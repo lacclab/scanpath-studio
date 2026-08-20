@@ -875,10 +875,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#save-and-restore-work" class="md-nav__link">
+  <a href="#back-up-and-restore-work" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Save and restore work
+        Back up and restore work
       
     </span>
   </a>
@@ -1660,10 +1660,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#save-and-restore-work" class="md-nav__link">
+  <a href="#back-up-and-restore-work" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Save and restore work
+        Back up and restore work
       
     </span>
   </a>
@@ -1706,9 +1706,9 @@
 <h2 id="export-results">Export results<a class="headerlink" href="#export-results" title="Permanent link">&para;</a></h2>
 <p>Open the <strong>Export</strong> subtab in the Scanpath view.</p>
 <ul>
-<li><strong>This trial</strong> exports the current static or animated figure.</li>
-<li><strong>Multiple trials</strong> applies one configuration to the filtered pool or whole
-  dataset and can include figures, tables, and configuration metadata.</li>
+<li><strong>Current figure</strong> exports the visible static or animated figure.</li>
+<li><strong>Export bundle</strong> packages figures, tables, and configuration metadata for
+  this trial, a filtered subset, or the whole dataset.</li>
 <li><strong>Separable layers</strong> writes aligned text, boxes, fixations, saccades, heatmap,
   and image layers for editing.</li>
 </ul>
@@ -1729,8 +1729,8 @@ MP4 use Chrome/Chromium through Kaleido. See
 <a href="../../export-troubleshooting/">Export troubleshooting</a> if those formats fail.</p>
 <h2 id="share-a-view">Share a view<a class="headerlink" href="#share-a-view" title="Permanent link">&para;</a></h2>
 <p>The <strong>Share</strong> subtab creates a deep link containing the selected data source and
-visualization settings. Choose whether the URL includes participant + trial,
-trial only, or settings only.</p>
+visualization settings. <strong>Refresh &amp; Copy</strong> rebuilds the URL from the current
+trial and settings and places it on the clipboard in one step.</p>
 <p>A link never contains the fixation or word tables. Built-in data can be reopened
 from the URL; a recipient of an uploaded-data link must load the same dataset.</p>
 <p>Public corpora travel too: the link names the corpus (<code>?source=corpus&amp;corpus=…</code>)
@@ -1738,11 +1738,14 @@ rather than its data. For a harmonised benchmark corpus the recipient needs thei
 own prepared bundle containing it — the Share panel says which corpus the link
 names, and opening a link for a corpus that isn't available leaves the data
 source where it was instead of switching to a different one.</p>
-<h2 id="save-and-restore-work">Save and restore work<a class="headerlink" href="#save-and-restore-work" title="Permanent link">&para;</a></h2>
-<p><strong>💾 Save &amp; restore</strong> downloads a JSON configuration containing the view,
-mapping, and annotations. Use it to continue work, attach a reproducible bug
-report, or preserve a manual review. Inspect annotations before sharing because
-notes may contain participant-related information.</p>
+<h2 id="back-up-and-restore-work">Back up and restore work<a class="headerlink" href="#back-up-and-restore-work" title="Permanent link">&para;</a></h2>
+<p><strong>Session → JSON backup</strong> downloads the view, mapping, metadata attachments and
+annotations. It is portable, but it does <strong>not</strong> contain uploaded dataset rows;
+load the same data before restoring it. Use it to continue work, attach a
+reproducible bug report, or preserve a manual review. Inspect annotations before
+sharing because notes may contain participant-related information.</p>
+<p>This differs from <strong>Automatic recovery</strong>, which keeps dataset tables and working
+state on the current computer and restores them after a refresh or restart.</p>
 <h2 id="keep-an-output-reproducible">Keep an output reproducible<a class="headerlink" href="#keep-an-output-reproducible" title="Permanent link">&para;</a></h2>
 <p>For a figure or batch, retain:</p>
 <ul>

@@ -1635,6 +1635,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#raw-gaze" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Raw gaze
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#text-words" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1977,6 +1988,17 @@
     <span class="md-ellipsis">
       
         Heatmap
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#raw-gaze" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Raw gaze
       
     </span>
   </a>
@@ -2708,6 +2730,37 @@ the linear-reading schematic.</p>
 <code>heatmap_metric="counts"</code> weights by fixation count instead of dwell time;
 <code>heatmap_norm="Log"</code> compresses heavy-tailed dwell times. Duration mass spreads
 dwell over nearby characters; <code>duration_mass_sigma_chars</code> controls its Gaussian.</p>
+<h3 id="raw-gaze">Raw gaze<a class="headerlink" href="#raw-gaze" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Anim</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>raw_gaze_color</code></td>
+<td><code>'#888888'</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>raw_gaze_opacity</code></td>
+<td><code>0.6</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>raw_gaze_marker_size</code></td>
+<td><code>4.0</code></td>
+<td>yes</td>
+</tr>
+</tbody>
+</table>
+<p>The raw sample cloud drawn under the scanpath when <code>show_raw_gaze=True</code> and a
+normalized raw-gaze frame is passed as <code>raw_gaze=…</code>. Its own colour, opacity
+and marker size (UX-86) — separate from the fixation styling, since the point
+of the layer is to sit behind the fixations without competing with them.</p>
 <h3 id="text-words">Text &amp; words<a class="headerlink" href="#text-words" title="Permanent link">&para;</a></h3>
 <table>
 <thead>

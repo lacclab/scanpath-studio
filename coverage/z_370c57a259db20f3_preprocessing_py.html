@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for scanpath_studio/preprocessing.py: 92%</title>
+    <title>Coverage for scanpath_studio/preprocessing.py: 93%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_4667309f.css" type="text/css">
     <script src="coverage_html_cb_dd2e7eb5.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>scanpath_studio<span class="sep">/</span>preprocessing.py</b>:
-            <span class="pc_cov">92%</span>
+            <span class="pc_cov">93%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">398 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">368<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">30<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">372<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">26<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_session_keys_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-17 21:37 +0000
+            created at 2026-08-20 07:55 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -292,12 +292,12 @@
     <p class="run run2"><span class="n"><a id="t210" href="#t210">210</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t211" href="#t211">211</a></span><span class="t">        <span class="nam">out</span><span class="op">[</span><span class="str">&quot;excluded&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">out</span><span class="op">[</span><span class="str">&quot;excluded&quot;</span><span class="op">]</span> <span class="op">|</span> <span class="nam">prior_excluded</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t212" href="#t212">212</a></span><span class="t">    <span class="key">elif</span> <span class="nam">policy</span> <span class="op">==</span> <span class="str">&quot;Discard&quot;</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t213" href="#t213">213</a></span><span class="t">        <span class="nam">mask</span> <span class="op">=</span> <span class="nam">pd</span><span class="op">.</span><span class="nam">to_numeric</span><span class="op">(</span><span class="nam">out</span><span class="op">[</span><span class="str">&quot;duration_ms&quot;</span><span class="op">]</span><span class="op">,</span> <span class="nam">errors</span><span class="op">=</span><span class="str">&quot;coerce&quot;</span><span class="op">)</span> <span class="op">&lt;</span> <span class="nam">float</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t214" href="#t214">214</a></span><span class="t">            <span class="nam">cfg</span><span class="op">[</span><span class="str">&quot;short_threshold_ms&quot;</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t215" href="#t215">215</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t216" href="#t216">216</a></span><span class="t">        <span class="nam">out</span><span class="op">.</span><span class="nam">loc</span><span class="op">[</span><span class="nam">mask</span><span class="op">,</span> <span class="str">&quot;excluded&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="key">True</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t217" href="#t217">217</a></span><span class="t">        <span class="nam">out</span><span class="op">.</span><span class="nam">loc</span><span class="op">[</span><span class="nam">mask</span><span class="op">,</span> <span class="str">&quot;excluded_reason&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="str">&quot;short&quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t218" href="#t218">218</a></span><span class="t">        <span class="nam">dropped</span> <span class="op">=</span> <span class="nam">int</span><span class="op">(</span><span class="nam">mask</span><span class="op">.</span><span class="nam">sum</span><span class="op">(</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t213" href="#t213">213</a></span><span class="t">        <span class="nam">mask</span> <span class="op">=</span> <span class="nam">pd</span><span class="op">.</span><span class="nam">to_numeric</span><span class="op">(</span><span class="nam">out</span><span class="op">[</span><span class="str">&quot;duration_ms&quot;</span><span class="op">]</span><span class="op">,</span> <span class="nam">errors</span><span class="op">=</span><span class="str">&quot;coerce&quot;</span><span class="op">)</span> <span class="op">&lt;</span> <span class="nam">float</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t214" href="#t214">214</a></span><span class="t">            <span class="nam">cfg</span><span class="op">[</span><span class="str">&quot;short_threshold_ms&quot;</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t215" href="#t215">215</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t216" href="#t216">216</a></span><span class="t">        <span class="nam">out</span><span class="op">.</span><span class="nam">loc</span><span class="op">[</span><span class="nam">mask</span><span class="op">,</span> <span class="str">&quot;excluded&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="key">True</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t217" href="#t217">217</a></span><span class="t">        <span class="nam">out</span><span class="op">.</span><span class="nam">loc</span><span class="op">[</span><span class="nam">mask</span><span class="op">,</span> <span class="str">&quot;excluded_reason&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="str">&quot;short&quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t218" href="#t218">218</a></span><span class="t">        <span class="nam">dropped</span> <span class="op">=</span> <span class="nam">int</span><span class="op">(</span><span class="nam">mask</span><span class="op">.</span><span class="nam">sum</span><span class="op">(</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t219" href="#t219">219</a></span><span class="t">    <span class="nam">out</span> <span class="op">=</span> <span class="nam">materialize_runs</span><span class="op">(</span><span class="nam">out</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t220" href="#t220">220</a></span><span class="t">    <span class="nam">report</span> <span class="op">=</span> <span class="nam">cleaning_report</span><span class="op">(</span><span class="nam">out</span><span class="op">,</span> <span class="nam">short_policy</span><span class="op">=</span><span class="nam">policy</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t221" href="#t221">221</a></span><span class="t">    <span class="key">if</span> <span class="key">not</span> <span class="nam">report</span><span class="op">.</span><span class="nam">empty</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
@@ -905,7 +905,7 @@
             <a class="nav" href="z_370c57a259db20f3_session_keys_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-17 21:37 +0000
+            created at 2026-08-20 07:55 +0000
         </p>
     </div>
 </footer>

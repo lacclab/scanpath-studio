@@ -1932,6 +1932,14 @@ precedence. Areas of interest come <strong>directly from your word boxes</strong
 not computed; only the fixation→word assignment is derived (bounding-box
 containment with a small nearest-word fallback).</p>
 <h2 id="optional-preprocessing-and-derived-tables">Optional preprocessing and derived tables<a class="headerlink" href="#optional-preprocessing-and-derived-tables" title="Permanent link">&para;</a></h2>
+<div class="admonition note">
+<p class="admonition-title">Not in the app in this release (PRE-22)</p>
+<p>The <strong>Preprocessing</strong> panel is held back from the app's 🗂️ Data page for
+this release and returns in the next one. Nothing about the pipeline
+changed: <code>api.preprocess_data</code>, <code>scanpath-studio analyze</code> and the tables
+below are shipped and supported as before, and setting
+<code>SCANPATH_EXPERIMENTAL=1</code> brings the panel back for a local session.</p>
+</div>
 <p>The <strong>Preprocessing</strong> panel is off by default. When disabled, it returns the
 normalized fixation table unchanged. When enabled, it can soft-mark
 blink-adjacent or short fixations as <code>excluded</code>, merge short-and-close

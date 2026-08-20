@@ -1662,8 +1662,8 @@ pipeline uses it.</p>
 <li><strong>🔤 Column mapping</strong> — the one thing that decides what every measure
    downstream is computed from. Rows marked ✨ were auto-detected; override any
    that guessed wrong.</li>
-<li><strong>🔎 What's in this dataset</strong> — the counts come first, as the quickest check
-   that the mapping worked. The raw and derived tables fold open below them
+<li><strong>🔎 What's in the selected dataset</strong> — the counts come first, as the
+   quickest check that the mapping worked. The raw and derived tables fold open below them
    (including, when present, the ordered screen catalogue and per-screen canvas
    sizes), and <strong>🧾 Trial identity</strong> says whether one trial id really is one
    reading.</li>
@@ -1706,10 +1706,9 @@ bulk-output details.</p>
 minutes; requires two readings sharing a text.</em></p>
 <ol>
 <li>Select the reference reading and, for multipart data, the reference screen.</li>
-<li>Open <strong>🔬 Comparisons</strong> and choose the grouping field. Candidates must share
-   the text and screen, so different coordinate spaces are not overlaid.
-   Similarity (NLD) scoring ranks them for you when the build has experimental
-   features enabled (<code>SCANPATH_EXPERIMENTAL=1</code>).</li>
+<li>Open <strong>🔬 Comparisons</strong> and choose <strong>text id</strong> as the comparison field. The
+   grid shows other filtered trials with the same text value. Other fields can
+   intentionally select trials from different texts.</li>
 <li>Record the comparison settings with the figure or configuration export.</li>
 </ol>
 <h2 id="explore-the-corpus">Explore the corpus<a class="headerlink" href="#explore-the-corpus" title="Permanent link">&para;</a></h2>

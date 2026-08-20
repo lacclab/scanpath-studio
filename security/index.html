@@ -2016,8 +2016,8 @@ too. Nothing here is inferred from documentation alone.</p>
 <li><strong>Audited version:</strong> <code>scanpath_studio</code> 0.25.0</li>
 <li><strong>Dependency versions the runtime claims were checked against:</strong> Streamlit
   1.58.0, pandas 2.3.3, CPython 3.12.12. The runtime has since moved to
-  Streamlit <strong>1.61.1</strong> (ENG-31); see <em>After the audit — Streamlit 1.61</em> below
-  for the two config surfaces that version added.</li>
+  Streamlit <strong>1.62.0</strong> (ENG-43); see <em>After the audit — Streamlit 1.61/1.62</em>
+  below for the relevant runtime changes.</li>
 <li><strong>Method:</strong> source read of every write-to-disk, URL-building, path-handling,
   archive-reading and <code>@st.cache_data</code> site, plus targeted scripts that exercised
   the share-link builder, the bulk exporter, the export path sanitizer, the
@@ -2039,8 +2039,8 @@ Recovery cache</strong>) and from <code>scanpath-studio cache --clear</code>, an
 described for researchers in <a href="../privacy/#what-happens-to-a-file-you-upload">privacy.md</a>.</p>
 </div>
 <div class="admonition note">
-<p class="admonition-title">After the audit — Streamlit 1.61 (ENG-31)</p>
-<p>The runtime moved from 1.58.0 to 1.61.1. Two of the config options that
+<p class="admonition-title">After the audit — Streamlit 1.61/1.62 (ENG-31, ENG-43)</p>
+<p>The runtime moved from 1.58.0 to 1.61.1 and then 1.62.0. Two of the config options that
 arrived in between touch the surfaces this page describes, and <strong>both are
 left at their defaults</strong>:</p>
 <ul>
@@ -2059,7 +2059,12 @@ left at their defaults</strong>:</p>
 <p><code>server.maxWidgetStateSize</code> (25 MB) also arrived in 1.60. It caps a single
 rerun's aggregate widget state, not session state — an uploaded corpus lives
 in session state and is unaffected; the only widget-borne payload is the
-💾 Save &amp; restore config JSON, which is kilobytes.</p>
+Session JSON backup, which is kilobytes.</p>
+<p>Streamlit 1.62 also randomizes/configures the sample used to hash large
+pandas and NumPy values in its own caches. That is useful defense in depth,
+but does not replace <code>data.frame_fingerprint</code>: Scanpath Studio intentionally
+passes corpus frames as underscore-prefixed, un-hashed cache arguments and
+supplies its explicit fingerprint as the semantic key.</p>
 </div>
 <div class="admonition warning">
 <p class="admonition-title">Scanpath Studio has no authentication, on any deployment</p>
@@ -2286,8 +2291,8 @@ should know about before mailing the file around:</p>
 <p>No fixation rows and no word rows are in either artifact.</p>
 <p>Don't confuse this with the <code>plot_config.json</code> a bulk export writes: that one
 comes from <code>export._plot_config_dict</code>, and its <code>"annotations"</code> key holds the
-figure's title and caption (EXP-2), not the per-trial notes. Only the sidebar's
-<strong>💾 Save &amp; restore</strong> download carries the annotation store.</p>
+figure's title and caption (EXP-2), not the per-trial notes. Only <strong>Session →
+JSON backup</strong> carries the annotation store.</p>
 <p><strong>Assessment.</strong> This is inherent to the feature: a link that reopens a specific
 trial has to identify that trial. The right response is disclosure, not removal,
 and <a href="../privacy/#whats-in-a-link-a-config-file-and-an-export">privacy.md</a> already
@@ -2296,19 +2301,14 @@ itself does not say so at the point of copying.</p>
 <p><strong>Fix.</strong> Add a one-line caption in <code>url_state.py:_render_share_body</code> next to the
 copy button: <em>"This link contains the participant and trial ids."</em> Optionally add
 a toggle that drops <code>participant</code> / <code>trial_id</code> and shares view settings only. Say
-the same thing next to the <strong>💾 Save &amp; restore</strong> download button, naming the
+the same thing next to the <strong>JSON backup</strong> download button, naming the
 annotation notes.</p>
-<p><strong>Status:</strong> <strong>fixed</strong> 2026-07-29 — the Share panel now has a <strong>What the link
-includes</strong> picker (<code>url_state._SHARE_IDENTITY_MODES</code>, read by
-<code>_share_identity_flags</code>) offering <em>Participant + trial</em> (the default — a link
-that reopens one trial has to identify it, so this is opt-<em>out</em>, not opt-in),
-<em>Trial only</em> and <em>Settings only</em>; <code>_build_share_query</code> takes matching
-<code>include_participant</code> / <code>include_trial</code> keywords. Under the link,
-<code>_share_identity_caution</code> prints what that link actually names and where URLs
-end up. <em>Trial only</em> still lands on the exact trial: <code>_restore_selection</code>
-falls through to a trial-id-alone match when <code>participant</code> is absent. Covered
-by <code>tests/test_security_fixes.py::TestShareLinkIdentityIsOptOut</code>. The
-<strong>💾 Save &amp; restore</strong> download (<code>tabs._render_save_restore_expander</code>) now
+<p><strong>Status:</strong> <strong>updated</strong> 2026-08-20 — the Share panel always includes the
+participant, trial, and visualization settings. The former identity-mode picker
+and warning were removed to keep sharing predictable; the panel instead notes
+that recipients may need to replace the URL's address or port. The lower-level
+query builder retains its optional identity flags for programmatic callers. The
+The <strong>JSON backup</strong> (<code>tabs._render_save_restore_expander</code>) now
 carries a matching caption naming what the file holds — the selected
 participant/trial <em>and</em> the text of every annotation note. <strong>Not addressed:</strong>
 that file still has no opt-out, only the disclosure; and the CLI / headless API
@@ -2504,18 +2504,30 @@ intends to read and raise a clear <code>ValueError</code> above a threshold befo
 any of them, rather than discovering the size by exhausting RAM.</p>
 <p><strong>Status:</strong> <strong>fixed</strong> 2026-07-29 — <code>data._check_zip_limits</code> runs before any
 member is opened, checking the declared <code>ZipInfo.file_size</code> values against
-<code>ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES</code> (4 GB), <code>ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES</code>
-(8 GB) and <code>ZIP_MAX_COMPRESSION_RATIO</code> (200×, applied only once the total
-uncompressed size reaches <code>ZIP_RATIO_CHECK_MIN_BYTES</code> = 256 MB, so a small
-very-repetitive table isn't punished). Each raises a clear user-facing
-<code>ValueError</code>.</p>
+<code>ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES</code>, <code>ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES</code> and
+<code>ZIP_MAX_COMPRESSION_RATIO</code> (200×, applied only once the total uncompressed size
+reaches <code>ZIP_RATIO_CHECK_MIN_BYTES</code> = 256 MB, so a small very-repetitive table
+isn't punished). Each raises a clear user-facing <code>ValueError</code>.</p>
 <p>A declared-size check alone is forgeable — the central directory is attacker-
-controlled — so <code>_read_zipped_table</code> additionally reads each member with
-<code>inner.read(remaining + 1)</code> against a running byte budget and raises if the
-actual payload overruns it. The absolute caps are deliberately generous because
-real eye-tracking exports are genuinely large; the <strong>ratio</strong> is what actually
-discriminates a zip bomb. <code>UPLOAD_SIZE_WARN_BYTES</code> (25 MB, compressed) is
-unchanged and still only warns.</p>
+controlled — so <code>_read_zipped_table</code> additionally reads each member through
+<code>_BudgetedZipMember</code>, which counts the bytes that actually arrive against a
+running budget and raises the moment they overrun it. The absolute caps are
+deliberately generous because real eye-tracking exports are genuinely large; the
+<strong>ratio</strong> is what actually discriminates a zip bomb. <code>UPLOAD_SIZE_WARN_BYTES</code>
+(25 MB, compressed) is unchanged and still only warns.</p>
+<p><strong>Revised</strong> 2026-08-19 (DATA-34) — the two absolute caps were 4 GB per member
+and 8 GB per archive, which refused an honest single-CSV fixation report of
+~8 GB on a workstation with the memory to read it. They are now 32 GB / 64 GB
+by default and all three are tunable from the environment
+(<code>SCANPATH_ZIP_MAX_MEMBER_GB</code>, <code>SCANPATH_ZIP_MAX_TOTAL_GB</code>,
+<code>SCANPATH_ZIP_MAX_RATIO</code>, read once at import), so a memory-capped deployment
+such as the hosted demo sets them <em>down</em> rather than every workstation living
+with the container's budget. This is a deliberate trade: the absolute caps are a
+memory guard, not a security boundary — on the ~1 GB hosted demo any upload
+approaching them was already fatal, and the ratio check, which is what actually
+distinguishes a bomb from a corpus, is unchanged. Members are also streamed into
+pandas now instead of being read whole into <code>bytes</code> first, so the honest large
+case no longer needs a second full-size copy of itself in memory.</p>
 <hr />
 <h3 id="s7-low-stimulus-text-is-interpolated-into-raw-html-without-escaping">S7 · Low — stimulus text is interpolated into raw HTML without escaping<a class="headerlink" href="#s7-low-stimulus-text-is-interpolated-into-raw-html-without-escaping" title="Permanent link">&para;</a></h3>
 <p><code>tabs._render_paragraph_panel</code> builds a highlighted-span line with
@@ -2541,8 +2553,8 @@ the remaining six either escape or interpolate tool-controlled constants
 (<code>_chip_color</code> and <code>_span_bg_for</code> both return values from fixed palettes, so the
 <code>style="background:…"</code> attributes are not attacker-reachable either).</p>
 <p>Streamlit's markdown path does not compensate. Inspecting the shipped 1.58.0
-frontend bundle (<code>static/static/js/index.*.js</code>; re-checked on 1.61.1 after
-ENG-31 — <code>rehype-sanitize</code> is still absent), the <code>allowHTML</code> branch lazily
+frontend bundle (<code>static/static/js/index.*.js</code>; re-checked on 1.62.0 after
+ENG-43 — <code>rehype-sanitize</code> is still absent), the <code>allowHTML</code> branch lazily
 loads <code>rehype-raw</code> and no sanitizer plugin — <code>rehype-sanitize</code> is not in the
 distribution at all; the only guard is a URL transform rejecting <code>javascript:</code>
 and <code>vbscript:</code> schemes, and <code>disallowedElements</code> is empty for non-label
@@ -2725,7 +2737,7 @@ next session. So the disk writes in the package are the corpus downloads in
 <code>datasets.py</code>, the CLI/headless <code>api.save_figure*</code>, the MP4 temp file of S8,
 and — locally — the recovery cache. It is written with <code>os.replace</code> over a
 sibling temp file (no partial reads), holds no credentials, and is removable
-from the app's <strong>🗄️ Recovery cache</strong> panel or <code>scanpath-studio cache --clear</code>.</p>
+from <strong>Session → Automatic recovery</strong> or <code>scanpath-studio cache --clear</code>.</p>
 <p><strong>No zip-slip on ingest.</strong> An uploaded archive is never extracted.
 <code>data._read_zipped_table</code> reads each member into an <code>io.BytesIO</code> and hands it to
 pandas; member names are used only as <code>source_file</code> labels via <code>Path(member).stem</code>.
@@ -2812,9 +2824,8 @@ no <code>&lt;</code> can reach it.</p>
 <li><strong>A shared/hosted deployment should set <code>SCANPATH_LOCAL_FS=0</code></strong> and supply the
   corpus location through <code>SCANPATH_DATA_ROOT</code> (S2), which removes the directory
   input, the folder picker and the download-to-arbitrary-path button.</li>
-<li><strong>A share link is identifying by default.</strong> It names a participant and a trial
-  unless you change <strong>What the link includes</strong> in the Share panel to <em>Trial only</em>
-  or <em>Settings only</em> (S3). A saved plot config has no such control: it carries the
+<li><strong>A share link is identifying.</strong> It names a participant and a trial alongside
+  the visualization settings (S3). A saved plot config likewise carries the
   selection <em>and</em> every annotation note you have typed, for every trial — read it
   before sending it to a collaborator.</li>
 <li><strong>Check exported tables before publishing them.</strong> Drop the <code>image_path</code> column

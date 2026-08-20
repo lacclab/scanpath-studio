@@ -1939,7 +1939,7 @@ the recorded setup.</p>
 and run-configuration files. <code>scanpath-studio corpus</code> produces a tidy
 corpus-analysis table for scripting. The <code>render</code> command still renders one
 trial per invocation; use the <a href="../automation/#batch-pattern">Python batch pattern</a>
-or <strong>Export → Multiple trials</strong> for many figures.</p>
+or <strong>Export → Export bundle</strong> for many figures.</p>
 <p><code>--all-screens</code> is the multipart exception: it writes one deterministic
 <code>__screen-001-&lt;id&gt;</code> file per screen of the selected parent trial. The recorded
 transition option stores the observed parent-clock gap in animation metadata;
@@ -1954,8 +1954,9 @@ restart resumes where you left off. <code>cache</code> shows what is stored and 
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
 <a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the stored session</span>
 </code></pre></div>
-<p>The same information (and a <strong>Forget saved session</strong> button) is in the app's
-sidebar under <strong>🗄️ Recovery cache</strong>. <code>SCANPATH_STUDIO_PERSIST=0</code> turns caching
+<p>The same information and controls are in <strong>Session → Automatic recovery</strong>;
+<strong>Clear recovery cache</strong> removes the saved copy without closing the current
+app. <code>SCANPATH_STUDIO_PERSIST=0</code> turns caching
 off permanently, <code>--no-persist</code> for one launch, and <code>SCANPATH_STUDIO_STATE_DIR</code>
 moves the folder. Hosted deployments never cache. See
 <a href="../privacy/#what-happens-to-a-file-you-upload">Privacy</a>.</p>

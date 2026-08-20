@@ -1215,6 +1215,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#a-zip-upload-is-refused-as-above-the-per-file-limit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A zip upload is refused as "above the per-file limit"
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#why-does-html-export-work-but-pngsvgpdf-fail" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1776,6 +1787,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#a-zip-upload-is-refused-as-above-the-per-file-limit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A zip upload is refused as "above the per-file limit"
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#why-does-html-export-work-but-pngsvgpdf-fail" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1882,27 +1904,40 @@ It does not change x or overwrite uploaded data. Compare algorithms in
 <p>Yes. A words-only table can visualize precomputed word measures; a
 fixations-only table can show gaze positions without stimulus text. Most
 features work best with both tables.</p>
+<h2 id="a-zip-upload-is-refused-as-above-the-per-file-limit">A zip upload is refused as "above the per-file limit"<a class="headerlink" href="#a-zip-upload-is-refused-as-above-the-per-file-limit" title="Permanent link">&para;</a></h2>
+<p>The app bounds how far a <code>.zip</code> may decompress before it opens a single member,
+so a small archive of highly compressible CSV cannot fill this machine's RAM.
+The defaults are 32 GB for one member and 64 GB across the archive — above any
+honest export, including a full OneStop fixation report — and each is a
+memory guard you can move:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nv">SCANPATH_ZIP_MAX_MEMBER_GB</span><span class="o">=</span><span class="m">64</span><span class="w"> </span><span class="nv">SCANPATH_ZIP_MAX_TOTAL_GB</span><span class="o">=</span><span class="m">128</span><span class="w"> </span>scanpath-studio<span class="w"> </span>run
+</code></pre></div>
+<p><code>SCANPATH_ZIP_MAX_RATIO</code> (default 200×) is the separate check that catches an
+archive expanding far past what data plausibly compresses to; a memory-capped
+deployment tightens all three rather than raising them. Note that parsing a
+table costs several times its size in RAM, so a table too large for the machine
+is better split — one file per participant — or converted to Parquet.</p>
 <h2 id="why-does-html-export-work-but-pngsvgpdf-fail">Why does HTML export work but PNG/SVG/PDF fail?<a class="headerlink" href="#why-does-html-export-work-but-pngsvgpdf-fail" title="Permanent link">&para;</a></h2>
 <p>Static formats use Kaleido and need Chrome/Chromium. Run:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>plotly_get_chrome<span class="w"> </span>-y
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>plotly_get_chrome<span class="w"> </span>-y
 </code></pre></div>
 <p>See <a href="../export-troubleshooting/">Export troubleshooting</a> for video requirements.</p>
 <h2 id="can-another-person-open-my-share-link">Can another person open my share link?<a class="headerlink" href="#can-another-person-open-my-share-link" title="Permanent link">&para;</a></h2>
 <p>Yes, but uploaded data is not embedded in the URL. The recipient must load the
-same dataset. The Share panel can omit participant and trial IDs; see
+same dataset. Share links include the current participant and trial; see
 <a href="../guides/outputs-sharing/">Outputs and sharing</a>.</p>
 <h2 id="does-a-refresh-erase-my-work">Does a refresh erase my work?<a class="headerlink" href="#does-a-refresh-erase-my-work" title="Permanent link">&para;</a></h2>
 <p>Local and desktop installs restore completed datasets and session state from an
-on-device cache. The hosted demo is memory-only. Download <strong>💾 Save &amp; restore</strong>
-JSON when the work must be portable.</p>
-<p>The sidebar's <strong>🗄️ Recovery cache</strong> panel shows what that cache holds, where it
-is, and clears it; <code>scanpath-studio cache</code> does the same from a terminal. See
+on-device recovery cache. The hosted demo is memory-only. Download a <strong>JSON
+backup</strong> from <strong>Session</strong> when settings and annotations must be portable.</p>
+<p><strong>Session → Automatic recovery</strong> shows what the cache holds, where it is saved,
+and lets you pause or clear it; <code>scanpath-studio cache</code> does the same from a terminal. See
 <a href="../privacy/#what-happens-to-a-file-you-upload">Privacy</a>.</p>
 <h2 id="i-edited-the-code-and-nothing-changed">I edited the code and nothing changed?<a class="headerlink" href="#i-edited-the-code-and-nothing-changed" title="Permanent link">&para;</a></h2>
 <p>Streamlit re-runs only the top-level script — it does not reload already-imported
 modules, and <code>st.cache_data</code> does not hash the helper functions a cached loader
 calls. Restart the server process after editing code; a rerun or "Clear cache"
-isn't enough. This is unrelated to the <strong>🗄️ Recovery cache</strong>, which stores your
+isn't enough. This is unrelated to <strong>Automatic recovery</strong>, which stores your
 data and settings, not code. See
 <a href="https://github.com/lacclab/scanpath-studio/blob/main/CONTRIBUTING.md#if-a-code-change-doesnt-show-up">Contributing</a>.</p>
 <h2 id="where-does-my-data-go">Where does my data go?<a class="headerlink" href="#where-does-my-data-go" title="Permanent link">&para;</a></h2>

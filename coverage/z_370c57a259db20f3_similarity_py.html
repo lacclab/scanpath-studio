@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for scanpath_studio/similarity.py: 96%</title>
+    <title>Coverage for scanpath_studio/similarity.py: 94%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_4667309f.css" type="text/css">
     <script src="coverage_html_cb_dd2e7eb5.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>scanpath_studio<span class="sep">/</span>similarity.py</b>:
-            <span class="pc_cov">96%</span>
+            <span class="pc_cov">94%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">113 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">109<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">4<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">106<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">7<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_styles_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-17 21:37 +0000
+            created at 2026-08-20 07:55 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -373,7 +373,7 @@
     <p class="run"><span class="n"><a id="t291" href="#t291">291</a></span><span class="t">        <span class="key">return</span> <span class="op">[</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t292" href="#t292">292</a></span><span class="t">    <span class="key">if</span> <span class="nam">n</span> <span class="op">&lt;=</span> <span class="nam">max_points</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t293" href="#t293">293</a></span><span class="t">        <span class="key">return</span> <span class="nam">list</span><span class="op">(</span><span class="nam">range</span><span class="op">(</span><span class="num">1</span><span class="op">,</span> <span class="nam">n</span> <span class="op">+</span> <span class="num">1</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t294" href="#t294">294</a></span><span class="t">    <span class="key">return</span> <span class="nam">sorted</span><span class="op">(</span><span class="op">{</span><span class="nam">round</span><span class="op">(</span><span class="nam">v</span><span class="op">)</span> <span class="key">for</span> <span class="nam">v</span> <span class="key">in</span> <span class="nam">np</span><span class="op">.</span><span class="nam">linspace</span><span class="op">(</span><span class="num">1</span><span class="op">,</span> <span class="nam">n</span><span class="op">,</span> <span class="nam">max_points</span><span class="op">)</span><span class="op">}</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t294" href="#t294">294</a></span><span class="t">    <span class="key">return</span> <span class="nam">sorted</span><span class="op">(</span><span class="op">{</span><span class="nam">round</span><span class="op">(</span><span class="nam">v</span><span class="op">)</span> <span class="key">for</span> <span class="nam">v</span> <span class="key">in</span> <span class="nam">np</span><span class="op">.</span><span class="nam">linspace</span><span class="op">(</span><span class="num">1</span><span class="op">,</span> <span class="nam">n</span><span class="op">,</span> <span class="nam">max_points</span><span class="op">)</span><span class="op">}</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t295" href="#t295">295</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t296" href="#t296">296</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t297" href="#t297">297</a></span><span class="t"><span class="key">def</span> <span class="nam">nld_by_fixation_index</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
@@ -438,8 +438,8 @@
     <p class="run"><span class="n"><a id="t356" href="#t356">356</a></span><span class="t">    <span class="key">if</span> <span class="key">not</span> <span class="nam">times</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t357" href="#t357">357</a></span><span class="t">        <span class="key">return</span> <span class="op">[</span><span class="op">]</span><span class="op">,</span> <span class="op">[</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t358" href="#t358">358</a></span><span class="t">    <span class="key">if</span> <span class="nam">len</span><span class="op">(</span><span class="nam">times</span><span class="op">)</span> <span class="op">&gt;</span> <span class="nam">max_points</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t359" href="#t359">359</a></span><span class="t">        <span class="nam">picks</span> <span class="op">=</span> <span class="nam">np</span><span class="op">.</span><span class="nam">linspace</span><span class="op">(</span><span class="num">0</span><span class="op">,</span> <span class="nam">len</span><span class="op">(</span><span class="nam">times</span><span class="op">)</span> <span class="op">-</span> <span class="num">1</span><span class="op">,</span> <span class="nam">max_points</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t360" href="#t360">360</a></span><span class="t">        <span class="nam">times</span> <span class="op">=</span> <span class="nam">sorted</span><span class="op">(</span><span class="op">{</span><span class="nam">times</span><span class="op">[</span><span class="nam">round</span><span class="op">(</span><span class="nam">i</span><span class="op">)</span><span class="op">]</span> <span class="key">for</span> <span class="nam">i</span> <span class="key">in</span> <span class="nam">picks</span><span class="op">}</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t359" href="#t359">359</a></span><span class="t">        <span class="nam">picks</span> <span class="op">=</span> <span class="nam">np</span><span class="op">.</span><span class="nam">linspace</span><span class="op">(</span><span class="num">0</span><span class="op">,</span> <span class="nam">len</span><span class="op">(</span><span class="nam">times</span><span class="op">)</span> <span class="op">-</span> <span class="num">1</span><span class="op">,</span> <span class="nam">max_points</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t360" href="#t360">360</a></span><span class="t">        <span class="nam">times</span> <span class="op">=</span> <span class="nam">sorted</span><span class="op">(</span><span class="op">{</span><span class="nam">times</span><span class="op">[</span><span class="nam">round</span><span class="op">(</span><span class="nam">i</span><span class="op">)</span><span class="op">]</span> <span class="key">for</span> <span class="nam">i</span> <span class="key">in</span> <span class="nam">picks</span><span class="op">}</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t361" href="#t361">361</a></span><span class="t">    <span class="nam">xs</span><span class="op">,</span> <span class="nam">nlds</span> <span class="op">=</span> <span class="op">[</span><span class="op">]</span><span class="op">,</span> <span class="op">[</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t362" href="#t362">362</a></span><span class="t">    <span class="key">for</span> <span class="nam">t</span> <span class="key">in</span> <span class="nam">times</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t363" href="#t363">363</a></span><span class="t">        <span class="nam">ref_seq</span> <span class="op">=</span> <span class="op">[</span><span class="nam">int</span><span class="op">(</span><span class="nam">w</span><span class="op">)</span> <span class="key">for</span> <span class="nam">w</span><span class="op">,</span> <span class="nam">o</span> <span class="key">in</span> <span class="nam">zip</span><span class="op">(</span><span class="nam">ref_w</span><span class="op">,</span> <span class="nam">ref_on</span><span class="op">)</span> <span class="key">if</span> <span class="nam">o</span> <span class="op">&lt;=</span> <span class="nam">t</span> <span class="key">and</span> <span class="nam">pd</span><span class="op">.</span><span class="nam">notna</span><span class="op">(</span><span class="nam">w</span><span class="op">)</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
@@ -456,7 +456,7 @@
             <a class="nav" href="z_370c57a259db20f3_styles_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-17 21:37 +0000
+            created at 2026-08-20 07:55 +0000
         </p>
     </div>
 </footer>

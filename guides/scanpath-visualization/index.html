@@ -1860,8 +1860,11 @@ the previous/next buttons or screen menu to move between them. Figure links and
 saved configurations retain the active screen, and <strong>Annotations</strong> lets you
 choose parent-trial or current-screen scope.</p>
 <h2 id="control-the-layers">Control the layers<a class="headerlink" href="#control-the-layers" title="Permanent link">&para;</a></h2>
-<p>The <strong>Plot controls</strong> rail beside the plot starts with three <strong>Quick views</strong> and
+<p>The <strong>Plot controls</strong> rail beside the plot starts with four <strong>Quick views</strong> and
 a <strong>Palette</strong> — often all you need — followed by five collapsible sections:</p>
+<p>Scanpath, Heatmap, and Illustration are deterministic presets: selecting one
+starts from the app defaults before applying that view. <strong>Custom</strong> remembers the
+last settings you changed by hand and restores them after you visit a preset.</p>
 <table>
 <thead>
 <tr>
@@ -1894,7 +1897,7 @@ a <strong>Palette</strong> — often all you need — followed by five collapsib
 <tr>
 <td>📐 Figure &amp; canvas</td>
 <td>—</td>
-<td>monitor geometry, fonts, plot background, full-monitor framing, colour bars, axes, title and labels</td>
+<td>monitor framing, plot background, colour bars, axes, title and labels</td>
 </tr>
 </tbody>
 </table>
@@ -1904,12 +1907,10 @@ a <strong>Palette</strong> — often all you need — followed by five collapsib
 same list. Fixations is open by default; the rest start collapsed, and a layer's
 settings appear only while that layer is on. Marker size already encodes duration
 by default, so uniform fixation color is usually the clearest starting point.</p>
-<p><strong>📐 Figure &amp; canvas</strong> has no layer to switch on, so it keeps <strong>Show full
-monitor</strong> in view and groups the rest the same way: <strong>🖥️ Screen &amp; geometry</strong>
-(monitor pixels, physical size, viewing distance, DPI), <strong>🔤 Text &amp; fonts</strong> (text
-scaling, font size and typeface, text and background colour), <strong>📊 Axes &amp; grid</strong>
-(coordinate grid, colour bars, axis fields) and <strong>🏷️ Title &amp; labels</strong>
-(Illustration label, figure title and caption).</p>
+<p><strong>Stimulus → Text</strong> keeps typography beside the layer it controls. Text can
+scale from word boxes, or use one fixed size entered in pixels or points; point
+sizes use the dataset DPI. <strong>📐 Figure &amp; canvas</strong> has no layer to switch on. It
+contains <strong>🖥️ Screen &amp; framing</strong>, <strong>📊 Axes &amp; grid</strong>, and <strong>🏷️ Title &amp; labels</strong>.</p>
 <h3 id="show-screen-coordinates">Show screen coordinates<a class="headerlink" href="#show-screen-coordinates" title="Permanent link">&para;</a></h3>
 <p>Open <strong>📐 Figure &amp; canvas → 📊 Axes &amp; grid</strong> and turn on <strong>Coordinate grid</strong> to
 read the stimulus in monitor pixels. Automatic spacing chooses a readable
@@ -1935,14 +1936,20 @@ computation.</p>
 <li><strong>Animate</strong> replays the selected trial. <strong>⚙ Playback</strong> controls speed,
   autoplay, and frame quality.</li>
 <li><strong>Compare</strong> adds a second reading beside the selected one.</li>
-<li><strong>Comparisons</strong> ranks other same-text scanpaths using the selected grouping
-  and similarity settings.</li>
+<li><strong>Comparisons</strong> shows trials whose chosen field matches the selected trial.
+  Choosing text id finds other readings of the text; choosing participant id
+  finds that reader's other trials.</li>
 </ul>
 <h3 id="comparing-across-datasets">Comparing across datasets<a class="headerlink" href="#comparing-across-datasets" title="Permanent link">&para;</a></h3>
-<p><strong>Compare with</strong> (above the <em>Compare To</em> picker) chooses which dataset scanpath
-B comes from. It defaults to <em>This dataset</em>; pick another and the candidate list,
-the <strong>Filter B by</strong> controls beside it, and the trial's screen geometry all come
-from that dataset instead.</p>
+<p><strong>Compare with</strong> (the first control on scanpath B's line, directly under the
+dataset picker on your own) chooses which dataset scanpath B comes from. It
+defaults to <em>This dataset</em>; pick another and the candidate list, the 🔎 filters
+at the end of B's line, and the trial's screen geometry all come from that
+dataset instead.</p>
+<p>B's line is the same shape as the trial line above it — dataset, trial, scrub
+slider, then ◀ ▶ ⇅ and 🔎 — so the two read down the page as one pair of
+controls. B's 🔎 appears only when B has a dataset of its own to narrow;
+under <em>This dataset</em> the candidates come out of the pool your own 🔎 defines.</p>
 <p>Any loaded upload, the bundled demo and the synthetic trial are always
 available. A public corpus is offered too, but only loads when its files are
 already where you last pointed the app — otherwise it shows <em>(needs setup)</em> and
@@ -1999,7 +2006,7 @@ corpora <em>Both</em> often draws two offset sets of rectangles under the two tr
 Pick one side to read the overlay as a comparison of the <em>fixation traces</em>
 against a single stimulus. It defaults to <em>Both</em>, which leaves same-dataset
 overlays exactly as they were.</p>
-<p><strong>⚖️ Download this comparison as a bundle</strong> (Export → <em>This trial</em>) writes the
+<p><strong>⚖️ Download this comparison as a bundle</strong> (Export → <em>Current figure</em>) writes the
 figure plus both scanpaths' tables and a manifest naming each side's dataset,
 trial and recording setup. The image alone can't be reproduced; the bundle can.</p>
 <p>A share link carries the comparison as <code>?compare=&lt;participant&gt;:&lt;trial&gt;</code> plus

@@ -5694,7 +5694,13 @@ def main() -> None:
         if not wizard_owns_page:
             render_dataset_table(
                 host=dataset_table_slot,
-                active=data_choice,
+                # Public corpora load through the historical category token,
+                # while the table rows use concrete registry labels. Preserve
+                # that concrete canonical selection so the active row and its
+                # remembered counts are keyed to the row the user can revisit.
+                active=str(
+                    st.session_state.get("data_source_choice") or data_choice
+                ),
                 words=words_all,
                 fixations=fixations_all,
                 raw_gaze=raw_gaze_df,

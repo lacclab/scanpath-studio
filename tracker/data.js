@@ -505,11 +505,14 @@ window.TRACKER = {
     "datasets, prefilled from their saved setup, and commits mapping plus setup",
     "through one Save changes action. Half-finished setup edits do not affect the",
     "plot. Built-in datasets use the same three-column field-card grammar for",
-    "their read-only setup summary."
+    "their read-only setup summary.",
+    "",
+    "The defect review also keeps the concrete public-corpus token when rendering",
+    "Available datasets. Its active row is now highlighted and the loaded frames",
+    "populate remembered counts under the token that row uses on later visits."
    ],
    "whatsLeft": [
-    "Nothing in implementation. Automated and browser verification were deferred",
-    "at the user's explicit request."
+    "Nothing."
    ],
    "background": [
     "**Held deliberately** until the add-dataset layout settles — #UX-55",
@@ -539,10 +542,12 @@ window.TRACKER = {
     "Review Edit on a stored dataset: mapping and the three Recording setup",
     "columns should look like the completed add flow and save together.",
     "Only columns retained during the original normalization can be remapped;",
-    "re-upload remains necessary to recover a column dropped at import."
+    "re-upload remains necessary to recover a column dropped at import.",
+    "Review a loaded public corpus in Available datasets: its row should be tinted",
+    "and its remembered counts should remain integers after switching away."
    ],
    "statusNote": [
-    "Ready for review; tests intentionally not run at the user's request."
+    "**Ready for review — defect review fixes completed 2026-08-20; tests intentionally not run at the user's request.**"
    ]
   },
   {
@@ -1509,7 +1514,12 @@ window.TRACKER = {
     "",
     "**Selection follow-up.** Select Dataset is a bold field label. Scanpath B now",
     "always has its own 🔎 trial filters, including when Compare with is This dataset;",
-    "its pool starts from the unfiltered active dataset and never changes scanpath A."
+    "its pool starts from the unfiltered active dataset and never changes scanpath A.",
+    "",
+    "**Defect review.** The independently filtered B pool now travels with the picker",
+    "selection into figure construction. A trial admitted by B's filters is therefore",
+    "loaded from B's frames even when A's filters exclude it. Current contributor docs",
+    "also use Stimulus & Context and the actual 2.7rem plot-control height."
    ],
    "whatsLeft": [
     "Nothing."
@@ -1517,7 +1527,7 @@ window.TRACKER = {
    "decisions": [
     "Review **Refresh & Copy** in Share and confirm it replaces both old actions while copying the current view.",
     "Review the 3rem top inset, compact single-outline plot controls with a full-width dropdown target, visible **♻️ Reset it** button, and Scanpath-default / Custom-restore Quick-view behavior at the supplied window sizes.",
-    "Review Compare with This dataset: B's 🔎 should narrow only B, while A remains selected and unchanged."
+    "Review Compare with This dataset: B's 🔎 should narrow only B, while A remains selected and unchanged, including when A's own filters exclude the chosen B trial."
    ],
    "background": [
     "The comparison column is a selection constraint: candidates must have the same",
@@ -1529,7 +1539,7 @@ window.TRACKER = {
     "in the app. Local stimulus paths remain deliberately outside links and saved configs."
    ],
    "statusNote": [
-    "**Ready for review — latest selection and plot-control follow-ups completed 2026-08-20; tests intentionally not run at the user's request.**"
+    "**Ready for review — defect review fixes completed 2026-08-20; tests intentionally not run at the user's request.**"
    ]
   },
   {

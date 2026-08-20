@@ -1206,7 +1206,12 @@ def _render_compare_selector(
     combos_all: pd.DataFrame | None = None,
     words_all: pd.DataFrame | None = None,
     fixations_all: pd.DataFrame | None = None,
-) -> tuple[str | None, str | None, SecondaryDataset | None]:
+) -> tuple[
+    str | None,
+    str | None,
+    SecondaryDataset | None,
+    SecondaryDataset | None,
+]:
     """The compare-trial (B) selector, rendered above the chips (CMP-1).
 
     Mirrors the main trial picker: a ``selectbox`` showing the trial id (+ 📄/👤
@@ -1220,8 +1225,9 @@ def _render_compare_selector(
     **CMP-8 §5.1** put a *dataset* picker above it: B may come from a different
     corpus entirely, in which case the candidate pool, the narrow-by filters and
     the screen geometry are all that dataset's own. Returns
-    ``(participant, trial, source)`` — ``source`` is ``None`` for the
-    same-dataset case, i.e. everything that existed before CMP-8.
+    ``(participant, trial, source, pool)`` — ``source`` is ``None`` for the
+    same-dataset case, while ``pool`` always carries the independently filtered
+    B frames from which the selected trial must be extracted.
 
     **UX-64** made that one line rather than three: B's row is now A's row —
     ``[Compare with] [Compare To] [scrub slider] [◀ ▶ ⇅ 🔎]`` on the same
@@ -1232,6 +1238,7 @@ def _render_compare_selector(
     names, ready_by_name, reason_by_name = _compare_source_choices()
     source, source_notice = _resolve_compare_source(ready_by_name, reason_by_name)
     filter_source = source
+    comparison_pool = source
     if source is not None:
         # B's pool is its own dataset, narrowed by its own filters (§5.2), and
         # nothing about A applies to it — including the multipart screen scoping
@@ -1287,6 +1294,7 @@ def _render_compare_selector(
         narrowed = _narrow_secondary(
             filter_source, same_filters, use_annotations=True
         )
+        comparison_pool = narrowed
         combos = narrowed.combos
         words_filtered = narrowed.words
         fixations_filtered = narrowed.fixations
@@ -1393,7 +1401,7 @@ def _render_compare_selector(
                 if active_screen
                 else "No other trials match B's 🔎 filters."
             )
-        return None, None, None
+        return None, None, None, None
 
     sort_keys = trial_sort_keys(
         combos,
@@ -1582,8 +1590,8 @@ def _render_compare_selector(
         )
 
     if selected_compare_label:
-        return (*label_to_trial[selected_compare_label], source)
-    return None, None, None
+        return (*label_to_trial[selected_compare_label], source, comparison_pool)
+    return None, None, None, None
 
 
 _CRITICAL_SPAN_BG = "#FCE7F3"  # light pink — critical-span words
@@ -4239,6 +4247,7 @@ def render_single_trial_tab(
     # figure exactly (CMP-3). Only shown when Compare is on.
     compare_participant, compare_trial = None, None
     compare_source: SecondaryDataset | None = None
+    compare_pool: SecondaryDataset | None = None
     # Layout comes from the rail's Compare-config popover via session_state; an
     # animated comparison always co-animates on one clock, so force overlay then.
     # CMP-11: the cross-dataset *resolve* is NOT done here. It needs B's screen,
@@ -4255,7 +4264,7 @@ def render_single_trial_tab(
         }.get(st.session_state.get(SINGLE_COMPARE_LAYOUT), "overlay")
     if compare_enabled:
         with compare_slot:
-            compare_participant, compare_trial, compare_source = (
+            compare_participant, compare_trial, compare_source, compare_pool = (
                 _render_compare_selector(
                     combos,
                     selection_mode,
@@ -4330,9 +4339,20 @@ def render_single_trial_tab(
 
     # Second trial's words/fixations + labels for the comparison figure and the
     # side-by-side Trial Info / metadata table.
+    # B owns an independent filter pool even when it comes from this dataset.
+    # Extracting its selection from A's filtered frames makes a valid B choice
+    # disappear whenever A's filters exclude it — exactly what the separate B
+    # filters are meant to prevent. The source remains None for a local pool so
+    # downstream labels, geometry and participant ids retain same-dataset rules.
+    compare_words_pool = (
+        compare_pool.words if compare_pool is not None else words_filtered
+    )
+    compare_fixations_pool = (
+        compare_pool.fixations if compare_pool is not None else fixations_filtered
+    )
     compare_meta = _build_compare_meta(
-        words_filtered,
-        fixations_filtered,
+        compare_words_pool,
+        compare_fixations_pool,
         selected_participant,
         selected_trial,
         compare_participant,

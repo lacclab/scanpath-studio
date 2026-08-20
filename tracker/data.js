@@ -1414,7 +1414,11 @@ window.TRACKER = {
     "",
     "The final follow-ups make the Data Management dataset table explicit and compact,",
     "remove repeated participant/chrome copy around the plot, and restore enough top",
-    "inset that the fixed app header cannot clip the first control row."
+    "inset that the fixed app header cannot clip the first control row.",
+    "",
+    "The latest follow-ups merge Refresh and Copy, increase the top inset again, restore",
+    "the missing reset-confirmation button, make named Quick views reapply their defaults,",
+    "and give every plot-control row more height with one clean outline."
    ],
    "whatWasDone": [
     "**Data.** The page title is **Data Management**. Its two summary captions are",
@@ -1463,18 +1467,23 @@ window.TRACKER = {
     "",
     "The ordinary scanpath chip row no longer repeats participant ID to its left; the",
     "Participant chip remains. Fixation controls keep the saved snap setting but drop",
-    "the Linear-reading schematic mini-heading. A 2rem top inset clears the fixed header",
-    "without bringing back the removed bottom whitespace."
+    "the Linear-reading schematic mini-heading. A 3rem top inset clears the fixed header",
+    "without bringing back the removed bottom whitespace.",
+    "",
+    "**Latest controls pass.** Share has one browser-native **Refresh & Copy** action and",
+    "always builds it from the current view. Named Quick views now clear custom style,",
+    "filter and geometry values before applying their defaults; Custom still restores the",
+    "last hand-tuned state. Plot-control rows and Quick-view/reset buttons are 3rem tall.",
+    "The split-row selector now targets only the horizontal row, so the similarly named",
+    "popover wrapper no longer draws a second overlapping outline. Mapping's icon-button",
+    "CSS is scoped to mapping cells, restoring the full **♻️ Reset it** dialog button."
    ],
    "whatsLeft": [
     "Nothing."
    ],
    "decisions": [
-    "Review the Scanpath control line, both comparison surfaces, all five subtabs, and",
-    "the animation popover/transport at the window sizes from the supplied screenshots.",
-    "Confirm that Top & bottom is the preferred visible name; the saved/deep-link wire",
-    "value remains Stacked for compatibility.",
-    "The requested A/B legend redesign is deliberately separate as #UX-95 (Backlog)."
+    "Review **Refresh & Copy** in Share and confirm it replaces both old actions while copying the current view.",
+    "Review the 3rem top inset, taller single-outline plot controls, visible **♻️ Reset it** button, and Scanpath-default / Custom-restore Quick-view behavior at the supplied window sizes."
    ],
    "background": [
     "The comparison column is a selection constraint: candidates must have the same",
@@ -1486,7 +1495,7 @@ window.TRACKER = {
     "in the app. Local stimulus paths remain deliberately outside links and saved configs."
    ],
    "statusNote": [
-    "**Pending approval — follow-up pass completed 2026-08-20.**"
+    "**Ready for review — Share and plot-control follow-ups completed 2026-08-20.**"
    ]
   },
   {

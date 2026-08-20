@@ -1990,7 +1990,7 @@ def _build_share_query(
 
 
 def _render_share_link_widget(query: str) -> None:
-    """Render the copyable share link (read-only field + Copy button).
+    """Render the current share link and its single Refresh & Copy action.
 
     A same-origin ``st.iframe`` embed (same trick as the tour — see
     ``tour.render_spotlight_tour``) composes the full URL from the *live* address:
@@ -2007,7 +2007,7 @@ def _render_share_link_widget(query: str) -> None:
           <div class="sps-share-row">
             <input id="sps-share-url" type="text" readonly
                    aria-label="Shareable link" />
-            <button id="sps-share-copy" type="button">Copy link</button>
+            <button id="sps-share-action" type="button">Refresh &amp; Copy</button>
           </div>
           <div id="sps-share-status" class="sps-share-status"></div>
         </div>
@@ -2023,12 +2023,12 @@ def _render_share_link_widget(query: str) -> None:
             background: rgba(128, 128, 128, 0.08); color: inherit;
             font-size: 0.85rem; font-family: ui-monospace, monospace;
           }}
-          #sps-share-copy {{
+          #sps-share-action {{
             flex: 0 0 auto; padding: 0.45rem 0.9rem; cursor: pointer;
             border: 1px solid #1f77b4; border-radius: 8px; white-space: nowrap;
             background: #1f77b4; color: #fff; font-weight: 600; font-size: 0.85rem;
           }}
-          #sps-share-copy:hover {{ background: #185fa5; }}
+          #sps-share-action:hover {{ background: #185fa5; }}
           .sps-share-status {{
             min-height: 1.1rem; margin-top: 0.35rem; font-size: 0.8rem;
             color: #2e7d32; font-weight: 600;
@@ -2042,7 +2042,7 @@ def _render_share_link_widget(query: str) -> None:
           const url = query ? base + "?" + query : base;
           const input = document.getElementById("sps-share-url");
           const status = document.getElementById("sps-share-status");
-          const btn = document.getElementById("sps-share-copy");
+          const btn = document.getElementById("sps-share-action");
           input.value = url;
           input.addEventListener("focus", function () {{ input.select(); }});
           function flash(msg) {{
@@ -2076,37 +2076,18 @@ def _render_share_body(data_choice: str) -> None:
     """Render the **Share** subtab: a deep link to the current view (data source +
     trial + visualization settings).
 
-    The link is built **lazily** — only when the user clicks *Refresh link* (and
-    once on first open). It is NOT rebuilt on
-    every rerun, so tweaking an unrelated control doesn't silently rewrite a link
-    the user is about to share; the link reflects the settings as of the last
-    refresh. The link always carries the selected participant, trial and all
-    shareable visualization settings."""
+    Streamlit reruns after every relevant control change, so the query handed to
+    the embedded **Refresh & Copy** button already reflects the current view when
+    the user clicks it. The link always carries the selected participant, trial
+    and all shareable visualization settings."""
     st.markdown(
         "**Share this view** — a link that reopens Scanpath Studio on the "
         "current trial with your visualization settings."
     )
-    refresh = st.button(
-        "🔄 Refresh link",
-        key="share_refresh",
-        type="primary",
-        help="Rebuild the link from the current trial + settings.",
-    )
-    # What the frozen link is allowed to go stale *against*: the view settings, on
-    # purpose (tweaking a control must not silently rewrite a link the user is
-    # about to paste). Not the data source, and — DATA-27 — not the corpus within
-    # it. Before this task a stale `?source=` named a different *kind* of source,
-    # which reads as obviously wrong; now every public corpus shares one kind, so
-    # a stale link would confidently open a *different corpus* of the same kind,
-    # with a caveat naming the corpus the user is no longer looking at. That is
-    # the silent-wrong-corpus failure this feature is most careful about, so the
-    # freeze is keyed on the source selection.
-    identity = (data_choice, st.session_state.get(PUBLIC_DATASET_CHOICE))
-    stale = st.session_state.get("_share_query_identity") != identity
-    if refresh or stale or st.session_state.get("_share_query_frozen") is None:
-        st.session_state["_share_query_frozen"] = _build_share_query(data_choice)
-        st.session_state["_share_query_identity"] = identity
-    query, caveats = st.session_state["_share_query_frozen"]
+    query, caveats = _build_share_query(data_choice)
+    # Keep the rendered value inspectable in AppTest without duplicating the
+    # browser-only URL composition logic.
+    st.session_state["_share_query_current"] = (query, caveats)
     for note in caveats:
         st.caption("⚠️ " + note)
     _render_share_link_widget(query)
@@ -2114,7 +2095,7 @@ def _render_share_body(data_choice: str) -> None:
         "If the recipient runs Scanpath Studio at a different address or port, "
         "replace the start of the URL before opening it."
     )
-    st.caption("Reflects your settings as of the last refresh.")
+    st.caption("Refresh & Copy uses the current trial and settings.")
 
 
 # -----------------------------------------------------------------------------

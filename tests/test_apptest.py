@@ -2892,17 +2892,15 @@ class TestCorpusAnalysisTab:
 
 
 @pytest.mark.timeout(90)
-class TestShareLinkLazy:
-    """The Share link builds lazily — frozen until the user presses Refresh."""
+class TestShareLinkCurrent:
+    """The merged Share action always receives the current view."""
 
-    def test_link_frozen_until_refresh(self):
+    def test_link_tracks_settings_without_a_second_refresh_button(self):
         at = _make_apptest(synthetic=True)
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        # Built once on first render so there's always something to copy.
-        assert "_share_query_frozen" in at.session_state
-        q1, _ = at.session_state["_share_query_frozen"]
-        # Flip a viz control WITHOUT pressing Refresh — the link must not change.
+        assert "_share_query_current" in at.session_state
+        q1, _ = at.session_state["_share_query_current"]
         current = (
             at.session_state["global_show_words"]
             if "global_show_words" in at.session_state
@@ -2910,13 +2908,9 @@ class TestShareLinkLazy:
         )
         at.session_state["global_show_words"] = not current
         at.run(timeout=30)
-        q2, _ = at.session_state["_share_query_frozen"]
-        assert q2 == q1, "link must not rebuild without Refresh"
-        # Press Refresh — now the link reflects the new setting.
-        at.button(key="share_refresh").click()
-        at.run(timeout=30)
-        q3, _ = at.session_state["_share_query_frozen"]
-        assert q3 != q1, "Refresh must rebuild the link from current settings"
+        q2, _ = at.session_state["_share_query_current"]
+        assert q2 != q1, "Refresh & Copy must receive the current settings"
+        assert not [button for button in at.button if button.key == "share_refresh"]
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
 
 
@@ -3349,6 +3343,7 @@ class TestResetSettings:
         # itself happens on the confirm click, one run later.
         confirm = [b for b in at.button if b.key == "reset_viz_confirm"]
         assert confirm, "Reset confirmation button not rendered"
+        assert confirm[0].label == "♻️ Reset it"
         at = confirm[0].click().run(timeout=30)
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"

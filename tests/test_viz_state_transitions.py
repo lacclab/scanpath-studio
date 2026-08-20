@@ -13,7 +13,7 @@ def _viz_store() -> dict:
     return deepcopy(controls._VIZ_WIDGET_DEFAULTS)
 
 
-def test_illustration_to_scanpath_restores_shared_style(monkeypatch):
+def test_illustration_to_scanpath_restores_named_view_defaults(monkeypatch):
     store = _viz_store()
     store.update(
         {
@@ -42,13 +42,13 @@ def test_illustration_to_scanpath_restores_shared_style(monkeypatch):
     assert controls._active_quick_view() == "scanpath"
     assert store["global_saccade_render_mode"] == "Straight"
     assert store["global_fixation_snap_to_word"] is False
-    assert store["global_saccade_color_mode"] == "By type"
-    assert store["global_fixation_opacity"] == 0.45
+    assert store["global_saccade_color_mode"] == "Uniform"
+    assert store["global_fixation_opacity"] == 0.7
     assert store["single_animate"] is True
     assert controls._PRE_ILLUSTRATION_STATE not in store
 
 
-def test_leaving_illustration_keeps_an_explicit_intervening_edit(monkeypatch):
+def test_leaving_illustration_does_not_leak_an_intervening_edit(monkeypatch):
     store = _viz_store()
     monkeypatch.setattr(controls.st, "session_state", store)
 
@@ -56,7 +56,7 @@ def test_leaving_illustration_keeps_an_explicit_intervening_edit(monkeypatch):
     store["global_fixation_opacity"] = 0.8
     controls._apply_view_preset("heatmap")
 
-    assert store["global_fixation_opacity"] == 0.8
+    assert store["global_fixation_opacity"] == 0.7
     assert store["global_saccade_render_mode"] == "Straight"
     assert store["global_fixation_snap_to_word"] is False
     assert controls._active_quick_view() == "heatmap"
@@ -75,16 +75,16 @@ def test_restored_illustration_without_snapshot_can_exit_to_scanpath(monkeypatch
         assert store[key] == controls._VIZ_WIDGET_DEFAULTS[key]
 
 
-def test_reset_settings_discards_the_illustration_restore_snapshot(monkeypatch):
+def test_reset_settings_discards_the_quick_view_selection(monkeypatch):
     store = _viz_store()
     monkeypatch.setattr(controls.st, "session_state", store)
     monkeypatch.setattr(controls.st, "query_params", {})
     controls._apply_view_preset("illustration")
-    assert controls._PRE_ILLUSTRATION_STATE in store
+    assert store[controls._QUICK_VIEW_SELECTION_KEY] == "illustration"
 
     controls.reset_viz_settings()
 
-    assert controls._PRE_ILLUSTRATION_STATE not in store
+    assert controls._QUICK_VIEW_SELECTION_KEY not in store
 
 
 def test_custom_quick_view_remembers_manual_settings(monkeypatch):
@@ -92,15 +92,43 @@ def test_custom_quick_view_remembers_manual_settings(monkeypatch):
     monkeypatch.setattr(controls.st, "session_state", store)
 
     controls._apply_view_preset("scanpath")
+    # The real callback is followed by a rerun, where the rail captures the
+    # complete named-view baseline before any manual control can be edited.
+    assert controls._active_quick_view() == "scanpath"
     store["global_fixation_opacity"] = 0.42
     assert controls._active_quick_view() == "custom"
 
     controls._apply_view_preset("heatmap")
     assert controls._active_quick_view() == "heatmap"
+    assert store["global_fixation_opacity"] == 0.7
     controls._apply_view_preset("custom")
 
     assert controls._active_quick_view() == "custom"
     assert store["global_fixation_opacity"] == 0.42
+
+
+def test_scanpath_quick_view_clears_custom_configuration(monkeypatch):
+    store = _viz_store()
+    store.update(
+        {
+            "global_fixation_opacity": 0.31,
+            "global_fixation_color": "#abcdef",
+            "global_show_heatmap": True,
+            "global_canvas_width": 999,
+            "_canvas_seeded_for": "demo",
+        }
+    )
+    monkeypatch.setattr(controls.st, "session_state", store)
+    monkeypatch.setattr(controls.st, "query_params", {"fixation_opacity": "0.31"})
+
+    controls._apply_view_preset("scanpath")
+
+    assert store["global_fixation_opacity"] == 0.7
+    assert store["global_fixation_color"] == controls.DEFAULT_FIXATION_COLOR
+    assert store["global_show_heatmap"] is False
+    assert "global_canvas_width" not in store
+    assert "_canvas_seeded_for" not in store
+    assert controls.st.query_params == {}
 
 
 def test_full_monitor_changes_only_framing_state_and_cache_input(monkeypatch):

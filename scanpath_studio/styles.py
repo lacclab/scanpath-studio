@@ -8,7 +8,7 @@ def get_app_css() -> str:
     return """
     <style>
     .stMainBlockContainer,
-    section.main > div.block-container {padding-top: 2rem; padding-bottom: 0 !important;}
+    section.main > div.block-container {padding-top: 3rem; padding-bottom: 0 !important;}
     .stMainBlockContainer > [data-testid="stVerticalBlock"] > :last-child,
     section.main > div.block-container > [data-testid="stVerticalBlock"] > :last-child {
         margin-bottom: 0 !important;
@@ -361,9 +361,10 @@ def get_app_css() -> str:
        3px, and anything that nudges either half (a longer label, a wider rail
        font) wraps the ▾ onto its own line. At a glyph's width there is room to
        spare. */
-    [class*="st-key-split_mode_"] {
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"] {
         width: 100%;
         max-width: 100%;
+        min-height: 3rem;
         align-items: stretch !important;
         border: 1px solid var(--sps-border);
         /* A rounded rectangle, not a pill — it is what the Zoom control being
@@ -372,7 +373,8 @@ def get_app_css() -> str:
         border-radius: 0.6rem;
         padding-left: 0.55rem;
     }
-    [class*="st-key-split_mode_"] [data-testid="stElementContainer"] {
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stElementContainer"] {
         display: flex;
         align-items: center;
     }
@@ -383,16 +385,19 @@ def get_app_css() -> str:
        than a labelled or icon-bearing button, so the row needs ~35px less, and
        the *label* is allowed to give way before the trigger does. The switch
        may shrink and ellipsise; the ▾ never moves. */
-    [class*="st-key-split_mode_"] {
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"] {
         flex-wrap: nowrap !important;
     }
-    [class*="st-key-split_mode_"] > div:not(:has([data-testid="stPopover"])) {
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        > div:not(:has([data-testid="stPopover"])) {
         min-width: 0;
         flex: 1 1 auto;
         padding-right: 0.45rem;
     }
-    [class*="st-key-split_mode_"] [data-testid="stWidgetLabel"] p,
-    [class*="st-key-split_mode_"] [data-testid="stMarkdownContainer"] p {
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stWidgetLabel"] p,
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stMarkdownContainer"] p {
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -414,7 +419,8 @@ def get_app_css() -> str:
        control that silently cannot be reached. Wrapping costs a rounded box with
        the ▾ tucked under the switch, which reads more like a card than a split
        button; that is the right way to lose. */
-    [class*="st-key-split_mode_"] > div:has([data-testid="stPopover"]) {
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        > div:has([data-testid="stPopover"]) {
         display: flex;
         align-items: center;
         flex: 0 0 auto;
@@ -424,9 +430,11 @@ def get_app_css() -> str:
     /* Target the popover's own button, never `… button`: the toggle's label
        carries Streamlit's `?` help icon, which is also a button and would
        otherwise be restyled along with it. */
-    [class*="st-key-split_mode_"] [data-testid="stPopover"] button {
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stPopover"] button {
         min-width: 0 !important;
-        min-height: 0 !important;
+        min-height: 100% !important;
+        height: 100% !important;
         width: auto !important;
         padding: 0 0.3rem !important;
         border: 0 !important;
@@ -439,7 +447,7 @@ def get_app_css() -> str:
        rather than `:hover` keeps a disabled ▾ inert — it is disabled exactly
        when its mode is off, and a hover response would promise a menu that,
        while it does open, is entirely greyed. */
-    [class*="st-key-split_mode_"]
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
         > div:has([data-testid="stPopover"] button:hover:enabled) {
         background: var(--sps-accent-soft);
     }
@@ -778,18 +786,18 @@ def get_app_css() -> str:
        the "I chose this" that a same-value re-pick cannot report). It has to
        keep reading as the icon it replaced: no chrome, no button box, no width
        of its own — only the pointer and a lift on hover say it is pressable. */
-    [class*="st-key-"][class*="_confirm"] button {
+    [class*="st-key-"][class*="_cell_confirm"] button {
         min-height: 0;
         padding: 0;
         border: none;
         background: none;
         line-height: 1.2;
     }
-    [class*="st-key-"][class*="_confirm"] button:hover {
+    [class*="st-key-"][class*="_cell_confirm"] button:hover {
         background: none;
         transform: translateY(-1px);
     }
-    [class*="st-key-"][class*="_confirm"] button p { font-size: 0.95rem; }
+    [class*="st-key-"][class*="_cell_confirm"] button p { font-size: 0.95rem; }
 
     /* UX-89 — the hairline between the Fixations block and the AOI block. The
        mapping is grouped by *table* now (each table's identity row and its
@@ -939,6 +947,15 @@ def get_app_css() -> str:
        extra pause so the rule and the Fixations border do not crowd together. */
     .st-key-scanpath_rail .st-key-palette_layers_divider {
         margin-bottom: 0.4rem !important;
+    }
+    /* Plot-rail triggers need enough height for their labels and switch tracks;
+       the app-wide compact button treatment otherwise leaves them cramped. */
+    .st-key-scanpath_rail .st-key-viz_view_scanpath button,
+    .st-key-scanpath_rail .st-key-viz_view_heatmap button,
+    .st-key-scanpath_rail .st-key-viz_view_illustration button,
+    .st-key-scanpath_rail .st-key-viz_view_custom button,
+    .st-key-scanpath_rail .st-key-reset_viz_settings_btn button {
+        min-height: 3rem;
     }
     /* The rail is deliberately narrow — keep its short headers + toggle labels on
        one line so they don't break mid-word (e.g. "Anima\nte") when it's tight. */

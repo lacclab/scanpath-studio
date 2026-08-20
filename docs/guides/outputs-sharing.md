@@ -33,8 +33,8 @@ MP4 use Chrome/Chromium through Kaleido. See
 ## Share a view
 
 The **Share** subtab creates a deep link containing the selected data source and
-visualization settings. Choose whether the URL includes participant + trial,
-trial only, or settings only.
+visualization settings. **Refresh & Copy** rebuilds the URL from the current
+trial and settings and places it on the clipboard in one step.
 
 A link never contains the fixation or word tables. Built-in data can be reopened
 from the URL; a recipient of an uploaded-data link must load the same dataset.

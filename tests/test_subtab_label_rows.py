@@ -208,3 +208,20 @@ class TestConvertedFields:
         assert widgets, "the panel rendered no widgets to check"
         for widget in widgets:
             assert widget.proto.label_visibility.value == COLLAPSED, widget.label
+
+
+def test_share_widget_has_one_refresh_and_copy_action(monkeypatch):
+    """Refresh and copy are one browser gesture, not two separate buttons."""
+    from scanpath_studio import url_state
+
+    rendered = {}
+
+    def capture(html: str, *, height: int) -> None:
+        rendered.update(html=html, height=height)
+
+    monkeypatch.setattr(url_state, "embed_html_iframe", capture)
+    url_state._render_share_link_widget("source=demo")
+
+    assert rendered["html"].count("<button") == 1
+    assert "Refresh &amp; Copy" in rendered["html"]
+    assert "Copy link" not in rendered["html"]

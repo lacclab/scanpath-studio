@@ -43,7 +43,7 @@ See [Export troubleshooting](export-troubleshooting.md) for video requirements.
 ## Can another person open my share link?
 
 Yes, but uploaded data is not embedded in the URL. The recipient must load the
-same dataset. The Share panel can omit participant and trial IDs; see
+same dataset. Share links include the current participant and trial; see
 [Outputs and sharing](guides/outputs-sharing.md).
 
 ## Does a refresh erase my work?

@@ -518,6 +518,31 @@ class TestSpotlightSelectorsResolve:
         assert "border-left: 1px solid var(--sps-border);" in css
         assert "padding-left: 0.7rem;" in css
 
+    def test_page_top_inset_clears_the_fixed_header(self):
+        """The first Scanpath row must sit fully below Streamlit's fixed chrome."""
+        from scanpath_studio.styles import get_app_css
+
+        css = get_app_css()
+        assert "padding-top: 3rem; padding-bottom: 0 !important;" in css
+
+    def test_plot_control_rows_are_tall_and_have_one_outline(self):
+        """The popover key shares the row prefix; never style both as rows."""
+        from scanpath_studio.styles import get_app_css
+
+        css = get_app_css()
+        row = '[data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]'
+        assert f"{row} {{" in css
+        assert "min-height: 3rem;" in css
+        assert '\n    [class*="st-key-split_mode_"] {' not in css
+        assert ".st-key-reset_viz_settings_btn button" in css
+
+    def test_mapping_confirm_css_does_not_hide_dialog_buttons(self):
+        from scanpath_studio.styles import get_app_css
+
+        css = get_app_css()
+        assert '[class*="_cell_confirm"] button {' in css
+        assert '[class*="_confirm"] button {' not in css
+
     def test_subtabs_use_a_second_plot_width_row(self):
         """UX-43: open subtab content cannot contribute to the rail-row height."""
         import inspect

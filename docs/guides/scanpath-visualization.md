@@ -20,8 +20,9 @@ choose parent-trial or current-screen scope.
 The **Plot controls** rail beside the plot starts with four **Quick views** and
 a **Palette** — often all you need — followed by five collapsible sections:
 
-Scanpath, Heatmap, and Illustration are presets. **Custom** remembers the last
-settings you changed by hand and restores them after you visit another preset.
+Scanpath, Heatmap, and Illustration are deterministic presets: selecting one
+starts from the app defaults before applying that view. **Custom** remembers the
+last settings you changed by hand and restores them after you visit a preset.
 
 | Section | Layers | Use it for |
 | --- | --- | --- |

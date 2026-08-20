@@ -517,7 +517,7 @@ def _share_panel_app():
     _render_share_body(PUBLIC_DATASETS_CHOICE)
 
 
-class TestTheFrozenLinkFollowsTheCorpus:
+class TestTheCurrentLinkFollowsTheView:
     def test_panel_always_shares_the_full_view_without_an_identity_picker(self, bundle):
         from scanpath_studio import app
 
@@ -529,7 +529,7 @@ class TestTheFrozenLinkFollowsTheCorpus:
         }
         at.run(timeout=30)
         assert not at.exception, at.exception
-        query, _ = at.session_state["_share_query_frozen"]
+        query, _ = at.session_state["_share_query_current"]
         parsed = parse_qs(query)
         assert parsed["participant"] == ["p2"]
         assert parsed["trial_id"] == ["t3"]
@@ -541,15 +541,7 @@ class TestTheFrozenLinkFollowsTheCorpus:
         )
         assert "different address or port" in copy
 
-    def test_switching_corpus_invalidates_the_frozen_share_link(self, bundle):
-        """The link is frozen against *setting* changes on purpose — not against
-        a change of corpus.
-
-        Before this task a stale link named a different **kind** of source, which
-        reads as obviously wrong ("this data source can't be rebuilt"). Now every
-        public corpus shares one kind, so a stale link opens a specific, wrong
-        corpus and the caveat names a corpus the user is no longer looking at.
-        """
+    def test_switching_corpus_updates_the_share_link(self, bundle):
         from scanpath_studio import app
 
         potec = app.benchmark_corpus_label("PoTeC")
@@ -559,37 +551,34 @@ class TestTheFrozenLinkFollowsTheCorpus:
         at.session_state["public_dataset_choice"] = potec
         at.run(timeout=30)
         assert not at.exception, at.exception
-        query, caveats = at.session_state["_share_query_frozen"]
+        query, caveats = at.session_state["_share_query_current"]
         assert parse_qs(query)["corpus"] == ["harmonised-potec"]
         assert any("PoTeC" in note for note in caveats), caveats
 
-        # Switch the picker to another corpus and come back to Share, without
-        # pressing 🔄 Refresh link — as a user moving between subtabs does.
+        # The single Refresh & Copy action must receive the corpus now on screen.
         at.session_state["public_dataset_choice"] = provo
         at.run(timeout=30)
         assert not at.exception, at.exception
-        query, caveats = at.session_state["_share_query_frozen"]
+        query, caveats = at.session_state["_share_query_current"]
         assert parse_qs(query)["corpus"] == ["harmonised-provo"], (
             "the panel handed out a link naming the previously selected corpus"
         )
         assert not any("PoTeC" in note for note in caveats), caveats
 
-    def test_a_setting_change_still_does_not_rewrite_the_link(self, bundle):
-        """The other half: the freeze itself survives. A link the user is about
-        to paste must not silently change under an unrelated control."""
+    def test_a_setting_change_updates_the_share_link(self, bundle):
         from scanpath_studio import app
 
         at = AppTest.from_function(_share_panel_app)
         at.session_state["public_dataset_choice"] = app.benchmark_corpus_label("Provo")
         at.run(timeout=30)
         assert not at.exception, at.exception
-        before, _ = at.session_state["_share_query_frozen"]
+        before, _ = at.session_state["_share_query_current"]
 
         at.session_state["global_show_words"] = not st_value_of(at, "global_show_words")
         at.run(timeout=30)
         assert not at.exception, at.exception
-        after, _ = at.session_state["_share_query_frozen"]
-        assert after == before, "the link rebuilt without a Refresh"
+        after, _ = at.session_state["_share_query_current"]
+        assert after != before, "Refresh & Copy received stale settings"
 
 
 def st_value_of(at, key: str, default=True):
@@ -622,7 +611,7 @@ class TestRoundTripThroughTheApp:
             sender.session_state["data_source_choice"] = label
             sender.run(timeout=60)
             assert not sender.exception, f"{label}: {sender.exception}"
-            query, _caveats = sender.session_state["_share_query_frozen"]
+            query, _caveats = sender.session_state["_share_query_current"]
             parsed = parse_qs(query)
             assert parsed["source"] == ["corpus"], (label, parsed.get("source"))
             slugs[label] = parsed["corpus"][0]

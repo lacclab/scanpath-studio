@@ -822,13 +822,11 @@ def _saccade_filter_badge() -> str:
     return f" · {len(hidden)} hidden"
 
 
-# Quick-view presets: one click sets the *layer* toggles to a focused subset, so
-# a user lands on a legible picture instead of toggling layers one by one. The
-# Illustration preset also applies four presentation overrides. Those overrides
-# are temporary: ``_apply_view_preset`` snapshots them on the way in and restores
-# them on the way out, so Illustration → Scanpath cannot leave arc/snap/opacity
-# settings behind while the button says Scanpath. Other per-layer styling
-# (colours, sizes, colorscales) remains untouched.
+# Quick-view presets: one click starts from the app's visualization defaults and
+# then applies the focused layer/style overrides below. A named view is therefore
+# deterministic: returning to Scanpath cannot keep a colour, size, filter or
+# geometry edit made in Custom. The persistent Custom tile owns that hand-tuned
+# state and restores it exactly when selected again.
 _ILLUSTRATION_OVERRIDE_KEYS = (
     "global_saccade_render_mode",
     "global_fixation_snap_to_word",
@@ -899,16 +897,16 @@ _VIEW_PRESETS: dict[str, dict[str, object]] = {
 
 
 def _apply_view_preset(name: str) -> None:
-    """Apply a Quick-view preset and keep Illustration overrides reversible.
+    """Apply one deterministic named view, or restore the Custom snapshot.
 
     Runs as a button ``on_click`` callback, i.e. *before* the next rerun
     instantiates the layer checkboxes — so writing their ``global_show_*`` keys
     here is picked up cleanly (no "set after widget instantiated" warning).
 
-    Illustration owns four style/geometry values that ordinary quick views do
-    not. Preserve their incoming values once, then restore each value that is
-    still carrying Illustration's override when another preset is selected. A
-    value edited explicitly while Illustration is active is therefore retained.
+    Named views always begin from ``_VIZ_WIDGET_DEFAULTS``. Existing dynamic
+    ``global_*`` values are cleared so the next app rerun can re-seed dataset-
+    dependent canvas/field defaults. Custom is the only view that preserves
+    manual edits; leaving it snapshots the complete live ``global_*`` state.
     """
     if name not in {*_VIEW_PRESETS, _CUSTOM_VIEW}:
         raise ValueError(f"Unknown quick-view preset: {name}")
@@ -920,45 +918,43 @@ def _apply_view_preset(name: str) -> None:
     if name == _CUSTOM_VIEW:
         custom = ss.get(_QUICK_VIEW_CUSTOM_STATE)
         if isinstance(custom, dict):
+            for key in list(ss):
+                if str(key).startswith("global_"):
+                    ss.pop(key, None)
             for key, value in custom.items():
                 ss[key] = deepcopy(value)
         ss[_QUICK_VIEW_SELECTION_KEY] = _CUSTOM_VIEW
         ss.pop(_QUICK_VIEW_APPLIED_STATE, None)
         return
 
-    illustration = _VIEW_PRESETS["illustration"]
-    was_illustration = all(ss.get(key) == value for key, value in illustration.items())
-    if name == "illustration":
-        if _PRE_ILLUSTRATION_STATE not in ss:
-            ss[_PRE_ILLUSTRATION_STATE] = {
-                key: (
-                    _VIZ_WIDGET_DEFAULTS[key]
-                    if was_illustration
-                    else ss.get(key, _VIZ_WIDGET_DEFAULTS[key])
-                )
-                for key in _ILLUSTRATION_OVERRIDE_KEYS
-            }
-    else:
-        previous = ss.pop(_PRE_ILLUSTRATION_STATE, None)
-        # A saved config, deep link, or hot-reloaded session can enter on the
-        # Illustration values without ever running the callback that captures a
-        # snapshot. Falling back to the ordinary defaults still makes the exit
-        # deterministic instead of leaving Illustration geometry behind.
-        if previous is None and was_illustration:
-            previous = {
-                key: _VIZ_WIDGET_DEFAULTS[key] for key in _ILLUSTRATION_OVERRIDE_KEYS
-            }
-        if previous is not None:
-            for key in _ILLUSTRATION_OVERRIDE_KEYS:
-                # Do not overwrite an explicit edit made after Illustration was
-                # applied; only undo the value the preset itself still owns.
-                if ss.get(key) == illustration[key]:
-                    ss[key] = previous.get(key, _VIZ_WIDGET_DEFAULTS[key])
+    for key in list(ss):
+        if str(key).startswith("global_"):
+            ss.pop(key, None)
+    for key, value in _VIZ_WIDGET_DEFAULTS.items():
+        if key.startswith("global_"):
+            ss[key] = deepcopy(value)
+    # Canvas/font values are source-dependent rather than static defaults.
+    # Removing their guards lets app.seed_canvas_state restore them on the rerun
+    # that follows this button callback.
+    ss.pop("_canvas_seeded_for", None)
+    ss.pop("_font_seeded_for", None)
+    ss.pop("_palette_picked", None)
+    ss.pop(_PRE_ILLUSTRATION_STATE, None)
+
+    # A deep-link preset is applied at the top of every rerun. Once the user has
+    # explicitly chosen a Quick view it must not immediately put the old visual
+    # settings back; selection/source parameters are not part of this list.
+    from . import session_keys as _sk
+
+    for param in _sk.URL_PRESET_PARAMS:
+        st.query_params.pop(param, None)
 
     for key, value in _VIEW_PRESETS[name].items():
-        ss[key] = value
+        ss[key] = deepcopy(value)
     ss[_QUICK_VIEW_SELECTION_KEY] = name
-    ss[_QUICK_VIEW_APPLIED_STATE] = _capture_quick_view_state()
+    # The complete baseline is captured by `_sync_quick_view_state` after the
+    # next rerun has restored data-dependent defaults.
+    ss.pop(_QUICK_VIEW_APPLIED_STATE, None)
 
 
 def _capture_quick_view_state() -> dict[str, object]:
@@ -996,6 +992,9 @@ def _sync_quick_view_state() -> str:
         return _CUSTOM_VIEW
 
     applied = ss.get(_QUICK_VIEW_APPLIED_STATE)
+    if not isinstance(applied, dict):
+        ss[_QUICK_VIEW_APPLIED_STATE] = _capture_quick_view_state()
+        return str(selected)
     if isinstance(applied, dict) and _capture_quick_view_state() != applied:
         ss[_QUICK_VIEW_SELECTION_KEY] = _CUSTOM_VIEW
         ss[_QUICK_VIEW_CUSTOM_STATE] = _capture_quick_view_state()

@@ -11,8 +11,12 @@ content (titles/instructions as well as questions/answers). Share always include
 participant, trial, and visualization settings; the UI has no identity-mode
 picker, though `_build_share_query` retains opt-out arguments for headless callers.
 
-The plot rail starts with equal-width Animate/Compare split controls and a 2×2
-Quick-view grid (Scanpath / Heatmap / Illustration / persistent Custom). Checkbox
+The plot rail starts with equal-width, 3rem-tall Animate/Compare split controls
+and a 2×2 Quick-view grid (Scanpath / Heatmap / Illustration / persistent Custom).
+Named views reset to the visualization defaults before applying their preset;
+Custom alone restores hand-tuned state. The split-row CSS is scoped to the keyed
+`stHorizontalBlock`, not the similarly named popover wrapper, so each row has one
+outline. Checkbox
 rows use the shared label-left/underline-help primitive. Compare displays the
 wire value `Stacked` as **Top & bottom**; the wire value remains unchanged.
 Animation transport is above the plot and a non-1× speed triggers the automatic
@@ -24,11 +28,17 @@ exclude the selected trial, and show only trial IDs above their panels.
 Data Management renders integer dataset counts, pairs each Kind icon with its
 word (Demo / Manual / Private / Public), names the active dataset in the
 **What's in…** heading, and presents mappings in the add-dataset field-grid
-grammar. The page keeps a 2rem top inset so the fixed header does not clip the
+grammar. The page keeps a 3rem top inset so the fixed header does not clip the
 first row, while its bottom remains flush. The
 single-trial chip row no longer repeats participant ID in a title cell, and the
 Fixations controls keep the snap setting without the separate
 “Linear-reading schematic” caption.
+
+Share renders one **Refresh & Copy** browser action beside the URL. The query is
+rebuilt from the current view on each Streamlit rerun, so the one button always
+copies the current trial and settings without a separate server-side refresh.
+Mapping's icon-only confirm CSS is scoped to `_cell_confirm`; broad `_confirm`
+matching also stripped the reset dialog's primary button, leaving only its emoji.
 
 ## Run
 

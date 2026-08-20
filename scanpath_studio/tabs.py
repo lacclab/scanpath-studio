@@ -355,6 +355,189 @@ def _embed_html_iframe(html: str, *, height: int) -> None:
     embed_html_iframe(html, height=height)
 
 
+# VIZ-zoom (MVP): Plotly's own zoom only rescales the *axes*, so the word boxes
+# and saccades spread apart while the fixation markers, label font and line
+# widths stay pinned at the screen-pixel sizes they were built with — the plot
+# stops being true to scale the moment you zoom. These modebar buttons are
+# therefore removed and `dragmode` is switched off (below), and magnification is
+# done by scaling the whole rendered block instead, exactly like the fit-to-column
+# transform this function already applies.
+_NATIVE_ZOOM_BUTTONS = (
+    "zoom2d",
+    "pan2d",
+    "zoomIn2d",
+    "zoomOut2d",
+    "autoScale2d",
+    "resetScale2d",
+)
+
+_ZOOM_MAX = 8.0
+
+_TRUE_SCALE_TEMPLATE = """
+<div id="wrap-__KEY__" style="position:relative;width:100%;">
+  <div id="fit-__KEY__" style="width:100%;overflow:hidden;">
+    <div id="size-__KEY__" style="width:__W__px;height:__H__px;">
+      <div id="box-__KEY__" style="width:__W__px;height:__H__px;
+           transform-origin:top left;">__PLOT__</div>
+    </div>
+  </div>
+  __TOOLBAR__
+</div>
+<script>
+(function() {
+  var W = __W__, H = __H__, ZMAX = __ZMAX__, ZOOMABLE = __ZOOMABLE__;
+  var outer = document.getElementById("fit-__KEY__");
+  var size = document.getElementById("size-__KEY__");
+  var box = document.getElementById("box-__KEY__");
+  var label = document.getElementById("zoomlabel-__KEY__");
+  var zoom = 1, base = 1;
+
+  function baseScale() {
+    var avail = outer.clientWidth || W;
+    return __SCALE_JS__;
+  }
+  // One uniform transform for fit x zoom: boxes, fixations, labels and stroke
+  // widths all magnify together, so the figure stays true to scale.
+  function render() {
+    base = baseScale();
+    var s = base * zoom;
+    box.style.transform = "scale(" + s + ")";
+    size.style.width = Math.round(W * s) + "px";
+    size.style.height = Math.round(H * s) + "px";
+    outer.style.height = Math.round(H * base) + "px";
+    outer.style.overflow = zoom > 1.001 ? "auto" : "hidden";
+    outer.style.cursor = zoom > 1.001 ? "grab" : "";
+    if (label) { label.textContent = Math.round(zoom * 100) + "%"; }
+  }
+  // Zoom about a viewport-relative anchor so the point under the cursor (or the
+  // centre, for the buttons) stays put.
+  function setZoom(next, ax, ay) {
+    next = Math.min(ZMAX, Math.max(1, next));
+    if (Math.abs(next - zoom) < 1e-6) { return; }
+    var prev = base * zoom;
+    zoom = next;
+    render();
+    var ratio = (base * zoom) / prev;
+    if (ax === undefined) { ax = outer.clientWidth / 2; ay = outer.clientHeight / 2; }
+    outer.scrollLeft = (outer.scrollLeft + ax) * ratio - ax;
+    outer.scrollTop = (outer.scrollTop + ay) * ratio - ay;
+  }
+  render();
+  window.addEventListener("resize", render);
+  setTimeout(render, 150);
+
+  if (!ZOOMABLE) { return; }
+
+  // Trackpad pinch arrives as ctrl+wheel, so this covers pinch and Ctrl/Cmd +
+  // scroll. A plain wheel is left alone: it scrolls (i.e. pans) the zoomed plot.
+  outer.addEventListener("wheel", function(e) {
+    if (!e.ctrlKey && !e.metaKey) { return; }
+    e.preventDefault();
+    var r = outer.getBoundingClientRect();
+    setZoom(zoom * Math.exp(-e.deltaY * 0.0025), e.clientX - r.left, e.clientY - r.top);
+  }, {passive: false});
+
+  // Drag to pan once zoomed. Capture phase, because Plotly's drag layer sits on
+  // top; the click is only swallowed once the pointer actually moves, so the
+  // modebar and hover still work.
+  var panning = false, moved = false, sx = 0, sy = 0, sl = 0, st = 0;
+  outer.addEventListener("mousedown", function(e) {
+    if (zoom <= 1.001 || e.button !== 0) { return; }
+    panning = true; moved = false;
+    sx = e.clientX; sy = e.clientY; sl = outer.scrollLeft; st = outer.scrollTop;
+  }, true);
+  document.addEventListener("mousemove", function(e) {
+    if (!panning) { return; }
+    var dx = e.clientX - sx, dy = e.clientY - sy;
+    if (!moved && Math.abs(dx) + Math.abs(dy) < 3) { return; }
+    moved = true;
+    e.preventDefault();
+    outer.style.cursor = "grabbing";
+    outer.scrollLeft = sl - dx;
+    outer.scrollTop = st - dy;
+  }, true);
+  document.addEventListener("mouseup", function() {
+    panning = false;
+    outer.style.cursor = zoom > 1.001 ? "grab" : "";
+  }, true);
+
+  function on(id, fn) {
+    var el = document.getElementById(id + "-__KEY__");
+    if (el) { el.addEventListener("click", fn); }
+  }
+  on("zoomin", function() { setZoom(zoom * 1.25); });
+  on("zoomout", function() { setZoom(zoom / 1.25); });
+  on("zoomreset", function() {
+    zoom = 1; render(); outer.scrollLeft = 0; outer.scrollTop = 0;
+  });
+
+  // Switch off Plotly's own drag interactions so a drag on the plot pans this
+  // block instead of box-zooming the axes (which is what broke the sizing).
+  (function killNativeZoom() {
+    var gd = document.getElementById("truescale-__KEY__");
+    if (!window.Plotly || !gd || !gd._fullLayout) { setTimeout(killNativeZoom, 100); return; }
+    window.Plotly.relayout(gd, {dragmode: false});
+  })();
+})();
+</script>
+"""
+
+_ZOOM_TOOLBAR = """
+  <div id="zoombar-__KEY__" style="position:absolute;top:4px;left:4px;z-index:5;
+       display:flex;gap:2px;align-items:center;padding:2px 4px;
+       font:11px/1.6 system-ui,sans-serif;color:#444;
+       background:rgba(255,255,255,0.88);border:1px solid #ddd;border-radius:4px;">
+    <button id="zoomout-__KEY__" title="Zoom out" style="__BTN__">&minus;</button>
+    <span id="zoomlabel-__KEY__" style="min-width:34px;text-align:center;">100%</span>
+    <button id="zoomin-__KEY__" title="Zoom in" style="__BTN__">+</button>
+    <button id="zoomreset-__KEY__" title="Reset zoom" style="__BTN__">&#8635;</button>
+  </div>
+"""
+
+_ZOOM_BUTTON_CSS = (
+    "border:1px solid #ddd;background:#fff;border-radius:3px;cursor:pointer;"
+    "width:18px;height:18px;line-height:1;padding:0;color:#444;font-size:12px;"
+)
+
+
+def _true_scale_html(
+    plot_html: str,
+    *,
+    key: str,
+    width: int,
+    height: int,
+    max_height: int | None,
+    zoomable: bool,
+) -> tuple[str, int]:
+    """Wrap a fixed-size Plotly div in the fit-to-column (+ zoom) transform.
+
+    Pure so the embed markup is testable without a Streamlit run. Returns the
+    HTML and the iframe height to reserve for it.
+    """
+    if max_height is not None:
+        scale_js = f"Math.min(1, avail / W, {int(max_height)} / H)"
+        iframe_height = int(max_height) + 12
+    else:
+        scale_js = "Math.min(1, avail / W)"
+        iframe_height = height + 12
+    toolbar = (
+        _ZOOM_TOOLBAR.replace("__BTN__", _ZOOM_BUTTON_CSS).replace("__KEY__", key)
+        if zoomable
+        else ""
+    )
+    html = (
+        _TRUE_SCALE_TEMPLATE.replace("__TOOLBAR__", toolbar)
+        .replace("__PLOT__", plot_html)
+        .replace("__SCALE_JS__", scale_js)
+        .replace("__ZOOMABLE__", "true" if zoomable else "false")
+        .replace("__ZMAX__", str(_ZOOM_MAX))
+        .replace("__W__", str(int(width)))
+        .replace("__H__", str(int(height)))
+        .replace("__KEY__", key)
+    )
+    return html, iframe_height
+
+
 def _render_true_scale_chart(fig, *, key: str, max_height: int | None = None) -> None:
     """Display a spatial figure true-to-scale, fitted to the column width.
 
@@ -366,16 +549,26 @@ def _render_true_scale_chart(fig, *, key: str, max_height: int | None = None) ->
     width. A uniform transform keeps boxes, fixations and text locked at one true
     scale (unlike a Plotly re-layout, which leaves the font fixed), so the plot
     stays faithful to the experiment at any column width — and never needs
-    horizontal scrolling. It is only scaled down to fit (capped at 1×), so on a
-    wide monitor it sits at true size with margin rather than being stretched.
+    horizontal scrolling. It is only scaled down to fit, so on a wide monitor it
+    sits at true size with margin rather than being stretched.
+
+    **Zoom** rides on the same transform (MVP): the fit scale is multiplied by a
+    zoom factor (1×–8×) driven by the small toolbar, Ctrl/Cmd + wheel and
+    trackpad pinch, with drag-to-pan inside a fixed-height viewport. Plotly's own
+    zoom/pan is removed from the modebar and ``dragmode`` is switched off,
+    because an axis re-layout leaves markers, fonts and line widths at their
+    original pixel sizes — the thing this whole function exists to avoid. Zoom is
+    view-only: it never touches the figure, so exports and Share are unaffected.
 
     ``max_height`` caps the rendered (scaled) height in px — used for the small
     multiples in the *Multiple Comparison* grid, where the figure should also
     shrink to fit a fixed cell height (whichever of width/height binds), and the
     iframe is sized to that cap so panels don't leave a tall band of whitespace.
+    Those panels stay zoom-free.
     """
     width = int(fig.layout.width or 900)
     height = int(fig.layout.height or 600)
+    zoomable = max_height is None
     # VIZ-10: an animation built with autoplay on carries its per-frame duration on
     # the figure; kick off `Plotly.animate` at that speed after mount (Plotly's own
     # `auto_play` would ignore the configured speed). `None` for static figures or
@@ -384,10 +577,13 @@ def _render_true_scale_chart(fig, *, key: str, max_height: int | None = None) ->
     autoplay_script = (
         animation_autoplay_post_script(autoplay_ms) if autoplay_ms is not None else None
     )
+    config: dict = {"responsive": False, "displaylogo": False}
+    if zoomable:
+        config["modeBarButtonsToRemove"] = list(_NATIVE_ZOOM_BUTTONS)
     plot_html = fig.to_html(
         include_plotlyjs="cdn",
         full_html=False,
-        config={"responsive": False, "displaylogo": False},
+        config=config,
         div_id=f"truescale-{key}",
         # to_html defaults to auto_play=True, which auto-runs an animated figure on
         # load at Plotly's default frame duration (ignoring the configured playback
@@ -397,39 +593,14 @@ def _render_true_scale_chart(fig, *, key: str, max_height: int | None = None) ->
         auto_play=False,
         post_script=autoplay_script,
     )
-    # Scale factor: shrink to the available width, and (when capped) also to the
-    # cell height, never upscaling past 1×.
-    if max_height is not None:
-        scale_js = f"Math.min(1, avail / W, {int(max_height)} / H)"
-        iframe_height = int(max_height) + 12
-    else:
-        scale_js = "Math.min(1, avail / W)"
-        iframe_height = height + 12
-    # Wrap the fixed-size plot and scale it to the available (iframe) width.
-    # transform-origin top-left keeps it flush-left; the outer box height tracks
-    # the scaled height so there's no dead space below.
-    html = f"""
-    <div id="fit-{key}" style="width:100%;overflow:hidden;">
-      <div id="box-{key}" style="width:{width}px;height:{height}px;
-           transform-origin:top left;">{plot_html}</div>
-    </div>
-    <script>
-    (function() {{
-      var W = {width}, H = {height};
-      var outer = document.getElementById("fit-{key}");
-      var box = document.getElementById("box-{key}");
-      function fit() {{
-        var avail = outer.clientWidth || W;
-        var s = {scale_js};
-        box.style.transform = "scale(" + s + ")";
-        outer.style.height = Math.round(H * s) + "px";
-      }}
-      fit();
-      window.addEventListener("resize", fit);
-      setTimeout(fit, 150);
-    }})();
-    </script>
-    """
+    html, iframe_height = _true_scale_html(
+        plot_html,
+        key=key,
+        width=width,
+        height=height,
+        max_height=max_height,
+        zoomable=zoomable,
+    )
     # Iframe height = full true height (or the cap); the script trims the
     # visible block to the scaled height.
     _embed_html_iframe(html, height=iframe_height)

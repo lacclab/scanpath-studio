@@ -72,6 +72,12 @@ test = [
     # required for collection under `--strict-markers`.
     "pytest-timeout>=2.1.0",
 ]
+# The linter, pinned to exactly what CI runs (.github/workflows/ci.yml). An
+# unpinned ruff means a local run and CI can disagree — a new release lands new
+# rules and reds a branch that changed nothing. Bump both together.
+lint = [
+    "ruff==0.16.3",
+]
 # Build the documentation site (MkDocs Material + API autodoc from docstrings).
 docs = [
     "mkdocs-material>=9.5",

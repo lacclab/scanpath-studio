@@ -61,6 +61,13 @@ ruff check --exclude other_vis .  # lint
 ruff format --exclude other_vis . # auto-format
 ```
 
+Use **this project's ruff**, not whatever is on `PATH`: `pip install -e ".[lint]"`
+(or `uv run ruff …`) installs the exact version CI runs, pinned in one place —
+the `lint` extra in `pyproject.toml`, mirrored by `.github/workflows/ci.yml`. A
+newer ruff on your machine will pass a file CI then rejects, and a newer one in
+CI will red a branch that changed nothing. To take a new ruff, bump both
+together and fix what its new rules find in the same commit.
+
 Prefer `uv run pytest` over a bare `pytest` or `python -m pytest`: it resolves
 the versions in `uv.lock`, which is what CI installs. There are two ways to get
 a false green. A `.venv` that has drifted to an older pandas is the obvious one;

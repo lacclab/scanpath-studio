@@ -37,7 +37,7 @@ jobs:
       # A regular (non-editable) install: PyInstaller's collect_* helpers need
       # a real installed package tree, not an editable finder.
       - name: Install package + PyInstaller
-        run: pip install . pyinstaller
+        run: pip install . pyinstaller==6.22.2
 
       - name: Build the bundle
         run: pyinstaller --clean --noconfirm desktop/scanpath_studio.spec

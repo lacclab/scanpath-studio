@@ -35,6 +35,10 @@ you work under `scanpath_studio/`); contributor setup is in
 - **Don't break existing functionality** unless it was explicitly agreed.
 - Prefer the **latest dependency versions**; don't add legacy or back-compat
   shims. This is a research tool, not a version-pinned production deployment.
+  The exception is **CI tooling** — ruff, build, twine, PyInstaller are pinned
+  to an exact version (the `lint` extra in `pyproject.toml` and the workflows),
+  because an unpinned linter reds a branch that changed nothing. Bump those
+  deliberately, in their own commit, with whatever their new rules find.
 
 ## Dev loop
 

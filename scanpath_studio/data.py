@@ -902,9 +902,46 @@ def _tag_and_concat(
 # OneStop reports are hundreds of MB to a few GB of CSV per zipped table), so the
 # absolute caps only catch the honestly-enormous case, and the *ratio* is what
 # actually distinguishes a zip bomb from a big corpus.
-ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES = 4 * 1024**3  # 4 GB for any single member
-ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES = 8 * 1024**3  # 8 GB across the whole archive
-ZIP_MAX_COMPRESSION_RATIO = 200.0  # uncompressed / compressed
+#
+# DATA-34 raised the absolute caps (4/8 GB → 32/64 GB) and made all three
+# tunable: a full OneStop fixation report is a single ~8 GB CSV inside its zip,
+# which the old per-member cap refused outright on a workstation with the memory
+# to read it. The caps are a memory guard, not a security boundary — the ratio
+# check is what discriminates a bomb — so the default now suits the machine that
+# actually holds a corpus, and a memory-capped deployment tightens it with the
+# env vars below (read once, at import).
+ZIP_MAX_MEMBER_ENV = "SCANPATH_ZIP_MAX_MEMBER_GB"
+ZIP_MAX_TOTAL_ENV = "SCANPATH_ZIP_MAX_TOTAL_GB"
+ZIP_MAX_RATIO_ENV = "SCANPATH_ZIP_MAX_RATIO"
+
+
+def _zip_limit_from_env(var: str, default: float) -> float:
+    """Read a zip limit from the environment, falling back to ``default``.
+
+    The value is returned in whatever unit the caller works in (the two size
+    vars are read as gigabytes and scaled here; the ratio is unitless). An
+    unset, unparseable or non-positive value keeps the default rather than
+    failing the import — a typo in a deployment's env should not stop the app
+    from reading data."""
+    raw = os.environ.get(var, "").strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES = int(
+    _zip_limit_from_env(ZIP_MAX_MEMBER_ENV, 32.0) * 1024**3
+)  # any single member
+ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES = int(
+    _zip_limit_from_env(ZIP_MAX_TOTAL_ENV, 64.0) * 1024**3
+)  # across the whole archive
+ZIP_MAX_COMPRESSION_RATIO = _zip_limit_from_env(
+    ZIP_MAX_RATIO_ENV, 200.0
+)  # uncompressed / compressed
 # Below this the ratio is not checked at all: a small but very repetitive table
 # can legitimately compress 1000×, and expanding it costs nothing.
 ZIP_RATIO_CHECK_MIN_BYTES = 256 * 1024 * 1024
@@ -934,14 +971,17 @@ def _check_zip_limits(infos: list[zipfile.ZipInfo]) -> None:
             raise ValueError(
                 f"{info.filename!r} in the zip archive expands to "
                 f"{_format_bytes(info.file_size)}, above the per-file limit of "
-                f"{_format_bytes(ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES)}. Unzip it "
-                "and load the table directly, or split it into smaller files."
+                f"{_format_bytes(ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES)}. Raise "
+                f"{ZIP_MAX_MEMBER_ENV} (in GB) if this machine has the memory "
+                "to parse it, or split the table into smaller files — one per "
+                "participant reads far more comfortably than one of everything."
             )
     if total > ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES:
         raise ValueError(
             f"the zip archive expands to {_format_bytes(total)}, above the "
             f"{_format_bytes(ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES)} decompression "
-            "limit. Unzip it and load the tables directly, or split the archive."
+            f"limit. Raise {ZIP_MAX_TOTAL_ENV} (in GB) if this machine has the "
+            "memory to parse it, or split the archive into smaller uploads."
         )
     if total >= ZIP_RATIO_CHECK_MIN_BYTES:
         ratio = total / max(compressed, 1)
@@ -953,6 +993,46 @@ def _check_zip_limits(infos: list[zipfile.ZipInfo]) -> None:
                 "a normal data export. Unzip it and load the tables directly if "
                 "this is genuine."
             )
+
+
+#: Formats whose pandas reader seeks (columnar footers, zip-container
+#: workbooks), so their member can't be streamed and is read into memory whole.
+_SEEKABLE_ONLY_SUFFIXES = (".parquet", ".feather", ".xlsx", ".xls")
+
+
+class _BudgetedZipMember(io.RawIOBase):
+    """One zip member, readable only up to ``budget`` bytes.
+
+    A zip's central directory is attacker-controlled, so the declared sizes
+    :func:`_check_zip_limits` reads can be forged; this counts the bytes that
+    actually arrive and raises as soon as they pass the budget. Streaming them
+    (rather than ``read()``-ing the member into one big ``bytes`` first) also
+    keeps an honestly enormous CSV — a full OneStop fixation report is ~8 GB
+    inside its zip — from needing a second full-size copy of itself in memory
+    before pandas sees a byte of it (DATA-34).
+    """
+
+    def __init__(self, inner, budget: int, name: str) -> None:
+        self._inner = inner
+        self._budget = int(budget)
+        self._name = name
+        self.consumed = 0
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, buffer) -> int:
+        read = self._inner.readinto(buffer)
+        if not read:
+            return 0
+        self.consumed += read
+        if self.consumed > self._budget:
+            raise ValueError(
+                f"{self._name!r} in the zip archive decompresses past the "
+                f"{_format_bytes(ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES)} limit "
+                "(its declared size was wrong). Refusing to read it."
+            )
+        return read
 
 
 def _read_zipped_table(file_like_or_path) -> pd.DataFrame:
@@ -980,18 +1060,16 @@ def _read_zipped_table(file_like_or_path) -> pd.DataFrame:
         frames, labels = [], []
         for info in infos:
             member = info.filename
+            name = member.lower()
             with zf.open(info) as inner:
-                # Read one byte past the budget: if we get it, the member lied
-                # about its declared size and the archive is rejected.
-                payload = inner.read(remaining + 1)
-            if len(payload) > remaining:
-                raise ValueError(
-                    f"{member!r} in the zip archive decompresses past the "
-                    f"{_format_bytes(ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES)} limit "
-                    "(its declared size was wrong). Refusing to read it."
-                )
-            remaining -= len(payload)
-            frames.append(_read_by_extension(io.BytesIO(payload), member.lower()))
+                stream = _BudgetedZipMember(inner, remaining, member)
+                if name.endswith(_SEEKABLE_ONLY_SUFFIXES):
+                    # Columnar/workbook readers seek, so these still land in
+                    # memory whole — bounded by the same budget.
+                    frames.append(_read_by_extension(io.BytesIO(stream.read()), name))
+                else:
+                    frames.append(_read_by_extension(io.BufferedReader(stream), name))
+            remaining -= stream.consumed
             labels.append(Path(member).stem)
     return _tag_and_concat(frames, labels, SOURCE_FILE_COLUMN)
 

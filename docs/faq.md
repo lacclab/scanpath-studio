@@ -30,6 +30,24 @@ Yes. A words-only table can visualize precomputed word measures; a
 fixations-only table can show gaze positions without stimulus text. Most
 features work best with both tables.
 
+## A zip upload is refused as "above the per-file limit"
+
+The app bounds how far a `.zip` may decompress before it opens a single member,
+so a small archive of highly compressible CSV cannot fill this machine's RAM.
+The defaults are 32 GB for one member and 64 GB across the archive — above any
+honest export, including a full OneStop fixation report — and each is a
+memory guard you can move:
+
+```bash
+SCANPATH_ZIP_MAX_MEMBER_GB=64 SCANPATH_ZIP_MAX_TOTAL_GB=128 scanpath-studio run
+```
+
+`SCANPATH_ZIP_MAX_RATIO` (default 200×) is the separate check that catches an
+archive expanding far past what data plausibly compresses to; a memory-capped
+deployment tightens all three rather than raising them. Note that parsing a
+table costs several times its size in RAM, so a table too large for the machine
+is better split — one file per participant — or converted to Parquet.
+
 ## Why does HTML export work but PNG/SVG/PDF fail?
 
 Static formats use Kaleido and need Chrome/Chromium. Run:

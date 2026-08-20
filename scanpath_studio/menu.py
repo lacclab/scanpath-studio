@@ -14,14 +14,21 @@ the ``st.sidebar`` semantics being replaced. That is what keeps this a host swap
 rather than a restructure: ``main`` still reserves a slot here and downstream
 code still fills it by ``host=``.
 
+**UX-100 brought 💾 Session back to this bar.** UX-63 had made it a nav *page*;
+once UX-96 had cut it down to four short blocks, a whole top-level destination
+for them was more chrome than they were worth — and a page you navigate *away*
+from is the wrong shape for "check the recovery cache, then carry on". It is one
+popover again, at the right end of the title row, which is also why the
+off-screen-twin machinery below could go: a popover already executes every run.
+
 **DATA-26 took two groups off this bar.** ⚙️ Configure and 🧹 Preprocessing are
 now sections of the **Data** page (``constants._VIEW_DATA``), because setting a
 dataset up was split across a menu group and a subtab on the other side of the
 app. Their widgets keep the every-run execution the popovers gave them: the page
 container is built every run and merely hidden off-screen when another view is
 active (``constants.DATA_PAGE_OFFSCREEN_KEY`` + the ``display: none`` rule in
-``styles.py``). What is left here is genuinely session-wide: 💾 Save & restore ·
-🗄️ Recovery cache · ❓ Help (+ 🐛 Debug).
+``styles.py``). What is left here is genuinely session-wide, under one 💾 Session
+trigger: 🗄️ Automatic recovery · ⬇️ JSON backup · ♻️ Reset · 🐛 Debug tools.
 
 **Consequences for panel authors.** A popover nests neither an expander nor
 another popover, so a group that used to wrap itself in
@@ -45,9 +52,6 @@ from scanpath_studio.constants import (
     _VIEW_CORPUS,
     _VIEW_DATA,
     _VIEW_SCANPATH,
-    _VIEW_SESSION,
-    SESSION_PAGE_KEY,
-    SESSION_PAGE_OFFSCREEN_KEY,
 )
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -69,11 +73,11 @@ _NAV_PAGES = {
     _VIEW_SCANPATH: ("Scanpath", "🗺️", "scanpath"),
     _VIEW_CORPUS: ("Corpus Analysis", "📊", "corpus-analysis"),
     _VIEW_DATA: ("Data", "🗂️", "data"),
-    # UX-63: the two menu groups joined the nav rather than sitting in a row of
-    # popovers beneath it. Last, after the three analysis views — they are
-    # chrome, visited on purpose and rarely, and putting them earlier would cost
-    # every existing user their aim at the views they use.
-    _VIEW_SESSION: ("Session", "💾", "session"),
+    # 💾 Session is deliberately **not** here (UX-100). It is a popover on the
+    # title row instead — see :func:`render_top_menu`. UX-63 had made it a nav
+    # page; the four blocks it holds are chrome you dip into and leave, not a
+    # destination, and a page cost a whole entry plus the off-screen twin that
+    # kept its widgets alive.
 }
 
 #: UX-65 — the ❓ Help *section* of the nav: entry id → (label, icon, url path).
@@ -112,11 +116,12 @@ MENU_KEY = "top_menu"
 #: so these stay in the page where the user can't miss them.
 NOTICES_KEY = "top_menu_notices"
 
-#: The 💾 Session trigger keeps the tour's historical key: the spotlight
+#: The 💾 Session trigger's key, and the tour's historical one: the spotlight
 #: selector (``tour._SPOTLIGHT_STEPS``) and the "jump to Save & restore"
-#: affordance in ``annotations.py`` both look for ``.st-key-tour_grp_save_restore``.
+#: affordance in ``tabs.py`` both look for ``.st-key-tour_grp_save_restore``.
 #: UX-38 merged 💾 Save & restore and 🗄️ Recovery cache under it rather than
-#: renaming the key — the two blocks are still there, one popover down.
+#: renaming the key — the blocks are still there, one popover down — and UX-100
+#: put the key back on a real trigger after UX-63's page had left it unused.
 SAVE_RESTORE_KEY = "tour_grp_save_restore"
 
 
@@ -311,62 +316,71 @@ def render_top_menu(
     Call this once, early in ``app.main`` — before any data loading, so the
     loaders' UI lands in the bar rather than after the page content.
 
-    **UX-63 moved the two groups into the nav.** They were popovers in a
-    ``st.columns`` row *under* the nav; they are now entries of the nav itself,
-    so the header carries one menu — Scanpath · Corpus Analysis · Data ·
-    Session · Help — instead of a menu plus a row of buttons beneath it. The
-    earlier note here said this was impossible without ``position: fixed``
-    against Streamlit's internals; that was true of lifting a *widget* into the
-    header strip, and false of the route taken: ``st.navigation`` takes pages,
-    and these two are now pages.
+    **UX-63 made 💾 Session a nav page; UX-100 made it a popover again.** The
+    nav is back to the three views the work happens on — Scanpath · Corpus
+    Analysis · Data — and Session is one trigger at the right end of the title
+    row, over where the Scanpath view's control rail begins. UX-96 had already
+    cut the group to four short blocks, at which point a top-level destination
+    for them was more chrome than they were worth: you open Session to check the
+    recovery cache or download a backup and then carry on with what you were
+    doing, which is a popover's job and not a page's.
 
-    **They still render on every run**, into a container that is off-screen
-    unless its entry is active — the same trick DATA-26 uses for the Data page.
-    That is not incidental: a popover executes every run, and Streamlit drops a
-    widget's key at the end of any run in which it did not render, so content
-    that only rendered while its own page was open would silently reset the 🐛
-    Debug gate and the persistence pause toggle between visits. Rendering always
-    and hiding with CSS keeps exactly the popovers' semantics, so every
-    ``host=`` fill site in ``app.main`` is unchanged.
+    **The panel still renders on every run**, which is the whole reason it is a
+    popover rather than an ``st.dialog``: a popover body is plain script that
+    executes each run whether or not the panel is open, while a dialog body runs
+    only while open — and Streamlit drops a widget's key at the end of any run in
+    which it did not render, so a dialog would silently reset the 🐛 Debug gate
+    and the persistence pause toggle between visits. Every ``host=`` fill site in
+    ``app.main`` is unchanged, and the off-screen-twin container UX-63 needed to
+    get the same guarantee out of a *page* is gone with it.
 
     Args:
         show_debug: Add the 🐛 Debug block. Only debug sessions want it
             (``debug_log.debug_enabled``).
         active_view: The entry the nav currently has selected, from
-            :func:`render_nav`. Decides which of the two pages is visible.
+            :func:`render_nav`. Accepted so callers that already resolved the
+            view do not resolve it twice.
 
     Returns:
-        The pages' empty slots, plus ``title`` — ``app._render_about_panel``
+        The panel's empty slots, plus ``title`` — ``app._render_about_panel``
         fills it.
     """
-    active = active_view if active_view is not None else render_nav()
-    title_col, _menu_col = st.columns([4, 1], vertical_alignment="bottom")
-    # One container per group, keyed by whether it is the active view. `styles`
-    # hides the `*_offscreen` twins; the widgets inside keep executing.
-    session = st.container(
-        key=SESSION_PAGE_KEY if active == _VIEW_SESSION else SESSION_PAGE_OFFSCREEN_KEY
+    if active_view is None:
+        render_nav()
+    title_col, menu_col = st.columns([4, 1], vertical_alignment="bottom")
+    # Keyed :data:`SAVE_RESTORE_KEY`, which is load-bearing twice over: the
+    # spotlight tour aims at it, and the annotations panel's "save these too"
+    # shortcut clicks `.st-key-tour_grp_save_restore button` to open this panel.
+    # Both had nothing to find while UX-63 made this a page (a nav entry carries
+    # no key of ours), so the shortcut clicked into thin air. `styles.py` widens
+    # the panel off the same class: four sections is more than the 28 rem a menu
+    # popover defaults to.
+    session = menu_col.popover(
+        "💾 Session",
+        key=SAVE_RESTORE_KEY,
+        width="stretch",
+        help="Automatic recovery, a JSON backup of your settings and "
+        "annotations, a full reset, and the debug tools.",
     )
-    if active == _VIEW_SESSION:
-        session.subheader("💾 Session")
     # Recovery and a JSON backup are deliberately separate. Recovery contains
     # the local dataset tables and happens automatically; the portable JSON is
     # user-triggered and intentionally omits those tables. The order makes that
-    # distinction the page's hierarchy rather than a tooltip-only caveat.
+    # distinction the panel's hierarchy rather than a tooltip-only caveat.
     recovery_cache = session.container(key="session_auto_recovery")
-    recovery_cache.markdown("### 🗄️ Automatic recovery")
+    recovery_cache.markdown("#### 🗄️ Automatic recovery")
     recovery_body = recovery_cache.container()
 
     save_restore = session.container(key="session_json_backup")
-    save_restore.markdown("### ⬇️ JSON backup")
+    save_restore.markdown("#### ⬇️ JSON backup")
     reset_session = session.container(key="session_reset")
-    reset_session.markdown("### ♻️ Reset")
+    reset_session.markdown("#### ♻️ Reset")
     # UX-65: 🐛 Debug mode moved here from the foot of ❓ Help. Help is a set of
     # dialog-opening nav entries now and hosts no widgets at all, and the toggle
     # was never a link — it *is* `DEBUG_STATE_KEY`, a gate that has to keep
     # rendering every run or Streamlit drops it. Session is where the rest of
     # "what is this session holding" already lives.
     debug_gate = session.container(key="session_debug_tools")
-    debug_gate.markdown("### 🐛 Debug tools")
+    debug_gate.markdown("#### 🐛 Debug tools")
     debug_toggle = debug_gate.container()
     debug = debug_gate.container() if show_debug else None
     return TopMenu(

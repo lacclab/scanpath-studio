@@ -56,7 +56,6 @@ from scanpath_studio.annotations import (
 from scanpath_studio.constants import (
     _VIEW_CORPUS,
     _VIEW_DATA,
-    _VIEW_SESSION,
     AUTHOR_CHOICE,
     BACKGROUND_PRESETS,
     BENCHMARK_LABEL_SUFFIX,
@@ -642,8 +641,6 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
             "toggle above off.",
         ):
             st.session_state[_FORGET_CACHE_PENDING_KEY] = True
-        if st.session_state.get(_FORGET_CACHE_PENDING_KEY):
-            _forget_cache_confirmation_dialog()
         st.caption(f"Saved in this folder on your computer: `{status['directory']}`")
         # The environment-variable escape hatches, spelled out rather than
         # listed. They used to be the panel's only explanation of itself, packed
@@ -654,6 +651,12 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
             f"`{STATE_DIR_ENV_VAR}=/your/folder` to save somewhere else. "
             "`scanpath-studio cache` reports the same details from a terminal."
         )
+    # Outside the `with`: UX-100 made ``slot`` the 💾 Session **popover**, and a
+    # modal raised from inside a popover's block is a modal owned by a panel
+    # that closes the moment you click past it. Opening it at the top level
+    # keeps it a page-level dialog, which is what it always looked like.
+    if st.session_state.get(_FORGET_CACHE_PENDING_KEY):
+        _forget_cache_confirmation_dialog()
 
 
 _RESET_EVERYTHING_PENDING_KEY = "_reset_everything_pending"
@@ -4853,10 +4856,10 @@ def main() -> None:
     # UX-62: before the nav — `st.logo` writes into the same header strip
     # `st.navigation` draws into, and has to be there when it renders.
     render_app_logo()
-    # Active top-level view, resolved BEFORE `render_top_menu` — its own 💾
-    # Session page is a CSS-keyed panel drawn *inside* `render_top_menu`
-    # (UX-63), gated on this same value, so the BUG-31 wizard hold-override
-    # below has to land before that call, not after it (see the note there).
+    # Active top-level view, resolved BEFORE `render_top_menu` so the BUG-31
+    # wizard hold-override below can land before that call rather than after it
+    # (see the note there — it used to also gate the 💾 Session *page*, which
+    # UX-100 turned back into a popover).
     active_view = render_nav()
 
     # BUG-31 — navigating away mid-wizard used to land the user on the *half-built*
@@ -4882,12 +4885,11 @@ def main() -> None:
     #
     # BUG-36 follow-up: this block used to run *after* `render_top_menu`, so
     # choosing "Keep setting up" correctly held the `if/elif` dispatch below on
-    # Data but did nothing for the 💾 Session page's own panel, which
-    # `render_top_menu` draws itself from the *raw* nav click, earlier in the
-    # run — navigating to Session while the wizard was open kept showing the
-    # Session panel over the wizard regardless of what was chosen. Resolving
-    # the override here, before that call, and handing it in as `active_view=`
-    # closes that gap.
+    # Data but did nothing for the 💾 Session *page*, which `render_top_menu`
+    # drew itself from the *raw* nav click, earlier in the run. Resolving the
+    # override here and handing it in as `active_view=` closed that gap.
+    # UX-100 retired that page — Session is a popover, which never becomes the
+    # active view — but the ordering still matters for the dispatch below.
     if st.session_state.get("_show_upload_wizard"):
         if (
             active_view != _VIEW_DATA
@@ -5731,15 +5733,6 @@ def main() -> None:
                 scale_text_to_boxes=scale_text_to_boxes,
                 canvas_renderer=canvas_renderer,
             )
-    elif active_view == _VIEW_SESSION:
-        # UX-63: 💾 Session is a menu page. `menu.render_top_menu` drew its
-        # panel at the top of the run — into a container that is visible only
-        # while its own entry is active — so there is nothing to render here,
-        # and falling through to the Scanpath branch would draw a plot under it.
-        # The panel's own fills happen at their usual points below. (❓ Help was
-        # a second such page until UX-65 turned it into dialog-opening nav
-        # entries, which never become the active view at all.)
-        pass
     else:
         # The Scanpath view renders the viz controls itself (right rail) and
         # writes the global_* keys; re-read them below so Save & restore captures

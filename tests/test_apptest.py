@@ -147,15 +147,17 @@ class TestAppLaunches:
         assert not stray, f"these still render into the sidebar: {stray}"
 
     def test_every_session_wide_group_still_renders_off_its_own_page(self):
-        """UX-63: the two groups are nav entries now, not popovers — but their
-        panels must still render on **every** run.
+        """UX-100: 💾 Session is one popover, and its panels render every run.
 
-        That is the whole reason they are hidden with CSS rather than skipped:
-        a popover executes every run, and Streamlit drops a widget's key at the
-        end of any run in which it did not render, so content that only drew
-        while its own page was open would silently reset the 🐛 Debug gate and
-        the persistence pause toggle between visits. This asserts the panels are
-        present while the *Scanpath* view is active.
+        A popover body is plain script — it executes whether or not the panel is
+        open — and that is exactly why it is a popover and not an `st.dialog`:
+        Streamlit drops a widget's key at the end of any run in which it did not
+        render, so content that only drew while the panel was open would
+        silently reset the 🐛 Debug gate and the persistence pause toggle between
+        visits. This asserts the four blocks are present while the *Scanpath*
+        view is active.
+
+        ❓ Help is not a popover: UX-65 made it a nav section of dialog-openers.
         """
         at = _make_apptest()
         at.run(timeout=30)
@@ -168,9 +170,9 @@ class TestAppLaunches:
             "🐛 Debug tools",
         ):
             assert expected in body, f"{expected} stopped rendering off its page"
-        # The old bar is gone: neither group is a popover any more.
         labels = {p.proto.popover.label for p in at.get("popover")}
-        assert "❓ Help" not in labels and "💾 Session" not in labels, labels
+        assert "💾 Session" in labels, labels
+        assert "❓ Help" not in labels, labels
 
     def test_the_session_group_holds_both_ways_work_is_kept(self):
         """UX-38 merged the two into one 💾 Session popover — the portable JSON
@@ -185,8 +187,8 @@ class TestAppLaunches:
         # Both panels still render, one popover down: their headings are inside.
         body = " ".join(m.value for m in at.markdown)
         assert "### ⬇️ JSON backup" in body
-        assert "### 🗄️ Automatic recovery" in body
-        assert "### ♻️ Reset" in body
+        assert "#### 🗄️ Automatic recovery" in body
+        assert "#### ♻️ Reset" in body
         # The spotlight tour and annotations.py both target this key.
         assert SAVE_RESTORE_KEY == "tour_grp_save_restore"
 
@@ -679,18 +681,18 @@ class TestDataInspectionTab:
         is a view nothing can reach programmatically. DATA-26 added 🗂️ Data
         **last** of the analysis views: setup comes first in time, but the two
         analysis views are where the work happens and moving them would cost
-        every user their aim. UX-63 then appended 💾 Session, which is chrome —
-        visited on purpose and rarely.
+        every user their aim.
 
-        ❓ Help is deliberately **not** here: UX-65 made it a collapsible nav
+        Neither ❓ Help nor 💾 Session is here. UX-65 made Help a collapsible nav
         *section* of dialog-openers (`_HELP_PAGES`), which are actions rather
-        than views — nothing navigates to one and stays.
+        than views — nothing navigates to one and stays — and UX-100 made
+        Session a popover on the title row, for the same reason: you dip into it
+        and carry on, rather than travelling to it.
         """
         from scanpath_studio.constants import (
             _VIEW_CORPUS,
             _VIEW_DATA,
             _VIEW_SCANPATH,
-            _VIEW_SESSION,
         )
         from scanpath_studio.menu import _HELP_PAGES, _NAV_PAGES
 
@@ -698,7 +700,6 @@ class TestDataInspectionTab:
             _VIEW_SCANPATH,
             _VIEW_CORPUS,
             _VIEW_DATA,
-            _VIEW_SESSION,
         ]
         assert list(_HELP_PAGES) == [
             "help_tutorials",

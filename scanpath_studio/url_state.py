@@ -24,7 +24,6 @@ from .constants import (
     _VIEW_CORPUS,
     _VIEW_DATA,
     _VIEW_SCANPATH,
-    _VIEW_SESSION,
     AUTHOR_CHOICE,
     BACKGROUND_PRESETS,
     COLORSCALES,
@@ -2124,11 +2123,12 @@ def _active_view() -> str:
 
     Reads the `main_nav` mirror `menu.render_nav` writes from the router's
     selection, so it stays the one answer every caller shares. It may also carry
-    a legacy/stale value (e.g. "Data Inspection", the old standalone view — and
-    note that DATA-26's page is `_VIEW_DATA`, a different string, so an old
-    cached value does *not* silently resolve to it), or a view *requested* for
-    the next run; anything unrecognized resolves to the Scanpath page."""
+    a legacy/stale value (e.g. "Data Inspection", the old standalone view, or
+    "Session", which UX-100 turned back into a popover — and note that DATA-26's
+    page is `_VIEW_DATA`, a different string, so an old cached value does *not*
+    silently resolve to it), or a view *requested* for the next run; anything
+    unrecognized resolves to the Scanpath page."""
     requested = st.session_state.get("main_nav")
-    if requested in (_VIEW_CORPUS, _VIEW_DATA, _VIEW_SESSION):
+    if requested in (_VIEW_CORPUS, _VIEW_DATA):
         return requested
     return _VIEW_SCANPATH

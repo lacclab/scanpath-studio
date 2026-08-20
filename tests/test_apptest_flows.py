@@ -647,7 +647,7 @@ class TestRecoveryCachePanelFlow:
         _clean(at, "hosted cache panel:")
         assert not [t for t in at.toggle if t.key == "persist_local_saving"]
         captions = " ".join(str(c.value) for c in at.caption)
-        assert "Unavailable here." in captions
+        assert "Not available here." in captions
 
 
 class TestAuthoringEditorFlow:

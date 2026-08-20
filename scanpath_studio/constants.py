@@ -591,32 +591,21 @@ _VIEW_CORPUS = "Corpus Analysis"
 # which used to be split between the ⚙️ Configure / 🧹 Preprocessing menu
 # popovers and a 🔎 Data Inspection subtab buried in the Scanpath view.
 _VIEW_DATA = "Data"
-# UX-63: the two menu groups became views of their own, so the header carries
-# one menu — Scanpath · Corpus Analysis · Data · Session · Help — instead of a
-# nav plus a row of popovers under it.
+# UX-63 made 💾 Session and ❓ Help views of their own. Neither is one now:
+# UX-65 turned Help into a nav *section* of dialog-openers, and UX-100 turned
+# Session back into a popover on the title row. The strings survive only as
+# values a pre-UX-100 recovery cache can still hold in `main_nav`, which
+# `url_state._active_view` resolves back to the Scanpath view.
 _VIEW_SESSION = "Session"
 _VIEW_HELP = "Help"
 _MAIN_TAB_LABELS = [_VIEW_SCANPATH, _VIEW_CORPUS, _VIEW_DATA]
 
-#: UX-63: the keys each menu page's container is built with — visible when that
-#: view is active, off-screen otherwise. Same reasoning as the Data page's pair
-#: below: these panels hold widgets whose keys Streamlit drops at the end of any
-#: run in which they do not render (the 🐛 Debug toggle *is* the debug gate, and
-#: the persistence pause toggle governs what is written to disk). Rendering them
-#: every run and hiding them with CSS keeps the popovers' semantics exactly,
-#: which is what UX-38 chose them for — a page body that only runs when active
-#: would silently reset both.
 #: DATA-32 — the dataset table's remembered headline counts, `{token: {...}}`.
 #: A session-state key that also travels in the recovery cache's manifest, so it
 #: lives here rather than in `app`: `persistence` writes it and `app` fills it,
 #: and `persistence` cannot import `app` (that is the cycle `app` already
 #: avoids by importing `persistence` one way).
 DATASET_COUNTS_STORE_KEY = "_dataset_counts_store"
-
-SESSION_PAGE_KEY = "session_menu_page"
-SESSION_PAGE_OFFSCREEN_KEY = "session_menu_page_offscreen"
-HELP_PAGE_KEY = "help_menu_page"
-HELP_PAGE_OFFSCREEN_KEY = "help_menu_page_offscreen"
 
 # DATA-26: the two keys the Data page's outer container is built with — visible
 # when that view is active, off-screen otherwise.

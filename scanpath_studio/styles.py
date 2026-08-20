@@ -106,14 +106,18 @@ def get_app_css() -> str:
        spotlight target has to measure zero rather than sit off to one side. */
     .st-key-data_setup_page_offscreen { display: none !important; }
 
-    /* UX-63 — the Session and Help pages, when they are not the active entry.
-       Same reasoning and same mechanism as the Data page above: the widgets
-       inside must keep executing (the 🐛 Debug toggle *is* the debug gate, and
-       the persistence pause toggle governs what is written to disk), and
-       Streamlit drops the key of a widget that did not render. `display: none`,
-       so they contribute no layout and the tour's `findVisible()` cannot aim at
-       a hidden copy. */
-    .st-key-session_menu_page_offscreen { display: none !important; }
+    /* === The 💾 Session popover =============================================
+       UX-100 — Session is a popover on the title row again, not a nav page, so
+       the off-screen twin the page needed to keep its widgets executing is gone
+       (a popover body runs every run by itself). Its four blocks keep the cards
+       UX-96 gave them; they read the same in a panel as they did on a page.
+
+       The popover body defaults to 28 rem, which is narrow for four sections
+       of controls — the folder path and the environment-variable line in
+       Automatic recovery both want a full line. */
+    .st-key-tour_grp_save_restore [data-testid="stPopoverBody"] {
+        min-width: min(34rem, 92vw);
+    }
     .st-key-session_auto_recovery,
     .st-key-session_json_backup,
     .st-key-session_reset,
@@ -124,10 +128,10 @@ def get_app_css() -> str:
         margin: 0.65rem 0;
         background: rgba(128, 128, 128, 0.035);
     }
-    .st-key-session_auto_recovery h3,
-    .st-key-session_json_backup h3,
-    .st-key-session_reset h3,
-    .st-key-session_debug_tools h3 { margin-top: 0 !important; }
+    .st-key-session_auto_recovery h4,
+    .st-key-session_json_backup h4,
+    .st-key-session_reset h4,
+    .st-key-session_debug_tools h4 { margin-top: 0 !important; }
 
     /* UX-53 — the 🗂️ Data page was "too much space and text, and text too
        small". Scoped to the page's own key so the plot rail and the analysis

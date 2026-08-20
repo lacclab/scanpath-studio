@@ -171,6 +171,22 @@
       "archived": true,
       "updated": "2026-08-19"
     },
+    "BUG-38": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "Might be already fixed, just run the tests and see.",
+      "archived": true,
+      "updated": "2026-08-20"
+    },
+    "BUG-39": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-20"
+    },
     "BUG-4": {
       "status": "Backlog",
       "priority": "Normal",
@@ -178,6 +194,30 @@
       "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-13"
+    },
+    "BUG-40": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Shubi",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-20"
+    },
+    "BUG-41": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-20"
+    },
+    "BUG-42": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-20"
     },
     "CMP-11": {
       "status": "Closed",
@@ -362,6 +402,14 @@
       "archived": true,
       "updated": "2026-08-13"
     },
+    "DATA-27": {
+      "status": "In progress",
+      "priority": "Normal",
+      "owner": "Shubi",
+      "implementationBrief": "1. Still open. \n2. Yes and yes, as I am releasing it although it is not done. (for onestop also show just WIP)\n3. This should be made clear and visible, maybe in the available datasets table? together with the layout info\n4. Okay",
+      "archived": false,
+      "updated": "2026-08-20"
+    },
     "DATA-28": {
       "status": "Closed",
       "priority": "Normal",
@@ -373,25 +421,25 @@
     "DATA-29": {
       "status": "In progress",
       "priority": "Normal",
-      "owner": "Maya",
-      "implementationBrief": "1. this is the right model, the usecase is the same - appear as metadata chips on the scanpath screen and let the user choose which fields he would like to see\n2. auto fill. \ntrial field is mandatory, reader isnt",
-      "archived": false,
-      "updated": "2026-08-19"
-    },
-    "DATA-30": {
-      "status": "Review",
-      "priority": "Normal",
-      "owner": "Maya",
-      "implementationBrief": "Yes. (background: When eyegenbench will be finalized and included all onestop subset, I will be removing the native onestop at one point.)",
+      "owner": "Shubi",
+      "implementationBrief": "1. I still need to do this.\n2. Finish it.",
       "archived": false,
       "updated": "2026-08-20"
     },
+    "DATA-30": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "Yes. (background: When eyegenbench will be finalized and included all onestop subset, I will be removing the native onestop at one point.)",
+      "archived": true,
+      "updated": "2026-08-20"
+    },
     "DATA-31": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "Chase the real y.",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-20"
     },
     "DATA-32": {
@@ -405,9 +453,17 @@
     "DATA-33": {
       "status": "In progress",
       "priority": "Normal",
-      "owner": "Maya",
-      "implementationBrief": "Better, but Column mapping and Experimental setup still differ from Add dataset. Reuse the same renderers, layout, interactions and validation as far as possible.",
+      "owner": "Shubi",
+      "implementationBrief": "1. Better, but Column mapping and Experimental setup still differ from Add dataset. Reuse the same renderers, layout, interactions and validation as far as possible.\n2. Looks good",
       "archived": false,
+      "updated": "2026-08-20"
+    },
+    "DATA-34": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Shubi",
+      "implementationBrief": "",
+      "archived": true,
       "updated": "2026-08-20"
     },
     "ENG-19": {
@@ -546,6 +602,14 @@
       "archived": true,
       "updated": "2026-08-20"
     },
+    "ENG-41": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-20"
+    },
     "ENG-42": {
       "status": "Closed",
       "priority": "Normal",
@@ -555,11 +619,11 @@
       "updated": "2026-08-20"
     },
     "ENG-43": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-20"
     },
     "EXP-3": {
@@ -596,6 +660,30 @@
       "implementationBrief": "",
       "archived": true,
       "updated": "2026-08-08"
+    },
+    "PERF-4": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Shubi",
+      "implementationBrief": "1. yes definitely. Should support hundreds of readers and thousands of trials (onestop is ~20k trials; meco is ~1k readers).\n2. Add a task to fix this.\n3. I care about both.\n\nIn general I am not familiar with the functions name and such (I am a team lead). Make it readable for me. Think in terms of wheere in the pipeline the computations occur and what they do. Create a clear document specifying these. We should create a single big task including PERF-4 (this), PERF-5 and VAL-8 instead of three separate ones.",
+      "archived": true,
+      "updated": "2026-08-20"
+    },
+    "PERF-5": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-20"
+    },
+    "PERF-6": {
+      "status": "Planned",
+      "priority": "Normal",
+      "owner": "",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-20"
     },
     "PRE-1": {
       "status": "Closed",
@@ -718,12 +806,12 @@
       "updated": "2026-08-04"
     },
     "PRE-7": {
-      "status": "Backlog",
+      "status": "On hold",
       "priority": "Normal",
       "owner": "",
       "implementationBrief": "",
       "archived": false,
-      "updated": "2026-08-13"
+      "updated": "2026-08-20"
     },
     "PRE-8": {
       "status": "Closed",
@@ -1158,7 +1246,7 @@
     "UX-83": {
       "status": "In progress",
       "priority": "Normal",
-      "owner": "Maya",
+      "owner": "Shubi",
       "implementationBrief": "The app moves to the right page, but the tutorial itself does not start properly. Audit and fix the additional tutorial regressions caused by recent app changes, including targets, navigation, resume/exit, and per-tutorial automatic-opening dismissal.",
       "archived": false,
       "updated": "2026-08-20"
@@ -1252,11 +1340,11 @@
       "updated": "2026-08-20"
     },
     "UX-95": {
-      "status": "Backlog",
+      "status": "Closed",
       "priority": "Normal",
-      "owner": "Maya",
+      "owner": "Shubi",
       "implementationBrief": "",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-20"
     },
     "UX-96": {
@@ -1264,6 +1352,14 @@
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-20"
+    },
+    "UX-97": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "For Fixations, Saccades, Heatmap, and Raw gaze, the settings button/chevron should remain clickable while the layer is toggled off. Opening it should show the settings, but the actual setting controls should be visibly disabled until the layer is enabled again.",
       "archived": true,
       "updated": "2026-08-20"
     },
@@ -1319,6 +1415,14 @@
       "implementationBrief": "",
       "archived": true,
       "updated": "2026-08-13"
+    },
+    "VAL-8": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-20"
     },
     "VIZ-14": {
       "status": "Closed",
@@ -1434,6 +1538,81 @@
         "Related to #DATA-32."
       ],
       "owner": "Maya"
+    },
+    {
+      "status": "Closed",
+      "priority": "Normal",
+      "sub": "",
+      "title": "Keep layer settings reachable when the layer toggle is off",
+      "implementationBrief": "For Fixations, Saccades, Heatmap, and Raw gaze, the settings button/chevron should remain clickable while the layer is toggled off. Opening it should show the settings, but the actual setting controls should be visibly disabled until the layer is enabled again.",
+      "subgroup": "",
+      "added": "2026-08-20",
+      "id": "UX-97",
+      "group": "UX & Interaction",
+      "num": 97,
+      "request": [
+        "I should be able to press the settings button for **Fixations**, **Saccades**,",
+        "**Heatmap**, and **Raw gaze** even when that layer's toggle is off. The",
+        "settings panel should open normally, while its actual setting controls are",
+        "greyed out until the layer is switched on."
+      ],
+      "archived": true,
+      "prefix": "UX",
+      "background": [
+        "This is the Scanpath rail's shared `toggle → ⚙️ style → 🧹 filter` layer",
+        "pattern in [controls.py](scanpath_studio/controls.py). The off state now",
+        "disables only the controls that change the hidden layer, not the affordance",
+        "used to inspect or prepare them — so a layer's styling can be set up before",
+        "it is switched on.",
+        "",
+        "**Disabling never rewrites a value.** Same contract `_mode_gate` already",
+        "keeps: a disabled Streamlit widget owns and keeps its key, and these are",
+        "`global_*` keys — share-link and saved-config wire format — so a layer toggle",
+        "must not clobber a deep-linked or restored setting. Pinned by a test.",
+        "",
+        "The reason rides each control's own `help` (via `_gated_help`, so a gate",
+        "reason and a layer reason compose) rather than replacing it, which is what",
+        "keeps the row's tooltip useful in both states.",
+        "",
+        "No new surface: this changes when an existing control is interactive, not",
+        "what it sets, so the deep link, CLI and headless API are untouched.",
+        "",
+        "Related: #UX-80 (the one-line section rows), #UX-86 (Heatmap and Raw gaze as",
+        "peer sections), #UX-72 (the 🧹 Filter section), #VIZ-21 / #VIZ-23 (`_mode_gate`,",
+        "the other reason a rail control greys)."
+      ],
+      "decisions": [
+        "Review the four layers with their toggles off: the ▾ opens onto the real controls, greyed, with a caption saying to turn the layer on. Two calls worth disagreeing with — the 🧹 Filter halves were included (they had the same empty popover, and the ask named the `toggle → ⚙️ style → 🧹 filter` pattern), and 📄 Stimulus was **not**, because it holds three independent layers with no single switch, so there is no one thing being off."
+      ],
+      "whatsLeft": [
+        "Nothing."
+      ],
+      "owner": "Maya",
+      "whatWasDone": [
+        "Each layer section on the rail was gated `if show_<layer>:` around the whole",
+        "popover body, so switching a layer off left its ▾ clickable and **empty** —",
+        "the affordance said there was something there and the popover said otherwise.",
+        "",
+        "The bodies now always render and grey instead. `controls._layer_off(label, off=)`",
+        "is a context manager that pushes a reason onto a small stack;",
+        "`controls._layer_gate` folds that reason into every control rendered inside,",
+        "and the three shared rail primitives consult it — `_labeled` (which is what",
+        "`_popover_selectbox` and nearly every row go through), `_numeric_slider` and",
+        "`_range_slider`, so the UX-9 typed box greys with its slider. One caption at",
+        "the head of the popover says why, for the user who never hovers a control.",
+        "",
+        "Applied to all four layers named in the ask — 👁️ Fixations, ↗️ Saccades,",
+        "🔥 Heatmap, 🔵 Raw gaze — and to the two halves of the 🧹 Filter section that",
+        "belong to Fixations and Saccades, which had the same empty-popover shape for",
+        "the same reason.",
+        "",
+        "Fixations keeps its existing exception: in **Animate** the toggle reads off",
+        "but is inert (the replay *is* the fixation trail), and the styling below is",
+        "still live — so that case greys nothing.",
+        "",
+        "`tests/test_layer_settings_when_off.py` — 9 tests over the mechanism and over",
+        "the real rail, checking each layer's control both ways round."
+      ]
     }
   ]
 }

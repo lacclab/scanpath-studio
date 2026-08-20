@@ -484,15 +484,26 @@ def skip_next_local_save(session) -> None:
     session[_SKIP_NEXT_SAVE_KEY] = True
 
 
-def clear_local_state(session=None, root: Path | None = None) -> None:
+def clear_local_state(session=None, root: Path | None = None) -> bool:
     """Delete the stored cache and forget what this session had written.
 
     The in-memory datasets are deliberately left alone — this removes the copy
     on disk, it does not close the user's work. Callers clearing it from a
     widget-driven rerun can use :func:`skip_next_local_save` to prevent the
     immediate epilogue write without changing the saving preference.
+
+    Deleting the files is best-effort: a locked or read-only cache directory
+    must not wedge *"Clear recovery cache"* or *"Reset everything"*, which are
+    the two actions a user reaches for precisely when the session is already
+    broken. An :class:`OSError` is logged and reported as ``False``; the
+    in-session bookkeeping is cleared either way.
     """
-    forget_state(state_directory() if root is None else root)
+    removed = True
+    try:
+        forget_state(state_directory() if root is None else root)
+    except OSError as exc:
+        removed = False
+        _LOGGER.warning("Could not delete the recovery cache: %s", exc)
     if session is not None:
         for key in (
             _LAST_FINGERPRINT_KEY,
@@ -504,6 +515,7 @@ def clear_local_state(session=None, root: Path | None = None) -> None:
             DATASET_COUNTS_STORE_KEY,
         ):
             session.pop(key, None)
+    return removed
 
 
 def _cache_files(root: Path) -> list:

@@ -481,7 +481,7 @@ window.TRACKER = {
    "sub": "",
    "title": "Edit dataset reuses the finished add-dataset screen",
    "status": "In progress",
-   "owner": "Maya",
+   "owner": "Shubi",
    "note": "",
    "date": "",
    "added": "2026-08-19",
@@ -542,19 +542,18 @@ window.TRACKER = {
     "`wizard._remove_dataset`'s neighbours already keep around.",
     "",
     "Related: #UX-54 (the dataset table the ✏️ button lives in), #DATA-23",
-    "(rename), #UX-53 (the wizard's shape)."
-   ],
-   "decisions": [
-    "Review Edit on a stored dataset: mapping and the three Recording setup",
-    "columns should look like the completed add flow and save together.",
-    "Only columns retained during the original normalization can be remapped;",
-    "re-upload remains necessary to recover a column dropped at import.",
-    "Review a loaded public corpus in Available datasets: its row should be tinted",
-    "and its remembered counts should remain integers after switching away."
+    "(rename), #UX-53 (the wizard's shape).",
+    "",
+    "**Reviewed 2026-08-20** (user), splitting the two asks: the **Available datasets**",
+    "half is accepted — the loaded public corpus tints its row and its remembered",
+    "counts stay integers after switching away. The **edit screen** is *better but not",
+    "the same*: Column mapping and Experimental setup still differ from Add dataset,",
+    "and the instruction is to reuse the same renderers, layout, interactions and",
+    "validation as far as possible rather than to keep converging by eye."
    ],
    "statusNote": [
-    "**Returned to implementation 2026-08-20:** substantially better, but visible",
-    "differences remain in Column mapping and Experimental setup."
+    "**Returned to implementation 2026-08-20:** the Available-datasets half is signed",
+    "off, but visible differences remain in Column mapping and Experimental setup."
    ]
   },
   {
@@ -626,12 +625,8 @@ window.TRACKER = {
     "point at."
    ],
    "decisions": [
-    "Review: are 32 GB / 64 GB the defaults you want, given they are a memory",
-    "guard rather than a security boundary?",
-    "Try the load that failed — the zipped `fixations_Paragraph.csv` — and say",
-    "whether it now reads, or whether the machine runs out of memory parsing it",
-    "(in which case the answer is sharding to per-participant Parquet, not a",
-    "bigger cap)."
+    "Review: are 32 GB / 64 GB the defaults you want, given they are a memory guard rather than a security boundary?",
+    "Try the load that failed — the zipped `fixations_Paragraph.csv` — and say whether it now reads, or whether the machine runs out of memory parsing it (in which case the answer is sharding to per-participant Parquet, not a bigger cap)."
    ]
   },
   {
@@ -767,13 +762,6 @@ window.TRACKER = {
     "Add the requested per-tutorial dismissal control to the tutorial dialogs",
     "and make sure it suppresses automatic opening without removing the tutorial",
     "from the Tutorials list."
-   ],
-   "decisions": [
-    "Reproduce the current failure first: the page changes, but the first",
-    "tutorial card does not appear. Pin that rerun boundary with a regression",
-    "test before repairing the wider tutorial set.",
-    "Treat the broader tutorial audit as part of this task because recent app",
-    "changes have invalidated more than the original cross-page entry path."
    ],
    "statusNote": [
     "**Reopened 2026-08-20:** navigation improved, but the tutorial does not",
@@ -2923,8 +2911,8 @@ window.TRACKER = {
    "num": 38,
    "sub": "",
    "title": "A test fails on main: the 🐛 Debug popover is gone from the menu bar",
-   "status": "Backlog",
-   "owner": "",
+   "status": "Review",
+   "owner": "Maya",
    "note": "",
    "date": "",
    "added": "2026-08-19",
@@ -2951,6 +2939,30 @@ window.TRACKER = {
     "Three *other* tests in the same file are also red on `8d034c5`",
     "(`TestTheComputationLog`), but for an unrelated reason — #BUG-39. Fixing",
     "one will not fix the other."
+   ],
+   "statusNote": [
+    "**Already fixed on `main`, confirmed 2026-08-20.** The brief asked to run the",
+    "tests and see; the test passes, so this closes on evidence rather than a change."
+   ],
+   "whatWasDone": [
+    "Nothing in the app — the regression was repaired by the menu work that landed",
+    "since this was filed. `tests/test_debug_log.py::test_the_toggle_reveals_the_panel`",
+    "passes on `main` at `b41dccb`, so the 🐛 Debug popover is back on the menu bar",
+    "and the assertion holds again as written.",
+    "",
+    "The reading it settles is the first of the two this item offered: the panel *is*",
+    "meant to be a popover on the bar, not an inline block on the Session page. It",
+    "lost its host during the `st.navigation` move and got it back; the assertion was",
+    "never stale.",
+    "",
+    "The other three red tests in the same file were a separate cause and are fixed",
+    "under #BUG-39, as this item predicted."
+   ],
+   "whatsLeft": [
+    "Nothing."
+   ],
+   "decisions": [
+    "Sign off that a fixed-by-something-else bug can close on a passing test alone — there is no diff to read for this one, only `pytest tests/test_debug_log.py`."
    ]
   },
   {
@@ -2959,8 +2971,8 @@ window.TRACKER = {
    "num": 39,
    "sub": "",
    "title": "Three computation-log tests catch Streamlit's bare-mode warnings and fail",
-   "status": "Backlog",
-   "owner": "",
+   "status": "Review",
+   "owner": "Maya",
    "note": "",
    "date": "",
    "added": "2026-08-19",
@@ -2995,6 +3007,29 @@ window.TRACKER = {
     "an exact-equality assertion over a global handler is hostage to any",
     "library that logs. Worth confirming that reading before changing the",
     "tests, in case a real log line is genuinely missing underneath the noise."
+   ],
+   "whatWasDone": [
+    "The reading in *Background* was confirmed before anything changed: the app's own",
+    "lines are all still emitted (`scanpath_studio:debug_log.py:104 View · view=Scanpath`",
+    "and its pair are in the captured log), so nothing was missing underneath the",
+    "noise — the three tests were simply asserting over records they do not own.",
+    "",
+    "`tests/test_debug_log.py` gained one helper, `_app_records(caplog)`, returning",
+    "only records whose logger root is `scanpath_studio`, and the three assertions now",
+    "read through it. `caplog` collects from the **root** logger, so an exact-equality",
+    "assertion over `caplog.records` is hostage to every library that logs in the same",
+    "worker — which is exactly why the count varied with how the file was run.",
+    "",
+    "`caplog.at_level(..., logger=\"scanpath_studio\")` was already there and is not the",
+    "fix: it raises the app logger's level, it does not narrow what is captured.",
+    "",
+    "The whole file passes standalone (24 tests) and under `-n auto`."
+   ],
+   "whatsLeft": [
+    "Nothing."
+   ],
+   "decisions": [
+    "Sign off on fixing the **tests** rather than the app — the bare-mode warning is Streamlit's, it is correct in a bare-mode run, and silencing it in the app would hide a real signal from anyone debugging a background thread. The alternative (a `caplog` filter installed globally in `conftest.py`) would fix these three and every future one at the cost of hiding library logs from every test; say if you would rather have that."
    ]
   },
   {
@@ -5850,7 +5885,7 @@ window.TRACKER = {
    "sub": "",
    "title": "Attach a table of trial information, the way participant metadata attaches",
    "status": "Backlog",
-   "owner": "Maya",
+   "owner": "Shubi",
    "note": "",
    "date": "",
    "added": "2026-08-16",
@@ -5859,8 +5894,8 @@ window.TRACKER = {
    "archived": false,
    "statusNote": [
     "**In progress.** The core landed 2026-08-19; the visible surfaces —",
-    "attach, filters, chips and save & restore — landed the same day. What",
-    "is left is the headless half (export bundle, CLI, API)."
+    "attach, filters, chips and save & restore — landed the same day. The headless",
+    "half (export bundle, CLI, API) stays under this item, confirmed 2026-08-20."
    ],
    "request": [
     "Like participant information, but for trials — trial information with different",
@@ -5954,11 +5989,13 @@ window.TRACKER = {
     "`project_trials`); `tabs.render_trial_metadata_section`;",
     "`controls.trial_metadata_filter_key` / `_render_trial_metadata_filters` /",
     "`_trial_metadata_narrowing`; `app.main`'s `filter_to_keys` hop and the",
-    "`project_trials` line. Related: #DATA-20, #UX-49, #BUG-12."
+    "`project_trials` line. Related: #DATA-20, #UX-49, #BUG-12.",
+    "",
+    "**Answered 2026-08-20** (user): the headless half is **finished under this item**,",
+    "not split into a follow-up — so this does not close on the visible feature alone."
    ],
    "decisions": [
-    "Review the visible half: attach a trial table on the 🗂️ Data page, filter by one of its columns, and turn a column on as a chip. Two judgement calls to check — the reader picker defaults to *(none)*, i.e. one row describes a text and every reading inherits it; and a filter it can't satisfy narrows to nothing rather than being ignored.",
-    "The headless half (export bundle, `--trial-metadata`, `api.load_trial_metadata`) is still open — finish it under this item, or split it out so this one can close on the visible feature?"
+    "Review the visible half: attach a trial table on the 🗂️ Data page, filter by one of its columns, and turn a column on as a chip. Two judgement calls to check — the reader picker defaults to *(none)*, i.e. one row describes a text and every reading inherits it; and a filter it can't satisfy narrows to nothing rather than being ignored."
    ]
   },
   {
@@ -5967,7 +6004,7 @@ window.TRACKER = {
    "num": 27,
    "sub": "",
    "title": "EyeGenBench — load all 39 benchmark corpora as one built-in source",
-   "status": "Review",
+   "status": "In progress",
    "owner": "Shubi",
    "note": "Design + implementation plan signed off 2026-08-14; executing.",
    "date": "",
@@ -6035,7 +6072,14 @@ window.TRACKER = {
     "need hours or to hit access restrictions — they work in the EyeGenBench repo.",
     "The prep script reports per-corpus outcomes regardless.",
     "",
-    "Implementation plan: [`plans/data-27-eyegenbench-implementation.md`](plans/data-27-eyegenbench-implementation.md) — 14 TDD tasks."
+    "Implementation plan: [`plans/data-27-eyegenbench-implementation.md`](plans/data-27-eyegenbench-implementation.md) — 14 TDD tasks.",
+    "",
+    "**Decisions answered 2026-08-20** (user), leaving only the branch review open:",
+    "the **(WIP) marker is right, and on those entries only** — plus native OneStop,",
+    "which is also being released unfinished (now item 1 of *What's left*); the",
+    "**geometry tiers should be clear and visible**, suggested place the Available",
+    "datasets table alongside the layout information (item 2); and the **ruff 0.16",
+    "docs churn is accepted** as-is, no revert."
    ],
    "whatWasDone": [
     "Design and implementation plan, both committed on branch",
@@ -6099,28 +6143,31 @@ window.TRACKER = {
     "Verified by sweeping all 31 prepared corpora through the app's own path."
    ],
    "whatsLeft": [
-    "Nothing. Two corpora remain unprepared for reasons outside this work:",
-    "`etdd70` dies inside the pipeline's own Zenodo downloader (a bare `assert`",
-    "in `httpx`'s sync transport, which is why the sweep reported an empty error",
-    "for it), and seven more need manual acquisition from their publishers."
+    "**1. Mark the native OneStop entry (WIP) too.** The marker was confirmed for the",
+    "harmonised corpora *and* asked for on native OneStop, which today reads as",
+    "finished. Same display-only route as the rest (`app.picker_name_for`) so the",
+    "stored choice, the `?corpus=` slug and saved configs stay untouched — and it has",
+    "to reach the Comparisons *Compare with* picker as well, or a user can load it as",
+    "scanpath B without seeing the marker.",
+    "",
+    "**2. Put the geometry tier where it can be seen.** `geometry_source` is stamped",
+    "per trial and badged on the source picker, but the call was that it should be",
+    "*clear and visible* — in the **Available datasets** table on the 🗂️ Data page,",
+    "beside the layout information. `app.geometry_badge(entry)` already produces the",
+    "sentence (including the \"measured word boxes for N of M texts\" case, which a",
+    "bare tier label overclaims); this is about giving it a column there.",
+    "",
+    "Neither is blocked. Two corpora remain unprepared for reasons outside this work:",
+    "`etdd70` dies inside the pipeline's own Zenodo downloader (a bare `assert` in",
+    "`httpx`'s sync transport, which is why the sweep reported an empty error for it),",
+    "and seven more need manual acquisition from their publishers."
    ],
    "decisions": [
-    "**Review the branch** — 31 corpora in the source picker, each marked (WIP).",
-    "Worth clicking: pick *EMTeC (WIP)* and confirm the stimulus and word boxes",
-    "draw (it silently loaded zero word boxes until the branch review caught it),",
-    "and *PoTeC (harmonised benchmark) (WIP)* beside the native *PoTeC* to see the",
-    "two kept apart.",
-    "**Is (WIP) the marker you want, and on those entries only?** It is display",
-    "only — the stored choice, the `?corpus=` slug and saved configs are",
-    "untouched, so removing it later breaks no link.",
-    "**Geometry honesty is the judgement call to check.** 1 corpus is `real`, 20",
-    "`reconstructed`, 10 `synthesized`, and a corpus stays `synthesized` unless a",
-    "display parameter can be cited. MECO L2 W2 was *downgraded* on this branch:",
-    "its shipped 1920x1080 appears in neither cited source, and its font size was",
-    "a points value used as pixels.",
-    "**Docs churn inside the ruff commit** (merged from main): 0.16 formats Python",
-    "inside Markdown, so README and four docs pages were rewrapped and one README",
-    "one-liner now spans three lines. Cosmetic, and revertible if you dislike it."
+    "**Review the branch** — 31 corpora in the source picker, each marked (WIP). Worth clicking: pick *EMTeC (WIP)* and confirm the stimulus and word boxes draw (it silently loaded zero word boxes until the branch review caught it), and *PoTeC (harmonised benchmark) (WIP)* beside the native *PoTeC* to see the two kept apart."
+   ],
+   "statusNote": [
+    "**Three of the four open calls answered 2026-08-20**, and two of them ask for",
+    "work — see *What's left*. The branch review itself is still outstanding."
    ]
   },
   {
@@ -6220,8 +6267,7 @@ window.TRACKER = {
     "Nothing in implementation; review the rebuilt scanpaths' vertical scatter."
    ],
    "decisions": [
-    "Confirm that corpora without a shared real coordinate frame remain centred",
-    "rather than receiving fabricated or mismatched vertical positions."
+    "Confirm that corpora without a shared real coordinate frame remain centred rather than receiving fabricated or mismatched vertical positions."
    ],
    "background": [
     "**Why it happens.** EyeGenBench's harmonised schema has no fixation coordinates —",
@@ -18146,18 +18192,13 @@ window.TRACKER = {
    "num": 8,
    "sub": "",
    "title": "Read every computation in the register and confirm the science",
-   "status": "Backlog",
-   "note": "the human half of #VAL-5 — nobody can do this but you",
+   "status": "Closed",
+   "note": "Folded into #PERF-6 on 2026-08-20 at the user's request. The read-through and its three starting instructions are carried forward into #PERF-6's *Waiting on you*.",
    "date": "",
    "added": "2026-08-13",
    "group": "Validation",
    "subgroup": "",
-   "archived": false,
-   "decisions": [
-    "**Start with `pre.merge_short` and `pre.character_grid`.** Both moved onto the shared letter scale under #BUG-27 on 2026-08-13, so both changed *meaning* rather than just wording. The merge distance is the one with real consequences: it is a preprocessing setting that travels in share links and export bundles, so a wrong scale there silently changes other people's results, not just a number on a page.",
-    "**Then the four reading measures** — `measure.first_fixation`, `measure.first_pass`, `measure.regression_path`, `measure.total_fixation`. They are what a reader of a paper would assume standard, so a definition that quietly differs from the field's is the most expensive kind of error here.",
-    "**Say which entries you have cleared** as you go, so the status column can move from *Partially verified* to *Verified* for those. There is no point in me guessing which ones you actually read."
-   ],
+   "archived": true,
    "request": [
     "*\"Add a followup task for me to manually review all computations.\"* — the",
     "manual read-through that #VAL-5's register was built to make possible, split out",
@@ -18184,6 +18225,9 @@ window.TRACKER = {
     "hold by your decision. Related: #VAL-5 (the register), #VAL-4, #BUG-27 (found",
     "exactly this way, by working the arithmetic instead of trusting the docstring),",
     "#BUG-25, #ENG-37."
+   ],
+   "statusNote": [
+    "**Closed 2026-08-20 — superseded by #PERF-6.** Folded into #PERF-6 on 2026-08-20 at the user's request. The read-through and its three starting instructions are carried forward into #PERF-6's *Waiting on you*."
    ]
   },
   {
@@ -19256,146 +19300,289 @@ window.TRACKER = {
    ]
   },
  {
-  "id": "PERF-4",
-  "prefix": "PERF",
-  "num": 4,
-  "sub": "",
-  "title": "Profile every registered computation against a full-size corpus",
-  "status": "Review",
-  "owner": "Shubi",
-  "note": "",
-  "date": "",
-  "added": "2026-08-19",
-  "group": "Performance",
-  "subgroup": "",
-  "archived": false,
-  "statusNote": [
-   "> **Measured 2026-08-19** — M1 Max MacBook Pro (10 cores, 64 GB), Python 3.14,",
-   "> pandas 3.0.3 — against the full OneStop L1 EyeLink reports: 360 readers,",
-   "> 24,046 trials, 2.40 M fixation rows, 2.63 M word rows. The full-corpus pass",
-   "> completed in **2.55 h**, with the five heaviest stages deliberately",
-   "> skipped."
-  ],
-  "request": [
-   "*\"Profile the computations (related to #VAL-8) with a big dataset like",
-   "onestop.\"*"
-  ],
-  "whatWasDone": [
-   "**A benchmark, not a one-off.** [`benchmarks/computation_benchmark.py`](benchmarks/computation_benchmark.py) walks the pipeline in dependency order — normalize → assign → measure → preprocess → aggregate, then the per-trial similarity, drift-correction and figure builders — timing each stage with wall clock and RSS delta and tagging it with the [`computations.py`](scanpath_studio/computations.py) entry ids it exercises, so a row reads next to [`docs/computations.md`](docs/computations.md). All 65 register entries are covered. `--participants N` is the scale knob and stops the reader after N readers rather than parsing the whole multi-gigabyte export; `--skip` drops stages that cannot finish at the scale being measured. It follows [`benchmarks/export_benchmark.py`](benchmarks/export_benchmark.py)'s shape (dataclass rows, JSON out, nothing written into the repo).",
-   "",
-   "**The scale ladder.** Real OneStop readers, whole corpus loaded at once, excluding `measure_sensitivity` (which is off the scale on its own, below):",
-   "",
-   "| readers | trials | fixations | word rows | total | peak RSS |",
-   "| --- | --- | --- | --- | --- | --- |",
-   "| 1 | 66 | 5,131 | 7,555 | 16 s | 0.6 GB |",
-   "| 4 | 268 | 28,913 | 29,115 | 67 s | 1.4 GB |",
-   "| 16 | 1,069 | 103,624 | 116,236 | 6 min | 4.7 GB |",
-   "| 64 | 4,292 | 439,305 | 468,973 | 55 min | 17.4 GB |",
-   "",
-   "The aggregate grows as **n^1.28**. Per reader that is ~16 s of compute; the full 360-reader corpus extrapolates to ~8.4 h, and the measured stages say that extrapolation is *optimistic*.",
-   "",
-   "**Three populations, and the split is the finding.** The last column is a completed run over all 360 readers — 2.55 h of compute, and that is *with* the five `skipped` stages left out (four would not have finished; `bootstrap_ci` would have taken the machine down). Stages whose work is one vectorized pass over rows land on their fit:",
-   "",
-   "| stage | 1 | 4 | 16 | 64 | exponent | fit → 360 | measured at 360 |",
-   "| --- | --- | --- | --- | --- | --- | --- | --- |",
-   "| `materialize_runs` | 0.3 | 1.3 | 5.0 | 18.8 | n^0.98 | 102 s | **105 s** |",
-   "| `enrich_fixations` | 0.3 | 1.4 | 5.1 | 19.1 | n^1.01 | 109 s | **106 s** |",
-   "| `normalize_words` | 0.0 | 0.2 | 0.5 | 2.1 | n^0.93 | 11 s | **12 s** |",
-   "",
-   "Stages that loop in Python **once per trial** do not — at 24,046 trials they run 2–3× worse than their own fit predicts:",
-   "",
-   "| stage | 1 | 4 | 16 | 64 | exponent | fit → 360 | measured at 360 |",
-   "| --- | --- | --- | --- | --- | --- | --- | --- |",
-   "| `assign_fixations_to_words` | 0.3 | 1.3 | 4.7 | 28.1 | n^1.11 | 3 min | **7 min** |",
-   "| `fixation_in_text_mask` | 0.3 | 1.1 | 4.8 | 27.5 | n^1.11 | 3 min | **7 min** |",
-   "| `classify_saccades` | 0.1 | 0.3 | 1.7 | 14.3 | n^1.26 | 2 min | **6 min** |",
-   "",
-   "And the genuinely superlinear ones, which is where the hours are:",
-   "",
-   "| stage | 1 | 4 | 16 | 64 | exponent | fit → 360 | measured at 360 |",
-   "| --- | --- | --- | --- | --- | --- | --- | --- |",
-   "| `compute_per_word_measures` | 2.8 | 18.7 | 137.5 | 1696.2 | n^1.54 | 6.8 h | skipped |",
-   "| `merge_short_fixations` | 4.0 | 11.8 | 69.2 | 519.8 | n^1.17 | 65 min | skipped |",
-   "| `preprocess_fixations` | 4.3 | 13.3 | 75.2 | 542.0 | n^1.16 | 67 min | skipped |",
-   "| `sentence_measures` | 1.7 | 7.7 | 37.0 | 239.6 | n^1.19 | 31 min | **76 min** |",
-   "| `character_grid` | 0.6 | 2.5 | 12.3 | 81.9 | n^1.20 | 11 min | **29 min** |",
-   "| `trial_summary_table` | 0.4 | 2.2 | 9.7 | 64.1 | n^1.21 | 9 min | **19 min** |",
-   "| `measure_sensitivity` | 29.1 | 237.3 | – | – | n^1.51 | 60.2 h | skipped |",
-   "",
-   "**Memory is the harder ceiling.** Every stage allocating more than ~1 GB:",
-   "",
-   "| stage | readers | allocated |",
-   "| --- | --- | --- |",
-   "| `io.read_words_parquet` | 64 | +1.8 GB |",
-   "| `io.read_fixations_parquet` | 64 | +2.1 GB |",
-   "| `character_grid` | 64 | +1.2 GB |",
-   "| `bootstrap_ci` | 64 | +12.2 GB |",
-   "| `io.read_words_parquet` | 360 | +10.1 GB |",
-   "| `io.read_fixations_parquet` | 360 | +11.6 GB |",
-   "| `normalize_fixations` | 360 | +1.1 GB |",
-   "| `harmonize_frames` | 360 | +1.3 GB |",
-   "| `enrich_fixations` | 360 | +1.5 GB |",
-   "| `sentence_measures` | 360 | +1.5 GB |",
-   "| `saccade_table` | 360 | +1.1 GB |",
-   "",
-   "Loading and normalizing the full corpus alone reaches **25 GB resident** before a single measure is computed — the raw 300-column fixation frame and 174-column IA frame dominate, not the canonical columns.",
-   "",
-   "**The single-trial path is flat**, and that is the reassuring half: `plot_scanpath` stays at ~1.8 s and `animate_scanpath` at ~5.6 s whatever the corpus size, because both slice one trial first. Every drift-correction algorithm is under 0.15 s per trial except `merge` (~4.7 s) and `consensus` (~10 s), which are the two that run the others. Nothing in the geometry or aggregation groups is measurable at any scale."
-  ],
-  "whatsLeft": [
-   "Nothing. The fixes the numbers argue for are #PERF-5."
-  ],
-  "background": [
-   "**What this can and cannot establish.** It is a wall-clock and resident-memory profile of one machine, one run per cell — read the exponents, not the third digit. It says nothing about whether any computation is *correct*; that is #VAL-8's read-through, which this is named after only because the register is what made an exhaustive stage list possible.",
-   "",
-   "**Which scenario the corpus-wide column is.** It is Corpus Analysis and bulk export — `tabs.py:7671` and `tabs.py:5699` call `data.compute_word_metrics` on the whole *filtered* frame, and `app.py:4987` runs `preprocess_fixation_stage` over all of it whenever preprocessing is on. It is **not** the Scanpath view, which slices one trial and is flat. Both are behind `@st.cache_data` on a frame fingerprint, so these are cold costs paid once per dataset — but a cold cost of hours is still a cold cost.",
-   "",
-   "**The strongest evidence is a controlled comparison the codebase already ran.** `saccade_table` and `sentence_measures` live in the same module and both loop per group. `saccade_table` is the one **#PERF-3 already fixed** — it builds `_word_letter_geometry(words, keys)` once up front ([preprocessing.py:685](scanpath_studio/preprocessing.py:685)) and then loops — and it lands on its fit at full corpus (3 min predicted, 158 s measured). `sentence_measures` hoists nothing: it loops per trial in `infer_sentence_ids` ([preprocessing.py:283](scanpath_studio/preprocessing.py:283)) and again per *sentence* ([preprocessing.py:308](scanpath_studio/preprocessing.py:308)), and it overruns 2.5× (31 min predicted, **76 min** measured). Same module, same loop shape, one difference — so the fix #PERF-5 proposes has already been performed once here, and the stage that got it is the one stage in its module that still holds its fit at 360 readers.",
-   "",
-   "**And not every per-trial loop overruns**, which is what keeps this from being a blanket claim about `groupby`: `cleaning_report` walks all 24,046 trials doing ~15 small pandas operations each and lands at 30 s, dead on its n^0.98 fit. It only ever *reads* each chunk — it never writes a result back into a full-length Series, which is what #PERF-5's third finding is actually about.",
-   "",
-   "**Method.** The 4.4 GB `ia_P.tsv` / 4.8 GB `fixations_P.tsv` DataViewer reports were sliced into one Parquet file per reader so the scale knob is exact and the TSV parse is not re-paid per run. Values are left as `pd.read_csv` sees them, EyeLink's `.` missing marker included, so the dtypes match what an upload gets. Schema inference picks `RECORDING_SESSION_LABEL` / `paragraph_id` / `IA_*` unassisted, so no column mapping was hand-fed. `measure_sensitivity` was capped at 4 readers and five stages were skipped at 360 (`compute_per_word_measures`, `merge_short_fixations`, `preprocess_fixations`, `measure_sensitivity`, `bootstrap_ci`) — the first four because they would not finish, `bootstrap_ci` because it would have taken the machine down.",
-   "",
-   "**One cell reads ERR and it was mine.** `landing_positions` and `metric_over_time` both take the *fixation* frame, and the harness was handing both the measured *words* frame; `metric_over_time` was also being given `tfd`, a words-grain measure, so it walked an empty path. Small scale never complained — it only raised once the 360 run skipped `compute_per_word_measures` and the frame arriving twice lacked the columns. Fixed; all three are sub-millisecond at every scale even doing real work, so no conclusion moves.",
-   "",
-   "Related: #PERF-5 (the fixes these numbers argue for), #PERF-2 (the same question asked about frame *width* — the answer there was a warning, not an optimisation), #PERF-3 (fixed this exact hoist-the-scan shape in `saccade_table`), #VAL-5 (the register), #VAL-8, #DATA-34."
-  ],
-  "decisions": [
-   "**Is a 360-reader session a workflow you intend to support?** Everything below turns on this. The app already has the other answer built — `data.load_onestop_server_bundle`'s per-pid shards load one reader in under a second — so if one-reader-at-a-time is the intended path for corpora this size, the honest response is a documented ceiling and a warning (the shape #PERF-2 took) and #PERF-5 should be closed rather than done. If it is a workflow, #PERF-5 is real work.",
-   "**`bootstrap_ci` I would fix either way** — it fails by exhausting memory rather than by being slow (+12.2 GB at 64 readers, ~69 GB extrapolated), and `aggregation.spread_bounds` routes to it *unconditionally* when the aggregate is `sum`, so a user who chose SD still gets it. Say whether you would rather it subsample than allocate — that is a methodology call, not a code one.",
-   "**Check the scenario, not the code** — nothing in the app changed here. What is worth your eye is whether the corpus-wide column is the thing you care about being fast, or whether the single-trial path (flat, ~1.8 s, unaffected by corpus size) is where the user actually lives."
-  ]
- },
+   "id": "PERF-4",
+   "prefix": "PERF",
+   "num": 4,
+   "sub": "",
+   "title": "Profile every registered computation against a full-size corpus",
+   "status": "Closed",
+   "owner": "Shubi",
+   "note": "Folded into #PERF-6 on 2026-08-20 at the user's request — the profile, the fix list and the read-through are one task now. The benchmark and every number it produced are carried forward in #PERF-6's *What was done*; nothing here was abandoned.",
+   "date": "",
+   "added": "2026-08-19",
+   "group": "Performance",
+   "subgroup": "",
+   "archived": true,
+   "statusNote": [
+    "**Closed 2026-08-20 — superseded by #PERF-6.** Folded into #PERF-6 on 2026-08-20 at the user's request — the profile, the fix list and the read-through are one task now. The benchmark and every number it produced are carried forward in #PERF-6's *What was done*; nothing here was abandoned."
+   ],
+   "request": [
+    "*\"Profile the computations (related to #VAL-8) with a big dataset like",
+    "onestop.\"*"
+   ],
+   "whatWasDone": [
+    "**A benchmark, not a one-off.** [`benchmarks/computation_benchmark.py`](benchmarks/computation_benchmark.py) walks the pipeline in dependency order — normalize → assign → measure → preprocess → aggregate, then the per-trial similarity, drift-correction and figure builders — timing each stage with wall clock and RSS delta and tagging it with the [`computations.py`](scanpath_studio/computations.py) entry ids it exercises, so a row reads next to [`docs/computations.md`](docs/computations.md). All 65 register entries are covered. `--participants N` is the scale knob and stops the reader after N readers rather than parsing the whole multi-gigabyte export; `--skip` drops stages that cannot finish at the scale being measured. It follows [`benchmarks/export_benchmark.py`](benchmarks/export_benchmark.py)'s shape (dataclass rows, JSON out, nothing written into the repo).",
+    "",
+    "**The scale ladder.** Real OneStop readers, whole corpus loaded at once, excluding `measure_sensitivity` (which is off the scale on its own, below):",
+    "",
+    "| readers | trials | fixations | word rows | total | peak RSS |",
+    "| --- | --- | --- | --- | --- | --- |",
+    "| 1 | 66 | 5,131 | 7,555 | 16 s | 0.6 GB |",
+    "| 4 | 268 | 28,913 | 29,115 | 67 s | 1.4 GB |",
+    "| 16 | 1,069 | 103,624 | 116,236 | 6 min | 4.7 GB |",
+    "| 64 | 4,292 | 439,305 | 468,973 | 55 min | 17.4 GB |",
+    "",
+    "The aggregate grows as **n^1.28**. Per reader that is ~16 s of compute; the full 360-reader corpus extrapolates to ~8.4 h, and the measured stages say that extrapolation is *optimistic*.",
+    "",
+    "**Three populations, and the split is the finding.** The last column is a completed run over all 360 readers — 2.55 h of compute, and that is *with* the five `skipped` stages left out (four would not have finished; `bootstrap_ci` would have taken the machine down). Stages whose work is one vectorized pass over rows land on their fit:",
+    "",
+    "| stage | 1 | 4 | 16 | 64 | exponent | fit → 360 | measured at 360 |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    "| `materialize_runs` | 0.3 | 1.3 | 5.0 | 18.8 | n^0.98 | 102 s | **105 s** |",
+    "| `enrich_fixations` | 0.3 | 1.4 | 5.1 | 19.1 | n^1.01 | 109 s | **106 s** |",
+    "| `normalize_words` | 0.0 | 0.2 | 0.5 | 2.1 | n^0.93 | 11 s | **12 s** |",
+    "",
+    "Stages that loop in Python **once per trial** do not — at 24,046 trials they run 2–3× worse than their own fit predicts:",
+    "",
+    "| stage | 1 | 4 | 16 | 64 | exponent | fit → 360 | measured at 360 |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    "| `assign_fixations_to_words` | 0.3 | 1.3 | 4.7 | 28.1 | n^1.11 | 3 min | **7 min** |",
+    "| `fixation_in_text_mask` | 0.3 | 1.1 | 4.8 | 27.5 | n^1.11 | 3 min | **7 min** |",
+    "| `classify_saccades` | 0.1 | 0.3 | 1.7 | 14.3 | n^1.26 | 2 min | **6 min** |",
+    "",
+    "And the genuinely superlinear ones, which is where the hours are:",
+    "",
+    "| stage | 1 | 4 | 16 | 64 | exponent | fit → 360 | measured at 360 |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    "| `compute_per_word_measures` | 2.8 | 18.7 | 137.5 | 1696.2 | n^1.54 | 6.8 h | skipped |",
+    "| `merge_short_fixations` | 4.0 | 11.8 | 69.2 | 519.8 | n^1.17 | 65 min | skipped |",
+    "| `preprocess_fixations` | 4.3 | 13.3 | 75.2 | 542.0 | n^1.16 | 67 min | skipped |",
+    "| `sentence_measures` | 1.7 | 7.7 | 37.0 | 239.6 | n^1.19 | 31 min | **76 min** |",
+    "| `character_grid` | 0.6 | 2.5 | 12.3 | 81.9 | n^1.20 | 11 min | **29 min** |",
+    "| `trial_summary_table` | 0.4 | 2.2 | 9.7 | 64.1 | n^1.21 | 9 min | **19 min** |",
+    "| `measure_sensitivity` | 29.1 | 237.3 | – | – | n^1.51 | 60.2 h | skipped |",
+    "",
+    "**Memory is the harder ceiling.** Every stage allocating more than ~1 GB:",
+    "",
+    "| stage | readers | allocated |",
+    "| --- | --- | --- |",
+    "| `io.read_words_parquet` | 64 | +1.8 GB |",
+    "| `io.read_fixations_parquet` | 64 | +2.1 GB |",
+    "| `character_grid` | 64 | +1.2 GB |",
+    "| `bootstrap_ci` | 64 | +12.2 GB |",
+    "| `io.read_words_parquet` | 360 | +10.1 GB |",
+    "| `io.read_fixations_parquet` | 360 | +11.6 GB |",
+    "| `normalize_fixations` | 360 | +1.1 GB |",
+    "| `harmonize_frames` | 360 | +1.3 GB |",
+    "| `enrich_fixations` | 360 | +1.5 GB |",
+    "| `sentence_measures` | 360 | +1.5 GB |",
+    "| `saccade_table` | 360 | +1.1 GB |",
+    "",
+    "Loading and normalizing the full corpus alone reaches **25 GB resident** before a single measure is computed — the raw 300-column fixation frame and 174-column IA frame dominate, not the canonical columns.",
+    "",
+    "**The single-trial path is flat**, and that is the reassuring half: `plot_scanpath` stays at ~1.8 s and `animate_scanpath` at ~5.6 s whatever the corpus size, because both slice one trial first. Every drift-correction algorithm is under 0.15 s per trial except `merge` (~4.7 s) and `consensus` (~10 s), which are the two that run the others. Nothing in the geometry or aggregation groups is measurable at any scale."
+   ],
+   "whatsLeft": [
+    "Nothing. The fixes the numbers argue for are #PERF-5."
+   ],
+   "background": [
+    "**What this can and cannot establish.** It is a wall-clock and resident-memory profile of one machine, one run per cell — read the exponents, not the third digit. It says nothing about whether any computation is *correct*; that is #VAL-8's read-through, which this is named after only because the register is what made an exhaustive stage list possible.",
+    "",
+    "**Which scenario the corpus-wide column is.** It is Corpus Analysis and bulk export — `tabs.py:7671` and `tabs.py:5699` call `data.compute_word_metrics` on the whole *filtered* frame, and `app.py:4987` runs `preprocess_fixation_stage` over all of it whenever preprocessing is on. It is **not** the Scanpath view, which slices one trial and is flat. Both are behind `@st.cache_data` on a frame fingerprint, so these are cold costs paid once per dataset — but a cold cost of hours is still a cold cost.",
+    "",
+    "**The strongest evidence is a controlled comparison the codebase already ran.** `saccade_table` and `sentence_measures` live in the same module and both loop per group. `saccade_table` is the one **#PERF-3 already fixed** — it builds `_word_letter_geometry(words, keys)` once up front ([preprocessing.py:685](scanpath_studio/preprocessing.py:685)) and then loops — and it lands on its fit at full corpus (3 min predicted, 158 s measured). `sentence_measures` hoists nothing: it loops per trial in `infer_sentence_ids` ([preprocessing.py:283](scanpath_studio/preprocessing.py:283)) and again per *sentence* ([preprocessing.py:308](scanpath_studio/preprocessing.py:308)), and it overruns 2.5× (31 min predicted, **76 min** measured). Same module, same loop shape, one difference — so the fix #PERF-5 proposes has already been performed once here, and the stage that got it is the one stage in its module that still holds its fit at 360 readers.",
+    "",
+    "**And not every per-trial loop overruns**, which is what keeps this from being a blanket claim about `groupby`: `cleaning_report` walks all 24,046 trials doing ~15 small pandas operations each and lands at 30 s, dead on its n^0.98 fit. It only ever *reads* each chunk — it never writes a result back into a full-length Series, which is what #PERF-5's third finding is actually about.",
+    "",
+    "**Method.** The 4.4 GB `ia_P.tsv` / 4.8 GB `fixations_P.tsv` DataViewer reports were sliced into one Parquet file per reader so the scale knob is exact and the TSV parse is not re-paid per run. Values are left as `pd.read_csv` sees them, EyeLink's `.` missing marker included, so the dtypes match what an upload gets. Schema inference picks `RECORDING_SESSION_LABEL` / `paragraph_id` / `IA_*` unassisted, so no column mapping was hand-fed. `measure_sensitivity` was capped at 4 readers and five stages were skipped at 360 (`compute_per_word_measures`, `merge_short_fixations`, `preprocess_fixations`, `measure_sensitivity`, `bootstrap_ci`) — the first four because they would not finish, `bootstrap_ci` because it would have taken the machine down.",
+    "",
+    "**One cell reads ERR and it was mine.** `landing_positions` and `metric_over_time` both take the *fixation* frame, and the harness was handing both the measured *words* frame; `metric_over_time` was also being given `tfd`, a words-grain measure, so it walked an empty path. Small scale never complained — it only raised once the 360 run skipped `compute_per_word_measures` and the frame arriving twice lacked the columns. Fixed; all three are sub-millisecond at every scale even doing real work, so no conclusion moves.",
+    "",
+    "Related: #PERF-5 (the fixes these numbers argue for), #PERF-2 (the same question asked about frame *width* — the answer there was a warning, not an optimisation), #PERF-3 (fixed this exact hoist-the-scan shape in `saccade_table`), #VAL-5 (the register), #VAL-8, #DATA-34."
+   ]
+  },
  {
-  "id": "PERF-5",
-  "prefix": "PERF",
-  "num": 5,
-  "sub": "",
-  "title": "Corpus-wide compute is superlinear: hoist the per-row frame scans",
-  "status": "Backlog",
-  "note": "blocked on #PERF-4's first decision",
-  "date": "",
-  "added": "2026-08-19",
-  "group": "Performance",
-  "subgroup": "",
-  "archived": false,
-  "request": [
-   "#PERF-4 profiled every computation against the full OneStop corpus and found three structural costs, all the same shape — work that belongs outside a loop sitting inside one. This is the fix list. It is **Backlog rather than Planned** because #PERF-4's first decision (is a 360-reader session supported at all?) decides whether it should be done or closed.",
-   "",
-   "**1. `preprocessing._character_width` rescans the whole words frame per call** ([preprocessing.py:76](scanpath_studio/preprocessing.py:76)). It filters `words[to_numeric(words.word_id) == word_id]` and then hands the *full* frame down to `measures.word_char_advance` as `layout=words` — and it is called from inside the neighbour loop ([preprocessing.py:135](scanpath_studio/preprocessing.py:135)), so once per candidate neighbour per short fixation, not once per fixation. The word_id → char-width map is constant for the whole `merge_short_fixations` call, so it hoists. #PERF-3 already did exactly this to `saccade_table` (`_word_letter_geometry`, built once at [preprocessing.py:685](scanpath_studio/preprocessing.py:685)) — worth checking whether that same index can simply be reused rather than a second one built. Measured: `merge_short_fixations` 4.0 s → 520 s from 1 → 64 readers; `preprocess_fixations`, which wraps it, tracks it exactly.",
-   "",
-   "**2. `aggregation.bootstrap_ci` allocates `n_boot × len(values)` twice** ([aggregation.py:392](scanpath_studio/aggregation.py:392)) — `rng.integers(0, arr.size, size=(n_boot, arr.size))` and then `arr[idx]`, both float64/int64 at full width. Measured **+12.2 GB at 64 readers**; the full corpus extrapolates to ~69 GB, which is an OOM rather than a wait. This is the one that fails hardest and is cheapest to fix (resample in blocks, or subsample above a threshold). It matters more than the call count suggests because `spread_bounds` routes to it unconditionally when `agg == \"sum\"` ([aggregation.py:415](scanpath_studio/aggregation.py:415)) — deliberately, and correctly, since SD around a total is meaningless — so a user who picked SD still lands here. `paired_group_summary` ([aggregation.py:1569](scanpath_studio/aggregation.py:1569)) feeds it a whole cohort's values.",
-   "",
-   "**3. The per-trial Python loops degrade past their own fit.** `measures._groupwise` ([measures.py:610](scanpath_studio/measures.py:610)) and `assign_fixations_to_words` ([measures.py:322](scanpath_studio/measures.py:322)) both loop over `(participant, trial)` groups and write each chunk back with `.loc[chunk.index] = …` into a full-length Series — 24,046 such assignments at corpus scale, into a 2.4 M-row `object`-dtype Series in `_groupwise`'s case. Measured: `assign_fixations_to_words` and `fixation_in_text_mask` each 412 s at 360 readers against ~180 s predicted by their own n^1.11 fit, and `classify_saccades` 345 s against ~120 s. The row-vectorized stages beside them (`materialize_runs`, `enrich_fixations`) hit their fit within 3%, which is what isolates the loop as the cause."
-  ],
-  "background": [
-   "Numbers, method and the full stage table are in #PERF-4; [`benchmarks/computation_benchmark.py`](benchmarks/computation_benchmark.py) reproduces them, so any fix here has a before/after that is one command.",
-   "",
-   "**Not in scope until asked.** `measure_sensitivity` is the worst single offender (29 s → 237 s from 1 → 4 readers, n^1.51, ~60 h extrapolated) but it runs the whole measure pipeline three times by construction, so it is slow for an honest reason rather than a hoistable one — and it sits behind the experimental gate (#PRE-21). Fixing 1–3 speeds it up for free.",
-   "",
-   "Related: #PERF-4, #PERF-2, #PERF-3, #VAL-5."
-  ]
- },
+   "id": "PERF-5",
+   "prefix": "PERF",
+   "num": 5,
+   "sub": "",
+   "title": "Corpus-wide compute is superlinear: hoist the per-row frame scans",
+   "status": "Closed",
+   "note": "Folded into #PERF-6 on 2026-08-20 at the user's request. The three findings are carried forward verbatim into #PERF-6's *What's left*, and its opening question — is a 360-reader session supported? — was answered yes, so the fixes are real work rather than a maybe.",
+   "date": "",
+   "added": "2026-08-19",
+   "group": "Performance",
+   "subgroup": "",
+   "archived": true,
+   "request": [
+    "#PERF-4 profiled every computation against the full OneStop corpus and found three structural costs, all the same shape — work that belongs outside a loop sitting inside one. This is the fix list. It is **Backlog rather than Planned** because #PERF-4's first decision (is a 360-reader session supported at all?) decides whether it should be done or closed.",
+    "",
+    "**1. `preprocessing._character_width` rescans the whole words frame per call** ([preprocessing.py:76](scanpath_studio/preprocessing.py:76)). It filters `words[to_numeric(words.word_id) == word_id]` and then hands the *full* frame down to `measures.word_char_advance` as `layout=words` — and it is called from inside the neighbour loop ([preprocessing.py:135](scanpath_studio/preprocessing.py:135)), so once per candidate neighbour per short fixation, not once per fixation. The word_id → char-width map is constant for the whole `merge_short_fixations` call, so it hoists. #PERF-3 already did exactly this to `saccade_table` (`_word_letter_geometry`, built once at [preprocessing.py:685](scanpath_studio/preprocessing.py:685)) — worth checking whether that same index can simply be reused rather than a second one built. Measured: `merge_short_fixations` 4.0 s → 520 s from 1 → 64 readers; `preprocess_fixations`, which wraps it, tracks it exactly.",
+    "",
+    "**2. `aggregation.bootstrap_ci` allocates `n_boot × len(values)` twice** ([aggregation.py:392](scanpath_studio/aggregation.py:392)) — `rng.integers(0, arr.size, size=(n_boot, arr.size))` and then `arr[idx]`, both float64/int64 at full width. Measured **+12.2 GB at 64 readers**; the full corpus extrapolates to ~69 GB, which is an OOM rather than a wait. This is the one that fails hardest and is cheapest to fix (resample in blocks, or subsample above a threshold). It matters more than the call count suggests because `spread_bounds` routes to it unconditionally when `agg == \"sum\"` ([aggregation.py:415](scanpath_studio/aggregation.py:415)) — deliberately, and correctly, since SD around a total is meaningless — so a user who picked SD still lands here. `paired_group_summary` ([aggregation.py:1569](scanpath_studio/aggregation.py:1569)) feeds it a whole cohort's values.",
+    "",
+    "**3. The per-trial Python loops degrade past their own fit.** `measures._groupwise` ([measures.py:610](scanpath_studio/measures.py:610)) and `assign_fixations_to_words` ([measures.py:322](scanpath_studio/measures.py:322)) both loop over `(participant, trial)` groups and write each chunk back with `.loc[chunk.index] = …` into a full-length Series — 24,046 such assignments at corpus scale, into a 2.4 M-row `object`-dtype Series in `_groupwise`'s case. Measured: `assign_fixations_to_words` and `fixation_in_text_mask` each 412 s at 360 readers against ~180 s predicted by their own n^1.11 fit, and `classify_saccades` 345 s against ~120 s. The row-vectorized stages beside them (`materialize_runs`, `enrich_fixations`) hit their fit within 3%, which is what isolates the loop as the cause."
+   ],
+   "background": [
+    "Numbers, method and the full stage table are in #PERF-4; [`benchmarks/computation_benchmark.py`](benchmarks/computation_benchmark.py) reproduces them, so any fix here has a before/after that is one command.",
+    "",
+    "**Not in scope until asked.** `measure_sensitivity` is the worst single offender (29 s → 237 s from 1 → 4 readers, n^1.51, ~60 h extrapolated) but it runs the whole measure pipeline three times by construction, so it is slow for an honest reason rather than a hoistable one — and it sits behind the experimental gate (#PRE-21). Fixing 1–3 speeds it up for free.",
+    "",
+    "Related: #PERF-4, #PERF-2, #PERF-3, #VAL-5."
+   ],
+   "statusNote": [
+    "**Closed 2026-08-20 — superseded by #PERF-6.** Folded into #PERF-6 on 2026-08-20 at the user's request. The three findings are carried forward verbatim into #PERF-6's *What's left*, and its opening question — is a 360-reader session supported? — was answered yes, so the fixes are real work rather than a maybe."
+   ]
+  },
+  {
+   "id": "PERF-6",
+   "prefix": "PERF",
+   "num": 6,
+   "sub": "",
+   "title": "The computations at corpus scale: explain them, check them, make them fast",
+   "status": "Planned",
+   "owner": "",
+   "note": "",
+   "date": "",
+   "added": "2026-08-20",
+   "group": "Performance",
+   "subgroup": "",
+   "archived": false,
+   "statusNote": [
+    "**Opened 2026-08-20** at the user's request, replacing #PERF-4, #PERF-5 and",
+    "#VAL-8 — *\"we should create a single big task including PERF-4 (this), PERF-5",
+    "and VAL-8 instead of three separate ones\"*. Those three are archived; their",
+    "write-ups stay readable under *Show archived* and nothing in them is lost."
+   ],
+   "request": [
+    "One task covering the three halves of the same question, because splitting them",
+    "made each one unreadable on its own:",
+    "",
+    "**1. Say what the computations are, in terms a team lead can read.** *\"I am not",
+    "familiar with the functions name and such. Make it readable for me. Think in",
+    "terms of where in the pipeline the computations occur and what they do. Create a",
+    "clear document specifying these.\"* [`docs/computations.md`](docs/computations.md)",
+    "is a 65-row reference organised by register id; what is wanted is a document",
+    "organised by **pipeline stage** — load → normalize → assign fixations to words →",
+    "reading measures → preprocessing → corpus aggregation → figures — saying at each",
+    "stage what happens, what it costs, and what it is for.",
+    "",
+    "**2. Confirm the science.** The manual read-through of every computation in the",
+    "register (the old #VAL-8): does each formula, unit, grouping key and",
+    "missing-value rule match what the field means by that measure?",
+    "",
+    "**3. Make the corpus-wide path hold at real scale** (the old #PERF-5): *\"should",
+    "support hundreds of readers and thousands of trials (onestop is ~20k trials;",
+    "meco is ~1k readers)\"*."
+   ],
+   "whatWasDone": [
+    "**The measurement, from the old #PERF-4** (archived — full stage tables, memory",
+    "figures and method are in its write-up).",
+    "[`benchmarks/computation_benchmark.py`](benchmarks/computation_benchmark.py)",
+    "walks the pipeline in dependency order and times every one of the 65 register",
+    "entries with wall clock and RSS delta; `--participants N` is the scale knob.",
+    "It ran against the full OneStop L1 reports — 360 readers, 24,046 trials, 2.40 M",
+    "fixation rows — in **2.55 h**, with five stages skipped because they would not",
+    "have finished.",
+    "",
+    "**What it found**, in one line each:",
+    "",
+    "- Row-vectorized stages scale linearly and are fine (`materialize_runs`,",
+    "  `enrich_fixations`, `normalize_words` — all within 3% of their own fit at 360",
+    "  readers).",
+    "- Stages that loop in Python once per trial run 2–3× worse than their own fit",
+    "  predicts at 24,046 trials (`assign_fixations_to_words`, `fixation_in_text_mask`,",
+    "  `classify_saccades`).",
+    "- Three are genuinely superlinear and are where the hours go",
+    "  (`compute_per_word_measures` n^1.54, `sentence_measures`, `merge_short_fixations`).",
+    "- **Memory is the harder ceiling**: loading and normalizing the full corpus",
+    "  reaches 25 GB resident before a single measure is computed, and",
+    "  `aggregation.bootstrap_ci` allocates +12.2 GB at 64 readers (~69 GB",
+    "  extrapolated) — an OOM, not a wait.",
+    "- **The single-trial path is flat** — `plot_scanpath` ~1.8 s at any corpus size —",
+    "  so none of this touches the Scanpath view.",
+    "",
+    "The controlled comparison that isolates the cause is already in the codebase:",
+    "`saccade_table` and `sentence_measures` are the same loop shape in the same",
+    "module, and the one #PERF-3 already hoisted (`saccade_table`) is the one that",
+    "still holds its fit at 360 readers."
+   ],
+   "whatsLeft": [
+    "**1. The pipeline document** — the deliverable named in the request. By stage,",
+    "not by register id, and readable without knowing a function name: what each stage",
+    "does, what it produces, when it runs (per trial vs. over the whole filtered",
+    "corpus), what it costs at OneStop scale, and which cached result it lands in.",
+    "The two scale scenarios — Corpus Analysis / bulk export (`data.compute_word_metrics`",
+    "over the whole filtered frame) versus the single-trial view — are the spine of it,",
+    "because everything expensive is on one side of that line.",
+    "",
+    "**2. The three fixes** the numbers argue for, all the same shape — work that",
+    "belongs outside a loop sitting inside one:",
+    "",
+    "- `aggregation.bootstrap_ci` allocates `n_boot × len(values)` twice",
+    "  ([aggregation.py:392](scanpath_studio/aggregation.py:392)). Fix first: it fails",
+    "  by exhausting memory rather than by being slow, and `spread_bounds` routes to",
+    "  it *unconditionally* when the aggregate is `sum`, so a user who chose SD still",
+    "  lands here. Blocked only on the methodology call in *Waiting on you*.",
+    "- `preprocessing._character_width` rescans the whole words frame per call",
+    "  ([preprocessing.py:76](scanpath_studio/preprocessing.py:76)), from inside the",
+    "  neighbour loop — so once per candidate neighbour per short fixation. The",
+    "  word_id → char-width map is constant for the whole `merge_short_fixations`",
+    "  call. #PERF-3 built exactly this index for `saccade_table`",
+    "  (`_word_letter_geometry`, [preprocessing.py:685](scanpath_studio/preprocessing.py:685));",
+    "  check whether it can simply be reused.",
+    "- `measures._groupwise` ([measures.py:610](scanpath_studio/measures.py:610)) and",
+    "  `assign_fixations_to_words` ([measures.py:322](scanpath_studio/measures.py:322))",
+    "  write each per-trial chunk back with `.loc[chunk.index] = …` into a full-length",
+    "  Series — 24,046 such assignments at corpus scale, into a 2.4 M-row `object`",
+    "  Series in `_groupwise`'s case.",
+    "",
+    "**3. Re-measure after each fix.** `benchmarks/computation_benchmark.py` makes",
+    "before/after one command, so no fix here should land on an argument.",
+    "",
+    "The read-through in item 2 of the request is the user's, not the developer's —",
+    "it is in *Waiting on you*."
+   ],
+   "background": [
+    "**Scope confirmed 2026-08-20** (user), which is what turned the fix list from",
+    "*maybe close it* into work: a **hundreds-of-readers session is a workflow to",
+    "support** — OneStop is ~20k trials, MECO ~1k readers — and **both** scenarios",
+    "matter, the corpus-wide path and the single-trial one. The alternative the old",
+    "#PERF-4 offered (document a ceiling and warn, the shape #PERF-2 took, and close",
+    "the fixes unbuilt) is therefore off the table.",
+    "",
+    "**What the benchmark can and cannot establish.** Wall clock and resident memory",
+    "on one machine, one run per cell — read the exponents, not the third digit. It",
+    "says nothing about whether any computation is *correct*; that is item 2 of the",
+    "request, a tier-A human read-through. Tier B — an independent implementation —",
+    "is #VAL-4 and stays on hold.",
+    "",
+    "**What to read for item 2.** [`docs/computations.md`](docs/computations.md),",
+    "generated from [`computations.py`](scanpath_studio/computations.py) — 65 entries,",
+    "each with its exact formula, unit, grouping keys, missing-value behaviour,",
+    "imported-vs-computed precedence, a code link and its tests. Regenerate with",
+    "`python -m scanpath_studio.computations`; `tests/test_computations.py` fails if",
+    "the page is stale.",
+    "",
+    "**Not in scope until asked.** `measure_sensitivity` is the worst single offender",
+    "(n^1.51, ~60 h extrapolated) but it runs the whole measure pipeline three times",
+    "by construction, so it is slow for an honest reason rather than a hoistable one —",
+    "and it sits behind the experimental gate (#PRE-21). The three fixes speed it up",
+    "for free.",
+    "",
+    "Replaces #PERF-4 (the profile), #PERF-5 (the fix list) and #VAL-8 (the",
+    "read-through). Related: #PERF-2 (the same question asked about frame *width* —",
+    "the answer there was a warning, not an optimisation), #PERF-3 (fixed this exact",
+    "hoist-the-scan shape once already), #VAL-5 (the register), #VAL-4, #BUG-27,",
+    "#DATA-34."
+   ],
+   "decisions": [
+    "**Would you rather `bootstrap_ci` subsample than allocate?** That is a methodology call, not a code one, and it is the only thing blocking the fix that matters most — resampling in blocks preserves the estimate exactly and costs wall clock; subsampling above a threshold is fast and changes the interval slightly. Nothing else in the fix list is waiting on you.",
+    "**Start the read-through with `pre.merge_short` and `pre.character_grid`.** Both moved onto the shared letter scale under #BUG-27 on 2026-08-13, so both changed *meaning* rather than just wording. The merge distance is the one with real consequences: it is a preprocessing setting that travels in share links and export bundles, so a wrong scale there silently changes other people's results.",
+    "**Then the four reading measures** — `measure.first_fixation`, `measure.first_pass`, `measure.regression_path`, `measure.total_fixation`. They are what a reader of a paper would assume standard, so a definition that quietly differs from the field's is the most expensive kind of error here.",
+    "**Say which entries you have cleared** as you go, so the status column can move from *Partially verified* to *Verified* for those."
+   ]
+  },
  {
   "id": "BUG-40",
   "prefix": "BUG",
@@ -19448,6 +19635,117 @@ window.TRACKER = {
   "decisions": [
    "**Sign off on the side I fixed.** I moved the test rather than the app, on the reasoning above — `None` is the honest value for an absent action, and the test was depending on pandas dtype inference by accident. If you would rather the table wrote a falsy sentinel so cells are uniformly comparable, that is a one-line change in `app.py` instead and I will swap it."
   ]
- }
+ },
+  {
+   "id": "BUG-41",
+   "prefix": "BUG",
+   "num": 41,
+   "sub": "",
+   "title": "Reading a spreadsheet needs a dependency the package never declared",
+   "status": "Review",
+   "owner": "Maya",
+   "note": "",
+   "date": "",
+   "added": "2026-08-20",
+   "group": "Bugs",
+   "subgroup": "",
+   "archived": false,
+   "request": [
+    "`tests/test_dataset_support.py::test_load_multipleye_real_sample_side_data`",
+    "failed with `KeyError: 'comprehension_questions'` — deterministically, alone as",
+    "well as under `-n auto`, so not the xdist interference it was first read as."
+   ],
+   "whatWasDone": [
+    "The cause is one line up from the symptom: `pd.read_excel` needs **openpyxl**,",
+    "and nothing in the project ever depended on it. It was in nobody's",
+    "`pyproject.toml`, `requirements.txt` or lock file — it happened to be installed",
+    "in whichever environment the feature was written in.",
+    "",
+    "`openpyxl>=3.1.5` is now a real dependency (and `openpyxl~=3.1.5` in the",
+    "Streamlit Cloud manifest, which the file's own header asks be kept in step).",
+    "The failing test passes unchanged — no assertion was weakened.",
+    "",
+    "**The test was the mild half.** `datasets._multipleye_questions_by_stimulus`",
+    "catches the `ImportError` and returns an empty map, so a MultiplEYE corpus",
+    "loaded with no comprehension questions and said nothing about why. The",
+    "*upload* path has no such catch: `data._read_one` routes any `.xlsx` / `.xls`",
+    "straight to `pd.read_excel`, so dropping the questions workbook into the",
+    "wizard's own upload slot raised an unhandled `ImportError` at the user."
+   ],
+   "whatsLeft": [
+    "Nothing."
+   ],
+   "background": [
+    "The graceful degrade in `_multipleye_questions_by_stimulus` is still right — it",
+    "should not fail a whole corpus load over optional enrichment — but it was doing",
+    "the work of a missing dependency declaration, which is why this went unseen. A",
+    "degrade covers a file that is absent; it should not be covering a library that",
+    "is.",
+    "",
+    "Anchors: `datasets._multipleye_questions_by_stimulus`, `data._read_one`,",
+    "`wizard._render_multipleye_upload` (the workbook's upload slot). Related:",
+    "#DATA-24 (the MultiplEYE question screens this enrichment feeds)."
+   ],
+   "decisions": [
+    "Sign off on adding a dependency rather than skipping the test — the alternative was `pytest.importorskip(\"openpyxl\")`, which keeps the install lean and leaves the `.xlsx` upload path raising at whoever tries it."
+   ]
+  },
+  {
+   "id": "BUG-42",
+   "prefix": "BUG",
+   "num": 42,
+   "sub": "",
+   "title": "An undeletable cache file wedges Clear recovery / Reset everything",
+   "status": "Review",
+   "owner": "Maya",
+   "note": "",
+   "date": "",
+   "added": "2026-08-20",
+   "group": "Bugs",
+   "subgroup": "",
+   "archived": false,
+   "request": [
+    "`tests/test_broken_mapping_recovery.py::test_reset_everything_returns_a_wedged_app_to_the_demo`",
+    "failed with a `PermissionError` deleting",
+    "`~/.cache/scanpath-studio/session-v1/manifest.json`. The sandbox is what made",
+    "the file undeletable, but the app's reaction to that is the bug: the exception",
+    "escaped and took the rerun down."
+   ],
+   "whatWasDone": [
+    "`persistence.clear_local_state` now treats the on-disk half as best-effort — it",
+    "catches `OSError`, logs it through the module logger (so the line reaches the 🐛",
+    "Debug panel, not just a terminal nobody is watching), clears the in-session",
+    "bookkeeping either way and returns whether the files actually went.",
+    "",
+    "The boundary is deliberate. `forget_state` still raises: it is the low-level",
+    "file operation and a caller that wants to know should be told. What must not",
+    "fail is the pair of *user-facing* actions above it — **Clear recovery cache**",
+    "and **Reset everything** — which are precisely what someone reaches for when",
+    "the session is already broken, so failing there strands them with no way out.",
+    "",
+    "`tests/test_persistence.py::test_clear_local_state_survives_an_undeletable_cache`",
+    "pins it with `forget_state` monkeypatched to raise `PermissionError`."
+   ],
+   "whatsLeft": [
+    "Nothing."
+   ],
+   "background": [
+    "The read-only-cache case is rare but not exotic: a synced or backed-up home",
+    "directory, a file open in another process, or a cache directory owned by a",
+    "different user all produce it.",
+    "",
+    "The return value is new (`bool`) and additive — `api.clear_cache`, the",
+    "`scanpath-studio cache` subcommand and both `app.py` call sites ignore it and",
+    "behave as before. It exists so a future caller can report the failure in the UI",
+    "rather than re-deriving it.",
+    "",
+    "Anchors: `persistence.clear_local_state` / `forget_state`,",
+    "`app._forget_recovery_cache`, `app._reset_everything`. Related: #ENG-26,",
+    "#ENG-30, #UX-96 (the Session redesign these two buttons live on), #BUG-36."
+   ],
+   "decisions": [
+    "Sign off on staying silent in the UI when the delete fails: the cache is reported as cleared and only the debug log says otherwise. A `st.warning` was the alternative, but **Reset everything** clears session state immediately afterwards, so a warning raised there would be wiped before it rendered."
+   ]
+  }
  ]
 };

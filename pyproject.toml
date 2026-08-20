@@ -55,6 +55,11 @@ dependencies = [
     # extra bundles an ffmpeg binary for MP4 (no system package needed).
     "pillow>=10.0",
     "imageio[ffmpeg]>=2.34",
+    # pandas' .xlsx engine. Not optional in practice: the upload path reads
+    # spreadsheets (`data._read_one`) and MultiplEYE's comprehension-questions
+    # workbook is a shipped enrichment, so without it an upload raises and the
+    # questions column silently never appears (#BUG-41).
+    "openpyxl>=3.1.5",
 ]
 
 [project.optional-dependencies]

@@ -229,6 +229,31 @@ def test_clear_local_state_deletes_files_and_session_bookkeeping(tmp_path, monke
     assert save_local_state(session, "http://localhost:8501")
 
 
+def test_clear_local_state_survives_an_undeletable_cache(tmp_path, monkeypatch):
+    """A locked cache file must not wedge Clear recovery / Reset everything.
+
+    Those two actions are what a user reaches for when the session is already
+    broken, so the disk half is best-effort: it reports ``False`` and the
+    in-session bookkeeping is forgotten either way.
+    """
+    import scanpath_studio.persistence as module
+
+    monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
+    monkeypatch.setattr(module, "state_directory", lambda *a, **k: tmp_path)
+    session = {"_datasets": {"Corpus": _dataset()}}
+    save_local_state(session, "http://localhost:8501")
+    assert module._LAST_FINGERPRINT_KEY in session
+
+    def _refuse(root):
+        raise PermissionError(f"{root}/manifest.json is read-only")
+
+    monkeypatch.setattr(module, "forget_state", _refuse)
+
+    assert clear_local_state(session) is False
+    assert module._LAST_FINGERPRINT_KEY not in session
+    assert session["_datasets"]
+
+
 def test_clear_can_skip_one_rewrite_without_pausing_future_saves(tmp_path, monkeypatch):
     monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
     monkeypatch.setattr(persistence, "state_directory", lambda *a, **k: tmp_path)

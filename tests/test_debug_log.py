@@ -207,6 +207,17 @@ def test_the_handler_swallows_a_record_it_cannot_file():
     handler.emit(record)  # no session-state context here — must not raise
 
 
+def _app_records(caplog):
+    """Only the app's own records.
+
+    ``caplog`` collects from the root logger, so anything else running in the
+    same worker lands in ``caplog.records`` too — Streamlit's bare-mode
+    *"missing ScriptRunContext!"* warning above all (#BUG-39). Asserting on the
+    whole list makes a test hostage to every library that logs.
+    """
+    return [r for r in caplog.records if r.name.split(".")[0] == "scanpath_studio"]
+
+
 class TestTheComputationLog:
     """UX-37 follow-up: the panel is only worth opening if it says what the app
     actually did. Stages log with their duration; interactions log on change."""
@@ -215,7 +226,7 @@ class TestTheComputationLog:
         with caplog.at_level(logging.INFO, logger="scanpath_studio"):
             with debug_log.timed("normalize", rows=42):
                 pass
-        (record,) = caplog.records
+        (record,) = _app_records(caplog)
         assert record.getMessage().startswith("normalize · ")
         assert "ms" in record.getMessage()
         assert "rows=42" in record.getMessage()
@@ -225,8 +236,9 @@ class TestTheComputationLog:
             with pytest.raises(ValueError):
                 with debug_log.timed("normalize"):
                     raise ValueError("boom")
-        assert "normalize failed after" in caplog.records[0].getMessage()
-        assert "boom" in caplog.records[0].getMessage()
+        (record,) = _app_records(caplog)
+        assert "normalize failed after" in record.getMessage()
+        assert "boom" in record.getMessage()
 
     def test_a_state_change_logs_once_per_change(self, caplog):
         import streamlit as st
@@ -238,7 +250,7 @@ class TestTheComputationLog:
             debug_log.log_state_change("view", "Corpus", "View", view="Corpus")
         # Two lines, not three: a rerun re-executes everything, so an
         # unconditional log would print on every widget touch anywhere.
-        assert [r.getMessage() for r in caplog.records] == [
+        assert [r.getMessage() for r in _app_records(caplog)] == [
             "View · view=Scanpath",
             "View · view=Corpus",
         ]

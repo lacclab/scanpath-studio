@@ -55,35 +55,46 @@ you work under `scanpath_studio/`); contributor setup is in
 
 ## Tracking work
 
-- **Work lives in [GitHub Issues](https://github.com/lacclab/scanpath-studio/issues).**
-  `gh issue list --label status:in-progress`, `gh issue view <n>`,
-  `gh issue create`. The in-repo tracker was migrated on 2026-08-20 (ENG-32) and
-  is now a **read-only archive** — see *The archive* at the end of this section.
+- **Work lives in [GitHub Issues](https://github.com/lacclab/scanpath-studio/issues)**,
+  arranged on the **[Scanpath Studio board](https://github.com/orgs/lacclab/projects/5)**
+  (project 5). `gh issue view <n>`, `gh issue create`,
+  `gh project item-list 5 --owner lacclab`. The in-repo tracker was migrated on
+  2026-08-20 (ENG-32) and is now a **read-only archive** — see *The archive* at
+  the end of this section.
+- **Prefer GitHub's structured fields to labels.** Status, priority and kind are
+  native — the board's `Status` and `Priority` single-selects and the org's
+  issue types — so they are *not* also labels. Only two labels remain, for the
+  two things GitHub has no field for: `area:*` and `waiting-on-you`.
 - **Stable IDs are still the currency.** Every issue is titled
   `[VIZ-37] <title>`, because the docs, the `plans/` notes and the git history
   cite items by that ID and always will. A **new** issue takes the next free
-  number in its area's prefix — `gh issue list --state all --search "[DATA-" `
+  number in its area's prefix — `gh issue list --state all --search "[DATA-"`
   and add one, counting the archive too (`tracker/data.js` holds everything
   closed before the move). Never reuse or renumber an ID. GitHub's own `#N` is
   an implementation detail; cite the tracker ID in commits and prose, and the
   `#N` alongside it when a link helps.
-- **Labels carry the workflow.**
-  - `status:backlog | planned | in-progress | on-hold | review` — one per issue,
-    replaced (not added to) on a move: `gh issue edit <n> --add-label
-    status:in-progress --remove-label status:planned`.
-  - `area:*` mirrors the old groups (`ux`, `compare`, `viz`, `data`, `perf`,
-    `analysis`, `preprocessing`, `export`, `validation`, `bug`, `engineering`)
-    and decides the ID prefix.
-  - `priority:high` / `priority:low`; Normal is the unlabelled default.
-  - `waiting-on-you` — see *Waiting on you* below.
-- **Approval gate.** Finishing implementation means `status:review` with the
-  issue **open** — never close it yourself. Closing *is* the sign-off, and it is
-  the user's to make. An issue closed without being implemented says why in a
+- **Where each fact lives.**
+  - **Status** → the board's `Status` column: `Backlog · Planned · In progress ·
+    On hold · Review`. Closing the issue is the sixth state. Move it on the board,
+    or with `gh project item-edit` (needs the `project` token scope —
+    `gh auth refresh -s project` once).
+  - **Priority** → the board's `Priority` column: `Urgent · High · Medium · Low`.
+    Medium is the default.
+  - **Kind** → the native issue type: `Bug` · `Feature` (a capability) · `Task`
+    (a chore, a validation pass, infrastructure). `gh` has no flag for it; set it
+    with `gh api -X PATCH repos/lacclab/scanpath-studio/issues/<n> -f type=Task`.
+  - **Area** → an `area:*` label (`ux`, `compare`, `viz`, `data`, `perf`,
+    `analysis`, `preprocessing`, `export`, `validation`, `bug`, `engineering`).
+    It decides the ID prefix, and stays a label because there is no field for it.
+  - **Blocking the user** → the `waiting-on-you` label; see below.
+- **Approval gate.** Finishing implementation means board Status **Review** with
+  the issue **open** — never close it yourself. Closing *is* the sign-off, and it
+  is the user's to make. An issue closed without being implemented says why in a
   closing comment and uses `--reason "not planned"`.
-- **Claim it and move it to `status:in-progress` when you pick it up**, not when
-  you finish: `gh issue edit <n> --add-assignee @me --add-label
-  status:in-progress --remove-label status:planned`. Several sessions and two
-  people share this repo; an unassigned issue reads as unclaimed work.
+- **Claim it and move it to *In progress* when you pick it up**, not when you
+  finish: `gh issue edit <n> --add-assignee @me`, and set the board's Status.
+  Several sessions and two people share this repo; an unassigned issue reads as
+  unclaimed work.
 
 **Write-up shape.** The issue body is the same four sections the tracker used,
 as markdown headings, in this order:
@@ -97,16 +108,17 @@ as markdown headings, in this order:
 
 An optional `> blockquote` lede above them is the status / "update as of ⟨date⟩"
 line. A backlog issue has only *Request* (+ *Background*); the middle two are
-required once it reaches `status:in-progress` or `status:review`. Link code with
+required once it reaches *In progress* or *Review*. Link code with
 full blob URLs (`https://github.com/lacclab/scanpath-studio/blob/main/scanpath_studio/plots.py#L339`)
 — a relative path renders dead in an issue.
 
 **Waiting on you.** Everything only the *user* can decide goes in one place: a
 `### ⚖ Waiting on you` checklist at the top of the body, plus the
-`waiting-on-you` label, so `label:waiting-on-you` is one query for everything
-holding on them. That covers the design calls that block the work *and*, once it
+`waiting-on-you` label — a label rather than a field precisely so
+`gh issue list --label waiting-on-you` answers "what is holding on me" without a
+project call. That covers the design calls that block the work *and*, once it
 is built, the ask to review — name the judgement calls you made and the surfaces
-to click. An issue in `status:review` always has at least that entry. Clear an
+to click. An issue in *Review* always has at least that entry. Clear an
 item the moment it is answered — tick the box, and record the call under
 *Background* in the same edit — including when you settled it yourself.
 

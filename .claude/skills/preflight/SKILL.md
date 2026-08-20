@@ -24,8 +24,8 @@ output). Fix trivial failures (formatting) directly; report anything else.
    one-scannable-line entry under `[Unreleased]` (grouped Added / Changed /
    Fixed). If missing, draft the line and add it.
 5. **Issue** — if the pending work corresponds to a GitHub issue
-   (`gh issue list`), check its `status:*` label and body write-up are current.
-   Finished work goes to `status:review` with the review ask in its
+   (`gh issue list`), check its board Status and body write-up are current.
+   Finished work goes to Status **Review** with the review ask in its
    *⚖ Waiting on you* checklist — **never** close the issue yourself; that is
    the user's sign-off. Conventions in `CLAUDE.md` → *Tracking work*.
 

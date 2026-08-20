@@ -149,15 +149,21 @@ correctness) and by annotation state (favorites / tags) before `build_combo_opti
 
 ### Where the work is tracked
 
-Open work is on **[GitHub Issues](https://github.com/lacclab/scanpath-studio/issues)**
-(`gh issue list`, `gh issue view <n>`). Issues are titled `[VIZ-37] <title>`: the
-stable tracker IDs are cited throughout these docs, the `plans/` notes and the git
-history, so they outlive GitHub's own numbering. Six `status:*` labels carry the
-workflow, `area:*` mirrors the old groups and fixes the ID prefix, and **closing an
-issue is the user's sign-off** — implementation finishes at `status:review`, open.
-Everything waiting on the user is a `### ⚖ Waiting on you` checklist plus the
-`waiting-on-you` label. Full conventions, including the four-section body shape,
-in `CLAUDE.md` → *Tracking work*.
+Open work is on **[GitHub Issues](https://github.com/lacclab/scanpath-studio/issues)**,
+arranged on the **[Scanpath Studio board](https://github.com/orgs/lacclab/projects/5)**
+(`gh issue list`, `gh project item-list 5 --owner lacclab`). Issues are titled
+`[VIZ-37] <title>`: the stable tracker IDs are cited throughout these docs, the
+`plans/` notes and the git history, so they outlive GitHub's own numbering.
+
+Status (`Backlog · Planned · In progress · On hold · Review`) and priority live
+in the board's single-select columns, and kind is the native issue type
+(`Bug` / `Feature` / `Task`) — structured fields rather than labels, so there is
+one place per fact. Only `area:*` (which fixes the ID prefix) and
+`waiting-on-you` stayed labels, because GitHub has no field for either.
+**Closing an issue is the user's sign-off** — implementation finishes at *Review*,
+open, with everything waiting on them in a `### ⚖ Waiting on you` checklist. Full
+conventions, including the four-section body shape, in `CLAUDE.md` →
+*Tracking work*.
 
 The in-repo tracker was migrated on 2026-08-20 (ENG-32) and is now a **read-only
 archive**: `tracker/data.js` + `index.html` hold the 320 items closed before the

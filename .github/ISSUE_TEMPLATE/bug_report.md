@@ -2,7 +2,8 @@
 name: Bug report
 about: Something in Scanpath Studio behaves wrongly
 title: "[BUG-N] "
-labels: ["status:backlog", "area:bug"]
+type: Bug
+labels: ["area:bug"]
 ---
 
 <!--
@@ -10,6 +11,7 @@ Maintainers: replace N in the title with the next free BUG number —
 `gh issue list --state all --search "[BUG-"` plus the pre-2026-08-20 archive in
 tracker/data.js. IDs are stable and never renumbered.
 Outside reporters: leave the title as-is; we will number it.
+Maintainers: add it to the "Scanpath Studio" project board and set its Status.
 -->
 
 ## Request

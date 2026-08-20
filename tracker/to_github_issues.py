@@ -30,6 +30,7 @@ import argparse
 import json
 import re
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -40,18 +41,54 @@ STATE_FILE = TRACKER_DIR / "state.json"
 #: frozen tracker can point each live item at the issue that replaced it.
 MAP_FILE = TRACKER_DIR / "migrated.json"
 REPO = "lacclab/scanpath-studio"
+OWNER = REPO.split("/")[0]
+#: The kanban view over the issues. The `status:*` labels stay the source of
+#: truth — they need only the `repo` scope, and `gh issue list --label
+#: status:in-progress` is what the docs tell agents to use — so the board's
+#: Status column is a *mirror*, pushed by `--sync-board`. Nothing reads it back.
+BOARD_TITLE = "Scanpath Studio"
+BOARD_STATUS_FIELD = "Status"
 
 #: `Parked` is retired wording for `On hold` (and `Done`/`Pending approval` for
 #: the archived items). Normalizing on the way out means the retired vocabulary
 #: does not get a second life as a GitHub label.
 STATUS_ALIASES = {"Parked": "On hold", "Pending approval": "Review", "Done": "Closed"}
-STATUS_LABELS = {
-    "Backlog": ("status:backlog", "d4d4d8", "Wanted, not scheduled"),
-    "Planned": ("status:planned", "a5b4fc", "Scheduled, not started"),
-    "In progress": ("status:in-progress", "2563eb", "Someone is working on it"),
-    "On hold": ("status:on-hold", "9ca3af", "Deliberately deferred"),
-    "Review": ("status:review", "f59e0b", "Implemented — awaiting sign-off"),
+#: The board's Status column — the source of truth for where an item is.
+#: GitHub has no issue-level status beyond open/closed, so this is a project
+#: single-select field rather than a label. `Closed` is the sixth state and is
+#: the issue being closed, which is the user's sign-off.
+BOARD_STATUSES = {
+    "Backlog": ("GRAY", "Wanted, not scheduled"),
+    "Planned": ("BLUE", "Scheduled, not started"),
+    "In progress": ("PURPLE", "Someone is working on it"),
+    "On hold": ("ORANGE", "Deliberately deferred"),
+    "Review": ("YELLOW", "Implemented — awaiting sign-off"),
 }
+#: The board's Priority column, replacing the old `priority:*` labels. The
+#: tracker only ever had High / Normal / Low; Normal reads as Medium here, and
+#: Urgent exists for work that should jump its status queue.
+BOARD_PRIORITIES = {
+    "Urgent": ("RED", "Drop what you are doing"),
+    "High": ("ORANGE", "Before the rest of its status"),
+    "Medium": ("GRAY", "The default"),
+    "Low": ("BLUE", "Nice to have, no hurry"),
+}
+PRIORITY_FROM_TRACKER = {"High": "High", "Normal": "Medium", "Low": "Low"}
+#: GitHub's org-level issue types — a native field, so it beats a label. Most
+#: areas map cleanly; the exceptions are items whose *shape* differs from their
+#: area's norm (a capability filed under Engineering, a chore under Datasets).
+ISSUE_TYPE_BY_AREA = {
+    "Bugs": "Bug",
+    "Validation": "Task",
+    "Performance": "Task",
+    "Engineering": "Task",
+}
+ISSUE_TYPE_OVERRIDES = {
+    "ENG-17": "Feature",  # hosted online mode is a capability, not a chore
+    "DATA-15": "Task",  # replacing a bundled file is corpus maintenance
+    "UX-56": "Task",  # a design decision to make, not a thing to build
+}
+DEFAULT_ISSUE_TYPE = "Feature"
 GROUP_LABELS = {
     "UX & Interaction": ("area:ux", "c4b5fd"),
     "Compare mode": ("area:compare", "a7f3d0"),
@@ -65,14 +102,25 @@ GROUP_LABELS = {
     "Bugs": ("area:bug", "ef4444"),
     "Engineering": ("area:engineering", "d1d5db"),
 }
+#: The only flag left as a label: it has no native or project-field equivalent,
+#: and it wants to be queryable from `gh issue list` without a project call.
 EXTRA_LABELS = {
     "waiting-on-you": ("fbbf24", "Has an open call or review only the owner can make"),
-    "priority:high": ("dc2626", "Do this before the rest of its status"),
-    "priority:low": ("e5e7eb", "Nice to have, no hurry"),
 }
+#: Labels the structured fields replaced. Deleted from the repo by
+#: `--labels-only` so two vocabularies cannot disagree.
+RETIRED_LABELS = (
+    "status:backlog",
+    "status:planned",
+    "status:in-progress",
+    "status:on-hold",
+    "status:review",
+    "priority:high",
+    "priority:low",
+)
 #: The people in `data.js` → their GitHub logins, for `--assignee`. A name with
 #: no mapping is still recorded in the body; it just is not assigned.
-GITHUB_LOGINS = {"Shubi": "OmerShubi"}
+GITHUB_LOGINS = {"Shubi": "OmerShubi", "Maya": "Maya705"}
 SECTIONS = (
     ("request", "Request"),
     ("whatWasDone", "What was done"),
@@ -188,26 +236,54 @@ def render_body(item: dict[str, Any], numbers: dict[str, int]) -> str:
 
 
 def labels_for(item: dict[str, Any]) -> list[str]:
-    labels = [STATUS_LABELS[item["status"]][0], GROUP_LABELS[item["group"]][0]]
+    """The labels an issue keeps: its area, and whether it is blocking the user.
+
+    Status, priority and type are structured fields now — the board's Status and
+    Priority columns and GitHub's native issue type — so they are deliberately
+    not mirrored here. Two vocabularies for one fact is how they drift.
+    """
+    labels = [GROUP_LABELS[item["group"]][0]]
     if item.get("decisions"):
         labels.append("waiting-on-you")
-    priority = item.get("priority", "Normal")
-    if priority != "Normal":
-        labels.append(f"priority:{priority.lower()}")
     return labels
 
 
-def run_gh(args: list[str]) -> str:
-    result = subprocess.run(
-        ["gh", *args], capture_output=True, text=True, check=False, timeout=60
-    )
-    if result.returncode:
-        raise RuntimeError(result.stderr.strip() or f"gh {' '.join(args)} failed")
-    return result.stdout.strip()
+def issue_type_for(item: dict[str, Any]) -> str:
+    override = ISSUE_TYPE_OVERRIDES.get(item["id"])
+    if override:
+        return override
+    return ISSUE_TYPE_BY_AREA.get(item["group"], DEFAULT_ISSUE_TYPE)
+
+
+#: Transient network failures, which a run of ~100 API calls hits often enough
+#: to matter — and every operation here is idempotent, so a retry is safe.
+RETRYABLE = ("i/o timeout", "connection reset", "TLS handshake", "502 Bad Gateway")
+
+
+def run_gh(args: list[str], attempts: int = 3) -> str:
+    for attempt in range(1, attempts + 1):
+        result = subprocess.run(
+            ["gh", *args], capture_output=True, text=True, check=False, timeout=120
+        )
+        if not result.returncode:
+            return result.stdout.strip()
+        error = result.stderr.strip() or f"gh {' '.join(args)} failed"
+        if attempt == attempts or not any(hint in error for hint in RETRYABLE):
+            raise RuntimeError(error)
+        print(f"  retrying after: {error.splitlines()[0][:90]}")
+        time.sleep(2 * attempt)
+    raise AssertionError("unreachable")
 
 
 def ensure_labels() -> None:
-    wanted = {name: (color, blurb) for name, color, blurb in STATUS_LABELS.values()}
+    """Create the area labels, and delete the ones the structured fields replaced."""
+    for name in RETIRED_LABELS:
+        try:
+            run_gh(["label", "delete", name, "--repo", REPO, "--yes"])
+            print(f"label · removed {name}")
+        except RuntimeError:
+            pass  # already gone, which is the desired end state
+    wanted: dict[str, tuple[str, str]] = {}
     for group, (name, color) in GROUP_LABELS.items():
         wanted[name] = (color, group)
     wanted.update(
@@ -279,9 +355,9 @@ def update_issues(items: list[dict[str, Any]], numbers: dict[str, int]) -> None:
         for label in wanted:
             args += ["--add-label", label]
         # An item that changed status keeps its old `status:*` label otherwise —
-        # `gh issue edit` adds, it does not replace — and the issue then claims
-        # two statuses at once.
-        for label in (*(name for name, *_ in STATUS_LABELS.values()), "waiting-on-you"):
+        # `gh issue edit` adds, it does not replace, so a decision that has since
+        # been answered would keep its `waiting-on-you` badge forever.
+        for label in ("waiting-on-you",):
             if label not in wanted:
                 args += ["--remove-label", label]
         run_gh(args)
@@ -302,6 +378,170 @@ def backfill_links(items: list[dict[str, Any]], numbers: dict[str, int]) -> None
     print(f"cross-references resolved across {len(items)} issues")
 
 
+def run_gh_json(args: list[str]) -> Any:
+    return json.loads(run_gh([*args, "--format", "json"]) or "null")
+
+
+def _board_number() -> int:
+    """The project's number, creating the project the first time.
+
+    `gh project` needs the `project` token scope, which the plain `repo` scope
+    used everywhere else does not include — so this is the one code path that
+    fails with an auth error until someone runs `gh auth refresh -s project`.
+    """
+    projects = run_gh_json(["project", "list", "--owner", OWNER]).get("projects", [])
+    for project in projects:
+        if project["title"] == BOARD_TITLE:
+            return int(project["number"])
+    created = run_gh_json(
+        ["project", "create", "--owner", OWNER, "--title", BOARD_TITLE]
+    )
+    number = int(created["number"])
+    run_gh(["project", "link", str(number), "--owner", OWNER, "--repo", REPO])
+    print(f"created project #{number} ({BOARD_TITLE})")
+    return number
+
+
+def _option_literals(options: dict[str, tuple[str, str]]) -> str:
+    """The `singleSelectOptions` list, inlined into the mutation.
+
+    `gh api graphql -F name=value` sends every variable as a *string*, so a list
+    of objects arrives as one JSON blob and the server rejects it. Writing the
+    literals into the query sidesteps the variable plumbing entirely; `color` is
+    a GraphQL enum, so it is the one value that must not be quoted.
+    """
+    return ", ".join(
+        f"{{name: {json.dumps(label)}, color: {colour},"
+        f" description: {json.dumps(blurb)}}}"
+        for label, (colour, blurb) in options.items()
+    )
+
+
+def _select_field(
+    number: int, name: str, options: dict[str, tuple[str, str]]
+) -> dict[str, Any]:
+    """A project single-select field whose options are exactly ``options``.
+
+    A new project ships a Status field reading Todo / In Progress / Done, which
+    cannot express *On hold* or the review gate — and it is a built-in, so it
+    cannot be deleted and recreated (`Only custom fields can be deleted`). The
+    GraphQL mutation rewrites the options in place instead, which works for the
+    built-in and for fields this creates. Options not passed are dropped, so the
+    field ends up matching the tracker's vocabulary one-to-one.
+    """
+    fields = run_gh_json(["project", "field-list", str(number), "--owner", OWNER])
+    field = next((f for f in fields.get("fields", []) if f["name"] == name), None)
+    if field is None:
+        run_gh(
+            [
+                "project",
+                "field-create",
+                str(number),
+                "--owner",
+                OWNER,
+                "--name",
+                name,
+                "--data-type",
+                "SINGLE_SELECT",
+                "--single-select-options",
+                ",".join(options),
+            ]
+        )
+        return _select_field(number, name, options)
+
+    current = {option["name"] for option in field.get("options", [])}
+    if current == set(options):
+        return {
+            "id": field["id"],
+            "options": {o["name"]: o["id"] for o in field["options"]},
+        }
+    mutation = f"""
+    mutation {{
+      updateProjectV2Field(input: {{
+        fieldId: {json.dumps(field["id"])},
+        singleSelectOptions: [{_option_literals(options)}]
+      }}) {{
+        projectV2Field {{
+          ... on ProjectV2SingleSelectField {{ id options {{ id name }} }}
+        }}
+      }}
+    }}
+    """
+    result = json.loads(run_gh(["api", "graphql", "-f", f"query={mutation}"]))
+    updated = result["data"]["updateProjectV2Field"]["projectV2Field"]
+    print(f"board · {name} options → {', '.join(options)}")
+    return {
+        "id": updated["id"],
+        "options": {o["name"]: o["id"] for o in updated["options"]},
+    }
+
+
+def sync_board(items: list[dict[str, Any]], numbers: dict[str, int]) -> None:
+    """Put every issue on the board with its Status, Priority and issue type set.
+
+    One-way, and it is the *tracker archive* that is being read from — this is
+    the migration's own tool, not a two-way sync. Day to day, a status is changed
+    on the board itself; nothing here reads it back.
+    """
+    board = _board_number()
+    project_id = _project_id(board)
+    status = _select_field(board, "Status", BOARD_STATUSES)
+    priority = _select_field(board, "Priority", BOARD_PRIORITIES)
+    existing = {
+        entry.get("content", {}).get("number"): entry["id"]
+        for entry in run_gh_json(
+            ["project", "item-list", str(board), "--owner", OWNER, "--limit", "500"]
+        ).get("items", [])
+        if entry.get("content")
+    }
+    for item in items:
+        issue = numbers[item["id"]]
+        item_id = existing.get(issue)
+        if item_id is None:
+            added = run_gh_json(
+                [
+                    "project",
+                    "item-add",
+                    str(board),
+                    "--owner",
+                    OWNER,
+                    "--url",
+                    f"https://github.com/{REPO}/issues/{issue}",
+                ]
+            )
+            item_id = added["id"]
+        rank = PRIORITY_FROM_TRACKER[item.get("priority", "Normal")]
+        for field, option in (
+            (status, item["status"]),
+            (priority, rank),
+        ):
+            run_gh(
+                [
+                    "project",
+                    "item-edit",
+                    "--id",
+                    item_id,
+                    "--project-id",
+                    project_id,
+                    "--field-id",
+                    field["id"],
+                    "--single-select-option-id",
+                    field["options"][option],
+                ]
+            )
+        kind = issue_type_for(item)
+        # `gh` has no flag for the native issue type; REST does.
+        run_gh(
+            ["api", "-X", "PATCH", f"repos/{REPO}/issues/{issue}", "-f", f"type={kind}"]
+        )
+        print(f"{item['id']:<9} → #{issue} · {kind} · {item['status']} · {rank}")
+
+
+def _project_id(number: int) -> str:
+    project = run_gh_json(["project", "view", str(number), "--owner", OWNER])
+    return str(project["id"])
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true", help="Print, create nothing.")
@@ -313,6 +553,11 @@ def main() -> None:
         "--update",
         action="store_true",
         help="Re-render items that already have an issue instead of creating new ones.",
+    )
+    parser.add_argument(
+        "--sync-board",
+        action="store_true",
+        help="Mirror the status labels onto the Project board (needs the project scope).",
     )
     args = parser.parse_args()
 
@@ -340,6 +585,15 @@ def main() -> None:
     known = (
         json.loads(MAP_FILE.read_text(encoding="utf-8")) if MAP_FILE.exists() else {}
     )
+    if args.sync_board:
+        missing = [item["id"] for item in items if item["id"] not in known]
+        if missing:
+            raise SystemExit(
+                f"--sync-board needs an existing issue; missing: {missing}"
+            )
+        sync_board(items, known)
+        return
+
     if args.update:
         missing = [item["id"] for item in items if item["id"] not in known]
         if missing:

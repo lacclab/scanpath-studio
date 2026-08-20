@@ -102,7 +102,7 @@ visually, but also the deep link / Share, the CLI, and the headless API. See
 
 Work items are tracked in
 [GitHub Issues](https://github.com/lacclab/scanpath-studio/issues). If your PR
-corresponds to an issue, move its `status:*` label and keep the write-up in the
+corresponds to an issue, move its Status on the board and keep the write-up in the
 body current; the conventions — the `[VIZ-37]` title format, the four-section
 body, and the rule that **closing an issue is the maintainer's sign-off**, not
 yours — are in `CLAUDE.md` → *Tracking work*.
@@ -127,11 +127,12 @@ selectively and reading what you staged.
 
 Common to both:
 
-- **Claim the issue before you start it.** `gh issue edit <n> --add-assignee @me
-  --add-label status:in-progress --remove-label status:planned` *before* writing
-  code, not when you finish. The assignee is the only signal the other person has
-  that it is taken, and it is visible without pulling anything. Same for new
-  work: `gh issue create` first, then work on it.
+- **Claim the issue before you start it.** `gh issue edit <n> --add-assignee @me`
+  and drag it to *In progress* on the
+  [board](https://github.com/orgs/lacclab/projects/5) *before* writing code, not
+  when you finish. The assignee is the only signal the other person has that it
+  is taken, and it is visible without pulling anything. Same for new work:
+  `gh issue create` first, then work on it.
 - **Commit small, push often.** One commit per feature or fix, with the tracker
   ID in the subject (`fix(viz): … (VIZ-37)`). A large uncommitted working
   tree is the thing that actually hurts — it can't be pulled, reviewed, or built
@@ -145,6 +146,9 @@ Common to both:
   for the same number. Check
   `gh issue list --state all --search "[DATA-"` again after creating, and
   renumber **your own** issue if it collides.
+- **Moving a card needs the `project` scope**, once per machine:
+  `gh auth refresh -s project`. Without it the board is read-only from the CLI
+  (the web UI still works).
 Only when several sessions share one checkout:
 
 - **Agree on file ownership before editing.** Two sessions writing one file

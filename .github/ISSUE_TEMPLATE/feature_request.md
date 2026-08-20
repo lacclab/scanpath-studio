@@ -2,13 +2,15 @@
 name: Feature request
 about: Something Scanpath Studio should be able to do
 title: "[AREA-N] "
-labels: ["status:backlog"]
+type: Feature
 ---
 
 <!--
 Maintainers: pick the area label and match the title prefix to it —
 UX / CMP / VIZ / DATA / PERF / AN / PRE / EXP / VAL / ENG — then take the next
-free number in that prefix. IDs are stable and never renumbered.
+free number in that prefix. IDs are stable and never renumbered. Add it to the
+"Scanpath Studio" project board and set Status; switch the type to Task if it is
+a chore rather than a capability.
 -->
 
 ## Request

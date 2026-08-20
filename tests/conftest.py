@@ -239,6 +239,20 @@ def pin_data_view(at) -> None:
     pin_view(at, VIEW_DATA)
 
 
+def arm_session_dialog(at) -> None:
+    """Ask for the 💾 Session modal on the *next* run (UX-100).
+
+    Call it before **every** ``at.run()`` in a flow that drives the panel, not
+    just the first. In a browser an interaction inside a dialog reruns only the
+    dialog — a fragment — so the modal stays open on its own; ``AppTest`` has no
+    fragment reruns and replays the whole script, which pops the request flag.
+    Re-arming is how a test says "the user has not dismissed it yet".
+    """
+    from scanpath_studio import app
+
+    at.session_state[app._SESSION_DIALOG_KEY] = True
+
+
 def open_data_view(at, timeout: int = 60):
     """Switch to the 🗂️ Data page and rerun, so its body renders (DATA-26)."""
     pin_data_view(at)

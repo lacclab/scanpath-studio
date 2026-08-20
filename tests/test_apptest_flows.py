@@ -34,6 +34,7 @@ from scanpath_studio.constants import _VIEW_SCANPATH, AUTHOR_CHOICE
 from scanpath_studio.data import load_sample_data
 from tests.conftest import (
     APP_SCRIPT,
+    arm_session_dialog,
     SUBTAB_EXPORT,
     SUBTAB_KEY,
     VIEW_DATA,
@@ -448,7 +449,10 @@ class TestBulkExportFlow:
         monkeypatch.setattr(tabs, "bulk_export", capturing)
 
         at = _boot(subtab=SUBTAB_EXPORT)
-        assert self._download_labels(at) == ["⬇ Download backup"], (
+        # Nothing to download yet. (This used to also see the Session panel's
+        # "⬇ Download backup"; UX-100 moved that into the 💾 Session dialog, so
+        # it only renders while the modal is open.)
+        assert self._download_labels(at) == [], (
             "the zip download button must only appear after a build"
         )
 
@@ -576,7 +580,14 @@ class TestRecoveryCachePanelFlow:
         """
         monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
         monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
-        return _boot(synthetic=True)
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
+        # UX-100: the panel is in the 💾 Session modal. Armed before every run,
+        # because AppTest replays the whole script instead of rerunning the
+        # dialog fragment the way a browser does — see `arm_session_dialog`.
+        arm_session_dialog(at)
+        at.run(timeout=60)
+        return at
 
     def test_panel_reports_the_store_and_its_controls_drive_persistence(
         self, tmp_path, monkeypatch
@@ -597,6 +608,7 @@ class TestRecoveryCachePanelFlow:
 
         # Off → the pause flag is set and the next run writes nothing new.
         written = manifest.stat().st_mtime_ns
+        arm_session_dialog(at)
         at = toggles[0].set_value(False).run(timeout=60)
         _clean(at, "after pausing:")
         # AppTest's session-state proxy has no .get, so read the flag directly.
@@ -604,25 +616,31 @@ class TestRecoveryCachePanelFlow:
         at.session_state["global_show_heatmap"] = not bool(
             at.session_state["global_show_heatmap"]
         )
+        arm_session_dialog(at)
         at = at.run(timeout=60)
         assert manifest.stat().st_mtime_ns == written
 
         # Resume, then clear while saving is ON — the reported bug was that this
         # action silently changed the preference to off.
         toggle = next(t for t in at.toggle if t.key == "persist_local_saving")
+        arm_session_dialog(at)
         at = toggle.set_value(True).run(timeout=60)
         _clean(at, "after resuming:")
         assert at.session_state["_local_persistence_paused"] is False
 
         forget = [b for b in at.button if "Clear recovery cache" in str(b.label)]
         assert forget, "the Forget button is missing from the panel"
+        arm_session_dialog(at)
         at = forget[0].click().run(timeout=60)
         _clean(at, "after clicking forget:")
 
-        # BUG-36: the click now only opens a confirmation dialog; the delete
-        # itself happens on the confirm click, one run later.
+        # BUG-36: the click only arms a confirmation; the delete itself happens
+        # on the confirm click, one run later. UX-100 made that confirmation an
+        # inline row under the button rather than a modal of its own — the panel
+        # *is* a modal now, and Streamlit allows no dialog inside a dialog.
         confirm = [b for b in at.button if b.key == "forget_cache_confirm"]
         assert confirm, "the Forget confirmation button is missing"
+        arm_session_dialog(at)
         at = confirm[0].click().run(timeout=60)
         _clean(at, "after confirming forget:")
         assert not manifest.exists()
@@ -636,6 +654,7 @@ class TestRecoveryCachePanelFlow:
         at.session_state["global_show_heatmap"] = not bool(
             at.session_state["global_show_heatmap"]
         )
+        arm_session_dialog(at)
         at = at.run(timeout=60)
         _clean(at, "after changing the cleared session:")
         assert manifest.is_file()
@@ -643,7 +662,10 @@ class TestRecoveryCachePanelFlow:
     def test_panel_says_nothing_is_stored_on_a_hosted_deployment(self, monkeypatch):
         # No override and no loopback URL under AppTest == the hosted case.
         monkeypatch.delenv("SCANPATH_STUDIO_PERSIST", raising=False)
-        at = _boot(synthetic=True)
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
+        arm_session_dialog(at)
+        at.run(timeout=60)
         _clean(at, "hosted cache panel:")
         assert not [t for t in at.toggle if t.key == "persist_local_saving"]
         captions = " ".join(str(c.value) for c in at.caption)

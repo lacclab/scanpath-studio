@@ -29,6 +29,7 @@ Usage:
 
 from __future__ import annotations
 
+import html
 import logging
 import os
 import re
@@ -63,8 +64,13 @@ from scanpath_studio.constants import (
     BENCHMARK_SHORT_SUFFIX,
     BENCHMARK_WIP_SUFFIX,
     CITATION,
+    DATA_EDITOR_KEY,
+    DATA_EDITOR_OFFSCREEN_KEY,
+    DATA_OVERVIEW_KEY,
+    DATA_OVERVIEW_OFFSCREEN_KEY,
     DATA_PAGE_KEY,
     DATA_PAGE_OFFSCREEN_KEY,
+    DATASET_EDITOR_OPEN_KEY,
     DATASET_COUNTS_STORE_KEY,
     DEFAULT_BACKGROUND_COLOR,
     DEFAULT_FIGURE_SIZE,
@@ -154,8 +160,6 @@ from scanpath_studio.debug_log import (
     debug_enabled,
     install_log_capture,
     log_state_change,
-    render_debug_panel,
-    render_debug_toggle,
     seed_debug_mode,
     timed,
 )
@@ -517,29 +521,46 @@ def _forget_recovery_cache() -> None:
 _FORGET_CACHE_PENDING_KEY = "_forget_cache_pending"
 
 
-@st.dialog("Clear recovery cache?")
-def _forget_cache_confirmation_dialog() -> None:
-    """The modal body — BUG-36. Opened by ``_render_recovery_cache_panel``.
+def _reopen_session_dialog() -> None:
+    """Whole-app rerun that leaves the 💾 Session modal open behind it (UX-100).
 
-    Handled by the button's *return value*, not ``on_click`` — see
-    ``_delete_confirmation_dialog`` for why an ``on_click`` inside an
-    ``st.dialog`` body silently does nothing.
+    An `st.rerun(scope="app")` closes the dialog it is called from — right, when
+    the answer was *reset everything*, and wrong for a confirm/cancel pair that
+    the user expects to land back on the panel that asked. Re-arming before the
+    rerun is what puts it back. Never call it from ``_reset_everything``'s path:
+    that one clears session state, so there is no session left to show.
     """
-    st.warning(
+    st.session_state[_SESSION_DIALOG_KEY] = True
+    st.rerun(scope="app")
+
+
+def _forget_cache_confirmation(host) -> None:
+    """The "are you sure" row — BUG-36. Drawn by ``_render_recovery_cache_panel``.
+
+    **UX-100 unwrapped it from an ``st.dialog``.** The panel it belongs to is
+    itself the 💾 Session modal now, and Streamlit allows no dialog inside a
+    dialog — so the question is asked in place, right under the button that
+    raised it, which on a panel this short is where it reads best anyway.
+
+    Handled by each button's *return value*, not ``on_click`` — a dialog body is
+    a fragment, and an ``on_click`` inside one reruns only the fragment (see
+    ``_delete_confirmation_dialog``, which learned that as BUG-36).
+    """
+    host.warning(
         "Delete the recovery copy from this computer? Your open session and "
         "automatic-saving setting stay unchanged.",
         icon="⚠️",
     )
-    yes, no = st.columns(2)
+    yes, no = host.columns(2)
     if yes.button(
         "🗑 Clear cache", key="forget_cache_confirm", type="primary", width="stretch"
     ):
         _forget_recovery_cache()
         st.session_state.pop(_FORGET_CACHE_PENDING_KEY, None)
-        st.rerun(scope="app")
+        _reopen_session_dialog()
     if no.button("Keep it", key="forget_cache_cancel", width="stretch"):
         st.session_state.pop(_FORGET_CACHE_PENDING_KEY, None)
-        st.rerun(scope="app")
+        _reopen_session_dialog()
 
 
 def _toggle_recovery_saving() -> None:
@@ -641,6 +662,10 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
             "toggle above off.",
         ):
             st.session_state[_FORGET_CACHE_PENDING_KEY] = True
+        if st.session_state.get(_FORGET_CACHE_PENDING_KEY):
+            # Right under the button that raised it — see the function's own
+            # note on why this is no longer a modal of its own.
+            _forget_cache_confirmation(container)
         st.caption(f"Saved in this folder on your computer: `{status['directory']}`")
         # The environment-variable escape hatches, spelled out rather than
         # listed. They used to be the panel's only explanation of itself, packed
@@ -651,12 +676,6 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
             f"`{STATE_DIR_ENV_VAR}=/your/folder` to save somewhere else. "
             "`scanpath-studio cache` reports the same details from a terminal."
         )
-    # Outside the `with`: UX-100 made ``slot`` the 💾 Session **popover**, and a
-    # modal raised from inside a popover's block is a modal owned by a panel
-    # that closes the moment you click past it. Opening it at the top level
-    # keeps it a page-level dialog, which is what it always looked like.
-    if st.session_state.get(_FORGET_CACHE_PENDING_KEY):
-        _forget_cache_confirmation_dialog()
 
 
 _RESET_EVERYTHING_PENDING_KEY = "_reset_everything_pending"
@@ -669,14 +688,19 @@ def _reset_everything() -> None:
     st.session_state.clear()
 
 
-@st.dialog("Reset everything?")
-def _reset_everything_confirmation_dialog() -> None:
-    st.warning(
+def _reset_everything_confirmation(host) -> None:
+    """The "are you sure" row for ♻️ Reset everything.
+
+    Inline rather than an ``st.dialog`` for the same reason as
+    :func:`_forget_cache_confirmation`: it is raised from inside the 💾 Session
+    modal, and Streamlit allows no dialog inside a dialog (UX-100).
+    """
+    host.warning(
         "Remove uploaded datasets, annotations, mappings and settings, then "
         "return to the bundled demo?",
         icon="⚠️",
     )
-    yes, no = st.columns(2)
+    yes, no = host.columns(2)
     if yes.button(
         "♻️ Reset everything",
         key="reset_everything_confirm",
@@ -687,7 +711,7 @@ def _reset_everything_confirmation_dialog() -> None:
         st.rerun(scope="app")
     if no.button("Cancel", key="reset_everything_cancel", width="stretch"):
         st.session_state.pop(_RESET_EVERYTHING_PENDING_KEY, None)
-        st.rerun(scope="app")
+        _reopen_session_dialog()
 
 
 def _render_reset_everything_panel(*, slot=None) -> None:
@@ -702,7 +726,87 @@ def _render_reset_everything_panel(*, slot=None) -> None:
     ):
         st.session_state[_RESET_EVERYTHING_PENDING_KEY] = True
     if st.session_state.get(_RESET_EVERYTHING_PENDING_KEY):
-        _reset_everything_confirmation_dialog()
+        _reset_everything_confirmation(container)
+
+
+#: UX-100 — the 💾 Session nav entry's request flag. Same arm-then-serve shape as
+#: ❓ Help's three entries: a nav selection cannot open a dialog itself (the
+#: router reruns), so `menu._arm_help_action` sets this and `main` serves it.
+_SESSION_DIALOG_KEY = "_session_dialog_requested"
+
+
+def _arm_session() -> None:
+    """Request the 💾 Session dialog. Called by the nav entry (``menu.py``)."""
+    st.session_state[_SESSION_DIALOG_KEY] = True
+
+
+@st.dialog("💾 Session", width="large")
+def _session_dialog(app_url: str, backup_renderer=None) -> None:
+    """The 💾 Session modal: what this session is holding, and how to keep it.
+
+    Four blocks, in the order UX-96 settled on. Recovery and a JSON backup are
+    deliberately separate and deliberately in that order: recovery contains the
+    local dataset tables and happens automatically, while the portable JSON is
+    user-triggered and intentionally omits those tables — a distinction that is
+    the panel's hierarchy rather than a tooltip-only caveat.
+
+    ``backup_renderer`` fills the ⬇️ JSON backup block. It is a closure rather
+    than data because the panel needs the live figure settings and trial
+    selection, which only exist near the end of ``main`` — and ``main`` returns
+    early on every path where the dataset can't be drawn (the wizard mid-flight,
+    a rejected mapping, an empty pool). Those paths pass ``None``, and the block
+    says why rather than rendering an empty heading, which is what BUG-28 saw.
+
+    **A dialog body is a fragment.** It runs only while the modal is open, so
+    every widget in here either re-seeds from a durable value each render (the
+    persistence pause toggle, the 🐛 Debug gate) or holds nothing worth keeping.
+    An interaction in here reruns *this*, not ``main`` — hence the explicit
+    ``st.rerun(scope="app")`` after a restored backup, and the two inline
+    confirmations (Streamlit allows no dialog inside a dialog).
+    """
+    from scanpath_studio.debug_log import (
+        debug_enabled,
+        render_debug_panel,
+        render_debug_toggle,
+    )
+
+    recovery = st.container(key="session_auto_recovery")
+    recovery.markdown("#### 🗄️ Automatic recovery")
+    _render_recovery_cache_panel(app_url, slot=recovery.container())
+
+    backup = st.container(key="session_json_backup")
+    backup.markdown("#### ⬇️ JSON backup")
+    if backup_renderer is not None:
+        backup_renderer(backup.container())
+    else:
+        backup.caption(
+            "Available once a dataset is loaded and drawable — a backup records "
+            "the figure's settings and your annotations, and there is no figure "
+            "to record yet."
+        )
+
+    reset = st.container(key="session_reset")
+    reset.markdown("#### ♻️ Reset")
+    _render_reset_everything_panel(slot=reset.container())
+
+    debug_tools = st.container(key="session_debug_tools")
+    debug_tools.markdown("#### 🐛 Debug tools")
+    render_debug_toggle(debug_tools.container())
+    if debug_enabled():
+        render_debug_panel(debug_tools.container())
+
+
+def maybe_show_session(app_url: str, backup_renderer=None) -> None:
+    """Open the 💾 Session dialog if the nav entry armed it.
+
+    Unlike ``maybe_show_about`` this is served **late**, at whichever point of
+    ``main`` the backup renderer exists — the panel reports what this run just
+    persisted and offers a backup of the live figure, neither of which is known
+    early. Exactly one call runs per script run (each early return has its own),
+    which is what keeps the widgets inside single widgets.
+    """
+    if st.session_state.pop(_SESSION_DIALOG_KEY, False):
+        _session_dialog(app_url, backup_renderer)
 
 
 def _arm_about() -> None:
@@ -1869,6 +1973,13 @@ PUBLIC_DATASET_REGISTRY: dict = {
         description="Potsdam Textbook Corpus — German reading of biology & "
         "physics textbook passages (expert/novice readers).",
         link="https://github.com/DiLi-Lab/PoTeC",
+        # Word boxes come from the corpus' own `.ias` character files, but the
+        # release discards the recorded screen (x, y) — `datasets._potec_fixations`
+        # places each fixation at the centre of the character it names.
+        geometry="🛠️ **Reconstructed** fixation coordinates — the release keeps "
+        "no recorded (x, y), so each fixation sits at the centre of the "
+        "character it names, from the corpus' own `.ias` boxes. The word boxes "
+        "themselves are the corpus'.",
     ),
     "MultiplEYE — multilingual reading (ZH-CH sample)": dict(
         loader=_load_multipleye_source,
@@ -1879,6 +1990,8 @@ PUBLIC_DATASET_REGISTRY: dict = {
         description="MultiplEYE multilingual eye-tracking-while-reading — the "
         "read-only Zurich Chinese sample, loaded from a local folder.",
         link="https://multipleye.eu/",
+        geometry="✅ **Real** — recorded fixation coordinates, with word boxes "
+        "aggregated from the corpus' own character AOI files.",
     ),
     ONESTOP_PUBLIC_CHOICE: dict(
         loader=_load_onestop_public_source,
@@ -1898,8 +2011,65 @@ PUBLIC_DATASET_REGISTRY: dict = {
         "repeated) and seven trial parts (title / question / paragraph / answers "
         "/ feedback). Downloaded from OSF, or read from a LaCC lab export.",
         link="https://github.com/lacclab/OneStop-Eye-Movements",
+        geometry="✅ **Real** — recorded fixation coordinates and EyeLink's own "
+        "interest-area boxes (DATA-30 recovers the measured boxes from the raw "
+        "export; DATA-31 keeps the recorded fixation y with them).",
     ),
 }
+
+
+#: The same presentation metadata for the sources that are **not** registry
+#: entries — the packaged demo, the synthetic trial, the authoring canvas — so
+#: the dataset table's ℹ️ dialog can answer the same questions about every row.
+#: Uploads are absent on purpose: nothing here knows anything about them that
+#: their own row does not already show.
+_BUILTIN_DATASET_ABOUT: dict[str, dict] = {
+    DEMO_CHOICE: dict(
+        language="English (L1)",
+        size="3 readers · 2 articles × {Adv, Ele}",
+        description="A packaged subset of OneStop Eye Movements, so the app has "
+        "something real to open with. Regenerated by "
+        "`python -m scanpath_studio.update_sample_data`.",
+        link="https://github.com/lacclab/OneStop-Eye-Movements",
+        geometry="✅ **Real** — OneStop's recorded fixations and interest-area "
+        "boxes. The raw-gaze overlay is the one exception: it is **synthesized** "
+        "from the fixations, because OneStop publishes no raw samples.",
+    ),
+    SYNTHETIC_CHOICE: dict(
+        language="English",
+        size="1 reader · 1 trial · 6 words",
+        description="A hand-built trial with every measure traced by hand — the "
+        "same fixture the test suite asserts against. Use it to check what a "
+        "measure or a plot option does against a known answer.",
+        geometry="🧪 **Synthesized** — the layout and the fixations are both "
+        "hand-specified, not recorded.",
+    ),
+    AUTHOR_CHOICE: dict(
+        description="Type a text and place fixations on it yourself, for "
+        "figures that illustrate a pattern rather than report a recording.",
+        geometry="🧪 **Synthesized** — you draw it; the app lays the text out "
+        "deterministically and marks the figure as an illustration.",
+    ),
+}
+
+
+def dataset_about(token: str, registry: dict | None = None) -> dict:
+    """What the dataset table's ℹ️ dialog knows about one row.
+
+    One lookup for both halves of the catalogue — a public corpus' registry
+    entry and the packaged sources' table above — so the dialog does not have to
+    care which kind of row it was opened from. Returns ``{}`` for an upload,
+    which is the honest answer: nothing here knows anything about it that its
+    own row does not already show.
+    """
+    spec = (registry if registry is not None else public_dataset_registry()).get(token)
+    if spec:
+        return {
+            key: spec[key]
+            for key in ("language", "size", "description", "link", "geometry")
+            if spec.get(key)
+        }
+    return dict(_BUILTIN_DATASET_ABOUT.get(token) or {})
 
 
 def _benchmark_registry_entries() -> dict:
@@ -1931,6 +2101,10 @@ def _benchmark_registry_entries() -> dict:
             language=language_display(entry.get("language")),
             size=_benchmark_size_caption(entry),
             description=_benchmark_description(entry, harmonised_overlap=short != name),
+            # R34's badge, resolved once here rather than only inside the loader,
+            # so the dataset table's ℹ️ dialog can show it without opening the
+            # corpus.
+            geometry=geometry_badge(entry),
             link="https://github.com/EyeBench/EyeGenBench",
             # Marks the entry as coming from a prepared bundle, and names the
             # corpus inside it. `compare_source` dispatches on this rather than
@@ -3166,6 +3340,7 @@ def render_data_source_picker(host=None) -> None:
 _DATASET_EDIT_LABEL = ":material/edit: Edit"
 _DATASET_RENAME_LABEL = ":material/drive_file_rename_outline: Rename"
 _DATASET_REMOVE_LABEL = ":material/delete: Remove"
+_DATASET_ABOUT_LABEL = ":material/info: About"
 
 # Built-in and public dataset tokens are load-path identifiers, so changing
 # them would break deep links and loader dispatch. Their table rename is a
@@ -3174,6 +3349,10 @@ _DATASET_REMOVE_LABEL = ":material/delete: Remove"
 DATASET_ALIASES_KEY = "_dataset_display_aliases"
 HIDDEN_DATASETS_KEY = "_hidden_dataset_tokens"
 PENDING_RENAME_KEY = "_dataset_pending_rename"
+#: DATA-35 — the row whose ℹ️ About dialog is open. Same arm-then-read shape as
+#: the rename and delete flags above: a table callback sets it, the next run
+#: opens the dialog.
+PENDING_ABOUT_KEY = "_dataset_pending_about"
 
 #: UX-78 — the open dataset's row tint. A Styler writes inline CSS and so cannot
 #: read the theme's variables; a translucent blue reads as "selected" on both the
@@ -3467,6 +3646,53 @@ def _rename_dataset_dialog(
         st.rerun(scope="app")
 
 
+@st.dialog("About this dataset")
+def _dataset_about_dialog(token: str, *, registry: dict) -> None:
+    """DATA-35 — the row's description, language, size, home link and geometry.
+
+    A dialog rather than four more columns: the description is a sentence or
+    three and the geometry provenance is a whole clause, and the table already
+    carries nine numeric columns plus its actions. The two facts that fit a cell
+    — **Language** and the home **link** — stay in the table; the rest opens on
+    demand from here, which is what the ask meant by "a field that opens up".
+    """
+    about = dataset_about(token, registry)
+    st.markdown(f"### {_dataset_display_name(token, registry)}")
+    facts = " · ".join(
+        str(about[key]) for key in ("language", "size") if about.get(key)
+    )
+    if facts:
+        st.caption(facts)
+    if about.get("description"):
+        st.write(about["description"])
+    if about.get("geometry"):
+        # The provenance of the coordinates everything downstream is measured
+        # from — real / reconstructed / synthesized. `geometry_badge` already
+        # writes it as a sentence, so it is shown as one.
+        st.markdown(f"**Where the coordinates come from.** {about['geometry']}")
+    if about.get("link"):
+        st.markdown(f"[Dataset home ↗]({about['link']})")
+    if not about:
+        st.caption(
+            "This is a dataset you added, so the app knows only what its own "
+            "row shows. Its column mapping and recording setup are under "
+            "✏️ Edit."
+        )
+    if st.button("Close", key="dataset_about_close", width="stretch"):
+        st.session_state.pop(PENDING_ABOUT_KEY, None)
+        st.rerun(scope="app")
+
+
+def _render_about_dialog(tokens: list[str], registry: dict) -> None:
+    token = st.session_state.get(PENDING_ABOUT_KEY)
+    if token is None:
+        return
+    if token not in tokens:
+        st.session_state.pop(PENDING_ABOUT_KEY, None)
+        return
+    _dataset_about_dialog(token, registry=registry)
+
+
 def _render_rename_dialog(tokens: list[str], uploaded: set[str]) -> None:
     token = st.session_state.get(PENDING_RENAME_KEY)
     if token is None:
@@ -3477,6 +3703,57 @@ def _render_rename_dialog(tokens: list[str], uploaded: set[str]) -> None:
     _rename_dataset_dialog(token, uploaded=uploaded, tokens=tokens)
 
 
+def _close_dataset_editor() -> None:
+    """``on_click`` for the editor's way out — back to 📂 Available datasets."""
+    st.session_state.pop(DATASET_EDITOR_OPEN_KEY, None)
+    st.session_state.pop(FOCUS_MAPPING_KEY, None)
+
+
+def _render_dataset_editor_bar(host, data_choice: str) -> None:
+    """DATA-35 — the ✏️ Edit dataset screen's sticky header.
+
+    Deliberately the add-dataset screen's bar, down to the CSS class: the ask
+    was that "the Add Dataset and Edit Dataset screens should be very similar",
+    and the two screens ask the same questions of the same dataset — one before
+    it exists and one after. The difference is the title (this one names the
+    dataset) and the way out, which here is a return rather than a cancel: an
+    edit is applied by its own section's button, so leaving discards nothing and
+    needs no confirmation.
+    """
+    name = _dataset_display_name(
+        str(st.session_state.get("data_source_choice") or data_choice)
+    )
+    bar = host.container(key="dataset_editor_bar")
+    title_col, back_col = bar.columns([8, 2], vertical_alignment="center")
+    title_col.markdown(
+        f'<div class="sps-wiz-title">✏️ Edit {html.escape(name)}</div>',
+        unsafe_allow_html=True,
+    )
+    back_col.button(
+        "← Back to datasets",
+        key="dataset_editor_close",
+        on_click=_close_dataset_editor,
+        width="stretch",
+        help="Return to 📂 Available datasets. Changes you have already applied "
+        "are kept.",
+    )
+    bar.caption(
+        "How this dataset is read and measured — where its files are, how its "
+        "columns map onto the app's fields, the screen it was recorded on, and "
+        "any metadata tables attached to it. The same questions the "
+        "add-dataset screen asks, for a dataset that already exists."
+    )
+
+
+#: DATA-35 — set by a row action that genuinely changes what the app is showing
+#: (opening a dataset, opening the editor), read at the top of the table
+#: fragment. A widget callback may not call ``st.rerun``, and a *fragment* rerun
+#: would redraw the table alone while the page under it still showed the old
+#: dataset — so the callback asks and the fragment body does it.
+_TABLE_NEEDS_APP_RERUN = "_dataset_table_needs_app_rerun"
+
+
+@st.fragment
 def render_dataset_table(
     host=None,
     *,
@@ -3504,6 +3781,13 @@ def render_dataset_table(
         words: The open dataset's word frame, for its counts.
         fixations: Its fixation frame.
     """
+    # DATA-35: a row action that only opens a dialog — About, Rename, Remove —
+    # costs a *fragment* rerun, not a whole-app one. Renaming a dataset used to
+    # take two full page renders (one to open the modal, one to apply it) on a
+    # page that draws a forty-row table, the whole column mapping and three
+    # upload widgets; the first of those is now this box redrawing itself.
+    if st.session_state.pop(_TABLE_NEEDS_APP_RERUN, False):
+        st.rerun(scope="app")
     entries = list(st.session_state.get("_data_source_entries") or [])
     if not entries:
         return
@@ -3544,6 +3828,7 @@ def render_dataset_table(
         else:
             frames = (None, None, None)
         counts = remembered_dataset_counts(token, *frames)
+        about = dataset_about(token, registry)
         rows.append(
             {
                 # UX-78: the name *is* the button. `ButtonColumn` takes its label
@@ -3557,6 +3842,11 @@ def render_dataset_table(
                     if kinds.get(token)
                     else ("🔒 Private" if own else "")
                 ),
+                # DATA-35: the two facts about a corpus that fit in a cell. The
+                # description and the coordinate provenance are sentences, so
+                # they live one click away in the ℹ️ About dialog instead.
+                "Language": about.get("language") or "",
+                "Home": about.get("link") or None,
                 "Participants": counts.get("Participants"),
                 "Texts": counts.get("Texts"),
                 "Trials": counts.get("Trials"),
@@ -3564,7 +3854,8 @@ def render_dataset_table(
                 "Fixations": counts.get("Fixations"),
                 "Words": counts.get("Words"),
                 "Gaze points": counts.get("Gaze points"),
-                "Edit": _DATASET_EDIT_LABEL if own else None,
+                "About": _DATASET_ABOUT_LABEL,
+                "Edit": _DATASET_EDIT_LABEL,
                 "Rename": _DATASET_RENAME_LABEL,
                 "Remove": _DATASET_REMOVE_LABEL,
                 "_token": token,
@@ -3609,17 +3900,21 @@ def render_dataset_table(
         token = _clicked("dataset_table_name")
         if token is not None:
             _select_dataset(token)
+            st.session_state[_TABLE_NEEDS_APP_RERUN] = True
 
     def _on_edit() -> None:
-        # "A screen similar to add-dataset, that allows you to edit the maps and
-        # see the saved data tables" — that screen is *this page*, for whichever
-        # dataset is open: the mapping editor and the raw tables are already on
-        # it. So Edit opens the dataset and marks it, and the mapping section
-        # below renders itself expanded rather than folded.
+        # DATA-35: "a screen similar to add-dataset" is now literally a screen.
+        # Edit opens the dataset and raises the ✏️ Edit dataset screen over the
+        # overview — the column mapping, the recording setup, the source's
+        # options and location, the identity check and the metadata tables are
+        # all on it. `FOCUS_MAPPING_KEY` still rides along for the mapping
+        # editor's "editing <name>" line.
         token = _clicked("dataset_table_edit")
         if token is not None:
             _select_dataset(token)
             st.session_state[FOCUS_MAPPING_KEY] = token
+            st.session_state[DATASET_EDITOR_OPEN_KEY] = True
+            st.session_state[_TABLE_NEEDS_APP_RERUN] = True
 
     def _on_delete() -> None:
         # UX-54 r2: arm, don't delete. The click lands on a row of a table — one
@@ -3634,6 +3929,11 @@ def render_dataset_table(
         token = _clicked("dataset_table_rename")
         if token is not None:
             st.session_state[PENDING_RENAME_KEY] = token
+
+    def _on_about() -> None:
+        token = _clicked("dataset_table_about")
+        if token is not None:
+            st.session_state[PENDING_ABOUT_KEY] = token
 
     box = host if host is not None else st
     # UX-78: the open dataset is a tinted row rather than a ▶ in a column of its
@@ -3673,6 +3973,13 @@ def render_dataset_table(
                 key="dataset_table_name",
             ),
             "Kind": st.column_config.TextColumn("Kind", width="small"),
+            "Language": st.column_config.TextColumn("Language", width="small"),
+            "Home": st.column_config.LinkColumn(
+                "Home",
+                width="small",
+                display_text="Open ↗",
+                help="The corpus' own home page or repository.",
+            ),
             "Participants": st.column_config.NumberColumn(
                 "Participants", width="small", format="%d"
             ),
@@ -3690,11 +3997,19 @@ def render_dataset_table(
             "Gaze points": st.column_config.NumberColumn(
                 "Gaze points", width="small", format="%d"
             ),
+            "About": st.column_config.ButtonColumn(
+                "",
+                type="tertiary",
+                width="small",
+                help="What this dataset is, and where its coordinates come from.",
+                on_click=_on_about,
+                key="dataset_table_about",
+            ),
             "Edit": st.column_config.ButtonColumn(
                 "",
                 type="tertiary",
                 width="small",
-                help="Open it and edit its column mapping.",
+                help="Open it and edit its column mapping and recording setup.",
                 on_click=_on_edit,
                 key="dataset_table_edit",
             ),
@@ -3716,6 +4031,7 @@ def render_dataset_table(
             ),
         },
     )
+    _render_about_dialog(tokens, registry)
     _render_rename_dialog(tokens, uploaded)
     _render_delete_confirmation(box, tokens, uploaded)
     if note := st.session_state.pop("_dataset_table_note", None):
@@ -4902,25 +5218,27 @@ def main() -> None:
 
     menu = render_top_menu(show_debug=debug_enabled(), active_view=active_view)
     _render_about_panel(menu.title)
-    # BUG-28: filled HERE, not in the epilogue with its two neighbours. `main`
-    # returns early on every path where the dataset can't be drawn — the wizard
-    # mid-flight, a mapping that is incomplete or rejected, an empty pool — so
-    # anything filled at the bottom is missing from the 💾 Session popover in
-    # exactly the states these two buttons exist for (which is what the user saw:
-    # a Session menu of headings with no controls under them). This block needs
-    # nothing from the load, so it can be written before it.
-    _render_reset_everything_panel(slot=menu.reset_session)
 
-    def _fill_recovery_cache_panel() -> None:
-        """Write the 🗄️ Recovery cache block, once, on whichever path we leave by.
+    def _fill_recovery_cache_panel(backup_renderer=None) -> None:
+        """Serve the 💾 Session dialog, once, on whichever path we leave by.
 
-        Its neighbour above is filled eagerly, but this one reports what *this
-        run* just persisted, so it has to come after `save_local_state` — which
-        the early returns never reach. Each of them calls this instead, and the
-        epilogue calls it for the ordinary path; exactly one runs per script run,
-        which is what keeps the toggle and the Forget button single widgets.
+        The name is the panel it used to fill; UX-100 turned that panel into the
+        modal that now holds all four blocks. The *timing* is unchanged and is
+        the reason this is a closure rather than one call in the epilogue:
+        🗄️ Automatic recovery reports what **this run** just persisted, so it has
+        to come after `save_local_state` — which the early returns never reach.
+        Each of them calls this instead, and the epilogue calls it for the
+        ordinary path, so exactly one runs per script run. That is what keeps the
+        widgets inside single widgets.
+
+        BUG-28 is the reason ``backup_renderer`` is optional: `main` returns
+        early on every path where the dataset can't be drawn — the wizard
+        mid-flight, a mapping that is incomplete or rejected, an empty pool — and
+        those are exactly the states someone opens Session *in*. They get the
+        recovery cache, the reset and the debug tools; only the JSON backup,
+        which needs a figure to describe, says why it is not there.
         """
-        _render_recovery_cache_panel(app_url, slot=menu.recovery_cache)
+        maybe_show_session(app_url, backup_renderer)
 
     # First-visit welcome tour. After the URL presets, so embeds and
     # deep-linked sessions can suppress it — but BEFORE the heavy data/plot
@@ -4995,17 +5313,21 @@ def main() -> None:
     # every-run semantics exactly, so this stays a re-host rather than a rewrite
     # of every loader into a render/resolve pair.
     #
-    # Sub-slots are reserved in page order and filled at whatever point of the
-    # load reaches them (Streamlit lays containers out in creation order):
-    #     Data source     (picker + ➕ manage)
-    #     Description     (public-dataset caption / home link)
-    #     Options         (source-specific: OneStop regime + parts + variant, …)
-    #     Data location   (path input + Expected files + found/download status)
-    #     Add a dataset   (the upload wizard, while one is being added)
-    #     What's in it    (name + counts + raw tables + stats + trial identity)
-    #     Column mapping  (ONE section, three modes — see _render_setup_mapping)
-    #     Participant metadata (DATA-20)
-    #     Preprocessing
+    # DATA-35 split it into **two screens**, both built every run and switched by
+    # key for the same reason the page itself is (above):
+    #
+    #   Overview  📂 Available datasets (the table + ➕ Add dataset)
+    #             🔎 What's in the open dataset
+    #   Editor    ✏️ Edit dataset — everything that *configures* the dataset:
+    #             description / options / data location, column mapping,
+    #             recording setup, trial identity, stimulus images, the two
+    #             metadata tables, preprocessing.
+    #
+    # The overview used to carry all of it in one scroll, which put a forty-row
+    # table, twenty mapping selectboxes and three uploaders on the screen you
+    # visit to answer "which datasets do I have?". Sub-slots are reserved in
+    # page order and filled at whatever point of the load reaches them
+    # (Streamlit lays containers out in creation order).
     data_view = active_view == _VIEW_DATA
     setup_page = st.container(
         key=DATA_PAGE_KEY if data_view else DATA_PAGE_OFFSCREEN_KEY
@@ -5014,43 +5336,47 @@ def main() -> None:
     # own sticky title, so the page's header and its stage subheading would be a
     # second and third title above it.
     wizard_owns_page = bool(st.session_state.get("_show_upload_wizard"))
+    editing = (
+        bool(st.session_state.get(DATASET_EDITOR_OPEN_KEY)) and not wizard_owns_page
+    )
+    overview_page = setup_page.container(
+        key=DATA_OVERVIEW_OFFSCREEN_KEY if editing else DATA_OVERVIEW_KEY
+    )
+    editor_page = setup_page.container(
+        key=DATA_EDITOR_KEY if editing else DATA_EDITOR_OFFSCREEN_KEY
+    )
     if data_view and not wizard_owns_page:
-        setup_page.header("Data Management")
-        # UX-52 — four peer sections, one heading level, one divider between
-        # each. The source block used to open with no heading at all, which
-        # made the three headings below it read as the whole page rather than
-        # as three of its four stages. Written straight into `setup_page`
-        # before the slots are created, so it lands above them (Streamlit lays
-        # containers out in creation order).
-        setup_page.divider()
+        overview_page.header("Data Management")
+        # UX-52 — peer sections, one heading level, one divider between each.
+        overview_page.divider()
         # UX-77: the section lists every dataset (#UX-54 made it a table), so it
-        # is named for that rather than for the one *source* it used to pick —
-        # and its one action shares the heading's line instead of sitting a row
-        # below the table it acts on. The button is filled further down, once
-        # `data_choice` is known; the cell is reserved here so it lands beside
-        # the title (Streamlit lays containers out in creation order).
-        heading_col, add_dataset_slot = setup_page.columns(
-            [5, 1], vertical_alignment="bottom"
-        )
-        heading_col.subheader("📂 Available datasets")
-    else:
-        add_dataset_slot = None
-    setup_source_slot = setup_page.container()
-    description_slot = setup_page.container()
-    source_options_slot = setup_page.container()
-    data_location_slot = setup_page.container()
+        # is named for that rather than for the one *source* it used to pick.
+        # DATA-35 moved ➕ Add dataset off the heading's line and under the
+        # table, on the user's call: it is the action you reach for *after*
+        # reading the list and not finding what you wanted, so it belongs at the
+        # end of the list rather than above it. Its slot is reserved beside the
+        # table below; the button itself is filled once `data_choice` is known.
+        overview_page.subheader("📂 Available datasets")
+    setup_source_slot = overview_page.container()
+    # The editor's own header bar — the ✏️ Edit dataset screen's title and its
+    # way back, filled below once the dataset's display name is known.
+    editor_head_slot = editor_page.container()
+    description_slot = editor_page.container()
+    source_options_slot = editor_page.container()
+    data_location_slot = editor_page.container()
+    # The add-dataset wizard takes the whole page, so its slot is the page's,
+    # not either screen's.
     setup_wizard_slot = setup_page.container()
     # UX-52 round 2 — "what's in this dataset" comes **before** the mapping, on
     # the user's call. It breaks pipeline order deliberately: the counts are the
     # first thing you want after choosing a source ("did it load, and is it the
     # right size?"), and the mapping is what you scroll to when the answer looks
-    # wrong. Reserving the slots in this order is the whole change — Streamlit
-    # lays containers out in creation order, so *when* each is filled during the
-    # load is unaffected.
-    setup_body_slot = setup_page.container()
+    # wrong. DATA-35 kept that order across the split: the counts are the
+    # overview's second half, and the mapping opens the editor.
+    setup_body_slot = overview_page.container()
     # Keyed → the stable `.st-key-…` selectors the "Load and verify a dataset"
     # tutorial spotlights (UX-40), alongside `tutorial_data_inspection` above.
-    column_mapping_slot = setup_page.container(key="tutorial_column_mapping")
+    column_mapping_slot = editor_page.container(key="tutorial_column_mapping")
     # The heading belongs to the *section*, not to any one of its three modes —
     # mode A's panels are written into the body by `prepare_data` during the
     # load, long before the dispatch below picks a mode, so the title needs a
@@ -5058,9 +5384,8 @@ def main() -> None:
     mapping_head_slot = column_mapping_slot.container()
     mapping_body_slot = column_mapping_slot.container()
     # Raw tables for a dataset whose mapping is still broken. Its own slot,
-    # *below* the editor: with "what's in it" moved above, filling that one
-    # would put the tables above the controls that fix them.
-    unmapped_slot = setup_page.container()
+    # *below* the mapping editor, which is the control that fixes them.
+    unmapped_slot = editor_page.container()
     # UX-52 round 3 — the VAL-7 trial-identity verdict is its own section, not a
     # `#####` item inside "What's in this dataset" (the user's call). It carries
     # a *verdict* — sometimes a warning — and the fix it names is a change to the
@@ -5068,14 +5393,14 @@ def main() -> None:
     # thing it judges rather than buried under the counts.
     # Keyed → the `.st-key-…` selector the "Load and verify a dataset" tutorial
     # spotlights, alongside its siblings above and below.
-    setup_identity_slot = setup_page.container(key="tutorial_trial_identity")
+    setup_identity_slot = editor_page.container(key="tutorial_trial_identity")
     # VIZ-14: local stimulus-image paths sit beside the other optional attached
     # metadata, immediately before the participant table.
-    setup_stimulus_slot = setup_page.container(key="tutorial_stimulus_images")
+    setup_stimulus_slot = editor_page.container(key="tutorial_stimulus_images")
     # DATA-20 §1 — the participant-level metadata table. After the mapping (it
     # joins on the reader id the mapping just settled).
-    setup_metadata_slot = setup_page.container(key="tutorial_participant_metadata")
-    setup_preproc_slot = setup_page.container(key="tutorial_preprocessing")
+    setup_metadata_slot = editor_page.container(key="tutorial_participant_metadata")
+    setup_preproc_slot = editor_page.container(key="tutorial_preprocessing")
 
     # Data source selection. UX-25: only the *resolution* happens here (it must
     # precede the load); the picker itself renders in the main view — on the
@@ -5092,13 +5417,19 @@ def main() -> None:
     # and filled after the load, which is the first point this run's counts for
     # the open dataset exist.
     dataset_table_slot = setup_source_slot.container()
+    # DATA-35: under the table, not on the heading's line. Left-aligned in a
+    # narrow column so a stretched button doesn't run the width of the page.
+    add_dataset_slot = None
+    if data_view and not wizard_owns_page:
+        add_dataset_slot, _ = setup_source_slot.columns([1, 4])
     if data_view and add_dataset_slot is not None and data_choice != UPLOAD_CHOICE:
         # UX-64 took ➕ Add data off the Scanpath row and made this page the only
         # way in — so the way in has to *be* here. Without this button
         # `_enter_add_data_wizard` would have no trigger at all and uploading
         # would be unreachable. An `on_click` callback, not an inline handler:
         # it reassigns `data_source_choice`, which only lands before the widgets
-        # instantiate. UX-77 put it on the section heading's line.
+        # instantiate. UX-77 put it on the section heading's line; DATA-35 moved
+        # it under the table.
         add_dataset_slot.button(
             "➕ Add dataset",
             key="add_data_btn",
@@ -5107,6 +5438,8 @@ def main() -> None:
             width="stretch",
             type="primary",
         )
+    if data_view and editing:
+        _render_dataset_editor_bar(editor_head_slot, data_choice)
     # PRE-22: the section is held back from this release — heading, caption and
     # controls all come from behind the same gate, so the page has no gap where
     # a hidden stage used to be.
@@ -5598,16 +5931,6 @@ def main() -> None:
         fixations_filtered, base_font_size, words=words_filtered
     )
 
-    # The "💾 Save & restore" slot is its own popover on the menu bar (keyed
-    # `tour_grp_save_restore`, which the spotlight tour and the annotations
-    # panel's "jump here" affordance both target). The active view fills it later
-    # — it needs the live selection + figure settings for the download. See
-    # tabs._render_save_restore_expander. This single panel merges the former
-    # Plot-configuration and Annotations panels; it is a top-level menu group of
-    # its own, since saving/restoring plot config + annotations is a global
-    # session feature, not part of any one source's setup.
-    save_restore_slot = menu.save_restore
-
     # Whole-dataset combos for the Bulk Export tab's "Export the whole dataset"
     # option, mirroring how `combos` is built from the filtered frames.
     combos_all, _, _ = build_combo_options(
@@ -5786,29 +6109,43 @@ def main() -> None:
     _sr_figure_settings["raw_gaze"] = _sr_raw_gaze if not _sr_raw_gaze.empty else None
     _sr_figure_settings["line_spacing"] = line_spacing
     _sr_figure_settings["scale_text_to_boxes"] = scale_text_to_boxes
-    _render_save_restore_expander(
-        _sr_pid,
-        _sr_trial,
-        canvas_width,
-        canvas_height,
-        viz_settings["x_field"],
-        viz_settings["y_field"],
-        _sr_figure_settings,
-        viz_settings,
-        base_font_size,
-        _sr_raw_gaze,
-        font_family=font_family,
-        slot=save_restore_slot,
-    )
-    # ENG-30: the automatic counterpart to the portable JSON above — what the app
-    # is keeping on this machine, and the controls for it. It is FILLED after
-    # this run's save_local_state, or it would report the previous run's cache
-    # and read "nothing stored yet" on the run that first stores something —
-    # which is exactly why the slot has to be a popover reserved up front rather
-    # than something rendered in place down here. (BUG-28: the early-return paths
-    # fill it themselves — see `_fill_recovery_cache_panel` — since they never
-    # reach this epilogue and so used to leave 🗑 Forget saved session unreachable
-    # in exactly the wedged states someone goes looking for it.)
+
+    def _render_session_backup_block(slot) -> None:
+        """The ⬇️ JSON backup block of the 💾 Session dialog (UX-100).
+
+        A closure, because the panel needs the live trial selection and figure
+        settings resolved just above — and the dialog is served a few lines
+        below, after `save_local_state`, so 🗄️ Automatic recovery can report the
+        write that just happened rather than the previous run's. This single
+        panel merges the former Plot-configuration and Annotations panels; it is
+        a session-wide feature, not part of any one source's setup.
+        """
+        _render_save_restore_expander(
+            _sr_pid,
+            _sr_trial,
+            canvas_width,
+            canvas_height,
+            viz_settings["x_field"],
+            viz_settings["y_field"],
+            _sr_figure_settings,
+            viz_settings,
+            base_font_size,
+            _sr_raw_gaze,
+            font_family=font_family,
+            slot=slot,
+        )
+        # A dialog body is a fragment: uploading a backup in here reruns the
+        # dialog, not `main`, and `_apply_uploaded_plot_config` runs in `main`.
+        # So a file the app has not applied yet asks for a whole-app rerun —
+        # which is also what closes the modal onto the restored figure. The
+        # applied-signature marker is the importer's own (it dedupes by
+        # `(name, size)`), so this cannot loop.
+        pending = st.session_state.get("plot_config_upload")
+        if pending is not None and st.session_state.get("_plot_config_last_import") != (
+            pending.name,
+            pending.size,
+        ):
+            st.rerun(scope="app")
 
     # Share now lives in the Scanpath view's "🔗 Share" subtab (rendered via the
     # share_renderer passed into render_single_trial_tab), so it builds its deep
@@ -5825,19 +6162,15 @@ def main() -> None:
     stash_tutorial_context(
         build_tutorial_context(words_filtered, fixations_filtered, combos)
     )
-    # UX-37/UX-65: the way *in* to debug mode, now at the foot of 💾 Session —
-    # a developer/bug-report affordance, kept below the user-facing blocks.
-    render_debug_toggle(menu.debug_gate)
-
-    # Developer debug panel — hidden unless that toggle is on, which is also
-    # what put the 🐛 Debug popover on the menu bar to host it.
-    render_debug_panel(menu.debug)
+    # UX-100: the 🐛 Debug toggle and panel moved inside the Session dialog with
+    # the rest of the group (`_session_dialog`), so there is nothing to fill here.
 
     # Persist after all view/menu widgets have written their current values.
     # The helper fingerprints the session and is a no-op on unchanged reruns.
     save_local_state(st.session_state, app_url)
-    # …then report on what that just wrote, into the slot reserved above.
-    _fill_recovery_cache_panel()
+    # …then serve 💾 Session, if the nav asked for it, so 🗄️ Automatic recovery
+    # reports the write that just happened rather than the previous run's.
+    _fill_recovery_cache_panel(_render_session_backup_block)
 
 
 if __name__ == "__main__":

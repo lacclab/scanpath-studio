@@ -2817,28 +2817,11 @@ def _render_save_restore_expander(
         exported_at=datetime.now().isoformat(timespec="seconds"),
         compare_styles=compare_styles,
     )
-    # The annotations panel's "save these too" shortcut asks for this panel to
-    # open. It used to expand the sidebar and then the expander inside it; now
-    # the panel *is* a menu popover, so one click on its trigger is the whole
-    # job — no aria-expanded gate, because a popover trigger is always laid out.
-    # Still retried: a click during React hydration is silently lost.
-    if st.session_state.pop("_open_save_restore", False):
-        with container:
-            embed_html_iframe(
-                """<script>
-                (function () {
-                    const doc = window.parent.document;
-                    let tries = 0;
-                    (function openMenu() {
-                        const trigger = doc.querySelector(
-                            ".st-key-tour_grp_save_restore button");
-                        if (trigger) { trigger.click(); return; }
-                        if (++tries < 20) setTimeout(openMenu, 100);
-                    })();
-                })();
-                </script>""",
-                height=0,
-            )
+    # (An "_open_save_restore" shortcut used to click this panel's menu trigger
+    # from here via injected JS. Its last *setter* went with the annotations
+    # panel that had it, and UX-100 removed the trigger it clicked — the panel
+    # is a dialog now, armed by `app._arm_session`, which is what any future
+    # shortcut should set.)
     with container:
         n_anno = len(annotation_records)
         st.download_button(

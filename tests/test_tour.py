@@ -425,18 +425,12 @@ class TestSpotlightSelectorsResolve:
         import re
         from pathlib import Path
 
-        from scanpath_studio import menu
-
         root = Path(__file__).resolve().parents[1] / "scanpath_studio"
         source = "".join(
             (root / f"{module}.py").read_text(encoding="utf-8")
             for module in ("tabs", "app", "controls", "annotations", "menu")
         )
-        keys = set(re.findall(r'key="([\w]+)"', source))
-        # menu.py names its container keys as module constants rather than
-        # inline literals — styles.py and the tour selectors both refer to them,
-        # so they are single-sourced there. Resolve them instead of regexing.
-        return keys | {menu.MENU_KEY, menu.SAVE_RESTORE_KEY}
+        return set(re.findall(r'key="([\w]+)"', source))
 
     def _unresolved(self, selectors) -> list[str]:
         keys = self._keyed_containers()
@@ -519,11 +513,16 @@ class TestSpotlightSelectorsResolve:
         assert "padding-left: 0.7rem;" in css
 
     def test_page_top_inset_clears_the_fixed_header(self):
-        """The first Scanpath row must sit fully below Streamlit's fixed chrome."""
+        """The first Scanpath row must sit fully below Streamlit's fixed chrome.
+
+        Asserted per declaration rather than on one packed line: #UX-99 added
+        the side gutters to the same rule, so the block is now multi-line.
+        """
         from scanpath_studio.styles import get_app_css
 
         css = get_app_css()
-        assert "padding-top: 3rem; padding-bottom: 0 !important;" in css
+        assert "padding-top: 3rem;" in css
+        assert "padding-bottom: 0 !important;" in css
 
     def test_plot_control_rows_are_tall_and_have_one_outline(self):
         """The popover key shares the row prefix; never style both as rows."""

@@ -250,19 +250,44 @@ def debug_enabled() -> bool:
     return bool(st.session_state.get(DEBUG_STATE_KEY))
 
 
-def render_debug_toggle(host=None) -> None:
-    """Render the "🐛 Debug mode" toggle into the ❓ Help popover.
+#: UX-100 — the toggle's own widget key, mirrored into :data:`DEBUG_STATE_KEY`.
+#: The two used to be the same key, which was fine while the toggle rendered on
+#: every run; it now lives in the 💾 Session **dialog**, whose body is a fragment
+#: that runs only while the modal is open — and Streamlit drops a widget's key at
+#: the end of any run in which it did not render, so debug mode switched itself
+#: off the moment the modal was dismissed. Splitting them makes the durable flag
+#: the source of truth and the widget a view of it, exactly as the persistence
+#: pause toggle already worked.
+_DEBUG_TOGGLE_KEY = "_debug_mode_toggle"
 
-    The single gate (**UX-37**). Flipping it on puts the 🐛 Debug popover on the
-    menu bar *next* run — ``menu.render_top_menu`` runs at the top of ``main``
+
+def _mirror_debug_toggle() -> None:
+    """``on_change``: write the widget's value into the durable gate."""
+    st.session_state[DEBUG_STATE_KEY] = bool(st.session_state.get(_DEBUG_TOGGLE_KEY))
+
+
+def render_debug_toggle(host=None) -> None:
+    """Render the "🐛 Debug mode" toggle into the 💾 Session dialog.
+
+    The single gate (**UX-37**). Flipping it on adds the 🐛 Debug block *next*
+    run — ``menu.render_top_menu`` resolves ``show_debug`` at the top of ``main``
     and this renders at the bottom — which is the ordinary Streamlit widget
     round-trip, not a delay worth engineering around.
+
+    Seeded rather than passed a ``value=``: the widget key is a mirror of
+    :data:`DEBUG_STATE_KEY` (see :data:`_DEBUG_TOGGLE_KEY`), and a widget
+    carrying both a default and a session-state write logs Streamlit's "default
+    value but also had its value set via the Session State API" warning on every
+    run.
     """
+    st.session_state[_DEBUG_TOGGLE_KEY] = bool(st.session_state.get(DEBUG_STATE_KEY))
     (host if host is not None else st).toggle(
         "🐛 Debug mode",
-        key=DEBUG_STATE_KEY,
-        help="Add a 🐛 Debug panel to the menu bar: the captured log, a snapshot "
-        "of what's loaded, and a JSON download to attach to a bug report.",
+        key=_DEBUG_TOGGLE_KEY,
+        on_change=_mirror_debug_toggle,
+        help="Add a 🐛 Debug panel to the Session menu: the captured log, a "
+        "snapshot of what's loaded, and a JSON download to attach to a bug "
+        "report.",
     )
 
 

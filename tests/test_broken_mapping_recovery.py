@@ -17,7 +17,12 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from scanpath_studio.constants import DEMO_CHOICE
-from tests.conftest import APP_SCRIPT, open_data_view, pin_data_view
+from tests.conftest import (
+    APP_SCRIPT,
+    arm_session_dialog,
+    open_data_view,
+    pin_data_view,
+)
 
 #: Any real fixation column: mapping it as `screen_id` on one report only is
 #: what `multipart.validate_matching_parts` refuses.
@@ -100,18 +105,22 @@ def test_a_wedged_dataset_can_be_abandoned_without_visiting_the_data_page():
 def test_the_session_menu_keeps_its_escape_hatches_while_the_app_is_wedged(
     monkeypatch, tmp_path
 ):
-    """The 💾 Session popover's controls survive `main`'s early return.
+    """The 💾 Session dialog's controls survive `main`'s early return.
 
     They used to be written in the epilogue, which a dataset that cannot be
     drawn never reaches — so the menu someone opens when stuck showed its
-    headings with nothing under them. The recovery cache has to be forced on:
-    AppTest has no URL, so persistence reads as a hosted deployment and the
-    panel correctly explains that nothing is stored instead of offering Forget.
+    headings with nothing under them. UX-100 made the group a modal, which
+    changes nothing about that guarantee: each early return serves the dialog
+    itself. The recovery cache has to be forced on: AppTest has no URL, so
+    persistence reads as a hosted deployment and the panel correctly explains
+    that nothing is stored instead of offering Forget.
     """
     monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
     monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
 
-    at = _break_the_mapping(_boot())
+    at = _boot()
+    arm_session_dialog(at)
+    at = _break_the_mapping(at)
 
     keys = {b.key for b in at.button}
     assert "session_reset_everything" in keys
@@ -122,9 +131,15 @@ def test_the_session_menu_keeps_its_escape_hatches_while_the_app_is_wedged(
 def test_reset_everything_returns_a_wedged_app_to_the_demo():
     at = _boot()
     at.session_state["temporary_user_setting"] = "remove me"
+    # ♻️ Reset lives in the 💾 Session modal (UX-100), and AppTest replays the
+    # whole script on every run rather than reruns the dialog fragment — so the
+    # request has to be re-armed before each one. See `arm_session_dialog`.
+    arm_session_dialog(at)
+    at = at.run(timeout=180)
     reset = [b for b in at.button if b.key == "session_reset_everything"]
     assert reset
 
+    arm_session_dialog(at)
     at = reset[0].click().run(timeout=180)
     confirm = [b for b in at.button if b.key == "reset_everything_confirm"]
     assert confirm

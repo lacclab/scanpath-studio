@@ -607,6 +607,20 @@ _MAIN_TAB_LABELS = [_VIEW_SCANPATH, _VIEW_CORPUS, _VIEW_DATA]
 #: avoids by importing `persistence` one way).
 DATASET_COUNTS_STORE_KEY = "_dataset_counts_store"
 
+#: DATA-35 — "the ✏️ Edit dataset screen is open". The Data page is two screens
+#: now: the **overview** (the dataset table + what's in the open dataset) and the
+#: **editor** (everything that configures it — source options and location,
+#: column mapping, recording setup, trial identity, stimulus images, the two
+#: metadata tables, preprocessing). Both are built every run and switched by key,
+#: for exactly the reason the page itself is (see below): the editor is nothing
+#: but widgets that drive `prepare_data`, and Streamlit drops the key of a widget
+#: that did not render.
+DATASET_EDITOR_OPEN_KEY = "_dataset_editor_open"
+DATA_OVERVIEW_KEY = "data_overview"
+DATA_OVERVIEW_OFFSCREEN_KEY = "data_overview_offscreen"
+DATA_EDITOR_KEY = "data_dataset_editor"
+DATA_EDITOR_OFFSCREEN_KEY = "data_dataset_editor_offscreen"
+
 # DATA-26: the two keys the Data page's outer container is built with — visible
 # when that view is active, off-screen otherwise.
 #

@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from unittest import mock
 
-import pandas as pd
 import pytest
 
 from scanpath_studio import controls
@@ -146,51 +145,70 @@ class TestAppLaunches:
         ]
         assert not stray, f"these still render into the sidebar: {stray}"
 
-    def test_every_session_wide_group_still_renders_off_its_own_page(self):
-        """UX-100: 💾 Session is one popover, and its panels render every run.
+    def test_the_session_dialog_holds_all_four_blocks(self):
+        """UX-100: 💾 Session is a nav entry that opens a modal, like ❓ Help's.
 
-        A popover body is plain script — it executes whether or not the panel is
-        open — and that is exactly why it is a popover and not an `st.dialog`:
-        Streamlit drops a widget's key at the end of any run in which it did not
-        render, so content that only drew while the panel was open would
-        silently reset the 🐛 Debug gate and the persistence pause toggle between
-        visits. This asserts the four blocks are present while the *Scanpath*
-        view is active.
+        The four blocks live in the dialog body, so they render when — and only
+        when — it has been armed. Armed the way the nav arms it
+        (`menu._arm_help_action` → `app._arm_session`), so this covers the wire
+        between the entry and the modal rather than just the modal.
+        """
+        from scanpath_studio import app
 
-        ❓ Help is not a popover: UX-65 made it a nav section of dialog-openers.
+        at = _make_apptest()
+        at.session_state[app._SESSION_DIALOG_KEY] = True
+        at.run(timeout=30)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        body = " ".join(m.value for m in at.markdown)
+        for expected in (
+            "#### 🗄️ Automatic recovery",
+            "#### ⬇️ JSON backup",
+            "#### ♻️ Reset",
+            "#### 🐛 Debug tools",
+        ):
+            assert expected in body, f"{expected} missing from the Session dialog"
+        # Neither group is a popover any more — not the merged one UX-38 made,
+        # and not the two it merged.
+        labels = {p.proto.popover.label for p in at.get("popover")}
+        for gone in ("💾 Session", "❓ Help", "💾 Save & restore", "🗄️ Recovery cache"):
+            assert gone not in labels, labels
+
+    def test_the_session_blocks_stay_out_of_the_page_until_asked_for(self):
+        """The counterpart: unarmed, none of it is on the page.
+
+        Session used to be a whole nav page (#UX-63) and then a popover, both of
+        which rendered their widgets on every run. The dialog does not, which is
+        why the two widgets in there that hold real state — the persistence
+        pause toggle and the 🐛 Debug gate — each re-seed from a durable value
+        rather than *being* it (`debug_log._DEBUG_TOGGLE_KEY`).
         """
         at = _make_apptest()
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         body = " ".join(m.value for m in at.markdown)
-        for expected in (
-            "🗄️ Automatic recovery",
-            "⬇️ JSON backup",
-            "♻️ Reset",
-            "🐛 Debug tools",
-        ):
-            assert expected in body, f"{expected} stopped rendering off its page"
-        labels = {p.proto.popover.label for p in at.get("popover")}
-        assert "💾 Session" in labels, labels
-        assert "❓ Help" not in labels, labels
+        assert "#### 🗄️ Automatic recovery" not in body
+        assert "#### ⬇️ JSON backup" not in body
 
-    def test_the_session_group_holds_both_ways_work_is_kept(self):
-        """UX-38 merged the two into one 💾 Session popover — the portable JSON
-        and the on-device cache — keeping the tour's historical trigger key."""
-        from scanpath_studio.menu import SAVE_RESTORE_KEY
+    def test_debug_mode_survives_the_dialog_closing(self):
+        """UX-100: the 🐛 Debug gate is not the toggle's own widget key.
+
+        A dialog body is a fragment: it runs only while the modal is open, and
+        Streamlit drops a widget's key at the end of any run in which it did not
+        render. With `key=DEBUG_STATE_KEY` — which is how it was written while
+        the panel rendered every run — dismissing the modal turned debug mode
+        back off.
+        """
+        from scanpath_studio import app
+        from scanpath_studio.debug_log import DEBUG_STATE_KEY
 
         at = _make_apptest()
+        at.session_state[DEBUG_STATE_KEY] = True
+        at.session_state[app._SESSION_DIALOG_KEY] = True
         at.run(timeout=30)
-        labels = {p.proto.popover.label for p in at.get("popover")}
-        assert "💾 Save & restore" not in labels
-        assert "🗄️ Recovery cache" not in labels
-        # Both panels still render, one popover down: their headings are inside.
-        body = " ".join(m.value for m in at.markdown)
-        assert "### ⬇️ JSON backup" in body
-        assert "#### 🗄️ Automatic recovery" in body
-        assert "#### ♻️ Reset" in body
-        # The spotlight tour and annotations.py both target this key.
-        assert SAVE_RESTORE_KEY == "tour_grp_save_restore"
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # A run with the dialog closed must leave the durable gate alone.
+        at.run(timeout=30)
+        assert at.session_state[DEBUG_STATE_KEY] is True
 
     def test_configure_and_preprocessing_left_the_menu_bar(self):
         """DATA-26: the two setup groups are the Data page's, not the bar's.
@@ -884,15 +902,19 @@ class TestDatasetTable:
             matching = frame[frame["Kind"].astype(str).str.startswith(icon)]
             if not matching.empty:
                 assert matching["Kind"].astype(str).str.contains(word).all()
-        # Edit belongs to uploads; Rename and Remove are available on every row.
-        assert row["Rename"].iloc[0]
-        assert row["Remove"].iloc[0]
+        # DATA-35: every row carries every action. Edit used to be an upload's
+        # alone, back when it only opened the mapping editor a stored upload
+        # has; it now opens the Edit dataset screen, which every source has.
+        for column in ("About", "Edit", "Rename", "Remove"):
+            assert row[column].iloc[0], f"{column} missing from an upload's row"
         demo = frame[frame["Dataset"].str.contains("demo", case=False)]
         if not demo.empty:
-            edit = demo["Edit"].iloc[0]
-            assert pd.isna(edit) or not edit
-            assert demo["Rename"].iloc[0]
-            assert demo["Remove"].iloc[0]
+            for column in ("About", "Edit", "Rename", "Remove"):
+                assert demo[column].iloc[0], f"{column} missing from the demo's row"
+            # DATA-35's two new cells: the demo is a OneStop subset, so it knows
+            # its language and its home.
+            assert demo["Language"].iloc[0]
+            assert demo["Home"].iloc[0]
 
     def test_delete_is_wired_to_the_remover(self):
         """Regression: UX-64 dropped the ➕ popover that held *Remove a dataset*,
@@ -2958,12 +2980,16 @@ class TestNavRegressions:
         )
 
     def test_save_restore_present_on_every_view(self):
-        # The Save & restore sidebar panel must be reachable on both top-level
-        # views (regression: it only rendered on the Scanpath view after the nav
-        # change). Data Inspection is now a subtab of the Scanpath view.
+        # The Save & restore panel must be reachable on both top-level views
+        # (regression: it only rendered on the Scanpath view after the nav
+        # change). UX-100 moved it into the 💾 Session dialog, so the panel is
+        # reached by arming that — from whichever view is active.
+        from scanpath_studio import app
+
         for view in ("Scanpath Visualization", "Corpus Analysis"):
             at = _make_apptest(synthetic=True)
             at.session_state["main_nav"] = view
+            at.session_state[app._SESSION_DIALOG_KEY] = True
             at.run(timeout=60)
             assert not at.exception, f"{view}: {at.exception}"
             # Anchor on the panel's widgets, not its prose (UX-53 trimmed the

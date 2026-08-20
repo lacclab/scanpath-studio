@@ -93,6 +93,10 @@ class TutorialStep:
     selector: str
     view: str = _VIEW_SCANPATH
     subtab: str | None = None
+    #: DATA-35 — the step's target lives on the 🗂️ Data page's **✏️ Edit dataset**
+    #: screen rather than its overview, so opening the view is not enough: the
+    #: editor has to be raised too, or the spotlight aims at a hidden container.
+    dataset_editor: bool = False
     optional: bool = False
     #: PRE-22 — a step about a feature this build may not show. ``"preprocessing"``
     #: is the only value so far; a step whose gate is closed is dropped from the
@@ -150,11 +154,13 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Check the column mapping",
+                "✏️ **Edit** a dataset's row to open its setup screen. "
                 "**🔤 Column mapping** is the one thing that decides what every "
                 "measure downstream is computed from. Rows marked ✨ were "
                 "auto-detected; override any that guessed wrong.",
                 ".st-key-tutorial_column_mapping",
                 view=_VIEW_DATA,
+                dataset_editor=True,
             ),
             TutorialStep(
                 "Verify what was parsed",
@@ -173,14 +179,17 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "lot of regressions.",
                 ".st-key-tutorial_trial_identity",
                 view=_VIEW_DATA,
+                dataset_editor=True,
             ),
             TutorialStep(
                 "Decide on preprocessing",
-                "**🧹 Preprocessing** (bottom of the page) can soft-exclude or merge "
-                "short fixations before anything is measured. It is off by default, "
-                "applies to every view, and never discards your original rows.",
+                "**🧹 Preprocessing** (bottom of the ✏️ Edit screen) can "
+                "soft-exclude or merge short fixations before anything is "
+                "measured. It is off by default, applies to every view, and "
+                "never discards your original rows.",
                 ".st-key-tutorial_preprocessing",
                 view=_VIEW_DATA,
+                dataset_editor=True,
                 optional=True,
                 gate="preprocessing",
             ),
@@ -686,20 +695,17 @@ _SPOTLIGHT_STEPS = [
         "**🔗 Share** a deep link.",
     },
     {
+        # UX-100 merged the old "📚 The menu bar" step into this one. It named
+        # `.st-key-top_menu`, a container that stopped being created when
+        # #UX-63 emptied the settings row — so it had been highlighting nothing
+        # (`tests/test_tour.py` now catches that) — and its two subjects are
+        # nav entries themselves, which makes this the same target.
         "selector": NAV_SELECTOR,
-        "title": "📊 Corpus Analysis · 🗂️ Data",
-        "body": "The nav at the very top moves between the three views. "
-        "**📊 Corpus Analysis** aggregates across readers, texts and groups "
-        "instead of one trial at a time; **🗂️ Data** is where a dataset is set "
-        "up and checked.",
-    },
-    {
-        "selector": ".st-key-top_menu",
-        "title": "📚 The menu bar",
-        "body": "**❓ Help** has the tutorials, the FAQ and the docs. "
-        "**💾 Session** keeps your work — a portable JSON of the whole setup + "
-        "annotations, plus the on-device cache. Replay this tour from "
-        "**Tutorials → Welcome tour**. 👀",
+        "title": "🧭 The nav",
+        "body": "**📊 Corpus Analysis** aggregates across readers and texts; "
+        "**🗂️ Data** sets one up. **💾 Session** (backups, the on-device cache) "
+        "and **❓ Help** open over your work rather than taking you anywhere — "
+        "this tour included, under **Tutorials**. 👀",
     },
 ]
 
@@ -1267,9 +1273,20 @@ def _restore_tutorial_return() -> None:
 
 
 def _open_tutorial_surface(step: TutorialStep) -> None:
+    from scanpath_studio.constants import DATASET_EDITOR_OPEN_KEY
+
     st.session_state["main_nav"] = step.view
     if step.subtab is not None:
         st.session_state["single_subtab"] = step.subtab
+    # DATA-35: the Data page's two screens. A step that points into the editor
+    # opens it; one that points at the overview closes it, so walking back up a
+    # tutorial does not leave the editor covering the table the previous step
+    # was about.
+    if step.view == _VIEW_DATA:
+        if step.dataset_editor:
+            st.session_state[DATASET_EDITOR_OPEN_KEY] = True
+        else:
+            st.session_state.pop(DATASET_EDITOR_OPEN_KEY, None)
 
 
 _KNOWN_VIEWS = (_VIEW_SCANPATH, _VIEW_CORPUS, _VIEW_DATA)
@@ -1284,10 +1301,18 @@ def _tutorial_surface_is_open(step: TutorialStep) -> bool:
     Data page*, and the card offered to open the panel they were already
     looking at (and withheld the spotlight that should have been on it).
     """
+    from scanpath_studio.constants import DATASET_EDITOR_OPEN_KEY
+
     current_view = st.session_state.get("main_nav", _VIEW_SCANPATH)
     if current_view not in _KNOWN_VIEWS:
         current_view = _VIEW_SCANPATH
     if current_view != step.view:
+        return False
+    # DATA-35: on the Data page, "which screen" is part of the answer — an
+    # editor step is not open while the overview is showing, and vice versa.
+    if step.view == _VIEW_DATA and bool(
+        st.session_state.get(DATASET_EDITOR_OPEN_KEY)
+    ) != bool(step.dataset_editor):
         return False
     return (
         step.subtab is None

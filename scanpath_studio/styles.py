@@ -89,9 +89,6 @@ def get_app_css() -> str:
 
        (UX-8's sidebar collapse/expand styling lived here. It is gone with the
        sidebar: there is no longer any chrome to collapse.) */
-    .st-key-top_menu {
-        flex-wrap: wrap;
-    }
 
     /* === The Data page, off-screen ===========================================
        DATA-26. The setup widgets — the loaders' directory input and ⬇ Download
@@ -106,18 +103,20 @@ def get_app_css() -> str:
        spotlight target has to measure zero rather than sit off to one side. */
     .st-key-data_setup_page_offscreen { display: none !important; }
 
-    /* === The 💾 Session popover =============================================
-       UX-100 — Session is a popover on the title row again, not a nav page, so
-       the off-screen twin the page needed to keep its widgets executing is gone
-       (a popover body runs every run by itself). Its four blocks keep the cards
-       UX-96 gave them; they read the same in a panel as they did on a page.
+    /* DATA-35 — the Data page's two screens: the overview (the dataset table +
+       what's in the open dataset) and the ✏️ Edit dataset screen. Same
+       mechanism and same reason as the page above, one level in: the editor is
+       *made* of the widgets that drive `prepare_data`, so it renders every run
+       and is hidden by key rather than skipped. */
+    .st-key-data_overview_offscreen { display: none !important; }
+    .st-key-data_dataset_editor_offscreen { display: none !important; }
 
-       The popover body defaults to 28 rem, which is narrow for four sections
-       of controls — the folder path and the environment-variable line in
-       Automatic recovery both want a full line. */
-    .st-key-tour_grp_save_restore [data-testid="stPopoverBody"] {
-        min-width: min(34rem, 92vw);
-    }
+    /* === The 💾 Session dialog ==============================================
+       UX-100 — Session is a modal opened from the nav, not a page, so the
+       off-screen twin the page needed to keep its widgets executing is gone
+       with it (see menu.py for what the dialog's panels had to be written for
+       instead). Its four blocks keep the cards UX-96 gave them; they read the
+       same in a modal as they did on a page. */
     .st-key-session_auto_recovery,
     .st-key-session_json_backup,
     .st-key-session_reset,
@@ -766,6 +765,9 @@ def get_app_css() -> str:
 
        Scoped to this container's key: only the wizard gets a sticky bar, not
        every page. */
+    /* DATA-35 — the ✏️ Edit dataset screen wears the add-dataset screen's bar,
+       because the ask was that the two look the same. Same rule, two keys. */
+    .st-key-dataset_editor_bar,
     .st-key-wiz_sticky_bar {
         position: sticky;
         top: 3.2rem;

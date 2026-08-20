@@ -16,7 +16,7 @@ import logging
 import pytest
 
 from scanpath_studio import debug_log
-from tests.conftest import APP_SCRIPT
+from tests.conftest import APP_SCRIPT, arm_session_dialog
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 AppTest = streamlit_testing.AppTest
@@ -279,33 +279,45 @@ def test_the_run_logs_its_computations_and_selections():
     assert any(m.startswith("Filters applied ·") for m in messages), messages
 
 
+def _boot_with_session_open(**session) -> AppTest:
+    """Boot with the 💾 Session modal open — where the 🐛 Debug tools live.
+
+    UX-100 made the group a dialog, so its widgets render only while it is open,
+    and `arm_session_dialog` has to be repeated before every run (AppTest
+    replays the whole script rather than rerunning the dialog fragment).
+    """
+    at = AppTest.from_file(APP_SCRIPT)
+    for key, value in session.items():
+        at.session_state[key] = value
+    arm_session_dialog(at)
+    at.run(timeout=90)
+    return at
+
+
 def test_the_toggle_is_offered_without_any_url_param():
     """UX-37: the Session toggle is the way in, even on a plain visit."""
-    at = AppTest.from_file(APP_SCRIPT)
-    at.session_state["data_source_choice"] = "Synthetic test trial"
-    at.run(timeout=90)
+    at = _boot_with_session_open(data_source_choice="Synthetic test trial")
     assert not at.exception, at.exception
-    toggles = [t for t in at.toggle if t.key == debug_log.DEBUG_STATE_KEY]
-    assert toggles, "the 🐛 Debug mode toggle is not on the Session page"
+    toggles = [t for t in at.toggle if t.key == debug_log._DEBUG_TOGGLE_KEY]
+    assert toggles, "the 🐛 Debug mode toggle is not in the Session dialog"
     assert toggles[0].value is False, "debug mode must default off"
     # …and with it off, the panel draws nothing.
     assert not [s for s in at.selectbox if s.key == "_debug_level"]
 
 
 def test_the_toggle_reveals_the_panel():
-    at = AppTest.from_file(APP_SCRIPT)
-    at.session_state["data_source_choice"] = "Synthetic test trial"
-    at.run(timeout=90)
-    toggles = [t for t in at.toggle if t.key == debug_log.DEBUG_STATE_KEY]
+    at = _boot_with_session_open(data_source_choice="Synthetic test trial")
+    toggles = [t for t in at.toggle if t.key == debug_log._DEBUG_TOGGLE_KEY]
 
     # Turning it on renders the panel: a level filter, a Clear button, a state
     # snapshot and the JSON download.
+    arm_session_dialog(at)
     at = toggles[0].set_value(True).run(timeout=90)
     assert not at.exception, at.exception
     assert [s for s in at.selectbox if s.key == "_debug_level"]
     assert [b for b in at.button if b.key == "_debug_clear"]
     assert any(d.key == "_debug_download" for d in at.get("download_button"))
-    # …and it remains under the Session page's Debug tools section rather than
+    # …and it remains under the Session dialog's Debug tools block rather than
     # recreating the old menu-bar popover.
     headings = " ".join(str(markdown.value) for markdown in at.markdown)
     assert "🐛 Debug tools" in headings
@@ -318,6 +330,7 @@ def test_a_legacy_debug_url_param_still_arms_it():
     at = AppTest.from_file(APP_SCRIPT)
     at.query_params["debug"] = "1"
     at.session_state["data_source_choice"] = "Synthetic test trial"
+    arm_session_dialog(at)
     at.run(timeout=90)
     assert not at.exception, at.exception
     assert at.session_state[debug_log.DEBUG_STATE_KEY] is True
@@ -333,11 +346,13 @@ class TestTheGroundTruthTrialIsDebugOnly:
 
     def test_it_is_absent_until_debug_mode_is_on(self):
         at = AppTest.from_file(APP_SCRIPT)
+        arm_session_dialog(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert "Synthetic test trial" not in at.session_state["_data_source_entries"]
 
-        at.toggle(key=debug_log.DEBUG_STATE_KEY).set_value(True).run(timeout=60)
+        arm_session_dialog(at)
+        at.toggle(key=debug_log._DEBUG_TOGGLE_KEY).set_value(True).run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         entries = at.session_state["_data_source_entries"]
         assert "Synthetic test trial" in entries, entries
@@ -362,8 +377,11 @@ def test_the_url_param_does_not_override_turning_it_off():
     at = AppTest.from_file(APP_SCRIPT)
     at.query_params["debug"] = "1"
     at.session_state["data_source_choice"] = "Synthetic test trial"
+    arm_session_dialog(at)
     at.run(timeout=90)
-    toggle = next(t for t in at.toggle if t.key == debug_log.DEBUG_STATE_KEY)
+    toggle = next(t for t in at.toggle if t.key == debug_log._DEBUG_TOGGLE_KEY)
+    assert toggle.value is True, "the ?debug=1 seed should show the toggle on"
+    arm_session_dialog(at)
     at = toggle.set_value(False).run(timeout=90)
     assert not at.exception, at.exception
     assert at.session_state[debug_log.DEBUG_STATE_KEY] is False

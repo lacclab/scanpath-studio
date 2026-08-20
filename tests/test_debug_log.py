@@ -268,13 +268,13 @@ def test_the_run_logs_its_computations_and_selections():
 
 
 def test_the_toggle_is_offered_without_any_url_param():
-    """UX-37: the toggle *is* the way in, so a plain visit has to show it."""
+    """UX-37: the Session toggle is the way in, even on a plain visit."""
     at = AppTest.from_file(APP_SCRIPT)
     at.session_state["data_source_choice"] = "Synthetic test trial"
     at.run(timeout=90)
     assert not at.exception, at.exception
     toggles = [t for t in at.toggle if t.key == debug_log.DEBUG_STATE_KEY]
-    assert toggles, "the 🐛 Debug mode toggle is not on the ❓ Help menu"
+    assert toggles, "the 🐛 Debug mode toggle is not on the Session page"
     assert toggles[0].value is False, "debug mode must default off"
     # …and with it off, the panel draws nothing.
     assert not [s for s in at.selectbox if s.key == "_debug_level"]
@@ -293,9 +293,12 @@ def test_the_toggle_reveals_the_panel():
     assert [s for s in at.selectbox if s.key == "_debug_level"]
     assert [b for b in at.button if b.key == "_debug_clear"]
     assert any(d.key == "_debug_download" for d in at.get("download_button"))
-    # …and the 🐛 Debug popover joins the menu bar to host it.
-    labels = {p.proto.popover.label for p in at.get("popover")}
-    assert "🐛 Debug" in labels
+    # …and it remains under the Session page's Debug tools section rather than
+    # recreating the old menu-bar popover.
+    headings = " ".join(str(markdown.value) for markdown in at.markdown)
+    assert "🐛 Debug tools" in headings
+    labels = {popover.proto.popover.label for popover in at.get("popover")}
+    assert "🐛 Debug" not in labels
 
 
 def test_a_legacy_debug_url_param_still_arms_it():

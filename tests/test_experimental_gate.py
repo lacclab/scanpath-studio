@@ -188,12 +188,13 @@ class TestTheUiSurfacesAreAbsent:
         assert "Similarity to the selected scanpath" not in headings
         assert "Metric convergence" not in headings
 
-    def test_the_grid_says_how_it_is_ordered(self):
+    def test_the_grid_drops_the_redundant_ordering_caption(self):
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state[SUBTAB_KEY] = tabs.SUBTAB_COMPARISONS
         at.run(timeout=120)
         captions = " ".join(str(c.value) for c in at.caption)
-        assert "sorted by trial" in captions
+        assert "sorted by trial" not in captions
+        assert "Same participant_id" not in captions
         assert "NLD" not in captions
 
 

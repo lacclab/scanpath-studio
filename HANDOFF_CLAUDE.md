@@ -41,9 +41,10 @@
 - Focused implementation tests: `224 passed, 1 deselected`.
 - Multipart/MultiplEYE/persistence/tracker group passed after tracker write-up fixes.
 - `tests/test_tracker_server.py`: `29 passed`.
+- The stale Session Debug and comparison-caption tests were updated after this handoff was first written: `3 passed`.
 - Ruff checks passed on the changed implementation files.
 - `git diff --check` passes.
-- The full parallel suite was stopped after reaching about 96%: `5 failed, 2262 passed, 4 skipped, 3 xfailed, 4 warnings in 214.13s`. The five failures are documented below.
+- The full parallel suite was stopped after reaching about 96%: `5 failed, 2262 passed, 4 skipped, 3 xfailed, 4 warnings in 214.13s`. Two stale-test failures have since been resolved; the remaining failures are documented below.
 
 ## Work still open before pushing
 
@@ -57,21 +58,17 @@
    - Symptom: `KeyError: 'comprehension_questions'` on fixations.
    - First rerun this test alone. Earlier direct local loads succeeded, so this may be xdist/global-state interference rather than a deterministic loader regression.
 
-3. Update two stale tests to the intentional UI behavior.
-   - `tests/test_debug_log.py::test_the_toggle_reveals_the_panel` still expects the old `🐛 Debug` popover; Debug now lives on the Session page.
-   - `tests/test_experimental_gate.py::TestTheUiSurfacesAreAbsent::test_the_grid_says_how_it_is_ordered` expects `sorted by trial`, which the user explicitly asked to remove.
-
-4. Environment-only EyeGenBench CLI failure.
+3. Environment-only EyeGenBench CLI failure.
    - `tests/test_eyegenbench.py::test_cli_accepts_the_eyegenbench_input`
    - Kaleido reports `BrowserFailedError` because available Chrome/Chrome-for-Testing exits immediately.
    - Do not weaken the functional test. Verify on a machine with a working Chrome/Kaleido setup or report it as an environment limitation.
 
-5. After fixes, run:
-   - targeted tests for the four actionable failures;
+4. After fixes, run:
+   - targeted tests for the two remaining actionable failures;
    - `.venv/bin/pytest -q -n auto -k 'not test_cli_accepts_the_eyegenbench_input'`;
    - Ruff check/format check and `git diff --check`.
 
-6. Review the final diff and push `main`. The user previously requested all pending changes be pushed, but this handoff request only asked to write the handoff and commit current code, so pushing is deliberately left to the next agent.
+5. Review the final diff and push `main`. The user previously requested all pending changes be pushed, but this handoff request only asked to write the handoff and commit current code, so pushing is deliberately left to the next agent.
 
 ## Notes for careful continuation
 

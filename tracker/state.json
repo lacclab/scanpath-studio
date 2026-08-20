@@ -172,19 +172,19 @@
       "updated": "2026-08-19"
     },
     "BUG-38": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "Might be already fixed, just run the tests and see.",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-20"
     },
     "BUG-39": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-20"
     },
     "BUG-4": {
@@ -199,6 +199,22 @@
       "status": "Closed",
       "priority": "Normal",
       "owner": "Shubi",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-20"
+    },
+    "BUG-41": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-20"
+    },
+    "BUG-42": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
       "implementationBrief": "",
       "archived": true,
       "updated": "2026-08-20"
@@ -651,6 +667,22 @@
       "owner": "Shubi",
       "implementationBrief": "1. yes definitely. Should support hundreds of readers and thousands of trials (onestop is ~20k trials; meco is ~1k readers).\n2. Add a task to fix this.\n3. I care about both.\n\nIn general I am not familiar with the functions name and such (I am a team lead). Make it readable for me. Think in terms of wheere in the pipeline the computations occur and what they do. Create a clear document specifying these. We should create a single big task including PERF-4 (this), PERF-5 and VAL-8 instead of three separate ones.",
       "archived": true,
+      "updated": "2026-08-20"
+    },
+    "PERF-5": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-20"
+    },
+    "PERF-6": {
+      "status": "Planned",
+      "priority": "Normal",
+      "owner": "",
+      "implementationBrief": "",
+      "archived": false,
       "updated": "2026-08-20"
     },
     "PRE-1": {
@@ -1324,11 +1356,11 @@
       "updated": "2026-08-20"
     },
     "UX-97": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "For Fixations, Saccades, Heatmap, and Raw gaze, the settings button/chevron should remain clickable while the layer is toggled off. Opening it should show the settings, but the actual setting controls should be visibly disabled until the layer is enabled again.",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-20"
     },
     "VAL-1": {
@@ -1383,6 +1415,14 @@
       "implementationBrief": "",
       "archived": true,
       "updated": "2026-08-13"
+    },
+    "VAL-8": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-20"
     },
     "VIZ-14": {
       "status": "Closed",
@@ -1475,46 +1515,6 @@
       "implementationBrief": "1. each dataset has a name defined by the user and displayed in the select dataset menu in the control line where you choose the scanpath's trial id with the slider. i want the tag {dataset_name} to display that name, the name of the dataset from which you take the fixations and aois.\n2. if in side by side or stacked display, each plot has it's own dataset and trial id etc. so that's what this field should represent. in overlay view, i would like to have dataset_name_a and b, and also for trial id and the rest of the fields that can have 2 different values in this situation.",
       "archived": true,
       "updated": "2026-08-19"
-    },
-    "BUG-41": {
-      "status": "Review",
-      "priority": "Normal",
-      "owner": "Maya",
-      "implementationBrief": "",
-      "archived": false,
-      "updated": "2026-08-20"
-    },
-    "BUG-42": {
-      "status": "Review",
-      "priority": "Normal",
-      "owner": "Maya",
-      "implementationBrief": "",
-      "archived": false,
-      "updated": "2026-08-20"
-    },
-    "PERF-5": {
-      "status": "Closed",
-      "priority": "Normal",
-      "owner": "",
-      "implementationBrief": "",
-      "archived": true,
-      "updated": "2026-08-20"
-    },
-    "VAL-8": {
-      "status": "Closed",
-      "priority": "Normal",
-      "owner": "",
-      "implementationBrief": "",
-      "archived": true,
-      "updated": "2026-08-20"
-    },
-    "PERF-6": {
-      "status": "Planned",
-      "priority": "Normal",
-      "owner": "",
-      "implementationBrief": "",
-      "archived": false,
-      "updated": "2026-08-20"
     }
   },
   "createdItems": [
@@ -1540,7 +1540,7 @@
       "owner": "Maya"
     },
     {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "sub": "",
       "title": "Keep layer settings reachable when the layer toggle is off",
@@ -1556,7 +1556,7 @@
         "settings panel should open normally, while its actual setting controls are",
         "greyed out until the layer is switched on."
       ],
-      "archived": false,
+      "archived": true,
       "prefix": "UX",
       "background": [
         "This is the Scanpath rail's shared `toggle → ⚙️ style → 🧹 filter` layer",
@@ -1580,6 +1580,12 @@
         "Related: #UX-80 (the one-line section rows), #UX-86 (Heatmap and Raw gaze as",
         "peer sections), #UX-72 (the 🧹 Filter section), #VIZ-21 / #VIZ-23 (`_mode_gate`,",
         "the other reason a rail control greys)."
+      ],
+      "decisions": [
+        "Review the four layers with their toggles off: the ▾ opens onto the real controls, greyed, with a caption saying to turn the layer on. Two calls worth disagreeing with — the 🧹 Filter halves were included (they had the same empty popover, and the ask named the `toggle → ⚙️ style → 🧹 filter` pattern), and 📄 Stimulus was **not**, because it holds three independent layers with no single switch, so there is no one thing being off."
+      ],
+      "whatsLeft": [
+        "Nothing."
       ],
       "owner": "Maya",
       "whatWasDone": [
@@ -1606,12 +1612,6 @@
         "",
         "`tests/test_layer_settings_when_off.py` — 9 tests over the mechanism and over",
         "the real rail, checking each layer's control both ways round."
-      ],
-      "whatsLeft": [
-        "Nothing."
-      ],
-      "decisions": [
-        "Review the four layers with their toggles off: the ▾ opens onto the real controls, greyed, with a caption saying to turn the layer on. Two calls worth disagreeing with — the 🧹 Filter halves were included (they had the same empty popover, and the ask named the `toggle → ⚙️ style → 🧹 filter` pattern), and 📄 Stimulus was **not**, because it holds three independent layers with no single switch, so there is no one thing being off."
       ]
     }
   ]

@@ -108,12 +108,12 @@
       "updated": "2026-08-15"
     },
     "BUG-29": {
-      "status": "On hold",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "",
-      "archived": false,
-      "updated": "2026-08-19"
+      "archived": true,
+      "updated": "2026-08-20"
     },
     "BUG-30": {
       "status": "Closed",
@@ -541,6 +541,14 @@
       "priority": "Normal",
       "implementationBrief": "",
       "archived": true,
+      "updated": "2026-08-20"
+    },
+    "ENG-32": {
+      "status": "Planned",
+      "priority": "Normal",
+      "owner": "",
+      "implementationBrief": "",
+      "archived": false,
       "updated": "2026-08-20"
     },
     "ENG-33": {
@@ -1363,6 +1371,14 @@
       "archived": true,
       "updated": "2026-08-20"
     },
+    "UX-98": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-20"
+    },
     "VAL-1": {
       "status": "Closed",
       "priority": "Normal",
@@ -1515,6 +1531,14 @@
       "implementationBrief": "1. each dataset has a name defined by the user and displayed in the select dataset menu in the control line where you choose the scanpath's trial id with the slider. i want the tag {dataset_name} to display that name, the name of the dataset from which you take the fixations and aois.\n2. if in side by side or stacked display, each plot has it's own dataset and trial id etc. so that's what this field should represent. in overlay view, i would like to have dataset_name_a and b, and also for trial id and the rest of the fields that can have 2 different values in this situation.",
       "archived": true,
       "updated": "2026-08-19"
+    },
+    "VIZ-38": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-20"
     }
   },
   "createdItems": [

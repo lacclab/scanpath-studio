@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import warnings
+
 import pandas as pd
 import pytest
 
@@ -10,10 +12,19 @@ AppTest = streamlit_testing.AppTest
 
 from scanpath_studio.utils import (  # noqa: E402
     TRIAL_SORT_DEFAULT,
+    _merge_trial_level_sources,
     format_sort_value,
     sort_trial_options,
     trial_sort_keys,
 )
+
+
+def test_trial_metadata_merge_does_not_warn_on_its_first_source():
+    source = {"condition": pd.Series(["easy"], index=["t1"])}
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", FutureWarning)
+        merged = _merge_trial_level_sources([source])
+    assert merged["condition"].to_dict() == {"t1": "easy"}
 
 
 @pytest.fixture

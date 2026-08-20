@@ -920,9 +920,12 @@ def place_fixations(fix_df: pd.DataFrame, words: pd.DataFrame) -> pd.DataFrame:
     """
     box_cols = ["start_x", "start_y", "end_x", "end_y"]
     internal = {c: f"_words_{c}" for c in box_cols}
-    words_boxes = words[["unique_paragraph_id", "ia_index", *box_cols]].rename(
-        columns=internal
+    geometry_col = "_words_geometry_source"
+    words_boxes = words[["unique_paragraph_id", "ia_index", *box_cols]].copy()
+    words_boxes[geometry_col] = words.get(
+        "geometry_source", pd.Series(index=words.index, dtype="object")
     )
+    words_boxes = words_boxes.rename(columns=internal)
     merged = fix_df.merge(
         words_boxes, on=["unique_paragraph_id", "ia_index"], how="inner"
     )
@@ -937,6 +940,16 @@ def place_fixations(fix_df: pd.DataFrame, words: pd.DataFrame) -> pd.DataFrame:
     box_end_x = merged.pop(internal["end_x"])
     box_start_y = merged.pop(internal["start_y"])
     box_end_y = merged.pop(internal["end_y"])
+    geometry_source = merged.pop(geometry_col)
     merged["x"] = box_start_x + landing * (box_end_x - box_start_x)
-    merged["y"] = (box_start_y + box_end_y) / 2.0
+    inferred_y = (box_start_y + box_end_y) / 2.0
+    recorded_y = pd.to_numeric(
+        merged.get("recorded_fixation_y", pd.Series(index=merged.index, dtype=float)),
+        errors="coerce",
+    )
+    use_recorded = geometry_source.eq(GEOMETRY_REAL) & recorded_y.notna()
+    merged["y"] = recorded_y.where(use_recorded, inferred_y)
+    merged["fixation_y_source"] = use_recorded.map(
+        {True: "recorded", False: "word-box-center"}
+    )
     return merged

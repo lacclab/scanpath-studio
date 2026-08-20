@@ -669,6 +669,35 @@ def test_place_fixations_inverts_the_landing_position_formula():
     # Round-trip invariant: recovering the landing position reproduces the input.
     recovered = (placed.loc[0, "x"] - 10.0) / 50.0
     assert recovered == pytest.approx(0.5)
+    assert placed.loc[0, "fixation_y_source"] == "word-box-center"
+
+
+def test_place_fixations_uses_recorded_y_only_with_real_boxes():
+    words = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["real", "reconstructed"],
+            "ia_index": [0, 0],
+            "start_x": [10.0, 10.0],
+            "end_x": [60.0, 60.0],
+            "start_y": [20.0, 20.0],
+            "end_y": [40.0, 40.0],
+            "geometry_source": [GEOMETRY_REAL, GEOMETRY_RECONSTRUCTED],
+        }
+    )
+    fix = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["real", "reconstructed"],
+            "ia_index": [0, 0],
+            "fix_landing_position": [0.5, 0.5],
+            "recorded_fixation_y": [23.25, 23.25],
+        }
+    )
+    placed = place_fixations(fix, words)
+    assert placed["y"].tolist() == [23.25, 30.0]
+    assert placed["fixation_y_source"].tolist() == [
+        "recorded",
+        "word-box-center",
+    ]
 
 
 def test_place_fixations_drops_rows_with_no_matching_box():

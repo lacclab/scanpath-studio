@@ -335,6 +335,21 @@ def _render_screen_navigator(catalog: pd.DataFrame) -> str | None:
     return str(selected)
 
 
+def _part_catalog_for_display(
+    words: pd.DataFrame, fixations: pd.DataFrame
+) -> pd.DataFrame:
+    """Use MultiplEYE's fixation-onset order if cached word order is stale."""
+    try:
+        return part_catalog(words, fixations)
+    except ValueError as exc:
+        if (
+            str(exc) == "Multipart metadata 'screen_index' conflicts across tables."
+            and "screen_kind" in fixations.columns
+        ):
+            return part_catalog(fixations)
+        raise
+
+
 def _embed_html_iframe(html: str, *, height: int) -> None:
     """Backward-compatible local alias for the shared iframe helper."""
     embed_html_iframe(html, height=height)
@@ -1274,9 +1289,7 @@ def _render_compare_selector(
             full_words = pd.DataFrame()
         if full_fixations is None:
             full_fixations = pd.DataFrame()
-        current_name = str(
-            st.session_state.get("data_source_choice") or THIS_DATASET
-        )
+        current_name = str(st.session_state.get("data_source_choice") or THIS_DATASET)
         filter_source = SecondaryDataset(
             name=current_name,
             words=full_words,
@@ -1291,9 +1304,7 @@ def _render_compare_selector(
         if st.session_state.get(_COMPARE_SOURCE_RESOLVED_KEY) != THIS_DATASET:
             same_filters = dict(_NO_COMPARE_NARROWING)
         st.session_state[_COMPARE_SOURCE_RESOLVED_KEY] = THIS_DATASET
-        narrowed = _narrow_secondary(
-            filter_source, same_filters, use_annotations=True
-        )
+        narrowed = _narrow_secondary(filter_source, same_filters, use_annotations=True)
         comparison_pool = narrowed
         combos = narrowed.combos
         words_filtered = narrowed.words
@@ -2648,13 +2659,8 @@ def _render_save_restore_expander(
                 height=0,
             )
     with container:
-        st.caption(
-            "Unlike automatic recovery, this file is portable but does not "
-            "contain uploaded dataset rows. Load the same data before restoring."
-        )
         n_anno = len(annotation_records)
-        download, restore = st.columns(2, vertical_alignment="top")
-        download.download_button(
+        st.download_button(
             "⬇ Download backup",
             help="Save plot settings, selection, source reference, column mapping "
             f"and annotations ({n_anno} trial{'s' if n_anno != 1 else ''}) as JSON.",
@@ -2664,16 +2670,12 @@ def _render_save_restore_expander(
             key="plot_config_download",
             width="stretch",
         )
-        restore.file_uploader(
+        st.file_uploader(
             "Restore backup",
             type=["json"],
             key="plot_config_upload",
             help="Re-apply settings and annotations. Items that do not match "
             "the loaded data are skipped.",
-        )
-        st.caption(
-            "Contains the selected participant/trial and annotation text; review it "
-            "before sharing."
         )
         skipped = st.session_state.get("_plot_config_skipped")
         if skipped:
@@ -3750,7 +3752,7 @@ def render_single_trial_tab(
     parent_raw_gaze = pd.DataFrame()
     if raw_gaze is not None and not raw_gaze.empty:
         parent_raw_gaze = extract_trial(raw_gaze, selected_participant, selected_trial)
-    screens = part_catalog(parent_words, parent_fixations)
+    screens = _part_catalog_for_display(parent_words, parent_fixations)
     with screen_slot:
         selected_screen = _render_screen_navigator(screens)
     if selected_screen is not None:
@@ -3845,6 +3847,7 @@ def render_single_trial_tab(
             # controls inside are what go disabled).
             with st.container(
                 horizontal=True,
+                wrap=False,
                 vertical_alignment="center",
                 gap=None,
                 key="split_mode_animate",
@@ -4042,6 +4045,7 @@ def render_single_trial_tab(
             # (`single_compare_layout`), read into `compare_layout` below.
             with st.container(
                 horizontal=True,
+                wrap=False,
                 vertical_alignment="center",
                 gap=None,
                 key="split_mode_compare",
@@ -8869,9 +8873,7 @@ def _render_remap_editor(name: str, stored: dict) -> None:
     setup = _wizard_setup_step(
         st,
         word_frame if isinstance(word_frame, pd.DataFrame) else pd.DataFrame(),
-        fixation_frame
-        if isinstance(fixation_frame, pd.DataFrame)
-        else pd.DataFrame(),
+        fixation_frame if isinstance(fixation_frame, pd.DataFrame) else pd.DataFrame(),
         has_boxes,
         key_prefix=f"edit_{name}",
         initial=initial_setup,

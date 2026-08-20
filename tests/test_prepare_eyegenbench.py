@@ -54,6 +54,97 @@ def test_build_bundle_places_fixations_inside_their_boxes(tmp_path):
     assert box["start_x"] <= placed["x"] <= box["end_x"]
 
 
+def test_onestop_raw_geometry_recovers_harmonised_keys_boxes_and_y(tmp_path):
+    interim = tmp_path / "interim"
+    interim.mkdir()
+    pd.DataFrame(
+        {
+            "participant_id": ["Reader_1", "Reader_1"],
+            "article_batch": [3, 3],
+            "article_id": [0, 0],
+            "paragraph_id": [1, 1],
+            "difficulty_level": ["Adv", "Adv"],
+            "CURRENT_FIX_INDEX": [1, 2],
+            "CURRENT_FIX_INTEREST_AREA_ID": [1, 2],
+            "CURRENT_FIX_INTEREST_AREA_DATA": [
+                "[STATIC, RECTANGLE, 10, 20, 60, 40]",
+                "[STATIC, RECTANGLE, 70, 20, 120, 40]",
+            ],
+            "CURRENT_FIX_Y": [24.5, 31.0],
+            "practice_trial": [False, False],
+            "repeated_reading_trial": [False, False],
+        }
+    ).to_csv(interim / "fixations_Paragraph.csv", index=False)
+    pd.DataFrame(
+        {
+            "participant_id": ["reader_1"],
+            "article_batch": [3],
+            "article_id": [0],
+            "paragraph_id": [1],
+            "difficulty_level": ["Adv"],
+            "text_spacing_version": [0],
+        }
+    ).to_csv(interim / "trial_level_paragraphs.csv", index=False)
+
+    raw = prep.load_raw_geometry("onestop", interim)
+
+    assert raw["unique_paragraph_id"].tolist() == ["OneStop_3_0_Adv_1_0"] * 2
+    assert raw["unique_participant_id"].tolist() == ["OneStop_reader_1"] * 2
+    assert raw["ia_index"].tolist() == [0, 1]
+    assert raw["fix_index"].tolist() == [0, 1]
+    assert raw[prep.RECORDED_Y_COLUMN].tolist() == [24.5, 31.0]
+    assert raw["unique_trial_id"].tolist() == [
+        "OneStop_reader_1_3_0_Adv_1_0_False",
+        "OneStop_reader_1_3_0_Adv_1_0_False",
+    ]
+
+
+def test_provo_raw_geometry_recovers_real_word_rectangles(tmp_path):
+    interim = tmp_path / "interim"
+    interim.mkdir()
+    pd.DataFrame(
+        {
+            "Text_ID": [1, 1],
+            "IA_ID": [1, 2],
+            "IA_LEFT": [10, 70],
+            "IA_TOP": [20, 20],
+            "IA_RIGHT": [60, 120],
+            "IA_BOTTOM": [40, 40],
+        }
+    ).to_csv(interim / "Provo_Corpus-Eyetracking_Data.csv", index=False)
+
+    raw = prep.load_raw_geometry("provo", interim)
+    texts = TEXTS.assign(unique_paragraph_id="Provo_1")
+    words, report = prep.resolve_geometry("provo", texts, raw)
+
+    assert raw["unique_paragraph_id"].tolist() == ["Provo_1", "Provo_1"]
+    assert raw["CURRENT_FIX_INTEREST_AREA_DATA"].str.contains("RECTANGLE").all()
+    assert report["geometry_source"] == "real"
+    assert not words.empty
+
+
+def test_build_bundle_records_real_vertical_positions(tmp_path):
+    texts = TEXTS.copy()
+    raw = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1", "p1"],
+            "ia_index": [0, 1],
+            "CURRENT_FIX_INTEREST_AREA_DATA": [
+                "[STATIC, RECTANGLE, 10, 20, 60, 40]",
+                "[STATIC, RECTANGLE, 70, 20, 120, 40]",
+            ],
+        }
+    )
+    fix = FIX.assign(CURRENT_FIX_Y=[24.5, 31.0])
+
+    entry = prep.build_bundle("Provo", fix, texts, PARTS, raw, tmp_path)
+    placed = pd.read_parquet(tmp_path / "Provo" / "fixations.parquet")
+
+    assert placed["y"].tolist() == [24.5, 31.0]
+    assert set(placed["fixation_y_source"]) == {"recorded"}
+    assert entry["recorded_fixation_y_fraction"] == 1.0
+
+
 def test_write_manifest_merges_entries_across_runs(tmp_path):
     prep.write_manifest(tmp_path, [{"name": "A", "monitor": [1, 2]}])
     prep.write_manifest(tmp_path, [{"name": "B", "monitor": [3, 4]}])

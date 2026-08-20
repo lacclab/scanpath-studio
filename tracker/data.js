@@ -480,7 +480,7 @@ window.TRACKER = {
    "num": 33,
    "sub": "",
    "title": "Edit dataset reuses the finished add-dataset screen",
-   "status": "Review",
+   "status": "In progress",
    "owner": "Maya",
    "note": "",
    "date": "",
@@ -512,7 +512,13 @@ window.TRACKER = {
     "populate remembered counts under the token that row uses on later visits."
    ],
    "whatsLeft": [
-    "Nothing."
+    "The edit screen is closer to Add dataset, but it is not yet the same.",
+    "Column mapping still differs in layout, grouping and field interactions,",
+    "and Experimental setup still differs in presentation and behavior.",
+    "",
+    "Compare both paths field by field, reuse the same renderers and validation",
+    "wherever possible, and add coverage that prevents the Add and Edit dataset",
+    "flows from drifting apart again."
    ],
    "background": [
     "**Held deliberately** until the add-dataset layout settles — #UX-55",
@@ -547,7 +553,8 @@ window.TRACKER = {
     "and its remembered counts should remain integers after switching away."
    ],
    "statusNote": [
-    "**Ready for review — defect review fixes completed 2026-08-20; tests intentionally not run at the user's request.**"
+    "**Returned to implementation 2026-08-20:** substantially better, but visible",
+    "differences remain in Column mapping and Experimental setup."
    ]
   },
   {
@@ -742,21 +749,36 @@ window.TRACKER = {
     "every tutorial start unconditionally."
    ],
    "whatWasDone": [
-    "[`_start_use_case`](scanpath_studio/tour.py:1140) now calls",
-    "`_open_tutorial_surface` on the **current** step (index 0 for a fresh",
-    "start, wherever progress left off for a resume) right after seeding",
-    "`tutorial_return` — so the card opens already on the right page instead",
-    "of offering \"Show me / Open this panel\" first. `tutorial_return` still",
-    "captures the page being left *before* this, so Exit is unaffected."
+    "The first navigation pass was implemented: `_start_use_case` asks",
+    "`_open_tutorial_surface` to open the current step's page before showing",
+    "the tour. That part moves the app to the intended surface, but the tutorial",
+    "itself does not then start reliably, so this task is not complete."
    ],
    "whatsLeft": [
-    "Nothing."
+    "Fix the hand-off between page navigation and tutorial activation so the",
+    "first step actually opens after the rerun, while preserving the original",
+    "page for Exit and resume behavior.",
+    "",
+    "Audit every tutorial against the latest navigation, layout, Session and",
+    "Data-page changes. There are several additional tutorial regressions now:",
+    "verify targets and spotlights exist, steps open the correct subtab or panel,",
+    "Next/Back/Exit work, and completed or dismissed tutorials retain their state.",
+    "",
+    "Add the requested per-tutorial dismissal control to the tutorial dialogs",
+    "and make sure it suppresses automatic opening without removing the tutorial",
+    "from the Tutorials list."
    ],
    "decisions": [
-    "Review: start a Corpus-Analysis-first or Data-first tutorial from the 🧭",
-    "chooser and confirm the app lands on that page immediately, with no",
-    "\"Show me\" click needed; then Exit and confirm it returns to the page",
-    "you actually started from."
+    "Reproduce the current failure first: the page changes, but the first",
+    "tutorial card does not appear. Pin that rerun boundary with a regression",
+    "test before repairing the wider tutorial set.",
+    "Treat the broader tutorial audit as part of this task because recent app",
+    "changes have invalidated more than the original cross-page entry path."
+   ],
+   "statusNote": [
+    "**Reopened 2026-08-20:** navigation improved, but the tutorial does not",
+    "start properly and several tutorial paths need a regression pass after the",
+    "latest app changes."
    ]
   },
   {
@@ -1681,31 +1703,28 @@ window.TRACKER = {
     "the existing copy cleared, and keep Debug mode as the third clear area."
    ],
    "whatWasDone": [
-    "Session is now three bordered cards: Automatic recovery, JSON backup and",
-    "Debug tools. Automatic recovery reports dataset/row/annotation/size status,",
-    "lists what it contains, names its folder, offers an automatic-save toggle",
-    "and clears the on-disk copy without closing the live session.",
+    "Session is now four compact cards: Automatic recovery, JSON backup, Reset",
+    "and Debug. Automatic recovery names the saved copy and folder, offers an",
+    "automatic-save toggle, and clears the on-disk copy without closing the live",
+    "session or switching automatic saving off. The immediate rerun is skipped so",
+    "Clear does not recreate the file; the next actual change saves normally.",
     "",
-    "JSON backup explicitly differs from recovery: it is portable and carries",
-    "settings, selection, mappings, metadata attachments and annotations, but not",
-    "uploaded dataset rows. Download and restore share one compact row.",
+    "JSON backup keeps the two actions in task order: Download backup, then Restore",
+    "backup below it. Most explanatory paragraphs were removed.",
     "",
-    "Debug mode remains opt-in in the third card. The bundled-demo and computed-",
-    "result escape hatches remain available under a compact Troubleshooting",
-    "disclosure rather than competing with the three primary concepts."
+    "Reset everything is a confirmed full reset: it removes the local recovery",
+    "copy, clears query parameters and empties the live session. Debug remains",
+    "opt-in. The standalone computation-cache control is gone; dataset deletion",
+    "still invalidates derived computations automatically."
    ],
    "whatsLeft": [
-    "Nothing in implementation. Automated and browser verification were deferred",
-    "at the user's explicit request."
+    "Nothing."
    ],
    "decisions": [
-    "Review Session locally and on a hosted deployment: local should show its",
-    "folder and controls; hosted should explain that no recovery copy is written.",
-    "Confirm the JSON-backup boundary is clear enough: portable work state, not",
-    "the uploaded eye-tracking tables themselves."
+    "Approved and closed by the user on 2026-08-20."
    ],
    "statusNote": [
-    "Ready for review; tests intentionally not run at the user's request."
+    "**Closed — approved 2026-08-20.**"
    ]
   },
   {
@@ -6039,6 +6058,18 @@ window.TRACKER = {
     "are sitting in the raw file we already read. Join them, and let the corpus",
     "reach the `real` tier it qualifies for."
    ],
+   "whatWasDone": [
+    "The preparation pipeline now reads only OneStop's required raw EyeLink",
+    "columns, reconstructs EyeGenBench's exact corpus-prefixed identities, and",
+    "joins the recorded IA rectangles by paragraph and zero-based IA index.",
+    "OneStop and Provo were rebuilt locally; both now report real geometry."
+   ],
+   "whatsLeft": [
+    "Nothing in implementation; review the rebuilt corpus in the app."
+   ],
+   "decisions": [
+    "Confirm the OneStop plots align their measured word boxes with fixations."
+   ],
    "background": [
     "[`extract_eyelink_boxes`](scanpath_studio/eyegenbench_geometry.py:422) parses",
     "`CURRENT_FIX_INTEREST_AREA_DATA` = `[STATIC, RECTANGLE, left, top, right,",
@@ -6090,6 +6121,20 @@ window.TRACKER = {
     "Every newly added corpus draws its fixations at a fixed `y` per line, which reads",
     "as a drift-free reader rather than as missing data. Recover the real vertical",
     "position where the raw files still have it."
+   ],
+   "whatWasDone": [
+    "Preparation now carries recorded fixation y from OneStop, Provo, SBSAT and",
+    "ChineseReading, but uses it only when that paragraph also has real word-box",
+    "geometry. Other rows stay at the word-box centre and are labelled as such.",
+    "The manifest records coverage, the app badge discloses it, and rebuilt",
+    "OneStop and Provo both have recorded y for all emitted fixations."
+   ],
+   "whatsLeft": [
+    "Nothing in implementation; review the rebuilt scanpaths' vertical scatter."
+   ],
+   "decisions": [
+    "Confirm that corpora without a shared real coordinate frame remain centred",
+    "rather than receiving fabricated or mismatched vertical positions."
    ],
    "background": [
     "**Why it happens.** EyeGenBench's harmonised schema has no fixation coordinates —",
@@ -13249,6 +13294,19 @@ window.TRACKER = {
     "treating this as a version-only bump. The direct wins to assess are full",
     "popover contents in narrow / embedded viewports, native wrapping controls for",
     "dense layouts, and safer sampled hashing in `st.cache_data`."
+   ],
+   "whatWasDone": [
+    "The runtime and dependency declarations now use Streamlit 1.62.0. Animate,",
+    "Compare and plot-rail rows use native `wrap=False`; the redundant CSS wrap",
+    "override is gone, and popover maximum width is left to Streamlit's new",
+    "viewport-aware behavior. Security and contributor notes document the cache",
+    "hashing distinction and the upgraded runtime."
+   ],
+   "whatsLeft": [
+    "Nothing in implementation; final full-suite and browser review remain."
+   ],
+   "decisions": [
+    "Review the narrow rail and popovers after the 1.62 upgrade."
    ],
    "background": [
     "Release: [Streamlit 1.62.0](https://github.com/streamlit/streamlit/releases/tag/1.62.0).",

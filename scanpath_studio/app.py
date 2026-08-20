@@ -187,6 +187,7 @@ from scanpath_studio.persistence import (
     restored_from_cache,
     save_local_state,
     set_persistence_paused,
+    skip_next_local_save,
 )
 from scanpath_studio.session_keys import COLUMN_MAPPING_PREFIX, PARAM_CORPUS
 from scanpath_studio.styles import get_app_css
@@ -502,26 +503,15 @@ def _render_empty_after_filtering(
 
 
 def _forget_recovery_cache() -> None:
-    """Delete the on-device cache and stop re-writing it this session.
+    """Delete the on-device copy without changing automatic saving.
 
-    Pausing is what makes Forget stick — ``main`` saves at the end of every
-    run, so deleting alone would hand the same session straight back to disk.
-
-    **BUG-36:** called from the confirmation dialog's confirm button, by then
-    *after* the "Keep saving here" toggle has already rendered once this run
-    (the panel draws it above the Forget button) — so, unlike the original
-    ``on_click`` callback this replaced, a bare `st.session_state["persist_
-    local_saving"] = False` here would hit Streamlit's "cannot be modified
-    after the widget… is instantiated" guard. Popping the key instead is
-    safe post-render (`controls.reset_viz_settings` uses the same move on a
-    much larger key set) — the confirm button's `st.rerun(scope="app")`
-    right after this call re-seeds it fresh via the panel's own
-    ``setdefault``, which by then reads the pause flag set below as `True`
-    and seeds the toggle to `False` on that clean run.
+    The confirmation triggers a full rerun, whose normal epilogue would write
+    the still-open session straight back to disk. Suppress only that one write;
+    the user's saving toggle is left exactly as it was and later changes save
+    normally.
     """
     clear_local_state(st.session_state)
-    set_persistence_paused(st.session_state, True)
-    st.session_state.pop("persist_local_saving", None)
+    skip_next_local_save(st.session_state)
     st.session_state["_recovery_cache_forgotten"] = True
 
 
@@ -533,16 +523,13 @@ _FORGET_CACHE_PENDING_KEY = "_forget_cache_pending"
 def _forget_cache_confirmation_dialog() -> None:
     """The modal body — BUG-36. Opened by ``_render_recovery_cache_panel``.
 
-    The destructive half of the pair beside ``_clear_cache_confirmation_dialog``
-    — this one actually deletes the on-disk recovery cache and pauses saving,
-    unlike the lossless computation cache. Handled by the button's *return
-    value*, not ``on_click`` — see ``_delete_confirmation_dialog`` for why an
-    ``on_click`` inside an ``st.dialog`` body silently does nothing.
+    Handled by the button's *return value*, not ``on_click`` — see
+    ``_delete_confirmation_dialog`` for why an ``on_click`` inside an
+    ``st.dialog`` body silently does nothing.
     """
     st.warning(
-        "Delete the stored copy of this session from this computer and pause "
-        "saving here? The data you have **loaded right now stays open** — "
-        "this only removes what's on disk.",
+        "Delete the recovery copy from this computer? Your open session and "
+        "automatic-saving setting stay unchanged.",
         icon="⚠️",
     )
     yes, no = st.columns(2)
@@ -568,14 +555,8 @@ def _toggle_recovery_saving() -> None:
 def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
     """Render the "🗄️ Recovery cache" menu panel (ENG-30).
 
-    ENG-26 made a local session survive a refresh or a restart, but silently:
-    nothing in the app said that a copy of the loaded tables was being written
-    to the user's disk, where it lived, or how to get rid of it. This panel is
-    that disclosure plus its controls — what is stored, how big it is, when it
-    was last written, pause saving, and forget it. On a hosted deployment (where
-    `persistence.persistence_enabled` is False) it explains that nothing is
-    stored instead of hiding, so the difference between deployments is visible
-    from the same place.
+    Show the current store, its saving toggle and its clear action. On a hosted
+    deployment, explain only that automatic recovery is unavailable.
 
     ``slot`` is the 🗄️ Recovery cache block of the 💾 Session popover ``main``
     reserves on the top menu bar (UX-38), so the panel can render *after* this run's ``save_local_state`` and
@@ -602,33 +583,16 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
                 st.caption(f"Disabled by `{PERSIST_ENV_VAR}=0`.")
             return
 
-        # UX-53: what is cached and that it never leaves the machine is the
-        # group caption's tooltip in `menu.py`; this panel shows the *state* of
-        # the cache — restored, size, when — and its two controls.
         if restored_from_cache(st.session_state):
             st.success("Recovered when the app opened.", icon="↩️")
         if status["exists"] and status["readable"]:
             n_sets = len(status["datasets"])
-            bits = [f"**{n_sets}** dataset{'s' if n_sets != 1 else ''}"]
-            # None = stored before the manifest carried row counts; the next
-            # save backfills it. Saying "0 rows" would be worse than silence.
-            if status["rows"] is not None:
-                bits.append(f"**{status['rows']:,}** rows")
-            bits += [
-                f"**{status['annotations']}** annotated trial"
-                f"{'s' if status['annotations'] != 1 else ''}",
-                f"**{human_size(status['bytes'])}** on disk",
-            ]
-            st.markdown("**Saved:** " + " · ".join(bits))
-            # One line, not three: which datasets and when, together.
-            line = []
-            if status["datasets"]:
-                line.append(", ".join(d["name"] for d in status["datasets"]))
-            saved_at = str(status["saved_at"] or "").replace("T", " ")
-            if saved_at:
-                line.append(f"saved {saved_at}")
-            if line:
-                st.caption(" · ".join(line))
+            st.markdown(
+                f"**Saved:** {n_sets} dataset{'s' if n_sets != 1 else ''} · "
+                f"{status['annotations']} annotation"
+                f"{'s' if status['annotations'] != 1 else ''} · "
+                f"{human_size(status['bytes'])}"
+            )
         elif status["exists"]:
             st.warning(
                 "The stored session can't be read (written by a different "
@@ -641,11 +605,6 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
         else:
             st.caption("Nothing saved yet. The first change creates the cache.")
 
-        st.caption(
-            "Includes uploaded dataset tables, mappings, recording setup, "
-            "visualization settings, selection and annotations."
-        )
-
         # Seed rather than pass `value=`: the Forget callback writes this key via
         # the session-state API, and a widget carrying both logs Streamlit's
         # "default value but also had its value set via the Session State API"
@@ -657,63 +616,71 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
             "Save changes automatically",
             key="persist_local_saving",
             on_change=_toggle_recovery_saving,
-            help="Turn off to stop writing to the cache for the rest of this "
-            "session. The current app stays open and the existing saved copy "
-            "remains until you clear it.",
+            help="Keep this session recoverable after a refresh or restart.",
         )
         if st.button(
             "🗑 Clear recovery cache",
             key="forget_recovery_cache_btn",
             width="stretch",
             disabled=not status["exists"],
-            help="Delete the stored copy from this computer and pause saving. "
-            "The data you have loaded stays open.",
+            help="Delete the stored copy. Your open session and automatic-saving "
+            "setting stay unchanged.",
         ):
             st.session_state[_FORGET_CACHE_PENDING_KEY] = True
         if st.session_state.get(_FORGET_CACHE_PENDING_KEY):
             _forget_cache_confirmation_dialog()
-        # The folder is the one detail worth a line of its own (it is what you
-        # go and look at); the env-var switches live in its tooltip.
         st.caption(
-            f"Saved to `{status['directory']}`",
+            f"Stored at `{status['directory']}`",
             help=f"Always off: `{PERSIST_ENV_VAR}=0` · move the folder: "
             f"`{STATE_DIR_ENV_VAR}=…` · same info from a terminal: "
             "`scanpath-studio cache`.",
         )
 
 
-def _render_start_fresh_panel(*, slot=None) -> None:
-    """Render the "🧹 Start fresh" block of the 💾 Session popover (BUG-28).
+_RESET_EVERYTHING_PENDING_KEY = "_reset_everything_pending"
 
-    Two buttons, both reachable from every view, for the session that has
-    painted itself into a corner: back to the bundled demo (the wedged-dataset
-    case — the source picker is on the 🗂️ Data page, which is precisely where a
-    dataset that won't load leaves nothing usable), and clear the computed
-    cache. Renders **bare** into ``slot``: the popover trigger and the block
-    heading in :mod:`scanpath_studio.menu` are the disclosure.
-    """
+
+def _reset_everything() -> None:
+    """Remove all user-owned session state and restart on the bundled demo."""
+    clear_local_state(st.session_state)
+    st.query_params.clear()
+    st.session_state.clear()
+
+
+@st.dialog("Reset everything?")
+def _reset_everything_confirmation_dialog() -> None:
+    st.warning(
+        "Remove uploaded datasets, annotations, mappings and settings, then "
+        "return to the bundled demo?",
+        icon="⚠️",
+    )
+    yes, no = st.columns(2)
+    if yes.button(
+        "♻️ Reset everything",
+        key="reset_everything_confirm",
+        type="primary",
+        width="stretch",
+    ):
+        _reset_everything()
+        st.rerun(scope="app")
+    if no.button("Cancel", key="reset_everything_cancel", width="stretch"):
+        st.session_state.pop(_RESET_EVERYTHING_PENDING_KEY, None)
+        st.rerun(scope="app")
+
+
+def _render_reset_everything_panel(*, slot=None) -> None:
+    """Render Session's always-reachable full reset action."""
     container = slot if slot is not None else st.container()
-    with container.expander("Troubleshooting", expanded=False):
-        st.caption(
-            "These actions do not delete the automatic recovery copy above."
-        )
-        st.button(
-            DEMO_RESET_LABEL,
-            key="session_load_demo",
-            width="stretch",
-            help=DEMO_RESET_HELP,
-            on_click=load_bundled_demo,
-        )
-        if st.button(
-            "🧹 Rebuild computed results",
-            key="session_clear_cache",
-            width="stretch",
-            help="Recompute every figure, table and normalization from the data "
-            "already loaded. Nothing is lost, and automatic recovery is untouched.",
-        ):
-            st.session_state[_CLEAR_CACHE_PENDING_KEY] = True
-    if st.session_state.get(_CLEAR_CACHE_PENDING_KEY):
-        _clear_cache_confirmation_dialog()
+    if container.button(
+        "♻️ Reset everything",
+        key="session_reset_everything",
+        width="stretch",
+        help="Remove uploaded datasets and all session settings, then return to "
+        "the bundled demo.",
+    ):
+        st.session_state[_RESET_EVERYTHING_PENDING_KEY] = True
+    if st.session_state.get(_RESET_EVERYTHING_PENDING_KEY):
+        _reset_everything_confirmation_dialog()
 
 
 def _arm_about() -> None:
@@ -1618,8 +1585,21 @@ def geometry_badge(entry) -> str:
     if badge is None:
         return f"Screen geometry: {source}"
     if note := _geometry_coverage_note(entry):
-        return f"✅ **Real** screen geometry — {note}."
-    return badge
+        badge = f"✅ **Real** screen geometry — {note}."
+    try:
+        recorded_y = float(entry.get("recorded_fixation_y_fraction", 0.0))
+    except (TypeError, ValueError):
+        recorded_y = 0.0
+    if recorded_y >= 0.9995:
+        y_note = "Recorded fixation y."
+    elif recorded_y > 0:
+        y_note = (
+            f"Recorded fixation y for {recorded_y:.0%}; other y positions use "
+            "word-box centres."
+        )
+    else:
+        y_note = "Fixation y uses word-box centres."
+    return f"{badge} {y_note}"
 
 
 def benchmark_corpus_label(name: str) -> str:
@@ -2363,51 +2343,12 @@ def load_bundled_demo() -> None:
     reset_column_mapping()
 
 
-#: BUG-36 — the 🧹 Clear cached computations button's confirmation flag.
-_CLEAR_CACHE_PENDING_KEY = "_clear_cache_pending"
-
-
-@st.dialog("Clear cached computations?")
-def _clear_cache_confirmation_dialog() -> None:
-    """The modal body — BUG-36. Opened by ``_render_start_fresh_panel``.
-
-    ``clear_computation_cache`` is lossless by construction — everything it
-    drops is recomputable from the data already loaded — but the tracker item
-    asked for a confirmation on this button anyway (alongside the destructive
-    🗑 Forget button beside it), so both stop for a click rather than one.
-    Handled by the button's *return value*, not ``on_click`` — see
-    ``_delete_confirmation_dialog`` for why an ``on_click`` inside an
-    ``st.dialog`` body silently does nothing.
-    """
-    st.caption(
-        "Recompute every figure, table and normalization from the data "
-        "already loaded. **Nothing is lost** — this cache only holds results "
-        "the app can rebuild. The saved session on this computer is untouched."
-    )
-    yes, no = st.columns(2)
-    if yes.button(
-        "🧹 Clear it", key="clear_cache_confirm", type="primary", width="stretch"
-    ):
-        clear_computation_cache()
-        st.session_state.pop(_CLEAR_CACHE_PENDING_KEY, None)
-        st.rerun(scope="app")
-    if no.button("Cancel", key="clear_cache_cancel", width="stretch"):
-        st.session_state.pop(_CLEAR_CACHE_PENDING_KEY, None)
-        st.rerun(scope="app")
-
-
 def clear_computation_cache() -> None:
     """``on_click``: drop every ``@st.cache_data`` entry for this process.
 
-    The blunt instrument the 💾 Session menu offers beside it. Nothing the app
-    caches is authoritative — every entry is derived from the loaded frames and
-    a key — so the only cost of clearing is recomputing it, which is exactly
-    what someone reaches for when a figure or a table looks stale. It does
-    **not** touch the on-device recovery cache (that is 🗑 Forget saved session,
-    above it) or anything in session state — except DATA-32's remembered dataset
-    counts, which are derived values of exactly the kind this promises to drop,
-    and which the ask for them named explicitly. They are recomputed the next
-    time each dataset is listed with its frames in memory.
+    Used after deleting a dataset so derived values cannot retain its frames.
+    It does not touch the recovery cache or live session state, except for
+    DATA-32's remembered dataset counts, which are derived too.
     """
     st.cache_data.clear()
     forget_dataset_counts()
@@ -3283,9 +3224,8 @@ def remembered_dataset_counts(
 def forget_dataset_counts(keep: set | None = None) -> None:
     """Drop remembered counts for datasets that are no longer listed (DATA-32).
 
-    ``keep=None`` forgets all of them — what 🗑 *Forget saved session* and 🧹
-    *Clear cached computations* do, since a remembered count is exactly the kind
-    of derived value both promise to drop.
+    ``keep=None`` forgets all of them — used by recovery-cache clearing and by
+    the dataset-removal cache invalidation path.
     """
     store = _counts_store()
     for token in [t for t in store if keep is None or t not in keep]:
@@ -3462,7 +3402,9 @@ def _unique_dataset_alias(requested: str, token: str, tokens: list[str]) -> str:
 
 
 @st.dialog("Rename dataset")
-def _rename_dataset_dialog(token: str, *, uploaded: set[str], tokens: list[str]) -> None:
+def _rename_dataset_dialog(
+    token: str, *, uploaded: set[str], tokens: list[str]
+) -> None:
     """Rename any row while keeping app-owned source tokens stable."""
     current = _dataset_display_name(token)
     requested = st.text_input(
@@ -3495,9 +3437,7 @@ def _rename_dataset_dialog(token: str, *, uploaded: set[str], tokens: list[str])
         st.session_state.pop(PENDING_RENAME_KEY, None)
         st.session_state["_dataset_table_note"] = f"Renamed to {final_name}."
         st.rerun(scope="app")
-    if cancel_col.button(
-        "Cancel", key="dataset_table_rename_cancel", width="stretch"
-    ):
+    if cancel_col.button("Cancel", key="dataset_table_rename_cancel", width="stretch"):
         st.session_state.pop(PENDING_RENAME_KEY, None)
         st.rerun(scope="app")
 
@@ -4945,7 +4885,7 @@ def main() -> None:
     # exactly the states these two buttons exist for (which is what the user saw:
     # a Session menu of headings with no controls under them). This block needs
     # nothing from the load, so it can be written before it.
-    _render_start_fresh_panel(slot=menu.start_fresh)
+    _render_reset_everything_panel(slot=menu.reset_session)
 
     def _fill_recovery_cache_panel() -> None:
         """Write the 🗄️ Recovery cache block, once, on whichever path we leave by.
@@ -5698,9 +5638,7 @@ def main() -> None:
                 # while the table rows use concrete registry labels. Preserve
                 # that concrete canonical selection so the active row and its
                 # remembered counts are keyed to the row the user can revisit.
-                active=str(
-                    st.session_state.get("data_source_choice") or data_choice
-                ),
+                active=str(st.session_state.get("data_source_choice") or data_choice),
                 words=words_all,
                 fixations=fixations_all,
                 raw_gaze=raw_gaze_df,

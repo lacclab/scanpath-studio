@@ -218,6 +218,23 @@ class TestZipSizeCap:
         with pytest.raises(ValueError, match="declared size was wrong"):
             read_table(buf)
 
+    def test_forged_member_cannot_exceed_per_file_budget(self, monkeypatch):
+        payload = b"a,b\n1,2\n3,4\n"
+        buf = _zip_bytes({"fix.csv": payload})
+        monkeypatch.setattr(
+            "scanpath_studio.data.ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES",
+            len(payload) - 1,
+        )
+        monkeypatch.setattr(
+            "scanpath_studio.data.ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES", 10**9
+        )
+        # Simulate a forged central-directory size that passed the fast check.
+        monkeypatch.setattr(
+            "scanpath_studio.data._check_zip_limits", lambda infos: None
+        )
+        with pytest.raises(ValueError, match="per-file limit"):
+            read_table(buf)
+
     def test_defaults_clear_a_full_fixation_report(self):
         # DATA-34: one OneStop fixation report is a single ~8 GB CSV inside its
         # zip. The 4 GB per-member default refused it outright; the caps are a

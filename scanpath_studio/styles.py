@@ -98,6 +98,7 @@ def get_app_css() -> str:
     .st-key-session_menu_page_offscreen { display: none !important; }
     .st-key-session_auto_recovery,
     .st-key-session_json_backup,
+    .st-key-session_reset,
     .st-key-session_debug_tools {
         border: 1px solid var(--sps-border);
         border-radius: 0.75rem;
@@ -107,6 +108,7 @@ def get_app_css() -> str:
     }
     .st-key-session_auto_recovery h3,
     .st-key-session_json_backup h3,
+    .st-key-session_reset h3,
     .st-key-session_debug_tools h3 { margin-top: 0 !important; }
 
     /* UX-53 — the 🗂️ Data page was "too much space and text, and text too
@@ -132,7 +134,6 @@ def get_app_css() -> str:
     div[data-testid="stPopover"] button p { white-space: nowrap; }
     div[data-testid="stPopoverBody"] {
         min-width: min(28rem, 90vw);
-        max-width: min(32rem, 95vw);
     }
     div[data-testid="stPopoverBody"] p { line-height: 1.45; }
 
@@ -390,16 +391,8 @@ def get_app_css() -> str:
         display: flex;
         align-items: center;
     }
-    /* UX-80 r2 — **one line per section**, which the block below deliberately
-       did not guarantee. Its reasoning still holds (a switch will not shrink
-       below its own min-content, so a forced single line can push the ▾ off a
-       narrow rail) — what changed is that the ▾ is now a bare chevron rather
-       than a labelled or icon-bearing button, so the row needs ~35px less, and
-       the *label* is allowed to give way before the trigger does. The switch
-       may shrink and ellipsise; the ▾ never moves. */
-    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"] {
-        flex-wrap: nowrap !important;
-    }
+    /* ENG-43: Streamlit 1.62's native `wrap=False` now owns the one-line
+       contract. CSS only allocates the flexible and fixed halves. */
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
         > div:not(:has([data-testid="stPopover"])) {
         min-width: 0;
@@ -987,7 +980,11 @@ def get_app_css() -> str:
     .st-key-scanpath_rail .st-key-viz_view_scanpath button,
     .st-key-scanpath_rail .st-key-viz_view_heatmap button,
     .st-key-scanpath_rail .st-key-viz_view_illustration button,
-    .st-key-scanpath_rail .st-key-viz_view_custom button,
+    .st-key-scanpath_rail .st-key-viz_view_custom button {
+        min-height: 2.6rem;
+        padding-top: 0.25rem;
+        padding-bottom: 0.25rem;
+    }
     .st-key-scanpath_rail .st-key-reset_viz_settings_btn button {
         min-height: 3rem;
     }
@@ -1029,12 +1026,26 @@ def get_app_css() -> str:
         padding-right: 0.4rem;
         padding-top: 0.1rem;
     }
-    /* Quick views and native widget labels use the same colour and type scale. */
+    /* Quick views and Palette use the same quietly muted label treatment. */
     .sps-control-label {
         color: inherit;
+        opacity: 0.72;
         font-size: 0.875rem;
         line-height: 1.4;
-        margin-bottom: 0.25rem;
+        margin-bottom: 0;
+    }
+    .st-key-scanpath_rail .st-key-global_palette [data-testid="stWidgetLabel"] {
+        opacity: 0.72;
+    }
+    /* Give the heading a small breathing space, while keeping the 2×2 grid
+       itself tighter than ordinary Streamlit column rows. */
+    .st-key-scanpath_rail .st-key-quick_views_grid {
+        margin-top: 0;
+        padding-top: 0.45rem;
+        margin-bottom: 0.05rem;
+    }
+    .st-key-scanpath_rail .st-key-quick_views_grid > [data-testid="stVerticalBlock"] {
+        gap: 0.15rem !important;
     }
     /* The 2×2 Quick-view grid keeps full labels at ordinary rail widths and
        falls back to icons only at the narrowest size. */

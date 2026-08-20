@@ -1,38 +1,6 @@
 {
   "version": 3,
   "items": {
-    "UX-94": {
-      "status": "Review",
-      "priority": "Normal",
-      "owner": "Maya",
-      "implementationBrief": "",
-      "archived": false,
-      "updated": "2026-08-20"
-    },
-    "UX-95": {
-      "status": "Backlog",
-      "priority": "Normal",
-      "owner": "Maya",
-      "implementationBrief": "",
-      "archived": false,
-      "updated": "2026-08-20"
-    },
-    "UX-96": {
-      "status": "Review",
-      "priority": "Normal",
-      "owner": "Maya",
-      "implementationBrief": "",
-      "archived": false,
-      "updated": "2026-08-20"
-    },
-    "DATA-33": {
-      "status": "Review",
-      "priority": "Normal",
-      "owner": "Maya",
-      "implementationBrief": "",
-      "archived": false,
-      "updated": "2026-08-20"
-    },
     "AN-29": {
       "status": "Closed",
       "priority": "Normal",
@@ -411,20 +379,20 @@
       "updated": "2026-08-19"
     },
     "DATA-30": {
-      "status": "Backlog",
+      "status": "Review",
       "priority": "Normal",
-      "owner": "",
+      "owner": "Maya",
       "implementationBrief": "Yes. (background: When eyegenbench will be finalized and included all onestop subset, I will be removing the native onestop at one point.)",
       "archived": false,
-      "updated": "2026-08-17"
+      "updated": "2026-08-20"
     },
     "DATA-31": {
-      "status": "Backlog",
+      "status": "Review",
       "priority": "Normal",
-      "owner": "",
+      "owner": "Maya",
       "implementationBrief": "Chase the real y.",
       "archived": false,
-      "updated": "2026-08-17"
+      "updated": "2026-08-20"
     },
     "DATA-32": {
       "status": "Closed",
@@ -433,6 +401,14 @@
       "implementationBrief": "1. should be in the user's cache, like his uploaded datasets. it's better to keep these calculation results for all public datasets that exist in the system by default, and only save in the user's cache the user's uploaded datasets' info.\n2. can you do that once and then save it as part of the app's info? then we can do it once offline before the release.",
       "archived": true,
       "updated": "2026-08-19"
+    },
+    "DATA-33": {
+      "status": "In progress",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "Better, but Column mapping and Experimental setup still differ from Add dataset. Reuse the same renderers, layout, interactions and validation as far as possible.",
+      "archived": false,
+      "updated": "2026-08-20"
     },
     "ENG-19": {
       "status": "Closed",
@@ -509,7 +485,7 @@
       "priority": "Normal",
       "implementationBrief": "",
       "archived": true,
-      "updated": "2026-08-08"
+      "updated": "2026-08-20"
     },
     "ENG-33": {
       "status": "Closed",
@@ -561,6 +537,30 @@
       "implementationBrief": "1. Umm list , currently just with Maya and Shubi. \n2. Maybe a separate claim button, because it is relevant at any stage\n3 + 4 Choose what suites best. My goal is for this to work seamlessy, without any manual work from my side, and without unecessary complications for you when working concurrently with someone else. You can assume that we do best-effort not to conflict specific items, and it is just the two of us (ENG-32 will be the full generalization)",
       "archived": true,
       "updated": "2026-08-13"
+    },
+    "ENG-40": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-20"
+    },
+    "ENG-42": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-20"
+    },
+    "ENG-43": {
+      "status": "Review",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-20"
     },
     "EXP-3": {
       "status": "Closed",
@@ -1051,6 +1051,14 @@
       "archived": true,
       "updated": "2026-08-18"
     },
+    "UX-70": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-20"
+    },
     "UX-71": {
       "status": "Closed",
       "priority": "Normal",
@@ -1132,12 +1140,12 @@
       "updated": "2026-08-19"
     },
     "UX-81": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "",
-      "archived": false,
-      "updated": "2026-08-19"
+      "archived": true,
+      "updated": "2026-08-20"
     },
     "UX-82": {
       "status": "Closed",
@@ -1151,9 +1159,9 @@
       "status": "In progress",
       "priority": "Normal",
       "owner": "Maya",
-      "implementationBrief": "moves to the right page but tutorial itself doesnt start. \nalso i wanted a \"dont show again\" checkbox inside each tutorial's dialogs",
+      "implementationBrief": "The app moves to the right page, but the tutorial itself does not start properly. Audit and fix the additional tutorial regressions caused by recent app changes, including targets, navigation, resume/exit, and per-tutorial automatic-opening dismissal.",
       "archived": false,
-      "updated": "2026-08-19"
+      "updated": "2026-08-20"
     },
     "UX-84": {
       "status": "Closed",
@@ -1178,6 +1186,14 @@
       "implementationBrief": "make heatmap it's own section like fixations and saccades and raw gaze.",
       "archived": true,
       "updated": "2026-08-19"
+    },
+    "UX-87": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "I think claude created this card when i told him to delete the calculations when a dataset is deleted. is there a button that deletes all uploaded datasets? if so that this should be the button that clears calculations. no point in a button that does only that.",
+      "archived": true,
+      "updated": "2026-08-20"
     },
     "UX-88": {
       "status": "Closed",
@@ -1226,6 +1242,30 @@
       "implementationBrief": "",
       "archived": true,
       "updated": "2026-08-19"
+    },
+    "UX-94": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-20"
+    },
+    "UX-95": {
+      "status": "Backlog",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-20"
+    },
+    "UX-96": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-20"
     },
     "VAL-1": {
       "status": "Closed",
@@ -1375,24 +1415,25 @@
   },
   "createdItems": [
     {
-      "added": "2026-08-19",
+      "status": "Closed",
+      "priority": "Normal",
       "sub": "",
+      "title": "🧹 Clear cached computations button is pretty useless - delete it?",
+      "implementationBrief": "I think claude created this card when i told him to delete the calculations when a dataset is deleted. is there a button that deletes all uploaded datasets? if so that this should be the button that clears calculations. no point in a button that does only that.",
+      "subgroup": "",
+      "added": "2026-08-19",
+      "id": "UX-87",
+      "group": "UX & Interaction",
+      "num": 87,
       "request": [
         "🧹 Clear cached computations button is pretty useless - delete it?"
       ],
-      "priority": "Normal",
+      "archived": true,
       "prefix": "UX",
-      "subgroup": "",
-      "implementationBrief": "I think claude created this card when i told him to delete the calculations when a dataset is deleted. is there a button that deletes all uploaded datasets? if so that this should be the button that clears calculations. no point in a button that does only that.",
-      "id": "UX-87",
-      "num": 87,
-      "group": "UX & Interaction",
-      "archived": false,
-      "status": "Backlog",
-      "title": "🧹 Clear cached computations button is pretty useless - delete it?",
       "background": [
         "Related to #DATA-32."
-      ]
+      ],
+      "owner": "Maya"
     }
   ]
 }

@@ -11,8 +11,8 @@ too. Nothing here is inferred from documentation alone.
 - **Audited version:** `scanpath_studio` 0.25.0
 - **Dependency versions the runtime claims were checked against:** Streamlit
   1.58.0, pandas 2.3.3, CPython 3.12.12. The runtime has since moved to
-  Streamlit **1.61.1** (ENG-31); see *After the audit — Streamlit 1.61* below
-  for the two config surfaces that version added.
+  Streamlit **1.62.0** (ENG-43); see *After the audit — Streamlit 1.61/1.62*
+  below for the relevant runtime changes.
 - **Method:** source read of every write-to-disk, URL-building, path-handling,
   archive-reading and `@st.cache_data` site, plus targeted scripts that exercised
   the share-link builder, the bulk exporter, the export path sanitizer, the
@@ -32,8 +32,8 @@ too. Nothing here is inferred from documentation alone.
     Recovery cache**) and from `scanpath-studio cache --clear`, and it is
     described for researchers in [privacy.md](privacy.md#what-happens-to-a-file-you-upload).
 
-!!! note "After the audit — Streamlit 1.61 (ENG-31)"
-    The runtime moved from 1.58.0 to 1.61.1. Two of the config options that
+!!! note "After the audit — Streamlit 1.61/1.62 (ENG-31, ENG-43)"
+    The runtime moved from 1.58.0 to 1.61.1 and then 1.62.0. Two of the config options that
     arrived in between touch the surfaces this page describes, and **both are
     left at their defaults**:
 
@@ -53,6 +53,12 @@ too. Nothing here is inferred from documentation alone.
     rerun's aggregate widget state, not session state — an uploaded corpus lives
     in session state and is unaffected; the only widget-borne payload is the
     Session JSON backup, which is kilobytes.
+
+    Streamlit 1.62 also randomizes/configures the sample used to hash large
+    pandas and NumPy values in its own caches. That is useful defense in depth,
+    but does not replace `data.frame_fingerprint`: Scanpath Studio intentionally
+    passes corpus frames as underscore-prefixed, un-hashed cache arguments and
+    supplies its explicit fingerprint as the semantic key.
 
 !!! warning "Scanpath Studio has no authentication, on any deployment"
     There is no login, no session token, and no per-user authorization anywhere
@@ -560,8 +566,8 @@ the remaining six either escape or interpolate tool-controlled constants
 `style="background:…"` attributes are not attacker-reachable either).
 
 Streamlit's markdown path does not compensate. Inspecting the shipped 1.58.0
-frontend bundle (`static/static/js/index.*.js`; re-checked on 1.61.1 after
-ENG-31 — `rehype-sanitize` is still absent), the `allowHTML` branch lazily
+frontend bundle (`static/static/js/index.*.js`; re-checked on 1.62.0 after
+ENG-43 — `rehype-sanitize` is still absent), the `allowHTML` branch lazily
 loads `rehype-raw` and no sanitizer plugin — `rehype-sanitize` is not in the
 distribution at all; the only guard is a URL transform rejecting `javascript:`
 and `vbscript:` schemes, and `disallowedElements` is empty for non-label

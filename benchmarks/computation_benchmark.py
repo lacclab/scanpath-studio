@@ -234,6 +234,8 @@ def profile(
         lambda: data_module.normalize_fixations(fixations_raw, fix_schema),
         rows_in=len(fixations_raw),
     )
+    if words is None or fixations is None:
+        raise SystemExit("normalization failed")
     harmonized = profiler.run(
         "harmonize_frames",
         ["norm.stimulus_broadcast", "norm.aoi_center_placement"],
@@ -628,6 +630,9 @@ def main() -> None:
     )
     parser.add_argument("--json", default="", help="write the payload here")
     args = parser.parse_args()
+
+    if args.participants is not None and args.participants <= 0:
+        parser.error("--participants must be greater than zero")
 
     if bool(args.words) != bool(args.fixations):
         parser.error("--words and --fixations go together")

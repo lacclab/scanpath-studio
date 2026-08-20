@@ -20,6 +20,7 @@ from scanpath_studio.persistence import (
     save_local_state,
     save_state,
     set_persistence_paused,
+    skip_next_local_save,
 )
 
 
@@ -225,6 +226,22 @@ def test_clear_local_state_deletes_files_and_session_bookkeeping(tmp_path, monke
     assert not cache_status(tmp_path, url="http://localhost:8501", environ={})["exists"]
     # The loaded data is untouched, and the next save rewrites from scratch.
     assert session["_datasets"]
+    assert save_local_state(session, "http://localhost:8501")
+
+
+def test_clear_can_skip_one_rewrite_without_pausing_future_saves(tmp_path, monkeypatch):
+    monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
+    monkeypatch.setattr(persistence, "state_directory", lambda *a, **k: tmp_path)
+    session = {"_datasets": {"Corpus": _dataset()}}
+    assert save_local_state(session, "http://localhost:8501")
+
+    clear_local_state(session)
+    skip_next_local_save(session)
+
+    assert not save_local_state(session, "http://localhost:8501")
+    assert not (tmp_path / "manifest.json").exists()
+    assert not persistence_paused(session)
+    session["global_show_heatmap"] = True
     assert save_local_state(session, "http://localhost:8501")
 
 

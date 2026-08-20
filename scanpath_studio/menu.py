@@ -30,8 +30,8 @@ popover trigger *is* the disclosure, and repeating the title inside it would
 just be the label twice. See ``app._preprocessing_settings``,
 ``app._render_recovery_cache_panel`` and ``tabs._render_save_restore_expander``.
 
-Widths need no CSS: the old sidebar was ~21 rem, while a popover body is
-28–32 rem (``styles.py``), so every panel here is *roomier* than it was.
+Streamlit 1.62 owns the viewport-aware maximum width; ``styles.py`` keeps only
+the preferred 28 rem minimum for roomy desktop panels.
 """
 
 from __future__ import annotations
@@ -130,8 +130,8 @@ class TopMenu:
 
     save_restore: DeltaGenerator
     recovery_cache: DeltaGenerator
-    #: BUG-28's escape hatches — back to the demo, and clear the computed cache.
-    start_fresh: DeltaGenerator
+    #: Session-wide reset, rendered early so it survives data-load failures.
+    reset_session: DeltaGenerator
     notices: DeltaGenerator
     #: The page heading's slot — the left half of the row the menu shares.
     #: ``app._render_about_panel`` fills it; see :func:`render_top_menu`.
@@ -348,32 +348,18 @@ def render_top_menu(
     )
     if active == _VIEW_SESSION:
         session.subheader("💾 Session")
-        session.caption(
-            "Manage automatic recovery, portable backups and diagnostics."
-        )
     # Recovery and a JSON backup are deliberately separate. Recovery contains
     # the local dataset tables and happens automatically; the portable JSON is
     # user-triggered and intentionally omits those tables. The order makes that
     # distinction the page's hierarchy rather than a tooltip-only caveat.
     recovery_cache = session.container(key="session_auto_recovery")
     recovery_cache.markdown("### 🗄️ Automatic recovery")
-    recovery_cache.caption(
-        "A working copy on this computer, updated as you work."
-    )
     recovery_body = recovery_cache.container()
-    # BUG-28: the two "get me back to something that works" actions, reachable
-    # from every view — the analysis views have no source picker, and a dataset
-    # the pipeline rejects is exactly when the 🗂️ Data page is the last place
-    # the user wants to be sent. Third block of 💾 Session rather than a group of
-    # its own: it answers the same question ("what is kept, and how do I get it
-    # back") from the other end.
-    start_fresh = recovery_cache.container()
 
     save_restore = session.container(key="session_json_backup")
     save_restore.markdown("### ⬇️ JSON backup")
-    save_restore.caption(
-        "Portable settings and annotations. Dataset files are not included."
-    )
+    reset_session = session.container(key="session_reset")
+    reset_session.markdown("### ♻️ Reset")
     # UX-65: 🐛 Debug mode moved here from the foot of ❓ Help. Help is a set of
     # dialog-opening nav entries now and hosts no widgets at all, and the toggle
     # was never a link — it *is* `DEBUG_STATE_KEY`, a gate that has to keep
@@ -381,13 +367,12 @@ def render_top_menu(
     # "what is this session holding" already lives.
     debug_gate = session.container(key="session_debug_tools")
     debug_gate.markdown("### 🐛 Debug tools")
-    debug_gate.caption("Optional diagnostics for troubleshooting and bug reports.")
     debug_toggle = debug_gate.container()
     debug = debug_gate.container() if show_debug else None
     return TopMenu(
         save_restore=save_restore,
         recovery_cache=recovery_body,
-        start_fresh=start_fresh,
+        reset_session=reset_session,
         notices=st.container(key=NOTICES_KEY),
         title=title_col,
         debug=debug,

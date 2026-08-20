@@ -34,7 +34,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Visualization",
 ]
 dependencies = [
-    "streamlit>=1.61.1",
+    "streamlit>=1.62.0",
     "pandas>=2.3.3",
     "plotly>=6.5.2",
     "numpy>=2.4.1",

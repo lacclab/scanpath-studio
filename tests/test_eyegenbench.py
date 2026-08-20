@@ -277,7 +277,7 @@ def test_geometry_badge_never_claims_uniformly_real_geometry():
         "n_texts": 55,
         "paragraphs_without_real_boxes": 0,
     }
-    assert app.geometry_badge(full).endswith("measured word boxes.")
+    assert "measured word boxes." in app.geometry_badge(full)
     assert "of 55" not in app.geometry_badge(full)
     # A reconstructed corpus already says it has no measured boxes at all —
     # which is exactly what its (always non-zero) count means.
@@ -287,6 +287,11 @@ def test_geometry_badge_never_claims_uniformly_real_geometry():
         "paragraphs_without_real_boxes": 452,
     }
     assert "Reconstructed" in app.geometry_badge(reconstructed)
+    assert "Fixation y uses word-box centres." in app.geometry_badge(reconstructed)
+    recorded = {**full, "recorded_fixation_y_fraction": 1.0}
+    assert app.geometry_badge(recorded).endswith("Recorded fixation y.")
+    mixed_y = {**full, "recorded_fixation_y_fraction": 0.625}
+    assert "Recorded fixation y for 62%" in app.geometry_badge(mixed_y)
     assert app.geometry_badge({}) == ""
 
 

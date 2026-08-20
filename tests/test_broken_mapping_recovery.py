@@ -16,6 +16,7 @@ import pandas as pd
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from scanpath_studio.constants import DEMO_CHOICE
 from tests.conftest import APP_SCRIPT, open_data_view, pin_data_view
 
 #: Any real fixation column: mapping it as `screen_id` on one report only is
@@ -113,20 +114,25 @@ def test_the_session_menu_keeps_its_escape_hatches_while_the_app_is_wedged(
     at = _break_the_mapping(_boot())
 
     keys = {b.key for b in at.button}
-    assert {"session_load_demo", "session_clear_cache"} <= keys
+    assert "session_reset_everything" in keys
     # …including the recovery cache's own Forget, which lives past that return.
     assert any("Clear recovery cache" in b.label for b in at.button)
 
 
-def test_clearing_the_computation_cache_leaves_the_app_running():
+def test_reset_everything_returns_a_wedged_app_to_the_demo():
     at = _boot()
-    clear = [b for b in at.button if b.key == "session_clear_cache"]
-    assert clear
+    at.session_state["temporary_user_setting"] = "remove me"
+    reset = [b for b in at.button if b.key == "session_reset_everything"]
+    assert reset
 
-    clear[0].click().run(timeout=180)
+    at = reset[0].click().run(timeout=180)
+    confirm = [b for b in at.button if b.key == "reset_everything_confirm"]
+    assert confirm
+    at = confirm[0].click().run(timeout=180)
 
     assert not at.exception
     assert not at.error
+    assert at.session_state["data_source_choice"] == DEMO_CHOICE
 
 
 # --- the upload wizard, which reaches the same pipeline -----------------------

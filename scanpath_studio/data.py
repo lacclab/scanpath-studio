@@ -1012,10 +1012,18 @@ class _BudgetedZipMember(io.RawIOBase):
     before pandas sees a byte of it (DATA-34).
     """
 
-    def __init__(self, inner, budget: int, name: str) -> None:
+    def __init__(
+        self,
+        inner,
+        budget: int,
+        name: str,
+        *,
+        limit_label: str = "archive decompression limit",
+    ) -> None:
         self._inner = inner
         self._budget = int(budget)
         self._name = name
+        self._limit_label = limit_label
         self.consumed = 0
 
     def readable(self) -> bool:
@@ -1029,7 +1037,7 @@ class _BudgetedZipMember(io.RawIOBase):
         if self.consumed > self._budget:
             raise ValueError(
                 f"{self._name!r} in the zip archive decompresses past the "
-                f"{_format_bytes(ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES)} limit "
+                f"{_format_bytes(self._budget)} {self._limit_label} "
                 "(its declared size was wrong). Refusing to read it."
             )
         return read
@@ -1061,8 +1069,19 @@ def _read_zipped_table(file_like_or_path) -> pd.DataFrame:
         for info in infos:
             member = info.filename
             name = member.lower()
+            member_budget = min(remaining, ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES)
+            limit_label = (
+                "per-file limit"
+                if ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES <= remaining
+                else "archive decompression limit"
+            )
             with zf.open(info) as inner:
-                stream = _BudgetedZipMember(inner, remaining, member)
+                stream = _BudgetedZipMember(
+                    inner,
+                    member_budget,
+                    member,
+                    limit_label=limit_label,
+                )
                 if name.endswith(_SEEKABLE_ONLY_SUFFIXES):
                     # Columnar/workbook readers seek, so these still land in
                     # memory whole — bounded by the same budget.
@@ -1862,6 +1881,9 @@ FIX_OPTIONAL_FIELDS = [
     # "real" | "reconstructed" | "synthesized". Carried so the UI can badge a
     # reconstructed layout rather than pass it off as the original screen.
     ("geometry_source", "geometry_source", "passthrough", "meta"),
+    # DATA-31: whether EyeGenBench retained the recorded vertical coordinate or
+    # placed this fixation at its word box's centre.
+    ("fixation_y_source", "fixation_y_source", "passthrough", "meta"),
     # DATA-27: EyeGenBench's own composite trial id, kept for traceability back to the
     # benchmark. Deliberately NOT named `unique_trial_id` — normalize_fixations hardcodes
     # trial_id from any column with that literal name, which breaks the stimulus-word

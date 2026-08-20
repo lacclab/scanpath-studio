@@ -35,6 +35,7 @@ from scanpath_studio.eyegenbench_geometry import (
 
 MIN_FREE_GB = 15.0
 MANIFEST_NAME = "manifest.json"
+RECORDED_Y_COLUMN = "recorded_fixation_y"
 
 # The 39 loadable EyeGenBench datasets. `gazebasereading` is excluded -- still a
 # NotImplementedError stub upstream.
@@ -243,11 +244,156 @@ def _resolve_monitor(spec, report: dict, words: pd.DataFrame) -> tuple[list, str
     return [round(width), round(height)], source
 
 
+def _onestop_raw_geometry(interim: Path) -> pd.DataFrame | None:
+    """Standardize OneStop's raw EyeLink keys without loading its 6 GB width.
+
+    EyeGenBench deliberately drops the rectangle and recorded y from its
+    harmonised frame. Reading only the thirteen required columns recovers both
+    while reproducing EyeGenBench's own paragraph/trial identifiers exactly.
+    """
+    fix_path = interim / "fixations_Paragraph.csv"
+    trials_path = interim / "trial_level_paragraphs.csv"
+    if not (fix_path.is_file() and trials_path.is_file()):
+        return None
+    merge_on = [
+        "participant_id",
+        "article_batch",
+        "article_id",
+        "paragraph_id",
+        "difficulty_level",
+    ]
+    usecols = [
+        *merge_on,
+        "CURRENT_FIX_INDEX",
+        "CURRENT_FIX_INTEREST_AREA_ID",
+        "CURRENT_FIX_INTEREST_AREA_DATA",
+        "CURRENT_FIX_Y",
+        "practice_trial",
+        "repeated_reading_trial",
+    ]
+    raw = pd.read_csv(fix_path, engine="pyarrow", usecols=usecols)
+    raw = raw.loc[~raw["practice_trial"].fillna(False)].copy()
+    trials = pd.read_csv(
+        trials_path, usecols=[*merge_on, "text_spacing_version"]
+    ).drop_duplicates()
+    trials["participant_id"] = trials["participant_id"].astype(str).str.lower()
+    raw["participant_id"] = raw["participant_id"].astype(str).str.lower()
+    raw = raw.merge(trials, on=merge_on, how="left", validate="many_to_one")
+    paragraph_key = (
+        raw["article_batch"].astype(str)
+        + "_"
+        + raw["article_id"].astype(str)
+        + "_"
+        + raw["difficulty_level"].astype(str)
+        + "_"
+        + raw["paragraph_id"].astype(str)
+        + "_"
+        + pd.to_numeric(raw["text_spacing_version"], errors="raise")
+        .astype(int)
+        .astype(str)
+    )
+    # EyeGenBench prefixes every harmonised identity with the corpus name.
+    # The raw export does not, and geometry joins on these exact keys.
+    raw["unique_paragraph_id"] = "OneStop_" + paragraph_key
+    raw["unique_participant_id"] = "OneStop_" + raw["participant_id"]
+    raw["unique_trial_id"] = (
+        "OneStop_"
+        + raw["participant_id"].astype(str)
+        + "_"
+        + paragraph_key
+        + "_"
+        + raw["repeated_reading_trial"].astype(bool).astype(str)
+    )
+    raw["ia_index"] = (
+        pd.to_numeric(
+            raw["CURRENT_FIX_INTEREST_AREA_ID"].replace(".", pd.NA), errors="coerce"
+        )
+        - 1
+    )
+    raw["fix_index"] = pd.to_numeric(raw["CURRENT_FIX_INDEX"], errors="coerce") - 1
+    raw[RECORDED_Y_COLUMN] = pd.to_numeric(raw["CURRENT_FIX_Y"], errors="coerce")
+    return raw[
+        [
+            "unique_trial_id",
+            "unique_participant_id",
+            "unique_paragraph_id",
+            "fix_index",
+            "ia_index",
+            "CURRENT_FIX_INTEREST_AREA_DATA",
+            RECORDED_Y_COLUMN,
+        ]
+    ]
+
+
+def _provo_raw_geometry(interim: Path) -> pd.DataFrame | None:
+    """Standardize Provo's real IA rectangles for the shared geometry parser."""
+    path = interim / "Provo_Corpus-Eyetracking_Data.csv"
+    if not path.is_file():
+        return None
+    cols = ["Text_ID", "IA_ID", "IA_LEFT", "IA_TOP", "IA_RIGHT", "IA_BOTTOM"]
+    raw = pd.read_csv(path, usecols=cols, encoding="latin-1").drop_duplicates()
+    raw["unique_paragraph_id"] = "Provo_" + raw["Text_ID"].astype(str)
+    raw["ia_index"] = pd.to_numeric(raw["IA_ID"], errors="coerce") - 1
+    raw["CURRENT_FIX_INTEREST_AREA_DATA"] = (
+        "[STATIC, RECTANGLE, "
+        + raw["IA_LEFT"].astype(str)
+        + ", "
+        + raw["IA_TOP"].astype(str)
+        + ", "
+        + raw["IA_RIGHT"].astype(str)
+        + ", "
+        + raw["IA_BOTTOM"].astype(str)
+        + "]"
+    )
+    return raw[["unique_paragraph_id", "ia_index", "CURRENT_FIX_INTEREST_AREA_DATA"]]
+
+
+def load_raw_geometry(dataset: str, interim: Path) -> pd.DataFrame | None:
+    """Return a minimal, harmonised raw-geometry frame when one is supported."""
+    loaders = {"onestop": _onestop_raw_geometry, "provo": _provo_raw_geometry}
+    loader = loaders.get(str(dataset).lower())
+    return loader(interim) if loader is not None else None
+
+
+def _attach_recorded_fixation_y(
+    dataset: str, fix_df: pd.DataFrame, raw_fix_df: pd.DataFrame | None
+) -> pd.DataFrame:
+    """Attach a canonical recorded-y column without changing trial identity."""
+    out = fix_df.copy()
+    passed_through = {
+        "provo": "CURRENT_FIX_Y",
+        "sbsat": "CURRENT_FIX_Y",
+        "chinesereading": "Y_Position",
+    }.get(str(dataset).lower())
+    if passed_through and passed_through in out.columns:
+        out[RECORDED_Y_COLUMN] = pd.to_numeric(out[passed_through], errors="coerce")
+        return out
+    if raw_fix_df is None or RECORDED_Y_COLUMN not in raw_fix_df.columns:
+        return out
+    keys = [
+        "unique_trial_id",
+        "unique_participant_id",
+        "unique_paragraph_id",
+        "fix_index",
+    ]
+    if not set(keys) <= set(out.columns) or not set(keys) <= set(raw_fix_df.columns):
+        return out
+    recorded = raw_fix_df[[*keys, RECORDED_Y_COLUMN]].dropna(subset=[RECORDED_Y_COLUMN])
+    conflicts = recorded.groupby(keys, dropna=False)[RECORDED_Y_COLUMN].nunique()
+    if (conflicts > 1).any():
+        raise ValueError(
+            "raw fixation y is not unique for its EyeGenBench fixation key"
+        )
+    recorded = recorded.drop_duplicates(keys)
+    return out.merge(recorded, on=keys, how="left", validate="one_to_one")
+
+
 def build_bundle(dataset, fix_df, text_df, participant_df, raw_fix_df, out_root):
     """Write one dataset's bundle and return its manifest entry."""
     from scanpath_studio.eyegenbench_geometry import display_spec_for
 
     words, report = resolve_geometry(dataset, text_df, raw_fix_df)
+    fix_df = _attach_recorded_fixation_y(dataset, fix_df, raw_fix_df)
 
     # R16: EyeGenBench's own (finer-grained, per-reading) trial id must not be
     # emitted as `unique_trial_id` -- `data.normalize_fixations` hardcodes
@@ -261,6 +407,9 @@ def build_bundle(dataset, fix_df, text_df, participant_df, raw_fix_df, out_root)
     fix_df, words, repeated_readings = _disambiguate_repeated_readings(fix_df, words)
 
     fixations = place_fixations(fix_df, words)
+
+    recorded_y = fixations["fixation_y_source"].eq("recorded")
+    recorded_fraction = float(recorded_y.mean()) if len(fixations) else 0.0
 
     # R11: stamp fixations with their *paragraph's* geometry tier, not a
     # single dataset-level value -- carry the per-paragraph `geometry_source`
@@ -316,6 +465,7 @@ def build_bundle(dataset, fix_df, text_df, participant_df, raw_fix_df, out_root)
             .nunique()
         ),
         "n_fixations": len(fixations),
+        "recorded_fixation_y_fraction": round(recorded_fraction, 4),
         # Spec §8: attribution travels with the data into export bundles.
         "license": info.get("license", "unknown - consult the corpus"),
         "citation": info.get("citation", ""),
@@ -418,16 +568,8 @@ def run_prepare_data(dataset: str, eyegenbench_root: Path):
     finally:
         os.chdir(previous)
 
-    raw = None
     interim = eyegenbench_root / "data" / _canonical_name(dataset) / "interim"
-    for candidate in sorted(interim.glob("*.csv")) if interim.is_dir() else []:
-        try:
-            head = pd.read_csv(candidate, nrows=0)
-        except Exception:
-            continue
-        if "CURRENT_FIX_INTEREST_AREA_DATA" in head.columns:
-            raw = pd.read_csv(candidate)
-            break
+    raw = load_raw_geometry(dataset, interim) if interim.is_dir() else None
     return fix_df, text_df, participant_df, raw
 
 

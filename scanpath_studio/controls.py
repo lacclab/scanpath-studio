@@ -3269,6 +3269,7 @@ def _rail_section(host, label: str, *, slug: str, help: str = "", **toggle):
     """
     row = host.container(
         horizontal=True,
+        wrap=False,
         vertical_alignment="center",
         gap=None,
         key=f"split_mode_rail_{slug}",
@@ -3454,7 +3455,8 @@ def sidebar_controls(
     # the user's last hand-tuned state: changing any plot control selects it, and
     # switching away and back restores that snapshot.
     _active = _active_quick_view()
-    _qv_top = viz.columns(2)
+    _qv_grid = viz.container(key="quick_views_grid")
+    _qv_top = _qv_grid.columns(2, gap="small")
     _qv_top[0].button(
         "👁️ Scanpath",
         key="viz_view_scanpath",
@@ -3473,7 +3475,7 @@ def sidebar_controls(
         on_click=_apply_view_preset,
         args=("heatmap",),
     )
-    _qv_bottom = viz.columns(2)
+    _qv_bottom = _qv_grid.columns(2, gap="small")
     _qv_bottom[0].button(
         "✏️ Illustration",
         key="viz_view_illustration",

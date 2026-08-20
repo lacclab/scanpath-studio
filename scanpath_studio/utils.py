@@ -420,7 +420,10 @@ def _merge_trial_level_sources(
                     break
             if conflict:
                 break
-            combined = combined.combine_first(current)
+            # pandas warns when concatenation/combine_first has to infer a
+            # dtype from an empty object Series. The first real source needs no
+            # merge at all; starting from it also preserves its native dtype.
+            combined = current if combined.empty else combined.combine_first(current)
         if not conflict and not combined.empty:
             merged[col] = combined
     return merged

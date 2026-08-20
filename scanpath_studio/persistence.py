@@ -9,9 +9,11 @@ Storing a researcher's tables on their disk is invisible by nature, so the cache
 is also *inspectable*: :func:`cache_status` reports what is stored, where, how
 big it is and when it was written without importing Streamlit, and it backs the
 in-app "🗄️ Recovery cache" panel (``app._render_recovery_cache_panel``), the
-``scanpath-studio cache`` CLI subcommand and ``api.cache_status``.  Saving can be
+``scanpath-studio cache`` CLI subcommand and ``api.cache_status``. Saving can be
 paused for the session (:func:`set_persistence_paused`) and the stored files
-deleted (:func:`clear_local_state`).
+deleted (:func:`clear_local_state`). A clear initiated in the app uses
+:func:`skip_next_local_save` so the end of that rerun does not immediately
+recreate the files without changing the user's saving preference.
 """
 
 from __future__ import annotations
@@ -40,6 +42,7 @@ STATE_DIR_ENV_VAR = "SCANPATH_STUDIO_STATE_DIR"
 _RESTORED_KEY = "_local_persistence_restored"
 _RESTORED_PAYLOAD_KEY = "_local_persistence_restored_payload"
 _PAUSED_KEY = "_local_persistence_paused"
+_SKIP_NEXT_SAVE_KEY = "_local_persistence_skip_next_save"
 _LAST_FINGERPRINT_KEY = "_local_persistence_fingerprint"
 _LAST_DATASET_IDENTITY_KEY = "_local_persistence_dataset_identity"
 _LAST_DATASET_ENTRIES_KEY = "_local_persistence_dataset_entries"
@@ -469,13 +472,25 @@ def set_persistence_paused(session, paused: bool) -> None:
         session.pop(_LAST_FINGERPRINT_KEY, None)
 
 
+def skip_next_local_save(session) -> None:
+    """Suppress exactly one end-of-run persistence write.
+
+    Clearing the recovery cache triggers a full app rerun before ``main``
+    reaches its persistence epilogue. The fresh run must not write the same
+    live session straight back to disk, but it also must not turn off automatic
+    saving. A one-shot marker expresses that distinction; the following user
+    change saves normally.
+    """
+    session[_SKIP_NEXT_SAVE_KEY] = True
+
+
 def clear_local_state(session=None, root: Path | None = None) -> None:
     """Delete the stored cache and forget what this session had written.
 
     The in-memory datasets are deliberately left alone — this removes the copy
-    on disk, it does not close the user's work. Callers that want the cache to
-    *stay* gone must also pause saving (the panel's Forget button does both);
-    otherwise the end-of-run save writes the same session straight back out.
+    on disk, it does not close the user's work. Callers clearing it from a
+    widget-driven rerun can use :func:`skip_next_local_save` to prevent the
+    immediate epilogue write without changing the saving preference.
     """
     forget_state(state_directory() if root is None else root)
     if session is not None:
@@ -591,6 +606,8 @@ def cache_status(
 
 
 def save_local_state(session, url: str) -> bool:
+    if session.pop(_SKIP_NEXT_SAVE_KEY, False):
+        return False
     if not persistence_enabled(url) or persistence_paused(session):
         return False
     try:

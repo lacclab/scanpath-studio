@@ -161,7 +161,12 @@ class TestAppLaunches:
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         body = " ".join(m.value for m in at.markdown)
-        for expected in ("🗄️ Automatic recovery", "⬇️ JSON backup", "🐛 Debug tools"):
+        for expected in (
+            "🗄️ Automatic recovery",
+            "⬇️ JSON backup",
+            "♻️ Reset",
+            "🐛 Debug tools",
+        ):
             assert expected in body, f"{expected} stopped rendering off its page"
         # The old bar is gone: neither group is a popover any more.
         labels = {p.proto.popover.label for p in at.get("popover")}
@@ -181,6 +186,7 @@ class TestAppLaunches:
         body = " ".join(m.value for m in at.markdown)
         assert "### ⬇️ JSON backup" in body
         assert "### 🗄️ Automatic recovery" in body
+        assert "### ♻️ Reset" in body
         # The spotlight tour and annotations.py both target this key.
         assert SAVE_RESTORE_KEY == "tour_grp_save_restore"
 

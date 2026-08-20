@@ -607,8 +607,13 @@ class TestRecoveryCachePanelFlow:
         at = at.run(timeout=60)
         assert manifest.stat().st_mtime_ns == written
 
-        # Forget deletes the store; saving stays paused, so it does not come
-        # straight back on the same run's end-of-run save.
+        # Resume, then clear while saving is ON — the reported bug was that this
+        # action silently changed the preference to off.
+        toggle = [t for t in at.toggle if t.key == "persist_local_saving"][0]
+        at = toggle.set_value(True).run(timeout=60)
+        _clean(at, "after resuming:")
+        assert at.session_state["_local_persistence_paused"] is False
+
         forget = [b for b in at.button if "Clear recovery cache" in str(b.label)]
         assert forget, "the Forget button is missing from the panel"
         at = forget[0].click().run(timeout=60)
@@ -622,6 +627,18 @@ class TestRecoveryCachePanelFlow:
         _clean(at, "after confirming forget:")
         assert not manifest.exists()
         assert not persistence.cache_status(tmp_path)["exists"]
+        saving = [t for t in at.toggle if t.key == "persist_local_saving"]
+        assert saving and saving[0].value is True
+        assert at.session_state["_local_persistence_paused"] is False
+
+        # Only the immediate rewrite is skipped. The next real change resumes
+        # normal recovery saving without another toggle click.
+        at.session_state["global_show_heatmap"] = not bool(
+            at.session_state["global_show_heatmap"]
+        )
+        at = at.run(timeout=60)
+        _clean(at, "after changing the cleared session:")
+        assert manifest.is_file()
 
     def test_panel_says_nothing_is_stored_on_a_hosted_deployment(self, monkeypatch):
         # No override and no loopback URL under AppTest == the hosted case.

@@ -21,7 +21,7 @@ from scanpath_studio.synthetic import (
     MULTIPART_EXPECTED,
     make_multipart_synthetic_data,
 )
-from scanpath_studio.tabs import _build_compare_meta
+from scanpath_studio.tabs import _build_compare_meta, _part_catalog_for_display
 
 
 def _multipart_navigator_app():
@@ -54,6 +54,18 @@ def test_catalog_and_part_selection_preserve_order_geometry_and_clocks():
         int(fixations["timestamp_ms"].max()),
     ) == MULTIPART_EXPECTED["parent_timestamp_span"]
     assert fixations.groupby(SCREEN_ID)["screen_fixation_id"].min().eq(1).all()
+
+
+def test_multipleye_display_prefers_fixation_order_over_stale_word_order():
+    words, fixations = make_multipart_synthetic_data()
+    words = words.copy()
+    fixations = fixations.assign(screen_kind="reading")
+    words["screen_index"] = words["screen_index"].map({1: 2, 2: 1})
+
+    catalog = _part_catalog_for_display(words, fixations)
+
+    assert catalog[SCREEN_ID].tolist() == MULTIPART_EXPECTED["screens"]
+    assert catalog["screen_index"].tolist() == MULTIPART_EXPECTED["screen_indexes"]
 
 
 def test_scientific_enrichment_and_measures_never_cross_screen_boundary():

@@ -28,9 +28,10 @@ import argparse
 import gc
 import json
 import time
+from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any
 
 import pandas as pd
 import psutil
@@ -38,12 +39,14 @@ import psutil
 from scanpath_studio import (
     aggregation,
     alignment,
-    data as data_module,
     experimental_setup,
     illustration,
     measures,
     preprocessing,
     similarity,
+)
+from scanpath_studio import (
+    data as data_module,
 )
 
 PROCESS = psutil.Process()
@@ -607,8 +610,8 @@ def profile(
 
     return {
         "participants": int(words["participant_id"].nunique()),
-        "n_words": int(len(words)),
-        "n_fixations": int(len(fixations)),
+        "n_words": len(words),
+        "n_fixations": len(fixations),
         "n_trials": int(n_trials),
         "corpus_total_s": round(corpus_total, 3),
         "measurements": [asdict(m) for m in profiler.measurements],

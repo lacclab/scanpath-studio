@@ -91,8 +91,12 @@ jobs:
           python-version: "3.12"
           cache: pip
 
+      # Pinned deliberately: an unpinned linter turns a new ruff release into a
+      # red build on a branch that changed nothing. Bump it when you want the
+      # new rules — and bump the `lint` extra in pyproject.toml with it, so a
+      # local `ruff check` is the same ruff CI runs.
       - name: Install ruff
-        run: pip install ruff
+        run: pip install ruff==0.16.3
 
       - name: ruff check
         run: ruff check --exclude other_vis .

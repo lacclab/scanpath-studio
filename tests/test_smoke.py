@@ -414,3 +414,40 @@ class TestStimulusImageAlignment:
             checked += 1
 
         assert checked >= 1, "no bundled stimulus images were available to check"
+
+
+def test_true_scale_html_carries_zoom_transform() -> None:
+    """The embed magnifies via the fit transform, not a Plotly axis re-layout."""
+    from scanpath_studio import tabs
+
+    html, iframe_height = tabs._true_scale_html(
+        '<div id="truescale-single"></div>',
+        key="single",
+        width=900,
+        height=600,
+        max_height=None,
+        zoomable=True,
+    )
+    assert iframe_height == 612
+    # One uniform scale for fit x zoom, so markers/labels/strokes magnify too.
+    assert "base * zoom" in html
+    assert 'id="zoombar-single"' in html
+    # Plotly's own drag-zoom is switched off — it is what breaks the sizing.
+    assert "dragmode: false" in html
+
+
+def test_true_scale_html_small_multiples_have_no_zoom() -> None:
+    """Capped grid panels keep the plain fit-to-cell behaviour."""
+    from scanpath_studio import tabs
+
+    html, iframe_height = tabs._true_scale_html(
+        '<div id="truescale-grid"></div>',
+        key="grid",
+        width=900,
+        height=600,
+        max_height=240,
+        zoomable=False,
+    )
+    assert iframe_height == 252
+    assert "240 / H" in html
+    assert "zoombar" not in html

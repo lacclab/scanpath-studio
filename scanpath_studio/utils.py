@@ -11,6 +11,7 @@ import streamlit as st
 from .annotations import get_entry
 from .constants import SELECTOR_ROW_GRID, SELECTOR_ROW_TRIO
 from .data import frame_fingerprint
+from .fields import labeled
 
 # Annotation markers shown beside a trial in the pickers (UX-6). Independent of
 # the same-text/same-participant markers (UX-4) and of each other — a trial can
@@ -640,15 +641,22 @@ def _render_trial_sort_popover(
     if st.session_state.get(state_key) not in options:
         st.session_state[state_key] = TRIAL_SORT_DEFAULT
     with host.popover("⇅", width="content", help="Sort the trial list"):
-        choice = st.selectbox(
+        choice = labeled(
+            st,
+            "selectbox",
             "Sort trials by",
             options=options,
             key=state_key,
-            help="Reorder the picker so outliers surface without scrolling — by a "
-            "computed stat (fixation count, reading time) or a reader / text / "
-            "condition property.",
+            help="Reorder the trial list by a computed statistic or by a reader, "
+            "text or condition property.",
         )
-        descending = st.checkbox("Descending", key=f"{key_prefix}_trial_sort_desc")
+        descending = labeled(
+            st,
+            "checkbox",
+            "Descending",
+            key=f"{key_prefix}_trial_sort_desc",
+            help="Reverse the order.",
+        )
     if choice == TRIAL_SORT_DEFAULT:
         return None, False, TRIAL_SORT_DEFAULT
     return keys[choice], bool(descending), choice

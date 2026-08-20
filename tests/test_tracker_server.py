@@ -4,8 +4,6 @@ import importlib.util
 import json
 from pathlib import Path
 
-import pytest
-
 
 def _load_tracker_server():
     server_path = Path(__file__).parents[1] / "tracker" / "server.py"
@@ -18,6 +16,10 @@ def _load_tracker_server():
 
 SERVER = _load_tracker_server()
 TRACKER_DIR = Path(__file__).parents[1] / "tracker"
+#: The write-up sections, in render order. This used to live in `server.py`,
+#: which validated them on every save; the tracker is a read-only archive since
+#: ENG-32, so the shape is pinned here and nowhere else.
+WRITE_UP_FIELDS = ("statusNote", "request", "whatWasDone", "whatsLeft", "background")
 
 
 def _load_catalog() -> dict:
@@ -94,10 +96,10 @@ def test_open_items_carry_the_structured_write_up() -> None:
     for item in _open_items():
         assert "body" not in item, (
             f"{item['id']} still uses the legacy `body` blob — split it into "
-            f"{SERVER.WRITE_UP_FIELDS}."
+            f"{WRITE_UP_FIELDS}."
         )
         assert item.get("request"), f"{item['id']} has no `request` section."
-        for field in ("decisions", *SERVER.WRITE_UP_FIELDS):
+        for field in ("decisions", *WRITE_UP_FIELDS):
             lines = item.get(field)
             if lines is None:
                 continue
@@ -154,7 +156,7 @@ def test_write_up_sections_do_not_repeat_their_own_lead() -> None:
     """The label is the field name now; a leftover `**Request.**` is a double."""
     leads = ("**Request.", "**What was done.", "**What's left.", "**Background (")
     for item in _open_items():
-        for field in SERVER.WRITE_UP_FIELDS:
+        for field in WRITE_UP_FIELDS:
             first = (item.get(field) or [""])[0]
             assert not first.startswith(leads), (
                 f"{item['id']}: `{field}` repeats a bold lead — the tracker "
@@ -162,297 +164,63 @@ def test_write_up_sections_do_not_repeat_their_own_lead() -> None:
             )
 
 
-def test_validate_state_accepts_implementation_brief() -> None:
-    state = SERVER._validate_state(
-        {
-            "version": 2,
-            "revision": 3,
-            "items": {
-                "CMP-7": {
-                    "status": "Planned",
-                    "priority": "High",
-                    "implementationBrief": "Use one shared colour scale.",
-                    "archived": False,
-                    "updated": "2026-08-03",
-                }
-            },
-            "createdItems": [],
-        }
-    )
-
-    assert (
-        state["items"]["CMP-7"]["implementationBrief"] == "Use one shared colour scale."
-    )
+def _migrated() -> dict[str, int]:
+    return json.loads((TRACKER_DIR / "migrated.json").read_text(encoding="utf-8"))
 
 
-def test_validate_state_accepts_an_owner_from_the_people_list() -> None:
-    people = SERVER._known_people()
-    assert people, "tracker/data.js must declare `people` for Claim to work (ENG-39)."
+def test_every_item_still_open_has_a_github_issue() -> None:
+    """The migration is complete: nothing live is only in the tracker (ENG-32).
 
-    state = SERVER._validate_state(
-        {
-            "version": SERVER.STATE_VERSION,
-            "items": {"CMP-7": {"owner": people[0]}},
-            "createdItems": [],
-        }
-    )
-
-    assert state["items"]["CMP-7"]["owner"] == people[0]
-
-
-def test_validate_state_rejects_an_unknown_owner() -> None:
-    """A typo'd owner is a rejected save, not a third person who doesn't exist."""
-    with pytest.raises(ValueError, match="Invalid owner"):
-        SERVER._validate_state(
-            {
-                "version": SERVER.STATE_VERSION,
-                "items": {"CMP-7": {"owner": "Nobody"}},
-                "createdItems": [],
-            }
-        )
-
-
-def test_validated_state_never_carries_the_revision_counter() -> None:
-    """``revision`` is machine-local now (ENG-39), so it never reaches state.json.
-
-    It changed on every save, which made the git-tracked file conflict on every
-    parallel pull even when two people touched different items. The two-tabs
-    protection it provides is per-machine, so it lives in a gitignored
-    ``tracker/.local.json`` — and a version 2 file that still has it inline is
-    read, then written back without it.
+    The archive is allowed to hold open-looking statuses — those are the items
+    as they stood the day they moved — but each one must point at the issue that
+    replaced it, or it is work that exists in a frozen file and nowhere else.
     """
-    state = SERVER._validate_state(
-        {"version": 2, "revision": 349, "items": {}, "createdItems": []}
+    migrated = _migrated()
+    stranded = sorted(
+        item["id"] for item in _open_items() if item["id"] not in migrated
     )
 
-    assert "revision" not in state
-    assert state["version"] == SERVER.STATE_VERSION
-
-
-def test_state_file_is_free_of_the_revision_counter() -> None:
-    state = json.loads((TRACKER_DIR / "state.json").read_text(encoding="utf-8"))
-
-    assert "revision" not in state, (
-        "tracker/state.json still carries `revision` — it belongs in the "
-        "gitignored tracker/.local.json (ENG-39)."
+    assert not stranded, (
+        f"these items are open in the tracker but have no GitHub issue: {stranded}. "
+        "Raise them at https://github.com/lacclab/scanpath-studio/issues and add the "
+        "number to tracker/migrated.json, or archive them."
     )
 
 
-def test_local_state_file_is_gitignored() -> None:
-    ignored = (Path(__file__).parents[1] / ".gitignore").read_text(encoding="utf-8")
-
-    assert "tracker/.local.json" in ignored
-
-
-def test_every_status_offers_a_directed_transition() -> None:
-    """Each status names the moves it actually makes, as buttons (ENG-38)."""
-    source = (TRACKER_DIR / "index.html").read_text(encoding="utf-8")
-    block = source.split("const TRANSITIONS = {", 1)[1].split("};", 1)[0]
-
-    for status in SERVER.STATUSES:
-        assert f'"{status}": [' in block, f"{status} has no directed transitions."
-    for expected in ('["Closed", "Approve & close"]', '["In progress", "Send back"]'):
-        assert expected in block, f"Review is missing {expected}."
-
-
-def test_validate_state_accepts_on_hold_status() -> None:
-    state = SERVER._validate_state(
-        {
-            "version": 2,
-            "revision": 0,
-            "items": {"CMP-7": {"status": "On hold"}},
-            "createdItems": [],
-        }
-    )
-
-    assert state["items"]["CMP-7"]["status"] == "On hold"
-
-
-@pytest.mark.parametrize(
-    "change, message",
-    [
-        ({"UNKNOWN-1": {}}, "Unknown tracker item"),
-        ({"CMP-7": {"status": "Partly done"}}, "Invalid status"),
-        ({"CMP-7": {"priority": "Urgent"}}, "Invalid priority"),
-        ({"CMP-7": {"privateField": True}}, "Unsupported field"),
-    ],
-)
-def test_validate_state_rejects_invalid_changes(change: dict, message: str) -> None:
-    with pytest.raises(ValueError, match=message):
-        SERVER._validate_state(
-            {"version": 2, "revision": 0, "items": change, "createdItems": []}
-        )
-
-
-#: A task as the page's "New task" form builds it.
-# Numbers far above anything `data.js` will reach: these stand for a task the
-# user just created, so they must not collide with a real item (UX-99 did).
-CREATED_TASK = {
-    "id": "CMP-9099",
-    "prefix": "CMP",
-    "num": 9099,
-    "sub": "",
-    "title": "A new comparison task",
-    "status": "Backlog",
-    "priority": "Normal",
-    "implementationBrief": "Keep the two views aligned.",
-    "group": "Compare mode",
-    "subgroup": "",
-    "archived": False,
-    "added": "2026-08-03",
-    "request": ["A new comparison task"],
-}
-
-
-def test_validate_state_accepts_created_task() -> None:
-    state = SERVER._validate_state(
-        {"version": 2, "revision": 0, "items": {}, "createdItems": [dict(CREATED_TASK)]}
-    )
-
-    assert state["createdItems"][0]["id"] == "CMP-9099"
-
-
-def test_a_created_task_can_be_claimed() -> None:
-    """Claiming a UI-created task must not poison every later save (ENG-42).
-
-    The page keeps one object per created item, shared between `ITEMS` and
-    `STATE.createdItems`, and `stageEditor` assigns the edited fields onto it —
-    so a claim stamps `owner` there. `owner` was not in the created-item
-    contract, so the whole payload was rejected and *every* save from that page
-    failed, for every item, with "Save failed".
-    """
-    people = SERVER._known_people()
-    item = {**CREATED_TASK, "owner": people[0]}
-
-    state = SERVER._validate_state({"version": 3, "items": {}, "createdItems": [item]})
-
-    assert state["createdItems"][0]["owner"] == people[0]
-
-
-def test_a_created_task_rejects_an_owner_who_does_not_exist() -> None:
-    item = {**CREATED_TASK, "owner": "Nobody"}
-
-    with pytest.raises(ValueError, match="Invalid owner"):
-        SERVER._validate_state({"version": 3, "items": {}, "createdItems": [item]})
-
-
-def test_validate_state_rejects_group_prefix_mismatch() -> None:
-    item = {
-        "id": "UX-9099",
-        "prefix": "UX",
-        "num": 9099,
-        "sub": "",
-        "title": "Wrong group prefix",
-        "status": "Backlog",
-        "priority": "Normal",
-        "implementationBrief": "",
-        "group": "Compare mode",
-        "subgroup": "",
-        "archived": False,
-        "added": "2026-08-03",
-        "request": ["Wrong group prefix"],
+def test_migrated_ids_all_exist_in_the_catalogue() -> None:
+    known = {item["id"] for item in _load_catalog()["items"]}
+    known |= {
+        item["id"]
+        for item in json.loads(
+            (TRACKER_DIR / "state.json").read_text(encoding="utf-8")
+        ).get("createdItems", [])
     }
+    unknown = sorted(set(_migrated()) - known)
 
-    with pytest.raises(ValueError, match="Invalid prefix"):
-        SERVER._validate_state(
-            {"version": 2, "revision": 0, "items": {}, "createdItems": [item]}
-        )
-
-
-def test_write_state_is_valid_json(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    state_file = tmp_path / "state.json"
-    monkeypatch.setattr(SERVER, "TRACKER_DIR", tmp_path)
-    monkeypatch.setattr(SERVER, "STATE_FILE", state_file)
-    state = {"version": SERVER.STATE_VERSION, "items": {}, "createdItems": []}
-
-    SERVER._write_state(state)
-
-    assert json.loads(state_file.read_text(encoding="utf-8")) == state
-
-
-def test_revision_is_derived_from_the_state_file_not_stored(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The concurrency token is a hash of `state.json`, kept nowhere (ENG-41)."""
-    state_file = tmp_path / "state.json"
-    monkeypatch.setattr(SERVER, "TRACKER_DIR", tmp_path)
-    monkeypatch.setattr(SERVER, "STATE_FILE", state_file)
-    monkeypatch.setattr(SERVER, "LOCAL_FILE", tmp_path / ".local.json")
-
-    assert SERVER._state_revision() == 0  # no file yet
-    SERVER._write_state(
-        {"version": SERVER.STATE_VERSION, "items": {}, "createdItems": []}
+    assert not unknown, (
+        f"migrated.json names items that aren't in the tracker: {unknown}"
     )
-    first = SERVER._state_revision()
-
-    assert first > 0
-    assert SERVER._state_revision() == first  # stable while the file is untouched
-    assert not (tmp_path / ".local.json").exists()
 
 
-def test_an_out_of_band_edit_moves_the_revision(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """An agent editing `state.json` by hand must invalidate an open page's token.
+def test_the_tracker_server_has_no_write_endpoint() -> None:
+    """The archive is served, never written (ENG-32).
 
-    This is the whole point of ENG-41: `CLAUDE.md` tells agents to edit
-    `tracker/state.json` directly, and the old counter only moved when the API
-    wrote. A page loaded before such an edit then PUT its stale copy straight
-    over it and reported success.
+    `state.json` was edited through this server until the migration. Leaving a
+    write path behind would let the frozen copy drift from the issues that
+    replaced it, which is the one failure mode the freeze exists to prevent.
     """
-    state_file = tmp_path / "state.json"
-    monkeypatch.setattr(SERVER, "TRACKER_DIR", tmp_path)
-    monkeypatch.setattr(SERVER, "STATE_FILE", state_file)
-    SERVER._write_state(
-        {"version": SERVER.STATE_VERSION, "items": {}, "createdItems": []}
-    )
-    before = SERVER._state_revision()
+    source = (TRACKER_DIR / "server.py").read_text(encoding="utf-8")
 
-    state_file.write_text(
-        json.dumps(
-            {
-                "version": SERVER.STATE_VERSION,
-                "items": {"ENG-1": {"status": "Closed"}},
-                "createdItems": [],
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    assert SERVER._state_revision() != before
+    assert not hasattr(SERVER, "_write_state")
+    assert not hasattr(SERVER, "_validate_state")
+    for banned in ("do_PUT", "do_POST", "do_DELETE"):
+        assert banned not in source, f"tracker/server.py still defines {banned}."
 
 
-def test_whoami_prefers_an_explicit_choice_over_the_git_name(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    people = SERVER._known_people()
-    monkeypatch.setattr(SERVER, "LOCAL_FILE", tmp_path / ".local.json")
-    monkeypatch.setattr(SERVER, "_git_name", lambda: people[0])
+def test_the_tracker_page_offers_no_editing() -> None:
+    """Nothing on the page pretends to save, so nothing can fail to save."""
+    source = (TRACKER_DIR / "index.html").read_text(encoding="utf-8")
 
-    assert SERVER._whoami() == {"person": people[0], "people": people}
-
-    SERVER._write_local({"person": people[-1]})
-
-    assert SERVER._whoami()["person"] == people[-1]
-
-
-def test_whoami_matches_a_full_git_name_token_wise(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """ "Omer Shubi" resolves to "Shubi" with nobody configuring anything."""
-    people = SERVER._known_people()
-    monkeypatch.setattr(SERVER, "LOCAL_FILE", tmp_path / ".local.json")
-    monkeypatch.setattr(SERVER, "_git_name", lambda: f"Some {people[0].lower()}")
-
-    assert SERVER._whoami()["person"] == people[0]
-
-
-def test_whoami_is_empty_when_the_git_name_matches_nobody(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(SERVER, "LOCAL_FILE", tmp_path / ".local.json")
-    monkeypatch.setattr(SERVER, "_git_name", lambda: "Someone Else")
-
-    assert SERVER._whoami()["person"] == ""
+    for banned in ('method: "PUT"', "saveState", "stageEditor", "newTaskForm"):
+        assert banned not in source, f"tracker/index.html still has {banned}."
+    assert "https://github.com/lacclab/scanpath-studio/issues" in source

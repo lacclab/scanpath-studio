@@ -104,6 +104,23 @@
   .connection::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ink-faint); }
   .connection.on::before { background: #22c55e; }
   .connection.error::before { background: #ef4444; }
+  .issues-link {
+    padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--card); color: var(--ink); font-size: 13px; font-weight: 600;
+    text-decoration: none; white-space: nowrap;
+  }
+  .issues-link:hover { border-color: var(--accent); color: var(--accent); }
+  .frozen {
+    margin: 0 auto; max-width: 1180px; padding: 11px 16px 0;
+    font-size: 13.4px; line-height: 1.65; color: var(--ink-dim);
+  }
+  .frozen strong { color: var(--ink); }
+  .moved {
+    display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px;
+    border-radius: 999px; border: 1px solid var(--line); background: var(--card);
+    color: var(--ink-dim); font-size: 12.4px; font-weight: 600; text-decoration: none;
+  }
+  .moved:hover { border-color: var(--accent); color: var(--accent); }
   .stale {
     position: sticky; top: 0; z-index: 60; display: flex; align-items: center; gap: 12px;
     padding: 10px 16px; background: #7f1d1d; color: #fff; font-size: 13px; line-height: 1.4;
@@ -248,7 +265,6 @@
     margin-top: 1px; border: 1px solid var(--line-soft); background: var(--panel-2); color: var(--ink-dim);
   }
   .owner.me { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
-  #whoami { padding: 5px 8px; max-width: 150px; }
   .editor label { display: block; color: var(--ink-dim); font-size: 12px; }
   .editor select, .editor textarea {
     display: block; width: 100%; margin-top: 4px; color: var(--ink); background: var(--panel);
@@ -305,14 +321,22 @@
       <span class="sub">Scanpath Studio</span>
     </div>
     <input id="q" class="search" type="search" placeholder="Search id, title, text…  (/)">
-    <span class="connection" id="connection" aria-live="polite">Connecting…</span>
-    <select id="whoami" title="Who is at this keyboard — used by Claim, and remembered on this machine only" hidden></select>
-    <button class="primary" id="newTask" disabled>＋ New task</button>
+    <span class="connection" id="connection" aria-live="polite">Loading…</span>
+    <a class="issues-link" id="issuesLink" href="https://github.com/lacclab/scanpath-studio/issues">Open work → GitHub Issues</a>
     <button id="expand">Expand all</button>
     <button id="help">How this works</button>
     <button id="theme" title="Toggle theme">◐</button>
   </div>
 </header>
+
+<div class="frozen">
+  <strong>This tracker is frozen.</strong> Open work moved to
+  <a href="https://github.com/lacclab/scanpath-studio/issues">GitHub Issues</a> on
+  2026-08-20 (ENG-32) and is tracked there now. What is left here is the archive:
+  every item ever raised, its full write-up, and the <code>#ID</code> cross-references
+  that the docs, the plans and the git history still point at. Nothing on this page
+  can be edited.
+</div>
 
 <div class="wrap">
   <aside>
@@ -350,163 +374,63 @@
   <main id="list"><div class="empty">Starting tracker…</div></main>
 </div>
 
-<dialog id="newTaskBox">
-  <button class="close" type="button" onclick="newTaskBox.close()">✕</button>
-  <h3>Create a task</h3>
-  <p style="font-size:13px;color:var(--ink-dim)">The group determines the ID prefix; the next number is assigned automatically. New tasks start in Backlog.</p>
-  <form id="newTaskForm">
-    <div class="task-form">
-      <label class="wide">Title
-        <input id="taskTitle" required maxlength="300" placeholder="A short, outcome-focused title">
-      </label>
-      <label>Group<select id="taskGroup" required></select></label>
-      <label>Assigned ID<div class="id-preview mono" id="taskIdPreview"></div></label>
-      <label>Priority
-        <select id="taskPriority"><option>High</option><option selected>Normal</option><option>Low</option></select>
-      </label>
-      <label class="wide">Instructions for implementation
-        <textarea id="taskBrief" placeholder="What should be built? Include constraints and acceptance checks."></textarea>
-      </label>
-    </div>
-    <div class="dialog-actions">
-      <span class="form-error" id="taskError" aria-live="polite"></span>
-      <button type="button" onclick="newTaskBox.close()">Cancel</button>
-      <button class="primary" type="submit">Create task</button>
-    </div>
-  </form>
-</dialog>
-
 <dialog id="helpBox">
   <button class="close" onclick="helpBox.close()">✕</button>
-  <h3>How this tracker works</h3>
+  <h3>What this page is</h3>
   <p style="font-size:13.6px;color:var(--ink-dim)">
-    Every item has a stable <b>ID</b> you can cite in chat ("let's do <code>CMP-3</code>"),
-    a <b>status</b>, and a short write-up with code anchors. Expand an item to change
-    its status or leave implementation instructions. Changes are saved directly into
-    <code>tracker/state.json</code>; the original catalogue stays in <code>tracker/data.js</code>.
+    The <b>archive</b> of the Scanpath Studio improvements tracker. Every item ever
+    raised is here, with its full write-up and code anchors, under its stable
+    <b>ID</b> (<code>CMP-3</code>, <code>VIZ-31</code>) — the IDs the docs, the
+    <code>plans/</code> notes and the git history cite. Read-only: nothing on this
+    page can be edited, and there is no server API behind it any more.
+  </p>
+  <p style="font-size:13.6px;color:var(--ink-dim)">
+    <b>Open work lives on <a href="https://github.com/lacclab/scanpath-studio/issues">GitHub
+    Issues</a></b> since 2026-08-20 (ENG-32). The 26 items that were still live moved
+    there and each shows an <b>↗ #N</b> link on its card; the 320 closed ones stayed
+    behind, because their value is the write-up, not the workflow.
   </p>
 
-  <h4>Editing tasks</h4>
+  <h4>Finding things</h4>
   <ul>
-    <li>Expand a task, choose a status, and describe the outcome, constraints, or
-      acceptance checks in <b>Instructions for implementation</b>. These are saved in
-      the repository and become the task handoff for whichever coding agent works next.</li>
-    <li>Use <b>New task</b> to capture work without editing the catalogue by hand.</li>
-    <li>Start the live tracker by double-clicking <code>tracker/start.command</code>
-      (macOS) or <code>tracker/start.bat</code> (Windows) — or run
-      <code>python3 tracker/server.py</code>, which on Windows is
-      <code>python tracker\server.py</code>. Keep that terminal window open.</li>
-    <li>Each save writes to the project immediately. No downloads or file permissions
-      are involved, and concurrent browser tabs are protected from overwriting each other.</li>
-    <li><b>Closed</b> archives an item automatically. Moving it to any active status
-      restores it to the open list.</li>
+    <li>Search by ID, title, or any word in a write-up. <code>/</code> focuses the box.</li>
+    <li><code>#CMP-3</code> in the URL jumps straight to that item and expands it —
+      un-archiving the view if it needs to. Every <code>#ID</code> in a write-up is a
+      link that does the same.</li>
+    <li>Archived items are hidden until <b>Show archived</b>; the group, status,
+      priority and owner facets narrow what is on screen.</li>
   </ul>
-
-  <h4>Status, and the moves between them</h4>
-  <ul>
-    <li><b>Backlog</b> — captured, not scheduled. → <i>Plan it</i> · <i>Put on hold</i></li>
-    <li><b>Planned</b> — scoped and intended as upcoming work. → <i>Start work</i> ·
-      <i>Put on hold</i> · <i>Back to backlog</i></li>
-    <li><b>In progress</b> — actively being implemented. → <i>Ready for review</i> ·
-      <i>Put on hold</i></li>
-    <li><b>On hold</b> — intentionally paused or waiting on something. →
-      <i>Resume as planned</i> · <i>Resume work</i></li>
-    <li><b>Review</b> — implemented and waiting for your sign-off. →
-      <i>Approve &amp; close</i> · <i>Send back</i></li>
-    <li><b>Closed</b> — finished or no longer active; archived automatically. → <i>Reopen</i></li>
-  </ul>
-  <p style="font-size:13.4px;color:var(--ink-dim)">Expanding an item puts those moves on
-    the row above the fields, with the one you almost always want first. A move saves on
-    the click — there is no second trip to <i>Save changes</i>. The <b>Status</b> dropdown
-    is still there for anything off the usual path.</p>
-
-  <h4>Who has an item</h4>
-  <p style="font-size:13.4px;color:var(--ink-dim)">Pick your name once in the header; the
-    tracker guesses it from <code>git config user.name</code> and remembers it on this
-    machine only. <b>Claim</b> puts your name on an item and <b>Release</b> takes it off,
-    from any status — claiming is not the same as starting, so you can take something
-    while it is still Planned. The card shows <b>👤 name</b> next to the status, and the
-    <i>Owner</i> filter narrows to one person or to what nobody has taken. Claim before
-    you write code: it is the only signal the other person has that an item is taken.</p>
 
   <h4>Write-up shape</h4>
   <p style="font-size:13.4px;color:var(--ink-dim)">Four sections, in this order, so the
     ask stays legible next to what shipped. They are separate <b>fields</b> on the item
     (<code>request</code>, <code>whatWasDone</code>, <code>whatsLeft</code>,
-    <code>background</code>) rather than bold leads inside one blob of prose — a missing
-    section is now a missing key, which the test suite can see and an agent cannot
-    quietly reword away:</p>
+    <code>background</code>) rather than bold leads inside one blob of prose:</p>
   <ul>
     <li><b>Request</b> — what was asked for, in the asker's terms. Always present.</li>
     <li><b>What was done</b> — what actually shipped.</li>
-    <li><b>What's left</b> — <i>the developer's</i> remaining work, and nothing else.
-      Link the follow-up item when the remainder was split out. When the code is
-      finished this really is "Nothing", including on an item sitting in
-      <code>Review</code> — the review itself is not developer work, so it belongs in
-      the amber box below, not here.</li>
+    <li><b>What's left</b> — <i>the developer's</i> remaining work, and nothing else.</li>
     <li><b>Background (technical)</b> — code anchors, design calls, gotchas, related
       IDs. The internal half, kept out of the first three.</li>
   </ul>
   <p style="font-size:13.4px;color:var(--ink-dim)">An optional
-    <code>statusNote</code> renders above them as the item's lede — the status or
-    "update as of &lt;date&gt;" line that used to be a leading <code>&gt;</code> quote.
-    Archived items still hold the older single <code>body</code> array; both render.</p>
-  <p style="font-size:13.4px;color:var(--ink-dim)"><b>Anything that needs <i>you</i> goes
-    in one place</b> — the <code>decisions</code> field, rendered as the amber
-    <i>Waiting on you</i> box at the top of the item. Design calls that block the work,
-    and the review to run once it is built: both are things only you can do, so both are
-    listed there rather than buried in <i>Background</i> or addressed to you from inside
-    <i>What's left</i>. The box badges the card <b>⚖ N for you</b> and is what the
-    <i>Waiting on me</i> filter collects, so one click shows every item holding on you.
-    Answer in <i>Instructions for implementation</i>; whoever implements clears the field
-    and records the call in <i>Background</i>.</p>
-  <p style="font-size:13.4px;color:var(--ink-dim)">An item with no implementation
-    behind it has only <i>Request</i> (plus <i>Background</i>), whether it is Backlog,
-    Planned, or On hold. The other two appear once work exists, and are required once
-    the item reaches <code>In progress</code> or <code>Review</code>.</p>
+    <code>statusNote</code> renders above them as the item's lede. Older archived items
+    hold a single <code>body</code> array instead; both render. The amber
+    <i>Waiting on you</i> box is the <code>decisions</code> field — the calls that were
+    open when the item was last touched. On a migrated item those are now the issue's
+    <b>Waiting on you</b> checklist, which is where they get answered.</p>
+  <p style="font-size:13.4px;color:var(--ink-dim)">The same shape carried over to
+    GitHub unchanged: an issue body is the write-up, the six statuses are
+    <code>status:*</code> labels, the groups are <code>area:*</code> labels, and
+    <b>closing</b> an issue is the sign-off — so the approval gate (implemented →
+    <code>status:review</code>, open, until the user signs off) still holds.</p>
 
-  <h4>Keeping it current (for coding agents)</h4>
-  <p style="font-size:13.4px;color:var(--ink-dim)">The tracker is only worth reading if
-    it matches reality, so it gets updated <i>while</i> the work happens, not after:</p>
-  <ul>
-    <li><b>Claim it and flip the status when the work starts</b>, not when it ends —
-      <b>Claim</b> plus <code>In progress</code> the moment you pick an item up, so the
-      other person (or the other agent) can see it is taken.</li>
-    <li><b>Clear a decision the moment it is answered</b>, even before any code is
-      written, and record the call in <i>Background</i>. A settled question left in the
-      amber box costs a round of review.</li>
-    <li><b>Commit early and often</b> — one commit per feature or fix rather than one
-      per session, with the tracker edit in the same commit as the code it describes.</li>
-    <li><b>Finish into <code>Review</code></b>, never straight to <code>Closed</code>.
-      Leave <i>What's left</i> as the honest developer remainder, and put the review ask
-      — which surfaces to click, which judgement calls to disagree with — in
-      <i>Waiting on you</i>.</li>
-    <li><b>Nothing half-recorded.</b> Something noticed in passing is either fixed on
-      the spot or gets its own item; it never lives only in a chat log.</li>
-  </ul>
-
-  <h4>Rules</h4>
-  <ul>
-    <li><b>Approval gate.</b> When implementation is finished, mark it
-      <code>Review</code> — never jump straight to <code>Closed</code>. Only after the
-      user signs off does it become <code>Closed</code> + <code>archived: true</code>. Work
-      closed without implementation should say why in its instructions or write-up.</li>
-    <li><b>IDs are stable.</b> Never renumber. New items take the next free number in their
-      prefix (see below); archived items keep their ID.</li>
-    <li><b>Composite asks are split</b> into sub-items so they can land independently.</li>
-    <li>When implementing an item, ask for clarification as needed before starting.</li>
-    <li>When any view, measure, severity, or path here lands, update <code>AGENTS.md</code>,
-      <code>scanpath_studio/CLAUDE.md</code>, <code>CHANGELOG.md</code> and the
-      <code>docs/</code> site in the same change.</li>
-  </ul>
-
-  <h4>Next free ID</h4>
-  <div id="nextIds" class="mono" style="font-size:12.5px;color:var(--ink-dim);line-height:1.9"></div>
-
-  <h4>Adding an item</h4>
-  <p style="font-size:13.4px;color:var(--ink-dim)">Use <b>New task</b>. The tracker assigns
-    the group's prefix and next stable ID, then stores the new item in
-    <code>tracker/state.json</code>.</p>
+  <h4>Serving it</h4>
+  <p style="font-size:13.4px;color:var(--ink-dim)">Double-click
+    <code>tracker/start.command</code> (macOS) or <code>tracker/start.bat</code>
+    (Windows), or run <code>python3 tracker/server.py</code> — a plain static server, so
+    <code>fetch</code> works. Opening <code>index.html</code> as a <code>file://</code>
+    page cannot read <code>state.json</code> and will say so.</p>
 </dialog>
 
 <script src="data.js"></script>
@@ -529,20 +453,8 @@
   const PRIORITIES = ["High", "Normal", "Low"];
   const PRIORITY_RANK = { High: 0, Normal: 1, Low: 2 };
   const color = s => COLOR[s] || "#94a3b8";
-  const TERMINAL = new Set(["Closed"]);
-  /* The moves an item actually makes, in the order you reach for them — the
-     first is the one you almost always want, so it gets the primary button.
-     The Status dropdown stays for anything off this path. */
-  const TRANSITIONS = {
-    "Backlog": [["Planned", "Plan it"], ["On hold", "Put on hold"]],
-    "Planned": [["In progress", "Start work"], ["On hold", "Put on hold"], ["Backlog", "Back to backlog"]],
-    "In progress": [["Review", "Ready for review"], ["On hold", "Put on hold"]],
-    "On hold": [["Planned", "Resume as planned"], ["In progress", "Resume work"]],
-    "Review": [["Closed", "Approve & close"], ["In progress", "Send back"]],
-    "Closed": [["In progress", "Reopen"]],
-  };
   const PEOPLE = DATA.people || [];
-  let ME = "";
+  const ME = "";
   ITEMS.forEach(it => {
     it.status = STATUS_ALIASES[it.status] || it.status;
     if (it.status === "Closed") it.archived = true;
@@ -741,46 +653,21 @@
     const open = state.expandAll || openIds.has(it.id);
     const sub = [it.subgroup, it.note, it.implementationBrief ? "work instructions added" : "",
       it.added ? `added ${it.added}` : ""].filter(Boolean).join(" · ");
-    const options = ORDER.map(s => `<option${s === it.status ? " selected" : ""}>${s}</option>`).join("");
     const priority = it.priority || "Normal";
-    const priorityOptions = PRIORITIES.map(p => `<option${p === priority ? " selected" : ""}>${p}</option>`).join("");
     const owner = it.owner || "";
-    const ownerOptions = ["", ...PEOPLE]
-      .map(p => `<option value="${esc(p)}"${p === owner ? " selected" : ""}>${p ? esc(p) : "— unassigned —"}</option>`).join("");
     const note = it.implementationBrief
       ? `<div class="implementation-brief"><strong>Instructions for implementation</strong>${esc(it.implementationBrief)}</div>` : "";
     const decisions = openDecisions(it);
     const decideBox = decisions.length ? `<div class="decisions">
       <strong>Waiting on you</strong>
       <ol>${decisions.map(d => `<li>${inline(d)}</li>`).join("")}</ol>
-      <p class="hint">Every open call — a design decision, or a review to run — answered in
-        <em>Instructions for implementation</em> below, which is what a coding agent reads next.</p>
+      <p class="hint">The calls that were open when this item moved. They live on its
+        GitHub issue now, as the <em>Waiting on you</em> checklist — answer them there.</p>
     </div>` : "";
-    const moves = (TRANSITIONS[it.status] || []).map(([to, label], i) =>
-      `<button class="go ${i ? "" : "primary"}" data-go="${to}" title="Move to ${to}">${label}</button>`).join("");
-    const claim = !PEOPLE.length || !ME ? ""
-      : owner === ME
-        ? `<button class="claim" data-claim="">Release</button>`
-        : `<button class="claim" data-claim="${esc(ME)}">${owner ? `Take over from ${esc(owner)}` : "👤 Claim"}</button>`;
-    const editor = `<div class="editor" data-editor="${it.id}">
-      <div class="editor-title">Edit task</div>
-      <div class="transitions">
-        <span class="from">${it.status} →</span>${moves}${claim}
-      </div>
-      <div class="editor-grid">
-        <label>Status<select class="edit-status">${options}</select></label>
-        <label>Priority<select class="edit-priority">${priorityOptions}</select></label>
-        <label>Owner<select class="edit-owner"${PEOPLE.length ? "" : " disabled"}>${ownerOptions}</select></label>
-        <label>Instructions for implementation
-          <textarea class="edit-note" placeholder="Describe what to build, important constraints, and how you will know it is done.">${esc(it.implementationBrief || "")}</textarea>
-        </label>
-      </div>
-      <p class="editor-help">This becomes the handoff a coding agent reads before working on the task. Press ⌘/Ctrl + Enter to save.</p>
-      <div class="editor-actions">
-        <button class="save-item primary" data-save-item="${it.id}">Save changes</button>
-        <span class="item-save-state" aria-live="polite"></span>
-      </div>
-    </div>`;
+    const issue = MIGRATED[it.id];
+    const moved = issue
+      ? `<a class="moved" href="${ISSUES_URL}/${issue}" target="_blank" rel="noopener">↗ Tracked on GitHub as #${issue}</a>`
+      : "";
     return `<article class="item ${open ? "open" : ""} ${it.archived ? "archived" : ""}" id="${it.id}">
       <button class="head" data-id="${it.id}">
         <span class="idbadge">${it.id}</span>
@@ -788,12 +675,12 @@
           <span class="ttl">${inline(it.title)}</span>
           ${sub ? `<div class="sub">${inline(sub)}</div>` : ""}
         </span>
-        ${decisions.length ? `<span class="decide-badge" title="Open calls and reviews that need you">⚖ ${decisions.length} for you</span>` : ""}
+        ${issue ? `<span class="decide-badge" title="Moved to GitHub Issues">↗ #${issue}</span>` : ""}
         ${owner ? `<span class="owner ${owner === ME ? "me" : ""}" title="Claimed by ${esc(owner)}">👤 ${esc(owner)}</span>` : ""}
         ${priority !== "Normal" ? `<span class="priority priority-${priority.toLowerCase()}">${priority}</span>` : ""}
         <span class="status"><span class="dot" style="background:${color(it.status)}"></span>${it.status}</span>
       </button>
-      ${open ? `<div class="body">${editor}${decideBox}${note}${writeUp(it)}</div>` : ""}
+      ${open ? `<div class="body">${moved}${decideBox}${note}${writeUp(it)}</div>` : ""}
     </article>`;
   }
 
@@ -819,10 +706,14 @@
     el("list").innerHTML = html || `<div class="empty">Nothing matches those filters.</div>`;
   }
 
-  /* ---------- editable task persistence ---------- */
-  const API_PATH = "api/state";
-  let serverConnected = false;
-  let unsavedChanges = false;
+  /* ---------- the frozen archive ---------- */
+  /* ENG-32 moved every live item to GitHub Issues on 2026-08-20, so nothing on
+     this page is editable any more. It reads three static files — the catalogue
+     in `data.js`, the last status/owner overrides in `state.json`, and the
+     tracker-ID → issue-number map in `migrated.json` — and the server has no
+     write endpoint left to call. */
+  const ISSUES_URL = "https://github.com/lacclab/scanpath-studio/issues";
+  const MIGRATED = {};
 
   function setConnection(message, kind = "") {
     el("connection").textContent = message;
@@ -841,248 +732,56 @@
     });
   }
 
-  function statePayload() {
-    const items = Object.fromEntries(Object.keys(EDITS).sort().map(id => [id, EDITS[id]]));
-    return { version: STATE.version, revision: STATE.revision, items, createdItems: STATE.createdItems };
-  }
-
-  /* The one screen a stuck user actually reads, so it names *their* launcher.
-     `start.command` is a zsh script and `python3` is the Store stub on Windows —
-     both fail there, which is how a Windows user ends up opening index.html as a
-     file:// page where nothing can save. */
+  /* The archive is still a *site*, not a file: `file://` pages cannot fetch
+     `state.json`, so a stuck reader needs to be told how to serve it. */
   function renderOffline(message) {
     const windows = /win/i.test(navigator.userAgentData?.platform || navigator.platform || "");
     const launcher = windows ? "tracker\\start.bat" : "tracker/start.command";
     const command = windows ? "python tracker\\server.py" : "python3 tracker/server.py";
-    setConnection("Server unavailable", "error");
+    setConnection("Cannot read the archive", "error");
     el("list").innerHTML = `<div class="offline">
-      <h2>Start the live tracker</h2>
+      <h2>Serve the archive</h2>
       <p>${esc(message)}</p>
       <p>Double-click <code>${esc(launcher)}</code>, or run:</p>
       <pre><code>${esc(command)}</code></pre>
-      <p>The tracker will open at <code>http://127.0.0.1:8765/tracker/</code> and save changes directly into the project.</p>
+      <p>It opens at <code>http://127.0.0.1:8765/tracker/</code>. Open work is on
+        <a href="${ISSUES_URL}">GitHub Issues</a> and needs no server at all.</p>
     </div>`;
   }
 
-  async function initializePersistence() {
+  async function readJSON(name) {
+    const response = await fetch(name, { cache: "no-store" });
+    if (!response.ok) throw new Error(`Could not read tracker/${name} (${response.status}).`);
+    return response.json();
+  }
+
+  async function initializeArchive() {
     if (!/^https?:$/.test(location.protocol)) {
-      renderOffline("This tracker now runs as a local site instead of a standalone file.");
+      renderOffline("This archive runs as a local site rather than a standalone file.");
       return false;
     }
     try {
-      const response = await fetch(API_PATH, { cache: "no-store" });
-      const payload = await response.json();
-      if (!response.ok || !payload.ok || !payload.state) throw new Error(payload.error || "Tracker server did not respond.");
-      STATE.version = payload.state.version;
-      STATE.revision = payload.state.revision;
-      STATE.createdItems = payload.state.createdItems || [];
+      const [state, migrated] = await Promise.all([readJSON("state.json"), readJSON("migrated.json")]);
+      STATE.createdItems = state.createdItems || [];
       STATE.createdItems.forEach(item => {
         if (BY_ID.has(item.id)) return;
         ITEMS.push(item);
         BY_ID.set(item.id, item);
       });
-      Object.assign(EDITS, payload.state.items || {});
+      Object.assign(EDITS, state.items || {});
+      Object.assign(MIGRATED, migrated);
       applyEdits();
-      await loadWhoami();
-      serverConnected = true;
-      el("newTask").disabled = false;
-      setConnection("Live · saved to project", "on");
+      const moved = Object.keys(MIGRATED).length;
+      setConnection(`Archive · read-only · ${moved} items on GitHub`, "on");
       return true;
     } catch (error) {
-      renderOffline(error?.message || "Could not connect to the tracker server.");
+      renderOffline(error?.message || "Could not read the tracker archive.");
       return false;
     }
   }
 
-  function localDateStamp() {
-    const now = new Date();
-    return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
-  }
-
-  function stageEditor(editor) {
-    const id = editor.dataset.editor;
-    const status = editor.querySelector(".edit-status").value;
-    const priority = editor.querySelector(".edit-priority").value;
-    const owner = editor.querySelector(".edit-owner").value;
-    const implementationBrief = editor.querySelector(".edit-note").value.trim();
-    const archived = TERMINAL.has(status);
-    const updated = localDateStamp();
-    Object.assign(BY_ID.get(id), { status, priority, owner, implementationBrief, archived });
-    EDITS[id] = { status, priority, owner, implementationBrief, archived, updated };
-    return id;
-  }
-
-  function markDirty(editor) {
-    stageEditor(editor);
-    unsavedChanges = true;
-    setConnection("Unsaved changes", "");
-    editor.querySelector(".item-save-state").textContent = "Unsaved";
-  }
-
-  /* A 409 means the file moved under us — another tab, an agent editing
-     `state.json` by hand, or a `git pull`. Saying "Save failed" in the corner
-     was not enough: the edit is still sitting in the form, the page still shows
-     the pre-pull world, and the only safe move is a reload. So say exactly that,
-     once, in a banner the user has to dismiss by reloading. */
-  function renderStaleBanner(message) {
-    if (el("stale")) return;
-    const banner = document.createElement("div");
-    banner.id = "stale";
-    banner.className = "stale";
-    banner.innerHTML = `<span>${esc(message)}</span><button type="button" id="staleReload">Reload now</button>`;
-    document.body.prepend(banner);
-    el("staleReload").addEventListener("click", () => location.reload());
-  }
-
-  async function saveState() {
-    if (!serverConnected) return { ok: false, error: "Tracker server is not connected." };
-    setConnection("Saving…", "");
-    try {
-      const response = await fetch(API_PATH, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(statePayload()),
-      });
-      const payload = await response.json();
-      if (response.status === 409) {
-        setConnection("Out of date · reload", "error");
-        renderStaleBanner(payload.error || "The tracker changed on disk. Reload before saving.");
-        return { ok: false, error: payload.error || "The tracker changed on disk. Reload before saving." };
-      }
-      if (!response.ok || !payload.ok) throw new Error(payload.error || "Could not save tracker changes.");
-      STATE.revision = payload.state.revision;
-      unsavedChanges = false;
-      setConnection("Live · saved to project", "on");
-      return { ok: true };
-    } catch (error) {
-      setConnection("Save failed", "error");
-      return { ok: false, error: error?.message || "Could not save tracker changes." };
-    }
-  }
-
-  async function saveItem(button) {
-    const editor = button.closest(".editor");
-    stageEditor(editor);
-    editor.querySelector(".item-save-state").textContent = "Saving…";
-    const result = await saveState();
-    if (result.ok) render();
-    else editor.querySelector(".item-save-state").textContent = result.error;
-  }
-
-  /* A transition or a claim is a one-click action: set the field the button
-     stands for, then save straight away — no second trip to "Save changes". */
-  async function saveField(button, selector, value) {
-    const editor = button.closest(".editor");
-    editor.querySelector(selector).value = value;
-    await saveItem(button);
-  }
-
-  const WHOAMI_PATH = "api/whoami";
-
-  function renderWhoami() {
-    const picker = el("whoami");
-    if (!PEOPLE.length) return;
-    picker.hidden = false;
-    picker.innerHTML = ["", ...PEOPLE]
-      .map(p => `<option value="${esc(p)}"${p === ME ? " selected" : ""}>${p ? `👤 ${esc(p)}` : "👤 Who are you?"}</option>`).join("");
-  }
-
-  async function loadWhoami() {
-    try {
-      const response = await fetch(WHOAMI_PATH, { cache: "no-store" });
-      const payload = await response.json();
-      if (payload.ok) ME = payload.person || "";
-    } catch { /* identity is a convenience; the tracker works without it */ }
-    renderWhoami();
-  }
-
-  async function setWhoami(person) {
-    ME = person;
-    try {
-      await fetch(WHOAMI_PATH, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ person }),
-      });
-    } catch { /* the choice still applies to this page load */ }
-    render();
-  }
-
-  function taskIdentityForGroup(group) {
-    const counts = {};
-    ITEMS.filter(item => item.group === group).forEach(item => {
-      counts[item.prefix] = (counts[item.prefix] || 0) + 1;
-    });
-    const prefix = Object.keys(counts).sort((a, b) => counts[b] - counts[a] || a.localeCompare(b))[0];
-    const num = Math.max(0, ...ITEMS.filter(item => item.prefix === prefix).map(item => item.num)) + 1;
-    return { prefix, num, id: `${prefix}-${num}` };
-  }
-
-  function updateTaskIdPreview() {
-    el("taskIdPreview").textContent = taskIdentityForGroup(el("taskGroup").value).id;
-  }
-
-  function openNewTask() {
-    el("newTaskForm").reset();
-    el("taskError").textContent = "";
-    el("taskGroup").innerHTML = DATA.groups.map(g => `<option>${esc(g.name)}</option>`).join("");
-    updateTaskIdPreview();
-    el("newTaskBox").showModal();
-    el("taskTitle").focus();
-  }
-
-  async function createTask(event) {
-    event.preventDefault();
-    const previouslyUnsaved = unsavedChanges;
-    const title = el("taskTitle").value.trim();
-    const group = el("taskGroup").value;
-    const { prefix, num, id } = taskIdentityForGroup(group);
-    const priority = el("taskPriority").value;
-    const implementationBrief = el("taskBrief").value.trim();
-    const added = localDateStamp();
-    const item = {
-      id, prefix, num, sub: "", title, status: "Backlog", priority, implementationBrief,
-      group, subgroup: "", archived: false, added, request: [title],
-    };
-
-    if (!title) { el("taskError").textContent = "Add a title first."; return; }
-    STATE.createdItems.push(item);
-    ITEMS.push(item);
-    BY_ID.set(id, item);
-    unsavedChanges = true;
-    setConnection("Saving…", "");
-    const result = await saveState();
-    if (!result.ok) {
-      STATE.createdItems.pop();
-      ITEMS.splice(ITEMS.indexOf(item), 1);
-      BY_ID.delete(id);
-      unsavedChanges = previouslyUnsaved;
-      el("taskError").textContent = result.error;
-      return;
-    }
-
-    el("newTaskBox").close();
-    state.group = group;
-    state.status.clear();
-    state.priority.clear();
-    state.owner.clear();
-    state.archive = false;
-    state.q = "";
-    el("q").value = "";
-    openIds.add(id);
-    persist();
-    render();
-    document.getElementById(id)?.scrollIntoView({ block: "center" });
-  }
-
   /* ---------- events ---------- */
-  el("list").addEventListener("click", async e => {
-    const save = e.target.closest(".save-item");
-    if (save) { await saveItem(save); return; }
-    const go = e.target.closest(".go");
-    if (go) { await saveField(go, ".edit-status", go.dataset.go); return; }
-    const claim = e.target.closest(".claim");
-    if (claim) { await saveField(claim, ".edit-owner", claim.dataset.claim); return; }
+  el("list").addEventListener("click", e => {
     const head = e.target.closest(".head");
     if (!head) return;
     const id = head.dataset.id;
@@ -1091,18 +790,6 @@
     render();
     document.getElementById(id)?.scrollIntoView({ block: "nearest" });
   });
-
-  el("list").addEventListener("input", e => {
-    if (!e.target.matches(".edit-note")) return;
-    markDirty(e.target.closest(".editor"));
-  });
-
-  el("list").addEventListener("change", e => {
-    if (!e.target.matches(".edit-status, .edit-priority, .edit-owner")) return;
-    markDirty(e.target.closest(".editor"));
-  });
-
-  el("whoami").addEventListener("change", e => setWhoami(e.target.value));
 
   document.querySelector("aside").addEventListener("click", e => {
     const chip = e.target.closest(".chip");
@@ -1144,17 +831,7 @@
     render();
   });
 
-  el("newTask").addEventListener("click", openNewTask);
-  el("newTaskForm").addEventListener("submit", createTask);
-  el("taskGroup").addEventListener("change", updateTaskIdPreview);
-
-  el("help").addEventListener("click", () => {
-    const next = {};
-    ITEMS.forEach(i => next[i.prefix] = Math.max(next[i.prefix] || 0, i.num));
-    el("nextIds").innerHTML = Object.keys(next).sort()
-      .map(p => `${p}-${next[p] + 1}`).join(" &nbsp;·&nbsp; ");
-    el("helpBox").showModal();
-  });
+  el("help").addEventListener("click", () => el("helpBox").showModal());
 
   el("theme").addEventListener("click", () => {
     const cur = document.documentElement.dataset.theme;
@@ -1165,18 +842,8 @@
   document.documentElement.dataset.theme = localStorage.getItem("tracker-theme") || "";
 
   document.addEventListener("keydown", e => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-      const editor = document.activeElement?.closest?.(".editor");
-      if (editor) { e.preventDefault(); editor.querySelector(".save-item").click(); }
-    }
     if (e.key === "/" && document.activeElement !== el("q")) { e.preventDefault(); el("q").focus(); }
     if (e.key === "Escape" && document.activeElement === el("q")) { el("q").value = ""; state.q = ""; render(); }
-  });
-
-  window.addEventListener("beforeunload", e => {
-    if (!unsavedChanges) return;
-    e.preventDefault();
-    e.returnValue = "";
   });
 
   function jumpToHash() {
@@ -1195,7 +862,7 @@
   }
   window.addEventListener("hashchange", jumpToHash);
 
-  initializePersistence().then(ready => {
+  initializeArchive().then(ready => {
     if (!ready) return;
     render();
     jumpToHash();

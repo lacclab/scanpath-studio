@@ -253,6 +253,39 @@ def create_issues(items: list[dict[str, Any]]) -> dict[str, int]:
     return numbers
 
 
+def update_issues(items: list[dict[str, Any]], numbers: dict[str, int]) -> None:
+    """Re-render items that already have an issue, in place.
+
+    The archive is still what the bodies are generated from, so correcting a
+    write-up there and re-running is how an issue body gets fixed. Without this,
+    `--only` on a migrated item would raise a *second* issue for it.
+    """
+    for item in items:
+        number = numbers[item["id"]]
+        args = [
+            "issue",
+            "edit",
+            str(number),
+            "--repo",
+            REPO,
+            "--title",
+            f"[{item['id']}] {item['title']}",
+            "--body",
+            render_body(item, numbers),
+        ]
+        wanted = labels_for(item)
+        for label in wanted:
+            args += ["--add-label", label]
+        # An item that changed status keeps its old `status:*` label otherwise —
+        # `gh issue edit` adds, it does not replace — and the issue then claims
+        # two statuses at once.
+        for label in (*(name for name, *_ in STATUS_LABELS.values()), "waiting-on-you"):
+            if label not in wanted:
+                args += ["--remove-label", label]
+        run_gh(args)
+        print(f"{item['id']:<9} → updated #{number}")
+
+
 def backfill_links(items: list[dict[str, Any]], numbers: dict[str, int]) -> None:
     """Re-render every body now that all the issue numbers are known.
 
@@ -273,7 +306,12 @@ def main() -> None:
     parser.add_argument(
         "--labels-only", action="store_true", help="Create labels only."
     )
-    parser.add_argument("--only", help="Migrate a single tracker ID (for a retry).")
+    parser.add_argument("--only", help="Act on a single tracker ID (for a retry).")
+    parser.add_argument(
+        "--update",
+        action="store_true",
+        help="Re-render items that already have an issue instead of creating new ones.",
+    )
     args = parser.parse_args()
 
     items = live_items(load_items())
@@ -297,13 +335,25 @@ def main() -> None:
     if args.labels_only:
         return
 
-    numbers = create_issues(items)
-    backfill_links(items, numbers)
-    existing = (
+    known = (
         json.loads(MAP_FILE.read_text(encoding="utf-8")) if MAP_FILE.exists() else {}
     )
+    if args.update:
+        missing = [item["id"] for item in items if item["id"] not in known]
+        if missing:
+            raise SystemExit(f"--update needs an existing issue; missing: {missing}")
+        update_issues(items, known)
+        return
+
+    already = [item["id"] for item in items if item["id"] in known]
+    if already:
+        raise SystemExit(
+            f"already migrated: {already}. Re-run with --update to rewrite the body."
+        )
+    numbers = create_issues(items)
+    backfill_links(items, numbers)
     MAP_FILE.write_text(
-        f"{json.dumps({**existing, **numbers}, indent=2, sort_keys=True)}\n",
+        f"{json.dumps({**known, **numbers}, indent=2, sort_keys=True)}\n",
         encoding="utf-8",
     )
     print(f"wrote {MAP_FILE.relative_to(TRACKER_DIR.parent)}")

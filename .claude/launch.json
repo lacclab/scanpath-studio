@@ -2,27 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "scanpath-app",
-      "runtimeExecutable": "streamlit",
-      "runtimeArgs": [
-        "run",
-        "streamlit_app.py",
-        "--server.port",
-        "8502",
-        "--server.headless",
-        "true"
-      ],
-      "port": 8502
-    },
-    {
-      "name": "docs",
-      "runtimeExecutable": "mkdocs",
-      "runtimeArgs": [
-        "serve",
-        "--dev-addr",
-        "127.0.0.1:8503"
-      ],
-      "port": 8503
+      "name": "tracker-archive",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["tracker/server.py", "--port", "8790", "--no-open"],
+      "port": 8790
     }
   ]
 }

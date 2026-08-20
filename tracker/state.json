@@ -552,9 +552,9 @@
       "updated": "2026-08-20"
     },
     "ENG-32": {
-      "status": "Planned",
+      "status": "In progress",
       "priority": "Normal",
-      "owner": "",
+      "owner": "Shubi",
       "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-20"

@@ -3368,7 +3368,8 @@ window.TRACKER = {
     "2. *Sort trials by*: use the new underline format, with the checkbox / fields",
     "   to the right of the text, and make the **?** text clearer and more concise",
     "   without the example.",
-    "3. Use a funnel for the trial filter."
+    "3. Use a funnel for the trial filter.",
+    "4. In the filter popover, *Trial index* → **?**: remove the part after the dash."
    ],
    "whatWasDone": [
     "**Dataset tooltip.** The `?` carried `controls.data_dictionary_help_text()` —",
@@ -3391,7 +3392,13 @@ window.TRACKER = {
     "\":material/filter_alt:\"`. Unicode has no funnel emoji, so this is Streamlit's",
     "Material icon — the same mechanism as the dataset table's `:material/edit:`",
     "buttons. The \"no trials match its 🔎 filters\" messages and the comments naming",
-    "the button were updated with it, so nothing still points at a magnifier."
+    "the button were updated with it, so nothing still points at a magnifier.",
+    "",
+    "**Range help.** The numeric range slider's help (*Trial index*, and any other",
+    "numeric trial-level column) now stops at \"Trials with no value are kept.\" — the",
+    "trailing \"a range narrows, it doesn't exclude the unmeasured\" restated it. The",
+    "caption under the slider still names how many trials that covers, which is the",
+    "part that was doing real work."
    ],
    "whatsLeft": [
     "Nothing."

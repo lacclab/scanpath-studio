@@ -5981,8 +5981,7 @@ def render_trial_filters(
             key=_range_filter_key(col, prefix),
             on_change=_apply,
             help="Keep only trials whose value falls in this range. Trials with "
-            "no value are kept — a range narrows, it doesn't exclude the "
-            "unmeasured.",
+            "no value are kept.",
         )
         missing = _trials_missing_column(
             frame, col, cache_key=(frame_fingerprint(frame), col)

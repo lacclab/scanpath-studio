@@ -1286,8 +1286,16 @@ def _remember_setup(values: dict) -> None:
     st.session_state["_wizard_setup_recall"] = recall
 
 
-def _setup_mode(host, group: str, options: list, help_text: str, label=None):
-    """One group's ``st.radio(index=None)`` — nothing preselected, ever.
+def _setup_mode(
+    host,
+    group: str,
+    options: list,
+    help_text: str,
+    label=None,
+    *,
+    key_prefix: str = "wizard",
+):
+    """One setup group's radio, namespaced for add or edit.
 
     Returns the chosen label or ``None``. The mode keys are wizard-local UI state
     and deliberately **not** wire format (same reasoning as ``share_identity_mode``
@@ -1308,12 +1316,21 @@ def _setup_mode(host, group: str, options: list, help_text: str, label=None):
         f"{label or SETUP_GROUP_LABELS[group]} *",
         options,
         index=None,
-        key=_SETUP_MODE_KEYS[group],
+        key=f"{key_prefix}_setup_{group}_mode",
         help=help_text,
     )
 
 
-def _wizard_setup_step(host, words_raw, fix_raw, has_boxes: bool) -> SetupSnapshot:
+def _wizard_setup_step(
+    host,
+    words_raw,
+    fix_raw,
+    has_boxes: bool,
+    *,
+    key_prefix: str = "wizard",
+    initial: SetupSnapshot | None = None,
+    publish: bool = True,
+) -> SetupSnapshot:
     """Render the three Recording-setup groups and resolve them to a snapshot.
 
     Writes the resolved values into the existing ``global_*`` wire-format keys
@@ -1329,6 +1346,37 @@ def _wizard_setup_step(host, words_raw, fix_raw, has_boxes: bool) -> SetupSnapsh
     # The description that used to print here is now the section's hover text.
     screen_host, geom_host, text_host = host.columns(3, gap="medium")
 
+    # The Data Management editor reuses this exact control layout. Seed its
+    # three mode choices from the saved snapshot once; the add flow keeps its
+    # deliberate unanswered state because ``initial`` is None.
+    if initial is not None:
+        screen_modes = {
+            Provenance.MEASURED: _SCREEN_KNOW,
+            Provenance.ESTIMATED: _SCREEN_ESTIMATE,
+            Provenance.ASSUMED: _SCREEN_DEFAULT,
+        }
+        geometry_modes = {
+            Provenance.MEASURED: _GEOM_KNOW,
+            Provenance.ASSUMED: _GEOM_DEFAULT,
+            Provenance.SKIPPED: _GEOM_SKIP,
+        }
+        text_mode = (
+            _TEXT_BOXES
+            if initial.scale_text_to_boxes and has_boxes
+            else _TEXT_DEFAULT
+            if initial.text_provenance is Provenance.ASSUMED
+            else _TEXT_FONT
+        )
+        st.session_state.setdefault(
+            f"{key_prefix}_setup_screen_mode",
+            screen_modes.get(initial.screen_provenance, _SCREEN_KNOW),
+        )
+        st.session_state.setdefault(
+            f"{key_prefix}_setup_geometry_mode",
+            geometry_modes.get(initial.geometry_provenance, _GEOM_DEFAULT),
+        )
+        st.session_state.setdefault(f"{key_prefix}_setup_text_mode", text_mode)
+
     # --- Screen -------------------------------------------------------------
     screen_mode = _setup_mode(
         screen_host,
@@ -1337,18 +1385,33 @@ def _wizard_setup_step(host, words_raw, fix_raw, has_boxes: bool) -> SetupSnapsh
         "The presentation monitor's resolution in pixels. Everything is drawn in "
         "these coordinates.",
         label="Screen",
+        key_prefix=key_prefix,
     )
     est_w, est_h = compute_canvas_size(words_raw, fix_raw)
-    canvas_w, canvas_h = (
-        _recalled("canvas_width", 2560),
-        _recalled("canvas_height", 1440),
+    canvas_w = (
+        initial.canvas_width
+        if initial is not None
+        else _recalled("canvas_width", 2560)
+    )
+    canvas_h = (
+        initial.canvas_height
+        if initial is not None
+        else _recalled("canvas_height", 1440)
     )
     if screen_mode == _SCREEN_KNOW:
         canvas_w = screen_host.number_input(
-            "Width (px)", 100, 10000, int(canvas_w), key="wizard_setup_screen_w"
+            "Width (px)",
+            100,
+            10000,
+            int(canvas_w),
+            key=f"{key_prefix}_setup_screen_w",
         )
         canvas_h = screen_host.number_input(
-            "Height (px)", 100, 10000, int(canvas_h), key="wizard_setup_screen_h"
+            "Height (px)",
+            100,
+            10000,
+            int(canvas_h),
+            key=f"{key_prefix}_setup_screen_h",
         )
     elif screen_mode == _SCREEN_ESTIMATE:
         canvas_w, canvas_h = est_w, est_h
@@ -1369,19 +1432,32 @@ def _wizard_setup_step(host, words_raw, fix_raw, has_boxes: bool) -> SetupSnapsh
         "Needed only to express distances in degrees of visual angle. Skipping is "
         "a real answer — the app then hides the numbers it cannot honestly derive.",
         label="Physical size",
+        key_prefix=key_prefix,
     )
-    mon_mm = float(_recalled("monitor_width_mm", 597.0))
-    dist_mm = float(_recalled("viewing_distance_mm", 800.0))
+    mon_mm = float(
+        initial.monitor_width_mm
+        if initial is not None
+        else _recalled("monitor_width_mm", 597.0)
+    )
+    dist_mm = float(
+        initial.viewing_distance_mm
+        if initial is not None
+        else _recalled("viewing_distance_mm", 800.0)
+    )
     if geom_mode == _GEOM_KNOW:
         mon_mm = geom_host.number_input(
-            "Monitor width (mm)", 50.0, 2000.0, mon_mm, key="wizard_setup_monitor_mm"
+            "Monitor width (mm)",
+            50.0,
+            2000.0,
+            mon_mm,
+            key=f"{key_prefix}_setup_monitor_mm",
         )
         dist_mm = geom_host.number_input(
             "Viewing distance (mm)",
             50.0,
             5000.0,
             dist_mm,
-            key="wizard_setup_distance_mm",
+            key=f"{key_prefix}_setup_distance_mm",
         )
         if canvas_w and mon_mm > 0 and dist_mm > 0:
             geom_host.caption(
@@ -1410,10 +1486,19 @@ def _wizard_setup_step(host, words_raw, fix_raw, has_boxes: bool) -> SetupSnapsh
         "How big the reading text was drawn. Word labels are rendered at this size "
         "so the figure matches what the participant saw.",
         label="Text size",
+        key_prefix=key_prefix,
     )
     scale_to_boxes = True
-    base_font = int(_recalled("base_font_size", 16))
-    font_family = str(_recalled("font_family", FONT_FAMILY))
+    base_font = int(
+        initial.base_font_size
+        if initial is not None
+        else _recalled("base_font_size", 16)
+    )
+    font_family = str(
+        initial.font_family
+        if initial is not None
+        else _recalled("font_family", FONT_FAMILY)
+    )
     if text_mode == _TEXT_BOXES:
         scale_to_boxes = True
         text_host.caption(
@@ -1421,15 +1506,19 @@ def _wizard_setup_step(host, words_raw, fix_raw, has_boxes: bool) -> SetupSnapsh
         )
     elif text_mode == _TEXT_FONT:
         scale_to_boxes = False
+        initial_font_pt = float(_recalled("stimulus_font_pt", 12.0))
+        if initial is not None and mon_mm > 0 and geom_mode != _GEOM_SKIP:
+            initial_dpi = float(canvas_w) / (float(mon_mm) / 25.4)
+            initial_font_pt = float(initial.base_font_size) * 72.0 / initial_dpi
         font_pt = text_host.number_input(
             "Stimulus font (pt)",
             4.0,
             96.0,
-            float(_recalled("stimulus_font_pt", 12.0)),
-            key="wizard_setup_font_pt",
+            initial_font_pt,
+            key=f"{key_prefix}_setup_font_pt",
         )
         font_family = text_host.text_input(
-            "Font family", value=font_family, key="wizard_setup_font_family"
+            "Font family", value=font_family, key=f"{key_prefix}_setup_font_family"
         )
         # pt→px needs a DPI, which needs the physical width. Under a skipped
         # geometry group there is no honest DPI, so the conversion is withheld
@@ -1458,7 +1547,11 @@ def _wizard_setup_step(host, words_raw, fix_raw, has_boxes: bool) -> SetupSnapsh
         viewing_distance_mm=float(dist_mm),
         base_font_size=int(base_font),
         font_family=font_family,
-        line_spacing=float(st.session_state.get("global_line_spacing", 3.0)),
+        line_spacing=float(
+            initial.line_spacing
+            if initial is not None
+            else st.session_state.get("global_line_spacing", 3.0)
+        ),
         scale_text_to_boxes=bool(scale_to_boxes),
         screen_provenance=_SETUP_PROVENANCE.get(screen_mode),
         geometry_provenance=_SETUP_PROVENANCE.get(geom_mode),
@@ -1468,9 +1561,10 @@ def _wizard_setup_step(host, words_raw, fix_raw, has_boxes: bool) -> SetupSnapsh
     # Publish the snapshot for the save/restore + export writers. A partial one
     # resolves to None, so `current_setup_section` writes nothing rather than an
     # all-defaults section that would read as a real answer.
-    st.session_state["_wizard_setup_snapshot"] = (
-        snapshot.to_dict() if snapshot.is_answered() else None
-    )
+    if publish:
+        st.session_state["_wizard_setup_snapshot"] = (
+            snapshot.to_dict() if snapshot.is_answered() else None
+        )
 
     # Publish each group's values as soon as *that* group is answered, into the
     # wire-format `global_*` keys the rest of the app reads. The hard gate is on
@@ -1479,23 +1573,23 @@ def _wizard_setup_step(host, words_raw, fix_raw, has_boxes: bool) -> SetupSnapsh
     # unrelated questions. Only the values were ever wire format; the provenance
     # beside them is what is new.
     recall: dict = {}
-    if snapshot.screen_provenance is not None:
+    if publish and snapshot.screen_provenance is not None:
         st.session_state["global_canvas_width"] = snapshot.canvas_width
         st.session_state["global_canvas_height"] = snapshot.canvas_height
         recall["canvas_width"] = snapshot.canvas_width
         recall["canvas_height"] = snapshot.canvas_height
-    if snapshot.geometry_provenance not in (None, Provenance.SKIPPED):
+    if publish and snapshot.geometry_provenance not in (None, Provenance.SKIPPED):
         st.session_state["global_monitor_width_mm"] = snapshot.monitor_width_mm
         st.session_state["global_viewing_distance_mm"] = snapshot.viewing_distance_mm
         recall["monitor_width_mm"] = snapshot.monitor_width_mm
         recall["viewing_distance_mm"] = snapshot.viewing_distance_mm
-    if snapshot.text_provenance is not None:
+    if publish and snapshot.text_provenance is not None:
         st.session_state["global_base_font_size"] = snapshot.base_font_size
         st.session_state["global_font_family"] = snapshot.font_family
         st.session_state["global_scale_text_to_boxes"] = snapshot.scale_text_to_boxes
         recall["base_font_size"] = snapshot.base_font_size
         recall["font_family"] = snapshot.font_family
-    if recall:
+    if publish and recall:
         _remember_setup(recall)
 
     # UX-90 — an error, not a warning, and only once the user has actually tried
@@ -1505,7 +1599,7 @@ def _wizard_setup_step(host, words_raw, fix_raw, has_boxes: bool) -> SetupSnapsh
     # (`controls.ADD_ATTEMPTED_KEY`), so one click now turns the whole page red
     # at once instead of it nagging in two different tenses.
     unanswered = [g for g, p in snapshot.provenance.items() if p is None]
-    if unanswered and st.session_state.get(ADD_ATTEMPTED_KEY):
+    if publish and unanswered and st.session_state.get(ADD_ATTEMPTED_KEY):
         host.error(
             "Still to answer: "
             + ", ".join(f"**{SETUP_GROUP_LABELS[g]}**" for g in unanswered)

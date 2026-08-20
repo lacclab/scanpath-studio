@@ -172,8 +172,9 @@ scanpath-studio cache --json     # the same status as JSON
 scanpath-studio cache --clear    # delete the stored session
 ```
 
-The same information (and a **Forget saved session** button) is in the app's
-sidebar under **🗄️ Recovery cache**. `SCANPATH_STUDIO_PERSIST=0` turns caching
+The same information and controls are in **Session → Automatic recovery**;
+**Clear recovery cache** removes the saved copy without closing the current
+app. `SCANPATH_STUDIO_PERSIST=0` turns caching
 off permanently, `--no-persist` for one launch, and `SCANPATH_STUDIO_STATE_DIR`
 moves the folder. Hosted deployments never cache. See
 [Privacy](privacy.md#what-happens-to-a-file-you-upload).

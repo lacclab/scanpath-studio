@@ -30,7 +30,7 @@ last settings you changed by hand and restores them after you visit a preset.
 | ↗️ Saccades | Saccades | movement direction, reading type, regressions and return sweeps |
 | 📄 Stimulus | Text, Bounding boxes, Stimulus image | verify stimulus geometry and fixation-to-word alignment; compare against the original display |
 | 🔥 Overlays | Heatmap, Raw gaze | spatial concentration by count or duration; millisecond-level gaze samples |
-| 📐 Figure & canvas | — | monitor geometry, fonts, plot background, full-monitor framing, colour bars, axes, title and labels |
+| 📐 Figure & canvas | — | monitor framing, plot background, colour bars, axes, title and labels |
 
 Each layer section opens the same way: the **on/off toggle** first, then
 **⚙️ style** and **🧹 filter** — appearance and visibility kept apart, so
@@ -39,12 +39,10 @@ same list. Fixations is open by default; the rest start collapsed, and a layer's
 settings appear only while that layer is on. Marker size already encodes duration
 by default, so uniform fixation color is usually the clearest starting point.
 
-**📐 Figure & canvas** has no layer to switch on, so it keeps **Show full
-monitor** in view and groups the rest the same way: **🖥️ Screen & geometry**
-(monitor pixels, physical size, viewing distance, DPI), **🔤 Text & fonts** (text
-scaling, font size and typeface, text and background colour), **📊 Axes & grid**
-(coordinate grid, colour bars, axis fields) and **🏷️ Title & labels**
-(Illustration label, figure title and caption).
+**Stimulus → Text** keeps typography beside the layer it controls. Text can
+scale from word boxes, or use one fixed size entered in pixels or points; point
+sizes use the dataset DPI. **📐 Figure & canvas** has no layer to switch on. It
+contains **🖥️ Screen & framing**, **📊 Axes & grid**, and **🏷️ Title & labels**.
 
 ### Show screen coordinates
 

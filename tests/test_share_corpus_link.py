@@ -540,6 +540,7 @@ class TestTheCurrentLinkFollowsTheView:
             if getattr(element, "value", None)
         )
         assert "different address or port" in copy
+        assert "Refresh & Copy uses" not in copy
 
     def test_switching_corpus_updates_the_share_link(self, bundle):
         from scanpath_studio import app

@@ -225,3 +225,4 @@ def test_share_widget_has_one_refresh_and_copy_action(monkeypatch):
     assert rendered["html"].count("<button") == 1
     assert "Refresh &amp; Copy" in rendered["html"]
     assert "Copy link" not in rendered["html"]
+    assert rendered["height"] == 76

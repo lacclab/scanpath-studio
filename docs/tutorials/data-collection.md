@@ -45,7 +45,7 @@ is the participant, experimenter, or setup.
 
 ## 5. Save the review
 
-Open **💾 Save & restore** and download the JSON. It preserves the view settings
+Open **Session → JSON backup** and download the file. It preserves the view settings
 and annotations for later review. Do not rely on a screenshot as the only record
 of an exclusion decision.
 

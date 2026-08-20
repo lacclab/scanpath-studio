@@ -25,16 +25,18 @@ scrubber has more room. Comparison-subtab candidates match the selected trial on
 one chosen field, keep each candidate's own stimulus and the main plot styling,
 exclude the selected trial, and show only trial IDs above their panels.
 
-Data Management renders integer dataset counts, pairs each Kind icon with its
-word (Demo / Manual / Private / Public), names the active dataset in the
-**What's in…** heading, and presents mappings in the add-dataset field-grid
-grammar. The page keeps a 3rem top inset so the fixed header does not clip the
+Data Management renders the full inspection-summary fields as integer dataset
+counts, pairs each Kind icon with its word (Demo / Manual / Private / Public),
+and gives every row Rename / Remove actions (app-owned tokens keep a display
+alias or are hidden for the session; uploads are really re-keyed/deleted). It
+names the active dataset in the **What's in…** heading and presents mappings in
+the add-dataset field-grid grammar. The page keeps a 3rem top inset so the fixed header does not clip the
 first row, while its bottom remains flush. The
 single-trial chip row no longer repeats participant ID in a title cell, and the
 Fixations controls keep the snap setting without the separate
 “Linear-reading schematic” caption.
 
-Share renders one **Refresh & Copy** browser action beside the URL. The query is
+Share renders one compact **Refresh & Copy** browser action beside the URL. The query is
 rebuilt from the current view on each Streamlit rerun, so the one button always
 copies the current trial and settings without a separate server-side refresh.
 Mapping's icon-only confirm CSS is scoped to `_cell_confirm`; broad `_confirm`

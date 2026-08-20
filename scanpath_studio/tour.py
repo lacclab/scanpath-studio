@@ -1603,10 +1603,11 @@ _FAQ_ITEMS = [
     ),
     (
         "My uploaded data vanished after a refresh.",
-        "Expected — uploads, wizard datasets and annotations live in session "
-        "state, which dies with the session. Use **💾 Session → Save & restore** for the "
-        "plot config + annotations, and **⬇️ Save setup** in the "
-        "wizard for the column mapping; both are re-importable.",
+        "Local and desktop runs normally recover uploaded datasets, settings and "
+        "annotations automatically. Check **💾 Session → Automatic recovery** "
+        "to see whether it is enabled and where it is saved. For a portable copy "
+        "of settings and annotations, use **JSON backup**; dataset rows are not "
+        "included in that file.",
     ),
     (
         "PNG / SVG / PDF export fails but HTML works.",
@@ -1620,7 +1621,7 @@ _FAQ_ITEMS = [
         "`st.cache_data` doesn't hash the helpers a cached loader calls — a "
         "rerun or **Clear cache** isn't enough after editing code. Restart the "
         "server process. This is a different cache from the menu bar's "
-        "**💾 Session → 🗄️ Recovery cache** panel, which stores your data and settings, "
+        "**💾 Session → Automatic recovery** panel, which stores your data and settings, "
         "not code.",
     ),
     (

@@ -49,11 +49,11 @@ same dataset. Share links include the current participant and trial; see
 ## Does a refresh erase my work?
 
 Local and desktop installs restore completed datasets and session state from an
-on-device cache. The hosted demo is memory-only. Download **💾 Save & restore**
-JSON when the work must be portable.
+on-device recovery cache. The hosted demo is memory-only. Download a **JSON
+backup** from **Session** when settings and annotations must be portable.
 
-The sidebar's **🗄️ Recovery cache** panel shows what that cache holds, where it
-is, and clears it; `scanpath-studio cache` does the same from a terminal. See
+**Session → Automatic recovery** shows what the cache holds, where it is saved,
+and lets you pause or clear it; `scanpath-studio cache` does the same from a terminal. See
 [Privacy](privacy.md#what-happens-to-a-file-you-upload).
 
 ## I edited the code and nothing changed?
@@ -61,7 +61,7 @@ is, and clears it; `scanpath-studio cache` does the same from a terminal. See
 Streamlit re-runs only the top-level script — it does not reload already-imported
 modules, and `st.cache_data` does not hash the helper functions a cached loader
 calls. Restart the server process after editing code; a rerun or "Clear cache"
-isn't enough. This is unrelated to the **🗄️ Recovery cache**, which stores your
+isn't enough. This is unrelated to **Automatic recovery**, which stores your
 data and settings, not code. See
 [Contributing](https://github.com/lacclab/scanpath-studio/blob/main/CONTRIBUTING.md#if-a-code-change-doesnt-show-up).
 

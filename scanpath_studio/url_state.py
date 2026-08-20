@@ -2068,7 +2068,9 @@ def _render_share_link_widget(query: str) -> None:
         }})();
         </script>
         """,
-        height=110,
+        # One control row plus the transient copy-status line. The previous
+        # 110 px frame reserved a visibly empty block before the note below.
+        height=76,
     )
 
 
@@ -2095,7 +2097,6 @@ def _render_share_body(data_choice: str) -> None:
         "If the recipient runs Scanpath Studio at a different address or port, "
         "replace the start of the URL before opening it."
     )
-    st.caption("Refresh & Copy uses the current trial and settings.")
 
 
 # -----------------------------------------------------------------------------

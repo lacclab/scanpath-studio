@@ -349,62 +349,47 @@ def render_top_menu(
     if active == _VIEW_SESSION:
         session.subheader("💾 Session")
         session.caption(
-            "Save or restore your work, and see what is kept on this computer."
+            "Manage automatic recovery, portable backups and diagnostics."
         )
-    # UX-38: 💾 Save & restore and 🗄️ Recovery cache merged into one **💾 Session**
-    # group. Both answer the same question — *what is kept, and how do I get it
-    # back* — differing only in whether the state travels to another machine,
-    # which is why neither sat comfortably beside dataset setup or figure
-    # styling. Two containers, not one body: `main` fills them at very different
-    # points (Save & restore after the view renders, the cache after this run's
-    # `save_local_state`), and creation order is what keeps them in this order.
-    # UX-53: one short line per block, with the detail folded into its `?` —
-    # the panel opens on a menu click, so nobody arrives here to read prose.
-    save_restore = session.container()
-    save_restore.markdown("**💾 Save & restore**")
-    save_restore.caption(
-        "One JSON file — opens on any machine.",
-        help="Holds the plot configuration, every annotation, the data source "
-        "and the column mapping. On restore, everything that fits the loaded "
-        "data is re-applied and the rest is skipped.",
-    )
-    recovery_cache = session.container()
-    recovery_cache.divider()
-    recovery_cache.markdown("**🗄️ Recovery cache**")
+    # Recovery and a JSON backup are deliberately separate. Recovery contains
+    # the local dataset tables and happens automatically; the portable JSON is
+    # user-triggered and intentionally omits those tables. The order makes that
+    # distinction the page's hierarchy rather than a tooltip-only caveat.
+    recovery_cache = session.container(key="session_auto_recovery")
+    recovery_cache.markdown("### 🗄️ Automatic recovery")
     recovery_cache.caption(
-        "Kept on *this* computer, so a refresh doesn't lose your work.",
-        help="Uploaded datasets, column mappings, view settings and "
-        "annotations are written to this computer only — nothing is sent "
-        "anywhere.",
+        "A working copy on this computer, updated as you work."
     )
+    recovery_body = recovery_cache.container()
     # BUG-28: the two "get me back to something that works" actions, reachable
     # from every view — the analysis views have no source picker, and a dataset
     # the pipeline rejects is exactly when the 🗂️ Data page is the last place
     # the user wants to be sent. Third block of 💾 Session rather than a group of
     # its own: it answers the same question ("what is kept, and how do I get it
     # back") from the other end.
-    start_fresh = session.container()
-    start_fresh.divider()
-    start_fresh.markdown("**🧹 Start fresh**")
-    start_fresh.caption(
-        "Back to a known-good state without losing your uploads.",
-        help="Reload the bundled demo with a freshly detected column mapping, "
-        "or recompute everything from the data already loaded.",
+    start_fresh = recovery_cache.container()
+
+    save_restore = session.container(key="session_json_backup")
+    save_restore.markdown("### ⬇️ JSON backup")
+    save_restore.caption(
+        "Portable settings and annotations. Dataset files are not included."
     )
     # UX-65: 🐛 Debug mode moved here from the foot of ❓ Help. Help is a set of
     # dialog-opening nav entries now and hosts no widgets at all, and the toggle
     # was never a link — it *is* `DEBUG_STATE_KEY`, a gate that has to keep
     # rendering every run or Streamlit drops it. Session is where the rest of
     # "what is this session holding" already lives.
-    debug_gate = session.container()
-    debug_gate.divider()
-    debug = session.container() if show_debug else None
+    debug_gate = session.container(key="session_debug_tools")
+    debug_gate.markdown("### 🐛 Debug tools")
+    debug_gate.caption("Optional diagnostics for troubleshooting and bug reports.")
+    debug_toggle = debug_gate.container()
+    debug = debug_gate.container() if show_debug else None
     return TopMenu(
         save_restore=save_restore,
-        recovery_cache=recovery_cache,
+        recovery_cache=recovery_body,
         start_fresh=start_fresh,
         notices=st.container(key=NOTICES_KEY),
         title=title_col,
         debug=debug,
-        debug_gate=debug_gate,
+        debug_gate=debug_toggle,
     )

@@ -53,7 +53,7 @@ from scanpath_studio.animation_export import (
     export_animation,
     mime_for,
 )
-from scanpath_studio.annotations import render_trial_annotations
+from scanpath_studio.annotations import filter_keys, render_trial_annotations
 from scanpath_studio.compare_source import (
     COMPARE_SOURCE_KEY,
     THIS_DATASET,
@@ -111,10 +111,12 @@ from scanpath_studio.data import (
     compute_word_metrics,
     derive_trial_index,
     filter_trials,
+    filter_to_keys,
     frame_fingerprint,
     has_explicit_trial_index,
     remap_normalized_frame,
     trial_mapping_columns,
+    trial_keys,
     validate_fix_schema,
     validate_raw_gaze_schema,
     validate_word_schema,
@@ -1073,7 +1075,6 @@ def _resolve_compare_source(
     """
     chosen = str(st.session_state.get(COMPARE_SOURCE_KEY) or THIS_DATASET)
     if chosen == THIS_DATASET:
-        st.session_state[_COMPARE_SOURCE_RESOLVED_KEY] = chosen
         return None, ""
     if not ready_by_name.get(chosen, False):
         return None, f"⚠️ {reason_by_name.get(chosen, '')}"
@@ -1152,13 +1153,14 @@ def _render_compare_filters(host, source: SecondaryDataset) -> None:
     )
 
 
-def _narrow_secondary(source: SecondaryDataset, filters: dict) -> SecondaryDataset:
+def _narrow_secondary(
+    source: SecondaryDataset, filters: dict, *, use_annotations: bool = False
+) -> SecondaryDataset:
     """Apply B's own (``cmp``-prefixed) trial filters to a comparison source.
 
-    The annotation half of ``filters`` is deliberately *not* applied:
-    favorites/tags are keyed on ``(participant_id, trial_id)`` in the active
-    session, which describes **A's** dataset — starring a trial in one corpus
-    must not silently narrow another's pool to the same ids.
+    Annotation filters apply only when ``use_annotations`` is true. Favorites
+    and tags belong to the active dataset, so the same-dataset B pool can use
+    them; a different corpus must never inherit matching-looking ids.
     """
     words, fixations = filter_trials(
         source.words,
@@ -1167,6 +1169,24 @@ def _narrow_secondary(source: SecondaryDataset, filters: dict) -> SecondaryDatas
         metadata=filters["metadata"],
         ranges=filters.get("ranges"),
     )
+    selected_keys = filters.get("trial_keys")
+    if selected_keys is not None:
+        words, fixations = filter_to_keys(words, fixations, set(selected_keys))
+    if use_annotations and (
+        filters.get("favorites_only")
+        or filters.get("required_tags")
+        or filters.get("excluded_tags")
+    ):
+        present = trial_keys(words) | trial_keys(fixations)
+        kept = set(
+            filter_keys(
+                list(present),
+                favorites_only=bool(filters.get("favorites_only")),
+                required_tags=list(filters.get("required_tags") or []),
+                excluded_tags=list(filters.get("excluded_tags") or []),
+            )
+        )
+        words, fixations = filter_to_keys(words, fixations, kept)
     if fixations is source.fixations and words is source.words:
         return source
     combos, _, _ = build_combo_options_for(fixations, source.composite_trial_columns)
@@ -1183,6 +1203,9 @@ def _render_compare_selector(
     fixations_filtered: pd.DataFrame | None = None,
     trial_words: pd.DataFrame | None = None,
     words_filtered: pd.DataFrame | None = None,
+    combos_all: pd.DataFrame | None = None,
+    words_all: pd.DataFrame | None = None,
+    fixations_all: pd.DataFrame | None = None,
 ) -> tuple[str | None, str | None, SecondaryDataset | None]:
     """The compare-trial (B) selector, rendered above the chips (CMP-1).
 
@@ -1208,6 +1231,7 @@ def _render_compare_selector(
     how many candidates B has is what decides whether the row has a slider."""
     names, ready_by_name, reason_by_name = _compare_source_choices()
     source, source_notice = _resolve_compare_source(ready_by_name, reason_by_name)
+    filter_source = source
     if source is not None:
         # B's pool is its own dataset, narrowed by its own filters (§5.2), and
         # nothing about A applies to it — including the multipart screen scoping
@@ -1223,7 +1247,49 @@ def _render_compare_selector(
         words_filtered, fixations_filtered = source.words, source.fixations
         combos = source.combos
         trial_words = None
+    elif str(st.session_state.get(COMPARE_SOURCE_KEY) or THIS_DATASET) != THIS_DATASET:
+        # The requested external source is unavailable. Keep its picker and
+        # notice on screen, but never fall back to trials from the active
+        # dataset — that would make a failed dataset choice look successful.
+        options = []
+        filter_source = None
     else:
+        # "This dataset" still gets an independent B filter. Build it from the
+        # unfiltered frames (A's filters must not constrain B), then keep the
+        # returned ``source`` as None so every downstream same-dataset geometry
+        # and annotation path remains unchanged.
+        full_words = words_all if words_all is not None else words_filtered
+        full_fixations = (
+            fixations_all if fixations_all is not None else fixations_filtered
+        )
+        full_combos = combos_all if combos_all is not None else combos
+        if full_words is None:
+            full_words = pd.DataFrame()
+        if full_fixations is None:
+            full_fixations = pd.DataFrame()
+        current_name = str(
+            st.session_state.get("data_source_choice") or THIS_DATASET
+        )
+        filter_source = SecondaryDataset(
+            name=current_name,
+            words=full_words,
+            fixations=full_fixations,
+            combos=full_combos,
+            setup=snapshot_for(current_name, full_words, full_fixations),
+            composite_trial_columns=tuple(
+                st.session_state.get("_composite_trial_columns") or ()
+            ),
+        )
+        same_filters = read_trial_filters(_COMPARE_FILTER_PREFIX)
+        if st.session_state.get(_COMPARE_SOURCE_RESOLVED_KEY) != THIS_DATASET:
+            same_filters = dict(_NO_COMPARE_NARROWING)
+        st.session_state[_COMPARE_SOURCE_RESOLVED_KEY] = THIS_DATASET
+        narrowed = _narrow_secondary(
+            filter_source, same_filters, use_annotations=True
+        )
+        combos = narrowed.combos
+        words_filtered = narrowed.words
+        fixations_filtered = narrowed.fixations
         options = build_comparison_options(
             combos, selection_mode, selected_participant, selected_trial, selected_text
         )
@@ -1308,23 +1374,24 @@ def _render_compare_selector(
         # the slider and the ◀ ▶ steps all walk.
         step_col = trail.container(key="railbtn_single_compare_step")
         sort_col = trail.container(key="railbtn_single_compare_sort")
-    # §5.2's filters, only when B has a dataset of its own to narrow: under
-    # "This dataset" the candidates come out of A's pool, which A's own 🔎 has
-    # already narrowed — a second copy of the same controls would fight it.
-    if source is not None:
+    # B always has its own filter set. For "This dataset" it starts from the
+    # unfiltered active frames, so narrowing B never changes scanpath A.
+    if filter_source is not None:
         _render_compare_filters(
-            trail.container(key="railbtn_single_compare_filter"), source
+            trail.container(key="railbtn_single_compare_filter"), filter_source
         )
     if source_notice:
         st.caption(source_notice)
     if not options:
-        if source is not None:
+        if source_notice:
+            pass
+        elif source is not None:
             st.info(f"No trials in **{source.name}** match its 🔎 filters.")
         else:
             st.info(
-                "No other trials contain this screen."
+                "No other trials match B's 🔎 filters on this screen."
                 if active_screen
-                else "No other trials available for comparison."
+                else "No other trials match B's 🔎 filters."
             )
         return None, None, None
 
@@ -2573,39 +2640,32 @@ def _render_save_restore_expander(
                 height=0,
             )
     with container:
-        # UX-53: what the file holds used to be a four-line caption above the
-        # button, largely repeating the group's own caption; it is the button's
-        # tooltip now. The label stays exactly "⬇ Download (JSON)" — the bulk
-        # Export panel's test identifies its own button by *not* being this one.
+        st.caption(
+            "Unlike automatic recovery, this file is portable but does not "
+            "contain uploaded dataset rows. Load the same data before restoring."
+        )
         n_anno = len(annotation_records)
-        st.download_button(
-            "⬇ Download (JSON)",
-            help="Plot configuration, annotations "
-            f"({n_anno} trial{'s' if n_anno != 1 else ''}), data source and "
-            "column mapping, in one file.",
+        download, restore = st.columns(2, vertical_alignment="top")
+        download.download_button(
+            "⬇ Download backup",
+            help="Save plot settings, selection, source reference, column mapping "
+            f"and annotations ({n_anno} trial{'s' if n_anno != 1 else ''}) as JSON.",
             data=json.dumps(plot_config, indent=2),
-            # General filename — the config spans the whole session, not one
-            # trial.
-            file_name="scanpath_studio_config.json",
+            file_name="scanpath_studio_backup.json",
             mime="application/json",
             key="plot_config_download",
             width="stretch",
         )
-        # S3: unlike the Share link — which now lets you drop the ids — this
-        # file always carries the selected participant/trial AND every note you
-        # have typed, for every annotated trial. Say so before it is mailed on.
-        st.caption(
-            "⚠️ Names the selected participant and trial, and includes your note text.",
-            help="The file records the participant and trial you have open, "
-            "and the full text of every annotation note you have written — "
-            "check it before sending it on.",
-        )
-        st.file_uploader(
-            "Restore from JSON",
+        restore.file_uploader(
+            "Restore backup",
             type=["json"],
             key="plot_config_upload",
-            help="Re-apply settings + annotations from a file saved here earlier. "
-            "Anything that doesn't fit the loaded data is skipped.",
+            help="Re-apply settings and annotations. Items that do not match "
+            "the loaded data are skipped.",
+        )
+        st.caption(
+            "Contains the selected participant/trial and annotation text; review it "
+            "before sharing."
         )
         skipped = st.session_state.get("_plot_config_skipped")
         if skipped:
@@ -4208,6 +4268,9 @@ def render_single_trial_tab(
                     fixations_filtered=fixations_filtered,
                     trial_words=trial_words,
                     words_filtered=words_filtered,
+                    combos_all=combos_all,
+                    words_all=words_all,
+                    fixations_all=fixations_all,
                 )
             )
 
@@ -8550,6 +8613,26 @@ def _apply_remap() -> None:
     )
     comp = trial_mapping_columns(trial_schema) if trial_schema else []
     new_entry["composite_trial_columns"] = comp if len(comp) > 1 else []
+    setup_payload = st.session_state.get("_remap_pending_setup")
+    if isinstance(setup_payload, dict):
+        from scanpath_studio.experimental_setup import SetupSnapshot
+
+        new_entry["setup"] = dict(setup_payload)
+        setup = SetupSnapshot.from_dict(setup_payload, fallback=SetupSnapshot())
+        # Apply the saved dataset facts to the live figure immediately. These
+        # are the same wire keys the add flow publishes on finalize.
+        st.session_state.update(
+            {
+                "global_canvas_width": setup.canvas_width,
+                "global_canvas_height": setup.canvas_height,
+                "global_monitor_width_mm": setup.monitor_width_mm,
+                "global_viewing_distance_mm": setup.viewing_distance_mm,
+                "global_base_font_size": setup.base_font_size,
+                "global_font_family": setup.font_family,
+                "global_line_spacing": setup.line_spacing,
+                "global_scale_text_to_boxes": setup.scale_text_to_boxes,
+            }
+        )
     st.session_state["_datasets"][name] = new_entry
     st.session_state["_remap_applied"] = name
 
@@ -8738,11 +8821,43 @@ def _render_remap_editor(name: str, stored: dict) -> None:
     # the same mapping, in the same shape (UX-54 r2).
     st.markdown(mapping_menu_css(), unsafe_allow_html=True)
     if st.session_state.pop("_remap_applied", None) == name:
-        st.success("Mapping updated — the dataset was re-derived.")
+        st.success("Dataset updated — mapping and recording setup saved.")
     problems = st.session_state.get("_remap_problems") or {}
     composite = list(stored.get("composite_trial_columns") or [])
     pending: dict = _render_remap_fields(name, stored, problems, composite)
     st.session_state["_remap_pending_schemas"] = pending
+
+    # The add and edit flows now share the same three-column Recording setup
+    # renderer. Editing starts from the saved values and publishes only when
+    # Save changes runs, so unfinished edits never leak into the plot.
+    from scanpath_studio.experimental_setup import SetupSnapshot
+    from scanpath_studio.wizard import _wizard_setup_step
+
+    st.divider()
+    st.markdown("##### Recording setup")
+    st.caption("Screen, physical geometry and reading-text setup for this dataset.")
+    initial_setup = SetupSnapshot.from_dict(
+        stored.get("setup") or {}, fallback=SetupSnapshot()
+    )
+    word_frame = stored.get("words")
+    fixation_frame = stored.get("fixations")
+    has_boxes = bool(
+        isinstance(word_frame, pd.DataFrame)
+        and not word_frame.empty
+        and {"x", "y", "width", "height"} <= set(word_frame.columns)
+    )
+    setup = _wizard_setup_step(
+        st,
+        word_frame if isinstance(word_frame, pd.DataFrame) else pd.DataFrame(),
+        fixation_frame
+        if isinstance(fixation_frame, pd.DataFrame)
+        else pd.DataFrame(),
+        has_boxes,
+        key_prefix=f"edit_{name}",
+        initial=initial_setup,
+        publish=False,
+    )
+    st.session_state["_remap_pending_setup"] = setup.to_dict()
 
     dropped = stored.get("dropped_columns") or {}
     flat = sorted({c for cols in dropped.values() for c in (cols or [])})
@@ -8766,7 +8881,7 @@ def _render_remap_editor(name: str, stored: dict) -> None:
         type="primary",
         key=f"remap_apply_{name}",
         on_click=_apply_remap,
-        help="Re-derive this dataset's frames with the new mapping (overwrites it).",
+        help="Save the mapping and recording setup, then re-derive the dataset.",
     )
 
 
@@ -8882,7 +8997,6 @@ def _render_column_mapping_section(*, editor_rendered: bool = False) -> None:
     active = _active_stored_dataset()
     if active is not None:
         _render_remap_editor(*active)
-        _render_setup_provenance_note()
         return
     mapping = st.session_state.get("_active_column_mapping") or {}
     rows = _column_mapping_rows(mapping)
@@ -8926,20 +9040,21 @@ def _render_setup_provenance_note() -> None:
             else f"{snapshot.base_font_size} px · {snapshot.font_family}"
         ),
     }
-    st.dataframe(
-        pd.DataFrame(
-            [
-                {
-                    "Group": SETUP_GROUP_LABELS[group],
-                    "Value": values[group],
-                    "How we know": str(snapshot.provenance[group] or "not answered"),
-                }
-                for group in SETUP_GROUPS
-            ]
-        ),
-        hide_index=True,
-        width="stretch",
-    )
+    labels = {"screen": "Screen", "geometry": "Physical size", "text": "Text size"}
+    for cell, group in zip(st.columns(3, gap="medium"), SETUP_GROUPS):
+        label = html.escape(labels.get(group, SETUP_GROUP_LABELS[group]))
+        value = html.escape(values[group])
+        provenance = html.escape(
+            str(snapshot.provenance[group] or "not answered").capitalize()
+        )
+        cell.markdown(
+            '<div class="sps-readonly-map-cell">'
+            f'<div class="sps-readonly-map-label">{label}</div>'
+            f'<div class="sps-readonly-map-value">{value}</div>'
+            f'<div class="sps-readonly-map-note">{provenance}</div>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
     if snapshot.geometry_provenance is Provenance.SKIPPED:
         st.caption(
             "Visual-angle units are hidden for this dataset — the physical size "

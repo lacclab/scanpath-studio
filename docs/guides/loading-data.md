@@ -57,6 +57,12 @@ the progress chips at the top; your answers are kept as you move around.
 After loading, open the 🗂️ **Data** page and confirm that both tables share the
 expected trials and coordinate range.
 
+**Available datasets** lists the same headline fields shown in the active
+dataset summary—participants, texts, trials, fixations, words, gaze points and
+multipart screens. Rename or remove a source from its table row. Uploaded data
+is renamed or deleted in the session; packaged and public sources keep their
+stable identifiers and are renamed for display or hidden for this session.
+
 ### The recording setup asks how you know
 
 Step 4 describes the screen the data was **recorded** on — not the screen you are

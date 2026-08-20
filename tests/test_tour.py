@@ -532,7 +532,9 @@ class TestSpotlightSelectorsResolve:
         css = get_app_css()
         row = '[data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]'
         assert f"{row} {{" in css
-        assert "min-height: 3rem;" in css
+        assert "min-height: 2.7rem;" in css
+        assert "flex: 0 0 2.8rem;" in css
+        assert "width: 100% !important;" in css
         assert '\n    [class*="st-key-split_mode_"] {' not in css
         assert ".st-key-reset_viz_settings_btn button" in css
 
@@ -604,11 +606,22 @@ class TestSpotlightSelectorsResolve:
 
         assert '"📐 **Figure & canvas**"' in control_source
         assert (
-            "canvas_renderer(screen_group, text_host=stim_text_slot)" in control_source
+            "render_text=show_labels" in control_source
         )
         assert "display = host if bare else host.expander" in canvas_source
         assert 'viz.expander("🖥️ Canvas & text"' not in control_source
         assert 'viz.expander("📐 Figure & axes"' not in control_source
+
+    def test_corpus_canvas_controls_stay_inside_the_style_expander(self):
+        """The collapsed Corpus style row must own every canvas/font field."""
+        import inspect
+
+        from scanpath_studio import controls
+
+        source = inspect.getsource(controls.corpus_style_controls)
+        assert 'as style_panel' in source
+        assert "canvas_renderer(style_panel)" in source
+        assert "canvas_renderer(target)" not in source
 
     def test_plot_rail_uses_contextual_style_filter_labels(self):
         """UX-44: repeated per-layer labels stay terse.

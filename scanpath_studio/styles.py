@@ -96,6 +96,18 @@ def get_app_css() -> str:
        so they contribute no layout and the tour's `findVisible()` cannot aim at
        a hidden copy. */
     .st-key-session_menu_page_offscreen { display: none !important; }
+    .st-key-session_auto_recovery,
+    .st-key-session_json_backup,
+    .st-key-session_debug_tools {
+        border: 1px solid var(--sps-border);
+        border-radius: 0.75rem;
+        padding: 0.85rem 1rem 1rem;
+        margin: 0.65rem 0;
+        background: rgba(128, 128, 128, 0.035);
+    }
+    .st-key-session_auto_recovery h3,
+    .st-key-session_json_backup h3,
+    .st-key-session_debug_tools h3 { margin-top: 0 !important; }
 
     /* UX-53 — the 🗂️ Data page was "too much space and text, and text too
        small". Scoped to the page's own key so the plot rail and the analysis
@@ -364,7 +376,7 @@ def get_app_css() -> str:
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"] {
         width: 100%;
         max-width: 100%;
-        min-height: 3rem;
+        min-height: 2.7rem;
         align-items: stretch !important;
         border: 1px solid var(--sps-border);
         /* A rounded rectangle, not a pill — it is what the Zoom control being
@@ -423,20 +435,37 @@ def get_app_css() -> str:
         > div:has([data-testid="stPopover"]) {
         display: flex;
         align-items: center;
-        flex: 0 0 auto;
+        justify-content: stretch;
+        flex: 0 0 2.8rem;
+        min-width: 2.8rem;
         border-left: 1px solid var(--sps-border);
         border-radius: 0 0.6rem 0.6rem 0;
+    }
+    /* Streamlit wraps a helped popover trigger in several glyph-sized divs.
+       Stretch that chain too; widening only the outer slot leaves the actual
+       click target at the chevron's width. */
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        > div:has([data-testid="stPopover"]) [data-testid="stPopover"],
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        > div:has([data-testid="stPopover"]) [data-testid="stPopover"] > div,
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        > div:has([data-testid="stPopover"]) [data-testid="stTooltipIcon"],
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        > div:has([data-testid="stPopover"]) [data-testid="stTooltipHoverTarget"] {
+        display: flex;
+        width: 100%;
+        height: 100%;
     }
     /* Target the popover's own button, never `… button`: the toggle's label
        carries Streamlit's `?` help icon, which is also a button and would
        otherwise be restyled along with it. */
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
         [data-testid="stPopover"] button {
-        min-width: 0 !important;
+        min-width: 100% !important;
         min-height: 100% !important;
         height: 100% !important;
-        width: auto !important;
-        padding: 0 0.3rem !important;
+        width: 100% !important;
+        padding: 0 0.65rem !important;
         border: 0 !important;
         border-radius: 0 !important;
         background: transparent !important;
@@ -895,6 +924,11 @@ def get_app_css() -> str:
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+    }
+    .sps-readonly-map-note {
+        margin-top: 0.2rem;
+        font-size: 0.76rem;
+        opacity: 0.72;
     }
 
     /* Control rail: a subtle card so it reads as a panel, with a hair more

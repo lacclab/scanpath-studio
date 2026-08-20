@@ -115,7 +115,7 @@ def test_the_session_menu_keeps_its_escape_hatches_while_the_app_is_wedged(
     keys = {b.key for b in at.button}
     assert {"session_load_demo", "session_clear_cache"} <= keys
     # …including the recovery cache's own Forget, which lives past that return.
-    assert any("Forget saved session" in b.label for b in at.button)
+    assert any("Clear recovery cache" in b.label for b in at.button)
 
 
 def test_clearing_the_computation_cache_leaves_the_app_running():

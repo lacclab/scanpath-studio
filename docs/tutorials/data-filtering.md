@@ -44,7 +44,7 @@ fixation, and word counts are plausible.
 
 Use **Export → Export bundle** for the active filtered pool. Include the tidy
 tables and `plot_config.json`; export figures only if they are part of the
-analysis record. Download **💾 Save & restore** JSON as the human review record.
+analysis record. Download a **Session → JSON backup** as the human review record.
 
 **Done:** the original data remains intact, the retained pool is reproducible,
 and each manual decision has a reason.

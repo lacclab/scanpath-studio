@@ -438,15 +438,15 @@ class TestRememberedDatasetCounts:
         calls = []
         real = app._dataset_counts
 
-        def _counting(_words, _fixations, _key):
+        def _counting(_words, _fixations, _raw_gaze, _key):
             calls.append(_key)
-            return real(_words, _fixations, _key)
+            return real(_words, _fixations, _raw_gaze, _key)
 
         monkeypatch.setattr(app, "_dataset_counts", _counting)
         first = app.remembered_dataset_counts("corpus", words, fixations)
         second = app.remembered_dataset_counts("corpus", words, fixations)
         assert first == second
-        assert first["Readers"] == 2
+        assert first["Participants"] == 2
         assert first["Trials"] == 2
         assert first["Words"] == 3
         assert len(calls) == 1, "the second listing recomputed the counts"

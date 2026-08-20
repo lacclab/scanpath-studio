@@ -480,8 +480,8 @@ window.TRACKER = {
    "num": 33,
    "sub": "",
    "title": "Edit dataset reuses the finished add-dataset screen",
-   "status": "On hold",
-   "owner": "",
+   "status": "Review",
+   "owner": "Maya",
    "note": "",
    "date": "",
    "added": "2026-08-19",
@@ -490,7 +490,26 @@ window.TRACKER = {
    "archived": false,
    "request": [
     "Once the add-dataset screen is finished, duplicate it as the",
-    "**edit dataset** screen on the 🗂️ Data view."
+    "**edit dataset** screen on the 🗂️ Data view.",
+    "",
+    "Follow-up: make Data Management's column mapping as close to Add dataset",
+    "as possible, and carry that shared visual/interaction model to Recording",
+    "setup and other dataset fields."
+   ],
+   "whatWasDone": [
+    "Stored-dataset mapping already used the same field widget as Add dataset;",
+    "its rows now follow the wizard's ordered label-over-picker grid.",
+    "",
+    "The shared wizard Recording setup renderer now accepts a namespace and an",
+    "initial SetupSnapshot. Data Management calls that exact renderer for stored",
+    "datasets, prefilled from their saved setup, and commits mapping plus setup",
+    "through one Save changes action. Half-finished setup edits do not affect the",
+    "plot. Built-in datasets use the same three-column field-card grammar for",
+    "their read-only setup summary."
+   ],
+   "whatsLeft": [
+    "Nothing in implementation. Automated and browser verification were deferred",
+    "at the user's explicit request."
    ],
    "background": [
     "**Held deliberately** until the add-dataset layout settles — #UX-55",
@@ -515,6 +534,15 @@ window.TRACKER = {
     "",
     "Related: #UX-54 (the dataset table the ✏️ button lives in), #DATA-23",
     "(rename), #UX-53 (the wizard's shape)."
+   ],
+   "decisions": [
+    "Review Edit on a stored dataset: mapping and the three Recording setup",
+    "columns should look like the completed add flow and save together.",
+    "Only columns retained during the original normalization can be remapped;",
+    "re-upload remains necessary to recover a column dropped at import."
+   ],
+   "statusNote": [
+    "Ready for review; tests intentionally not run at the user's request."
    ]
   },
   {
@@ -977,7 +1005,7 @@ window.TRACKER = {
    "num": 89,
    "sub": "",
    "title": "Group the mapping rows by table — Fixations block, then AOI block",
-   "status": "Review",
+   "status": "In progress",
    "note": "",
    "date": "",
    "added": "2026-08-19",
@@ -1473,17 +1501,23 @@ window.TRACKER = {
     "**Latest controls pass.** Share has one browser-native **Refresh & Copy** action and",
     "always builds it from the current view. Named Quick views now clear custom style,",
     "filter and geometry values before applying their defaults; Custom still restores the",
-    "last hand-tuned state. Plot-control rows and Quick-view/reset buttons are 3rem tall.",
+    "last hand-tuned state. Split plot-control rows are now a compact 2.7rem high,",
+    "while the full 2.8rem-wide right segment opens each settings menu.",
     "The split-row selector now targets only the horizontal row, so the similarly named",
     "popover wrapper no longer draws a second overlapping outline. Mapping's icon-button",
-    "CSS is scoped to mapping cells, restoring the full **♻️ Reset it** dialog button."
+    "CSS is scoped to mapping cells, restoring the full **♻️ Reset it** dialog button.",
+    "",
+    "**Selection follow-up.** Select Dataset is a bold field label. Scanpath B now",
+    "always has its own 🔎 trial filters, including when Compare with is This dataset;",
+    "its pool starts from the unfiltered active dataset and never changes scanpath A."
    ],
    "whatsLeft": [
     "Nothing."
    ],
    "decisions": [
     "Review **Refresh & Copy** in Share and confirm it replaces both old actions while copying the current view.",
-    "Review the 3rem top inset, taller single-outline plot controls, visible **♻️ Reset it** button, and Scanpath-default / Custom-restore Quick-view behavior at the supplied window sizes."
+    "Review the 3rem top inset, compact single-outline plot controls with a full-width dropdown target, visible **♻️ Reset it** button, and Scanpath-default / Custom-restore Quick-view behavior at the supplied window sizes.",
+    "Review Compare with This dataset: B's 🔎 should narrow only B, while A remains selected and unchanged."
    ],
    "background": [
     "The comparison column is a selection constraint: candidates must have the same",
@@ -1495,7 +1529,7 @@ window.TRACKER = {
     "in the app. Local stimulus paths remain deliberately outside links and saved configs."
    ],
    "statusNote": [
-    "**Ready for review — Share and plot-control follow-ups completed 2026-08-20.**"
+    "**Ready for review — latest selection and plot-control follow-ups completed 2026-08-20; tests intentionally not run at the user's request.**"
    ]
   },
   {
@@ -1537,6 +1571,54 @@ window.TRACKER = {
     "Related implementation lives in `tabs.py` comparison settings and label patterns,",
     "`plots.py` comparison legends, `url_state.py`, `session_keys.py`, the CLI/API",
     "comparison contracts, and comparison/export regression tests."
+   ]
+  },
+  {
+   "id": "UX-96",
+   "prefix": "UX",
+   "num": 96,
+   "sub": "",
+   "title": "Rebuild Session around recovery, backup and debug tools",
+   "status": "Review",
+   "note": "",
+   "date": "",
+   "added": "2026-08-20",
+   "group": "UX & Interaction",
+   "subgroup": "",
+   "archived": false,
+   "owner": "Maya",
+   "request": [
+    "Redesign the Session page across functionality, wording and layout.",
+    "Separate the automatic cache from a downloaded JSON backup, state where",
+    "the cache is stored and what it contains, allow saving to be stopped and",
+    "the existing copy cleared, and keep Debug mode as the third clear area."
+   ],
+   "whatWasDone": [
+    "Session is now three bordered cards: Automatic recovery, JSON backup and",
+    "Debug tools. Automatic recovery reports dataset/row/annotation/size status,",
+    "lists what it contains, names its folder, offers an automatic-save toggle",
+    "and clears the on-disk copy without closing the live session.",
+    "",
+    "JSON backup explicitly differs from recovery: it is portable and carries",
+    "settings, selection, mappings, metadata attachments and annotations, but not",
+    "uploaded dataset rows. Download and restore share one compact row.",
+    "",
+    "Debug mode remains opt-in in the third card. The bundled-demo and computed-",
+    "result escape hatches remain available under a compact Troubleshooting",
+    "disclosure rather than competing with the three primary concepts."
+   ],
+   "whatsLeft": [
+    "Nothing in implementation. Automated and browser verification were deferred",
+    "at the user's explicit request."
+   ],
+   "decisions": [
+    "Review Session locally and on a hosted deployment: local should show its",
+    "folder and controls; hosted should explain that no recovery copy is written.",
+    "Confirm the JSON-backup boundary is clear enough: portable work state, not",
+    "the uploaded eye-tracking tables themselves."
+   ],
+   "statusNote": [
+    "Ready for review; tests intentionally not run at the user's request."
    ]
   },
   {
@@ -2920,6 +3002,41 @@ window.TRACKER = {
    "statusNote": [
     "**Built 2026-08-19.** `{dataset_name}` resolves everywhere the pattern",
     "language reaches, with `_a` / `_b` variants for the overlay."
+   ]
+  },
+  {
+   "id": "VIZ-37",
+   "prefix": "VIZ",
+   "num": 37,
+   "sub": "",
+   "title": "Add a fullscreen control to true-scale Plotly scanpath figures",
+   "status": "Backlog",
+   "note": "",
+   "date": "",
+   "added": "2026-08-20",
+   "group": "Visualization & display",
+   "subgroup": "",
+   "archived": false,
+   "request": [
+    "Add a visible **Fullscreen** button to the Plotly modebar on the main",
+    "scanpath figure. Entering fullscreen should expand the complete figure to",
+    "the available screen, preserve its aspect ratio and true-scale geometry, and",
+    "provide an obvious way to exit, including the Escape key."
+   ],
+   "background": [
+    "The icon between zoom-out and reset axes is Plotly's **autoscale** control,",
+    "not fullscreen. Streamlit 1.61 adds a fullscreen button automatically to",
+    "`st.plotly_chart`, but the spatial figures deliberately use",
+    "[`tabs._render_true_scale_chart`](scanpath_studio/tabs.py:343), which renders",
+    "`fig.to_html` inside an iframe so responsive re-layout cannot break the",
+    "data-to-pixel scale of word boxes, fixation markers, and text. The fullscreen",
+    "control therefore needs to be implemented explicitly in that true-scale HTML",
+    "embed rather than relying on Streamlit's chart wrapper.",
+    "",
+    "The shared renderer also serves animation, comparison, and stimulus figures;",
+    "implementation should establish whether the control belongs on every call site",
+    "or only the main scanpath figure, and must verify resizing and restoration after",
+    "leaving fullscreen."
    ]
   },
   {

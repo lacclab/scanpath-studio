@@ -45,12 +45,16 @@ own prepared bundle containing it — the Share panel says which corpus the link
 names, and opening a link for a corpus that isn't available leaves the data
 source where it was instead of switching to a different one.
 
-## Save and restore work
+## Back up and restore work
 
-**💾 Save & restore** downloads a JSON configuration containing the view,
-mapping, and annotations. Use it to continue work, attach a reproducible bug
-report, or preserve a manual review. Inspect annotations before sharing because
-notes may contain participant-related information.
+**Session → JSON backup** downloads the view, mapping, metadata attachments and
+annotations. It is portable, but it does **not** contain uploaded dataset rows;
+load the same data before restoring it. Use it to continue work, attach a
+reproducible bug report, or preserve a manual review. Inspect annotations before
+sharing because notes may contain participant-related information.
+
+This differs from **Automatic recovery**, which keeps dataset tables and working
+state on the current computer and restores them after a refresh or restart.
 
 ## Keep an output reproducible
 

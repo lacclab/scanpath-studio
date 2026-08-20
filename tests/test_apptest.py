@@ -160,7 +160,7 @@ class TestAppLaunches:
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         body = " ".join(m.value for m in at.markdown)
-        for expected in ("💾 Save & restore", "🗄️ Recovery cache", "🧹 Start fresh"):
+        for expected in ("🗄️ Automatic recovery", "⬇️ JSON backup", "🐛 Debug tools"):
             assert expected in body, f"{expected} stopped rendering off its page"
         # The old bar is gone: neither group is a popover any more.
         labels = {p.proto.popover.label for p in at.get("popover")}
@@ -178,8 +178,8 @@ class TestAppLaunches:
         assert "🗄️ Recovery cache" not in labels
         # Both panels still render, one popover down: their headings are inside.
         body = " ".join(m.value for m in at.markdown)
-        assert "**💾 Save & restore**" in body
-        assert "**🗄️ Recovery cache**" in body
+        assert "### ⬇️ JSON backup" in body
+        assert "### 🗄️ Automatic recovery" in body
         # The spotlight tour and annotations.py both target this key.
         assert SAVE_RESTORE_KEY == "tour_grp_save_restore"
 
@@ -852,9 +852,17 @@ class TestDatasetTable:
         row = frame[frame["Dataset"] == self.NAME]
         assert not row.empty, f"{self.NAME} missing from {list(frame['Dataset'])}"
         # Counts come from the frames already in memory, not from a reload.
-        assert int(row["Readers"].iloc[0]) > 0
+        assert int(row["Participants"].iloc[0]) > 0
         assert int(row["Fixations"].iloc[0]) > 0
-        for column in ("Readers", "Trials", "Fixations", "Words"):
+        for column in (
+            "Participants",
+            "Texts",
+            "Trials",
+            "Screens",
+            "Fixations",
+            "Words",
+            "Gaze points",
+        ):
             assert str(frame[column].dtype) == "Int64", (
                 f"{column} should stay integer even when unopened datasets are blank"
             )
@@ -868,15 +876,17 @@ class TestDatasetTable:
             matching = frame[frame["Kind"].astype(str).str.startswith(icon)]
             if not matching.empty:
                 assert matching["Kind"].astype(str).str.contains(word).all()
-        # Edit and Delete belong to the user's own uploads; the built-in demo
-        # carries neither, which is how a row says the action does not apply.
-        assert row["Delete"].iloc[0]
+        # Edit belongs to uploads; Rename and Remove are available on every row.
+        assert row["Rename"].iloc[0]
+        assert row["Remove"].iloc[0]
         demo = frame[frame["Dataset"].str.contains("demo", case=False)]
         if not demo.empty:
             import pandas as pd
 
-            delete = demo["Delete"].iloc[0]
-            assert pd.isna(delete) or not delete
+            edit = demo["Edit"].iloc[0]
+            assert pd.isna(edit) or not edit
+            assert demo["Rename"].iloc[0]
+            assert demo["Remove"].iloc[0]
 
     def test_delete_is_wired_to_the_remover(self):
         """Regression: UX-64 dropped the ➕ popover that held *Remove a dataset*,
@@ -3313,12 +3323,21 @@ class TestFigureAndCanvasSubGroups:
         assert '_rail_subsection(figure_grp, "🏷️ Title & labels")' in control_source
         # The typography half is drawn into the Stimulus section instead.
         assert "text_host" in canvas_source
-        assert '_rail_subsection(stim_grp, "🔤 Text")' in control_source
+        assert '_rail_subsection(stim_grp, "🔤 Text")' not in control_source
         # The framing toggle leads the screen block.
         assert 'screen_group.toggle(\n        "**Show full monitor**"' in control_source
         # …and the old flat captions are gone.
         assert 'figure_grp.caption("**Canvas & text**")' not in control_source
         assert 'figure_grp.caption("**Axes & labels**")' not in control_source
+
+    def test_text_can_be_switched_off_without_crashing_the_figure_controls(self):
+        """BUG-38: Figure & canvas must not render into a missing Text slot."""
+        at = _make_apptest(synthetic=True)
+        at.session_state["global_show_labels"] = False
+        at.run(timeout=30)
+
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["global_show_labels"] is False
 
 
 @pytest.mark.timeout(120)

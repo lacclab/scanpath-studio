@@ -448,7 +448,7 @@ class TestBulkExportFlow:
         monkeypatch.setattr(tabs, "bulk_export", capturing)
 
         at = _boot(subtab=SUBTAB_EXPORT)
-        assert self._download_labels(at) == ["⬇ Download (JSON)"], (
+        assert self._download_labels(at) == ["⬇ Download backup"], (
             "the zip download button must only appear after a build"
         )
 
@@ -609,7 +609,7 @@ class TestRecoveryCachePanelFlow:
 
         # Forget deletes the store; saving stays paused, so it does not come
         # straight back on the same run's end-of-run save.
-        forget = [b for b in at.button if "Forget" in str(b.label)]
+        forget = [b for b in at.button if "Clear recovery cache" in str(b.label)]
         assert forget, "the Forget button is missing from the panel"
         at = forget[0].click().run(timeout=60)
         _clean(at, "after clicking forget:")
@@ -630,7 +630,7 @@ class TestRecoveryCachePanelFlow:
         _clean(at, "hosted cache panel:")
         assert not [t for t in at.toggle if t.key == "persist_local_saving"]
         captions = " ".join(str(c.value) for c in at.caption)
-        assert "Off here." in captions
+        assert "Unavailable here." in captions
 
 
 class TestAuthoringEditorFlow:

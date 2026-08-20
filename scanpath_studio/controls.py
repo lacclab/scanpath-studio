@@ -25,7 +25,6 @@ from .constants import (
     DEFAULT_MARKER_SIZE_RANGE,
     DEFAULT_PALETTE,
     DEFAULT_SACCADE_WIDTH,
-    DEMO_CHOICE,
     FIXATION_SYMBOLS,
     HIGHLIGHTED_TEXT_COLOR,
     OUT_OF_TEXT_COLOR,
@@ -3173,7 +3172,7 @@ def corpus_style_controls(
     """
     _seed_viz_state(trial_fixations, base_font_size, words)
     target = host or st
-    with target.expander("🎨 Corpus figure style", expanded=False):
+    with target.expander("🎨 Corpus figure style", expanded=False) as style_panel:
         active = _active_palette()
         options = list(PALETTES) if active else [CUSTOM_PALETTE, *PALETTES]
         st.session_state["global_palette"] = active or CUSTOM_PALETTE
@@ -3205,8 +3204,11 @@ def corpus_style_controls(
             persist_state="session",
             help="Used by word matrices and stimulus heatmaps.",
         )
-    if canvas_renderer is not None:
-        canvas_renderer(target)
+        # VIZ-31's canvas controls belong to this disclosure too. Rendering
+        # them after the `with` block left the expander collapsed but every
+        # monitor/font/background field open across the Corpus page.
+        if canvas_renderer is not None:
+            canvas_renderer(style_panel)
     return viz_settings_from_state(trial_fixations, base_font_size, words=words)
 
 
@@ -4152,8 +4154,11 @@ def sidebar_controls(
     show_labels = stim_grp.toggle(
         "**Text**", key="global_show_labels", persist_state="session"
     )
+    stim_text_slot = None
     if show_labels:
-        with _rail_subsection(stim_grp, "🔤 Text"):
+        # The outer toggle already names this block Text; repeating a second
+        # "🔤 Text" heading inside spent space without adding hierarchy.
+        with stim_grp:
             # UX-81: the typography that draws this text — line spacing, the
             # font and its size, scale-to-boxes — used to sit two sections away
             # in 📐 Figure & canvas → 🔤 Text & fonts. It describes the stimulus,
@@ -4293,14 +4298,14 @@ def sidebar_controls(
     # need a distinct frame contract. The toggle itself is on the section's
     # row now (UX-86); this block only owns the style popover's contents.
     if show_heatmap:
-        with _rail_subsection(heatmap_grp, "⚙️ Heatmap style"):
+        with heatmap_grp:
             # A radio (not segmented_control) so the active style is always shown
             # selected from the seeded default — segmented_control could render
             # with nothing selected on first open.
             _labeled(
                 st,
                 "radio",
-                "Heatmap style",
+                "Style",
                 options=["Word boxes", "Interpolated", "Duration mass"],
                 horizontal=True,
                 key="global_heatmap_style",
@@ -4322,7 +4327,7 @@ def sidebar_controls(
                 _labeled(
                     st,
                     "number_input",
-                    "Duration-mass sigma (characters)",
+                    "Spread (characters)",
                     min_value=0.25,
                     max_value=10.0,
                     step=0.25,
@@ -4332,7 +4337,7 @@ def sidebar_controls(
                     help="Gaussian standard deviation measured in character widths.",
                 )
             _popover_selectbox(
-                "Heatmap colorscale",
+                "Colors",
                 COLORSCALES,
                 "global_heatmap_colorscale",
                 disabled=heat_disabled,
@@ -4343,7 +4348,7 @@ def sidebar_controls(
             _labeled(
                 st,
                 "radio",
-                "Color scaling",
+                "Scaling",
                 options=["Linear", "Log"],
                 horizontal=True,
                 key="global_heatmap_norm",
@@ -4359,7 +4364,7 @@ def sidebar_controls(
             heatmap_metric = _labeled(
                 st,
                 "selectbox",
-                "Heatmap metric",
+                "Metric",
                 options=["duration_ms", "counts"],
                 disabled=heat_disabled,
                 help=_gated_help(
@@ -4390,7 +4395,7 @@ def sidebar_controls(
                 )
                 _range_slider(
                     st,
-                    "Heatmap color range",
+                    "Color range",
                     label_left=True,
                     key="global_heatmap_color_range",
                     persist_state="session",
@@ -4512,11 +4517,11 @@ def sidebar_controls(
     # section's row (UX-86); this owns the style popover — previously nothing,
     # since raw gaze had no styling of its own before it got a section.
     if show_raw_gaze:
-        with _rail_subsection(raw_gaze_grp, "⚙️ Raw gaze style"):
+        with raw_gaze_grp:
             _labeled(
                 st,
                 "color_picker",
-                "Raw gaze color",
+                "Color",
                 key="global_raw_gaze_color",
                 persist_state="session",
                 disabled=raw_disabled,
@@ -4528,7 +4533,7 @@ def sidebar_controls(
             )
             _numeric_slider(
                 st,
-                "Raw gaze marker size",
+                "Marker size",
                 label_left=True,
                 key="global_raw_gaze_marker_size",
                 persist_state="session",
@@ -4540,7 +4545,7 @@ def sidebar_controls(
             )
             _numeric_slider(
                 st,
-                "Raw gaze opacity",
+                "Opacity",
                 label_left=True,
                 key="global_raw_gaze_opacity",
                 persist_state="session",
@@ -4552,19 +4557,6 @@ def sidebar_controls(
                 help="Sample dots overlap heavily at typical sampling rates; "
                 "lower opacity keeps dense clusters legible.",
             )
-    # DATA-15: the bundled demo's raw gaze is SYNTHESIZED from the fixation
-    # report (OneStop ships no sample-level gaze) — it looks like eye-tracker
-    # output and isn't, so say so wherever it can be switched on.
-    if (
-        has_raw_gaze
-        and st.session_state.get("data_source_choice") == DEMO_CHOICE
-        and st.session_state.get("global_show_raw_gaze")
-    ):
-        raw_gaze_grp.caption(
-            "⚠️ The demo's raw gaze is **synthesized** from its fixations for "
-            "illustration — it is not recorded eye-tracker output."
-        )
-
     # --- Figure & canvas --------------------------------------------------
     # UX-80/81: one popover, three named groups inside it and nothing nested —
     #
@@ -4592,7 +4584,11 @@ def sidebar_controls(
         "appeared on screen. Turn off to crop the view tightly to the data.",
     )
     if canvas_renderer is not None:
-        canvas_renderer(screen_group, text_host=stim_text_slot)
+        canvas_renderer(
+            screen_group,
+            text_host=stim_text_slot,
+            render_text=show_labels,
+        )
 
     show_coordinate_grid = axes.toggle(
         "Coordinate grid",

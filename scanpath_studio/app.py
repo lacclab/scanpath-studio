@@ -174,7 +174,7 @@ from scanpath_studio.menu import (
     render_top_menu,
     view_label,
 )
-from scanpath_studio.multipart import SCREEN_ID, extract_part
+from scanpath_studio.multipart import SCREEN_ID, extract_part, part_catalog
 from scanpath_studio.persistence import (
     PERSIST_ENV_VAR,
     STATE_DIR_ENV_VAR,
@@ -525,11 +525,11 @@ def _forget_recovery_cache() -> None:
     st.session_state["_recovery_cache_forgotten"] = True
 
 
-#: BUG-36 — the 🗑 Forget saved session button's confirmation flag.
+#: BUG-36 — the Clear recovery cache button's confirmation flag.
 _FORGET_CACHE_PENDING_KEY = "_forget_cache_pending"
 
 
-@st.dialog("Forget saved session?")
+@st.dialog("Clear recovery cache?")
 def _forget_cache_confirmation_dialog() -> None:
     """The modal body — BUG-36. Opened by ``_render_recovery_cache_panel``.
 
@@ -547,7 +547,7 @@ def _forget_cache_confirmation_dialog() -> None:
     )
     yes, no = st.columns(2)
     if yes.button(
-        "🗑 Forget it", key="forget_cache_confirm", type="primary", width="stretch"
+        "🗑 Clear cache", key="forget_cache_confirm", type="primary", width="stretch"
     ):
         _forget_recovery_cache()
         st.session_state.pop(_FORGET_CACHE_PENDING_KEY, None)
@@ -592,11 +592,11 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
     with container:
         if not status["enabled"]:
             st.caption(
-                "**Off here.** A refresh loses your session — save it above.",
+                "**Unavailable here.** This deployment keeps no recovery copy.",
                 help="This deployment keeps your session in memory only, so a "
                 "refresh or a restart loses uploaded datasets, mappings and "
-                "annotations. Run Scanpath Studio locally (or as the desktop "
-                "app) and it is restored automatically.",
+                "annotations. Download a JSON backup below for settings and "
+                "annotations; it does not include dataset files.",
             )
             if status["override"] == "off":
                 st.caption(f"Disabled by `{PERSIST_ENV_VAR}=0`.")
@@ -606,7 +606,7 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
         # group caption's tooltip in `menu.py`; this panel shows the *state* of
         # the cache — restored, size, when — and its two controls.
         if restored_from_cache(st.session_state):
-            st.success("Restored when the app opened.", icon="↩️")
+            st.success("Recovered when the app opened.", icon="↩️")
         if status["exists"] and status["readable"]:
             n_sets = len(status["datasets"])
             bits = [f"**{n_sets}** dataset{'s' if n_sets != 1 else ''}"]
@@ -619,7 +619,7 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
                 f"{'s' if status['annotations'] != 1 else ''}",
                 f"**{human_size(status['bytes'])}** on disk",
             ]
-            st.markdown(" · ".join(bits))
+            st.markdown("**Saved:** " + " · ".join(bits))
             # One line, not three: which datasets and when, together.
             line = []
             if status["datasets"]:
@@ -639,7 +639,12 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
         elif st.session_state.get("_recovery_cache_forgotten"):
             st.caption("Cleared. Nothing is stored on this computer.")
         else:
-            st.caption("Nothing stored yet — the session is saved as you work.")
+            st.caption("Nothing saved yet. The first change creates the cache.")
+
+        st.caption(
+            "Includes uploaded dataset tables, mappings, recording setup, "
+            "visualization settings, selection and annotations."
+        )
 
         # Seed rather than pass `value=`: the Forget callback writes this key via
         # the session-state API, and a widget carrying both logs Streamlit's
@@ -649,14 +654,15 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
             "persist_local_saving", not persistence_paused(st.session_state)
         )
         st.toggle(
-            "Keep saving here",
+            "Save changes automatically",
             key="persist_local_saving",
             on_change=_toggle_recovery_saving,
             help="Turn off to stop writing to the cache for the rest of this "
-            "session. Your work stays loaded either way.",
+            "session. The current app stays open and the existing saved copy "
+            "remains until you clear it.",
         )
         if st.button(
-            "🗑 Forget saved session",
+            "🗑 Clear recovery cache",
             key="forget_recovery_cache_btn",
             width="stretch",
             disabled=not status["exists"],
@@ -669,7 +675,7 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
         # The folder is the one detail worth a line of its own (it is what you
         # go and look at); the env-var switches live in its tooltip.
         st.caption(
-            f"Folder: `{status['directory']}`",
+            f"Saved to `{status['directory']}`",
             help=f"Always off: `{PERSIST_ENV_VAR}=0` · move the folder: "
             f"`{STATE_DIR_ENV_VAR}=…` · same info from a terminal: "
             "`scanpath-studio cache`.",
@@ -687,22 +693,25 @@ def _render_start_fresh_panel(*, slot=None) -> None:
     heading in :mod:`scanpath_studio.menu` are the disclosure.
     """
     container = slot if slot is not None else st.container()
-    container.button(
-        DEMO_RESET_LABEL,
-        key="session_load_demo",
-        width="stretch",
-        help=DEMO_RESET_HELP,
-        on_click=load_bundled_demo,
-    )
-    if container.button(
-        "🧹 Clear cached computations",
-        key="session_clear_cache",
-        width="stretch",
-        help="Recompute every figure, table and normalization from the data "
-        "already loaded. Nothing is lost — this cache only holds results the "
-        "app can rebuild. The saved session on this computer is untouched.",
-    ):
-        st.session_state[_CLEAR_CACHE_PENDING_KEY] = True
+    with container.expander("Troubleshooting", expanded=False):
+        st.caption(
+            "These actions do not delete the automatic recovery copy above."
+        )
+        st.button(
+            DEMO_RESET_LABEL,
+            key="session_load_demo",
+            width="stretch",
+            help=DEMO_RESET_HELP,
+            on_click=load_bundled_demo,
+        )
+        if st.button(
+            "🧹 Rebuild computed results",
+            key="session_clear_cache",
+            width="stretch",
+            help="Recompute every figure, table and normalization from the data "
+            "already loaded. Nothing is lost, and automatic recovery is untouched.",
+        ):
+            st.session_state[_CLEAR_CACHE_PENDING_KEY] = True
     if st.session_state.get(_CLEAR_CACHE_PENDING_KEY):
         _clear_cache_confirmation_dialog()
 
@@ -2980,6 +2989,21 @@ def render_sidebar_data_source(host=None) -> str:
         entries.append(SYNTHETIC_CHOICE)
         kinds[SYNTHETIC_CHOICE] = "🧪"
 
+    # Removing an app-owned/public source means removing it from this session's
+    # available list, not deleting packaged files or a public corpus. Keep the
+    # stable token intact for links and loader dispatch; the ordinary stale-
+    # selection healing below moves away from a source that was just hidden.
+    hidden = set(st.session_state.get(HIDDEN_DATASETS_KEY) or [])
+    entries = [token for token in entries if token not in hidden]
+    kinds = {token: kind for token, kind in kinds.items() if token in entries}
+    if not entries:
+        # Never strand the app without a loadable source. This can only happen
+        # after the user has removed every row one by one in the same session.
+        hidden.discard(DEMO_CHOICE)
+        st.session_state[HIDDEN_DATASETS_KEY] = sorted(hidden)
+        entries = [DEMO_CHOICE]
+        kinds = {DEMO_CHOICE: "🧪"}
+
     # Migrate a legacy `PUBLIC_DATASETS_CHOICE` selection (old saved state / deep
     # link / the former category radio) to the concrete corpus token so it lands on
     # the right entry. Falls back to the first public corpus (not the demo) when no
@@ -3137,11 +3161,11 @@ def render_data_source_picker(host=None) -> None:
             # invalidates no link and no saved config. Anything that tells the
             # user to "select X" reads it too, so the two cannot drift. The
             # snapshot is passed in for the M6 reason above it.
-            name = picker_name_for(token, registry)
+            name = _dataset_display_name(token, registry)
         elif token in uploaded:
-            name = f"{token} (yours)"
+            name = f"{_dataset_display_name(token, registry)} (yours)"
         else:
-            name = token
+            name = _dataset_display_name(token, registry)
         return f"{tag} {name}".strip()
 
     # Keyed wrapper → stable `.st-key-…` selector for the spotlight tour.
@@ -3159,7 +3183,7 @@ def render_data_source_picker(host=None) -> None:
     if current in entries:
         st.session_state["data_source_picker"] = current
     box.selectbox(
-        "Select Dataset",
+        "**Select Dataset**",
         entries,
         format_func=_entry_label,
         help=data_dictionary_help_text(),
@@ -3174,12 +3198,30 @@ def render_data_source_picker(host=None) -> None:
 #: since UX-78, what lets the **Dataset** column be both the name and the control
 #: that opens it.
 _DATASET_EDIT_LABEL = ":material/edit: Edit"
-_DATASET_DELETE_LABEL = ":material/delete: Delete"
+_DATASET_RENAME_LABEL = ":material/drive_file_rename_outline: Rename"
+_DATASET_REMOVE_LABEL = ":material/delete: Remove"
+
+# Built-in and public dataset tokens are load-path identifiers, so changing
+# them would break deep links and loader dispatch. Their table rename is a
+# display alias; removing one hides it from this browser session. Uploaded
+# datasets keep using the real store re-key/delete operations in `wizard.py`.
+DATASET_ALIASES_KEY = "_dataset_display_aliases"
+HIDDEN_DATASETS_KEY = "_hidden_dataset_tokens"
+PENDING_RENAME_KEY = "_dataset_pending_rename"
 
 #: UX-78 — the open dataset's row tint. A Styler writes inline CSS and so cannot
 #: read the theme's variables; a translucent blue reads as "selected" on both the
 #: light and the dark grid without being opaque enough to fight the text.
 _DATASET_ACTIVE_TINT = "rgba(59, 130, 246, 0.18)"
+
+
+def _dataset_display_name(token: str, registry: dict | None = None) -> str:
+    """User-facing dataset name without changing the source's stable token."""
+    alias = (st.session_state.get(DATASET_ALIASES_KEY) or {}).get(token)
+    if alias:
+        return str(alias)
+    registry = public_dataset_registry() if registry is None else registry
+    return picker_name_for(token, registry) if token in registry else token
 
 
 def _counts_store() -> dict:
@@ -3191,7 +3233,10 @@ def _counts_store() -> dict:
 
 
 def remembered_dataset_counts(
-    token: str, words: pd.DataFrame | None, fixations: pd.DataFrame | None
+    token: str,
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    raw_gaze: pd.DataFrame | None = None,
 ) -> dict:
     """This dataset's headline counts, computed at most once per version of it.
 
@@ -3214,13 +3259,23 @@ def remembered_dataset_counts(
     """
     store = _counts_store()
     entry = store.get(token)
-    if words is None and fixations is None:
+    if words is None and fixations is None and raw_gaze is None:
         counts = entry.get("counts") if isinstance(entry, dict) else None
-        return dict(counts) if isinstance(counts, dict) else {}
-    key = [frame_fingerprint(words), frame_fingerprint(fixations)]
+        remembered = dict(counts) if isinstance(counts, dict) else {}
+        # Recovery manifests written before this table matched the inspection
+        # summary called the same value Readers. Preserve it without loading the
+        # dataset merely to refresh a label.
+        if "Participants" not in remembered and "Readers" in remembered:
+            remembered["Participants"] = remembered.pop("Readers")
+        return remembered
+    key = [
+        frame_fingerprint(words),
+        frame_fingerprint(fixations),
+        frame_fingerprint(raw_gaze),
+    ]
     if isinstance(entry, dict) and entry.get("key") == key:
         return dict(entry.get("counts") or {})
-    counts = _dataset_counts(words, fixations, tuple(key))
+    counts = _dataset_counts(words, fixations, raw_gaze, tuple(key))
     store[token] = {"key": key, "counts": dict(counts)}
     return dict(counts)
 
@@ -3238,8 +3293,13 @@ def forget_dataset_counts(keep: set | None = None) -> None:
 
 
 @st.cache_data(show_spinner=False)
-def _dataset_counts(_words: pd.DataFrame, _fixations: pd.DataFrame, key) -> dict:
-    """Cheap headline counts for one dataset: readers, trials, words, fixations.
+def _dataset_counts(
+    _words: pd.DataFrame,
+    _fixations: pd.DataFrame,
+    _raw_gaze: pd.DataFrame,
+    key,
+) -> dict:
+    """Cheap headline counts for every field in the dataset summary row.
 
     Two ``nunique`` calls and two lengths — UX-54 asked for "measurements that
     are easy to calculate", and anything needing the measures pipeline would make
@@ -3262,12 +3322,29 @@ def _dataset_counts(_words: pd.DataFrame, _fixations: pd.DataFrame, key) -> dict
 
     words = _words if _words is not None else pd.DataFrame()
     fixations = _fixations if _fixations is not None else pd.DataFrame()
+    raw_gaze = _raw_gaze if _raw_gaze is not None else pd.DataFrame()
+    frames = (fixations, words, raw_gaze)
+
+    def _union_unique(column: str):
+        values = set()
+        found = False
+        for frame in frames:
+            if frame is None or frame.empty or column not in frame.columns:
+                continue
+            found = True
+            values.update(frame[column].dropna().astype(str).tolist())
+        return len(values) if found else None
+
+    text_column = "unique_text_id" if "unique_text_id" in words else "text_id"
+    screens = len(part_catalog(words, fixations, raw_gaze)) or None
     return {
-        "Readers": _n_unique(fixations, "participant_id")
-        or _n_unique(words, "participant_id"),
-        "Trials": _n_unique(fixations, "trial_id") or _n_unique(words, "trial_id"),
+        "Participants": _union_unique("participant_id"),
+        "Texts": _n_unique(words, text_column),
+        "Trials": _union_unique("trial_id"),
+        "Screens": screens,
         "Words": len(words) or None,
         "Fixations": len(fixations) or None,
+        "Gaze points": len(raw_gaze) or None,
     }
 
 
@@ -3288,8 +3365,10 @@ def _select_dataset(name: str) -> None:
 PENDING_DELETE_KEY = "_dataset_pending_delete"
 
 
-@st.dialog("Delete this dataset?")
-def _delete_confirmation_dialog(token: str) -> None:
+@st.dialog("Remove this dataset?")
+def _delete_confirmation_dialog(
+    token: str, *, uploaded: set[str], available: list[str]
+) -> None:
     """The modal body — UX-79. Opened by ``_render_delete_confirmation``.
 
     **BUG-36:** handled by the button's *return value*, not ``on_click`` — an
@@ -3299,23 +3378,42 @@ def _delete_confirmation_dialog(token: str) -> None:
     the modal and re-renders the page underneath (see ``tour.py``'s
     ``_tutorial_library_dialog``, which hit the same trap first).
     """
-    st.warning(
-        f"Delete **{token}**? Its tables, column mapping and annotations leave "
-        "this session — there is no undo."
-    )
+    owned = token in uploaded
+    if owned:
+        st.warning(
+            f"Remove **{_dataset_display_name(token)}**? Its tables, column "
+            "mapping and annotations leave this session — there is no undo."
+        )
+    else:
+        st.caption(
+            f"Remove **{_dataset_display_name(token)}** from Available datasets "
+            "for this session? The packaged or public source data is not deleted."
+        )
+    remaining = [entry for entry in available if entry != token]
     yes, no = st.columns(2)
     if yes.button(
-        "✕ Delete it",
+        "Remove",
         key="dataset_delete_confirm",
         type="primary",
         width="stretch",
+        disabled=not remaining,
     ):
-        # Local import, like `_enter_add_data_wizard` above: `wizard` imports
-        # `app` back, so it cannot be imported at module load.
-        from scanpath_studio.wizard import _remove_dataset
+        pending = st.session_state.pop(PENDING_DELETE_KEY, None)
+        if owned:
+            # Local import, like `_enter_add_data_wizard` above: `wizard`
+            # imports `app` back, so it cannot be imported at module load.
+            from scanpath_studio.wizard import _remove_dataset
 
-        _remove_dataset(st.session_state.pop(PENDING_DELETE_KEY, None))
+            _remove_dataset(pending)
+        else:
+            hidden = set(st.session_state.get(HIDDEN_DATASETS_KEY) or [])
+            hidden.add(pending)
+            st.session_state[HIDDEN_DATASETS_KEY] = sorted(hidden)
+            if st.session_state.get("data_source_choice") == pending:
+                st.session_state["_pending_source_choice"] = remaining[0]
         st.rerun(scope="app")
+    if not remaining:
+        st.caption("At least one dataset must remain available.")
     if no.button(
         "Keep it",
         key="dataset_delete_cancel",
@@ -3325,7 +3423,7 @@ def _delete_confirmation_dialog(token: str) -> None:
         st.rerun(scope="app")
 
 
-def _render_delete_confirmation(host, tokens: list) -> None:
+def _render_delete_confirmation(host, tokens: list, uploaded: set[str]) -> None:
     """The confirm step between ✕ Delete and the dataset actually going away.
 
     Deleting an upload drops its frames, its mapping and its annotations from
@@ -3346,7 +3444,72 @@ def _render_delete_confirmation(host, tokens: list) -> None:
     if token not in tokens:
         st.session_state.pop(PENDING_DELETE_KEY, None)
         return
-    _delete_confirmation_dialog(token)
+    _delete_confirmation_dialog(token, uploaded=uploaded, available=tokens)
+
+
+def _unique_dataset_alias(requested: str, token: str, tokens: list[str]) -> str:
+    """A non-empty display name that does not duplicate another table row."""
+    base = requested.strip() or _dataset_display_name(token)
+    used = {
+        _dataset_display_name(other).casefold() for other in tokens if other != token
+    }
+    candidate = base
+    suffix = 2
+    while candidate.casefold() in used:
+        candidate = f"{base} ({suffix})"
+        suffix += 1
+    return candidate
+
+
+@st.dialog("Rename dataset")
+def _rename_dataset_dialog(token: str, *, uploaded: set[str], tokens: list[str]) -> None:
+    """Rename any row while keeping app-owned source tokens stable."""
+    current = _dataset_display_name(token)
+    requested = st.text_input(
+        "Dataset name",
+        value=current,
+        key=f"dataset_table_rename_{token}",
+        persist_state="session",
+    )
+    apply_col, cancel_col = st.columns(2)
+    if apply_col.button(
+        "Rename",
+        key="dataset_table_rename_confirm",
+        type="primary",
+        width="stretch",
+    ):
+        requested = requested.strip()
+        if not requested:
+            st.warning("Enter a dataset name.")
+            return
+        if token in uploaded:
+            from scanpath_studio.wizard import rename_dataset
+
+            renamed = rename_dataset(token, requested)
+            final_name = renamed or token
+        else:
+            final_name = _unique_dataset_alias(requested, token, tokens)
+            aliases = dict(st.session_state.get(DATASET_ALIASES_KEY) or {})
+            aliases[token] = final_name
+            st.session_state[DATASET_ALIASES_KEY] = aliases
+        st.session_state.pop(PENDING_RENAME_KEY, None)
+        st.session_state["_dataset_table_note"] = f"Renamed to {final_name}."
+        st.rerun(scope="app")
+    if cancel_col.button(
+        "Cancel", key="dataset_table_rename_cancel", width="stretch"
+    ):
+        st.session_state.pop(PENDING_RENAME_KEY, None)
+        st.rerun(scope="app")
+
+
+def _render_rename_dialog(tokens: list[str], uploaded: set[str]) -> None:
+    token = st.session_state.get(PENDING_RENAME_KEY)
+    if token is None:
+        return
+    if token not in tokens:
+        st.session_state.pop(PENDING_RENAME_KEY, None)
+        return
+    _rename_dataset_dialog(token, uploaded=uploaded, tokens=tokens)
 
 
 def render_dataset_table(
@@ -3355,13 +3518,15 @@ def render_dataset_table(
     active: str | None = None,
     words: pd.DataFrame | None = None,
     fixations: pd.DataFrame | None = None,
+    raw_gaze: pd.DataFrame | None = None,
 ) -> None:
     """The 🗂️ Data page's dataset list, as a table (UX-54).
 
     One row per dataset — the same entries the picker offers — carrying the
-    headline counts and the actions belonging to that dataset: **Open** it,
-    **Edit** its column mapping, **Delete** it. Sortable and scrollable by virtue
-    of being an ``st.dataframe``, which is what a column of cards could not be.
+    full summary counts and the actions belonging to that dataset: **Open** it,
+    **Edit** its column mapping, **Rename** it, or **Remove** it. Sortable and
+    scrollable by virtue of being an ``st.dataframe``, which is what a column of
+    cards could not be.
 
     **Counts are only shown for data already in memory** — the open dataset
     (whose frames are passed in) and every stored upload. A public corpus is not
@@ -3396,19 +3561,23 @@ def render_dataset_table(
         if token == UPLOAD_CHOICE:
             continue  # the wizard, not a dataset
         own = token in uploaded
-        name = picker_name_for(token, registry) if token in registry else token
+        name = _dataset_display_name(token, registry)
         # DATA-32: counted once per version of a dataset and remembered, so a
         # row keeps its numbers without the frames being in memory. UX-54 r2 had
         # narrowed this to the open dataset because counting meant *loading*;
         # with a store that argument only applies to a corpus nobody has opened
         # yet, and those rows are still blank rather than guessed at.
         if token == active:
-            frames = (words, fixations)
+            frames = (words, fixations, raw_gaze)
         elif token in stored_uploads:
             entry = stored_uploads.get(token) or {}
-            frames = (entry.get("words"), entry.get("fixations"))
+            frames = (
+                entry.get("words"),
+                entry.get("fixations"),
+                entry.get("raw_gaze"),
+            )
         else:
-            frames = (None, None)
+            frames = (None, None, None)
         counts = remembered_dataset_counts(token, *frames)
         rows.append(
             {
@@ -3423,12 +3592,16 @@ def render_dataset_table(
                     if kinds.get(token)
                     else ("🔒 Private" if own else "")
                 ),
-                "Readers": counts.get("Readers"),
+                "Participants": counts.get("Participants"),
+                "Texts": counts.get("Texts"),
                 "Trials": counts.get("Trials"),
+                "Screens": counts.get("Screens"),
                 "Fixations": counts.get("Fixations"),
                 "Words": counts.get("Words"),
+                "Gaze points": counts.get("Gaze points"),
                 "Edit": _DATASET_EDIT_LABEL if own else None,
-                "Delete": _DATASET_DELETE_LABEL if own else None,
+                "Rename": _DATASET_RENAME_LABEL,
+                "Remove": _DATASET_REMOVE_LABEL,
                 "_token": token,
                 "_active": token == active,
             }
@@ -3440,7 +3613,15 @@ def render_dataset_table(
     # Missing counts are legitimate for a corpus that has never been opened.
     # Pandas would normally upcast those columns to float (and Streamlit would
     # display e.g. ``24.0``), so keep them as nullable integers explicitly.
-    count_columns = ["Readers", "Trials", "Fixations", "Words"]
+    count_columns = [
+        "Participants",
+        "Texts",
+        "Trials",
+        "Screens",
+        "Fixations",
+        "Words",
+        "Gaze points",
+    ]
     for column in count_columns:
         frame[column] = pd.array(frame[column], dtype="Int64")
 
@@ -3484,6 +3665,11 @@ def render_dataset_table(
         if token is not None:
             st.session_state[PENDING_DELETE_KEY] = token
 
+    def _on_rename() -> None:
+        token = _clicked("dataset_table_rename")
+        if token is not None:
+            st.session_state[PENDING_RENAME_KEY] = token
+
     box = host if host is not None else st
     # UX-78: the open dataset is a tinted row rather than a ▶ in a column of its
     # own. A Styler is the only per-row colour `st.dataframe` takes, and it is
@@ -3522,16 +3708,23 @@ def render_dataset_table(
                 key="dataset_table_name",
             ),
             "Kind": st.column_config.TextColumn("Kind", width="small"),
-            "Readers": st.column_config.NumberColumn(
-                "Readers", width="small", format="%d"
+            "Participants": st.column_config.NumberColumn(
+                "Participants", width="small", format="%d"
             ),
+            "Texts": st.column_config.NumberColumn("Texts", width="small", format="%d"),
             "Trials": st.column_config.NumberColumn(
                 "Trials", width="small", format="%d"
+            ),
+            "Screens": st.column_config.NumberColumn(
+                "Screens", width="small", format="%d"
             ),
             "Fixations": st.column_config.NumberColumn(
                 "Fixations", width="small", format="%d"
             ),
             "Words": st.column_config.NumberColumn("Words", width="small", format="%d"),
+            "Gaze points": st.column_config.NumberColumn(
+                "Gaze points", width="small", format="%d"
+            ),
             "Edit": st.column_config.ButtonColumn(
                 "",
                 type="tertiary",
@@ -3540,17 +3733,28 @@ def render_dataset_table(
                 on_click=_on_edit,
                 key="dataset_table_edit",
             ),
-            "Delete": st.column_config.ButtonColumn(
+            "Rename": st.column_config.ButtonColumn(
                 "",
                 type="tertiary",
                 width="small",
-                help="Remove this uploaded dataset from the session.",
+                help="Rename this dataset.",
+                on_click=_on_rename,
+                key="dataset_table_rename",
+            ),
+            "Remove": st.column_config.ButtonColumn(
+                "",
+                type="tertiary",
+                width="small",
+                help="Remove this dataset from the session.",
                 on_click=_on_delete,
                 key="dataset_table_delete",
             ),
         },
     )
-    _render_delete_confirmation(box, tokens)
+    _render_rename_dialog(tokens, uploaded)
+    _render_delete_confirmation(box, tokens, uploaded)
+    if note := st.session_state.pop("_dataset_table_note", None):
+        box.success(note)
 
 
 def resolve_source_monitor(
@@ -3874,6 +4078,7 @@ def render_sidebar_canvas_controls(
     title: str = "Experimental Setup",
     bare: bool = False,
     text_host=None,
+    render_text: bool = True,
 ) -> tuple[int, int, int, str, float, bool]:
     """Render the canvas-geometry, typography and background panel.
 
@@ -3910,7 +4115,7 @@ def render_sidebar_canvas_controls(
         Tuple of (canvas_width, canvas_height, base_font_size, font_family,
         line_spacing, scale_text_to_boxes).
     """
-    seed_canvas_state(words_filtered, fixations_filtered, data_choice)
+    seeded = seed_canvas_state(words_filtered, fixations_filtered, data_choice)
     _, font_css = _dataset_font(words_filtered)
     host = slot if slot is not None else st.container()
     display = host if bare else host.expander(title, expanded=expanded)
@@ -4021,79 +4226,98 @@ def render_sidebar_canvas_controls(
         + ("  ·  set in 🗂️ Data → Recording setup." if bare else "")
     )
 
+    # Text can be switched off while this function still supplies the screen
+    # half to 📐 Figure & canvas. Before BUG-38, the caller passed an undefined
+    # text container in that state and the whole Scanpath view crashed. Do not
+    # move the typography controls into the Figure popover as a fallback: they
+    # belong to Stimulus → Text, and their session-persistent keys already keep
+    # the last values while that layer is hidden.
+    if not render_text:
+        return (
+            int(canvas_width),
+            int(canvas_height),
+            int(seeded[2]),
+            str(seeded[3]),
+            float(seeded[4]),
+            bool(seeded[5]),
+        )
+
     # --- 🔤 Text & fonts (sub-group in bare mode) -------------------------
     # Reading text is true-to-scale by default: it auto-sizes to the word boxes
     # (text height = box_height / line_spacing) and scales with the figure, so it
     # always fills the real line slot. Untick to fall back to a fixed font size.
     # Keyed (+ seeded) so the Save & restore panel can capture/reapply them.
-    scale_text_to_boxes = text.checkbox(
+    scale_text_to_boxes = field(
+        text,
+        "checkbox",
         "Scale text to boxes",
         key="global_scale_text_to_boxes",
         persist_state="session",
-        help="Size the reading text from the word boxes (height = box height ÷ "
-        "line spacing) so it stays true to the real experiment at any zoom. "
-        "Untick to use the fixed 'Figure font size' below instead.",
+        help="Size text from word-box height. Without boxes, the plot font size "
+        "is used instead.",
     )
-    line_spacing = field(
-        text,
-        "number_input",
-        "Line spacing",
-        min_value=1.0,
-        max_value=10.0,
-        step=0.5,
-        disabled=not scale_text_to_boxes,
-        key="global_line_spacing",
-        persist_state="session",
-        help="Line slots per line of text. OneStop rendered one blank line above "
-        "and one below each text line, so the box spans 3 line heights → 3.",
+    line_spacing = float(st.session_state.get("global_line_spacing", seeded[4]))
+    use_stimulus_font_pt = bool(
+        st.session_state.get("global_use_stimulus_font_pt", False)
     )
-    use_stimulus_font_pt = text.checkbox(
-        "Use stimulus font size in points",
-        key="global_use_stimulus_font_pt",
-        persist_state="session",
-        disabled=scale_text_to_boxes,
-        help="Convert the original stimulus point size with the DPI above. "
-        "Scale-to-boxes still takes precedence when enabled.",
-    )
-    stimulus_font_pt = field(
-        text,
-        "number_input",
-        "Stimulus font size (pt)",
-        display="Font size (pt)",
-        min_value=4.0,
-        max_value=144.0,
-        step=0.5,
-        key="global_stimulus_font_pt",
-        persist_state="session",
-        disabled=scale_text_to_boxes or not use_stimulus_font_pt,
-    )
-    if not scale_text_to_boxes and use_stimulus_font_pt:
-        st.session_state["global_base_font_size"] = int(
-            min(max(round(font_pt_to_px(stimulus_font_pt, display_dpi)), 6), 72)
+    stimulus_font_pt = float(st.session_state.get("global_stimulus_font_pt", 12.0))
+    if scale_text_to_boxes:
+        line_spacing = field(
+            text,
+            "number_input",
+            "Line spacing",
+            min_value=1.0,
+            max_value=10.0,
+            step=0.5,
+            key="global_line_spacing",
+            persist_state="session",
+            help="Line slots represented by each word box. OneStop uses 3.",
         )
-    base_font_size = field(
-        text,
-        "number_input",
-        "Figure font size (px)",
-        min_value=6,
-        max_value=72,
-        step=1,
-        help="Real (monitor-pixel) font size, scaled true-to-scale with the "
-        "figure. Used for the reading text when 'Scale text to boxes' is off or "
-        "the data has no word boxes, and always for axis/legend chrome.",
-        key="global_base_font_size",
-        persist_state="session",
-        disabled=not scale_text_to_boxes and use_stimulus_font_pt,
-    )
-    # VIZ-1: every font-size control here is in pixels, but stimulus typography
-    # is usually specified in points. Spell out the difference + the conversion.
-    text.caption(
-        "ℹ️ Font sizes here are in **pixels (px)**, but stimuli are usually "
-        "specified in **points (pt)**. To match the original, convert via the "
-        "experiment's DPI: `px = pt × DPI ÷ 72` (e.g. 12 pt ≈ 16 px at 96 DPI). "
-        "Prefer **Scale text to boxes** when the data ships word boxes — it sizes "
-        "the text from the real geometry and sidesteps the conversion."
-    )
+    else:
+        use_stimulus_font_pt = field(
+            text,
+            "segmented_control",
+            "Font unit",
+            options=[False, True],
+            format_func=lambda use_pt: "Points (pt)" if use_pt else "Pixels (px)",
+            key="global_use_stimulus_font_pt",
+            persist_state="session",
+            help="Choose the original stimulus unit. Points are converted with "
+            "the dataset DPI: px = pt × DPI ÷ 72.",
+        )
+        if use_stimulus_font_pt:
+            stimulus_font_pt = field(
+                text,
+                "number_input",
+                "Font size (pt)",
+                min_value=4.0,
+                max_value=144.0,
+                step=0.5,
+                key="global_stimulus_font_pt",
+                persist_state="session",
+            )
+            st.session_state["global_base_font_size"] = int(
+                min(max(round(font_pt_to_px(stimulus_font_pt, display_dpi)), 6), 72)
+            )
+
+    if not scale_text_to_boxes and use_stimulus_font_pt:
+        base_font_size = int(st.session_state["global_base_font_size"])
+    else:
+        base_font_size = field(
+            text,
+            "number_input",
+            "Plot font size (px)" if scale_text_to_boxes else "Font size (px)",
+            min_value=6,
+            max_value=72,
+            step=1,
+            help=(
+                "Axis, legend, and fallback text size."
+                if scale_text_to_boxes
+                else "Reading-text, axis, and legend size in monitor pixels."
+            ),
+            key="global_base_font_size",
+            persist_state="session",
+        )
     text.button(
         "Use multilingual font stack",
         on_click=lambda: st.session_state.update(
@@ -4593,8 +4817,8 @@ def main() -> None:
         # session reads as "the app kept my data somewhere" without saying where;
         # the toast points at the menu panel that answers that.
         st.toast(
-            "Restored your last session from this computer — see 💾 Session → "
-            "🗄️ Recovery cache, beside the title.",
+            "Recovered your last session from this computer — see 💾 Session → "
+            "Automatic recovery.",
             icon="↩️",
         )
     if url_source == "onestop" and onestop_data_dir() is not None:
@@ -5383,7 +5607,7 @@ def main() -> None:
         scale_text_to_boxes,
     ) = seed_canvas_state(words_filtered, canvas_geometry_frame, data_choice)
 
-    def canvas_renderer(slot, text_host=None) -> None:
+    def canvas_renderer(slot, text_host=None, *, render_text: bool = True) -> None:
         """Render the canvas/text controls into the rail, in two places.
 
         UX-81 split the panel between two sections: the screen half into
@@ -5397,6 +5621,7 @@ def main() -> None:
             slot=slot,
             bare=True,
             text_host=text_host,
+            render_text=render_text,
         )
 
     # The visualization controls moved out of the sidebar into the Scanpath
@@ -5472,6 +5697,7 @@ def main() -> None:
                 active=data_choice,
                 words=words_all,
                 fixations=fixations_all,
+                raw_gaze=raw_gaze_df,
             )
         mapping_head_slot.divider()
         mapping_head_slot.subheader("🔤 Column mapping")
@@ -5508,7 +5734,8 @@ def main() -> None:
             st.divider()
             dataset_label = str(
                 st.session_state.get("data_source_choice") or data_choice
-            ).replace("`", "'")
+            )
+            dataset_label = _dataset_display_name(dataset_label).replace("`", "'")
             st.subheader(f"🔎 What's in the `{dataset_label}` dataset")
             # Keyed wrapper → the stable `.st-key-…` selector the "Load and
             # verify a dataset" tutorial spotlights (it kept its name across the

@@ -52,7 +52,7 @@ too. Nothing here is inferred from documentation alone.
     `server.maxWidgetStateSize` (25 MB) also arrived in 1.60. It caps a single
     rerun's aggregate widget state, not session state — an uploaded corpus lives
     in session state and is unaffected; the only widget-borne payload is the
-    💾 Save & restore config JSON, which is kilobytes.
+    Session JSON backup, which is kilobytes.
 
 !!! warning "Scanpath Studio has no authentication, on any deployment"
     There is no login, no session token, and no per-user authorization anywhere
@@ -250,8 +250,8 @@ No fixation rows and no word rows are in either artifact.
 
 Don't confuse this with the `plot_config.json` a bulk export writes: that one
 comes from `export._plot_config_dict`, and its `"annotations"` key holds the
-figure's title and caption (EXP-2), not the per-trial notes. Only the sidebar's
-**💾 Save & restore** download carries the annotation store.
+figure's title and caption (EXP-2), not the per-trial notes. Only **Session →
+JSON backup** carries the annotation store.
 
 **Assessment.** This is inherent to the feature: a link that reopens a specific
 trial has to identify that trial. The right response is disclosure, not removal,
@@ -262,7 +262,7 @@ itself does not say so at the point of copying.
 **Fix.** Add a one-line caption in `url_state.py:_render_share_body` next to the
 copy button: *"This link contains the participant and trial ids."* Optionally add
 a toggle that drops `participant` / `trial_id` and shares view settings only. Say
-the same thing next to the **💾 Save & restore** download button, naming the
+the same thing next to the **JSON backup** download button, naming the
 annotation notes.
 
 **Status:** **updated** 2026-08-20 — the Share panel always includes the
@@ -270,7 +270,7 @@ participant, trial, and visualization settings. The former identity-mode picker
 and warning were removed to keep sharing predictable; the panel instead notes
 that recipients may need to replace the URL's address or port. The lower-level
 query builder retains its optional identity flags for programmatic callers. The
-**💾 Save & restore** download (`tabs._render_save_restore_expander`) now
+The **JSON backup** (`tabs._render_save_restore_expander`) now
 carries a matching caption naming what the file holds — the selected
 participant/trial *and* the text of every annotation note. **Not addressed:**
 that file still has no opt-out, only the disclosure; and the CLI / headless API
@@ -764,7 +764,7 @@ next session. So the disk writes in the package are the corpus downloads in
 `datasets.py`, the CLI/headless `api.save_figure*`, the MP4 temp file of S8,
 and — locally — the recovery cache. It is written with `os.replace` over a
 sibling temp file (no partial reads), holds no credentials, and is removable
-from the app's **🗄️ Recovery cache** panel or `scanpath-studio cache --clear`.
+from **Session → Automatic recovery** or `scanpath-studio cache --clear`.
 
 **No zip-slip on ingest.** An uploaded archive is never extracted.
 `data._read_zipped_table` reads each member into an `io.BytesIO` and hands it to

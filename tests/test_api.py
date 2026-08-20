@@ -450,6 +450,18 @@ def test_animate_scanpath_fix_index_range_windows_the_replay(sample):
     assert len(fig.frames[-1].data[0].x) == 8
 
 
+def test_non_realtime_animation_is_labeled_as_an_illustration(sample):
+    words, fixations = sample
+    pid, tid = sps.list_trials(words, fixations).iloc[0]
+
+    fast = sps.animate_scanpath(words, fixations, pid, tid, playback_speed=2.0)
+    assert fast.layout.meta["illustration"] is True
+    assert "playback speed ×2" in fast.layout.meta["illustration_reasons"]
+
+    realtime = sps.animate_scanpath(words, fixations, pid, tid, playback_speed=1.0)
+    assert not (realtime.layout.meta or {}).get("illustration", False)
+
+
 def test_fix_index_range_rejects_a_window_that_selects_nothing(sample):
     words, fixations = sample
     pid, tid = sps.list_trials(words, fixations).iloc[0]

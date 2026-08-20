@@ -123,6 +123,19 @@ class TestDetection:
         assert "q_prompt" in qa and "response" in qa
         assert _humanize_field("is_target_span") == "Is target span"
 
+    def test_titles_and_reading_instructions_are_context(self):
+        w = pd.DataFrame(
+            {
+                "word_id": [0, 1],
+                "text": ["read", "this"],
+                "passage_title": ["Practice"] * 2,
+                "reading_instructions": ["Read naturally."] * 2,
+            }
+        )
+        context = _detect_question_columns(w)
+        assert "passage_title" in context
+        assert "reading_instructions" in context
+
     def test_no_spans_or_qa(self):
         w = pd.DataFrame({"word_id": [0, 1], "text": ["a", "b"]})
         assert _detect_span_columns(w) == []

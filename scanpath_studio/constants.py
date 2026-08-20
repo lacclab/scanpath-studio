@@ -406,7 +406,7 @@ UPLOAD_MAX_SIZE_MB = 5000
 
 CITATION = {
     "authors": (
-        "Omer Shubi, Keren Gruteke Klein, Ella Lion, Deborah N. Jakobi, "
+        "Omer Shubi, Keren Gruteke Klein, Maya Grossman, Ella Lion, Deborah N. Jakobi, "
         "David R. Reich, Lena Jäger, Yevgeni Berzak"
     ),
     "title": "Scanpath Studio",
@@ -674,7 +674,7 @@ FOCUS_MAPPING_KEY = "_focus_column_mapping"
 # shrink: two datasets under comparison are told apart by that label. What gave
 # way is the scrubber (5.0 → 3.6) and the filters, which became one icon in the
 # actions cluster rather than a labelled **More** button of their own.
-SELECTOR_ROW_GRID = [3.0, 3.0, 3.6, 2.3]
+SELECTOR_ROW_GRID = [2.9, 2.8, 4.0, 2.2]
 
 #: The pre-UX-64 three-track shape, for the rows that still have three things
 #: on them — the multipart screen navigator and compare mode's own picker rows.

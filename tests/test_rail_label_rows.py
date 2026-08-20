@@ -18,6 +18,8 @@ injecting markup into the page.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from streamlit.proto.LabelVisibility_pb2 import LabelVisibility
 
@@ -240,6 +242,13 @@ class TestSliderRow:
         assert slider.proto.label_visibility.value == COLLAPSED
 
 
+def test_fixation_controls_drop_the_linear_reading_subheading():
+    """The snap setting remains compatible, without a redundant mini-heading."""
+    source = (Path(APP_SCRIPT).parent / "scanpath_studio" / "controls.py").read_text()
+    assert 'st.caption("Linear-reading schematic")' not in source
+    assert '"global_fixation_snap_to_word"' in source
+
+
 @pytest.mark.timeout(180)
 class TestTheRealRail:
     """The whole rail, through the app, not one control in isolation."""
@@ -271,7 +280,14 @@ class TestTheRealRail:
         at.run()
         labels = " ".join(_label_markup(at))
         assert labels, "no UX-51 row labels rendered anywhere in the rail"
-        for title in ("Color fixations by", "Drift correction", "Marker shape"):
+        for title in (
+            "Color fixations by",
+            "Drift correction",
+            "Marker shape",
+            "Fixation index",
+            "Direction arrows",
+            "Show color bars",
+        ):
             assert f">{title}</span>" in labels, f"{title} lost its label column"
         # …carrying the control's help as the title's own tooltip.
         assert 'data-tip="Drift correction — Snap fixations' in labels

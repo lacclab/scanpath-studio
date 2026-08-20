@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 
 
@@ -37,6 +38,13 @@ def illustration_reasons(
         reasons.append("synthetic source")
     if raw_gaze_only:
         reasons.append("derived from raw gaze")
+    playback_speed = settings.get("playback_speed", 1.0)
+    try:
+        playback_speed = float(playback_speed)
+    except (TypeError, ValueError):
+        playback_speed = 1.0
+    if not math.isclose(playback_speed, 1.0):
+        reasons.append(f"playback speed ×{playback_speed:g}")
     return reasons
 
 

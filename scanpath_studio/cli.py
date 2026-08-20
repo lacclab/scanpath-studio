@@ -1520,6 +1520,7 @@ def render(argv: list[str]) -> None:
             animation_options = dict(
                 playback_speed=args.playback_speed,
                 autoplay=args.autoplay,
+                illustration_label=args.illustration_label,
                 anim_grid_step_ms=args.anim_grid_step_ms,
                 anim_max_frames=args.anim_max_frames,
                 **anim_kwargs,

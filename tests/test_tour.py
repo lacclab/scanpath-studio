@@ -557,7 +557,8 @@ class TestSpotlightSelectorsResolve:
         assert 'st.markdown("## 🎛️ Plot controls")' in tab_source
         assert 'st.markdown("## 🎛️ View modes")' not in tab_source
         assert 'st.markdown("## 🎨 Visualization")' not in tab_source
-        assert 'viz.caption("Quick views")' in control_source
+        assert "sps-control-label" in control_source
+        assert 'key="viz_view_custom"' in control_source
         # UX-80: a section is a `[toggle | ▾]` row, not an expander.
         assert "_rail_section(" in control_source
         assert 'viz.expander("↗️ Saccades"' not in control_source

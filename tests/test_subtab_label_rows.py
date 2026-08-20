@@ -94,7 +94,7 @@ class TestConvertedFields:
         assert note.proto.label_visibility.value == COLLAPSED
 
         add_tag = at.text_input(key="annotrial_newtag_p1__t1__parent")
-        assert add_tag.placeholder == "Add tag, then press Enter"
+        assert add_tag.placeholder == "Add a new tag"
         assert add_tag.proto.label_visibility.value == COLLAPSED
 
         rendered = _labels(at)

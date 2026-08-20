@@ -78,6 +78,7 @@ from scanpath_studio.constants import (
     SACCADE_DASH_OPTIONS,
     SELECTOR_ROW_GRID,
     SELECTOR_ROW_TRIO,
+    SELECTOR_ROW_WIDE_GRID,
     WORD_LABEL_COLOR,
     compare_palette_color,
     drift_correction_enabled,
@@ -220,10 +221,10 @@ from scanpath_studio.utils import (
 #: the tabs are built as a list and mapped back by label. `tests/conftest.py`
 #: imports these rather than repeating the strings.
 SUBTAB_ANNOTATIONS = "📝 Annotations"
-SUBTAB_STIMULUS = "Stimulus & questions"
+SUBTAB_STIMULUS = "📄 Stimulus & Context"
 SUBTAB_COMPARISONS = "🔬 Comparisons"
 SUBTAB_LINE_ASSIGNMENT = "📐 Line assignment"
-SUBTAB_EXPORT = "Export"
+SUBTAB_EXPORT = "📤 Export"
 SUBTAB_SHARE = "🔗 Share"
 
 
@@ -1120,8 +1121,8 @@ def _render_compare_dataset_cell(
             if ready_by_name.get(name, True)
             else f"{_mark_wip_if_benchmark(name)} (needs setup)"
         ),
-        help="Which dataset scanpath B comes from. Other datasets keep their own "
-        "screen geometry, so each panel is drawn to its own monitor.",
+        help="Choose dataset and trial B. 📄 marks the same text; 👤 marks the "
+        "same participant. Other datasets keep their own screen geometry.",
     )
 
 
@@ -1352,7 +1353,9 @@ def _render_compare_selector(
                 "the same participant, then all remaining trials. Other choices "
                 "match the main trial picker's sort menu.",
             )
-            sort_desc = st.checkbox(
+            sort_desc = _labeled(
+                st,
+                "checkbox",
                 "Descending",
                 key="single_compare_sort_desc",
                 disabled=sort_choice in {_CMP_SORT_DEFAULT, TRIAL_SORT_DEFAULT},
@@ -1464,16 +1467,11 @@ def _render_compare_selector(
 
         current_idx = labels.index(current)
 
-    picker_label = "**Compare To**"
-    if order_choice not in {_CMP_SORT_DEFAULT, TRIAL_SORT_DEFAULT}:
-        picker_label += f"  ·  by {order_choice} {'↓' if sort_desc else '↑'}"
     selected_compare_label = sel_col.selectbox(
-        picker_label,
+        "Compare trial",
         options=labels,
         key=sel_key,
-        help="Choose the second trial to compare against the selected trial. "
-        "📄 = same text · 👤 = same participant."
-        + (" Animated comparison overlays both on one clock." if animate else ""),
+        label_visibility="collapsed",
     )
     if n > 1:
         with slider_col:
@@ -1545,7 +1543,18 @@ _SPAN_BG_PALETTE = ["#FEF3C7", "#DBEAFE", "#DCFCE7", "#FAE8FF", "#FFE4E6"]
 # Substrings that mark a per-word boolean column as a highlightable span, and a
 # trial-level column as question/answer content. Dataset-agnostic by design.
 _SPAN_NAME_HINTS = ("span", "highlight", "critical", "target", "aoi_of_interest")
-_QA_NAME_HINTS = ("question", "answer", "correct", "response", "prompt")
+_QA_NAME_HINTS = (
+    "question",
+    "answer",
+    "correct",
+    "response",
+    "prompt",
+    "title",
+    "instruction",
+    "context",
+    "heading",
+    "subtitle",
+)
 
 
 def _humanize_field(col: str) -> str:
@@ -1591,7 +1600,7 @@ def _detect_span_columns(trial_words: pd.DataFrame) -> list[str]:
 
 
 def _detect_question_columns(trial_words: pd.DataFrame) -> list[str]:
-    """Trial-level columns holding question / answer content.
+    """Trial-level columns holding useful stimulus context.
 
     Matches columns whose name reads as question/answer/correct/… but excludes
     span-named columns and **per-word-varying boolean** columns: a boolean that
@@ -1599,7 +1608,8 @@ def _detect_question_columns(trial_words: pd.DataFrame) -> list[str]:
     span-like data, not a trial-level field, and rendering its first value as
     ``"Response: True"`` would be misleading. A *constant* boolean (e.g.
     ``is_correct``) is a legitimate trial-level field and is kept. Also excludes
-    plain numeric columns (UX-32): a Q&A field is inherently text or boolean, so
+    plain numeric columns (UX-32): an automatically detected context field is
+    text or boolean, so
     an unrelated numeric column that merely matches a name hint — e.g. a
     ``response_time_ms`` timing column on a generic upload — would otherwise
     render as a bogus "Response time ms: 120" line.
@@ -1621,7 +1631,7 @@ def _detect_question_columns(trial_words: pd.DataFrame) -> list[str]:
     return out
 
 
-#: Columns the Stimulus & questions field picker never offers (UX-32): the
+#: Columns the Stimulus & Context field picker never offers (UX-32): the
 #: stimulus text itself, word geometry, and the identity columns the trial chips
 #: above the plot already carry.
 _STIMULUS_FIELD_EXCLUDE = frozenset(
@@ -1781,12 +1791,12 @@ def _render_stimulus_field_picker(host, span_options, qa_options) -> None:
             labeled(
                 st,
                 "multiselect",
-                "Question & answer fields",
+                "Context fields",
                 options=qa_options,
                 key=_STIMULUS_QA_KEY,
                 persist_state="session",
-                help="Trial-level columns (one value for the whole trial), "
-                "listed under the stimulus text.",
+                help="Trial-level context such as a title, instruction, question, "
+                "or answer.",
             )
 
 
@@ -2021,9 +2031,7 @@ def _render_paragraph_panel(
     span_bg = {c: _span_bg_for(c, i) for i, c in enumerate(span_cols)}
 
     container = (
-        st.container()
-        if bare
-        else st.expander("Stimulus & questions", expanded=expanded)
+        st.container() if bare else st.expander("Stimulus & Context", expanded=expanded)
     )
     with container:
         text_col, picker_col = st.columns([9, 1.4], vertical_alignment="top")
@@ -2040,7 +2048,7 @@ def _render_paragraph_panel(
         # MultiplEYE structured comprehension questions (target + distractors).
         _render_comprehension_questions(trial_words)
 
-        # Question / answer fields, generically. Keep OneStop's combined
+        # Trial context fields, generically. Keep OneStop's combined
         # "selected X · ✓ correct" answer line when both columns are present.
         question_cols = [c for c in qa_cols if "question" in c.lower()]
         for col in question_cols:
@@ -2861,10 +2869,7 @@ def _render_anim_info_box(
         f"{summary['step_ms']:.0f} ms of reading"
     )
     if summary["coarsened"]:
-        grid += (
-            f" — coarsened from {summary['requested_step_ms']:.0f} ms to stay "
-            f"under the {max_frames or 360}-frame cap"
-        )
+        grid += ". Spacing was increased automatically to keep the animation manageable"
     if not dual:
         st.info(
             f"Reading time: {reading_span_ms / 1000:.1f}s · "
@@ -3433,6 +3438,8 @@ def _render_trial_condition_chips(
     trial_fixations: pd.DataFrame,
     participant: str | None,
     fields,
+    *,
+    leading_chip: tuple[str, str] | None = None,
 ) -> list[tuple[str, str]]:
     """Render the ``Field = Value`` chip strip above the plot — the trial's
     identity and experiment conditions, so "what am I looking at" is answered at
@@ -3485,9 +3492,17 @@ def _render_trial_condition_chips(
         label = _chip_field_label(col)
         prefix = "" if trial_level else "⚠️ "
         primary.append((f"{prefix}{label} = {value_str}", _chip_color(col, value_str)))
-    if primary:
+    if primary or leading_chip:
+        leading_html = ""
+        if leading_chip is not None:
+            leading_label, leading_color = leading_chip
+            leading_html = (
+                f'<span class="sps-chip" style="background:{leading_color};'
+                f'color:#fff;">{html.escape(leading_label)}</span>'
+            )
         st.markdown(
             '<div class="sps-trial-chips">'
+            + leading_html
             + "".join(
                 f'<span class="sps-chip" style="background:{bg};">'
                 f"{html.escape(lbl)}</span>"
@@ -3497,32 +3512,6 @@ def _render_trial_condition_chips(
             unsafe_allow_html=True,
         )
     return summary
-
-
-def _plain_trial_title(participant: str, trial: str) -> str:
-    """The chip line's title outside compare mode (UX-75).
-
-    Compare mode has one for free — the coloured `⟨dataset⟩ · ⟨reader⟩` label
-    naming which scanpath a strip belongs to (#CMP-15) — and a single-trial view
-    had none at all, so the left of the line would have been blank. It names the
-    **reader**, which is what compare mode's titles name too, so the same cell
-    means the same thing in both. Not the trial id: the picker directly above
-    this line already shows it, and a composite one is far too long for a cell
-    this narrow. The trial stands in only when there is no reader at all.
-    """
-    reader, trial_id = str(participant or ""), str(trial or "")
-    return reader or trial_id
-
-
-def _render_chip_title(host, title: str, color: str | None) -> None:
-    """One chip line's title cell — coloured to match its scanpath when comparing."""
-    if not title:
-        return
-    style = f"color:{color};" if color else ""
-    host.markdown(
-        f'<div class="sps-chip-title" style="{style}">{html.escape(str(title))}</div>',
-        unsafe_allow_html=True,
-    )
 
 
 def _render_trial_details_popover(summary: list[tuple[str, str]], host) -> None:
@@ -3582,8 +3571,8 @@ def render_single_trial_tab(
        rail on the right carrying the **view modes** (Animate / Compare) and the
        **visualization controls** (formerly in the sidebar — see
        ``controls.sidebar_controls``, rendered here with ``host=``).
-    3. A plot-width **subtab bar** directly below it: 📝 Annotations · Stimulus & questions ·
-       🔬 Comparisons · Export · 🔗 Share. Export folds in the former Bulk
+    3. A plot-width **subtab bar** directly below it: 📝 Annotations ·
+       📄 Stimulus & Context · 🔬 Comparisons · 📤 Export · 🔗 Share. Export folds in the former Bulk
        Export tab (``_render_export_panel``); Share (the former header popover)
        builds the deep link via ``share_renderer`` (passed by ``app.main``). The
        former Trial Info subtab was folded into the chips above the plot, and
@@ -3834,9 +3823,7 @@ def render_single_trial_tab(
                     "",
                     width="content",
                     key="split_mode_animate_popover",
-                    help="Playback settings. Replay the trial fixation by "
-                    "fixation; the play / pause / restart controls sit below "
-                    "the plot.",
+                    help="Replay settings. Playback controls appear above the plot.",
                 ):
                     st.session_state.setdefault(
                         "single_playback_speed", _ANIM_DEFAULT_SPEED
@@ -3857,36 +3844,28 @@ def render_single_trial_tab(
                         persist_state="session",
                         disabled=anim_disabled,
                     )
-                    # UX-30: the reading-time / playback-duration box reads as a
-                    # consequence of the speed picked above, so it sits right below it
-                    # instead of at the foot of the popover. `anim_info_slot` is only a
-                    # placeholder here — Streamlit lays containers out in creation
-                    # order, so the actual fill (below, once fixations/compare are
-                    # known) still lands in this spot.
                     # VIZ-10: start the replay automatically on load (at the speed
                     # above). Off → the figure waits on the ▶ Play button. UX-30
                     # moved it up here: Autoplay and speed are both "how does it
                     # play", where the frame grid below is "how is it sampled".
-                    st.checkbox(
+                    _labeled(
+                        st,
+                        "checkbox",
                         "Autoplay on load",
                         key="global_anim_autoplay",
                         persist_state="session",
                         disabled=anim_disabled,
                         help=_gated_help(
-                            "Start the replay automatically when the plot loads, at "
-                            "the playback speed set above. Turn off to start paused "
-                            "(press ▶ Play to run it).",
+                            "Start playing when the plot loads.",
                             anim_gate,
                         ),
                     )
-                    anim_info_slot = st.container()
                     st.divider()
+
                     # VIZ-11 follow-up: the frame grid is a real tradeoff — smoothness
                     # against frame count, which is what export size and render time
                     # are made of. It used to be decided for the user in two module
                     # constants, and the cap coarsened the grid silently.
-                    st.caption("**Frame grid**")
-
                     def _apply_anim_quality() -> None:
                         preset = _ANIM_QUALITY_PRESETS.get(
                             st.session_state.get("global_anim_quality")
@@ -3925,17 +3904,15 @@ def render_single_trial_tab(
                     _labeled(
                         st,
                         "segmented_control",
-                        "Animation quality",
+                        "Animation smoothness",
                         options=["Coarse", "Fine", "Custom"],
                         key="global_anim_quality",
                         persist_state="session",
                         on_change=_apply_anim_quality,
                         disabled=anim_disabled,
                         help=_gated_help(
-                            "**Coarse** — 300 ms / 120 frames for fast drafts. "
-                            "**Fine** — 40 ms / 900 frames for high-fidelity review. "
-                            "**Custom** reveals the sliders below, pre-seeded with "
-                            "whichever preset was active last.",
+                            "Fine is smoother; Coarse renders faster. Custom sets "
+                            "the spacing and limit.",
                             anim_gate,
                         ),
                     )
@@ -3962,9 +3939,7 @@ def render_single_trial_tab(
                             on_change=_mark_anim_quality_custom,
                             disabled=anim_disabled,
                             help=_gated_help(
-                                "How often a frame is emitted along the reading "
-                                "clock. Smaller is smoother and larger to export; the "
-                                "slider scrubs linearly through seconds either way.",
+                                "Time between frames. Smaller is smoother.",
                                 anim_gate,
                             ),
                         )
@@ -3980,13 +3955,15 @@ def render_single_trial_tab(
                             on_change=_mark_anim_quality_custom,
                             disabled=anim_disabled,
                             help=_gated_help(
-                                "Hard ceiling on the frame count. A long reading "
-                                "coarsens the grid to stay under it rather than "
-                                "emitting thousands of frames (which balloons the "
-                                "GIF/MP4 export).",
+                                "Maximum replay frames; long trials are spaced "
+                                "automatically.",
                                 anim_gate,
                             ),
                         )
+                    # Filled later, once the selected comparison trial is known.
+                    # Creating the slot here keeps the resulting frame count beside
+                    # the smoothness control that determines it.
+                    anim_info_slot = st.container()
             # Compare is a view mode (toggle here); the second-trial selector renders
             # above the chips in the plot column (compare_slot below), mirroring the
             # main trial picker (CMP-1).
@@ -4037,15 +4014,15 @@ def render_single_trial_tab(
                     # (B excludes A, and a cross-dataset B is another corpus), so
                     # their positions carry no shared meaning — the control
                     # advances each by the same ±1, nothing more.
-                    st.checkbox(
+                    _labeled(
+                        st,
+                        "checkbox",
                         "Step both trials together",
                         key=COMPARE_STEP_LINK_KEY,
                         persist_state="session",
                         disabled=cmp_disabled,
                         help=_gated_help(
-                            "◀ ▶ on either picker moves this trial *and* the "
-                            "compared one by one. A side that reaches the end of its "
-                            "own list stays put while the other keeps going.",
+                            "◀ ▶ moves both trial pickers by one.",
                             cmp_gate,
                         ),
                     )
@@ -4058,11 +4035,16 @@ def render_single_trial_tab(
                             "segmented_control",
                             "View",
                             options=["Overlay", "Side by side", "Stacked"],
+                            format_func=lambda value: (
+                                "Top & bottom" if value == "Stacked" else value
+                            ),
+                            label_width=0.2,
+                            width="stretch",
                             key=SINGLE_COMPARE_LAYOUT,
                             persist_state="session",
                             disabled=cmp_disabled,
                             help=_gated_help(
-                                "Stacked = trials shown one above the other.",
+                                "Top & bottom places one plot above the other.",
                                 cmp_gate,
                             ),
                         )
@@ -4105,15 +4087,15 @@ def render_single_trial_tab(
                                     cmp_gate,
                                 ),
                             )
-                    show_legend_now = st.checkbox(
+                    show_legend_now = _labeled(
+                        st,
+                        "checkbox",
                         "Show A/B legend",
                         key="global_show_compare_legend",
                         persist_state="session",
                         disabled=cmp_disabled,
                         help=_gated_help(
-                            "Show a legend naming the two scanpaths on the overlay "
-                            "(off by default — the colours already tell A and B "
-                            "apart).",
+                            "Name scanpaths A and B on the figure.",
                             cmp_gate,
                         ),
                     )
@@ -4353,7 +4335,10 @@ def render_single_trial_tab(
         if not order.empty:
             full_fix_range = (int(order.min()), int(order.max()))
     detected_reasons = illustration_reasons(
-        viz_settings,
+        {
+            **viz_settings,
+            "playback_speed": playback_speed if animate else 1.0,
+        },
         data_source=st.session_state.get("_active_data_source"),
         fix_index_range=fix_range,
         full_fixation_range=full_fix_range,
@@ -4451,8 +4436,11 @@ def render_single_trial_tab(
         # UX-27: **Details** and ✏️ share ONE trailing column, as a `railbtn_*`
         # cluster — styles.py lays every such container out as a right-packed
         # flex row, so this row's pair ends flush with the ◀ ▶ ⇅ cluster above.
-        title_col, strip_col, trail_col = st.columns(
-            SELECTOR_ROW_TRIO, vertical_alignment="top"
+        # The Participant chip already identifies the reading. Do not repeat
+        # the same id in a title cell; use that width for the chip strip in both
+        # ordinary and Compare modes.
+        strip_col, trail_col = st.columns(
+            SELECTOR_ROW_WIDE_GRID, vertical_alignment="top"
         )
         trail = trail_col.container(key="railbtn_chip_trail")
         # Created in display order (Details, then ✏️) but filled out of order:
@@ -4467,16 +4455,15 @@ def render_single_trial_tab(
         ):
             render_trial_chip_picker(words_all, fixations_all, host=st.container())
         chip_fields = st.session_state.get("trial_chip_fields") or []
-        _render_chip_title(
-            title_col,
-            compare_meta["label_primary"]
-            if comparing and compare_meta
-            else _plain_trial_title(selected_participant, selected_trial),
-            color_a,
-        )
         with strip_col:
             summary = _render_trial_condition_chips(
-                trial_words, trial_fixations, selected_participant, chip_fields
+                trial_words,
+                trial_fixations,
+                selected_participant,
+                chip_fields,
+                leading_chip=(f"Trial ID = {selected_trial}", color_a)
+                if comparing and color_a
+                else None,
             )
         # Rendered after the strip so it reads the *primary* trial's stats.
         _render_trial_details_popover(summary, details_box)
@@ -4485,16 +4472,16 @@ def render_single_trial_tab(
             # B's own line, directly under B's control row. No ✏️ or **Details**
             # of its own: the chip fields are one setting for both readings, and
             # the summary popover describes the trial the panels are anchored on.
-            b_title, b_strip, _b_trail = st.columns(
-                SELECTOR_ROW_TRIO, vertical_alignment="top"
+            b_strip, _b_trail = st.columns(
+                SELECTOR_ROW_WIDE_GRID, vertical_alignment="top"
             )
-            _render_chip_title(b_title, compare_meta["label_compare"], color_b)
             with b_strip:
                 _render_trial_condition_chips(
                     compare_meta["words"],
                     compare_meta["fixations"],
                     compare_participant,
                     chip_fields,
+                    leading_chip=(f"Trial ID = {compare_trial}", color_b),
                 )
 
     # CMP-8 §6: the two halves of the pair bundle, built from the *unqualified*
@@ -7366,7 +7353,6 @@ def _comparison_panel_settings(base_settings: dict) -> dict:
         **base_settings,
         "show_heatmap": False,
         "show_raw_gaze": False,
-        "color_by": "duration_ms",
         "color_by_line": False,
         "fixation_flags": None,
         "show_order": False,
@@ -7395,7 +7381,6 @@ def render_multiple_comparison_tab(
     trial. The field decides the set: text id yields other readings of the text,
     participant id yields that reader's other texts, and so on.
     """
-    st.caption("Show trials that match the selected trial on a field you choose.")
     if trial_words.empty or trial_fixations.empty:
         st.info("Choose a trial with words and fixations.")
         return
@@ -7405,17 +7390,21 @@ def render_multiple_comparison_tab(
         st.info("No trial-level field is available for matching.")
         return
 
-    col_side, col_main = st.columns([3, 7], gap="medium")
-
-    with col_side:
+    intro_col, field_col, grid_col = st.columns(
+        [4.6, 3.2, 2.2], gap="medium", vertical_alignment="center"
+    )
+    with intro_col:
+        st.caption("Show trials matching the selected trial on one field.")
+    with field_col:
         gen_col = labeled(
             st,
             "selectbox",
-            "Comparison column",
+            "Match field",
             options=gen_cols,
             key="multi_gen_col",
             help="Show trials with the same value as the selected trial.",
         )
+    with grid_col:
         n_cols = labeled(
             st,
             "slider",
@@ -7435,18 +7424,14 @@ def render_multiple_comparison_tab(
         selected_trial,
     )
     if not candidates:
-        with col_main:
-            st.info(
-                f"No other filtered trial matches the selected **{gen_col}** value."
-            )
+        st.info(f"No other filtered trial matches **{gen_col}**.")
         return
     # More scanpaths of this text exist than we score (very high-cardinality
     # column); the ones we do score are ranked by similarity below.
     scored_capped = n_total > len(candidates)
 
-    with col_side:
-        if scored_capped:
-            st.caption(f"Showing {len(candidates)} of {n_total} matching trials.")
+    if scored_capped:
+        st.caption(f"Showing {len(candidates)} of {n_total} matches.")
 
     # Reuse the user's viz toggles but force a clean, comparable spatial view: the
     # grid is inherently spatial, and a generation frame may lack the selected
@@ -7477,7 +7462,7 @@ def render_multiple_comparison_tab(
     sliced_real = trial_fixations
     sliced_gens = candidates
 
-    with col_main:
+    with st.container():
         # Score every collected generation against the selected scanpath. The
         # per-generation NLD annotates each grid panel and orders both the grid and
         # the table; the full table is shown beneath the grid.
@@ -7530,18 +7515,8 @@ def render_multiple_comparison_tab(
             ranked = sorted(sliced_gens)
         panel_cap = _GEN_MAX_PANELS if scoring else _GEN_MAX_PANELS_UNRANKED
         grid_names = ranked[:panel_cap]
-        grid_capped = len(sliced_gens) > panel_cap
 
         st.markdown("#### Matching trials")
-        if scoring:
-            rank_note = f"Same **{gen_col}** value · ranked by NLD."
-            if grid_capped:
-                rank_note += f" Showing {_GEN_MAX_PANELS} of {len(sliced_gens)}."
-        else:
-            rank_note = f"Same **{gen_col}** value · sorted by trial."
-            if grid_capped:
-                rank_note += f" Showing {panel_cap} of {len(sliced_gens)}."
-        st.caption(rank_note)
         # Estimate a uniform cell height from the figure aspect + column count so
         # panels line up and don't leave a tall whitespace band below each.
         aspect = float(canvas_height) / float(canvas_width or 1)
@@ -7556,10 +7531,11 @@ def render_multiple_comparison_tab(
                 with cell:
                     fix = sliced_gens[name]
                     nld = nld_by_gen.get(name)
+                    trial_label = str(fix["trial_id"].iloc[0])
                     if nld is not None and pd.notna(nld):
-                        st.caption(f"**{name}** · NLD {nld:.2f} · {len(fix)} fixations")
+                        st.caption(f"**{trial_label}** · NLD {nld:.2f}")
                     else:
-                        st.caption(f"**{name}** · {len(fix)} fixations")
+                        st.caption(f"**{trial_label}**")
                     words = _comparison_trial_words(words_filtered, fix)
                     # Key on the absolute panel index (dict order is stable), so two
                     # labels differing only by spaces can't collide on the iframe key.
@@ -8003,6 +7979,35 @@ def _column_mapping_rows(mapping: dict) -> list[dict]:
                 {"Table": table_label, "Field": label, "Mapped column": str(col)}
             )
     return rows
+
+
+def _render_readonly_mapping_grid(rows: list[dict]) -> None:
+    """Show a built-in source mapping in the add-dataset screen's field grid.
+
+    Built-in mappings cannot be edited, but presenting them as label-over-value
+    cells keeps the same visual grammar as the editable setup and remap screens.
+    """
+    tables: dict[str, list[dict]] = {}
+    for row in rows:
+        tables.setdefault(str(row["Table"]), []).append(row)
+    for table, fields in tables.items():
+        st.markdown(
+            f'<div class="sps-readonly-map-table">{html.escape(table)}</div>',
+            unsafe_allow_html=True,
+        )
+        for start in range(0, len(fields), 4):
+            chunk = fields[start : start + 4]
+            cells = st.columns(4, gap="small")
+            for cell, row in zip(cells, chunk):
+                field = html.escape(str(row["Field"]))
+                value = html.escape(str(row["Mapped column"]))
+                cell.markdown(
+                    '<div class="sps-readonly-map-cell">'
+                    f'<div class="sps-readonly-map-label">{field}</div>'
+                    f'<div class="sps-readonly-map-value">{value}</div>'
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
 
 
 # Field-key → canonical post-normalization column for each table. The remap
@@ -8869,6 +8874,9 @@ def _render_column_mapping_section(*, editor_rendered: bool = False) -> None:
     it into a slot reserved above all three.
     """
     if editor_rendered:
+        # The editable built-in mapping now uses the same compact field grid as
+        # Add dataset; widen its option menus just as the wizard does.
+        st.markdown(mapping_menu_css(), unsafe_allow_html=True)
         _render_setup_provenance_note()
         return
     active = _active_stored_dataset()
@@ -8881,11 +8889,7 @@ def _render_column_mapping_section(*, editor_rendered: bool = False) -> None:
     if not rows:
         st.info("No column mapping available for the current data source.")
         return
-    st.dataframe(
-        pd.DataFrame(rows, columns=["Table", "Field", "Mapped column"]),
-        hide_index=True,
-        width="stretch",
-    )
+    _render_readonly_mapping_grid(rows)
     st.caption("How each source column maps to the app's canonical fields.")
     _render_setup_provenance_note()
 

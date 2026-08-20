@@ -2,6 +2,34 @@
 
 Streamlit workbench for exploring eye-tracking-while-reading scanpaths: word boxes, fixations, saccades, density heatmaps, and per-word reading measures (FFD/FPRT/RPD/TFD, regressions). Top-level [README](../README.md) covers install/release.
 
+## Current Scanpath UI (UX-94)
+
+This section supersedes older UX-history descriptions below where they conflict.
+The per-trial subtabs are **📝 Annotations · 📄 Stimulus & Context · 🔬
+Comparisons · 📤 Export · 🔗 Share**. Stimulus context is generic trial-level
+content (titles/instructions as well as questions/answers). Share always includes
+participant, trial, and visualization settings; the UI has no identity-mode
+picker, though `_build_share_query` retains opt-out arguments for headless callers.
+
+The plot rail starts with equal-width Animate/Compare split controls and a 2×2
+Quick-view grid (Scanpath / Heatmap / Illustration / persistent Custom). Checkbox
+rows use the shared label-left/underline-help primitive. Compare displays the
+wire value `Stacked` as **Top & bottom**; the wire value remains unchanged.
+Animation transport is above the plot and a non-1× speed triggers the automatic
+Illustration label. `SELECTOR_ROW_GRID` is `[2.9, 2.8, 4.0, 2.2]` so the trial
+scrubber has more room. Comparison-subtab candidates match the selected trial on
+one chosen field, keep each candidate's own stimulus and the main plot styling,
+exclude the selected trial, and show only trial IDs above their panels.
+
+Data Management renders integer dataset counts, pairs each Kind icon with its
+word (Demo / Manual / Private / Public), names the active dataset in the
+**What's in…** heading, and presents mappings in the add-dataset field-grid
+grammar. The page keeps a 2rem top inset so the fixed header does not clip the
+first row, while its bottom remains flush. The
+single-trial chip row no longer repeats participant ID in a title cell, and the
+Fixations controls keep the snap setting without the separate
+“Linear-reading schematic” caption.
+
 ## Run
 
 ```bash

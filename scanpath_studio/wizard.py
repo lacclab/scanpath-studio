@@ -1682,7 +1682,7 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
     questions_df = app._read_uploaded_frame(
         uploader_label="Comprehension questions (optional)",
         upload_help="The multipleye_comprehension_questions_*.xlsx workbook — "
-        "adds the questions to the Stimulus & questions panel.",
+        "adds the questions to the Stimulus & Context panel.",
         state_prefix="mpe_questions",
         multi=False,
         container=body,

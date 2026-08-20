@@ -100,7 +100,7 @@ the loaded frames so the app's existing panels render them:
 - **Reader metadata** from `participant_data.csv` (age, gender, languages, …) →
   Trial Info chips and Corpus Analysis grouping facets.
 - **Comprehension questions** from `multipleye_comprehension_questions_*.xlsx` →
-  the Stimulus & questions panel, joined by stimulus.
+  the Stimulus & Context panel, joined by stimulus.
 - **Pre-computed reading measures** from `reading_measures/` → canonical `IA_*`
   columns attached to **per-reader** word boxes (FFD, FPRT, RPD, TFT, skip,
   regression counts). The app prefers these pre-aggregated columns over recomputing.

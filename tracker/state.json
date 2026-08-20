@@ -9,6 +9,14 @@
       "archived": false,
       "updated": "2026-08-20"
     },
+    "UX-95": {
+      "status": "Backlog",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-20"
+    },
     "AN-29": {
       "status": "Closed",
       "priority": "Normal",

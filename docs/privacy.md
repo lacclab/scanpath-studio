@@ -48,14 +48,14 @@ provider. Sessions are temporary and server resources are limited.
 
 ## What's in a link, a config file, and an export
 
-- A **share link** contains visualization settings and, depending on your
-  choice, participant and/or trial IDs. It does not contain the data tables.
+- A **share link** contains the participant and trial IDs plus the visualization
+  settings. It does not contain the data tables.
 - A **saved configuration** can contain column names and annotation notes.
 - An **exported table** contains the selected research data.
 
-Review these artifacts before sharing them. Use **Settings only** in the Share
-panel when participant and trial identifiers should not enter browser history,
-logs, or chat previews.
+Review these artifacts before sharing them. Share links can enter browser
+history, logs, or chat previews, so do not copy one when its participant or
+trial identifiers should not be exposed there.
 
 ## Network activity
 

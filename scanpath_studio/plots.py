@@ -491,8 +491,8 @@ def _apply_coordinate_grid_axes(
 # dims scale together, so boxes/text/fixations keep one true scale. A wider
 # monitor just leaves margin (the plot is "narrower than the column", never
 # stretched); a narrower window scrolls rather than distorting.
-_DISPLAY_MAX_HEIGHT = 650
-_DISPLAY_MAX_WIDTH = 900
+_DISPLAY_MAX_HEIGHT = 690
+_DISPLAY_MAX_WIDTH = 960
 
 
 def _fit_display_size(
@@ -3346,15 +3346,14 @@ def _animation_play_buttons(frame_duration):
         dict(
             type="buttons",
             showactive=False,
-            # A horizontal row just below the plot (y=0 = plot bottom; yanchor=
-            # "top" hangs the row into the bottom margin); the time slider sits
-            # below it. direction="right" keeps the three buttons on one line.
+            # A horizontal row above the plot. The scrubber shares this top
+            # transport band to keep playback controls together.
             direction="right",
-            y=0.0,
+            y=1.0,
             x=0.0,
             xanchor="left",
-            yanchor="top",
-            pad=dict(t=8, l=8),
+            yanchor="bottom",
+            pad=dict(b=12, l=8),
             buttons=[
                 dict(
                     label="▶ Play",
@@ -3412,9 +3411,8 @@ def _animation_time_slider(frame_times, total_ms):
     return [
         dict(
             active=0,
-            # Sit below the plot (y=0 = plot bottom; yanchor="top" hangs it into
-            # the bottom margin), under the play/pause/restart buttons.
-            yanchor="top",
+            # Share the top transport band with Play / Pause / Restart.
+            yanchor="bottom",
             xanchor="left",
             ticklen=0,
             minorticklen=0,
@@ -3427,10 +3425,10 @@ def _animation_time_slider(frame_times, total_ms):
                 xanchor="right",
             ),
             transition=dict(duration=0),
-            pad=dict(t=48, b=10),
-            len=0.9,
-            x=0.05,
-            y=0.0,
+            pad=dict(b=12),
+            len=0.6,
+            x=0.38,
+            y=1.0,
             steps=[
                 dict(
                     args=[
@@ -3703,13 +3701,6 @@ def _render_scanpath_animation(
                         tickangle=colorbar_tickangle,
                         tickfont_size=colorbar_tickfont_size,
                     )
-                    if colorbar_orientation == "Horizontal":
-                        # `_colorbar_dict` parks a horizontal bar just under the
-                        # plot — which is where the transport controls live here,
-                        # so drop it below them (y is a fraction of plot height).
-                        colorbar["y"] = -(
-                            (_CONTROLS_MARGIN_PX + 12) / max(float(fitted_h), 1.0)
-                        )
                 specs[0]["marker_extra"] = dict(
                     colorscale=fixation_colorscale,
                     cmin=rng[0],
@@ -4102,7 +4093,7 @@ def _render_scanpath_animation(
 
     # fitted_w / fitted_h were computed up front (so the label scale matched).
     # ALL transport controls (play/pause/restart buttons + the time slider with
-    # its "Elapsed" readout) sit BELOW the plot in the bottom margin. Critically,
+    # its elapsed-time readout) sit ABOVE the plot in the top margin. Critically,
     # the figure is made tall enough that the plot region stays >= fitted_h after
     # Plotly's automargin reserves space for those controls — otherwise the
     # equal-aspect (`scaleanchor`) plot would shrink to fit the leftover height,
@@ -4110,17 +4101,16 @@ def _render_scanpath_animation(
     # for fitted_h (text-too-large bug). _CONTROLS_MARGIN_PX is that reserve.
     # A single-replay numeric colorbar gets the same treatment on the right
     # (the dual-overlay legend overlays the plot, so it needs no reserve).
-    # A HORIZONTAL colorbar (VIZ-23) instead sits below the transport controls,
-    # so it takes bottom reserve rather than right — same trade `_decoration_margins`
-    # makes for the static figure.
+    # A HORIZONTAL colorbar (VIZ-23) stays below the plot, so it takes bottom
+    # reserve rather than right — the same trade `_decoration_margins` makes for
+    # the static figure.
     anim_colorbar = bool(specs and specs[0].get("marker_extra", {}).get("showscale"))
     horizontal_colorbar = anim_colorbar and colorbar_orientation == "Horizontal"
     right_reserve = (
         _COLORBAR_RESERVE_PX if (anim_colorbar and not horizontal_colorbar) else 0
     )
-    bottom_reserve = _CONTROLS_MARGIN_PX + (
-        _COLORBAR_BOTTOM_PX if horizontal_colorbar else 0
-    )
+    top_reserve = _CONTROLS_MARGIN_PX
+    bottom_reserve = _COLORBAR_BOTTOM_PX if horizontal_colorbar else 0
     grid_left = _GRID_LEFT_RESERVE_PX if show_coordinate_grid else 0
     grid_bottom = _GRID_BOTTOM_RESERVE_PX if show_coordinate_grid else 0
     # Stimulus-page background image (MultiplEYE) — same layout image as
@@ -4165,14 +4155,16 @@ def _render_scanpath_animation(
         rendered_height=fitted_h,
     )
     layout = dict(
-        height=fitted_h + bottom_reserve + grid_bottom + _CONTROLS_SAFETY_PX,
+        height=(
+            fitted_h + top_reserve + bottom_reserve + grid_bottom + _CONTROLS_SAFETY_PX
+        ),
         width=fitted_w + grid_left + right_reserve,
         autosize=False,
         images=bg_images,
         margin=dict(
             l=grid_left,
             r=right_reserve,
-            t=0,
+            t=top_reserve,
             b=bottom_reserve + grid_bottom,
         ),
         xaxis=xaxis,

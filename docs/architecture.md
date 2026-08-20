@@ -11,7 +11,7 @@ the repo root (kept current as the code changes); this is the short version.
 | `app.py` | Streamlit entry point: page config, sidebar, data load, filtering, and dispatch to the two top-level views (Scanpath Visualization ⇄ Corpus Analysis, toggled from the header). |
 | `url_state.py` | Deep links + plot-config save/restore (versioned schema + migrations) + the Share link, split out of `app.py`. |
 | `wizard.py` | The Upload / Add-dataset guided setup flow. |
-| `tabs.py` | View renderers: Scanpath Visualization (Annotations / Stimulus & questions / Comparisons / Export / Share subtabs; Line assignment only under `SCANPATH_EXPERIMENTAL=1`), Corpus Analysis (Per text · Per reader · Groups subtabs — the question-oriented analysis sections), and the Data page's inspection panel (`render_data_inspection_tab`). |
+| `tabs.py` | View renderers: Scanpath Visualization (Annotations / Stimulus & Context / Comparisons / Export / Share subtabs; Line assignment only under `SCANPATH_EXPERIMENTAL=1`), Corpus Analysis (Per text · Per reader · Groups subtabs — the question-oriented analysis sections), and the Data page's inspection panel (`render_data_inspection_tab`). |
 | `controls.py` | Visualization controls (rendered into the Scanpath tab's right-hand rail), column-mapping UI, trial-filter panel. |
 | `data.py` | Schema inference, normalization, filtering, sample/OneStop loaders, trial-index derivation. |
 | `multipart.py` | Ordered child-screen identity, validation, manifest assignment, screen catalogues, and per-screen canvas metadata. |

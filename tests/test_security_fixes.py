@@ -3,8 +3,8 @@
 Each class pins one finding from ``docs/security.md`` so the fix can't quietly
 regress:
 
-* **S3** — a share link no longer has to name a participant, and a link built
-  without one still lands on the trial.
+* **S3** — a share link carries the selected participant and trial; lower-level
+  callers can still omit either identifier when constructing a URL directly.
 * **S7** — stimulus text reaches ``unsafe_allow_html=True`` HTML-escaped.
 * **S10** — the debug-log handler is installed once per *process*, not once per
   session, so handlers can't accumulate on the process-wide root logger.
@@ -23,13 +23,8 @@ from scanpath_studio import tabs as tabs_module
 from scanpath_studio import url_state as url_state_module
 from scanpath_studio.constants import DEMO_CHOICE
 from scanpath_studio.url_state import (
-    _SHARE_IDENTITY_FULL,
-    _SHARE_IDENTITY_NONE,
-    _SHARE_IDENTITY_TRIAL,
     _build_share_query,
     _restore_selection,
-    _share_identity_caution,
-    _share_identity_flags,
 )
 
 
@@ -60,15 +55,8 @@ def _combos() -> pd.DataFrame:
     )
 
 
-class TestShareLinkIdentityIsOptOut:
-    """S3 — the identifying half of a share link can be left out."""
-
-    def test_identity_flags_cover_every_mode(self):
-        assert _share_identity_flags(_SHARE_IDENTITY_FULL) == (True, True)
-        assert _share_identity_flags(_SHARE_IDENTITY_TRIAL) == (False, True)
-        assert _share_identity_flags(_SHARE_IDENTITY_NONE) == (False, False)
-        # An unset / unknown mode falls back to the documented default.
-        assert _share_identity_flags(None) == (True, True)
+class TestShareLinkIdentity:
+    """S3 — the UI's canonical link identifies its selected trial."""
 
     def test_default_still_carries_both_ids(self, fake_st):
         fake_st.session_state = {
@@ -123,19 +111,6 @@ class TestShareLinkIdentityIsOptOut:
         assert "trial_id" not in parsed
         assert parsed["source"] == ["demo"]
         assert parsed["show_words"] == ["1"]
-
-    def test_caution_names_what_the_link_carries(self):
-        both = _share_identity_caution("source=demo&participant=p2&trial_id=t3")
-        assert "participant" in both and "trial" in both
-        assert both.startswith("⚠️")
-
-        trial_only = _share_identity_caution("source=demo&trial_id=t3")
-        assert "participant" not in trial_only
-        assert trial_only.startswith("⚠️")
-
-        neither = _share_identity_caution("source=demo&show_words=1")
-        assert neither.startswith("🔒")
-        assert "no participant or trial id" in neither
 
 
 class TestStimulusTextIsEscaped:

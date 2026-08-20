@@ -83,7 +83,6 @@ _NAV_PAGES = {
 #: absent on purpose: ``st.Page`` cannot be a URL, and the UX-62 wordmark beside
 #: this nav already links to the docs site.
 _HELP_PAGES = {
-    "help_tour": ("Show tutorial", "🎓", "help-tour"),
     "help_tutorials": ("Tutorials", "🧭", "help-tutorials"),
     "help_faq": ("FAQ", "❔", "help-faq"),
     "help_about": ("About", "ℹ️", "help-about"),

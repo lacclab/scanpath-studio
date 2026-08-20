@@ -74,6 +74,7 @@ from .plots import (  # noqa: E402
     COMPARISON_FIGURE_OPTIONS,
     STATIC_FIGURE_OPTIONS,
     FigureSettings,
+    add_illustration_label,
     animation_autoplay_frame_duration,
     animation_autoplay_post_script,
     make_comparison_figure,
@@ -1385,6 +1386,7 @@ def animate_scanpath(
     playback_speed: float = 1.0,
     autoplay: bool = True,
     fix_index_range: tuple[int, int] | None = None,
+    illustration_label: str = "auto",
     title: str = "",
     caption: str = "",
     **animation_overrides,
@@ -1405,6 +1407,10 @@ def animate_scanpath(
     to save a figure that opens paused (press ▶ Play to run it). Autoplay only
     affects the interactive HTML; GIF/MP4 rasterization renders every frame
     regardless.
+
+    When ``playback_speed`` is not ``1``, the automatic Illustration label says
+    the replay timing was changed. ``illustration_label`` accepts ``"auto"``,
+    ``"show"``, or ``"hide"`` like :func:`plot_scanpath`.
 
     The animation builder accepts a subset of the static figure's options
     (``show_words``, ``show_word_labels``, ``show_saccades``, ``show_order``,
@@ -1440,6 +1446,13 @@ def animate_scanpath(
     trial_words, trial_fixations, pid, tid, _selected_screen = _select_part(
         words, fixations, participant, trial, screen
     )
+    full_fix_range = None
+    if not trial_fixations.empty and "order_in_trial" in trial_fixations.columns:
+        full_order = pd.to_numeric(
+            trial_fixations["order_in_trial"], errors="coerce"
+        ).dropna()
+        if not full_order.empty:
+            full_fix_range = (int(full_order.min()), int(full_order.max()))
     trial_fixations = _apply_fix_index_range(trial_fixations, fix_index_range, pid, tid)
     if canvas_size is None:
         canvas_size = screen_canvas_size(trial_words)
@@ -1449,6 +1462,20 @@ def animate_scanpath(
             canvas_size = _data.compute_canvas_size(trial_words, trial_fixations)
     fixations_b = animation_overrides.pop("fixations_b", None)
     words_b = animation_overrides.pop("words_b", None)
+    label_mode = str(illustration_label).capitalize()
+    if label_mode not in {"Auto", "Show", "Hide"}:
+        raise ValueError("illustration_label must be 'auto', 'show', or 'hide'.")
+    if "illustration_reasons" not in animation_overrides:
+        from .illustration import illustration_reasons, resolve_label_reasons
+
+        reasons = illustration_reasons(
+            {**animation_overrides, "playback_speed": playback_speed},
+            fix_index_range=fix_index_range,
+            full_fixation_range=full_fix_range,
+        )
+        animation_overrides["illustration_reasons"] = resolve_label_reasons(
+            label_mode, reasons
+        )
     render_settings = FigureSettings.from_mapping(
         animation_overrides,
         canvas_width=int(canvas_size[0]),
@@ -1465,6 +1492,7 @@ def animate_scanpath(
         fixations_b=fixations_b,
         words_b=words_b,
     )
+    add_illustration_label(fig, animation_overrides.get("illustration_reasons"))
     annotate_figure(fig, title=title, caption=caption)
     return fig
 

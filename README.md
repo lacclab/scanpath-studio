@@ -17,7 +17,7 @@ It is **dataset-agnostic** (auto-detects EyeLink / Gazepoint / snake-case
 columns) and ships with a small [OneStop][onestop-paper] demo, so you can try it
 with zero setup.
 
-> **Authors:** Omer Shubi, Keren Gruteke Klein, Ella Lion, Deborah N. Jakobi,
+> **Authors:** Omer Shubi, Keren Gruteke Klein, Maya Grossman, Ella Lion, Deborah N. Jakobi,
 > David R. Reich, Lena Jäger, and Yevgeni Berzak — Data and Decision Sciences
 > (Technion) and Department of Computational Linguistics (University of Zurich).
 
@@ -61,7 +61,7 @@ The app is organized into three tabs:
 
 | Tab | What's there |
 |-----|--------------|
-| **Scanpath Visualization** | The layered scanpath: a **Browse by** selection row above the plot (trial / text / participant) and, beside it, a right-hand **control rail** with **Animate** and **Compare** toggles plus the per-layer visualization controls (style each scanpath independently). The trial's key info shows as configurable chips above the plot. Below, subtabs: **Annotations**, **Stimulus & questions**, **Comparisons** (trials matching the selected trial on a field you choose), **Export** (single-trial *and* bulk — HTML / GIF / MP4 and figures / settings / tabular data), and **Share**. |
+| **Scanpath Visualization** | The layered scanpath: a **Browse by** selection row above the plot (trial / text / participant) and, beside it, a right-hand **control rail** with **Animate** and **Compare** toggles plus the per-layer visualization controls (style each scanpath independently). The trial's key info shows as configurable chips above the plot. Below, subtabs: **Annotations**, **Stimulus & Context**, **Comparisons** (trials matching the selected trial on a field you choose), **Export** (single-trial *and* bulk — HTML / GIF / MP4 and figures / settings / tabular data), and **Share**. |
 | **Corpus Analysis** | Three subtabs — **Per text**, **Per reader**, and **Groups** (profile one cohort, or compare two) — the question-oriented analysis views: metric distributions and word profiles, per-text heatmaps pooled over readers, reader summaries, and group differences with effect sizes. |
 | **Data** | *Data Management* — available datasets, column mapping, stimulus images, participant/trial metadata, data tables, summary statistics, and optional preprocessing. |
 

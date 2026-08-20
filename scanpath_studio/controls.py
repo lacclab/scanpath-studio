@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import math
 from collections.abc import Callable
+from copy import deepcopy
 
 import numpy as np
 import pandas as pd
@@ -835,6 +836,10 @@ _ILLUSTRATION_OVERRIDE_KEYS = (
     "global_fixation_opacity",
 )
 _PRE_ILLUSTRATION_STATE = "_quick_view_pre_illustration"
+_QUICK_VIEW_SELECTION_KEY = "_quick_view_selection"
+_QUICK_VIEW_CUSTOM_STATE = "_quick_view_custom_state"
+_QUICK_VIEW_APPLIED_STATE = "_quick_view_applied_state"
+_CUSTOM_VIEW = "custom"
 
 _VIEW_PRESETS: dict[str, dict[str, object]] = {
     "scanpath": {
@@ -905,10 +910,22 @@ def _apply_view_preset(name: str) -> None:
     still carrying Illustration's override when another preset is selected. A
     value edited explicitly while Illustration is active is therefore retained.
     """
-    if name not in _VIEW_PRESETS:
+    if name not in {*_VIEW_PRESETS, _CUSTOM_VIEW}:
         raise ValueError(f"Unknown quick-view preset: {name}")
 
     ss = st.session_state
+    current = ss.get(_QUICK_VIEW_SELECTION_KEY)
+    if current == _CUSTOM_VIEW:
+        ss[_QUICK_VIEW_CUSTOM_STATE] = _capture_quick_view_state()
+    if name == _CUSTOM_VIEW:
+        custom = ss.get(_QUICK_VIEW_CUSTOM_STATE)
+        if isinstance(custom, dict):
+            for key, value in custom.items():
+                ss[key] = deepcopy(value)
+        ss[_QUICK_VIEW_SELECTION_KEY] = _CUSTOM_VIEW
+        ss.pop(_QUICK_VIEW_APPLIED_STATE, None)
+        return
+
     illustration = _VIEW_PRESETS["illustration"]
     was_illustration = all(ss.get(key) == value for key, value in illustration.items())
     if name == "illustration":
@@ -940,6 +957,51 @@ def _apply_view_preset(name: str) -> None:
 
     for key, value in _VIEW_PRESETS[name].items():
         ss[key] = value
+    ss[_QUICK_VIEW_SELECTION_KEY] = name
+    ss[_QUICK_VIEW_APPLIED_STATE] = _capture_quick_view_state()
+
+
+def _capture_quick_view_state() -> dict[str, object]:
+    """Snapshot every live global plot setting for the persistent Custom view."""
+    return {
+        str(key): deepcopy(value)
+        for key, value in st.session_state.items()
+        if str(key).startswith("global_")
+    }
+
+
+def _sync_quick_view_state() -> str:
+    """Keep the fourth Quick view in step with manual plot-control edits."""
+    ss = st.session_state
+    selected = ss.get(_QUICK_VIEW_SELECTION_KEY)
+    if selected not in {*_VIEW_PRESETS, _CUSTOM_VIEW}:
+        selected = next(
+            (
+                name
+                for name in ("illustration", "scanpath", "heatmap")
+                if all(
+                    ss.get(key) == value for key, value in _VIEW_PRESETS[name].items()
+                )
+            ),
+            _CUSTOM_VIEW,
+        )
+        ss[_QUICK_VIEW_SELECTION_KEY] = selected
+        if selected == _CUSTOM_VIEW:
+            ss[_QUICK_VIEW_CUSTOM_STATE] = _capture_quick_view_state()
+        else:
+            ss[_QUICK_VIEW_APPLIED_STATE] = _capture_quick_view_state()
+
+    if selected == _CUSTOM_VIEW:
+        ss[_QUICK_VIEW_CUSTOM_STATE] = _capture_quick_view_state()
+        return _CUSTOM_VIEW
+
+    applied = ss.get(_QUICK_VIEW_APPLIED_STATE)
+    if isinstance(applied, dict) and _capture_quick_view_state() != applied:
+        ss[_QUICK_VIEW_SELECTION_KEY] = _CUSTOM_VIEW
+        ss[_QUICK_VIEW_CUSTOM_STATE] = _capture_quick_view_state()
+        ss.pop(_QUICK_VIEW_APPLIED_STATE, None)
+        return _CUSTOM_VIEW
+    return str(selected)
 
 
 def _active_quick_view() -> str | None:
@@ -949,11 +1011,7 @@ def _active_quick_view() -> str | None:
     superset of the Scanpath contract, so the old order mislabeled an active
     Illustration as Scanpath even while arc-and-snap geometry remained live.
     """
-    ss = st.session_state
-    for name in ("illustration", "scanpath", "heatmap"):
-        if all(ss.get(k) == v for k, v in _VIEW_PRESETS[name].items()):
-            return name
-    return None
+    return _sync_quick_view_state()
 
 
 # VIZ-18: palette setting name → the session key it writes. A palette is applied
@@ -2728,7 +2786,9 @@ def _render_fix_range_slider(fixations: pd.DataFrame | None) -> None:
         "the bulk (multiple-trial) export is unaffected.",
     )
     # Seeded via `_VIZ_WIDGET_DEFAULTS`, so no `value=` here (see `_pin`).
-    st.checkbox(
+    _labeled(
+        st,
+        "checkbox",
         "Apply to all trials",
         key="single_fix_range_all_trials",
         persist_state="session",
@@ -3385,14 +3445,16 @@ def sidebar_controls(
     # Focused presets stay one compact row; Reading-order / Everything
     # are still reachable by toggling layers. The remaining preset keys
     # (`reading_order`, `everything`) stay in `_VIEW_PRESETS` for any deep link.
-    viz.caption("Quick views")
-    # Side by side to keep the rail short. The active preset (whichever Quick-view
-    # preset the current layer toggles match) renders as "primary" so the user can
-    # see which view is active at a glance. When neither preset matches (the user
-    # has customized layers manually) both buttons render without highlight.
+    viz.markdown(
+        '<div class="sps-control-label">Quick views</div>',
+        unsafe_allow_html=True,
+    )
+    # A 2×2 grid keeps the labels readable in the narrow rail. Custom remembers
+    # the user's last hand-tuned state: changing any plot control selects it, and
+    # switching away and back restores that snapshot.
     _active = _active_quick_view()
-    _qv = viz.columns(3)
-    _qv[0].button(
+    _qv_top = viz.columns(2)
+    _qv_top[0].button(
         "👁️ Scanpath",
         key="viz_view_scanpath",
         type="primary" if _active == "scanpath" else "secondary",
@@ -3401,7 +3463,7 @@ def sidebar_controls(
         on_click=_apply_view_preset,
         args=("scanpath",),
     )
-    _qv[1].button(
+    _qv_top[1].button(
         "🔥 Heatmap",
         key="viz_view_heatmap",
         type="primary" if _active == "heatmap" else "secondary",
@@ -3410,7 +3472,8 @@ def sidebar_controls(
         on_click=_apply_view_preset,
         args=("heatmap",),
     )
-    _qv[2].button(
+    _qv_bottom = viz.columns(2)
+    _qv_bottom[0].button(
         "✏️ Illustration",
         key="viz_view_illustration",
         type="primary" if _active == "illustration" else "secondary",
@@ -3419,6 +3482,15 @@ def sidebar_controls(
         "uniform visual style.",
         on_click=_apply_view_preset,
         args=("illustration",),
+    )
+    _qv_bottom[1].button(
+        "🛠️ Custom",
+        key="viz_view_custom",
+        type="primary" if _active == _CUSTOM_VIEW else "secondary",
+        width="stretch",
+        help="Your most recent custom plot settings.",
+        on_click=_apply_view_preset,
+        args=(_CUSTOM_VIEW,),
     )
     # VIZ-31: the Illustration *label* (the publication-disclosure override) now
     # lives in the "📐 Figure & canvas" group below, with the other figure-level
@@ -3725,18 +3797,15 @@ def sidebar_controls(
                             static_reason,
                         ),
                     )
-            # UX-13: "Snap fixations above words" used to sit flush under the
-            # Drift-correction selectbox, which made it read as a
-            # drift-correction option. It is not — it's the fixation half of
-            # the VIZ-9 *linear-reading schematic* (its partner, arcing
-            # saccades, is Saccades → Style → Line shape → Arc). Keep it under
-            # Fixations (it moves fixations), but in its own captioned block
-            # so the two are never confused.
-            st.divider()
-            st.caption("Linear-reading schematic")
+            # "Snap fixations above words" is the fixation half of VIZ-9 (its
+            # partner is Saccades → Style → Line shape → Arc). Keep the control
+            # for saved-view compatibility, but do not give it a separate
+            # "Linear-reading schematic" heading in this already compact panel.
             # Still `make_scanpath_figure`-only (VIZ-9's `fixation_snap_to_word`),
             # unlike the drift correction above it — hence its own gate.
-            st.checkbox(
+            _labeled(
+                st,
+                "checkbox",
                 "Snap fixations above words",
                 key="global_fixation_snap_to_word",
                 persist_state="session",
@@ -3828,8 +3897,12 @@ def sidebar_controls(
                     disabled=metric_disabled,
                     help=_gated_help(None, metric_reason),
                 )
-            show_order = st.checkbox(
-                "Fixation index", key="global_show_order", persist_state="session"
+            show_order = _labeled(
+                st,
+                "checkbox",
+                "Fixation index",
+                key="global_show_order",
+                persist_state="session",
             )
             if show_order:
                 # In Compare (and in a dual animation) the index labels are tinted
@@ -3904,7 +3977,9 @@ def sidebar_controls(
             # VIZ-23 gave `make_scanpath_animation` an arrow layer of its own
             # (each arrowhead un-masks with the saccade it belongs to), so
             # direction arrows now reach all three builders.
-            st.checkbox(
+            _labeled(
+                st,
+                "checkbox",
                 "Direction arrows",
                 key="global_show_saccade_arrows",
                 persist_state="session",
@@ -3960,7 +4035,9 @@ def sidebar_controls(
                         SACCADE_CLASS_LABELS[cls_name],
                         key=state_key,
                     )
-                st.checkbox(
+                _labeled(
+                    st,
+                    "checkbox",
                     "Show legend",
                     key="global_saccade_type_legend",
                     persist_state="session",
@@ -4009,9 +4086,9 @@ def sidebar_controls(
                 help=_gated_help("Thickness of the saccade lines. Default 2.", _reason),
             )
             # VIZ-9: "linear reading" schematic — arched saccades. Its paired
-            # control, "Snap fixations above words", lives under Fixations
-            # (it moves fixations) in its own "Linear-reading schematic"
-            # block — see UX-13. Arcs are a `make_scanpath_figure` feature.
+            # control, "Snap fixations above words", remains under Fixations
+            # because it moves fixations. Arcs are a `make_scanpath_figure`
+            # feature.
             _labeled(
                 st,
                 "segmented_control",
@@ -4546,8 +4623,12 @@ def sidebar_controls(
                 help="Major labels and lines repeat at this pixel interval; "
                 "minor lines divide it into fifths.",
             )
-    show_colorbars = axes.checkbox(
-        "Show color bars", key="global_show_colorbars", persist_state="session"
+    show_colorbars = _labeled(
+        axes,
+        "checkbox",
+        "Show color bars",
+        key="global_show_colorbars",
+        persist_state="session",
     )
     if show_colorbars:
         # VIZ-23: all three builders now route their colour bar through
@@ -5001,7 +5082,14 @@ def reset_viz_settings() -> None:
     keys = set(_sk.PLOT_CONFIG_STATE_KEYS)
     keys |= set(_sk.compare_state_keys(0)) | set(_sk.compare_state_keys(1))
     keys |= {k for k in st.session_state if str(k).startswith("global_")}
-    keys |= {"single_fix_range", "single_fix_range_all_trials"}
+    keys |= {
+        "single_fix_range",
+        "single_fix_range_all_trials",
+        _PRE_ILLUSTRATION_STATE,
+        _QUICK_VIEW_SELECTION_KEY,
+        _QUICK_VIEW_CUSTOM_STATE,
+        _QUICK_VIEW_APPLIED_STATE,
+    }
     for key in keys:
         st.session_state.pop(key, None)
     # Re-seeding is source-driven for these two (see app.seed_canvas_state);
@@ -5949,8 +6037,12 @@ def render_trial_filters(
                 f"{prefix}filter_favorites", False
             )
         )
-    host.checkbox(
-        "⭐ Favorites only", key=f"{prefix}filter_favorites", on_change=_apply
+    _labeled(
+        host,
+        "checkbox",
+        "⭐ Favorites only",
+        key=f"{prefix}filter_favorites",
+        on_change=_apply,
     )
     tags = known_tags()
     if tags:

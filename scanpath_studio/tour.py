@@ -158,9 +158,9 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Verify what was parsed",
-                "**🔎 What's in this dataset** opens on the counts — the quickest "
-                "check that the mapping worked. The raw and derived tables fold "
-                "open below them.",
+                "**🔎 What's in the selected dataset** opens on the counts — the "
+                "quickest check that the mapping worked. The raw and derived "
+                "tables fold open below them.",
                 ".st-key-tutorial_data_inspection",
                 view=_VIEW_DATA,
             ),
@@ -419,7 +419,7 @@ _STEPS = [
         "📝 Annotate & save",
         "Star, tag, and note trials, then filter to them. **💾 Session** "
         "saves the whole setup + annotations to JSON. Replay this via "
-        "**🎓 Show tutorial**. 👀",
+        "**Tutorials → Welcome tour**. 👀",
     ),
 ]
 
@@ -557,8 +557,8 @@ def _render_tour_optout() -> None:
         "Don't show this again",
         key="tour_dont_show",
         value=tour_opted_out(),
-        help="Skip the tour on future visits. **🎓 Show tutorial** under ❓ Help "
-        "always brings it back.",
+        help="Skip the tour on future visits. **Tutorials → Welcome tour** under "
+        "❓ Help always brings it back.",
     )
     embed_html_iframe(_tour_optout_script(opted_out), height=0)
 
@@ -681,8 +681,8 @@ _SPOTLIGHT_STEPS = [
     {
         "selector": ".st-key-tour_grp_subtabs",
         "title": "📑 Per-trial panels",
-        "body": "Below the plot: **📝 Annotations**, **Stimulus & questions**, "
-        "**🔬 Comparisons**, **Export** (this trial or bulk), and "
+        "body": "Below the plot: **📝 Annotations**, **📄 Stimulus & Context**, "
+        "**🔬 Comparisons**, **📤 Export** (this trial or bulk), and "
         "**🔗 Share** a deep link.",
     },
     {
@@ -699,7 +699,7 @@ _SPOTLIGHT_STEPS = [
         "body": "**❓ Help** has the tutorials, the FAQ and the docs. "
         "**💾 Session** keeps your work — a portable JSON of the whole setup + "
         "annotations, plus the on-device cache. Replay this tour from "
-        "**🎓 Show tutorial**. 👀",
+        "**Tutorials → Welcome tour**. 👀",
     },
 ]
 
@@ -1114,14 +1114,14 @@ def maybe_show_welcome_tour() -> None:
 
 
 def render_tour_replay_button(host=None) -> None:
-    """Button in the ❓ Help menu popover that replays the tour from step one.
+    """Compatibility button that replays the welcome tour from step one.
 
     Deliberately ignores the UX-12 opt-out — "don't show this again" means "stop
     greeting me", not "take the tutorial away". The card's checkbox renders
     pre-ticked on a replay so the choice can be reversed from the same place.
     """
     (host if host is not None else st).button(
-        "🎓 Show tutorial",
+        "🎓 Welcome tour",
         key="tour_replay",
         width="stretch",
         help="Replay the quick intro tour.",
@@ -1333,7 +1333,7 @@ def render_tutorial_library(context: dict[str, object], *, host=None) -> None:
         "🧭 Tutorials",
         key="tutorial_library_open",
         width="stretch",
-        help="Task-oriented walkthroughs, independent of the welcome tour.",
+        help="Welcome and task-oriented walkthroughs.",
         on_click=_arm_tutorial_library,
     )
 
@@ -1350,9 +1350,16 @@ def _tutorial_library_dialog() -> None:
     st.markdown("**Choose the outcome you want to reach.**")
     st.caption(
         "Each one points at the real controls and changes nothing — your data, "
-        "filters and settings are exactly where you left them. Independent of "
-        "the automatic welcome tour."
+        "filters and settings are exactly where you left them."
     )
+    welcome = st.container(border=True)
+    welcome_head, welcome_action = welcome.columns([3, 1], vertical_alignment="center")
+    welcome_head.markdown("**Welcome tour**")
+    welcome_head.caption("A quick introduction to Scanpath Studio.")
+    welcome_head.caption("App overview · about 2 minutes")
+    if welcome_action.button("Start", key="tutorial_start_welcome", width="stretch"):
+        _arm_tour()
+        st.rerun(scope="app")
     # UX-40: one bordered card per tutorial instead of five identical
     # caption/caption/caption/two-buttons stacks separated by dividers — at that
     # density the eye had nothing to land on, and "Start over" sat there at full

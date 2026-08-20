@@ -233,6 +233,14 @@ class TestAnimationParity:
         assert all(len(fr.traces) == 4 for fr in fig.frames)
         assert not [t for t in fig.data if t.name == "saccade direction"]
 
+    def test_transport_controls_are_above_the_plot(self):
+        fig = _anim()
+        assert fig.layout.updatemenus[0].y == 1
+        assert fig.layout.updatemenus[0].yanchor == "bottom"
+        assert fig.layout.sliders[0].y == 1
+        assert fig.layout.sliders[0].yanchor == "bottom"
+        assert fig.layout.margin.t == _CONTROLS_MARGIN_PX
+
     def test_colorbar_keeps_its_placement_and_reserve(self):
         fig = _anim(color_by="duration_ms", show_colorbars=True)
         cb = _trail(fig).marker.colorbar
@@ -242,7 +250,8 @@ class TestAnimationParity:
         assert (cb.y, cb.yanchor) == (0.5, "middle")
         assert cb.orientation in (None, "v")
         assert fig.layout.margin.r == _COLORBAR_RESERVE_PX
-        assert fig.layout.margin.b == _CONTROLS_MARGIN_PX
+        assert fig.layout.margin.t == _CONTROLS_MARGIN_PX
+        assert fig.layout.margin.b == 0
 
     def test_colorbar_is_now_the_static_figures_styled_one(self):
         """Deliberate VIZ-23 change: both builders share `_colorbar_dict`."""
@@ -372,11 +381,11 @@ class TestAnimationColorbarStyle:
         assert cb.orientation == "h"
         assert cb.tickangle == 45
         assert cb.tickfont.size == 9
-        # A horizontal bar takes bottom reserve (below the transport controls)
-        # instead of the right-hand one.
+        # A horizontal bar takes bottom reserve while transport stays above.
         assert cb.y < 0
         assert fig.layout.margin.r == 0
-        assert fig.layout.margin.b == _CONTROLS_MARGIN_PX + _COLORBAR_BOTTOM_PX
+        assert fig.layout.margin.t == _CONTROLS_MARGIN_PX
+        assert fig.layout.margin.b == _COLORBAR_BOTTOM_PX
 
 
 # ---------------------------------------------------------------------------

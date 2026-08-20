@@ -265,16 +265,11 @@ a toggle that drops `participant` / `trial_id` and shares view settings only. Sa
 the same thing next to the **💾 Save & restore** download button, naming the
 annotation notes.
 
-**Status:** **fixed** 2026-07-29 — the Share panel now has a **What the link
-includes** picker (`url_state._SHARE_IDENTITY_MODES`, read by
-`_share_identity_flags`) offering *Participant + trial* (the default — a link
-that reopens one trial has to identify it, so this is opt-*out*, not opt-in),
-*Trial only* and *Settings only*; `_build_share_query` takes matching
-`include_participant` / `include_trial` keywords. Under the link,
-`_share_identity_caution` prints what that link actually names and where URLs
-end up. *Trial only* still lands on the exact trial: `_restore_selection`
-falls through to a trial-id-alone match when `participant` is absent. Covered
-by `tests/test_security_fixes.py::TestShareLinkIdentityIsOptOut`. The
+**Status:** **updated** 2026-08-20 — the Share panel always includes the
+participant, trial, and visualization settings. The former identity-mode picker
+and warning were removed to keep sharing predictable; the panel instead notes
+that recipients may need to replace the URL's address or port. The lower-level
+query builder retains its optional identity flags for programmatic callers. The
 **💾 Save & restore** download (`tabs._render_save_restore_expander`) now
 carries a matching caption naming what the file holds — the selected
 participant/trial *and* the text of every annotation note. **Not addressed:**
@@ -868,9 +863,8 @@ no `<` can reach it.
 - **A shared/hosted deployment should set `SCANPATH_LOCAL_FS=0`** and supply the
   corpus location through `SCANPATH_DATA_ROOT` (S2), which removes the directory
   input, the folder picker and the download-to-arbitrary-path button.
-- **A share link is identifying by default.** It names a participant and a trial
-  unless you change **What the link includes** in the Share panel to *Trial only*
-  or *Settings only* (S3). A saved plot config has no such control: it carries the
+- **A share link is identifying.** It names a participant and a trial alongside
+  the visualization settings (S3). A saved plot config likewise carries the
   selection *and* every annotation note you have typed, for every trial — read it
   before sending it to a collaborator.
 - **Check exported tables before publishing them.** Drop the `image_path` column

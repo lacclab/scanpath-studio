@@ -7,7 +7,12 @@ def get_app_css() -> str:
     """Return custom CSS to reduce whitespace and disable animations."""
     return """
     <style>
-    section.main > div.block-container {padding-top: 0.25rem; padding-bottom: 0.25rem;}
+    .stMainBlockContainer,
+    section.main > div.block-container {padding-top: 2rem; padding-bottom: 0 !important;}
+    .stMainBlockContainer > [data-testid="stVerticalBlock"] > :last-child,
+    section.main > div.block-container > [data-testid="stVerticalBlock"] > :last-child {
+        margin-bottom: 0 !important;
+    }
     /* Remove all whitespace around plotly charts */
     div[data-testid="stPlotlyChart"] {margin: 0 !important; padding: 0 !important; line-height: 0 !important;}
     div[data-testid="stPlotlyChart"] > div {margin: 0 !important; padding: 0 !important;}
@@ -357,7 +362,7 @@ def get_app_css() -> str:
        font) wraps the ▾ onto its own line. At a glyph's width there is room to
        spare. */
     [class*="st-key-split_mode_"] {
-        width: fit-content;
+        width: 100%;
         max-width: 100%;
         align-items: stretch !important;
         border: 1px solid var(--sps-border);
@@ -383,7 +388,8 @@ def get_app_css() -> str:
     }
     [class*="st-key-split_mode_"] > div:not(:has([data-testid="stPopover"])) {
         min-width: 0;
-        flex: 0 1 auto;
+        flex: 1 1 auto;
+        padding-right: 0.45rem;
     }
     [class*="st-key-split_mode_"] [data-testid="stWidgetLabel"] p,
     [class*="st-key-split_mode_"] [data-testid="stMarkdownContainer"] p {
@@ -850,6 +856,39 @@ def get_app_css() -> str:
        the row, so it opens leftwards rather than off the panel. */
     .sps-map-flag.sps-fhelp::after { left: auto; right: 0; }
 
+    /* Data Management's read-only mappings use the same label-over-control
+       grammar as Add dataset. The value is intentionally select-like without
+       being a disabled widget: built-in schemas are informative, not editable. */
+    .sps-readonly-map-table {
+        margin: 0.65rem 0 0.2rem;
+        padding-top: 0.35rem;
+        border-top: 1px solid rgba(128, 128, 128, 0.18);
+        font-weight: 700;
+        font-size: 0.9rem;
+        opacity: 0.85;
+    }
+    .sps-readonly-map-label {
+        min-height: 1.35rem;
+        margin-bottom: 0.2rem;
+        font-size: 0.82rem;
+        font-weight: 600;
+        opacity: 0.88;
+    }
+    .sps-readonly-map-value {
+        min-height: 2.4rem;
+        display: flex;
+        align-items: center;
+        padding: 0.45rem 0.65rem;
+        border: 1px solid var(--sps-border);
+        border-radius: 0.5rem;
+        background: rgba(128, 128, 128, 0.07);
+        font-family: var(--sps-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+        font-size: 0.82rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
     /* Control rail: a subtle card so it reads as a panel, with a hair more
        breathing room between the stacked toggles than the app-wide gap:0 rule.
        UX-43 gives it its own scroll area exactly as tall as the plot row: the
@@ -939,27 +978,32 @@ def get_app_css() -> str:
         padding-right: 0.4rem;
         padding-top: 0.1rem;
     }
-    /* UX-29: the three Quick-view buttons ("👁️ Scanpath" / "🔥 Heatmap" / "✏️
-       Illustration") wrap to 2-3 lines once the rail column narrows on a small
-       window. Rather than
-       widen the rail (shrinks the plot column) or drop to a 2×2 grid, fall back
-       to the emoji alone: the label text is collapsed to zero size (so it takes
-       no layout space) and a `::before` re-adds just the emoji at normal size —
-       the row stays the same three-button layout at every width. */
+    /* Quick views and native widget labels use the same colour and type scale. */
+    .sps-control-label {
+        color: inherit;
+        font-size: 0.875rem;
+        line-height: 1.4;
+        margin-bottom: 0.25rem;
+    }
+    /* The 2×2 Quick-view grid keeps full labels at ordinary rail widths and
+       falls back to icons only at the narrowest size. */
     @container sps-rail (max-width: 320px) {
         .st-key-viz_view_scanpath button p,
         .st-key-viz_view_heatmap button p,
-        .st-key-viz_view_illustration button p {
+        .st-key-viz_view_illustration button p,
+        .st-key-viz_view_custom button p {
             font-size: 0;
         }
         .st-key-viz_view_scanpath button p::before,
         .st-key-viz_view_heatmap button p::before,
-        .st-key-viz_view_illustration button p::before {
+        .st-key-viz_view_illustration button p::before,
+        .st-key-viz_view_custom button p::before {
             font-size: 1rem;
         }
         .st-key-viz_view_scanpath button p::before { content: "👁️"; }
         .st-key-viz_view_heatmap button p::before { content: "🔥"; }
         .st-key-viz_view_illustration button p::before { content: "✏️"; }
+        .st-key-viz_view_custom button p::before { content: "🛠️"; }
     }
     /* BUG-24: the rail's heading row holds nothing but the heading. UX-44 put a
        compact Reset pill beside it in a second column, which did not fit — the
@@ -1087,21 +1131,6 @@ def get_app_css() -> str:
         .st-key-scanpath_rail button p {
             word-break: normal;
             overflow-wrap: normal;
-        }
-        /* Which leaves the two side-by-side Quick-view buttons: "Scanpath" and
-           "Heatmap" are single words that can't wrap, and at half of a ~170px
-           rail they don't fit — so that row stacks. Scoped to *that* row via
-           :has(), NOT to every column row in the rail: the per-layer popovers'
-           contents are rail DOM children even while closed, so a blanket rule
-           would also stack UX-9's slider + number box back onto two lines. */
-        .st-key-scanpath_rail
-            [data-testid="stHorizontalBlock"]:has(.st-key-viz_view_scanpath) {
-            flex-wrap: wrap;
-        }
-        .st-key-scanpath_rail
-            [data-testid="stHorizontalBlock"]:has(.st-key-viz_view_scanpath)
-            > [data-testid="stColumn"] {
-            min-width: 100%;
         }
         /* The typed boxes beside each slider (UX-9) give up width first — the
            slider is the primary control. */

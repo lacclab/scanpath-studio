@@ -45,8 +45,8 @@ pipeline uses it.
 2. **🔤 Column mapping** — the one thing that decides what every measure
    downstream is computed from. Rows marked ✨ were auto-detected; override any
    that guessed wrong.
-3. **🔎 What's in this dataset** — the counts come first, as the quickest check
-   that the mapping worked. The raw and derived tables fold open below them
+3. **🔎 What's in the selected dataset** — the counts come first, as the
+   quickest check that the mapping worked. The raw and derived tables fold open below them
    (including, when present, the ordered screen catalogue and per-screen canvas
    sizes), and **🧾 Trial identity** says whether one trial id really is one
    reading.

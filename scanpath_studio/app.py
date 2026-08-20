@@ -757,7 +757,8 @@ def _about_dialog() -> None:
 
     bibtex = (
         "@software{Shubi_Scanpath_Studio_2026,\n"
-        "author = {Shubi, Omer and Gruteke Klein, Keren and Lion, Ella and "
+        "author = {Shubi, Omer and Gruteke Klein, Keren and Grossman, Maya and "
+        "Lion, Ella and "
         'Jakobi, Deborah N. and Reich, David R. and J{\\"a}ger, Lena and '
         "Berzak, Yevgeni},\n"
         "license = {MIT},\n"
@@ -775,6 +776,7 @@ movements in reading.
 
 Developed by [Omer Shubi](https://omershubi.github.io/)¹,
 [Keren Gruteke Klein](https://kerengruteke.github.io/)¹,
+Maya Grossman¹,
 [Ella Lion](https://ella-lion.github.io/)¹,
 [Deborah N. Jakobi]({_DILI}/lab-members/jakobi.html)²,
 [David R. Reich]({_DILI}/lab-members/reich.html)²,
@@ -2495,6 +2497,10 @@ def prepare_data(
                 # The host is the ⚙️ Configure menu popover, which nests no
                 # expander — render the panel inline with its own bold header.
                 use_expander=False,
+                # Match the add-dataset screen's compact field grid instead of
+                # stretching every mapping across a full row.
+                columns_per_row=4,
+                stack_labels=True,
             )
         else:
             word_schema = word_proposed
@@ -2516,6 +2522,8 @@ def prepare_data(
                 problems=validate_fix_schema(fix_proposed),
                 container=mapping_host,
                 use_expander=False,
+                columns_per_row=4,
+                stack_labels=True,
             )
         else:
             fix_schema = fix_proposed
@@ -3151,13 +3159,12 @@ def render_data_source_picker(host=None) -> None:
     if current in entries:
         st.session_state["data_source_picker"] = current
     box.selectbox(
-        "Data source",
+        "Select Dataset",
         entries,
         format_func=_entry_label,
         help=data_dictionary_help_text(),
         key="data_source_picker",
         on_change=_on_data_source_pick,
-        label_visibility="collapsed",
     )
 
 
@@ -3378,6 +3385,12 @@ def render_dataset_table(
     # it — deleted, renamed, or a public corpus whose location was unset.
     forget_dataset_counts(keep={t for t in entries if t != UPLOAD_CHOICE})
 
+    kind_labels = {
+        "🧪": "Demo",
+        "✏️": "Manual",
+        "🔒": "Private",
+        "🌐": "Public",
+    }
     rows = []
     for token in entries:
         if token == UPLOAD_CHOICE:
@@ -3405,7 +3418,11 @@ def render_dataset_table(
                 # both the ▶ marker column and the separate Open column. The open
                 # dataset is the coloured row instead (see the Styler below).
                 "Dataset": name,
-                "Kind": kinds.get(token, "") or ("Yours" if own else ""),
+                "Kind": (
+                    f"{kinds[token]} {kind_labels.get(kinds[token], '')}".strip()
+                    if kinds.get(token)
+                    else ("🔒 Private" if own else "")
+                ),
                 "Readers": counts.get("Readers"),
                 "Trials": counts.get("Trials"),
                 "Fixations": counts.get("Fixations"),
@@ -3420,6 +3437,12 @@ def render_dataset_table(
         return
     frame = pd.DataFrame(rows)
     tokens = frame.pop("_token").tolist()
+    # Missing counts are legitimate for a corpus that has never been opened.
+    # Pandas would normally upcast those columns to float (and Streamlit would
+    # display e.g. ``24.0``), so keep them as nullable integers explicitly.
+    count_columns = ["Readers", "Trials", "Fixations", "Words"]
+    for column in count_columns:
+        frame[column] = pd.array(frame[column], dtype="Int64")
 
     def _clicked(state_key):
         """The token of the row whose button was clicked, or ``None``.
@@ -3470,9 +3493,11 @@ def render_dataset_table(
     # translucent accent that sits legibly on both the light and the dark grid.
     active_row = next((i for i, row in enumerate(rows) if row["_active"]), None)
     frame = frame.drop(columns=["_active"])
-    display = frame
+    # A Styler is required for the active-row tint; the underlying nullable
+    # integer dtypes remain intact for numeric display and sorting.
+    display = frame.style
     if active_row is not None:
-        display = frame.style.apply(
+        display = display.apply(
             lambda row: (
                 [
                     f"background-color: {_DATASET_ACTIVE_TINT}"
@@ -3497,10 +3522,16 @@ def render_dataset_table(
                 key="dataset_table_name",
             ),
             "Kind": st.column_config.TextColumn("Kind", width="small"),
-            "Readers": st.column_config.NumberColumn("Readers", width="small"),
-            "Trials": st.column_config.NumberColumn("Trials", width="small"),
-            "Fixations": st.column_config.NumberColumn("Fixations", width="small"),
-            "Words": st.column_config.NumberColumn("Words", width="small"),
+            "Readers": st.column_config.NumberColumn(
+                "Readers", width="small", format="%d"
+            ),
+            "Trials": st.column_config.NumberColumn(
+                "Trials", width="small", format="%d"
+            ),
+            "Fixations": st.column_config.NumberColumn(
+                "Fixations", width="small", format="%d"
+            ),
+            "Words": st.column_config.NumberColumn("Words", width="small", format="%d"),
             "Edit": st.column_config.ButtonColumn(
                 "",
                 type="tertiary",
@@ -5475,7 +5506,10 @@ def main() -> None:
             render_trial_metadata_section(combos_all)
         with setup_body_slot:
             st.divider()
-            st.subheader("🔎 What's in this dataset")
+            dataset_label = str(
+                st.session_state.get("data_source_choice") or data_choice
+            ).replace("`", "'")
+            st.subheader(f"🔎 What's in the `{dataset_label}` dataset")
             # Keyed wrapper → the stable `.st-key-…` selector the "Load and
             # verify a dataset" tutorial spotlights (it kept its name across the
             # move off the Scanpath subtab bar).

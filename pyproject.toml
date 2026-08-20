@@ -8,7 +8,16 @@ dynamic = ["version"]
 description = "Interactive Streamlit workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data."
 readme = "README.md"
 requires-python = ">=3.11"
-authors = [{ name = "Omer Shubi (LACC Lab, Technion)", email = "lacclab.technion@gmail.com" }]
+authors = [
+    { name = "Omer Shubi", email = "lacclab.technion@gmail.com" },
+    { name = "Keren Gruteke Klein" },
+    { name = "Maya Grossman" },
+    { name = "Ella Lion" },
+    { name = "Deborah N. Jakobi" },
+    { name = "David R. Reich" },
+    { name = "Lena Jäger" },
+    { name = "Yevgeni Berzak" },
+]
 license = { file = "LICENSE" }
 keywords = ["eye-tracking", "scanpath", "visualization", "streamlit", "reading", "psycholinguistics"]
 classifiers = [

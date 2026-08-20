@@ -237,5 +237,13 @@ def test_comparison_panels_use_the_candidate_words_and_keep_text_visible():
     selected_words = _comparison_trial_words(words, candidate)
     assert selected_words["text"].tolist() == ["beta"]
 
-    settings = _comparison_panel_settings({"show_word_labels": True})
+    settings = _comparison_panel_settings(
+        {
+            "show_word_labels": True,
+            "color_by": None,
+            "fixation_color": "#123456",
+        }
+    )
     assert settings["show_word_labels"] is True
+    assert settings["color_by"] is None
+    assert settings["fixation_color"] == "#123456"

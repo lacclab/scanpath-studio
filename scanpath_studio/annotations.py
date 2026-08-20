@@ -312,7 +312,7 @@ def render_trial_annotations(
         add_col.text_input(
             "Add a tag",
             key=newtag_key,
-            placeholder="Add tag, then press Enter",
+            placeholder="Add a new tag",
             on_change=_add_tag_callback,
             args=(tags_key, newtag_key),
             label_visibility="collapsed",

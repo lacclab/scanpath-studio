@@ -877,7 +877,7 @@ window.TRACKER = {
    "num": 88,
    "sub": "",
    "title": "Drop the Screen name field, and every 'still to do' badge on the add-dataset page",
-   "status": "Review",
+   "status": "In progress",
    "note": "",
    "date": "",
    "added": "2026-08-19",
@@ -1404,7 +1404,17 @@ window.TRACKER = {
     "shorter, and Export should offer an explicit This trial scope.",
     "",
     "The follow-up asked to remove the single-trial parenthetical and make Naming",
-    "& labels substantially more compact."
+    "& labels substantially more compact.",
+    "",
+    "Further follow-ups simplify Share, tighten and align the plot rail, place the",
+    "comparison controls on one row, rename and generalize Stimulus & Context, add a",
+    "persistent Custom quick view, refine animation controls and playback placement,",
+    "reduce unused app space, move the welcome tutorial into Tutorials, and add Maya",
+    "Grossman after Keren everywhere authors are listed.",
+    "",
+    "The final follow-ups make the Data Management dataset table explicit and compact,",
+    "remove repeated participant/chrome copy around the plot, and restore enough top",
+    "inset that the fixed app header cannot clip the first control row."
    ],
    "whatWasDone": [
     "**Data.** The page title is **Data Management**. Its two summary captions are",
@@ -1431,13 +1441,40 @@ window.TRACKER = {
     "",
     "Regression tests cover same-rerun favorite markers, comparison matching across",
     "texts, candidate-specific stimulus words/text visibility, export scope/copy, and",
-    "the compact annotation and naming layouts. User docs and the changelog match."
+    "the compact annotation and naming layouts. User docs and the changelog match.",
+    "",
+    "**Follow-up pass.** Share now always carries the full view and explains address/",
+    "port changes. The plot rail has equal-width split toggles, label-first checkboxes,",
+    "a 2×2 persistent Custom quick view, clearer animation smoothness controls, and",
+    "transport above a slightly larger plot. Non-real-time playback earns an Illustration",
+    "label. The trial slider is wider and the app trims its bottom whitespace.",
+    "",
+    "Stimulus & Context now detects titles and instructions as well as question fields.",
+    "The welcome tour moved into Tutorials. Maya Grossman follows Keren in every author",
+    "list. The Scanpath dataset picker is labelled; Compare removes its duplicate trial",
+    "heading, uses label-first settings and fixation-coloured Trial ID chips, and displays",
+    "Top & bottom instead of Stacked. Comparison grids follow the main fixation styling,",
+    "center their controls, and use trial-only headings without redundant counts/copy.",
+    "",
+    "**Data Management follow-up.** Dataset counts use nullable integer columns, and",
+    "Kind cells read Demo, Manual, Private or Public beside their icon. The inspection",
+    "heading names the active dataset. Editable and read-only mappings now use the",
+    "add-dataset screen's compact label-over-field grid instead of a long summary table.",
+    "",
+    "The ordinary scanpath chip row no longer repeats participant ID to its left; the",
+    "Participant chip remains. Fixation controls keep the saved snap setting but drop",
+    "the Linear-reading schematic mini-heading. A 2rem top inset clears the fixed header",
+    "without bringing back the removed bottom whitespace."
    ],
    "whatsLeft": [
     "Nothing."
    ],
    "decisions": [
-    "Review UX-94 in the Data, Annotations, Comparisons and Export panels. In particular, confirm the uncollapsed Stimulus images section is the intended meaning of making it look like Participant metadata, and that **Current figure** plus **Export bundle → This trial** is the right distinction."
+    "Review the Scanpath control line, both comparison surfaces, all five subtabs, and",
+    "the animation popover/transport at the window sizes from the supplied screenshots.",
+    "Confirm that Top & bottom is the preferred visible name; the saved/deep-link wire",
+    "value remains Stacked for compatibility.",
+    "The requested A/B legend redesign is deliberately separate as #UX-95 (Backlog)."
    ],
    "background": [
     "The comparison column is a selection constraint: candidates must have the same",
@@ -1449,7 +1486,48 @@ window.TRACKER = {
     "in the app. Local stimulus paths remain deliberately outside links and saved configs."
    ],
    "statusNote": [
-    "**Ready for review — 2026-08-20.**"
+    "**Pending approval — follow-up pass completed 2026-08-20.**"
+   ]
+  },
+  {
+   "id": "UX-95",
+   "prefix": "UX",
+   "num": 95,
+   "sub": "",
+   "title": "Improve the comparison A/B legend",
+   "status": "Backlog",
+   "note": "",
+   "date": "",
+   "added": "2026-08-20",
+   "group": "UX & Interaction",
+   "subgroup": "",
+   "archived": false,
+   "owner": "Maya",
+   "request": [
+    "Improve the A/B legend used when two scanpaths are compared.",
+    "",
+    "The legend should identify the two trials clearly without repeating information",
+    "already available in the selectors or trial chips.",
+    "",
+    "Review its wording, placement, colour association, and behavior across Overlay,",
+    "Side by side, Top & bottom, animation, exports, and narrow screens.",
+    "",
+    "This is a separate follow-up and must not be implemented as part of UX-94."
+   ],
+   "whatsLeft": [
+    "Audit the current automatic and custom A/B labels on every comparison layout.",
+    "Design a concise legend that remains unambiguous in-app and in exported figures.",
+    "Carry the decision through the app, deep links, saved configs, CLI/API surfaces,",
+    "tests, documentation, and changelog where the chosen behavior requires it."
+   ],
+   "background": [
+    "Compare currently has an optional figure legend plus trial selectors and coloured",
+    "trial-ID chips. Those surfaces overlap, but each serves a different export and",
+    "screen-layout case; the right consolidation needs a deliberate design pass.",
+    "",
+    "Related implementation lives in `tabs.py` comparison settings and label patterns,",
+    "`plots.py` comparison legends, `url_state.py`, `session_keys.py`, the CLI/API",
+    "comparison contracts, and comparison/export regression tests."
    ]
   },
   {

@@ -56,11 +56,10 @@ def _make_apptest(*, synthetic: bool = False) -> AppTest:
 
 
 def _replay_tour(at: AppTest) -> None:
-    """Replay the tour the way the user does — the ❓ Help nav entry.
+    """Replay the tour through the compatibility action used by tests.
 
-    UX-65 turned the 🎓 Show tutorial *button* into a nav entry, and AppTest
-    cannot click an ``st.navigation`` entry, so this takes the path the entry
-    takes: ``menu._arm_help_action`` is exactly what the router calls on it.
+    The visible entry now lives in Tutorials; this bypasses the dialog so tests
+    focused on the tour itself do not also test the tutorial library.
     """
     from unittest.mock import patch
 
@@ -560,7 +559,7 @@ class TestDataInspectionTab:
         for section in (
             "📂 Available datasets",
             "🔤 Column mapping",
-            "🔎 What's in this dataset",
+            "🔎 What's in the `Synthetic test trial` dataset",
             "🧹 Preprocessing",
         ):
             assert section in subheaders, f"missing stage {section}: {subheaders}"
@@ -587,23 +586,18 @@ class TestDataInspectionTab:
         # The filtering note stays under the summary-stats table.
         assert any("computed after filtering" in c.value for c in at.caption)
 
-    def test_column_mapping_table_renders(self):
+    def test_column_mapping_uses_the_setup_field_grid(self):
         at = _make_apptest(synthetic=True)
         pin_data_view(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
 
-        mapping_tables = [
-            df.value
-            for df in at.dataframe
-            if list(getattr(df.value, "columns", []))
-            == ["Table", "Field", "Mapped column"]
+        mapping_cells = [
+            m.value for m in at.markdown if "sps-readonly-map-value" in (m.value or "")
         ]
-        assert mapping_tables, "column-mapping table not rendered"
-        table = mapping_tables[0]
-        assert not table.empty
-        # Every mapped row names a real source field.
-        assert (table["Mapped column"].astype(str).str.len() > 0).all()
+        assert mapping_cells, "column-mapping field grid not rendered"
+        assert any("participant_id" in cell for cell in mapping_cells)
+        assert any("trial_id" in cell for cell in mapping_cells)
 
     def test_top_level_nav_views(self):
         # Top-level navigation is Streamlit's own top nav — `st.navigation(
@@ -700,7 +694,6 @@ class TestDataInspectionTab:
             _VIEW_SESSION,
         ]
         assert list(_HELP_PAGES) == [
-            "help_tour",
             "help_tutorials",
             "help_faq",
             "help_about",
@@ -861,12 +854,29 @@ class TestDatasetTable:
         # Counts come from the frames already in memory, not from a reload.
         assert int(row["Readers"].iloc[0]) > 0
         assert int(row["Fixations"].iloc[0]) > 0
+        for column in ("Readers", "Trials", "Fixations", "Words"):
+            assert str(frame[column].dtype) == "Int64", (
+                f"{column} should stay integer even when unopened datasets are blank"
+            )
+        assert row["Kind"].iloc[0] == "🔒 Private"
+        for icon, word in {
+            "🧪": "Demo",
+            "✏️": "Manual",
+            "🔒": "Private",
+            "🌐": "Public",
+        }.items():
+            matching = frame[frame["Kind"].astype(str).str.startswith(icon)]
+            if not matching.empty:
+                assert matching["Kind"].astype(str).str.contains(word).all()
         # Edit and Delete belong to the user's own uploads; the built-in demo
         # carries neither, which is how a row says the action does not apply.
         assert row["Delete"].iloc[0]
         demo = frame[frame["Dataset"].str.contains("demo", case=False)]
         if not demo.empty:
-            assert not demo["Delete"].iloc[0]
+            import pandas as pd
+
+            delete = demo["Delete"].iloc[0]
+            assert pd.isna(delete) or not delete
 
     def test_delete_is_wired_to_the_remover(self):
         """Regression: UX-64 dropped the ➕ popover that held *Remove a dataset*,
@@ -3531,7 +3541,7 @@ class TestLazySubtabBodiesStillRender:
         at.run(timeout=120)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         headings = " ".join(s.value for s in at.subheader)
-        assert "What's in this dataset" in headings or at.dataframe
+        assert "What's in the" in headings or at.dataframe
 
 
 class TestAnimationExportRasterBranch:

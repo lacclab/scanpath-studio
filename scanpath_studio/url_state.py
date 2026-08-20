@@ -12,7 +12,7 @@ import copy
 import json
 import re
 from dataclasses import dataclass, field
-from urllib.parse import parse_qsl, urlencode
+from urllib.parse import urlencode
 
 import pandas as pd
 import streamlit as st
@@ -56,7 +56,6 @@ from .controls import (
     palette_state,
 )
 from .experimental_setup import format_provenance_param, parse_provenance_param
-from .fields import panel_field
 from .session_keys import (
     COMPARE_LAYOUT_PARAM,
     COMPARE_PARAM,
@@ -163,54 +162,6 @@ def _parse_align_algorithm(v) -> str:
         if option.lower() == name.lower():
             return option
     raise ValueError(f"unknown drift-correction algorithm {name!r}")
-
-
-# --- Share-link identity (S3) ----------------------------------------------
-# A share link that names a participant is participant data in a URL, and URLs
-# are logged, cached and pasted into issue trackers. The identifying half is
-# therefore opt-out-able at the point of copying. The default keeps both ids
-# (a link that reopens one trial has to identify it) and the panel says so;
-# "Trial only" leans on `_restore_selection`'s trial-id-alone fallback, so the
-# link still lands on the exact trial without naming a reader.
-_SHARE_IDENTITY_KEY = "share_identity_mode"
-_SHARE_IDENTITY_FULL = "Participant + trial"
-_SHARE_IDENTITY_TRIAL = "Trial only"
-_SHARE_IDENTITY_NONE = "Settings only"
-_SHARE_IDENTITY_MODES = [
-    _SHARE_IDENTITY_FULL,
-    _SHARE_IDENTITY_TRIAL,
-    _SHARE_IDENTITY_NONE,
-]
-
-
-def _share_identity_flags(mode: str | None) -> tuple[bool, bool]:
-    """``mode`` → ``(include_participant, include_trial)`` for the link builder."""
-    if mode == _SHARE_IDENTITY_TRIAL:
-        return False, True
-    if mode == _SHARE_IDENTITY_NONE:
-        return False, False
-    return True, True
-
-
-def _share_identity_caution(query: str) -> str:
-    """The caption printed under the link, naming the ids it actually carries."""
-    params = dict(parse_qsl(query, keep_blank_values=True))
-    named = [
-        label
-        for key, label in (("participant", "participant"), ("trial_id", "trial"))
-        if params.get(key)
-    ]
-    if not named:
-        return (
-            "🔒 This link carries view settings only — no participant or trial id. "
-            "The recipient lands on whichever trial their own session opens."
-        )
-    return (
-        "⚠️ This link names the "
-        + " and ".join(named)
-        + " in its URL. URLs are kept in browser history, server logs and link "
-        "previews — use *Trial only* or *Settings only* above if that matters."
-    )
 
 
 # --- Share-link parameter groups -------------------------------------------
@@ -1949,8 +1900,8 @@ def _build_share_query(
         params["screen"] = str(screen_id)
 
     # CMP-8 §7: the second scanpath. Gated on `include_trial` for the same reason
-    # A's trial is — the DATA-16/S3 identity picker governs *both* readers a link
-    # names, not just the first. B's source rides along only when it is one a URL
+    # A's trial is — lower-level callers may omit identity from a URL even though
+    # the app's Share panel always includes it. B's source rides along only when it is one a URL
     # can rebuild; an uploaded dataset lives in session state, so the link says so
     # rather than silently dropping half the comparison.
     compare = selection.get("compare") if include_trial else None
@@ -1961,7 +1912,7 @@ def _build_share_query(
         else:
             # `compare=` has no trial-only spelling — it is `<pid>:<trial>`, and
             # a trial id alone is ambiguous across readers in B's corpus. Under
-            # an identity mode that drops participants the comparison therefore
+            # a programmatic link that drops participants, the comparison therefore
             # cannot travel, and the link must say so rather than arrive as a
             # single scanpath the recipient has no way to know was a pair.
             caveats.append(
@@ -2126,34 +2077,15 @@ def _render_share_body(data_choice: str) -> None:
     trial + visualization settings).
 
     The link is built **lazily** — only when the user clicks *Refresh link* (and
-    once on first open, or whenever the identity choice changes, so there's
-    always something to copy that matches the control). It is NOT rebuilt on
+    once on first open). It is NOT rebuilt on
     every rerun, so tweaking an unrelated control doesn't silently rewrite a link
     the user is about to share; the link reflects the settings as of the last
-    refresh.
-
-    S3: what the link *names* is a choice made here, at the point of copying.
-    The default still carries the participant and trial ids (a link that
-    reopens one trial has to identify it), but the caption says so and the
-    **What the link includes** picker drops either half."""
+    refresh. The link always carries the selected participant, trial and all
+    shareable visualization settings."""
     st.markdown(
         "**Share this view** — a link that reopens Scanpath Studio on the "
         "current trial with your visualization settings."
     )
-    mode = panel_field(
-        st,
-        "radio",
-        "What the link includes",
-        options=_SHARE_IDENTITY_MODES,
-        key=_SHARE_IDENTITY_KEY,
-        horizontal=True,
-        help=(
-            "A link lands in browser history, server logs and chat previews. "
-            "Drop the participant id when you don't want the link to name a "
-            "reader — it still opens on the same trial."
-        ),
-    )
-    include_participant, include_trial = _share_identity_flags(mode)
     refresh = st.button(
         "🔄 Refresh link",
         key="share_refresh",
@@ -2168,21 +2100,20 @@ def _render_share_body(data_choice: str) -> None:
     # a stale link would confidently open a *different corpus* of the same kind,
     # with a caveat naming the corpus the user is no longer looking at. That is
     # the silent-wrong-corpus failure this feature is most careful about, so the
-    # freeze is keyed on the selection as well as the identity mode.
-    identity = (mode, data_choice, st.session_state.get(PUBLIC_DATASET_CHOICE))
+    # freeze is keyed on the source selection.
+    identity = (data_choice, st.session_state.get(PUBLIC_DATASET_CHOICE))
     stale = st.session_state.get("_share_query_identity") != identity
     if refresh or stale or st.session_state.get("_share_query_frozen") is None:
-        st.session_state["_share_query_frozen"] = _build_share_query(
-            data_choice,
-            include_participant=include_participant,
-            include_trial=include_trial,
-        )
+        st.session_state["_share_query_frozen"] = _build_share_query(data_choice)
         st.session_state["_share_query_identity"] = identity
     query, caveats = st.session_state["_share_query_frozen"]
     for note in caveats:
         st.caption("⚠️ " + note)
     _render_share_link_widget(query)
-    st.caption(_share_identity_caution(query))
+    st.caption(
+        "If the recipient runs Scanpath Studio at a different address or port, "
+        "replace the start of the URL before opening it."
+    )
     st.caption("Reflects your settings as of the last refresh.")
 
 

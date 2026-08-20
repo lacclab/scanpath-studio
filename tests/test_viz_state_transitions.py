@@ -87,6 +87,22 @@ def test_reset_settings_discards_the_illustration_restore_snapshot(monkeypatch):
     assert controls._PRE_ILLUSTRATION_STATE not in store
 
 
+def test_custom_quick_view_remembers_manual_settings(monkeypatch):
+    store = _viz_store()
+    monkeypatch.setattr(controls.st, "session_state", store)
+
+    controls._apply_view_preset("scanpath")
+    store["global_fixation_opacity"] = 0.42
+    assert controls._active_quick_view() == "custom"
+
+    controls._apply_view_preset("heatmap")
+    assert controls._active_quick_view() == "heatmap"
+    controls._apply_view_preset("custom")
+
+    assert controls._active_quick_view() == "custom"
+    assert store["global_fixation_opacity"] == 0.42
+
+
 def test_full_monitor_changes_only_framing_state_and_cache_input(monkeypatch):
     store = _viz_store()
     store.update(

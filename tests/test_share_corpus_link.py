@@ -518,6 +518,29 @@ def _share_panel_app():
 
 
 class TestTheFrozenLinkFollowsTheCorpus:
+    def test_panel_always_shares_the_full_view_without_an_identity_picker(self, bundle):
+        from scanpath_studio import app
+
+        at = AppTest.from_function(_share_panel_app)
+        at.session_state["public_dataset_choice"] = app.benchmark_corpus_label("Provo")
+        at.session_state["_share_selection"] = {
+            "participant_id": "p2",
+            "trial_id": "t3",
+        }
+        at.run(timeout=30)
+        assert not at.exception, at.exception
+        query, _ = at.session_state["_share_query_frozen"]
+        parsed = parse_qs(query)
+        assert parsed["participant"] == ["p2"]
+        assert parsed["trial_id"] == ["t3"]
+        assert not [radio for radio in at.radio if radio.key == "share_identity_mode"]
+        copy = " ".join(
+            element.value
+            for element in [*at.markdown, *at.caption]
+            if getattr(element, "value", None)
+        )
+        assert "different address or port" in copy
+
     def test_switching_corpus_invalidates_the_frozen_share_link(self, bundle):
         """The link is frozen against *setting* changes on purpose — not against
         a change of corpus.

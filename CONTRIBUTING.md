@@ -16,23 +16,18 @@ streamlit run streamlit_app.py    # run the app locally
 
 Tested on Python 3.11–3.14.
 
-Then start the work tracker — every open and finished item, searchable, with
-`#ID` deep links — and leave that terminal running:
+Then find the work. Every open and finished item is a
+[GitHub issue](https://github.com/lacclab/scanpath-studio/issues), arranged on
+the [Scanpath Studio board](https://github.com/orgs/lacclab/projects/5):
 
 ```bash
-python3 tracker/server.py
+gh issue list                       # what's open
+gh project item-list 5 --owner lacclab   # the board, with Status and Priority
 ```
 
-On Windows, run `python tracker\server.py` (or double-click `tracker\start.bat`).
-`python3` there is normally the Microsoft Store alias, which prints *"Python was
-not found"* and exits without starting anything — and `start.command` is a zsh
-script. A tracker page opened without its server can be read but not saved.
-
-It opens at <http://127.0.0.1:8765/tracker/>; its **How this works** panel is
-the short version of the conventions below. If a port is already taken, another
-person or another editor session owns that server — start yours on a different
-port (`--port` for the tracker, `--server.port` for Streamlit) rather than
-killing theirs.
+Everything closed before 2026-08-20 is in the in-repo `tracker/` archive
+instead — see [*Before you open a PR*](#before-you-open-a-pr) below for how to
+read it.
 
 If you use an AI coding assistant, it picks the project's conventions up on its
 own: [`CLAUDE.md`](CLAUDE.md) (working agreements) imports
@@ -108,14 +103,19 @@ body, and the rule that **closing an issue is the maintainer's sign-off**, not
 yours — are in `CLAUDE.md` → *Tracking work*.
 
 The in-repo tracker that preceded this (`tracker/`) is a read-only archive of
-everything closed before 2026-08-20. Open `python3 tracker/server.py` to read it;
-don't edit it.
+everything closed before 2026-08-20, with the full write-ups. Read it with
+`python3 tracker/server.py` — it opens at <http://127.0.0.1:8765/tracker/> — and
+don't edit it. On Windows run `python tracker\server.py` (or double-click
+`tracker\start.bat`); `python3` there is normally the Microsoft Store alias,
+which prints *"Python was not found"* and exits without starting anything, and
+`start.command` is a zsh script. If the port is already taken, another person or
+editor session owns that server — start yours on a different port (`--port` for
+the archive, `--server.port` for Streamlit) rather than killing theirs.
 
 ## Working together
 
-The repo commits **directly to `main`** and its work queue is a file in the
-repo, so two people (or two AI sessions) staying out of each other's way is a
-matter of habit rather than tooling.
+The repo commits **directly to `main`**, so two people (or two AI sessions)
+staying out of each other's way is a matter of habit rather than tooling.
 
 Two situations, and they need opposite instincts. **Two clones** — the ordinary
 case — is what git is for: you each have your own working tree, conflicts surface

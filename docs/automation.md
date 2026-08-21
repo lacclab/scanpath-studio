@@ -60,7 +60,11 @@ portable automated format. Static images require Chrome/Chromium.
 ## Reference map
 
 - [Data format](data-format.md): accepted tables and canonical fields
+- [Computations & methodology](computations.md): every derived value's formula,
+  units, grouping keys, and precedence
 - [Python API](api.md): loaders, measures, plot builders, and saving
 - [CLI](cli.md): launch and render commands
+- [Harmonised benchmark corpora](benchmark-corpora.md): thirty-one public corpora
+  in one schema
 - [True-to-scale rendering](rendering.md): coordinate and canvas details
 - [Privacy](privacy.md): local, desktop, and hosted data handling

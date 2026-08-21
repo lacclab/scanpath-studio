@@ -5,18 +5,19 @@ or group-level result.
 
 ## 1. Define the analysis pool
 
-Load the corpus and apply **Trial filters** before opening Corpus Analysis. Check
+Load the corpus and narrow the trial pool before opening Corpus Analysis. Check
 the participant, text, and trial counts on the 🗂️ **Data** page. A text ID must
 identify the same stimulus across readers; a trial ID identifies one reading.
 
 ## 2. Open Corpus Analysis
 
-Select **📊 Corpus Analysis →** in the header, then choose the view that matches
-the question:
+Select **📊 Corpus Analysis** in the navigation, then choose the view that
+matches the question:
 
 | Question | View |
 | --- | --- |
 | How was one text read? | **Per text** |
+| How was one sentence read, across readers? | **Per sentence** |
 | How does one reader behave across trials? | **Per reader** |
 | How do conditions or populations differ? | **Groups** |
 

@@ -7,10 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **The README and the docs site describe the app as it is at 0.29.0**
+
 ### Fixed
 - **A large release no longer fails to create its GitHub release** (ENG-43)
 
 ### Details
+
+#### Changed
+- **The README and the docs site describe the app as it is at 0.29.0** — the docs still had the sidebar, a three-subtab Corpus Analysis, a seven-step upload wizard, per-layer 🧹 filters and a 🔥 Overlays section, none of which the app has had for a release or more. The user-facing pages now match: the top nav's three views plus the 💾 Session / ❓ Help dialogs, the 🗂️ Data page's two screens (📂 Available datasets · ✏️ Edit dataset), *Per sentence* beside the other three analysis subtabs, the two-part wizard, the one-line plot-rail sections with the single 🧹 Filter (UX-72/UX-80/UX-81/UX-86), the participant-metadata table, the thirty-one harmonised corpora, and PRE-22's note that the Preprocessing panel is held back from this release while the API and `analyze` are not. `docs/cli.md` gains the public-corpus flags (`--potec` / `--onestop*` / `--eyegenbench*` / `--source multipleye`) and the styling options it never listed; `docs/api.md` gains `load_onestop` and `load_multipleye`. `AGENTS.md` and `CONTRIBUTING.md` are corrected the same way — the module map had five modules missing and described `menu.py`, `controls.py` and `wizard_shell.py` as they were before UX-80/UX-100, and CONTRIBUTING still opened by telling a new contributor to start the tracker server that ENG-32 froze.
 
 #### Fixed
 - **A large release no longer fails to create its GitHub release** (ENG-43) — `v0.29.0` bundled six months of work, so its changelog section came to 172,795 characters; GitHub rejects a release body over 125,000, so the tag published to PyPI and then failed on *Create GitHub release* (HTTP 422). `scripts/changelog_notes.py` now takes `--max-chars` and `--details-url`, and over the cap it keeps the changelog's **headline** half and links the rest — which is what the two-tier shape (ENG-34) exists for, the headlines being the half written to be pasted somewhere. Only if the headlines alone still overrun does it truncate, always at a line boundary and always saying it did. The publish workflow passes 120,000 for the release body (leaving room for the install line it appends) and 3,500 for the Slack notification, whose ceiling is far lower and which would have hit the same wall.

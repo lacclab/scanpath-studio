@@ -25,9 +25,10 @@ one that matches your goal; setup details are linked only when needed.
 
 New here? Complete [Getting started](../getting-started.md) first.
 
-The same workflows are available inside the app under **Help → 🧭 Tutorials**.
-The chooser explains the outcome, prerequisite, and time before starting. Each
-tutorial keeps its own progress, can open the relevant view or subtab with
+The same workflows are available inside the app under ❓ **Help → 🧭 Tutorials**
+in the navigation. The chooser explains the outcome, prerequisite, and time
+before starting. Each tutorial keeps its own progress, can open the relevant view
+or subtab with
 **Show me / Open this panel**, and never changes data, filters, annotations, or
 scientific settings for you.
 
@@ -36,23 +37,31 @@ scientific settings for you.
 **Outcome:** parsed words, fixations, and mappings visibly checked. *About 3
 minutes.*
 
-Everything below is on the 🗂️ **Data** page, which is laid out in the order the
-pipeline uses it.
+Everything below is on the 🗂️ **Data** page, which is two screens: 📂 **Available
+datasets** and ✏️ **Edit dataset**, the second laid out in the order the pipeline
+uses it.
 
-1. **📂 Data source** — keep the demo, or use ➕ to add your own tables. Upload
-   either or both reports and check the proposed mappings. Map **Multipart
-   screens** only when one logical trial has several coordinate spaces.
-2. **🔤 Column mapping** — the one thing that decides what every measure
-   downstream is computed from. Rows marked ✨ were auto-detected; override any
-   that guessed wrong.
-3. **🔎 What's in the selected dataset** — the counts come first, as the
-   quickest check that the mapping worked. The raw and derived tables fold open below them
-   (including, when present, the ordered screen catalogue and per-screen canvas
-   sizes), and **🧾 Trial identity** says whether one trial id really is one
-   reading.
-4. **🧹 Preprocessing** — optional soft exclusion or merging of short fixations,
-   applied before anything is measured. Off by default, and it never discards
-   your original rows.
+1. **📂 Available datasets** — keep the demo, or use **➕ Add dataset** to add
+   your own tables. Click a dataset's name to open it, or ✏️ **Edit** to change
+   how it was read. Map **Multipart screens** only when one logical trial has
+   several coordinate spaces.
+2. **🔤 Column mapping** (in ✏️ Edit dataset) — the one thing that decides what
+   every measure downstream is computed from. Rows marked ✨ were auto-detected;
+   override any that guessed wrong. **Recording setup**, 🖼️ **Stimulus images**
+   and the 👤 **Participant** / 🗂️ **Trial metadata** tables are on the same
+   screen.
+3. **🔎 What's in the dataset** — back on the overview, the counts come first, as
+   the quickest check that the mapping worked. The raw and derived tables fold
+   open below them (including, when present, the ordered screen catalogue and
+   per-screen canvas sizes), and **🧾 Trial identity** says whether one trial id
+   really is one reading.
+
+!!! note "Preprocessing is held back in this release (PRE-22)"
+    Optional soft exclusion and merging of short fixations is finished and
+    shipped — `api.preprocess_data` and `scanpath-studio analyze` work as before
+    — but its panel is not shown in this release's app. `SCANPATH_EXPERIMENTAL=1`
+    brings it back for a local session. See
+    [Data format](../data-format.md#optional-preprocessing-and-derived-tables).
 
 The longer data-collection workflow is in [Data collection](data-collection.md),
 and every accepted field is in [Data format](../data-format.md).
@@ -62,7 +71,8 @@ and every accepted field is in [Data format](../data-format.md).
 **Outcome:** reviewed trials marked and ready for ID export. *About 4 minutes;
 requires at least one trial.*
 
-1. Use **Filter by** and **More** to define the review pool.
+1. Open the **filter funnel** on the control line — **Narrow by** plus the
+   condition and annotation filters — to define the review pool.
 2. Step through the trial picker. A multipart trial adds a second navigator for
    its ordered screens.
 3. Open **Annotations** and choose parent-trial or current-screen scope before
@@ -106,13 +116,13 @@ minutes; requires two readings sharing a text.*
 duration moved across the experiment. *About 4 minutes; requires variation
 across the loaded pool.*
 
-1. Switch to **Corpus Analysis** from the header. Your loaded data and filters
-   stay in place, so whatever you narrowed to on the Scanpath view is what gets
-   aggregated.
+1. Switch to **📊 Corpus Analysis** in the navigation. Your loaded data and
+   filters stay in place, so whatever you narrowed to on the Scanpath view is
+   what gets aggregated.
 2. Pick the *shape* of the question, not the chart. **Per text** — one text,
-   many readers. **Per reader** — one reader, all their trials. **Groups** — a
-   cohort, or two compared. For "did this reader speed up?", open **Per
-   reader**.
+   many readers. **Per sentence** — one measure combined per text/sentence pair.
+   **Per reader** — one reader, all their trials. **Groups** — a cohort, or two
+   compared. For "did this reader speed up?", open **Per reader**.
 3. Choose the reader on the left, then set **View** to **Per-trial trend** — one
    point per trial in presentation order, the whole experiment on one axis.
 4. Set the measure to **fixation duration**. Each point is that trial's mean; a

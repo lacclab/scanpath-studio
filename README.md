@@ -46,10 +46,12 @@ The scanpath plot is built from layers you toggle independently:
 On top of that:
 
 - **Animated replay** — watch the scanpath unfold at real or scaled speed; export as interactive HTML, GIF, or MP4.
-- **Compare readings** — overlay two trials on one canvas or place them side by side (e.g. ordinary vs. information-seeking, first vs. repeated, L1 vs. L2).
+- **Compare readings** — overlay two trials on one canvas or place them side by side (e.g. ordinary vs. information-seeking, first vs. repeated, L1 vs. L2), including two trials from *different* datasets.
 - **Critical-span, out-of-text & by-line** highlights — mark an answer span, flag fixations outside every word box, or color fixations by text line.
 - **Triage** — star, tag, and annotate trials; save and restore everything as a JSON sidecar.
 - **Bulk export** — one zip of per-trial PNG + SVG figures, plot settings, and tabular data across every filtered trial.
+- **Author a scanpath** — draw fixations straight onto the stimulus canvas for a teaching figure or a schematic.
+- **A computation register** — every derived value's formula, units and precedence, published as a [methodology page](https://lacclab.github.io/scanpath-studio/computations/).
 
 ![Two readers of the same paragraph, overlaid on one canvas](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/demo_dual_scanpath.png)
 
@@ -57,13 +59,15 @@ On top of that:
 fixations between them
 ([watch it animated](https://lacclab.github.io/scanpath-studio/#the-app-in-one-paragraph)).*
 
-The app is organized into three tabs:
+The app is organized into three views, chosen from the navigation in the header
+(💾 **Session** and ❓ **Help** sit beside them and open over whatever you are
+looking at, rather than taking you away from it):
 
-| Tab | What's there |
-|-----|--------------|
-| **Scanpath Visualization** | The layered scanpath: a **Browse by** selection row above the plot (trial / text / participant) and, beside it, a right-hand **control rail** with **Animate** and **Compare** toggles plus the per-layer visualization controls (style each scanpath independently). The trial's key info shows as configurable chips above the plot. Below, subtabs: **Annotations**, **Stimulus & Context**, **Comparisons** (trials matching the selected trial on a field you choose), **Export** (single-trial *and* bulk — HTML / GIF / MP4 and figures / settings / tabular data), and **Share**. |
-| **Corpus Analysis** | Three subtabs — **Per text**, **Per reader**, and **Groups** (profile one cohort, or compare two) — the question-oriented analysis views: metric distributions and word profiles, per-text heatmaps pooled over readers, reader summaries, and group differences with effect sizes. |
-| **Data** | *Data Management* — available datasets, column mapping, stimulus images, participant/trial metadata, data tables, summary statistics, and optional preprocessing. |
+| View | What's there |
+|------|--------------|
+| 🗺️ **Scanpath** | The layered scanpath: a control line above the plot — dataset, trial picker, ◀ ▶ step, ⇅ sort and a filter funnel holding **Narrow by** plus the condition and annotation filters — and, beside the figure, a right-hand **control rail** with **Animate** and **Compare** toggles plus the per-layer visualization controls (style each scanpath independently). The trial's key info shows as configurable chips above the plot. Below, subtabs: **Annotations**, **Stimulus & Context**, **Comparisons** (trials matching the selected trial on a field you choose), **Export** (single-trial *and* bulk — HTML / GIF / MP4 and figures / settings / tabular data), and **Share**. |
+| 📊 **Corpus Analysis** | Four subtabs — **Per text**, **Per sentence**, **Per reader**, and **Groups** (profile one cohort, or compare two) — the question-oriented analysis views: metric distributions and word profiles, per-text heatmaps pooled over readers, reader summaries, and group differences with effect sizes. |
+| 🗂️ **Data** | Two screens: 📂 **Available datasets** (the datasets this session holds, plus what's in the open one — data tables and summary statistics) and ✏️ **Edit dataset** (source and location, column mapping, recording setup, trial identity, stimulus images, and the participant/trial metadata tables). |
 
 ![The Scanpath Studio app](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/docs/assets/app_screenshot.png)
 
@@ -81,19 +85,27 @@ of everything closed before 2026-08-20 is browsable offline: double-click
 
 Upload **CSV, TSV, Parquet, or Feather** tables for words/AoIs, fixations, and
 (optionally) raw gaze. Columns are auto-detected from common EyeLink, Gazepoint,
-and snake-case conventions; a sidebar **Column mapping** panel overrides any
-guess. The loader bends to fit real corpora — many files per table (concatenated
-with a `source_file` tag), a single report (words- or fixations-only),
-stimulus-level word boxes broadcast across readers, and AoI-sequence fixations
-placed at word/character-box centers.
+and snake-case conventions; the **Column mapping** on 🗂️ Data → ✏️ **Edit
+dataset** overrides any guess. The loader bends to fit real corpora — many files
+per table (concatenated with a `source_file` tag), a single report (words- or
+fixations-only), stimulus-level word boxes broadcast across readers, AoI-sequence
+fixations placed at word/character-box centers, and trials recorded over several
+screens. A separate one-row-per-reader table of **participant metadata** (and one
+of trial metadata) attaches alongside, and its columns then behave like fields in
+the data — filters, chips, trial sorting, and the export bundle.
 
 If your data carries only raw fixations, the app computes the canonical per-word
 measures itself — **FFD**, **FPRT** (gaze duration), **RPD** (go-past), **TFD**
 (dwell), plus skips and regressions, following Rayner (1998) and Inhoff & Radach
 (1998). Pre-aggregated EyeLink columns, when present, take precedence.
 
-A ready-made [**PoTeC**](https://github.com/DiLi-Lab/PoTeC) loader (Potsdam
-Textbook Corpus) exercises that flexible pipeline end to end:
+Several public corpora need no upload at all: **OneStop**,
+[**PoTeC**](https://github.com/DiLi-Lab/PoTeC) (Potsdam Textbook Corpus) and
+**MultiplEYE** have ready-made loaders, and thirty-one
+[harmonised benchmark corpora](https://lacclab.github.io/scanpath-studio/benchmark-corpora/)
+— German, Chinese, Persian, English — load from one locally prepared bundle in a
+single common schema, which is what makes cross-corpus comparison practical. The
+PoTeC loader exercises that flexible pipeline end to end:
 
 ```python
 import scanpath_studio as sps
@@ -141,8 +153,9 @@ Tested on Python 3.11–3.14. Run the tests with `uv run pytest`; see
 [AGENTS.md](AGENTS.md) for an architectural overview.
 
 Joining the project? [CONTRIBUTING.md](CONTRIBUTING.md) is the whole of it —
-setup, the work tracker (`python3 tracker/server.py`), the checks that gate CI,
-and how two people stay out of each other's way.
+setup, where the work is tracked
+([GitHub Issues](https://github.com/lacclab/scanpath-studio/issues)), the checks
+that gate CI, and how two people stay out of each other's way.
 
 ## Documentation
 
@@ -190,7 +203,7 @@ Much of this code was written with AI assistance. That is not the same as
 bug-free. **Cross-check anything you publish against your own pipeline.** If
 something looks wrong,
 [open an issue](https://github.com/lacclab/scanpath-studio/issues) with the JSON
-from **💾 Save & restore** — it reproduces the exact view.
+from **💾 Session → ⬇️ JSON backup** — it reproduces the exact view.
 
 ## License
 

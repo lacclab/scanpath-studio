@@ -7,7 +7,7 @@ workflow, use a [tutorial](../tutorials/index.md).
 
 - :material-eye:{ .lg .middle } **[Scanpath visualization](scanpath-visualization.md)**
 
-    Layers, fixation filtering, replay, comparison, and drift correction.
+    Layers, filtering, replay, cross-dataset comparison, and drift correction.
 
 - :material-database-import:{ .lg .middle } **[Loading public and own data](loading-data.md)**
 
@@ -15,7 +15,7 @@ workflow, use a [tutorial](../tutorials/index.md).
 
 - :material-chart-box:{ .lg .middle } **[Corpus workspace](corpus-workspace.md)**
 
-    Raw-data inspection, reading measures, and the three analysis views.
+    Raw-data inspection, reading measures, and the four analysis views.
 
 - :material-share-variant:{ .lg .middle } **[Outputs and sharing](outputs-sharing.md)**
 

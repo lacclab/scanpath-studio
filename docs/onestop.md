@@ -11,7 +11,7 @@ the **full public corpus** from [OSF](https://osf.io/2prdq/) as a public dataset
     - **Public dataset (this page)** — the OneStop reports as a public dataset:
       the **Public** variant downloads from OSF on demand (no setup); the **LaCC
       lab** variant reads a local lab-processed export. Pick the variant, reading
-      regime, and trial parts in the sidebar.
+      regime, and trial parts on the 🗂️ **Data** page.
     - **OneStop server bundle** — points at a local `lacclab` export via the
       `$ONESTOP_DATA_DIR` environment variable, with per-pid Parquet shards for
       review-app deep links. See
@@ -23,8 +23,8 @@ trials.
 
 ## Loading it
 
-OneStop is exposed as a **Public dataset**. In the app, choose
-**Public datasets → OneStop**, then in the ⚙️ **Configure → Options** group pick a
+OneStop is exposed as a **Public dataset**. In the app, open 🗂️ **Data** and
+choose **OneStop** as the data source, then in its **Options** pick a
 **Variant**, a **Reading regime**, and one or more **Parts**:
 
 **Variant**
@@ -67,7 +67,7 @@ its own trial (the part is folded into the trial id, e.g. `Paragraph::1` vs
 regime-split; the other parts come from the all-regimes full release, so they
 load regardless of the chosen regime.
 
-The ⚙️ **Configure → Data location** section lists the **Expected files** and
+The **Data location** section of the 🗂️ Data page lists the **Expected files** and
 shows whether they're already present. For the Public variant, if they're
 present the corpus loads with no network access; if not, click **⬇ Download** to
 fetch them into the folder (cached on disk, so only the first load pays the

@@ -19,15 +19,18 @@ The app exposes common per-word measures including first fixation duration,
 first-pass gaze duration, regression-path duration, total fixation duration,
 fixation count, skipping, and regressions. It uses recognized precomputed
 values when available; otherwise it derives them from fixation-to-word
-assignment.
+assignment. Every one of them — its formula, units, grouping keys, and what
+happens when a value is missing — is listed in
+[Computations & methodology](../computations.md).
 
 ## Choose the analysis view
 
-Select **📊 Corpus Analysis →** in the header.
+Select **📊 Corpus Analysis** in the navigation.
 
 | View | Unit of interest | Typical use |
 | --- | --- | --- |
 | **Per text** | one stimulus across readers | word profile, distribution, pooled heatmap |
+| **Per sentence** | one sentence across readers | one measure combined for each text/sentence pair |
 | **Per reader** | one reader across trials | reader summary and within-reader pattern |
 | **Groups** | one cohort or two cohorts | condition/population summaries, differences, effect sizes |
 

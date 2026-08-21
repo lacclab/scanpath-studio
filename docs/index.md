@@ -49,12 +49,16 @@ Inspect, compare, analyse, and export eye-tracking-while-reading scanpaths.
 
 ## What the app includes
 
-- **Scanpath visualization:** true-position text, fixations, saccades, heatmaps,
-  replay, comparison, and vertical-drift correction.
-- **Flexible loading:** public corpora or your own word, fixation, and raw-gaze
-  tables with automatic or manual column mapping.
-- **Corpus analysis:** per-text, per-reader, and group summaries using standard
-  reading measures.
+- **Scanpath visualization:** true-position text, fixations, saccades, raw gaze,
+  heatmaps, replay, and comparison — including two trials from different
+  datasets. Vertical-drift correction is available behind an experimental flag.
+- **Flexible loading:** your own word, fixation, and raw-gaze tables with
+  automatic or manual column mapping, a table of participant metadata, or one of
+  the ready-made public corpora — OneStop, PoTeC, MultiplEYE, and thirty-one
+  [harmonised benchmark corpora](benchmark-corpora.md).
+- **Corpus analysis:** per-text, per-sentence, per-reader, and group summaries
+  using standard reading measures, each one documented in the
+  [computation register](computations.md).
 - **Reproducible output:** static and animated figures, bulk exports, share
   links, and restorable configurations.
 
@@ -65,7 +69,7 @@ See the [feature guides](guides/index.md) for the controls, or
     Scanpath Studio was built with AI assistance. Cross-check results before
     publishing. If something looks wrong,
     [report it](https://github.com/lacclab/scanpath-studio/issues)
-    with your **Save & restore** JSON.
+    with your **💾 Session → ⬇️ JSON backup** file.
 
 Citation metadata is available in
 [`CITATION.cff`](https://github.com/lacclab/scanpath-studio/blob/main/CITATION.cff).

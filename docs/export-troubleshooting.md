@@ -50,15 +50,17 @@ numbers can be reproduced later.
 
 ??? question "A column wasn't detected / mapped to the wrong field"
     Auto-detection matches common conventions case- and separator-insensitively.
-    Override it with the app's **Column mapping** panel, or pass
+    Override it with the app's **Column mapping** panel (🗂️ Data → ✏️ Edit
+    dataset), or pass
     `word_schema` / `fix_schema` to
     [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data].
 
 ??? question "The reading text looks too big / too small"
     Text is drawn true-to-scale from the word boxes and the **monitor
-    resolution**. Set the real monitor size (**📐 Figure & canvas → 🖥️ Screen &
-    geometry** in the visualization rail, or `canvas_size=(W, H)` in the API)
-    — e.g. `(2560, 1440)` for OneStop.
+    resolution**. Set the real monitor size (🗂️ **Data → ✏️ Edit dataset →
+    Recording setup**, **📐 Figure & canvas → 🖥️ Screen & framing** in the
+    visualization rail, or `canvas_size=(W, H)` in the API) — e.g.
+    `(2560, 1440)` for OneStop.
 
 ??? question "OneStop server data"
     Pointing the app at a full OneStop export uses `$ONESTOP_DATA_DIR`; see

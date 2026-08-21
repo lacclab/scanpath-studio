@@ -45,21 +45,29 @@ That is the default workflow. You can now follow a tutorial for
 
 ## 3. Load your data
 
-Select **➕ Add data** and work down the setup wizard:
+Open 🗂️ **Data**, select **➕ Add dataset**, and work down the two-part wizard:
 
-1. name the dataset and enter the experiment's monitor size;
-2. upload a words/IA table and a fixations table;
-3. check the proposed participant, trial, text, position, and duration columns;
-4. select **Add dataset**.
+1. name the dataset;
+2. **Upload data files** — a words/IA table and a fixations table, plus, if you
+   have them, raw gaze and a one-row-per-reader participant table;
+3. **Map data fields** — check the proposed trial and reader identity, the
+   fixation features, the recording setup (monitor size and viewing distance),
+   and any extra fields;
+4. select **✅ Add dataset**.
+
+The dataset then appears under 📂 **Available datasets**, and ✏️ **Edit dataset**
+reopens everything above at any time.
 
 See [Loading public and own data](guides/loading-data.md) for accepted formats,
-manual mapping, and common checks.
+manual mapping, and common checks, and
+[Harmonised benchmark corpora](benchmark-corpora.md) for the thirty-one public
+corpora that need no upload.
 
 ## Author a scanpath without files
 
-Choose **Author a scanpath** as the data source when you want to sketch a trial
-from text instead of uploading tables. Enter the stimulus, inspect the generated
-word boxes, then edit the scanpath in either place:
+Choose **✏️ Author a scanpath** as the data source when you want to sketch a
+trial from text instead of uploading tables. Enter the stimulus, inspect the
+generated word boxes, then edit the scanpath in either place:
 
 - click empty canvas space to add a fixation;
 - drag a fixation to change its X/Y coordinate;

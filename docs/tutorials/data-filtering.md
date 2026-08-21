@@ -5,9 +5,11 @@ an auditable retained pool.
 
 ## 1. Narrow the trial pool
 
-Load the dataset, then open **Trial filters**. Start with broad dataset fields
-such as participant, condition, correctness, or repeated-reading status. Use the
-trial ordering control to surface unusually short or long trials.
+Load the dataset, then open the **filter funnel** on the control line above the
+plot: it holds **Narrow by** (text and participant) together with the condition
+and annotation filters. Start with broad dataset fields such as participant,
+condition, correctness, or repeated-reading status. Use the ⇅ trial-ordering
+popover to surface unusually short or long trials.
 
 Avoid applying many filters at once: add one, check the remaining count, then
 continue. If the pool becomes empty, use the adjacent clear action to identify
@@ -16,7 +18,7 @@ which filter removed it.
 ## 2. Review candidate trials
 
 For each candidate, inspect the default scanpath and turn on **Animate** only
-when timing helps. Open **Fixations → Filter** and mark:
+when timing helps. Open **🧹 Filter → 👁️ Fixations** in the plot rail and mark:
 
 - out-of-bounds points;
 - fixations below or above your duration thresholds;
@@ -31,7 +33,7 @@ In **Annotations**, apply a consistent tag vocabulary—for example `exclude`,
 `review`, `poor-calibration`, or `skimming`—and add a brief reason. Star trials
 that are useful examples or approved for a figure.
 
-Return to **Trial filters** and filter by favorites or tags. This turns the
+Return to the trial filters and filter by favorites or tags. This turns the
 review decisions into the active pool without deleting the source data.
 
 ## 4. Verify the retained pool

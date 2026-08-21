@@ -42,6 +42,34 @@ scanpath-studio render --words ia.csv --fixations fix.csv \
 HTML is interactive and browser-free. PNG, SVG, and PDF require
 Chrome/Chromium (`plotly_get_chrome -y`).
 
+## Public corpora
+
+A public corpus loads headlessly the same way the app loads it — no export step
+in between:
+
+```bash
+# PoTeC, downloaded on first use
+scanpath-studio render --potec ./potec -p 12 -t b0 -o potec.html
+
+# OneStop, choosing the variant, regime and part
+scanpath-studio render --onestop ./onestop --onestop-variant public \
+  --onestop-regime ordinary --onestop-part Paragraph --list-trials
+
+# One corpus out of a prepared harmonised bundle
+scanpath-studio render --eyegenbench ./data/EyeGenBench \
+  --eyegenbench-dataset Provo -p 1 -t 1 -o provo.svg
+
+# MultiplEYE, from its raw export
+scanpath-studio render --source multipleye --export ./multipleye_session \
+  --list-trials
+```
+
+`--eyegenbench-dataset` names one of the thirty-one
+[harmonised benchmark corpora](benchmark-corpora.md) in a bundle you prepared
+locally; `--no-question-screens` drops MultiplEYE's comprehension screens. The
+Python API takes the same corpora through the loaders re-exported at the package
+root (`load_potec`, `load_onestop`, `load_multipleye`, `load_eyegenbench`).
+
 ## Compare two scanpaths
 
 `--compare-with PARTICIPANT:TRIAL` draws a second reading beside or over the
@@ -133,6 +161,12 @@ the recorded setup.
 | map arbitrary source rows to screens | `--trial-parts-manifest manifest.json` |
 | attach participant metadata | `--participant-metadata readers.csv` |
 | export editable layers | `--separable-layers` |
+| style the fixations | `--fixation-color`, `--fixation-symbol`, `--fixation-colorscale`, `--marker-size-range` |
+| style the saccades | `--saccade-style`, `--saccade-width`, `--saccade-arcs`, `--saccade-arrows`, `--saccade-classes` |
+| pick a palette | `--palette` |
+| size the figure | `--width`, `--height`, `--scale` |
+| title and caption it | `--title`, `--caption` |
+| tune the heatmap | `--heatmap-metric`, `--heatmap-colorscale`, `--heatmap-norm` |
 
 Use the installed command as the authoritative full reference:
 

@@ -5,9 +5,11 @@ Start with the default view, then change only controls needed for the question.
 
 ## Choose a trial
 
-Use the participant and trial pickers above the plot. Trial filters define which
-readings are available; ordering helps surface long, short, early, or late
-trials. The detail popover shows the active trial's summary fields.
+Use the trial picker on the control line above the plot. The filter funnel
+beside it defines which readings are available — **Narrow by** for text and
+participant, plus the condition and annotation filters — and the ⇅ popover orders
+the list, which helps surface long, short, early, or late trials. The detail
+popover shows the active trial's summary fields.
 
 When a trial contains ordered screens, a second navigator appears below the
 trial picker. The plot always shows one screen in its own recorded canvas; use
@@ -17,8 +19,9 @@ choose parent-trial or current-screen scope.
 
 ## Control the layers
 
-The **Plot controls** rail beside the plot starts with four **Quick views** and
-a **Palette** — often all you need — followed by five collapsible sections:
+The **Plot controls** rail beside the plot starts with four **Quick views**
+(👁️ Scanpath, 🔥 Heatmap, ✏️ Illustration, 🛠️ Custom) and a **Palette** — often
+all you need — followed by seven sections:
 
 Scanpath, Heatmap, and Illustration are deterministic presets: selecting one
 starts from the app defaults before applying that view. **Custom** remembers the
@@ -29,20 +32,24 @@ last settings you changed by hand and restores them after you visit a preset.
 | 👁️ Fixations | Fixations | location, order, duration and colour field |
 | ↗️ Saccades | Saccades | movement direction, reading type, regressions and return sweeps |
 | 📄 Stimulus | Text, Bounding boxes, Stimulus image | verify stimulus geometry and fixation-to-word alignment; compare against the original display |
-| 🔥 Overlays | Heatmap, Raw gaze | spatial concentration by count or duration; millisecond-level gaze samples |
+| 🔥 Heatmap | Heatmap | spatial concentration by fixation count or duration |
+| 🔵 Raw gaze | Raw gaze | millisecond-level gaze samples |
+| 🧹 Filter | — | thin what is drawn inside this one reading (fixations and saccades together) |
 | 📐 Figure & canvas | — | monitor framing, plot background, colour bars, axes, title and labels |
 
-Each layer section opens the same way: the **on/off toggle** first, then
-**⚙️ style** and **🧹 filter** — appearance and visibility kept apart, so
-"colour the regressions red" and "show only the regressions" don't sit in the
-same list. Fixations is open by default; the rest start collapsed, and a layer's
-settings appear only while that layer is on. Marker size already encodes duration
-by default, so uniform fixation color is usually the clearest starting point.
+Every section is **one line**: its on/off switch, where it has a single thing to
+switch, and a **▾** holding everything else in a popover that opens over the page
+instead of being cropped by the narrow rail. 📄 Stimulus carries three layers and
+so takes its name instead, with each layer's toggle leading its own group inside;
+🧹 Filter and 📐 Figure & canvas have no layer to switch at all. A layer's
+settings stay readable while the layer is off, so you can set a layer up before
+turning it on. Marker size already encodes duration by default, so uniform
+fixation color is usually the clearest starting point.
 
 **Stimulus → Text** keeps typography beside the layer it controls. Text can
 scale from word boxes, or use one fixed size entered in pixels or points; point
-sizes use the dataset DPI. **📐 Figure & canvas** has no layer to switch on. It
-contains **🖥️ Screen & framing**, **📊 Axes & grid**, and **🏷️ Title & labels**.
+sizes use the dataset DPI. **📐 Figure & canvas** contains **🖥️ Screen &
+framing**, **📊 Axes & grid**, and **🏷️ Title & labels**.
 
 ### Show screen coordinates
 
@@ -55,17 +62,22 @@ The grid is off by default and does not shrink or rescale the spatial data area.
 
 ## Filter fixations and saccades
 
-**Fixations → 🧹 Filter** contains duration thresholds, out-of-bounds handling, and
-the fixation-index range. Marking preserves context; discarding removes points
-from the rendered scanpath.
+One **🧹 Filter** section thins the whole figure, in two blocks. Not to be
+confused with the 🔎 funnel on the control line above the plot, which narrows the
+*trial pool* — which readings you can pick; this one thins the reading you are
+looking at.
 
-**Saccades → 🧹 Filter** picks which reading classes are drawn at all — forward,
+**👁️ Fixations** contains duration thresholds, out-of-bounds handling, and the
+fixation-index range. Marking preserves context; discarding removes points from
+the rendered scanpath.
+
+**↗️ Saccades** picks which reading classes are drawn at all — forward,
 skip, refixation, return sweep, regression. Hidden classes lose their line
 *and* their direction arrow, which is how you get a regressions-only figure.
 Classes come from the same split as Saccades → ⚙️ Style → **By type**, so the two
 always agree on what a regression is; clearing the list means *no filter*, not
-an empty plot. Both filters show a badge on the popover button while they are
-active, so a thinned figure never looks like missing data.
+an empty plot. The section shows a badge while either half is narrowing, so a
+thinned figure never looks like missing data.
 
 These are visualization choices, not edits to the source data or reading-measure
 computation.

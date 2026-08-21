@@ -32,6 +32,10 @@ app's default view and change only the needed layers.
 
 ::: scanpath_studio.datasets.load_potec
 
+::: scanpath_studio.datasets.load_onestop
+
+::: scanpath_studio.datasets.load_multipleye
+
 ::: scanpath_studio.eyegenbench.load_eyegenbench
 
 ::: scanpath_studio.eyegenbench.eyegenbench_datasets

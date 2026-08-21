@@ -13,10 +13,11 @@ MultiplEYE is exposed as a **Public dataset**, which is on by default. To hide
 the public-dataset sources (e.g. on a deployment that should only take uploads),
 set `SCANPATH_PUBLIC_DATASETS=0`.
 
-Pick **Public datasets → MultiplEYE**, point *Data directory* at a session
-set (the *Expected files* panel lists the layout it looks for), and choose the
-**fixation source** (`scanpaths` or `fixations`). The whole session set loads —
-use the **Narrow by** trial filters to focus on specific readers or stimuli. A
+On the 🗂️ **Data** page, pick **MultiplEYE** as the data source, point
+*Data directory* at a session set (the *Expected files* panel lists the layout it
+looks for), and choose the **fixation source** (`scanpaths` or `fixations`). The
+whole session set loads — use the **filter funnel** above the plot (**Narrow by**
+plus the condition filters) to focus on specific readers or stimuli. A
 directory load surfaces all the rich side data (below); the browser-upload path
 supports a subset (see *Uploading* at the end).
 

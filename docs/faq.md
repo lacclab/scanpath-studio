@@ -13,16 +13,22 @@ fixations using your word boxes and computes its own measures. AOI padding,
 fixation exclusions, and definitions can differ between pipelines. Cross-check
 values used in a publication.
 
-## Does Fixations → Filter change the measures?
+## Does 🧹 Filter change the measures?
 
-No. Its duration, boundary, and index controls affect the rendered scanpath.
-They do not edit the source tables or recompute the corpus measures.
+No. The plot rail's **🧹 Filter** section — duration, boundary, and index
+controls for fixations, reading classes for saccades — affects the rendered
+scanpath only. It does not edit the source tables or recompute the corpus
+measures. (The filter funnel above the plot is a different thing again: it
+narrows which trials you can pick, not what one figure draws.)
 
 ## What does drift correction change?
 
 It assigns fixations to likely text lines and changes their rendered y-position.
 It does not change x or overwrite uploaded data. Compare algorithms in
-**Line assignment** when the choice is uncertain.
+**Line assignment** when the choice is uncertain. Drift correction and NLD
+scanpath similarity are gated off in the released app (PRE-21); set
+`SCANPATH_EXPERIMENTAL=1` to expose them in the app, the CLI, and the Python
+API.
 
 ## Can I load only one table?
 

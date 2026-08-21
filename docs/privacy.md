@@ -16,8 +16,9 @@ and annotations are stored in an on-device recovery cache so a refresh does not
 erase the session. This happens on local and desktop runs only; a hosted
 deployment stores nothing.
 
-The cache is visible and removable from inside the app: the sidebar's **🗄️
-Recovery cache** panel names the folder, reports what is stored and how large it
+The cache is visible and removable from inside the app: 💾 **Session →
+🗄️ Automatic recovery** (the dialog the nav's 💾 Session entry opens) names the
+folder, reports what is stored and how large it
 is, pauses saving for the session, and deletes the stored copy (**Forget saved
 session**). The same from a terminal, with the app closed:
 

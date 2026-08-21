@@ -5,9 +5,10 @@ result is a short record of which trials need attention and why.
 
 ## 1. Load a pilot session
 
-Select **➕ Add data**, enter the actual monitor resolution, upload the word/IA
-and fixation tables, check the proposed columns, then select **Add dataset**.
-If the dataset is already loaded, select it from the data-source picker.
+On the 🗂️ **Data** page select **➕ Add dataset**, upload the word/IA and
+fixation tables, then check the proposed columns and the **Recording setup**
+(the actual monitor resolution) before selecting **✅ Add dataset**. If the
+dataset is already loaded, open it from 📂 **Available datasets**.
 
 ## 2. Check the setup on one trial
 
@@ -27,9 +28,9 @@ Turn on **Animate**. Watch once at the default speed, then slow playback only if
 an event is unclear. Look for long missing periods, repeated off-text points,
 frequent interruptions, or a vertical shift that grows during the trial.
 
-Use **Fixations → Filter** to *mark* short, long, or out-of-bounds fixations. Marking
-keeps the full trial visible; discarding is better reserved for a later,
-documented filtering decision.
+Use **🧹 Filter → 👁️ Fixations** in the plot rail to *mark* short, long, or
+out-of-bounds fixations. Marking keeps the full trial visible; discarding is
+better reserved for a later, documented filtering decision.
 
 ## 4. Record the decision
 

@@ -53,12 +53,14 @@ def <corpus>_raw_frames(root, *, download=False, ...) -> tuple[pd.DataFrame, pd.
 
 It returns the two tables **before** normalization, in the corpus' own column
 names. That's deliberate: the app runs them through the same auto-detect →
-normalize pipeline as an upload, so the sidebar **Column mapping** panels still
-appear and stay editable. Read the whole corpus (the global trial filters do the
-narrowing), and never write anything — that's the downloader's job.
+normalize pipeline as an upload, so the **Column mapping** panels on
+🗂️ **Data → ✏️ Edit dataset** still appear and stay editable. Read the whole
+corpus (the global trial filters do the narrowing), and never write anything —
+that's the downloader's job.
 
 When something's missing, raise `FileNotFoundError` with a message that says what
-to do. The app prints it verbatim in the sidebar, so your message *is* the error UI.
+to do. The app prints it verbatim on the 🗂️ Data page, so your message *is* the
+error UI.
 
 **2. A normalized loader** — `load_<corpus>(root, ...)`, which calls
 [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data] with your raw
@@ -248,7 +250,7 @@ in `app.py`, and the test tree in `tests/test_dataset_support.py`.
 ## Submitting it
 
 One pull request with all of it: the adapter, any optional-field rows in
-`data.py`, the sidebar loader and registry entry, the default directory, the CLI
+`data.py`, the loader and registry entry, the default directory, the CLI
 flag, the API re-export, the tests, and a docs page plus its nav line. In the PR
 description state the corpus' **licence**, a **citation**, its **public URL**, and
 its **on-disk size**.

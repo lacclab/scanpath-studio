@@ -21,7 +21,7 @@ recovery below possible: it reads the raw files the pipeline downloaded.
 
 ## Using a corpus
 
-1. Open 🗂️ **Data → Data source** and pick a corpus. Each prepared corpus is one
+1. Open 🗂️ **Data** and pick a corpus as the data source. Each prepared corpus is one
    🌐 entry under its own name (*Provo (WIP)*, *ZuCo1 (WIP)*, …). The **(WIP)**
    marker is there because this feature ships to main unfinished; it is display
    only, and nothing about the corpus depends on it.
@@ -38,8 +38,9 @@ recovery below possible: it reads the raw files the pipeline downloaded.
        └─ participants.parquet
     ```
 
-3. The whole corpus loads. Use **Narrow by** and the **More** filters to scope it
-   — several of these corpora are large (ChineseReading is 1,718 readers).
+3. The whole corpus loads. Use the **filter funnel** on the control line to
+   scope it — several of these corpora are large (ChineseReading is 1,718
+   readers).
 
 A caption under the picker states the corpus's geometry provenance, and the
 description carries its licence and citation. If the bundle isn't where you

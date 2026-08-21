@@ -12,6 +12,7 @@ import weakref
 import zipfile
 from collections import OrderedDict
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
 
@@ -321,7 +322,11 @@ def load_onestop_server_bundle(
         ia_present = ia_shard.exists()
         fix_present = fix_shard.exists()
         if ia_present and fix_present:
-            return pd.read_parquet(ia_shard), pd.read_parquet(fix_shard)
+            # PERF-6: parse only the columns the mapping + registry keep.
+            return (
+                read_mapped_table(ia_shard, kind="words"),
+                read_mapped_table(fix_shard, kind="fixations"),
+            )
         # NEVER fall through to the 15 GB load when a participant is named —
         # the deep link is for one pid only, so loading the whole cohort just
         # to discover the pid still has no data is pure waste. Surface a clear
@@ -350,8 +355,11 @@ def load_onestop_server_bundle(
             f"fixations_Paragraph.csv.zip."
         )
         return pd.DataFrame(), pd.DataFrame()
-    words = pd.read_csv(ia_path, low_memory=False)
-    fixations = pd.read_csv(fix_path, low_memory=False)
+    # PERF-6: an IA report ships 174 columns and a fixation report 300, of
+    # which normalization keeps 27 and 17. Parsing the rest is what made this
+    # path reach ~25 GB resident before a single measure was computed.
+    words = read_mapped_table(ia_path, kind="words")
+    fixations = read_mapped_table(fix_path, kind="fixations")
     return words, fixations
 
 
@@ -844,8 +852,13 @@ def aggregate_char_boxes(
     return out.drop(columns=list(temp))
 
 
-def _read_by_extension(buf, name: str) -> pd.DataFrame:
+def _read_by_extension(buf, name: str, plan: ReadPlan | None = None) -> pd.DataFrame:
     """Dispatch a buffer/path to a pandas reader by its (lowercased) name.
+
+    ``plan`` (PERF-6) narrows the read to the columns normalization keeps and
+    declares EyeLink's ``.`` missing in the numeric ones. Delimited text and
+    Parquet honour it; Excel has no column-projection reader, so it is read
+    whole and pruned after.
 
     CSV/TSV reads pass ``low_memory=False`` so pandas infers one dtype per
     column in a single pass. The default chunked parser can otherwise read the
@@ -857,15 +870,220 @@ def _read_by_extension(buf, name: str) -> pd.DataFrame:
     (multi-chunk) files, which is why a small upload reads fine locally but a
     full report kills the worker on the cloud. Matches the other read paths
     (``load_onestop_server_bundle``, ``onestop_shard``)."""
+    columns = list(plan.columns) if plan is not None and plan.columns else None
     if name.endswith(".parquet"):
-        return pd.read_parquet(buf)
+        return pd.read_parquet(buf, columns=columns)
     if name.endswith(".feather"):
-        return pd.read_feather(buf)
+        return pd.read_feather(buf, columns=columns)
     if name.endswith((".xlsx", ".xls")):
-        return pd.read_excel(buf)  # first sheet (e.g. MultiplEYE questions workbook)
+        # First sheet (e.g. MultiplEYE questions workbook).
+        frame = pd.read_excel(buf)
+        return frame[[c for c in columns if c in frame.columns]] if columns else frame
     if name.endswith((".tsv", ".tab")):
-        return pd.read_csv(buf, sep="\t", low_memory=False)
-    return pd.read_csv(buf, low_memory=False)
+        return pd.read_csv(buf, sep="\t", low_memory=False, **_read_kwargs(plan))
+    return pd.read_csv(buf, low_memory=False, **_read_kwargs(plan))
+
+
+#: EyeLink writes a value it could not measure as a bare period. Declared
+#: missing for *numeric* columns only: a word whose text is "." is a word
+#: (PERF-6), so a blanket ``na_values="."`` would delete it from the stimulus.
+MISSING_MARKER = "."
+
+#: Schema fields whose values are numbers, and which therefore read the marker
+#: above as missing. The identity fields (participant, trial, text_id, text,
+#: screen_id) are deliberately absent — a "." there is a label.
+NUMERIC_SCHEMA_FIELDS = frozenset(
+    {
+        "bottom",
+        "canvas_height",
+        "canvas_width",
+        "duration",
+        "fixation_id",
+        "height",
+        "left",
+        "line",
+        "right",
+        "screen_index",
+        "screen_timestamp",
+        "timestamp",
+        "top",
+        "width",
+        "word_id",
+        "x",
+        "y",
+    }
+)
+
+
+@dataclass(frozen=True)
+class ReadPlan:
+    """Which columns to parse out of a table, and what counts as missing in them.
+
+    ``columns`` is ``None`` for "parse everything" — the honest answer when the
+    mapping claims nothing in the header, so there is no basis on which to drop
+    anything.
+    """
+
+    columns: tuple[str, ...] | None = None
+    na_values: dict[str, list[str]] = field(default_factory=dict)
+
+
+def _read_kwargs(plan: ReadPlan | None) -> dict:
+    """``read_csv`` keywords for a plan (nothing at all for ``None``)."""
+    if plan is None:
+        return {}
+    kwargs: dict = {}
+    if plan.columns is not None:
+        kwargs["usecols"] = list(plan.columns)
+    if plan.na_values:
+        kwargs["na_values"] = plan.na_values
+    return kwargs
+
+
+def plan_table_read(
+    header: Sequence[str],
+    schema: dict,
+    registry: Sequence[tuple],
+    *,
+    filter_fields: Iterable[str] | None = None,
+    keep_columns: Iterable[str] | None = None,
+) -> ReadPlan:
+    """Narrow a read to the columns ``normalize_*`` keeps (PERF-6).
+
+    An EyeLink IA report ships 174 columns and a fixation report 300; the
+    mapping plus ``*_OPTIONAL_FIELDS`` claim 27 and 17, and normalization drops
+    the rest on the next line. Parsing them anyway is the largest single cost on
+    the load path — measured on the full OneStop reports, planning the read
+    takes it from ~200 s / 25 GB to ~58 s / 2.2 GB for a byte-identical frame.
+
+    ``header`` is the column names alone (see :func:`read_table_columns`), so
+    the plan is made before a single row is parsed. ``filter_fields`` and
+    ``keep_columns`` carry the columns the user chose to keep beyond the
+    mapping, exactly as :func:`compute_keep_columns` takes them.
+    """
+    names = list(header)
+    present = set(names)
+    if not (set(_schema_source_columns(schema)) & present):
+        # Nothing is mapped yet — an unmapped upload, or a table this schema
+        # does not describe. Dropping columns here would be guessing.
+        return ReadPlan()
+    keep = compute_keep_columns(
+        schema,
+        optional_sources=[row[0] for row in registry if row[0] in present],
+        filter_fields=filter_fields,
+        keep_columns=keep_columns,
+    )
+    numeric = {row[0] for row in registry if row[2] == "numeric"}
+    numeric |= {
+        column
+        for key, column in schema.items()
+        if key in NUMERIC_SCHEMA_FIELDS and isinstance(column, str)
+    }
+    columns = tuple(name for name in names if name in keep)
+    return ReadPlan(
+        columns=columns,
+        na_values={name: [MISSING_MARKER] for name in columns if name in numeric},
+    )
+
+
+def read_table_columns(file_like_or_path) -> list[str]:
+    """A table's column names, without parsing its rows.
+
+    The header pass that :func:`plan_table_read` plans from. Delimited text
+    reads zero rows and columnar formats read their schema; anything else
+    (Excel, a zip of several members) falls back to reading the table, because
+    there is no cheaper way to learn its columns and those formats are not the
+    ones that hurt.
+    """
+    name = getattr(file_like_or_path, "name", str(file_like_or_path)).lower()
+    _rewind(file_like_or_path)
+    try:
+        if name.endswith(".zip"):
+            return _zipped_table_columns(file_like_or_path)
+        if name.endswith(".parquet"):
+            import pyarrow.parquet as pq
+
+            return list(pq.read_schema(file_like_or_path).names)
+        if name.endswith(".feather"):
+            from pyarrow import feather
+
+            return list(feather.read_table(file_like_or_path, columns=[]).schema.names)
+        if name.endswith((".tsv", ".tab")):
+            return list(pd.read_csv(file_like_or_path, sep="\t", nrows=0).columns)
+        if name.endswith(".csv"):
+            return list(pd.read_csv(file_like_or_path, nrows=0).columns)
+    finally:
+        _rewind(file_like_or_path)
+    return list(read_table(file_like_or_path).columns)
+
+
+def _zipped_table_columns(file_like_or_path) -> list[str]:
+    """Column names of a ``.zip``'s members, without decompressing the rows.
+
+    A OneStop report is a single ~4 GB CSV inside its zip, so the fallback of
+    reading the table and taking its columns would unpack the whole archive to
+    answer a question the first line already does. Members are unioned in order,
+    matching how :func:`_read_zipped_table` concatenates them.
+    """
+    columns: list[str] = []
+    with zipfile.ZipFile(file_like_or_path) as zf:
+        infos = [
+            i
+            for i in zf.infolist()
+            if not i.is_dir() and not Path(i.filename).name.startswith((".", "__"))
+        ]
+        if not infos:
+            raise ValueError("the zip archive contains no readable table files")
+        for info in infos:
+            name = info.filename.lower()
+            with zf.open(info) as inner:
+                if name.endswith((".tsv", ".tab")):
+                    names = pd.read_csv(inner, sep="\t", nrows=0).columns
+                elif name.endswith(".csv"):
+                    names = pd.read_csv(inner, nrows=0).columns
+                else:
+                    # Columnar/workbook members seek, so there is no cheap
+                    # header read — fall back to the table's own columns.
+                    names = _read_by_extension(io.BytesIO(inner.read()), name).columns
+            columns.extend(c for c in names if c not in columns)
+    return columns
+
+
+def _rewind(file_like_or_path) -> None:
+    """Seek an uploaded buffer back to the start, so it can be read again."""
+    seek = getattr(file_like_or_path, "seek", None)
+    if callable(seek):
+        seek(0)
+
+
+def read_mapped_table(
+    file_like_or_path,
+    *,
+    kind: str,
+    declared: dict | None = None,
+    filter_fields: Iterable[str] | None = None,
+) -> pd.DataFrame:
+    """Read one words or fixations table, parsing only the columns it needs.
+
+    The header-then-plan-then-read pass in one call — what a loader that already
+    knows which table it is reading wants (PERF-6). ``declared`` is a publisher's
+    own mapping, used in place of auto-detection; ``filter_fields`` are extra
+    source columns to keep for trial filtering.
+
+    The frame comes back *pre-normalization*, exactly as a plain
+    :func:`read_table` would return it, minus the columns nothing claims.
+    """
+    proposers = {
+        "words": (propose_word_schema, WORD_OPTIONAL_FIELDS),
+        "fixations": (propose_fix_schema, FIX_OPTIONAL_FIELDS),
+    }
+    if kind not in proposers:
+        raise ValueError(f"kind must be one of {sorted(proposers)}, not {kind!r}")
+    propose, registry = proposers[kind]
+    header = read_table_columns(file_like_or_path)
+    schema = dict(declared) if declared else propose(pd.DataFrame(columns=header))
+    plan = plan_table_read(header, schema, registry, filter_fields=filter_fields)
+    return read_table(file_like_or_path, plan=plan)
 
 
 def _tag_and_concat(
@@ -1043,7 +1261,9 @@ class _BudgetedZipMember(io.RawIOBase):
         return read
 
 
-def _read_zipped_table(file_like_or_path) -> pd.DataFrame:
+def _read_zipped_table(
+    file_like_or_path, *, plan: ReadPlan | None = None
+) -> pd.DataFrame:
     """Read table(s) from a ``.zip`` archive (e.g. ``data.csv.zip``).
 
     Each member is dispatched on its own extension, so a zip may wrap any
@@ -1085,9 +1305,13 @@ def _read_zipped_table(file_like_or_path) -> pd.DataFrame:
                 if name.endswith(_SEEKABLE_ONLY_SUFFIXES):
                     # Columnar/workbook readers seek, so these still land in
                     # memory whole — bounded by the same budget.
-                    frames.append(_read_by_extension(io.BytesIO(stream.read()), name))
+                    frames.append(
+                        _read_by_extension(io.BytesIO(stream.read()), name, plan)
+                    )
                 else:
-                    frames.append(_read_by_extension(io.BufferedReader(stream), name))
+                    frames.append(
+                        _read_by_extension(io.BufferedReader(stream), name, plan)
+                    )
             remaining -= stream.consumed
             labels.append(Path(member).stem)
     return _tag_and_concat(frames, labels, SOURCE_FILE_COLUMN)
@@ -1122,14 +1346,17 @@ def upload_exceeds_limit(
     return uploaded_files_total_bytes(uploaded) > threshold_bytes
 
 
-def read_table(file_like_or_path) -> pd.DataFrame:
+def read_table(file_like_or_path, *, plan: ReadPlan | None = None) -> pd.DataFrame:
     """Read a tabular file by extension: csv, tsv, parquet, feather, or a
     ``.zip`` wrapping one or more of those (e.g. ``data.csv.zip``). A
-    multi-member zip is concatenated like a multi-file upload."""
+    multi-member zip is concatenated like a multi-file upload.
+
+    ``plan`` (PERF-6) is a :class:`ReadPlan` from :func:`plan_table_read`,
+    narrowing the read to the columns normalization keeps."""
     name = getattr(file_like_or_path, "name", str(file_like_or_path)).lower()
     if name.endswith(".zip"):
-        return _read_zipped_table(file_like_or_path)
-    return _read_by_extension(file_like_or_path, name)
+        return _read_zipped_table(file_like_or_path, plan=plan)
+    return _read_by_extension(file_like_or_path, name, plan)
 
 
 def expand_table_inputs(inputs: TablesInput) -> list:

@@ -578,11 +578,13 @@ def _read_onestop_part(
             "download=True to fetch it from OSF (public variant), or point at a "
             "folder holding the lacclab reports."
         )
-    # Read via data.read_table (not pd.read_csv directly): the OSF .csv.zip
-    # archives wrap the CSV alongside macOS __MACOSX resource-fork entries, which
-    # pandas' zip reader rejects ("Multiple files found in ZIP"). read_table's
-    # zip path filters that cruft and reads with low_memory=False.
-    frame = data.read_table(path)
+    # Read via data.read_mapped_table (not pd.read_csv directly): the OSF
+    # .csv.zip archives wrap the CSV alongside macOS __MACOSX resource-fork
+    # entries, which pandas' zip reader rejects ("Multiple files found in ZIP").
+    # read_table's zip path filters that cruft and reads with low_memory=False —
+    # and PERF-6's planned read parses only the columns normalization keeps,
+    # which is most of what a multi-gigabyte report costs.
+    frame = data.read_mapped_table(path, kind="words" if kind == "ia" else "fixations")
     frame["part"] = part
     if part == "QA":
         frame = frame.drop_duplicates()

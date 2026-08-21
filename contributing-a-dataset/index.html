@@ -1951,8 +1951,29 @@ import time:</p>
 <a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="n">description</span><span class="o">=</span><span class="s2">"German reading of biology &amp; physics textbook passages "</span>
 <a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="s2">"(expert/novice readers)."</span><span class="p">,</span>
 <a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="n">link</span><span class="o">=</span><span class="s2">"https://github.com/DiLi-Lab/PoTeC"</span><span class="p">,</span>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="p">),</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="n">published_counts</span><span class="o">=</span><span class="p">{</span>             <span class="c1"># the row before anyone opens it (DATA-36)</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>        <span class="s2">"Participants"</span><span class="p">:</span> <span class="mi">75</span><span class="p">,</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>        <span class="s2">"Texts"</span><span class="p">:</span> <span class="mi">12</span><span class="p">,</span>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>        <span class="s2">"Trials"</span><span class="p">:</span> <span class="mi">900</span><span class="p">,</span>
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>        <span class="s2">"Words"</span><span class="p">:</span> <span class="mi">142125</span><span class="p">,</span>
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>        <span class="s2">"Fixations"</span><span class="p">:</span> <span class="mi">404420</span><span class="p">,</span>
+<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>    <span class="p">},</span>
+<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>    <span class="n">published_counts_source</span><span class="o">=</span><span class="s2">"PoTeC's own README: 75 participants each "</span>
+<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>    <span class="s2">"reading all 12 texts, and “900 trials (75 participants * 12 trials)”. "</span>
+<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>    <span class="s2">"Word and fixation totals were measured from the released corpus."</span><span class="p">,</span>
+<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>    <span class="n">geometry</span><span class="o">=</span><span class="s2">"🛠️ **Reconstructed** fixation coordinates — the release keeps "</span>
+<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>    <span class="s2">"no recorded (x, y), so each fixation sits at the centre of the "</span>
+<a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>    <span class="s2">"character it names, from the corpus' own `.ias` boxes."</span><span class="p">,</span>
+<a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="p">),</span>
 </code></pre></div>
+<p><strong><code>published_counts</code> is a claim about the corpus, not about a load</strong>, which is
+why <code>published_counts_source</code> sits beside it: say which published document each
+figure came from, and say so when you measured one yourself instead. The table
+shows them until the dataset is opened, then shows what actually loaded and
+flags any field where the load exceeds the published figure — a discrepancy that
+can only mean the published number is wrong. <code>geometry</code> is the matching honesty
+line for coordinates: whether the boxes and fixation positions are the corpus'
+own, reconstructed, or synthesized.</p>
 <p>Each entry is <strong>one top-level source in the picker</strong>, tagged 🌐 and searchable
 beside the demo and the uploads — there is no category to nest under and no
 sub-picker inside an entry. A corpus that ships in several variants gets several

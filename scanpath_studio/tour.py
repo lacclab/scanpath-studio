@@ -207,9 +207,10 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
         steps=(
             TutorialStep(
                 "Narrow the review pool",
-                "Open the funnel beside the trial picker: **Text** and "
-                "**Participant** at the top, condition and annotation filters "
-                "(favorites, tags) below. This tutorial only points; it never "
+                "Open the funnel beside the trial picker: the text and "
+                "participant pickers at the top (*All texts* / *All "
+                "participants* until you narrow), then condition and annotation "
+                "filters (favorites, tags). This tutorial only points; it never "
                 "changes a filter.",
                 ".st-key-tour_grp_narrow_by",
             ),
@@ -660,8 +661,9 @@ _SPOTLIGHT_STEPS = [
         "selector": ".st-key-tour_grp_narrow_by",
         "title": "🔍 Narrow the pool",
         "body": "The funnel beside the trial picker holds every way to narrow "
-        "the pool: **Text** and **Participant** first, then the condition and "
-        "annotation filters (favorites, tags).",
+        "the pool: the text and participant pickers first (*All texts* / *All "
+        "participants*), then the condition and annotation filters (favorites, "
+        "tags).",
     },
     {
         "selector": ".st-key-tour_grp_trial_picker",

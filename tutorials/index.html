@@ -1645,39 +1645,50 @@ one that matches your goal; setup details are linked only when needed.</p>
 </ul>
 </div>
 <p>New here? Complete <a href="../getting-started/">Getting started</a> first.</p>
-<p>The same workflows are available inside the app under <strong>Help → 🧭 Tutorials</strong>.
-The chooser explains the outcome, prerequisite, and time before starting. Each
-tutorial keeps its own progress, can open the relevant view or subtab with
+<p>The same workflows are available inside the app under ❓ <strong>Help → 🧭 Tutorials</strong>
+in the navigation. The chooser explains the outcome, prerequisite, and time
+before starting. Each tutorial keeps its own progress, can open the relevant view
+or subtab with
 <strong>Show me / Open this panel</strong>, and never changes data, filters, annotations, or
 scientific settings for you.</p>
 <h2 id="load-your-own-data">Load your own data<a class="headerlink" href="#load-your-own-data" title="Permanent link">&para;</a></h2>
 <p><strong>Outcome:</strong> parsed words, fixations, and mappings visibly checked. <em>About 3
 minutes.</em></p>
-<p>Everything below is on the 🗂️ <strong>Data</strong> page, which is laid out in the order the
-pipeline uses it.</p>
+<p>Everything below is on the 🗂️ <strong>Data</strong> page, which is two screens: 📂 <strong>Available
+datasets</strong> and ✏️ <strong>Edit dataset</strong>, the second laid out in the order the pipeline
+uses it.</p>
 <ol>
-<li><strong>📂 Data source</strong> — keep the demo, or use ➕ to add your own tables. Upload
-   either or both reports and check the proposed mappings. Map <strong>Multipart
-   screens</strong> only when one logical trial has several coordinate spaces.</li>
-<li><strong>🔤 Column mapping</strong> — the one thing that decides what every measure
-   downstream is computed from. Rows marked ✨ were auto-detected; override any
-   that guessed wrong.</li>
-<li><strong>🔎 What's in the selected dataset</strong> — the counts come first, as the
-   quickest check that the mapping worked. The raw and derived tables fold open below them
-   (including, when present, the ordered screen catalogue and per-screen canvas
-   sizes), and <strong>🧾 Trial identity</strong> says whether one trial id really is one
-   reading.</li>
-<li><strong>🧹 Preprocessing</strong> — optional soft exclusion or merging of short fixations,
-   applied before anything is measured. Off by default, and it never discards
-   your original rows.</li>
+<li><strong>📂 Available datasets</strong> — keep the demo, or use <strong>➕ Add dataset</strong> to add
+   your own tables. Click a dataset's name to open it, or ✏️ <strong>Edit</strong> to change
+   how it was read. Map <strong>Multipart screens</strong> only when one logical trial has
+   several coordinate spaces.</li>
+<li><strong>🔤 Column mapping</strong> (in ✏️ Edit dataset) — the one thing that decides what
+   every measure downstream is computed from. Rows marked ✨ were auto-detected;
+   override any that guessed wrong. <strong>Recording setup</strong>, 🖼️ <strong>Stimulus images</strong>
+   and the 👤 <strong>Participant</strong> / 🗂️ <strong>Trial metadata</strong> tables are on the same
+   screen.</li>
+<li><strong>🔎 What's in the dataset</strong> — back on the overview, the counts come first, as
+   the quickest check that the mapping worked. The raw and derived tables fold
+   open below them (including, when present, the ordered screen catalogue and
+   per-screen canvas sizes), and <strong>🧾 Trial identity</strong> says whether one trial id
+   really is one reading.</li>
 </ol>
+<div class="admonition note">
+<p class="admonition-title">Preprocessing is held back in this release (PRE-22)</p>
+<p>Optional soft exclusion and merging of short fixations is finished and
+shipped — <code>api.preprocess_data</code> and <code>scanpath-studio analyze</code> work as before
+— but its panel is not shown in this release's app. <code>SCANPATH_EXPERIMENTAL=1</code>
+brings it back for a local session. See
+<a href="../data-format/#optional-preprocessing-and-derived-tables">Data format</a>.</p>
+</div>
 <p>The longer data-collection workflow is in <a href="data-collection/">Data collection</a>,
 and every accepted field is in <a href="../data-format/">Data format</a>.</p>
 <h2 id="filter-and-annotate-trials">Filter and annotate trials<a class="headerlink" href="#filter-and-annotate-trials" title="Permanent link">&para;</a></h2>
 <p><strong>Outcome:</strong> reviewed trials marked and ready for ID export. <em>About 4 minutes;
 requires at least one trial.</em></p>
 <ol>
-<li>Use <strong>Filter by</strong> and <strong>More</strong> to define the review pool.</li>
+<li>Open the <strong>filter funnel</strong> on the control line — <strong>Narrow by</strong> plus the
+   condition and annotation filters — to define the review pool.</li>
 <li>Step through the trial picker. A multipart trial adds a second navigator for
    its ordered screens.</li>
 <li>Open <strong>Annotations</strong> and choose parent-trial or current-screen scope before
@@ -1716,13 +1727,13 @@ minutes; requires two readings sharing a text.</em></p>
 duration moved across the experiment. <em>About 4 minutes; requires variation
 across the loaded pool.</em></p>
 <ol>
-<li>Switch to <strong>Corpus Analysis</strong> from the header. Your loaded data and filters
-   stay in place, so whatever you narrowed to on the Scanpath view is what gets
-   aggregated.</li>
+<li>Switch to <strong>📊 Corpus Analysis</strong> in the navigation. Your loaded data and
+   filters stay in place, so whatever you narrowed to on the Scanpath view is
+   what gets aggregated.</li>
 <li>Pick the <em>shape</em> of the question, not the chart. <strong>Per text</strong> — one text,
-   many readers. <strong>Per reader</strong> — one reader, all their trials. <strong>Groups</strong> — a
-   cohort, or two compared. For "did this reader speed up?", open <strong>Per
-   reader</strong>.</li>
+   many readers. <strong>Per sentence</strong> — one measure combined per text/sentence pair.
+   <strong>Per reader</strong> — one reader, all their trials. <strong>Groups</strong> — a cohort, or two
+   compared. For "did this reader speed up?", open <strong>Per reader</strong>.</li>
 <li>Choose the reader on the left, then set <strong>View</strong> to <strong>Per-trial trend</strong> — one
    point per trial in presentation order, the whole experiment on one axis.</li>
 <li>Set the measure to <strong>fixation duration</strong>. Each point is that trial's mean; a

@@ -1851,17 +1851,20 @@
 <p>The Scanpath view shows one selected reading on the stimulus coordinate system.
 Start with the default view, then change only controls needed for the question.</p>
 <h2 id="choose-a-trial">Choose a trial<a class="headerlink" href="#choose-a-trial" title="Permanent link">&para;</a></h2>
-<p>Use the participant and trial pickers above the plot. Trial filters define which
-readings are available; ordering helps surface long, short, early, or late
-trials. The detail popover shows the active trial's summary fields.</p>
+<p>Use the trial picker on the control line above the plot. The filter funnel
+beside it defines which readings are available — <strong>Narrow by</strong> for text and
+participant, plus the condition and annotation filters — and the ⇅ popover orders
+the list, which helps surface long, short, early, or late trials. The detail
+popover shows the active trial's summary fields.</p>
 <p>When a trial contains ordered screens, a second navigator appears below the
 trial picker. The plot always shows one screen in its own recorded canvas; use
 the previous/next buttons or screen menu to move between them. Figure links and
 saved configurations retain the active screen, and <strong>Annotations</strong> lets you
 choose parent-trial or current-screen scope.</p>
 <h2 id="control-the-layers">Control the layers<a class="headerlink" href="#control-the-layers" title="Permanent link">&para;</a></h2>
-<p>The <strong>Plot controls</strong> rail beside the plot starts with four <strong>Quick views</strong> and
-a <strong>Palette</strong> — often all you need — followed by five collapsible sections:</p>
+<p>The <strong>Plot controls</strong> rail beside the plot starts with four <strong>Quick views</strong>
+(👁️ Scanpath, 🔥 Heatmap, ✏️ Illustration, 🛠️ Custom) and a <strong>Palette</strong> — often
+all you need — followed by seven sections:</p>
 <p>Scanpath, Heatmap, and Illustration are deterministic presets: selecting one
 starts from the app defaults before applying that view. <strong>Custom</strong> remembers the
 last settings you changed by hand and restores them after you visit a preset.</p>
@@ -1890,9 +1893,19 @@ last settings you changed by hand and restores them after you visit a preset.</p
 <td>verify stimulus geometry and fixation-to-word alignment; compare against the original display</td>
 </tr>
 <tr>
-<td>🔥 Overlays</td>
-<td>Heatmap, Raw gaze</td>
-<td>spatial concentration by count or duration; millisecond-level gaze samples</td>
+<td>🔥 Heatmap</td>
+<td>Heatmap</td>
+<td>spatial concentration by fixation count or duration</td>
+</tr>
+<tr>
+<td>🔵 Raw gaze</td>
+<td>Raw gaze</td>
+<td>millisecond-level gaze samples</td>
+</tr>
+<tr>
+<td>🧹 Filter</td>
+<td>—</td>
+<td>thin what is drawn inside this one reading (fixations and saccades together)</td>
 </tr>
 <tr>
 <td>📐 Figure &amp; canvas</td>
@@ -1901,16 +1914,18 @@ last settings you changed by hand and restores them after you visit a preset.</p
 </tr>
 </tbody>
 </table>
-<p>Each layer section opens the same way: the <strong>on/off toggle</strong> first, then
-<strong>⚙️ style</strong> and <strong>🧹 filter</strong> — appearance and visibility kept apart, so
-"colour the regressions red" and "show only the regressions" don't sit in the
-same list. Fixations is open by default; the rest start collapsed, and a layer's
-settings appear only while that layer is on. Marker size already encodes duration
-by default, so uniform fixation color is usually the clearest starting point.</p>
+<p>Every section is <strong>one line</strong>: its on/off switch, where it has a single thing to
+switch, and a <strong>▾</strong> holding everything else in a popover that opens over the page
+instead of being cropped by the narrow rail. 📄 Stimulus carries three layers and
+so takes its name instead, with each layer's toggle leading its own group inside;
+🧹 Filter and 📐 Figure &amp; canvas have no layer to switch at all. A layer's
+settings stay readable while the layer is off, so you can set a layer up before
+turning it on. Marker size already encodes duration by default, so uniform
+fixation color is usually the clearest starting point.</p>
 <p><strong>Stimulus → Text</strong> keeps typography beside the layer it controls. Text can
 scale from word boxes, or use one fixed size entered in pixels or points; point
-sizes use the dataset DPI. <strong>📐 Figure &amp; canvas</strong> has no layer to switch on. It
-contains <strong>🖥️ Screen &amp; framing</strong>, <strong>📊 Axes &amp; grid</strong>, and <strong>🏷️ Title &amp; labels</strong>.</p>
+sizes use the dataset DPI. <strong>📐 Figure &amp; canvas</strong> contains <strong>🖥️ Screen &amp;
+framing</strong>, <strong>📊 Axes &amp; grid</strong>, and <strong>🏷️ Title &amp; labels</strong>.</p>
 <h3 id="show-screen-coordinates">Show screen coordinates<a class="headerlink" href="#show-screen-coordinates" title="Permanent link">&para;</a></h3>
 <p>Open <strong>📐 Figure &amp; canvas → 📊 Axes &amp; grid</strong> and turn on <strong>Coordinate grid</strong> to
 read the stimulus in monitor pixels. Automatic spacing chooses a readable
@@ -1919,16 +1934,20 @@ interval. Ticks stay anchored to screen-coordinate zero even when the visible
 range is cropped or negative.
 The grid is off by default and does not shrink or rescale the spatial data area.</p>
 <h2 id="filter-fixations-and-saccades">Filter fixations and saccades<a class="headerlink" href="#filter-fixations-and-saccades" title="Permanent link">&para;</a></h2>
-<p><strong>Fixations → 🧹 Filter</strong> contains duration thresholds, out-of-bounds handling, and
-the fixation-index range. Marking preserves context; discarding removes points
-from the rendered scanpath.</p>
-<p><strong>Saccades → 🧹 Filter</strong> picks which reading classes are drawn at all — forward,
+<p>One <strong>🧹 Filter</strong> section thins the whole figure, in two blocks. Not to be
+confused with the 🔎 funnel on the control line above the plot, which narrows the
+<em>trial pool</em> — which readings you can pick; this one thins the reading you are
+looking at.</p>
+<p><strong>👁️ Fixations</strong> contains duration thresholds, out-of-bounds handling, and the
+fixation-index range. Marking preserves context; discarding removes points from
+the rendered scanpath.</p>
+<p><strong>↗️ Saccades</strong> picks which reading classes are drawn at all — forward,
 skip, refixation, return sweep, regression. Hidden classes lose their line
 <em>and</em> their direction arrow, which is how you get a regressions-only figure.
 Classes come from the same split as Saccades → ⚙️ Style → <strong>By type</strong>, so the two
 always agree on what a regression is; clearing the list means <em>no filter</em>, not
-an empty plot. Both filters show a badge on the popover button while they are
-active, so a thinned figure never looks like missing data.</p>
+an empty plot. The section shows a badge while either half is narrowing, so a
+thinned figure never looks like missing data.</p>
 <p>These are visualization choices, not edits to the source data or reading-measure
 computation.</p>
 <h2 id="replay-and-compare">Replay and compare<a class="headerlink" href="#replay-and-compare" title="Permanent link">&para;</a></h2>

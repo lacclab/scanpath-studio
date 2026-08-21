@@ -1718,9 +1718,11 @@ rows, fixations, and raw gaze. Use it to confirm:</p>
 first-pass gaze duration, regression-path duration, total fixation duration,
 fixation count, skipping, and regressions. It uses recognized precomputed
 values when available; otherwise it derives them from fixation-to-word
-assignment.</p>
+assignment. Every one of them — its formula, units, grouping keys, and what
+happens when a value is missing — is listed in
+<a href="../../computations/">Computations &amp; methodology</a>.</p>
 <h2 id="choose-the-analysis-view">Choose the analysis view<a class="headerlink" href="#choose-the-analysis-view" title="Permanent link">&para;</a></h2>
-<p>Select <strong>📊 Corpus Analysis →</strong> in the header.</p>
+<p>Select <strong>📊 Corpus Analysis</strong> in the navigation.</p>
 <table>
 <thead>
 <tr>
@@ -1734,6 +1736,11 @@ assignment.</p>
 <td><strong>Per text</strong></td>
 <td>one stimulus across readers</td>
 <td>word profile, distribution, pooled heatmap</td>
+</tr>
+<tr>
+<td><strong>Per sentence</strong></td>
+<td>one sentence across readers</td>
+<td>one measure combined for each text/sentence pair</td>
 </tr>
 <tr>
 <td><strong>Per reader</strong></td>

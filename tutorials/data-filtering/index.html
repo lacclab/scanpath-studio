@@ -1727,15 +1727,17 @@
 <p>This workflow finds trials unsuitable for an analysis or publication and leaves
 an auditable retained pool.</p>
 <h2 id="1-narrow-the-trial-pool">1. Narrow the trial pool<a class="headerlink" href="#1-narrow-the-trial-pool" title="Permanent link">&para;</a></h2>
-<p>Load the dataset, then open <strong>Trial filters</strong>. Start with broad dataset fields
-such as participant, condition, correctness, or repeated-reading status. Use the
-trial ordering control to surface unusually short or long trials.</p>
+<p>Load the dataset, then open the <strong>filter funnel</strong> on the control line above the
+plot: it holds <strong>Narrow by</strong> (text and participant) together with the condition
+and annotation filters. Start with broad dataset fields such as participant,
+condition, correctness, or repeated-reading status. Use the ⇅ trial-ordering
+popover to surface unusually short or long trials.</p>
 <p>Avoid applying many filters at once: add one, check the remaining count, then
 continue. If the pool becomes empty, use the adjacent clear action to identify
 which filter removed it.</p>
 <h2 id="2-review-candidate-trials">2. Review candidate trials<a class="headerlink" href="#2-review-candidate-trials" title="Permanent link">&para;</a></h2>
 <p>For each candidate, inspect the default scanpath and turn on <strong>Animate</strong> only
-when timing helps. Open <strong>Fixations → Filter</strong> and mark:</p>
+when timing helps. Open <strong>🧹 Filter → 👁️ Fixations</strong> in the plot rail and mark:</p>
 <ul>
 <li>out-of-bounds points;</li>
 <li>fixations below or above your duration thresholds;</li>
@@ -1747,7 +1749,7 @@ or silently change the reading measures.</p>
 <p>In <strong>Annotations</strong>, apply a consistent tag vocabulary—for example <code>exclude</code>,
 <code>review</code>, <code>poor-calibration</code>, or <code>skimming</code>—and add a brief reason. Star trials
 that are useful examples or approved for a figure.</p>
-<p>Return to <strong>Trial filters</strong> and filter by favorites or tags. This turns the
+<p>Return to the trial filters and filter by favorites or tags. This turns the
 review decisions into the active pool without deleting the source data.</p>
 <h2 id="4-verify-the-retained-pool">4. Verify the retained pool<a class="headerlink" href="#4-verify-the-retained-pool" title="Permanent link">&para;</a></h2>
 <p>Check at least one trial from each participant or condition. Then open the

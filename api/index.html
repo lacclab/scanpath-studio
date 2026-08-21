@@ -1070,6 +1070,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#scanpath_studio.datasets.load_onestop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_onestop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.datasets.load_multipleye" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_multipleye
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#scanpath_studio.eyegenbench.load_eyegenbench" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2038,6 +2060,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#scanpath_studio.datasets.load_onestop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_onestop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.datasets.load_multipleye" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_multipleye
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#scanpath_studio.eyegenbench.load_eyegenbench" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2534,6 +2578,89 @@ fig = scanpath_studio.plot_scanpath(words, fixations)
 <p>The PoTeC monitor was 1680×1050 (DELL P2210, 60 Hz); pass that as
 <code>canvas_size</code> to :func:<code>scanpath_studio.plot_scanpath</code> for true-to-scale
 rendering.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.datasets.load_onestop" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">scanpath_studio.datasets.load_onestop</span>
+
+
+<a href="#scanpath_studio.datasets.load_onestop" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">load_onestop</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">regime</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'ordinary'</span><span class="p">,</span> <span class="n">parts</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">variant</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'public'</span><span class="p">,</span> <span class="n">download</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Load OneStop as normalized <code>(words, fixations)</code> frames, ready to plot.</p>
+<p><code>root</code> is a folder holding (or to download into, public variant only) the
+OneStop reports. Narrow the load with <code>regime</code> (<code>ordinary</code> /
+<code>information_seeking</code> / <code>repeated</code> / <code>information_seeking_repeated</code>),
+<code>parts</code> (any subset of <code>Title / Question_Preview / Paragraph / Questions /
+Answers / QA / Feedback</code> — default Paragraph), and <code>variant</code> (<code>public</code>
+OSF release or <code>lacclab</code> local export). The public OSF reports are large;
+pass <code>download=True</code> to fetch the chosen regime + parts into <code>root</code> on
+first use::</p>
+<div class="highlight"><pre><span></span><code>words, fixations = load_onestop(
+    "data/OneStop", regime="ordinary", parts=["Paragraph"], download=True
+)
+fig = scanpath_studio.plot_scanpath(
+    words, fixations, canvas_size=(2560, 1440)
+)
+</code></pre></div>
+<p>OneStop's presentation monitor was 2560×1440 (Dell U2715H) — the citation
+lives in :data:<code>scanpath_studio.eyegenbench_geometry.DISPLAY_SPECS</code>'s
+<code>"onestop"</code> entry (Berzak et al. 2025, Methods → Apparatus); pass that as
+<code>canvas_size</code> to :func:<code>scanpath_studio.plot_scanpath</code> for true-to-scale
+rendering. The reports already match the bundled demo's schema, so this reuses
+the generic auto-detect → normalize path (no OneStop-specific column mapping).</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.datasets.load_multipleye" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">scanpath_studio.datasets.load_multipleye</span>
+
+
+<a href="#scanpath_studio.datasets.load_multipleye" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">load_multipleye</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">sessions</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">stimuli</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">fixation_source</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'scanpaths'</span><span class="p">,</span> <span class="n">include_question_screens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Load MultiplEYE as normalized <code>(words, fixations)</code> frames, ready to plot.</p>
+<p><code>root</code> is a MultiplEYE session set (e.g.
+<code>data/MultiplEYE_ZH_CH_Zurich_1_2025</code>). Narrow the load with <code>sessions</code>
+(full session ids, e.g. <code>["001_ZH_CH_1_ET1"]</code>) and/or <code>stimuli</code> (e.g.
+<code>["Lit_Alchemist_4"]</code>).</p>
+<p>Participants are session ids (ET1 and ET2 read disjoint stimuli, so each is
+a distinct reader). A trial is <strong>one reading of one stimulus</strong>
+(<code>trial_id == text_id == "Lit_Alchemist_4"</code>), and its screens — the reading
+pages <code>page_1…page_N</code> plus the comprehension-question screens — are
+<code>screen_id</code> values in presentation order (<code>screen_index</code>, ranked from
+that reader's own fixation onsets, since the question order is shuffled per
+reader). <code>screen_kind</code> is <code>reading</code> or <code>question</code>::</p>
+<div class="highlight"><pre><span></span><code>words, fixations = load_multipleye(
+    "data/MultiplEYE_ZH_CH_Zurich_1_2025", stimuli=["Lit_Alchemist_4"]
+)
+fig = scanpath_studio.plot_scanpath(
+    words, fixations, screen="page_1", canvas_size=MULTIPLEYE_MONITOR
+)
+</code></pre></div>
+<p><code>fixation_source</code> is <code>"scanpaths"</code> (default; fixations pre-tagged with
+page + word index) or <code>"fixations"</code> (raw, no word linkage); question
+screens always come from <code>fixations/</code>, which is the only export that keeps
+them. <code>include_question_screens=False</code> loads the reading pages alone.</p>
 
 
     </div>

@@ -1878,11 +1878,13 @@ work from a plain script.</p>
 </code></pre></div>
 <p>It returns the two tables <strong>before</strong> normalization, in the corpus' own column
 names. That's deliberate: the app runs them through the same auto-detect →
-normalize pipeline as an upload, so the sidebar <strong>Column mapping</strong> panels still
-appear and stay editable. Read the whole corpus (the global trial filters do the
-narrowing), and never write anything — that's the downloader's job.</p>
+normalize pipeline as an upload, so the <strong>Column mapping</strong> panels on
+🗂️ <strong>Data → ✏️ Edit dataset</strong> still appear and stay editable. Read the whole
+corpus (the global trial filters do the narrowing), and never write anything —
+that's the downloader's job.</p>
 <p>When something's missing, raise <code>FileNotFoundError</code> with a message that says what
-to do. The app prints it verbatim in the sidebar, so your message <em>is</em> the error UI.</p>
+to do. The app prints it verbatim on the 🗂️ Data page, so your message <em>is</em> the
+error UI.</p>
 <p><strong>2. A normalized loader</strong> — <code>load_&lt;corpus&gt;(root, ...)</code>, which calls
 <a class="autorefs autorefs-internal" title="scanpath_studio.api.load_scanpath_data" href="../api/#scanpath_studio.api.load_scanpath_data"><code>load_scanpath_data</code></a> with your raw
 frames. Pass explicit schema dicts when the corpus' column names are stable;
@@ -2040,7 +2042,7 @@ positions at all) → <code>potec_raw_frames</code> → <code>load_potec</code>.
 in <code>app.py</code>, and the test tree in <code>tests/test_dataset_support.py</code>.</p>
 <h2 id="submitting-it">Submitting it<a class="headerlink" href="#submitting-it" title="Permanent link">&para;</a></h2>
 <p>One pull request with all of it: the adapter, any optional-field rows in
-<code>data.py</code>, the sidebar loader and registry entry, the default directory, the CLI
+<code>data.py</code>, the loader and registry entry, the default directory, the CLI
 flag, the API re-export, the tests, and a docs page plus its nav line. In the PR
 description state the corpus' <strong>licence</strong>, a <strong>citation</strong>, its <strong>public URL</strong>, and
 its <strong>on-disk size</strong>.</p>

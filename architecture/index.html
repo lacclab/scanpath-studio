@@ -1702,7 +1702,11 @@ the repo root (kept current as the code changes); this is the short version.</p>
 <tbody>
 <tr>
 <td><code>app.py</code></td>
-<td>Streamlit entry point: page config, sidebar, data load, filtering, and dispatch to the two top-level views (Scanpath Visualization ⇄ Corpus Analysis, toggled from the header).</td>
+<td>Streamlit entry point: page config, data load, filtering, and dispatch to the three top-level views (Scanpath Visualization · Corpus Analysis · Data), plus the 💾 Session dialog.</td>
+</tr>
+<tr>
+<td><code>menu.py</code></td>
+<td>The top navigation and the menu slots that replaced the sidebar — <code>render_nav</code> draws Streamlit's native top nav, and 💾 Session and the ❓ Help entries open dialogs over the current view. Nothing in the app writes to <code>st.sidebar</code>.</td>
 </tr>
 <tr>
 <td><code>url_state.py</code></td>
@@ -1714,7 +1718,7 @@ the repo root (kept current as the code changes); this is the short version.</p>
 </tr>
 <tr>
 <td><code>tabs.py</code></td>
-<td>View renderers: Scanpath Visualization (Annotations / Stimulus &amp; Context / Comparisons / Export / Share subtabs; Line assignment only under <code>SCANPATH_EXPERIMENTAL=1</code>), Corpus Analysis (Per text · Per reader · Groups subtabs — the question-oriented analysis sections), and the Data page's inspection panel (<code>render_data_inspection_tab</code>).</td>
+<td>View renderers: Scanpath Visualization (Annotations / Stimulus &amp; Context / Comparisons / Export / Share subtabs; Line assignment only under <code>SCANPATH_EXPERIMENTAL=1</code>), Corpus Analysis (Per text · Per sentence · Per reader · Groups subtabs — the question-oriented analysis sections), and the Data page's inspection and metadata panels.</td>
 </tr>
 <tr>
 <td><code>controls.py</code></td>
@@ -1774,7 +1778,7 @@ the repo root (kept current as the code changes); this is the short version.</p>
 </tr>
 <tr>
 <td><code>persistence.py</code></td>
-<td>On-device recovery cache for a local/desktop session (datasets, mappings, settings, annotations), inspected and cleared from the sidebar panel, <code>scanpath-studio cache</code>, and <code>api.cache_status</code>.</td>
+<td>On-device recovery cache for a local/desktop session (datasets, mappings, settings, annotations), inspected and cleared from the 💾 Session dialog's 🗄️ Automatic recovery block, <code>scanpath-studio cache</code>, and <code>api.cache_status</code>.</td>
 </tr>
 <tr>
 <td><code>alignment.py</code></td>
@@ -1782,7 +1786,15 @@ the repo root (kept current as the code changes); this is the short version.</p>
 </tr>
 <tr>
 <td><code>datasets.py</code></td>
-<td>Ready-made loaders for public corpora (OneStop, PoTeC, MultiplEYE).</td>
+<td>Ready-made loaders for public corpora (OneStop, PoTeC, MultiplEYE) and for the thirty-one <a href="../benchmark-corpora/">harmonised benchmark corpora</a>, each its own data source.</td>
+</tr>
+<tr>
+<td><code>metadata.py</code></td>
+<td>Keyed participant-metadata tables: a validated frame + field registry, joined only onto the per-trial combos and turned into reader ids for the participant filter — never broadcast onto words or fixations.</td>
+</tr>
+<tr>
+<td><code>computations.py</code></td>
+<td>The computation register behind <a href="../computations/">Computations &amp; methodology</a>: one entry per user-visible derived value, and the generator for that page.</td>
 </tr>
 <tr>
 <td><code>compare_source.py</code></td>

@@ -1700,7 +1700,7 @@ the <strong>full public corpus</strong> from <a href="https://osf.io/2prdq/">OSF
 <li><strong>Public dataset (this page)</strong> — the OneStop reports as a public dataset:
   the <strong>Public</strong> variant downloads from OSF on demand (no setup); the <strong>LaCC
   lab</strong> variant reads a local lab-processed export. Pick the variant, reading
-  regime, and trial parts in the sidebar.</li>
+  regime, and trial parts on the 🗂️ <strong>Data</strong> page.</li>
 <li><strong>OneStop server bundle</strong> — points at a local <code>lacclab</code> export via the
   <code>$ONESTOP_DATA_DIR</code> environment variable, with per-pid Parquet shards for
   review-app deep links. See
@@ -1711,8 +1711,8 @@ the <strong>full public corpus</strong> from <a href="https://osf.io/2prdq/">OSF
 paragraphs, each in an Advanced and an Elementary version) — ~19.4k regular
 trials.</p>
 <h2 id="loading-it">Loading it<a class="headerlink" href="#loading-it" title="Permanent link">&para;</a></h2>
-<p>OneStop is exposed as a <strong>Public dataset</strong>. In the app, choose
-<strong>Public datasets → OneStop</strong>, then in the ⚙️ <strong>Configure → Options</strong> group pick a
+<p>OneStop is exposed as a <strong>Public dataset</strong>. In the app, open 🗂️ <strong>Data</strong> and
+choose <strong>OneStop</strong> as the data source, then in its <strong>Options</strong> pick a
 <strong>Variant</strong>, a <strong>Reading regime</strong>, and one or more <strong>Parts</strong>:</p>
 <p><strong>Variant</strong></p>
 <table>
@@ -1817,7 +1817,7 @@ its own trial (the part is folded into the trial id, e.g. <code>Paragraph::1</co
 <code>Title::1</code>, so their word boxes don't collide). On OSF only <em>Paragraph</em> is
 regime-split; the other parts come from the all-regimes full release, so they
 load regardless of the chosen regime.</p>
-<p>The ⚙️ <strong>Configure → Data location</strong> section lists the <strong>Expected files</strong> and
+<p>The <strong>Data location</strong> section of the 🗂️ Data page lists the <strong>Expected files</strong> and
 shows whether they're already present. For the Public variant, if they're
 present the corpus loads with no network access; if not, click <strong>⬇ Download</strong> to
 fetch them into the folder (cached on disk, so only the first load pays the

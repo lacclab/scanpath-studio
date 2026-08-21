@@ -1182,10 +1182,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#does-fixations-filter-change-the-measures" class="md-nav__link">
+  <a href="#does-filter-change-the-measures" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Does Fixations → Filter change the measures?
+        Does 🧹 Filter change the measures?
       
     </span>
   </a>
@@ -1754,10 +1754,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#does-fixations-filter-change-the-measures" class="md-nav__link">
+  <a href="#does-filter-change-the-measures" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Does Fixations → Filter change the measures?
+        Does 🧹 Filter change the measures?
       
     </span>
   </a>
@@ -1893,13 +1893,19 @@ the app cannot infer it from an export. See <a href="../guides/loading-data/">Lo
 fixations using your word boxes and computes its own measures. AOI padding,
 fixation exclusions, and definitions can differ between pipelines. Cross-check
 values used in a publication.</p>
-<h2 id="does-fixations-filter-change-the-measures">Does Fixations → Filter change the measures?<a class="headerlink" href="#does-fixations-filter-change-the-measures" title="Permanent link">&para;</a></h2>
-<p>No. Its duration, boundary, and index controls affect the rendered scanpath.
-They do not edit the source tables or recompute the corpus measures.</p>
+<h2 id="does-filter-change-the-measures">Does 🧹 Filter change the measures?<a class="headerlink" href="#does-filter-change-the-measures" title="Permanent link">&para;</a></h2>
+<p>No. The plot rail's <strong>🧹 Filter</strong> section — duration, boundary, and index
+controls for fixations, reading classes for saccades — affects the rendered
+scanpath only. It does not edit the source tables or recompute the corpus
+measures. (The filter funnel above the plot is a different thing again: it
+narrows which trials you can pick, not what one figure draws.)</p>
 <h2 id="what-does-drift-correction-change">What does drift correction change?<a class="headerlink" href="#what-does-drift-correction-change" title="Permanent link">&para;</a></h2>
 <p>It assigns fixations to likely text lines and changes their rendered y-position.
 It does not change x or overwrite uploaded data. Compare algorithms in
-<strong>Line assignment</strong> when the choice is uncertain.</p>
+<strong>Line assignment</strong> when the choice is uncertain. Drift correction and NLD
+scanpath similarity are gated off in the released app (PRE-21); set
+<code>SCANPATH_EXPERIMENTAL=1</code> to expose them in the app, the CLI, and the Python
+API.</p>
 <h2 id="can-i-load-only-one-table">Can I load only one table?<a class="headerlink" href="#can-i-load-only-one-table" title="Permanent link">&para;</a></h2>
 <p>Yes. A words-only table can visualize precomputed word measures; a
 fixations-only table can show gaze positions without stimulus text. Most

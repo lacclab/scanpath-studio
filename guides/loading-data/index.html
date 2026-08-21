@@ -1766,7 +1766,9 @@ from your own experiment.</p>
 <li><strong>Public corpus:</strong> choose the corpus and local data directory; download when
   prompted. Corpora prepared from a local benchmark bundle appear here too, one
   entry each — see <a href="../../benchmark-corpora/">Harmonised benchmark corpora</a>.</li>
-<li><strong>➕ Add data:</strong> upload or select your own files and map their columns.</li>
+<li><strong>➕ Add dataset:</strong> upload or select your own files and map their columns
+  (🗂️ <strong>Data → 📂 Available datasets</strong>).</li>
+<li><strong>✏️ Author a scanpath:</strong> sketch a trial from text, with no files at all.</li>
 </ul>
 <p>Run locally or use the desktop app for sensitive participant data.</p>
 <h2 id="what-your-data-needs">What your data needs<a class="headerlink" href="#what-your-data-needs" title="Permanent link">&para;</a></h2>
@@ -1794,43 +1796,49 @@ and precomputed reading measures are optional but enable more features. Accepted
 files are CSV, TSV, Parquet, and Feather. See <a href="../../data-format/">Data format</a>
 for canonical fields.</p>
 <h2 id="use-the-setup-wizard">Use the setup wizard<a class="headerlink" href="#use-the-setup-wizard" title="Permanent link">&para;</a></h2>
-<p>The wizard is seven steps. Work down them in order, or jump straight to one with
-the progress chips at the top; your answers are kept as you move around.</p>
+<p>The wizard is <strong>two parts</strong>, in the only order they can happen in — there is
+nothing to map until a file has been read — with the dataset's name above both
+and <strong>✅ Add dataset</strong> at the foot. Everything in part 2 is on one screen, so the
+whole mapping is visible at once.</p>
+<p><strong>1. Upload data files.</strong> Add the word/IA and fixation files; several files per
+table are allowed. Raw gaze goes here too, as does an optional table with <strong>one
+row per reader</strong> (native language, age, comprehension score) — see
+<a href="../../data-format/#participant-metadata">Participant metadata</a>; the same
+attach-and-report UI is on the 🗂️ <strong>Data</strong> page for datasets that don't come
+through this wizard. A summary card names the columns that were auto-detected and
+the ones still missing — it is a report, not a shortcut: detection matches column
+<em>names</em>, so part 2 is where you confirm it picked the right ones. <em>Restore a
+saved setup</em> lives behind a popover here.</p>
+<p><strong>2. Map data fields</strong>, four sections deep:</p>
 <ol>
-<li><strong>Your data</strong> — add the word/IA and fixation files; several files per table are
-   allowed. A summary card names the columns that were auto-detected and the ones
-   still missing — it is a report, not a shortcut: detection matches column
-   <em>names</em>, so steps 2 and 3 are where you confirm it actually picked the right
-   ones. Raw gaze and <em>Restore a saved setup</em> live behind the two popovers.</li>
 <li><strong>Trials &amp; readers</strong> — check the proposed trial ID, and the optional
    participant and text IDs. Pick several columns to build a composite ID when one
    is not unique enough. The readout below the pickers is the fastest sanity
    check: <em>N trials · N readers · N texts</em>.</li>
-<li><strong>Fixations &amp; text</strong> — fixation x/y/duration and the word ID/text/box. Anything
-   unusual (word ID on fixations, timestamps, line index, character-AOI
-   aggregation) is behind <strong>⚙️ Advanced</strong>.</li>
+<li><strong>Fixation features</strong> — fixation x/y/duration, then the word ID/text/box under
+   their own heading. Anything unusual (word ID on fixations, timestamps, line
+   index, character-AOI aggregation) is behind <strong>⚙️ Advanced</strong>.</li>
 <li><strong>Recording setup</strong> — see below.</li>
-<li><strong>About your readers</strong> — optional: attach a table with <strong>one row per reader</strong>
-   (native language, age, comprehension score). See
-   <a href="../../data-format/#participant-metadata">Participant metadata</a>; the same
-   attach-and-report UI is on the 🗂️ <strong>Data</strong> page for datasets that don't come
-   through this wizard.</li>
 <li><strong>Extra fields</strong> — keep any condition or analysis fields you will need later,
    and choose which become trial filters.</li>
-<li><strong>Name &amp; add</strong> — review every decision in one table, then <strong>Add dataset</strong>.</li>
 </ol>
+<p>The wizard objects only once you press <strong>✅ Add dataset</strong>, and then about
+everything at once rather than one field at a time.</p>
 <p>After loading, open the 🗂️ <strong>Data</strong> page and confirm that both tables share the
 expected trials and coordinate range.</p>
-<p><strong>Available datasets</strong> lists the same headline fields shown in the active
-dataset summary—participants, texts, trials, fixations, words, gaze points and
-multipart screens. Rename or remove a source from its table row. Uploaded data
-is renamed or deleted in the session; packaged and public sources keep their
-stable identifiers and are renamed for display or hidden for this session.</p>
+<p>📂 <strong>Available datasets</strong> lists the same headline fields shown in the active
+dataset summary — participants, texts, trials, fixations, words, gaze points and
+multipart screens; click a name to open it, and the open row is tinted. Rename or
+remove a source from its table row, or open ✏️ <strong>Edit dataset</strong> to change how it
+was mapped. Uploaded data is renamed or deleted in the session; packaged and
+public sources keep their stable identifiers and are renamed for display or
+hidden for this session.</p>
 <h3 id="the-recording-setup-asks-how-you-know">The recording setup asks how you know<a class="headerlink" href="#the-recording-setup-asks-how-you-know" title="Permanent link">&para;</a></h3>
-<p>Step 4 describes the screen the data was <strong>recorded</strong> on — not the screen you are
-reading this on. It has <strong>no defaults</strong>: a wrong monitor size silently rescales
-every figure, so the app will not guess one for you. Each of the three groups asks
-how you know the value:</p>
+<p><strong>Recording setup</strong> describes the screen the data was <strong>recorded</strong> on — not the
+screen you are reading this on. It has <strong>no defaults</strong>: a wrong monitor size
+silently rescales every figure, so the app will not guess one for you. Each of
+the three groups — <em>Screen</em>, <em>Physical size &amp; viewing distance</em>, and <em>Reading
+text size</em> — asks how you know the value:</p>
 <table>
 <thead>
 <tr>
@@ -1866,11 +1874,12 @@ how you know the value:</p>
 a skipped group is shown: with no physical width there is no honest pixels-per-
 degree or point-to-pixel conversion, so those are hidden rather than computed from
 a default.</p>
-<p>The answer travels with the dataset. It appears in the step-7 review table and
-under 🗂️ <strong>Data → Recording setup</strong>, rides a share link as <code>setup_prov</code>,
-and is written into the saved-setup JSON and into <code>plot_config.json</code> in a bulk
-export — so a figure set records that its monitor size was assumed, and whoever
-opens your link can tell your measurements from the app's guesses.</p>
+<p>The answer travels with the dataset. It appears in the review table beside
+<strong>✅ Add dataset</strong> and under 🗂️ <strong>Data → ✏️ Edit dataset → Recording setup</strong>,
+rides a share link as <code>setup_prov</code>, and is written into the saved-setup JSON and
+into <code>plot_config.json</code> in a bulk export — so a figure set records that its
+monitor size was assumed, and whoever opens your link can tell your measurements
+from the app's guesses.</p>
 <p>Answers are remembered across datasets in a session as <strong>pre-filled values with
 the choice reset</strong>: quick for a second export from the same lab, while still
 making you assert that the setup applies to this dataset too.</p>
@@ -1882,8 +1891,8 @@ may be dropped during normalization.</p>
 <h2 id="reuse-the-setup">Reuse the setup<a class="headerlink" href="#reuse-the-setup" title="Permanent link">&para;</a></h2>
 <p>Download the setup JSON from the wizard and restore it for the next export from
 the same pipeline. If a mapping was wrong, edit it under
-🗂️ <strong>Data → Column mapping</strong> or reload the files when a required column
-was not retained.</p>
+🗂️ <strong>Data → ✏️ Edit dataset → Column mapping</strong> or reload the files when a
+required column was not retained.</p>
 
 
 

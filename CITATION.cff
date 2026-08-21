@@ -36,8 +36,8 @@ authors:
 repository-code: "https://github.com/lacclab/scanpath-studio"
 url: "https://scanpath-studio.streamlit.app"
 license: MIT
-version: 0.28.0
-date-released: "2026-08-08"
+version: 0.29.0
+date-released: "2026-08-21"
 keywords:
   - eye-tracking
   - scanpath

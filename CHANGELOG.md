@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-08-21
+
 ### Added
 - **Rebuilt data-upload wizard with an honest experimental setup** (DATA-22)
 - **Compare scanpaths across datasets** (CMP-8)

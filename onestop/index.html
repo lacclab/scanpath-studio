@@ -1710,14 +1710,20 @@ the <strong>full public corpus</strong> from <a href="https://osf.io/2prdq/">OSF
 <p>The corpus is 360 L1-English readers reading 30 Guardian articles (162
 paragraphs, each in an Advanced and an Elementary version) — ~19.4k regular
 trials.</p>
-<div class="admonition warning">
-<p class="admonition-title">The app currently reports 7 texts, not 162 paragraphs</p>
-<p>Those are the corpus' own figures. The public loader composes no unique
-paragraph id, so <code>text_id</code> is the paragraph's index <em>within its article</em> and
-paragraphs from different articles collide — the loaded corpus reads as
-<strong>7 texts</strong>. Anything keyed on text id is affected: the <em>Per text</em> analyses,
-text-based comparisons, and the text counts on 🗂️ Data. Tracked as
-<a href="https://github.com/lacclab/scanpath-studio/issues/133">BUG-43</a>.</p>
+<div class="admonition info">
+<p class="admonition-title">A text is one paragraph at one difficulty level</p>
+<p>The public reports carry no unique paragraph id, so the loader composes one
+— <code>{article_batch}_{article_id}_{paragraph_id}_{difficulty_level}</code>, the same
+id the bundled demo ships, with the reader and the reading folded under it
+for the trial id. Advanced and Elementary are therefore <strong>two texts</strong>, not
+two renderings of one, and the app counts <strong>330</strong> of them across the four
+regimes (the lab export, which composes the id its own way, agrees).</p>
+<p>Before this (<a href="https://github.com/lacclab/scanpath-studio/issues/133">BUG-43</a>)
+<code>text_id</code> was the paragraph's index <em>within its article</em>, so paragraphs from
+different articles collided and the whole corpus read as <strong>7 texts</strong> —
+affecting the <em>Per text</em> analyses, text-based comparisons, and the counts on
+🗂️ Data. A share link made before the fix names a trial by the old id and
+will not resolve.</p>
 </div>
 <h2 id="loading-it">Loading it<a class="headerlink" href="#loading-it" title="Permanent link">&para;</a></h2>
 <p>OneStop is exposed as a <strong>Public dataset</strong>. In the app, open 🗂️ <strong>Data</strong> and

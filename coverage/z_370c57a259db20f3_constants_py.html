@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_controls_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-21 19:52 +0000
+            created at 2026-08-21 22:33 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -146,7 +146,7 @@
     <p class="pln"><span class="n"><a id="t64" href="#t64">64</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t65" href="#t65">65</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t66" href="#t66">66</a></span><span class="t"><span class="com"># Default text font. A single generic family that renders (monospaced) on every</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t67" href="#t67">67</a></span><span class="t"><span class="com"># platform including the Streamlit Cloud demo; the sidebar field accepts any CSS</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t67" href="#t67">67</a></span><span class="t"><span class="com"># platform including the Streamlit Cloud demo; the font field accepts any CSS</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t68" href="#t68">68</a></span><span class="t"><span class="com"># font name or stack if you want the exact experiment font.</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t69" href="#t69">69</a></span><span class="t"><span class="nam">FONT_FAMILY</span> <span class="op">=</span> <span class="str">&quot;monospace&quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t70" href="#t70">70</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
@@ -219,7 +219,7 @@
     <p class="run"><span class="n"><a id="t137" href="#t137">137</a></span><span class="t">    <span class="key">return</span> <span class="nam">COMPARISON_PALETTE</span><span class="op">[</span><span class="nam">idx</span> <span class="op">%</span> <span class="nam">len</span><span class="op">(</span><span class="nam">COMPARISON_PALETTE</span><span class="op">)</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t138" href="#t138">138</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t139" href="#t139">139</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t140" href="#t140">140</a></span><span class="t"><span class="com"># Saccade line styles offered in the sidebar. Maps the friendly UI label to the</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t140" href="#t140">140</a></span><span class="t"><span class="com"># Saccade line styles offered in the plot rail. Maps the friendly UI label to the</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t141" href="#t141">141</a></span><span class="t"><span class="com"># Plotly ``line.dash`` value used in the figure builders.</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t142" href="#t142">142</a></span><span class="t"><span class="nam">SACCADE_DASH_OPTIONS</span> <span class="op">=</span> <span class="op">{</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t143" href="#t143">143</a></span><span class="t">    <span class="str">&quot;Solid&quot;</span><span class="op">:</span> <span class="str">&quot;solid&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
@@ -334,7 +334,7 @@
     <p class="run"><span class="n"><a id="t252" href="#t252">252</a></span><span class="t"><span class="nam">OUT_OF_TEXT_COLOR</span> <span class="op">=</span> <span class="str">&quot;#d62728&quot;</span>  <span class="com"># red</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t253" href="#t253">253</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t254" href="#t254">254</a></span><span class="t"><span class="com"># Plot background. Default white; some analyses prefer a neutral gray.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t255" href="#t255">255</a></span><span class="t"><span class="com"># A &quot;Custom&#8230;&quot; entry in the sidebar reveals a free color picker.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t255" href="#t255">255</a></span><span class="t"><span class="com"># A &quot;Custom&#8230;&quot; entry in the rail reveals a free color picker.</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t256" href="#t256">256</a></span><span class="t"><span class="nam">DEFAULT_BACKGROUND_COLOR</span> <span class="op">=</span> <span class="str">&quot;#ffffff&quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t257" href="#t257">257</a></span><span class="t"><span class="nam">BACKGROUND_PRESETS</span> <span class="op">=</span> <span class="op">{</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t258" href="#t258">258</a></span><span class="t">    <span class="str">&quot;White&quot;</span><span class="op">:</span> <span class="str">&quot;#ffffff&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
@@ -629,7 +629,7 @@
     <p class="run"><span class="n"><a id="t547" href="#t547">547</a></span><span class="t"><span class="nam">ONESTOP_PUBLIC_CHOICE</span> <span class="op">=</span> <span class="str">&quot;OneStop &#8212; 360-participant English corpus&quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t548" href="#t548">548</a></span><span class="t"><span class="nam">ONESTOP_PUBLIC_DEFAULT_DIR</span> <span class="op">=</span> <span class="str">&quot;data/OneStop&quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t549" href="#t549">549</a></span><span class="t"><span class="com"># Default folder for the lacclab OneStop variant (a lab-processed local export;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t550" href="#t550">550</a></span><span class="t"><span class="com"># superset schema, no download). Path-editable in the sidebar and overridable via</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t550" href="#t550">550</a></span><span class="t"><span class="com"># superset schema, no download). Path-editable on the &#128450;&#65039; Data page and overridable via</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t551" href="#t551">551</a></span><span class="t"><span class="com"># the `ONESTOP_LACCLAB_DIR` env var &#8212; never the *only* option, just the default.</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t552" href="#t552">552</a></span><span class="t"><span class="nam">ONESTOP_LACCLAB_DEFAULT_DIR</span> <span class="op">=</span> <span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t553" href="#t553">553</a></span><span class="t">    <span class="str">&quot;/Users/shubi/Library/CloudStorage/OneDrive-Technion/In-lab Experiments/&quot;</span>&nbsp;</span><span class="r"></span></p>
@@ -642,7 +642,7 @@
     <p class="run run2"><span class="n"><a id="t560" href="#t560">560</a></span><span class="t">    <span class="str">&quot;information_seeking_repeated&quot;</span><span class="op">:</span> <span class="str">&quot;Information seeking (repeated)&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t561" href="#t561">561</a></span><span class="t"><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t562" href="#t562">562</a></span><span class="t"><span class="com"># OneStop trial parts (screens) &#8594; display label, in presentation order. Mirrors</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t563" href="#t563">563</a></span><span class="t"><span class="com"># datasets._ONESTOP_PARTS; the sidebar multiselect + the parts URL/CLI contract</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t563" href="#t563">563</a></span><span class="t"><span class="com"># datasets._ONESTOP_PARTS; the Parts multiselect + the parts URL/CLI contract</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t564" href="#t564">564</a></span><span class="t"><span class="com"># use these keys. Paragraph is the reading passage (the default).</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t565" href="#t565">565</a></span><span class="t"><span class="nam">ONESTOP_PART_LABELS</span> <span class="op">=</span> <span class="op">{</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t566" href="#t566">566</a></span><span class="t">    <span class="str">&quot;Title&quot;</span><span class="op">:</span> <span class="str">&quot;Title&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
@@ -797,7 +797,7 @@
             <a class="nav" href="z_370c57a259db20f3_controls_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-21 19:52 +0000
+            created at 2026-08-21 22:33 +0000
         </p>
     </div>
 </footer>

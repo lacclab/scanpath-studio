@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_utils_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-21 19:52 +0000
+            created at 2026-08-21 22:33 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -251,7 +251,7 @@
     <p class="pln"><span class="n"><a id="t169" href="#t169">169</a></span><span class="t"><span class="com"># toggles. Each group maps a short URL key &#8594; the session_state key it reads/writes.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t170" href="#t170">170</a></span><span class="t"><span class="com"># `_build_share_query` (write) and `_apply_url_preset` (read) both iterate these,</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t171" href="#t171">171</a></span><span class="t"><span class="com"># so the two sides can&#x27;t drift. Data-dependent fields (color ranges, highlight</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t172" href="#t172">172</a></span><span class="t"><span class="com"># column, axis/color-by fields) self-heal on load via the sidebar&#x27;s _drop_stale /</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t172" href="#t172">172</a></span><span class="t"><span class="com"># column, axis/color-by fields) self-heal on load via the rail&#x27;s _drop_stale /</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t173" href="#t173">173</a></span><span class="t"><span class="com"># _clamp_range, so a link opened on a different trial degrades gracefully.</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t174" href="#t174">174</a></span><span class="t"><span class="nam">_SHARE_TOGGLE_PARAMS</span> <span class="op">=</span> <span class="op">{</span>  <span class="com"># bool &#8594; &quot;1&quot;/&quot;0&quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t175" href="#t175">175</a></span><span class="t">    <span class="str">&quot;preproc_enabled&quot;</span><span class="op">:</span> <span class="str">&quot;global_preproc_enabled&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
@@ -417,7 +417,7 @@
     <p class="pln"><span class="n"><a id="t335" href="#t335">335</a></span><span class="t"><span class="com"># (slider / number_input). A hand-crafted link with an out-of-range value would</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t336" href="#t336">336</a></span><span class="t"><span class="com"># otherwise crash the widget on render &#8212; Streamlit raises when a Session-State</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t337" href="#t337">337</a></span><span class="t"><span class="com"># value falls outside the widget&#x27;s range. Clamp on the way in. (Data-dependent</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t338" href="#t338">338</a></span><span class="t"><span class="com"># colour ranges aren&#x27;t here &#8212; the sidebar&#x27;s `_clamp_range` handles those against</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t338" href="#t338">338</a></span><span class="t"><span class="com"># colour ranges aren&#x27;t here &#8212; the rail&#x27;s `_clamp_range` handles those against</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t339" href="#t339">339</a></span><span class="t"><span class="com"># the live data.)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t340" href="#t340">340</a></span><span class="t"><span class="nam">_URL_BOUNDED</span> <span class="op">=</span> <span class="op">{</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t341" href="#t341">341</a></span><span class="t">    <span class="str">&quot;global_preproc_short_threshold_ms&quot;</span><span class="op">:</span> <span class="op">(</span><span class="num">1.0</span><span class="op">,</span> <span class="num">500.0</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
@@ -496,7 +496,7 @@
     <p class="pln"><span class="n"><a id="t414" href="#t414">414</a></span><span class="t"><span class="com">#</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t415" href="#t415">415</a></span><span class="t"><span class="com"># Deliberately generic (R42): a benchmark-only branch would have to re-derive</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t416" href="#t416">416</a></span><span class="t"><span class="com"># which registry entry produced the picker&#x27;s collapsed choice, duplicating</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t417" href="#t417">417</a></span><span class="t"><span class="com"># `app.render_sidebar_data_source`&#x27;s healing logic &#8212; and &quot;these corpora are</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t417" href="#t417">417</a></span><span class="t"><span class="com"># `app.resolve_data_source`&#x27;s healing logic &#8212; and &quot;these corpora are</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t418" href="#t418">418</a></span><span class="t"><span class="com"># special&quot; is the assumption this plan has been bitten by repeatedly. A built-in</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t419" href="#t419">419</a></span><span class="t"><span class="com"># corpus and a prepared one are the same kind of thing here.</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t420" href="#t420">420</a></span><span class="t"><span class="nam">CORPUS_SOURCE_TOKEN</span> <span class="op">=</span> <span class="str">&quot;corpus&quot;</span>&nbsp;</span><span class="r"></span></p>
@@ -600,7 +600,7 @@
     <p class="pln"><span class="n"><a id="t518" href="#t518">518</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t519" href="#t519">519</a></span><span class="t"><span class="str">    ``(&quot;&quot;, {})`` when the active source is not a public corpus.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t520" href="#t520">520</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t521" href="#t521">521</a></span><span class="t"><span class="str">    `app.render_sidebar_data_source` collapses **any** registry label to</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t521" href="#t521">521</a></span><span class="t"><span class="str">    `app.resolve_data_source` collapses **any** registry label to</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t522" href="#t522">522</a></span><span class="t"><span class="str">    `PUBLIC_DATASETS_CHOICE` and stashes the label on `public_dataset_choice`, so</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t523" href="#t523">523</a></span><span class="t"><span class="str">    that is where the answer lives for a link built from the running app. A</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t524" href="#t524">524</a></span><span class="t"><span class="str">    caller holding the label itself (the tests, and anything predating the</span>&nbsp;</span><span class="r"></span></p>
@@ -666,7 +666,7 @@
     <p class="pln"><span class="n"><a id="t584" href="#t584">584</a></span><span class="t"><span class="str">        ...etc &#8212; see _URL_PRESETS above</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t585" href="#t585">585</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t586" href="#t586">586</a></span><span class="t"><span class="str">    Bonus side-effect: when any colorscale is set via URL, also forces the</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t587" href="#t587">587</a></span><span class="t"><span class="str">    &quot;Advanced styling&quot; sidebar expander open so the value is visible/editable.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t587" href="#t587">587</a></span><span class="t"><span class="str">    &quot;Advanced styling&quot; expander open so the value is visible/editable.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t588" href="#t588">588</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t589" href="#t589">589</a></span><span class="t"><span class="str">    External tools can deep-link into this app via the URL schema above to</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t590" href="#t590">590</a></span><span class="t"><span class="str">    land on a specific trial with the reviewer&#x27;s preferred viz settings.</span>&nbsp;</span><span class="r"></span></p>
@@ -735,7 +735,7 @@
     <p class="run run2"><span class="n"><a id="t653" href="#t653">653</a></span><span class="t">            <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t654" href="#t654">654</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t655" href="#t655">655</a></span><span class="t">    <span class="com"># Heatmap / fixation colorscale only render under the Advanced expander &#8212;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t656" href="#t656">656</a></span><span class="t">    <span class="com"># auto-open it so the URL value is exposed in the sidebar.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t656" href="#t656">656</a></span><span class="t">    <span class="com"># auto-open it so the URL value is exposed in the rail.</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t657" href="#t657">657</a></span><span class="t">    <span class="key">if</span> <span class="str">&quot;heatmap_colorscale&quot;</span> <span class="key">in</span> <span class="nam">qp</span> <span class="key">or</span> <span class="str">&quot;fixation_colorscale&quot;</span> <span class="key">in</span> <span class="nam">qp</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t658" href="#t658">658</a></span><span class="t">        <span class="nam">st</span><span class="op">.</span><span class="nam">session_state</span><span class="op">.</span><span class="nam">setdefault</span><span class="op">(</span><span class="str">&quot;global_advanced&quot;</span><span class="op">,</span> <span class="key">True</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t659" href="#t659">659</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
@@ -819,8 +819,8 @@
     <p class="run run2"><span class="n"><a id="t737" href="#t737">737</a></span><span class="t">    <span class="str">&quot;full_monitor&quot;</span><span class="op">:</span> <span class="str">&quot;global_fit_to_monitor&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t738" href="#t738">738</a></span><span class="t">    <span class="str">&quot;autoplay&quot;</span><span class="op">:</span> <span class="str">&quot;global_anim_autoplay&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t739" href="#t739">739</a></span><span class="t"><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t740" href="#t740">740</a></span><span class="t"><span class="com"># Static widget bounds, mirrored from controls.sidebar_controls /</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t741" href="#t741">741</a></span><span class="t"><span class="com"># render_sidebar_canvas_controls, so a restored value is clamped to a range the</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t740" href="#t740">740</a></span><span class="t"><span class="com"># Static widget bounds, mirrored from controls.render_plot_controls /</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t741" href="#t741">741</a></span><span class="t"><span class="com"># render_canvas_controls, so a restored value is clamped to a range the</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t742" href="#t742">742</a></span><span class="t"><span class="com"># widget will accept.</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t743" href="#t743">743</a></span><span class="t"><span class="nam">_CANVAS_BOUNDS</span> <span class="op">=</span> <span class="op">(</span><span class="num">100</span><span class="op">,</span> <span class="num">10000</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t744" href="#t744">744</a></span><span class="t"><span class="nam">_FONT_BOUNDS</span> <span class="op">=</span> <span class="op">(</span><span class="num">6</span><span class="op">,</span> <span class="num">72</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -1140,7 +1140,7 @@
     <p class="run"><span class="n"><a id="t1058" href="#t1058">1058</a></span><span class="t"><span class="key">def</span> <span class="nam">_restore_plot_config</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t1059" href="#t1059">1059</a></span><span class="t">    <span class="nam">config</span><span class="op">:</span> <span class="nam">dict</span><span class="op">,</span> <span class="nam">combos</span><span class="op">:</span> <span class="nam">pd</span><span class="op">.</span><span class="nam">DataFrame</span><span class="op">,</span> <span class="nam">fixations</span><span class="op">:</span> <span class="nam">pd</span><span class="op">.</span><span class="nam">DataFrame</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t1060" href="#t1060">1060</a></span><span class="t"><span class="op">)</span> <span class="op">-&gt;</span> <span class="nam">tuple</span><span class="op">[</span><span class="nam">int</span><span class="op">,</span> <span class="nam">list</span><span class="op">]</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1061" href="#t1061">1061</a></span><span class="t">    <span class="str">&quot;&quot;&quot;Seed session_state from an uploaded plot-config dict so the sidebar</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1061" href="#t1061">1061</a></span><span class="t">    <span class="str">&quot;&quot;&quot;Seed session_state from an uploaded plot-config dict so the rail</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1062" href="#t1062">1062</a></span><span class="t"><span class="str">    widgets render with the saved settings. Returns ``(applied, skipped)`` where</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1063" href="#t1063">1063</a></span><span class="t"><span class="str">    ``skipped`` lists human-readable labels that didn&#x27;t fit the current data.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1064" href="#t1064">1064</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
@@ -1667,7 +1667,7 @@
     <p class="run run2"><span class="n"><a id="t1585" href="#t1585">1585</a></span><span class="t">        <span class="nam">isinstance</span><span class="op">(</span><span class="nam">highlighting</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="str">&quot;highlight_column&quot;</span><span class="op">)</span><span class="op">,</span> <span class="nam">str</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t1586" href="#t1586">1586</a></span><span class="t">        <span class="key">and</span> <span class="nam">highlighting</span><span class="op">[</span><span class="str">&quot;highlight_column&quot;</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t1587" href="#t1587">1587</a></span><span class="t">    <span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1588" href="#t1588">1588</a></span><span class="t">        <span class="com"># The sidebar&#x27;s `_drop_stale` clears this if it isn&#x27;t a column in the</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1588" href="#t1588">1588</a></span><span class="t">        <span class="com"># The rail&#x27;s `_drop_stale` clears this if it isn&#x27;t a column in the</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1589" href="#t1589">1589</a></span><span class="t">        <span class="com"># restored-onto data, so it needs no validation against words here.</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1590" href="#t1590">1590</a></span><span class="t">        <span class="nam">put</span><span class="op">(</span><span class="str">&quot;global_highlight_column&quot;</span><span class="op">,</span> <span class="nam">highlighting</span><span class="op">[</span><span class="str">&quot;highlight_column&quot;</span><span class="op">]</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1591" href="#t1591">1591</a></span><span class="t">    <span class="com"># Fixation classification (PRE-2): short/long/out-of-bounds highlight or discard.</span>&nbsp;</span><span class="r"></span></p>
@@ -1837,9 +1837,9 @@
     <p class="run"><span class="n"><a id="t1755" href="#t1755">1755</a></span><span class="t"><span class="key">def</span> <span class="nam">_apply_uploaded_plot_config</span><span class="op">(</span><span class="nam">combos</span><span class="op">:</span> <span class="nam">pd</span><span class="op">.</span><span class="nam">DataFrame</span><span class="op">,</span> <span class="nam">fixations</span><span class="op">:</span> <span class="nam">pd</span><span class="op">.</span><span class="nam">DataFrame</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1756" href="#t1756">1756</a></span><span class="t">    <span class="str">&quot;&quot;&quot;Restore settings from a freshly uploaded plot-config JSON, once per file.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1757" href="#t1757">1757</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1758" href="#t1758">1758</a></span><span class="t"><span class="str">    Reads the file captured by the sidebar ``plot_config_upload`` uploader</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1759" href="#t1759">1759</a></span><span class="t"><span class="str">    (persisted in session_state across reruns) and writes the saved settings</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1760" href="#t1760">1760</a></span><span class="t"><span class="str">    into session_state *before* the sidebar widgets render &#8212; the same mechanism</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1758" href="#t1758">1758</a></span><span class="t"><span class="str">    Reads the file captured by the &#128190; Session dialog&#x27;s ``plot_config_upload``</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1759" href="#t1759">1759</a></span><span class="t"><span class="str">    uploader (persisted in session_state across reruns) and writes the saved</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1760" href="#t1760">1760</a></span><span class="t"><span class="str">    settings into session_state *before* the widgets render &#8212; the same mechanism</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1761" href="#t1761">1761</a></span><span class="t"><span class="str">    as ``_apply_url_preset``. Deduped by ``(name, size)`` so manual tweaks made</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1762" href="#t1762">1762</a></span><span class="t"><span class="str">    after a restore aren&#x27;t clobbered on every rerun. Call right after the trial</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1763" href="#t1763">1763</a></span><span class="t"><span class="str">    combos are built, before the canvas/visualization controls.&quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
@@ -2223,7 +2223,7 @@
             <a class="nav" href="z_370c57a259db20f3_utils_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-21 19:52 +0000
+            created at 2026-08-21 22:33 +0000
         </p>
     </div>
 </footer>

@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_wizard_shell_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-21 19:52 +0000
+            created at 2026-08-21 22:33 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -85,7 +85,7 @@
     <p class="pln"><span class="n"><a id="t3" href="#t3">3</a></span><span class="t"><span class="str">Split out of ``app.py``: everything from the upload-table reading UI through the</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t4" href="#t4">4</a></span><span class="t"><span class="str">ordered wizard steps (identity &#8594; trial/participant/text &#8594; keep-fields/filters &#8594;</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t5" href="#t5">5</a></span><span class="t"><span class="str">name &amp; finish) and the MultiplEYE upload branch. ``app.py`` drives this from</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t6" href="#t6">6</a></span><span class="t"><span class="str">``render_sidebar_data_source`` / ``main`` and re-exports a few helpers for tests.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t6" href="#t6">6</a></span><span class="t"><span class="str">``resolve_data_source`` / ``main`` and re-exports a few helpers for tests.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t7" href="#t7">7</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t8" href="#t8">8</a></span><span class="t"><span class="str">A handful of data-IO / normalization helpers (``_read_uploaded_frame``,</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t9" href="#t9">9</a></span><span class="t"><span class="str">``_normalize_pair``, ``_stash_active_mapping``, ``_render_unmapped_view``) stay in</span>&nbsp;</span><span class="r"></span></p>
@@ -308,7 +308,7 @@
     <p class="run"><span class="n"><a id="t226" href="#t226">226</a></span><span class="t">    <span class="nam">store</span> <span class="op">=</span> <span class="nam">st</span><span class="op">.</span><span class="nam">session_state</span><span class="op">.</span><span class="nam">setdefault</span><span class="op">(</span><span class="str">&quot;_datasets&quot;</span><span class="op">,</span> <span class="op">{</span><span class="op">}</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t227" href="#t227">227</a></span><span class="t">    <span class="nam">store</span><span class="op">[</span><span class="nam">ds_name</span><span class="op">]</span> <span class="op">=</span> <span class="nam">payload</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t228" href="#t228">228</a></span><span class="t">    <span class="com"># Apply the source switch through the plain pending key that</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t229" href="#t229">229</a></span><span class="t">    <span class="com"># render_sidebar_data_source consumes before the radio instantiates, and</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t229" href="#t229">229</a></span><span class="t">    <span class="com"># resolve_data_source consumes before the radio instantiates, and</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t230" href="#t230">230</a></span><span class="t">    <span class="com"># leave the wizard.</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t231" href="#t231">231</a></span><span class="t">    <span class="nam">st</span><span class="op">.</span><span class="nam">session_state</span><span class="op">[</span><span class="str">&quot;_pending_source_choice&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">ds_name</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t232" href="#t232">232</a></span><span class="t">    <span class="nam">st</span><span class="op">.</span><span class="nam">session_state</span><span class="op">[</span><span class="str">&quot;_show_upload_wizard&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="key">False</span>&nbsp;</span><span class="r"></span></p>
@@ -1830,7 +1830,7 @@
     <p class="pln"><span class="n"><a id="t1748" href="#t1748">1748</a></span><span class="t">        <span class="com"># Seed the MultiplEYE presentation monitor (true-to-scale default).</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1749" href="#t1749">1749</a></span><span class="t">        <span class="nam">st</span><span class="op">.</span><span class="nam">session_state</span><span class="op">.</span><span class="nam">setdefault</span><span class="op">(</span><span class="str">&quot;global_canvas_width&quot;</span><span class="op">,</span> <span class="nam">MULTIPLEYE_MONITOR</span><span class="op">[</span><span class="num">0</span><span class="op">]</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1750" href="#t1750">1750</a></span><span class="t">        <span class="nam">st</span><span class="op">.</span><span class="nam">session_state</span><span class="op">.</span><span class="nam">setdefault</span><span class="op">(</span><span class="str">&quot;global_canvas_height&quot;</span><span class="op">,</span> <span class="nam">MULTIPLEYE_MONITOR</span><span class="op">[</span><span class="num">1</span><span class="op">]</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1751" href="#t1751">1751</a></span><span class="t">        <span class="nam">app</span><span class="op">.</span><span class="nam">render_sidebar_canvas_controls</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t1751" href="#t1751">1751</a></span><span class="t">        <span class="nam">app</span><span class="op">.</span><span class="nam">render_canvas_controls</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t1752" href="#t1752">1752</a></span><span class="t">            <span class="nam">empty_words_frame</span><span class="op">(</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t1753" href="#t1753">1753</a></span><span class="t">            <span class="nam">empty_fixations_frame</span><span class="op">(</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t1754" href="#t1754">1754</a></span><span class="t">            <span class="nam">data_choice</span><span class="op">=</span><span class="key">None</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
@@ -2250,7 +2250,7 @@
     <p class="pln"><span class="n"><a id="t2168" href="#t2168">2168</a></span><span class="t">        <span class="com"># the guide button, the docs link, and the way out. Everything else that</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2169" href="#t2169">2169</a></span><span class="t">        <span class="com"># used to stack above the wizard is gone (the page header and its summary</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2170" href="#t2170">2170</a></span><span class="t">        <span class="com"># in `app.main`, the &quot;Adding a dataset&#8230;&quot; caption in</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t2171" href="#t2171">2171</a></span><span class="t">        <span class="com"># `render_sidebar_data_source`, and the second copy of this very title</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t2171" href="#t2171">2171</a></span><span class="t">        <span class="com"># `resolve_data_source`, and the second copy of this very title</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2172" href="#t2172">2172</a></span><span class="t">        <span class="com"># that lived here) &#8212; four headings for one screen, from three modules.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2173" href="#t2173">2173</a></span><span class="t">        <span class="com">#</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2174" href="#t2174">2174</a></span><span class="t">        <span class="com"># Keyed so `styles.py` can pin it; the CSS is scoped to this key alone,</span>&nbsp;</span><span class="r"></span></p>
@@ -3064,7 +3064,7 @@
             <a class="nav" href="z_370c57a259db20f3_wizard_shell_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-21 19:52 +0000
+            created at 2026-08-21 22:33 +0000
         </p>
     </div>
 </footer>

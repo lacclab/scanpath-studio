@@ -2034,8 +2034,8 @@ session. That post-dates the audit below, so every "no on-disk residue of
 loaded data" claim on this page holds only for a hosted deployment (where
 <code>persistence.persistence_enabled</code> returns False) or with
 <code>SCANPATH_STUDIO_PERSIST=0</code>. The store is single-user, unencrypted and
-account-readable; it is disclosed and deletable in-app (sidebar → <strong>🗄️
-Recovery cache</strong>) and from <code>scanpath-studio cache --clear</code>, and it is
+account-readable; it is disclosed and deletable in-app (💾 <strong>Session</strong> →
+<strong>🗄️ Recovery cache</strong>) and from <code>scanpath-studio cache --clear</code>, and it is
 described for researchers in <a href="../privacy/#what-happens-to-a-file-you-upload">privacy.md</a>.</p>
 </div>
 <div class="admonition note">
@@ -2393,7 +2393,7 @@ function that takes an un-hashed frame — 32 call sites across <code>app.py</co
 <li><code>tabs._cached_scanpath_figure</code>, the corpus-analysis wrappers
   (<code>tabs._c_per_reader_word</code>, <code>_c_cohort_profile</code>, <code>_c_word_rate</code>, …), the
   reading measures (<code>data._compute_word_metrics_cached</code>), the trial list
-  (<code>utils._build_combo_options_cached</code>), the sidebar filter options
+  (<code>utils._build_combo_options_cached</code>), the trial-filter options
   (<code>controls._column_unique_strs</code> / <code>_column_present_bools</code>), the default filter
   set (<code>data._default_filters_cached</code>), the stimuli table
   (<code>tabs._build_stimuli_table_cached</code>) and the dataset statistics

@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_export_status_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-21 19:52 +0000
+            created at 2026-08-21 22:33 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -219,7 +219,7 @@
     <p class="pln"><span class="n"><a id="t137" href="#t137">137</a></span><span class="t">    <span class="com"># all-or-nothing.</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t138" href="#t138">138</a></span><span class="t">    <span class="nam">metadata_fields</span><span class="op">:</span> <span class="nam">tuple</span><span class="op">[</span><span class="nam">str</span><span class="op">,</span> <span class="op">...</span><span class="op">]</span> <span class="op">|</span> <span class="key">None</span> <span class="op">=</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t139" href="#t139">139</a></span><span class="t">    <span class="com"># When True, export operates on the whole loaded dataset, ignoring the</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t140" href="#t140">140</a></span><span class="t">    <span class="com"># sidebar &quot;Filter trials&quot; panel; the caller supplies the unfiltered frames.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t140" href="#t140">140</a></span><span class="t">    <span class="com"># trial-filter funnel; the caller supplies the unfiltered frames.</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t141" href="#t141">141</a></span><span class="t">    <span class="nam">export_unfiltered</span><span class="op">:</span> <span class="nam">bool</span> <span class="op">=</span> <span class="key">False</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t142" href="#t142">142</a></span><span class="t">    <span class="nam">scope</span><span class="op">:</span> <span class="nam">str</span> <span class="op">=</span> <span class="str">&quot;all&quot;</span>  <span class="com"># &quot;all&quot; | &quot;trial&quot; | &quot;participant&quot; | &quot;text&quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t143" href="#t143">143</a></span><span class="t">    <span class="nam">scope_participant</span><span class="op">:</span> <span class="nam">str</span> <span class="op">|</span> <span class="key">None</span> <span class="op">=</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
@@ -849,11 +849,11 @@
     <p class="pln"><span class="n"><a id="t767" href="#t767">767</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t768" href="#t768">768</a></span><span class="t"><span class="str">    Returns ``(scope, pid, trial, text, export_unfiltered)``. The whole-dataset</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t769" href="#t769">769</a></span><span class="t"><span class="str">    choice lives inside the &quot;Trials to include&quot; radio (an extra &quot;All&quot; option that</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t770" href="#t770">770</a></span><span class="t"><span class="str">    ignores the sidebar filter) rather than as a separate checkbox.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t770" href="#t770">770</a></span><span class="t"><span class="str">    ignores the trial filters) rather than as a separate checkbox.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t771" href="#t771">771</a></span><span class="t"><span class="str">    &quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t772" href="#t772">772</a></span><span class="t">    <span class="com"># Build the ordered radio: label -&gt; (scope, export_unfiltered). Both &quot;All&quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t773" href="#t773">773</a></span><span class="t">    <span class="com"># (the whole dataset, ignoring the sidebar filter) and &quot;All filtered trials&quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t774" href="#t774">774</a></span><span class="t">    <span class="com"># (the current sidebar selection) are always offered &#8212; they coincide only</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t773" href="#t773">773</a></span><span class="t">    <span class="com"># (the whole dataset, ignoring the trial filters) and &quot;All filtered trials&quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t774" href="#t774">774</a></span><span class="t">    <span class="com"># (the current filter selection) are always offered &#8212; they coincide only</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t775" href="#t775">775</a></span><span class="t">    <span class="com"># when no filter is active.</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t776" href="#t776">776</a></span><span class="t">    <span class="nam">options_map</span><span class="op">:</span> <span class="nam">dict</span><span class="op">[</span><span class="nam">str</span><span class="op">,</span> <span class="nam">tuple</span><span class="op">[</span><span class="nam">str</span><span class="op">,</span> <span class="nam">bool</span><span class="op">]</span><span class="op">]</span> <span class="op">=</span> <span class="op">{</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t777" href="#t777">777</a></span><span class="t">        <span class="str">&quot;This trial&quot;</span><span class="op">:</span> <span class="op">(</span><span class="str">&quot;trial&quot;</span><span class="op">,</span> <span class="key">False</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
@@ -1083,7 +1083,7 @@
     <p class="pln"><span class="n"><a id="t1001" href="#t1001">1001</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1002" href="#t1002">1002</a></span><span class="t"><span class="str">    ``combos`` is the currently filtered trial pool; ``combos_all`` (when given)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1003" href="#t1003">1003</a></span><span class="t"><span class="str">    is the whole loaded dataset. Picking the &quot;All&quot; scope switches the scope</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1004" href="#t1004">1004</a></span><span class="t"><span class="str">    picker &#8212; and the export itself &#8212; to ``combos_all`` so the sidebar filters</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1004" href="#t1004">1004</a></span><span class="t"><span class="str">    picker &#8212; and the export itself &#8212; to ``combos_all`` so the trial filters</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1005" href="#t1005">1005</a></span><span class="t"><span class="str">    are ignored. ``title_pattern``/``caption_pattern`` come from the Scanpath</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1006" href="#t1006">1006</a></span><span class="t"><span class="str">    rail&#x27;s **&#128208; Figure &amp; canvas** &#8594; *Title &amp; caption on the figure* (EXP-5) &#8212;</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1007" href="#t1007">1007</a></span><span class="t"><span class="str">    this panel no longer has its own copy of that setting.</span>&nbsp;</span><span class="r"></span></p>
@@ -1999,7 +1999,7 @@
             <a class="nav" href="z_370c57a259db20f3_export_status_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-21 19:52 +0000
+            created at 2026-08-21 22:33 +0000
         </p>
     </div>
 </footer>

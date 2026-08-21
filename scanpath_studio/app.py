@@ -70,8 +70,8 @@ from scanpath_studio.constants import (
     DATA_OVERVIEW_OFFSCREEN_KEY,
     DATA_PAGE_KEY,
     DATA_PAGE_OFFSCREEN_KEY,
-    DATASET_EDITOR_OPEN_KEY,
     DATASET_COUNTS_STORE_KEY,
+    DATASET_EDITOR_OPEN_KEY,
     DEFAULT_BACKGROUND_COLOR,
     DEFAULT_FIGURE_SIZE,
     DEFAULT_LINE_SPACING,
@@ -112,6 +112,9 @@ from scanpath_studio.controls import (
     viz_settings_from_state,
 )
 from scanpath_studio.data import (
+    FIX_OPTIONAL_FIELDS,
+    WORD_OPTIONAL_FIELDS,
+    ReadPlan,
     compute_canvas_size,
     count_trials,
     default_filters,
@@ -135,11 +138,13 @@ from scanpath_studio.data import (
     normalize_words,
     onestop_data_dir,
     onestop_full_bundle_exists,
+    plan_table_read,
     preprocess_fixation_stage,
     propose_fix_schema,
     propose_raw_gaze_schema,
     propose_word_schema,
     read_table,
+    read_table_columns,
     read_tables,
     reset_fingerprint_memo,
     resolve_stimulus_image_paths,
@@ -2859,22 +2864,98 @@ def _uploaded_file_key(uploaded) -> tuple:
 
 
 @st.cache_data(show_spinner="Reading uploaded data…")
-def _read_uploaded_table_cached(_uploaded, file_key) -> pd.DataFrame:
+def _read_uploaded_table_cached(
+    _uploaded, file_key, kind=None, chosen=()
+) -> pd.DataFrame:
     try:
         _uploaded.seek(0)
     except Exception:
         pass
-    return read_table(_uploaded)
+    if kind is None:
+        return read_table(_uploaded)
+    # PERF-6: parse only the columns the mapping, the registry and the user's
+    # own picks need. `kind` and `chosen` are part of the cache key, so naming
+    # a new column simply re-reads the file under the new plan.
+    header = read_table_columns(_uploaded)
+    return read_table(_uploaded, plan=upload_read_plan(header, kind, chosen=chosen))
 
 
 @st.cache_data(show_spinner="Reading uploaded data…")
-def _read_uploaded_tables_cached(_uploaded_list, file_keys) -> pd.DataFrame:
+def _read_uploaded_tables_cached(
+    _uploaded_list, file_keys, kind=None, chosen=()
+) -> pd.DataFrame:
     for f in _uploaded_list:
         try:
             f.seek(0)
         except Exception:
             pass
-    return read_tables(list(_uploaded_list))
+    plan_for = None
+    if kind is not None:
+
+        def plan_for(header):
+            return upload_read_plan(header, kind, chosen=chosen)
+
+    return read_tables(list(_uploaded_list), plan_for=plan_for)
+
+
+#: Session keys naming a source column the user has picked: every mapping
+#: dropdown (``col_map_<table>_<field>``) and the wizard's extra-keeps picker.
+#: A composite trial id stores a *list*, so both shapes are read.
+_CHOSEN_COLUMN_KEYS = ("col_map_",)
+_CHOSEN_COLUMN_EXTRA = "wizard_keep_extra"
+
+
+def _columns_chosen_in_state(state, header) -> set:
+    """Source columns of ``header`` the user has already named (PERF-6).
+
+    Swept out of session state rather than read field by field: the mapping
+    keys are per-table *and* per-field, and a composite trial id stores a list,
+    so matching names against the header is both simpler and robust to a key
+    this function has never heard of. Names belonging to the *other* upload box
+    — or left over from a previous dataset — aren't columns of this table, so
+    the header filter drops them.
+    """
+    columns = set(header)
+    chosen: set = set()
+    for key, value in state.items():
+        if not (
+            str(key).startswith(_CHOSEN_COLUMN_KEYS) or key == _CHOSEN_COLUMN_EXTRA
+        ):
+            continue
+        values = value if isinstance(value, (list, tuple, set)) else [value]
+        chosen.update(v for v in values if isinstance(v, str) and v in columns)
+    return chosen
+
+
+def upload_read_plan(header, kind: str, *, chosen=()) -> ReadPlan:
+    """Plan an uploaded table's read from its header (PERF-6, decision 2a).
+
+    The mapping is auto-proposed from the column names, so the plan exists
+    before the user has touched anything; ``chosen`` folds back in the columns
+    they *have* named, which is what keeps a hand-picked mapping or a kept extra
+    from being dropped. A column named later simply changes the plan, and the
+    read runs again against the new one.
+    """
+    propose = propose_word_schema if kind == "words" else propose_fix_schema
+    registry = WORD_OPTIONAL_FIELDS if kind == "words" else FIX_OPTIONAL_FIELDS
+    names = list(header)
+    return plan_table_read(
+        names,
+        propose(pd.DataFrame(columns=names)),
+        registry,
+        keep_columns=set(chosen),
+    )
+
+
+def _uploaded_header(state_prefix: str) -> list:
+    """The full column list of the table uploaded under ``state_prefix``.
+
+    PERF-6 narrows the *rows* an upload parses, never the column names: the
+    mapping dropdowns and the wizard's "Additional fields to keep" picker still
+    offer every column in the file, and naming one adds it to the plan. Empty
+    when nothing is uploaded, or on a path that reads the table whole.
+    """
+    return list(st.session_state.get(f"{state_prefix}_header") or [])
 
 
 def _read_uploaded_frame(
@@ -2884,6 +2965,7 @@ def _read_uploaded_frame(
     state_prefix: str,
     multi: bool,
     container=None,
+    kind: str | None = None,
 ) -> pd.DataFrame:
     """Render one upload box and return its (concatenated) frame.
 
@@ -2928,11 +3010,27 @@ def _read_uploaded_frame(
             "with enough RAM; may crash the memory-limited hosted demo.",
         ):
             return pd.DataFrame()
+    # PERF-6: the header pass is cheap and its answer is what both the plan and
+    # the wizard's column pickers are built from, so it happens first and is
+    # stashed for `_uploaded_header`. `chosen` is sorted into a tuple because it
+    # rides in the cache key.
+    header: list = []
+    chosen: tuple = ()
+    if kind is not None:
+        source = uploaded[0] if multi else uploaded
+        header = read_table_columns(source)
+        chosen = tuple(sorted(_columns_chosen_in_state(st.session_state, header)))
+    st.session_state[f"{state_prefix}_header"] = header
     if multi:
         return _read_uploaded_tables_cached(
-            uploaded, tuple(_uploaded_file_key(f) for f in uploaded)
+            uploaded,
+            tuple(_uploaded_file_key(f) for f in uploaded),
+            kind=kind,
+            chosen=chosen,
         )
-    return _read_uploaded_table_cached(uploaded, _uploaded_file_key(uploaded))
+    return _read_uploaded_table_cached(
+        uploaded, _uploaded_file_key(uploaded), kind=kind, chosen=chosen
+    )
 
 
 def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataFrame:

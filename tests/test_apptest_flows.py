@@ -34,10 +34,10 @@ from scanpath_studio.constants import _VIEW_SCANPATH, AUTHOR_CHOICE
 from scanpath_studio.data import load_sample_data
 from tests.conftest import (
     APP_SCRIPT,
-    arm_session_dialog,
     SUBTAB_EXPORT,
     SUBTAB_KEY,
     VIEW_DATA,
+    arm_session_dialog,
     pin_view,
 )
 

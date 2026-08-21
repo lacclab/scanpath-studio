@@ -20,7 +20,6 @@ import pandas as pd
 import pytest
 
 from scanpath_studio import data as data_module
-
 from scanpath_studio.data import (
     WORD_OPTIONAL_FIELDS,
     normalize_words,
@@ -208,3 +207,37 @@ class TestReadMappedTable:
     def test_rejects_a_kind_it_has_no_registry_for(self, report):
         with pytest.raises(ValueError, match="kind"):
             read_mapped_table(report, kind="raw_gaze")
+
+
+class TestReadTablesPlanner:
+    """A multi-file upload plans each file against its *own* header."""
+
+    def _write(self, path, frame):
+        frame.to_csv(path, sep="\t", index=False)
+        return path
+
+    def test_plans_each_file_separately(self, tmp_path):
+        """One file per participant is the common upload shape, and an export
+        can gain or lose a column between them — one shared plan would name a
+        column the other file hasn't got, and `usecols` raises on that."""
+        a = self._write(tmp_path / "a.tsv", pd.DataFrame({**MAPPED, **CLAIMED}))
+        b = self._write(
+            tmp_path / "b.tsv",
+            pd.DataFrame({**MAPPED, **UNCLAIMED}),  # no IA_DWELL_TIME
+        )
+        frame = data_module.read_tables(
+            [a, b],
+            plan_for=lambda header: plan_table_read(
+                header,
+                propose_word_schema(pd.DataFrame(columns=header)),
+                WORD_OPTIONAL_FIELDS,
+            ),
+        )
+        assert len(frame) == 4
+        assert "IA_AREA" not in frame.columns  # dropped from b
+        assert "IA_DWELL_TIME" in frame.columns  # kept from a, NaN for b's rows
+        assert frame["IA_DWELL_TIME"].isna().tolist() == [False, True, True, True]
+
+    def test_without_a_planner_reads_everything(self, tmp_path):
+        a = self._write(tmp_path / "a.tsv", pd.DataFrame({**MAPPED, **UNCLAIMED}))
+        assert "IA_AREA" in data_module.read_tables([a]).columns

@@ -1382,12 +1382,17 @@ def expand_table_inputs(inputs: TablesInput) -> list:
 
 
 def read_tables(
-    inputs: TablesInput, source_column: str | None = SOURCE_FILE_COLUMN
+    inputs: TablesInput,
+    source_column: str | None = SOURCE_FILE_COLUMN,
+    *,
+    plan_for=None,
 ) -> pd.DataFrame:
     """Read one or many tabular files and concatenate them into one frame.
 
     ``inputs`` may be a single path or file-like object, a glob pattern, or a
-    list mixing those (a ``.zip`` member counts as a file too). Each part gets a
+    list mixing those (a ``.zip`` member counts as a file too). ``plan_for`` is
+    called with each file's column names and returns the :class:`ReadPlan` to
+    read it under (PERF-6); omit it to parse every column. Each part gets a
     ``source_file`` column holding the file's stem (unless the data already has
     that column, or ``source_column=None``) — *including a single file*, so
     datasets that key identity in the filename can recover it (the upload wizard
@@ -1396,7 +1401,12 @@ def read_tables(
     items = expand_table_inputs(inputs)
     frames, labels = [], []
     for item in items:
-        frames.append(read_table(item))
+        # PERF-6: each file is planned against its OWN header. One file per
+        # participant is the common upload shape, and an export can gain or
+        # lose a column between them — a shared plan would name a column some
+        # file hasn't got, which `usecols` raises on.
+        plan = plan_for(read_table_columns(item)) if plan_for is not None else None
+        frames.append(read_table(item, plan=plan))
         labels.append(Path(getattr(item, "name", str(item))).stem)
     return _tag_and_concat(frames, labels, source_column, always_tag=True)
 

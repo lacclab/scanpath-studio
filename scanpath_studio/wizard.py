@@ -963,11 +963,17 @@ def _wizard_keep_and_filter(tables: list, filter_host, keep_host) -> tuple[dict,
     for raw, schema, registry, prefix in tables:
         if raw is None or raw.empty or schema is None:
             continue
+        # PERF-6: categorize against the file's HEADER, not the frame — the
+        # frame holds only the columns the plan parsed, and the whole job of
+        # the pickers below is to offer the ones it didn't. Naming one here
+        # adds it to the plan, and the file is read again under it.
+        header = app._uploaded_header(prefix)
+        source = pd.DataFrame(columns=header) if header else raw
         cat_by_prefix[prefix] = _c_categorize_columns(
-            raw,
+            source,
             schema,
             registry,
-            frame_fingerprint(raw),
+            tuple(header) or frame_fingerprint(raw),
             # `prefix` is in the key because `_registry` rides un-hashed and
             # varies per table: two tables with the same fingerprint *and* the
             # same schema key would otherwise share one result.
@@ -2313,17 +2319,22 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 "```bash\npip install scanpath-studio\nscanpath-studio\n```"
             )
 
-    def upload_box(host, *, label, help_text, prefix, multi, noun):
+    def upload_box(host, *, label, help_text, prefix, multi, noun, kind=None):
         frame = app._read_uploaded_frame(
             uploader_label=label,
             upload_help=help_text,
             state_prefix=prefix,
             multi=multi,
             container=host,
+            kind=kind,
         )
         if not frame.empty:
+            # PERF-6 parses only the columns the mapping needs, so the frame's
+            # own width is the *plan*, not the file's. Count the header, which
+            # is what the user is being asked to check against their export.
+            n_columns = len(app._uploaded_header(prefix)) or len(frame.columns)
             host.success(
-                f"✓ **{len(frame):,}** {noun} · **{len(frame.columns)}** columns "
+                f"✓ **{len(frame):,}** {noun} · **{n_columns}** columns "
                 "— make sure this is the number you expect to see."
             )
             if active:
@@ -2338,12 +2349,14 @@ def _render_data_setup(active: bool) -> _UploadResult:
         prefix="col_map_fix",
         multi=True,
         noun="fixations",
+        kind="fixations",
     )
     raw_words = upload_box(
         s1,
         label="Words / IA table(s)",
         help_text="One or more files (e.g. one per text); concatenated.",
         prefix="col_map_words",
+        kind="words",
         multi=True,
         noun="words",
     )

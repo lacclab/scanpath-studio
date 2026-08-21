@@ -129,6 +129,31 @@ class TestUploadedTableRead:
         )
         assert "IA_AREA" in frame.columns
 
+    def test_a_column_only_a_later_file_has_is_still_kept(self, tmp_path):
+        """One file per participant is the common upload shape, and an export
+        can gain a column between them — resolving the user's picks against
+        only the first file's header would silently drop it from all of them."""
+        import io
+
+        first = self._upload(tmp_path, "a.tsv")
+        later = pd.DataFrame(
+            {
+                "RECORDING_SESSION_LABEL": ["l1_002"],
+                "paragraph_id": ["p1"],
+                "IA_ID": [1],
+                "IA_LABEL": ["Later"],
+                "IA_LEFT": [10],
+                "IA_RIGHT": [50],
+                "IA_TOP": [100],
+                "IA_BOTTOM": [130],
+                "ADDED_LATER": ["kept"],
+            }
+        )
+        buf = io.BytesIO(later.to_csv(sep="\t", index=False).encode())
+        buf.name = "b.tsv"
+        header = app._upload_header([first, buf], multi=True)
+        assert "ADDED_LATER" in header
+
     def test_a_multi_file_upload_plans_each_file(self, tmp_path):
         uploads = [self._upload(tmp_path, "a.tsv"), self._upload(tmp_path, "b.tsv")]
         frame = app._read_uploaded_tables_cached(

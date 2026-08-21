@@ -65,3 +65,28 @@ class TestFrameCache:
         monkeypatch.setattr(data_module, "st", _NoState())
         built = _frame()
         assert frame_cache("t_bare", "k", lambda: built) is built
+
+
+class TestClearFrameCache:
+    """`clear_computation_cache` must reach it, or a deleted dataset's frames
+    outlive the delete — the thing that function exists to prevent."""
+
+    def test_clearing_drops_every_slot(self):
+        from scanpath_studio.data import clear_frame_cache
+
+        first = frame_cache("t_clear_a", "k", _frame)
+        frame_cache("t_clear_b", "k", _frame)
+        clear_frame_cache()
+        assert frame_cache("t_clear_a", "k", _frame) is not first
+
+    def test_clearing_is_safe_with_no_session_state(self, monkeypatch):
+        import scanpath_studio.data as data_module
+        from scanpath_studio.data import clear_frame_cache
+
+        class _NoState:
+            @property
+            def session_state(self):
+                raise RuntimeError("no runtime")
+
+        monkeypatch.setattr(data_module, "st", _NoState())
+        clear_frame_cache()  # must not raise

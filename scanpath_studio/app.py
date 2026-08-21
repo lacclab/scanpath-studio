@@ -128,6 +128,7 @@ from scanpath_studio.data import (
     filter_frame_to_keys,
     filter_raw_gaze,
     filter_to_keys,
+    clear_frame_cache,
     filter_trials,
     frame_cache,
     frame_fingerprint,
@@ -1389,9 +1390,7 @@ def _load_potec_source(
     if not ready:
         return load_sample_data()
     try:
-        return frame_cache(
-            "raw_frames", ("potec", root), lambda: _cached_potec_raw_frames(root)
-        )
+        return _cached_potec_raw_frames(root)
     except (FileNotFoundError, ValueError, OSError) as exc:
         loc.error(f"Couldn't load PoTeC from `{root}`: {exc}")
         return pd.DataFrame(), pd.DataFrame()
@@ -1470,11 +1469,7 @@ def _load_multipleye_source(
     if not ready:
         return load_sample_data()
     try:
-        return frame_cache(
-            "raw_frames",
-            ("multipleye", root, fixation_source),
-            lambda: _cached_multipleye_raw_frames(root, fixation_source),
-        )
+        return _cached_multipleye_raw_frames(root, fixation_source)
     except (FileNotFoundError, ValueError, OSError) as exc:
         loc.error(f"Couldn't load MultiplEYE from `{root}`: {exc}")
         return pd.DataFrame(), pd.DataFrame()
@@ -1593,11 +1588,7 @@ def _load_onestop_public_source(
     if not ready:
         return load_sample_data()
     try:
-        return frame_cache(
-            "raw_frames",
-            ("onestop_public", root, regime, tuple(parts), variant),
-            lambda: _cached_onestop_raw_frames(root, regime, tuple(parts), variant),
-        )
+        return _cached_onestop_raw_frames(root, regime, tuple(parts), variant)
     except (FileNotFoundError, ValueError, OSError) as exc:
         loc.error(f"Couldn't load OneStop from `{root}`: {exc}")
         return pd.DataFrame(), pd.DataFrame()
@@ -1967,11 +1958,7 @@ def _load_benchmark_source(
     if entry and (badge := geometry_badge(entry)):
         opt.caption(badge)
     try:
-        return frame_cache(
-            "raw_frames",
-            ("benchmark", root, dataset),
-            lambda: _cached_eyegenbench_raw_frames(root, dataset),
-        )
+        return _cached_eyegenbench_raw_frames(root, dataset)
     except _MANIFEST_ERRORS as exc:
         loc.error(f"Couldn't load '{dataset}' from `{root}`: {exc}")
         return pd.DataFrame(), pd.DataFrame()
@@ -2343,11 +2330,7 @@ def load_words_and_fixations(
     # The Upload source is handled separately by the setup wizard
     # (`_render_data_setup`), which renders each table's upload + mapping; see main().
     if data_choice == ONESTOP_CHOICE:
-        words, fixations = frame_cache(
-            "raw_frames",
-            ("onestop_bundle", str(onestop_data_dir() or ""), participant),
-            lambda: load_onestop_server_bundle(participant=participant),
-        )
+        words, fixations = load_onestop_server_bundle(participant=participant)
         if words.empty or fixations.empty:
             _note_dataset_unavailable(
                 label="OneStop server bundle",
@@ -2365,11 +2348,7 @@ def load_words_and_fixations(
         return words, fixations
     if data_choice == MULTIPLEYE_BUNDLE_CHOICE:
         try:
-            words, fixations = frame_cache(
-                "raw_frames",
-                ("multipleye_bundle", str(multipleye_bundle_dir() or ""), participant),
-                lambda: _cached_multipleye_server_bundle(participant=participant),
-            )
+            words, fixations = _cached_multipleye_server_bundle(participant=participant)
         except (FileNotFoundError, ValueError, OSError) as exc:
             st.error(f"Couldn't load the MultiplEYE bundle: {exc}")
             st.stop()
@@ -2401,8 +2380,7 @@ def _schema_key(schema: dict | None) -> tuple | None:
     )
 
 
-@st.cache_data(show_spinner=False)
-def _normalize_pair_cached(
+def _normalize_pair_uncached(
     _words_df: pd.DataFrame,
     _word_schema: dict | None,
     _fixations_df: pd.DataFrame,
@@ -2413,11 +2391,16 @@ def _normalize_pair_cached(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Pure normalize + harmonize, cached on a cheap fingerprint of the inputs.
 
-    The raw frames are passed un-hashed (underscore args); ``cache_key`` carries
-    a ``frame_fingerprint`` + schema signature + the keep-column selection
-    instead, so a trial change (which re-runs the script but feeds byte-identical
-    raw frames) hits the cache and skips re-normalizing the whole corpus, while
-    changing the kept columns correctly busts it.
+    ``cache_key`` carries a ``frame_fingerprint`` + schema signature + the
+    keep-column selection, so a trial change (which re-runs the script but feeds
+    byte-identical raw frames) hits the cache and skips re-normalizing the whole
+    corpus, while changing the kept columns correctly busts it.
+
+    PERF-6: deliberately **not** ``@st.cache_data``. That would store a copy of
+    its own and hand out another on every hit, so the frames would sit in memory
+    twice — measured at ~1.2 GB of avoidable resident memory at OneStop scale,
+    against the 0.69 s per rerun the copy was costing. `frame_cache` keeps
+    exactly one, which is why `clear_computation_cache` clears it too.
     """
     # UX-37: logged because a cache *miss* is exactly what a "why was that slow?"
     # question is about, and a hit is silent — the line only appears when the
@@ -2473,12 +2456,12 @@ def _normalize_pair(
         tuple(sorted(keep_words)) if keep_words is not None else None,
         tuple(sorted(keep_fix)) if keep_fix is not None else None,
     )
-    # PERF-6: `_normalize_pair_cached` is `@st.cache_data`, which hands back a
-    # deep copy on every *hit* — ~0.69 s and ~0.7 GB of churn per rerun at
-    # OneStop scale, for frames the app already has and never writes to (audited
-    # by tests/test_frame_immutability.py). `frame_cache` keeps the last result
-    # and returns the object itself; the cached function still does the work on
-    # a miss, and still persists it across a session's cache clears.
+    # PERF-6: the normalized frames are cached *only* here. `st.cache_data`
+    # hands back a deep copy on every hit — ~0.69 s and ~0.7 GB of churn per
+    # rerun at OneStop scale, for frames the app already has and never writes to
+    # (audited by tests/test_frame_immutability.py) — and keeping both caches
+    # would hold two copies of the corpus at rest, which is the worse of the two
+    # costs. `frame_cache` keeps one and returns the object itself.
     # PERF-6: the spinner says how much data is being normalized, because on a
     # real corpus this is a ~20 s wait and "Normalizing data…" gives no sense of
     # whether that is expected. `show_spinner=False` on the cached function, so
@@ -2491,7 +2474,7 @@ def _normalize_pair(
         cache_key,
         lambda: _with_spinner(
             notice,
-            _normalize_pair_cached,
+            _normalize_pair_uncached,
             words_df,
             word_schema,
             fixations_df,
@@ -2611,6 +2594,10 @@ def clear_computation_cache() -> None:
     DATA-32's remembered dataset counts, which are derived too.
     """
     st.cache_data.clear()
+    # PERF-6: the normalized frames live in `frame_cache`, not `st.cache_data`,
+    # so clearing only the latter would leave the deleted dataset's frames
+    # behind — which is exactly what this function exists to prevent.
+    clear_frame_cache()
     forget_dataset_counts()
 
 
@@ -3006,6 +2993,23 @@ def upload_read_plan(header, kind: str, *, chosen=()) -> ReadPlan:
     )
 
 
+def _upload_header(uploaded, *, multi: bool) -> list:
+    """Every column name across an upload, in first-seen order (PERF-6).
+
+    The *union*, not the first file's: one upload is commonly one file per
+    participant, and an export can gain or lose a column between them
+    (``read_tables``: "fields absent from a file become NaN"). Resolving the
+    user's chosen columns against only the first header would silently drop a
+    column that lives in a later file, and the mapping dropdowns would not
+    offer it at all.
+    """
+    sources = list(uploaded) if multi else [uploaded]
+    header: list = []
+    for source in sources:
+        header.extend(c for c in read_table_columns(source) if c not in header)
+    return header
+
+
 def _uploaded_header(state_prefix: str) -> list:
     """The full column list of the table uploaded under ``state_prefix``.
 
@@ -3076,8 +3080,7 @@ def _read_uploaded_frame(
     header: list = []
     chosen: tuple = ()
     if kind is not None:
-        source = uploaded[0] if multi else uploaded
-        header = read_table_columns(source)
+        header = _upload_header(uploaded, multi=multi)
         chosen = tuple(sorted(_columns_chosen_in_state(st.session_state, header)))
     st.session_state[f"{state_prefix}_header"] = header
     if multi:

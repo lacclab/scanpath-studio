@@ -119,9 +119,12 @@ def frame_cache(slot: str, key, build):
     """
     try:
         store = st.session_state.setdefault(_FRAME_CACHE_KEY, {})
-    except Exception:
+    except (RuntimeError, AttributeError, KeyError) as exc:
         # No Streamlit runtime (api.py, cli.py, a bare import) — nothing to
-        # cache into, and nothing that reruns.
+        # cache into, and nothing that reruns. Logged rather than silent: the
+        # symptom of catching this wrongly is a cache that simply never works,
+        # which is invisible except as everything being slow.
+        _LOGGER.debug("frame_cache falling back to a plain call: %s", exc)
         return build()
     entry = store.get(slot)
     if entry is not None and entry[0] == key:
@@ -129,6 +132,19 @@ def frame_cache(slot: str, key, build):
     value = build()
     store[slot] = (key, value)
     return value
+
+
+def clear_frame_cache() -> None:
+    """Drop every no-copy frame cache entry (PERF-6).
+
+    Called by ``app.clear_computation_cache`` alongside ``st.cache_data.clear``:
+    the normalized frames are cached *here* rather than there, so clearing only
+    Streamlit's cache would leave a just-deleted dataset's frames alive.
+    """
+    try:
+        st.session_state.pop(_FRAME_CACHE_KEY, None)
+    except (RuntimeError, AttributeError, KeyError):
+        pass  # No runtime: there is no cache to clear.
 
 
 def reset_fingerprint_memo() -> None:
@@ -966,13 +982,41 @@ class ReadPlan:
     columns: tuple[str, ...] | None = None
     na_values: dict[str, list[str]] = field(default_factory=dict)
 
+    def narrowed_to(self, available: Iterable[str]) -> ReadPlan:
+        """This plan restricted to the columns one file actually has.
+
+        A multi-file read — several uploads, or several members of one zip —
+        plans from the *union* of their headers, and ``usecols`` raises on a
+        name the file it is reading does not carry. Narrowing per file is what
+        keeps a heterogeneous set readable, exactly as it was before the read
+        was planned at all (``read_tables``: "fields absent from a file become
+        NaN"). An empty intersection degrades to reading the whole file rather
+        than to reading none of it: a file this plan cannot describe is one
+        there is no basis to prune.
+        """
+        if self.columns is None:
+            return self
+        present = set(available)
+        columns = tuple(name for name in self.columns if name in present)
+        if not columns:
+            return ReadPlan()
+        return ReadPlan(
+            columns=columns,
+            na_values={k: v for k, v in self.na_values.items() if k in present},
+        )
+
 
 def _read_kwargs(plan: ReadPlan | None) -> dict:
-    """``read_csv`` keywords for a plan (nothing at all for ``None``)."""
+    """``read_csv`` keywords for a plan (nothing at all for ``None``).
+
+    An empty ``columns`` reads the whole file, matching the columnar readers in
+    :func:`_read_by_extension` — `usecols=[]` would parse nothing at all, and
+    the two must not disagree about what an empty plan means.
+    """
     if plan is None:
         return {}
     kwargs: dict = {}
-    if plan.columns is not None:
+    if plan.columns:
         kwargs["usecols"] = list(plan.columns)
     if plan.na_values:
         kwargs["na_values"] = plan.na_values
@@ -1073,17 +1117,21 @@ def _zipped_table_columns(file_like_or_path) -> list[str]:
         ]
         if not infos:
             raise ValueError("the zip archive contains no readable table files")
+        # DATA-16/S6: the same declared-size guard the full read applies. A
+        # cheaper way to learn an archive's columns must not also be a way
+        # around its decompression limits.
+        _check_zip_limits(infos)
         for info in infos:
             name = info.filename.lower()
+            if not name.endswith((".tsv", ".tab", ".csv")):
+                # Columnar/workbook members seek, so there is no header-only
+                # read: defer to `_read_zipped_table`, which reads every member
+                # under a running byte budget (declared sizes are forgeable, so
+                # the check above is not sufficient on its own).
+                return list(_read_zipped_table(file_like_or_path).columns)
+            sep = "\t" if name.endswith((".tsv", ".tab")) else ","
             with zf.open(info) as inner:
-                if name.endswith((".tsv", ".tab")):
-                    names = pd.read_csv(inner, sep="\t", nrows=0).columns
-                elif name.endswith(".csv"):
-                    names = pd.read_csv(inner, nrows=0).columns
-                else:
-                    # Columnar/workbook members seek, so there is no cheap
-                    # header read — fall back to the table's own columns.
-                    names = _read_by_extension(io.BytesIO(inner.read()), name).columns
+                names = pd.read_csv(inner, sep=sep, nrows=0).columns
             columns.extend(c for c in names if c not in columns)
     return columns
 
@@ -1344,12 +1392,25 @@ def _read_zipped_table(
                 if name.endswith(_SEEKABLE_ONLY_SUFFIXES):
                     # Columnar/workbook readers seek, so these still land in
                     # memory whole — bounded by the same budget.
-                    frames.append(
-                        _read_by_extension(io.BytesIO(stream.read()), name, plan)
-                    )
+                    buf = io.BytesIO(stream.read())
+                    member_plan = plan
+                    if plan is not None and plan.columns:
+                        member_plan = plan.narrowed_to(read_table_columns(buf))
+                        buf.seek(0)
+                    frames.append(_read_by_extension(buf, name, member_plan))
                 else:
+                    # PERF-6: one archive can hold members with different
+                    # columns, and the plan is built from their union — narrow
+                    # it to this member's own header or `usecols` rejects it.
+                    member_plan = plan
+                    if plan is not None and plan.columns:
+                        with zf.open(info) as head:
+                            sep = "\t" if name.endswith((".tsv", ".tab")) else ","
+                            member_plan = plan.narrowed_to(
+                                pd.read_csv(head, sep=sep, nrows=0).columns
+                            )
                     frames.append(
-                        _read_by_extension(io.BufferedReader(stream), name, plan)
+                        _read_by_extension(io.BufferedReader(stream), name, member_plan)
                     )
             remaining -= stream.consumed
             labels.append(Path(member).stem)

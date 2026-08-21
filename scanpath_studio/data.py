@@ -2849,10 +2849,54 @@ def trial_identity_key(frame: pd.DataFrame) -> list[str]:
     return key
 
 
+def _sample_trials(
+    words: pd.DataFrame, fixations: pd.DataFrame, limit: int | None, seed: int
+) -> tuple[pd.DataFrame, pd.DataFrame, int | None]:
+    """Narrow both frames to ``limit`` trials, or leave them alone (VAL-7).
+
+    Samples the *trial keys* rather than rows, so a chosen trial arrives whole —
+    a half-read trial would look exactly like the two-readings-under-one-id
+    defect this screens for. Returns the frames plus the corpus size sampled
+    from, or ``None`` when no sampling happened.
+    """
+    if not limit or limit <= 0:
+        return words, fixations, None
+    keys = trial_keys(words) | trial_keys(fixations)
+    if len(keys) <= limit:
+        return words, fixations, None
+    rng = np.random.default_rng(seed)
+    ordered = sorted(keys)  # a set's order is not stable across processes
+    picked = {ordered[i] for i in rng.choice(len(ordered), size=limit, replace=False)}
+    kept_words, kept_fixations = filter_to_keys(words, fixations, picked)
+    return kept_words, kept_fixations, len(keys)
+
+
+#: Trials VAL-7's identity check examines by default before it starts sampling.
+#: Measured on the full OneStop corpus (24,046 trials, 5.0 M rows): the census
+#: takes 4.23 s on every dataset load, for one warning line, and this sample
+#: takes 1.15 s. Most of what remains is fixed — narrowing two multi-million-row
+#: frames costs ~0.8 s whatever the sample size — which is why 500 trials only
+#: reaches 0.84 s and is not worth the worse sample. It is a screen, not a
+#: census: a Trial ID that under-specifies does so systematically, across every
+#: reading it merges, so a fair sample of this size finds it.
+TRIAL_IDENTITY_SAMPLE = 2000
+
+
 def diagnose_trial_identity(
-    words: pd.DataFrame, fixations: pd.DataFrame
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    *,
+    sample_trials: int | None = None,
+    seed: int = 0,
 ) -> dict[str, object]:
     """Report evidence that one ``trial_id`` covers more than one reading (VAL-7).
+
+    ``sample_trials`` caps how many trials are examined; ``None`` scans them all
+    (what the 🗂️ Data page's *Check every trial* button asks for). The sample is
+    drawn with a fixed ``seed``, because a screen whose verdict flickers between
+    reruns is worse than no screen. ``sampled_from`` reports the corpus size the
+    sample was drawn from, or ``None`` when nothing was sampled — every count in
+    the report is then "out of ``trials``", which is what was actually looked at.
 
     Returns a dict with:
 
@@ -2880,6 +2924,7 @@ def diagnose_trial_identity(
         "repeated_fixation_id_trials": 0,
         "backwards_clock_trials": 0,
         "multi_valued_columns": {},
+        "sampled_from": None,
     }
     key_frame = fixations if fixations is not None and not fixations.empty else words
     if key_frame is None or key_frame.empty:
@@ -2887,6 +2932,10 @@ def diagnose_trial_identity(
     key = trial_identity_key(key_frame)
     if len(key) < 2:  # need at least participant + trial to speak of a reading
         return report
+    words, fixations, sampled_from = _sample_trials(
+        words, fixations, sample_trials, seed
+    )
+    report["sampled_from"] = sampled_from
     # The denominator is the union across both frames, not one of them: a corpus
     # can carry word boxes for readers who have no fixations (the bundled demo
     # does), and counting the numerator over words against a fixations-only
@@ -2982,8 +3031,14 @@ def trial_identity_warning(report: dict[str, object]) -> str | None:
         return None
     affected = int(report["affected_trials"])
     total = int(report.get("trials") or 0)
+    sampled_from = report.get("sampled_from")
+    scope = (
+        f"of {total} trials sampled from {int(sampled_from):,}"
+        if sampled_from
+        else f"of {total} trials"
+    )
     lead = (
-        f"**{affected} of {total} trials look like more than one reading "
+        f"**{affected} {scope} look like more than one reading "
         f"under the current Trial ID.**"
     )
     multi = report.get("multi_valued_columns") or {}
@@ -3147,7 +3202,18 @@ def preprocess_fixation_stage(
     return _preprocess_fixation_stage_cached(words, fixations, settings, key)
 
 
-@st.cache_data(show_spinner="Preprocessing fixations…")
+#: Ceiling on the caches keyed by a *single trial's* frames (PERF-6). Without
+#: one, a bulk export over OneStop's 20,000 trials leaves 20,000 result frames
+#: behind it — each computed once and never asked for again. Large enough that
+#: stepping back and forth through a few dozen trials still hits the cache,
+#: small enough that an export's footprint is the corpus, not the corpus plus a
+#: copy of every trial's measures.
+PER_TRIAL_CACHE_ENTRIES = 128
+
+
+@st.cache_data(
+    show_spinner="Preprocessing fixations…", max_entries=PER_TRIAL_CACHE_ENTRIES
+)
 def _preprocess_fixation_stage_cached(
     _words: pd.DataFrame, _fixations: pd.DataFrame, settings: dict, cache_key
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -3158,7 +3224,9 @@ def _preprocess_fixation_stage_cached(
     return preprocess_fixations(assigned, _words, settings=settings)
 
 
-@st.cache_data(show_spinner="Computing reading measures…")
+@st.cache_data(
+    show_spinner="Computing reading measures…", max_entries=PER_TRIAL_CACHE_ENTRIES
+)
 def _compute_word_metrics_cached(
     _words: pd.DataFrame, _fixations: pd.DataFrame, cache_key
 ) -> pd.DataFrame:

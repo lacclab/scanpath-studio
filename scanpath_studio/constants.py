@@ -699,3 +699,10 @@ SELECTOR_ROW_WIDE_GRID = [
     SELECTOR_ROW_GRID[0] + SELECTOR_ROW_GRID[1] + SELECTOR_ROW_GRID[2],
     SELECTOR_ROW_GRID[3],
 ]
+
+
+#: VAL-7's identity check screens a sample of trials by default (PERF-6). The
+#: 🗂️ Data page's *Check every trial* button sets this session flag to ask for
+#: the full census instead. UI-only — it is deliberately not wire format, so it
+#: travels in neither a share link nor a saved config.
+TRIAL_IDENTITY_FULL_KEY = "_trial_identity_full_scan"

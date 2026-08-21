@@ -91,6 +91,7 @@ from scanpath_studio.constants import (
     POTEC_DEFAULT_DIR,
     PUBLIC_DATASETS_CHOICE,
     SYNTHETIC_CHOICE,
+    TRIAL_IDENTITY_FULL_KEY,
     UPLOAD_CHOICE,
     WIZARD_LEAVE_KEY,
     WIZARD_STAY_KEY,
@@ -113,6 +114,7 @@ from scanpath_studio.controls import (
 )
 from scanpath_studio.data import (
     FIX_OPTIONAL_FIELDS,
+    TRIAL_IDENTITY_SAMPLE,
     WORD_OPTIONAL_FIELDS,
     ReadPlan,
     compute_canvas_size,
@@ -2279,15 +2281,18 @@ def _stimulus_font_install_hint(css_family: str | None) -> tuple[str, str] | Non
 
 @st.cache_data(show_spinner=False)
 def _cached_trial_identity_report(
-    _words: pd.DataFrame, _fixations: pd.DataFrame, cache_key
+    _words: pd.DataFrame, _fixations: pd.DataFrame, cache_key, sample_trials=None
 ) -> dict:
     """VAL-7's diagnosis, memoized on the two frames' fingerprints.
 
     It groups the whole corpus by trial several times over, so it must not run
     on every rerun — but it also must not be skipped, since the failure it
-    catches is invisible in the figure.
+    catches is invisible in the figure. PERF-6: on a corpus larger than
+    ``sample_trials`` it screens a deterministic sample instead (4.23 s → 1.15 s
+    on full OneStop); the 🗂️ Data page's *Check every trial* button asks for the
+    census by passing ``None``, and lands on its own cache entry.
     """
-    return diagnose_trial_identity(_words, _fixations)
+    return diagnose_trial_identity(_words, _fixations, sample_trials=sample_trials)
 
 
 @st.cache_data(show_spinner="Loading MultiplEYE server bundle…")
@@ -2396,7 +2401,7 @@ def _schema_key(schema: dict | None) -> tuple | None:
     )
 
 
-@st.cache_data(show_spinner="Normalizing data…")
+@st.cache_data(show_spinner=False)
 def _normalize_pair_cached(
     _words_df: pd.DataFrame,
     _word_schema: dict | None,
@@ -2474,10 +2479,19 @@ def _normalize_pair(
     # by tests/test_frame_immutability.py). `frame_cache` keeps the last result
     # and returns the object itself; the cached function still does the work on
     # a miss, and still persists it across a session's cache clears.
+    # PERF-6: the spinner says how much data is being normalized, because on a
+    # real corpus this is a ~20 s wait and "Normalizing data…" gives no sense of
+    # whether that is expected. `show_spinner=False` on the cached function, so
+    # there is one spinner rather than two nested ones.
+    notice = st.spinner(
+        f"Normalizing {len(words_df):,} word rows and {len(fixations_df):,} fixations…"
+    )
     return frame_cache(
         "normalized_pair",
         cache_key,
-        lambda: _normalize_pair_cached(
+        lambda: _with_spinner(
+            notice,
+            _normalize_pair_cached,
             words_df,
             word_schema,
             fixations_df,
@@ -2487,6 +2501,18 @@ def _normalize_pair(
             _keep_fix=keep_fix,
         ),
     )
+
+
+def _with_spinner(notice, func, *args, **kwargs):
+    """Run ``func`` under ``notice``, so the spinner only shows on real work.
+
+    The message is built before the cache lookup (it needs the input sizes), but
+    must not *render* on a cache hit — a spinner that flashes on every rerun is
+    noise. Entering the context here means it opens only when the work actually
+    runs.
+    """
+    with notice:
+        return func(*args, **kwargs)
 
 
 def _reset_active_mapping() -> None:
@@ -5868,10 +5894,16 @@ def main() -> None:
     # on the *unfiltered* frames: this is a property of the mapping, not of the
     # current filter. The full evidence table is in 🔎 Data Inspection; here it
     # gets one line, because the column name is the remedy.
+    # PERF-6: screen a sample by default; the Data page's "Check every trial"
+    # button sets this flag, which is what asks for the full census.
+    identity_sample = (
+        None if st.session_state.get(TRIAL_IDENTITY_FULL_KEY) else TRIAL_IDENTITY_SAMPLE
+    )
     identity_report = _cached_trial_identity_report(
         words_all,
         fixations_all,
         cache_key=(frame_fingerprint(words_all), frame_fingerprint(fixations_all)),
+        sample_trials=identity_sample,
     )
     st.session_state["_trial_identity_report"] = identity_report
     identity_warning = trial_identity_warning(identity_report)

@@ -40,8 +40,68 @@ class ExportStatus:
             return None
         return min(max(self.completed / self.total, 0.0), 1.0)
 
+    @property
+    def rate_per_s(self) -> float | None:
+        """Units finished per second so far, or ``None`` before there are any."""
+        if not self.completed or not self.elapsed_s:
+            return None
+        return self.completed / self.elapsed_s
+
+    @property
+    def remaining_s(self) -> float | None:
+        """Seconds left at the rate observed so far (PERF-6).
+
+        ``None`` until the first unit finishes: with nothing done there is no
+        rate, and an estimate invented from one would be a guess wearing a
+        number. Deliberately the naive rate over the *whole* run rather than a
+        recent window — a bulk export's per-trial cost is near-constant, and an
+        estimate that lurches with each slow trial reads as broken.
+        """
+        rate = self.rate_per_s
+        if rate is None or self.total is None:
+            return None
+        return max(0.0, (self.total - self.completed) / rate)
+
 
 StatusCallback = Callable[[ExportStatus], None]
+
+
+def format_duration(seconds: float | None) -> str:
+    """A duration as a person would say it: ``2h 15m``, ``1m 15s``, ``9s``."""
+    if seconds is None:
+        return ""
+    if seconds < 1:
+        return "under a second"
+    seconds = int(round(seconds))
+    hours, rest = divmod(seconds, 3600)
+    minutes, secs = divmod(rest, 60)
+    if hours:
+        return f"{hours}h {minutes}m"
+    if minutes:
+        return f"{minutes}m {secs}s"
+    return f"{secs}s"
+
+
+def progress_caption(status: ExportStatus) -> str:
+    """One line under the bar: how far, how fast, how much longer.
+
+    A bulk export over a real corpus runs for hours, and "1,203 / 20,000" only
+    answers the first of those. The rate is what makes the estimate legible —
+    it lets someone sanity-check the number rather than take it on faith.
+    """
+    if status.completed is None or status.total is None:
+        return status.message
+    parts = [f"{status.completed:,}/{status.total:,} trials"]
+    rate = status.rate_per_s
+    if rate is not None:
+        parts.append(f"{rate:.3g}/s" if rate < 10 else f"{rate:.0f}/s")
+    remaining = status.remaining_s
+    if remaining is not None:
+        parts.append(
+            "finishing…" if remaining < 1 else f"{format_duration(remaining)} left"
+        )
+    parts.append(status.message)
+    return " · ".join(parts)
 
 
 def emit_status(

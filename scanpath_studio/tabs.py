@@ -79,6 +79,7 @@ from scanpath_studio.constants import (
     SELECTOR_ROW_GRID,
     SELECTOR_ROW_TRIO,
     SELECTOR_ROW_WIDE_GRID,
+    TRIAL_IDENTITY_FULL_KEY,
     WORD_LABEL_COLOR,
     compare_palette_color,
     drift_correction_enabled,
@@ -137,6 +138,7 @@ from scanpath_studio.export_status import (
     EXPORTER_VERSION,
     ExportStage,
     ExportStatus,
+    progress_caption,
     static_export_signature,
 )
 from scanpath_studio.fields import labeled, panel_field
@@ -5171,7 +5173,9 @@ def _render_bulk_export(
             )
             status_box.update(label=f"{status.message}{elapsed}", state=state)
             if status.fraction is not None:
-                text = f"{status.completed}/{status.total} trials · {status.message}"
+                # PERF-6: over a real corpus this runs for hours, so the bar
+                # carries the rate and the time left, not just the count.
+                text = progress_caption(status)
                 if progress_bar is None:
                     progress_bar = progress_slot.progress(status.fraction, text=text)
                 else:
@@ -9078,6 +9082,16 @@ def _render_remap_editor(name: str, stored: dict) -> None:
     )
 
 
+def _request_full_identity_scan() -> None:
+    """Ask for VAL-7's census instead of its sample, from the next run (PERF-6).
+
+    A callback rather than an inline handler: ``app.main`` reads the flag near
+    the top of the run, well before this section renders, so setting it inline
+    would leave the sampled report on screen for one more rerun.
+    """
+    st.session_state[TRIAL_IDENTITY_FULL_KEY] = True
+
+
 def render_trial_identity_section() -> None:
     """VAL-7: the evidence behind "this trial id may cover several readings".
 
@@ -9098,20 +9112,35 @@ def render_trial_identity_section() -> None:
     if not total:
         st.caption("No trials loaded, so there is nothing to check.")
         return
+    # PERF-6: on a large corpus the check screens a deterministic sample, so
+    # every figure below is "out of `total`" — say so, and offer the census.
+    sampled_from = report.get("sampled_from")
+    scope = f"{total} trials" if not sampled_from else f"{total} sampled trials"
     affected = int(report.get("affected_trials") or 0)
     if not affected:
-        st.success(
-            f"Each of the {total} trials looks like a single reading.",
-            icon="✅",
-        )
+        st.success(f"Each of the {scope} looks like a single reading.", icon="✅")
     else:
         st.warning(
-            f"**{affected} of {total} trials look like more than one reading.** "
+            f"**{affected} of {scope} look like more than one reading.** "
             "A Trial ID that doesn't fully identify a reading concatenates "
             "several into one scanpath — which renders perfectly happily, as an "
             "ordinary scanpath with a lot of regressions. Add the column named "
             "below to the Trial ID mapping to separate them.",
             icon="⚠️",
+        )
+    if sampled_from:
+        st.caption(
+            f"Checked {total:,} of this dataset's {int(sampled_from):,} trials. A "
+            "Trial ID that under-specifies does so in every reading it merges, "
+            "so a sample of this size finds it — the full check is here for when "
+            "you want the exact count."
+        )
+        st.button(
+            "🔎 Check every trial",
+            key="trial_identity_full_scan_btn",
+            on_click=_request_full_identity_scan,
+            help=f"Run the check across all {int(sampled_from):,} trials. Slower, "
+            "and the result is kept for the rest of this session.",
         )
     rows = [
         {

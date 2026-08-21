@@ -127,6 +127,7 @@ from scanpath_studio.data import (
     filter_raw_gaze,
     filter_to_keys,
     filter_trials,
+    frame_cache,
     frame_fingerprint,
     harmonize_frames,
     infer_raw_gaze_schema,
@@ -1386,7 +1387,9 @@ def _load_potec_source(
     if not ready:
         return load_sample_data()
     try:
-        return _cached_potec_raw_frames(root)
+        return frame_cache(
+            "raw_frames", ("potec", root), lambda: _cached_potec_raw_frames(root)
+        )
     except (FileNotFoundError, ValueError, OSError) as exc:
         loc.error(f"Couldn't load PoTeC from `{root}`: {exc}")
         return pd.DataFrame(), pd.DataFrame()
@@ -1465,7 +1468,11 @@ def _load_multipleye_source(
     if not ready:
         return load_sample_data()
     try:
-        return _cached_multipleye_raw_frames(root, fixation_source)
+        return frame_cache(
+            "raw_frames",
+            ("multipleye", root, fixation_source),
+            lambda: _cached_multipleye_raw_frames(root, fixation_source),
+        )
     except (FileNotFoundError, ValueError, OSError) as exc:
         loc.error(f"Couldn't load MultiplEYE from `{root}`: {exc}")
         return pd.DataFrame(), pd.DataFrame()
@@ -1584,7 +1591,11 @@ def _load_onestop_public_source(
     if not ready:
         return load_sample_data()
     try:
-        return _cached_onestop_raw_frames(root, regime, tuple(parts), variant)
+        return frame_cache(
+            "raw_frames",
+            ("onestop_public", root, regime, tuple(parts), variant),
+            lambda: _cached_onestop_raw_frames(root, regime, tuple(parts), variant),
+        )
     except (FileNotFoundError, ValueError, OSError) as exc:
         loc.error(f"Couldn't load OneStop from `{root}`: {exc}")
         return pd.DataFrame(), pd.DataFrame()
@@ -1954,7 +1965,11 @@ def _load_benchmark_source(
     if entry and (badge := geometry_badge(entry)):
         opt.caption(badge)
     try:
-        return _cached_eyegenbench_raw_frames(root, dataset)
+        return frame_cache(
+            "raw_frames",
+            ("benchmark", root, dataset),
+            lambda: _cached_eyegenbench_raw_frames(root, dataset),
+        )
     except _MANIFEST_ERRORS as exc:
         loc.error(f"Couldn't load '{dataset}' from `{root}`: {exc}")
         return pd.DataFrame(), pd.DataFrame()
@@ -2323,7 +2338,11 @@ def load_words_and_fixations(
     # The Upload source is handled separately by the setup wizard
     # (`_render_data_setup`), which renders each table's upload + mapping; see main().
     if data_choice == ONESTOP_CHOICE:
-        words, fixations = load_onestop_server_bundle(participant=participant)
+        words, fixations = frame_cache(
+            "raw_frames",
+            ("onestop_bundle", str(onestop_data_dir() or ""), participant),
+            lambda: load_onestop_server_bundle(participant=participant),
+        )
         if words.empty or fixations.empty:
             _note_dataset_unavailable(
                 label="OneStop server bundle",
@@ -2341,7 +2360,11 @@ def load_words_and_fixations(
         return words, fixations
     if data_choice == MULTIPLEYE_BUNDLE_CHOICE:
         try:
-            words, fixations = _cached_multipleye_server_bundle(participant=participant)
+            words, fixations = frame_cache(
+                "raw_frames",
+                ("multipleye_bundle", str(multipleye_bundle_dir() or ""), participant),
+                lambda: _cached_multipleye_server_bundle(participant=participant),
+            )
         except (FileNotFoundError, ValueError, OSError) as exc:
             st.error(f"Couldn't load the MultiplEYE bundle: {exc}")
             st.stop()
@@ -2445,14 +2468,24 @@ def _normalize_pair(
         tuple(sorted(keep_words)) if keep_words is not None else None,
         tuple(sorted(keep_fix)) if keep_fix is not None else None,
     )
-    return _normalize_pair_cached(
-        words_df,
-        word_schema,
-        fixations_df,
-        fix_schema,
+    # PERF-6: `_normalize_pair_cached` is `@st.cache_data`, which hands back a
+    # deep copy on every *hit* — ~0.69 s and ~0.7 GB of churn per rerun at
+    # OneStop scale, for frames the app already has and never writes to (audited
+    # by tests/test_frame_immutability.py). `frame_cache` keeps the last result
+    # and returns the object itself; the cached function still does the work on
+    # a miss, and still persists it across a session's cache clears.
+    return frame_cache(
+        "normalized_pair",
         cache_key,
-        _keep_words=keep_words,
-        _keep_fix=keep_fix,
+        lambda: _normalize_pair_cached(
+            words_df,
+            word_schema,
+            fixations_df,
+            fix_schema,
+            cache_key,
+            _keep_words=keep_words,
+            _keep_fix=keep_fix,
+        ),
     )
 
 

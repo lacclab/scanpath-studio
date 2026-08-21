@@ -92,6 +92,45 @@ _FINGERPRINT_MEMO = threading.local()
 _FINGERPRINT_MEMO_MAX = 64
 
 
+#: Session-state home of the no-copy frame caches (PERF-6), one entry per slot.
+_FRAME_CACHE_KEY = "_sps_frame_cache"
+
+
+def frame_cache(slot: str, key, build):
+    """Return ``build()``'s result, reusing the last one while ``key`` holds.
+
+    ``st.cache_data`` hands every caller a private **deep copy** of its result.
+    That is the right default — it stops one part of the app corrupting
+    another's data — but for the corpus-scale frames it buys nothing and costs a
+    great deal: measured on the full OneStop reports, ~1.15 s and ~1.2 GB of
+    allocate-and-discard on *every* rerun, i.e. on every widget touch, for data
+    the app already had.
+
+    Nothing writes into those frames in place. That is not an assumption:
+    ``tests/test_frame_immutability.py`` captures them as the loader yields them,
+    runs a full render and a rerun on top, and asserts they come back
+    byte-identical — and the same file's canary proves the check would notice if
+    they didn't. So this hands back **the object itself**.
+
+    One entry per slot, deliberately: keeping the previous corpus alive beside
+    the current one would cost more memory than the copy ever did. Falls back to
+    calling ``build`` when there is no session state, which is what the headless
+    API and the CLI see.
+    """
+    try:
+        store = st.session_state.setdefault(_FRAME_CACHE_KEY, {})
+    except Exception:
+        # No Streamlit runtime (api.py, cli.py, a bare import) — nothing to
+        # cache into, and nothing that reruns.
+        return build()
+    entry = store.get(slot)
+    if entry is not None and entry[0] == key:
+        return entry[1]
+    value = build()
+    store[slot] = (key, value)
+    return value
+
+
 def reset_fingerprint_memo() -> None:
     """Drop the per-run fingerprint memo. Called once per script run (PERF-3)."""
     getattr(_FINGERPRINT_MEMO, "cache", {}).clear()

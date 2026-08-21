@@ -71,8 +71,9 @@ and every accepted field is in [Data format](../data-format.md).
 **Outcome:** reviewed trials marked and ready for ID export. *About 4 minutes;
 requires at least one trial.*
 
-1. Open the **filter funnel** on the control line — **Narrow by** plus the
-   condition and annotation filters — to define the review pool.
+1. Open the **filter funnel** beside the trial picker — text and participant
+   pickers, then the condition and annotation filters — to define the review
+   pool.
 2. Step through the trial picker. A multipart trial adds a second navigator for
    its ordered screens.
 3. Open **Annotations** and choose parent-trial or current-screen scope before

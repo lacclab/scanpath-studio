@@ -6,10 +6,11 @@ Start with the default view, then change only controls needed for the question.
 ## Choose a trial
 
 Use the trial picker on the control line above the plot. The filter funnel
-beside it defines which readings are available — **Narrow by** for text and
-participant, plus the condition and annotation filters — and the ⇅ popover orders
-the list, which helps surface long, short, early, or late trials. The detail
-popover shows the active trial's summary fields.
+beside it holds every way to narrow the pool — pickers for text and participant
+at the top (*All texts* / *All participants* until you choose), then the
+condition and annotation filters — and the ⇅ popover orders the list, which helps
+surface long, short, early, or late trials. The detail popover shows the active
+trial's summary fields.
 
 When a trial contains ordered screens, a second navigator appears below the
 trial picker. The plot always shows one screen in its own recorded canvas; use

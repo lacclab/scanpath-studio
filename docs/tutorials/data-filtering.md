@@ -5,11 +5,11 @@ an auditable retained pool.
 
 ## 1. Narrow the trial pool
 
-Load the dataset, then open the **filter funnel** on the control line above the
-plot: it holds **Narrow by** (text and participant) together with the condition
-and annotation filters. Start with broad dataset fields such as participant,
-condition, correctness, or repeated-reading status. Use the ⇅ trial-ordering
-popover to surface unusually short or long trials.
+Load the dataset, then open the **filter funnel** beside the trial picker: it
+holds the text and participant pickers together with the condition and annotation
+filters. Start with broad dataset fields such as participant, condition,
+correctness, or repeated-reading status. Use the ⇅ trial-ordering popover to
+surface unusually short or long trials.
 
 Avoid applying many filters at once: add one, check the remaining count, then
 continue. If the pool becomes empty, use the adjacent clear action to identify

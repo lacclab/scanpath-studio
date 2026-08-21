@@ -16,8 +16,9 @@ set `SCANPATH_PUBLIC_DATASETS=0`.
 On the 🗂️ **Data** page, pick **MultiplEYE** as the data source, point
 *Data directory* at a session set (the *Expected files* panel lists the layout it
 looks for), and choose the **fixation source** (`scanpaths` or `fixations`). The
-whole session set loads — use the **filter funnel** above the plot (**Narrow by**
-plus the condition filters) to focus on specific readers or stimuli. A
+whole session set loads — use the **filter funnel** beside the trial picker
+(text and participant pickers, then the condition filters) to focus on specific
+readers or stimuli. A
 directory load surfaces all the rich side data (below); the browser-upload path
 supports a subset (see *Uploading* at the end).
 

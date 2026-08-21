@@ -4,8 +4,26 @@
     {
       "name": "tracker-archive",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["tracker/server.py", "--port", "8790", "--no-open"],
+      "runtimeArgs": [
+        "tracker/server.py",
+        "--port",
+        "8790",
+        "--no-open"
+      ],
       "port": 8790
+    },
+    {
+      "name": "scanpath-studio",
+      "runtimeExecutable": "streamlit",
+      "runtimeArgs": [
+        "run",
+        "streamlit_app.py",
+        "--server.port",
+        "8511",
+        "--server.headless",
+        "true"
+      ],
+      "port": 8511
     }
   ]
 }

@@ -83,6 +83,20 @@ _TOUR_OPTOUT_MAX_AGE = 365 * 24 * 60 * 60
 # code; this only picks which one auto-opens / the replay button launches.
 TOUR_STYLE = "spotlight"
 
+# UX-101: the trial filters live behind one funnel since UX-64, and a *closed*
+# Streamlit popover renders no body — so `tour_grp_narrow_by` is absent from the
+# page until the funnel is clicked, and a step aimed at it silently spotlighted
+# nothing. A step that points inside a popover names the trigger that opens it
+# here, and the spotlight opens it (see `_popover_script`).
+#
+# Two selectors because the picker row has two layouts: `select_trial` drops the
+# slider for a pool of one and gives the funnel its own trailing column
+# (`railbtn_single_filter_solo`) — exactly the case a filter *causes*, so the
+# tour must reach it there too.
+FUNNEL_TRIGGER = (
+    ".st-key-railbtn_single_filter button, .st-key-railbtn_single_filter_solo button"
+)
+
 
 @dataclass(frozen=True)
 class TutorialStep:
@@ -97,6 +111,10 @@ class TutorialStep:
     #: screen rather than its overview, so opening the view is not enough: the
     #: editor has to be raised too, or the spotlight aims at a hidden container.
     dataset_editor: bool = False
+    #: UX-101 — the step's target is built inside a popover, so it is not in the
+    #: page until that popover's trigger is clicked. The selector of the trigger;
+    #: the spotlight opens it before it looks for the target (`_popover_script`).
+    popover: str = ""
     optional: bool = False
     #: PRE-22 — a step about a feature this build may not show. ``"preprocessing"``
     #: is the only value so far; a step whose gate is closed is dropped from the
@@ -207,12 +225,13 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
         steps=(
             TutorialStep(
                 "Narrow the review pool",
-                "Open the funnel beside the trial picker: the text and "
-                "participant pickers at the top (*All texts* / *All "
-                "participants* until you narrow), then condition and annotation "
-                "filters (favorites, tags). This tutorial only points; it never "
-                "changes a filter.",
+                "The funnel beside the trial picker — opened for you here — "
+                "holds the text and participant pickers at the top (*All texts* "
+                "/ *All participants* until you narrow), then condition and "
+                "annotation filters (favorites, tags). This tutorial only "
+                "points; it never changes a filter.",
                 ".st-key-tour_grp_narrow_by",
+                popover=FUNNEL_TRIGGER,
             ),
             TutorialStep(
                 "Review one trial at a time",
@@ -659,11 +678,12 @@ _SPOTLIGHT_STEPS = [
     # the whole block.
     {
         "selector": ".st-key-tour_grp_narrow_by",
+        "popover": FUNNEL_TRIGGER,
         "title": "🔍 Narrow the pool",
-        "body": "The funnel beside the trial picker holds every way to narrow "
-        "the pool: the text and participant pickers first (*All texts* / *All "
-        "participants*), then the condition and annotation filters (favorites, "
-        "tags).",
+        "body": "The funnel beside the trial picker — opened behind this card — "
+        "holds every way to narrow the pool: the text and participant pickers "
+        "first (*All texts* / *All participants*), then condition and "
+        "annotation filters (favorites, tags).",
     },
     {
         "selector": ".st-key-tour_grp_trial_picker",
@@ -883,6 +903,88 @@ def _highlight_css(selector: str, accent: str) -> str:
 """
 
 
+#: UX-101, measured live (Streamlit 1.62, 1440×900): a popover's panel is drawn
+#: at ``z-index: 1000060``, above the card's 999990 — so on a step that opens
+#: one, the panel covered the card's left edge and cut the first word off every
+#: line. Raise the card **only on those steps**; everywhere else it stays under
+#: Streamlit's own overlays, where a floating card belongs.
+_CARD_OVER_POPOVER_CSS = ".st-key-tour_card { z-index: 1000070; }"
+
+
+def _all_popover_triggers() -> str:
+    """One selector matching every popover trigger the tour knows how to open.
+
+    Derived from the steps themselves rather than listed, so a step that starts
+    opening a second popover is closed again by the steps after it for free.
+    """
+    declared = {step.get("popover") for step in _SPOTLIGHT_STEPS}
+    declared |= {step.popover for tutorial in TUTORIALS for step in tutorial.steps}
+    return ", ".join(sorted(trigger for trigger in declared if trigger))
+
+
+def _popover_script(trigger: str) -> str:
+    """Open the popover this step points inside, and close the last step's.
+
+    A closed Streamlit popover renders **no body**: before UX-101 the two
+    *narrow the pool* steps pointed at a container that only exists while the
+    funnel is open, so the spotlight retried for 30 s and then gave up in
+    silence — no highlight, no scroll, no error, and the card still advanced.
+
+    Opening it is the one piece of state the tour touches, and it is chrome, not
+    data: no widget inside is read or written, so the tutorial's promise that it
+    "never changes a filter" holds. Clicking is gated on ``aria-expanded`` so a
+    funnel the user already opened is left alone (a second click would close
+    it), and every *other* trigger the tour opens is closed, so the panel from
+    the previous step cannot sit over this step's target.
+    """
+    others = _all_popover_triggers()
+    if not (trigger or others):
+        return ""
+    return f"""<script>
+                (function () {{
+                    const doc = window.parent.document;
+                    const win = doc.defaultView;
+                    const wanted = {trigger!r};
+                    const all = {others!r};
+                    // Only ever click a trigger that is really on screen.
+                    // Streamlit keeps a 0x0 twin of the picker row in the DOM,
+                    // so a plain querySelector can land on a button nobody can
+                    // see — the same trap `_scroll_into_view_script` documents.
+                    const visible = (el) => {{
+                        const r = el.getBoundingClientRect();
+                        if (!r.width || !r.height) return false;
+                        const cs = win.getComputedStyle(el);
+                        return cs.visibility !== "hidden" && cs.display !== "none";
+                    }};
+                    let tries = 0;
+                    (function attempt() {{
+                        if (wanted) {{
+                            const target = [...doc.querySelectorAll(wanted)]
+                                .find(visible);
+                            if (!target) {{
+                                // Riding out the first run, where the card
+                                // streams to the browser well before the picker
+                                // row it points at (see render_spotlight_tour).
+                                if (++tries < 200) setTimeout(attempt, 150);
+                                return;
+                            }}
+                            if (target.getAttribute("aria-expanded") !== "true") {{
+                                target.click();
+                            }}
+                        }}
+                        if (!all) return;
+                        for (const other of doc.querySelectorAll(all)) {{
+                            if (wanted && other.matches(wanted)) continue;
+                            if (other.getAttribute("aria-expanded") === "true"
+                                    && visible(other)) {{
+                                other.click();
+                            }}
+                        }}
+                    }})();
+                }})();
+                </script>"""
+
+
 def _scroll_into_view_script(selector: str) -> str:
     """Centre `selector`'s first *visible* match within its own scroller.
 
@@ -974,6 +1076,7 @@ def render_spotlight_tour() -> None:
         + _CARD_CSS
         + f".st-key-tour_card {{ background: {bg}; border: 1px solid {border}; }}"
         + (_WELCOME_CSS if step_idx == 0 else "")
+        + (_CARD_OVER_POPOVER_CSS if step.get("popover") else "")
         + highlight
         + "</style>",
         unsafe_allow_html=True,
@@ -1033,6 +1136,13 @@ def render_spotlight_tour() -> None:
         # run is still loading (the Streamlit click alone would only take
         # effect once that ~10 s run finishes). See _dismiss_listener_script.
         embed_html_iframe(_dismiss_listener_script(step["selector"]), height=0)
+
+        # UX-101: raise the popover this step points inside (and lower the one
+        # the last step raised) BEFORE the find-and-scroll below goes looking —
+        # a closed popover has no body for it to find.
+        popover_script = _popover_script(step.get("popover", ""))
+        if popover_script:
+            embed_html_iframe(popover_script, height=0)
 
         if step["selector"]:
             # Bring the highlighted section into view. Same-origin iframe
@@ -1474,6 +1584,7 @@ def render_use_case_tutorial() -> None:
         "<style>"
         + _CARD_CSS
         + f".st-key-tour_card {{ background: {bg}; border: 1px solid {border}; }}"
+        + (_CARD_OVER_POPOVER_CSS if step.popover else "")
         + highlight
         + "</style>",
         unsafe_allow_html=True,
@@ -1559,6 +1670,10 @@ def render_use_case_tutorial() -> None:
             </script>""",
             height=0,
         )
+
+        popover_script = _popover_script(step.popover)
+        if popover_script:
+            embed_html_iframe(popover_script, height=0)
 
         if selector:
             embed_html_iframe(

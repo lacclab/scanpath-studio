@@ -407,6 +407,50 @@ class TestFaq:
             assert len(answer) <= 480, f"FAQ answer too long: {question!r}"
 
 
+def _keys_built_inside_a_popover() -> set[str]:
+    """Container keys created off a ``st.popover(...)`` handle.
+
+    A closed popover renders no body, so these keys are absent from the DOM
+    until their trigger is clicked (UX-101). Found by reading the source rather
+    than listed by hand: the point is to notice the *next* control that moves
+    into a popover.
+    """
+    import ast
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "scanpath_studio"
+    keys: set[str] = set()
+    for module in ("tabs", "app", "controls", "annotations", "menu"):
+        tree = ast.parse((root / f"{module}.py").read_text(encoding="utf-8"))
+        for scope in ast.walk(tree):
+            handles = {
+                node.targets[0].id
+                for node in ast.walk(scope)
+                if isinstance(node, ast.Assign)
+                and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)
+                and isinstance(node.value, ast.Call)
+                and isinstance(node.value.func, ast.Attribute)
+                and node.value.func.attr == "popover"
+            }
+            if not handles:
+                continue
+            for node in ast.walk(scope):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "container"
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id in handles
+                ):
+                    keys |= {
+                        kw.value.value
+                        for kw in node.keywords
+                        if kw.arg == "key" and isinstance(kw.value, ast.Constant)
+                    }
+    return keys
+
+
 class TestSpotlightSelectorsResolve:
     """Every spotlight step must point at a container that actually exists.
 
@@ -483,6 +527,100 @@ class TestSpotlightSelectorsResolve:
         selectors = [s["selector"] for s in _SPOTLIGHT_STEPS if s.get("selector")]
         duplicates = {s for s in selectors if selectors.count(s) > 1}
         assert not duplicates, f"steps share a spotlight target: {duplicates}"
+
+    def test_a_target_inside_a_popover_says_so(self):
+        """UX-101: a closed Streamlit popover renders **no body**.
+
+        UX-64 folded the trial filters into one funnel, which put
+        ``tour_grp_narrow_by`` inside a popover — and the two steps aimed at it
+        went on pointing at an element that only exists while the funnel is
+        open. The spotlight's find-and-scroll retried for 30 s and then returned
+        silently: no highlight, no error, and the card still advanced.
+
+        So every step whose target is built off a popover handle has to declare
+        the trigger that opens it. The containment is read out of the source,
+        not listed here, so the next control that moves into a popover fails
+        this instead of going quiet in the browser.
+        """
+        from scanpath_studio.tour import TUTORIALS, _SPOTLIGHT_STEPS
+
+        inside = _keys_built_inside_a_popover()
+        assert "tour_grp_narrow_by" in inside, (
+            "the scan found no popover-contained container at all — it has "
+            "stopped seeing what it is meant to police"
+        )
+        undeclared = [
+            step["title"]
+            for step in _SPOTLIGHT_STEPS
+            if (step.get("selector") or "").removeprefix(".st-key-") in inside
+            and not step.get("popover")
+        ] + [
+            step.title
+            for tutorial in TUTORIALS
+            for step in tutorial.steps
+            if step.selector.removeprefix(".st-key-") in inside and not step.popover
+        ]
+        assert not undeclared, (
+            "these steps point inside a popover but don't say which one to "
+            f"open, so they will spotlight nothing: {undeclared}"
+        )
+
+    def test_the_funnel_steps_open_the_funnel(self):
+        """Both narrow-the-pool steps name the funnel trigger — in both of the
+        layouts the picker row has (a pool of one drops the slider and puts the
+        funnel in its own trailing column)."""
+        from scanpath_studio.tour import FUNNEL_TRIGGER, TUTORIALS, _SPOTLIGHT_STEPS
+
+        assert ".st-key-railbtn_single_filter " in FUNNEL_TRIGGER
+        assert ".st-key-railbtn_single_filter_solo " in FUNNEL_TRIGGER
+        declared = [
+            step.get("popover")
+            for step in _SPOTLIGHT_STEPS
+            if step["selector"] == ".st-key-tour_grp_narrow_by"
+        ] + [
+            step.popover
+            for tutorial in TUTORIALS
+            for step in tutorial.steps
+            if step.selector == ".st-key-tour_grp_narrow_by"
+        ]
+        assert declared == [FUNNEL_TRIGGER, FUNNEL_TRIGGER]
+
+    def test_the_open_script_only_clicks_a_closed_trigger(self):
+        """Opening is idempotent: a funnel the user already opened is left as
+        it is, because a second click would close it."""
+        from scanpath_studio.tour import FUNNEL_TRIGGER, _popover_script
+
+        script = _popover_script(FUNNEL_TRIGGER)
+        assert "aria-expanded" in script
+        assert FUNNEL_TRIGGER in script
+        # …and only a trigger that is really on screen: Streamlit keeps a 0x0
+        # twin of the picker row, so clicking the first match would toggle a
+        # popover nobody can see (observed live at 1440x900).
+        assert "getBoundingClientRect" in script
+        assert "find(visible)" in script
+
+    def test_the_card_rises_above_the_panel_it_opened(self):
+        """Streamlit draws a popover's panel above the card, so an opened funnel
+        covered the card's left edge and cut the first word off every line
+        (measured live at 1440x900). The card outranks it on those steps only."""
+        from scanpath_studio.tour import _CARD_OVER_POPOVER_CSS
+
+        assert "z-index: 1000070" in _CARD_OVER_POPOVER_CSS
+        for source in ("render_spotlight_tour", "render_use_case_tutorial"):
+            import inspect
+
+            from scanpath_studio import tour
+
+            body = inspect.getsource(getattr(tour, source))
+            assert "_CARD_OVER_POPOVER_CSS" in body, source
+
+    def test_a_step_without_a_popover_closes_the_one_before_it(self):
+        """The panel the previous step opened must not sit over this step's
+        target, so every step's script knows every trigger the tour opens."""
+        from scanpath_studio.tour import FUNNEL_TRIGGER, _popover_script
+
+        script = _popover_script("")
+        assert FUNNEL_TRIGGER in script
 
     def test_data_source_sits_outside_the_filter_spotlight(self):
         """UX-42: adjacent targets must not be nested inside one highlight."""
@@ -578,7 +716,7 @@ class TestSpotlightSelectorsResolve:
         from scanpath_studio.tabs import render_single_trial_tab
 
         tab_source = inspect.getsource(render_single_trial_tab)
-        control_source = inspect.getsource(controls.sidebar_controls)
+        control_source = inspect.getsource(controls.render_plot_controls)
 
         assert 'st.markdown("## 🎛️ Plot controls")' in tab_source
         assert 'st.markdown("## 🎛️ View modes")' not in tab_source
@@ -600,8 +738,8 @@ class TestSpotlightSelectorsResolve:
 
         from scanpath_studio import app, controls
 
-        control_source = inspect.getsource(controls.sidebar_controls)
-        canvas_source = inspect.getsource(app.render_sidebar_canvas_controls)
+        control_source = inspect.getsource(controls.render_plot_controls)
+        canvas_source = inspect.getsource(app.render_canvas_controls)
 
         assert '"📐 **Figure & canvas**"' in control_source
         assert "render_text=show_labels" in control_source
@@ -633,7 +771,7 @@ class TestSpotlightSelectorsResolve:
 
         from scanpath_studio import controls
 
-        control_source = inspect.getsource(controls.sidebar_controls)
+        control_source = inspect.getsource(controls.render_plot_controls)
 
         assert '"👁️ **Fixations**"' in control_source
         assert 'f"🧹 **Filter**{' in control_source
@@ -652,7 +790,7 @@ class TestSpotlightSelectorsResolve:
         zoomed out far enough to reach the side-by-side branch.
 
         Two things keep that from coming back: the heading row holds a single
-        element, and the reset renders after ``sidebar_controls`` (creation
+        element, and the reset renders after ``render_plot_controls`` (creation
         order is what puts it at the foot of the rail's scroll area).
         """
         import inspect
@@ -667,7 +805,7 @@ class TestSpotlightSelectorsResolve:
         assert "render_viz_reset(st)" in tab_source
         # No second column in the heading row, and no reset above the controls.
         assert "rail_heading, rail_reset = st.columns(" not in tab_source
-        assert tab_source.index("sidebar_controls(") < tab_source.index(
+        assert tab_source.index("render_plot_controls(") < tab_source.index(
             "render_viz_reset(st)"
         )
 

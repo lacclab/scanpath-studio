@@ -7,18 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Every dataset arrives with its figures already in the table** (DATA-36)
+
 ### Changed
 - **The README and the docs site describe the app as it is at 0.29.0**
 
 ### Fixed
+- **A trial is counted as a reader-and-trial pair, not a bare trial id** (DATA-36)
 - **A large release no longer fails to create its GitHub release** (ENG-43)
 
 ### Details
+
+#### Added
+- **Every dataset arrives with its figures already in the table** (DATA-36) — the 🗂️ Data table only filled its count columns for a dataset the session was holding, so on a fresh session almost every row was blank: a public corpus is not read until it is opened, and reading thirty-one of them to fill a table would cost minutes. Each catalogue entry now states the figures its own corpus publishes — PoTeC's README (75 readers × 12 texts = 900 trials), OneStop's 360 readers, the counts every prepared benchmark corpus already carries in its bundle manifest — and the row shows those until it is opened, at which point what actually loaded takes over. A new **Counts** column says which of the two you are looking at, because "Published · 360 participants" is a claim about the corpus and "Loaded · 180" is a fact about your session. ℹ️ About names the basis for each figure and, once the dataset is loaded, sets the two side by side: loading *less* than the corpus publishes is the ordinary case (one OneStop regime, one MultiplEYE session folder), while loading **more** is the one thing that can only mean the published figure is wrong, and that row is flagged. The two datasets that ship inside the package are pinned by a test that recounts them from the files, so regenerating the demo corpus fails a test rather than leaving a stale number on screen.
 
 #### Changed
 - **The README and the docs site describe the app as it is at 0.29.0** — the docs still had the sidebar, a three-subtab Corpus Analysis, a seven-step upload wizard, per-layer 🧹 filters and a 🔥 Overlays section, none of which the app has had for a release or more. The user-facing pages now match: the top nav's three views plus the 💾 Session / ❓ Help dialogs, the 🗂️ Data page's two screens (📂 Available datasets · ✏️ Edit dataset), *Per sentence* beside the other three analysis subtabs, the two-part wizard, the one-line plot-rail sections with the single 🧹 Filter (UX-72/UX-80/UX-81/UX-86), the participant-metadata table, the thirty-one harmonised corpora, and PRE-22's note that the Preprocessing panel is held back from this release while the API and `analyze` are not. `docs/cli.md` gains the public-corpus flags (`--potec` / `--onestop*` / `--eyegenbench*` / `--source multipleye`) and the styling options it never listed; `docs/api.md` gains `load_onestop` and `load_multipleye`. `AGENTS.md` and `CONTRIBUTING.md` are corrected the same way — the module map had five modules missing and described `menu.py`, `controls.py` and `wizard_shell.py` as they were before UX-80/UX-100, and CONTRIBUTING still opened by telling a new contributor to start the tracker server that ENG-32 froze.
 
 #### Fixed
+- **A trial is counted as a reader-and-trial pair, not a bare trial id** (DATA-36) — the dataset table and the 🗂️ Data summary both counted *distinct `trial_id` values*, which is only the number of trials for a corpus that numbers them globally. PoTeC names its trials after the text, so all 75 readers share the same twelve ids and both places reported **12 trials** for a corpus whose own README says 900 (75 participants × 12 texts). They now count `(participant_id, trial_id)` pairs — what the trial picker lists, since `build_combo_options` de-duplicates on exactly that — which also drops the full-column `astype(str).tolist()` the old union ran over every trial id in the frame (2.4 M of them on OneStop).
 - **A large release no longer fails to create its GitHub release** (ENG-43) — `v0.29.0` bundled six months of work, so its changelog section came to 172,795 characters; GitHub rejects a release body over 125,000, so the tag published to PyPI and then failed on *Create GitHub release* (HTTP 422). `scripts/changelog_notes.py` now takes `--max-chars` and `--details-url`, and over the cap it keeps the changelog's **headline** half and links the rest — which is what the two-tier shape (ENG-34) exists for, the headlines being the half written to be pasted somewhere. Only if the headlines alone still overrun does it truncate, always at a line boundary and always saying it did. The publish workflow passes 120,000 for the release body (leaving room for the install line it appends) and 3,500 for the Slack notification, whose ceiling is far lower and which would have hit the same wall.
 
 ## [0.29.0] - 2026-08-21

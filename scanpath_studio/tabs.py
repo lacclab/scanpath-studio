@@ -8126,10 +8126,14 @@ def _dataset_statistics(
     participant_ids = set(_words["participant_id"].unique()) | set(
         _fixations["participant_id"].unique()
     )
-    trial_ids = set(_words["trial_id"].unique()) | set(_fixations["trial_id"].unique())
+    # DATA-36: a trial is a **(participant, trial_id) pair**, matching both the
+    # trial picker and the dataset table beside this. Counting distinct trial
+    # ids instead said "12 trials" for all 900 of PoTeC's, because that corpus
+    # names its trials after the text and every reader reads all twelve.
+    trial_ids = trial_keys(_words) | trial_keys(_fixations)
     if "participant_id" in _raw_gaze.columns:
         participant_ids |= set(_raw_gaze["participant_id"].unique())
-        trial_ids |= set(_raw_gaze["trial_id"].unique())
+        trial_ids |= trial_keys(_raw_gaze)
     text_col = "unique_text_id" if "unique_text_id" in _words.columns else "text_id"
     text_ids = set(_words[text_col].unique()) if text_col in _words.columns else set()
 

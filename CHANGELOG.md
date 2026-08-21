@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **A trial is counted as a reader-and-trial pair, not a bare trial id** (DATA-36)
+- **Two prompts no longer send you to a sidebar the app hasn't had since UX-38** (UX-38)
 - **A large release no longer fails to create its GitHub release** (ENG-43)
 
 ### Details
@@ -27,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Fixed
 - **A trial is counted as a reader-and-trial pair, not a bare trial id** (DATA-36) — the dataset table and the 🗂️ Data summary both counted *distinct `trial_id` values*, which is only the number of trials for a corpus that numbers them globally. PoTeC names its trials after the text, so all 75 readers share the same twelve ids and both places reported **12 trials** for a corpus whose own README says 900 (75 participants × 12 texts). They now count `(participant_id, trial_id)` pairs — what the trial picker lists, since `build_combo_options` de-duplicates on exactly that — which also drops the full-column `astype(str).tolist()` the old union ran over every trial id in the frame (2.4 M of them on OneStop).
+- **Two prompts no longer send you to a sidebar the app hasn't had since UX-38** (UX-38) — a public corpus whose files are missing said "Set **Data location** in the sidebar", and the wizard's trial-filter picker promised "a value picker in the sidebar Filter panel". Data location is a section of the 🗂️ Data page and the filters are the **More** popover beside Narrow by; both now say so.
 - **A large release no longer fails to create its GitHub release** (ENG-43) — `v0.29.0` bundled six months of work, so its changelog section came to 172,795 characters; GitHub rejects a release body over 125,000, so the tag published to PyPI and then failed on *Create GitHub release* (HTTP 422). `scripts/changelog_notes.py` now takes `--max-chars` and `--details-url`, and over the cap it keeps the changelog's **headline** half and links the rest — which is what the two-tier shape (ENG-34) exists for, the headlines being the half written to be pasted somewhere. Only if the headlines alone still overrun does it truncate, always at a line boundary and always saying it did. The publish workflow passes 120,000 for the release body (leaving room for the install line it appends) and 3,500 for the Slack notification, whose ceiling is far lower and which would have hit the same wall.
 
 ## [0.29.0] - 2026-08-21

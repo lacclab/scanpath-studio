@@ -1223,9 +1223,9 @@ def _render_dataset_unavailable() -> None:
     """UX-7(b): a first-class "this corpus isn't here yet" state in the main area.
 
     Picking a download-on-demand corpus whose files aren't present used to change
-    nothing visible except a sidebar line — the loaders quietly fall back to the
-    bundled demo, so the plot showed *demo* scanpaths as though the choice had
-    taken effect. This names the dataset, says what's missing and how big the
+    nothing visible except a line in the data-location panel — the loaders quietly
+    fall back to the bundled demo, so the plot showed *demo* scanpaths as though
+    the choice had taken effect. This names the dataset, says what's missing and how big the
     download is, offers the action inline, and states plainly that the demo is
     what's on screen meanwhile.
     """
@@ -1285,7 +1285,8 @@ def _dataset_access_status(
     an already-downloaded corpus never re-checks the network).
 
     A missing corpus is also recorded for the main-area empty state (UX-7): the
-    sidebar line alone is easy to miss when the plot keeps rendering demo data.
+    data-location line alone is easy to miss when the plot keeps rendering demo
+    data.
     """
     if present:
         cfg.success(f"Found in `{root}`")
@@ -1297,8 +1298,8 @@ def _dataset_access_status(
         _note_dataset_unavailable(
             label=label,
             reason="its files aren't in the folder you pointed at.",
-            action="Set **Data location** in the sidebar to a folder holding the "
-            "files listed under **Expected files**.",
+            action="Set **Data location** on the 🗂️ Data page to a folder "
+            "holding the files listed under **Expected files**.",
             root=root,
         )
         return False

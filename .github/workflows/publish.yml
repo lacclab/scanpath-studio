@@ -46,7 +46,15 @@ jobs:
         run: |
           VERSION="${TAG#v}"
           NOTES_FILE="$(mktemp)"
-          python scripts/changelog_notes.py "$VERSION" --format markdown > "$NOTES_FILE"
+          # GitHub rejects a release body over 125,000 characters, and a
+          # release that bundles months of work overruns that (v0.29.0's
+          # section was 172,795) — which published to PyPI and then failed
+          # here. Over the cap the changelog's headline half is kept and the
+          # rest is linked; leave headroom for the install line appended below.
+          python scripts/changelog_notes.py "$VERSION" --format markdown \
+            --max-chars 120000 \
+            --details-url "https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/CHANGELOG.md" \
+            > "$NOTES_FILE"
           if [ ! -s "$NOTES_FILE" ]; then
             printf 'Release %s of scanpath-studio.' "$TAG" > "$NOTES_FILE"
           fi
@@ -70,7 +78,11 @@ jobs:
           fi
           VERSION="${TAG#v}"
           URL="https://pypi.org/project/scanpath-studio/${VERSION}/"
-          NOTES="$(python scripts/changelog_notes.py "$VERSION")"
+          # Slack's ceiling is far lower than GitHub's, and a notification is
+          # a summary either way — keep the headlines, link the rest.
+          NOTES="$(python scripts/changelog_notes.py "$VERSION" \
+            --max-chars 3500 \
+            --details-url "https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/CHANGELOG.md")"
           HEADER=":rocket: *scanpath-studio ${TAG}* published to PyPI"
           if [ -n "$NOTES" ]; then
             TEXT="$(printf '%s\n%s\n\n*Release notes:*\n%s' "$HEADER" "$URL" "$NOTES")"

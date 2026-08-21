@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **A large release no longer fails to create its GitHub release** (ENG-43)
+
+### Details
+
+#### Fixed
+- **A large release no longer fails to create its GitHub release** (ENG-43) — `v0.29.0` bundled six months of work, so its changelog section came to 172,795 characters; GitHub rejects a release body over 125,000, so the tag published to PyPI and then failed on *Create GitHub release* (HTTP 422). `scripts/changelog_notes.py` now takes `--max-chars` and `--details-url`, and over the cap it keeps the changelog's **headline** half and links the rest — which is what the two-tier shape (ENG-34) exists for, the headlines being the half written to be pasted somewhere. Only if the headlines alone still overrun does it truncate, always at a line boundary and always saying it did. The publish workflow passes 120,000 for the release body (leaving room for the install line it appends) and 3,500 for the Slack notification, whose ceiling is far lower and which would have hit the same wall.
+
 ## [0.29.0] - 2026-08-21
 
 ### Added

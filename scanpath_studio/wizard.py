@@ -998,7 +998,8 @@ def _wizard_keep_and_filter(tables: list, filter_host, keep_host) -> tuple[dict,
             default=opts,
             key="wizard_filter_by",
             help="Trial-level conditions (Hunting/Gathering, difficulty, …). Each "
-            "becomes a value picker in the **More** filters beside Narrow by.",
+            "becomes a value picker in the trial-filter popover — the funnel "
+            "beside the trial picker.",
         )
 
     # --- Additional fields to keep: non-meta detected + unclaimed, cross-table ---

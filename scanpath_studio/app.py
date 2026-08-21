@@ -2041,25 +2041,27 @@ PUBLIC_DATASET_REGISTRY: dict = {
         "repeated) and seven trial parts (title / question / paragraph / answers "
         "/ feedback). Downloaded from OSF, or read from a LaCC lab export.",
         link="https://github.com/lacclab/OneStop-Eye-Movements",
-        # DATA-36. **Texts is deliberately absent.** The public release carries
-        # no unique paragraph key — only `article_batch` / `article_id` /
-        # `paragraph_id` / `difficulty_level` — so `text_id` maps to
-        # `paragraph_id`, the index *within* an article, and the app counts
-        # seven texts for a corpus of 162 paragraphs. Publishing 162 beside a
-        # measured 7 would read as a broken row; the id is the thing to fix
-        # (BUG-43), and this figure lands with it.
+        # DATA-36. **Texts** counts one paragraph at one difficulty level: the
+        # composed `unique_paragraph_id` (BUG-43) makes Advanced and Elementary
+        # two texts rather than two renderings of one, exactly as the bundled
+        # demo's ids do. Before that fix `text_id` mapped to `paragraph_id` —
+        # the index *within* an article — and the whole corpus read as seven
+        # texts, which is why this figure was left unpublished until now.
         published_counts={
             "Participants": 360,
+            "Texts": 330,
             "Trials": 24046,
             "Words": 2632159,
             "Fixations": 2400788,
         },
         published_counts_source=(
             "360 readers is the corpus' own figure (Berzak et al. 2025). The "
-            "trial, word and fixation totals were measured from the public OSF "
-            "release's Paragraph reports across all four regimes — one regime is "
-            "what this source loads at a time, so a single load holds a fraction "
-            "of them."
+            "text, trial, word and fixation totals were measured from the public "
+            "OSF release's Paragraph reports across all four regimes — one regime "
+            "is what this source loads at a time, so a single load holds a "
+            "fraction of them. 330 texts is 165 paragraphs at two difficulty "
+            "levels, and matches the distinct `unique_paragraph_id` count in the "
+            "lab export, which composes that id a different way."
         ),
         geometry="✅ **Real** — recorded fixation coordinates and EyeLink's own "
         "interest-area boxes (DATA-30 recovers the measured boxes from the raw "

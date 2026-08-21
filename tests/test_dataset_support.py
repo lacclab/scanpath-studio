@@ -534,28 +534,48 @@ def _write_csv_zip_with_macosx(path, frame, member_name):
         zf.writestr(f"__MACOSX/._{member_name}", b"\x00\x00")
 
 
-def _fake_onestop_part_frames(part, label_a, label_b):
+# The composing columns every OneStop report carries, and the id the loader
+# builds out of them (batch_article_paragraph_level -- update_sample_data's
+# convention). The public OSF release ships NO unique_paragraph_id, which is
+# what BUG-43 was about; `shape="lacclab"` adds the lab export's own instead.
+_FAKE_ONESTOP_IDS = {
+    "article_batch": 2,
+    "article_id": 3,
+    "paragraph_id": 1,
+    "difficulty_level": "Adv",
+    "repeated_reading_trial": 0,
+}
+_FAKE_ONESTOP_PARAGRAPH = "2_3_1_Adv"
+_FAKE_ONESTOP_TRIAL = "p1_2_3_1_Adv_r0"
+
+
+def _fake_onestop_part_frames(part, label_a, label_b, shape="public"):
     """Minimal OneStop-shaped (ia, fixations) frames for a part.
 
     Distinct IA_LABELs per part let a multi-part load prove the parts stayed
-    separate (each part's words carry its own labels)."""
+    separate (each part's words carry its own labels). ``shape`` picks which
+    release the columns imitate: ``"public"`` (the OSF reports -- the composing
+    id columns only) or ``"lacclab"`` (which also ships its own
+    ``unique_paragraph_id``, in its own field order)."""
+    ids = {key: [value, value] for key, value in _FAKE_ONESTOP_IDS.items()}
+    if shape == "lacclab":
+        ids["unique_paragraph_id"] = ["3_2_Adv_1", "3_2_Adv_1"]
     ia = pd.DataFrame(
         {
             "participant_id": ["p1", "p1"],
-            "unique_paragraph_id": ["1_Adv_1", "1_Adv_1"],
+            **ids,
             "IA_ID": [1, 2],
             "IA_LABEL": [label_a, label_b],
             "IA_LEFT": [100.0, 140.0],
             "IA_RIGHT": [138.0, 180.0],
             "IA_TOP": [80.0, 80.0],
             "IA_BOTTOM": [110.0, 110.0],
-            "difficulty_level": ["Adv", "Adv"],
         }
     )
     fix = pd.DataFrame(
         {
             "participant_id": ["p1", "p1"],
-            "unique_paragraph_id": ["1_Adv_1", "1_Adv_1"],
+            **ids,
             "CURRENT_FIX_INDEX": [1, 2],
             "CURRENT_FIX_X": [110.0, 150.0],
             "CURRENT_FIX_Y": [95.0, 95.0],
@@ -577,13 +597,15 @@ _FAKE_ONESTOP_PART_LABELS = {
 }
 
 
-def _fake_onestop_reports(root, regime, parts=("Paragraph",), variant="public"):
+def _fake_onestop_reports(
+    root, regime, parts=("Paragraph",), variant="public", shape="public"
+):
     """Write minimal OneStop-shaped IA + fixation reports for regime + parts."""
     root = datasets_module.Path(root)
     root.mkdir(parents=True, exist_ok=True)
     for part in parts:
         la, lb = _FAKE_ONESTOP_PART_LABELS[part]
-        ia, fix = _fake_onestop_part_frames(part, la, lb)
+        ia, fix = _fake_onestop_part_frames(part, la, lb, shape=shape)
         ia_path = datasets_module._onestop_part_paths(root, "ia", regime, part, variant)
         fix_path = datasets_module._onestop_part_paths(
             root, "fixations", regime, part, variant
@@ -691,7 +713,7 @@ def test_onestop_default_part_is_paragraph(onestop_offline, tmp_path):
     )
     assert set(words["part"]) == {"Paragraph"}
     # Single-part load keeps the historical (unfolded) paragraph id.
-    assert set(words["unique_paragraph_id"]) == {"1_Adv_1"}
+    assert set(words["unique_paragraph_id"]) == {_FAKE_ONESTOP_PARAGRAPH}
 
 
 def test_onestop_multiple_parts_stay_separate(onestop_offline, tmp_path):
@@ -709,12 +731,12 @@ def test_onestop_multiple_parts_stay_separate(onestop_offline, tmp_path):
     # The shared paragraph id was prefixed with the part, so the two parts are
     # now distinct trials rather than one collapsed one.
     assert set(words["unique_paragraph_id"]) == {
-        "Title::1_Adv_1",
-        "Paragraph::1_Adv_1",
+        f"Title::{_FAKE_ONESTOP_PARAGRAPH}",
+        f"Paragraph::{_FAKE_ONESTOP_PARAGRAPH}",
     }
     assert set(fixations["unique_paragraph_id"]) == {
-        "Title::1_Adv_1",
-        "Paragraph::1_Adv_1",
+        f"Title::{_FAKE_ONESTOP_PARAGRAPH}",
+        f"Paragraph::{_FAKE_ONESTOP_PARAGRAPH}",
     }
     # Parts are returned in presentation order (Title before Paragraph).
     assert list(dict.fromkeys(words["part"])) == ["Title", "Paragraph"]
@@ -809,6 +831,149 @@ def test_load_onestop_normalized(onestop_offline, tmp_path):
     assert {"participant_id", "trial_id", "word_id", "text"} <= set(words.columns)
     fig = sps.plot_scanpath(words, fixations)
     assert len(fig.data) > 0
+
+
+# ---------------------------------------------------------------------------
+# BUG-43: the public release has no unique_paragraph_id, so the loader composes
+# one. Without it `paragraph_id` (the index of the paragraph WITHIN its article,
+# 1..7) is the whole text identity, and every article's paragraph 3 is the same
+# "text".
+# ---------------------------------------------------------------------------
+
+
+def _onestop_public_report(root, ia, fix, *, regime="ordinary", part="Paragraph"):
+    """Write one public-shaped (ia, fixations) pair for ``part`` under ``root``."""
+    root = datasets_module.Path(root)
+    for kind, frame in (("ia", ia), ("fixations", fix)):
+        path = datasets_module._onestop_report_path(root, kind, regime, part)
+        _write_csv_zip_with_macosx(path, frame, path.name.removesuffix(".zip"))
+
+
+def _onestop_public_words(**overrides):
+    """A public-shaped IA frame; each keyword overrides one column's values."""
+    frame = pd.DataFrame(
+        {
+            "participant_id": ["p1", "p1"],
+            **{key: [value, value] for key, value in _FAKE_ONESTOP_IDS.items()},
+            "IA_ID": [1, 2],
+            "IA_LABEL": ["The", "cat"],
+            "IA_LEFT": [100.0, 140.0],
+            "IA_RIGHT": [138.0, 180.0],
+            "IA_TOP": [80.0, 80.0],
+            "IA_BOTTOM": [110.0, 110.0],
+        }
+    )
+    for column, values in overrides.items():
+        frame[column] = values
+    return frame
+
+
+def _onestop_public_fixations(**overrides):
+    """A public-shaped fixation frame; each keyword overrides one column."""
+    frame = pd.DataFrame(
+        {
+            "participant_id": ["p1", "p1"],
+            **{key: [value, value] for key, value in _FAKE_ONESTOP_IDS.items()},
+            "CURRENT_FIX_INDEX": [1, 2],
+            "CURRENT_FIX_X": [110.0, 150.0],
+            "CURRENT_FIX_Y": [95.0, 95.0],
+            "CURRENT_FIX_DURATION": [200.0, 180.0],
+        }
+    )
+    for column, values in overrides.items():
+        frame[column] = values
+    return frame
+
+
+def test_onestop_public_composes_a_unique_paragraph_id(onestop_offline, tmp_path):
+    """The public reports carry no unique_paragraph_id; the loader builds one
+    out of batch + article + paragraph + level, on both frames."""
+    words, fixations = datasets_module.onestop_raw_frames(
+        tmp_path, regime="ordinary", download=True
+    )
+    assert set(words["unique_paragraph_id"]) == {_FAKE_ONESTOP_PARAGRAPH}
+    assert set(fixations["unique_paragraph_id"]) == {_FAKE_ONESTOP_PARAGRAPH}
+
+
+def test_onestop_public_composes_a_unique_trial_id(onestop_offline, tmp_path):
+    """…and a trial id under it: the reader, the paragraph, and which reading."""
+    words, fixations = datasets_module.onestop_raw_frames(
+        tmp_path, regime="ordinary", download=True
+    )
+    assert set(words["unique_trial_id"]) == {_FAKE_ONESTOP_TRIAL}
+    assert set(fixations["unique_trial_id"]) == {_FAKE_ONESTOP_TRIAL}
+
+
+def test_onestop_composed_ids_match_the_bundled_demo(onestop_offline, tmp_path):
+    """The composed ids are the same strings update_sample_data writes into the
+    bundled demo — the demo IS a subset of this corpus, so a trial must not
+    change identity depending on which of the two you opened."""
+    from scanpath_studio import update_sample_data
+
+    words, _ = datasets_module.onestop_raw_frames(
+        tmp_path, regime="ordinary", download=True
+    )
+    demo = update_sample_data.add_unique_ids(
+        _onestop_public_words().assign(
+            repeated_reading_trial=[False, False],
+        )
+    )
+    assert set(words["unique_paragraph_id"]) == set(demo["unique_paragraph_id"])
+    assert set(words["unique_trial_id"]) == set(demo["unique_trial_id"])
+
+
+def test_onestop_paragraph_three_of_two_articles_is_two_texts(tmp_path):
+    """The bug itself: paragraph 3 of article 1 and paragraph 3 of article 27
+    are different texts, and normalization must see them that way."""
+    _onestop_public_report(
+        tmp_path,
+        _onestop_public_words(article_id=[1, 27], paragraph_id=[3, 3]),
+        _onestop_public_fixations(article_id=[1, 27], paragraph_id=[3, 3]),
+    )
+    words, fixations = datasets_module.load_onestop(tmp_path, regime="ordinary")
+    assert words["text_id"].nunique() == 2
+    assert fixations["text_id"].nunique() == 2
+
+
+def test_onestop_repeated_reading_is_its_own_trial(tmp_path):
+    """Both readings of a repeated-reading trial are the same text, read twice —
+    two trials, told apart by the flag rather than by their order on disk."""
+    _onestop_public_report(
+        tmp_path,
+        _onestop_public_words(repeated_reading_trial=[0, 1], IA_ID=[1, 1]),
+        _onestop_public_fixations(repeated_reading_trial=[0, 1]),
+    )
+    words, _ = datasets_module.load_onestop(tmp_path, regime="ordinary")
+    assert words["text_id"].nunique() == 1
+    assert set(words["trial_id"]) == {
+        f"p1_{_FAKE_ONESTOP_PARAGRAPH}_r0",
+        f"p1_{_FAKE_ONESTOP_PARAGRAPH}_r1",
+    }
+
+
+def test_onestop_keeps_the_lab_exports_own_paragraph_id(tmp_path):
+    """The lacclab export ships its own unique_paragraph_id (in its own field
+    order). That is the publisher's id — compose the trial id under it, don't
+    overwrite it."""
+    _fake_onestop_reports(
+        tmp_path, "ordinary", parts=["Paragraph"], variant="lacclab", shape="lacclab"
+    )
+    words, _ = datasets_module.onestop_raw_frames(
+        tmp_path, regime="ordinary", parts=["Paragraph"], variant="lacclab"
+    )
+    assert set(words["unique_paragraph_id"]) == {"3_2_Adv_1"}
+    assert set(words["unique_trial_id"]) == {"p1_3_2_Adv_1_r0"}
+
+
+def test_onestop_without_the_composing_columns_is_left_alone(tmp_path):
+    """A report missing one of the composing columns gets no invented id — the
+    loader falls back to whatever identity the frame already carries."""
+    words = _onestop_public_words().drop(columns=["article_batch"])
+    fixations = _onestop_public_fixations().drop(columns=["article_batch"])
+    _onestop_public_report(tmp_path, words, fixations)
+    loaded, _ = datasets_module.onestop_raw_frames(tmp_path, regime="ordinary")
+    assert "unique_paragraph_id" not in loaded.columns
+    assert "unique_trial_id" not in loaded.columns
 
 
 # ---------------------------------------------------------------------------

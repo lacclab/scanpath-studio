@@ -561,6 +561,77 @@ def download_onestop(
     return root
 
 
+# BUG-43: the public OSF release ships **no** ``unique_paragraph_id``, so the
+# only text identity on its reports is ``paragraph_id`` — the paragraph's index
+# *within its article*, 1..7. On its own that makes paragraph 3 of article 1 and
+# paragraph 3 of article 27 the same "text" (162 paragraphs read as 7), and
+# because the same id then repeats dozens of times per reader,
+# ``data._disambiguate_repeated_readings`` ranks the collisions apart into trial
+# ids like ``3_r17`` — an order, not an identity.
+#
+# So compose the ids the corpus's own tooling writes, in the same field order
+# ``update_sample_data.add_unique_ids`` uses for the bundled demo. The demo is a
+# subset of this corpus, so a trial must not change identity depending on which
+# of the two was opened. The level is part of the *text* id there, and stays
+# one here: OneStop's Advanced and Elementary renderings of a paragraph are
+# different texts, not two views of one.
+_ONESTOP_PARAGRAPH_ID_PARTS: tuple[str, ...] = (
+    "article_batch",
+    "article_id",
+    "paragraph_id",
+    "difficulty_level",
+)
+_ONESTOP_TRIAL_ID_PARTS: tuple[str, ...] = ("participant_id", "repeated_reading_trial")
+#: Every source column the composition needs — handed to the planned read so
+#: narrowing it (PERF-6) can never quietly cost us the ids.
+_ONESTOP_ID_COLUMNS: tuple[str, ...] = (
+    _ONESTOP_PARAGRAPH_ID_PARTS + _ONESTOP_TRIAL_ID_PARTS
+)
+
+
+def _compose_onestop_ids(frame: pd.DataFrame) -> pd.DataFrame:
+    """Give an OneStop report the ``unique_paragraph_id`` / ``unique_trial_id``
+    the public release omits (BUG-43).
+
+    Each id is composed only when the frame does not already carry it: the
+    lacclab export ships its own ``unique_paragraph_id`` (in its own field
+    order), and that is the publisher's identity — the trial id is composed
+    *under* it rather than over it. A frame missing any of the composing
+    columns is returned untouched: there is nothing to invent an id from.
+    """
+    from . import data
+
+    columns = set(frame.columns)
+    if "unique_paragraph_id" not in columns:
+        if not set(_ONESTOP_PARAGRAPH_ID_PARTS) <= columns:
+            return frame
+        frame = frame.copy()
+        frame["unique_paragraph_id"] = _join_ids(frame, _ONESTOP_PARAGRAPH_ID_PARTS)
+        columns = set(frame.columns)
+    if "unique_trial_id" not in columns:
+        if not set(_ONESTOP_TRIAL_ID_PARTS) <= columns:
+            return frame
+        frame = frame.copy()
+        reading = data.coerce_flag(frame["repeated_reading_trial"]).astype(int)
+        frame["unique_trial_id"] = (
+            frame["participant_id"].astype(str)
+            + "_"
+            + frame["unique_paragraph_id"].astype(str)
+            + "_r"
+            + reading.astype(str)
+        )
+    return frame
+
+
+def _join_ids(frame: pd.DataFrame, columns: Iterable[str]) -> pd.Series:
+    """``"_"``-joined string form of ``columns`` — one composed id per row."""
+    parts = [frame[column].astype(str) for column in columns]
+    joined = parts[0]
+    for part in parts[1:]:
+        joined = joined + "_" + part
+    return joined
+
+
 def _read_onestop_part(
     root: Path, kind: str, regime: str, part: str, variant: str
 ) -> pd.DataFrame:
@@ -584,7 +655,12 @@ def _read_onestop_part(
     # read_table's zip path filters that cruft and reads with low_memory=False —
     # and PERF-6's planned read parses only the columns normalization keeps,
     # which is most of what a multi-gigabyte report costs.
-    frame = data.read_mapped_table(path, kind="words" if kind == "ia" else "fixations")
+    frame = data.read_mapped_table(
+        path,
+        kind="words" if kind == "ia" else "fixations",
+        filter_fields=_ONESTOP_ID_COLUMNS,
+    )
+    frame = _compose_onestop_ids(frame)
     frame["part"] = part
     if part == "QA":
         frame = frame.drop_duplicates()

@@ -21,14 +21,21 @@ The corpus is 360 L1-English readers reading 30 Guardian articles (162
 paragraphs, each in an Advanced and an Elementary version) — ~19.4k regular
 trials.
 
-!!! warning "The app currently reports 7 texts, not 162 paragraphs"
+!!! info "A text is one paragraph at one difficulty level"
 
-    Those are the corpus' own figures. The public loader composes no unique
-    paragraph id, so `text_id` is the paragraph's index *within its article* and
-    paragraphs from different articles collide — the loaded corpus reads as
-    **7 texts**. Anything keyed on text id is affected: the *Per text* analyses,
-    text-based comparisons, and the text counts on 🗂️ Data. Tracked as
-    [BUG-43](https://github.com/lacclab/scanpath-studio/issues/133).
+    The public reports carry no unique paragraph id, so the loader composes one
+    — `{article_batch}_{article_id}_{paragraph_id}_{difficulty_level}`, the same
+    id the bundled demo ships, with the reader and the reading folded under it
+    for the trial id. Advanced and Elementary are therefore **two texts**, not
+    two renderings of one, and the app counts **330** of them across the four
+    regimes (the lab export, which composes the id its own way, agrees).
+
+    Before this ([BUG-43](https://github.com/lacclab/scanpath-studio/issues/133))
+    `text_id` was the paragraph's index *within its article*, so paragraphs from
+    different articles collided and the whole corpus read as **7 texts** —
+    affecting the *Per text* analyses, text-based comparisons, and the counts on
+    🗂️ Data. A share link made before the fix names a trial by the old id and
+    will not resolve.
 
 ## Loading it
 

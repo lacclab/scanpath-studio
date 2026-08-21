@@ -66,7 +66,9 @@ to study that corpus; pick the harmonised one to compare it with the other 30.
 Thirty-one corpora, ~14.0 million fixations, 22,255 distinct texts. This table is
 generated from `data/EyeGenBench/manifest.json`, which is the authoritative
 record of what a bundle holds; your own bundle's manifest is the authority for
-your machine. Languages are the ISO codes the manifest records — the picker
+your machine. Those same manifest figures fill the dataset table's count columns
+on the 🗂️ Data page, so a prepared corpus lists its readers, texts and fixations
+before you open it. Languages are the ISO codes the manifest records — the picker
 renders them as names (`de` → German).
 
 !!! note "Geometry is stamped at preparation time"

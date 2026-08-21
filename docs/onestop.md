@@ -21,6 +21,15 @@ The corpus is 360 L1-English readers reading 30 Guardian articles (162
 paragraphs, each in an Advanced and an Elementary version) — ~19.4k regular
 trials.
 
+!!! warning "The app currently reports 7 texts, not 162 paragraphs"
+
+    Those are the corpus' own figures. The public loader composes no unique
+    paragraph id, so `text_id` is the paragraph's index *within its article* and
+    paragraphs from different articles collide — the loaded corpus reads as
+    **7 texts**. Anything keyed on text id is affected: the *Per text* analyses,
+    text-based comparisons, and the text counts on 🗂️ Data. Tracked as
+    [BUG-43](https://github.com/lacclab/scanpath-studio/issues/133).
+
 ## Loading it
 
 OneStop is exposed as a **Public dataset**. In the app, open 🗂️ **Data** and

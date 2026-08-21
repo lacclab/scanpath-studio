@@ -144,8 +144,30 @@ import time:
     description="German reading of biology & physics textbook passages "
     "(expert/novice readers).",
     link="https://github.com/DiLi-Lab/PoTeC",
+    published_counts={             # the row before anyone opens it (DATA-36)
+        "Participants": 75,
+        "Texts": 12,
+        "Trials": 900,
+        "Words": 142125,
+        "Fixations": 404420,
+    },
+    published_counts_source="PoTeC's own README: 75 participants each "
+    "reading all 12 texts, and “900 trials (75 participants * 12 trials)”. "
+    "Word and fixation totals were measured from the released corpus.",
+    geometry="🛠️ **Reconstructed** fixation coordinates — the release keeps "
+    "no recorded (x, y), so each fixation sits at the centre of the "
+    "character it names, from the corpus' own `.ias` boxes.",
 ),
 ```
+
+**`published_counts` is a claim about the corpus, not about a load**, which is
+why `published_counts_source` sits beside it: say which published document each
+figure came from, and say so when you measured one yourself instead. The table
+shows them until the dataset is opened, then shows what actually loaded and
+flags any field where the load exceeds the published figure — a discrepancy that
+can only mean the published number is wrong. `geometry` is the matching honesty
+line for coordinates: whether the boxes and fixation positions are the corpus'
+own, reconstructed, or synthesized.
 
 Each entry is **one top-level source in the picker**, tagged 🌐 and searchable
 beside the demo and the uploads — there is no category to nest under and no

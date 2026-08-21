@@ -73,6 +73,14 @@ was mapped. Uploaded data is renamed or deleted in the session; packaged and
 public sources keep their stable identifiers and are renamed for display or
 hidden for this session.
 
+A public corpus arrives with its own published figures, so a row you have never
+opened is not a blank one. The **Counts** column says which you are reading —
+*Published* is a claim about the corpus, *Loaded* a fact about this session — and
+ℹ️ **About** names where each published figure came from, setting the two side by
+side once the dataset is open. Loading **less** than a corpus publishes is the
+ordinary case (one OneStop regime, one MultiplEYE session folder) and is not
+flagged; loading **more** is, because only a wrong published figure explains it.
+
 ### The recording setup asks how you know
 
 **Recording setup** describes the screen the data was **recorded** on — not the

@@ -106,7 +106,7 @@ from scanpath_studio.controls import (
     render_trial_chip_picker,
     render_trial_filters,
     render_viz_reset,
-    sidebar_controls,
+    render_plot_controls,
 )
 from scanpath_studio.data import (
     compute_word_metrics,
@@ -2479,7 +2479,7 @@ def _build_studio_config(
         "schema": PLOT_CONFIG_SCHEMA,
         "app": {"name": "Scanpath Studio", "version": app_version},
         # When this config was saved (ISO 8601, local time) — provenance only,
-        # surfaced when restoring (sidebar + the upload wizard's restore step).
+        # surfaced when restoring (💾 Session + the upload wizard's restore step).
         "exported_at": exported_at,
         "data_source": data_source,
         "column_mapping": column_mapping,
@@ -3685,7 +3685,7 @@ def _render_trial_condition_chips(
     fit, with a **More** disclosure that re-listed *every* chip so the clipped
     ones stayed reachable — the same facts shown twice, because which chips fit
     is a live-width question Python can't answer. The fix is to stop asking: the
-    strip is a wrapping flex row, so nothing is ever cut at any width or sidebar
+    strip is a wrapping flex row, so nothing is ever cut at any width or rail
     state, and the duplicate list has no reason to exist. What's left is split by
     *kind* rather than by what happened to fit — conditions inline here, the
     computed summary stats in the **Summary stats** popover the caller renders from the
@@ -3799,7 +3799,7 @@ def render_single_trial_tab(
 ) -> None:
     """Render the main Scanpath Visualization screen (static + animated).
 
-    Layout, designed for use with the sidebar closed (everything needed is beside
+    Layout, designed so everything needed is beside
     the plot, no scrolling):
 
     1. A compact **selection bar** above the plot — the trial picker + a 🔍 Filter
@@ -3808,7 +3808,7 @@ def render_single_trial_tab(
     2. A **plot + right rail** split: the scanpath plot on the left, and a control
        rail on the right carrying the **view modes** (Animate / Compare) and the
        **visualization controls** (formerly in the sidebar — see
-       ``controls.sidebar_controls``, rendered here with ``host=``).
+       ``controls.render_plot_controls``, rendered here with ``host=``).
     3. A plot-width **subtab bar** directly below it: 📝 Annotations ·
        📄 Stimulus & Context · 🔬 Comparisons · 📤 Export · 🔗 Share. Export folds in the former Bulk
        Export tab (``_render_export_panel``); Share (the former header popover)
@@ -3830,7 +3830,8 @@ def render_single_trial_tab(
 
     # --- Plot (left) + control rail (right) -----------------------------------
     # Columns FIRST so the rail starts at the very top, beside the selection —
-    # built for the sidebar-closed workflow. The selection menus + chips + plot all
+    # built for the everything-beside-the-plot workflow. The selection menus +
+    # chips + plot all
     # live in the left column, including the per-trial subtabs directly below the
     # plot. The rail is kept narrow (the plot is the hero) and scrolls separately.
     plot_col, rail_col = st.columns([4, 1], gap="large")
@@ -4395,8 +4396,8 @@ def render_single_trial_tab(
             )
             st.session_state["_resolved_animating"] = bool(animate)
         # The visualization controls moved out of the sidebar into this rail
-        # (host=rail) so they sit beside the plot with the sidebar closed.
-        viz_settings = sidebar_controls(
+        # (host=rail) so they sit beside the plot they drive.
+        viz_settings = render_plot_controls(
             fixations_filtered,
             base_font_size,
             host=rail,
@@ -4408,7 +4409,7 @@ def render_single_trial_tab(
             fix_range_fixations=trial_fixations,
             # VIZ-31: the canvas / text panel (monitor geometry, fonts, text
             # colour, background) renders inside the rail's group order rather
-            # than in the sidebar. `app.main` passes it in already bound to the
+            # than in a panel of its own. `app.main` passes it in already bound to the
             # frames + data source, since those are app-side concerns.
             canvas_renderer=canvas_renderer,
         )
@@ -4670,7 +4671,7 @@ def render_single_trial_tab(
         cmp_words = trial_words
         cmp_fixations = plot_fixations
 
-    # Condition chips above the plot — configurable via the sidebar picker
+    # Condition chips above the plot — configurable via the ✏️ Edit chips picker
     # (`trial_chip_fields`); `Field = Value` for the chosen fields. When comparing,
     # a second labelled strip shows the compared trial too.
     # UX-75 — one line per reading: its **title on the left**, its chips filling

@@ -236,7 +236,7 @@ from scanpath_studio.url_state import (
 )
 
 # NOTE: ``scanpath_studio.wizard`` is imported lazily inside the two functions
-# that use it (render_sidebar_data_source, main), not here. wizard does
+# that use it (resolve_data_source, main), not here. wizard does
 # ``from . import app`` at module top, so a top-level import here forms a cycle:
 # under ``streamlit run app.py`` the script isn't registered as
 # ``scanpath_studio.app``, so wizard's ``from . import app`` re-imports app fresh,
@@ -1362,10 +1362,10 @@ def _load_potec_source(
     in filenames, fixation coordinates come from a separate character-AoI
     file), so this dedicated source wraps ``datasets.potec_raw_frames``. The
     returned raw frames go through the same normalization as an upload, so the
-    sidebar Column-mapping panels still appear and stay overridable. The whole
+    Column-mapping panels still appear and stay overridable. The whole
     corpus loads — narrow it with the **Narrow by** trial filters.
 
-    ``options_host`` / ``location_host`` are the DATA-9 sidebar sub-slots; PoTeC
+    ``options_host`` / ``location_host`` are the DATA-9 sub-slots; PoTeC
     has no source options, so only the data-location slot is used (defaults to a
     standalone expander when called without slots).
     """
@@ -1430,11 +1430,11 @@ def _load_multipleye_source(
     MultiplEYE can't be loaded through the generic Upload flow (participant /
     trial / stimulus live only in the folder + file names), so this dedicated
     source wraps ``datasets.multipleye_raw_frames``. The returned raw frames go
-    through the same normalization as an upload, so the sidebar Column-mapping
+    through the same normalization as an upload, so the Column-mapping
     panels still appear and stay overridable. The whole session set loads —
     narrow it with the **Narrow by** trial filters.
 
-    ``options_host`` / ``location_host`` are the DATA-9 sidebar sub-slots (the
+    ``options_host`` / ``location_host`` are the DATA-9 sub-slots (the
     fixation-source radio above, the data location below); default to their own
     expanders when called standalone.
     """
@@ -1513,7 +1513,7 @@ def _load_onestop_public_source(
     stay overridable. Distinct from the env-var "OneStop server bundle" source,
     which serves a lacclab export (and per-pid shards for deep links).
 
-    ``options_host`` / ``location_host`` are the DATA-9 sidebar sub-slots (source
+    ``options_host`` / ``location_host`` are the DATA-9 sub-slots (source
     options above, data location below); default to their own expanders so the
     loader still works standalone.
     """
@@ -1967,12 +1967,12 @@ def _load_benchmark_source(
 
 
 # Registry behind the "Public datasets" source: label → loader (renders its own
-# sidebar options and returns raw, pre-normalization frames), the corpus'
+# source options and returns raw, pre-normalization frames), the corpus'
 # presentation-monitor size (canvas default for true-to-scale rendering; None to
 # estimate from data extents), and a little presentation metadata (a short name
 # for the picker, plus language / size / description / home link shown as a
 # caption). To add a corpus: write a loader in datasets.py, wrap it in a
-# `_load_*_source` sidebar function above, and add one entry here — the
+# `_load_*_source` function above, and add one entry here — the
 # searchable picker scales as the catalogue grows.
 PUBLIC_DATASET_REGISTRY: dict = {
     "PoTeC — Potsdam Textbook Corpus": dict(
@@ -2421,7 +2421,7 @@ def load_words_and_fixations(
     the OneStop server bundle.
 
     ``description_host`` / ``options_host`` / ``location_host`` are the DATA-9
-    sidebar sub-slots a public dataset's caption / source options / data-location
+    sub-slots a public dataset's caption / source options / data-location
     controls render into (ignored by the other sources).
 
     Args:
@@ -2771,8 +2771,8 @@ def prepare_data(
 ) -> tuple[pd.DataFrame, pd.DataFrame, list]:
     """Infer schemas and normalize incoming dataframes to canonical column names.
 
-    When ``allow_override`` is True, render sidebar expanders that let the user
-    pick the exact column names for each field (pre-filled with auto-detection).
+    When ``allow_override`` is True, render the mapping expanders that let the
+    user pick the exact column names for each field (pre-filled with auto-detection).
     Otherwise just auto-detect.
 
     Returns ``(words_norm, fixations_norm, problems)``. ``problems`` is a list
@@ -3148,8 +3148,8 @@ def _read_uploaded_frame(
 ) -> pd.DataFrame:
     """Render one upload box and return its (concatenated) frame.
 
-    Renders in the sidebar by default; pass ``container`` (the setup wizard's
-    main-area container) to render it there. Empty frame when nothing is
+    Renders into ``container`` — the setup wizard's own step, or the 🗂️ Data
+    page's upload slot. Empty frame when nothing is
     uploaded. The file parse is cached on the upload's identity (see
     ``_uploaded_file_key``) so a large uploaded table is read once, not re-parsed
     on every rerun. Isolated from the mapping render so tests can inject frames
@@ -3226,8 +3226,7 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
             *Data location* section of the 🗂️ Data page (DATA-26).
         notices: Where the "raw gaze ignored" warnings render. Deliberately the
             strip under the menu bar, not ``host``: a warning on a page the user
-            isn't looking at is invisible, which the always-visible sidebar
-            never was.
+            isn't looking at is invisible, and that strip is on every page.
 
     Returns:
         Normalized raw gaze DataFrame with canonical columns, or empty DataFrame
@@ -3293,13 +3292,13 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
 # -----------------------------------------------------------------------------
 # Data-source resolution + the panels the top menu bar hosts
 #
-# `_sidebar_group` is gone with the sidebar: each former group is now its own
+# `_sidebar_group` is gone with the sidebar (UX-38): each former group is its own
 # popover on the menu bar (see `menu.render_top_menu`), and the popover's trigger
 # label is the group heading. Nothing left to title.
 # -----------------------------------------------------------------------------
 
 
-def render_sidebar_data_source(host=None) -> str:
+def resolve_data_source(host=None) -> str:
     """Resolve the active data source (renders no picker widget — UX-25).
 
     Returns the selected source: ``DEMO_CHOICE`` ("Bundled Demo"), a stored
@@ -3475,7 +3474,7 @@ def _on_data_source_pick() -> None:
     """Route the main-view picker's choice through the pre-widget seam (UX-25).
 
     An ``on_change`` callback: it runs before the rerun's script body, so
-    ``render_sidebar_data_source`` — which pops ``_pending_source_choice`` at the
+    ``resolve_data_source`` — which pops ``_pending_source_choice`` at the
     top of ``main`` — applies the new source on the *same* run that renders it.
     The picker rides its own widget key (``data_source_picker``) rather than
     writing ``data_source_choice`` directly, so a deep link / saved config can
@@ -3542,8 +3541,8 @@ def render_data_source_picker(host=None) -> None:
 
     Sits on the "Filter by" row, left of the label, so the top of the page reads
     left-to-right as *which dataset → how to narrow it → which trial* — the app is
-    built to be used with the sidebar closed. Renders from the entry list
-    :func:`render_sidebar_data_source` published earlier this run; a pick is
+    built to be read straight down the page. Renders from the entry list
+    :func:`resolve_data_source` published earlier this run; a pick is
     applied on the next run via :func:`_on_data_source_pick`.
 
     UX-64 reduced it to the selectbox alone. Adding a dataset, removing one and
@@ -4668,7 +4667,7 @@ def seed_canvas_state(
 ) -> tuple[int, int, int, str, float, bool]:
     """Resolve the canvas / typography settings without rendering any widget.
 
-    Split out of `render_sidebar_canvas_controls` by **VIZ-31**, which moved that
+    Split out of `render_canvas_controls` by **VIZ-31**, which moved that
     panel from the sidebar into the Scanpath rail. The rail renders inside
     `tabs.render_single_trial_tab`, i.e. *after* `main` has to know the canvas
     size and font in order to build `viz_settings` and dispatch a view — and the
@@ -4829,7 +4828,7 @@ def seed_canvas_state(
     )
 
 
-def render_sidebar_canvas_controls(
+def render_canvas_controls(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
     data_choice: str | None = None,
@@ -5122,7 +5121,7 @@ def render_sidebar_canvas_controls(
         )
 
     # Base reading-text colour (highlighted-text colour lives in Visualization
-    # controls). Read back into viz_settings by controls.sidebar_controls.
+    # controls). Read back into viz_settings by controls.render_plot_controls.
     field(
         text,
         "color_picker",
@@ -5133,7 +5132,7 @@ def render_sidebar_canvas_controls(
     )
 
     # Plot background lives here (Experimental Setup) rather than under
-    # Visualization; sidebar_controls reads the chosen value from session state.
+    # Visualization; render_plot_controls reads the chosen value from session state.
     bg_options = list(BACKGROUND_PRESETS.keys()) + ["Custom…"]
     field(
         text,
@@ -5534,7 +5533,7 @@ def main() -> None:
         2. Render title and caption
         3. Load and normalize data (words, fixations, optional raw gaze)
         4. Apply user-selected filters (participants, trials, texts)
-        5. Render sidebar controls (canvas, fonts, visualization settings)
+        5. Render the plot controls (canvas, fonts, visualization settings)
         6. Render the active view (Scanpath Visualization / Corpus Analysis / Data Inspection)
 
     Data Flow:
@@ -5646,7 +5645,7 @@ def main() -> None:
     # was last on. BEFORE any data loading, equally deliberately: the loaders'
     # directory inputs, download buttons and column-mapping panels fill the bar's
     # popovers by `host=`, so those slots have to exist first — the same
-    # reserve-then-fill discipline the sidebar containers had.
+    # reserve-then-fill discipline the former sidebar containers had.
     seed_debug_mode()  # UX-37: a legacy ?debug=1 link pre-arms the Help toggle.
     # UX-62: before the nav — `st.logo` writes into the same header strip
     # `st.navigation` draws into, and has to be there when it renders.
@@ -5658,7 +5657,7 @@ def main() -> None:
     active_view = render_nav()
 
     # BUG-31 — navigating away mid-wizard used to land the user on the *half-built*
-    # dataset: `render_sidebar_data_source` reports `UPLOAD_CHOICE` for the whole
+    # dataset: `resolve_data_source` reports `UPLOAD_CHOICE` for the whole
     # run while the wizard is open, whatever the view, so `main` returned early
     # with "this dataset isn't set up yet" over a session that still held every
     # finished dataset. It read as data loss; it was an unfinished wizard.
@@ -5889,7 +5888,7 @@ def main() -> None:
     # picker, and rendering both would duplicate the `tour_grp_data_source` key.
     from scanpath_studio.wizard import _enter_add_data_wizard
 
-    data_choice = render_sidebar_data_source(host=setup_source_slot)
+    data_choice = resolve_data_source(host=setup_source_slot)
     # UX-54: the page lists every dataset as a *table* — one row each, sortable,
     # with the counts beside the name and the per-row actions in the row they
     # belong to. Reserved here (so it keeps its place at the top of the page)
@@ -5958,7 +5957,7 @@ def main() -> None:
     # they render in the Scanpath rail beside the layers they restyle.)
 
     # Load + map core data. The **Upload** source renders each table as an
-    # [upload box → mapping] group in the sidebar (words, fixations, raw gaze) and
+    # [upload box → mapping] group on the 🗂️ Data page (words, fixations, raw gaze) and
     # normalizes inline; every other source auto-detects (or, for public datasets,
     # renders standalone mapping panels) via prepare_data. Keep the raw frames
     # around so we can show them if the mapping isn't ready.
@@ -6022,14 +6021,14 @@ def main() -> None:
         # A dataset the user uploaded earlier and named — its frames were
         # normalized once by the wizard and stored in session, so switching back
         # to it is instant (no re-upload, no re-mapping). See _render_data_setup's
-        # finalize and render_sidebar_data_source.
+        # finalize and resolve_data_source.
         stored = st.session_state["_datasets"][data_choice]
         words_df, fixations_df = stored["words"], stored["fixations"]
         raw_gaze_df = stored["raw_gaze"]
         raw_words_df, raw_fixations_df = words_df, fixations_df
         mapping_problems = []
-        # Re-publish this dataset's chosen filter fields so the sidebar
-        # "Filter trials" panel offers the same dynamic conditions.
+        # Re-publish this dataset's chosen filter fields so the trial-filter
+        # funnel offers the same dynamic conditions.
         st.session_state["wizard_filter_fields"] = list(stored.get("filter_fields", []))
         # Restore the composite trial-id components (session-only state) so the
         # trial picker renders its Participant/Text cascade — every other load
@@ -6044,7 +6043,7 @@ def main() -> None:
     else:
         # Built-in sources (demo / synthetic / OneStop / public) auto-detect
         # their mapping, so they skip the wizard entirely. Drop any wizard filter
-        # fields left over from a prior upload so the sidebar falls back to the
+        # fields left over from a prior upload so the funnel falls back to the
         # built-in default conditions for these sources.
         st.session_state.pop("wizard_filter_fields", None)
         # Re-propose the column mapping when the monitor-defining source changes.
@@ -6055,7 +6054,7 @@ def main() -> None:
         # MultiplEYE's per-page `trial_id` was ignored and every page collapsed
         # into one stimulus-level trial. Clearing on source change lets each
         # corpus auto-detect its own mapping; same-source reruns (and restores)
-        # keep their keys. Mirrors the canvas re-seed in render_sidebar_canvas_controls.
+        # keep their keys. Mirrors the canvas re-seed in render_canvas_controls.
         #
         # Two harmonised benchmark corpora share one schema, so switching between
         # them re-proposes a mapping that auto-detects to the same thing — the
@@ -6176,10 +6175,10 @@ def main() -> None:
 
     # UX-7(b): if the selected corpus isn't on disk, say so here — in the main
     # area, where the (demo) plot the user is actually looking at is — rather than
-    # leaving it to a sidebar line they've likely scrolled past.
+    # leaving it to a line on the 🗂️ Data page they may never open.
     _render_dataset_unavailable()
 
-    # Whole-dataset frames, captured BEFORE the sidebar "Filter trials" panel —
+    # Whole-dataset frames, captured BEFORE the trial-filter funnel —
     # the Bulk Export tab's "Export the whole dataset" option exports these,
     # ignoring the current filters.
     words_all, fixations_all = words_df, fixations_df
@@ -6353,7 +6352,7 @@ def main() -> None:
     combos = metadata_mod.project_trials(metadata_mod.active_trials(), combos)
 
     # Land a shared/deep link on its exact `?trial_id=` (once) now that combos
-    # exist — see _apply_url_trial_selection. Runs before the sidebar/tab widgets
+    # exist — see _apply_url_trial_selection. Runs before the rail/tab widgets
     # render so the seeded selection is picked up as their initial value.
     _apply_url_trial_selection(combos)
     # Same hop, from inside the app: a "go to this trial" button in a Corpus
@@ -6362,12 +6361,12 @@ def main() -> None:
     _apply_pending_trial_selection(combos)
 
     # Restore settings + annotations from an uploaded config JSON BEFORE the
-    # sidebar widgets render, so they pick up the saved values (see
+    # rail widgets render, so they pick up the saved values (see
     # _apply_url_preset for the same preset-then-render mechanism). The uploader
     # lives in the "💾 Save & restore" panel below; its file persists across reruns.
     _apply_uploaded_plot_config(combos, fixations_filtered)
 
-    # Canvas and visualization controls (sidebar). For a raw-gaze-only dataset,
+    # Canvas and visualization controls (the Scanpath rail). For a raw-gaze-only dataset,
     # size the canvas from the gaze extent and default the raw-gaze overlay on —
     # it's the only layer there, so the plot would otherwise be blank.
     raw_gaze_only = words_filtered.empty and fixations_filtered.empty
@@ -6396,7 +6395,7 @@ def main() -> None:
         ``slot`` (📐 Figure & canvas) and the typography half into ``text_host``
         (📄 Stimulus → Text). One call, so each widget is created exactly once.
         """
-        render_sidebar_canvas_controls(
+        render_canvas_controls(
             words_filtered,
             canvas_geometry_frame,
             data_choice,
@@ -6408,7 +6407,7 @@ def main() -> None:
 
     # The visualization controls moved out of the sidebar into the Scanpath
     # screen's right-hand rail (tabs.render_single_trial_tab renders them via
-    # controls.sidebar_controls with host=rail). The other views — and the Save &
+    # controls.render_plot_controls with host=rail). The other views — and the Save &
     # restore panel below — still need the resolved settings, so read them from
     # session_state without rendering any widgets; the rail's widgets are the
     # source of truth and write the same keys.
@@ -6436,7 +6435,7 @@ def main() -> None:
     # Render tabbed interface. Animation is now a checkbox inside the Scanpath
     # Visualization tab (no separate Animated Scanpath tab); Bulk Export has its
     # own tab. Raw Data + Data Statistics are merged into Data Inspection.
-    # Dispatch the active view (sidebar nav). Only one view body renders per run
+    # Dispatch the active view (top nav). Only one view body renders per run
     # — the keyed nav widget persists the selection across reruns, so no JS hack
     # is needed (unlike st.tabs). render_single_trial_tab writes _share_selection
     # and fills the Save & restore slot when it's the active view.
@@ -6525,7 +6524,7 @@ def main() -> None:
     elif active_view == _VIEW_CORPUS:
         # UX-25: Corpus Analysis has no "Filter by" row, so the picker gets its
         # own compact row at the top of the page — it stays reachable on every
-        # view without reopening the sidebar.
+        # view.
         _ds_col, _ = st.columns([2, 5])
         render_data_source_picker(host=_ds_col)
         with st.container(key="tutorial_corpus_analysis"):
@@ -6574,7 +6573,7 @@ def main() -> None:
     )
 
     # Save & restore (plot config + annotations) renders on EVERY view so it stays
-    # reachable when a non-Scanpath view is active (it's a sidebar panel). The
+    # reachable when a non-Scanpath view is active (it's a menu panel). The
     # trial selection comes from _share_selection (written by the Scanpath view;
     # blank before any trial has been resolved this session).
     _sr_sel = st.session_state.get("_share_selection") or {}

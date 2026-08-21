@@ -93,7 +93,7 @@ def _public_location(label: str) -> tuple[str, dict]:
 
     The kwargs are the *user's current* source options (OneStop's variant /
     regime / parts, MultiplEYE's fixation source) — the same session keys the
-    sidebar widgets own, read rather than re-rendered.
+    the Compare-with widgets own, read rather than re-rendered.
     """
     from scanpath_studio import app, datasets
 

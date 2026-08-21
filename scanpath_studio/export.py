@@ -137,7 +137,7 @@ class ExportOptions:
     # all-or-nothing.
     metadata_fields: tuple[str, ...] | None = None
     # When True, export operates on the whole loaded dataset, ignoring the
-    # sidebar "Filter trials" panel; the caller supplies the unfiltered frames.
+    # trial-filter funnel; the caller supplies the unfiltered frames.
     export_unfiltered: bool = False
     scope: str = "all"  # "all" | "trial" | "participant" | "text"
     scope_participant: str | None = None
@@ -767,11 +767,11 @@ def _render_scope_picker(
 
     Returns ``(scope, pid, trial, text, export_unfiltered)``. The whole-dataset
     choice lives inside the "Trials to include" radio (an extra "All" option that
-    ignores the sidebar filter) rather than as a separate checkbox.
+    ignores the trial filters) rather than as a separate checkbox.
     """
     # Build the ordered radio: label -> (scope, export_unfiltered). Both "All"
-    # (the whole dataset, ignoring the sidebar filter) and "All filtered trials"
-    # (the current sidebar selection) are always offered — they coincide only
+    # (the whole dataset, ignoring the trial filters) and "All filtered trials"
+    # (the current filter selection) are always offered — they coincide only
     # when no filter is active.
     options_map: dict[str, tuple[str, bool]] = {
         "This trial": ("trial", False),
@@ -1001,7 +1001,7 @@ def render_export_options(
 
     ``combos`` is the currently filtered trial pool; ``combos_all`` (when given)
     is the whole loaded dataset. Picking the "All" scope switches the scope
-    picker — and the export itself — to ``combos_all`` so the sidebar filters
+    picker — and the export itself — to ``combos_all`` so the trial filters
     are ignored. ``title_pattern``/``caption_pattern`` come from the Scanpath
     rail's **📐 Figure & canvas** → *Title & caption on the figure* (EXP-5) —
     this panel no longer has its own copy of that setting.

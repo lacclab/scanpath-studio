@@ -2,8 +2,9 @@
 
 Annotations are keyed by ``(participant_id, trial_id)`` and live in Streamlit
 session state, so they persist across reruns within a session. There is no
-backend; to keep annotations across sessions or share them, the sidebar offers
-a JSON **download** (a portable sidecar) and **restore** (re-upload).
+backend; to keep annotations across sessions or share them, the 💾 Session
+dialog offers a JSON **download** (a portable sidecar) and **restore**
+(re-upload).
 
 The module is split into a *pure* core (``records_to_store`` /
 ``store_to_records`` / ``serialize`` / ``deserialize`` — no Streamlit, unit

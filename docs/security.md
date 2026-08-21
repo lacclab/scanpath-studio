@@ -28,8 +28,8 @@ too. Nothing here is inferred from documentation alone.
     loaded data" claim on this page holds only for a hosted deployment (where
     `persistence.persistence_enabled` returns False) or with
     `SCANPATH_STUDIO_PERSIST=0`. The store is single-user, unencrypted and
-    account-readable; it is disclosed and deletable in-app (sidebar → **🗄️
-    Recovery cache**) and from `scanpath-studio cache --clear`, and it is
+    account-readable; it is disclosed and deletable in-app (💾 **Session** →
+    **🗄️ Recovery cache**) and from `scanpath-studio cache --clear`, and it is
     described for researchers in [privacy.md](privacy.md#what-happens-to-a-file-you-upload).
 
 !!! note "After the audit — Streamlit 1.61/1.62 (ENG-31, ENG-43)"
@@ -380,7 +380,7 @@ function that takes an un-hashed frame — 32 call sites across `app.py`,
 - `tabs._cached_scanpath_figure`, the corpus-analysis wrappers
   (`tabs._c_per_reader_word`, `_c_cohort_profile`, `_c_word_rate`, …), the
   reading measures (`data._compute_word_metrics_cached`), the trial list
-  (`utils._build_combo_options_cached`), the sidebar filter options
+  (`utils._build_combo_options_cached`), the trial-filter options
   (`controls._column_unique_strs` / `_column_present_bools`), the default filter
   set (`data._default_filters_cached`), the stimuli table
   (`tabs._build_stimuli_table_cached`) and the dataset statistics

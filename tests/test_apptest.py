@@ -145,6 +145,20 @@ class TestAppLaunches:
         ]
         assert not stray, f"these still render into the sidebar: {stray}"
 
+    def test_a_panel_cannot_default_back_into_the_sidebar(self):
+        """ENG-44: ``render_trial_filters`` used to fall back to ``st.sidebar``
+        when given no host — a default that would have drawn the whole filter
+        panel into chrome the app has not rendered since UX-38. The host is now
+        required, so forgetting it is a TypeError rather than a panel nobody can
+        see."""
+        import inspect
+
+        from scanpath_studio import controls
+
+        host = inspect.signature(controls.render_trial_filters).parameters["host"]
+        assert host.default is inspect.Parameter.empty
+        assert host.kind is inspect.Parameter.KEYWORD_ONLY
+
     def test_the_session_dialog_holds_all_four_blocks(self):
         """UX-100: 💾 Session is a nav entry that opens a modal, like ❓ Help's.
 
@@ -1000,7 +1014,7 @@ class TestDatasetRename:
         assert set(at.session_state["_datasets"]) == {"Reading study 2026"}
         # The selection followed, so the app is still showing the same data
         # rather than falling back to the demo (the healing branch in
-        # render_sidebar_data_source drops a name that is no longer an entry).
+        # resolve_data_source drops a name that is no longer an entry).
         assert at.session_state["data_source_choice"] == "Reading study 2026"
         # UX-54: the 🗂️ Data page lists datasets as a *table*, not a selectbox —
         # the picker only renders on the analysis views now. The table is what
@@ -1831,9 +1845,9 @@ class TestUnmappedRawDataView:
         # carries the concrete registry label directly (DATA-9), not
         # `PUBLIC_DATASETS_CHOICE` — that constant only appears pre-healing, on
         # a legacy/first-ever selection, which the first run above already
-        # resolved away. Leaving it unset here would let `render_sidebar_
-        # data_source`'s healing step re-publish the *old* `public_dataset_choice`
-        # from the stale `data_source_choice`, masking the switch entirely.
+        # resolved away. Leaving it unset here would let `resolve_data_source`'s
+        # healing step re-publish the *old* `public_dataset_choice` from the
+        # stale `data_source_choice`, masking the switch entirely.
         at.session_state["data_source_choice"] = mpe_key
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
@@ -3347,8 +3361,8 @@ class TestFigureAndCanvasSubGroups:
 
         from scanpath_studio import app, controls
 
-        control_source = inspect.getsource(controls.sidebar_controls)
-        canvas_source = inspect.getsource(app.render_sidebar_canvas_controls)
+        control_source = inspect.getsource(controls.render_plot_controls)
+        canvas_source = inspect.getsource(app.render_canvas_controls)
 
         assert '_rail_subsection(figure_grp, "🖥️ Screen & framing")' in control_source
         assert '_rail_subsection(figure_grp, "📊 Axes & grid")' in control_source

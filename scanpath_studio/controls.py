@@ -653,7 +653,7 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_fixclass_blink_color": "#17becf",
     # VIZ-7: single-trial fixation-index window (start, end over `order_in_trial`)
     # for the main scanpath plot. `None` = full trial; the real bounds depend on
-    # the selected trial's fixation count, so `sidebar_controls` resolves/clamps
+    # the selected trial's fixation count, so `render_plot_controls` resolves/clamps
     # the concrete (1, max_fix) range at render time (mirroring `multi_fix_range`).
     "single_fix_range": None,
     # Whether that window survives a trial change. Off = the window belongs to
@@ -1783,8 +1783,9 @@ def column_mapping_ui(
 ) -> dict[str, str | None]:
     """Render a column-mapping expander letting users override the inferred mapping.
 
-    Renders in the sidebar by default; pass ``container`` (e.g. a main-area
-    container from the setup wizard) to render it there instead.
+    Renders into ``container`` — the 🗂️ Data page's mapping slot, or the setup
+    wizard's own step. With no container it renders inline, wherever the caller
+    already is.
 
     Returns a mapping {field_key: column_name_or_None}. Fields marked
     ``multi: True`` (Trial ID) render as a multiselect: picking several columns
@@ -2227,7 +2228,7 @@ def _emit_field_tints(tint_cells: dict[str, list[str]]) -> None:
         st.markdown(f"<style>{''.join(rules)}</style>", unsafe_allow_html=True)
 
 
-# Field-option helpers — shared by the sidebar selectors and the plot-config
+# Field-option helpers — shared by the rail's selectors and the plot-config
 # restore path (`app._restore_plot_config`) so both agree on what's valid for
 # the current data.
 def color_field_options(trial_fixations: pd.DataFrame) -> list[str]:
@@ -2815,7 +2816,7 @@ def _seed_viz_state(
 ) -> tuple[list[str], list[str], list[str]]:
     """Seed every viz widget's session_state default (pure — renders nothing).
 
-    Both ``sidebar_controls`` (which renders the widgets) and
+    Both ``render_plot_controls`` (which renders the widgets) and
     ``viz_settings_from_state`` (the non-rendering reader used by the Corpus view
     and the Save & restore panel) call this first, so the controls and their
     consumers can't drift. The widgets render WITHOUT a ``value=``/``index=``
@@ -2825,7 +2826,7 @@ def _seed_viz_state(
 
     Seeding only — keeping a stored value alive through a run where its widget
     doesn't render is the widgets' own ``persist_state="session"`` (ENG-36), so
-    this is safe to call both before rendering (``sidebar_controls``) and after
+    this is safe to call both before rendering (``render_plot_controls``) and after
     (``app.main`` re-reads the settings once the rail has rendered, where writing
     a widget key would raise). Returns ``(color_fields, numeric_fields,
     highlight_options)`` for the caller to reuse.
@@ -2906,7 +2907,7 @@ def _collect_viz_settings(
     """Build the viz-settings dict from session_state (pure — renders nothing).
 
     The single source of truth for the dict the figure builders consume, so the
-    rendered controls (``sidebar_controls``) and the non-rendering reader
+    rendered controls (``render_plot_controls``) and the non-rendering reader
     (``viz_settings_from_state``) return identical shapes. Conditionally-applied
     fields (colour ranges, the highlight column, saccade arrows) are gated here
     exactly as the widgets gate them, so a stored value for an off layer doesn't
@@ -3008,7 +3009,7 @@ def _collect_viz_settings(
         raw_gaze_opacity=float(ss.get("global_raw_gaze_opacity", 0.6)),
         show_stimulus_image=bool(ss.get("global_show_stimulus_image")),
         # VIZ-4: image-stimulus opacity (applies to dataset + uploaded images) and
-        # the uploaded image's data URI (session-only; set by sidebar_controls).
+        # the uploaded image's data URI (session-only; set by render_plot_controls).
         stimulus_image_opacity=float(ss.get("global_stimulus_image_opacity", 1.0)),
         stimulus_image_upload_uri=ss.get("_stimulus_image_upload_uri"),
         # VIZ-4: manual image alignment (origin nudge + size scale).
@@ -3145,7 +3146,7 @@ def viz_settings_from_state(
     Used by the views that consume the settings but don't host the controls — the
     Corpus Analysis figures and the Save & restore panel — so they stay in sync
     with the scanpath rail (which renders the actual widgets via
-    ``sidebar_controls``) on whatever the user last set.
+    ``render_plot_controls``) on whatever the user last set.
     """
     _, numeric_fields, highlight_options = _seed_viz_state(
         trial_fixations, base_font_size, words
@@ -3177,7 +3178,8 @@ def corpus_style_controls(
     corpus figures are drawn true-to-scale from exactly those values — monitor
     size, fonts, line spacing, background — so the view that consumes them needs
     a way to change them; before VIZ-31 the panel lived in the always-present
-    sidebar and was reachable from here for free.
+    sidebar and was reachable from here for free (there is no sidebar now —
+    UX-38).
     """
     _seed_viz_state(trial_fixations, base_font_size, words)
     target = host or st
@@ -3383,7 +3385,7 @@ def render_viz_reset(host) -> None:
         _reset_viz_confirmation_dialog()
 
 
-def sidebar_controls(
+def render_plot_controls(
     trial_fixations: pd.DataFrame,
     base_font_size: int,
     *,
@@ -3422,9 +3424,9 @@ def sidebar_controls(
     file — see the "Layer groups" comment.
 
     ``canvas_renderer`` is an optional ``callable(slot)`` rendering the canvas /
-    text panel (``app.render_sidebar_canvas_controls``) into a slot reserved
-    between the Overlays and Figure groups. VIZ-31 moved that panel out of the
-    sidebar so the figure's fonts, text colour and background sit beside the
+    text panel (``app.render_canvas_controls``) into a slot reserved
+    between the Overlays and Figure groups. VIZ-31 moved that panel into the rail
+    so the figure's fonts, text colour and background sit beside the
     other visual controls; when it is ``None`` (the wizard, the non-rendering
     readers) nothing is drawn there and the panel keeps its own home.
 
@@ -4801,7 +4803,7 @@ def sidebar_controls(
     return settings
 
 
-# Cached option-list scans for the sidebar filter panel. These run on every
+# Cached option-list scans for the trial-filter panel. These run on every
 # rerun to populate the multiselects; caching them on a cheap frame fingerprint
 # keeps them off the hot path on large corpora (full-column unique() scans).
 @st.cache_data(show_spinner=False)
@@ -5009,8 +5011,8 @@ def read_trial_filters(prefix: str = "") -> dict:
 
     Computed last run by ``render_trial_filters`` and stashed in a *plain*
     session_state value (not a widget key), so it survives runs where the filter
-    panel itself isn't rendered — e.g. when a non-Scanpath view is active under
-    the sidebar nav. ``main()`` reads this *before* the tab renders, so filtering
+    panel itself isn't rendered — e.g. when a non-Scanpath view is active on the
+    top nav. ``main()`` reads this *before* the tab renders, so filtering
     stays global even though the controls now live in the Trial Selection panel.
     """
     return dict(st.session_state.get(f"{prefix}_trial_filters", _EMPTY_TRIAL_FILTERS))
@@ -5369,7 +5371,7 @@ def _seed_filter_widget(
     """Pre-seed a filter widget's state from the persistent mirror.
 
     Filter controls live in the Scanpath tab body, which doesn't render on every
-    run (other views under the sidebar nav). Streamlit clears a not-rendered
+    run (other views on the top nav). Streamlit clears a not-rendered
     widget's key, so on return we re-seed it from ``_trial_filters_raw`` (the last
     selections), dropping any value no longer in ``options`` (e.g. after a dataset
     switch). Setting the key *before* the widget renders avoids the
@@ -5941,22 +5943,23 @@ def render_narrow_by(
 
 
 def render_trial_filters(
-    words: pd.DataFrame, fixations: pd.DataFrame, *, prefix: str = "", host=None
+    words: pd.DataFrame, fixations: pd.DataFrame, *, host, prefix: str = ""
 ) -> dict:
     """Render the trial-filter controls into ``host`` and persist the selections.
 
     Lets the user narrow the trial pool by participant and by categorical
     condition (Hunting/Gathering, difficulty, first/repeated reading,
     correctness) plus annotation state (favorites / tags). Renders into ``host``
-    (the Trial Selection panel; defaults to the sidebar). The narrowing result is
+    — since UX-64 the trial picker's 🔎 funnel popover. The narrowing result is
     derived by ``_compute_trial_filters`` and stashed in session_state
     (`_trial_filters`); each widget's ``on_change`` recomputes it *before* the
     rerun so ``main()``'s ``read_trial_filters`` applies the change on the same
     run. The persisted value also survives runs where this panel isn't rendered
-    (a non-Scanpath view under the sidebar nav).
+    (a non-Scanpath view on the top nav).
+    ``host`` is required: it used to default to ``st.sidebar``, a container the
+    app has not drawn since UX-38 — a caller that forgot it rendered the whole
+    panel into chrome nobody sees. Now it cannot compile.
     """
-    if host is None:
-        host = st.sidebar
 
     def _apply() -> None:
         st.session_state[f"{prefix}_trial_filters"] = _compute_trial_filters(

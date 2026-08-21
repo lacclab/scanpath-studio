@@ -35,7 +35,7 @@ from collections.abc import Mapping
 from types import MappingProxyType
 
 # ---------------------------------------------------------------------------
-# Visualization settings — the `global_*` keys the sidebar/rail widgets own.
+# Visualization settings — the `global_*` keys the plot rail's widgets own.
 # Every one of these round-trips through BOTH the share link and the saved
 # config (or, below the divider, through the saved config only).
 # ---------------------------------------------------------------------------

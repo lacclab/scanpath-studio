@@ -64,7 +64,7 @@ def preprocessing_enabled() -> bool:
 
 
 # Default text font. A single generic family that renders (monospaced) on every
-# platform including the Streamlit Cloud demo; the sidebar field accepts any CSS
+# platform including the Streamlit Cloud demo; the font field accepts any CSS
 # font name or stack if you want the exact experiment font.
 FONT_FAMILY = "monospace"
 
@@ -137,7 +137,7 @@ def compare_palette_color(idx: int) -> str:
     return COMPARISON_PALETTE[idx % len(COMPARISON_PALETTE)]
 
 
-# Saccade line styles offered in the sidebar. Maps the friendly UI label to the
+# Saccade line styles offered in the plot rail. Maps the friendly UI label to the
 # Plotly ``line.dash`` value used in the figure builders.
 SACCADE_DASH_OPTIONS = {
     "Solid": "solid",
@@ -252,7 +252,7 @@ HOLLOW_OUTLINE_WIDTH = 2.0
 OUT_OF_TEXT_COLOR = "#d62728"  # red
 
 # Plot background. Default white; some analyses prefer a neutral gray.
-# A "Custom…" entry in the sidebar reveals a free color picker.
+# A "Custom…" entry in the rail reveals a free color picker.
 DEFAULT_BACKGROUND_COLOR = "#ffffff"
 BACKGROUND_PRESETS = {
     "White": "#ffffff",
@@ -547,7 +547,7 @@ ONESTOP_CHOICE = "OneStop server bundle"
 ONESTOP_PUBLIC_CHOICE = "OneStop — 360-participant English corpus"
 ONESTOP_PUBLIC_DEFAULT_DIR = "data/OneStop"
 # Default folder for the lacclab OneStop variant (a lab-processed local export;
-# superset schema, no download). Path-editable in the sidebar and overridable via
+# superset schema, no download). Path-editable on the 🗂️ Data page and overridable via
 # the `ONESTOP_LACCLAB_DIR` env var — never the *only* option, just the default.
 ONESTOP_LACCLAB_DEFAULT_DIR = (
     "/Users/shubi/Library/CloudStorage/OneDrive-Technion/In-lab Experiments/"
@@ -560,7 +560,7 @@ ONESTOP_REGIME_LABELS = {
     "information_seeking_repeated": "Information seeking (repeated)",
 }
 # OneStop trial parts (screens) → display label, in presentation order. Mirrors
-# datasets._ONESTOP_PARTS; the sidebar multiselect + the parts URL/CLI contract
+# datasets._ONESTOP_PARTS; the Parts multiselect + the parts URL/CLI contract
 # use these keys. Paragraph is the reading passage (the default).
 ONESTOP_PART_LABELS = {
     "Title": "Title",

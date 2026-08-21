@@ -668,7 +668,7 @@ def _app_figure_defaults(words, fixations, monkeypatch):
     settings = tabs._build_figure_settings(viz, viz["show_raw_gaze"])
     # tabs.py passes these four outside _build_figure_settings: the axis fields
     # from viz_settings, and the text-sizing pair from the Experimental-setup
-    # canvas controls (app.render_sidebar_canvas_controls, which needs a widget
+    # canvas controls (app.render_canvas_controls, which needs a widget
     # host — these are its `setdefault` values).
     settings["x_field"] = viz["x_field"]
     settings["y_field"] = viz["y_field"]

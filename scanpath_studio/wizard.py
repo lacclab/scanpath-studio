@@ -3,7 +3,7 @@
 Split out of ``app.py``: everything from the upload-table reading UI through the
 ordered wizard steps (identity → trial/participant/text → keep-fields/filters →
 name & finish) and the MultiplEYE upload branch. ``app.py`` drives this from
-``render_sidebar_data_source`` / ``main`` and re-exports a few helpers for tests.
+``resolve_data_source`` / ``main`` and re-exports a few helpers for tests.
 
 A handful of data-IO / normalization helpers (``_read_uploaded_frame``,
 ``_normalize_pair``, ``_stash_active_mapping``, ``_render_unmapped_view``) stay in
@@ -226,7 +226,7 @@ def _finalize_wizard_dataset() -> None:
     store = st.session_state.setdefault("_datasets", {})
     store[ds_name] = payload
     # Apply the source switch through the plain pending key that
-    # render_sidebar_data_source consumes before the radio instantiates, and
+    # resolve_data_source consumes before the radio instantiates, and
     # leave the wizard.
     st.session_state["_pending_source_choice"] = ds_name
     st.session_state["_show_upload_wizard"] = False
@@ -1748,7 +1748,7 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
         # Seed the MultiplEYE presentation monitor (true-to-scale default).
         st.session_state.setdefault("global_canvas_width", MULTIPLEYE_MONITOR[0])
         st.session_state.setdefault("global_canvas_height", MULTIPLEYE_MONITOR[1])
-        app.render_sidebar_canvas_controls(
+        app.render_canvas_controls(
             empty_words_frame(),
             empty_fixations_frame(),
             data_choice=None,
@@ -2168,7 +2168,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # the guide button, the docs link, and the way out. Everything else that
         # used to stack above the wizard is gone (the page header and its summary
         # in `app.main`, the "Adding a dataset…" caption in
-        # `render_sidebar_data_source`, and the second copy of this very title
+        # `resolve_data_source`, and the second copy of this very title
         # that lived here) — four headings for one screen, from three modules.
         #
         # Keyed so `styles.py` can pin it; the CSS is scoped to this key alone,

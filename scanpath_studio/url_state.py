@@ -169,7 +169,7 @@ def _parse_align_algorithm(v) -> str:
 # toggles. Each group maps a short URL key → the session_state key it reads/writes.
 # `_build_share_query` (write) and `_apply_url_preset` (read) both iterate these,
 # so the two sides can't drift. Data-dependent fields (color ranges, highlight
-# column, axis/color-by fields) self-heal on load via the sidebar's _drop_stale /
+# column, axis/color-by fields) self-heal on load via the rail's _drop_stale /
 # _clamp_range, so a link opened on a different trial degrades gracefully.
 _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "preproc_enabled": "global_preproc_enabled",
@@ -335,7 +335,7 @@ _URL_PRESETS = {
 # (slider / number_input). A hand-crafted link with an out-of-range value would
 # otherwise crash the widget on render — Streamlit raises when a Session-State
 # value falls outside the widget's range. Clamp on the way in. (Data-dependent
-# colour ranges aren't here — the sidebar's `_clamp_range` handles those against
+# colour ranges aren't here — the rail's `_clamp_range` handles those against
 # the live data.)
 _URL_BOUNDED = {
     "global_preproc_short_threshold_ms": (1.0, 500.0),
@@ -414,7 +414,7 @@ def _source_choice_for_param(value) -> str | None:
 #
 # Deliberately generic (R42): a benchmark-only branch would have to re-derive
 # which registry entry produced the picker's collapsed choice, duplicating
-# `app.render_sidebar_data_source`'s healing logic — and "these corpora are
+# `app.resolve_data_source`'s healing logic — and "these corpora are
 # special" is the assumption this plan has been bitten by repeatedly. A built-in
 # corpus and a prepared one are the same kind of thing here.
 CORPUS_SOURCE_TOKEN = "corpus"
@@ -518,7 +518,7 @@ def _selected_corpus(data_choice: str) -> tuple[str, dict]:
 
     ``("", {})`` when the active source is not a public corpus.
 
-    `app.render_sidebar_data_source` collapses **any** registry label to
+    `app.resolve_data_source` collapses **any** registry label to
     `PUBLIC_DATASETS_CHOICE` and stashes the label on `public_dataset_choice`, so
     that is where the answer lives for a link built from the running app. A
     caller holding the label itself (the tests, and anything predating the
@@ -584,7 +584,7 @@ def _apply_url_preset() -> str | None:
         ...etc — see _URL_PRESETS above
 
     Bonus side-effect: when any colorscale is set via URL, also forces the
-    "Advanced styling" sidebar expander open so the value is visible/editable.
+    "Advanced styling" expander open so the value is visible/editable.
 
     External tools can deep-link into this app via the URL schema above to
     land on a specific trial with the reviewer's preferred viz settings.
@@ -653,7 +653,7 @@ def _apply_url_preset() -> str | None:
             )
 
     # Heatmap / fixation colorscale only render under the Advanced expander —
-    # auto-open it so the URL value is exposed in the sidebar.
+    # auto-open it so the URL value is exposed in the rail.
     if "heatmap_colorscale" in qp or "fixation_colorscale" in qp:
         st.session_state.setdefault("global_advanced", True)
 
@@ -737,8 +737,8 @@ _PLOT_CONFIG_LAYER_KEYS = {
     "full_monitor": "global_fit_to_monitor",
     "autoplay": "global_anim_autoplay",
 }
-# Static widget bounds, mirrored from controls.sidebar_controls /
-# render_sidebar_canvas_controls, so a restored value is clamped to a range the
+# Static widget bounds, mirrored from controls.render_plot_controls /
+# render_canvas_controls, so a restored value is clamped to a range the
 # widget will accept.
 _CANVAS_BOUNDS = (100, 10000)
 _FONT_BOUNDS = (6, 72)
@@ -1058,7 +1058,7 @@ class _RestoreContext:
 def _restore_plot_config(
     config: dict, combos: pd.DataFrame, fixations: pd.DataFrame
 ) -> tuple[int, list]:
-    """Seed session_state from an uploaded plot-config dict so the sidebar
+    """Seed session_state from an uploaded plot-config dict so the rail
     widgets render with the saved settings. Returns ``(applied, skipped)`` where
     ``skipped`` lists human-readable labels that didn't fit the current data.
 
@@ -1585,7 +1585,7 @@ def _restore_plot_config(
         isinstance(highlighting.get("highlight_column"), str)
         and highlighting["highlight_column"]
     ):
-        # The sidebar's `_drop_stale` clears this if it isn't a column in the
+        # The rail's `_drop_stale` clears this if it isn't a column in the
         # restored-onto data, so it needs no validation against words here.
         put("global_highlight_column", highlighting["highlight_column"])
     # Fixation classification (PRE-2): short/long/out-of-bounds highlight or discard.
@@ -1755,9 +1755,9 @@ def _restore_plot_config(
 def _apply_uploaded_plot_config(combos: pd.DataFrame, fixations: pd.DataFrame) -> None:
     """Restore settings from a freshly uploaded plot-config JSON, once per file.
 
-    Reads the file captured by the sidebar ``plot_config_upload`` uploader
-    (persisted in session_state across reruns) and writes the saved settings
-    into session_state *before* the sidebar widgets render — the same mechanism
+    Reads the file captured by the 💾 Session dialog's ``plot_config_upload``
+    uploader (persisted in session_state across reruns) and writes the saved
+    settings into session_state *before* the widgets render — the same mechanism
     as ``_apply_url_preset``. Deduped by ``(name, size)`` so manual tweaks made
     after a restore aren't clobbered on every rerun. Call right after the trial
     combos are built, before the canvas/visualization controls."""

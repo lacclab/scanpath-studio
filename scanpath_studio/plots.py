@@ -1427,7 +1427,7 @@ def _add_word_label_trace(
             customdata = pd.concat(customdata_parts, axis=1)
     # Per-word text color: the highlight colour for highlighted words when the
     # caller asks for "Mark text" (``highlight_column`` set), the base text
-    # colour otherwise. Both are configurable from the sidebar.
+    # colour otherwise. Both are configurable from the plot rail.
     if highlight_column and highlight_column in words.columns:
         critical_mask = words[highlight_column].fillna(False).astype(bool)
         label_color = [
@@ -4236,7 +4236,7 @@ def _comparison_scanpath_style(
     """Resolve the per-scanpath style for a comparison trace.
 
     Defaults reproduce the classic two-flat-colour look (``COMPARISON_PALETTE``);
-    ``override`` (from the sidebar's per-scanpath styling panel) wins per key.
+    ``override`` (from the rail's per-scanpath styling panel) wins per key.
     """
     base = {
         "fix_color": compare_palette_color(idx),

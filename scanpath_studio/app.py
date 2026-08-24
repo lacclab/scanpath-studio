@@ -180,6 +180,7 @@ from scanpath_studio.experimental_setup import (
     font_pt_to_px,
     pixels_per_degree,
 )
+from scanpath_studio.html_embed import embed_html_iframe
 from scanpath_studio.menu import (
     close_open_popovers,
     render_nav,
@@ -280,6 +281,49 @@ def public_datasets_enabled() -> bool:
     return raw not in ("0", "false", "no")
 
 
+#: UX-109 follow-up. The CSS `direction: ltr` rule in `get_app_css` does not
+#: reach this: Streamlit's own widgets (the trial-position slider among them)
+#: are built on react-aria, whose `useLocale()` decides RTL straight from
+#: `navigator.language` — never from the page's CSS `direction` or a
+#: `dir="rtl"` attribute — confirmed by reading Streamlit's own shipped
+#: `Slider.*.js`, which flips its thumb's percentage (`B = 1 - B`) whenever
+#: that locale reads as RTL. A Hebrew-locale browser therefore renders the
+#: thumb at the *mirrored* position while the surrounding markup (this app's
+#: own CSS, the filled-track gradient) stays physically left-to-right,
+#: producing exactly the reported screenshot: thumb correct for a mirrored
+#: scale, fill correct for a normal one, agreeing nowhere except the ends.
+#: This app has no RTL content of its own to get right, so the fix is to make
+#: every react-aria consumer see a LTR locale regardless of the browser's:
+#: override `navigator.language`/`languages` on the *parent* window (this
+#: embed is same-origin, so it is the same `Navigator` object React reads,
+#: not a copy) and fire `languagechange`, which is the event react-aria's own
+#: locale cache listens for to invalidate itself and re-render every mounted
+#: consumer — needed because Streamlit's own chrome (top nav, main menu) can
+#: easily have already read+cached the browser's real locale before this
+#: script ever gets a chance to run.
+_FORCE_LTR_LOCALE_SCRIPT = """
+<script>
+(function () {
+    try {
+        var nav = window.parent.navigator;
+        Object.defineProperty(nav, "language", {
+            get: function () { return "en-US"; },
+            configurable: true,
+        });
+        Object.defineProperty(nav, "languages", {
+            get: function () { return ["en-US"]; },
+            configurable: true,
+        });
+        window.parent.dispatchEvent(new Event("languagechange"));
+    } catch (e) {
+        /* A browser that refuses the redefinition leaves the page as it
+           found it — no worse than before this ran. */
+    }
+})();
+</script>
+"""
+
+
 def configure_page() -> None:
     """Streamlit page config + custom CSS.
 
@@ -295,6 +339,7 @@ def configure_page() -> None:
         layout="wide",
     )
     st.markdown(get_app_css(), unsafe_allow_html=True)
+    embed_html_iframe(_FORCE_LTR_LOCALE_SCRIPT, height=0)
 
 
 #: The app's wordmark, shown in Streamlit's own header (UX-62). Inside the

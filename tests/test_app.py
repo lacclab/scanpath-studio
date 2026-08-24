@@ -635,3 +635,33 @@ class TestResolveDataDir:
 
         resolved = app_module._resolve_data_dir("~/somewhere")
         assert resolved == str(Path("~/somewhere").expanduser())
+
+
+class TestForceLtrLocaleScript:
+    """UX-109 follow-up: `get_app_css`'s `direction: ltr` doesn't reach
+    react-aria's own RTL detection — Streamlit's Slider (`Slider.*.js`) reads
+    `navigator.language` directly and flips its thumb's percentage for a RTL
+    locale, independent of the page's CSS `direction`. Confirmed live: setting
+    `navigator.language = "he"` and dispatching `languagechange` moved the
+    trial-position slider's thumb to the *mirrored* position while its filled
+    track (styled in this app's own CSS, unaffected) stayed put — the exact
+    mismatch reported. This script overrides the browser's reported locale on
+    the parent window (same-origin) and re-dispatches `languagechange`, which
+    is what react-aria's own locale cache listens for to invalidate itself."""
+
+    def test_overrides_the_parent_windows_navigator_language(self):
+        script = app_module._FORCE_LTR_LOCALE_SCRIPT
+        assert "window.parent.navigator" in script
+        assert '"language"' in script
+        assert '"languages"' in script
+        assert 'return "en-US"' in script
+
+    def test_redispatches_languagechange_on_the_parent(self):
+        script = app_module._FORCE_LTR_LOCALE_SCRIPT
+        assert 'window.parent.dispatchEvent(new Event("languagechange"))' in script
+
+    def test_configure_page_embeds_the_script(self):
+        import inspect
+
+        source = inspect.getsource(app_module.configure_page)
+        assert "embed_html_iframe(_FORCE_LTR_LOCALE_SCRIPT, height=0)" in source

@@ -246,28 +246,32 @@ def _safe_filename(text: str) -> str:
     return "".join(c if c.isalnum() or c in "-_." else "_" for c in str(text))
 
 
-def _step_screen(options: tuple[str, ...], delta: int) -> None:
+def _step_screen(key_prefix: str, options: tuple[str, ...], delta: int) -> None:
     """Move the multipart navigator without touching the parent trial picker."""
     if not options:
         return
-    current = str(st.session_state.get("single_screen_id", options[0]))
+    id_key = f"{key_prefix}_screen_id"
+    current = str(st.session_state.get(id_key, options[0]))
     position = options.index(current) if current in options else 0
-    st.session_state["single_screen_id"] = options[
-        max(0, min(len(options) - 1, position + delta))
+    st.session_state[id_key] = options[max(0, min(len(options) - 1, position + delta))]
+
+
+def _on_screen_slider(key_prefix: str) -> None:
+    """Mirror a scrub of the screen slider onto the canonical selectbox.
+
+    ``{key_prefix}_screen_id`` stays the one selection every other reader
+    consults (``_step_screen``, ``extract_part``); the slider is a second view
+    of it, the same arrangement ``utils._select_trial_none_mode`` uses for the
+    trial picker.
+    """
+    st.session_state[f"{key_prefix}_screen_id"] = st.session_state[
+        f"{key_prefix}_screen_pos"
     ]
 
 
-def _on_screen_slider() -> None:
-    """Mirror a scrub of the screen slider onto the canonical selectbox.
-
-    ``single_screen_id`` stays the one selection every other reader consults
-    (``_step_screen``, ``extract_part``); the slider is a second view of it, the
-    same arrangement ``utils._select_trial_none_mode`` uses for the trial picker.
-    """
-    st.session_state["single_screen_id"] = st.session_state["single_screen_pos"]
-
-
-def _render_screen_navigator(catalog: pd.DataFrame) -> str | None:
+def _render_screen_navigator(
+    catalog: pd.DataFrame, *, key_prefix: str = "single"
+) -> str | None:
     """Select/scrub/step navigator for one logical multipart trial.
 
     **UX-47**: this row carries the same grammar as the trial picker directly
@@ -286,15 +290,23 @@ def _render_screen_navigator(catalog: pd.DataFrame) -> str | None:
     Dataset** and its slider ran on past **Select Trial**'s own, wider than it
     and not aligned to it). The trail (◀ ▶) keeps the *actions* track either
     way, so it does not move.
+
+    **UX-112**: ``key_prefix`` (default ``"single"``, A's own — every existing
+    call/key/test keeps working unchanged) lets scanpath B in Compare mode get
+    its own independent navigator (``key_prefix="single_compare"``) over its
+    own multipart trial, rather than being forced onto whichever screen A
+    happens to have selected.
     """
+    id_key = f"{key_prefix}_screen_id"
+    pos_key = f"{key_prefix}_screen_pos"
     if catalog.empty:
-        st.session_state.pop("single_screen_id", None)
-        st.session_state.pop("single_screen_pos", None)
+        st.session_state.pop(id_key, None)
+        st.session_state.pop(pos_key, None)
         return None
     options = tuple(catalog[SCREEN_ID].astype(str))
-    current = st.session_state.get("single_screen_id")
+    current = st.session_state.get(id_key)
     if current not in options:
-        st.session_state["single_screen_id"] = options[0]
+        st.session_state[id_key] = options[0]
     labels = {
         str(
             row.screen_id
@@ -304,11 +316,11 @@ def _render_screen_navigator(catalog: pd.DataFrame) -> str | None:
     _blank_col, sel_col, slider_col, trail_col = st.columns(
         SELECTOR_ROW_GRID, vertical_alignment="bottom"
     )
-    position = options.index(str(st.session_state["single_screen_id"]))
+    position = options.index(str(st.session_state[id_key]))
     selected = sel_col.selectbox(
         "**Screen**",
         options,
-        key="single_screen_id",
+        key=id_key,
         format_func=labels.get,
         help="One coordinate space at a time; the parent trial selection stays fixed.",
     )
@@ -316,15 +328,14 @@ def _render_screen_navigator(catalog: pd.DataFrame) -> str | None:
         # Mirror the canonical selection onto the slider BEFORE it renders, so
         # picking a screen in the dropdown (or stepping with ◀ ▶) moves the thumb
         # too; the drag callback writes back the other way, reconciling next run.
-        st.session_state["single_screen_pos"] = str(
-            st.session_state["single_screen_id"]
-        )
+        st.session_state[pos_key] = str(st.session_state[id_key])
         with slider_col:
             st.select_slider(
                 "Screen position",
                 options=options,
-                key="single_screen_pos",
+                key=pos_key,
                 on_change=_on_screen_slider,
+                args=(key_prefix,),
                 format_func=labels.get,
                 help=f"Scrub through this trial's {len(options)} screens; the "
                 "dropdown jumps straight to one.",
@@ -335,22 +346,22 @@ def _render_screen_navigator(catalog: pd.DataFrame) -> str | None:
     # 3px spacing and in the same pill shape as the trial row's ◀ ▶ ⇅ above and
     # the chip strip below. `width="stretch"` is deliberately gone — it fought the
     # `width: auto` that makes the cluster content-sized.
-    trail = trail_col.container(key="railbtn_single_screen_trail")
+    trail = trail_col.container(key=f"railbtn_{key_prefix}_screen_trail")
     trail.button(
         "◀",
-        key="single_screen_previous",
+        key=f"{key_prefix}_screen_previous",
         help="Previous screen in this logical trial",
         disabled=position == 0,
         on_click=_step_screen,
-        args=(options, -1),
+        args=(key_prefix, options, -1),
     )
     trail.button(
         "▶",
-        key="single_screen_next",
+        key=f"{key_prefix}_screen_next",
         help="Next screen in this logical trial",
         disabled=position == len(options) - 1,
         on_click=_step_screen,
-        args=(options, 1),
+        args=(key_prefix, options, 1),
     )
     return str(selected)
 
@@ -1414,7 +1425,6 @@ def _render_compare_selector(
     selected_text: str | None,
     animate: bool = False,
     fixations_filtered: pd.DataFrame | None = None,
-    trial_words: pd.DataFrame | None = None,
     words_filtered: pd.DataFrame | None = None,
     combos_all: pd.DataFrame | None = None,
     words_all: pd.DataFrame | None = None,
@@ -1454,8 +1464,7 @@ def _render_compare_selector(
     comparison_pool = source
     if source is not None:
         # B's pool is its own dataset, narrowed by its own filters (§5.2), and
-        # nothing about A applies to it — including the multipart screen scoping
-        # below, which asks whether *this* corpus' trials share A's screen id.
+        # nothing about A applies to it.
         options = build_comparison_options(
             source.combos,
             selection_mode,
@@ -1466,7 +1475,6 @@ def _render_compare_selector(
         )
         words_filtered, fixations_filtered = source.words, source.fixations
         combos = source.combos
-        trial_words = None
     elif str(st.session_state.get(COMPARE_SOURCE_KEY) or THIS_DATASET) != THIS_DATASET:
         # The requested external source is unavailable. Keep its picker and
         # notice on screen, but never fall back to trials from the active
@@ -1510,51 +1518,14 @@ def _render_compare_selector(
         options = build_comparison_options(
             combos, selection_mode, selected_participant, selected_trial, selected_text
         )
-    active_screen = None
-    if (
-        trial_words is not None
-        and not trial_words.empty
-        and SCREEN_ID in trial_words.columns
-    ):
-        active_screen = str(trial_words[SCREEN_ID].iloc[0])
-        screen_source = (
-            fixations_filtered
-            if fixations_filtered is not None
-            and not fixations_filtered.empty
-            and SCREEN_ID in fixations_filtered.columns
-            else words_filtered
-        )
-        if (
-            screen_source is None
-            or screen_source.empty
-            or SCREEN_ID not in screen_source.columns
-        ):
-            options = []
-        else:
-            candidates_with_screen = set(
-                map(
-                    tuple,
-                    screen_source.loc[
-                        screen_source[SCREEN_ID].astype(str) == active_screen,
-                        ["participant_id", "trial_id"],
-                    ]
-                    .astype(str)
-                    .drop_duplicates()
-                    .to_numpy(),
-                )
-            )
-            options = [
-                option
-                for option in options
-                if (str(option[0]), str(option[1])) in candidates_with_screen
-            ]
-            if (
-                fixations_filtered is not None
-                and SCREEN_ID in fixations_filtered.columns
-            ):
-                fixations_filtered = fixations_filtered[
-                    fixations_filtered[SCREEN_ID].astype(str) == active_screen
-                ]
+    # UX-112: B's candidate pool used to be narrowed here to only trials
+    # sharing A's *exact* active screen id (and B's own fixation pool
+    # pre-filtered to that one screen) — a workaround for B being forced onto
+    # A's screen outright further down, in `_build_compare_meta`. B now
+    # chooses its own screen from its own navigator regardless of what A has
+    # selected, so that workaround is gone: any multipart trial is a valid B
+    # candidate, and its own navigator (rendered once it's chosen) is what
+    # narrows it to one coordinate space.
     # UX-64 — ONE row for scanpath B, the mirror of A's above it:
     # `[Compare with] [Compare To] [scrub slider] [◀ ▶ ⇅ filter]` on the same
     # `SELECTOR_ROW_GRID`, replacing the dataset row + *Filter B by* row + picker
@@ -1606,11 +1577,7 @@ def _render_compare_selector(
         elif source is not None:
             st.info(f"No trials in **{source.name}** match its filters.")
         else:
-            st.info(
-                "No other trials match B's filters on this screen."
-                if active_screen
-                else "No other trials match B's filters."
-            )
+            st.info("No other trials match B's filters.")
         return None, None, None, None
 
     sort_keys = trial_sort_keys(
@@ -2973,7 +2940,7 @@ def _build_compare_meta(
     selected_trial: str,
     compare_participant: str | None,
     compare_trial: str | None,
-    selected_screen: str | None = None,
+    compare_screen: str | None = None,
     source: SecondaryDataset | None = None,
     primary_dataset: str | None = None,
 ) -> dict | None:
@@ -2989,29 +2956,36 @@ def _build_compare_meta(
     and the returned dict carries the qualified participant plus B's own
     ``dataset`` / ``text_id`` / ``setup`` — the last three because everything
     downstream would otherwise look them up in **A's** combos and geometry.
+
+    ``compare_screen`` (UX-112) is **B's own** chosen screen id — from its own
+    navigator, scoped to its own multipart trial — never A's. Earlier this
+    parameter *was* A's screen id, reused for B outright (valid only when both
+    sides happened to spell screens the same way) and forced to ``None`` for a
+    cross-dataset ``source`` (there being no sense asking whether a foreign
+    trial contains A's screen id) — which left a cross-dataset multipart B
+    extracted whole, every one of its screens concatenated into one frame even
+    though each is its own coordinate space. B choosing its own screen fixes
+    both: it means the same thing regardless of ``source``, so there is
+    nothing left to force.
     """
     if compare_participant is None or compare_trial is None:
         return None
     if source is not None:
-        # The multipart screen scoping below asks whether B contains *A's*
-        # screen id, which is meaningless across corpora — a foreign dataset's
-        # trial is compared whole.
-        selected_screen = None
         words_filtered, fixations_filtered = source.words, source.fixations
     compare_words = extract_trial(words_filtered, compare_participant, compare_trial)
     compare_fix = extract_trial(fixations_filtered, compare_participant, compare_trial)
-    if selected_screen is not None:
+    if compare_screen is not None:
         if not compare_words.empty:
             if SCREEN_ID not in compare_words.columns:
                 return None
             compare_words = extract_part(
-                compare_words, compare_participant, compare_trial, selected_screen
+                compare_words, compare_participant, compare_trial, compare_screen
             )
         if not compare_fix.empty:
             if SCREEN_ID not in compare_fix.columns:
                 return None
             compare_fix = extract_part(
-                compare_fix, compare_participant, compare_trial, selected_screen
+                compare_fix, compare_participant, compare_trial, compare_screen
             )
         if compare_words.empty and compare_fix.empty:
             return None
@@ -3985,6 +3959,10 @@ def render_single_trial_tab(
         # containers double as welcome-tour spotlight targets — `compare_slot`
         # takes one too, for symmetry with the strip it now sits beside.
         compare_slot = st.container(key="tour_grp_compare_picker")
+        # UX-112: B's own screen navigator, directly under B's trial row, the
+        # same relationship `screen_slot` has with A's row above it — reserved
+        # here (before the chip strips) so creation order keeps it in place.
+        compare_screen_slot = st.container(key="tour_grp_compare_screen_picker")
         chips_slot = st.container(key="tour_grp_chips")
         compare_chips_slot = st.container(key="tour_grp_compare_chips")
         plot_slot = st.container(key="tour_grp_plot")
@@ -4516,6 +4494,7 @@ def render_single_trial_tab(
     compare_participant, compare_trial = None, None
     compare_source: SecondaryDataset | None = None
     compare_pool: SecondaryDataset | None = None
+    selected_compare_screen: str | None = None
     # Layout comes from the rail's Compare-config popover via session_state; an
     # animated comparison always co-animates on one clock, so force overlay then.
     # CMP-11: the cross-dataset *resolve* is NOT done here. It needs B's screen,
@@ -4543,13 +4522,46 @@ def render_single_trial_tab(
                     # CMP-6: lets the selector order candidates by the main
                     # picker's own sort keys (fixation count, reading time, …).
                     fixations_filtered=fixations_filtered,
-                    trial_words=trial_words,
                     words_filtered=words_filtered,
                     combos_all=combos_all,
                     words_all=words_all,
                     fixations_all=fixations_all,
                 )
             )
+        # UX-112: B's own screen navigator, directly under B's own row —
+        # built from B's own trial (not A's), so B can pick any of its own
+        # screens independently instead of being forced onto whichever one A
+        # has selected. `compare_words_pool`/`compare_fixations_pool` (also
+        # read further down, at `_build_compare_meta`) are B's own filter pool:
+        # an independent `SecondaryDataset` when B has one, else the same
+        # already-filtered frames A draws from (a local "This dataset" B
+        # keeps A's filters — `compare_pool` is only ever non-None for a
+        # source with its own §5.2 filters).
+        compare_words_pool = (
+            compare_pool.words if compare_pool is not None else words_filtered
+        )
+        compare_fixations_pool = (
+            compare_pool.fixations if compare_pool is not None else fixations_filtered
+        )
+        if compare_participant is not None and compare_trial is not None:
+            compare_parent_words = extract_trial(
+                compare_words_pool, compare_participant, compare_trial
+            )
+            compare_parent_fixations = extract_trial(
+                compare_fixations_pool, compare_participant, compare_trial
+            )
+            compare_screens = _part_catalog_for_display(
+                compare_parent_words, compare_parent_fixations
+            )
+        else:
+            compare_screens = pd.DataFrame()
+        with compare_screen_slot:
+            selected_compare_screen = _render_screen_navigator(
+                compare_screens, key_prefix="single_compare"
+            )
+    else:
+        compare_words_pool = words_filtered
+        compare_fixations_pool = fixations_filtered
 
     global_raw_toggle = bool(viz_settings.get("show_raw_gaze"))
     effective_show_raw_gaze = bool(global_raw_toggle and trial_has_raw_gaze)
@@ -4606,18 +4618,12 @@ def render_single_trial_tab(
     y_field = viz_settings["y_field"]
 
     # Second trial's words/fixations + labels for the comparison figure and the
-    # side-by-side Trial Info / metadata table.
-    # B owns an independent filter pool even when it comes from this dataset.
-    # Extracting its selection from A's filtered frames makes a valid B choice
-    # disappear whenever A's filters exclude it — exactly what the separate B
-    # filters are meant to prevent. The source remains None for a local pool so
-    # downstream labels, geometry and participant ids retain same-dataset rules.
-    compare_words_pool = (
-        compare_pool.words if compare_pool is not None else words_filtered
-    )
-    compare_fixations_pool = (
-        compare_pool.fixations if compare_pool is not None else fixations_filtered
-    )
+    # side-by-side Trial Info / metadata table. `compare_words_pool` /
+    # `compare_fixations_pool` (B owns an independent filter pool even when it
+    # comes from this dataset — extracting its selection from A's filtered
+    # frames would make a valid B choice disappear whenever A's filters
+    # exclude it, exactly what the separate B filters are meant to prevent)
+    # were built above, alongside B's own screen navigator.
     compare_meta = _build_compare_meta(
         compare_words_pool,
         compare_fixations_pool,
@@ -4625,7 +4631,7 @@ def render_single_trial_tab(
         selected_trial,
         compare_participant,
         compare_trial,
-        selected_screen,
+        selected_compare_screen,
         source=compare_source,
         # CMP-15: A's corpus, so a cross-dataset pair names both sides.
         primary_dataset=str(st.session_state.get("data_source_choice") or ""),

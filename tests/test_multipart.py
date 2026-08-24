@@ -223,6 +223,65 @@ def test_direct_comparison_selects_the_matching_screen_only():
     assert meta["fixations"][SCREEN_ID].unique().tolist() == ["question"]
 
 
+def test_comparison_lets_b_choose_its_own_screen_independent_of_a():
+    """UX-112: B's screen is its own choice, not A's forced onto it.
+
+    Passing a `compare_screen` is now unconditionally B's own selection —
+    there is no "A's screen" concept left in `_build_compare_meta` at all —
+    so a value that would be meaningless as *A's* screen id (the fixture only
+    has "intro"/"question") still works correctly as long as it identifies a
+    real screen of B's own trial.
+    """
+    words, fixations = make_multipart_synthetic_data()
+    other_words = words.assign(participant_id="other", trial_id="other_trial")
+    other_fixations = fixations.assign(participant_id="other", trial_id="other_trial")
+    meta = _build_compare_meta(
+        pd.concat([words, other_words]),
+        pd.concat([fixations, other_fixations]),
+        "synthetic",
+        "multipart_demo",
+        "other",
+        "other_trial",
+        "intro",
+    )
+    assert meta is not None
+    assert meta["words"][SCREEN_ID].unique().tolist() == ["intro"]
+    assert meta["fixations"][SCREEN_ID].unique().tolist() == ["intro"]
+
+
+def test_cross_dataset_comparison_scopes_b_to_its_own_chosen_screen():
+    """The regression this fix exists for: a cross-dataset multipart B used to
+    come back as *every* screen concatenated (`compare_screen` was force-set
+    to `None` whenever `source is not None`) — each screen its own coordinate
+    space, silently mixed into one frame. B choosing its own screen applies
+    regardless of `source`, so a cross-dataset B is scoped exactly like a
+    same-dataset one."""
+    from scanpath_studio.compare_source import SecondaryDataset
+    from scanpath_studio.experimental_setup import SetupSnapshot
+
+    words, fixations = make_multipart_synthetic_data()
+    source = SecondaryDataset(
+        name="OtherCorpus",
+        words=words,
+        fixations=fixations,
+        combos=pd.DataFrame(),
+        setup=SetupSnapshot(),
+    )
+    meta = _build_compare_meta(
+        pd.DataFrame(),  # unused: `source is not None` reads from `source` instead
+        pd.DataFrame(),
+        "synthetic",
+        "multipart_demo",
+        "synthetic",
+        "multipart_demo",
+        "question",
+        source=source,
+    )
+    assert meta is not None
+    assert meta["words"][SCREEN_ID].unique().tolist() == ["question"]
+    assert meta["fixations"][SCREEN_ID].unique().tolist() == ["question"]
+
+
 def test_in_app_screen_navigator_keeps_parent_and_steps_in_recorded_order():
     from streamlit.testing.v1 import AppTest
 
@@ -235,6 +294,37 @@ def test_in_app_screen_navigator_keeps_parent_and_steps_in_recorded_order():
     at.button(key="single_screen_next").click().run()
     assert at.selectbox(key="single_screen_id").value == "question"
     assert at.button(key="single_screen_next").disabled
+
+
+def _two_screen_navigators_app():
+    """Stand-ins for A's own navigator and B's (`key_prefix="single_compare"`)
+    — the two real surfaces in Compare mode, each over its own multipart
+    trial (UX-112)."""
+    from scanpath_studio.multipart import part_catalog
+    from scanpath_studio.synthetic import make_multipart_synthetic_data
+    from scanpath_studio.tabs import _render_screen_navigator
+
+    words, fixations = make_multipart_synthetic_data()
+    catalog = part_catalog(words, fixations)
+    _render_screen_navigator(catalog)
+    _render_screen_navigator(catalog, key_prefix="single_compare")
+
+
+def test_as_and_bs_screen_navigators_stay_independent():
+    """UX-112: distinct keys, so stepping one never touches the other — the
+    same guarantee the trial pickers already have for A vs B."""
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_function(_two_screen_navigators_app).run()
+    assert not at.exception, at.exception
+    assert at.selectbox(key="single_screen_id").value == "intro"
+    assert at.selectbox(key="single_compare_screen_id").value == "intro"
+
+    at.button(key="single_compare_screen_next").click().run()
+    assert not at.exception, at.exception
+    assert at.selectbox(key="single_compare_screen_id").value == "question"
+    # A's own navigator is untouched by stepping B's.
+    assert at.selectbox(key="single_screen_id").value == "intro"
 
 
 def _single_screen_navigator_app():
@@ -297,7 +387,11 @@ def test_ux47_screen_steps_live_in_a_railbtn_cluster():
     from scanpath_studio.tabs import _render_screen_navigator
 
     source = inspect.getsource(_render_screen_navigator)
-    assert 'container(key="railbtn_single_screen_trail")' in source
+    # UX-112: the key is prefix-parameterized (A's own "single" default, B's
+    # own "single_compare") rather than the literal "single_screen_trail" —
+    # still a `railbtn_*` name, which is the part the shared CSS rule below
+    # actually matches on.
+    assert 'container(key=f"railbtn_{key_prefix}_screen_trail")' in source
     # The steps must be children of that container, not of the columns.
     assert 'trail.button(\n        "◀"' in source
     assert 'trail.button(\n        "▶"' in source

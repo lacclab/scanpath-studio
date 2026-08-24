@@ -2399,9 +2399,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
     _wizard_name_header(s_name, active)
 
     def _render_restore_trigger(host) -> None:
-        # UX-113: beside stage 2's title, not buried under the three uploads —
-        # restoring is an alternative *starting point* for the stage, not a
-        # fourth table.
+        # UX-113: beside stage 3's title, not stage 2's — restoring a saved
+        # setup seeds the column mapping (3), kept/filtered fields (4), and
+        # recording setup (5) answers; it never touches the uploads themselves,
+        # so it belongs beside the first stage it actually affects.
         restore_box = host.popover("↩️ Restore a saved setup (optional)")
         _wizard_restore_config(restore_box)
         _render_restored_config_caption(restore_box)
@@ -2413,10 +2414,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
     _generic_format = (
         st.session_state.get("wizard_dataset_format", "Generic") != "MultiplEYE"
     )
-    s1 = _part(
-        "data", trailing=_render_restore_trigger if active and _generic_format else None
+    s1 = _part("data")
+    s_map = _part(
+        "mapping",
+        trailing=_render_restore_trigger if active and _generic_format else None,
     )
-    s_map = _part("mapping")
 
     # === 1 · Upload data files ===============================================
     if active:

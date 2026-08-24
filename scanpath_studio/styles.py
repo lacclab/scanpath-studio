@@ -7,6 +7,24 @@ def get_app_css() -> str:
     """Return custom CSS to reduce whitespace and disable animations."""
     return """
     <style>
+    /* Force LTR regardless of the browser's own OS/locale default direction.
+       Every plot, coordinate, and reading-order concept in this app is
+       physical left-to-right, but nothing here ever states that — so a
+       browser whose UI language is a RTL one (Hebrew, Arabic, ...) inherits
+       `direction: rtl` onto the page, and BaseWeb (the component library
+       Streamlit's own widgets are built on) styles several of them with CSS
+       *logical* properties that flip under it. The clearest case is the
+       select-slider: its thumb is positioned with a physical `left: X%` (so
+       it still lands at the right spot), but its filled track segment uses a
+       logical inset that flips to the *other* end — the fill looks
+       nowhere near the thumb it is supposed to lead up to. Rather than only
+       patching the slider, force ltr globally: anything else BaseWeb draws
+       with a logical property would drift the same way, silently.
+       Bug reported with a Hebrew-locale browser (screenshot: thumb correct,
+       fill anchored to the wrong end). */
+    html, body, [data-testid="stApp"] {
+        direction: ltr !important;
+    }
     /* UX-99: the page's side gutters. Streamlit's wide layout reserves ~5rem
        either side, which on this app is ~10rem of nothing beside the widest
        things it draws — the scanpath canvas plus its rail, the Corpus tables,

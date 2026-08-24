@@ -650,6 +650,18 @@ class TestSpotlightSelectorsResolve:
         assert "border-left: 1px solid var(--sps-border);" in css
         assert "padding-left: 0.7rem;" in css
 
+    def test_the_app_forces_ltr_regardless_of_browser_locale(self):
+        """A browser whose OS/UI language is RTL (Hebrew, Arabic, ...) inherits
+        `direction: rtl`, which BaseWeb's select-slider styles with a logical
+        inset that flips under it — the thumb (positioned with a physical
+        `left: X%`) lands correctly, but the filled track segment leading up to
+        it does not, so the two visibly disagree."""
+        from scanpath_studio.styles import get_app_css
+
+        css = get_app_css()
+        assert 'html, body, [data-testid="stApp"] {' in css
+        assert "direction: ltr !important;" in css
+
     def test_page_top_inset_clears_the_fixed_header(self):
         """The first Scanpath row must sit fully below Streamlit's fixed chrome.
 

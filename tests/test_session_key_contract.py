@@ -205,6 +205,18 @@ def test_annotation_store_key_matches_annotations_module():
     assert sk.TRIAL_ANNOTATIONS == ANNOTATIONS_STATE_KEY
 
 
+def test_design_presets_key_matches_controls_module():
+    """The design library travels in the config *and* the recovery cache."""
+    from scanpath_studio.controls import DESIGN_PRESETS_KEY
+    from scanpath_studio.persistence import _SESSION_KEYS
+
+    assert sk.DESIGN_PRESETS == DESIGN_PRESETS_KEY
+    assert sk.DESIGN_PRESETS in _SESSION_KEYS, (
+        "the design library dropped out of the cache manifest — the user's "
+        "saved designs would stop surviving a restart"
+    )
+
+
 def test_selection_prefix_pinned():
     """The trial-picker key prefix a link seeds is itself wire format."""
     from scanpath_studio.url_state import _SELECTION_PREFIXES

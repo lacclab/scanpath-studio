@@ -34,7 +34,11 @@ import pandas as pd
 
 from .annotations import ANNOTATIONS_STATE_KEY, records_to_store, store_to_records
 from .constants import DATASET_COUNTS_STORE_KEY
-from .session_keys import COLUMN_MAPPING_PREFIX, PLOT_CONFIG_STATE_KEYS
+from .session_keys import (
+    COLUMN_MAPPING_PREFIX,
+    DESIGN_PRESETS,
+    PLOT_CONFIG_STATE_KEYS,
+)
 
 SCHEMA_VERSION = 1
 PERSIST_ENV_VAR = "SCANPATH_STUDIO_PERSIST"
@@ -59,6 +63,10 @@ _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
     "single_animate",
     "wizard_filter_fields",
     "_composite_trial_columns",
+    # VIZ-39 — the saved design library. It is the user's own work, not a
+    # setting derived from a dataset, so it belongs in the cache for the same
+    # reason annotations do: closing the app must not be how you lose it.
+    DESIGN_PRESETS,
 }
 
 
@@ -573,6 +581,7 @@ def cache_status(
         "datasets": [],
         "rows": 0,
         "annotations": 0,
+        "designs": 0,
         "settings": 0,
         "bytes": 0,
         "saved_at": None,
@@ -608,7 +617,9 @@ def cache_status(
             else None
         )
         status["annotations"] = len(list(manifest.get("annotations", [])))
-        status["settings"] = len(dict(manifest.get("session", {})))
+        stored_session = dict(manifest.get("session", {}))
+        status["designs"] = len(dict(stored_session.get(DESIGN_PRESETS, {})))
+        status["settings"] = len(stored_session)
         # A newer/unknown schema is present but will not restore — say so here
         # rather than let the panel claim the work is safely stored.
         status["readable"] = schema == SCHEMA_VERSION

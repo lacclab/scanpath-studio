@@ -59,6 +59,7 @@ from .fields import (
     plain,
     row_label,
 )
+from .session_keys import DESIGN_PRESETS as _DESIGN_PRESETS_WIRE_KEY
 
 NONE_OPTION = "(none)"
 
@@ -518,7 +519,7 @@ _VIZ_WIDGET_DEFAULTS = {
     # First-load layers default to the *core scanpath* only — fixations, saccades
     # and the reading text — so a new user lands on a legible picture instead of
     # seven stacked encodings. The bounding-box grid and the density heatmap are
-    # analytical overlays, off by default and one click (or one Quick view) away.
+    # analytical overlays, off by default and one click (or one design preset) away.
     "global_show_words": False,
     "global_show_labels": True,
     "global_show_fix": True,
@@ -884,6 +885,115 @@ _QUICK_VIEW_CUSTOM_STATE = "_quick_view_custom_state"
 _QUICK_VIEW_APPLIED_STATE = "_quick_view_applied_state"
 _CUSTOM_VIEW = "custom"
 
+#: VIZ-39 — the user's own saved designs: ``{name: {global_key: value}}``.
+#: The three built-ins are *code*; these are data, and they are what the
+#: "Quick views" row was standing in for — it offered exactly one unnamed
+#: snapshot ("your most recent custom settings"), which could not be kept,
+#: compared, or come back to.
+DESIGN_PRESETS_KEY = _DESIGN_PRESETS_WIRE_KEY
+#: Which saved design the ✏️ button has open for editing, if any.
+_DESIGN_EDIT_KEY = "_design_preset_editing"
+#: Whether the 💾 "Save current design" modal is open.
+_DESIGN_SAVE_PENDING_KEY = "_design_save_pending"
+#: Which saved design the 🗑️ confirmation is asking about, if any.
+_DESIGN_DELETE_PENDING_KEY = "_design_delete_pending"
+#: The 💾 dialog's two ways of saving, and the radio that picks between them.
+_SAVE_MODE_NEW = "new"
+_SAVE_MODE_REPLACE = "replace"
+_DESIGN_SAVE_MODE_KEY = "design_save_mode"
+#: `[name | ✏️ | 🗑️]` — the shared column split, so the rename field lands
+#: exactly where the name it replaces was.
+_DESIGN_ROW_W = (0.62, 0.19, 0.19)
+#: A selection of `design:<name>`, kept in the same slot as the built-ins so
+#: `_sync_quick_view_state`'s drift detection applies to saved designs too —
+#: touch any control and the highlight drops, exactly as for a built-in.
+_DESIGN_SELECTION_PREFIX = "design:"
+
+
+def design_presets() -> dict[str, dict]:
+    """The user's saved designs, newest last. Always a dict (VIZ-39)."""
+    stored = st.session_state.get(DESIGN_PRESETS_KEY)
+    return stored if isinstance(stored, dict) else {}
+
+
+def _design_selection(name: str) -> str:
+    return f"{_DESIGN_SELECTION_PREFIX}{name}"
+
+
+def selected_design_name() -> str | None:
+    """The saved design currently applied, or ``None``."""
+    selected = st.session_state.get(_QUICK_VIEW_SELECTION_KEY)
+    if isinstance(selected, str) and selected.startswith(_DESIGN_SELECTION_PREFIX):
+        return selected[len(_DESIGN_SELECTION_PREFIX) :]
+    return None
+
+
+def save_design_preset(name: str) -> str | None:
+    """Store the live plot settings under ``name``. Returns the name taken.
+
+    An existing name is **overwritten**, which is what the ✏️ editor's *Update
+    to current settings* means; the caller is what distinguishes saving a new
+    design from updating one, because only it knows which the user asked for.
+    """
+    clean = " ".join(str(name).split())[:60]
+    if not clean:
+        return None
+    # A design named after a built-in would shadow it in `_apply_view_preset`,
+    # which checks saved designs first — so the built-in button would silently
+    # start applying someone else's settings.
+    if clean in _VIEW_PRESETS:
+        clean = f"{clean} (mine)"
+    presets = dict(design_presets())
+    presets[clean] = _capture_quick_view_state()
+    st.session_state[DESIGN_PRESETS_KEY] = presets
+    st.session_state[_QUICK_VIEW_SELECTION_KEY] = _design_selection(clean)
+    # Pop rather than snapshot, exactly as `_apply_view_preset` does. Saving runs
+    # inside the dialog's fragment frame, where popovers that are open have their
+    # `*__num` slider twins in session_state; those keys are collected the moment
+    # the popover closes, so a baseline taken here would read as drift on the
+    # next full run and drop the highlight off the design just saved. Letting
+    # `_sync_quick_view_state` take the baseline puts it in the same frame as
+    # the comparison.
+    st.session_state.pop(_QUICK_VIEW_APPLIED_STATE, None)
+    return clean
+
+
+def rename_design_preset(old: str, new: str) -> str | None:
+    """Rename a saved design in place, keeping its position in the list."""
+    clean = " ".join(str(new).split())[:60]
+    presets = design_presets()
+    if not clean or old not in presets or clean == old:
+        return None
+    st.session_state[DESIGN_PRESETS_KEY] = {
+        (clean if key == old else key): value for key, value in presets.items()
+    }
+    if selected_design_name() == old:
+        st.session_state[_QUICK_VIEW_SELECTION_KEY] = _design_selection(clean)
+    return clean
+
+
+def delete_design_preset(name: str) -> None:
+    """Forget a saved design. The live plot settings are left exactly as they are.
+
+    Deleting the design you are *looking at* must not change the figure — the
+    settings are already applied and are the user's own. Only the highlight
+    goes, which `_sync_quick_view_state` handles by falling through to Custom.
+    """
+    presets = dict(design_presets())
+    presets.pop(name, None)
+    st.session_state[DESIGN_PRESETS_KEY] = presets
+    if selected_design_name() == name:
+        st.session_state[_QUICK_VIEW_SELECTION_KEY] = _CUSTOM_VIEW
+    if st.session_state.get(_DESIGN_EDIT_KEY) == name:
+        st.session_state.pop(_DESIGN_EDIT_KEY, None)
+
+
+def _toggle_design_editor(name: str) -> None:
+    """✏️ opens the inline editor for one design, and closes any other."""
+    current = st.session_state.get(_DESIGN_EDIT_KEY)
+    st.session_state[_DESIGN_EDIT_KEY] = None if current == name else name
+
+
 _VIEW_PRESETS: dict[str, dict[str, object]] = {
     "scanpath": {
         "global_show_fix": True,
@@ -953,30 +1063,56 @@ def _apply_view_preset(name: str) -> None:
     dependent canvas/field defaults. Custom is the only view that preserves
     manual edits; leaving it snapshots the complete live ``global_*`` state.
     """
-    if name not in {*_VIEW_PRESETS, _CUSTOM_VIEW}:
-        raise ValueError(f"Unknown quick-view preset: {name}")
+    saved = design_presets()
+    if name not in {*_VIEW_PRESETS, _CUSTOM_VIEW, *saved}:
+        raise ValueError(f"Unknown design preset: {name}")
 
     ss = st.session_state
     current = ss.get(_QUICK_VIEW_SELECTION_KEY)
     if current == _CUSTOM_VIEW:
         ss[_QUICK_VIEW_CUSTOM_STATE] = _capture_quick_view_state()
+
+    # VIZ-39 — one of the user's own saved designs. Same shape as the built-in
+    # branch below (clear, then write what the design owns), and deliberately
+    # NOT the Custom branch's shape: a saved design is a *record* of settings,
+    # so it starts from the widget defaults like a built-in does rather than
+    # layering onto whatever happened to be on screen.
+    if name in saved:
+        for key in list(ss):
+            if _is_restorable_global(key):
+                ss.pop(key, None)
+        for key, value in _VIZ_WIDGET_DEFAULTS.items():
+            if _is_restorable_global(key):
+                ss[key] = deepcopy(value)
+        for key, value in saved[name].items():
+            if _is_restorable_global(key):
+                ss[key] = deepcopy(value)
+        ss.pop("_canvas_seeded_for", None)
+        ss.pop("_font_seeded_for", None)
+        ss.pop("_palette_picked", None)
+        ss.pop(_PRE_ILLUSTRATION_STATE, None)
+        ss[_QUICK_VIEW_SELECTION_KEY] = _design_selection(name)
+        ss.pop(_QUICK_VIEW_APPLIED_STATE, None)
+        return
+
     if name == _CUSTOM_VIEW:
         custom = ss.get(_QUICK_VIEW_CUSTOM_STATE)
         if isinstance(custom, dict):
             for key in list(ss):
-                if str(key).startswith("global_"):
+                if _is_restorable_global(key):
                     ss.pop(key, None)
             for key, value in custom.items():
-                ss[key] = deepcopy(value)
+                if _is_restorable_global(key):
+                    ss[key] = deepcopy(value)
         ss[_QUICK_VIEW_SELECTION_KEY] = _CUSTOM_VIEW
         ss.pop(_QUICK_VIEW_APPLIED_STATE, None)
         return
 
     for key in list(ss):
-        if str(key).startswith("global_"):
+        if _is_restorable_global(key):
             ss.pop(key, None)
     for key, value in _VIZ_WIDGET_DEFAULTS.items():
-        if key.startswith("global_"):
+        if _is_restorable_global(key):
             ss[key] = deepcopy(value)
     # Canvas/font values are source-dependent rather than static defaults.
     # Removing their guards lets app.seed_canvas_state restore them on the rerun
@@ -987,7 +1123,7 @@ def _apply_view_preset(name: str) -> None:
     ss.pop(_PRE_ILLUSTRATION_STATE, None)
 
     # A deep-link preset is applied at the top of every rerun. Once the user has
-    # explicitly chosen a Quick view it must not immediately put the old visual
+    # explicitly chosen a design preset it must not immediately put the old visual
     # settings back; selection/source parameters are not part of this list.
     from . import session_keys as _sk
 
@@ -1002,19 +1138,298 @@ def _apply_view_preset(name: str) -> None:
     ss.pop(_QUICK_VIEW_APPLIED_STATE, None)
 
 
+#: Widget keys a design preset must not carry, even though they are `global_*`.
+#: `st.file_uploader` refuses to have its key assigned from session state at
+#: all, so snapshotting one and writing it back raises
+#: `StreamlitValueAssignmentNotAllowedError` and takes the whole page down —
+#: which is what happened the moment a Custom view was captured with a stimulus
+#: image attached. The `_upload` suffix is the same convention
+#: `url_state._restore_column_mapping` already excludes by.
+def _is_restorable_global(key: object) -> bool:
+    name = str(key)
+    return name.startswith("global_") and not name.endswith("_upload")
+
+
+def _render_saved_designs(host) -> None:
+    """The user's own designs: save, apply, rename, delete (VIZ-39).
+
+    The list is an expander, because it grows and the rail is narrow — and
+    because it is the *built-ins* above that should stay one click away. The 💾
+    button is drawn **into the expander's own title bar** (`.st-key-design_shell`
+    is the positioning context; the CSS lives in `styles.py`) rather than in a
+    column beside it: a column would take a fifth of the rail's width away from
+    the list underneath for a single icon, and the header row's right-hand side
+    is empty space Streamlit is not using. Saving stays on screen whether the
+    list is open or shut, which is the point.
+    """
+    saved = design_presets()
+    active = selected_design_name()
+    label = f"🎨 My designs ({len(saved)})" if saved else "🎨 My designs"
+    shell = host.container(key="design_shell")
+    with shell.expander(label, expanded=bool(st.session_state.get(_DESIGN_EDIT_KEY))):
+        if not saved:
+            st.caption(
+                "No saved designs yet. Set the layers, colours and figure up "
+                "the way you like them, then hit 💾 — it lands here, one click "
+                "from every trial you look at afterwards."
+            )
+        for name in saved:
+            # One bordered container per design, so a design reads as one object
+            # rather than as three buttons that happen to be adjacent.
+            row = st.container(border=True, key=f"design_row_{name}")
+            if st.session_state.get(_DESIGN_EDIT_KEY) == name:
+                _render_design_rename(row, name)
+                continue
+            cells = row.columns(_DESIGN_ROW_W, vertical_alignment="center")
+            cells[0].button(
+                name,
+                key=f"design_apply_{name}",
+                type="primary" if active == name else "tertiary",
+                width="stretch",
+                help=f"Apply “{name}”.",
+                on_click=_apply_view_preset,
+                args=(name,),
+            )
+            # Material icons rather than emoji: emoji render at whatever size and
+            # baseline the platform font decides, which is what made these two
+            # sit high and unaligned in their buttons.
+            cells[1].button(
+                "",
+                icon=":material/edit:",
+                key=f"design_edit_{name}",
+                type="tertiary",
+                width="stretch",
+                help="Rename this design.",
+                on_click=_toggle_design_editor,
+                args=(name,),
+            )
+            cells[2].button(
+                "",
+                icon=":material/delete:",
+                key=f"design_delete_{name}",
+                type="tertiary",
+                width="stretch",
+                help="Forget this design.",
+                on_click=_ask_delete_design,
+                args=(name,),
+            )
+    if shell.button(
+        "",
+        icon=":material/save:",
+        key="design_save",
+        help="Save the plot settings on screen now as a named design.",
+    ):
+        st.session_state[_DESIGN_SAVE_PENDING_KEY] = True
+        st.session_state[_DESIGN_SAVE_MODE_KEY] = _SAVE_MODE_NEW
+    if st.session_state.get(_DESIGN_SAVE_PENDING_KEY):
+        _design_save_dialog()
+    pending_delete = st.session_state.get(_DESIGN_DELETE_PENDING_KEY)
+    if pending_delete in saved:
+        _design_delete_dialog(str(pending_delete))
+
+
+def _ask_delete_design(name: str) -> None:
+    """🗑️ arms the confirmation instead of deleting (VIZ-39).
+
+    A design is a handful of choices the user made and cannot get back by
+    undoing anything, so it gets the same confirm step ♻️ Reset visualization
+    has — and for the same reason, an `on_click` that only sets a flag, because
+    a callback may not open a dialog.
+    """
+    st.session_state[_DESIGN_DELETE_PENDING_KEY] = name
+    st.session_state.pop(_DESIGN_EDIT_KEY, None)
+
+
+def _close_design_delete_dialog() -> None:
+    """Disarm the 🗑️ confirmation. Also its ``on_dismiss`` hook."""
+    st.session_state.pop(_DESIGN_DELETE_PENDING_KEY, None)
+
+
+@st.dialog("Delete this design?", on_dismiss=_close_design_delete_dialog)
+def _design_delete_dialog(name: str) -> None:
+    """Confirm forgetting one saved design — VIZ-39."""
+    st.caption(
+        f"**{name}** is forgotten. The plot on screen does not change: these "
+        "settings stay applied until you pick another design."
+    )
+    yes, no = st.columns(2, gap="small")
+    if yes.button(
+        "🗑️ Delete it", key="design_delete_confirm", type="primary", width="stretch"
+    ):
+        delete_design_preset(name)
+        _close_design_delete_dialog()
+        st.rerun(scope="app")
+    if no.button("Cancel", key="design_delete_cancel", width="stretch"):
+        _close_design_delete_dialog()
+        st.rerun(scope="app")
+
+
+def _close_design_save_dialog() -> None:
+    """Disarm the modal. Also the ``on_dismiss`` hook — see below."""
+    st.session_state.pop(_DESIGN_SAVE_PENDING_KEY, None)
+
+
+# `on_dismiss` is what keeps a *flag*-driven dialog honest: ✕ and Esc close the
+# modal in the browser without running a line of the body, so without this the
+# flag stayed armed and the dialog reopened on the very next rerun — clicking a
+# preset, toggling a layer, anything.
+@st.dialog("Save current design", on_dismiss=_close_design_save_dialog)
+def _design_save_dialog() -> None:
+    """Name the settings on screen and keep them (VIZ-39).
+
+    A **form**, so ⏎ is the same as clicking 💾 Save: Streamlit routes Enter to
+    the form's *first* submit button, which is why Save is written before Cancel
+    and why it is never `disabled` (a disabled first button turns Enter off for
+    the whole form — an empty name is caught below instead).
+
+    Opened from a pending flag rather than the button's return value, and closed
+    with an explicit ``scope="app"`` rerun, for the same reason as
+    `_reset_viz_confirmation_dialog`: a dialog body is a fragment.
+    """
+    saved = design_presets()
+    mode = _SAVE_MODE_NEW
+    if saved:
+        # Outside the form on purpose. A form batches its widgets and does not
+        # rerun until it is submitted, so a radio *inside* one cannot change
+        # what the form shows — the choice has to be made where it can.
+        mode = st.radio(
+            "Save the settings on screen as",
+            options=(_SAVE_MODE_NEW, _SAVE_MODE_REPLACE),
+            format_func=lambda choice: (
+                "A new design"
+                if choice == _SAVE_MODE_NEW
+                else "A replacement for one I saved"
+            ),
+            key=_DESIGN_SAVE_MODE_KEY,
+        )
+    with st.form("design_save_form", border=False):
+        if mode == _SAVE_MODE_REPLACE:
+            name = st.selectbox(
+                "Design to replace",
+                options=list(saved),
+                key="design_replace_target",
+            )
+            st.warning(
+                "The chosen design's stored settings are **overwritten** by "
+                "the ones on screen now. What it held is not recoverable.",
+                icon="⚠️",
+            )
+        else:
+            name = st.text_input(
+                "Design name",
+                key="design_new_name",
+                placeholder="e.g. Paper figure",
+                help="Stores every plot setting on screen now — layers, "
+                "colours, filter, figure and canvas.",
+            )
+        row = st.columns(2, gap="small")
+        save = row[0].form_submit_button("💾 Save", type="primary", width="stretch")
+        cancel = row[1].form_submit_button("Cancel", width="stretch")
+    if cancel:
+        _close_design_save_dialog()
+        st.rerun(scope="app")
+    if save:
+        if not save_design_preset(name or ""):
+            st.error("Give the design a name first.")
+        else:
+            st.session_state.pop("design_new_name", None)
+            _close_design_save_dialog()
+            st.rerun(scope="app")
+
+
+def _render_design_rename(row, name: str) -> None:
+    """✏️ turns the card *itself* into the rename field — VIZ-39.
+
+    The box sits exactly where the name was and the two icons keep their slots,
+    so nothing moves under the cursor and the list does not grow a panel: the
+    card is either a design you can apply or a name you are typing.
+
+    A **form**, because ⏎ has to commit — Streamlit routes Enter to the first
+    submit button, which is ✓. Both buttons are `on_click` callbacks rather than
+    return values, so the row is already drawn in its new state on the rerun the
+    submit itself causes; handling the result after the fact would draw the card
+    once in the state the user just left.
+    """
+    with row.form(f"design_rename_form_{name}", border=False):
+        cells = st.columns(_DESIGN_ROW_W, vertical_alignment="center")
+        cells[0].text_input(
+            "Name",
+            value=name,
+            key=f"design_rename_{name}",
+            label_visibility="collapsed",
+        )
+        # Both need an explicit `key`: a submit button's identity is its label,
+        # and these two share the empty one — the icon is not part of it, so the
+        # second silently collapsed to a 0-height cell without them.
+        cells[1].form_submit_button(
+            "",
+            icon=":material/check:",
+            key=f"design_rename_go_{name}",
+            type="tertiary",
+            width="stretch",
+            help=f"Rename “{name}”.",
+            on_click=_rename_named_design,
+            args=(name,),
+        )
+        cells[2].form_submit_button(
+            "",
+            icon=":material/close:",
+            key=f"design_rename_cancel_{name}",
+            type="tertiary",
+            width="stretch",
+            help="Keep the name it has.",
+            on_click=_cancel_design_rename,
+        )
+
+
+def _cancel_design_rename() -> None:
+    st.session_state.pop(_DESIGN_EDIT_KEY, None)
+
+
+def _rename_named_design(old: str) -> None:
+    """``on_click`` for ✓: read the card's box, then leave edit mode.
+
+    Always leaves it, including when the name is blank or unchanged — ✓ means
+    *done*, and ✕ is there for backing out. `rename_design_preset` no-ops on
+    both, so neither can lose a design.
+    """
+    rename_design_preset(old, st.session_state.get(f"design_rename_{old}") or "")
+    st.session_state.pop(_DESIGN_EDIT_KEY, None)
+
+
 def _capture_quick_view_state() -> dict[str, object]:
-    """Snapshot every live global plot setting for the persistent Custom view."""
+    """Snapshot every live global plot setting for the persistent Custom view.
+
+    Uploader keys are left out (see `_is_restorable_global`): an `UploadedFile`
+    is neither deep-copyable in any useful sense nor assignable back, and the
+    image itself is not a *setting* — it survives on its own widget key across
+    the view switch regardless.
+    """
     return {
         str(key): deepcopy(value)
         for key, value in st.session_state.items()
-        if str(key).startswith("global_")
+        if _is_restorable_global(key)
     }
 
 
 def _sync_quick_view_state() -> str:
-    """Keep the fourth Quick view in step with manual plot-control edits."""
+    """Keep the design-preset highlight in step with manual plot-control edits."""
     ss = st.session_state
     selected = ss.get(_QUICK_VIEW_SELECTION_KEY)
+    # VIZ-39: a `design:<name>` selection is valid while that design still
+    # exists, and from here on is treated exactly like a built-in — including
+    # the drift check below, so editing any control drops the highlight.
+    if selected_design_name() in design_presets():
+        applied = ss.get(_QUICK_VIEW_APPLIED_STATE)
+        if not isinstance(applied, dict):
+            ss[_QUICK_VIEW_APPLIED_STATE] = _capture_quick_view_state()
+            return str(selected)
+        if _capture_quick_view_state() != applied:
+            ss[_QUICK_VIEW_SELECTION_KEY] = _CUSTOM_VIEW
+            ss[_QUICK_VIEW_CUSTOM_STATE] = _capture_quick_view_state()
+            ss.pop(_QUICK_VIEW_APPLIED_STATE, None)
+            return _CUSTOM_VIEW
+        return str(selected)
     if selected not in {*_VIEW_PRESETS, _CUSTOM_VIEW}:
         selected = next(
             (
@@ -1810,9 +2225,22 @@ def column_mapping_ui(
     beside them while every neighbour had its title above).
     """
     forget_mapping_for_other_table(df, state_key_prefix, field_specs)
-    # No `"(none)"` entry any more (UX-53 r10): "not mapped" is the select's own
-    # empty state, which is what gives every field Streamlit's built-in ✕.
-    options = list(df.columns)
+    # UX-108 — PERF-6 narrows `df` to only the columns a plan decided to
+    # actually *parse* (auto-detect + the optional-field registry + whatever a
+    # `col_map_*` key already names, session-wide); a column nobody has named
+    # yet is never in it, so offering `df.columns` here hid the rest of the
+    # file. Worse, "whatever a `col_map_*` key already names" is swept from
+    # session state with no dataset scoping — re-uploading the same file for a
+    # *second* dataset inherits the first one's picks as the plan's floor, so
+    # the read narrows to exactly what was kept last time and the picker looks
+    # like it is *remembering* which fields to hide. `app._read_uploaded_frame`
+    # stashes the file's real header the moment it reads it, independent of
+    # what the plan actually parsed; every field in the file belongs in this
+    # list regardless. Empty outside an upload context (the 🗂️ Data page's
+    # remap editor has no raw file to ask, and offers only what survived the
+    # original import by design) — fall back to the parsed frame there.
+    full_header = st.session_state.get(f"{state_key_prefix}_header")
+    options = list(full_header) if full_header else list(df.columns)
     expanded = bool(expand_on_problem and problems)
     # UX-53 field colour: which rows *must* be filled, and whether the user has
     # already tried to add the dataset (before that, empty is not an error).
@@ -2146,7 +2574,13 @@ def column_mapping_ui(
             field_col = field_col.container(key=cell_key)
             chosen_cols = field_col.multiselect(
                 label,
-                options=list(df.columns),
+                # UX-108 — the same widened list `_selectbox` uses (`options`,
+                # closed over from the outer scope), not `df.columns` again:
+                # Trial ID is the one field every dataset composes, and it is a
+                # `multi: True` field precisely so several raw columns can be
+                # joined into one id — the composable columns are exactly the
+                # ones a narrowed parse is most likely to have left out.
+                options=options,
                 key=state_key,
                 help=spec.get("help"),
                 label_visibility="collapsed",
@@ -3223,7 +3657,7 @@ def corpus_style_controls(
     return viz_settings_from_state(trial_fixations, base_font_size, words=words)
 
 
-def _rail_section(host, label: str, *, slug: str, help: str = "", **toggle):
+def _rail_section(host, label: str, *, slug: str, **toggle):
     """One rail section: `[toggle | ▾]` on a single line (UX-80).
 
     The shape #UX-68 gave 🎬 Animate and ⚖️ Compare, applied to every section of
@@ -3236,11 +3670,12 @@ def _rail_section(host, label: str, *, slug: str, help: str = "", **toggle):
     and sizes to its content. #UX-74 tried the opposite — inlining the popovers —
     and had to be reverted for exactly this.
 
-    Passing ``toggle`` kwargs (``key=``, ``help=``, ``disabled=``) draws the
-    switch and returns its value. Omitting them draws the section's **name**
-    instead, for the sections that have no single thing to switch: 📄 Stimulus
+    Passing ``toggle`` kwargs (``key=``, ``disabled=``) draws the switch and
+    returns its value. Omitting them leaves the section's **name** on its own,
+    for the sections that have no single thing to switch: 📄 Stimulus
     and 🔥 Overlays hold several layers, 📐 Figure & canvas holds none, and 🧹
-    Filter is not a layer at all.
+    Filter is not a layer at all. ``note=`` is a line written into the top of
+    the popover — used for the ⚠️ that says why a switch is greyed.
 
     Returns ``(value, body)`` — ``value`` is ``None`` for a name-only section.
     The ``split_mode_`` key prefix is what `styles.py` styles the row with; it is
@@ -3257,10 +3692,9 @@ def _rail_section(host, label: str, *, slug: str, help: str = "", **toggle):
     - **No label and no icon on the trigger.** A `▾` label (or a
       `:material/arrow_drop_down:` icon) sits *beside* the chevron Streamlit
       draws on every popover, which is one arrow too many.
-    - ``help_text`` goes to the **popover**, not the toggle. Streamlit renders a
-      widget's `help` as a `?` icon next to its label — one more thing on a row
-      that has to fit — while a popover trigger's `help` is a plain hover
-      tooltip. Same words, no icon.
+    - ``help_text`` went to the **popover**, not the toggle, so that a row which
+      has to fit did not also carry Streamlit's `?` icon. **UX-103 took the
+      hover text off this row entirely** — see the comments in the body.
 
     **BUG-37 — the popover carries an explicit ``key=``.** ``st.popover`` is a
     stateful widget in this Streamlit version (it takes ``key``/``on_change``
@@ -3286,16 +3720,34 @@ def _rail_section(host, label: str, *, slug: str, help: str = "", **toggle):
         gap=None,
         key=f"split_mode_rail_{slug}",
     )
-    tips = [t for t in (toggle.pop("help_text", None), help) if t]
-    value = row.toggle(label, **toggle) if toggle else None
-    if value is None:
-        row.markdown(label)
-    return value, row.popover(
+    note = toggle.pop("note", None)
+    # UX-103: the switch is drawn WITHOUT its label and the name is written
+    # beside it as markdown, for every section rather than only the four that
+    # have no switch. It is the one way to be rid of the native tooltip: in a
+    # one-line row Streamlit puts a checkbox label in "truncate" mode, which
+    # stamps a `title=` on it carrying the same words that are already on
+    # screen -- a second-long browser tooltip reading "Fixations" over the word
+    # "Fixations". A `title` cannot be styled or suppressed from CSS, and
+    # `label_visibility="collapsed"` hides the element that carries it while
+    # keeping the string as the switch's accessible name. The cost is that the
+    # name is no longer a click target for the switch, which the rail's eight
+    # rows are the one place worth paying it.
+    value = (
+        row.toggle(label, label_visibility="collapsed", **toggle) if toggle else None
+    )
+    row.markdown(label)
+    body = row.popover(
         "",
         width="content",
-        help="\n\n".join(tips) if tips else None,
         key=f"split_mode_rail_{slug}_popover",
     )
+    # ...and the popover trigger carries no `help=` either. What hovered there
+    # was a restatement of the section's own name; what is worth saying -- why
+    # a switch is greyed -- is written inside the popover instead, where it is
+    # read without waiting for a tooltip and without covering the row below.
+    if note:
+        body.caption(note)
+    return value, body
 
 
 def _rail_subsection(host, label: str, *, note: str = ""):
@@ -3455,17 +3907,19 @@ def render_plot_controls(
     # dict always carries every key the figure builders depend on.
     viz = (host if host is not None else st).container(key="tour_grp_viz_controls")
 
-    # --- Quick views ------------------------------------------------------
-    # Focused presets stay one compact row; Reading-order / Everything
-    # are still reachable by toggling layers. The remaining preset keys
+    # --- Design presets ---------------------------------------------------
+    # VIZ-39 renamed this from "Quick views" and gave it a second half: the four
+    # built-in designs in the 2x2 grid they have always been in, and the user's
+    # own saved designs in an expander under them. 🛠️ Custom is not a design —
+    # it is the one unnamed slot holding *your most recent hand-tuning*, so
+    # switching to a built-in and back does not lose it. Naming settings you
+    # want to keep is what "My designs" is for. The remaining preset keys
     # (`reading_order`, `everything`) stay in `_VIEW_PRESETS` for any deep link.
     viz.markdown(
-        '<div class="sps-control-label">Quick views</div>',
+        '<div class="sps-control-label">Design presets</div>',
         unsafe_allow_html=True,
     )
-    # A 2×2 grid keeps the labels readable in the narrow rail. Custom remembers
-    # the user's last hand-tuned state: changing any plot control selects it, and
-    # switching away and back restores that snapshot.
+    # A 2×2 grid keeps the labels readable in the narrow rail.
     _active = _active_quick_view()
     _qv_grid = viz.container(key="quick_views_grid")
     _qv_top = _qv_grid.columns(2, gap="small")
@@ -3503,10 +3957,13 @@ def render_plot_controls(
         key="viz_view_custom",
         type="primary" if _active == _CUSTOM_VIEW else "secondary",
         width="stretch",
-        help="Your most recent custom plot settings.",
+        help="Your most recent custom plot settings. Save it under a name in "
+        "🎨 My designs to keep it.",
         on_click=_apply_view_preset,
         args=(_CUSTOM_VIEW,),
     )
+    _render_saved_designs(viz)
+
     # VIZ-31: the Illustration *label* (the publication-disclosure override) now
     # lives in the "📐 Figure & canvas" group below, with the other figure-level
     # presentation settings, rather than as a third top-level row up here.
@@ -3606,24 +4063,19 @@ def render_plot_controls(
         viz,
         "👁️ **Fixations**",
         slug="fix",
-        help="Fixation marker style, colour and size.",
         key="global_show_fix",
         persist_state="session",
         disabled=fix_off_disabled,
-        help_text=_gated_help(
-            "Draw the fixation markers.",
-            "⚠️ Fixations always draw in **Animate** mode — the replay is made "
-            "of them. Your setting is kept for the static and comparison "
-            "figures; the styling below still applies."
-            if fix_off_disabled
-            else "",
-        ),
+        note="⚠️ Fixations always draw in **Animate** mode — the replay is made "
+        "of them. Your setting is kept for the static and comparison figures; "
+        "the styling below still applies."
+        if fix_off_disabled
+        else "",
     )
     show_saccades, sac_grp = _rail_section(
         viz,
         "↗️ **Saccades**",
         slug="sac",
-        help="Saccade line shape, colour and width.",
         key="global_show_saccades",
         persist_state="session",
     )
@@ -3636,7 +4088,6 @@ def render_plot_controls(
         viz,
         "📄 **Stimulus**",
         slug="stim",
-        help="The text, its word boxes, and the stimulus image.",
     )
     # UX-86: Overlays dissolved — Heatmap and Raw gaze are now peer sections,
     # each with exactly one thing to switch, so each carries its own toggle
@@ -3647,22 +4098,20 @@ def render_plot_controls(
         viz,
         "🔥 **Heatmap**",
         slug="heatmap",
-        help="Tint the reading by fixation density.",
         key="global_show_heatmap",
         persist_state="session",
         disabled=heat_disabled,
-        help_text=_gated_help("", heat_reason),
+        note=heat_reason,
     )
     raw_disabled, raw_reason = _mode_gate(animating, comparing, **_static_only)
     show_raw_gaze, raw_gaze_grp = _rail_section(
         viz,
         "🔵 **Raw gaze**",
         slug="rawgaze",
-        help="Millisecond-level gaze positions as small dots.",
         key="global_show_raw_gaze",
         persist_state="session",
         disabled=not has_raw_gaze or raw_disabled,
-        help_text=_gated_help(
+        note=_gated_help(
             "" if has_raw_gaze else "(No raw gaze data loaded)", raw_reason
         ),
     )
@@ -3683,7 +4132,6 @@ def render_plot_controls(
         viz,
         f"🧹 **Filter**{_plot_filter_badge()}",
         slug="filter",
-        help="Thin what is drawn inside this reading.",
     )
     # Sub-slots up front so each block below renders into the right half of the
     # section from wherever it sits in this file (the same trick the sections
@@ -3698,7 +4146,6 @@ def render_plot_controls(
         viz,
         "📐 **Figure & canvas**",
         slug="figure",
-        help="Framing, screen, axes, and what the figure says in words.",
     )
 
     # --- Fixations --------------------------------------------------------
@@ -5094,6 +5541,10 @@ def reset_viz_settings() -> None:
         _QUICK_VIEW_CUSTOM_STATE,
         _QUICK_VIEW_APPLIED_STATE,
     }
+    # VIZ-39: `DESIGN_PRESETS_KEY` is deliberately NOT in that set. Reset puts
+    # the *view* back to defaults; the user's saved designs are a library, not
+    # a view, and losing them to a reset button would be the kind of undoless
+    # deletion nothing here offers.
     for key in keys:
         st.session_state.pop(key, None)
     # Re-seeding is source-driven for these two (see app.seed_canvas_state);
@@ -5227,6 +5678,10 @@ def _chip_field_options(words, fixations, trial_level: set) -> list[str]:
     # trial-level recorded column — no allowlist of its own.
     for field in participant_metadata_fields():
         add(field.name)
+    # DATA-29 — and a trial-grain field is constant within a trial by
+    # definition, which is the property this list is for.
+    for field in trial_metadata_fields():
+        add(field.name)
     cols.extend(SUMMARY_CHIP_FIELDS)
     return cols
 
@@ -5280,6 +5735,9 @@ def render_trial_chip_picker(
         tuple(words.columns),
         tuple(fixations.columns),
         tuple(field.name for field in participant_metadata_fields()),
+        # DATA-29 — attaching or detaching the trial table changes the offered
+        # set the same way, so it belongs in the signature for the same reason.
+        tuple(field.name for field in trial_metadata_fields()),
     )
     available = _chip_field_options(
         words, fixations, cached_trial_level_columns(words, fixations)

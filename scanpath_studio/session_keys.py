@@ -183,6 +183,12 @@ GLOBAL_ADVANCED = "global_advanced"
 # Per-trial annotations travel inside the schema-2 config; the store key is
 # owned by annotations.py (pinned equal to it by the contract test).
 TRIAL_ANNOTATIONS = "trial_annotations"
+# VIZ-39 — the user's saved design library. Wire format twice over: it travels
+# in the schema-2 config under `design_presets`, and it is one of the keys the
+# on-device recovery cache writes to its manifest, so the designs survive
+# closing the app. Owned by controls.py (pinned equal to it by the contract
+# test).
+DESIGN_PRESETS = "_design_presets"
 # Saved column mapping is seeded key-by-key from the config's `column_mapping`
 # section; the prefix is the contract, the suffixes are data-dependent.
 COLUMN_MAPPING_PREFIX = "col_map_"

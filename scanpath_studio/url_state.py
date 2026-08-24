@@ -1749,6 +1749,24 @@ def _restore_plot_config(
                 icon="🗂️",
             )
 
+    # VIZ-39 — the saved-design library. Restored wholesale rather than merged:
+    # a config describes one session's designs, and silently blending two
+    # libraries would leave the user unable to say which file a design came
+    # from. Absent key = leave whatever is there, the same rule as above.
+    designs = config.get("design_presets")
+    if isinstance(designs, dict):
+        from scanpath_studio.controls import DESIGN_PRESETS_KEY
+
+        clean = {
+            str(name): dict(values)
+            for name, values in designs.items()
+            if isinstance(values, dict)
+        }
+        if clean:
+            st.session_state[DESIGN_PRESETS_KEY] = clean
+            restore.applied += 1
+            st.toast(f"Restored {len(clean)} saved design(s).", icon="🎨")
+
     return restore.applied, skipped
 
 

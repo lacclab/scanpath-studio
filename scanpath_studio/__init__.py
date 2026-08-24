@@ -22,6 +22,7 @@ __all__ = [
     "load_potec",
     "load_sample_data",
     "load_scanpath_data",
+    "load_trial_metadata",
     "main",
     "plot_corpus_figure",
     "plot_scanpath",

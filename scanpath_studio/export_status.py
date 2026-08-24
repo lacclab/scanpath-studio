@@ -72,7 +72,7 @@ def format_duration(seconds: float | None) -> str:
         return ""
     if seconds < 1:
         return "under a second"
-    seconds = int(round(seconds))
+    seconds = round(seconds)  # round() on a float already returns an int
     hours, rest = divmod(seconds, 3600)
     minutes, secs = divmod(rest, 60)
     if hours:

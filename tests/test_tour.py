@@ -542,7 +542,7 @@ class TestSpotlightSelectorsResolve:
         not listed here, so the next control that moves into a popover fails
         this instead of going quiet in the browser.
         """
-        from scanpath_studio.tour import TUTORIALS, _SPOTLIGHT_STEPS
+        from scanpath_studio.tour import _SPOTLIGHT_STEPS, TUTORIALS
 
         inside = _keys_built_inside_a_popover()
         assert "tour_grp_narrow_by" in inside, (
@@ -569,7 +569,7 @@ class TestSpotlightSelectorsResolve:
         """Both narrow-the-pool steps name the funnel trigger — in both of the
         layouts the picker row has (a pool of one drops the slider and puts the
         funnel in its own trailing column)."""
-        from scanpath_studio.tour import FUNNEL_TRIGGER, TUTORIALS, _SPOTLIGHT_STEPS
+        from scanpath_studio.tour import _SPOTLIGHT_STEPS, FUNNEL_TRIGGER, TUTORIALS
 
         assert ".st-key-railbtn_single_filter " in FUNNEL_TRIGGER
         assert ".st-key-railbtn_single_filter_solo " in FUNNEL_TRIGGER
@@ -722,7 +722,11 @@ class TestSpotlightSelectorsResolve:
         assert 'st.markdown("## 🎛️ View modes")' not in tab_source
         assert 'st.markdown("## 🎨 Visualization")' not in tab_source
         assert "sps-control-label" in control_source
+        # VIZ-39: the 2×2 grid of built-in designs is unchanged — 🛠️ Custom is
+        # still the unnamed "your last hand-tuning" slot — and the user's own
+        # named designs are the library beneath it.
         assert 'key="viz_view_custom"' in control_source
+        assert "_render_saved_designs(viz)" in control_source
         # UX-80: a section is a `[toggle | ▾]` row, not an expander.
         assert "_rail_section(" in control_source
         assert 'viz.expander("↗️ Saccades"' not in control_source

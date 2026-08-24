@@ -276,7 +276,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
         steps=(
             TutorialStep(
                 "Choose the visual language",
-                "Use quick views, palette, and the layer controls. Heatmap and scanpath "
+                "Use design presets, palette, and the layer controls. Heatmap and scanpath "
                 "are settings on the same figure, not separate data transformations.",
                 ".st-key-tour_grp_viz_controls",
             ),
@@ -710,7 +710,9 @@ _SPOTLIGHT_STEPS = [
         "selector": ".st-key-tour_grp_viz_controls",
         "title": "🎛️ Plot controls",
         "body": "Toggle and style every layer — fixations, saccades, heatmap, word "
-        "boxes, text. **Quick views** jump between Scanpath and Heatmap presets.",
+        "boxes, text. **Design presets** jump between Scanpath, Heatmap, "
+        "Illustration and your last custom tuning — and 💾 keeps the ones you "
+        "set up yourself under a name.",
     },
     {
         "selector": ".st-key-tour_grp_subtabs",

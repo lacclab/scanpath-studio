@@ -108,10 +108,11 @@ STEPS_BY_ID: dict[str, WizardStep] = {s.id: s for s in STEPS}
 #: no heading of its own. Its explanation lives on its uploader's label.
 SECTION_TITLES: dict[str, str] = {
     "identity": "Trials & readers",
-    # UX-53 r7: the fixation fields lead this section and carry its name; the
-    # word fields keep their own inline heading under it. "Fixations & text"
-    # plus an inner "**Fixations**" was two titles for one group of controls.
-    "geometry": "Fixation features",
+    # UX-104: what is left in this section is the raw-gaze table's own fields,
+    # so it is named for them. It was "Fixation features" from UX-53 r7, when
+    # the fixation fields still led it; they have since moved up into the
+    # per-table block, and char-AOI aggregation followed them.
+    "geometry": "Raw gaze",
     "setup": "Recording setup",
     "fields": "Extra fields",
 }

@@ -16,10 +16,12 @@ any guess.
 | **Fixations** | one row per fixation | participant id, trial id, duration (ms); optionally x/y, timestamp, fixation id, word/IA id |
 | **Raw gaze** *(optional)* | one row per gaze sample | participant id, trial id, x, y, timestamp |
 | **Participant metadata** *(optional)* | one row per reader | participant id, plus anything you know about them |
+| **Trial metadata** *(optional)* | one row per reading | trial id (optionally participant id too), plus anything you know about that reading |
 
 Either main table may be omitted for single-report datasets — the missing layer
 is simply skipped. A words-only table still draws a heatmap from its
-pre-aggregated reading measures.
+pre-aggregated reading measures, and a dataset added with only one of the two can
+gain the other later on 🗂️ **Data → ✏️ Edit dataset**, without being added again.
 
 ## Participant metadata
 
@@ -54,6 +56,39 @@ Three rules are worth knowing:
 
 Headless, it is a `--participant-metadata FILE` flag on `scanpath-studio render`
 and [`load_participant_metadata()`](api.md) in the Python API.
+
+## Trial metadata
+
+The same idea one grain down: a table of **one row per reading** — a list
+name, a presentation order, a per-trial comprehension score, whatever your
+design recorded about the trial rather than about the reader. It attaches
+beside the participant table — in part 1 of the add-dataset wizard, and on
+🗂️ **Data → ✏️ Edit dataset** under 🗂️ **Trial metadata** for a dataset that is
+already loaded — and its columns behave like fields in the data in the same
+way: they filter trials, show up as chips above the plot, sort the trial picker,
+appear in the inspection tables, and travel with exports
+(`metadata/trials.csv`) and saved sessions.
+
+```csv
+trial_id,list_name,presentation_order,comprehension
+t01,A,1,1
+t02,A,2,0
+```
+
+**The key is your call, and it decides what a row means.** Keyed by trial id
+alone, a row describes a *text*, and every reader's reading of it inherits that
+row — right for a design where the trial id names the material. Add a
+participant column (the *Reader column* picker, `--trial-metadata-reader-column`
+on the CLI) and a row describes **one reading**, which is what you need as soon
+as the same reader reads the same text twice. Nothing in a file says which of
+the two you meant, so this is never guessed: the picker starts at *(none)*.
+
+Everything else matches the participant table — the join is reported before it
+is used, duplicate rows that disagree are dropped and named rather than
+resolved, and the table is never copied onto your fixations.
+
+Headless, it is `--trial-metadata FILE` on `scanpath-studio render` and
+[`load_trial_metadata()`](api.md) in the Python API.
 
 ## Flexible loading
 

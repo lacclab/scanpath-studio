@@ -291,6 +291,23 @@ def _render_parser() -> argparse.ArgumentParser:
         "--list-trials output.",
     )
 
+    src.add_argument(
+        "--trial-metadata",
+        metavar="FILE",
+        help="Trial-level metadata table (DATA-29): one row per reading, a "
+        "trial-id column plus anything known about it. Validated and reported "
+        "the same way, and its fields are added to --list-trials output.",
+    )
+    src.add_argument(
+        "--trial-metadata-reader-column",
+        metavar="COLUMN",
+        help="Key the --trial-metadata table by reader AND trial, using this "
+        "column as the reader id. Without it the table is keyed by trial id "
+        "alone, which means a row describes a *text* and every reader's "
+        "reading of it inherits that row. Never inferred: nothing in the file "
+        "says which of the two a corpus means.",
+    )
+
     parser.add_argument(
         "-p", "--participant", help="Participant id (default: first available)."
     )
@@ -934,6 +951,18 @@ def _compare_setup_snapshot(
     )
 
 
+def _format_trial_key(key) -> str:
+    """One trial-metadata report key as text (DATA-29).
+
+    A table keyed by reader *and* trial reports ``(participant, trial)`` pairs
+    while one keyed by trial alone reports bare ids, so the two shapes are
+    printed by the same helper rather than by two branches at each call site.
+    """
+    if isinstance(key, tuple):
+        return "/".join(str(part) for part in key)
+    return str(key)
+
+
 def _parse_canvas(value: str | None) -> tuple | None:
     if not value:
         return None
@@ -1261,12 +1290,55 @@ def render(argv: list[str]) -> None:
             if ids:
                 print(f"  {len(ids)} {label}: {', '.join(ids)}", file=sys.stderr)
 
+    # DATA-29: the same, one grain down. A trial table's report is worth more
+    # than the participant one, not less: getting the *key* wrong is silent
+    # (a table keyed by trial alone still joins, it just means something else),
+    # and "0 matched" here is the one thing that says so out loud.
+    attached_trials = None
+    if args.trial_metadata:
+        try:
+            attached_trials = api.load_trial_metadata(
+                args.trial_metadata,
+                participant_column=args.trial_metadata_reader_column,
+                trials=fixations,
+            )
+        except (ValueError, FileNotFoundError, OSError) as exc:
+            raise SystemExit(str(exc))
+        report = attached_trials.report
+        keyed = "reader + trial" if attached_trials.keyed_by_participant else "trial id"
+        print(
+            f"Trial metadata: {len(attached_trials.fields)} field(s) "
+            f"({', '.join(attached_trials.names)}) for {len(report.matched)} "
+            f"trial(s), keyed by {keyed}.",
+            file=sys.stderr,
+        )
+        for label, keys in (
+            ("no row in the table", report.only_in_data),
+            ("not in the data", report.only_in_table),
+            ("rows that disagree (left empty)", report.conflicting),
+        ):
+            if keys:
+                shown = ", ".join(_format_trial_key(key) for key in keys[:20])
+                # Plain "..." rather than an ellipsis character: this line
+                # goes to stderr, and a Windows console in its default
+                # code page prints the single glyph as a replacement mark.
+                more = "" if len(keys) <= 20 else f", ... (+{len(keys) - 20})"
+                print(f"  {len(keys)} {label}: {shown}{more}", file=sys.stderr)
+    elif args.trial_metadata_reader_column:
+        raise SystemExit(
+            "--trial-metadata-reader-column needs --trial-metadata: it names a "
+            "column in that table."
+        )
+
     if args.list_trials:
         combos = api.list_trials(words, fixations)
-        if args.participant_metadata:
+        if args.participant_metadata or attached_trials is not None:
             from scanpath_studio import metadata as _metadata
 
-            combos = _metadata.project(attached, combos)
+            if args.participant_metadata:
+                combos = _metadata.project(attached, combos)
+            if attached_trials is not None:
+                combos = _metadata.project_trials(attached_trials, combos)
         print(combos.to_string(index=False))
         return
     if args.list_parts:
@@ -1787,8 +1859,9 @@ def cache(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(
         prog="scanpath-studio cache",
         description="Show what a local run has stored on this computer "
-        "(uploaded datasets, mappings, view settings, annotations), where it "
-        "lives, and delete it. The hosted app stores nothing.",
+        "(uploaded datasets, mappings, view settings, saved designs, "
+        "annotations), where it lives, and delete it. The hosted app stores "
+        "nothing.",
     )
     parser.add_argument(
         "--path", action="store_true", help="print the cache folder and exit"
@@ -1841,7 +1914,8 @@ def cache(argv: list[str]) -> None:
     rows = f"{status['rows']:,} rows" if status["rows"] is not None else "rows unknown"
     print(
         f"         {rows} · {status['annotations']} annotated "
-        f"trial(s) · {status['settings']} setting(s)"
+        f"trial(s) · {status['designs']} saved design(s) · "
+        f"{status['settings']} setting(s)"
     )
     print(f"Size:    {_human_size(status['bytes'])}")
     print(f"Written: {status['saved_at']}")

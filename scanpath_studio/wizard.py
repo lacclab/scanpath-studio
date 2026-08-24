@@ -604,7 +604,16 @@ def _render_identity_field(
     missing_cells: list[str] = []
     for cell, (slug, table_label, raw, schema) in zip(cells, tables):
         key = f"col_map_{slug}_{field_key}"
-        options = list(raw.columns)
+        # UX-108 — the file's real header, not `raw.columns`: PERF-6 parses
+        # only the columns an auto-detect + the optional-field registry +
+        # whatever a `col_map_*` key already names decided to keep, and Trial
+        # ID / Participant ID / Text ID are exactly the fields a composite
+        # mapping is built from — the ones a narrow parse is most likely to
+        # have left out. Same fallback as `controls.column_mapping_ui`: empty
+        # outside a real upload (this function also renders for a *stored*
+        # dataset's already-normalized frames, which have no header to ask).
+        full_header = st.session_state.get(f"col_map_{slug}_header")
+        options = list(full_header) if full_header else list(raw.columns)
         _seed(key, options, default_cols)
         # Title on the cell's first line, control on its second (UX-53 r14), so
         # the row reads as a line of names over a line of pickers. The title
@@ -938,6 +947,65 @@ def _wizard_reader_ids(raw_words, word_schema, raw_fix, fix_schema) -> list:
             continue
         found |= set(_wizard_reader_ids_cached(frame, column, frame_fingerprint(frame)))
     return sorted(found)
+
+
+def _wizard_trial_combos(raw_words, word_schema, raw_fix, fix_schema):
+    """The ``(participant_id, trial_id)`` pairs the finished dataset will have.
+
+    DATA-29's table attaches in the wizard, which runs **before** the frames are
+    normalized — so, exactly as :func:`_wizard_reader_ids` does one grain up,
+    the keys are read off the raw tables through the mapping the user has just
+    made. ``trial_id_series`` is what `normalize_*` itself uses to compose a
+    trial id, including the multi-column case, so the pairs here are the pairs
+    the join will really see.
+
+    An unmapped participant column yields an empty reader half rather than no
+    rows: the dataset has no reader identity, so a trial-keyed table still joins
+    and a reader-keyed one correctly matches nothing.
+
+    Gated on a table actually being attached, and cached per frame — this
+    walks the whole raw frame, and the wizard reruns on every keystroke.
+    """
+    from scanpath_studio import metadata as metadata_mod
+
+    empty = pd.DataFrame(columns=["participant_id", "trial_id"])
+    if st.session_state.get(metadata_mod.TRIAL_RAW_SESSION_KEY) is None:
+        return empty
+    parts = []
+    for frame, schema in ((raw_fix, fix_schema), (raw_words, word_schema)):
+        trial_mapping = (schema or {}).get("trial")
+        if not trial_mapping or frame is None or frame.empty:
+            continue
+        columns = trial_mapping_columns(trial_mapping)
+        if any(column not in frame.columns for column in columns):
+            continue
+        participant = (schema or {}).get("participant")
+        if participant and participant not in frame.columns:
+            participant = None
+        parts.append(
+            _wizard_trial_combos_cached(
+                frame,
+                tuple(columns),
+                participant,
+                frame_fingerprint(frame),
+            )
+        )
+    if not parts:
+        return empty
+    return pd.concat(parts, ignore_index=True).drop_duplicates()
+
+
+@st.cache_data(show_spinner=False)
+def _wizard_trial_combos_cached(_frame, columns: tuple, participant, fingerprint: str):
+    """Distinct ``(participant_id, trial_id)`` pairs in one raw frame."""
+    trial = trial_id_series(_frame, list(columns)).astype(str)
+    reader = (
+        _frame[participant].astype(str)
+        if participant
+        else pd.Series([""] * len(_frame), index=_frame.index)
+    )
+    out = pd.DataFrame({"participant_id": reader, "trial_id": trial})
+    return out.drop_duplicates().reset_index(drop=True)
 
 
 @st.cache_data(show_spinner=False)
@@ -2464,6 +2532,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # reserve-then-fill discipline the rest of the page uses.
         id_rows = {}
         feature_rows = {}
+        # UX-104: the AOI block gets a third line. Char-AOI aggregation is a
+        # statement about *the AOI table* — what one of its rows is — so it
+        # belongs under that table's own fields rather than in a section of its
+        # own two headings away. Reserved with the rest so creation order (=
+        # screen order) keeps it directly under the block it describes.
+        extra_rows = {}
         blocks = [
             ("fix", has_fix, "Fixations", _FIX_ROW2_W),
             ("words", has_words, "AOI", _AOI_ROW2_W),
@@ -2484,6 +2558,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
             feature_rows[slug] = s2.columns(
                 feature_widths, gap="small", vertical_alignment="bottom"
             )
+            if slug == "words":
+                extra_rows[slug] = s2.container()
 
         # `_render_identity_field` takes its cells in (fixations, AOI) order.
         def _cells_for(index: int) -> list:
@@ -2647,24 +2723,30 @@ def _render_data_setup(active: bool) -> _UploadResult:
                     ["line"],
                 )
             )
+            # UX-104 — line 3 of the AOI block. One row per *character* is a
+            # fact about this table, so the question sits with the fields that
+            # describe it, not in a later section the user reads after they
+            # have stopped thinking about the AOI file.
+            extra_rows["words"].toggle(
+                "Aggregate character AOIs into word boxes",
+                key="wizard_aggregate_char_boxes",
+                help="For interest-area tables with one row per *character* "
+                "(e.g. CJK corpora): collapse the characters of each word "
+                "(grouped by the Trial + Word/IA id above) into one bounding "
+                "box.",
+            )
 
-    s3 = wizard_shell.section(
-        sections_host,
-        "geometry",
-        caption="Character-AOI aggregation and raw gaze, if either applies.",
-    )
-
-    if has_words:
-        words_advanced = s3.container()
-        words_advanced.toggle(
-            "Aggregate character AOIs into word boxes",
-            key="wizard_aggregate_char_boxes",
-            help="For interest-area tables with one row per *character* (e.g. CJK "
-            "corpora): collapse the characters of each word (grouped by the Trial "
-            "+ Word/IA id above) into one bounding box.",
-        )
-
+    # UX-104 — the raw-gaze section renders only when there is a raw-gaze
+    # table. It used to carry the char-AOI toggle as well, so it always had
+    # something in it; with that moved up beside the AOI fields it describes,
+    # a dataset without gaze samples would otherwise get a heading over
+    # nothing.
     if not raw_gaze.empty:
+        s3 = wizard_shell.section(
+            sections_host,
+            "geometry",
+            caption="The gaze-sample table's own columns.",
+        )
         rg_host = s3.container()
         rg_host.markdown(
             '<div class="sps-wiz-subhead">Raw gaze features</div>',
@@ -2742,6 +2824,17 @@ def _render_data_setup(active: bool) -> _UploadResult:
 
         render_participant_metadata_section(
             _wizard_reader_ids(raw_words, word_schema, raw_fix, fix_schema),
+            host=s1.container(),
+        )
+        # DATA-29 — and the trial table directly under it, for the same
+        # reason: it is an upload, and the two are read as a pair ("what else do
+        # I know about the readers / about the readings"). Both were reachable
+        # only on the 🗂️ Data page's editor before, which meant a dataset added
+        # through the wizard had to be added first and annotated afterwards.
+        from scanpath_studio.tabs import render_trial_metadata_section
+
+        render_trial_metadata_section(
+            _wizard_trial_combos(raw_words, word_schema, raw_fix, fix_schema),
             host=s1.container(),
         )
 

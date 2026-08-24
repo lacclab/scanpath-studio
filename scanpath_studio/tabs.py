@@ -63,6 +63,7 @@ from scanpath_studio.compare_source import (
     snapshot_for,
 )
 from scanpath_studio.constants import (
+    DATASET_EDITOR_OPEN_KEY,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
@@ -103,18 +104,27 @@ from scanpath_studio.controls import (
     render_narrow_by,
     render_pattern_help,
     render_pattern_input,
+    render_plot_controls,
     render_trial_chip_picker,
     render_trial_filters,
     render_viz_reset,
-    render_plot_controls,
 )
 from scanpath_studio.data import (
+    aggregate_char_boxes,
     compute_word_metrics,
     derive_trial_index,
+    empty_fixations_frame,
+    empty_words_frame,
     filter_to_keys,
     filter_trials,
     frame_fingerprint,
+    harmonize_frames,
     has_explicit_trial_index,
+    normalize_fixations,
+    normalize_words,
+    propose_fix_schema,
+    propose_word_schema,
+    read_tables,
     remap_normalized_frame,
     trial_keys,
     trial_mapping_columns,
@@ -2706,7 +2716,18 @@ def _build_studio_config(
         # DATA-29: and the trial table, for exactly the same reason — a restored
         # `filter_trialmeta_*` selection has to land on fields that exist.
         "trial_metadata": _trial_metadata_payload(),
+        # VIZ-39: the user's saved designs travel with the config. A design is
+        # a named bundle of the very settings this file already carries, so a
+        # config that restored the settings but not the library would come back
+        # with the figure right and no way to get back to it.
+        "design_presets": _design_presets_payload(),
     }
+
+
+def _design_presets_payload() -> dict:
+    from scanpath_studio.controls import design_presets
+
+    return {name: dict(values) for name, values in design_presets().items()}
 
 
 def _participant_metadata_payload():
@@ -3562,6 +3583,20 @@ def _render_export_panel(
         st.session_state["_export_participant_metadata"] = _attached.frame
     else:
         st.session_state.pop("_export_participant_metadata", None)
+    # DATA-29: the trial table travels the same way, on its own key and its own
+    # fingerprint — two tables can be attached, replaced or cleared
+    # independently, so one shared signature would serve a stale zip whenever
+    # only the other one changed.
+    from scanpath_studio import metadata as _md
+
+    _attached_trials = _md.active_trials()
+    if _attached_trials is not None and not _attached_trials.frame.empty:
+        bulk_settings["trial_metadata_fingerprint"] = frame_fingerprint(
+            _attached_trials.frame
+        )
+        st.session_state["_export_trial_metadata"] = _attached_trials.frame
+    else:
+        st.session_state.pop("_export_trial_metadata", None)
     _render_bulk_export(
         combos,
         words_filtered,
@@ -3622,12 +3657,18 @@ def _chip_value_and_uniqueness(col, trial_words, trial_fixations, participant):
     if col == "participant_id":
         return (participant or None, True)
     for src in (trial_words, trial_fixations):
-        if src is not None and not src.empty and col in src.columns:
-            series = src[col]
-            non_null = series.dropna()
-            if non_null.empty:
-                return (None, True)
-            return (non_null.iloc[0], int(series.nunique(dropna=True)) <= 1)
+        if src is None or src.empty or col not in src.columns:
+            continue
+        series = src[col]
+        non_null = series.dropna()
+        if non_null.empty:
+            # An empty column is not an answer. This used to return straight
+            # away, which meant a recorded column that happens to be blank for
+            # this trial *blocked* the attached metadata below — a field the
+            # user had just added to the chips then rendered nothing, with
+            # nothing on screen to say why.
+            continue
+        return (non_null.iloc[0], int(series.nunique(dropna=True)) <= 1)
     # DATA-20: not a recorded column — try the attached participant table. A
     # reader attribute is trivially constant within a trial, so it never earns
     # the ⚠️ "varies within this trial" flag. Checked *after* the frames, so a
@@ -3637,7 +3678,31 @@ def _chip_value_and_uniqueness(col, trial_words, trial_fixations, participant):
         value = attached.values_for(participant).get(col)
         if value is not None and not pd.isna(value):
             return (value, True)
+    # DATA-29 — then the attached *trial* table, on the same terms. A trial
+    # attribute is constant within its trial by definition, so it never earns
+    # the warning either. The trial id comes off the frames rather than from an
+    # argument: every caller already passes this trial's own rows, and the id is
+    # on both of them.
+    from scanpath_studio import metadata as _md
+
+    attached_trials = _md.active_trials()
+    if attached_trials is not None:
+        trial_id = _first_value("trial_id", trial_words, trial_fixations)
+        if trial_id is not None:
+            value = attached_trials.values_for(participant, trial_id).get(col)
+            if value is not None and not pd.isna(value):
+                return (value, True)
     return (None, True)
+
+
+def _first_value(col: str, *frames):
+    """First non-null ``col`` across ``frames``, or ``None`` (DATA-29 helper)."""
+    for src in frames:
+        if src is not None and not src.empty and col in src.columns:
+            non_null = src[col].dropna()
+            if not non_null.empty:
+                return non_null.iloc[0]
+    return None
 
 
 def _chip_color(col: str, value_str: str) -> str:
@@ -8458,7 +8523,14 @@ def _participant_metadata_body(participants) -> None:
 
     columns = [str(column) for column in raw.columns]
     inferred = md.infer_participant_id_column(raw)
-    id_column = st.selectbox(
+    # UX-105 — the same three slots as the trial table below, for the same
+    # reason: one visible line once the table is in, the picker only while you
+    # are attaching, everything else in the fold.
+    key_host = st.container()
+    status_host = st.container()
+    details = st.expander("🔎 Join details", expanded=False)
+    picker_host = key_host if upload is not None else details
+    id_column = picker_host.selectbox(
         "Participant ID column",
         columns,
         index=columns.index(inferred) if inferred in columns else 0,
@@ -8476,35 +8548,45 @@ def _participant_metadata_body(participants) -> None:
 
     report = attached.report
     if not attached.fields:
-        st.warning(
+        status_host.warning(
             "That table has no columns besides the id, so there is nothing to add.",
             icon="⚠️",
         )
         return
     matched = len(report.matched)
+    fields = f"{len(attached.fields)} field(s) added"
     if report.is_clean:
-        st.success(f"Joined to all {matched} readers.", icon="✅")
+        status_host.success(f"Joined to all {matched} readers · {fields}.", icon="✅")
+    elif matched:
+        status_host.info(
+            f"Joined to {matched} readers · {fields}. "
+            "What did not line up is under **🔎 Join details**.",
+            icon="🔗",
+        )
     else:
-        st.info(f"Joined to {matched} readers.", icon="🔗")
-    if report.conflicting:
-        st.warning(
-            f"**{len(report.conflicting)} reader(s) have rows that disagree** "
-            f"({_id_list(report.conflicting)}). Their fields are left empty "
-            "rather than resolved by taking the first row.",
-            icon="⚠️",
-        )
-    if report.only_in_data:
-        st.caption(
-            f"No row for {len(report.only_in_data)} loaded reader(s): "
-            f"{_id_list(report.only_in_data)}. Their fields read as missing."
-        )
-    if report.only_in_table:
-        st.caption(
-            f"{len(report.only_in_table)} row(s) describe readers that are not "
-            f"loaded: {_id_list(report.only_in_table)}. Ignored."
-        )
-
-    with st.expander(f"👤 {len(attached.fields)} field(s) added", expanded=False):
+        # DATA-20 — zero matches is the same silent trap the trial table had
+        # (see `_render_key_mismatch`): the fields attach, appear everywhere,
+        # and read as missing everywhere.
+        with status_host:
+            _render_key_mismatch(attached, report, "reader")
+    with details:
+        if report.conflicting:
+            st.warning(
+                f"**{len(report.conflicting)} reader(s) have rows that disagree** "
+                f"({_id_list(report.conflicting)}). Their fields are left empty "
+                "rather than resolved by taking the first row.",
+                icon="⚠️",
+            )
+        if report.only_in_data:
+            st.caption(
+                f"No row for {len(report.only_in_data)} loaded reader(s): "
+                f"{_id_list(report.only_in_data)}. Their fields read as missing."
+            )
+        if report.only_in_table:
+            st.caption(
+                f"{len(report.only_in_table)} row(s) describe readers that are "
+                f"not loaded: {_id_list(report.only_in_table)}. Ignored."
+            )
         st.dataframe(
             [
                 {
@@ -8542,8 +8624,21 @@ def _clear_trial_metadata() -> None:
         md.TRIAL_RAW_SESSION_KEY,
         md.TRIAL_FILE_SESSION_KEY,
         _TM_NAME_KEY,
+        # …and the two key pickers, so a different table uploaded next starts
+        # from its own auto-detect rather than from a column name that belonged
+        # to the one just detached.
+        "trial_metadata_id_column",
+        "trial_metadata_participant_column",
     ):
         st.session_state.pop(key, None)
+    # The uploader's own key — the participant twin has carried this line
+    # since DATA-20 and this one was missing it, which is exactly the bug it
+    # describes: without it the widget still holds the file on the next run,
+    # the (now absent) signature check reads as "new file", and the table
+    # re-attaches itself immediately. Detaching a trial table therefore looked
+    # like it had done nothing, and the table came back on the next visit.
+    # Safe in an `on_click` callback, which runs before the widgets instantiate.
+    st.session_state.pop("trial_metadata_upload", None)
 
 
 def render_trial_metadata_section(combos, *, host=None) -> None:
@@ -8609,7 +8704,21 @@ def _trial_metadata_body(combos) -> None:
 
     columns = [str(column) for column in raw.columns]
     inferred = md.infer_trial_id_column(raw)
-    left, right = st.columns(2)
+    # UX-105 — three slots, filled below, so the section reads as **one line**
+    # once the table is in: the key pickers, the verdict, and everything else
+    # folded away. Reserved in this order because Streamlit's creation order is
+    # screen order and the pickers have to run before the join they decide.
+    key_host = st.container()
+    status_host = st.container()
+    details = st.expander("🔎 Join details", expanded=False)
+    # The pickers show while you are **attaching** — a file in the uploader
+    # above — and fold into the details the rest of the time. A table restored
+    # with a session, or attached on another screen, is a table whose key was
+    # settled once; leaving two selects and their help icons parked at the top
+    # of every later visit was the ask ("i dont want them to appear at the
+    # start"). They stay one click away, on the same keys.
+    picker_host = key_host if upload is not None else details
+    left, right = picker_host.columns(2)
     trial_column = left.selectbox(
         "Trial ID column",
         columns,
@@ -8642,36 +8751,54 @@ def _trial_metadata_body(combos) -> None:
 
     report = attached.report
     if not attached.fields:
-        st.warning(
+        status_host.warning(
             "That table has no columns besides the key, so there is nothing to add.",
             icon="⚠️",
         )
         return
     grain = "reading" if attached.keyed_by_participant else "trial"
     matched = len(report.matched)
+    fields = f"{len(attached.fields)} field(s) added"
     if report.is_clean:
-        st.success(f"Joined to all {matched} {grain}s.", icon="✅")
+        status_host.success(f"Joined to all {matched} {grain}s · {fields}.", icon="✅")
+    elif matched:
+        status_host.info(
+            f"Joined to {matched} {grain}s · {fields}. "
+            "What did not line up is under **🔎 Join details**.",
+            icon="🔗",
+        )
     else:
-        st.info(f"Joined to {matched} {grain}s.", icon="🔗")
-    if report.conflicting:
-        st.warning(
-            f"**{len(report.conflicting)} {grain}(s) have rows that disagree** "
-            f"({_id_list(report.conflicting)}). Their fields are left empty "
-            "rather than resolved by taking the first row.",
-            icon="⚠️",
-        )
-    if report.only_in_data:
-        st.caption(
-            f"No row for {len(report.only_in_data)} loaded {grain}(s): "
-            f"{_id_list(report.only_in_data)}. Their fields read as missing."
-        )
-    if report.only_in_table:
-        st.caption(
-            f"{len(report.only_in_table)} row(s) describe {grain}s that are not "
-            f"loaded: {_id_list(report.only_in_table)}. Ignored."
-        )
-
-    with st.expander(f"🗂️ {len(attached.fields)} field(s) added", expanded=False):
+        # DATA-29 — nothing matched. This used to read as a quiet blue
+        # "Joined to 0 trials", which is the *worst* case dressed as a status
+        # line: the table attaches, its fields appear in every picker, and then
+        # every one of them renders as missing everywhere, with nothing on
+        # screen connecting the two facts. It is an error, and it names the two
+        # things that cause it, with both sides' ids side by side — nearly
+        # always a spelling difference ("101" against "101.0", a float column
+        # with one blank cell in it) or the wrong column picked above.
+        with status_host:
+            _render_key_mismatch(attached, report, grain)
+    # Everything that is not the verdict lives in the fold. Each of these used
+    # to be its own alert or caption stacked under the section, which on a table
+    # that half-matched meant four blocks of prose for one upload.
+    with details:
+        if report.conflicting:
+            st.warning(
+                f"**{len(report.conflicting)} {grain}(s) have rows that "
+                f"disagree** ({_id_list(report.conflicting)}). Their fields are "
+                "left empty rather than resolved by taking the first row.",
+                icon="⚠️",
+            )
+        if report.only_in_data:
+            st.caption(
+                f"No row for {len(report.only_in_data)} loaded {grain}(s): "
+                f"{_id_list(report.only_in_data)}. Their fields read as missing."
+            )
+        if report.only_in_table:
+            st.caption(
+                f"{len(report.only_in_table)} row(s) describe {grain}s that are "
+                f"not loaded: {_id_list(report.only_in_table)}. Ignored."
+            )
         st.dataframe(
             [
                 {
@@ -8693,6 +8820,47 @@ def _trial_metadata_body(combos) -> None:
         key="trial_metadata_clear",
         on_click=_clear_trial_metadata,
         help="Remove the trial metadata from this session.",
+    )
+
+
+def _render_key_mismatch(attached, report, grain: str) -> None:
+    """Nothing joined — say so, and show the two sides' ids (DATA-20/DATA-29).
+
+    Shared by both metadata sections: zero matches is the one outcome that
+    looks like success everywhere else in the app (the table attaches, its
+    fields fill every picker) and is a total failure wherever a value is
+    actually read. It names the columns the key was built from, because that is
+    what the fix is.
+
+    Quiet when the dataset has contributed **no** keys to match against. In the
+    add-dataset wizard the table can be attached before the id column it joins
+    on is mapped, and there is nothing wrong with that — shouting "nothing
+    matched" at a user on their way to mapping it would be an error message for
+    a step they have not reached.
+    """
+    if not report.only_in_data:
+        st.caption(
+            "Nothing to join to yet — map this dataset's id column and the "
+            "report appears here."
+        )
+        return
+    trial_column = getattr(attached, "trial_column", None)
+    if trial_column is None:
+        keyed = f", keyed by `{attached.id_column}`"
+    elif attached.keyed_by_participant:
+        keyed = f", keyed by `{attached.participant_column}` + `{trial_column}`"
+    else:
+        keyed = f", keyed by `{trial_column}`"
+    st.error(
+        f"**No {grain} in this dataset matched a row in that table**{keyed}. "
+        "Every field it adds will read as missing until the keys line up — so "
+        "check the column picked above, or detach the table.\n\n"
+        f"In the table: {_id_list(list(report.only_in_table)[:4])}\n"
+        f"In this dataset: {_id_list(list(report.only_in_data)[:4])}\n\n"
+        "A trailing `.0` on one side is the usual culprit: a column read as "
+        "whole numbers in one file and as decimals in the other (one blank "
+        "cell is enough) spells the same id two ways.",
+        icon="🚫",
     )
 
 
@@ -8782,10 +8950,21 @@ def _apply_remap() -> None:
         return
     name, stored = active
     pending = st.session_state.get("_remap_pending_schemas") or {}
+    # UX-104 — tables uploaded on this screen because the dataset had none.
+    # Validated on the same terms as the rest, and blocking Save the same way:
+    # an incomplete mapping for a table being added must not attach half of it.
+    added = [
+        table_key
+        for table_key in (st.session_state.get("_remap_added_tables") or [])
+        if isinstance(
+            st.session_state.get(_added_raw_key(name, table_key)), pd.DataFrame
+        )
+    ]
     problems: dict = {}
     for table_key in ("words", "fixations", "raw_gaze"):
         frame = stored.get(table_key)
-        if frame is None or frame.empty or table_key not in pending:
+        present = frame is not None and not frame.empty
+        if (not present and table_key not in added) or table_key not in pending:
             continue
         probs = _REMAP_VALIDATORS[table_key](pending[table_key])
         if probs:
@@ -8803,6 +8982,49 @@ def _apply_remap() -> None:
             continue
         schema = pending[table_key]
         new_entry[table_key] = remap_normalized_frame(frame, schema, kind=table_key)
+        new_schemas[table_key] = schema
+    # …then the added ones, which are *raw*: they take the same normalization
+    # the add-dataset screen runs, and then `harmonize_frames` — the
+    # cross-frame fixups (id dtypes, the BUG-8 word-id offset, AoI-only
+    # fixations placed at word-box centres) are exactly what makes a half
+    # uploaded today line up with a half uploaded weeks ago. Both halves are
+    # written back, because harmonizing can change either.
+    for table_key in added:
+        raw = st.session_state.get(_added_raw_key(name, table_key))
+        if raw is None or raw.empty or table_key not in pending:
+            continue
+        schema = pending[table_key]
+        try:
+            if table_key == "words":
+                # UX-106 — the add screen's aggregation, on the add-a-table
+                # path. Runs on the RAW frame before normalization, which is the
+                # only point it can: `normalize_words` expects one row per box.
+                if st.session_state.get(aggregate_key(name)):
+                    raw = aggregate_char_boxes(raw, schema)
+                fresh = normalize_words(raw, schema)
+                other = new_entry.get("fixations")
+                if not isinstance(other, pd.DataFrame) or other.empty:
+                    other = empty_fixations_frame()
+                fresh, other = harmonize_frames(fresh, other)
+                new_entry["words"], new_entry["fixations"] = fresh, other
+            else:
+                fresh = normalize_fixations(raw, schema)
+                other = new_entry.get("words")
+                if not isinstance(other, pd.DataFrame) or other.empty:
+                    other = empty_words_frame()
+                other, fresh = harmonize_frames(other, fresh)
+                new_entry["words"], new_entry["fixations"] = other, fresh
+        except Exception as exc:
+            # The mapping is complete but the pipeline rejects the combination
+            # (`app.mapping_failure_problem` names the usual causes). Reported
+            # like any other blocker rather than raised: this runs in an
+            # `on_click`, where an exception is a red traceback over the page.
+            from scanpath_studio.app import mapping_failure_problem
+
+            st.session_state["_remap_problems"] = {
+                table_key: [mapping_failure_problem(exc)]
+            }
+            return
         new_schemas[table_key] = schema
     new_entry["schemas"] = new_schemas
     # Recompute the composite trial components from the new trial mapping so the
@@ -8839,73 +9061,215 @@ def _apply_remap() -> None:
         )
     st.session_state["_datasets"][name] = new_entry
     st.session_state["_remap_applied"] = name
+    # UX-107 — saving is the end of the edit, so it returns to 📂 Available
+    # datasets the way ✅ Add dataset returns from the add screen. The success
+    # line travels with it (`_remap_applied`, read above the dataset table);
+    # printing it here would put it on a screen the user is leaving.
+    #
+    # Every `_remap_*` scratch key goes too. They describe an edit session:
+    # what was uploaded but not yet attached, what was typed but not yet saved,
+    # and what blocked the last attempt. Left behind, they would be read as the
+    # *next* edit's starting point — of a different dataset, in the worst case.
+    for key in [k for k in st.session_state if str(k).startswith("_remap_")]:
+        if key != "_remap_applied":
+            st.session_state.pop(key, None)
+    st.session_state.pop(DATASET_EDITOR_OPEN_KEY, None)
+    st.session_state.pop(FOCUS_MAPPING_KEY, None)
 
 
-#: UX-54 r2 — the editor's field groups, in the add-dataset screen's order and
-#: shape: what a row *is*, then where the eyes landed, then what the AOI says.
-#: ``("<table>", "<field>")`` pairs, one tuple per rendered line. Whatever a
-#: table's specs carry beyond these lands on a trailing *More* line, so a field
-#: can never be dropped by this list falling behind ``*_FIELD_SPECS``.
-_EDIT_ROWS: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
-    (
-        "Fixations",
+#: UX-104 — the editor's field grid, now the **same blocks the add-dataset
+#: screen draws**: one block per table, its identity line first (what a row
+#: *is*: trial, screen, reader, text, word, and the table's own id) and its
+#: feature line under it, rather than the old grouping which interleaved the
+#: two tables and split a table's own fields three rows apart.
+#:
+#: ``(label, widths, fields, extra)`` per rendered line, ``fields`` being
+#: ``("<table>", "<field>")`` pairs and ``extra`` naming a non-mapping control
+#: that belongs under that line (UX-106: the AOI block's char-aggregation
+#: question, which is the add screen's third AOI line). The widths are `wizard._ID_ROW1_W` and its
+#: two row-2 grids, imported rather than restated so the two screens' rows line
+#: up to the pixel. A blank label continues the block above it.
+#:
+#: Whatever a table's specs carry beyond these still lands on a trailing *More*
+#: line, so a field can never be dropped by this list falling behind
+#: ``*_FIELD_SPECS``.
+def _edit_rows() -> tuple:
+    from scanpath_studio.wizard import _AOI_ROW2_W, _FIX_ROW2_W, _ID_ROW1_W
+
+    return (
         (
-            ("fixations", "trial"),
-            ("fixations", "participant"),
-            ("fixations", "text_id"),
-            ("fixations", "screen_id"),
-            ("fixations", "screen_index"),
+            "Fixations",
+            _ID_ROW1_W,
+            (
+                ("fixations", "trial"),
+                ("fixations", "screen_id"),
+                ("fixations", "participant"),
+                ("fixations", "text_id"),
+                ("fixations", "word_id"),
+                ("fixations", "fixation_id"),
+            ),
+            "",
         ),
-    ),
-    (
-        "AOI",
         (
-            ("words", "trial"),
-            ("words", "participant"),
-            ("words", "text_id"),
-            ("words", "screen_id"),
-            ("words", "screen_index"),
+            "",
+            _FIX_ROW2_W,
+            (
+                ("fixations", "x"),
+                ("fixations", "y"),
+                ("fixations", "timestamp"),
+                ("fixations", "duration"),
+            ),
+            "",
         ),
-    ),
-    (
-        "Fixations",
         (
-            ("fixations", "x"),
-            ("fixations", "y"),
-            ("fixations", "timestamp"),
-            ("fixations", "duration"),
+            "AOI",
+            _ID_ROW1_W,
+            (
+                ("words", "trial"),
+                ("words", "screen_id"),
+                ("words", "participant"),
+                ("words", "text_id"),
+                ("words", "word_id"),
+                ("words", "text"),
+            ),
+            "",
         ),
-    ),
-    ("", (("fixations", "fixation_id"), ("fixations", "screen_fixation_id"))),
-    (
-        "AOI",
+        ("", _AOI_ROW2_W, (("words", "box"), ("words", "line")), "aggregate"),
         (
-            ("fixations", "word_id"),
-            ("words", "word_id"),
-            ("words", "text"),
-            ("words", "line"),
+            "Raw gaze",
+            _ID_ROW1_W,
+            (
+                ("raw_gaze", "trial"),
+                ("raw_gaze", "screen_id"),
+                ("raw_gaze", "participant"),
+                ("raw_gaze", "x"),
+                ("raw_gaze", "y"),
+                ("raw_gaze", "timestamp"),
+            ),
+            "",
         ),
-    ),
-    ("", (("words", "box"),)),
+        ("", _FIX_ROW2_W, (("raw_gaze", "text"),), ""),
+    )
+
+
+#: The trailing *More* line's grid: a name column and five equal cells.
+_EDIT_ROW_W = (0.10, 0.18, 0.18, 0.18, 0.18, 0.18)
+
+#: What each table is called down the editor's left-hand name column.
+_TABLE_LABELS = {"fixations": "Fixations", "words": "AOI", "raw_gaze": "Raw gaze"}
+
+
+#: UX-104 — the two tables a stored dataset can be *missing* and later gain.
+#: A dataset added from fixations alone is a complete dataset (the app draws a
+#: scanpath with no text), and so is one added from word boxes alone (it draws a
+#: heatmap from pre-aggregated measures) — but until now the only way to give
+#: either one its other half was to add the whole dataset again. ``propose`` is
+#: the auto-detect the add screen runs on a fresh upload.
+_ADDABLE_TABLES = (
     (
-        "Raw gaze",
-        (
-            ("raw_gaze", "trial"),
-            ("raw_gaze", "participant"),
-            ("raw_gaze", "x"),
-            ("raw_gaze", "y"),
-        ),
+        "fixations",
+        "Add a fixations table",
+        "Scanpath / fixation CSVs",
+        propose_fix_schema,
     ),
-    ("", (("raw_gaze", "timestamp"), ("raw_gaze", "screen_id"), ("raw_gaze", "text"))),
+    ("words", "Add an AOI (word box) table", "Word AOI CSVs", propose_word_schema),
 )
 
-#: The editor's row grid: a narrow name column, then five equal picker cells —
-#: ``wizard._ID_ROW_W``, so the two screens' rows line up with one another.
-_EDIT_ROW_W = (0.10, 0.18, 0.18, 0.18, 0.18, 0.18)
+
+def _added_raw_key(name: str, table_key: str) -> str:
+    return f"_remap_add_raw_{name}_{table_key}"
+
+
+def _render_missing_table_uploads(name: str, stored: dict, *, host=None) -> dict:
+    """Uploaders for the tables this dataset has none of (UX-104).
+
+    Returns ``{table_key: raw_frame}`` for whatever has been uploaded, which
+    :func:`_render_remap_fields` then maps with the *same* fields as a table
+    that was there all along — the point being that adding the missing half
+    is the same screen, not a second flow.
+
+    The frame lives in session state rather than being re-read per rerun: an
+    ``st.file_uploader`` hands back the same bytes on every run, and this page
+    reruns on every keystroke in the mapping below it.
+    """
+    added: dict = {}
+    host = host if host is not None else st
+    for table_key, headline, prompt, _propose in _ADDABLE_TABLES:
+        frame = stored.get(table_key)
+        if isinstance(frame, pd.DataFrame) and not frame.empty:
+            continue
+        raw_key = _added_raw_key(name, table_key)
+        box = host.container(border=True)
+        box.markdown(f"**{headline}**")
+        box.caption(
+            "This dataset was added without one. Upload the file and map it "
+            "below; **✅ Save changes** normalizes it and joins it to the "
+            "tables already here."
+        )
+        uploads = box.file_uploader(
+            prompt,
+            type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
+            accept_multiple_files=True,
+            key=f"remap_add_upload_{name}_{table_key}",
+        )
+        signature_key = f"_remap_add_file_{name}_{table_key}"
+        if not uploads:
+            # Clearing the uploader clears what it produced, or Save would
+            # attach a table the user has just taken off the screen.
+            st.session_state.pop(raw_key, None)
+            st.session_state.pop(signature_key, None)
+            continue
+        signature = tuple(
+            getattr(upload, "file_id", None)
+            or (upload.name, getattr(upload, "size", None))
+            for upload in uploads
+        )
+        if st.session_state.get(signature_key) != signature:
+            try:
+                st.session_state[raw_key] = read_tables(list(uploads))
+                st.session_state[signature_key] = signature
+            except Exception as exc:  # unreadable file — say so, keep the page
+                st.session_state.pop(raw_key, None)
+                box.error(f"Could not read that file: {exc}")
+                continue
+        raw = st.session_state.get(raw_key)
+        if isinstance(raw, pd.DataFrame) and not raw.empty:
+            box.caption(f"{len(raw):,} rows · {len(raw.columns)} columns.")
+            added[table_key] = raw
+    return added
+
+
+def aggregate_key(name: str) -> str:
+    """Session key of the editor's char-AOI aggregation toggle (UX-106)."""
+    return f"remap_{name}_aggregate_char_boxes"
+
+
+def _render_aggregate_toggle(name: str, *, adding: bool) -> None:
+    """The add screen's third AOI line, on the edit screen (UX-106).
+
+    Live only while an AOI table is being **added**: aggregation collapses raw
+    character rows into one box per word, and a table already in the dataset was
+    normalized on the way in — its character rows no longer exist, so the
+    honest answer for one is "upload the file again", not a toggle that would
+    quietly do nothing. Rendered either way so the block keeps the add screen's
+    shape, and disabled says which case you are in.
+    """
+    st.toggle(
+        "Aggregate character AOIs into word boxes",
+        key=aggregate_key(name),
+        disabled=not adding,
+        help="For interest-area tables with one row per *character* (e.g. CJK "
+        "corpora): collapse the characters of each word (grouped by the Trial "
+        "+ Word/IA id above) into one bounding box."
+        if adding
+        else "Applies to an AOI table being added. This dataset's table was "
+        "normalized when it was imported, so its character rows are already "
+        "collapsed — re-upload the file to aggregate it differently.",
+    )
 
 
 def _render_remap_fields(
-    name: str, stored: dict, problems: dict, composite: list
+    name: str, stored: dict, problems: dict, composite: list, added: dict | None = None
 ) -> dict:
     """The stored dataset's mapping, laid out the way add-dataset lays it out.
 
@@ -8939,6 +9303,26 @@ def _render_remap_fields(
             if trial_key not in st.session_state:
                 st.session_state[trial_key] = list(composite)
 
+    # UX-104 — a table being *added* joins the same grid as the ones already
+    # here, so it goes into the same dicts. Two things differ, and only two: its
+    # frame is raw rather than normalized, so the proposal is a fresh
+    # auto-detect and the label says "detected" rather than "currently mapped";
+    # and its widget keys carry an `_add` suffix, so uploading a table, changing
+    # your mind and uploading a different one cannot leave a select pointing at
+    # a column the new file does not have.
+    detected_labels = dict.fromkeys(frames, "currently mapped")
+    added = added or {}
+    for table_key, _headline, _prompt, propose in _ADDABLE_TABLES:
+        raw = added.get(table_key)
+        if raw is None or raw.empty:
+            continue
+        specs = next(sp for key, _l, sp, _c in _REMAP_TABLES if key == table_key)
+        frames[table_key] = raw
+        specs_by_table[table_key] = specs
+        prefixes[table_key] = f"remap_{name}_{table_key}_add"
+        proposals[table_key] = propose(raw)
+        detected_labels[table_key] = "detected"
+
     def _cell(host, table_key: str, field: str) -> dict:
         return column_mapping_ui(
             frames[table_key],
@@ -8953,14 +9337,16 @@ def _render_remap_fields(
             header=False,
             columns_per_row=1,
             stack_labels=True,
-            # Here `proposed` is the dataset's current saved mapping (the frame
-            # is already normalized), not a fresh auto-detect — say so.
-            detected_label="currently mapped",
+            # For a table already in the dataset `proposed` is its saved
+            # mapping (the frame is already normalized), not a fresh
+            # auto-detect — say so. A table being added *is* auto-detected.
+            detected_label=detected_labels.get(table_key, "currently mapped"),
         )
 
     pending: dict = {table: {} for table in frames}
     seen: set = set()
-    for label, fields in _EDIT_ROWS:
+    drawn: set = set()
+    for label, widths, fields, extra in _edit_rows():
         live = [
             (table, field)
             for table, field in fields
@@ -8969,8 +9355,14 @@ def _render_remap_fields(
         ]
         if not live:
             continue
+        # A hairline between blocks, as on the add screen — a block is one
+        # table read across two lines, and without the gap the six rows read as
+        # one long grid whose left-hand names label the wrong things.
+        if label and drawn:
+            st.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
+        drawn.add(label or "-")
         row = st.columns(
-            _EDIT_ROW_W[: len(live) + 1], gap="small", vertical_alignment="bottom"
+            list(widths[: len(live) + 1]), gap="small", vertical_alignment="bottom"
         )
         row[0].markdown(
             f'<div class="sps-id-row-name sps-geo-row-name">{label}</div>',
@@ -8979,29 +9371,49 @@ def _render_remap_fields(
         for cell, (table, field) in zip(row[1:], live):
             pending[table].update(_cell(cell, table, field))
             seen.add((table, field))
+        if extra == "aggregate" and "words" in frames:
+            _render_aggregate_toggle(name, adding="words" in (added or {}))
 
     # Anything the rows above do not name — a field added to the specs since, or
     # one this editor never grouped — still has to render, or applying the
     # mapping would silently drop it.
-    for table in frames:
-        rest = [
-            spec["key"]
-            for spec in specs_by_table[table]
-            if (table, spec["key"]) not in seen
-        ]
-        if not rest:
-            continue
+    # UX-106 — ONE *More* heading for the whole leftover group, with each
+    # table's own line named after the table. It used to print "More" down the
+    # left of every such line, so a three-table dataset read as three headings
+    # for one idea.
+    leftovers = [
+        (
+            table,
+            [
+                spec["key"]
+                for spec in specs_by_table[table]
+                if (table, spec["key"]) not in seen
+            ],
+        )
+        for table in frames
+    ]
+    leftovers = [(table, rest) for table, rest in leftovers if rest]
+    if leftovers:
+        st.markdown('<div class="sps-wiz-subhead">More</div>', unsafe_allow_html=True)
+    for table, rest in leftovers:
         row = st.columns(_EDIT_ROW_W, gap="small", vertical_alignment="bottom")
         row[0].markdown(
-            '<div class="sps-id-row-name sps-geo-row-name">More</div>',
+            f'<div class="sps-id-row-name sps-geo-row-name">{_TABLE_LABELS[table]}</div>',
             unsafe_allow_html=True,
         )
         for index, field in enumerate(rest):
             pending[table].update(_cell(row[1 + index % 5], table, field))
+    # What `_apply_remap` has to treat differently: these frames are raw, so
+    # they are *normalized* rather than remapped. Recorded here rather than
+    # recomputed there because the callback runs before the next render, when
+    # the uploader's own state is the only other witness — and that answers a
+    # subtly different question ("is a file attached") than this one ("was it
+    # mapped on the screen the user just pressed Save on").
+    st.session_state["_remap_added_tables"] = sorted(added)
     return pending
 
 
-def _render_remap_editor(name: str, stored: dict) -> None:
+def _render_remap_editor(name: str, stored: dict, uploads_host=None) -> None:
     """Editable column-mapping form for a stored dataset (the surviving columns).
 
     Renders one ``column_mapping_ui`` per present table seeded with the current
@@ -9024,11 +9436,18 @@ def _render_remap_editor(name: str, stored: dict) -> None:
     # UX-71: the same wide option lists the add-dataset screen gets — this is
     # the same mapping, in the same shape (UX-54 r2).
     st.markdown(mapping_menu_css(), unsafe_allow_html=True)
-    if st.session_state.pop("_remap_applied", None) == name:
-        st.success("Dataset updated — mapping and recording setup saved.")
     problems = st.session_state.get("_remap_problems") or {}
     composite = list(stored.get("composite_trial_columns") or [])
-    pending: dict = _render_remap_fields(name, stored, problems, composite)
+    # UX-104: before the grid, because Streamlit's creation order is screen
+    # order and a table's fields cannot render above the file they map. UX-106
+    # gives it a slot of its own at the **top of the page** — the add screen
+    # puts every upload in part 1, above the mapping, and "add the table this
+    # dataset is missing" is the same kind of decision. Falls back to here when
+    # no slot is passed (the collapsed/legacy call).
+    added = _render_missing_table_uploads(
+        name, stored, host=uploads_host if uploads_host is not None else st
+    )
+    pending: dict = _render_remap_fields(name, stored, problems, composite, added)
     st.session_state["_remap_pending_schemas"] = pending
 
     # The add and edit flows now share the same three-column Recording setup
@@ -9045,10 +9464,17 @@ def _render_remap_editor(name: str, stored: dict) -> None:
     )
     word_frame = stored.get("words")
     fixation_frame = stored.get("fixations")
+    # UX-106/UX-108 — the add screen offers *Scale to the word boxes* whenever
+    # there is an AOI table at all (`has_boxes=has_words`), not only when every
+    # box column is mapped. This screen has to ask the same thing of **either**
+    # source of an AOI table: the one already stored, or one sitting in the
+    # uploader above and not yet saved — added != {} the moment a table is
+    # attached there, well before ✅ Save changes runs, and the option
+    # disappearing until after the save would be backwards: it is exactly the
+    # setup question you want answered *before* committing to a new table.
     has_boxes = bool(
-        isinstance(word_frame, pd.DataFrame)
-        and not word_frame.empty
-        and {"x", "y", "width", "height"} <= set(word_frame.columns)
+        (isinstance(word_frame, pd.DataFrame) and not word_frame.empty)
+        or (added or {}).get("words") is not None
     )
     setup = _wizard_setup_step(
         st,
@@ -9060,6 +9486,18 @@ def _render_remap_editor(name: str, stored: dict) -> None:
         publish=False,
     )
     st.session_state["_remap_pending_setup"] = setup.to_dict()
+    # UX-107 — is there anything to lose by leaving? A table uploaded here is
+    # unsaved by definition; otherwise it is whether the mapping or the setup
+    # reads differently from the moment the editor opened. Comparing against the
+    # *opening* state rather than against the stored entry is what makes an
+    # untouched editor read as clean: the seeds the pickers start from are not
+    # always spelled the way the saved schema is, and the question ✕ Cancel asks
+    # is "did you change anything", not "does this differ from disk".
+    signature = _editor_signature(pending, setup.to_dict())
+    baseline = st.session_state.get(_REMAP_BASELINE_KEY)
+    if baseline is None:
+        st.session_state[_REMAP_BASELINE_KEY] = baseline = signature
+    st.session_state[_REMAP_DIRTY_KEY] = bool(added) or signature != baseline
 
     dropped = stored.get("dropped_columns") or {}
     flat = sorted({c for cols in dropped.values() for c in (cols or [])})
@@ -9076,7 +9514,71 @@ def _render_remap_editor(name: str, stored: dict) -> None:
                 width="stretch",
                 height=320,
             )
-    st.button(
+    # UX-106: ✅ Save changes is no longer rendered here. It belongs at the foot
+    # of the whole screen the way ✅ Add dataset does — this section is the
+    # first of six, so a commit button at its end sat in the middle of the page
+    # with trial identity, stimulus images and two metadata tables below it.
+    # `render_dataset_editor_footer` draws it into a slot `app.main` reserves
+    # last.
+
+
+#: UX-107 — what the editor looked like when it opened, and whether it looks
+#: different now. The baseline is captured on the editor's first render (every
+#: `_remap_*` key is cleared when it opens or closes, so an absent baseline
+#: *means* "just opened") and compared on every render after.
+_REMAP_BASELINE_KEY = "_remap_baseline"
+_REMAP_DIRTY_KEY = "_remap_dirty"
+
+
+def _editor_signature(pending: dict, setup_payload: dict) -> str:
+    """A stable, comparable rendering of everything ✅ Save changes would save.
+
+    JSON with sorted keys rather than the dicts themselves: a mapping value may
+    be a string or a list (a composite trial id), and Streamlit hands those back
+    as new objects every run, so identity comparison is useless and `==` on
+    nested structures is fragile about list-vs-tuple.
+    """
+    return json.dumps(
+        {"schemas": pending, "setup": setup_payload}, sort_keys=True, default=str
+    )
+
+
+def dataset_editor_is_dirty() -> bool:
+    """Whether the open editor holds anything ✅ Save changes has not saved.
+
+    Read by ✕ Cancel, which asks for confirmation only when there is something
+    to lose. **Biased towards dirty**: an unknown state (no baseline yet, a
+    signature that cannot be built) counts as changed, because a wrong "clean"
+    discards work in silence while a wrong "dirty" costs one extra click.
+    """
+    return bool(st.session_state.get(_REMAP_DIRTY_KEY, True))
+
+
+def render_dataset_editor_footer(host) -> None:
+    """✅ Save changes, at the foot of the ✏️ Edit dataset screen (UX-106).
+
+    The add screen's shape: the one commit is the last thing on the page, under
+    everything it commits. It used to sit at the end of the *Column mapping*
+    section — the first of six — which put it in the middle of the screen,
+    above trial identity, stimulus images and both metadata tables.
+
+    It also prints what blocked the last attempt. `_apply_remap` records those
+    in ``_remap_problems``, which until now only tinted the offending selects;
+    a mapping the pipeline *rejected* (rather than one with an empty required
+    field) has no cell to tint, so pressing Save did nothing and said nothing.
+    """
+    active = _active_stored_dataset()
+    if active is None:
+        return
+    name, _stored = active
+    problems = st.session_state.get("_remap_problems") or {}
+    box = host.container()
+    box.divider()
+    for table_key, messages in problems.items():
+        label = _TABLE_LABELS.get(table_key, table_key)
+        for message in messages:
+            box.error(f"**{label}** — {message}", icon="🚫")
+    box.button(
         # UX-54 r2: the add-dataset screen's ✅ Add dataset, for the screen that
         # edits one — same shape, same place, same filled blue.
         "✅ Save changes",
@@ -9195,7 +9697,9 @@ def render_trial_identity_section() -> None:
         )
 
 
-def _render_column_mapping_section(*, editor_rendered: bool = False) -> None:
+def _render_column_mapping_section(
+    *, editor_rendered: bool = False, uploads_host=None
+) -> None:
     """The body of the Data page's **Column mapping** section (DATA-26).
 
     One section, three modes — a *presentation* merge, not a code merge. Two
@@ -9223,7 +9727,7 @@ def _render_column_mapping_section(*, editor_rendered: bool = False) -> None:
         return
     active = _active_stored_dataset()
     if active is not None:
-        _render_remap_editor(*active)
+        _render_remap_editor(*active, uploads_host=uploads_host)
         return
     mapping = st.session_state.get("_active_column_mapping") or {}
     rows = _column_mapping_rows(mapping)

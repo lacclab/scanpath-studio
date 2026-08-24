@@ -37,24 +37,27 @@ and **✅ Add dataset** at the foot. Everything in part 2 is on one screen, so t
 whole mapping is visible at once.
 
 **1. Upload data files.** Add the word/IA and fixation files; several files per
-table are allowed. Raw gaze goes here too, as does an optional table with **one
-row per reader** (native language, age, comprehension score) — see
-[Participant metadata](../data-format.md#participant-metadata); the same
-attach-and-report UI is on the 🗂️ **Data** page for datasets that don't come
-through this wizard. A summary card names the columns that were auto-detected and
+table are allowed. Raw gaze goes here too, as do two optional keyed tables —
+**one row per reader** (native language, age, comprehension score) and **one row
+per reading** (list name, presentation order, a per-trial score) — see
+[Participant metadata](../data-format.md#participant-metadata) and
+[Trial metadata](../data-format.md#trial-metadata); the same attach-and-report UI
+is on the 🗂️ **Data** page for datasets that don't come through this wizard. A summary card names the columns that were auto-detected and
 the ones still missing — it is a report, not a shortcut: detection matches column
 *names*, so part 2 is where you confirm it picked the right ones. *Restore a
 saved setup* lives behind a popover here.
 
-**2. Map data fields**, four sections deep:
+**2. Map data fields**, in sections:
 
-1. **Trials & readers** — check the proposed trial ID, and the optional
-   participant and text IDs. Pick several columns to build a composite ID when one
-   is not unique enough. The readout below the pickers is the fastest sanity
-   check: *N trials · N readers · N texts*.
-2. **Fixation features** — fixation x/y/duration, then the word ID/text/box under
-   their own heading. Anything unusual (word ID on fixations, timestamps, line
-   index, character-AOI aggregation) is behind **⚙️ Advanced**.
+1. **Trials & readers** — one block per table, its identity line first (trial,
+   screen, reader, text, word and the table's own id) and its own fields under
+   it: x/y/timestamp/duration for fixations, the word box and line index for the
+   AOI table, then whether that table has one row per **character** rather than
+   per word. Pick several columns to build a composite trial ID when one is not
+   unique enough. The readout below the pickers is the fastest sanity check:
+   *N trials · N readers · N texts*.
+2. **Raw gaze** — the gaze-sample table's own columns; shown only if you
+   uploaded one.
 3. **Recording setup** — see below.
 4. **Extra fields** — keep any condition or analysis fields you will need later,
    and choose which become trial filters.
@@ -69,7 +72,11 @@ expected trials and coordinate range.
 dataset summary — participants, texts, trials, fixations, words, gaze points and
 multipart screens; click a name to open it, and the open row is tinted. Rename or
 remove a source from its table row, or open ✏️ **Edit dataset** to change how it
-was mapped. Uploaded data is renamed or deleted in the session; packaged and
+was mapped — the same field grid the wizard draws, and, for a dataset added with
+only one of the two main tables, an uploader for the other one. Adding the
+missing half there normalizes it and joins it to what is already loaded, so a
+fixations-only dataset can gain its word boxes (or an AOI-only one its
+fixations) without being added again. Uploaded data is renamed or deleted in the session; packaged and
 public sources keep their stable identifiers and are renamed for display or
 hidden for this session.
 

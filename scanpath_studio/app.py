@@ -118,6 +118,7 @@ from scanpath_studio.data import (
     TRIAL_IDENTITY_SAMPLE,
     WORD_OPTIONAL_FIELDS,
     ReadPlan,
+    clear_frame_cache,
     compute_canvas_size,
     count_trials,
     default_filters,
@@ -129,7 +130,6 @@ from scanpath_studio.data import (
     filter_frame_to_keys,
     filter_raw_gaze,
     filter_to_keys,
-    clear_frame_cache,
     filter_trials,
     frame_cache,
     frame_fingerprint,
@@ -207,8 +207,10 @@ from scanpath_studio.tabs import (
     _build_figure_settings,
     _render_column_mapping_section,
     _render_save_restore_expander,
+    dataset_editor_is_dirty,
     render_corpus_analysis_tab,
     render_data_inspection_tab,
+    render_dataset_editor_footer,
     render_participant_metadata_section,
     render_single_trial_tab,
     render_trial_identity_section,
@@ -618,9 +620,10 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
         # old panel opened straight into "Saved: 0 datasets · 5.9 KB" and left
         # both questions to a tooltip full of environment variables.
         st.caption(
-            "Your uploaded datasets, their column mappings, your settings and "
-            "your annotations are saved on **this computer** as you work, and "
-            "reopened for you next time. Nothing is uploaded anywhere."
+            "Your uploaded datasets, their column mappings, your settings, "
+            "your saved designs and your annotations are saved on **this "
+            "computer** as you work, and reopened for you next time. Nothing "
+            "is uploaded anywhere."
         )
 
         if restored_from_cache(st.session_state):
@@ -631,6 +634,8 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
                 f"**Saved:** {n_sets} dataset{'s' if n_sets != 1 else ''} · "
                 f"{status['annotations']} annotation"
                 f"{'s' if status['annotations'] != 1 else ''} · "
+                f"{status['designs']} design"
+                f"{'s' if status['designs'] != 1 else ''} · "
                 f"{human_size(status['bytes'])}"
             )
         elif status["exists"]:
@@ -4170,10 +4175,70 @@ def _render_rename_dialog(tokens: list[str], uploaded: set[str]) -> None:
     _rename_dataset_dialog(token, uploaded=uploaded, tokens=tokens)
 
 
+#: UX-106 — whether the editor's ✕ Cancel confirmation is open. A pending
+#: flag rather than a button return value, the house pattern: a callback may not
+#: open a dialog, and a dialog opened from a return value is lost on the next
+#: full rerun.
+_EDITOR_LEAVE_PENDING_KEY = "_dataset_editor_leave_pending"
+
+
 def _close_dataset_editor() -> None:
     """``on_click`` for the editor's way out — back to 📂 Available datasets."""
     st.session_state.pop(DATASET_EDITOR_OPEN_KEY, None)
     st.session_state.pop(FOCUS_MAPPING_KEY, None)
+    st.session_state.pop(_EDITOR_LEAVE_PENDING_KEY, None)
+    # Anything typed into the editor and not saved goes with it — including a
+    # table uploaded to fill a missing half, which is only a *pending* attach
+    # until ✅ Save changes runs.
+    for key in [k for k in st.session_state if str(k).startswith("_remap_")]:
+        st.session_state.pop(key, None)
+
+
+def _ask_leave_dataset_editor() -> None:
+    """✕ Cancel: confirm only when there is something to lose (UX-106/UX-107).
+
+    An editor nobody has typed into is a screen you are simply leaving, and a
+    modal asking whether you are sure is friction for a decision with no
+    consequence. `tabs.dataset_editor_is_dirty` answers the question and errs
+    towards *dirty*, so the confirmation is skipped only when the mapping, the
+    recording setup and the uploads are all exactly as the editor opened.
+    """
+    if not dataset_editor_is_dirty():
+        _close_dataset_editor()
+        return
+    st.session_state[_EDITOR_LEAVE_PENDING_KEY] = True
+
+
+def _dismiss_leave_dataset_editor() -> None:
+    st.session_state.pop(_EDITOR_LEAVE_PENDING_KEY, None)
+
+
+@st.dialog("Leave without saving?", on_dismiss=_dismiss_leave_dataset_editor)
+def _leave_dataset_editor_dialog() -> None:
+    """Confirm discarding an in-progress edit — the add screen's ✕ Cancel.
+
+    The add screen has always confirmed (`_render_leave_prompt`), because
+    leaving it throws away an upload. This screen used to leave straight away
+    on the reasoning that "an edit is applied by its own button, so leaving
+    discards nothing" — which stopped being true once a *table* could be
+    uploaded here and be waiting on Save.
+    """
+    st.caption(
+        "Changes you have already saved are kept. Anything edited since — the "
+        "mapping, the recording setup, and any table uploaded to fill a "
+        "missing half — is discarded."
+    )
+    leave, stay = st.columns(2, gap="small")
+    leave.button(
+        "✕ Leave",
+        key="dataset_editor_leave_confirm",
+        type="primary",
+        width="stretch",
+        on_click=_close_dataset_editor,
+    )
+    if stay.button("Keep editing", key="dataset_editor_leave_cancel", width="stretch"):
+        _dismiss_leave_dataset_editor()
+        st.rerun(scope="app")
 
 
 def _render_dataset_editor_bar(host, data_choice: str) -> None:
@@ -4182,10 +4247,10 @@ def _render_dataset_editor_bar(host, data_choice: str) -> None:
     Deliberately the add-dataset screen's bar, down to the CSS class: the ask
     was that "the Add Dataset and Edit Dataset screens should be very similar",
     and the two screens ask the same questions of the same dataset — one before
-    it exists and one after. The difference is the title (this one names the
-    dataset) and the way out, which here is a return rather than a cancel: an
-    edit is applied by its own section's button, so leaving discards nothing and
-    needs no confirmation.
+    it exists and one after. The only difference left is the title, which names
+    the dataset; UX-106 made the way out the add screen's ✕ Cancel, with the
+    same confirmation, because a table uploaded here to fill a missing half is
+    pending until ✅ Save changes runs and leaving would drop it in silence.
     """
     name = _dataset_display_name(
         str(st.session_state.get("data_source_choice") or data_choice)
@@ -4197,13 +4262,18 @@ def _render_dataset_editor_bar(host, data_choice: str) -> None:
         unsafe_allow_html=True,
     )
     back_col.button(
-        "← Back to datasets",
+        # UX-106: the add screen's ✕ Cancel, in the same filled blue and the
+        # same corner — the two screens are the same screen, before and after.
+        "✕ Cancel",
         key="dataset_editor_close",
-        on_click=_close_dataset_editor,
+        type="primary",
+        on_click=_ask_leave_dataset_editor,
         width="stretch",
-        help="Return to 📂 Available datasets. Changes you have already applied "
-        "are kept.",
+        help="Leave the editor. Changes you have already saved are kept; "
+        "anything unsaved is discarded, after a confirmation.",
     )
+    if st.session_state.get(_EDITOR_LEAVE_PENDING_KEY):
+        _leave_dataset_editor_dialog()
     bar.caption(
         "How this dataset is read and measured — where its files are, how its "
         "columns map onto the app's fields, the screen it was recorded on, and "
@@ -5842,6 +5912,12 @@ def main() -> None:
     description_slot = editor_page.container()
     source_options_slot = editor_page.container()
     data_location_slot = editor_page.container()
+    # UX-106 — "add the AOI/fixations table this dataset was created without"
+    # is an *upload*, and the add screen puts every upload above the mapping.
+    # Reserved here so it renders there; filled from `_render_remap_editor`,
+    # which runs much later (creation order is screen order, so the two need
+    # not agree).
+    editor_uploads_slot = editor_page.container()
     # The add-dataset wizard takes the whole page, so its slot is the page's,
     # not either screen's.
     setup_wizard_slot = setup_page.container()
@@ -5879,6 +5955,10 @@ def main() -> None:
     # joins on the reader id the mapping just settled).
     setup_metadata_slot = editor_page.container(key="tutorial_participant_metadata")
     setup_preproc_slot = editor_page.container(key="tutorial_preprocessing")
+    # UX-106 — the editor's own foot: ✅ Save changes, under everything it
+    # saves, the way ✅ Add dataset sits under the whole add screen. Reserved
+    # last so it lands after preprocessing; filled at the end of the run.
+    editor_footer_slot = editor_page.container(key="dataset_editor_footer")
 
     # Data source selection. UX-25: only the *resolution* happens here (it must
     # precede the load); the picker itself renders in the main view — on the
@@ -6463,6 +6543,15 @@ def main() -> None:
         # happened. Unfiltered on purpose — the table describes the *dataset*,
         # not what the current Narrow-by left standing.
         if not wizard_owns_page:
+            # UX-107 — ✅ Save changes closes the editor, so its success line
+            # belongs here, on the screen it returns to.
+            saved = st.session_state.pop("_remap_applied", None)
+            if saved:
+                dataset_table_slot.success(
+                    f"**{_dataset_display_name(str(saved))}** updated — mapping, "
+                    "recording setup and any table you added are saved.",
+                    icon="✅",
+                )
             render_dataset_table(
                 host=dataset_table_slot,
                 # Public corpora load through the historical category token,
@@ -6482,7 +6571,10 @@ def main() -> None:
             "from."
         )
         with mapping_body_slot:
-            _render_column_mapping_section(editor_rendered=mapping_editor_rendered)
+            _render_column_mapping_section(
+                editor_rendered=mapping_editor_rendered,
+                uploads_host=editor_uploads_slot,
+            )
         with setup_identity_slot:
             st.divider()
             st.subheader("🧾 Trial identity")
@@ -6505,6 +6597,9 @@ def main() -> None:
             # DATA-29: same reasoning one grain down — the report describes the
             # dataset's trials, so it is built from the *unfiltered* combos.
             render_trial_metadata_section(combos_all)
+        # UX-106 — and the screen's one commit at its foot, in the slot
+        # reserved after every section it saves.
+        render_dataset_editor_footer(editor_footer_slot)
         with setup_body_slot:
             st.divider()
             dataset_label = str(

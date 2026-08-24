@@ -15,7 +15,6 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-
 _SPEC = importlib.util.spec_from_file_location(
     "changelog_notes",
     Path(__file__).resolve().parents[1] / "scripts" / "changelog_notes.py",

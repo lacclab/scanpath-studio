@@ -656,6 +656,67 @@ def load_participant_metadata(
     )
 
 
+def load_trial_metadata(
+    table: TablesLike,
+    *,
+    id_column: str | None = None,
+    participant_column: str | None = None,
+    trials: pd.DataFrame | None = None,
+):
+    """Load a trial-level metadata table (DATA-29 — milestone 2).
+
+    The sibling of :func:`load_participant_metadata`, one grain down: ``table``
+    has **one row per reading** — a trial-id column plus anything known about
+    that reading (a list name, a condition, a per-trial comprehension score).
+
+    **The key is yours to state, and it changes what the table means.** Keyed by
+    trial id alone, a row describes a *text*, and every reader's reading of it
+    inherits that row; pass ``participant_column`` to key by reader **and**
+    trial, so a row describes one *reading*. Nothing in a file says which world
+    a corpus is in, so this is never inferred — unlike ``id_column``, which
+    defaults to the first recognised spelling (``trial_id``, ``item_id``,
+    ``TRIAL_INDEX``, …).
+
+    Pass ``trials`` — a normalized fixations/words frame, or any frame with
+    ``participant_id`` + ``trial_id`` — to have the join validated against the
+    data you actually loaded; the returned ``.report`` then names the trials
+    missing from either side.
+
+    Returns a :class:`~scanpath_studio.metadata.TrialMetadata`: the cleaned
+    frame, a field registry, and the join report. As with the participant
+    table, nothing is broadcast onto the words/fixations frames.
+
+    >>> words, fixations = load_sample_data()
+    >>> meta = load_trial_metadata(
+    ...     "readings.csv", trials=fixations
+    ... )  # doctest: +SKIP
+    >>> meta.names  # doctest: +SKIP
+    ('list_name', 'comprehension_score')
+    """
+    from scanpath_studio import metadata as _metadata
+
+    frame = _as_dataframe(table, "trial metadata")
+    resolved = id_column or _metadata.infer_trial_id_column(frame)
+    if not resolved or resolved not in frame.columns:
+        raise ValueError(
+            "Could not find the trial-id column in the metadata table. "
+            f"Columns: {_column_preview(frame)}. Pass id_column= explicitly."
+        )
+    if participant_column and participant_column not in frame.columns:
+        raise ValueError(
+            f"participant_column={participant_column!r} is not in the metadata "
+            f"table. Columns: {_column_preview(frame)}."
+        )
+    keys = _metadata.trial_keys(trials) if trials is not None else None
+    return _metadata.build_trial_metadata(
+        frame,
+        resolved,
+        participant_column,
+        source_name=getattr(table, "name", None) or "trial metadata",
+        keys=keys,
+    )
+
+
 def load_sample_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     """Return the bundled OneStop demo, normalized and ready to plot.
 

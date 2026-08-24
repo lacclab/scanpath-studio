@@ -420,6 +420,19 @@ def get_app_css() -> str:
         flex: 1 1 auto;
         padding-right: 0.45rem;
     }
+    /* UX-103 — on the RAIL's rows the switch and the name are now two separate
+       children (the switch is drawn with its label collapsed, to be rid of the
+       native `title=` tooltip Streamlit stamps on a truncating label). Without
+       this the rule above would hand the switch half the row, because both
+       halves match it. Only the name is flexible; the switch is its own width.
+       Scoped to `split_mode_rail_` on purpose: 🎬 Animate and ⚖️ Compare above
+       the plot still carry their label inside the toggle, where the slot has to
+       stay the flexible one. */
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_rail_"]
+        > div:has([data-testid="stCheckbox"]) {
+        flex: 0 0 auto;
+        padding-right: 0.4rem;
+    }
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
         [data-testid="stWidgetLabel"] p,
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
@@ -427,6 +440,27 @@ def get_app_css() -> str:
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+    }
+    /* UX-102 — and the same `p` must give up its bottom margin, or the row
+       grows a scrollbar. Streamlit 1.62 gives every `wrap=False` horizontal
+       container `overflow-x: auto`, and CSS then promotes `overflow-y` from
+       `visible` to `auto` along with it: each row is a scroll box, so anything
+       that overhangs it by a pixel shows a scrollbar on hover. A markdown `p`
+       carries `margin-bottom: 1rem` that Streamlit cancels with a matching
+       negative margin on `stMarkdownContainer` — which fixes the layout but not
+       `scrollHeight`, and the margin still counts there. So exactly the three
+       name-only sections (📄 Stimulus · 🧹 Filter · 📐 Figure & canvas, the ones
+       drawn with a name instead of a switch) scrolled 8px and lost 11px of
+       width to the scrollbar's gutter, while the five with a toggle did not.
+       Zeroing both margins is the fix rather than `overflow: visible`, because
+       it removes the overhang instead of hiding it — the row keeps the
+       horizontal clipping Streamlit put there. Nothing moves: the label is
+       centred by the flex row either way. */
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stMarkdownContainer"],
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stMarkdownContainer"] p {
+        margin-bottom: 0;
     }
     /* The divider is drawn on the popover's SLOT — the row's own child — and not
        on the button, which is the obvious place and does not work. A trigger
@@ -1050,7 +1084,7 @@ def get_app_css() -> str:
         padding-right: 0.4rem;
         padding-top: 0.1rem;
     }
-    /* Quick views and Palette use the same quietly muted label treatment. */
+    /* Design presets and Palette use the same quietly muted label treatment. */
     .sps-control-label {
         color: inherit;
         opacity: 0.72;
@@ -1070,6 +1104,77 @@ def get_app_css() -> str:
     }
     .st-key-scanpath_rail .st-key-quick_views_grid > [data-testid="stVerticalBlock"] {
         gap: 0.15rem !important;
+    }
+    /* VIZ-39 — 🎨 My designs. 💾 Save is drawn *into* the expander's own title
+       bar: `design_shell` is the positioning context, and the header row's
+       right-hand side is empty (the chevron sits left), so the list underneath
+       keeps the full width of the rail instead of losing a fifth of it to one
+       icon in a column of its own. */
+    .st-key-scanpath_rail .st-key-design_shell {
+        position: relative;
+    }
+    .st-key-scanpath_rail .st-key-design_save {
+        position: absolute;
+        top: 0.3rem;
+        right: 0.4rem;
+        width: auto !important;
+        z-index: 3;
+    }
+    .st-key-scanpath_rail .st-key-design_save button {
+        min-height: 1.9rem;
+        padding: 0 0.4rem;
+    }
+    /* Keep the title itself clear of the button it now shares a line with. */
+    .st-key-scanpath_rail .st-key-design_shell summary {
+        padding-right: 2.4rem;
+    }
+    /* One saved design is one bordered card, not three loose buttons: the row's
+       own container carries the border, and the controls inside it are borderless
+       so the card reads as a single object. */
+    .st-key-scanpath_rail [class*="st-key-design_row_"] {
+        padding: 0.15rem 0.3rem;
+        margin-bottom: 0.3rem;
+        border-radius: 0.5rem;
+    }
+    .st-key-scanpath_rail [class*="st-key-design_row_"] [data-testid="stHorizontalBlock"] {
+        gap: 0.1rem !important;
+    }
+    .st-key-scanpath_rail [class*="st-key-design_row_"] button {
+        min-height: 1.9rem;
+        padding: 0.1rem 0.3rem;
+        justify-content: center;
+    }
+    /* An icon-only button still carries the label's right margin, which is what
+       pushes these two off-centre. */
+    .st-key-scanpath_rail [class*="st-key-design_row_"] button [data-testid="stIconMaterial"] {
+        margin: 0 !important;
+        font-size: 1.1rem;
+    }
+    /* ✏️ swaps the name for a field in the same slot, so the field has to end up
+       the height of the button it replaces — otherwise the card grows by a
+       third the moment you click, and the list shuffles under the cursor. The
+       field is wrapped in a form (for ⏎), and every layer of that wrapping
+       brings its own margin; measured in the browser, zeroing these four brings
+       the editing card to 46px against the resting card's 45. */
+    .st-key-scanpath_rail [class*="st-key-design_row_"] [data-testid="stForm"] {
+        border: 0;
+        padding: 0;
+    }
+    .st-key-scanpath_rail [class*="st-key-design_row_"] > [data-testid="stLayoutWrapper"],
+    .st-key-scanpath_rail [class*="st-key-design_row_"] [data-testid="stForm"] [data-testid="stElementContainer"],
+    .st-key-scanpath_rail [class*="st-key-design_row_"] [data-testid="stForm"] [data-testid="stLayoutWrapper"] {
+        margin-bottom: 0 !important;
+    }
+    .st-key-scanpath_rail [class*="st-key-design_row_"] [data-testid="stForm"] [data-testid="stVerticalBlock"] {
+        gap: 0 !important;
+    }
+    .st-key-scanpath_rail [class*="st-key-design_row_"] [data-testid="stTextInput"] input {
+        padding: 0.1rem 0.4rem;
+        min-height: 1.9rem;
+    }
+    .st-key-scanpath_rail [class*="st-key-design_row_"] [data-testid="stTextInputRootElement"] {
+        height: 2.1rem;
+        min-height: 0;
     }
     /* The 2×2 Quick-view grid keeps full labels at ordinary rail widths and
        falls back to icons only at the narrowest size. */

@@ -160,6 +160,7 @@ the recorded setup.
 | render every ordered screen | `--all-screens`, optionally `--screen-transition instant|recorded` |
 | map arbitrary source rows to screens | `--trial-parts-manifest manifest.json` |
 | attach participant metadata | `--participant-metadata readers.csv` |
+| attach trial metadata | `--trial-metadata readings.csv`, `--trial-metadata-reader-column` to key it by reader **and** trial |
 | export editable layers | `--separable-layers` |
 | style the fixations | `--fixation-color`, `--fixation-symbol`, `--fixation-colorscale`, `--marker-size-range` |
 | style the saccades | `--saccade-style`, `--saccade-width`, `--saccade-arcs`, `--saccade-arrows`, `--saccade-classes` |

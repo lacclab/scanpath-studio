@@ -558,23 +558,56 @@ def _tutorial_optout_script(dismissed: set[str]) -> str:
     )
 
 
-def _render_tutorial_optout(tutorial_id: str, host) -> None:
-    """The per-tutorial "Don't auto-show this one" checkbox (UX-85).
+def _render_tutorial_optout(tutorial_id: str, host, *, key_suffix: str = "") -> None:
+    """The per-tutorial "Don't auto-show this one" checkbox (UX-85, UX-110).
 
-    Read directly, like :func:`_render_tour_optout` — this renders inside the
-    🧭 Tutorials dialog, and a dialog body re-executes on its own widgets'
-    interactions, so there is no fragment-scoping hazard to route around (the
-    checkbox's effect is entirely local to this card; nothing outside the
-    dialog needs to see it in the same run — unlike Start/Resume next to it).
+    Two independent call sites share this one preference: the 🧭 Tutorials
+    picker card (``key_suffix=""``) and the running tutorial's own footer
+    (:func:`render_use_case_tutorial`, ``key_suffix="_running"``) — distinct
+    widget keys because a tutorial can be actively open *while* its own card
+    is also visible in the picker (opening 🧭 Tutorials does not close a
+    tutorial already in progress), which would otherwise collide as two
+    widgets sharing one key in the same run.
+
+    Pulls in the shared truth on render, but only when nothing has touched
+    *this* widget since the last time it agreed with it — ``_synced_key``
+    remembers what this specific checkbox last matched. Seeding the key
+    unconditionally on every run (an earlier version of this did) is wrong in
+    a subtler way than the usual "value= is ignored once the key exists"
+    trap: it would also stomp a check/uncheck AppTest (or a real click)
+    already wrote into this exact key for *this* run, before the widget ever
+    got to read it back — the box would silently refuse to respond to its own
+    click. Comparing against the last-synced snapshot is what tells "the
+    other checkbox moved the shared set" apart from "this one was just
+    clicked", so a fresh click always wins over a stale pull.
+
+    Read directly (no fragment-scoping hazard): the picker card sits in a
+    ``st.dialog`` body, which re-executes on its own widgets' interactions the
+    same as a plain script rerun would, and the running-tutorial footer's own
+    ``@st.fragment`` scope is exactly where its own checkbox needs to take
+    effect. Nothing outside either surface needs to see the toggle in the same
+    run — unlike Start/Resume next to it, which hand off to a different view.
+    Cross-surface agreement (checking one shows checked on the *other*) still
+    needs that other surface to render again — the next time the picker
+    dialog opens, or the next fragment rerun of the running tutorial's own
+    footer — same as any other Streamlit UI reacting to state it doesn't own.
     """
     dismissed = _dismissed_tutorial_ids()
+    key = f"tutorial_dont_autoshow_{tutorial_id}{key_suffix}"
+    synced_key = f"_{key}_synced"
+    shared_truth = tutorial_id in dismissed
+    if key not in st.session_state or (
+        st.session_state.get(synced_key) == st.session_state[key]
+        and st.session_state[key] != shared_truth
+    ):
+        st.session_state[key] = shared_truth
     checked = host.checkbox(
         "🔕 Don't auto-show this one",
-        key=f"tutorial_dont_autoshow_{tutorial_id}",
-        value=tutorial_id in dismissed,
+        key=key,
         help="Stops this tutorial from offering itself automatically. It "
         "stays listed here, and Start / Resume work exactly the same.",
     )
+    st.session_state[synced_key] = checked
     if checked:
         dismissed.add(tutorial_id)
     else:
@@ -1645,6 +1678,12 @@ def render_use_case_tutorial() -> None:
                 _open_tutorial_surface(step)
                 _finish_use_case(tutorial.id)
                 st.rerun()
+
+        # UX-110: the same "don't auto-show this one" preference the 🧭
+        # Tutorials picker card already offers, reachable from the running
+        # tutorial too — checking it here needs no trip back to the picker,
+        # and the two stay in sync (see _render_tutorial_optout's docstring).
+        _render_tutorial_optout(tutorial.id, st, key_suffix="_running")
 
         # A Streamlit popover is client-side state, so its server callback can
         # start a tutorial but cannot close the chooser that contained the

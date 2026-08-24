@@ -130,6 +130,77 @@ class TestTourOptOut:
         assert tour_opted_out() is False
 
 
+def _two_tutorial_optout_checkboxes_app():
+    """Stand-ins for the picker card and the running tutorial's own footer —
+    the two real surfaces that render this same per-tutorial preference,
+    each under its own widget key (see ``_render_tutorial_optout``)."""
+    import streamlit as st
+
+    from scanpath_studio.tour import _render_tutorial_optout
+
+    _render_tutorial_optout("load_inspect", st)
+    _render_tutorial_optout("load_inspect", st, key_suffix="_running")
+
+
+class TestPerTutorialOptOutSync:
+    """UX-110: the picker card's checkbox and the running tutorial's own
+    footer checkbox are two widgets sharing one preference (one dismissed-id
+    set, one cookie) — ticking either must show as ticked in the other."""
+
+    def test_both_default_off_and_use_distinct_keys(self):
+        at = AppTest.from_function(_two_tutorial_optout_checkboxes_app)
+        at.run()
+        assert not at.exception, at.exception
+        picker = at.checkbox(key="tutorial_dont_autoshow_load_inspect")
+        running = at.checkbox(key="tutorial_dont_autoshow_load_inspect_running")
+        assert picker.value is False
+        assert running.value is False
+
+    def test_checking_the_picker_card_shows_checked_on_the_running_footer(self):
+        at = AppTest.from_function(_two_tutorial_optout_checkboxes_app)
+        at.run()
+        at.checkbox(key="tutorial_dont_autoshow_load_inspect").check().run()
+        assert not at.exception, at.exception
+        assert (
+            at.checkbox(key="tutorial_dont_autoshow_load_inspect_running").value is True
+        )
+
+    def test_unchecking_the_running_footer_shows_unchecked_on_the_picker_card(self):
+        """The reverse direction, starting from both already checked — proves
+        this isn't just "the second widget's first render picks up the first
+        one's value" but a live sync, not a one-way default.
+
+        The picker card renders *before* the running footer in this harness
+        (mirroring app.py's render order: the dialog is a modal decided by an
+        earlier user action, the fragment card renders every script run), so
+        a change made in the footer needs one more render of the picker card
+        to show — same as any other Streamlit UI reacting to state it doesn't
+        own itself. That one extra idle ``.run()`` below stands in for "the
+        user looks at the picker card again"."""
+        at = AppTest.from_function(_two_tutorial_optout_checkboxes_app)
+        at.run()
+        at.checkbox(key="tutorial_dont_autoshow_load_inspect").check().run()
+        assert (
+            at.checkbox(key="tutorial_dont_autoshow_load_inspect_running").value is True
+        )
+
+        at.checkbox(key="tutorial_dont_autoshow_load_inspect_running").uncheck().run()
+        assert not at.exception, at.exception
+        at.run()
+        assert at.checkbox(key="tutorial_dont_autoshow_load_inspect").value is False
+
+    def test_tutorial_opted_out_reflects_either_checkbox(self):
+        # Read via `at.session_state`, not a fresh top-level `st.session_state`
+        # in the test process — the latter is a disconnected proxy once a
+        # script has actually run under AppTest.
+        at = AppTest.from_function(_two_tutorial_optout_checkboxes_app)
+        at.run()
+        assert "load_inspect" not in at.session_state["_tutorial_dismissed_ids"]
+        at.checkbox(key="tutorial_dont_autoshow_load_inspect_running").check().run()
+        assert not at.exception, at.exception
+        assert "load_inspect" in at.session_state["_tutorial_dismissed_ids"]
+
+
 def test_welcome_tour_text_is_concise():
     """Every welcome/spotlight/wizard step body stays short (UI/UX: no walls of
     text). Guards against the steps creeping back to multi-paragraph blurbs."""

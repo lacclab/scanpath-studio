@@ -865,10 +865,15 @@ _CARD_CSS = """
 }
 .st-key-tour_card [data-testid="stHorizontalBlock"] { margin-top: 0.9rem; }
 /* UX-12 "Don't show this again": a footnote between the progress bar and the
-   footer, so it's muted and pulled tight rather than reading as another step. */
-.st-key-tour_dont_show { margin-top: -0.5rem !important; }
-.st-key-tour_dont_show label { opacity: 0.8; }
-.st-key-tour_dont_show label p { font-size: 0.85rem !important; }
+   footer, so it's muted and pulled tight rather than reading as another step.
+   UX-110 gives the wizard-setup-guide card (same `tour_card` shape) the
+   identical treatment for its own opt-out. */
+.st-key-tour_dont_show,
+.st-key-wizard_guide_dont_show { margin-top: -0.5rem !important; }
+.st-key-tour_dont_show label,
+.st-key-wizard_guide_dont_show label { opacity: 0.8; }
+.st-key-tour_dont_show label p,
+.st-key-wizard_guide_dont_show label p { font-size: 0.85rem !important; }
 """
 
 # Welcome step only: center the card like a modal and dim the app behind it
@@ -1989,7 +1994,71 @@ def render_faq_button(host=None) -> None:
 # shown (unless suppressed for embeds/deep-links, or the welcome spotlight tour
 # is still on screen so the two don't stack), and is replayable from the
 # wizard's "❓ Show setup guide" button.
+#
+# UX-110: this is the third first-visit walkthrough in the app (after the
+# welcome tour and the per-tutorial cards), and until now the only one with no
+# persistent opt-out — ``wizard_guide_seen`` gates the auto-open, but it is
+# plain session state, so the guide came back to greet every new tab/session
+# regardless of a prior "I get it, stop". It now carries the same cookie +
+# checkbox shape as the other two.
 # -----------------------------------------------------------------------------
+
+# One year, path=/, SameSite=Lax — same shape as ``TOUR_OPTOUT_COOKIE``, no
+# personal data, just a UI preference.
+WIZARD_GUIDE_OPTOUT_COOKIE = "sps_wizard_guide_optout"
+
+
+def wizard_guide_opted_out() -> bool:
+    """True when this browser asked never to auto-open the setup guide again.
+
+    Same shape as :func:`tour_opted_out`: ``_wizard_guide_dismissed`` (a plain
+    flag, not the checkbox's own widget key — see that function's docstring
+    for why) wins within a session, falling back to the cookie, then to
+    ``False`` with no request context (bare mode / AppTest).
+    """
+    if "_wizard_guide_dismissed" in st.session_state:
+        return bool(st.session_state["_wizard_guide_dismissed"])
+    try:
+        return st.context.cookies.get(WIZARD_GUIDE_OPTOUT_COOKIE) == "1"
+    except Exception:
+        return False
+
+
+def _wizard_guide_optout_script(opted_out: bool) -> str:
+    """A same-origin script that writes (or clears) the opt-out cookie."""
+    if opted_out:
+        value = f"{WIZARD_GUIDE_OPTOUT_COOKIE}=1; max-age={_TOUR_OPTOUT_MAX_AGE}"
+    else:
+        value = f"{WIZARD_GUIDE_OPTOUT_COOKIE}=; max-age=0"
+    return (
+        "<script>window.parent.document.cookie = "
+        f'"{value}; path=/; SameSite=Lax";</script>'
+    )
+
+
+def _render_wizard_guide_optout() -> None:
+    """The "Don't show this again" checkbox for the setup guide (UX-110).
+
+    One call site today (the guide's own running card) — there is no picker
+    equivalent to sync with, unlike the welcome tour and the per-tutorial
+    cards, so this is simpler than :func:`_render_tour_optout`: no second
+    widget key, no last-synced reconciliation, just seed-once-then-let-the-
+    widget-own-it, same as any ordinary Streamlit checkbox. Kept as its own
+    function (rather than inlined) so a second surface — should one ever
+    replay this guide from somewhere else — has one place to reuse.
+    """
+    key = "wizard_guide_dont_show"
+    if key not in st.session_state:
+        st.session_state[key] = wizard_guide_opted_out()
+    opted_out = st.checkbox(
+        "Don't show this again",
+        key=key,
+        help="Skip the setup guide on future visits. **❓ Show setup guide** in "
+        "the wizard always brings it back.",
+    )
+    st.session_state["_wizard_guide_dismissed"] = opted_out
+    embed_html_iframe(_wizard_guide_optout_script(opted_out), height=0)
+
 
 # (title, markdown body) per step — one per part of the wizard, in order.
 # DATA-22 §4: the guide is now *anchored*. Each step names the wizard step it
@@ -2102,6 +2171,12 @@ def render_spotlight_wizard_guide() -> None:
         st.markdown(f"## {title}")
         st.markdown(body)
         st.progress((step_idx + 1) / n, text=f"Step {step_idx + 1} of {n}")
+        # UX-110: same placement rule as the welcome tour's own opt-out — only
+        # where a user decides they're done with the guide (the first step,
+        # bailing out now, or the last, got it, don't greet me again), so the
+        # short middle step keeps its tight vertical rhythm.
+        if step_idx in (0, n - 1):
+            _render_wizard_guide_optout()
         back_col, exit_col, next_col = st.columns(3)
         back_col.button(
             "← Back",
@@ -2159,16 +2234,19 @@ def maybe_show_wizard_guide() -> None:
 
     Call as the active wizard renders, immediately followed by
     ``render_spotlight_wizard_guide()`` which draws the card. The auto-open is
-    skipped for embeds/deep-links and while the welcome spotlight tour is still
-    on screen, so the two walkthroughs never stack. ``wizard_guide_seen`` is set
-    *before* arming (mirroring ``tour_seen``) so a dismissal doesn't re-open it
-    on the next rerun.
+    skipped for embeds/deep-links, while the welcome spotlight tour is still
+    on screen (so the two walkthroughs never stack), and — UX-110 — for a
+    browser that already asked never to see it again via
+    :func:`wizard_guide_opted_out`. ``wizard_guide_seen`` is set *before*
+    arming (mirroring ``tour_seen``) so a dismissal doesn't re-open it on the
+    next rerun.
     """
     if st.session_state.get("wizard_guide_seen"):
         return
     if (
         tour_suppressed(st.query_params)
         or st.session_state.get("tour_mode") == "spotlight"
+        or wizard_guide_opted_out()
     ):
         return
     st.session_state["wizard_guide_seen"] = True  # before arming — see docstring

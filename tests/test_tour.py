@@ -73,6 +73,82 @@ class TestWizardGuideSpotlight:
         assert "wizard_sp_next" in keys
 
 
+class TestWizardGuideOptOut:
+    """UX-110: the setup guide gets the same persistent "don't show again" the
+    welcome tour and the per-tutorial cards already have — until this, only
+    ``wizard_guide_seen`` (plain session state) gated the auto-open, so it
+    greeted every new session regardless of a prior dismissal."""
+
+    def test_checkbox_on_first_step_defaults_off(self):
+        at = AppTest.from_function(_wizard_guide_app)
+        at.run()
+        assert not at.exception, at.exception
+        box = at.checkbox(key="wizard_guide_dont_show")
+        assert box.value is False
+
+    def test_ticking_suppresses_a_later_session(self):
+        at = AppTest.from_function(_wizard_guide_app)
+        at.run()
+        at.checkbox(key="wizard_guide_dont_show").check().run()
+        assert not at.exception, at.exception
+        from scanpath_studio import tour
+
+        assert at.session_state["wizard_guide_dont_show"] is True
+        assert tour._wizard_guide_optout_script(True).count("max-age=0") == 0
+        assert "sps_wizard_guide_optout=1" in tour._wizard_guide_optout_script(True)
+        assert "max-age=0" in tour._wizard_guide_optout_script(False)
+
+    def test_opted_out_session_never_auto_arms(self):
+        """A returning browser (cookie can't be simulated headlessly, so this
+        goes through the same session-state fast path `tour_opted_out` uses)
+        never sees `maybe_show_wizard_guide` flip `tour_mode` to "wizard"."""
+        at = AppTest.from_function(_wizard_guide_optout_returning_app)
+        at.run()
+        assert not at.exception, at.exception
+        assert "tour_mode" not in at.session_state
+        assert not any(b.key == "wizard_sp_next" for b in at.button)
+
+    def test_replay_ignores_the_opt_out(self):
+        """The explicit "❓ Show setup guide" button still works even after
+        opting out of the automatic greeting — same rule UX-12 set for the
+        welcome tour's replay."""
+        at = AppTest.from_function(_wizard_guide_optout_replay_app)
+        at.run()
+        assert at.session_state["tour_mode"] == "wizard"
+        assert any(b.key == "wizard_sp_next" for b in at.button)
+
+    def test_opted_out_is_false_without_a_request_context(self):
+        from scanpath_studio.tour import wizard_guide_opted_out
+
+        assert wizard_guide_opted_out() is False
+
+
+def _wizard_guide_optout_returning_app():
+    import streamlit as st
+
+    from scanpath_studio.tour import (
+        maybe_show_wizard_guide,
+        render_spotlight_wizard_guide,
+    )
+
+    st.session_state["_wizard_guide_dismissed"] = True
+    maybe_show_wizard_guide()
+    render_spotlight_wizard_guide()
+
+
+def _wizard_guide_optout_replay_app():
+    import streamlit as st
+
+    from scanpath_studio.tour import _arm_wizard_guide, render_spotlight_wizard_guide
+
+    st.session_state["_wizard_guide_dismissed"] = True
+    st.session_state["wizard_guide_seen"] = True
+    if not st.session_state.get("_armed_once"):
+        st.session_state["_armed_once"] = True
+        _arm_wizard_guide()
+    render_spotlight_wizard_guide()
+
+
 def _welcome_tour_app():
     from scanpath_studio.tour import maybe_show_welcome_tour, render_spotlight_tour
 

@@ -479,11 +479,19 @@ def _close_dialog_clientside() -> None:
 def tour_opted_out() -> bool:
     """True when this browser asked never to be shown the welcome tour again.
 
-    Reads the ``sps_tour_optout`` cookie (UX-12). Within a session the checkbox's
-    own state wins, so ticking it takes effect without waiting for the browser to
-    hand the cookie back on the next load. Defensive about ``st.context`` because
-    bare-mode / AppTest runs have no request behind them.
+    Reads the ``sps_tour_optout`` cookie (UX-12). Within a session
+    ``_tour_dismissed`` — a plain data flag, not any checkbox's own widget
+    key (UX-110) — wins, so ticking either the tour's own checkbox or the 🧭
+    Tutorials picker's copy of it takes effect immediately rather than
+    waiting for the browser to hand the cookie back on the next load. The
+    legacy ``tour_dont_show`` key (the tour's own checkbox, or a value parked
+    there directly before either checkbox has rendered) is still honoured as
+    a fallback, so setting it directly — as tests, and any future caller that
+    predates UX-110, do — keeps working. Defensive about ``st.context``
+    because bare-mode / AppTest runs have no request behind them.
     """
+    if "_tour_dismissed" in st.session_state:
+        return bool(st.session_state["_tour_dismissed"])
     if "tour_dont_show" in st.session_state:
         return bool(st.session_state["tour_dont_show"])
     try:
@@ -615,15 +623,48 @@ def _render_tutorial_optout(tutorial_id: str, host, *, key_suffix: str = "") -> 
     embed_html_iframe(_tutorial_optout_script(dismissed), height=0)
 
 
-def _render_tour_optout() -> None:
-    """The "Don't show this again" checkbox + the cookie write that backs it."""
-    opted_out = st.checkbox(
+def _render_tour_optout(host=st, *, key_suffix: str = "") -> None:
+    """The "Don't show this again" checkbox + the cookie write that backs it.
+
+    Two call sites (UX-110): the welcome tour's own first/last step
+    (``host=st``, ``key_suffix=""`` — the original ``tour_dont_show`` key,
+    unchanged, so existing links/tests keep working) and the 🧭 Tutorials
+    picker's Welcome tour card (``host=<that card's container>``,
+    ``key_suffix="_picker"``). Both can be on screen in the same run — the
+    picker can be reopened while the tour it started is still settling onto
+    screen — so they need distinct widget keys, synced the same way
+    :func:`_render_tutorial_optout` syncs its own pair: seeded from
+    :func:`tour_opted_out` only when nothing has touched *this* particular
+    checkbox since it last agreed with that shared truth (``_synced_key``),
+    not via ``value=``, which Streamlit only consults before a widget's key
+    first exists.
+
+    Whichever is ticked writes ``_tour_dismissed`` — a plain data flag,
+    deliberately never a widget's own key — rather than the other checkbox's
+    ``tour_dont_show``/``tour_dont_show_picker`` key directly: Streamlit
+    refuses `st.session_state[key] = ...` for any key whose widget has
+    already been instantiated *anywhere* in the current run, and both
+    checkboxes CAN render in the same run (see above), so writing into the
+    other one's own key would raise the moment that happens. `tour_opted_out`
+    reads `_tour_dismissed` first, which is what makes either checkbox's
+    click visible to the auto-open gate and to the other checkbox.
+    """
+    key = f"tour_dont_show{key_suffix}"
+    synced_key = f"_{key}_synced"
+    shared_truth = tour_opted_out()
+    if key not in st.session_state or (
+        st.session_state.get(synced_key) == st.session_state[key]
+        and st.session_state[key] != shared_truth
+    ):
+        st.session_state[key] = shared_truth
+    opted_out = host.checkbox(
         "Don't show this again",
-        key="tour_dont_show",
-        value=tour_opted_out(),
+        key=key,
         help="Skip the tour on future visits. **Tutorials → Welcome tour** under "
         "❓ Help always brings it back.",
     )
+    st.session_state[synced_key] = opted_out
+    st.session_state["_tour_dismissed"] = opted_out
     embed_html_iframe(_tour_optout_script(opted_out), height=0)
 
 
@@ -1535,6 +1576,11 @@ def _tutorial_library_dialog() -> None:
     if welcome_action.button("Start", key="tutorial_start_welcome", width="stretch"):
         _arm_tour()
         st.rerun(scope="app")
+    # UX-110: the welcome tour's own "Don't show this again" (UX-12), reachable
+    # here too — every other card in this dialog already offers its own
+    # opt-out (below), so the welcome card was the one place in the whole
+    # chooser missing it.
+    _render_tour_optout(welcome, key_suffix="_picker")
     # UX-40: one bordered card per tutorial instead of five identical
     # caption/caption/caption/two-buttons stacks separated by dividers — at that
     # density the eye had nothing to land on, and "Start over" sat there at full

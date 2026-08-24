@@ -130,6 +130,59 @@ class TestTourOptOut:
         assert tour_opted_out() is False
 
 
+def _tour_optout_dual_app():
+    """Stand-ins for the welcome tour's own checkbox and the 🧭 Tutorials
+    picker's Welcome tour card checkbox — the two real surfaces sharing this
+    preference (UX-110)."""
+    import streamlit as st
+
+    from scanpath_studio.tour import (
+        _arm_tour,
+        _render_tour_optout,
+        render_spotlight_tour,
+    )
+
+    st.session_state["tour_seen"] = True
+    if not st.session_state.get("_armed_once"):
+        st.session_state["_armed_once"] = True
+        _arm_tour()
+    render_spotlight_tour()
+    _render_tour_optout(st, key_suffix="_picker")
+
+
+class TestWelcomeTourOptOutSync:
+    """UX-110: the welcome tour's own checkbox and the picker card's copy of
+    it are two widgets sharing the ``tour_dont_show`` truth — ticking either
+    must show as ticked in the other, the same guarantee UX-110 gives the
+    per-tutorial checkboxes."""
+
+    def test_both_default_off(self):
+        at = AppTest.from_function(_tour_optout_dual_app)
+        at.run()
+        assert not at.exception, at.exception
+        assert at.checkbox(key="tour_dont_show").value is False
+        assert at.checkbox(key="tour_dont_show_picker").value is False
+
+    def test_checking_the_tour_shows_checked_on_the_picker_card(self):
+        at = AppTest.from_function(_tour_optout_dual_app)
+        at.run()
+        at.checkbox(key="tour_dont_show").check().run()
+        assert not at.exception, at.exception
+        assert at.checkbox(key="tour_dont_show_picker").value is True
+
+    def test_checking_the_picker_card_is_seen_by_tour_opted_out(self):
+        at = AppTest.from_function(_tour_optout_dual_app)
+        at.run()
+        at.checkbox(key="tour_dont_show_picker").check().run()
+        assert not at.exception, at.exception
+        # `tour_opted_out()` (what the auto-open gate calls) checks
+        # `_tour_dismissed` first — a plain flag, not either checkbox's own
+        # widget key, since Streamlit forbids writing into a key whose widget
+        # already rendered this run and both checkboxes can be on screen at
+        # once.
+        assert at.session_state["_tour_dismissed"] is True
+
+
 def _two_tutorial_optout_checkboxes_app():
     """Stand-ins for the picker card and the running tutorial's own footer —
     the two real surfaces that render this same per-tutorial preference,

@@ -4389,7 +4389,9 @@ def render_plot_controls(
                 "then scaled to fit the column, so on-screen it is a touch "
                 "smaller). Default 10.",
             )
-        _hover_dis, _hover_reason = _mode_gate(animating, comparing, **_no_compare)
+        # Honoured by all three render paths (static, animation, and — since the
+        # comparison builders now take `fixation_hover_fields` too — Compare),
+        # so this one carries no `_mode_gate`.
         _labeled(
             st,
             "multiselect",
@@ -4397,12 +4399,8 @@ def render_plot_controls(
             options=hover_field_options(trial_fixations),
             key="global_fixation_hover_fields",
             persist_state="session",
-            disabled=_hover_dis,
-            help=_gated_help(
-                "Fields shown when hovering a fixation. Choose any retained "
-                "fixation column; order here is tooltip order.",
-                _hover_reason,
-            ),
+            help="Fields shown when hovering a fixation. Choose any retained "
+            "fixation column; order here is tooltip order.",
         )
         # When comparing two trials, the per-scanpath fixation styling lives
         # here (under the Fixation settings), not in a separate panel.
@@ -4735,7 +4733,9 @@ def render_plot_controls(
                 )
 
             st.divider()
-            _hover_dis, _hover_reason = _mode_gate(animating, comparing, **_no_compare)
+            # Honoured by all three render paths (static, animation, and — since
+            # the comparison builders now take `word_hover_fields` too —
+            # Compare), so this one carries no `_mode_gate`.
             _labeled(
                 st,
                 "multiselect",
@@ -4743,12 +4743,8 @@ def render_plot_controls(
                 options=hover_field_options(words, words=True),
                 key="global_word_hover_fields",
                 persist_state="session",
-                disabled=_hover_dis,
-                help=_gated_help(
-                    "Fields shown when hovering a word: identity, any reading "
-                    "measure, linguistic feature, or retained metadata column.",
-                    _hover_reason,
-                ),
+                help="Fields shown when hovering a word: identity, any reading "
+                "measure, linguistic feature, or retained metadata column.",
             )
 
     # --- Heatmap ----------------------------------------------------------

@@ -4273,6 +4273,7 @@ def _add_comparison_fixation_trace(
     show_colorbar: bool = False,
     colorbar_style: dict | None = None,
     fixation_symbol: str = DEFAULT_FIXATION_SYMBOL,
+    fixation_hover_fields: Sequence[str] | None = None,
     row: int | None = None,
     col: int | None = None,
 ) -> None:
@@ -4407,6 +4408,17 @@ def _add_comparison_fixation_trace(
     order_font["color"] = fix_color
     if order_font_size is not None:
         order_font["size"] = order_font_size
+    # VIZ-26 hover fields (the "Hover fields" multiselect under 👁️ Fixations)
+    # reach the comparison figure too — it used to hard-code Order/Time/Duration
+    # regardless of that setting, which is what made the control look inert
+    # while comparing. Same fallback list the static + animation builders use
+    # when nothing is explicitly chosen, so the three render paths agree.
+    hover_fields = (
+        ["order_in_trial", "duration_ms", "word_id"]
+        if fixation_hover_fields is None
+        else list(fixation_hover_fields)
+    )
+    customdata, hovertemplate = _hover_payload(trial_fix, hover_fields)
     _add(
         go.Scatter(
             x=trial_fix["x"],
@@ -4419,12 +4431,8 @@ def _add_comparison_fixation_trace(
             text=trial_fix["order_in_trial"] if show_order else None,
             textposition="top center",
             textfont=order_font,
-            hovertemplate=(
-                f"{display_name} "
-                "Order %{customdata[2]}<br>Time %{customdata[0]} ms<br>"
-                "Duration %{customdata[1]} ms<extra></extra>"
-            ),
-            customdata=trial_fix[["timestamp_ms", "duration_ms", "order_in_trial"]],
+            hovertemplate=f"{display_name} {hovertemplate}",
+            customdata=customdata,
         )
     )
 
@@ -4649,6 +4657,9 @@ def _make_split_comparison_figure(
     text_color = settings.text_color
     highlight_column = settings.highlight_column
     highlight_text_color = settings.highlight_text_color
+    word_hover_measure = settings.word_hover_measure
+    word_hover_fields = settings.word_hover_fields
+    fixation_hover_fields = settings.fixation_hover_fields
     background_color = settings.background_color
     line_spacing = settings.line_spacing
     scale_text_to_boxes = settings.scale_text_to_boxes
@@ -4869,6 +4880,7 @@ def _make_split_comparison_figure(
             show_colorbar=show_colorbars and idx == 0,
             colorbar_style=cb_style,
             fixation_symbol=fixation_symbol,
+            fixation_hover_fields=fixation_hover_fields,
             row=row,
             col=col,
         )
@@ -4897,6 +4909,8 @@ def _make_split_comparison_figure(
                 highlight_column=highlight_column,
                 text_color=text_color,
                 highlight_text_color=highlight_text_color,
+                word_hover_measure=word_hover_measure,
+                word_hover_fields=word_hover_fields,
             )
 
         xaxis_key = "xaxis" if idx == 0 else f"xaxis{idx + 1}"
@@ -5059,6 +5073,9 @@ def _render_comparison_figure(
     text_color = settings.text_color
     highlight_column = settings.highlight_column
     highlight_text_color = settings.highlight_text_color
+    word_hover_measure = settings.word_hover_measure
+    word_hover_fields = settings.word_hover_fields
+    fixation_hover_fields = settings.fixation_hover_fields
     background_color = settings.background_color
     line_spacing = settings.line_spacing
     scale_text_to_boxes = settings.scale_text_to_boxes
@@ -5231,6 +5248,7 @@ def _render_comparison_figure(
             show_colorbar=show_colorbars and _idx == 0,
             colorbar_style=cb_style,
             fixation_symbol=fixation_symbol,
+            fixation_hover_fields=fixation_hover_fields,
         )
         if show_words and draws_stimulus[_idx]:
             existing = list(fig.layout.shapes) if fig.layout.shapes else []
@@ -5253,6 +5271,8 @@ def _render_comparison_figure(
                 highlight_column=highlight_column,
                 text_color=text_color,
                 highlight_text_color=highlight_text_color,
+                word_hover_measure=word_hover_measure,
+                word_hover_fields=word_hover_fields,
             )
 
     shapes = list(fig.layout.shapes) if fig.layout.shapes else []

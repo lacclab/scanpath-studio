@@ -210,6 +210,35 @@ class TestTheLinkedStepEndToEnd:
         assert not at.exception, at.exception
         assert at.session_state["single_trial_id"] == expected_a
 
+    def test_bs_own_arrow_never_silently_reverts_b(self):
+        """The "sometimes only A moves" report.
+
+        B's own step wrote only the *label* (`single_compare_trial`), never
+        `_COMPARE_IDENTITY_KEY`. The very next run's by-identity reconciliation
+        — which exists so A's move relabelling B's pool (📄/👤 markers) doesn't
+        strand a stale label — then read the *pre-click* identity and silently
+        snapped B back to it, even though A had already moved on. Only visible
+        on the steps that happened to change one of B's markers, which is what
+        made it look intermittent rather than simply broken.
+        """
+        at = self._boot_compare()
+        at.checkbox(key=utils.COMPARE_STEP_LINK_KEY).set_value(True).run(timeout=90)
+        assert not at.exception, at.exception
+
+        seen_b = [self._compare_identity(at)]
+        seen_a = [at.session_state["single_trial_id"]]
+        for _ in range(6):
+            at.button(key="single_compare_next").click().run(timeout=90)
+            assert not at.exception, at.exception
+            seen_b.append(self._compare_identity(at))
+            seen_a.append(at.session_state["single_trial_id"])
+
+        stalls = [i for i in range(1, len(seen_b)) if seen_b[i] == seen_b[i - 1]]
+        assert not stalls, f"B silently reverted after click(s) {stalls}: {seen_b}"
+        assert len(set(seen_a)) == len(seen_a), (
+            f"A did not advance on every linked click: {seen_a}"
+        )
+
     # -- CMP-13 follow-up: "still jumps around" ------------------------------
     # Identity stepping was already correct — B landed on the right trial every
     # time. What leapt (10/23 → 22/23 in the report) was its *position*: the

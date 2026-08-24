@@ -1729,11 +1729,28 @@ def _render_compare_selector(
         # Mirror the slider to the current selection before it renders.
         st.session_state[pos_key] = current
 
+        def _remember_compare_identity(label: str) -> None:
+            # B is re-resolved by *identity* every run (line ~1697 below),
+            # because its labels are rebuilt relative to A and a stale label
+            # string stops matching the moment A's move changes a 📄/👤
+            # marker. That reconciliation reads `_COMPARE_IDENTITY_KEY` — so a
+            # write here that only sets `sel_key` (the label) leaves it
+            # pointing at the trial *before* the click, and the very next run
+            # silently snaps back to it while A has already moved. Both
+            # widget callbacks below write the identity alongside the label so
+            # the reconciliation always names where the click actually landed.
+            trial = label_to_trial.get(label)
+            if trial is not None:
+                st.session_state[_COMPARE_IDENTITY_KEY] = tuple(str(v) for v in trial)
+
         def _on_compare_slider() -> None:
             st.session_state[sel_key] = st.session_state[pos_key]
+            _remember_compare_identity(st.session_state[pos_key])
 
         def _step_compare(delta: int) -> None:
-            step_within(labels, sel_key, delta)
+            new_pos = step_within(labels, sel_key, delta)
+            if new_pos is not None:
+                _remember_compare_identity(labels[new_pos])
             # CMP-13: the link works in both directions — B's ◀ ▶ move A too.
             # A's ids are stable (they don't depend on B), so this steps A's
             # canonical key straight from the list its picker last rendered.

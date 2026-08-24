@@ -1359,7 +1359,14 @@ def _wizard_footer(host, *, disabled: bool, help_text: str, on_click=None) -> No
     (and shrink the empty `_rest` one) on a narrow screen — `_FOOTER_ROW_W`'s
     compact desktop width leaves each button too few pixels there, and "Save
     setup" / "Add dataset" wrap to two lines.
+
+    UX-113 also gave it a real `st.divider()` above — heavier and more spaced
+    than the mapping blocks' own hairline (`.sps-wiz-blockgap`) on purpose:
+    this is the one commit for the *whole* wizard, not the end of stage 5, and
+    it should read as a clear break rather than one more row under Recording
+    setup.
     """
+    host.divider()
     row = host.container(key="wizard_footer_row")
     save_col, add_col, _rest = row.columns(
         _FOOTER_ROW_W, gap="small", vertical_alignment="center"
@@ -1552,14 +1559,15 @@ def _wizard_setup_step(
         else _recalled("canvas_height", 1440)
     )
     if screen_mode == _SCREEN_KNOW:
-        canvas_w = screen_host.number_input(
+        w_col, h_col = screen_host.columns(2, gap="small")
+        canvas_w = w_col.number_input(
             "Width (px)",
             100,
             10000,
             int(canvas_w),
             key=f"{key_prefix}_setup_screen_w",
         )
-        canvas_h = screen_host.number_input(
+        canvas_h = h_col.number_input(
             "Height (px)",
             100,
             10000,

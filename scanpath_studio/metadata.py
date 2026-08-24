@@ -53,7 +53,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from .data import stable_id
+from .data import stable_id, trial_id_series, trial_mapping_columns
 
 # Source columns that plausibly hold the reader id, most explicit first. Shares
 # the spirit of `data.pick_column`'s candidate lists: first hit wins, and the
@@ -337,15 +337,26 @@ def infer_trial_id_column(frame: pd.DataFrame) -> str | None:
     return None
 
 
+def _trial_column_label(trial_column) -> str:
+    """Display form of a (possibly composite) trial-column mapping — joined
+    with " + ", matching how the wizard spells a composite trial id back out."""
+    return " + ".join(trial_mapping_columns(trial_column))
+
+
 def build_trial_metadata(
     frame: pd.DataFrame,
-    trial_column: str,
+    trial_column: str | list[str],
     participant_column: str | None = None,
     *,
     source_name: str = "trial metadata",
     keys: Iterable | None = None,
 ) -> TrialMetadata:
     """Validate a raw trial table into a registry + clean frame (DATA-29).
+
+    ``trial_column`` is a single column name, or **several** to build a unique
+    trial id on the fly (joined with ``_``, like the Trial ID mapping the
+    uploaded data itself uses — see :func:`data.trial_id_series`) — for a
+    table whose own trial id needs the same composite key the data does.
 
     The participant half of the key is **optional and explicit**: pass
     ``participant_column`` to key by reader *and* trial. ``keys`` is the set of
@@ -357,31 +368,40 @@ def build_trial_metadata(
     Mirrors :func:`build_participant_metadata` deliberately, including the rule
     that duplicate rows are only a problem when they *disagree*.
     """
+    trial_cols = trial_mapping_columns(trial_column)
+    label = _trial_column_label(trial_column)
     empty = TrialMetadata(
         pd.DataFrame(columns=["trial_id"]),
         (),
         source_name,
-        str(trial_column),
+        label,
         str(participant_column) if participant_column else None,
     )
-    if frame is None or frame.empty or trial_column not in frame.columns:
+    if (
+        frame is None
+        or frame.empty
+        or not trial_cols
+        or any(c not in frame.columns for c in trial_cols)
+    ):
         return empty
     if participant_column and participant_column not in frame.columns:
         participant_column = None
 
     work = frame.copy()
-    # `stable_id` — not a plain `.astype(str)` — so this table's own trial id
-    # is spelled the same way `data.normalize_*` spells the app's: a blank
-    # cell anywhere else in *this* file's trial-id column is enough to read it
-    # as floats ("101.0") against the data's "101", and the join below would
-    # silently match nothing (DATA-29's "no reading matched" is exactly this).
-    work["trial_id"] = stable_id(work[trial_column])
+    # `trial_id_series` — not a plain `.astype(str)` — so this table's own
+    # trial id is spelled the same way `data.normalize_*` spells the app's: a
+    # blank cell anywhere else in *this* file's trial-id column is enough to
+    # read it as floats ("101.0") against the data's "101", and the join below
+    # would silently match nothing (DATA-29's "no reading matched" is exactly
+    # this) — and a composite id is built the identical way (joined with "_",
+    # each part through `stable_id` first).
+    work["trial_id"] = trial_id_series(work, trial_column)
     work = work[work["trial_id"] != ""]
     if participant_column:
         work["participant_id"] = stable_id(work[participant_column])
         work = work[work["participant_id"] != ""]
     reserved = {
-        str(trial_column),
+        *trial_cols,
         str(participant_column) if participant_column else "",
         "trial_id",
         "participant_id",
@@ -436,7 +456,7 @@ def build_trial_metadata(
         clean,
         tuple(fields),
         source_name,
-        str(trial_column),
+        label,
         str(participant_column) if participant_column else None,
         JoinReport(
             matched=tuple(sorted(set(key_frame), key=str)),

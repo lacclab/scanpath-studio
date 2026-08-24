@@ -3255,6 +3255,11 @@ class TestGenericFilenamePowers:
             r"(?P<pid>p\d+)_(?P<trial>t\d+)_scan"
         )
         at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # UX-113: nothing is derived — or offered to map below — until Apply.
+        apply_btn = [b for b in at.button if b.key == "wizard_filename_apply"]
+        assert apply_btn, "Apply button not rendered"
+        apply_btn[0].click().run(timeout=60)
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # The regex-extracted columns are offered to map as ids…

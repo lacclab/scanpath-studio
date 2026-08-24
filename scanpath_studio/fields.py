@@ -60,7 +60,7 @@ def plain(text: str) -> str:
     return _WHITESPACE_RUN.sub(" ", _MD_MARKS.sub("", text)).strip()
 
 
-def row_label(host, label: str, help: str | None) -> None:
+def row_label(host, label: str, help: str | None, *, emphasis: bool = False) -> None:
     """Render one row's title into its own (left) column.
 
     ``help`` folds into the title's own hover tooltip rather than getting a `?`
@@ -73,18 +73,24 @@ def row_label(host, label: str, help: str | None) -> None:
     for a form whose every row hides its description there. The CSS one opens in
     ~120 ms, matching the `?` icons Streamlit draws elsewhere. ``aria-label``
     keeps the text reachable now that no ``title`` carries it.
+
+    ``emphasis`` (UX-113) adds ``.sps-flabel-emph`` — bolder and a touch
+    larger than the ordinary field title, for a row that should stand out
+    among plainer ones on the same screen (the upload wizard's own table
+    titles among their neighbouring mapping fields).
     """
     text = plain(label)
+    emph = " sps-flabel-emph" if emphasis else ""
     if not help:
         host.markdown(
-            f'<span class="sps-flabel">{html.escape(text)}</span>',
+            f'<span class="sps-flabel{emph}">{html.escape(text)}</span>',
             unsafe_allow_html=True,
         )
         return
     tip = html.escape(f"{text} — {plain(help)}", quote=True)
     host.markdown(
         f'<span class="sps-fhelp" data-tip="{tip}" aria-label="{tip}">'
-        f'<span class="sps-flabel sps-flabel-help">{html.escape(text)}</span>'
+        f'<span class="sps-flabel sps-flabel-help{emph}">{html.escape(text)}</span>'
         "</span>",
         unsafe_allow_html=True,
     )

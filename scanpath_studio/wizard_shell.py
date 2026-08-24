@@ -100,21 +100,6 @@ STEPS: tuple[WizardStep, ...] = (
 
 STEPS_BY_ID: dict[str, WizardStep] = {s.id: s for s in STEPS}
 
-#: The two sub-topics still kept as `section()` headings, nested inside part 3
-#: ("Map data fields") — everything else that used to live here (`setup`,
-#: `fields`) is now a `STEPS` entry of its own (UX-113).
-#: `readers` is deliberately absent (UX-53 r6): the participant table is one
-#: uploader among four, not a stage, so it renders with the other uploads under
-#: no heading of its own. Its explanation lives on its uploader's label.
-SECTION_TITLES: dict[str, str] = {
-    "identity": "Trials & readers",
-    # UX-104: what is left in this section is the raw-gaze table's own fields,
-    # so it is named for them. It was "Fixation features" from UX-53 r7, when
-    # the fixation fields still led it; they have since moved up into the
-    # per-table block, and char-AOI aggregation followed them.
-    "geometry": "Raw gaze",
-}
-
 
 def open_key(step_id: str) -> str:
     """Session key holding whether ``step_id``'s expander is open."""
@@ -126,7 +111,7 @@ def part_key(step_id: str) -> str:
     return f"wiz_part_{step_id}"
 
 
-def part(host, step: WizardStep, *, status: StepStatus | None = None):
+def part(host, step: WizardStep, *, status: StepStatus | None = None, trailing=None):
     """One linear part of the wizard: a minimal headline, then its body.
 
     UX-53 r8. The parts run in a fixed order — there is nothing to map before a
@@ -134,14 +119,26 @@ def part(host, step: WizardStep, *, status: StepStatus | None = None):
     no open state, and therefore none of the DATA-19 / DATA-22 collapse
     machinery. It costs one line, which is the point; the previous shapes spent
     a header and a click each on a sequence with no choices in it.
+
+    ``trailing`` (UX-113), when given, is called with a column beside the
+    title — e.g. stage 2's "↩️ Restore a saved setup" popover trigger — so it
+    reads as part of the title line instead of as the first thing in the body.
+    Only the title line splits; the returned body container stays full width.
     """
     box = host.container(key=part_key(step.id))
     mark = f"{badge(status)} " if status else ""
-    box.markdown(
+    title_html = (
         f'<div class="sps-wiz-part"><span class="sps-wiz-part-n">{step.number}</span>'
-        f"{mark}{html.escape(step.title)}</div>",
-        unsafe_allow_html=True,
+        f"{mark}{html.escape(step.title)}</div>"
     )
+    if trailing is not None:
+        title_col, trailing_col = box.columns(
+            [0.6, 0.4], gap="small", vertical_alignment="center"
+        )
+        title_col.markdown(title_html, unsafe_allow_html=True)
+        trailing(trailing_col)
+    else:
+        box.markdown(title_html, unsafe_allow_html=True)
     return box.container()
 
 
@@ -230,39 +227,6 @@ def step_panel(host, step: WizardStep, status: StepStatus, *, active: bool):
         key=open_key(step.id),
         on_change="rerun",
     )
-
-
-def section(host, section_id: str, *, status: StepStatus | None = None, caption=""):
-    """One topic, rendered as a **line title** rather than a panel.
-
-    UX-53: the former steps became sections, and a disclosure per topic was the
-    thing making the page long — you cannot see the mapping you are checking
-    against the mapping you just set. A heading costs one line, always shows its
-    fields, and (unlike the expander it replaces) has no open state to remount,
-    so none of the DATA-19 / DATA-22 collapse hazards apply.
-
-    Round 3: ``caption`` no longer prints. Explanatory prose is **hover-only** —
-    it rides the heading as a `.sps-fhelp` tooltip (the same CSS mechanism
-    UX-51 uses for the rail's field labels, which beats the browser's native
-    `title=` because that waits ~1s). The words are still there for whoever
-    wants them; they just stop costing a line each on a page whose whole
-    problem was length.
-    """
-    title = SECTION_TITLES.get(section_id, section_id)
-    mark = f"{badge(status)} " if status else ""
-    if caption:
-        host.markdown(
-            f'<div class="sps-wiz-section">{mark}'
-            f'<span class="sps-fhelp" data-tip="{html.escape(caption, quote=True)}">'
-            f"{html.escape(title)}</span></div>",
-            unsafe_allow_html=True,
-        )
-    else:
-        host.markdown(
-            f'<div class="sps-wiz-section">{mark}{html.escape(title)}</div>',
-            unsafe_allow_html=True,
-        )
-    return host.container()
 
 
 def continue_button(host, step: WizardStep, *, label: str = "Continue →") -> None:

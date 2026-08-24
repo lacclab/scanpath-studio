@@ -641,60 +641,85 @@ def _render_identity_field(
         mark_missing_cells(missing_cells)
 
 
+#: UX-113 — session key holding the *committed* filename-derive settings
+#: (mode/delimiter/pattern/lower). Kept separate from the live widget keys
+#: below so editing the delimiter or regex doesn't silently change what is
+#: actually derived — only clicking Apply does.
+_FILENAME_DERIVE_APPLIED_KEY = "wizard_filename_applied"
+
+#: A worked example rather than a blank box — shown as the regex field's own
+#: starting value (edit or replace it) and repeated in its help text so the
+#: two stay in sync.
+_FILENAME_REGEX_EXAMPLE = r"(?P<session>\d+_\w+_ET\d)_.*_(?P<stimulus>.+)_scanpath"
+
+
 def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
     """Optional step: derive columns from the captured ``source_file`` so a trial
     / participant id that lives only in the file name can be mapped.
 
     Two modes: split into positional ``file_part_N`` columns on a delimiter, or
     extract *named groups* with a regex (robust to variable-length parts, e.g. a
-    stimulus name whose length varies). Returns the (possibly augmented) frames so
-    the identifier pickers below see the new columns. No-op unless enabled."""
-    body.caption(
-        "When identity lives in the file name (no column carries it), the "
-        "uploaded filename is captured as `source_file` — derive columns from it "
-        "to map as the Trial or Participant id below."
+    stimulus name whose length varies). Nothing is derived, and nothing becomes
+    mappable below, until **Apply** — the settings here are a draft until then,
+    so retyping a regex mid-thought never silently changes the committed
+    columns. Returns the (possibly augmented) frames so the identifier pickers
+    below see the new columns; a no-op while the toggle is off.
+    """
+    toggle_col, controls_col = body.columns(
+        [0.26, 0.74], gap="small", vertical_alignment="center"
     )
-    if not body.toggle(
+    enabled = toggle_col.toggle(
         "Derive columns from the filename",
         key="wizard_filename_split",
-        help="Adds columns parsed from source_file (e.g. session, stimulus) you "
-        "can then map as ids.",
-    ):
+        help=(
+            "When identity lives only in the file name — no column carries "
+            "it — the uploaded filename is already captured as `source_file`. "
+            "Turn this on to derive real columns from it (e.g. session, "
+            "stimulus) that you can then map as the Trial or Participant id "
+            "below: split it on a delimiter into positional columns, or pull "
+            "out named regex groups for parts of variable length (e.g. a "
+            "stimulus name)."
+        ),
+    )
+    if not enabled:
         return raw_words, raw_fix, raw_gaze
 
-    mode = body.radio(
+    mode_col, input_col, lower_col, apply_col = controls_col.columns(
+        [0.2, 0.38, 0.2, 0.16], gap="small", vertical_alignment="bottom"
+    )
+    mode = mode_col.selectbox(
         "How",
         ["Split on a delimiter", "Regex named groups"],
         key="wizard_filename_mode",
-        horizontal=True,
+        label_visibility="collapsed",
+        help="How to pull columns out of the filename.",
     )
     pattern = ""
+    lower = False
     if mode == "Split on a delimiter":
         delimiter = (
-            body.text_input(
+            input_col.text_input(
                 "Delimiter",
                 value="_",
                 key="wizard_filename_delim",
                 max_chars=8,
+                label_visibility="collapsed",
                 help="Character(s) to split the filename on — e.g. "
                 "`reader0_b0_scanpath` → reader0 / b0 / scanpath.",
             )
             or "_"
         )
-        out = [
-            split_source_file(fr, delimiter=delimiter) if not fr.empty else fr
-            for fr in (raw_words, raw_fix, raw_gaze)
-        ]
     else:
-        pattern = body.text_input(
+        pattern = input_col.text_input(
             "Regex (named groups)",
-            value="",
+            value=_FILENAME_REGEX_EXAMPLE,
             key="wizard_filename_regex",
-            help=r"e.g. `(?P<session>\d+_\w+_ET\d)_.*_(?P<stimulus>.+)_scanpath` — "
-            "each named group becomes a column.",
+            label_visibility="collapsed",
+            help=f"e.g. `{_FILENAME_REGEX_EXAMPLE}` — each named group becomes "
+            "a column. Edit this to match your own filenames.",
         )
-        lower = body.toggle(
-            "Lowercase extracted values",
+        lower = lower_col.toggle(
+            "Lowercase",
             key="wizard_filename_regex_lower",
             help="Fold case so a value matches across tables (e.g. CamelCase "
             "scanpath names vs lowercase AOI names).",
@@ -703,27 +728,58 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
             try:
                 re.compile(pattern)
             except re.error as exc:
-                body.error(f"Invalid regex: {exc}")
-                return raw_words, raw_fix, raw_gaze
-            # A group named after an existing column would be skipped (real data
-            # wins) — flag it so the user renames the group instead of silently
-            # getting the original column.
-            collisions = sorted(
-                {
-                    c
-                    for fr in (raw_words, raw_fix, raw_gaze)
-                    if not fr.empty
-                    for c in source_file_regex_collisions(fr, pattern)
-                }
-            )
-            if collisions:
-                body.warning(
-                    "These group names already exist as columns and were left "
-                    f"untouched: {', '.join(collisions)}. Rename the group(s) to "
-                    "extract them."
-                )
+                controls_col.error(f"Invalid regex: {exc}")
+                pattern = ""
+
+    apply_clicked = apply_col.button(
+        "Apply",
+        key="wizard_filename_apply",
+        width="stretch",
+        disabled=mode == "Regex named groups" and not pattern,
+        help="Derive the columns above and make them available to map below.",
+    )
+    if apply_clicked:
+        st.session_state[_FILENAME_DERIVE_APPLIED_KEY] = {
+            "mode": mode,
+            "delimiter": delimiter if mode == "Split on a delimiter" else None,
+            "pattern": pattern if mode != "Split on a delimiter" else None,
+            "lower": lower,
+        }
+
+    applied = st.session_state.get(_FILENAME_DERIVE_APPLIED_KEY)
+    if not applied:
+        return raw_words, raw_fix, raw_gaze
+
+    if applied["mode"] == "Split on a delimiter":
         out = [
-            extract_columns_from_source_file(fr, pattern, lowercase=lower)
+            split_source_file(fr, delimiter=applied["delimiter"])
+            if not fr.empty
+            else fr
+            for fr in (raw_words, raw_fix, raw_gaze)
+        ]
+    else:
+        applied_pattern = applied["pattern"]
+        # A group named after an existing column would be skipped (real data
+        # wins) — flag it so the user renames the group instead of silently
+        # getting the original column.
+        collisions = sorted(
+            {
+                c
+                for fr in (raw_words, raw_fix, raw_gaze)
+                if not fr.empty
+                for c in source_file_regex_collisions(fr, applied_pattern)
+            }
+        )
+        if collisions:
+            body.warning(
+                "These group names already exist as columns and were left "
+                f"untouched: {', '.join(collisions)}. Rename the group(s) and "
+                "Apply again to extract them."
+            )
+        out = [
+            extract_columns_from_source_file(
+                fr, applied_pattern, lowercase=applied["lower"]
+            )
             if not fr.empty
             else fr
             for fr in (raw_words, raw_fix, raw_gaze)
@@ -731,13 +787,31 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
 
     raw_words, raw_fix, raw_gaze = out
     preview = raw_fix if not raw_fix.empty else raw_words
-    if mode == "Split on a delimiter":
+    if applied["mode"] == "Split on a delimiter":
         new_cols = [c for c in preview.columns if c.startswith(FILE_PART_PREFIX)]
-    elif pattern:
-        new_cols = [c for c in re.compile(pattern).groupindex if c in preview.columns]
     else:
-        new_cols = []
+        new_cols = [
+            c for c in re.compile(applied["pattern"]).groupindex if c in preview.columns
+        ]
     if new_cols:
+        # UX-113: publish the derived columns into each table's own header
+        # stash. `column_mapping_ui` offers `col_map_<slug>_header` over the
+        # live frame's own columns (PERF-6's narrow-parse plan), which is the
+        # *file's* header stashed at upload time — so a column synthesized in
+        # memory afterwards, like these, never showed up in the picker below
+        # even though the frame itself already carried it.
+        for prefix, fr in (
+            ("col_map_words", raw_words),
+            ("col_map_fix", raw_fix),
+            ("col_map_raw_gaze", raw_gaze),
+        ):
+            if fr.empty:
+                continue
+            header_key = f"{prefix}_header"
+            header = list(st.session_state.get(header_key) or fr.columns)
+            missing = [c for c in new_cols if c not in header]
+            if missing:
+                st.session_state[header_key] = [*header, *missing]
         body.caption("Derived columns (first rows) — map them as ids below:")
         body.dataframe(
             preview[[SOURCE_FILE_COLUMN, *new_cols]].drop_duplicates().head(),
@@ -1280,8 +1354,14 @@ def _wizard_footer(host, *, disabled: bool, help_text: str, on_click=None) -> No
     same size and the same colour. ✅ Add dataset is `primary` on every path:
     it is the page's one commit, and #UX-66 r2 already paired ✕ Cancel with it
     in the same filled blue, as the two ends of one decision.
+
+    UX-113: the row is keyed so `styles.py` can widen the two button columns
+    (and shrink the empty `_rest` one) on a narrow screen — `_FOOTER_ROW_W`'s
+    compact desktop width leaves each button too few pixels there, and "Save
+    setup" / "Add dataset" wrap to two lines.
     """
-    save_col, add_col, _rest = host.columns(
+    row = host.container(key="wizard_footer_row")
+    save_col, add_col, _rest = row.columns(
         _FOOTER_ROW_W, gap="small", vertical_alignment="center"
     )
     _render_setup_download(save_col)
@@ -2045,12 +2125,10 @@ _FIX_ROW2_W = (0.09, 0.2275, 0.2275, 0.2275, 0.2275)
 #: the box gets most of the row, Line index the rest (UX-55 r3).
 _AOI_ROW2_W = (0.09, 0.73, 0.18)
 
-#: One line under the *Trials & readers* heading, in place of the paragraph the
-#: step used to carry. UX-53's brief was "display less text".
-_IDENTITY_CAPTION = (
-    "Which columns identify a trial, and who read it. Everything else on this "
-    "page hangs off the trial id."
-)
+#: Row 2 of the Raw gaze block (UX-113): X · Y · Timestamp — no Duration, raw
+#: gaze has no such concept (unlike row 1, which reuses `_ID_ROW1_W` outright:
+#: same six identity fields, same shape as Fixations/AOI above it).
+_RAW_GAZE_ROW2_W = (0.09, 0.3033, 0.3033, 0.3034)
 
 
 def _hover_note(host, label: str, note: str, *, link: str = "") -> None:
@@ -2175,27 +2253,6 @@ def _mapping_label(mapping) -> str | None:
     if isinstance(mapping, (list, tuple)):
         return " + ".join(str(c) for c in mapping) or None
     return str(mapping)
-
-
-def _render_setup_provenance_note(host, snapshot: SetupSnapshot) -> None:
-    """What the recording setup implies, in one line.
-
-    UX-53 removed the review *table* this used to close — every decision it
-    listed is now stated beside the control that makes it. These two captions
-    are not: they are derived from the setup as a whole, and the SKIPPED branch
-    is the point at which an assumed monitor stops being invisible (DATA-2), so
-    they survive the table that carried them.
-    """
-    if snapshot.geometry_provenance is Provenance.SKIPPED:
-        host.caption(
-            "Visual-angle units (px per degree) are hidden for this dataset — the "
-            "physical size was skipped, so there is nothing honest to derive them "
-            "from."
-        )
-    elif snapshot.px_per_degree is not None:
-        host.caption(
-            f"≈ **{snapshot.px_per_degree:.1f} px** per degree of visual angle."
-        )
 
 
 def _setup_group_value(snapshot: SetupSnapshot, group: str) -> str:
@@ -2324,7 +2381,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # numbered headline, no expander — and `step_panel`'s bold-heading
     # degradation in the collapsed *Data & mapping* review panel, which is
     # itself an expander and so can nest neither.
-    def _part(step_id: str):
+    def _part(step_id: str, *, trailing=None):
         step = wizard_shell.STEPS_BY_ID[step_id]
         status = statuses.get(step_id, wizard_shell.StepStatus.TODO)
         if active:
@@ -2332,7 +2389,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             # expander that changes label remounts collapsed); the headline was
             # the last place a ⚠️ could nag about a field visible on the same
             # screen.
-            return wizard_shell.part(body, step)
+            return wizard_shell.part(body, step, trailing=trailing)
         return wizard_shell.step_panel(body, step, status, active=False)
 
     # UX-53 r8 / UX-113: the dataset's **name** is its own numbered stage — it
@@ -2341,7 +2398,24 @@ def _render_data_setup(active: bool) -> _UploadResult:
     s_name = _part("name")
     _wizard_name_header(s_name, active)
 
-    s1 = _part("data")
+    def _render_restore_trigger(host) -> None:
+        # UX-113: beside stage 2's title, not buried under the three uploads —
+        # restoring is an alternative *starting point* for the stage, not a
+        # fourth table.
+        restore_box = host.popover("↩️ Restore a saved setup (optional)")
+        _wizard_restore_config(restore_box)
+        _render_restored_config_caption(restore_box)
+
+    # Restoring a config seeds `col_map_*` keys, which mean nothing on the
+    # MultiplEYE branch (no column mapping there) — read from state, same as
+    # the format-dispatch check below, since the picker itself hasn't
+    # (re-)rendered yet at this point in the script.
+    _generic_format = (
+        st.session_state.get("wizard_dataset_format", "Generic") != "MultiplEYE"
+    )
+    s1 = _part(
+        "data", trailing=_render_restore_trigger if active and _generic_format else None
+    )
     s_map = _part("mapping")
 
     # === 1 · Upload data files ===============================================
@@ -2395,7 +2469,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # UX-113: the title reads like every mapping field's — dotted underline,
         # the description on hover (`.sps-fhelp`) — instead of Streamlit's own
         # label + native (~1s) help tooltip.
-        inline_field_label(host, label, help_text)
+        inline_field_label(host, label, help_text, emphasis=True)
         frame = app._read_uploaded_frame(
             uploader_label=label,
             upload_help=help_text,
@@ -2448,9 +2522,6 @@ def _render_data_setup(active: bool) -> _UploadResult:
         multi=False,
         noun="gaze points",
     )
-    restore_box = s1.popover("↩️ Restore a saved setup (optional)")
-    _wizard_restore_config(restore_box)
-    _render_restored_config_caption(restore_box)
 
     def _render_metadata_uploads(word_schema, fix_schema) -> None:
         """DATA-20/DATA-29's participant + trial tables, peers of the uploads
@@ -2480,19 +2551,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
             host=s1.container(),
         )
 
-    if raw_words.empty and raw_fix.empty and raw_gaze.empty:
-        # UX-113: nothing to map yet, but the participant/trial uploaders are
-        # still peers of the three tables above — render them here too, rather
-        # than exiting before stage 2 is complete.
-        _render_metadata_uploads({}, {})
-        return _UploadResult(
-            empty_words_frame(),
-            empty_fixations_frame(),
-            pd.DataFrame(),
-            raw_words,
-            raw_fix,
-            [],
-        )
+    # UX-113: stages 3-5 render unconditionally now, rather than exiting here
+    # before any of them exist — every `has_words`/`has_fix`/`raw_gaze.empty`
+    # guard below already tolerates all three being empty (the same guards the
+    # raw-gaze-only path needed), so there is nothing left to special-case.
+    nothing_uploaded = raw_words.empty and raw_fix.empty and raw_gaze.empty
 
     prop_w = (
         _c_propose_word_schema(raw_words, frame_fingerprint(raw_words))
@@ -2528,11 +2591,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
     sections_host = s_map.container()
     counts_host = s_map.container()
 
-    s2 = wizard_shell.section(
-        sections_host,
-        "identity",
-        caption=_IDENTITY_CAPTION,
-    )
+    # UX-113: no heading — it is the first, usually only thing under "3 Map
+    # data fields" now that `setup`/`fields` are their own stages (only a
+    # raw-gaze upload adds a second, titled "Raw gaze" section below), so a
+    # sub-heading here just repeated the stage title above it.
+    s2 = sections_host.container()
     # Filename derivation must run *before* the identifier pickers so the
     # derived columns are mappable below. UX-53 took it out of its popover —
     # "advanced" is a reason to place a control last, not to hide it behind a
@@ -2547,6 +2610,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
             raw_fix,
             raw_gaze,
         )
+        # UX-113: the same hairline the Fixations/AOI blocks use between each
+        # other, so this section reads as its own block too, not a run-on
+        # continuation of the Fixations row it sits directly above.
+        s2.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
 
     if has_words or has_fix:
         # UX-55 r4: one block per table, two lines — row 1 is identity, row 2
@@ -2776,39 +2843,52 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 "box.",
             )
 
-    # UX-104 — the raw-gaze section renders only when there is a raw-gaze
-    # table. It used to carry the char-AOI toggle as well, so it always had
-    # something in it; with that moved up beside the AOI fields it describes,
-    # a dataset without gaze samples would otherwise get a heading over
-    # nothing.
+    # UX-104 — the raw-gaze block renders only when there is a raw-gaze table.
+    # UX-113: same "name column + evenly split pickers" grid as the Fixations/
+    # AOI blocks above (a single generic `column_mapping_ui` grid read as a
+    # cramped, differently-shaped block beside them) — no section heading of
+    # its own, for the same reason identity's lost "Trials & readers": the row
+    # name ("Raw gaze") already says what it is.
     if not raw_gaze.empty:
-        s3 = wizard_shell.section(
-            sections_host,
-            "geometry",
-            caption="The gaze-sample table's own columns.",
+        s3 = sections_host.container()
+        if has_words or has_fix:
+            # A hairline under the identity block above, same as the gap
+            # between the Fixations and AOI blocks — nothing to separate from
+            # on a raw-gaze-only upload, where this is the first block.
+            s3.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
+        # Row 1: Trial ID · Screen ID · Participant ID · Text ID · Word/IA ID ·
+        # Word text/label — same six-cell grid, same field order, as the
+        # Fixations/AOI row above.
+        rg_row1 = s3.columns(_ID_ROW1_W, gap="small", vertical_alignment="center")
+        rg_row1[0].markdown(
+            '<div class="sps-id-row-name">Raw gaze</div>', unsafe_allow_html=True
         )
-        rg_host = s3.container()
-        rg_host.markdown(
-            '<div class="sps-wiz-subhead">Raw gaze features</div>',
-            unsafe_allow_html=True,
-        )
-        raw_gaze_schema = _map_section(
-            raw_gaze,
-            RAW_GAZE_FIELD_SPECS,
-            prop_g,
-            "col_map_raw_gaze",
-            rg_host,
-            [
-                "participant",
-                "trial",
-                "screen_id",
-                "x",
-                "y",
-                "timestamp",
-                "text",
-            ],
-            per_row=8,
-        )
+        # Row 2: X · Y · Timestamp — no Duration, raw gaze has no such concept.
+        rg_row2 = s3.columns(_RAW_GAZE_ROW2_W, gap="small", vertical_alignment="bottom")
+        raw_gaze_schema: dict = {}
+        row1_keys = ["trial", "screen_id", "participant", "text_id", "word_id", "text"]
+        for cell, key in zip(rg_row1[1:], row1_keys):
+            raw_gaze_schema.update(
+                _map_section(
+                    raw_gaze,
+                    RAW_GAZE_FIELD_SPECS,
+                    prop_g,
+                    "col_map_raw_gaze",
+                    cell,
+                    [key],
+                )
+            )
+        for cell, key in zip(rg_row2[1:], ["x", "y", "timestamp"]):
+            raw_gaze_schema.update(
+                _map_section(
+                    raw_gaze,
+                    RAW_GAZE_FIELD_SPECS,
+                    prop_g,
+                    "col_map_raw_gaze",
+                    cell,
+                    [key],
+                )
+            )
     else:
         raw_gaze_schema = {}
 
@@ -2881,15 +2961,16 @@ def _render_data_setup(active: bool) -> _UploadResult:
     setup_blockers = [
         SETUP_GROUP_LABELS[g] for g, p in setup_snapshot.provenance.items() if p is None
     ]
-    blocked = bool(problems) or bool(setup_blockers)
+    # `nothing_uploaded` is its own term (not folded into `problems`/
+    # `setup_blockers`): a restored setup config can answer every group with
+    # nothing uploaded, which must still block — there is nothing to add.
+    blocked = nothing_uploaded or bool(problems) or bool(setup_blockers)
 
     # UX-53 dropped the review table. Every figure in it is now stated where it
     # is decided — row counts beside each upload, the trial count under the trial
     # picker (`_wizard_trial_step`), the mapped column beside its own field, and
     # each setup value beside its provenance radio. Repeating them here made a
     # second screen out of things the user had just read.
-    if active:
-        _render_setup_provenance_note(s6, setup_snapshot)
 
     # UX-88: no "Still to do" list, and no status badges on the part headlines
     # or section headings above. The page said the same thing three times — a
@@ -3068,7 +3149,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
             disabled=blocked,
             on_click=_finalize_wizard_dataset,
             help_text=(
-                "Answer the Recording setup section first: " + ", ".join(setup_blockers)
+                "Upload a Fixations, Words/IA, or Raw gaze table above to get started."
+                if nothing_uploaded
+                else "Answer the Recording setup section first: "
+                + ", ".join(setup_blockers)
                 if setup_blockers
                 else "Store this dataset and switch to it."
             ),

@@ -679,6 +679,14 @@ def get_app_css() -> str:
         text-underline-offset: 3px;
         cursor: help;
     }
+    /* UX-113 — a title that should stand out among plainer field titles on the
+       same screen (the upload wizard's own table titles: Fixations, Words/IA,
+       Raw gaze, Participant/Trial metadata). Bolder and a touch larger than
+       the ordinary `.sps-flabel`, short of a full heading. */
+    .sps-flabel-emph {
+        font-weight: 700;
+        font-size: 1.05rem;
+    }
     /* …and the tooltip it opens. Deliberately NOT the browser's native `title=`
        (UX-51 shipped that first): a native tooltip waits about a second, which
        reads as broken when every row in a dense form keeps its description
@@ -770,6 +778,38 @@ def get_app_css() -> str:
         font-size: 0.8rem;
         font-weight: 700;
     }
+    /* UX-113 — `_FOOTER_ROW_W`'s compact desktop ratio (1.4 : 1.4 : 8 rest,
+       matching the ✕ Cancel width elsewhere) gives each button column too few
+       pixels to keep "Save setup" / "Add dataset" on one line, at any width
+       (not only a mobile one — the ratio itself is the problem). Streamlit
+       sets each `stColumn`'s own `flex: 1 1 calc(<share>% - Npx)` via a real
+       stylesheet class (not inline), so a bare `min-width` floor doesn't just
+       clamp the final size — the flex-grow redistribution the browser then
+       runs (still 1 for every column) hands the two button columns most of
+       the row instead. Pinning the button columns to a fixed,
+       ungrowing/unshrinking `flex-basis` sidesteps that fight, but leaving
+       the empty third (`_rest`) column flexible then wraps it onto an
+       invisible second line (an empty flex item, `flex-wrap`'s default) —
+       harmless (zero height) but it pads the row with dead space below the
+       buttons. Collapsing `_rest` to zero instead avoids that: three fixed
+       widths always fit the first line, so nothing wraps. `!important`
+       because these override Streamlit's own stylesheet `flex`. */
+    .st-key-wizard_footer_row [data-testid="stHorizontalBlock"] {
+        flex-wrap: nowrap !important;
+    }
+    .st-key-wizard_footer_row [data-testid="stColumn"]:nth-of-type(1),
+    .st-key-wizard_footer_row [data-testid="stColumn"]:nth-of-type(2) {
+        flex: 0 0 10.5rem !important;
+        width: 10.5rem !important;
+        min-width: 10.5rem !important;
+    }
+    .st-key-wizard_footer_row [data-testid="stColumn"]:nth-of-type(3) {
+        flex: 0 0 0 !important;
+        width: 0 !important;
+        min-width: 0 !important;
+        padding: 0 !important;
+    }
+
     /* The dataset name leads the wizard and names the whole thing, so it is set
        larger than an ordinary field rather than looking like the first of them. */
     .st-key-wiz_name_box input {
@@ -897,15 +937,33 @@ def get_app_css() -> str:
     }
     [class*="st-key-"][class*="_cell_confirm"] button p { font-size: 0.95rem; }
 
-    /* UX-89 — the hairline between the Fixations block and the AOI block. The
-       mapping is grouped by *table* now (each table's identity row and its
-       feature row together), so the only thing separating the two groups is
-       this: one line, deliberately fainter and far tighter than `st.divider`,
-       whose margins would reintroduce the vertical cost the page keeps
-       fighting. */
+    /* UX-89 — the hairline between the Fixations block and the AOI block (and,
+       since UX-113, every other block boundary in stage 3: filename-derive vs.
+       Fixations, Raw gaze vs. whatever sits above it). The mapping is grouped
+       by *table* now (each table's identity row and its feature row together),
+       so the only thing separating two blocks is this: one line, deliberately
+       fainter and far tighter than `st.divider`, whose margins would
+       reintroduce the vertical cost the page keeps fighting. UX-113 gave it
+       more room underneath, so the line reads as a clear break between blocks
+       rather than sitting glued to the one below it. */
     .sps-wiz-blockgap {
         border-top: 1px solid var(--sps-line, rgba(128, 128, 128, 0.22));
-        margin: 0.55rem 0 0.35rem;
+        margin: 0.55rem 0 1rem;
+    }
+
+    /* UX-113 — the filename-derive row's Apply button: a gentle tint of the
+       app's own accent (the same tokens the code chips and tab hover use),
+       not the loud filled `primary` blue reserved for the page's one commit
+       (✅ Add dataset). */
+    .st-key-wizard_filename_apply button {
+        background: var(--sps-accent-soft);
+        border-color: var(--sps-accent-border);
+        color: var(--sps-accent);
+    }
+    .st-key-wizard_filename_apply button:hover {
+        background: var(--sps-accent-border);
+        border-color: var(--sps-accent);
+        color: var(--sps-accent);
     }
 
     /* UX-75 — the chip line's title cell: the reading this strip belongs to,

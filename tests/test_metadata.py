@@ -746,7 +746,6 @@ class TestTheWizardStep:
             "Recording setup",
         ]
         assert "readers" not in wizard_shell.STEPS_BY_ID
-        assert "readers" not in wizard_shell.SECTION_TITLES
 
         # …and its body is the participant-table panel: the id-column picker is
         # the widget that only exists once a table is being attached, so the

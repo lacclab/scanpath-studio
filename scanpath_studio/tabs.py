@@ -8530,7 +8530,9 @@ def _participant_metadata_body(participants) -> None:
         "then behave like fields in the data: filters, chips, trial sorting, "
         "inspection and export. CSV / TSV / Parquet / Excel."
     )
-    inline_field_label(st, "Participant metadata table (optional)", _pm_help)
+    inline_field_label(
+        st, "Participant metadata table (optional)", _pm_help, emphasis=True
+    )
     upload = st.file_uploader(
         "Participant metadata table (optional)",
         type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
@@ -8670,11 +8672,10 @@ def _clear_trial_metadata() -> None:
         md.TRIAL_RAW_SESSION_KEY,
         md.TRIAL_FILE_SESSION_KEY,
         _TM_NAME_KEY,
-        # …and the two key pickers, so a different table uploaded next starts
-        # from its own auto-detect rather than from a column name that belonged
-        # to the one just detached.
+        # …and the key picker, so a different table uploaded next starts from
+        # its own auto-detect rather than from a column name that belonged to
+        # the one just detached.
         "trial_metadata_id_column",
-        "trial_metadata_participant_column",
     ):
         st.session_state.pop(key, None)
     # The uploader's own key — the participant twin has carried this line
@@ -8691,26 +8692,27 @@ def render_trial_metadata_section(combos, *, host=None) -> None:
     """DATA-29 — attach a trial-level table and report the join.
 
     The sibling of :func:`render_participant_metadata_section`, and deliberately
-    the same shape: nothing is guessed, the key columns are offered pre-filled
+    the same shape: nothing is guessed, the key column is offered pre-filled
     but overridable, and the join is reported in full before the fields go
     anywhere.
 
-    **The key is the user's call, not an inference.** A table keyed by trial id
-    alone describes a *text*, and every reading of that text inherits its row; a
-    table keyed by reader *and* trial describes one *reading*. Nothing in a file
-    says which world a corpus is in, so the reader column is a picker with an
-    explicit *(none)* — defaulting to unset, the trial-grain reading, rather
-    than auto-filling from any plausible column, because guessing wrong here
-    silently changes what every filter built on it means.
+    **UX-113 — trial id only, no reader column.** A table keyed by trial id
+    alone describes a *text*, and every reading of that text inherits its
+    row; a table keyed by reader *and* trial describes one *reading* — but
+    this UI only ever attaches the first kind now. The picker itself is a
+    multiselect, exactly like the uploaded data's own Trial ID mapping: pick
+    one column, or several to build a unique id on the fly (joined with "_"
+    via :func:`data.trial_id_series`, through :func:`metadata.build_trial_metadata`).
+    A row-per-reading table still reaches the app headlessly, via
+    ``--trial-metadata-reader-column`` (:func:`api.load_trial_metadata`),
+    which keeps the ``participant_column`` parameter this screen no longer
+    exposes.
     """
     if host is not None:
         with host:
             _trial_metadata_body(combos)
         return
     _trial_metadata_body(combos)
-
-
-_TRIAL_META_NONE = "(none — one row per trial)"
 
 
 def _trial_metadata_body(combos) -> None:
@@ -8723,7 +8725,7 @@ def _trial_metadata_body(combos) -> None:
         "behave like fields in the data: filters, chips, trial sorting, "
         "inspection and export. CSV / TSV / Parquet / Excel."
     )
-    inline_field_label(st, "Trial metadata table (optional)", _tm_help)
+    inline_field_label(st, "Trial metadata table (optional)", _tm_help, emphasis=True)
     upload = st.file_uploader(
         "Trial metadata table (optional)",
         type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
@@ -8763,39 +8765,47 @@ def _trial_metadata_body(combos) -> None:
     key_host = st.container()
     status_host = st.container()
     details = st.expander("🔎 Join details", expanded=False)
-    # The pickers show while you are **attaching** — a file in the uploader
-    # above — and fold into the details the rest of the time. A table restored
-    # with a session, or attached on another screen, is a table whose key was
-    # settled once; leaving two selects and their help icons parked at the top
-    # of every later visit was the ask ("i dont want them to appear at the
-    # start"). They stay one click away, on the same keys.
+    # The picker shows while you are **attaching** — a file in the uploader
+    # above — and folds into the details the rest of the time. A table
+    # restored with a session, or attached on another screen, is a table
+    # whose key was settled once; leaving a select and its help icon parked
+    # at the top of every later visit was the ask ("i dont want them to
+    # appear at the start"). It stays one click away, on the same key.
     picker_host = key_host if upload is not None else details
-    left, right = picker_host.columns(2)
-    trial_column = left.selectbox(
+    # UX-113: one key — the trial id — not a trial-id-plus-reader-id pair.
+    # A row-per-reading table (one row per reader × trial) needs its own
+    # reader column to disambiguate, but that is no longer offered here; a
+    # table that needs it can still be attached via the headless
+    # `--trial-metadata-reader-column` (api.load_trial_metadata), which keeps
+    # the parameter this UI no longer exposes.
+    trial_key = "trial_metadata_id_column"
+    stored = st.session_state.get(trial_key)
+    if not isinstance(stored, list):
+        st.session_state[trial_key] = [inferred] if inferred in columns else []
+    else:
+        valid = [c for c in stored if c in columns]
+        st.session_state[trial_key] = valid or (
+            [inferred] if inferred in columns else []
+        )
+    inline_field_label(
+        picker_host,
+        "Trial ID column",
+        "Pick the column holding this table's trial id — or pick SEVERAL "
+        "columns to build one on the fly (values joined with '_'), the same "
+        "way the uploaded data's own Trial ID mapping does. Required — it is "
+        "what makes this a trial table.",
+    )
+    trial_columns = picker_host.multiselect(
         "Trial ID column",
         columns,
-        index=columns.index(inferred) if inferred in columns else 0,
-        key="trial_metadata_id_column",
+        key=trial_key,
         persist_state="session",
-        help="Which column holds the trial id that joins to your data. "
-        "Required — it is what makes this a trial table.",
-    )
-    participant_choice = right.selectbox(
-        "Reader ID column",
-        [_TRIAL_META_NONE, *columns],
-        key="trial_metadata_participant_column",
-        persist_state="session",
-        help="Optional. Leave unset when each row describes a **text** and "
-        "every reading of it inherits the row. Set it when each row describes "
-        "one **reading** by one reader.",
-    )
-    participant_column = (
-        None if participant_choice == _TRIAL_META_NONE else participant_choice
+        label_visibility="collapsed",
     )
     attached = md.build_trial_metadata(
         raw,
-        trial_column,
-        participant_column,
+        trial_columns,
+        None,
         source_name=str(st.session_state.get(_TM_NAME_KEY) or "trial table"),
         keys=md.trial_keys(combos),
     )

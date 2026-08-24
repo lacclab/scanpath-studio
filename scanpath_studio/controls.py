@@ -120,15 +120,19 @@ _MAPPING_ROW_W = (0.24, 0.40, 0.36)
 _GRID_LABEL_W = (0.85, 0.15)
 
 
-def inline_field_label(host, label: str, help_text: str | None = None) -> None:
+def inline_field_label(
+    host, label: str, help_text: str | None = None, *, emphasis: bool = False
+) -> None:
     """Render a field title above its control (UX-53 r14).
 
     The public door onto `_row_label`, for callers that build their own row:
     `wizard._render_identity_field` puts one picker per table across a shared
     row and needs their titles to look like every other mapping title, tooltip
-    included.
+    included. ``emphasis`` (UX-113) is the bolder/larger `.sps-flabel-emph`
+    variant, for a title that should stand out among its neighbours (the
+    wizard's own upload/attach table titles).
     """
-    _row_label(host, label, help_text)
+    _row_label(host, label, help_text, emphasis=emphasis)
 
 
 #: Shown in a select with nothing chosen. UX-53 r10 replaced the `"(none)"`
@@ -1847,6 +1851,33 @@ RAW_GAZE_FIELD_SPECS: list[dict] = [
         "required": False,
         "help": "Child screen inside a logical trial.",
     },
+    # UX-113: text_id/word_id round out the row to the same six identity
+    # fields Fixations/AOI map (Trial · Screen · Participant · Text · Word/IA
+    # · text-or-id), instead of raw gaze being the one table with no way to
+    # say either. Both optional — a raw-gaze-only dataset with no such column
+    # still works exactly as before (see `data.normalize_raw_gaze`).
+    {
+        "key": "text_id",
+        "label": "Text ID",
+        "required": False,
+        "help": "Groups gaze samples by the text/passage they belong to. Left "
+        "unmapped, the text id mirrors the trial id — raw gaze normally has "
+        "no separate text/passage concept.",
+    },
+    {
+        "key": "word_id",
+        "label": "Word/IA ID",
+        "required": False,
+        "help": "Which word/AOI each gaze sample landed on, if the export "
+        "already carries one — raw gaze is not assigned to words the way "
+        "fixations are, so this is carried through as-is, not computed.",
+    },
+    {
+        "key": "text",
+        "label": "Word text/label",
+        "required": False,
+        "help": "Optional word/label associated with the sample.",
+    },
     {
         "key": "x",
         "label": "X coordinate",
@@ -1865,12 +1896,6 @@ RAW_GAZE_FIELD_SPECS: list[dict] = [
         "required": False,
         "help": "Sample time (ms); orders the continuous gaze path. "
         "Defaults to row order.",
-    },
-    {
-        "key": "text",
-        "label": "Word text/label",
-        "required": False,
-        "help": "Optional word/label associated with the sample.",
     },
 ]
 

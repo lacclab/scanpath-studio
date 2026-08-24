@@ -709,6 +709,8 @@ def propose_raw_gaze_schema(raw_gaze: pd.DataFrame) -> dict[str, str | None]:
         trial=pick_column(raw_gaze, TRIAL_CANDIDATES),
         screen_id=pick_column(raw_gaze, SCREEN_ID_CANDIDATES),
         screen_index=pick_column(raw_gaze, SCREEN_INDEX_CANDIDATES),
+        text_id=pick_column(raw_gaze, TEXT_ID_CANDIDATES),
+        word_id=pick_column(raw_gaze, FIX_WORD_ID_CANDIDATES),
         text=pick_column(raw_gaze, TEXT_CANDIDATES),
         x=pick_column(raw_gaze, RAW_GAZE_X_CANDIDATES),
         y=pick_column(raw_gaze, RAW_GAZE_Y_CANDIDATES),
@@ -1696,15 +1698,24 @@ def normalize_raw_gaze(raw_gaze: pd.DataFrame, schema: dict[str, str]) -> pd.Dat
         df["trial_id"] = stable_id(raw_gaze[trial_col])
         if "unique_trial_id" in raw_gaze.columns:
             df["unique_trial_id"] = stable_id(raw_gaze["unique_trial_id"])
-    # Raw gaze has no text/passage concept; mirror trial_id so a raw-gaze-only
-    # dataset still works with the trial picker (utils.build_combo_options needs
-    # a text_id column).
-    df["text_id"] = df["trial_id"]
+    # UX-113: mapped when the export carries its own text/passage column;
+    # otherwise raw gaze has no text/passage concept of its own, so mirror
+    # trial_id — a raw-gaze-only dataset still needs *a* text_id column for
+    # the trial picker (utils.build_combo_options).
+    if schema.get("text_id"):
+        df["text_id"] = raw_gaze[schema["text_id"]].astype(str)
+    else:
+        df["text_id"] = df["trial_id"]
     df = _copy_screen_fields(df, raw_gaze, schema)
     if schema.get("text"):
         df["text"] = raw_gaze[schema["text"]].astype(str)
     else:
         df["text"] = ""
+    # UX-113: raw gaze samples are never run through word assignment the way
+    # fixations are (there is no per-sample geometry step for it) — carried
+    # through only when the export already names one, not computed.
+    if schema.get("word_id"):
+        df["word_id"] = raw_gaze[schema["word_id"]]
     df["x"] = pd.to_numeric(raw_gaze[schema["x"]], errors="coerce")
     df["y"] = pd.to_numeric(raw_gaze[schema["y"]], errors="coerce")
     if schema.get("timestamp"):

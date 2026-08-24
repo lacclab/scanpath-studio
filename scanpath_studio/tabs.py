@@ -278,6 +278,14 @@ def _render_screen_navigator(catalog: pd.DataFrame) -> str | None:
     screen dropdown started ~11% in (against the trial dropdown's 0) at 78% wide
     (against 30%), and its steps rendered as wide rectangles beside the pill
     clusters on every neighbouring row.
+
+    **UX-111**: the selectbox and slider now sit under the trial row's own
+    *pick* and *scrub* tracks — ``SELECTOR_ROW_GRID`` in full, with the leading
+    *dataset* track left blank — instead of ``SELECTOR_ROW_TRIO`` (which merges
+    those two tracks into one, so this row's dropdown started under **Select
+    Dataset** and its slider ran on past **Select Trial**'s own, wider than it
+    and not aligned to it). The trail (◀ ▶) keeps the *actions* track either
+    way, so it does not move.
     """
     if catalog.empty:
         st.session_state.pop("single_screen_id", None)
@@ -293,8 +301,8 @@ def _render_screen_navigator(catalog: pd.DataFrame) -> str | None:
         ): f"{int(row.screen_index)} of {len(catalog)} · {row.screen_id}"
         for row in catalog.itertuples()
     }
-    sel_col, slider_col, trail_col = st.columns(
-        SELECTOR_ROW_TRIO, vertical_alignment="bottom"
+    _blank_col, sel_col, slider_col, trail_col = st.columns(
+        SELECTOR_ROW_GRID, vertical_alignment="bottom"
     )
     position = options.index(str(st.session_state["single_screen_id"]))
     selected = sel_col.selectbox(

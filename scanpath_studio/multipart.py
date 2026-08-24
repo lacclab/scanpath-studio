@@ -76,11 +76,6 @@ def normalize_screen_identity(frame: pd.DataFrame) -> pd.DataFrame:
             raise ValueError("screen_index contains missing or non-numeric values.")
         out[SCREEN_ID] = numeric_index.astype(int).astype(str)
     else:
-        if (
-            out[SCREEN_ID].isna().any()
-            or out[SCREEN_ID].astype(str).str.strip().eq("").any()
-        ):
-            raise ValueError("screen_id contains missing or blank values.")
         # `stable_id`, not a plain `.astype(str)` — BUG-44's hazard applies here
         # too: a whole-number screen_id reads as float64 the moment any OTHER
         # row anywhere in that column is missing, so one report's `"1"` becomes
@@ -90,6 +85,12 @@ def normalize_screen_identity(frame: pd.DataFrame) -> pd.DataFrame:
         # module-level import would cycle.
         from .data import stable_id
 
+        # A missing/blank cell is tolerated exactly as `trial_id_series` (via
+        # `stable_id`) already tolerates one in a trial id — no proactive
+        # `isna()` check here either. Rejecting it outright meant a screen_id
+        # column with a stray blank cell (the same dtype-coercion quirk
+        # BUG-44 fixed for identity columns generally) failed the whole
+        # mapping instead of just reading that one blank cell as "nan".
         out[SCREEN_ID] = stable_id(out[SCREEN_ID])
 
     if not has_index:

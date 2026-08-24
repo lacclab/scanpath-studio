@@ -2086,7 +2086,7 @@ def _mark_add_attempted() -> None:
 
 
 def _wizard_name_header(host, active: bool) -> None:
-    """The dataset's name, above both parts (UX-53 r8).
+    """The dataset's name, its own numbered stage (UX-53 r8, UX-113).
 
     It used to sit in step 7 beside *Add dataset*, i.e. below every mapping
     field. The name is what the whole dataset is *called*, so it belongs to
@@ -2142,6 +2142,7 @@ def _wizard_statuses() -> dict[str, wizard_shell.StepStatus]:
         return S.ACTION if uploaded_any else S.TODO
 
     statuses = {
+        "name": S.DONE if (ss.get("wizard_dataset_name") or "").strip() else S.TODO,
         "data": S.DONE if uploaded_any else S.TODO,
         "identity": required(trial_mapped),
         "geometry": required(uploaded_any and not problems),
@@ -2153,13 +2154,15 @@ def _wizard_statuses() -> dict[str, wizard_shell.StepStatus]:
         ),
         "fields": S.DONE if fields_touched else S.OPTIONAL,
     }
-    # UX-53: the six former steps are now *sections*, and the two surviving steps
-    # aggregate them — a part is only DONE when every required section under it
-    # is. The section keys stay in the dict because the section headings, the
-    # blocker list and `_wizard_problems_last` all still badge per topic.
+    # UX-53/UX-113: "identity"/"geometry" are still *sections* nested inside the
+    # "mapping" step, so it aggregates them — a part is only DONE when every
+    # required section under it is. "setup"/"fields" became steps of their own
+    # (UX-113) and no longer roll up into this one. The section keys stay in the
+    # dict because the section headings, the blocker list and
+    # `_wizard_problems_last` all still badge per topic.
     statuses["mapping"] = (
         S.DONE
-        if all(statuses[k] is S.DONE for k in ("identity", "geometry", "setup"))
+        if all(statuses[k] is S.DONE for k in ("identity", "geometry"))
         else required(False)
     )
     return statuses
@@ -2301,10 +2304,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
         ):
             st.session_state[WIZARD_LEAVE_KEY] = _VIEW_DATA
         _render_leave_prompt(bar)
-        # UX-53 r8: no progress chips. They were navigation for an accordion
-        # that no longer exists — the two parts are linear, so there is nothing
-        # to flip between and a chip row would be a menu with one path through
-        # it.
+        # UX-53 r8 / UX-113: no progress chips. They were navigation for an
+        # accordion that no longer exists — the five parts are linear, so there
+        # is nothing to flip between and a chip row would be a menu with one
+        # path through it.
         body = st.container()
     else:
         panel = st.expander("📋 Data & mapping", expanded=False)
@@ -2317,14 +2320,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
             st.session_state["setup_complete"] = False
             st.rerun()
 
-    # UX-53 r8. The dataset's **name** sits above both parts: it names the whole
-    # thing, so it belongs to neither the upload nor the mapping.
-    _wizard_name_header(body, active)
-
-    # Two linear parts. `part()` while the wizard is active — a one-line
-    # headline, no expander — and `step_panel`'s bold-heading degradation in the
-    # collapsed *Data & mapping* review panel, which is itself an expander and
-    # so can nest neither.
+    # Five linear parts. `part()` while the wizard is active — a one-line
+    # numbered headline, no expander — and `step_panel`'s bold-heading
+    # degradation in the collapsed *Data & mapping* review panel, which is
+    # itself an expander and so can nest neither.
     def _part(step_id: str):
         step = wizard_shell.STEPS_BY_ID[step_id]
         status = statuses.get(step_id, wizard_shell.StepStatus.TODO)
@@ -2335,6 +2334,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
             # screen.
             return wizard_shell.part(body, step)
         return wizard_shell.step_panel(body, step, status, active=False)
+
+    # UX-53 r8 / UX-113: the dataset's **name** is its own numbered stage — it
+    # names the whole thing, so it belongs to neither the upload nor the
+    # mapping — rendered first since nothing after it makes sense without one.
+    s_name = _part("name")
+    _wizard_name_header(s_name, active)
 
     s1 = _part("data")
     s_map = _part("mapping")
@@ -2359,18 +2364,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
     if st.session_state.get("wizard_dataset_format", "Generic") == "MultiplEYE":
         return _render_multipleye_upload(body, active)
 
-    # Privacy caption + run-locally tip keep their always-created container:
-    # a *conditional* child here shifts the element tree mid-parse and Streamlit
-    # leaves a greyed-out ghost of the whole upload group on screen (BUG-2).
+    # The run-locally tip keeps its always-created container: a *conditional*
+    # child here shifts the element tree mid-parse and Streamlit leaves a
+    # greyed-out ghost of the whole upload group on screen (BUG-2).
     intro = s1.container()
-    _hover_note(
-        intro,
-        "🔒 Parsed locally",
-        "Your file is parsed on the machine running this app and never sent "
-        "elsewhere. Local/desktop installs keep a private recovery cache after "
-        "you add the dataset; the hosted demo remains memory-only.",
-        link="https://lacclab.github.io/scanpath-studio/privacy/",
-    )
     core_uploaded = bool(
         st.session_state.get("col_map_fix_upload")
         or st.session_state.get("col_map_words_upload")
@@ -2379,7 +2376,13 @@ def _render_data_setup(active: bool) -> _UploadResult:
         st.session_state.get("col_map_raw_gaze_upload")
     )
     if active and not already_uploaded:
-        intro.info("⬆️ Upload a **Fixations** and/or **Words/IA** table to begin.")
+        # UX-113: a small caption near the stage title, not a boxed alert — the
+        # three tables below say the same thing at their own titles' hover, this
+        # is just the nudge to open with.
+        intro.caption(
+            "⬆️ Upload at least one of **Fixations**, **Words / IA**, or "
+            "**Raw gaze** below to get started."
+        )
         app_url = str(getattr(st.context, "url", "") or "")
         if not is_loopback_url(app_url):
             intro.markdown(
@@ -2389,6 +2392,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
             )
 
     def upload_box(host, *, label, help_text, prefix, multi, noun, kind=None):
+        # UX-113: the title reads like every mapping field's — dotted underline,
+        # the description on hover (`.sps-fhelp`) — instead of Streamlit's own
+        # label + native (~1s) help tooltip.
+        inline_field_label(host, label, help_text)
         frame = app._read_uploaded_frame(
             uploader_label=label,
             upload_help=help_text,
@@ -2396,6 +2403,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             multi=multi,
             container=host,
             kind=kind,
+            label_visibility="collapsed",
         )
         if not frame.empty:
             # PERF-6 parses only the columns the mapping needs, so the frame's
@@ -2444,7 +2452,39 @@ def _render_data_setup(active: bool) -> _UploadResult:
     _wizard_restore_config(restore_box)
     _render_restored_config_caption(restore_box)
 
+    def _render_metadata_uploads(word_schema, fix_schema) -> None:
+        """DATA-20/DATA-29's participant + trial tables, peers of the uploads
+        above (UX-113: visible from the start, not only once a main table is
+        in). `word_schema`/`fix_schema` are `{}` pre-upload — there is nothing
+        to derive a join report from yet, which is also the correct answer —
+        and the real mapping once identity (stage 3) has resolved it.
+        Still only while `active`: the collapsed *Data & mapping* review panel
+        would otherwise build the same widget keys as the 🗂️ Data page's
+        section.
+        """
+        if not active:
+            return
+        from scanpath_studio.tabs import render_participant_metadata_section
+
+        render_participant_metadata_section(
+            _wizard_reader_ids(raw_words, word_schema, raw_fix, fix_schema),
+            host=s1.container(),
+        )
+        # DATA-29 — and the trial table directly under it, for the same
+        # reason: it is an upload, and the two are read as a pair ("what else
+        # do I know about the readers / about the readings").
+        from scanpath_studio.tabs import render_trial_metadata_section
+
+        render_trial_metadata_section(
+            _wizard_trial_combos(raw_words, word_schema, raw_fix, fix_schema),
+            host=s1.container(),
+        )
+
     if raw_words.empty and raw_fix.empty and raw_gaze.empty:
+        # UX-113: nothing to map yet, but the participant/trial uploaders are
+        # still peers of the three tables above — render them here too, rather
+        # than exiting before stage 2 is complete.
+        _render_metadata_uploads({}, {})
         return _UploadResult(
             empty_words_frame(),
             empty_fixations_frame(),
@@ -2795,58 +2835,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # and is listed above ✅ Add dataset. Since the fields all live on one screen
     # now, the summary was a second copy of what was directly below it.
 
-    s4 = wizard_shell.section(
-        sections_host,
-        "setup",
-        # UX-58: the wording the step used to print as a caption inside its
-        # body. One description, on the heading's hover, like the rest of the
-        # page — there is no reason for a section to explain itself twice.
-        caption=(
-            "These describe the screen the data was recorded on, not the screen "
-            "you are looking at now. Pick how you know each one — there is no "
-            "default, because a wrong guess here silently rescales every figure."
-        ),
-    )
-    restored_setup = _restored_setup_snapshot()
-    if restored_setup is not None:
-        _apply_restored_setup(restored_setup)
-        s4.caption("✓ Pre-answered from the restored setup file — review it below.")
-    setup_snapshot = _wizard_setup_step(s4, raw_words, raw_fix, has_boxes=has_words)
-
-    # DATA-20's participant table moved up beside the uploads (UX-53) — it is an
-    # upload, and it belongs with them. UX-53 r6 dropped its section heading
-    # too: it is one uploader among four now, and a heading of its own made it
-    # read as a stage. Its explanation is on the uploader's own label.
-    # Still only while `active`: the collapsed *Data & mapping* review panel
-    # would otherwise build the same widget keys as the 🗂️ Data page's section.
-    if active:
-        from scanpath_studio.tabs import render_participant_metadata_section
-
-        render_participant_metadata_section(
-            _wizard_reader_ids(raw_words, word_schema, raw_fix, fix_schema),
-            host=s1.container(),
-        )
-        # DATA-29 — and the trial table directly under it, for the same
-        # reason: it is an upload, and the two are read as a pair ("what else do
-        # I know about the readers / about the readings"). Both were reachable
-        # only on the 🗂️ Data page's editor before, which meant a dataset added
-        # through the wizard had to be added first and annotated afterwards.
-        from scanpath_studio.tabs import render_trial_metadata_section
-
-        render_trial_metadata_section(
-            _wizard_trial_combos(raw_words, word_schema, raw_fix, fix_schema),
-            host=s1.container(),
-        )
-
-    s5 = wizard_shell.section(
-        sections_host,
-        "fields",
-        caption=(
-            "Filter trials by becomes a value picker in the Narrow-by panel; "
-            "Additional fields to keep are the columns you can colour, sort and "
-            "analyse by later. Fewer columns is faster."
-        ),
-    )
+    # UX-113: "Keep extra fields" is stage 4 — its own numbered part, rendered
+    # before "Recording setup" (stage 5). Its old caption ("Filter trials by
+    # becomes a value picker…") now lives as the WizardStep's own hover caption.
+    s_fields = _part("fields")
     keep_tables: list = []
     if has_words:
         keep_tables.append(
@@ -2854,13 +2846,37 @@ def _render_data_setup(active: bool) -> _UploadResult:
         )
     if has_fix:
         keep_tables.append((raw_fix, fix_schema, FIX_OPTIONAL_FIELDS, "col_map_fix"))
-    keep_by_prefix, filter_fields = _wizard_keep_and_filter(keep_tables, s5, s5)
+    keep_by_prefix, filter_fields = _wizard_keep_and_filter(
+        keep_tables, s_fields, s_fields
+    )
     st.session_state["wizard_filter_fields"] = list(filter_fields)
 
-    # The foot of part 2: what is still missing, then the button. UX-53 put the
-    # alerts *directly above* **Add dataset** — a blocker listed a screen away
-    # from the control it blocks is a blocker the user reads after clicking.
-    s6 = s_map.container()
+    # DATA-20's participant table (and DATA-29's trial table) render beside the
+    # uploads (UX-53/UX-113) — they are uploads, and they belong with them. Now
+    # that identity (stage 3) has resolved the real mapping, re-render with it:
+    # the join report reads the up-to-date schema instead of the `{}` the
+    # upload-only call above used.
+    _render_metadata_uploads(word_schema, fix_schema)
+
+    # UX-113: "Recording setup" is stage 5 — its own numbered part. Its old
+    # caption ("These describe the screen the data was recorded on…") now lives
+    # as the WizardStep's own hover caption.
+    s_setup = _part("setup")
+    restored_setup = _restored_setup_snapshot()
+    if restored_setup is not None:
+        _apply_restored_setup(restored_setup)
+        s_setup.caption(
+            "✓ Pre-answered from the restored setup file — review it below."
+        )
+    setup_snapshot = _wizard_setup_step(
+        s_setup, raw_words, raw_fix, has_boxes=has_words
+    )
+
+    # The foot of the wizard: what is still missing, then the button. UX-53 put
+    # the alerts *directly above* **Add dataset** — a blocker listed a screen
+    # away from the control it blocks is a blocker the user reads after
+    # clicking. UX-113: now trails all five stages, not just "Map data fields".
+    s6 = body.container()
 
     setup_blockers = [
         SETUP_GROUP_LABELS[g] for g, p in setup_snapshot.provenance.items() if p is None

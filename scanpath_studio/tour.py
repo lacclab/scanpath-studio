@@ -2070,32 +2070,61 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": "📂 Set up your dataset",
         "body": (
-            "Turn your eye-tracking tables into an interactive dataset in two "
-            "steps: upload the files, then say which columns mean what. Follow "
+            "Turn your eye-tracking tables into an interactive dataset in five "
+            "steps: name it, upload the files, say which columns mean what, "
+            "pick what else to keep, and describe the recording setup. Follow "
             "along with **Next**, or **Skip** to dive in."
         ),
         "selector": "",
         "step_id": None,
     },
     {
-        "title": "1 · Upload data files",
+        "title": "1 · Dataset name",
         "body": (
-            "Name the dataset at the top, then add your **Fixations** and/or "
-            "**Words / IA** tables — CSV / TSV / Parquet, several files or "
-            "either alone. Raw gaze and a participant table are optional."
+            "Name it — this is what shows up in the Data source list, so you "
+            "can switch back to it later."
+        ),
+        "selector": ".st-key-wiz_part_name",
+        "step_id": "name",
+    },
+    {
+        "title": "2 · Upload data files",
+        "body": (
+            "Add your **Fixations** and/or **Words / IA** tables — CSV / TSV "
+            "/ Parquet, several files or either alone. Raw gaze and a "
+            "participant table are optional."
         ),
         "selector": ".st-key-wiz_part_data",
         "step_id": "data",
     },
     {
-        "title": "2 · Map data fields",
+        "title": "3 · Map data fields",
         "body": (
-            "Say which column is what: **Trials & readers**, **Fixation "
-            "features**, **Recording setup**, **Extra fields**. Anything still "
-            "missing is listed above **✅ Add dataset**. 👀"
+            "Say which column is what: **Trials & readers** and **Raw gaze**. "
+            "Anything still missing is listed above **✅ Add dataset**. 👀"
         ),
         "selector": ".st-key-wiz_part_mapping",
         "step_id": "mapping",
+    },
+    {
+        "title": "4 · Keep extra fields",
+        "body": (
+            "Pick which extra columns to keep for coloring, sorting and "
+            "analysis later, and which field to filter trials by. Fewer "
+            "columns is faster."
+        ),
+        "selector": ".st-key-wiz_part_fields",
+        "step_id": "fields",
+    },
+    {
+        "title": "5 · Recording setup",
+        "body": (
+            "Say how you know the screen, physical size and text size the "
+            "data was recorded with — there is no default, because a wrong "
+            "guess here silently rescales every figure."
+        ),
+        "selector": ".st-key-wiz_part_setup",
+        "step_id": "setup",
     },
 ]
 

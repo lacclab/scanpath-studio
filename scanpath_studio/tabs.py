@@ -100,6 +100,7 @@ from scanpath_studio.controls import (
     column_mapping_ui,
     corpus_style_controls,
     current_dataset_name,
+    inline_field_label,
     read_trial_filters,
     render_narrow_by,
     render_pattern_help,
@@ -8520,7 +8521,16 @@ def _participant_metadata_body(participants) -> None:
     from scanpath_studio.data import read_table
 
     # UX-53 r5: the paragraph that used to print here now rides the uploader's
-    # own label as a tooltip — descriptive prose on this page is hover-only.
+    # own title as a tooltip — descriptive prose on this page is hover-only.
+    # UX-113: the same dotted-underline format the mapping fields use
+    # (`inline_field_label`), rather than Streamlit's own label + native
+    # (~1s) help tooltip.
+    _pm_help = (
+        "One row per reader, with a `participant_id` column. The columns "
+        "then behave like fields in the data: filters, chips, trial sorting, "
+        "inspection and export. CSV / TSV / Parquet / Excel."
+    )
+    inline_field_label(st, "Participant metadata table (optional)", _pm_help)
     upload = st.file_uploader(
         "Participant metadata table (optional)",
         type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
@@ -8529,9 +8539,8 @@ def _participant_metadata_body(participants) -> None:
         # need it either: the parsed frame is kept in session state under
         # `md.RAW_SESSION_KEY`, so the attached table survives even if the
         # uploader widget itself is ever reset.
-        help="One row per reader, with a `participant_id` column. The columns "
-        "then behave like fields in the data: filters, chips, trial sorting, "
-        "inspection and export. CSV / TSV / Parquet / Excel.",
+        help=_pm_help,
+        label_visibility="collapsed",
     )
     if upload is None:
         if active_participant_metadata() is None:
@@ -8708,13 +8717,19 @@ def _trial_metadata_body(combos) -> None:
     from scanpath_studio import metadata as md
     from scanpath_studio.data import read_table
 
+    # UX-113: same dotted-underline title format as the mapping fields.
+    _tm_help = (
+        "One row per trial, with a trial-id column. The columns then "
+        "behave like fields in the data: filters, chips, trial sorting, "
+        "inspection and export. CSV / TSV / Parquet / Excel."
+    )
+    inline_field_label(st, "Trial metadata table (optional)", _tm_help)
     upload = st.file_uploader(
         "Trial metadata table (optional)",
         type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
         key="trial_metadata_upload",
-        help="One row per trial, with a trial-id column. The columns then "
-        "behave like fields in the data: filters, chips, trial sorting, "
-        "inspection and export. CSV / TSV / Parquet / Excel.",
+        help=_tm_help,
+        label_visibility="collapsed",
     )
     if upload is None:
         if md.active_trials() is None:

@@ -3195,6 +3195,7 @@ def _read_uploaded_frame(
     multi: bool,
     container=None,
     kind: str | None = None,
+    label_visibility: str = "visible",
 ) -> pd.DataFrame:
     """Render one upload box and return its (concatenated) frame.
 
@@ -3203,7 +3204,15 @@ def _read_uploaded_frame(
     uploaded. The file parse is cached on the upload's identity (see
     ``_uploaded_file_key``) so a large uploaded table is read once, not re-parsed
     on every rerun. Isolated from the mapping render so tests can inject frames
-    without a real upload (AppTest can't drive ``st.file_uploader``)."""
+    without a real upload (AppTest can't drive ``st.file_uploader``).
+
+    ``label_visibility="collapsed"`` (UX-113) lets a caller draw its own title
+    above the box — e.g. via ``controls.inline_field_label``'s dotted-underline
+    hover format, matching the mapping steps' field titles — instead of
+    Streamlit's own label + native (~1s) help tooltip. The widget still gets the
+    real ``uploader_label``/``upload_help`` as its accessible name and help; only
+    where they are drawn changes.
+    """
     host = container if container is not None else st.container()
     uploaded = host.file_uploader(
         uploader_label,
@@ -3211,6 +3220,7 @@ def _read_uploaded_frame(
         accept_multiple_files=multi,
         key=f"{state_prefix}_upload",
         help=upload_help,
+        label_visibility=label_visibility,
     )
     if not uploaded:
         return pd.DataFrame()

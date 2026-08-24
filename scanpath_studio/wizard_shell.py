@@ -81,28 +81,28 @@ class WizardStep:
     required: bool
 
 
-#: UX-53 folded the original seven steps into two. Everything that was steps
-#: 2–7 is now one part whose former steps are plain **line titles** (`section`)
-#: rather than expanders, so the whole mapping is visible at once instead of
-#: costing a click each — the ask was "all the field mappings on one screen".
-#: The optional participant table (#DATA-20, the old step 5) moved up beside the
-#: uploads it belongs with, and *Name & add* (the old step 7) became the head and
-#: foot of the combined part: the dataset name on top, validation and
-#: **✅ Add dataset** at the bottom.
-#: UX-53 round 8 — two **linear** parts. Upload always precedes mapping (there
-#: is nothing to map until a file is read), so they are labelled but not
-#: navigable: no chips, no accordion, no open state. `part()` renders each as a
-#: one-line headline, and the dataset name sits above both because it belongs to
-#: neither.
+#: UX-53 folded the original seven steps into two, then UX-113 unfolded them
+#: back to five — flat and same-size this time, not the old per-step
+#: expanders. Upload always precedes mapping (there is nothing to map until a
+#: file is read), so the five are labelled but not navigable: no chips, no
+#: accordion, no open state. `part()` renders each as a one-line numbered
+#: headline. The dataset name is its own numbered stage rather than an
+#: unlabeled header above everything, and Recording setup / Extra fields are
+#: their own numbered stages rather than sub-headings nested inside "Map data
+#: fields" — all five read as one flat sequence.
 STEPS: tuple[WizardStep, ...] = (
-    WizardStep("data", 1, "Upload data files", "The tables you exported", True),
-    WizardStep("mapping", 2, "Map data fields", "Which column is what", True),
+    WizardStep("name", 1, "Dataset name", "What to call it", True),
+    WizardStep("data", 2, "Upload data files", "The tables you exported", True),
+    WizardStep("mapping", 3, "Map data fields", "Which column is what", True),
+    WizardStep("fields", 4, "Keep extra fields", "Which extra columns to keep", True),
+    WizardStep("setup", 5, "Recording setup", "The screen it was recorded on", True),
 )
 
 STEPS_BY_ID: dict[str, WizardStep] = {s.id: s for s in STEPS}
 
-#: The former steps, kept as the section headings inside part 2 (and, for
-#: `readers`, inside part 1). Ordered as they render.
+#: The two sub-topics still kept as `section()` headings, nested inside part 3
+#: ("Map data fields") — everything else that used to live here (`setup`,
+#: `fields`) is now a `STEPS` entry of its own (UX-113).
 #: `readers` is deliberately absent (UX-53 r6): the participant table is one
 #: uploader among four, not a stage, so it renders with the other uploads under
 #: no heading of its own. Its explanation lives on its uploader's label.
@@ -113,8 +113,6 @@ SECTION_TITLES: dict[str, str] = {
     # the fixation fields still led it; they have since moved up into the
     # per-table block, and char-AOI aggregation followed them.
     "geometry": "Raw gaze",
-    "setup": "Recording setup",
-    "fields": "Extra fields",
 }
 
 

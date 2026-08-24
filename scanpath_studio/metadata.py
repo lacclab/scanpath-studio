@@ -53,6 +53,8 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from .data import stable_id
+
 # Source columns that plausibly hold the reader id, most explicit first. Shares
 # the spirit of `data.pick_column`'s candidate lists: first hit wins, and the
 # user can always override the guess in the UI.
@@ -368,10 +370,15 @@ def build_trial_metadata(
         participant_column = None
 
     work = frame.copy()
-    work["trial_id"] = work[trial_column].astype(str).str.strip()
+    # `stable_id` — not a plain `.astype(str)` — so this table's own trial id
+    # is spelled the same way `data.normalize_*` spells the app's: a blank
+    # cell anywhere else in *this* file's trial-id column is enough to read it
+    # as floats ("101.0") against the data's "101", and the join below would
+    # silently match nothing (DATA-29's "no reading matched" is exactly this).
+    work["trial_id"] = stable_id(work[trial_column])
     work = work[work["trial_id"] != ""]
     if participant_column:
-        work["participant_id"] = work[participant_column].astype(str).str.strip()
+        work["participant_id"] = stable_id(work[participant_column])
         work = work[work["participant_id"] != ""]
     reserved = {
         str(trial_column),
@@ -726,7 +733,9 @@ def build_participant_metadata(
         )
 
     work = frame.copy()
-    work["participant_id"] = work[id_column].astype(str).str.strip()
+    # See the matching comment in `build_trial_metadata` — the same "one blank
+    # cell spells the id two ways" hazard applies to a reader id.
+    work["participant_id"] = stable_id(work[id_column])
     work = work[work["participant_id"] != ""]
     value_columns = [
         str(column)

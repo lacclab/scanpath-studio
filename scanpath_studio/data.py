@@ -454,17 +454,49 @@ def trial_mapping_columns(trial_mapping) -> list:
     return list(trial_mapping)
 
 
+#: Matches an otherwise-integer string with a spurious trailing ``.0`` —
+#: exactly what a whole-number id column becomes once pandas has any reason to
+#: read it as ``float64`` instead of ``int64``.
+_WHOLE_FLOAT_ID = re.compile(r"^(-?\d+)\.0$")
+
+
+def stable_id(series: pd.Series) -> pd.Series:
+    """Cast an id column to the string every identity join compares it by.
+
+    Plain ``.astype(str)`` spells the *same* id two ways when one file's id
+    column is read as whole numbers and another's is read as decimals — and it
+    takes only one blank cell anywhere in an otherwise-integer CSV column to
+    flip the whole column from ``int64`` to ``float64``. A trial's AOI table
+    and its fixations report almost always come from two different exports, so
+    this is not a rare corpus quirk: it is common for exactly one of the two to
+    have that one blank cell the other does not. The trial picker, every
+    metadata join (DATA-20/DATA-29), fixation-to-word assignment, and every
+    filter then compare ``"101"`` against ``"101.0"`` as strings and find no
+    match, even though both name the same trial.
+
+    Dropping a trailing ``.0`` off an otherwise-integer string is the one
+    collapse worth making here: it never changes what two *genuinely* different
+    ids look like (``"101"`` and ``"101.5"`` are untouched), and it is the
+    single spelling difference a real corpus never intends and a stray missing
+    cell always creates.
+    """
+    text = series.astype(str).str.strip()
+    return text.str.replace(_WHOLE_FLOAT_ID, r"\1", regex=True)
+
+
 def trial_id_series(source: pd.DataFrame, trial_mapping) -> pd.Series:
     """Trial-id values for a single-column or composite (multi-column) mapping.
 
     A multi-column mapping builds a unique trial ID on the fly by joining the
     columns' string values with ``_`` — for datasets that ship no precomputed
     unique-trial column (e.g. OneStop-style participant + paragraph +
-    repeated-reading)."""
+    repeated-reading). Each component is passed through :func:`stable_id`
+    first, so a composite id cannot inherit a ``.0`` from one of its parts.
+    """
     cols = trial_mapping_columns(trial_mapping)
     if len(cols) == 1:
-        return source[cols[0]].astype(str)
-    return source[cols].astype(str).agg("_".join, axis=1)
+        return stable_id(source[cols[0]])
+    return source[cols].apply(stable_id).agg("_".join, axis=1)
 
 
 def _preserve_composite_columns(
@@ -1661,9 +1693,9 @@ def normalize_raw_gaze(raw_gaze: pd.DataFrame, schema: dict[str, str]) -> pd.Dat
             if "unique_trial_id" in raw_gaze.columns
             else trial_cols[0]
         )
-        df["trial_id"] = raw_gaze[trial_col].astype(str)
+        df["trial_id"] = stable_id(raw_gaze[trial_col])
         if "unique_trial_id" in raw_gaze.columns:
-            df["unique_trial_id"] = raw_gaze["unique_trial_id"].astype(str)
+            df["unique_trial_id"] = stable_id(raw_gaze["unique_trial_id"])
     # Raw gaze has no text/passage concept; mirror trial_id so a raw-gaze-only
     # dataset still works with the trial picker (utils.build_combo_options needs
     # a text_id column).
@@ -2434,13 +2466,13 @@ def normalize_words(
         trial_col = (
             "unique_trial_id" if "unique_trial_id" in words.columns else trial_cols[0]
         )
-        df["trial_id"] = words[trial_col].astype(str)
+        df["trial_id"] = stable_id(words[trial_col])
         if schema.get("participant"):
             df = _disambiguate_repeated_readings(df, words, trial_col)
         if "unique_trial_id" in words.columns:
-            df["unique_trial_id"] = words["unique_trial_id"].astype(str)
+            df["unique_trial_id"] = stable_id(words["unique_trial_id"])
     if "unique_paragraph_id" in words.columns:
-        df["unique_text_id"] = words["unique_paragraph_id"].astype(str)
+        df["unique_text_id"] = stable_id(words["unique_paragraph_id"])
         df["text_id"] = df["unique_text_id"]
     elif schema.get("text_id"):
         # str or list (a composite text id, joined like the trial id).
@@ -2509,20 +2541,20 @@ def normalize_fixations(
             if "unique_trial_id" in fixations.columns
             else trial_cols[0]
         )
-        df["trial_id"] = fixations[trial_col].astype(str)
+        df["trial_id"] = stable_id(fixations[trial_col])
         if schema.get("participant"):
             df = _disambiguate_repeated_readings(df, fixations, trial_col)
         if "unique_trial_id" in fixations.columns:
-            df["unique_trial_id"] = fixations["unique_trial_id"].astype(str)
+            df["unique_trial_id"] = stable_id(fixations["unique_trial_id"])
     if "unique_paragraph_id" in fixations.columns:
-        df["text_id"] = fixations["unique_paragraph_id"].astype(str)
+        df["text_id"] = stable_id(fixations["unique_paragraph_id"])
     elif schema.get("text_id"):
         # str or list (a composite text id, joined like the trial id).
         df["text_id"] = trial_id_series(fixations, schema["text_id"])
     else:
         df["text_id"] = df["trial_id"]
     if "unique_paragraph_id" in fixations.columns:
-        df["unique_text_id"] = fixations["unique_paragraph_id"].astype(str)
+        df["unique_text_id"] = stable_id(fixations["unique_paragraph_id"])
     df = _copy_screen_fields(df, fixations, schema)
     # X/Y may be unmapped for AOI-sequence datasets (no pixel coordinates) —
     # left NaN here and filled from word-box centers by harmonize_frames().

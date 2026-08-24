@@ -81,7 +81,16 @@ def normalize_screen_identity(frame: pd.DataFrame) -> pd.DataFrame:
             or out[SCREEN_ID].astype(str).str.strip().eq("").any()
         ):
             raise ValueError("screen_id contains missing or blank values.")
-        out[SCREEN_ID] = out[SCREEN_ID].astype(str)
+        # `stable_id`, not a plain `.astype(str)` — BUG-44's hazard applies here
+        # too: a whole-number screen_id reads as float64 the moment any OTHER
+        # row anywhere in that column is missing, so one report's `"1"` becomes
+        # another's `"1.0"` and `validate_matching_parts` below rejects every
+        # screen as an orphan even though both sides recorded the same one.
+        # Imported locally — `data.py` imports from this module, so a
+        # module-level import would cycle.
+        from .data import stable_id
+
+        out[SCREEN_ID] = stable_id(out[SCREEN_ID])
 
     if not has_index:
         distinct = out[parents + [SCREEN_ID]].drop_duplicates()

@@ -624,8 +624,18 @@ def _compose_onestop_ids(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def _join_ids(frame: pd.DataFrame, columns: Iterable[str]) -> pd.Series:
-    """``"_"``-joined string form of ``columns`` — one composed id per row."""
-    parts = [frame[column].astype(str) for column in columns]
+    """``"_"``-joined string form of ``columns`` — one composed id per row.
+
+    Each part goes through ``stable_id`` (BUG-44), not a plain ``.astype(str)``
+    — several of OneStop's own id components (``paragraph_id``, ``article_id``)
+    are whole numbers, and one blank cell anywhere else in that CSV column is
+    enough for pandas to read the whole thing as ``float64``. Left uncorrected
+    here, the composed id would embed a ``.0`` that a plain string column on
+    the other side of a join never has.
+    """
+    from . import data
+
+    parts = [data.stable_id(frame[column]) for column in columns]
     joined = parts[0]
     for part in parts[1:]:
         joined = joined + "_" + part

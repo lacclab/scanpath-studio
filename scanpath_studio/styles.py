@@ -809,6 +809,15 @@ def get_app_css() -> str:
         min-width: 0 !important;
         padding: 0 !important;
     }
+    /* UX-113 — real breathing room around the footer's own divider, on both
+       sides: Streamlit's default `st.divider()` margin reads as barely more
+       than the mapping blocks' own tight `.sps-wiz-blockgap` hairline, which
+       undersells that this line is the boundary before the page's one commit,
+       not another block gap. */
+    .st-key-wizard_footer_divider hr {
+        margin-top: 1.25rem !important;
+        margin-bottom: 1.5rem !important;
+    }
 
     /* The dataset name leads the wizard and names the whole thing, so it is set
        larger than an ordinary field rather than looking like the first of them. */

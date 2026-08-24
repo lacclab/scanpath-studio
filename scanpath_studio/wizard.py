@@ -1361,12 +1361,14 @@ def _wizard_footer(host, *, disabled: bool, help_text: str, on_click=None) -> No
     setup" / "Add dataset" wrap to two lines.
 
     UX-113 also gave it a real `st.divider()` above — heavier and more spaced
+    (its own keyed container, `styles.py` widens the margin on both sides)
     than the mapping blocks' own hairline (`.sps-wiz-blockgap`) on purpose:
     this is the one commit for the *whole* wizard, not the end of stage 5, and
     it should read as a clear break rather than one more row under Recording
     setup.
     """
-    host.divider()
+    divider_host = host.container(key="wizard_footer_divider")
+    divider_host.divider()
     row = host.container(key="wizard_footer_row")
     save_col, add_col, _rest = row.columns(
         _FOOTER_ROW_W, gap="small", vertical_alignment="center"

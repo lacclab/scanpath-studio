@@ -4652,7 +4652,15 @@ def render_single_trial_tab(
     # panels and exports. A None range leaves the frames untouched.
     fix_range = viz_settings.get("fix_index_range")
     fig_fixations = _slice_fix_range(trial_fixations, fix_range)
-    fig_compare_fix = _slice_fix_range(compare_fix, fix_range)
+    # `fix_range` is A's own window (its bounds and default both come from A's
+    # fixation count — `controls._render_fix_range_slider`, "the single
+    # fixation-index control for the app"; there is no B-side widget, ENG-8).
+    # Slicing B by it used to be a silent truncation, not a no-op: the window
+    # defaults to `(1, len(A's fixations))` the instant A has ≥2 fixations, so
+    # any trial B with MORE fixations than A lost its trailing ones on every
+    # comparison, whether or not the slider was ever touched. B is never
+    # windowed by A's control.
+    fig_compare_fix = compare_fix
     full_fix_range = None
     if not trial_fixations.empty and "order_in_trial" in trial_fixations.columns:
         order = pd.to_numeric(
@@ -4956,7 +4964,6 @@ def render_single_trial_tab(
                 viz_settings,
                 layout=compare_layout,
                 compare_stimulus=compare_stimulus,
-                fix_index_range=fix_range,
                 compare_meta=compare_meta,
                 shared_numeric=shared_numeric,
                 setup_note=compare_setup_note,
@@ -5304,16 +5311,18 @@ def _render_comparison_figure(
     viz_settings: dict,
     layout: str = "overlay",
     compare_stimulus: str = "both",
-    fix_index_range=None,
     compare_meta: dict | None = None,
     shared_numeric: frozenset[str] | None = None,
     setup_note: str = "",
 ):
     """Render comparison figure for two trials.
 
-    ``fix_index_range`` (VIZ-7) windows both scanpaths to a ``(start, end)``
-    ``order_in_trial`` range; ``None`` shows the full readings. Shared visual
-    choices, canvas geometry, and the stimulus image arrive in ``settings``.
+    ``fixations_filtered`` carries both scanpaths, already resolved by the
+    caller: A's VIZ-7 fixation-index window (a single-scanpath control with no
+    B-side widget, ENG-8) is applied upstream, and B is passed through in full
+    — a window sized to A's own fixation count must never silently truncate a
+    B with more fixations than A. Shared visual choices, canvas geometry, and
+    the stimulus image arrive in ``settings``.
 
     ``fixations_filtered`` may already carry PRE-3 drift-corrected ``y`` values —
     correction happens once, upstream of the render-mode split.
@@ -5335,9 +5344,6 @@ def _render_comparison_figure(
     popover."""
     text_field = "unique_text_id" if "unique_text_id" in combos.columns else "text_id"
     cross_dataset = bool(compare_meta and compare_meta.get("dataset"))
-    # Window both compared trials to the chosen fixation-index range. Slicing the
-    # whole frame is fine — make_comparison_figure only extracts the two trials.
-    fixations_filtered = _slice_fix_range(fixations_filtered, fix_index_range)
 
     def _lookup_text_id(participant_id: str, trial_id: str) -> str | None:
         match = combos[

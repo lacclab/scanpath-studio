@@ -168,6 +168,7 @@ the recorded setup.
 | size the figure | `--width`, `--height`, `--scale` |
 | title and caption it | `--title`, `--caption` |
 | tune the heatmap | `--heatmap-metric`, `--heatmap-colorscale`, `--heatmap-norm` |
+| print the equivalent Python | `--print-code python` (or `cli` / `both`, plus `--print-code-explicit`) |
 
 Use the installed command as the authoritative full reference:
 

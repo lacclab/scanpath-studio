@@ -540,7 +540,11 @@ def _call_kwargs(state: FigureState, *, explicit: bool) -> list[tuple[str, Any]]
     something, which is the same "only the non-defaults" rule by another route.
     """
     out: list[tuple[str, Any]] = []
-    if state.screen:
+    # `compare_scanpaths` has no `screen` parameter — the app pre-extracts each
+    # side's screen before handing over the frames — so emitting one there would
+    # be rejected as an unknown figure keyword. Reported by `state_caveats`
+    # instead of quietly producing a snippet that raises on the first run.
+    if state.screen and state.kind != "comparison":
         out.append(("screen", str(state.screen)))
     if state.canvas:
         out.append(("canvas_size", (int(state.canvas[0]), int(state.canvas[1]))))
@@ -559,7 +563,10 @@ def _call_kwargs(state: FigureState, *, explicit: bool) -> list[tuple[str, Any]]
             out.append(("fix_index_range", (int(lo), int(hi))))
         if state.drift_correction:
             out.append(("drift_correction", str(state.drift_correction)))
-            if state.drift_connectors:
+            # Connectors are the static builder's alone (the original→corrected
+            # layer has no comparison equivalent), so `compare_scanpaths` takes
+            # no such keyword — see CLAUDE.md's render-path table.
+            if state.drift_connectors and state.kind == "static":
                 out.append(("drift_connectors", True))
     if state.title:
         out.append(("title", str(state.title)))
@@ -776,6 +783,12 @@ def state_caveats(source: SnippetSource, state: FigureState) -> list[str]:
         notes.append(
             "The stimulus image was uploaded into the app, so the snippet "
             f"names `{_IMAGE_PLACEHOLDER}` instead — point it at your own file."
+        )
+    if state.kind == "comparison" and state.screen:
+        notes.append(
+            f"This is screen `{state.screen}` of a multipart trial. "
+            "`compare_scanpaths` compares whole trials, so slice each side to "
+            "its screen first (`multipart.extract_part`) and pass those frames."
         )
     return notes
 

@@ -8,6 +8,8 @@ true."""
 
 from __future__ import annotations
 
+import ast
+import inspect
 import shlex
 
 import pytest
@@ -278,6 +280,52 @@ def test_every_flag_a_snippet_can_emit_is_a_real_render_flag():
     assert emitted <= known, sorted(emitted - known)
 
 
+def _emitted_keywords(snippet: str) -> set[str]:
+    """The keyword names of the `sps.<builder>(...)` call in a snippet."""
+    tree = ast.parse(snippet)
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in cs._API_FUNCTION.values()
+        ):
+            return {kw.arg for kw in node.keywords if kw.arg}
+    raise AssertionError(f"no builder call in:\n{snippet}")
+
+
+@pytest.mark.parametrize("kind", cs.KINDS)
+def test_every_keyword_a_snippet_emits_is_one_its_builder_accepts(kind):
+    """The failure this catches is a snippet that raises on its first line.
+
+    `compare_scanpaths` takes neither `screen` nor `drift_connectors` — the app
+    pre-slices each side's screen, and the connector layer is the static
+    builder's alone — so a state carrying both used to emit a call that
+    `_reject_unknown_options` refuses."""
+    state = _state(
+        kind,
+        screen="page_1",
+        canvas=(1920, 1080),
+        base_font_size=20,
+        font_family="Courier New",
+        title="T",
+        caption="C",
+        fix_index_range=(1, 9),
+        drift_correction="warp",
+        drift_connectors=True,
+        playback_speed=2.0,
+        autoplay=False,
+        compare=cs.CompareTarget(participant="p2", trial="t2"),
+    )
+    builder = getattr(api, cs._API_FUNCTION[kind])
+    accepted = set(inspect.signature(builder).parameters) | set(
+        api.figure_options(kind)
+    )
+    emitted = _emitted_keywords(
+        cs.python_snippet(DEMO, state, explicit=True, output="out.png")
+    )
+    assert emitted <= accepted, sorted(emitted - accepted)
+
+
 # ---------------------------------------------------------------------------
 # The round-trips — the snippet is executed, not just read
 # ---------------------------------------------------------------------------
@@ -360,7 +408,7 @@ def test_the_python_snippet_rebuilds_the_same_figure(demo_trial):
     assert _figure_fingerprint(namespace["fig"]) == _figure_fingerprint(expected)
 
 
-def test_the_cli_snippet_runs_and_matches_the_python_one(tmp_path, demo_trial):
+def test_the_cli_snippet_parses_and_runs(tmp_path, demo_trial):
     _words, _fixations, participant, trial = demo_trial
     state = cs.FigureState(
         kind="static",

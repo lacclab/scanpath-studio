@@ -32,8 +32,22 @@ PAPER_FIGURES_DIR=../overleaf/figures uv run python paper/paper_figs.py
 | `paper_fig_corpus.py` | `fig_corpus` | full OneStop under `data/OneStop` (`datasets.download_onestop`) |
 | `paper_stats.py` | case-study descriptives + the measure validation | bundled demo (none) |
 | `paper_timings.py` | the runtime table | bundled demo, plus PoTeC for the long-trial row |
+| `paper_ui_screenshots.py` | `fig_interface`, `fig_ui_*` | a **running app** to point a browser at (see below) |
 
-`fig_interface` is a screenshot of the running application and is not scripted.
+The interface figures are the one set that cannot be rendered headlessly — they
+are screenshots of the application itself. `paper_ui_screenshots.py` drives a
+real browser over a running server, so they are reproducible all the same:
+
+```bash
+uv run streamlit run streamlit_app.py --server.port 8599   # in one shell
+PAPER_FIGURES_DIR=../overleaf/figures \
+    uv run --with playwright python paper/paper_ui_screenshots.py
+```
+
+It needs Playwright's Chromium (`playwright install chromium`, or point
+`PAPER_CHROME` at another Chrome binary) and talks to `PAPER_APP_URL`
+(default `http://localhost:8599`). Never overwrite `fig_interface` or a
+`fig_ui_*` figure from one of the headless scripts.
 
 ## Notes
 

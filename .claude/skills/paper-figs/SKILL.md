@@ -25,9 +25,11 @@ Run from the repository root (`app/`).
 | `paper_fig_corpus.py` | `fig_corpus` | full OneStop under `data/OneStop` (`datasets.download_onestop`) |
 | `paper_stats.py` | case-study descriptives + measure validation | bundled demo (none) |
 | `paper_timings.py` | runtime table | bundled demo + PoTeC |
+| `paper_ui_screenshots.py` | `fig_interface`, `fig_ui_*` | a **running app** — see step 6 |
 
-`fig_interface` is a screenshot of the running app — not scripted; never
-overwrite it from a script.
+`fig_interface` and the `fig_ui_*` figures are screenshots of the running app.
+They come only from `paper_ui_screenshots.py` (step 6) — never overwrite one
+from a headless script.
 
 ## Steps
 
@@ -47,3 +49,12 @@ overwrite it from a script.
    `../overleaf/figures` timestamps to confirm which figures changed.
 5. Optional (if requested or figures changed): recompile the manuscript with
    `latexmk -pdf sn-article.tex` in `../overleaf/` and report any errors.
+6. **Interface figures** (only when asked for them, or for `all`): these need
+   the app up. Start it — `uv run streamlit run streamlit_app.py --server.port
+   8599`, or the `scanpath` entry in `.claude/launch.json` — then run
+   `PAPER_FIGURES_DIR=../overleaf/figures uv run --with playwright python
+   paper/paper_ui_screenshots.py`. Playwright's Chromium must be installed
+   (`playwright install chromium`, or set `PAPER_CHROME`). The script leaves
+   the app on the Data page with nothing half-set-up; open the captures and
+   look at them before reporting, since a mid-rerun capture fails silently as a
+   blank or half-drawn panel.

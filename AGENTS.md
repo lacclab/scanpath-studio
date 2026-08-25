@@ -22,7 +22,7 @@ docs at <https://lacclab.github.io/OneStop-Eye-Movements/>), shipped under
 ```text
 scanpath_studio/
 ├─ app.py            entry point: page config, data load, trial filters, dispatch to the three views + the 💾 Session dialog (`_session_dialog`), and the 🗂️ Data page's two screens (📂 Available datasets / ✏️ Edit dataset, DATA-35)
-├─ url_state.py      deep links + plot-config save/restore (versioned via `PLOT_CONFIG_SCHEMA` + `_migrate_plot_config` — ENG-11) + Share link (`_build_share_query`, whose `include_participant=` / `include_trial=` are the DATA-16/S3 seam for withholding trial identity from a link) + the `main_nav` view helpers (`_active_view`/`_go_corpus`/`_go_scanpath`) the top nav reconciles against (split from app.py)
+├─ url_state.py      deep links + plot-config save/restore (versioned via `PLOT_CONFIG_SCHEMA` + `_migrate_plot_config` — ENG-11) + Share link (`_build_share_query`, whose `include_participant=` / `include_trial=` are the DATA-16/S3 seam for withholding trial identity from a link) + the Share subtab's EXP-7 code-snippet block (`_snippet_source` maps the loaded corpus to a `code_snippet.SnippetSource`; `_render_code_snippet_body` draws it) + the `main_nav` view helpers (`_active_view`/`_go_corpus`/`_go_scanpath`) the top nav reconciles against (split from app.py)
 ├─ menu.py          UX-38 → UX-100: what replaced the sidebar. `render_nav` draws Streamlit's native `st.navigation(position="top")` — three **views** (🗺️ Scanpath · 📊 Corpus Analysis · 🗂️ Data) plus the **action** entries (💾 Session and ❓ Help's Tutorials / FAQ / About), which arm a dialog and bounce the router back so the modal opens over the current view — and returns the active view. `render_top_menu` is left with the title row and the main-area `notices` slot; ⚙️ Configure and 🧹 Preprocessing became sections of the Data page (DATA-26), and 💾 Session's four blocks are `app._session_dialog`. Nothing in the app writes to `st.sidebar`
 ├─ session_keys.py   the session-state keys / URL params that are a wire format (share links + saved configs), as constants + frozen groupings — pinned by tests/test_session_key_contract.py so a rename fails a test instead of a user's old link (ENG-6)
 ├─ wizard.py         the Upload / Add-dataset wizard — guided data-setup flow (split from app.py)
@@ -51,6 +51,7 @@ scanpath_studio/
 ├─ computations.py   VAL-5: the computation register — 64 `Computation` entries (formula, units, grouping keys, missing behaviour, precedence, code link, tests, consumers, verification tier + status) covering everything that derives or semantically changes a user-visible value. Generates `docs/computations.md` (`python -m scanpath_studio.computations`); `tests/test_computations.py` pins it against `aggregation.MEASURES`, `alignment.ALGORITHMS` and the similarity metric so the catalogue cannot drift from the code
 ├─ model_scanpaths.py synthetic "model-generated" scanpaths over a real text's word boxes (Comparisons placeholder data)
 ├─ plots.py          `FigureSettings` is the shared render contract used by UI, API, export, scanpath, animation, and comparison builders; also owns the Plotly builders, render helpers, and separable-layer export
+├─ code_snippet.py   EXP-7: the API / CLI code that reproduces the figure on screen — a pure serializer over the same settings dict the builders consume (published as a `FigureState` by `tabs._publish_snippet_state`), diffed against `api.figure_options(kind)` so only the non-defaults are written. `_CLI_EMITTERS` is the `render` flag subset; anything outside it is *named* in `ReproductionCode.cli_unsupported`, never dropped
 ├─ export.py         configurable bulk-export module (PNG/SVG/JSON/CSV/Parquet/mega-table; VIZ-5 separable per-layer files via `plots.split_scanpath_layers`)
 ├─ animation_export.py rasterize the animated scanpath to GIF/MP4 (warm-Kaleido frame render + Pillow/imageio-ffmpeg encode)
 ├─ export_status.py  shared export stage/callback vocabulary + deterministic static-byte signatures
@@ -62,7 +63,7 @@ scanpath_studio/
 ├─ utils.py          trial-combo construction, trial-selection UI, comparison helpers
 ├─ constants.py      palette, defaults, citation metadata
 ├─ styles.py         injected CSS
-├─ api.py            headless public API (load/normalize, plot_scanpath, animate_scanpath, save_figure)
+├─ api.py            headless public API (load/normalize, plot_scanpath, animate_scanpath, save_figure, figure_code)
 ├─ cli.py            console entry: `run` launches the app, `render` builds figures headless via api.py
 ├─ __main__.py       `python -m scanpath_studio` → cli.main
 ├─ __init__.py       exposes __version__, main(), and lazy re-exports of the api.py surface

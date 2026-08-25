@@ -1918,6 +1918,119 @@ def save_figure_layers(
     return written
 
 
+def figure_code(
+    *,
+    kind: str = "static",
+    source: str = "demo",
+    source_options: dict | None = None,
+    participant: str = "",
+    trial: str = "",
+    screen: str | None = None,
+    compare: tuple[str, str] | None = None,
+    compare_layout: str = "overlay",
+    compare_stimulus: str = "both",
+    compare_dataset: str = "",
+    canvas_size: tuple[int, int] | None = None,
+    base_font_size: int = 16,
+    font_family: str = FONT_FAMILY,
+    title: str = "",
+    caption: str = "",
+    fix_index_range: tuple[int, int] | None = None,
+    illustration_label: str = "auto",
+    drift_correction: str | None = None,
+    drift_connectors: bool = False,
+    playback_speed: float = 1.0,
+    autoplay: bool = True,
+    flavor: str = "python",
+    explicit: bool = False,
+    output: str = "scanpath.png",
+    **figure_overrides,
+) -> str:
+    """The API or CLI code that reproduces a figure (EXP-7).
+
+    The headless twin of the app's 🔗 Share → *Reproduce this figure in code*
+    block: give it the same arguments you would give :func:`plot_scanpath`
+    (``kind="static"``), :func:`animate_scanpath` (``"animation"``) or
+    :func:`compare_scanpaths` (``"comparison"``) and it returns the snippet that
+    rebuilds that figure, rather than the figure::
+
+        print(sps.api.figure_code(participant="l7_101", trial="1_Adv_1",
+                                  show_heatmap=False, flavor="cli"))
+
+    ``source`` names how the data is loaded — ``"demo"``, ``"synthetic"``,
+    ``"files"``, ``"potec"``, ``"onestop"``, ``"multipleye"``, ``"benchmark"``,
+    ``"author"``, or ``"unknown"`` for data a snippet can't name — with
+    ``source_options`` carrying that loader's arguments (``{"root": …}``,
+    ``{"words": [...], "fixations": [...]}``, and so on).
+
+    ``compare_dataset`` names the corpus scanpath B was loaded from when it is a
+    *second* one (CMP-8). B's participant id belongs to that corpus rather than
+    the one the snippet loads, so naming it turns a snippet that would quietly
+    reference a missing reader into one that says where B comes from.
+
+    Only the options that differ from :func:`figure_options` are written, so the
+    snippet stays readable; ``explicit=True`` emits every option at its current
+    value. ``flavor`` is ``"python"``, ``"cli"``, or ``"both"`` (the two
+    separated by a blank line). Settings the CLI has no flag for are named in a
+    trailing comment rather than dropped — see
+    :class:`code_snippet.ReproductionCode` for the structured form.
+    """
+    from . import code_snippet as _snippet
+
+    if flavor not in ("python", "cli", "both"):
+        raise ValueError(f"flavor must be 'python', 'cli' or 'both', got {flavor!r}.")
+    _reject_unknown_options(
+        figure_overrides,
+        set(figure_options(kind)) | {"palette"},
+        "figure_code",
+    )
+    state = _snippet.FigureState(
+        kind=kind,
+        settings={**figure_options(kind), **_expand_palette(figure_overrides)},
+        participant=participant,
+        trial=trial,
+        screen=screen,
+        canvas=canvas_size,
+        base_font_size=base_font_size,
+        font_family=font_family,
+        title=title,
+        caption=caption,
+        fix_index_range=fix_index_range,
+        illustration_label=illustration_label,
+        drift_correction=drift_correction,
+        drift_connectors=drift_connectors,
+        playback_speed=playback_speed,
+        autoplay=autoplay,
+        compare=(
+            _snippet.CompareTarget(
+                participant=str(compare[0]),
+                trial=str(compare[1]),
+                layout=compare_layout,
+                compare_stimulus=compare_stimulus,
+                dataset=str(compare_dataset),
+            )
+            if compare is not None
+            else None
+        ),
+    )
+    code = _snippet.reproduction_code(
+        _snippet.SnippetSource(
+            kind=source, label=source, options=dict(source_options or {})
+        ),
+        state,
+        explicit=explicit,
+        output=output,
+    )
+    cli = code.cli
+    if code.cli_unsupported:
+        cli += "\n# No `render` flag for: " + ", ".join(code.cli_unsupported)
+    if flavor == "python":
+        return code.python
+    if flavor == "cli":
+        return cli
+    return f"{code.python}\n\n{cli}"
+
+
 def cache_status() -> dict:
     """Describe the on-device recovery cache a local app run keeps (ENG-30).
 

@@ -72,6 +72,29 @@ app's default view and change only the needed layers.
 
 ::: scanpath_studio.api.plot_corpus_figure
 
+## Reproduce a figure in code
+
+The app's 🔗 **Share** subtab shows the API or CLI code that rebuilds the figure
+currently on screen — copy it into a notebook or a terminal and the same plot
+comes back, ready to run over a batch of trials. `figure_code` is the headless
+form of that block, and `render --print-code` prints it for an invocation you
+already have.
+
+```python
+print(
+    sps.figure_code(
+        participant="l7_101",
+        trial="1_Adv_1",
+        show_heatmap=False,
+        color_by="duration_ms",
+    )
+)
+```
+
+::: scanpath_studio.api.figure_code
+
+::: scanpath_studio.api.figure_options
+
 ## Save
 
 ::: scanpath_studio.api.save_figure

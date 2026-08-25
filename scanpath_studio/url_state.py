@@ -20,6 +20,21 @@ import streamlit as st
 from scanpath_studio.html_embed import embed_html_iframe
 
 from .annotations import restore_records
+from .code_snippet import (
+    SNIPPET_STATE_KEY,
+    SOURCE_AUTHOR,
+    SOURCE_BENCHMARK,
+    SOURCE_DEMO,
+    SOURCE_MULTIPLEYE,
+    SOURCE_ONESTOP,
+    SOURCE_POTEC,
+    SOURCE_SYNTHETIC,
+    SOURCE_UNKNOWN,
+    UNKNOWN_SOURCE_NOTE,
+    FigureState,
+    SnippetSource,
+    reproduction_code,
+)
 from .constants import (
     _VIEW_CORPUS,
     _VIEW_DATA,
@@ -2091,6 +2106,208 @@ def _render_share_link_widget(query: str) -> None:
     )
 
 
+# -----------------------------------------------------------------------------
+# EXP-7 — the API / CLI code that reproduces the figure on screen
+# -----------------------------------------------------------------------------
+#: The Share subtab's two snippet controls. UI-only, exactly like
+#: `share_identity_mode`: they govern how the *recipe* is written, not what the
+#: figure is, so neither belongs on the wire — a deep link carrying "show me the
+#: CLI form" would be describing the reader's pane, not the view. If either is
+#: ever persisted into a saved config it has to join
+#: `session_keys.PLOT_CONFIG_STATE_KEYS` first.
+SNIPPET_FLAVOR_KEY = "snippet_flavor"
+SNIPPET_EXPLICIT_KEY = "snippet_explicit"
+
+_SNIPPET_FLAVORS = ("🐍 Python", "⌨️ CLI")
+
+#: Output filename the snippet saves to, per figure kind. An animation is
+#: interactive HTML; the static and comparison figures raster.
+_SNIPPET_OUTPUT = {
+    "static": "scanpath.png",
+    "comparison": "comparison.png",
+    "animation": "scanpath.html",
+}
+
+
+def _snippet_source(data_choice: str) -> SnippetSource:
+    """Describe the loaded data the way a script would have to load it.
+
+    Dispatches on the registry entry's **stable identifier** (`short` for a
+    built-in, `benchmark_dataset` for a prepared corpus), not the display label
+    — the same rule `corpus_slug` follows for the share link, and for the same
+    reason: the label is copy and can be reworded.
+
+    A corpus root is a *local path*, which is why it is emitted only when the
+    path box is the user's own (S2 `local_filesystem_enabled`). On a shared
+    deployment the location comes from the server's configuration and the user
+    never sees it, so quoting it back in a copyable snippet would hand every
+    visitor the server's layout. There the snippet carries a placeholder.
+    """
+    from scanpath_studio.app import local_filesystem_enabled
+
+    def root(key: str, placeholder: str) -> str:
+        if not local_filesystem_enabled():
+            return placeholder
+        return str(st.session_state.get(key) or placeholder)
+
+    if data_choice == DEMO_CHOICE:
+        return SnippetSource(kind=SOURCE_DEMO, label=DEMO_CHOICE)
+    if data_choice == SYNTHETIC_CHOICE:
+        return SnippetSource(kind=SOURCE_SYNTHETIC, label=SYNTHETIC_CHOICE)
+    if data_choice == AUTHOR_CHOICE:
+        return SnippetSource(
+            kind=SOURCE_AUTHOR,
+            label=AUTHOR_CHOICE,
+            options={"path": "scanpath.json"},
+            note=(
+                "An authored scanpath lives in this session — export it from "
+                "the ✍️ authoring panel first, then point the snippet at that "
+                "JSON file."
+            ),
+        )
+
+    corpus_label, spec = _selected_corpus(data_choice)
+    if spec.get("benchmark_dataset"):
+        return SnippetSource(
+            kind=SOURCE_BENCHMARK,
+            label=corpus_label,
+            options={
+                "root": root("eyegenbench_dir", "data/eyegenbench"),
+                "dataset": str(spec["benchmark_dataset"]),
+            },
+        )
+    short = str(spec.get("short") or "")
+    if short == "PoTeC":
+        return SnippetSource(
+            kind=SOURCE_POTEC,
+            label=corpus_label,
+            options={"root": root("potec_dir", "data/PoTeC")},
+        )
+    if short == "MultiplEYE":
+        fixation_source = str(
+            st.session_state.get("multipleye_fixation_source") or "scanpaths"
+        )
+        return SnippetSource(
+            kind=SOURCE_MULTIPLEYE,
+            label=corpus_label,
+            options={
+                "root": root("multipleye_dir", "data/MultiplEYE"),
+                "fixation_source": fixation_source,
+            },
+            # `render --source multipleye` has no fixation-source flag, so the
+            # non-default reading of the corpus can only be said in Python.
+            cli_unsupported=(
+                () if fixation_source == "scanpaths" else ("fixation_source",)
+            ),
+        )
+    if short == "OneStop" or data_choice in (ONESTOP_CHOICE, ONESTOP_PUBLIC_CHOICE):
+        variant = str(st.session_state.get("onestop_variant") or "public")
+        note = ""
+        if data_choice == ONESTOP_CHOICE:
+            # The 🗄️ server bundle is the lab export by definition; it has no
+            # variant picker of its own. It is also read through a *different*
+            # loader from the public one — `data.load_onestop_server_bundle`,
+            # which takes the per-pid shards or the CSV.zip exports under
+            # `$ONESTOP_DATA_DIR`. `load_onestop` is the public API's nearest
+            # twin but reads the regime/part report layout, so the difference is
+            # stated rather than papered over: a snippet that silently pointed
+            # the wrong loader at the right folder would fail on the user's
+            # machine with nothing to explain it.
+            variant = "lacclab"
+            note = (
+                "The app read this through its **server-bundle** path "
+                "(`$ONESTOP_DATA_DIR`, per-participant shards or the CSV.zip "
+                "exports). The snippet uses the public `load_onestop` loader, "
+                "which expects the regime/part report layout in that same "
+                "folder — point it at your reports if the two differ."
+            )
+        parts = st.session_state.get("onestop_parts")
+        return SnippetSource(
+            kind=SOURCE_ONESTOP,
+            label=corpus_label or data_choice,
+            options={
+                "root": root(f"onestop_{variant}_dir", "data/OneStop"),
+                "regime": str(st.session_state.get("onestop_regime") or "ordinary"),
+                "variant": variant,
+                "parts": list(parts) if parts else ["Paragraph"],
+            },
+            note=note,
+        )
+    if data_choice == MULTIPLEYE_BUNDLE_CHOICE:
+        # Unlike OneStop's, this bundle loader *is* `multipleye_raw_frames` over
+        # the configured root — the same call `load_multipleye` makes — so the
+        # snippet reproduces it exactly and needs no caveat.
+        return SnippetSource(
+            kind=SOURCE_MULTIPLEYE,
+            label=MULTIPLEYE_BUNDLE_CHOICE,
+            options={"root": root("multipleye_dir", "data/MultiplEYE")},
+        )
+    return SnippetSource(
+        kind=SOURCE_UNKNOWN,
+        label=data_choice,
+        note=UNKNOWN_SOURCE_NOTE,
+    )
+
+
+def _render_code_snippet_body(data_choice: str) -> None:
+    """Render the **reproduce this figure in code** block of the Share subtab.
+
+    The figure state comes from `tabs._publish_snippet_state`, written on the
+    run that drew the figure — so what is quoted here is the plot's own input,
+    not a second reading of the widgets. Nothing is rendered when no scanpath
+    has been drawn this session (the Corpus view can reach this panel).
+    """
+    state = st.session_state.get(SNIPPET_STATE_KEY)
+    if not isinstance(state, FigureState):
+        st.caption(
+            "Open a trial on the 🗺️ Scanpath view and the code that rebuilds "
+            "its figure appears here."
+        )
+        return
+
+    st.markdown(
+        "**Reproduce this figure in code** — paste it into a notebook or a "
+        "terminal to rebuild exactly this plot, headlessly."
+    )
+    flavor_col, explicit_col = st.columns([2, 3], vertical_alignment="center")
+    flavor = flavor_col.segmented_control(
+        "Flavour",
+        options=_SNIPPET_FLAVORS,
+        default=_SNIPPET_FLAVORS[0],
+        key=SNIPPET_FLAVOR_KEY,
+        label_visibility="collapsed",
+    )
+    explicit = explicit_col.checkbox(
+        "Show every option",
+        key=SNIPPET_EXPLICIT_KEY,
+        help="By default only the options you changed are written, so the "
+        "snippet stays readable. Tick this for the full explicit form — every "
+        "figure option at its current value.",
+    )
+    code = reproduction_code(
+        _snippet_source(data_choice),
+        state,
+        explicit=bool(explicit),
+        output=_SNIPPET_OUTPUT.get(state.kind, "scanpath.png"),
+    )
+    # Inspectable from AppTest without re-deriving it (same trick as
+    # `_share_query_current` above).
+    st.session_state["_snippet_code_current"] = code
+    for note in code.caveats:
+        st.caption("⚠️ " + note)
+    if flavor == _SNIPPET_FLAVORS[1]:
+        if code.cli_unsupported:
+            st.caption(
+                "⚠️ `render` has no flag for "
+                + ", ".join(f"`{name}`" for name in code.cli_unsupported)
+                + " — the 🐍 Python form carries "
+                + ("them." if len(code.cli_unsupported) > 1 else "it.")
+            )
+        st.code(code.cli, language="bash")
+    else:
+        st.code(code.python, language="python")
+
+
 def _render_share_body(data_choice: str) -> None:
     """Render the **Share** subtab: a deep link to the current view (data source +
     trial + visualization settings).
@@ -2114,6 +2331,8 @@ def _render_share_body(data_choice: str) -> None:
         "If the recipient runs Scanpath Studio at a different address or port, "
         "replace the start of the URL before opening it."
     )
+    st.divider()
+    _render_code_snippet_body(data_choice)
 
 
 # -----------------------------------------------------------------------------

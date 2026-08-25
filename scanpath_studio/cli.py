@@ -22,6 +22,7 @@ from pathlib import Path
 import pandas as pd
 
 from . import __version__
+from .code_snippet import SnippetSource
 from .constants import (
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_SYMBOL,
@@ -733,6 +734,24 @@ def _render_parser() -> argparse.ArgumentParser:
         help="With --animate: cap the frame count at N (default: 360). A long "
         "reading coarsens the grid to stay under it.",
     )
+    # EXP-7: the same reproduction snippet the app's 🔗 Share subtab shows,
+    # for the invocation you just typed. Chiefly a *translation*: "I have this
+    # render command, give me the Python for my notebook."
+    viz.add_argument(
+        "--print-code",
+        choices=["python", "cli", "both"],
+        default=None,
+        metavar="FLAVOUR",
+        help="Print the API / CLI code that reproduces this figure to stdout "
+        "(python | cli | both), then render as usual (EXP-7). Only the options "
+        "that differ from the defaults are written.",
+    )
+    viz.add_argument(
+        "--print-code-explicit",
+        action="store_true",
+        help="With --print-code: write every figure option at its current "
+        "value instead of only the non-defaults.",
+    )
 
     # CMP-9 — compare mode's CLI surface. B comes either from the dataset
     # already loaded (--compare-with alone) or from a second pair of tables.
@@ -973,6 +992,186 @@ def _parse_canvas(value: str | None) -> tuple | None:
     if w <= 0 or h <= 0:
         raise SystemExit(f"--canvas dimensions must be positive, got {value!r}")
     return (w, h)
+
+
+def _snippet_source_from_args(args) -> SnippetSource:
+    """Which ``SnippetSource`` the render command's own input flags describe.
+
+    The inverse of the ``--sample`` / ``--words`` / ``--potec`` / … group, so
+    ``--print-code python`` hands back a loader call that reads the same corpus
+    this invocation just read."""
+    from . import code_snippet as cs
+
+    if args.authoring:
+        return cs.SnippetSource(
+            kind=cs.SOURCE_AUTHOR, label="authored", options={"path": args.authoring}
+        )
+    if args.potec:
+        return cs.SnippetSource(
+            kind=cs.SOURCE_POTEC, label="PoTeC", options={"root": args.potec}
+        )
+    if args.eyegenbench:
+        return cs.SnippetSource(
+            kind=cs.SOURCE_BENCHMARK,
+            label=args.eyegenbench_dataset or "benchmark",
+            options={
+                "root": args.eyegenbench,
+                "dataset": args.eyegenbench_dataset or "",
+            },
+        )
+    if args.onestop:
+        return cs.SnippetSource(
+            kind=cs.SOURCE_ONESTOP,
+            label="OneStop",
+            options={
+                "root": args.onestop,
+                "regime": args.onestop_regime,
+                "variant": args.onestop_variant,
+                "parts": list(args.onestop_part or ["Paragraph"]),
+            },
+        )
+    if args.source == "multipleye":
+        return cs.SnippetSource(
+            kind=cs.SOURCE_MULTIPLEYE,
+            label="MultiplEYE",
+            options={"root": args.export or "data/MultiplEYE"},
+        )
+    if args.words or args.fixations:
+        return cs.SnippetSource(
+            kind=cs.SOURCE_FILES,
+            label="files",
+            options={
+                "words": list(args.words or []),
+                "fixations": list(args.fixations or []),
+            },
+        )
+    return cs.SnippetSource(kind=cs.SOURCE_DEMO, label="Bundled Demo")
+
+
+def _print_reproduction_code(api, args, overrides: dict, canvas, participant, trial):
+    """EXP-7: print the snippet that rebuilds the figure this invocation renders.
+
+    Built from ``overrides`` — the very dict handed to the builder a few lines
+    below — merged onto the kind's effective defaults, so the printed recipe is
+    a serializer over the figure's own input rather than a second reading of
+    ``args``. ``--palette`` is expanded first, exactly as ``api`` expands it, or
+    the snippet would name a preset the figure had already resolved away.
+    """
+    from . import code_snippet as cs
+
+    kind = (
+        "animation"
+        if args.animate
+        else "comparison"
+        if args.compare_with is not None
+        else "static"
+    )
+    settings = {**api.figure_options(kind), **api._expand_palette(dict(overrides))}
+    # These two are passed to `animate_scanpath` beside the overrides rather
+    # than through them, so they never reached `settings` — a straight silent
+    # drop of two real `figure_options("animation")` keys.
+    if kind == "animation":
+        for name, value in (
+            ("anim_grid_step_ms", args.anim_grid_step_ms),
+            ("anim_max_frames", args.anim_max_frames),
+        ):
+            if value is not None:
+                settings[name] = value
+    compare = None
+    if args.compare_with is not None:
+        compare_participant, compare_trial = _parse_compare_with(args.compare_with)
+        compare = cs.CompareTarget(
+            participant=compare_participant,
+            trial=compare_trial,
+            layout=args.compare_layout,
+            compare_stimulus=args.compare_stimulus,
+            # CMP-8: B came from a second corpus exactly when its own frames
+            # were given, so B's ids are that corpus's — the same caveat the
+            # app's Share panel raises.
+            dataset=(
+                str(args.compare_dataset_name or "Dataset B")
+                if (args.compare_words or args.compare_fixations)
+                else ""
+            ),
+        )
+    state = cs.FigureState(
+        kind=kind,
+        settings=settings,
+        participant=str(participant),
+        trial=str(trial),
+        screen=args.screen,
+        canvas=canvas,
+        base_font_size=args.font_size,
+        font_family=args.font_family or FONT_FAMILY,
+        title=args.title or "",
+        caption=args.caption or "",
+        illustration_label=str(args.illustration_label or "auto").lower(),
+        drift_correction=args.drift_correction,
+        drift_connectors=bool(args.drift_connectors),
+        playback_speed=args.playback_speed,
+        autoplay=args.autoplay,
+        compare=compare,
+    )
+    # `save_figure`'s own defaults, so a plain invocation writes a plain save
+    # line and only a deliberate `--width` / `--scale` shows up.
+    save_kwargs = {
+        name: value
+        for name, value in (
+            ("scale", args.scale),
+            ("width", args.width),
+            ("height", args.height),
+        )
+        if value is not None and not (name == "scale" and value == 2.0)
+    }
+    caveats = []
+    if args.all_screens:
+        caveats.append(
+            "--all-screens renders every screen of the parent trial; the "
+            "snippet rebuilds one screen. Use api.render_parent_trial(...) for "
+            "the whole set."
+        )
+    # A `render` input that changes the figure but has no `FigureState` field is
+    # named, never dropped — the same rule `cli_unsupported` applies in the other
+    # direction. Translating a command into a notebook cell has to be honest
+    # about the parts of the command that didn't come along.
+    if args.monitor_mm is not None or args.viewing_distance is not None:
+        caveats.append(
+            "--monitor-mm / --viewing-distance describe the recording setup; "
+            "the snippet has no field for them. Build an "
+            "experimental_setup.SetupSnapshot and pass it as `setup=`."
+        )
+    if args.image_root:
+        caveats.append(
+            "--image-root / --image-pattern resolve one stimulus image per row; "
+            "the snippet names no image. Pass the resolved file as "
+            "`background_image=`."
+        )
+    if args.all_screens and args.screen_transition != "instant":
+        caveats.append(
+            f"--screen-transition {args.screen_transition} only affects the "
+            "--all-screens metadata, which the single-figure snippet omits."
+        )
+    code = cs.reproduction_code(
+        _snippet_source_from_args(args),
+        state,
+        explicit=bool(args.print_code_explicit),
+        output=args.output or "scanpath.png",
+        save_kwargs=save_kwargs,
+        extra_caveats=tuple(caveats),
+    )
+    blocks = []
+    if args.print_code in ("python", "both"):
+        blocks.append(code.python)
+    if args.print_code in ("cli", "both"):
+        cli = code.cli
+        if code.cli_unsupported:
+            cli += "\n# No `render` flag for: " + ", ".join(code.cli_unsupported)
+        blocks.append(cli)
+    # stdout, not stderr: this is the requested output, and it has to survive a
+    # `> recipe.py` redirect while the progress lines stay on the terminal.
+    print("\n\n".join(blocks))
+    for note in code.caveats:
+        print(f"Note: {note}", file=sys.stderr)
 
 
 def _parse_xy(value: str | None) -> tuple | None:
@@ -1504,6 +1703,8 @@ def render(argv: list[str]) -> None:
         title=args.title or "",
         caption=args.caption or "",
     )
+    if args.print_code:
+        _print_reproduction_code(api, args, overrides, canvas, participant, trial)
     try:
         if args.animate:
             # The animation builder supports a subset of the static layers;

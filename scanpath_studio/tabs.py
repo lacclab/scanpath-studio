@@ -7,6 +7,7 @@ import html
 import json
 import os
 from collections.abc import Callable
+from dataclasses import fields as dataclass_fields
 from dataclasses import replace
 from typing import Any
 
@@ -54,6 +55,11 @@ from scanpath_studio.animation_export import (
     mime_for,
 )
 from scanpath_studio.annotations import filter_keys, render_trial_annotations
+from scanpath_studio.code_snippet import (
+    SNIPPET_STATE_KEY,
+    CompareTarget,
+    FigureState,
+)
 from scanpath_studio.compare_source import (
     COMPARE_SOURCE_KEY,
     THIS_DATASET,
@@ -1134,6 +1140,109 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         word_hover_fields=viz_settings.get("word_hover_fields"),
         fixation_hover_fields=viz_settings.get("fixation_hover_fields"),
     )
+
+
+def _publish_snippet_state(
+    kind: str,
+    figure_settings: dict,
+    viz_settings: dict,
+    *,
+    participant: str,
+    trial: str,
+    screen: str | None,
+    canvas: tuple[int, int],
+    base_font_size: int,
+    font_family: str,
+    title: str,
+    caption: str,
+    playback_speed: float,
+    compare: CompareTarget | None,
+) -> None:
+    """EXP-7: park the state the Share subtab's code snippet is written from.
+
+    Published from the render path rather than re-read from the widgets, so the
+    snippet is a serializer over the **figure's own input** — the same reason
+    `_share_selection` is written here and not rebuilt inside the Share panel.
+    A separate emitter reading `session_state` a second time is exactly the
+    drift the issue (EXP-7) asked to avoid.
+    """
+    st.session_state[SNIPPET_STATE_KEY] = FigureState(
+        kind=kind,
+        settings=dict(figure_settings),
+        participant=str(participant),
+        trial=str(trial),
+        screen=None if screen is None else str(screen),
+        canvas=(int(canvas[0]), int(canvas[1])),
+        base_font_size=int(base_font_size),
+        font_family=str(font_family),
+        title=title,
+        caption=caption,
+        fix_index_range=viz_settings.get("fix_index_range"),
+        # "Off" is the rail's word for no correction; the API's is None.
+        drift_correction=(
+            None
+            if str(viz_settings.get("align_algorithm", "Off")) == "Off"
+            else str(viz_settings["align_algorithm"])
+        ),
+        drift_connectors=bool(viz_settings.get("align_connectors")),
+        # The rail's choice, not the reasons it resolved to: `illustration_reasons`
+        # is derived, so a snippet that carried only that would re-derive at
+        # "auto" and disagree with a figure whose disclosure was forced on/off.
+        illustration_label=str(viz_settings.get("illustration_label", "Auto")).lower(),
+        playback_speed=float(playback_speed or 1.0),
+        autoplay=bool(viz_settings.get("anim_autoplay", True)),
+        compare=compare,
+    )
+
+
+def _amend_snippet_settings(settings, kind: str) -> None:
+    """Correct the published snippet's settings to the ones the figure used.
+
+    `_publish_snippet_state` runs above the three render branches and carries
+    `_build_figure_settings`'s dict, but each branch then layers its own
+    `with_overrides(...)` on top — the comparison's per-scanpath `style_a` /
+    `style_b` / `show_legend` / `trial_labels`, the animation's frame budget —
+    and *those* are what the figure is actually built from. `figure_kwargs`
+    skips any key the published dict never carried, so without this the snippet
+    silently reproduced them at their defaults: a Compare figure hand-coloured
+    in the rail came back in the stock palette.
+
+    Only keys the chosen builder accepts are merged, so this cannot widen the
+    published dict into something `api` would reject.
+    """
+    from . import api
+
+    state = st.session_state.get(SNIPPET_STATE_KEY)
+    if state is None:
+        return
+    known = {field.name for field in dataclass_fields(type(settings))}
+    merged = dict(state.settings)
+    merged.update(
+        {
+            name: getattr(settings, name)
+            for name in api.figure_options(kind)
+            if name in known
+        }
+    )
+    st.session_state[SNIPPET_STATE_KEY] = replace(state, settings=merged)
+
+
+def _amend_snippet_title_caption(title: str, caption: str) -> None:
+    """Correct the published snippet's title/caption to what the figure carries.
+
+    `_publish_snippet_state` runs *above* the three render branches (so a trial
+    that draws nothing still gets a snippet), but the branches render the
+    pattern against different context — the comparison path passes a
+    `compare_row` and the unsliced trial, the animation path passes no
+    `combo_row`. Rendering it once, context-free, therefore produced a snippet
+    whose `title=` disagreed with the figure: `{participant_id_b}` resolving to
+    `""` in Compare mode is the visible case. `_apply_title_caption` is the one
+    place that knows the final text, so it hands it back here.
+    """
+    state = st.session_state.get(SNIPPET_STATE_KEY)
+    if state is None:
+        return
+    st.session_state[SNIPPET_STATE_KEY] = replace(state, title=title, caption=caption)
 
 
 def _figure_input_key(
@@ -3174,6 +3283,55 @@ def _apply_preprocessing_caption(fig, participant, trial) -> None:
     fig.update_layout(meta=metadata)
 
 
+def _rendered_title_caption(
+    viz_settings: dict,
+    trial_words: pd.DataFrame,
+    trial_fixations: pd.DataFrame,
+    participant: str,
+    trial: str,
+    combo_row: dict | None = None,
+    dataset_name: str | None = None,
+    compare_row: dict | None = None,
+) -> tuple[str, str]:
+    """The rail's title/caption **patterns rendered against this trial**.
+
+    Split out of `_apply_title_caption` for EXP-7: the reproduction snippet has
+    to pass the same literal strings to `api.plot_scanpath(title=…, caption=…)`
+    that the figure on screen carries, and `plot_scanpath` takes literal text
+    rather than the rail's `{trial_id}` pattern. Rendering it twice from the
+    pattern would be the drift this whole feature exists to avoid."""
+    title_pattern = viz_settings.get("title_pattern") or ""
+    caption_pattern = viz_settings.get("caption_pattern") or ""
+    if not title_pattern and not caption_pattern:
+        return "", ""
+    settings_summary_input = {
+        "show_words": viz_settings.get("show_words", False),
+        "show_word_labels": viz_settings.get("show_labels", True),
+        "show_fixations": viz_settings.get("show_fix", True),
+        "show_saccades": viz_settings.get("show_saccades", True),
+        "show_heatmap": viz_settings.get("show_heatmap", False),
+        "color_by": viz_settings.get("color_by"),
+        "palette": viz_settings.get("palette"),
+    }
+    fields = pattern_fields(
+        participant,
+        trial,
+        trial_words,
+        trial_fixations,
+        settings_summary_input,
+        combo_row=combo_row,
+        # VIZ-36: the name the dataset picker shows. `current_dataset_name()`
+        # is the session default so the three in-app render paths (static,
+        # animation, compare) all get it without each remembering to.
+        dataset_name=current_dataset_name() if dataset_name is None else dataset_name,
+        compare_row=compare_row,
+    )
+    return (
+        render_pattern(title_pattern, fields) if title_pattern else "",
+        render_pattern(caption_pattern, fields) if caption_pattern else "",
+    )
+
+
 def _apply_title_caption(
     fig,
     viz_settings: dict,
@@ -3200,34 +3358,23 @@ def _apply_title_caption(
     — the `{settings}` placeholder only needs a handful of them, and the
     animation/comparison call sites don't otherwise need a full figure-builder
     settings dict at all."""
-    title_pattern = viz_settings.get("title_pattern") or ""
-    caption_pattern = viz_settings.get("caption_pattern") or ""
-    if not title_pattern and not caption_pattern:
-        return
-    settings_summary_input = {
-        "show_words": viz_settings.get("show_words", False),
-        "show_word_labels": viz_settings.get("show_labels", True),
-        "show_fixations": viz_settings.get("show_fix", True),
-        "show_saccades": viz_settings.get("show_saccades", True),
-        "show_heatmap": viz_settings.get("show_heatmap", False),
-        "color_by": viz_settings.get("color_by"),
-        "palette": viz_settings.get("palette"),
-    }
-    fields = pattern_fields(
-        participant,
-        trial,
+    title, caption = _rendered_title_caption(
+        viz_settings,
         trial_words,
         trial_fixations,
-        settings_summary_input,
+        participant,
+        trial,
         combo_row=combo_row,
-        # VIZ-36: the name the dataset picker shows. `current_dataset_name()`
-        # is the session default so the three in-app render paths (static,
-        # animation, compare) all get it without each remembering to.
-        dataset_name=current_dataset_name() if dataset_name is None else dataset_name,
+        dataset_name=dataset_name,
         compare_row=compare_row,
     )
-    title = render_pattern(title_pattern, fields) if title_pattern else ""
-    caption = render_pattern(caption_pattern, fields) if caption_pattern else ""
+    # EXP-7: the snippet's `title=` / `caption=` must be *this* text, rendered
+    # with this branch's frames / combo_row / compare_row — see
+    # `_amend_snippet_title_caption`. Amended even when both are empty, so a
+    # branch that renders to nothing clears the pre-published pair.
+    _amend_snippet_title_caption(title, caption)
+    if not title and not caption:
+        return
     annotate_figure(fig, title=title, caption=caption)
 
 
@@ -3346,6 +3493,7 @@ def _build_and_render_animation(
         anim_grid_step_ms=grid_step_ms,
         anim_max_frames=max_frames,
     )
+    _amend_snippet_settings(animation_settings, "animation")
     fig = make_scanpath_animation(
         trial_words,
         trial_fixations,
@@ -4907,6 +5055,76 @@ def render_single_trial_tab(
         and (not cross_dataset or compare_comparable)
     )
 
+    # EXP-7: publish the state the 🔗 Share subtab writes its reproduction
+    # snippet from — the same `figure_settings` the builders below consume,
+    # the same title/caption text `_apply_title_caption` will stamp on. Kept
+    # above the three render branches so it is written whichever one draws,
+    # and so an empty-fixations trial (which draws nothing) still has a
+    # snippet for the settings on the rail.
+    _snippet_primary_combo = combos[
+        (combos["participant_id"] == selected_participant)
+        & (combos["trial_id"] == selected_trial)
+    ]
+    _snippet_title, _snippet_caption = _rendered_title_caption(
+        viz_settings,
+        trial_words,
+        plot_fixations,
+        selected_participant,
+        selected_trial,
+        combo_row=(
+            _snippet_primary_combo.iloc[0].to_dict()
+            if not _snippet_primary_combo.empty
+            else None
+        ),
+        # Every branch that draws overwrites this pair through
+        # `_amend_snippet_title_caption`, so what is rendered here only survives
+        # on the one path that draws nothing: animation on a trial with no
+        # fixations. That path can still be *comparing*, and a `{…_b}`
+        # placeholder left blank there is the same drift the amend exists to
+        # stop — so B is named here too.
+        compare_row=(
+            {
+                "dataset_name": _compare_dataset_name(compare_meta),
+                "participant_id": compare_meta["raw_participant"],
+                "trial_id": compare_meta["trial"],
+            }
+            if comparing and compare_meta is not None
+            else None
+        ),
+    )
+    _publish_snippet_state(
+        "animation"
+        if animate and not trial_fixations.empty
+        else "comparison"
+        if comparing
+        else "static",
+        figure_settings,
+        viz_settings,
+        participant=selected_participant,
+        trial=selected_trial,
+        screen=selected_screen,
+        canvas=(canvas_width, canvas_height),
+        base_font_size=base_font_size,
+        font_family=font_family,
+        title=_snippet_title,
+        caption=_snippet_caption,
+        playback_speed=playback_speed,
+        compare=(
+            CompareTarget(
+                # The real ids, never the CMP-8 namespaced ones — a snippet
+                # names readers the way their own corpus does, exactly as the
+                # Share link does two blocks above.
+                participant=str(compare_meta["raw_participant"]),
+                trial=str(compare_meta["trial"]),
+                layout=str(compare_layout),
+                compare_stimulus=str(compare_stimulus),
+                dataset=str(compare_meta.get("dataset") or ""),
+            )
+            if comparing and compare_meta is not None
+            else None
+        ),
+    )
+
     # Animation info box, in its slot inside the rail's Playback popover.
     if animate and not fig_fixations.empty and anim_info_slot is not None:
         with anim_info_slot:
@@ -5021,6 +5239,7 @@ def render_single_trial_tab(
                     )
             static_settings = render_settings.with_overrides(**extra_settings)
             build_inputs = static_settings.for_builder(STATIC_FIGURE_OPTIONS)
+            _amend_snippet_settings(static_settings, "static")
             build_inputs["raw_gaze"] = figure_raw_gaze
             displayed_fig = _cached_scanpath_figure(
                 trial_words,
@@ -5460,6 +5679,7 @@ def _render_comparison_figure(
             dropped_metric = str(overrides["heatmap_metric"])
             overrides["heatmap_metric"] = "duration_ms"
     comparison_settings = settings.with_overrides(**overrides)
+    _amend_snippet_settings(comparison_settings, "comparison")
     fig_compare = make_comparison_figure(
         words_filtered,
         fixations_filtered,

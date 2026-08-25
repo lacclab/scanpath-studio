@@ -12,6 +12,8 @@ __all__ = [
     "clear_cache",
     "compare_scanpaths",
     "compute_word_metrics",
+    "figure_code",
+    "figure_options",
     "list_parts",
     "list_trials",
     "load_authored_scanpath",

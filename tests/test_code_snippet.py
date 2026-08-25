@@ -79,7 +79,6 @@ def test_derived_settings_are_never_quoted():
     code = cs.reproduction_code(DEMO, state)
     assert "connector_y" not in code.python
     assert "drift_connectors=True" in code.python
-    assert "--drift-connectors" in code.cli
 
 
 # ---------------------------------------------------------------------------
@@ -269,7 +268,10 @@ def test_every_flag_a_snippet_can_emit_is_a_real_render_flag():
             key: value
             for key, value in api.figure_options("static").items()
             if key not in cs._DERIVED_SETTINGS
-        }
+        },
+        # PRE-21's gated pair: emitted only when `_render_parser` also has them.
+        drift_correction="warp",
+        drift_connectors=True,
     )
     command = cs.reproduction_code(DEMO, state, explicit=True).cli
     emitted = {
@@ -679,3 +681,56 @@ def test_a_shared_deployment_never_quotes_the_servers_data_path(monkeypatch):
     )
     assert "/srv/private" not in source.options["root"]
     assert "/srv/private" not in cs.reproduction_code(source, _state()).python
+
+
+# ---------------------------------------------------------------------------
+# What a copied command must not do (review follow-ups)
+# ---------------------------------------------------------------------------
+def test_drift_flags_are_emitted_only_where_the_parser_has_them(monkeypatch):
+    """PRE-21 gates them, and a snippet is copied into *another* terminal.
+
+    Emitting them from a session that happens to have SCANPATH_EXPERIMENTAL set
+    hands over a command that dies on `unrecognized arguments`."""
+    state = _state(drift_correction="warp", drift_connectors=True)
+
+    monkeypatch.delenv("SCANPATH_EXPERIMENTAL", raising=False)
+    command, unsupported = cs.cli_snippet(DEMO, state)
+    assert "--drift-correction" not in command
+    assert "--drift-connectors" not in command
+    assert {"drift_correction", "drift_connectors"} <= set(unsupported)
+
+    monkeypatch.setenv("SCANPATH_EXPERIMENTAL", "1")
+    command, unsupported = cs.cli_snippet(DEMO, state)
+    assert "--drift-correction warp" in command
+    assert "--drift-connectors" in command
+    assert "drift_correction" not in unsupported
+
+
+def test_the_illustration_disclosure_choice_reaches_both_snippets():
+    """`illustration_reasons` is derived; the *label mode* is the rail choice.
+
+    Without it a snippet re-derives at "auto", so a figure whose disclosure was
+    forced Hide reproduces with it showing."""
+    state = _state(illustration_label="hide")
+    code = cs.reproduction_code(DEMO, state)
+    assert "illustration_label='hide'" in code.python
+    assert "--illustration-label hide" in code.cli
+    # The default stays silent, like every other non-default rule here.
+    assert "illustration_label" not in cs.reproduction_code(DEMO, _state()).python
+
+
+def test_a_cross_dataset_comparison_says_whose_reader_b_is():
+    """CMP-8: B's participant id belongs to *its* corpus, not the loaded one."""
+    state = _state(
+        kind="comparison",
+        compare=cs.CompareTarget(participant="reader_07", trial="t9", dataset="PoTeC"),
+    )
+    notes = " ".join(cs.reproduction_code(DEMO, state).caveats)
+    assert "PoTeC" in notes and "reader_07" in notes
+    # A same-dataset comparison has nothing to warn about.
+    same = _state(
+        kind="comparison", compare=cs.CompareTarget(participant="p2", trial="t1")
+    )
+    assert not any(
+        "second dataset" in n for n in cs.reproduction_code(DEMO, same).caveats
+    )

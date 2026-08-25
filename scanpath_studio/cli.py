@@ -1087,6 +1087,7 @@ def _print_reproduction_code(api, args, overrides: dict, canvas, participant, tr
         font_family=args.font_family or FONT_FAMILY,
         title=args.title or "",
         caption=args.caption or "",
+        illustration_label=str(args.illustration_label or "auto").lower(),
         drift_correction=args.drift_correction,
         drift_connectors=bool(args.drift_connectors),
         playback_speed=args.playback_speed,
@@ -1110,6 +1111,27 @@ def _print_reproduction_code(api, args, overrides: dict, canvas, participant, tr
             "--all-screens renders every screen of the parent trial; the "
             "snippet rebuilds one screen. Use api.render_parent_trial(...) for "
             "the whole set."
+        )
+    # A `render` input that changes the figure but has no `FigureState` field is
+    # named, never dropped — the same rule `cli_unsupported` applies in the other
+    # direction. Translating a command into a notebook cell has to be honest
+    # about the parts of the command that didn't come along.
+    if args.monitor_mm is not None or args.viewing_distance is not None:
+        caveats.append(
+            "--monitor-mm / --viewing-distance describe the recording setup; "
+            "the snippet has no field for them. Build an "
+            "experimental_setup.SetupSnapshot and pass it as `setup=`."
+        )
+    if args.image_root:
+        caveats.append(
+            "--image-root / --image-pattern resolve one stimulus image per row; "
+            "the snippet names no image. Pass the resolved file as "
+            "`background_image=`."
+        )
+    if args.all_screens and args.screen_transition != "instant":
+        caveats.append(
+            f"--screen-transition {args.screen_transition} only affects the "
+            "--all-screens metadata, which the single-figure snippet omits."
         )
     code = cs.reproduction_code(
         _snippet_source_from_args(args),

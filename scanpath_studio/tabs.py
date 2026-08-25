@@ -1184,10 +1184,32 @@ def _publish_snippet_state(
             else str(viz_settings["align_algorithm"])
         ),
         drift_connectors=bool(viz_settings.get("align_connectors")),
+        # The rail's choice, not the reasons it resolved to: `illustration_reasons`
+        # is derived, so a snippet that carried only that would re-derive at
+        # "auto" and disagree with a figure whose disclosure was forced on/off.
+        illustration_label=str(viz_settings.get("illustration_label", "Auto")).lower(),
         playback_speed=float(playback_speed or 1.0),
         autoplay=bool(viz_settings.get("anim_autoplay", True)),
         compare=compare,
     )
+
+
+def _amend_snippet_title_caption(title: str, caption: str) -> None:
+    """Correct the published snippet's title/caption to what the figure carries.
+
+    `_publish_snippet_state` runs *above* the three render branches (so a trial
+    that draws nothing still gets a snippet), but the branches render the
+    pattern against different context — the comparison path passes a
+    `compare_row` and the unsliced trial, the animation path passes no
+    `combo_row`. Rendering it once, context-free, therefore produced a snippet
+    whose `title=` disagreed with the figure: `{participant_id_b}` resolving to
+    `""` in Compare mode is the visible case. `_apply_title_caption` is the one
+    place that knows the final text, so it hands it back here.
+    """
+    state = st.session_state.get(SNIPPET_STATE_KEY)
+    if state is None:
+        return
+    st.session_state[SNIPPET_STATE_KEY] = replace(state, title=title, caption=caption)
 
 
 def _figure_input_key(
@@ -3313,6 +3335,11 @@ def _apply_title_caption(
         dataset_name=dataset_name,
         compare_row=compare_row,
     )
+    # EXP-7: the snippet's `title=` / `caption=` must be *this* text, rendered
+    # with this branch's frames / combo_row / compare_row — see
+    # `_amend_snippet_title_caption`. Amended even when both are empty, so a
+    # branch that renders to nothing clears the pre-published pair.
+    _amend_snippet_title_caption(title, caption)
     if not title and not caption:
         return
     annotate_figure(fig, title=title, caption=caption)

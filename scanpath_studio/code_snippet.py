@@ -282,6 +282,7 @@ class FigureState:
     title: str = ""
     caption: str = ""
     fix_index_range: tuple[int, int] | None = None
+    illustration_label: str = "auto"
     drift_correction: str | None = None
     drift_connectors: bool = False
     playback_speed: float = 1.0
@@ -568,6 +569,15 @@ def _call_kwargs(state: FigureState, *, explicit: bool) -> list[tuple[str, Any]]
             # no such keyword — see CLAUDE.md's render-path table.
             if state.drift_connectors and state.kind == "static":
                 out.append(("drift_connectors", True))
+    # The disclosure is a rail choice, not a derived value: `illustration_reasons`
+    # (what the app resolved it to) is in `_DERIVED_SETTINGS`, so without the
+    # *label mode* the snippet would silently re-derive at "auto" and disagree
+    # with the figure on screen. `compare_scanpaths` has no such parameter —
+    # `state_caveats` says so rather than passing a keyword it would reject.
+    if state.kind != "comparison" and (
+        explicit or str(state.illustration_label).lower() != "auto"
+    ):
+        out.append(("illustration_label", str(state.illustration_label).lower()))
     if state.title:
         out.append(("title", str(state.title)))
     if state.caption:
@@ -651,6 +661,8 @@ def cli_snippet(
     figure needs that ``render`` has no flag for — reported, never dropped, so a
     snippet can't quietly promise a figure the CLI won't produce.
     """
+    from .constants import drift_correction_enabled
+
     _, source_cli = _SOURCE_WRITERS.get(source.kind, _SOURCE_WRITERS[SOURCE_UNKNOWN])
     argv: list[str] = ["scanpath-studio", "render"]
     if source_cli is None:
@@ -670,6 +682,8 @@ def cli_snippet(
         argv += ["--font-size", str(int(state.base_font_size))]
     if state.font_family and (explicit or _non_default_font(state.font_family)):
         argv += ["--font-family", str(state.font_family)]
+    if explicit or str(state.illustration_label).lower() != "auto":
+        argv += ["--illustration-label", str(state.illustration_label).lower()]
     if state.title:
         argv += ["--title", str(state.title)]
     if state.caption:
@@ -684,9 +698,18 @@ def cli_snippet(
             argv.append("--no-autoplay")
     else:
         if state.drift_correction:
-            argv += ["--drift-correction", str(state.drift_correction)]
-            if state.drift_connectors:
-                argv.append("--drift-connectors")
+            # PRE-21 gates both flags behind SCANPATH_EXPERIMENTAL=1, and the
+            # snippet is copied into *another* terminal — so emitting them from
+            # a session that happens to have the gate open would hand over a
+            # command that dies on `unrecognized arguments`.
+            if drift_correction_enabled():
+                argv += ["--drift-correction", str(state.drift_correction)]
+                if state.drift_connectors:
+                    argv.append("--drift-connectors")
+            else:
+                unsupported.append("drift_correction")
+                if state.drift_connectors:
+                    unsupported.append("drift_connectors")
         # VIZ-7's fixation-index window is a `plot_scanpath` parameter with no
         # `render` flag — named here rather than silently widened to the whole
         # trial, which would be a different figure.
@@ -789,6 +812,25 @@ def state_caveats(source: SnippetSource, state: FigureState) -> list[str]:
             f"This is screen `{state.screen}` of a multipart trial. "
             "`compare_scanpaths` compares whole trials, so slice each side to "
             "its screen first (`multipart.extract_part`) and pass those frames."
+        )
+    # CMP-8: scanpath B can come from a *second* dataset, and its participant id
+    # is that corpus's own — writing it against the loaded corpus would name a
+    # reader who isn't in it. Both surfaces have the seam (`words_b=` /
+    # `--compare-words`); the snippet can't fill it in, so it says whose it is.
+    compare = state.compare
+    if state.kind == "comparison" and compare is not None and compare.dataset:
+        notes.append(
+            f"Scanpath B comes from a second dataset (`{compare.dataset}`), so "
+            f"`{compare.participant}` is that corpus's reader, not this one's. "
+            "Load it too and pass it as `words_b=` / `fixations_b=` "
+            "(`--compare-words` / `--compare-fixations` on the CLI)."
+        )
+    if state.kind == "comparison" and str(state.illustration_label).lower() != "auto":
+        notes.append(
+            "`compare_scanpaths` has no `illustration_label` parameter, so the "
+            "snippet leaves your **"
+            f"{str(state.illustration_label).capitalize()}** choice off — the "
+            "disclosure is re-derived from the figure."
         )
     return notes
 

@@ -3133,16 +3133,27 @@ def _collect_compare_styles() -> tuple[dict, dict]:
     return styles[0], styles[1]
 
 
-def _fix_range_max(fixations: pd.DataFrame | None) -> int:
-    """Highest 1-based fixation index in ``fixations`` (0 when none)."""
+def _fix_range_bounds(fixations: pd.DataFrame | None) -> tuple[int, int]:
+    """Lowest and highest fixation index in ``fixations`` (``(0, 0)`` when none).
+
+    Both bounds come from the *displayed* frame, which is what makes the slider
+    correct on a multipart trial: ``order_in_trial`` there is the PARENT-GLOBAL
+    index, so a later screen runs e.g. 509-578, not 1-70. Assuming a floor of 1
+    (BUG-47) both put indices the screen does not contain inside the slider's
+    reach and left the untouched default ``(1, max)`` unequal to the frame's own
+    range, which stamped every screen after the first with the Illustration
+    "fixation subset" disclosure.
+    """
     if (
         fixations is None
         or fixations.empty
         or "order_in_trial" not in fixations.columns
     ):
-        return 0
-    top = pd.to_numeric(fixations["order_in_trial"], errors="coerce").max()
-    return int(top) if pd.notna(top) else 0
+        return (0, 0)
+    order = pd.to_numeric(fixations["order_in_trial"], errors="coerce").dropna()
+    if order.empty:
+        return (0, 0)
+    return (int(order.min()), int(order.max()))
 
 
 def _fix_range_trial_key(fixations: pd.DataFrame | None) -> tuple | None:
@@ -3155,7 +3166,10 @@ def _fix_range_trial_key(fixations: pd.DataFrame | None) -> tuple | None:
     if fixations is None or fixations.empty:
         return None
     parts = []
-    for col in ("participant_id", "trial_id"):
+    # BUG-47: a multipart trial's screens are separate readings sharing one
+    # parent-global index axis, so "fixations 5-20" means as little across two
+    # screens as it does across two trials -- the screen is part of the identity.
+    for col in ("participant_id", "trial_id", "screen_id"):
         if col not in fixations.columns:
             continue
         values = fixations[col].dropna().unique()
@@ -3168,17 +3182,23 @@ def _fix_range_trial_key(fixations: pd.DataFrame | None) -> tuple | None:
 def _render_fix_range_slider(fixations: pd.DataFrame | None) -> None:
     """Render the VIZ-7 fixation-index window slider (``single_fix_range``).
 
-    The slider value persists across trial changes (which shift ``max_fix``), so
+    The slider value persists across trial changes (which shift the bounds), so
     it is seeded/clamped via session_state *only* (no ``value=`` arg) to stay
-    inside ``[1, max_fix]`` — a stored out-of-range value would otherwise raise.
+    inside ``[min_fix, max_fix]`` — a stored out-of-range value would otherwise
+    raise. **Both** bounds come from the displayed frame (BUG-47): on a multipart
+    trial ``order_in_trial`` is parent-global, so a later screen runs 509-578 and
+    a hard-coded floor of 1 would offer indices that screen does not hold and
+    leave the untouched default unequal to the frame's full range — which the
+    Illustration policy reads as a deliberate "fixation subset".
     This is the single fixation-index control for the app; the Comparisons subtab
-    deliberately has none of its own (ENG-8). A trial with fewer than two
+    deliberately has none of its own (ENG-8). A frame with fewer than two
     fixations can't host a range slider (a one-value slider throws in the
     browser), so the window is cleared to ``None`` (the full, unsliced trial).
 
     **Scope.** A window is per-trial by default: picking another trial shows all
     of that trial's fixations again, because a range like "fixations 5–20" rarely
-    means the same thing on a different reading. The *Apply to all trials*
+    means the same thing on a different reading. A multipart trial's *screens*
+    count as different readings here too (BUG-47). The *Apply to all trials*
     checkbox opts into the sticky behaviour (the window is re-applied to every
     trial, clamped to each one's length).
 
@@ -3198,10 +3218,13 @@ def _render_fix_range_slider(fixations: pd.DataFrame | None) -> None:
     """
     if fixations is None:
         return
-    max_fix = _fix_range_max(fixations)
-    if max_fix < 2:
+    min_fix, max_fix = _fix_range_bounds(fixations)
+    if max_fix < 1 or min_fix >= max_fix:
         # Nothing meaningful to window — clear any stale stored range so the
-        # plot isn't filtered by a window the slider can no longer show.
+        # plot isn't filtered by a window the slider can no longer show. The
+        # `min_fix >= max_fix` half is the single-fixation frame: a one-value
+        # range slider throws in the browser, and on a multipart screen that
+        # frame's lone index is 509, not 1 (BUG-47).
         if st.session_state.get("single_fix_range") is not None:
             st.session_state["single_fix_range"] = None
         st.session_state["single_fix_range_user_set"] = False
@@ -3219,21 +3242,23 @@ def _render_fix_range_slider(fixations: pd.DataFrame | None) -> None:
     stored = st.session_state.get("single_fix_range")
     user_set = st.session_state.get("single_fix_range_user_set")
     if stored is None:
-        st.session_state["single_fix_range"] = (1, max_fix)
+        st.session_state["single_fix_range"] = (min_fix, max_fix)
         st.session_state["single_fix_range_user_set"] = False
     elif user_set is False:
         # BUG-16: an untouched auto-default follows the selected trial and always
-        # expands to its full range. Only a widget interaction freezes a window.
-        st.session_state["single_fix_range"] = (1, max_fix)
+        # expands to its full range — which is the frame's OWN range, floor
+        # included, so that an untouched window equals the full range on a later
+        # multipart screen too and no Illustration disclosure fires (BUG-47).
+        st.session_state["single_fix_range"] = (min_fix, max_fix)
     elif isinstance(stored, (tuple, list)) and len(stored) == 2:
         # A value supplied before this widget first renders (test seam, restored
         # session, or future deep link) is explicit and should be preserved.
         st.session_state.setdefault("single_fix_range_user_set", True)
-        lo = max(1, min(int(stored[0]), max_fix))
+        lo = max(min_fix, min(int(stored[0]), max_fix))
         hi = max(lo, min(int(stored[1]), max_fix))
         st.session_state["single_fix_range"] = (lo, hi)
     else:
-        st.session_state["single_fix_range"] = (1, max_fix)
+        st.session_state["single_fix_range"] = (min_fix, max_fix)
         st.session_state["single_fix_range_user_set"] = False
 
     def _mark_fix_range_user_set() -> None:
@@ -3245,7 +3270,7 @@ def _render_fix_range_slider(fixations: pd.DataFrame | None) -> None:
         label_left=True,
         key="single_fix_range",
         persist_state="session",
-        min_value=1,
+        min_value=min_fix,
         max_value=max_fix,
         on_change=_mark_fix_range_user_set,
         help="Draw only fixations whose index falls in this range (their "

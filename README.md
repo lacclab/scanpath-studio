@@ -201,7 +201,7 @@ under its original license ([docs][onestop-docs]).
 
 Much of this code was written with AI assistance. That is not the same as
 bug-free. **Cross-check anything you publish against your own pipeline.** If
-something looks wrong,
+something looks wrong — or if you have a feature request or suggestion —
 [open an issue](https://github.com/lacclab/scanpath-studio/issues) with the JSON
 from **💾 Session → ⬇️ JSON backup** — it reproduces the exact view.
 

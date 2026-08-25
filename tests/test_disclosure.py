@@ -46,6 +46,14 @@ class TestTheNoteIsOnEverySurface:
     def test_it_points_somewhere_a_report_can_land(self, path):
         assert "scanpath-studio/issues" in _text(path), path
 
+    @pytest.mark.parametrize(
+        "path", ["README.md", "docs/index.md", "scanpath_studio/app.py"]
+    )
+    def test_the_note_explicitly_welcomes_feature_requests(self, path):
+        body = _text(path).lower()
+        note = body[body.find("ai assistance") :][:2000]
+        assert "feature request" in note, path
+
     def test_the_in_app_note_links_issues_via_the_citation_metadata(self):
         """Not a hard-coded URL — the repo link already lives in CITATION."""
         body = _text("scanpath_studio/app.py")

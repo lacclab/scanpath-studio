@@ -67,7 +67,8 @@ See the [feature guides](guides/index.md) for the controls, or
 
 !!! note "AI-assisted software"
     Scanpath Studio was built with AI assistance. Cross-check results before
-    publishing. If something looks wrong,
+    publishing. If something looks wrong — or if you have a feature request or
+    suggestion —
     [report it](https://github.com/lacclab/scanpath-studio/issues)
     with your **💾 Session → ⬇️ JSON backup** file.
 

@@ -359,6 +359,10 @@ def figure_kwargs(
         if key in _DERIVED_SETTINGS:
             continue
         value = settings[key]
+        # A frame-valued option (`words_b`) is data, not a setting: its repr is
+        # meaningless in another process. `state_caveats` names it instead.
+        if hasattr(value, "to_dict") and hasattr(value, "columns"):
+            continue
         if _is_data_uri(value):
             value = _IMAGE_PLACEHOLDER
         if explicit or _comparable(value) != _comparable(default):
@@ -654,6 +658,7 @@ def cli_snippet(
     *,
     explicit: bool = False,
     output: str = "scanpath.png",
+    save_kwargs: dict | None = None,
 ) -> tuple[str, list[str]]:
     """The ``scanpath-studio render`` invocation that rebuilds ``state``'s figure.
 
@@ -661,8 +666,6 @@ def cli_snippet(
     figure needs that ``render`` has no flag for — reported, never dropped, so a
     snippet can't quietly promise a figure the CLI won't produce.
     """
-    from .constants import drift_correction_enabled
-
     _, source_cli = _SOURCE_WRITERS.get(source.kind, _SOURCE_WRITERS[SOURCE_UNKNOWN])
     argv: list[str] = ["scanpath-studio", "render"]
     if source_cli is None:
@@ -674,7 +677,7 @@ def cli_snippet(
         argv += ["-p", str(state.participant)]
     if state.trial:
         argv += ["-t", str(state.trial)]
-    if state.screen:
+    if state.screen and state.kind != "comparison":
         argv += ["--screen", str(state.screen)]
     if state.canvas:
         argv += ["--canvas", f"{int(state.canvas[0])}x{int(state.canvas[1])}"]
@@ -682,7 +685,12 @@ def cli_snippet(
         argv += ["--font-size", str(int(state.base_font_size))]
     if state.font_family and (explicit or _non_default_font(state.font_family)):
         argv += ["--font-family", str(state.font_family)]
-    if explicit or str(state.illustration_label).lower() != "auto":
+    # `render`'s compare branch passes neither to `compare_scanpaths` (which has
+    # no parameter for either), so emitting them beside a Python form that
+    # correctly omits them would be the two flavours contradicting each other.
+    if state.kind != "comparison" and (
+        explicit or str(state.illustration_label).lower() != "auto"
+    ):
         argv += ["--illustration-label", str(state.illustration_label).lower()]
     if state.title:
         argv += ["--title", str(state.title)]
@@ -690,6 +698,7 @@ def cli_snippet(
         argv += ["--caption", str(state.caption)]
 
     unsupported: list[str] = []
+    env_prefix = ""
     if state.kind == "animation":
         argv.append("--animate")
         if explicit or state.playback_speed != 1.0:
@@ -698,18 +707,18 @@ def cli_snippet(
             argv.append("--no-autoplay")
     else:
         if state.drift_correction:
-            # PRE-21 gates both flags behind SCANPATH_EXPERIMENTAL=1, and the
-            # snippet is copied into *another* terminal — so emitting them from
-            # a session that happens to have the gate open would hand over a
-            # command that dies on `unrecognized arguments`.
-            if drift_correction_enabled():
-                argv += ["--drift-correction", str(state.drift_correction)]
-                if state.drift_connectors:
-                    argv.append("--drift-connectors")
-            else:
-                unsupported.append("drift_correction")
-                if state.drift_connectors:
-                    unsupported.append("drift_connectors")
+            # PRE-21 gates both flags behind SCANPATH_EXPERIMENTAL=1, so
+            # `_render_parser` only grows them when it is set. Checking the gate
+            # *here* would be no check at all — `_collect_viz_settings` already
+            # forces `align_algorithm` to "Off" unless it is open, so a state
+            # that carries a correction can only have come from a process where
+            # it was. The command is copied into *another* terminal, though, so
+            # it has to carry the variable with it or die on `unrecognized
+            # arguments` there.
+            env_prefix = "SCANPATH_EXPERIMENTAL=1"
+            argv += ["--drift-correction", str(state.drift_correction)]
+            if state.drift_connectors:
+                argv.append("--drift-connectors")
         # VIZ-7's fixation-index window is a `plot_scanpath` parameter with no
         # `render` flag — named here rather than silently widened to the whole
         # trial, which would be a different figure.
@@ -732,11 +741,21 @@ def cli_snippet(
             continue
         argv += emit(value)
 
+    # The raster geometry `save_figure` would be given. `render` has the same
+    # three flags, so a translated invocation has to carry them or write a
+    # differently-sized file than the Python form beside it.
+    for name in ("width", "height", "scale"):
+        value = (save_kwargs or {}).get(name)
+        if value is not None:
+            argv += [f"--{name}", _num(value)]
+
     argv += ["-o", output]
     unsupported.extend(source.cli_unsupported)
     if source_cli is None:
         unsupported.append(f"the {source.label or source.kind} data source")
-    return _wrap_command(argv), sorted(dict.fromkeys(unsupported))
+    return _wrap_command(argv, env_prefix=env_prefix), sorted(
+        dict.fromkeys(unsupported)
+    )
 
 
 #: Settings-vocabulary layout → the `--compare-layout` choice.
@@ -748,22 +767,30 @@ _CLI_COMPARE_LAYOUT = {
 }
 
 
-def _wrap_command(argv: list[str], width: int = 76) -> str:
+def _wrap_command(argv: list[str], width: int = 76, *, env_prefix: str = "") -> str:
     """One shell command, wrapped with backslash continuations.
 
     Wrapped on flag boundaries (a token starting ``-`` opens a new group) so a
     flag never ends up on a different line from its value — that is the one way
-    a wrapped command can be pasted and silently mean something else."""
+    a wrapped command can be pasted and silently mean something else.
+
+    ``env_prefix`` is prepended verbatim (already shell-safe, never user text):
+    a flag the parser only grows under an environment variable has to be pasted
+    together with it."""
     groups: list[list[str]] = []
     for token in argv:
         if token.startswith("-") or not groups:
             groups.append([token])
         else:
             groups[-1].append(token)
+    if env_prefix and groups:
+        groups[0].insert(0, env_prefix)
     lines: list[str] = []
     current = ""
     for group in groups:
-        piece = " ".join(shlex.quote(token) for token in group)
+        piece = " ".join(
+            token if token == env_prefix else shlex.quote(token) for token in group
+        )
         if not current:
             current = piece
         elif len(current) + len(piece) + 1 <= width:
@@ -813,12 +840,24 @@ def state_caveats(source: SnippetSource, state: FigureState) -> list[str]:
             "`compare_scanpaths` compares whole trials, so slice each side to "
             "its screen first (`multipart.extract_part`) and pass those frames."
         )
+    # CMP-11: Animate + Compare is *one* figure with two readings on one clock,
+    # so `kind` is "animation" and B rides along in `compare`. B's frames are
+    # frames, not keywords — `animate_scanpath` takes them as `words_b=` /
+    # `fixations_b=` — so, like the raw-gaze layer, they are a caveat rather
+    # than something the snippet can quote.
+    compare = state.compare
+    if state.kind == "animation" and compare is not None:
+        notes.append(
+            "This is a two-reading animation. B's frames are frames rather than "
+            f"options, so pass `{compare.participant}` / `{compare.trial}`'s "
+            "rows as `words_b=` / `fixations_b=` (`--compare-with` plus "
+            "`--animate` on the CLI) — the snippet replays A alone."
+        )
     # CMP-8: scanpath B can come from a *second* dataset, and its participant id
     # is that corpus's own — writing it against the loaded corpus would name a
     # reader who isn't in it. Both surfaces have the seam (`words_b=` /
     # `--compare-words`); the snippet can't fill it in, so it says whose it is.
-    compare = state.compare
-    if state.kind == "comparison" and compare is not None and compare.dataset:
+    if compare is not None and compare.dataset:
         notes.append(
             f"Scanpath B comes from a second dataset (`{compare.dataset}`), so "
             f"`{compare.participant}` is that corpus's reader, not this one's. "
@@ -845,7 +884,9 @@ def reproduction_code(
     extra_caveats: tuple[str, ...] = (),
 ) -> ReproductionCode:
     """Both snippets for one figure — the pair the Share subtab shows."""
-    command, unsupported = cli_snippet(source, state, explicit=explicit, output=output)
+    command, unsupported = cli_snippet(
+        source, state, explicit=explicit, output=output, save_kwargs=save_kwargs
+    )
     return ReproductionCode(
         python=python_snippet(
             source,

@@ -7,6 +7,7 @@ import html
 import json
 import os
 from collections.abc import Callable
+from dataclasses import fields as dataclass_fields
 from dataclasses import replace
 from typing import Any
 
@@ -1192,6 +1193,38 @@ def _publish_snippet_state(
         autoplay=bool(viz_settings.get("anim_autoplay", True)),
         compare=compare,
     )
+
+
+def _amend_snippet_settings(settings, kind: str) -> None:
+    """Correct the published snippet's settings to the ones the figure used.
+
+    `_publish_snippet_state` runs above the three render branches and carries
+    `_build_figure_settings`'s dict, but each branch then layers its own
+    `with_overrides(...)` on top — the comparison's per-scanpath `style_a` /
+    `style_b` / `show_legend` / `trial_labels`, the animation's frame budget —
+    and *those* are what the figure is actually built from. `figure_kwargs`
+    skips any key the published dict never carried, so without this the snippet
+    silently reproduced them at their defaults: a Compare figure hand-coloured
+    in the rail came back in the stock palette.
+
+    Only keys the chosen builder accepts are merged, so this cannot widen the
+    published dict into something `api` would reject.
+    """
+    from . import api
+
+    state = st.session_state.get(SNIPPET_STATE_KEY)
+    if state is None:
+        return
+    known = {field.name for field in dataclass_fields(type(settings))}
+    merged = dict(state.settings)
+    merged.update(
+        {
+            name: getattr(settings, name)
+            for name in api.figure_options(kind)
+            if name in known
+        }
+    )
+    st.session_state[SNIPPET_STATE_KEY] = replace(state, settings=merged)
 
 
 def _amend_snippet_title_caption(title: str, caption: str) -> None:
@@ -3460,6 +3493,7 @@ def _build_and_render_animation(
         anim_grid_step_ms=grid_step_ms,
         anim_max_frames=max_frames,
     )
+    _amend_snippet_settings(animation_settings, "animation")
     fig = make_scanpath_animation(
         trial_words,
         trial_fixations,
@@ -5042,6 +5076,21 @@ def render_single_trial_tab(
             if not _snippet_primary_combo.empty
             else None
         ),
+        # Every branch that draws overwrites this pair through
+        # `_amend_snippet_title_caption`, so what is rendered here only survives
+        # on the one path that draws nothing: animation on a trial with no
+        # fixations. That path can still be *comparing*, and a `{…_b}`
+        # placeholder left blank there is the same drift the amend exists to
+        # stop — so B is named here too.
+        compare_row=(
+            {
+                "dataset_name": _compare_dataset_name(compare_meta),
+                "participant_id": compare_meta["raw_participant"],
+                "trial_id": compare_meta["trial"],
+            }
+            if comparing and compare_meta is not None
+            else None
+        ),
     )
     _publish_snippet_state(
         "animation"
@@ -5190,6 +5239,7 @@ def render_single_trial_tab(
                     )
             static_settings = render_settings.with_overrides(**extra_settings)
             build_inputs = static_settings.for_builder(STATIC_FIGURE_OPTIONS)
+            _amend_snippet_settings(static_settings, "static")
             build_inputs["raw_gaze"] = figure_raw_gaze
             displayed_fig = _cached_scanpath_figure(
                 trial_words,
@@ -5629,6 +5679,7 @@ def _render_comparison_figure(
             dropped_metric = str(overrides["heatmap_metric"])
             overrides["heatmap_metric"] = "duration_ms"
     comparison_settings = settings.with_overrides(**overrides)
+    _amend_snippet_settings(comparison_settings, "comparison")
     fig_compare = make_comparison_figure(
         words_filtered,
         fixations_filtered,

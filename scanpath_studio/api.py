@@ -1929,12 +1929,14 @@ def figure_code(
     compare: tuple[str, str] | None = None,
     compare_layout: str = "overlay",
     compare_stimulus: str = "both",
+    compare_dataset: str = "",
     canvas_size: tuple[int, int] | None = None,
     base_font_size: int = 16,
     font_family: str = FONT_FAMILY,
     title: str = "",
     caption: str = "",
     fix_index_range: tuple[int, int] | None = None,
+    illustration_label: str = "auto",
     drift_correction: str | None = None,
     drift_connectors: bool = False,
     playback_speed: float = 1.0,
@@ -1960,6 +1962,11 @@ def figure_code(
     ``"author"``, or ``"unknown"`` for data a snippet can't name — with
     ``source_options`` carrying that loader's arguments (``{"root": …}``,
     ``{"words": [...], "fixations": [...]}``, and so on).
+
+    ``compare_dataset`` names the corpus scanpath B was loaded from when it is a
+    *second* one (CMP-8). B's participant id belongs to that corpus rather than
+    the one the snippet loads, so naming it turns a snippet that would quietly
+    reference a missing reader into one that says where B comes from.
 
     Only the options that differ from :func:`figure_options` are written, so the
     snippet stays readable; ``explicit=True`` emits every option at its current
@@ -1989,6 +1996,7 @@ def figure_code(
         title=title,
         caption=caption,
         fix_index_range=fix_index_range,
+        illustration_label=illustration_label,
         drift_correction=drift_correction,
         drift_connectors=drift_connectors,
         playback_speed=playback_speed,
@@ -1999,6 +2007,7 @@ def figure_code(
                 trial=str(compare[1]),
                 layout=compare_layout,
                 compare_stimulus=compare_stimulus,
+                dataset=str(compare_dataset),
             )
             if compare is not None
             else None

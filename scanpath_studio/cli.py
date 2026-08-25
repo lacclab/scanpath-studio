@@ -1067,6 +1067,16 @@ def _print_reproduction_code(api, args, overrides: dict, canvas, participant, tr
         else "static"
     )
     settings = {**api.figure_options(kind), **api._expand_palette(dict(overrides))}
+    # These two are passed to `animate_scanpath` beside the overrides rather
+    # than through them, so they never reached `settings` — a straight silent
+    # drop of two real `figure_options("animation")` keys.
+    if kind == "animation":
+        for name, value in (
+            ("anim_grid_step_ms", args.anim_grid_step_ms),
+            ("anim_max_frames", args.anim_max_frames),
+        ):
+            if value is not None:
+                settings[name] = value
     compare = None
     if args.compare_with is not None:
         compare_participant, compare_trial = _parse_compare_with(args.compare_with)
@@ -1075,6 +1085,14 @@ def _print_reproduction_code(api, args, overrides: dict, canvas, participant, tr
             trial=compare_trial,
             layout=args.compare_layout,
             compare_stimulus=args.compare_stimulus,
+            # CMP-8: B came from a second corpus exactly when its own frames
+            # were given, so B's ids are that corpus's — the same caveat the
+            # app's Share panel raises.
+            dataset=(
+                str(args.compare_dataset_name or "Dataset B")
+                if (args.compare_words or args.compare_fixations)
+                else ""
+            ),
         )
     state = cs.FigureState(
         kind=kind,

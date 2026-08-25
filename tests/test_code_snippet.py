@@ -609,6 +609,110 @@ def test_the_app_tracks_a_layer_the_user_turns_off():
     assert at.session_state[cs.SNIPPET_STATE_KEY].settings["show_saccades"] != before
 
 
+@pytest.mark.timeout(240)
+def test_the_published_title_is_the_one_the_figure_actually_carries():
+    """The snippet's `title=` has to be the figure's own text, not a re-render.
+
+    `_publish_snippet_state` runs above the three render branches, and they do
+    not render the pattern against the same context: the static branch passes
+    the trial's `combo_row`, the **animation** branch passes none. So a
+    combo-derived placeholder like `{difficulty_level}` resolves in the hoisted
+    pair and is blank on the animated figure — a snippet quoting a title the
+    figure does not carry. `_amend_snippet_title_caption` is the only thing
+    that closes that gap, which is what makes this test discriminating: it
+    fails if the amend is removed."""
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file(APP_SCRIPT)
+    at.session_state["global_show_title_caption"] = True
+    at.session_state["global_title_pattern"] = "{participant_id}|{trial_index}"
+    at.run(timeout=200)
+    assert not at.exception, at.exception
+    static = at.session_state[cs.SNIPPET_STATE_KEY]
+    assert static.kind == "static"
+    resolved = static.title.rpartition("|")[2]
+    assert resolved, "the demo's combo row should resolve {trial_index}"
+
+    # Same trial, animated: no combo_row reaches the pattern, so the figure's
+    # own title drops that half — and the published one must drop it too.
+    at.session_state["single_animate"] = True
+    at.run(timeout=200)
+    assert not at.exception, at.exception
+    state = at.session_state[cs.SNIPPET_STATE_KEY]
+    assert state.kind == "animation"
+    assert state.title.rpartition("|")[2] != resolved, (
+        f"published title still carries the static branch's context: {state.title!r}"
+    )
+    # And it reaches both flavours rather than stopping at the dataclass.
+    code = cs.reproduction_code(cs.SnippetSource(kind=cs.SOURCE_DEMO), state)
+    assert state.title in code.python and state.title in code.cli
+
+
+@pytest.mark.timeout(180)
+def test_turning_the_title_off_clears_the_published_one():
+    """The amend runs above `_apply_title_caption`'s empty-pair early return,
+    so a branch that renders no title clears the hoisted one rather than
+    leaving a stale string in the snippet."""
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file(APP_SCRIPT)
+    at.session_state["data_source_choice"] = "Synthetic test trial"
+    at.session_state["global_show_title_caption"] = True
+    at.session_state["global_title_pattern"] = "{participant_id}"
+    at.run(timeout=150)
+    assert not at.exception, at.exception
+    assert at.session_state[cs.SNIPPET_STATE_KEY].title
+
+    at.session_state["global_show_title_caption"] = False
+    at.run(timeout=150)
+    assert not at.exception, at.exception
+    assert at.session_state[cs.SNIPPET_STATE_KEY].title == ""
+
+
+#: Options no published state can carry, with the reason. `words_b` /
+#: `fixations_b` are *frames* — a snippet quotes B's identity and a caveat
+#: points at the `words_b=` seam, because a DataFrame repr means nothing in
+#: another process.
+_UNPUBLISHABLE = {"words_b", "fixations_b"}
+
+
+@pytest.mark.timeout(300)
+@pytest.mark.parametrize(
+    ("label", "session"),
+    [
+        ("static", {}),
+        ("animation", {"single_animate": True}),
+        ("comparison", {"single_compare_toggle": True}),
+    ],
+)
+def test_the_app_publishes_every_option_its_builder_accepts(label, session):
+    """`figure_kwargs` skips any key the published dict never carried.
+
+    That skip is silent, so an option the app applies *after* the publish —
+    the comparison's per-scanpath `style_a` / `style_b` / `show_legend`, the
+    animation's frame budget — reproduced at its default instead: a Compare
+    figure hand-coloured in the rail came back in the stock palette. Each
+    branch now amends the published settings with the ones it actually built
+    from; this pins that they stay complete."""
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file(APP_SCRIPT)
+    for key, value in session.items():
+        at.session_state[key] = value
+    at.run(timeout=250)
+    assert not at.exception, at.exception
+
+    state = at.session_state[cs.SNIPPET_STATE_KEY]
+    assert state.kind == label
+    missing = (
+        set(api.figure_options(state.kind))
+        - set(state.settings)
+        - cs._DERIVED_SETTINGS
+        - _UNPUBLISHABLE
+    )
+    assert not missing, f"{label} figure reproduces these at their default: {missing}"
+
+
 # ---------------------------------------------------------------------------
 # The app's source → the snippet's loader
 # ---------------------------------------------------------------------------
@@ -686,24 +790,57 @@ def test_a_shared_deployment_never_quotes_the_servers_data_path(monkeypatch):
 # ---------------------------------------------------------------------------
 # What a copied command must not do (review follow-ups)
 # ---------------------------------------------------------------------------
-def test_drift_flags_are_emitted_only_where_the_parser_has_them(monkeypatch):
-    """PRE-21 gates them, and a snippet is copied into *another* terminal.
+def test_the_drift_command_carries_the_variable_its_flags_need():
+    """PRE-21 gates both flags behind SCANPATH_EXPERIMENTAL=1.
 
-    Emitting them from a session that happens to have SCANPATH_EXPERIMENTAL set
-    hands over a command that dies on `unrecognized arguments`."""
+    Gating the *emission* on that variable would be no check at all — the
+    settings collector already forces `align_algorithm` to "Off" unless it is
+    open, so a state carrying a correction can only have come from a process
+    where it was set. The command is pasted into another terminal, so it has to
+    carry the variable with it or die on `unrecognized arguments` there."""
     state = _state(drift_correction="warp", drift_connectors=True)
-
-    monkeypatch.delenv("SCANPATH_EXPERIMENTAL", raising=False)
     command, unsupported = cs.cli_snippet(DEMO, state)
-    assert "--drift-correction" not in command
-    assert "--drift-connectors" not in command
-    assert {"drift_correction", "drift_connectors"} <= set(unsupported)
-
-    monkeypatch.setenv("SCANPATH_EXPERIMENTAL", "1")
-    command, unsupported = cs.cli_snippet(DEMO, state)
-    assert "--drift-correction warp" in command
-    assert "--drift-connectors" in command
+    assert command.startswith("SCANPATH_EXPERIMENTAL=1 scanpath-studio render")
+    assert "--drift-correction warp" in command and "--drift-connectors" in command
     assert "drift_correction" not in unsupported
+    # And a figure with no correction is a plain command.
+    assert not cs.cli_snippet(DEMO, _state())[0].startswith("SCANPATH_EXPERIMENTAL")
+
+
+def test_a_comparison_command_omits_the_flags_its_render_path_ignores():
+    """`render`'s compare branch passes neither to `compare_scanpaths`, and the
+    Python form correctly omits both — so emitting them would be the two
+    flavours of one recipe contradicting each other."""
+    state = _state(
+        kind="comparison",
+        screen="s2",
+        illustration_label="hide",
+        compare=cs.CompareTarget(participant="p2", trial="t2"),
+    )
+    command = cs.reproduction_code(DEMO, state).cli
+    assert "--illustration-label" not in command
+    assert "--screen" not in command
+
+
+def test_the_raster_geometry_reaches_both_flavours():
+    """A translated invocation has to write the same-sized file, not just the
+    same picture."""
+    code = cs.reproduction_code(
+        DEMO, _state(), save_kwargs={"width": 1600, "scale": 3.0}
+    )
+    assert "width=1600" in code.python and "scale=3.0" in code.python
+    assert "--width 1600" in code.cli and "--scale 3" in code.cli
+
+
+def test_a_dual_animation_says_where_scanpath_b_goes():
+    """CMP-11: Animate + Compare is one figure with two readings, so `kind` is
+    "animation" and B rides in `compare`. B's frames are frames, not options."""
+    state = _state(
+        kind="animation",
+        compare=cs.CompareTarget(participant="p2", trial="t2"),
+    )
+    notes = " ".join(cs.reproduction_code(DEMO, state).caveats)
+    assert "words_b=" in notes and "p2" in notes
 
 
 def test_the_illustration_disclosure_choice_reaches_both_snippets():

@@ -981,7 +981,8 @@ If you use the bundled demo data, also cite
     st.markdown(
         f"""
 Scanpath Studio was built with AI assistance. Cross-check results before
-publishing. If something looks wrong,
+publishing. If something looks wrong — or if you have a feature request or
+suggestion —
 [open an issue]({CITATION["url"]}/issues) ↗ with your **💾 Session** JSON.
 """
     )

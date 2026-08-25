@@ -503,6 +503,8 @@ _CLI_EMITTERS: dict[str, Any] = {
     "background_image_size": _pair("--stimulus-image-size", "x"),
     "background_image_origin": _pair("--stimulus-image-origin", ","),
     "background_image_opacity": _valued("--stimulus-image-opacity"),
+    "anim_grid_step_ms": _valued("--anim-grid-step-ms"),
+    "anim_max_frames": _valued("--anim-max-frames"),
 }
 
 #: Settings the ``render`` parser can't express *and* that a snippet should not
@@ -567,7 +569,11 @@ def _call_kwargs(state: FigureState, *, explicit: bool) -> list[tuple[str, Any]]
             lo, hi = state.fix_index_range
             out.append(("fix_index_range", (int(lo), int(hi))))
         if state.drift_correction:
-            out.append(("drift_correction", str(state.drift_correction)))
+            # The rail's own spelling is Title-case ("Warp"). `plot_scanpath`
+            # lowercases internally but `compare_scanpaths` hands the string
+            # straight to `alignment.correct`, so an un-lowered snippet *raises*
+            # there. The CLI validator lowercases too — match it.
+            out.append(("drift_correction", str(state.drift_correction).lower()))
             # Connectors are the static builder's alone (the original→corrected
             # layer has no comparison equivalent), so `compare_scanpaths` takes
             # no such keyword — see CLAUDE.md's render-path table.
@@ -716,8 +722,11 @@ def cli_snippet(
             # it has to carry the variable with it or die on `unrecognized
             # arguments` there.
             env_prefix = "SCANPATH_EXPERIMENTAL=1"
-            argv += ["--drift-correction", str(state.drift_correction)]
-            if state.drift_connectors:
+            argv += ["--drift-correction", str(state.drift_correction).lower()]
+            # Static-only, exactly as `_call_kwargs` has it: `render`'s compare
+            # branch never forwards it, so emitting it here would be the two
+            # flavours of one recipe disagreeing.
+            if state.drift_connectors and state.kind == "static":
                 argv.append("--drift-connectors")
         # VIZ-7's fixation-index window is a `plot_scanpath` parameter with no
         # `render` flag — named here rather than silently widened to the whole

@@ -254,9 +254,35 @@ def test_a_source_with_no_render_flags_says_so():
 # The emitter table can't drift from the parser
 # ---------------------------------------------------------------------------
 def test_every_cli_emitter_names_a_real_figure_option():
-    valid = set(api.figure_options("static"))
+    # Across every kind, not just "static": the animation frame budget is a
+    # real option with a real flag, and it exists only in the animation set.
+    valid = set().union(*(api.figure_options(kind) for kind in cs.KINDS))
     assert set(cs._CLI_EMITTERS) <= valid
     assert cs._CLI_IMPLICIT <= valid
+
+
+def test_every_render_flag_for_a_published_option_has_an_emitter():
+    """The inverse of the table test above, which round two needed and lacked.
+
+    A key that reaches `settings` but has no `_CLI_EMITTERS` entry is dropped
+    from the command *and* reported as unsupported — a false warning next to a
+    command that renders a different figure."""
+    parser = cli._render_parser()
+    dests = {action.dest for action in parser._actions}
+    # Written by hand in `cli_snippet`'s comparison block rather than through
+    # the table, because they ride on `--compare-with` rather than standing alone.
+    by_hand = {"compare_stimulus", "layout", "trial_labels"}
+    for kind in cs.KINDS:
+        for key in api.figure_options(kind):
+            if key in cs._DERIVED_SETTINGS or key in cs._CLI_IMPLICIT:
+                continue
+            if key in by_hand:
+                continue
+            if key in dests and key not in cs._CLI_EMITTERS:
+                raise AssertionError(
+                    f"`render` has --{key.replace('_', '-')} but no emitter, so "
+                    f"a {kind} snippet drops it and calls it unsupported."
+                )
 
 
 def test_every_flag_a_snippet_can_emit_is_a_real_render_flag():
@@ -805,6 +831,34 @@ def test_the_drift_command_carries_the_variable_its_flags_need():
     assert "drift_correction" not in unsupported
     # And a figure with no correction is a plain command.
     assert not cs.cli_snippet(DEMO, _state())[0].startswith("SCANPATH_EXPERIMENTAL")
+
+
+def test_a_comparison_snippet_spells_the_algorithm_the_way_its_builder_reads_it():
+    """The rail spells it "Warp"; `compare_scanpaths` hands the string straight
+    to `alignment.correct`, which only knows "warp" — so an un-lowered snippet
+    raises on its first line. The CLI validator lowercases too."""
+    state = _state(
+        kind="comparison",
+        drift_correction="Warp",
+        compare=cs.CompareTarget(participant="p2", trial="t2"),
+    )
+    code = cs.reproduction_code(DEMO, state)
+    assert "drift_correction='warp'" in code.python
+    assert "--drift-correction warp" in code.cli
+    # Connectors are the static builder's alone, on *both* flavours.
+    assert "--drift-connectors" not in code.cli
+
+
+def test_the_animation_frame_budget_reaches_the_command():
+    """Both are real `render` flags, so reporting them unsupported would be a
+    false warning *and* a command that renders a different animation."""
+    state = _state(
+        kind="animation", figure={"anim_grid_step_ms": 40, "anim_max_frames": 100}
+    )
+    code = cs.reproduction_code(DEMO, state)
+    assert "--anim-grid-step-ms 40" in code.cli
+    assert "--anim-max-frames 100" in code.cli
+    assert not {"anim_grid_step_ms", "anim_max_frames"} & set(code.cli_unsupported)
 
 
 def test_a_comparison_command_omits_the_flags_its_render_path_ignores():

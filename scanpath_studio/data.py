@@ -1741,8 +1741,19 @@ def infer_raw_gaze_schema(raw_gaze: pd.DataFrame) -> dict[str, str] | None:
     return schema
 
 
-def normalize_raw_gaze(raw_gaze: pd.DataFrame, schema: dict[str, str]) -> pd.DataFrame:
-    """Normalize raw gaze data to canonical column names."""
+def normalize_raw_gaze(
+    raw_gaze: pd.DataFrame, schema: dict[str, str], *, keep_columns: set | None = None
+) -> pd.DataFrame:
+    """Normalize raw gaze data to canonical column names.
+
+    ``keep_columns`` (UX-120) carries user-chosen extra source columns
+    through verbatim, the same "Extra fields to keep" mechanism
+    :func:`normalize_words`/:func:`normalize_fixations` already have — raw
+    gaze has no optional-fields *registry* of its own (no semantic field
+    here is common enough across exports to earn a canonical name the way
+    ``saccade_amplitude`` does for fixations), so this only ever carries
+    unclaimed columns, via :func:`_carry_extra_columns`.
+    """
     df = pd.DataFrame(index=raw_gaze.index)
     if schema.get("participant"):
         # str or list (a composite participant id), joined like normalize_words —
@@ -1791,6 +1802,8 @@ def normalize_raw_gaze(raw_gaze: pd.DataFrame, schema: dict[str, str]) -> pd.Dat
     else:
         # Each row represents one millisecond, so use row index within trial as timestamp
         df["timestamp_ms"] = df.groupby(list(PARENT_KEY), sort=False).cumcount()
+    if keep_columns is not None:
+        _carry_extra_columns(df, raw_gaze, keep_columns, _schema_source_columns(schema))
     df = _preserve_composite_columns(df, raw_gaze, schema["trial"])
     return df
 

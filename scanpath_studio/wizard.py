@@ -1267,7 +1267,10 @@ def _wizard_table_keep_picker(
     for d in detected:
         src = d["source"]
         opts.append(src)
-        labels[src] = f"{d['dest']}  ·  {d['category']}"
+        # UX-121: no more "· meta"/"· extra" suffix — each table's picker is
+        # already its own, so the category badge that used to help tell
+        # cross-table entries apart is redundant now; the field name alone.
+        labels[src] = d["dest"]
         # Trial-level conditions and detected measures/linguistic features
         # were both auto-kept before UX-114 split them into two pickers —
         # same net defaults, offered as one choice now.
@@ -1277,7 +1280,7 @@ def _wizard_table_keep_picker(
             meta_dest_by_source[src] = d["dest"]
     for col in unclaimed:
         opts.append(col)
-        labels.setdefault(col, f"{col}  ·  extra")
+        labels.setdefault(col, col)
 
     key = f"wizard_keep_{prefix}"
     if key not in st.session_state:
@@ -1384,7 +1387,7 @@ def _wizard_restore_config(host) -> None:
                 # list — apply it to both tables; each one's picker prunes
                 # away whatever it doesn't actually offer.
                 cols = list(kf["wizard_keep_extra"])
-                for prefix in ("col_map_words", "col_map_fix"):
+                for prefix in ("col_map_words", "col_map_fix", "col_map_raw_gaze"):
                     st.session_state[f"wizard_keep_{prefix}"] = list(cols)
         if isinstance(config.get("experimental_setup"), dict):
             # The canvas is carried in a *sibling* section by the plot-config
@@ -1467,8 +1470,9 @@ def _keep_and_filter_section() -> dict | None:
     read defensively.
     """
     by_table = {
+        # UX-120: raw gaze joined the two tables with their own keep-picker.
         prefix: list(st.session_state[key])
-        for prefix in ("col_map_words", "col_map_fix")
+        for prefix in ("col_map_words", "col_map_fix", "col_map_raw_gaze")
         if (key := f"wizard_keep_{prefix}") in st.session_state
         and st.session_state[key]
     }
@@ -2432,7 +2436,8 @@ def _wizard_statuses() -> dict[str, wizard_shell.StepStatus]:
     # per-table keep picker(s) exist (`wizard_keep_<prefix>`, one per mapped
     # table).
     fields_touched = any(
-        ss.get(f"wizard_keep_{prefix}") for prefix in ("col_map_words", "col_map_fix")
+        ss.get(f"wizard_keep_{prefix}")
+        for prefix in ("col_map_words", "col_map_fix", "col_map_raw_gaze")
     )
 
     def required(done: bool) -> wizard_shell.StepStatus:
@@ -3195,8 +3200,26 @@ def _render_data_setup(active: bool) -> _UploadResult:
                     [key],
                 )
             )
+        # UX-120: the same per-table "extra fields to keep" picker
+        # Fixations/AOI have — raw gaze had none, because
+        # `normalize_raw_gaze` had no mechanism to carry an extra column
+        # through at all (it built an entirely fresh frame from only the
+        # schema-mapped columns). It does now (`_carry_extra_columns`), so
+        # this table gets the same choice, no registry of known-optional
+        # fields to offer (there is no raw-gaze equivalent of
+        # `saccade_amplitude` common enough to earn a canonical name) —
+        # every unmapped column is offered as a plain extra to keep.
+        rg_kept, rg_meta = _wizard_table_keep_picker(
+            s3.container(),
+            raw_gaze,
+            raw_gaze_schema,
+            [],
+            "col_map_raw_gaze",
+            noun="Raw gaze",
+        )
     else:
         raw_gaze_schema = {}
+        rg_kept, rg_meta = set(), []
 
     words_problems = validate_word_schema(word_schema) if has_words else []
     fix_problems = validate_fix_schema(fix_schema) if has_fix else []
@@ -3249,6 +3272,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
         )
         keep_by_prefix["col_map_fix"] = kept
         filter_fields += meta
+    keep_by_prefix["col_map_raw_gaze"] = rg_kept
+    filter_fields += rg_meta
     # The same dest field (e.g. "difficulty") can legitimately come from both
     # tables — `_wizard_table_keep_picker` decides per table, so de-dup here,
     # order-preserving.
@@ -3423,7 +3448,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
         if raw_gaze_problems:
             s3.warning("Raw gaze ignored — " + "; ".join(raw_gaze_problems))
         else:
-            raw_gaze_norm = normalize_raw_gaze(raw_gaze, raw_gaze_schema)
+            raw_gaze_norm = normalize_raw_gaze(
+                raw_gaze,
+                raw_gaze_schema,
+                keep_columns=keep_by_prefix.get("col_map_raw_gaze", set()),
+            )
 
     if active:
         # Stash the assembled, already-normalized dataset so the finalize callback

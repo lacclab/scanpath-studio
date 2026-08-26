@@ -344,3 +344,72 @@ class TestPreprocessingGate:
         assert "Cleaning QA" not in derived
         for kept in ("Sentences", "Saccades", "Trials", "Readers", "Characters"):
             assert kept in derived, f"{kept} is not a preprocessing surface: {derived}"
+
+
+class TestMultiplEYEUploadGate:
+    """UX-114 — the wizard's "Dataset format" choice + the MultiplEYE upload
+    branch it dispatches to are held back this release, the same way PRE-22
+    holds back the preprocessing panel: the code stays for a later revival
+    (most of what it did by hand is now what the generalized Generic wizard
+    can do too), but a default build offers no format *question* at all.
+    """
+
+    def test_it_is_hidden_by_default(self, monkeypatch):
+        from scanpath_studio import constants
+
+        monkeypatch.delenv(constants.EXPERIMENTAL_ENV_VAR, raising=False)
+        assert constants.multipleye_upload_enabled() is False
+
+    def test_the_experimental_flag_brings_it_back(self, monkeypatch):
+        from scanpath_studio import constants
+
+        monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
+        assert constants.multipleye_upload_enabled() is True
+
+    def test_the_wizard_offers_no_format_choice(self, monkeypatch):
+        from scanpath_studio import app
+        from tests.conftest import answer_setup_step
+
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        answer_setup_step(at)
+        at.session_state["_show_upload_wizard"] = True
+        at.session_state["setup_complete"] = False
+        at.run(timeout=60)
+        assert not at.exception, at.exception
+        assert [
+            s for s in at.segmented_control if s.key == "wizard_dataset_format"
+        ] == []
+        assert at.session_state["wizard_dataset_format"] == "Generic"
+        # The Generic upload row renders directly — no format question in front
+        # of it, on either Add or Edit dataset (this same function backs both).
+        uploader_keys = {u.key for u in at.file_uploader}
+        assert "col_map_fix_upload" in uploader_keys
+        assert "col_map_words_upload" in uploader_keys
+
+    def test_a_stale_multipleye_choice_is_forced_back_to_generic(self, monkeypatch):
+        """A session that picked MultiplEYE while the flag was on (or a
+        restored setup carrying that choice) must not reach the hidden branch
+        once the flag is off again."""
+        from scanpath_studio import app
+        from tests.conftest import answer_setup_step
+
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        answer_setup_step(at)
+        at.session_state["_show_upload_wizard"] = True
+        at.session_state["setup_complete"] = False
+        at.session_state["wizard_dataset_format"] = "MultiplEYE"
+        at.run(timeout=60)
+        assert not at.exception, at.exception
+        assert at.session_state["wizard_dataset_format"] == "Generic"
+        uploader_keys = {u.key for u in at.file_uploader}
+        assert "col_map_fix_upload" in uploader_keys
+
+    def test_the_multipleye_upload_functions_are_untouched(self):
+        """A gate, not a deletion — the upload-parsing code stays importable
+        and working, reachable directly and ready for a later revival."""
+        from scanpath_studio import datasets
+
+        assert callable(datasets.multipleye_frames_from_uploads)
+        assert callable(datasets.load_multipleye_uploads)

@@ -214,6 +214,7 @@ from scanpath_studio.tabs import (
     render_dataset_editor_footer,
     render_participant_metadata_section,
     render_single_trial_tab,
+    render_text_metadata_section,
     render_trial_identity_section,
     render_trial_metadata_section,
 )
@@ -3112,10 +3113,11 @@ def _read_uploaded_tables_cached(
 
 
 #: Session keys naming a source column the user has picked: every mapping
-#: dropdown (``col_map_<table>_<field>``) and the wizard's extra-keeps picker.
-#: A composite trial id stores a *list*, so both shapes are read.
-_CHOSEN_COLUMN_KEYS = ("col_map_",)
-_CHOSEN_COLUMN_EXTRA = "wizard_keep_extra"
+#: dropdown (``col_map_<table>_<field>``) and the wizard's per-table
+#: extra-keeps pickers (``wizard_keep_<prefix>`` — UX-114; was one cross-table
+#: ``wizard_keep_extra`` key before). A composite trial id stores a *list*, so
+#: both shapes are read.
+_CHOSEN_COLUMN_KEYS = ("col_map_", "wizard_keep_")
 
 
 def _columns_chosen_in_state(state, header) -> set:
@@ -3131,9 +3133,7 @@ def _columns_chosen_in_state(state, header) -> set:
     columns = set(header)
     chosen: set = set()
     for key, value in state.items():
-        if not (
-            str(key).startswith(_CHOSEN_COLUMN_KEYS) or key == _CHOSEN_COLUMN_EXTRA
-        ):
+        if not str(key).startswith(_CHOSEN_COLUMN_KEYS):
             continue
         values = value if isinstance(value, (list, tuple, set)) else [value]
         chosen.update(v for v in values if isinstance(v, str) and v in columns)
@@ -6486,6 +6486,9 @@ def main() -> None:
     # left-join is what makes a trial field behave like a field in the data —
     # again without broadcasting the table onto words or fixations.
     combos = metadata_mod.project_trials(metadata_mod.active_trials(), combos)
+    # And the text table, the third grain, onto the same small frame — same
+    # reasoning again.
+    combos = metadata_mod.project_texts(metadata_mod.active_texts(), combos)
 
     # Land a shared/deep link on its exact `?trial_id=` (once) now that combos
     # exist — see _apply_url_trial_selection. Runs before the rail/tab widgets
@@ -6644,15 +6647,22 @@ def main() -> None:
         # it immediately before participant metadata on the Data page.
         with setup_metadata_slot:
             st.divider()
-            st.subheader("👤 Participant metadata")
-            # The *unfiltered* readers: the join report describes the dataset,
-            # not whatever the current Narrow-by left standing.
-            render_participant_metadata_section(participants_all)
-            st.divider()
-            st.subheader("🗂️ Trial metadata")
-            # DATA-29: same reasoning one grain down — the report describes the
-            # dataset's trials, so it is built from the *unfiltered* combos.
-            render_trial_metadata_section(combos_all)
+            # UX-114: the three tables side by side — one column each, rather
+            # than stacked full-width blocks with a divider between every
+            # pair. The *unfiltered* pool feeds every report (participants_all
+            # / combos_all): the join describes the dataset, not whatever the
+            # current Narrow-by left standing.
+            pm_col, tm_col, txm_col = st.columns(3, gap="medium")
+            with pm_col:
+                st.subheader("👤 Participant metadata")
+                render_participant_metadata_section(participants_all)
+            with tm_col:
+                st.subheader("🗂️ Trial metadata")
+                # DATA-29: same reasoning one grain down.
+                render_trial_metadata_section(combos_all)
+            with txm_col:
+                st.subheader("📄 Text metadata")
+                render_text_metadata_section(metadata_mod.text_keys(combos_all))
         # UX-106 — and the screen's one commit at its foot, in the slot
         # reserved after every section it saves.
         render_dataset_editor_footer(editor_footer_slot)

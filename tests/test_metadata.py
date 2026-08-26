@@ -734,18 +734,20 @@ class TestTheWizardStep:
         assert not at.exception, at.exception
 
         # UX-53 folded the seven steps into two linear parts; UX-113 unfolded
-        # them back to five, flat and same-size. The participant table stays
-        # up beside the uploads — it is an upload, so it belongs with them,
-        # under no heading of its own (r6).
-        assert [s.number for s in wizard_shell.STEPS] == [1, 2, 3, 4, 5]
+        # them back to five, flat and same-size; UX-114 folded "Keep extra
+        # fields" back into "Map data fields" (per-table pickers now sit
+        # directly under each table's own mapping), leaving four. The
+        # participant table stays up beside the uploads — it is an upload, so
+        # it belongs with them, under no heading of its own (r6).
+        assert [s.number for s in wizard_shell.STEPS] == [1, 2, 3, 4]
         assert [s.title for s in wizard_shell.STEPS] == [
             "Dataset name",
             "Upload data files",
             "Map data fields",
-            "Keep extra fields",
             "Recording setup",
         ]
         assert "readers" not in wizard_shell.STEPS_BY_ID
+        assert "fields" not in wizard_shell.STEPS_BY_ID
 
         # …and its body is the participant-table panel: the id-column picker is
         # the widget that only exists once a table is being attached, so the

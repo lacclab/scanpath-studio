@@ -2528,9 +2528,11 @@ class TestSetupWizard:
         assert at.session_state["setup_complete"] is True
 
     def test_redesigned_wizard_structure(self, monkeypatch):
-        """The redesigned wizard: dataset name at the top, ONE cross-table Filter
-        picker + ONE Keep picker (not duplicated per table), and an 'Add dataset'
-        button. difficulty_level → Filter trials by; junk_col → keep extras."""
+        """UX-114: dataset name at the top, ONE per-table "fields to keep"
+        picker directly under that table's own mapping (not a separate
+        cross-table stage), and an 'Add dataset' button. difficulty_level (a
+        detected meta condition) and junk_col (unclaimed) both live on the
+        AOI/words table, so both are offered by its own keep picker."""
         app = self._inject(monkeypatch)
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
@@ -2540,14 +2542,14 @@ class TestSetupWizard:
         # Dataset name moved to the top.
         assert any(t.key == "wizard_dataset_name" for t in at.text_input)
         ms_keys = {m.key for m in at.multiselect if m.key}
-        # One cross-table Filter + one Keep picker (the old per-table keys are gone).
-        assert "wizard_filter_by" in ms_keys
-        assert "wizard_keep_extra" in ms_keys
+        # One per-table keep picker (the old cross-table Filter/Keep pair is gone).
+        assert "wizard_keep_col_map_words" in ms_keys
         assert "col_map_fix_optional" not in ms_keys
         assert "col_map_words_optional" not in ms_keys
-        filter_ms = next(m for m in at.multiselect if m.key == "wizard_filter_by")
-        assert any("difficulty_level" in o for o in filter_ms.options)
-        keep_ms = next(m for m in at.multiselect if m.key == "wizard_keep_extra")
+        keep_ms = next(
+            m for m in at.multiselect if m.key == "wizard_keep_col_map_words"
+        )
+        assert any("difficulty_level" in o for o in keep_ms.options)
         assert any("junk_col" in o for o in keep_ms.options)
         # The fixation extras / noise flag are no longer mapping selectboxes.
         sel_keys = {s.key for s in at.selectbox if s.key}

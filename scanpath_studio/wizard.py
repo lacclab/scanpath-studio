@@ -32,6 +32,7 @@ from .constants import (
     SYNTHETIC_CHOICE,
     UPLOAD_CHOICE,
     WIZARD_LEAVE_KEY,
+    multipleye_upload_enabled,
 )
 from .controls import (
     ADD_ATTEMPTED_KEY,
@@ -114,7 +115,11 @@ def _reset_wizard_widgets() -> None:
     for key in [
         k
         for k in list(st.session_state.keys())
-        if isinstance(k, str) and k.startswith("col_map_")
+        # UX-114: the per-table keep pickers (`wizard_keep_col_map_words` etc.,
+        # plus their Select-all/None button keys) share the "col_map_" table
+        # names as a *suffix*, not a prefix — sweep "wizard_keep_" too, or a
+        # new dataset would inherit the previous one's keep choices.
+        if isinstance(k, str) and k.startswith(("col_map_", "wizard_keep_"))
     ]:
         del st.session_state[key]
     for key in (
@@ -125,8 +130,6 @@ def _reset_wizard_widgets() -> None:
         "_wizard_restored_meta",
         "_composite_trial_columns",
         "wizard_filter_fields",
-        "wizard_filter_by",
-        "wizard_keep_extra",
         # MultiplEYE preset uploads + generic filename-derivation / aggregation.
         "mpe_fix_upload",
         "mpe_aoi_upload",
@@ -209,6 +212,43 @@ def _safe_dataset_name(name: str | None, *, exclude: str | None = None) -> str:
     return name
 
 
+def _wizard_finalize_metadata_pools(payload: dict) -> tuple:
+    """The just-finalized dataset's own participant/trial/text pools.
+
+    UX-116: unlike ``_wizard_reader_ids``/``_wizard_trial_combos``/
+    ``_wizard_text_ids`` (which read the *raw*, pre-normalization frames,
+    because those run live while mapping is still being worked out), this
+    reads the *normalized* ``words``/``fixations`` already in ``payload`` —
+    the canonical ``participant_id``/``trial_id``/``text_id`` columns are
+    exactly what the real dataset will carry, so there is no re-deriving to
+    do. Called once, from ``_finalize_wizard_dataset``.
+    """
+    words = payload.get("words")
+    fixations = payload.get("fixations")
+    combo_frames = [
+        frame[["participant_id", "trial_id"]]
+        for frame in (fixations, words)
+        if frame is not None and not frame.empty and "participant_id" in frame.columns
+    ]
+    combos = (
+        pd.concat(combo_frames, ignore_index=True).drop_duplicates()
+        if combo_frames
+        else pd.DataFrame(columns=["participant_id", "trial_id"])
+    )
+    participants = sorted(combos["participant_id"].dropna().astype(str).unique())
+    text_series = [
+        frame["text_id"]
+        for frame in (fixations, words)
+        if frame is not None and not frame.empty and "text_id" in frame.columns
+    ]
+    texts = (
+        sorted(pd.concat(text_series).dropna().astype(str).unique())
+        if text_series
+        else []
+    )
+    return participants, combos, texts
+
+
 def _finalize_wizard_dataset() -> None:
     """Store the wizard's normalized frames as a named dataset and switch to it.
 
@@ -222,6 +262,14 @@ def _finalize_wizard_dataset() -> None:
     payload = st.session_state.pop("_wizard_finalize_payload", None)
     if payload is None:
         return
+    # UX-116: the metadata tables' own join was deferred (`live_join=False`)
+    # while this dataset was still being assembled — do it now, against the
+    # pools this dataset actually ends up with. No UI here: a callback runs
+    # before the widgets that would host it exist for this run.
+    from scanpath_studio.tabs import commit_deferred_metadata
+
+    participants, combos, texts = _wizard_finalize_metadata_pools(payload)
+    commit_deferred_metadata(participants, combos, texts)
     ds_name = _safe_dataset_name(st.session_state.get("wizard_dataset_name"))
     store = st.session_state.setdefault("_datasets", {})
     store[ds_name] = payload
@@ -1143,109 +1191,117 @@ def _wizard_reader_ids_cached(_frame, column: str, fingerprint: str) -> list:
     return sorted({str(value) for value in _frame[column].dropna().unique()})
 
 
-def _wizard_keep_and_filter(tables: list, filter_host, keep_host) -> tuple[dict, list]:
-    """Render ONE cross-table *Filter trials by* picker (``filter_host``) and ONE
-    *Additional fields to keep* picker (``keep_host``) — instead of duplicating
-    both per table, which was confusing.
+def _wizard_text_ids(raw_words, word_schema, raw_fix, fix_schema) -> list:
+    """The text ids the finished dataset will have, read from the raw tables.
 
-    ``tables`` is a list of ``(raw, schema, registry, prefix)``. Returns
-    ``(keep_by_prefix, filter_dest_fields)``: the source columns to retain per
-    table (fed to ``compute_keep_columns(keep_columns=…)``), and the trial-level
-    condition fields the Filter panel should offer."""
-    cat_by_prefix: dict = {}
-    for raw, schema, registry, prefix in tables:
-        if raw is None or raw.empty or schema is None:
+    The third-grain sibling of :func:`_wizard_reader_ids` — same reasoning:
+    runs before normalization, so the join report is built off the raw
+    frames through the mapping the user has just made, gated on a text table
+    actually being attached, and cached per frame.
+    """
+    from scanpath_studio import metadata as metadata_mod
+
+    if st.session_state.get(metadata_mod.TEXT_RAW_SESSION_KEY) is None:
+        return []
+    found: set = set()
+    for frame, schema in ((raw_fix, fix_schema), (raw_words, word_schema)):
+        column = (schema or {}).get("text_id")
+        if not column or frame is None or frame.empty or column not in frame.columns:
             continue
-        # PERF-6: categorize against the file's HEADER, not the frame — the
-        # frame holds only the columns the plan parsed, and the whole job of
-        # the pickers below is to offer the ones it didn't. Naming one here
-        # adds it to the plan, and the file is read again under it.
-        header = app._uploaded_header(prefix)
-        source = pd.DataFrame(columns=header) if header else raw
-        cat_by_prefix[prefix] = _c_categorize_columns(
-            source,
-            schema,
-            registry,
-            tuple(header) or frame_fingerprint(raw),
-            # `prefix` is in the key because `_registry` rides un-hashed and
-            # varies per table: two tables with the same fingerprint *and* the
-            # same schema key would otherwise share one result.
-            (prefix, _schema_key(schema)),
-        )
+        found |= set(_wizard_reader_ids_cached(frame, column, frame_fingerprint(frame)))
+    return sorted(found)
 
-    # --- Filter trials by: trial-level condition (meta) fields, cross-table ---
-    # dest field -> [(prefix, source), …] so the chosen field's source column is
-    # kept in the table(s) that carry it.
-    filter_map: dict = {}
-    for prefix, cats in cat_by_prefix.items():
-        for d in cats["detected_optional"]:
-            if d["category"] == "meta":
-                filter_map.setdefault(d["dest"], []).append((prefix, d["source"]))
-    filter_dest_fields: list = []
-    if filter_map:
-        opts = sorted(filter_map)
-        _clean_multiselect_state("wizard_filter_by", opts)
-        filter_dest_fields = filter_host.multiselect(
-            "Filter trials by",
+
+def _wizard_table_keep_picker(
+    host, raw, schema, registry, prefix: str, *, noun: str
+) -> tuple[set, list]:
+    """One table's "fields to keep" decision (UX-114) — directly under that
+    table's own mapping, replacing the old cross-table pair of pickers
+    ("Filter trials by" / "Additional fields to keep") that used to be their
+    own wizard stage. Everything not mapped above and not kept here is
+    dropped at normalization; everything kept becomes available to filter
+    trials by, sort by, color by, or show as an info chip later — one
+    decision instead of two.
+
+    Returns ``(kept_source_columns, meta_dest_fields)``: the first feeds
+    ``compute_keep_columns(keep_columns=…)`` for this table; the second is
+    this table's contribution to the cross-table trial-filter condition list
+    (a source column detected as a trial-level "meta" condition, e.g.
+    Hunting/Gathering or difficulty — kept by default, same as before).
+    """
+    if raw is None or raw.empty or schema is None:
+        return set(), []
+    # PERF-6: categorize against the file's HEADER, not the frame — the frame
+    # holds only the columns the plan parsed, and the whole job of the picker
+    # below is to offer the ones it didn't. Naming one here adds it to the
+    # plan, and the file is read again under it.
+    header = app._uploaded_header(prefix)
+    source = pd.DataFrame(columns=header) if header else raw
+    cats = _c_categorize_columns(
+        source,
+        schema,
+        registry,
+        tuple(header) or frame_fingerprint(raw),
+        (prefix, _schema_key(schema)),
+    )
+    detected = cats["detected_optional"]
+    unclaimed = cats["unclaimed"]
+    if not detected and not unclaimed:
+        return set(), []
+
+    opts: list = []
+    labels: dict = {}
+    default: list = []
+    meta_dest_by_source: dict = {}
+    for d in detected:
+        src = d["source"]
+        opts.append(src)
+        labels[src] = f"{d['dest']}  ·  {d['category']}"
+        # Trial-level conditions and detected measures/linguistic features
+        # were both auto-kept before UX-114 split them into two pickers —
+        # same net defaults, offered as one choice now.
+        if d["category"] in ("meta", "measure", "linguistic"):
+            default.append(src)
+        if d["category"] == "meta":
+            meta_dest_by_source[src] = d["dest"]
+    for col in unclaimed:
+        opts.append(col)
+        labels.setdefault(col, f"{col}  ·  extra")
+
+    key = f"wizard_keep_{prefix}"
+    if key not in st.session_state:
+        st.session_state[key] = list(default)
+    _clean_multiselect_state(key, opts)
+
+    inline_field_label(
+        host,
+        f"Extra fields to keep — {noun}",
+        "Columns not used in the mapping above. Keep the ones you want "
+        "available later — to filter trials by, sort by, color by, or show "
+        "as an info chip. Anything left out here is dropped when the "
+        "dataset is added.",
+    )
+    picker_col, all_col, none_col = host.columns(
+        [0.72, 0.14, 0.14], gap="small", vertical_alignment="bottom"
+    )
+    if all_col.button("Select all", key=f"{key}_all", width="stretch"):
+        st.session_state[key] = list(opts)
+    if none_col.button("None", key=f"{key}_none", width="stretch"):
+        st.session_state[key] = []
+    chosen = set(
+        picker_col.multiselect(
+            f"Extra fields to keep — {noun}",
             options=opts,
-            default=opts,
-            key="wizard_filter_by",
-            help="Trial-level conditions (Hunting/Gathering, difficulty, …). Each "
-            "becomes a value picker in the trial-filter popover — the funnel "
-            "beside the trial picker.",
+            format_func=lambda s: labels.get(s, s),
+            key=key,
+            label_visibility="collapsed",
         )
-
-    # --- Additional fields to keep: non-meta detected + unclaimed, cross-table ---
-    keep_map: dict = {}
-    keep_labels: dict = {}
-    keep_default: list = []
-    for prefix, cats in cat_by_prefix.items():
-        for d in cats["detected_optional"]:
-            if d["category"] == "meta":
-                continue  # handled by the Filter picker above
-            keep_map.setdefault(d["source"], []).append((prefix, d["source"]))
-            keep_labels[d["source"]] = f"{d['dest']}  ·  {d['category']}"
-            if d["source"] not in keep_default:
-                keep_default.append(d["source"])  # measures/linguistic kept by default
-        for col in cats["unclaimed"]:
-            keep_map.setdefault(col, []).append((prefix, col))
-            keep_labels.setdefault(col, f"{col}  ·  extra")
-    chosen_keep: set = set()
-    if keep_map:
-        opts = list(keep_map)
-        _clean_multiselect_state("wizard_keep_extra", opts)
-        chosen_keep = set(
-            keep_host.multiselect(
-                "Additional fields to keep",
-                options=opts,
-                # Detected reading measures / linguistic features kept by default;
-                # unrecognised extras stay off until opted in.
-                default=keep_default,
-                format_func=lambda s: keep_labels.get(s, s),
-                key="wizard_keep_extra",
-                help="Reading measures, linguistic features and any other columns "
-                "to retain (to colour or filter by). Fewer columns is faster.",
-            )
-        )
-        warning = wide_frame_warning(
-            len(chosen_keep),
-            max(
-                (len(raw) for raw, *_ in tables if raw is not None),
-                default=0,
-            ),
-        )
-        if warning:
-            keep_host.warning(warning)
-
-    # Map both pickers' choices back to the per-table source columns to keep.
-    keep_by_prefix: dict = {prefix: set() for prefix in cat_by_prefix}
-    for dest in filter_dest_fields:
-        for prefix, source in filter_map.get(dest, []):
-            keep_by_prefix[prefix].add(source)
-    for key in chosen_keep:
-        for prefix, source in keep_map.get(key, []):
-            keep_by_prefix[prefix].add(source)
-    return keep_by_prefix, list(filter_dest_fields)
+    )
+    warning = wide_frame_warning(len(chosen), len(raw))
+    if warning:
+        host.warning(warning)
+    meta_fields = [meta_dest_by_source[s] for s in chosen if s in meta_dest_by_source]
+    return chosen, meta_fields
 
 
 def _wizard_restore_config(host) -> None:
@@ -1303,9 +1359,22 @@ def _wizard_restore_config(host) -> None:
                         st.session_state[key] = value
         if isinstance(config.get("keep_and_filter"), dict):
             kf = config["keep_and_filter"]
-            for key in ("wizard_filter_by", "wizard_keep_extra"):
-                if kf.get(key) is not None:
-                    st.session_state[key] = kf[key]
+            # UX-114: the per-table picks are the real source of truth — each
+            # `wizard_keep_<prefix>` widget re-derives `wizard_filter_fields`
+            # itself once the mapping resolves, so seeding those (rather than
+            # the flat legacy keys) is what actually reproduces the setup.
+            by_table = kf.get("wizard_keep_by_table")
+            if isinstance(by_table, dict):
+                for prefix, cols in by_table.items():
+                    if isinstance(cols, list):
+                        st.session_state[f"wizard_keep_{prefix}"] = list(cols)
+            elif kf.get("wizard_keep_extra") is not None:
+                # A setup saved before UX-114 only has the flat cross-table
+                # list — apply it to both tables; each one's picker prunes
+                # away whatever it doesn't actually offer.
+                cols = list(kf["wizard_keep_extra"])
+                for prefix in ("col_map_words", "col_map_fix"):
+                    st.session_state[f"wizard_keep_{prefix}"] = list(cols)
         if isinstance(config.get("experimental_setup"), dict):
             # The canvas is carried in a *sibling* section by the plot-config
             # writer (`tabs._build_studio_config` puts it under `canvas_px`), so
@@ -1374,14 +1443,33 @@ def _filename_derive_section() -> dict | None:
 
 
 def _keep_and_filter_section() -> dict | None:
-    """The ``keep_and_filter`` section for a saved config (UX-113 Phase 3):
-    the kept-extra-fields and filter-by choices. ``None`` when neither was
-    touched."""
-    filter_by = st.session_state.get("wizard_filter_by")
-    keep_extra = st.session_state.get("wizard_keep_extra")
-    if not filter_by and not keep_extra:
+    """The ``keep_and_filter`` section for a saved config (UX-113 Phase 3,
+    reshaped per-table by UX-114). ``None`` when nothing was touched.
+
+    UX-114 replaced the two cross-table pickers (``wizard_filter_by`` /
+    ``wizard_keep_extra``) with one per-table multiselect each
+    (``wizard_keep_<prefix>``) — a **new, additively-named** key,
+    ``wizard_keep_by_table``, carries those; the old flat keys are still
+    written too (kept in sync from the per-table picks) so a setup saved here
+    still restores cleanly through any older reader of this section. No
+    ``PLOT_CONFIG_SCHEMA`` bump — this whole section is already optional and
+    read defensively.
+    """
+    by_table = {
+        prefix: list(st.session_state[key])
+        for prefix in ("col_map_words", "col_map_fix")
+        if (key := f"wizard_keep_{prefix}") in st.session_state
+        and st.session_state[key]
+    }
+    filter_fields = st.session_state.get("wizard_filter_fields")
+    if not by_table and not filter_fields:
         return None
-    return {"wizard_filter_by": filter_by, "wizard_keep_extra": keep_extra}
+    return {
+        "wizard_keep_by_table": by_table or None,
+        "wizard_filter_by": filter_fields,
+        "wizard_keep_extra": sorted({c for cols in by_table.values() for c in cols})
+        or None,
+    }
 
 
 def _wizard_setup_config() -> dict:
@@ -2329,7 +2417,12 @@ def _wizard_statuses() -> dict[str, wizard_shell.StepStatus]:
         or ss.get("col_map_words_trial")
     )
     setup_answered = all(ss.get(_SETUP_MODE_KEYS[g]) for g in SETUP_GROUPS)
-    fields_touched = bool(ss.get("wizard_keep_extra") or ss.get("wizard_filter_by"))
+    # UX-114: "fields" no longer has widgets of its own — it reads whichever
+    # per-table keep picker(s) exist (`wizard_keep_<prefix>`, one per mapped
+    # table).
+    fields_touched = any(
+        ss.get(f"wizard_keep_{prefix}") for prefix in ("col_map_words", "col_map_fix")
+    )
 
     def required(done: bool) -> wizard_shell.StepStatus:
         if done:
@@ -2349,13 +2442,17 @@ def _wizard_statuses() -> dict[str, wizard_shell.StepStatus]:
         "readers": (
             S.DONE if ss.get(metadata_mod.RAW_SESSION_KEY) is not None else S.OPTIONAL
         ),
+        # UX-114: "fields" is not a numbered part any more (its pickers moved
+        # into "mapping", one per table) — the key stays for any bookkeeping
+        # that still badges it by name, and it's OPTIONAL so it never blocks
+        # "mapping" from reaching DONE below.
         "fields": S.DONE if fields_touched else S.OPTIONAL,
     }
-    # UX-53/UX-113: "identity"/"geometry" are still *sections* nested inside the
-    # "mapping" step, so it aggregates them — a part is only DONE when every
-    # required section under it is. "setup"/"fields" became steps of their own
-    # (UX-113) and no longer roll up into this one. The section keys stay in the
-    # dict because the section headings, the blocker list and
+    # UX-53/UX-113/UX-114: "identity"/"geometry" are still *sections* nested
+    # inside the "mapping" step, so it aggregates them — a part is only DONE
+    # when every required section under it is. "setup" is a step of its own
+    # and does not roll up into this one. The section keys stay in the dict
+    # because the section headings, the blocker list and
     # `_wizard_problems_last` all still badge per topic.
     statuses["mapping"] = (
         S.DONE
@@ -2526,6 +2623,17 @@ def _render_data_setup(active: bool) -> _UploadResult:
         _wizard_restore_config(restore_box)
         _render_restored_config_caption(restore_box)
 
+    # UX-114: the "Dataset format" choice + the MultiplEYE branch it dispatches
+    # to are held back this release (mirrors PRE-21/PRE-22's gate) — the code
+    # stays for a later revival, but with the flag off there is no format
+    # *question* at all, on either Add or Edit dataset (this function backs
+    # both). Force the key rather than relying on the `.get(..., "Generic")`
+    # fallback below, so a stale "MultiplEYE" left over from an earlier,
+    # flagged session can't sneak back in.
+    _multipleye_enabled = multipleye_upload_enabled()
+    if not _multipleye_enabled:
+        st.session_state["wizard_dataset_format"] = "Generic"
+
     # Restoring a config seeds `col_map_*` keys, which mean nothing on the
     # MultiplEYE branch (no column mapping there) — read from state, same as
     # the format-dispatch check below, since the picker itself hasn't
@@ -2540,7 +2648,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     )
 
     # === 1 · Upload data files ===============================================
-    if active:
+    if active and _multipleye_enabled:
         s1.segmented_control(
             "Dataset format",
             ["Generic", "MultiplEYE"],
@@ -2556,7 +2664,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # `_render_multipleye_upload` opens its own canvas expander, and
     # expander-in-expander is forbidden. Read from state so the collapsed review
     # panel branches the same way.
-    if st.session_state.get("wizard_dataset_format", "Generic") == "MultiplEYE":
+    if (
+        _multipleye_enabled
+        and st.session_state.get("wizard_dataset_format", "Generic") == "MultiplEYE"
+    ):
         return _render_multipleye_upload(body, active)
 
     # The run-locally tip keeps its always-created container: a *conditional*
@@ -2645,31 +2756,48 @@ def _render_data_setup(active: bool) -> _UploadResult:
     )
 
     def _render_metadata_uploads(word_schema, fix_schema) -> None:
-        """DATA-20/DATA-29's participant + trial tables, peers of the uploads
-        above (UX-113: visible from the start, not only once a main table is
-        in). `word_schema`/`fix_schema` are `{}` pre-upload — there is nothing
-        to derive a join report from yet, which is also the correct answer —
-        and the real mapping once identity (stage 3) has resolved it.
-        Still only while `active`: the collapsed *Data & mapping* review panel
-        would otherwise build the same widget keys as the 🗂️ Data page's
-        section.
+        """DATA-20/DATA-29's participant + trial tables, plus the text table,
+        peers of the uploads above (UX-113: visible from the start, not only
+        once a main table is in). `word_schema`/`fix_schema` are `{}`
+        pre-upload — there is nothing to derive a join report from yet, which
+        is also the correct answer — and the real mapping once identity
+        (stage 3) has resolved it. Still only while `active`: the collapsed
+        *Data & mapping* review panel would otherwise build the same widget
+        keys as the 🗂️ Data page's section.
+
+        UX-114: the three side by side in one row, rather than each its own
+        full-width block — they are read as a set ("what else do I know
+        about the readers / the readings / the texts").
         """
         if not active:
             return
-        from scanpath_studio.tabs import render_participant_metadata_section
+        from scanpath_studio.tabs import (
+            render_participant_metadata_section,
+            render_text_metadata_section,
+            render_trial_metadata_section,
+        )
 
+        pm_col, tm_col, txm_col = s1.columns(3, gap="medium")
+        # UX-116: `live_join=False` — there is no finished dataset to join
+        # against yet (the pools below are provisional, still shifting as
+        # identity mapping is worked out), so the wizard only collects the
+        # upload + id-column + keep-fields choices here. The real join runs
+        # once, in `_finalize_wizard_dataset`, against the dataset's own
+        # settled pools — see `tabs.commit_deferred_metadata`.
         render_participant_metadata_section(
             _wizard_reader_ids(raw_words, word_schema, raw_fix, fix_schema),
-            host=s1.container(),
+            host=pm_col,
+            live_join=False,
         )
-        # DATA-29 — and the trial table directly under it, for the same
-        # reason: it is an upload, and the two are read as a pair ("what else
-        # do I know about the readers / about the readings").
-        from scanpath_studio.tabs import render_trial_metadata_section
-
         render_trial_metadata_section(
             _wizard_trial_combos(raw_words, word_schema, raw_fix, fix_schema),
-            host=s1.container(),
+            host=tm_col,
+            live_join=False,
+        )
+        render_text_metadata_section(
+            _wizard_text_ids(raw_words, word_schema, raw_fix, fix_schema),
+            host=txm_col,
+            live_join=False,
         )
 
     # UX-113: stages 3-5 render unconditionally now, rather than exiting here
@@ -2766,6 +2894,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # own two headings away. Reserved with the rest so creation order (=
         # screen order) keeps it directly under the block it describes.
         extra_rows = {}
+        keep_rows = {}
         blocks = [
             ("fix", has_fix, "Fixations", _FIX_ROW2_W),
             ("words", has_words, "AOI", _AOI_ROW2_W),
@@ -2788,6 +2917,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
             )
             if slug == "words":
                 extra_rows[slug] = s2.container()
+            # UX-114: this table's own "extra fields to keep" row, directly
+            # under its mapping — reserved here (same discipline as the rows
+            # above), filled once the schema resolves further down.
+            keep_rows[slug] = s2.container()
 
         # `_render_identity_field` takes its cells in (fixations, AOI) order.
         def _cells_for(index: int) -> list:
@@ -3052,21 +3185,38 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # and is listed above ✅ Add dataset. Since the fields all live on one screen
     # now, the summary was a second copy of what was directly below it.
 
-    # UX-113: "Keep extra fields" is stage 4 — its own numbered part, rendered
-    # before "Recording setup" (stage 5). Its old caption ("Filter trials by
-    # becomes a value picker…") now lives as the WizardStep's own hover caption.
-    s_fields = _part("fields")
-    keep_tables: list = []
+    # UX-114: "Keep extra fields" is no longer a stage of its own — each
+    # table's own decision now sits directly under that table's own mapping
+    # (the `keep_rows[slug]` containers reserved above), so there is nothing
+    # left to render at this point except collect the two tables' results.
+    keep_by_prefix: dict = {}
+    filter_fields: list = []
     if has_words:
-        keep_tables.append(
-            (raw_words, word_schema, WORD_OPTIONAL_FIELDS, "col_map_words")
+        kept, meta = _wizard_table_keep_picker(
+            keep_rows["words"],
+            raw_words,
+            word_schema,
+            WORD_OPTIONAL_FIELDS,
+            "col_map_words",
+            noun="AOI",
         )
+        keep_by_prefix["col_map_words"] = kept
+        filter_fields += meta
     if has_fix:
-        keep_tables.append((raw_fix, fix_schema, FIX_OPTIONAL_FIELDS, "col_map_fix"))
-    keep_by_prefix, filter_fields = _wizard_keep_and_filter(
-        keep_tables, s_fields, s_fields
-    )
-    st.session_state["wizard_filter_fields"] = list(filter_fields)
+        kept, meta = _wizard_table_keep_picker(
+            keep_rows["fix"],
+            raw_fix,
+            fix_schema,
+            FIX_OPTIONAL_FIELDS,
+            "col_map_fix",
+            noun="Fixations",
+        )
+        keep_by_prefix["col_map_fix"] = kept
+        filter_fields += meta
+    # The same dest field (e.g. "difficulty") can legitimately come from both
+    # tables — `_wizard_table_keep_picker` decides per table, so de-dup here,
+    # order-preserving.
+    st.session_state["wizard_filter_fields"] = list(dict.fromkeys(filter_fields))
 
     # DATA-20's participant table (and DATA-29's trial table) render beside the
     # uploads (UX-53/UX-113) — they are uploads, and they belong with them. Now

@@ -46,6 +46,23 @@ def similarity_enabled() -> bool:
     return experimental_features_enabled()
 
 
+def multipleye_upload_enabled() -> bool:
+    """Whether the wizard's "Dataset format" choice + MultiplEYE upload branch
+    are exposed **in the app**, this release (UX-114).
+
+    Held back the same way PRE-22 holds back the preprocessing panel: the code
+    (`wizard._render_multipleye_upload`, the format `segmented_control`) stays
+    in place for a later revival — most of what it did by hand is now what the
+    generalized Generic wizard can do too (UX-113's filename-derive +
+    block-aware char-AOI aggregation), so it may shrink further rather than
+    simply come back — but this release ships with no format *choice* at all:
+    every upload goes through Generic. Scope is the **app** only;
+    `datasets.multipleye_frames_from_uploads`/`load_multipleye_uploads` are
+    untouched and still callable directly.
+    """
+    return experimental_features_enabled()
+
+
 def preprocessing_enabled() -> bool:
     """Whether the soft-exclusion / merge pipeline is exposed **in the app** (PRE-22).
 

@@ -2818,6 +2818,8 @@ def _build_studio_config(
         # DATA-29: and the trial table, for exactly the same reason — a restored
         # `filter_trialmeta_*` selection has to land on fields that exist.
         "trial_metadata": _trial_metadata_payload(),
+        # And the text table, the third grain — same reasoning again.
+        "text_metadata": _text_metadata_payload(),
         # VIZ-39: the user's saved designs travel with the config. A design is
         # a named bundle of the very settings this file already carries, so a
         # config that restored the settings but not the library would come back
@@ -2842,6 +2844,12 @@ def _trial_metadata_payload():
     from scanpath_studio import metadata as md
 
     return md.trial_to_payload(md.active_trials())
+
+
+def _text_metadata_payload():
+    from scanpath_studio import metadata as md
+
+    return md.text_to_payload(md.active_texts())
 
 
 def _collect_column_mapping() -> dict:
@@ -3745,6 +3753,15 @@ def _render_export_panel(
         st.session_state["_export_trial_metadata"] = _attached_trials.frame
     else:
         st.session_state.pop("_export_trial_metadata", None)
+    # And the text table, the third grain — same reasoning again.
+    _attached_texts = _md.active_texts()
+    if _attached_texts is not None and not _attached_texts.frame.empty:
+        bulk_settings["text_metadata_fingerprint"] = frame_fingerprint(
+            _attached_texts.frame
+        )
+        st.session_state["_export_text_metadata"] = _attached_texts.frame
+    else:
+        st.session_state.pop("_export_text_metadata", None)
     _render_bulk_export(
         combos,
         words_filtered,
@@ -8711,7 +8728,9 @@ def _clear_participant_metadata() -> None:
     st.session_state.pop("participant_metadata_upload", None)
 
 
-def render_participant_metadata_section(participants, *, host=None) -> None:
+def render_participant_metadata_section(
+    participants, *, host=None, live_join: bool = True
+) -> None:
     """DATA-20 §1 — attach a participant-level table and report the join.
 
     Two homes, one body. The **upload wizard**'s *About your readers* step is the
@@ -8728,15 +8747,21 @@ def render_participant_metadata_section(participants, *, host=None) -> None:
     Nothing is guessed. The id column is offered pre-filled but overridable, and
     the join is reported in full before the fields go anywhere — unmatched on
     both sides, duplicated rows, and rows that disagree with themselves.
+
+    ``live_join=False`` (UX-116, the wizard's own call) skips the join entirely:
+    the upload, the id-column picker and the keep-fields picker still render,
+    but nothing is matched against ``participants`` and nothing attaches — see
+    :func:`commit_deferred_metadata`, which the wizard's "✅ Add dataset" runs
+    instead once the dataset it would join against actually exists.
     """
     if host is not None:
         with host:
-            _participant_metadata_body(participants)
+            _participant_metadata_body(participants, live_join=live_join)
         return
-    _participant_metadata_body(participants)
+    _participant_metadata_body(participants, live_join=live_join)
 
 
-def _participant_metadata_body(participants) -> None:
+def _participant_metadata_body(participants, *, live_join: bool = True) -> None:
     from scanpath_studio import metadata as md
     from scanpath_studio.data import read_table
 
@@ -8753,7 +8778,14 @@ def _participant_metadata_body(participants) -> None:
     inline_field_label(
         st, "Participant metadata table (optional)", _pm_help, emphasis=True
     )
-    upload = st.file_uploader(
+    # UX-114: the uploader and ✕ Detach share one row — `detach_col` is filled
+    # much later (once we know whether a table is actually attached), which
+    # works because a Streamlit column is a placeholder you can write into at
+    # any point in the script; only the *order within* `detach_col` follows
+    # execution order, not its position relative to `up_col`. Same trick this
+    # function already uses for `key_host`/`status_host`/`details` below.
+    up_col, detach_col = st.columns([0.8, 0.2], gap="small")
+    upload = up_col.file_uploader(
         "Participant metadata table (optional)",
         type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
         key="participant_metadata_upload",
@@ -8767,6 +8799,19 @@ def _participant_metadata_body(participants) -> None:
     if upload is None:
         if active_participant_metadata() is None:
             return
+        # UX-115: removing the file from its uploader chip detaches the table
+        # too — every other upload on this page (fixations, words, raw gaze)
+        # already vanishes the moment its own uploader goes empty
+        # (`app._read_uploaded_frame` returns nothing), so a metadata table
+        # that lingers, still joined and still counting kept fields, after its
+        # own chip is dismissed reads as broken rather than intentional. This
+        # section's uploader is reliably rendered every run while the wizard
+        # is active (`wizard_active = not setup_complete`, never toggled
+        # mid-flow) and unconditionally on the Data page, so `upload is None`
+        # here really does mean "the user just removed it", not "this widget
+        # simply didn't render last run" — safe to clear on sight.
+        _clear_participant_metadata()
+        return
     else:
         # `file_id`, not (name, size): re-uploading a corrected file of the
         # same name and byte length must be read again (VIZ-4 precedent in
@@ -8799,15 +8844,38 @@ def _participant_metadata_body(participants) -> None:
     details = st.expander("🔎 Join details", expanded=False)
     picker_host = key_host if upload is not None else details
     id_column = picker_host.selectbox(
-        "Participant ID column",
+        "Participant ID column *",
         columns,
         index=columns.index(inferred) if inferred in columns else 0,
         key="participant_metadata_id_column",
         persist_state="session",
-        help="Which column holds the reader id that joins to your data.",
+        help="Which column holds the reader id that joins to your data. "
+        "Required — it is the only thing that makes the join possible.",
     )
+    # UX-114: which non-id columns actually become fields — right under the id
+    # picker, on the same fold-once-settled terms.
+    kept = _metadata_keep_picker(
+        picker_host, raw, id_column, prefix="participant_metadata", noun="participant"
+    )
+    if not live_join:
+        # UX-116: the wizard doesn't have a finished dataset to join against
+        # yet, and showing a join report against a *provisional* reader pool
+        # (still changing as identity mapping is worked out) read as noise, or
+        # worse — a wrong verdict. Nothing is matched or attached here;
+        # `commit_deferred_metadata` does that once "✅ Add dataset" is clicked.
+        status_host.caption(
+            f"{len(raw):,} row(s) · {len(kept)} field(s) selected — "
+            "joins once you click **✅ Add dataset**."
+        )
+        detach_col.button(
+            "✕ Detach participant table",
+            key="participant_metadata_clear",
+            on_click=_clear_participant_metadata,
+            help="Remove the participant metadata from this session.",
+        )
+        return
     attached = md.build_participant_metadata(
-        raw,
+        raw[[id_column, *kept]],
         id_column,
         source_name=str(st.session_state.get(_PM_NAME_KEY) or "participant table"),
         participants=participants,
@@ -8817,32 +8885,38 @@ def _participant_metadata_body(participants) -> None:
     report = attached.report
     if not attached.fields:
         status_host.warning(
-            "That table has no columns besides the id, so there is nothing to add.",
+            "Nothing kept — pick at least one field above, or detach this table.",
             icon="⚠️",
         )
         return
+    status_host.caption(f"{len(attached.fields)} field(s) kept")
+    id_count = _metadata_id_count(raw, id_column)
     matched = len(report.matched)
-    fields = f"{len(attached.fields)} field(s) added"
-    if report.is_clean:
-        status_host.success(f"Joined to all {matched} readers · {fields}.", icon="✅")
-    elif matched:
-        status_host.info(
-            f"Joined to {matched} readers · {fields}. "
-            "What did not line up is under **🔎 Join details**.",
-            icon="🔗",
+    if report.is_clean or matched:
+        # UX-114: one small combined line — the distinct-id count (independent
+        # of the join) and the join result together, replacing the separate
+        # caption + colored banner this used to be.
+        parts = [f"✓ {id_count:,} identified" if id_count is not None else None]
+        parts.append(
+            f"{matched:,} joined"
+            if report.is_clean
+            else f"{matched:,} joined — see **🔎 Join details**"
         )
+        status_host.caption(" · ".join(p for p in parts if p))
     else:
         # DATA-20 — zero matches is the same silent trap the trial table had
         # (see `_render_key_mismatch`): the fields attach, appear everywhere,
-        # and read as missing everywhere.
+        # and read as missing everywhere. Loud on purpose — unlike the line
+        # above, this stays a real alert.
         with status_host:
             _render_key_mismatch(attached, report, "reader")
     with details:
         if report.conflicting:
             st.warning(
-                f"**{len(report.conflicting)} reader(s) have rows that disagree** "
-                f"({_id_list(report.conflicting)}). Their fields are left empty "
-                "rather than resolved by taking the first row.",
+                f"**{len(report.conflicting)} reader(s) have duplicate ids whose "
+                f"rows disagree** ({_id_list(report.conflicting)}) — rather than "
+                "guessing which row is right, every row for that reader is "
+                "dropped, so their fields read as missing rather than added.",
                 icon="⚠️",
             )
         if report.only_in_data:
@@ -8871,8 +8945,8 @@ def _participant_metadata_body(participants) -> None:
             width="stretch",
         )
         st.dataframe(attached.frame, hide_index=True, width="stretch")
-    st.button(
-        "✕ Detach this table",
+    detach_col.button(
+        "✕ Detach participant table",
         key="participant_metadata_clear",
         on_click=_clear_participant_metadata,
         help="Remove the participant metadata from this session.",
@@ -8908,7 +8982,7 @@ def _clear_trial_metadata() -> None:
     st.session_state.pop("trial_metadata_upload", None)
 
 
-def render_trial_metadata_section(combos, *, host=None) -> None:
+def render_trial_metadata_section(combos, *, host=None, live_join: bool = True) -> None:
     """DATA-29 — attach a trial-level table and report the join.
 
     The sibling of :func:`render_participant_metadata_section`, and deliberately
@@ -8927,15 +9001,17 @@ def render_trial_metadata_section(combos, *, host=None) -> None:
     ``--trial-metadata-reader-column`` (:func:`api.load_trial_metadata`),
     which keeps the ``participant_column`` parameter this screen no longer
     exposes.
+
+    ``live_join=False`` — see :func:`render_participant_metadata_section`.
     """
     if host is not None:
         with host:
-            _trial_metadata_body(combos)
+            _trial_metadata_body(combos, live_join=live_join)
         return
-    _trial_metadata_body(combos)
+    _trial_metadata_body(combos, live_join=live_join)
 
 
-def _trial_metadata_body(combos) -> None:
+def _trial_metadata_body(combos, *, live_join: bool = True) -> None:
     from scanpath_studio import metadata as md
     from scanpath_studio.data import read_table
 
@@ -8946,7 +9022,10 @@ def _trial_metadata_body(combos) -> None:
         "inspection and export. CSV / TSV / Parquet / Excel."
     )
     inline_field_label(st, "Trial metadata table (optional)", _tm_help, emphasis=True)
-    upload = st.file_uploader(
+    # UX-114: uploader + ✕ Detach share one row — see the matching comment in
+    # `_participant_metadata_body`.
+    up_col, detach_col = st.columns([0.8, 0.2], gap="small")
+    upload = up_col.file_uploader(
         "Trial metadata table (optional)",
         type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
         key="trial_metadata_upload",
@@ -8956,6 +9035,9 @@ def _trial_metadata_body(combos) -> None:
     if upload is None:
         if md.active_trials() is None:
             return
+        # UX-115 — see the matching note in `_participant_metadata_body`.
+        _clear_trial_metadata()
+        return
     else:
         signature = getattr(upload, "file_id", None) or (
             upload.name,
@@ -9009,21 +9091,46 @@ def _trial_metadata_body(combos) -> None:
         )
     inline_field_label(
         picker_host,
-        "Trial ID column",
+        "Trial ID column *",
         "Pick the column holding this table's trial id — or pick SEVERAL "
         "columns to build one on the fly (values joined with '_'), the same "
         "way the uploaded data's own Trial ID mapping does. Required — it is "
-        "what makes this a trial table.",
+        "the only thing that makes the join possible.",
     )
     trial_columns = picker_host.multiselect(
-        "Trial ID column",
+        "Trial ID column *",
         columns,
         key=trial_key,
         persist_state="session",
         label_visibility="collapsed",
     )
+    if not trial_columns:
+        status_host.warning(
+            "Pick a Trial ID column above — it's required, since it's the "
+            "only thing that makes this table joinable.",
+            icon="⚠️",
+        )
+        return
+    # UX-114: which non-id columns actually become fields — right under the id
+    # picker, on the same fold-once-settled terms.
+    kept = _metadata_keep_picker(
+        picker_host, raw, trial_columns, prefix="trial_metadata", noun="trial"
+    )
+    if not live_join:
+        # UX-116 — see the matching branch in `_participant_metadata_body`.
+        status_host.caption(
+            f"{len(raw):,} row(s) · {len(kept)} field(s) selected — "
+            "joins once you click **✅ Add dataset**."
+        )
+        detach_col.button(
+            "✕ Detach trial table",
+            key="trial_metadata_clear",
+            on_click=_clear_trial_metadata,
+            help="Remove the trial metadata from this session.",
+        )
+        return
     attached = md.build_trial_metadata(
-        raw,
+        raw[[*trial_columns, *kept]],
         trial_columns,
         None,
         source_name=str(st.session_state.get(_TM_NAME_KEY) or "trial table"),
@@ -9034,21 +9141,25 @@ def _trial_metadata_body(combos) -> None:
     report = attached.report
     if not attached.fields:
         status_host.warning(
-            "That table has no columns besides the key, so there is nothing to add.",
+            "Nothing kept — pick at least one field above, or detach this table.",
             icon="⚠️",
         )
         return
     grain = "reading" if attached.keyed_by_participant else "trial"
+    status_host.caption(f"{len(attached.fields)} field(s) kept")
+    id_count = _metadata_id_count(raw, trial_columns)
     matched = len(report.matched)
-    fields = f"{len(attached.fields)} field(s) added"
-    if report.is_clean:
-        status_host.success(f"Joined to all {matched} {grain}s · {fields}.", icon="✅")
-    elif matched:
-        status_host.info(
-            f"Joined to {matched} {grain}s · {fields}. "
-            "What did not line up is under **🔎 Join details**.",
-            icon="🔗",
+    if report.is_clean or matched:
+        # UX-114: one small combined line — the distinct-id count (independent
+        # of the join) and the join result together, replacing the separate
+        # caption + colored banner this used to be.
+        parts = [f"✓ {id_count:,} identified" if id_count is not None else None]
+        parts.append(
+            f"{matched:,} joined"
+            if report.is_clean
+            else f"{matched:,} joined — see **🔎 Join details**"
         )
+        status_host.caption(" · ".join(p for p in parts if p))
     else:
         # DATA-29 — nothing matched. This used to read as a quiet blue
         # "Joined to 0 trials", which is the *worst* case dressed as a status
@@ -9057,7 +9168,8 @@ def _trial_metadata_body(combos) -> None:
         # screen connecting the two facts. It is an error, and it names the two
         # things that cause it, with both sides' ids side by side — nearly
         # always a spelling difference ("101" against "101.0", a float column
-        # with one blank cell in it) or the wrong column picked above.
+        # with one blank cell in it) or the wrong column picked above. Loud on
+        # purpose — unlike the line above, this stays a real alert.
         with status_host:
             _render_key_mismatch(attached, report, grain)
     # Everything that is not the verdict lives in the fold. Each of these used
@@ -9066,9 +9178,10 @@ def _trial_metadata_body(combos) -> None:
     with details:
         if report.conflicting:
             st.warning(
-                f"**{len(report.conflicting)} {grain}(s) have rows that "
-                f"disagree** ({_id_list(report.conflicting)}). Their fields are "
-                "left empty rather than resolved by taking the first row.",
+                f"**{len(report.conflicting)} {grain}(s) have duplicate ids whose "
+                f"rows disagree** ({_id_list(report.conflicting)}) — rather than "
+                f"guessing which row is right, every row for that {grain} is "
+                "dropped, so its fields read as missing rather than added.",
                 icon="⚠️",
             )
         if report.only_in_data:
@@ -9097,11 +9210,230 @@ def _trial_metadata_body(combos) -> None:
             width="stretch",
         )
         st.dataframe(attached.frame, hide_index=True, width="stretch")
-    st.button(
-        "✕ Detach this table",
+    detach_col.button(
+        "✕ Detach trial table",
         key="trial_metadata_clear",
         on_click=_clear_trial_metadata,
         help="Remove the trial metadata from this session.",
+    )
+
+
+#: The text table's display name, like `_PM_NAME_KEY`/`_TM_NAME_KEY`.
+_TXM_NAME_KEY = "_text_metadata_name"
+
+
+def _clear_text_metadata() -> None:
+    """Detach the text table (the ✕ button's ``on_click``)."""
+    from scanpath_studio import metadata as md
+
+    for key in (
+        md.TEXT_SESSION_KEY,
+        md.TEXT_RAW_SESSION_KEY,
+        md.TEXT_FILE_SESSION_KEY,
+        _TXM_NAME_KEY,
+        "text_metadata_id_column",
+    ):
+        st.session_state.pop(key, None)
+    st.session_state.pop("text_metadata_upload", None)
+
+
+def render_text_metadata_section(texts, *, host=None, live_join: bool = True) -> None:
+    """Attach a text-level table and report the join — the third grain.
+
+    Sibling of :func:`render_participant_metadata_section` and
+    :func:`render_trial_metadata_section`, same shape: nothing is guessed, the
+    key column is offered pre-filled but overridable, and the join is
+    reported in full before the fields go anywhere.
+
+    Flat grain, like the participant table — one row per ``text_id``, never a
+    reader-paired key, since a text is a stimulus rather than something one
+    reader owns. The id picker is a multiselect like the trial table's,
+    though: a text id can be composite (joined with "_" via
+    :func:`data.trial_id_series`, through :func:`metadata.build_text_metadata`).
+
+    ``live_join=False`` — see :func:`render_participant_metadata_section`.
+    """
+    if host is not None:
+        with host:
+            _text_metadata_body(texts, live_join=live_join)
+        return
+    _text_metadata_body(texts, live_join=live_join)
+
+
+def _text_metadata_body(texts, *, live_join: bool = True) -> None:
+    from scanpath_studio import metadata as md
+    from scanpath_studio.data import read_table
+
+    _txm_help = (
+        "One row per text, with a text-id column. The columns then "
+        "behave like fields in the data: filters, chips, trial sorting, "
+        "inspection and export. CSV / TSV / Parquet / Excel."
+    )
+    inline_field_label(st, "Text metadata table (optional)", _txm_help, emphasis=True)
+    # UX-114: uploader + ✕ Detach share one row — see the matching comment in
+    # `_participant_metadata_body`.
+    up_col, detach_col = st.columns([0.8, 0.2], gap="small")
+    upload = up_col.file_uploader(
+        "Text metadata table (optional)",
+        type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
+        key="text_metadata_upload",
+        help=_txm_help,
+        label_visibility="collapsed",
+    )
+    if upload is None:
+        if md.active_texts() is None:
+            return
+        # UX-115 — see the matching note in `_participant_metadata_body`.
+        _clear_text_metadata()
+        return
+    else:
+        signature = getattr(upload, "file_id", None) or (
+            upload.name,
+            getattr(upload, "size", None),
+        )
+        if st.session_state.get(md.TEXT_FILE_SESSION_KEY) != signature:
+            try:
+                st.session_state[md.TEXT_RAW_SESSION_KEY] = read_table(upload)
+                st.session_state[md.TEXT_FILE_SESSION_KEY] = signature
+                st.session_state[_TXM_NAME_KEY] = upload.name
+                st.session_state.pop("text_metadata_id_column", None)
+            except Exception as exc:  # unreadable file — say so, keep the page
+                st.error(f"Could not read {upload.name}: {exc}")
+                return
+
+    raw = st.session_state.get(md.TEXT_RAW_SESSION_KEY)
+    if raw is None or raw.empty:
+        return
+
+    columns = [str(column) for column in raw.columns]
+    inferred = md.infer_text_id_column(raw)
+    key_host = st.container()
+    status_host = st.container()
+    details = st.expander("🔎 Join details", expanded=False)
+    picker_host = key_host if upload is not None else details
+    text_key = "text_metadata_id_column"
+    stored = st.session_state.get(text_key)
+    if not isinstance(stored, list):
+        st.session_state[text_key] = [inferred] if inferred in columns else []
+    else:
+        valid = [c for c in stored if c in columns]
+        st.session_state[text_key] = valid or (
+            [inferred] if inferred in columns else []
+        )
+    inline_field_label(
+        picker_host,
+        "Text ID column *",
+        "Pick the column holding this table's text id — or pick SEVERAL "
+        "columns to build one on the fly (values joined with '_'), the same "
+        "way the uploaded data's own Text ID mapping does. Required — it is "
+        "the only thing that makes the join possible.",
+    )
+    text_columns = picker_host.multiselect(
+        "Text ID column *",
+        columns,
+        key=text_key,
+        persist_state="session",
+        label_visibility="collapsed",
+    )
+    if not text_columns:
+        status_host.warning(
+            "Pick a Text ID column above — it's required, since it's the "
+            "only thing that makes this table joinable.",
+            icon="⚠️",
+        )
+        return
+    # UX-114: which non-id columns actually become fields — right under the id
+    # picker, on the same fold-once-settled terms.
+    kept = _metadata_keep_picker(
+        picker_host, raw, text_columns, prefix="text_metadata", noun="text"
+    )
+    if not live_join:
+        # UX-116 — see the matching branch in `_participant_metadata_body`.
+        status_host.caption(
+            f"{len(raw):,} row(s) · {len(kept)} field(s) selected — "
+            "joins once you click **✅ Add dataset**."
+        )
+        detach_col.button(
+            "✕ Detach text table",
+            key="text_metadata_clear",
+            on_click=_clear_text_metadata,
+            help="Remove the text metadata from this session.",
+        )
+        return
+    attached = md.build_text_metadata(
+        raw[[*text_columns, *kept]],
+        text_columns,
+        source_name=str(st.session_state.get(_TXM_NAME_KEY) or "text table"),
+        keys=texts,
+    )
+    st.session_state[md.TEXT_SESSION_KEY] = attached
+
+    report = attached.report
+    if not attached.fields:
+        status_host.warning(
+            "Nothing kept — pick at least one field above, or detach this table.",
+            icon="⚠️",
+        )
+        return
+    status_host.caption(f"{len(attached.fields)} field(s) kept")
+    id_count = _metadata_id_count(raw, text_columns)
+    matched = len(report.matched)
+    if report.is_clean or matched:
+        # UX-114: one small combined line — the distinct-id count (independent
+        # of the join) and the join result together, replacing the separate
+        # caption + colored banner this used to be.
+        parts = [f"✓ {id_count:,} identified" if id_count is not None else None]
+        parts.append(
+            f"{matched:,} joined"
+            if report.is_clean
+            else f"{matched:,} joined — see **🔎 Join details**"
+        )
+        status_host.caption(" · ".join(p for p in parts if p))
+    else:
+        # Loud on purpose — unlike the line above, this stays a real alert
+        # (DATA-20/29's "a metadata table that joins to nothing says so").
+        with status_host:
+            _render_key_mismatch(attached, report, "text")
+    with details:
+        if report.conflicting:
+            st.warning(
+                f"**{len(report.conflicting)} text(s) have duplicate ids whose "
+                f"rows disagree** ({_id_list(report.conflicting)}) — rather than "
+                "guessing which row is right, every row for that text is "
+                "dropped, so its fields read as missing rather than added.",
+                icon="⚠️",
+            )
+        if report.only_in_data:
+            st.caption(
+                f"No row for {len(report.only_in_data)} loaded text(s): "
+                f"{_id_list(report.only_in_data)}. Their fields read as missing."
+            )
+        if report.only_in_table:
+            st.caption(
+                f"{len(report.only_in_table)} row(s) describe text(s) that are "
+                f"not loaded: {_id_list(report.only_in_table)}. Ignored."
+            )
+        st.dataframe(
+            [
+                {
+                    "Field": field.label,
+                    "Column": field.name,
+                    "Grain": field.grain,
+                    "Type": field.dtype,
+                    "Distinct": field.n_unique,
+                    "Missing": field.n_missing,
+                }
+                for field in attached.fields
+            ],
+            hide_index=True,
+            width="stretch",
+        )
+        st.dataframe(attached.frame, hide_index=True, width="stretch")
+    detach_col.button(
+        "✕ Detach text table",
+        key="text_metadata_clear",
+        on_click=_clear_text_metadata,
+        help="Remove the text metadata from this session.",
     )
 
 
@@ -9126,13 +9458,20 @@ def _render_key_mismatch(attached, report, grain: str) -> None:
             "report appears here."
         )
         return
-    trial_column = getattr(attached, "trial_column", None)
-    if trial_column is None:
+    # Three grains, three attribute shapes — dispatch on which the attached
+    # object actually carries rather than a passed-in type tag.
+    if hasattr(attached, "id_column"):
         keyed = f", keyed by `{attached.id_column}`"
-    elif attached.keyed_by_participant:
-        keyed = f", keyed by `{attached.participant_column}` + `{trial_column}`"
+    elif hasattr(attached, "keyed_by_participant"):
+        if attached.keyed_by_participant:
+            keyed = (
+                f", keyed by `{attached.participant_column}` + "
+                f"`{attached.trial_column}`"
+            )
+        else:
+            keyed = f", keyed by `{attached.trial_column}`"
     else:
-        keyed = f", keyed by `{trial_column}`"
+        keyed = f", keyed by `{attached.text_column}`"
     st.error(
         f"**No {grain} in this dataset matched a row in that table**{keyed}. "
         "Every field it adds will read as missing until the keys line up — so "
@@ -9151,6 +9490,127 @@ def _id_list(ids, limit: int = 6) -> str:
     shown = ", ".join(f"`{value}`" for value in list(ids)[:limit])
     extra = len(ids) - limit
     return f"{shown} +{extra} more" if extra > 0 else shown
+
+
+def _metadata_id_count(raw, mapping) -> int | None:
+    """Distinct values of a metadata table's own id-column mapping.
+
+    The same immediate "✓ N" feedback the wizard's own Trial ID field gives
+    (`wizard._distinct_id_count`) — a sanity check on what the picked column(s)
+    actually contain, independent of whether they go on to join anything.
+    Reimplemented locally rather than imported: `wizard.py` imports from this
+    module, so the reverse import would be a cycle."""
+    from scanpath_studio.data import trial_id_series, trial_mapping_columns
+
+    if raw is None or getattr(raw, "empty", True) or not mapping:
+        return None
+    cols = trial_mapping_columns(mapping)
+    if not cols or not all(c in raw.columns for c in cols):
+        return None
+    return int(trial_id_series(raw, mapping).nunique())
+
+
+def _metadata_keep_picker(host, raw, id_columns, *, prefix: str, noun: str) -> list:
+    """Which of a metadata table's non-id columns to register as fields
+    (UX-114) — the metadata-table sibling of the wizard's own per-table
+    "Extra fields to keep" picker. Everything not kept here never becomes a
+    field: not filterable, not sortable, not a color-by option, not an info
+    chip. Defaults to every non-id column — today's implicit, unconditional
+    behavior — so ignoring this control changes nothing.
+    """
+    id_cols = (
+        {str(c) for c in trial_mapping_columns(id_columns)} if id_columns else set()
+    )
+    options = [str(c) for c in raw.columns if str(c) not in id_cols]
+    if not options:
+        return []
+    key = f"{prefix}_keep_fields"
+    if key not in st.session_state:
+        st.session_state[key] = list(options)
+    else:
+        stored = st.session_state[key]
+        if isinstance(stored, list):
+            opt_set = set(options)
+            cleaned = [c for c in stored if c in opt_set]
+            if len(cleaned) != len(stored):
+                st.session_state[key] = cleaned
+
+    inline_field_label(
+        host,
+        f"Extra fields to keep — {noun}",
+        "Columns besides the id. Keep the ones you want available later — to "
+        "filter trials by, sort by, color by, or show as an info chip. "
+        "Anything left out here is never registered as a field.",
+    )
+    picker_col, all_col, none_col = host.columns(
+        [0.72, 0.14, 0.14], gap="small", vertical_alignment="bottom"
+    )
+    if all_col.button("Select all", key=f"{key}_all", width="stretch"):
+        st.session_state[key] = list(options)
+    if none_col.button("None", key=f"{key}_none", width="stretch"):
+        st.session_state[key] = []
+    return picker_col.multiselect(
+        f"Extra fields to keep — {noun}",
+        options=options,
+        key=key,
+        label_visibility="collapsed",
+    )
+
+
+def commit_deferred_metadata(participants, combos, texts) -> None:
+    """UX-116: perform the join the three ``_*_metadata_body`` functions skip
+    under ``live_join=False``.
+
+    The wizard's "✅ Add dataset" runs this from its ``on_click`` callback —
+    which is why nothing here renders (a callback runs before the widgets that
+    make up the rest of the page exist for this run, so any ``st.*`` call
+    inside one is dropped or misplaced). It reads back exactly what the
+    deferred render already captured — the raw table and the id-column /
+    keep-fields picks, all plain session state the widgets themselves wrote —
+    and attaches it the same way the live path does, now that ``participants``
+    /``combos``/``texts`` (the just-finalized dataset's own pools) exist to
+    join against.
+
+    A table with nothing to join (no id column chosen, or nothing kept) is
+    left unattached, the same silent bail-out the live path takes; the full
+    report becomes visible the next time this table is opened for editing
+    (🗂️ Data page, ``live_join=True``).
+    """
+    from scanpath_studio import metadata as md
+
+    raw = st.session_state.get(md.RAW_SESSION_KEY)
+    id_column = st.session_state.get("participant_metadata_id_column")
+    kept = st.session_state.get("participant_metadata_keep_fields") or []
+    if raw is not None and not raw.empty and id_column and kept:
+        st.session_state[md.SESSION_KEY] = md.build_participant_metadata(
+            raw[[id_column, *kept]],
+            id_column,
+            source_name=str(st.session_state.get(_PM_NAME_KEY) or "participant table"),
+            participants=participants,
+        )
+
+    raw = st.session_state.get(md.TRIAL_RAW_SESSION_KEY)
+    trial_columns = st.session_state.get("trial_metadata_id_column") or []
+    kept = st.session_state.get("trial_metadata_keep_fields") or []
+    if raw is not None and not raw.empty and trial_columns and kept:
+        st.session_state[md.TRIAL_SESSION_KEY] = md.build_trial_metadata(
+            raw[[*trial_columns, *kept]],
+            trial_columns,
+            None,
+            source_name=str(st.session_state.get(_TM_NAME_KEY) or "trial table"),
+            keys=md.trial_keys(combos),
+        )
+
+    raw = st.session_state.get(md.TEXT_RAW_SESSION_KEY)
+    text_columns = st.session_state.get("text_metadata_id_column") or []
+    kept = st.session_state.get("text_metadata_keep_fields") or []
+    if raw is not None and not raw.empty and text_columns and kept:
+        st.session_state[md.TEXT_SESSION_KEY] = md.build_text_metadata(
+            raw[[*text_columns, *kept]],
+            text_columns,
+            source_name=str(st.session_state.get(_TXM_NAME_KEY) or "text table"),
+            keys=texts,
+        )
 
 
 def _render_dataset_rename() -> None:

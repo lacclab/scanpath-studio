@@ -82,20 +82,21 @@ class WizardStep:
 
 
 #: UX-53 folded the original seven steps into two, then UX-113 unfolded them
-#: back to five — flat and same-size this time, not the old per-step
-#: expanders. Upload always precedes mapping (there is nothing to map until a
-#: file is read), so the five are labelled but not navigable: no chips, no
-#: accordion, no open state. `part()` renders each as a one-line numbered
-#: headline. The dataset name is its own numbered stage rather than an
-#: unlabeled header above everything, and Recording setup / Extra fields are
-#: their own numbered stages rather than sub-headings nested inside "Map data
-#: fields" — all five read as one flat sequence.
+#: to five — flat and same-size, not the old per-step expanders. UX-114 folded
+#: "Keep extra fields" back into "Map data fields" (each table's own keep
+#: picker now sits directly under that table's own mapping — a cross-table
+#: pick was a second, confusing decision), leaving four. Upload always
+#: precedes mapping (there is nothing to map until a file is read), so the
+#: four are labelled but not navigable: no chips, no accordion, no open state.
+#: `part()` renders each as a one-line numbered headline. The dataset name is
+#: its own numbered stage rather than an unlabeled header above everything,
+#: and Recording setup is its own numbered stage rather than a sub-heading
+#: nested inside "Map data fields" — all four read as one flat sequence.
 STEPS: tuple[WizardStep, ...] = (
     WizardStep("name", 1, "Dataset name", "What to call it", True),
     WizardStep("data", 2, "Upload data files", "The tables you exported", True),
     WizardStep("mapping", 3, "Map data fields", "Which column is what", True),
-    WizardStep("fields", 4, "Keep extra fields", "Which extra columns to keep", True),
-    WizardStep("setup", 5, "Recording setup", "The screen it was recorded on", True),
+    WizardStep("setup", 4, "Recording setup", "The screen it was recorded on", True),
 )
 
 STEPS_BY_ID: dict[str, WizardStep] = {s.id: s for s in STEPS}

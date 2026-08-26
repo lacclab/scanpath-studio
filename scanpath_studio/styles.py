@@ -849,6 +849,15 @@ def get_app_css() -> str:
         margin-left: 0.35rem !important;
     }
 
+    /* UX-122 — each Fixations/AOI/Raw gaze row's own uploader sits where the
+       row's plain name label used to; a thin rule (not the full column gap
+       either side of it) marks it off from the field-mapping pickers that
+       follow, in the same row. */
+    [class*="st-key-wiz_map_upload_"] {
+        border-right: 1px solid rgba(128, 128, 128, 0.3);
+        padding-right: 0.5rem;
+    }
+
     /* UX-62 r2 — the header wordmark. `st.logo`'s only sizing control is
        small/medium/large, and even `large` leaves it small beside the nav, in a
        link that carries its own padding. So the height is set here instead, and

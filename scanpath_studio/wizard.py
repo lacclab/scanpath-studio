@@ -2703,7 +2703,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # is just the nudge to open with.
         intro.caption(
             "⬆️ Upload at least one of **Fixations**, **Words / IA**, or "
-            "**Raw gaze** below to get started."
+            "**Raw gaze** in **Map data fields** below to get started."
         )
         app_url = str(getattr(st.context, "url", "") or "")
         if not is_loopback_url(app_url):
@@ -2762,35 +2762,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
             stats.caption(f"✓ {len(frame):,} {noun} · {n_columns} columns")
         return frame
 
-    raw_fix = upload_box(
-        s1,
-        label="Fixations table(s)",
-        help_text="One or more files (e.g. one per participant); concatenated.",
-        prefix="col_map_fix",
-        multi=True,
-        noun="fixations",
-        kind="fixations",
-    )
-    raw_words = upload_box(
-        s1,
-        label="Words / IA table(s)",
-        help_text="One or more files (e.g. one per text); concatenated.",
-        prefix="col_map_words",
-        kind="words",
-        multi=True,
-        noun="words",
-    )
-    # UX-53 r5: a peer of the other tables, not hidden behind a popover. It is
-    # an upload like the rest, and burying it made it look like a different
-    # *kind* of thing. "Optional" is in the label, where it costs no line.
-    raw_gaze = upload_box(
-        s1,
-        label="Raw gaze table (optional)",
-        help_text="Millisecond-level gaze overlay (one file).",
-        prefix="col_map_raw_gaze",
-        multi=False,
-        noun="gaze points",
-    )
+    # UX-122: Fixations/Words/Raw gaze no longer upload here — each table's
+    # own uploader moved into "3 Map data fields", replacing that table's
+    # row-name label (see `row_fix`/`row_words`/`rg_row1` below). `raw_fix`/
+    # `raw_words`/`raw_gaze` are placeholders until those rows render; only
+    # the three metadata tables still upload in this stage.
+    raw_fix, raw_words, raw_gaze = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
     def _render_metadata_uploads(word_schema, fix_schema) -> None:
         """DATA-20/DATA-29's participant + trial tables, plus the text table,
@@ -2837,31 +2814,6 @@ def _render_data_setup(active: bool) -> _UploadResult:
             live_join=False,
         )
 
-    # UX-113: stages 3-5 render unconditionally now, rather than exiting here
-    # before any of them exist — every `has_words`/`has_fix`/`raw_gaze.empty`
-    # guard below already tolerates all three being empty (the same guards the
-    # raw-gaze-only path needed), so there is nothing left to special-case.
-    nothing_uploaded = raw_words.empty and raw_fix.empty and raw_gaze.empty
-
-    prop_w = (
-        _c_propose_word_schema(raw_words, frame_fingerprint(raw_words))
-        if not raw_words.empty
-        else {}
-    )
-    prop_f = (
-        _c_propose_fix_schema(raw_fix, frame_fingerprint(raw_fix))
-        if not raw_fix.empty
-        else {}
-    )
-    prop_g = (
-        _c_propose_raw_gaze_schema(raw_gaze, frame_fingerprint(raw_gaze))
-        if not raw_gaze.empty
-        else {}
-    )
-    word_schema: dict = {}
-    fix_schema: dict = {}
-    has_words, has_fix = not raw_words.empty, not raw_fix.empty
-
     # === 2 · Map data fields =================================================
 
     # UX-71: this screen's dropdowns hold column names, so their option lists
@@ -2882,13 +2834,86 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # raw-gaze upload adds a second, titled "Raw gaze" section below), so a
     # sub-heading here just repeated the stage title above it.
     s2 = sections_host.container()
+
+    # UX-122: each table's own uploader replaces its plain row-name label —
+    # there is no separate "Upload data files" step for these three tables
+    # any more (only the metadata tables still upload in stage 2), so the row
+    # — and its uploader — has to exist before we know whether that table has
+    # data. Fixations then AOI always render, in that fixed order, each
+    # resolving `has_fix`/`has_words` and reserving its own feature/keep rows
+    # immediately (UX-89: a table's rows stay adjacent, not batched by kind)
+    # before the next table's row begins.
+    id_rows = {}
+    feature_rows = {}
+    extra_rows = {}
+    keep_rows = {}
+
+    row_fix = s2.columns(_ID_ROW1_W, gap="small", vertical_alignment="center")
+    raw_fix = upload_box(
+        row_fix[0].container(key="wiz_map_upload_col_map_fix"),
+        label="Fixations table(s)",
+        help_text="One or more files (e.g. one per participant); concatenated.",
+        prefix="col_map_fix",
+        multi=True,
+        noun="fixations",
+        kind="fixations",
+    )
+    has_fix = not raw_fix.empty
+    if has_fix:
+        id_rows["fix"] = row_fix[1:]
+        feature_rows["fix"] = s2.columns(
+            _FIX_ROW2_W, gap="small", vertical_alignment="bottom"
+        )
+        keep_rows["fix"] = s2.container()
+
+    s2.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
+    row_words = s2.columns(_ID_ROW1_W, gap="small", vertical_alignment="center")
+    raw_words = upload_box(
+        row_words[0].container(key="wiz_map_upload_col_map_words"),
+        label="Words / IA table(s)",
+        help_text="One or more files (e.g. one per text); concatenated.",
+        prefix="col_map_words",
+        kind="words",
+        multi=True,
+        noun="words",
+    )
+    has_words = not raw_words.empty
+    if has_words:
+        id_rows["words"] = row_words[1:]
+        feature_rows["words"] = s2.columns(
+            _AOI_ROW2_W, gap="small", vertical_alignment="bottom"
+        )
+        extra_rows["words"] = s2.container()
+        keep_rows["words"] = s2.container()
+
+    # UX-113: stages 3-5 render unconditionally now, rather than exiting here
+    # before any of them exist — every `has_words`/`has_fix`/`raw_gaze.empty`
+    # guard below already tolerates all three being empty (the same guards the
+    # raw-gaze-only path needed), so there is nothing left to special-case.
+    # `raw_gaze` itself uploads a little further down (its own row), so
+    # `nothing_uploaded` is finalized there.
+    prop_w = (
+        _c_propose_word_schema(raw_words, frame_fingerprint(raw_words))
+        if has_words
+        else {}
+    )
+    prop_f = (
+        _c_propose_fix_schema(raw_fix, frame_fingerprint(raw_fix)) if has_fix else {}
+    )
+    word_schema: dict = {}
+    fix_schema: dict = {}
+
     # Column derivation must run *before* the identifier pickers so the
     # derived columns are mappable below. UX-53 took it out of its popover —
     # "advanced" is a reason to place a control last, not to hide it behind a
     # click — so it renders inline, below the pickers it feeds. UX-113: no
     # longer gated on `source_file` specifically — the tool derives from any
-    # uploaded column now, so any non-empty table is reason enough to offer it.
+    # uploaded column now, so any non-empty table is reason enough to offer
+    # it. UX-122 moved this section below the Fixations/AOI rows (it used to
+    # sit above them) — it needs their own uploads to already exist, which is
+    # no longer true before they render.
     if has_words or has_fix:
+        s2.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
         derive_host = s2.container()
         raw_words, raw_fix, raw_gaze = _wizard_filename_derive(
             derive_host,
@@ -2896,68 +2921,6 @@ def _render_data_setup(active: bool) -> _UploadResult:
             raw_fix,
             raw_gaze,
         )
-        # UX-113: the same hairline the Fixations/AOI blocks use between each
-        # other, so this section reads as its own block too, not a run-on
-        # continuation of the Fixations row it sits directly above.
-        s2.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
-
-    if has_words or has_fix:
-        # UX-55 r4: one block per table, two lines — row 1 is identity, row 2
-        # is geometry, and the two are no longer separate sections. A screen id
-        # is part of *how a trial is identified* for a multipart dataset
-        # (UX-53 r16's reasoning), and a word/fixation id reads the same way,
-        # so splitting "identity" from "description" bought less legibility
-        # than the two-line block costs: read across a line to see how one
-        # table is identified end to end, down a column to see whether the
-        # tables agree.
-        #
-        # A narrow first column names the row, so the field titles need not
-        # repeat it three times. The counts go to a full-width strip below: they
-        # are sentences, and a sentence in a quarter of the width is a column of
-        # single words.
-        # UX-89 — grouped by **table**, not by kind: each table's identity row
-        # and its feature row are adjacent, under one name on the left, with a
-        # hairline between the two blocks. The rows used to interleave (both
-        # identity rows, then both feature rows), which put a table's own two
-        # lines two rows apart and made the left-hand name look like it labelled
-        # one line rather than the block. Streamlit's creation order *is* screen
-        # order, so all four are reserved here and filled far below — the same
-        # reserve-then-fill discipline the rest of the page uses.
-        id_rows = {}
-        feature_rows = {}
-        # UX-104: the AOI block gets a third line. Char-AOI aggregation is a
-        # statement about *the AOI table* — what one of its rows is — so it
-        # belongs under that table's own fields rather than in a section of its
-        # own two headings away. Reserved with the rest so creation order (=
-        # screen order) keeps it directly under the block it describes.
-        extra_rows = {}
-        keep_rows = {}
-        blocks = [
-            ("fix", has_fix, "Fixations", _FIX_ROW2_W),
-            ("words", has_words, "AOI", _AOI_ROW2_W),
-        ]
-        for position, (slug, present, table_label, feature_widths) in enumerate(blocks):
-            if not present:
-                continue
-            if position and any(pres for _, pres, _, _ in blocks[:position]):
-                s2.markdown(
-                    '<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True
-                )
-            row = s2.columns(_ID_ROW1_W, gap="small", vertical_alignment="center")
-            row[0].markdown(
-                f'<div class="sps-id-row-name">{table_label}</div>',
-                unsafe_allow_html=True,
-            )
-            id_rows[slug] = row[1:]
-            feature_rows[slug] = s2.columns(
-                feature_widths, gap="small", vertical_alignment="bottom"
-            )
-            if slug == "words":
-                extra_rows[slug] = s2.container()
-            # UX-114: this table's own "extra fields to keep" row, directly
-            # under its mapping — reserved here (same discipline as the rows
-            # above), filled once the schema resolves further down.
-            keep_rows[slug] = s2.container()
 
         # `_render_identity_field` takes its cells in (fixations, AOI) order.
         def _cells_for(index: int) -> list:
@@ -3154,26 +3117,42 @@ def _render_data_setup(active: bool) -> _UploadResult:
                     )
                 )
 
-    # UX-104 — the raw-gaze block renders only when there is a raw-gaze table.
-    # UX-113: same "name column + evenly split pickers" grid as the Fixations/
-    # AOI blocks above (a single generic `column_mapping_ui` grid read as a
-    # cramped, differently-shaped block beside them) — no section heading of
-    # its own, for the same reason identity's lost "Trials & readers": the row
-    # name ("Raw gaze") already says what it is.
+    # UX-104 — the raw-gaze block. UX-113: same "name column + evenly split
+    # pickers" grid as the Fixations/AOI blocks above (a single generic
+    # `column_mapping_ui` grid read as a cramped, differently-shaped block
+    # beside them). UX-122: its own uploader replaces the "Raw gaze" label
+    # in row 1's name column, so — like Fixations/AOI above — row 1 always
+    # renders (there is nowhere else to upload); row 2 and everything below
+    # only once there is something to map.
+    s3 = sections_host.container()
+    if has_words or has_fix:
+        # A hairline under the identity block above, same as the gap
+        # between the Fixations and AOI blocks — nothing to separate from
+        # on a raw-gaze-only upload, where this is the first block.
+        s3.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
+    # Row 1: Trial ID · Screen ID · Participant ID · Text ID · Word/IA ID ·
+    # Word text/label — same six-cell grid, same field order, as the
+    # Fixations/AOI row above.
+    rg_row1 = s3.columns(_ID_ROW1_W, gap="small", vertical_alignment="center")
+    raw_gaze = upload_box(
+        rg_row1[0].container(key="wiz_map_upload_col_map_raw_gaze"),
+        label="Raw gaze table (optional)",
+        help_text="Millisecond-level gaze overlay (one file).",
+        prefix="col_map_raw_gaze",
+        multi=False,
+        noun="gaze points",
+    )
+    # UX-113: stages 3-5 render unconditionally now, rather than exiting here
+    # before any of them exist — every `has_words`/`has_fix`/`raw_gaze.empty`
+    # guard below already tolerates all three being empty (the same guards the
+    # raw-gaze-only path needed), so there is nothing left to special-case.
+    nothing_uploaded = raw_words.empty and raw_fix.empty and raw_gaze.empty
+    prop_g = (
+        _c_propose_raw_gaze_schema(raw_gaze, frame_fingerprint(raw_gaze))
+        if not raw_gaze.empty
+        else {}
+    )
     if not raw_gaze.empty:
-        s3 = sections_host.container()
-        if has_words or has_fix:
-            # A hairline under the identity block above, same as the gap
-            # between the Fixations and AOI blocks — nothing to separate from
-            # on a raw-gaze-only upload, where this is the first block.
-            s3.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
-        # Row 1: Trial ID · Screen ID · Participant ID · Text ID · Word/IA ID ·
-        # Word text/label — same six-cell grid, same field order, as the
-        # Fixations/AOI row above.
-        rg_row1 = s3.columns(_ID_ROW1_W, gap="small", vertical_alignment="center")
-        rg_row1[0].markdown(
-            '<div class="sps-id-row-name">Raw gaze</div>', unsafe_allow_html=True
-        )
         # Row 2: X · Y · Timestamp — no Duration, raw gaze has no such concept.
         rg_row2 = s3.columns(_RAW_GAZE_ROW2_W, gap="small", vertical_alignment="bottom")
         raw_gaze_schema: dict = {}

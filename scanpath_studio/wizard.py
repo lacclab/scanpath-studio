@@ -1212,6 +1212,16 @@ def _wizard_text_ids(raw_words, word_schema, raw_fix, fix_schema) -> list:
     return sorted(found)
 
 
+def _row_body(host):
+    """Indent to where the field-mapping pickers start (`_ID_ROW1_W`'s name
+    column), for a row that has no name of its own — the "Extra fields to
+    keep" picker and the "Aggregate character AOIs" toggle both describe the
+    table above them rather than naming a new one, so they line up under the
+    pickers rather than under the row-name label."""
+    _, body = host.columns([_ID_ROW1_W[0], 1 - _ID_ROW1_W[0]], gap="small")
+    return body
+
+
 def _wizard_table_keep_picker(
     host, raw, schema, registry, prefix: str, *, noun: str
 ) -> tuple[set, list]:
@@ -1248,6 +1258,7 @@ def _wizard_table_keep_picker(
     unclaimed = cats["unclaimed"]
     if not detected and not unclaimed:
         return set(), []
+    host = _row_body(host)
 
     opts: list = []
     labels: dict = {}
@@ -2716,13 +2727,34 @@ def _render_data_setup(active: bool) -> _UploadResult:
             # own width is the *plan*, not the file's. Count the header, which
             # is what the user is being asked to check against their export.
             n_columns = len(app._uploaded_header(prefix)) or len(frame.columns)
-            host.success(
-                f"✓ **{len(frame):,}** {noun} · **{n_columns}** columns "
-                "— make sure this is the number you expect to see."
-            )
+            # UX-117/118/119: a small caption, like the metadata tables' own
+            # "✓ N identified" — the row/column count was a full-width green
+            # banner, disproportionate next to a one-line join caption. The
+            # preview trigger and the count sit in one `stats` container
+            # (`styles.py` turns it into a packed flex row, the same trick
+            # `railbtn_*` uses) rather than `st.columns` — a ratio-based
+            # column always reserves its ratio's share of the row even once
+            # its content is `width="content"`-sized, which is what left a gap
+            # between an icon-sized button and the text that used to follow
+            # it two columns later.
+            stats = host.container(key=f"wiz_upload_stats_{prefix}")
             if active:
-                host.caption("Preview — first rows:")
-                host.dataframe(frame.head(), width="stretch", hide_index=True)
+                # UX-117: the preview used to sit permanently on the page —
+                # several rows tall per table, three tables wide. A hover-only
+                # reveal was tried first, but `st.dataframe`'s canvas grid
+                # (glide-data-grid) sizes itself once at mount via
+                # ResizeObserver and never recovers from mounting inside a
+                # zero-size/hidden box, so it stayed blank even once "shown".
+                # A popover sidesteps that: Streamlit doesn't render its body
+                # at all until opened, so the grid always mounts visible.
+                # UX-119: icon-only trigger (no "Preview" label) — way smaller,
+                # matching the rail's other icon-only popovers (⇅, ✏️).
+                preview = stats.popover(
+                    "👁️", width="content", help="Preview — first rows"
+                )
+                preview.caption("First rows:")
+                preview.dataframe(frame.head(), width="stretch", hide_index=True)
+            stats.caption(f"✓ {len(frame):,} {noun} · {n_columns} columns")
         return frame
 
     raw_fix = upload_box(
@@ -3087,8 +3119,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
             # UX-104 — line 3 of the AOI block. One row per *character* is a
             # fact about this table, so the question sits with the fields that
             # describe it, not in a later section the user reads after they
-            # have stopped thinking about the AOI file.
-            aggregate_char_boxes_on = extra_rows["words"].toggle(
+            # have stopped thinking about the AOI file. UX-118: indented to
+            # where the pickers above start (`_row_body`), not the row-name
+            # label — this line has no name of its own, it describes the AOI
+            # table above it.
+            aoi_extra = _row_body(extra_rows["words"])
+            aggregate_char_boxes_on = aoi_extra.toggle(
                 "Aggregate character AOIs into word boxes",
                 key="wizard_aggregate_char_boxes",
                 help="For interest-area tables with one row per *character* "
@@ -3108,7 +3144,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
                         WORD_FIELD_SPECS,
                         prop_w,
                         "col_map_words",
-                        extra_rows["words"],
+                        aoi_extra,
                         ["block"],
                     )
                 )

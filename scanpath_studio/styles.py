@@ -829,6 +829,26 @@ def get_app_css() -> str:
     }
     .st-key-wiz_name_box label p { font-weight: 700; }
 
+    /* UX-119 — a wizard table upload's "👁️ Preview" trigger + its row/column
+       count caption pack together with no gap, the same trick `railbtn_*`
+       uses: turn the container into a packed flex ROW and let each child
+       hug its own content instead of Streamlit's default one-child-per-row,
+       full-width stacking. `st.columns` was tried first and rejected — a
+       ratio-based column reserves its ratio's share of the row regardless of
+       its content's own `width="content"` sizing, which is what left a gap
+       between an icon-sized button and the caption a whole column over. */
+    [class*="st-key-wiz_upload_stats_"] {
+        flex-direction: row;
+        align-items: center;
+    }
+    [class*="st-key-wiz_upload_stats_"] > div {
+        flex: 0 0 auto !important;
+        width: auto !important;
+    }
+    [class*="st-key-wiz_upload_stats_"] > div + div {
+        margin-left: 0.35rem !important;
+    }
+
     /* UX-62 r2 — the header wordmark. `st.logo`'s only sizing control is
        small/medium/large, and even `large` leaves it small beside the nav, in a
        link that carries its own padding. So the height is set here instead, and

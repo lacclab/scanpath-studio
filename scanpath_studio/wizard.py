@@ -2713,11 +2713,17 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 "```bash\npip install scanpath-studio\nscanpath-studio\n```"
             )
 
-    def upload_box(host, *, label, help_text, prefix, multi, noun, kind=None):
+    def upload_box(
+        host, *, label, help_text, prefix, multi, noun, kind=None, short_label=None
+    ):
         # UX-113: the title reads like every mapping field's — dotted underline,
         # the description on hover (`.sps-fhelp`) — instead of Streamlit's own
-        # label + native (~1s) help tooltip.
-        inline_field_label(host, label, help_text, emphasis=True)
+        # label + native (~1s) help tooltip. UX-123: `short_label` is what
+        # actually shows — the narrow row-name column this now renders into
+        # (UX-122) is too tight for "Fixations table(s)"/"Words / IA
+        # table(s)", which just ellipsised. The accessible name and the
+        # uploader's own tooltip still carry the full `label`/`help_text`.
+        inline_field_label(host, short_label or label, help_text, emphasis=True)
         frame = app._read_uploaded_frame(
             uploader_label=label,
             upload_help=help_text,
@@ -2848,10 +2854,18 @@ def _render_data_setup(active: bool) -> _UploadResult:
     extra_rows = {}
     keep_rows = {}
 
+    # UX-123: "Derive columns from the filename" stays the first thing in
+    # this stage, as it was before UX-122 — reserved here (screen order is
+    # creation order) and filled in further down, once the uploads below it
+    # have actually run and there is something to derive from.
+    derive_host = s2.container()
+    derive_gap = s2.container()
+
     row_fix = s2.columns(_ID_ROW1_W, gap="small", vertical_alignment="center")
     raw_fix = upload_box(
         row_fix[0].container(key="wiz_map_upload_col_map_fix"),
         label="Fixations table(s)",
+        short_label="Fixations",
         help_text="One or more files (e.g. one per participant); concatenated.",
         prefix="col_map_fix",
         multi=True,
@@ -2871,6 +2885,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     raw_words = upload_box(
         row_words[0].container(key="wiz_map_upload_col_map_words"),
         label="Words / IA table(s)",
+        short_label="AOIs",
         help_text="One or more files (e.g. one per text); concatenated.",
         prefix="col_map_words",
         kind="words",
@@ -2909,17 +2924,19 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # click — so it renders inline, below the pickers it feeds. UX-113: no
     # longer gated on `source_file` specifically — the tool derives from any
     # uploaded column now, so any non-empty table is reason enough to offer
-    # it. UX-122 moved this section below the Fixations/AOI rows (it used to
-    # sit above them) — it needs their own uploads to already exist, which is
-    # no longer true before they render.
+    # it. UX-122/123: it needs the Fixations/AOI uploads above to already
+    # exist, which by this point in the script they do — but it still
+    # *renders* above them, into `derive_host`/`derive_gap`, reserved before
+    # either row so screen order puts it first regardless of fill order.
     if has_words or has_fix:
-        s2.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
-        derive_host = s2.container()
         raw_words, raw_fix, raw_gaze = _wizard_filename_derive(
             derive_host,
             raw_words,
             raw_fix,
             raw_gaze,
+        )
+        derive_gap.markdown(
+            '<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True
         )
 
         # `_render_identity_field` takes its cells in (fixations, AOI) order.
@@ -3137,6 +3154,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     raw_gaze = upload_box(
         rg_row1[0].container(key="wiz_map_upload_col_map_raw_gaze"),
         label="Raw gaze table (optional)",
+        short_label="Raw gaze",
         help_text="Millisecond-level gaze overlay (one file).",
         prefix="col_map_raw_gaze",
         multi=False,

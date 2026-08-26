@@ -831,19 +831,33 @@ def get_app_css() -> str:
 
     /* UX-119 — a wizard table upload's "👁️ Preview" trigger + its row/column
        count caption pack together with no gap, the same trick `railbtn_*`
-       uses: turn the container into a packed flex ROW and let each child
+       uses: turn the container into a packed flex ROW and let the trigger
        hug its own content instead of Streamlit's default one-child-per-row,
        full-width stacking. `st.columns` was tried first and rejected — a
        ratio-based column reserves its ratio's share of the row regardless of
        its content's own `width="content"` sizing, which is what left a gap
-       between an icon-sized button and the caption a whole column over. */
+       between an icon-sized button and the caption a whole column over.
+       UX-123: this container is now also the narrow `wiz_map_upload_*` name
+       column (UX-122), so the count caption — the last child, whether or not
+       the trigger rendered before it — wraps onto its own line(s) instead of
+       overflowing: `flex: 1 1 auto; min-width: 0` lets it shrink below its
+       one-line width, which is what lets it wrap at all. */
     [class*="st-key-wiz_upload_stats_"] {
         flex-direction: row;
-        align-items: center;
+        flex-wrap: wrap;
+        align-items: flex-start;
     }
-    [class*="st-key-wiz_upload_stats_"] > div {
+    [class*="st-key-wiz_upload_stats_"] > div:first-child {
         flex: 0 0 auto !important;
         width: auto !important;
+    }
+    [class*="st-key-wiz_upload_stats_"] > div:last-child {
+        flex: 1 1 auto !important;
+        width: auto !important;
+        min-width: 0 !important;
+    }
+    [class*="st-key-wiz_upload_stats_"] > div:last-child p {
+        white-space: normal !important;
     }
     [class*="st-key-wiz_upload_stats_"] > div + div {
         margin-left: 0.35rem !important;
@@ -852,10 +866,17 @@ def get_app_css() -> str:
     /* UX-122 — each Fixations/AOI/Raw gaze row's own uploader sits where the
        row's plain name label used to; a thin rule (not the full column gap
        either side of it) marks it off from the field-mapping pickers that
-       follow, in the same row. */
+       follow, in the same row. UX-123: the row centers this column's block
+       vertically against the (usually taller) mapping pickers beside it —
+       `st.columns(vertical_alignment="center")` centers the *column*, not
+       necessarily the stack of title/uploader/caption inside it, so this
+       column is a flex column in its own right too. */
     [class*="st-key-wiz_map_upload_"] {
         border-right: 1px solid rgba(128, 128, 128, 0.3);
         padding-right: 0.5rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
     }
 
     /* UX-62 r2 — the header wordmark. `st.logo`'s only sizing control is

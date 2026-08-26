@@ -41,6 +41,8 @@ from types import MappingProxyType
 # ---------------------------------------------------------------------------
 GLOBAL_SHOW_WORDS = "global_show_words"
 GLOBAL_SHOW_LABELS = "global_show_labels"
+# UX-128: the 📄 Stimulus section's master switch.
+GLOBAL_SHOW_STIMULUS = "global_show_stimulus"
 GLOBAL_SHOW_FIX = "global_show_fix"
 GLOBAL_SHOW_ORDER = "global_show_order"
 GLOBAL_SHOW_SACCADES = "global_show_saccades"
@@ -298,6 +300,7 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
     {
         "show_words": GLOBAL_SHOW_WORDS,
         "show_labels": GLOBAL_SHOW_LABELS,
+        "show_stimulus": GLOBAL_SHOW_STIMULUS,
         "show_fixations": GLOBAL_SHOW_FIX,
         "show_order": GLOBAL_SHOW_ORDER,
         "show_saccades": GLOBAL_SHOW_SACCADES,
@@ -417,6 +420,7 @@ PLOT_CONFIG_LAYER_KEYS: Mapping[str, str] = MappingProxyType(
     {
         "words": GLOBAL_SHOW_WORDS,
         "word_labels": GLOBAL_SHOW_LABELS,
+        "stimulus": GLOBAL_SHOW_STIMULUS,
         "fixations": GLOBAL_SHOW_FIX,
         "order_labels": GLOBAL_SHOW_ORDER,
         "saccades": GLOBAL_SHOW_SACCADES,
@@ -562,6 +566,7 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         # layers
         GLOBAL_SHOW_WORDS,
         GLOBAL_SHOW_LABELS,
+        GLOBAL_SHOW_STIMULUS,
         GLOBAL_SHOW_FIX,
         GLOBAL_SHOW_ORDER,
         GLOBAL_SHOW_SACCADES,

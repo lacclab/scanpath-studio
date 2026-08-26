@@ -191,6 +191,9 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "preproc_blink_adjacent": "global_preproc_blink_adjacent",
     "show_words": "global_show_words",
     "show_labels": "global_show_labels",
+    # UX-128: the 📄 Stimulus section's master switch (default on, so always
+    # emitted — a link/config that predates this toggle restores as "on").
+    "show_stimulus": "global_show_stimulus",
     "show_fixations": "global_show_fix",
     "show_order": "global_show_order",
     "show_saccades": "global_show_saccades",
@@ -742,6 +745,8 @@ def _apply_url_preset() -> str | None:
 _PLOT_CONFIG_LAYER_KEYS = {
     "words": "global_show_words",
     "word_labels": "global_show_labels",
+    # UX-128: the 📄 Stimulus section's master switch.
+    "stimulus": "global_show_stimulus",
     "fixations": "global_show_fix",
     "order_labels": "global_show_order",
     "saccades": "global_show_saccades",

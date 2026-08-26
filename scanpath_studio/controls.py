@@ -526,6 +526,10 @@ _VIZ_WIDGET_DEFAULTS = {
     # analytical overlays, off by default and one click (or one design preset) away.
     "global_show_words": False,
     "global_show_labels": True,
+    # UX-128: the 📄 Stimulus section's own master switch — on by default, so
+    # a fresh session's figure is unchanged (Text on, Bounding boxes/Image
+    # off, same as before this toggle existed).
+    "global_show_stimulus": True,
     "global_show_fix": True,
     "global_show_order": False,
     "global_show_saccades": True,
@@ -1004,6 +1008,7 @@ _VIEW_PRESETS: dict[str, dict[str, object]] = {
         "global_show_saccades": True,
         "global_show_saccade_arrows": False,
         "global_show_labels": True,
+        "global_show_stimulus": True,
         "global_show_order": False,
         "global_show_heatmap": False,
         "global_show_words": False,
@@ -1012,6 +1017,7 @@ _VIEW_PRESETS: dict[str, dict[str, object]] = {
     "heatmap": {
         "global_show_heatmap": True,
         "global_show_labels": True,
+        "global_show_stimulus": True,
         "global_show_fix": False,
         "global_show_saccades": False,
         "global_show_order": False,
@@ -1023,6 +1029,7 @@ _VIEW_PRESETS: dict[str, dict[str, object]] = {
         "global_show_saccades": True,
         "global_show_saccade_arrows": False,
         "global_show_labels": True,
+        "global_show_stimulus": True,
         "global_show_order": False,
         "global_show_heatmap": False,
         "global_show_words": False,
@@ -1038,6 +1045,7 @@ _VIEW_PRESETS: dict[str, dict[str, object]] = {
         "global_show_saccades": True,
         "global_show_saccade_arrows": True,
         "global_show_labels": True,
+        "global_show_stimulus": True,
         "global_show_heatmap": False,
         "global_show_words": False,
         "global_show_raw_gaze": False,
@@ -1045,6 +1053,7 @@ _VIEW_PRESETS: dict[str, dict[str, object]] = {
     "everything": {
         "global_show_words": True,
         "global_show_labels": True,
+        "global_show_stimulus": True,
         "global_show_fix": True,
         "global_show_saccades": True,
         "global_show_saccade_arrows": True,
@@ -3422,7 +3431,13 @@ def _collect_viz_settings(
     show_fix = bool(ss.get("global_show_fix"))
     show_saccades = bool(ss.get("global_show_saccades"))
     show_heatmap = bool(ss.get("global_show_heatmap"))
-    show_labels = bool(ss.get("global_show_labels"))
+    # UX-128: the 📄 Stimulus section's master switch — ANDed into its three
+    # layers' *effective* values below, rather than read by the figure
+    # builders directly, so it stays a pure display gate: `global_show_words`/
+    # `global_show_labels`/`global_show_stimulus_image` still hold whatever
+    # the user configured, for the moment this is turned back on.
+    show_stimulus = bool(ss.get("global_show_stimulus", True))
+    show_labels = show_stimulus and bool(ss.get("global_show_labels"))
     color_by = ss.get("global_color_by")
 
     # Fixation colour range only applies when fixations are shown AND coloured by
@@ -3487,7 +3502,7 @@ def _collect_viz_settings(
         )
 
     return dict(
-        show_words=bool(ss.get("global_show_words")),
+        show_words=show_stimulus and bool(ss.get("global_show_words")),
         show_labels=show_labels,
         show_fix=show_fix,
         show_order=bool(ss.get("global_show_order")),
@@ -3508,7 +3523,8 @@ def _collect_viz_settings(
         raw_gaze_color=ss.get("global_raw_gaze_color") or "#888888",
         raw_gaze_marker_size=float(ss.get("global_raw_gaze_marker_size", 4.0)),
         raw_gaze_opacity=float(ss.get("global_raw_gaze_opacity", 0.6)),
-        show_stimulus_image=bool(ss.get("global_show_stimulus_image")),
+        show_stimulus_image=show_stimulus
+        and bool(ss.get("global_show_stimulus_image")),
         # VIZ-4: image-stimulus opacity (applies to dataset + uploaded images) and
         # the uploaded image's data URI (session-only; set by render_plot_controls).
         stimulus_image_opacity=float(ss.get("global_stimulus_image_opacity", 1.0)),
@@ -4146,15 +4162,21 @@ def render_plot_controls(
         key="global_show_saccades",
         persist_state="session",
     )
-    # Three layers in one section (text, boxes, image) and two in the next
-    # (heatmap, raw gaze), so neither row has a single switch to carry — they
-    # take their name instead, and each layer's own toggle leads its group
-    # inside. A master switch was considered and rejected: it would have to
-    # remember which of the three were on to restore them.
-    _stim_none, stim_grp = _rail_section(
+    # UX-128: a master switch for the section's three layers (text, boxes,
+    # image), matching Fixations/Saccades. Earlier this was name-only — each
+    # layer carried its own toggle and nothing gated all three at once — on
+    # the reasoning that a master switch would have to remember which of the
+    # three were on to restore them. It doesn't: this toggle never touches
+    # `global_show_words`/`global_show_labels`/`global_show_stimulus_image`
+    # themselves, so each keeps whatever the user set. It only ANDs into the
+    # *effective* values `_collect_viz_settings` returns — turning it back on
+    # reveals exactly what was configured before, with nothing to restore.
+    show_stimulus, stim_grp = _rail_section(
         viz,
         "📄 **Stimulus**",
         slug="stim",
+        key="global_show_stimulus",
+        persist_state="session",
     )
     # UX-86: Overlays dissolved — Heatmap and Raw gaze are now peer sections,
     # each with exactly one thing to switch, so each carries its own toggle
@@ -4673,6 +4695,17 @@ def render_plot_controls(
         st.caption(
             "Classes come from the same reading-class split as ⚙️ Saccade "
             "style → **By type**, so the two agree on what a regression is."
+        )
+
+    # UX-128: the layer toggles below (Text / Bounding boxes / Stimulus image)
+    # and their own style controls stay live even while the section's master
+    # switch is off, so a user can still set up what they want shown once
+    # they turn it back on — nothing here mutates them, `_collect_viz_
+    # settings` only ANDs the master into what actually reaches the figure.
+    if not show_stimulus:
+        stim_grp.caption(
+            "⚠️ **📄 Stimulus** is off — nothing below shows in the plot. "
+            "Your settings are kept either way."
         )
 
     # --- Text -------------------------------------------------------------

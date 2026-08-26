@@ -2641,6 +2641,10 @@ def _build_studio_config(
         "layers": {
             "words": figure_settings["show_words"],
             "word_labels": figure_settings["show_word_labels"],
+            # UX-128: the 📄 Stimulus master switch — like the other section
+            # switches (fixations/saccades/heatmap/raw_gaze) this is the raw
+            # widget value, not something `_collect_viz_settings` gates.
+            "stimulus": bool(st.session_state.get("global_show_stimulus", True)),
             "fixations": figure_settings["show_fixations"],
             "order_labels": figure_settings["show_order"],
             "saccades": figure_settings["show_saccades"],

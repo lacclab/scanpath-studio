@@ -3312,6 +3312,60 @@ class TestGenericFilenamePowers:
         stored = next(iter(at.session_state["_datasets"].values()))
         assert len(stored["words"]) == 2  # aggregated from 4 char rows
 
+    def test_aggregate_toggle_exposes_block_field_and_keeps_blocks_apart(
+        self, monkeypatch
+    ):
+        # UX-113: a "block" column (e.g. a question's stem/target answer
+        # blocks) each restarting word_idx at 0 must not collapse into one
+        # box per shared word_idx once the "AOI block" field is mapped.
+        import pandas as pd
+
+        from scanpath_studio import app
+
+        words = pd.DataFrame(
+            {
+                "trial_id": ["t"] * 8,
+                "block": ["stem"] * 4 + ["target"] * 4,
+                "word_idx": [0, 0, 1, 1] * 2,
+                "word": ["AA", "AA", "BB", "BB", "CC", "CC", "DD", "DD"],
+                "top_left_x": [80, 100, 140, 160] * 2,
+                "top_left_y": [50] * 4 + [150] * 4,
+                "width": [20] * 8,
+                "height": [30] * 8,
+            }
+        )
+        monkeypatch.setattr(
+            app,
+            "_read_uploaded_frame",
+            lambda **kw: (
+                words if kw["state_prefix"] == "col_map_words" else pd.DataFrame()
+            ),
+        )
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        answer_setup_step(at)
+        at.session_state["_show_upload_wizard"] = True
+        at.session_state["setup_complete"] = False
+        at.session_state["wizard_dataset_format"] = "Generic"
+        at.session_state["wizard_aggregate_char_boxes"] = True
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # The block field renders only while the aggregate toggle is on.
+        block_pick = [s for s in at.selectbox if s.key == "col_map_words_block"]
+        assert block_pick, "AOI block field not rendered"
+        block_pick[0].select("block").run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+        finalize = [b for b in at.button if b.key == "wizard_finalize"]
+        assert finalize, "Add dataset button missing (mapping incomplete?)"
+        finalize[0].click().run()
+
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert "_datasets" in at.session_state and at.session_state["_datasets"]
+        stored = next(iter(at.session_state["_datasets"].values()))
+        # 4 distinct boxes survive (not 2 merged across blocks).
+        assert len(stored["words"]) == 4
+
 
 @pytest.mark.timeout(120)
 class TestFigureAndCanvasSubGroups:

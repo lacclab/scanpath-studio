@@ -654,8 +654,10 @@ _FILENAME_REGEX_EXAMPLE = r"(?P<session>\d+_\w+_ET\d)_.*_(?P<stimulus>.+)_scanpa
 
 
 def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
-    """Optional step: derive columns from the captured ``source_file`` so a trial
-    / participant id that lives only in the file name can be mapped.
+    """Optional step: derive columns from an uploaded column's own text — the
+    captured ``source_file`` by default, or any other column — so identity
+    that lives only inside a string (a filename, or a structured value like
+    ``question_04111_target``) can be mapped.
 
     Two modes: split into positional ``file_part_N`` columns on a delimiter, or
     extract *named groups* with a regex (robust to variable-length parts, e.g. a
@@ -672,27 +674,57 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
         "Derive columns from the filename",
         key="wizard_filename_split",
         help=(
-            "When identity lives only in the file name — no column carries "
-            "it — the uploaded filename is already captured as `source_file`. "
-            "Turn this on to derive real columns from it (e.g. session, "
-            "stimulus) that you can then map as the Trial or Participant id "
-            "below: split it on a delimiter into positional columns, or pull "
-            "out named regex groups for parts of variable length (e.g. a "
-            "stimulus name)."
+            "When identity lives only inside a text value — no column carries "
+            "it on its own — derive real columns from it (e.g. session, "
+            "stimulus) that you can then map as an id below: split it on a "
+            "delimiter into positional columns, or pull out named regex "
+            "groups for parts of variable length (e.g. a stimulus name). "
+            "Defaults to the uploaded filename (captured as `source_file`), "
+            "but any other uploaded column works the same way."
         ),
     )
     if not enabled:
         return raw_words, raw_fix, raw_gaze
 
-    mode_col, input_col, lower_col, apply_col = controls_col.columns(
-        [0.2, 0.38, 0.2, 0.16], gap="small", vertical_alignment="bottom"
+    # UX-113: which column to read — `source_file` (the filename) by default,
+    # but any column the upload carries. The same trick that pulls a trial id
+    # out of a filename also pulls e.g. a question id + block name out of a
+    # `page`-style column's own text.
+    available_columns = list(
+        dict.fromkeys(
+            c
+            for fr in (raw_words, raw_fix, raw_gaze)
+            if not fr.empty
+            for c in fr.columns
+        )
+    ) or [SOURCE_FILE_COLUMN]
+    default_column = (
+        SOURCE_FILE_COLUMN
+        if SOURCE_FILE_COLUMN in available_columns
+        else available_columns[0]
+    )
+    column_key = "wizard_filename_column"
+    if st.session_state.get(column_key) not in available_columns:
+        st.session_state[column_key] = default_column
+
+    col_col, mode_col, input_col, lower_col, apply_col = controls_col.columns(
+        [0.2, 0.16, 0.32, 0.16, 0.16], gap="small", vertical_alignment="bottom"
+    )
+    source_column = col_col.selectbox(
+        "Column",
+        available_columns,
+        key=column_key,
+        label_visibility="collapsed",
+        help="Which uploaded column to derive from — defaults to the "
+        "filename (`source_file`); pick any other column that encodes "
+        "identity as text.",
     )
     mode = mode_col.selectbox(
         "How",
         ["Split on a delimiter", "Regex named groups"],
         key="wizard_filename_mode",
         label_visibility="collapsed",
-        help="How to pull columns out of the filename.",
+        help="How to pull columns out of the chosen column's text.",
     )
     pattern = ""
     lower = False
@@ -741,6 +773,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
     if apply_clicked:
         st.session_state[_FILENAME_DERIVE_APPLIED_KEY] = {
             "mode": mode,
+            "column": source_column,
             "delimiter": delimiter if mode == "Split on a delimiter" else None,
             "pattern": pattern if mode != "Split on a delimiter" else None,
             "lower": lower,
@@ -749,10 +782,13 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
     applied = st.session_state.get(_FILENAME_DERIVE_APPLIED_KEY)
     if not applied:
         return raw_words, raw_fix, raw_gaze
+    # Older sessions' applied state predates the column picker (UX-113) —
+    # `source_file` was the only option then, so that's the correct fallback.
+    applied_column = applied.get("column", SOURCE_FILE_COLUMN)
 
     if applied["mode"] == "Split on a delimiter":
         out = [
-            split_source_file(fr, delimiter=applied["delimiter"])
+            split_source_file(fr, delimiter=applied["delimiter"], column=applied_column)
             if not fr.empty
             else fr
             for fr in (raw_words, raw_fix, raw_gaze)
@@ -767,7 +803,9 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
                 c
                 for fr in (raw_words, raw_fix, raw_gaze)
                 if not fr.empty
-                for c in source_file_regex_collisions(fr, applied_pattern)
+                for c in source_file_regex_collisions(
+                    fr, applied_pattern, column=applied_column
+                )
             }
         )
         if collisions:
@@ -778,7 +816,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
             )
         out = [
             extract_columns_from_source_file(
-                fr, applied_pattern, lowercase=applied["lower"]
+                fr, applied_pattern, column=applied_column, lowercase=applied["lower"]
             )
             if not fr.empty
             else fr
@@ -786,7 +824,20 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
         ]
 
     raw_words, raw_fix, raw_gaze = out
-    preview = raw_fix if not raw_fix.empty else raw_words
+    # UX-113: prefer whichever table actually carries the derived-from column
+    # — it no longer has to be `source_file`, universally stamped on every
+    # table, so a table that never had `applied_column` (e.g. an AOI-only
+    # `page` value) must not become the preview.
+    preview_candidates = [
+        fr
+        for fr in (raw_fix, raw_words)
+        if not fr.empty and applied_column in fr.columns
+    ]
+    preview = (
+        preview_candidates[0]
+        if preview_candidates
+        else (raw_fix if not raw_fix.empty else raw_words)
+    )
     if applied["mode"] == "Split on a delimiter":
         new_cols = [c for c in preview.columns if c.startswith(FILE_PART_PREFIX)]
     else:
@@ -814,7 +865,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
                 st.session_state[header_key] = [*header, *missing]
         body.caption("Derived columns (first rows) — map them as ids below:")
         body.dataframe(
-            preview[[SOURCE_FILE_COLUMN, *new_cols]].drop_duplicates().head(),
+            preview[[applied_column, *new_cols]].drop_duplicates().head(),
             width="stretch",
             hide_index=True,
         )
@@ -1236,6 +1287,25 @@ def _wizard_restore_config(host) -> None:
         # this existed simply leaves the step unanswered, which is the honest
         # outcome rather than a silent default. Additive, so per ENG-11 the
         # PLOT_CONFIG_SCHEMA stays where it is.
+        # UX-113 Phase 3: filename/column-derive settings + keep/filter-field
+        # choices weren't captured before — a restored setup silently dropped
+        # them, forcing a re-do even though the mapping itself round-tripped.
+        # Both sections are optional (older files simply lack them), so no
+        # PLOT_CONFIG_SCHEMA bump — same precedent as experimental_setup.
+        if isinstance(config.get("filename_derive"), dict):
+            fd = config["filename_derive"]
+            if isinstance(fd.get("applied"), dict):
+                st.session_state[_FILENAME_DERIVE_APPLIED_KEY] = fd["applied"]
+            widgets = fd.get("widgets")
+            if isinstance(widgets, dict):
+                for key, value in widgets.items():
+                    if value is not None:
+                        st.session_state[key] = value
+        if isinstance(config.get("keep_and_filter"), dict):
+            kf = config["keep_and_filter"]
+            for key in ("wizard_filter_by", "wizard_keep_extra"):
+                if kf.get(key) is not None:
+                    st.session_state[key] = kf[key]
         if isinstance(config.get("experimental_setup"), dict):
             # The canvas is carried in a *sibling* section by the plot-config
             # writer (`tabs._build_studio_config` puts it under `canvas_px`), so
@@ -1280,6 +1350,40 @@ def _render_restored_config_caption(host) -> None:
     host.caption(f"✓ Restored setup {detail} — review the mapping below.")
 
 
+def _filename_derive_section() -> dict | None:
+    """The ``filename_derive`` section for a saved config (UX-113 Phase 3): the
+    committed derivation (``_FILENAME_DERIVE_APPLIED_KEY``) plus the live
+    widget values needed to redisplay the control on restore. ``None`` when
+    nothing has been applied — an absent section is the honest "not used"."""
+    applied = st.session_state.get(_FILENAME_DERIVE_APPLIED_KEY)
+    if not applied:
+        return None
+    return {
+        "applied": applied,
+        "widgets": {
+            "wizard_filename_split": st.session_state.get("wizard_filename_split"),
+            "wizard_filename_column": st.session_state.get("wizard_filename_column"),
+            "wizard_filename_mode": st.session_state.get("wizard_filename_mode"),
+            "wizard_filename_delim": st.session_state.get("wizard_filename_delim"),
+            "wizard_filename_regex": st.session_state.get("wizard_filename_regex"),
+            "wizard_filename_regex_lower": st.session_state.get(
+                "wizard_filename_regex_lower"
+            ),
+        },
+    }
+
+
+def _keep_and_filter_section() -> dict | None:
+    """The ``keep_and_filter`` section for a saved config (UX-113 Phase 3):
+    the kept-extra-fields and filter-by choices. ``None`` when neither was
+    touched."""
+    filter_by = st.session_state.get("wizard_filter_by")
+    keep_extra = st.session_state.get("wizard_keep_extra")
+    if not filter_by and not keep_extra:
+        return None
+    return {"wizard_filter_by": filter_by, "wizard_keep_extra": keep_extra}
+
+
 def _wizard_setup_config() -> dict:
     """The current wizard setup as a JSON-able dict: the column mapping plus
     provenance, in the schema the restore step (``_wizard_restore_config``) reads
@@ -1302,6 +1406,8 @@ def _wizard_setup_config() -> dict:
         # re-applied setup file carries "the monitor was assumed" rather than
         # quietly re-deriving a number the recipient would read as measured.
         "experimental_setup": current_setup_section(),
+        "filename_derive": _filename_derive_section(),
+        "keep_and_filter": _keep_and_filter_section(),
     }
 
 
@@ -2611,13 +2717,13 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # raw-gaze upload adds a second, titled "Raw gaze" section below), so a
     # sub-heading here just repeated the stage title above it.
     s2 = sections_host.container()
-    # Filename derivation must run *before* the identifier pickers so the
+    # Column derivation must run *before* the identifier pickers so the
     # derived columns are mappable below. UX-53 took it out of its popover —
     # "advanced" is a reason to place a control last, not to hide it behind a
-    # click — so it renders inline, below the pickers it feeds.
-    if (has_words or has_fix) and any(
-        SOURCE_FILE_COLUMN in fr.columns for fr in (raw_fix, raw_words) if not fr.empty
-    ):
+    # click — so it renders inline, below the pickers it feeds. UX-113: no
+    # longer gated on `source_file` specifically — the tool derives from any
+    # uploaded column now, so any non-empty table is reason enough to offer it.
+    if has_words or has_fix:
         derive_host = s2.container()
         raw_words, raw_fix, raw_gaze = _wizard_filename_derive(
             derive_host,
@@ -2849,7 +2955,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             # fact about this table, so the question sits with the fields that
             # describe it, not in a later section the user reads after they
             # have stopped thinking about the AOI file.
-            extra_rows["words"].toggle(
+            aggregate_char_boxes_on = extra_rows["words"].toggle(
                 "Aggregate character AOIs into word boxes",
                 key="wizard_aggregate_char_boxes",
                 help="For interest-area tables with one row per *character* "
@@ -2857,6 +2963,22 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 "(grouped by the Trial + Word/IA id above) into one bounding "
                 "box.",
             )
+            # UX-113: only relevant once aggregating — a table whose rows are
+            # grouped into sub-screen blocks that each restart their own word
+            # numbering (e.g. a comprehension question's answer blocks) needs
+            # to say so, or two blocks' word 0 would silently merge into one
+            # box (see data.aggregate_char_boxes).
+            if aggregate_char_boxes_on:
+                word_schema.update(
+                    _map_section(
+                        raw_words,
+                        WORD_FIELD_SPECS,
+                        prop_w,
+                        "col_map_words",
+                        extra_rows["words"],
+                        ["block"],
+                    )
+                )
 
     # UX-104 — the raw-gaze block renders only when there is a raw-gaze table.
     # UX-113: same "name column + evenly split pickers" grid as the Fixations/

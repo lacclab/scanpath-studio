@@ -1637,7 +1637,10 @@ def _default_box_format(proposed: dict[str, str | None]) -> str:
 # size. All optional, all inert for an ordinary single-screen corpus, and
 # together they were half the rows in the editor — so they fold into an
 # "Advanced" group instead of padding the list everyone reads.
-_ADVANCED_MAPPING_KEYS = frozenset({"screen_id"})
+# UX-113: "block" joins it for the same reason — only a table with sub-screen
+# blocks that each restart their own numbering (e.g. a comprehension
+# question's answer blocks) ever needs it.
+_ADVANCED_MAPPING_KEYS = frozenset({"screen_id", "block"})
 
 #: Mapping keys that are **resolved but never rendered** (UX-53 round 3).
 #:
@@ -1709,6 +1712,20 @@ WORD_FIELD_SPECS: list[dict] = [
         "required": False,
         "help": "Line number of the word on screen; used for color-by-line "
         "(otherwise inferred from box Y).",
+    },
+    # UX-113: only meaningful alongside "Aggregate character AOIs into word
+    # boxes" — a table whose rows are grouped into sub-blocks that each
+    # restart their own numbering (e.g. a comprehension question's stem /
+    # target / distractor answer blocks). Without it, two blocks' word 0
+    # would silently aggregate into one merged box.
+    {
+        "key": "block",
+        "label": "AOI block",
+        "required": False,
+        "help": "Groups word boxes that each restart their own numbering "
+        "within one screen (e.g. a question's stem/target/distractor "
+        "blocks) — leave empty for ordinary one-block screens. Only used "
+        "when aggregating character AOIs into word boxes.",
     },
     {
         "key": "canvas_width",

@@ -1458,6 +1458,43 @@ def test_extract_columns_from_source_file_noops():
     )
 
 
+def test_split_and_extract_from_a_column_other_than_source_file():
+    # UX-113: the wizard's "derive from a column" tool isn't pinned to
+    # `source_file` — a `page`-style column encoding identity in its own text
+    # (e.g. MultiplEYE's question-AOI screens) works the same way.
+    df = pd.DataFrame(
+        {
+            "page": [
+                "Lit_Alchemist_4_question_04111_target",
+                "Lit_Alchemist_4_question_04111_distractor1",
+            ],
+            "source_file": ["aoi_export", "aoi_export"],
+        }
+    )
+    split = data_module.split_source_file(df, delimiter="_", column="page")
+    assert split["file_part_1"].tolist() == ["Lit", "Lit"]
+
+    out = data_module.extract_columns_from_source_file(
+        df, r"question_(?P<question_id>\d+)_(?P<aoi_block>\w+)$", column="page"
+    )
+    assert out["question_id"].tolist() == ["04111", "04111"]
+    assert out["aoi_block"].tolist() == ["target", "distractor1"]
+
+    # `column=` is accepted for signature symmetry with the other two, but a
+    # collision is against df's real columns regardless of which one the
+    # regex reads from — a group named after an existing column collides...
+    assert data_module.source_file_regex_collisions(
+        df, r"(?P<page>.)", column="page"
+    ) == ["page"]
+    # ...one that isn't an existing column name does not.
+    assert (
+        data_module.source_file_regex_collisions(
+            df, r"(?P<question_id>\d+)", column="page"
+        )
+        == []
+    )
+
+
 def test_aggregate_char_boxes_origin_size():
     # 2 words x 2 chars/word, origin+size boxes; aggregate to one box per word.
     chars = pd.DataFrame(
@@ -1490,6 +1527,60 @@ def test_aggregate_char_boxes_origin_size():
         50,
         30,
     )
+
+
+def test_aggregate_char_boxes_with_block_keeps_blocks_apart_and_renumbers():
+    # UX-113: two blocks (e.g. a question's stem/target answer blocks) each
+    # restart their own local word_idx — without block-aware grouping, both
+    # blocks' word 0 would silently merge into one box spanning both
+    # locations. "stem" sits above "target" (lower y = earlier reading order).
+    rows = []
+    for block, y0, words in (
+        ("stem", 10, [("AA", 0, 0), ("BB", 1, 20)]),
+        ("target", 50, [("CC", 0, 0), ("DD", 1, 20)]),
+    ):
+        for word, word_idx, x0 in words:
+            for i, ch in enumerate(word):
+                rows.append(
+                    {
+                        "trial_id": "t1",
+                        "block": block,
+                        "word_idx": word_idx,
+                        "char": ch,
+                        "left": x0 + i * 10,
+                        "right": x0 + i * 10 + 10,
+                        "top": y0,
+                        "bottom": y0 + 10,
+                    }
+                )
+    chars = pd.DataFrame(rows)
+    schema = dict(
+        trial="trial_id",
+        word_id="word_idx",
+        block="block",
+        left="left",
+        right="right",
+        top="top",
+        bottom="bottom",
+    )
+    out = data_module.aggregate_char_boxes(chars, schema)
+    # 4 distinct words survive (not 2 — the bug this fixes), renumbered
+    # sequentially per screen in block-reading-order (stem's two words first,
+    # since it sits above target) then original word-id order within a block.
+    assert len(out) == 4
+    assert sorted(out["word_idx"].tolist()) == [0, 1, 2, 3]
+    by_block = out.set_index("block")
+    assert sorted(by_block.loc["stem", "word_idx"].tolist()) == [0, 1]
+    assert sorted(by_block.loc["target", "word_idx"].tolist()) == [2, 3]
+    # No box spans both blocks' rows (the merge bug: top 10 through 60).
+    assert out["top"].max() - out["top"].min() < 50
+
+    # Leaving `block` unmapped reproduces the (buggy but pre-existing) merge —
+    # a regression guard that this phase doesn't change behavior when the new
+    # field is left unused.
+    schema_noblock = {k: v for k, v in schema.items() if k != "block"}
+    legacy = data_module.aggregate_char_boxes(chars, schema_noblock)
+    assert len(legacy) == 2
 
 
 def test_aggregate_char_boxes_edges_and_noop():
@@ -1570,6 +1661,85 @@ def test_multipleye_uploads_case_match_join():
     assert set(words["text_id"]) == {"Lit_Demo_1"}  # CamelCase canonical, not lowercase
     assert set(words["trial_id"]) <= set(fixations["trial_id"])
     assert set(fixations["participant_id"]) == {"001_ZH_CH_1_ET1"}
+
+
+def test_generic_wizard_tools_reproduce_multipleye_upload_recipe():
+    # UX-113 Phase 4 parity checkpoint: the same reading-pages-only upload,
+    # built with the *generic* wizard tools (column-derive via
+    # extract_columns_from_source_file + api.load_scanpath_data) instead of
+    # the MultiplEYE-specific recipe, lands on the same trial/participant
+    # identity and the same row counts. Case is folded on both derived
+    # columns here (the generic tool has no cross-table CamelCase canonical —
+    # that's `datasets.py`'s own case-matching trick, still MultiplEYE-only),
+    # so identity is compared case-insensitively rather than literally.
+    from scanpath_studio import api
+
+    scan = _upload_frame(
+        {
+            "001_ZH_CH_1_ET1_trial_1_Lit_Demo_1_scanpath": [
+                _scan_row(1000, 200, 90, 65, "page_1", 0),
+                _scan_row(1300, 180, 150, 65, "page_1", 1),
+                _scan_row(2000, 210, 90, 65, "page_2", 0),
+            ]
+        }
+    )
+    aoi = _upload_frame(
+        {
+            "lit_demo_1_aoi": _aoi_pages(
+                ("page_1", 0, "AA", 80),
+                ("page_1", 1, "BB", 140),
+                ("page_2", 0, "CC", 80),
+            )
+        },
+        columns=_AOI_COLS,
+    )
+    words_ref, fixations_ref = datasets_module.load_multipleye_uploads(scan, aoi)
+
+    fix_raw = data_module.extract_columns_from_source_file(
+        scan, datasets_module._MULTIPLEYE_TRIAL_RE.pattern, lowercase=True
+    )
+    aoi_raw = data_module.extract_columns_from_source_file(
+        aoi, r"(?P<stimulus>.+)_aoi$", lowercase=True
+    )
+    word_schema = {
+        "trial": "stimulus",
+        "text_id": "stimulus",
+        "word_id": "word_idx",
+        "text": "word",
+        "line": "line_idx",
+        "x": "top_left_x",
+        "y": "top_left_y",
+        "width": "width",
+        "height": "height",
+        "screen_id": "page",
+    }
+    aoi_raw = data_module.aggregate_char_boxes(aoi_raw, word_schema)
+    fix_schema = {
+        "participant": "session",
+        "trial": "stimulus",
+        "text_id": "stimulus",
+        "duration": "duration",
+        "timestamp": "onset",
+        "x": "location_x",
+        "y": "location_y",
+        "word_id": "word_idx",
+        "screen_id": "page",
+    }
+    words, fixations = api.load_scanpath_data(
+        words=aoi_raw,
+        fixations=fix_raw,
+        word_schema=word_schema,
+        fix_schema=fix_schema,
+    )
+
+    assert len(words) == len(words_ref)
+    assert len(fixations) == len(fixations_ref)
+    assert {t.lower() for t in words["trial_id"].unique()} == {
+        t.lower() for t in words_ref["trial_id"].unique()
+    }
+    assert {p.lower() for p in fixations["participant_id"].unique()} == {
+        p.lower() for p in fixations_ref["participant_id"].unique()
+    }
 
 
 def test_multipleye_uploads_fixations_only():

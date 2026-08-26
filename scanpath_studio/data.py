@@ -861,11 +861,17 @@ def extract_columns_from_source_file(
     return df
 
 
-def source_file_regex_collisions(df: pd.DataFrame, pattern: str) -> list:
+def source_file_regex_collisions(
+    df: pd.DataFrame, pattern: str, *, column: str = SOURCE_FILE_COLUMN
+) -> list:
     """Named groups of ``pattern`` that already exist as columns in ``df``.
 
     :func:`extract_columns_from_source_file` skips these (so it never clobbers
-    real data); the wizard surfaces them so the user can rename the group."""
+    real data); the wizard surfaces them so the user can rename the group.
+    ``column`` is accepted for symmetry with its two siblings (UX-113 —
+    "derive from any column", not only ``source_file``) but isn't otherwise
+    used: a collision is a collision against ``df``'s columns regardless of
+    which column the regex reads from."""
     if not pattern:
         return []
     try:
@@ -875,6 +881,33 @@ def source_file_regex_collisions(df: pd.DataFrame, pattern: str) -> list:
     return [g for g in groups if g in df.columns]
 
 
+def _renumber_word_ids_across_blocks(
+    out: pd.DataFrame, *, screen_cols: list, block_col: str, word_col: str
+) -> pd.DataFrame:
+    """Reassign ``word_col`` sequentially per screen, in block-then-original
+    order — the post-aggregation half of :func:`aggregate_char_boxes`'s block
+    support (see its docstring). ``out`` is the already-aggregated frame (one
+    row per word box), still carrying the ``_box_l``/``_box_t`` temp columns
+    :func:`aggregate_char_boxes` computes just before calling this. A block's
+    reading-order position is its own first box's top-then-left corner —
+    geometry the aggregation already has, not a second field to ask for."""
+    block_order = (
+        out.groupby([*screen_cols, block_col], sort=False)[["_box_t", "_box_l"]]
+        .first()
+        .reset_index()
+        .sort_values([*screen_cols, "_box_t", "_box_l"])
+    )
+    block_order["_block_rank"] = block_order.groupby(screen_cols, sort=False).cumcount()
+    out = out.merge(
+        block_order[[*screen_cols, block_col, "_block_rank"]],
+        on=[*screen_cols, block_col],
+        how="left",
+    )
+    out = out.sort_values([*screen_cols, "_block_rank", word_col], kind="stable")
+    out[word_col] = out.groupby(screen_cols, sort=False).cumcount()
+    return out.drop(columns="_block_rank").reset_index(drop=True)
+
+
 def aggregate_char_boxes(
     df: pd.DataFrame, schema: dict[str, str | None]
 ) -> pd.DataFrame:
@@ -882,26 +915,51 @@ def aggregate_char_boxes(
 
     For interest-area tables shipped one row per *character* (e.g. CJK corpora
     that have no whitespace word boundaries), aggregate the characters of each
-    word — grouped by the mapped trial id + word id (plus participant / text id
-    when mapped) — into a single bounding box: min/max over the mapped box columns,
-    first value of every other column. Run this on the RAW frame *before*
+    word — grouped by the mapped trial id + word id (plus participant / text id /
+    screen id when mapped) — into a single bounding box: min/max over the mapped
+    box columns, first value of every other column. A mapped screen id narrows
+    the group the same way participant/text id do — a multi-screen (multipart)
+    trial commonly restarts word numbering per screen, so without it a shared
+    word id on two screens of the same trial would silently merge into one box.
+    Run this on the RAW frame *before*
     :func:`normalize_words` (which expects one row per word box). ``schema`` is a
     word schema dict (field → source column). Returns ``df`` unchanged when the
-    trial or word-id column isn't mapped, or no box columns are."""
+    trial or word-id column isn't mapped, or no box columns are.
+
+    UX-113 — ``schema["block"]``, when mapped, groups words into sub-screen
+    blocks that each restart their own local word numbering (e.g. a
+    comprehension question's stem/target/distractor answer blocks). Without
+    it, two blocks' word 0 would silently aggregate into one merged box. When
+    it *is* mapped, the word id is also renumbered sequentially per screen
+    afterwards — in block-reading-order (each block's own top-then-left
+    position, geometry rather than a second field the user would have to
+    supply) then original word-id order — so ids stay unique within one
+    screen, which matters because a mapped word id can be authoritative for
+    fixation assignment (see ``measures.assign_fixations_to_words``)."""
     word_col = schema.get("word_id")
     trial = schema.get("trial")
     if not word_col or not trial:
         return df
+    block_col = schema.get("block") or None
     group_cols = list(trial_mapping_columns(trial))
-    for key in ("participant", "text_id"):
+    # A mapped screen id must narrow the group like participant/text_id do —
+    # a multi-screen trial (multipart) commonly restarts word numbering per
+    # screen (e.g. MultiplEYE's reading pages), so without this a shared
+    # word id on two screens of the same trial would silently merge into one
+    # box, the same failure mode "block" fixes within a single screen.
+    for key in ("participant", "text_id", "screen_id"):
         mapped = schema.get(key)
         if mapped:
             group_cols += trial_mapping_columns(mapped)
+    if block_col:
+        group_cols.append(block_col)
     group_cols.append(word_col)
     # De-dup, keep only columns actually present, and require the word id.
     group_cols = [c for c in dict.fromkeys(group_cols) if c in df.columns]
     if word_col not in group_cols:
         return df
+    if block_col not in group_cols:  # mapped, but not actually on this frame
+        block_col = None
 
     has_xywh = all(schema.get(k) for k in ("x", "y", "width", "height"))
     has_edges = all(schema.get(k) for k in ("left", "right", "top", "bottom"))
@@ -925,6 +983,14 @@ def aggregate_char_boxes(
     agg = {c: "first" for c in df.columns if c not in group_cols and c not in temp}
     agg.update(_box_l="min", _box_t="min", _box_r="max", _box_b="max")
     out = df.groupby(group_cols, sort=False, as_index=False).agg(agg)
+
+    if block_col:
+        out = _renumber_word_ids_across_blocks(
+            out,
+            screen_cols=[c for c in group_cols if c not in (word_col, block_col)],
+            block_col=block_col,
+            word_col=word_col,
+        )
 
     # Write the aggregated box back into the SAME schema columns so the existing
     # word schema still maps it (origin+size or edges, matching the input form).

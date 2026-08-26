@@ -922,10 +922,16 @@ def get_app_css() -> str:
        block, and so the overlay it sizes itself against, tall enough to
        show the uploader whole even with nothing uploaded yet — measured at
        ~92px (title + the collapsed-instructions dropzone), rounded up with
-       a little breathing room. */
+       a little breathing room.
+       UX-129: 104px -> 128px — the overlay centers its content
+       (`justify-content: center`) against the *whole* block height, and the
+       title + collapsed dropzone measure ~96px on their own, so 104px left
+       only ~2px above the title and ~6px below the button: close enough to
+       read as the title being cut off at the top of its block, not merely
+       "close to the edge". 128px leaves a real ~16px on each side. */
     [class*="st-key-wiz_map_block_"] {
         position: relative;
-        min-height: 104px;
+        min-height: 128px;
     }
     [class*="st-key-wiz_map_upload_"] {
         position: absolute;

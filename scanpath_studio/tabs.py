@@ -89,6 +89,7 @@ from scanpath_studio.constants import (
     TRIAL_IDENTITY_FULL_KEY,
     WORD_LABEL_COLOR,
     compare_palette_color,
+    derived_analysis_tables_enabled,
     drift_correction_enabled,
     preprocessing_enabled,
     similarity_enabled,
@@ -8254,26 +8255,32 @@ def _render_raw_table(df: pd.DataFrame, caption: str | None = None) -> None:
         st.caption(caption)
 
 
-def render_metrics_tab(
-    words_filtered: pd.DataFrame, fixations_filtered: pd.DataFrame
-) -> None:
-    """Render word-level metrics tab."""
-    st.markdown("##### Word-level data")
-    metrics = compute_word_metrics(words_filtered, fixations_filtered)
-    _render_raw_table(metrics)
-
-
 def render_fixations_tab(fixations_filtered: pd.DataFrame) -> None:
-    """Render fixation-level data tab."""
-    st.markdown("##### Fixation-level data")
+    """Render the raw fixations table, as uploaded/mapped — no computation."""
+    if fixations_filtered.empty:
+        st.caption("No Fixations table uploaded.")
+        return
     _render_raw_table(fixations_filtered)
+
+
+def render_words_tab(words_filtered: pd.DataFrame) -> None:
+    """Render the raw Words/IA (AOI) table, as uploaded/mapped — no computation.
+
+    UX-126: this used to be "Word-level data", `compute_word_metrics`'s full
+    per-word reading-measure computation (FFD/FPRT/RPD/TFD/…) run just to
+    populate a Raw Data sub-tab. That's derived, not raw — moved out; the raw
+    AOI table it's derived *from* is what belongs here.
+    """
+    if words_filtered.empty:
+        st.caption("No Words / IA table uploaded.")
+        return
+    _render_raw_table(words_filtered)
 
 
 def render_raw_gaze_tab(raw_gaze_filtered: pd.DataFrame) -> None:
     """Render raw gaze data tab."""
-    st.markdown("##### Raw gaze data")
     if raw_gaze_filtered.empty:
-        st.info("No raw gaze data available after filtering.")
+        st.caption("No Raw gaze table uploaded.")
         return
     # DATA-15: the bundled demo's raw gaze is synthesized from the fixation
     # report — a table that looks like recorded samples must say it isn't.
@@ -8283,6 +8290,20 @@ def render_raw_gaze_tab(raw_gaze_filtered: pd.DataFrame) -> None:
             "illustration — it is not recorded eye-tracker output."
         )
     _render_raw_table(raw_gaze_filtered)
+
+
+def _render_raw_metadata_tab(label: str, attached, id_note: str) -> None:
+    """One of the Participants/Trials/Texts sub-tabs — always present (UX-126),
+    even when nothing is attached, so the Raw Data section is always the same
+    six tables rather than some appearing only once uploaded."""
+    if attached is None or attached.frame.empty:
+        st.caption(f"No {label.lower()} table attached.")
+        return
+    st.caption(
+        f"From **{attached.source_name}**, joined on {id_note}. Kept as its "
+        "own table — it is not copied onto the word or fixation rows."
+    )
+    _render_raw_table(attached.frame)
 
 
 @st.cache_data(show_spinner="Building stimuli list…")
@@ -8347,24 +8368,6 @@ def _build_stimuli_table_cached(_words: pd.DataFrame, cache_key) -> pd.DataFrame
     return result[[c for c in ordered if c in result.columns]]
 
 
-def render_stimuli_tab(words_filtered: pd.DataFrame) -> None:
-    """Render the stimuli subtab — one reconstructed passage per Text ID."""
-    st.markdown("##### Stimuli")
-    if words_filtered.empty:
-        st.info("No word data available after filtering.")
-        return
-    stimuli = _build_stimuli_table_cached(
-        words_filtered, cache_key=frame_fingerprint(words_filtered)
-    )
-    if stimuli.empty:
-        st.info(
-            "No stimulus text could be reconstructed — check the Word text and "
-            "Text ID column mappings."
-        )
-        return
-    _render_raw_table(stimuli)
-
-
 def _render_data_provenance() -> None:
     """Show a 'source / cohort / date / file mtime' banner above the Raw Data
     sub-tabs so reviewers can verify which OneStop export they're looking at.
@@ -8414,37 +8417,42 @@ def render_raw_data_tab(
     fixations_filtered: pd.DataFrame,
     raw_gaze_filtered: pd.DataFrame,
 ) -> None:
-    """Render the raw data tab with sub-tabs.
+    """Render the raw data tab: exactly the six tables a dataset can upload —
+    Fixations, AOIs (Words/IA), Raw gaze, Participants, Trials, Texts (UX-126).
+
+    Always six tabs, in this fixed order, whether or not a given table is
+    actually present — a table with nothing uploaded/attached shows a plain
+    "not uploaded" line instead of the tab disappearing, so the set doesn't
+    reshuffle as you attach things. Every one of the six is shown *as
+    uploaded* — no reconstruction (the former "Stimuli" sub-tab, which joined
+    word rows into passages) and no derived measures (the former
+    "Word-level" sub-tab, `compute_word_metrics`'s full FFD/FPRT/RPD/TFD
+    pass) — both real computation for a section whose whole point is the raw
+    tables. That view still exists — it's the 🧮 Derived analysis tables
+    section below (currently held back — UX-126) and the Corpus Analysis
+    view.
 
     UX-52 folds this whole block into a collapsed expander, so the provenance
     banner moved out to its caller (it owns an expander, which cannot nest) —
     see ``render_data_inspection_tab``.
     """
-    labels = ["Stimuli", "Word-level", "Fixation-level", "Raw gaze"]
-    # DATA-20: the participant table is a *source* table, so it is shown
-    # losslessly beside the others — and only when one is attached, rather than
-    # as a permanently empty tab.
-    attached = active_participant_metadata()
-    if attached is not None and not attached.frame.empty:
-        labels.append("Participants")
-    tabs = st.tabs(labels)
+    from scanpath_studio import metadata as md
+
+    tabs = st.tabs(["Fixations", "AOIs", "Raw gaze", "Participants", "Trials", "Texts"])
     with tabs[0]:
-        render_stimuli_tab(words_filtered)
-    with tabs[1]:
-        render_metrics_tab(words_filtered, fixations_filtered)
-    with tabs[2]:
         render_fixations_tab(fixations_filtered)
-    with tabs[3]:
+    with tabs[1]:
+        render_words_tab(words_filtered)
+    with tabs[2]:
         render_raw_gaze_tab(raw_gaze_filtered)
-    if len(tabs) > 4:
-        with tabs[4]:
-            st.markdown("##### Participant metadata")
-            st.caption(
-                f"From **{attached.source_name}**, joined on `participant_id`. "
-                "Kept as its own table — it is not copied onto the word or "
-                "fixation rows."
-            )
-            _render_raw_table(attached.frame)
+    with tabs[3]:
+        _render_raw_metadata_tab(
+            "Participants", active_participant_metadata(), "`participant_id`"
+        )
+    with tabs[4]:
+        _render_raw_metadata_tab("Trials", md.active_trials(), "the trial id")
+    with tabs[5]:
+        _render_raw_metadata_tab("Texts", md.active_texts(), "`text_id`")
 
 
 # -----------------------------------------------------------------------------
@@ -10579,7 +10587,7 @@ def _c_derived_tables(
     raw_gaze_fingerprint,
     pixels_per_degree_value: float | None,
 ) -> dict:
-    """The six PRE-11/12/15/19 + AN-30 derived tables, built once per dataset.
+    """The seven PRE-11/12/15/19 + AN-30 derived tables, built once per dataset.
 
     PERF-3: **Data Inspection is a subtab**, and Streamlit renders every subtab's
     body on every run — only the *display* is client-side. So this ran in full on
@@ -10604,6 +10612,7 @@ def _c_derived_tables(
         else _fixations
     )
     return {
+        "Stimuli": _build_stimuli_table_cached(_words, words_fingerprint),
         "Sentences": sentence_measures(measured_words, _fixations),
         "Saccades": saccade_table(
             analysis_fixations,
@@ -10697,47 +10706,61 @@ def render_data_inspection_tab(
     _render_data_provenance()
 
     # 2. Every raw-data table (Stimuli / Word-level / Fixation-level / Raw gaze).
-    with st.expander("📋 Raw data — stimuli, words, fixations, gaze", expanded=False):
+    with st.expander(
+        "📋 Raw data — fixations, AOIs, raw gaze, participants, trials, texts",
+        expanded=False,
+    ):
         render_raw_data_tab(words_filtered, fixations_filtered, raw_gaze_filtered)
 
-    # PRE-11/12/15/19 + AN-30: first-class derived tables, all exportable.
-    from scanpath_studio.experimental_setup import pixels_per_degree
+    # UX-126: the whole section — including the computation that backs it — is
+    # held back from this release, the same way PRE-21/PRE-22 hold back drift
+    # correction / preprocessing. Gated *before* `_c_derived_tables` is even
+    # called: that function is cached, but a cache lookup still means hashing
+    # the frames and running the reading-measure / saccade-classification /
+    # sentence/reader aggregation pipeline on a cache miss, on every Data page
+    # rerun, whether or not the (collapsed-by-default) expander is ever
+    # opened. Off, none of that runs. The code stays for a later release —
+    # `preprocessing.py`'s own table builders are untouched and still
+    # directly callable.
+    if derived_analysis_tables_enabled():
+        # PRE-11/12/15/19 + AN-30: first-class derived tables, all exportable.
+        from scanpath_studio.experimental_setup import pixels_per_degree
 
-    try:
-        ppd = pixels_per_degree(
-            float(st.session_state.get("global_viewing_distance_mm", 800.0)),
-            float(st.session_state.get("global_canvas_width", 1200.0)),
-            float(st.session_state.get("global_monitor_width_mm", 597.0)),
+        try:
+            ppd = pixels_per_degree(
+                float(st.session_state.get("global_viewing_distance_mm", 800.0)),
+                float(st.session_state.get("global_canvas_width", 1200.0)),
+                float(st.session_state.get("global_monitor_width_mm", 597.0)),
+            )
+        except (TypeError, ValueError):
+            ppd = None
+        derived = _c_derived_tables(
+            words_filtered,
+            fixations_filtered,
+            raw_gaze_filtered,
+            frame_fingerprint(words_filtered),
+            frame_fingerprint(fixations_filtered),
+            frame_fingerprint(raw_gaze_filtered),
+            ppd,
         )
-    except (TypeError, ValueError):
-        ppd = None
-    derived = _c_derived_tables(
-        words_filtered,
-        fixations_filtered,
-        raw_gaze_filtered,
-        frame_fingerprint(words_filtered),
-        frame_fingerprint(fixations_filtered),
-        frame_fingerprint(raw_gaze_filtered),
-        ppd,
-    )
-    # PRE-22: *Cleaning QA* is the preprocessing pipeline's own provenance table
-    # (PRE-15) — one row per trial saying what that stage excluded and why — so
-    # it goes with the stage while the feature is held back from the release.
-    # The other five are plain analysis tables that happen to live in
-    # `preprocessing.py`; they are unaffected.
-    if not preprocessing_enabled():
-        derived = {k: v for k, v in derived.items() if k != "Cleaning QA"}
-    with st.expander(
-        "🧮 Derived analysis tables — " + " · ".join(derived), expanded=False
-    ):
-        for tab, (label, table) in zip(st.tabs(list(derived)), derived.items()):
-            with tab:
-                if table.empty:
-                    st.caption(
-                        f"No {label.lower()} table is available for this selection."
-                    )
-                else:
-                    _render_raw_table(table)
+        # PRE-22: *Cleaning QA* is the preprocessing pipeline's own provenance
+        # table (PRE-15) — one row per trial saying what that stage excluded
+        # and why — so it goes with the stage while that feature is held back
+        # too. The other five are plain analysis tables that happen to live in
+        # `preprocessing.py`; they are unaffected.
+        if not preprocessing_enabled():
+            derived = {k: v for k, v in derived.items() if k != "Cleaning QA"}
+        with st.expander(
+            "🧮 Derived analysis tables — " + " · ".join(derived), expanded=False
+        ):
+            for tab, (label, table) in zip(st.tabs(list(derived)), derived.items()):
+                with tab:
+                    if table.empty:
+                        st.caption(
+                            f"No {label.lower()} table is available for this selection."
+                        )
+                    else:
+                        _render_raw_table(table)
 
     # 3. Per-metric summary statistics.
     with st.expander("📊 Summary statistics", expanded=False):

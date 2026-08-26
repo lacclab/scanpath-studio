@@ -80,6 +80,21 @@ def preprocessing_enabled() -> bool:
     return experimental_features_enabled()
 
 
+def derived_analysis_tables_enabled() -> bool:
+    """Whether the 🗂️ Data page's "🧮 Derived analysis tables" section (Sentences
+    / Saccades / Trials / Readers / Characters) is exposed **in the app** (UX-126).
+
+    Same gate, same reasoning as `preprocessing_enabled()`/`drift_correction_enabled()`:
+    the feature is finished and tested, held back for a later release. Off, the
+    section doesn't render *and* its backing computation (`tabs._c_derived_tables`
+    — full reading-measure + saccade/sentence/reader aggregation) never runs, not
+    just its display — a Data page rerun with the flag off does none of that work.
+    Scope is the **app** only: `preprocessing.py`'s own table builders are
+    untouched and still directly callable.
+    """
+    return experimental_features_enabled()
+
+
 # Default text font. A single generic family that renders (monospaced) on every
 # platform including the Streamlit Cloud demo; the font field accepts any CSS
 # font name or stack if you want the exact experiment font.

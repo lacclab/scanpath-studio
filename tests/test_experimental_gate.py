@@ -336,14 +336,67 @@ class TestPreprocessingGate:
         at.run(timeout=90)
         assert not at.exception, at.exception
         assert "🧹 Preprocessing" not in [s.value for s in at.subheader]
-        # …including the pipeline's own QA table, which is a preprocessing
-        # surface rather than one of the plain analysis tables beside it.
+        # UX-126: with the experimental flag off (this whole file's default),
+        # the 🧮 Derived analysis tables section — Cleaning QA included — is
+        # withheld too, so there's nothing preprocessing-specific left to
+        # single out here. See TestDerivedAnalysisTablesGate for that gate.
         labels = [e.label for e in at.expander]
-        derived = next((label for label in labels if "Derived analysis" in label), "")
-        assert derived, labels
-        assert "Cleaning QA" not in derived
-        for kept in ("Sentences", "Saccades", "Trials", "Readers", "Characters"):
-            assert kept in derived, f"{kept} is not a preprocessing surface: {derived}"
+        assert not any("Derived analysis" in label for label in labels), labels
+
+
+class TestDerivedAnalysisTablesGate:
+    """UX-126 — the Data page's 🧮 Derived analysis tables section (Sentences /
+    Saccades / Trials / Readers / Characters / Cleaning QA) is held back this
+    release, the same way PRE-22 holds back preprocessing: the builders stay in
+    the codebase for a later revival, but the app must neither render the
+    section nor run the aggregation pipeline that backs it.
+    """
+
+    def test_it_is_hidden_by_default(self, monkeypatch):
+        from scanpath_studio import constants
+
+        monkeypatch.delenv(constants.EXPERIMENTAL_ENV_VAR, raising=False)
+        assert constants.derived_analysis_tables_enabled() is False
+
+    def test_the_experimental_flag_brings_it_back(self, monkeypatch):
+        from scanpath_studio import constants
+
+        monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
+        assert constants.derived_analysis_tables_enabled() is True
+
+    def test_the_data_page_hides_the_section_and_skips_its_computation(
+        self, monkeypatch
+    ):
+        from tests.conftest import pin_data_view
+
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["data_source_choice"] = "Synthetic test trial"
+        pin_data_view(at)
+
+        def _must_not_run(*_a, **_k):
+            raise AssertionError(
+                "the derived-tables computation ran while the gate is off"
+            )
+
+        with monkeypatch.context() as m:
+            m.setattr(tabs, "_c_derived_tables", _must_not_run)
+            at.run(timeout=90)
+        assert not at.exception, at.exception
+        labels = [e.label for e in at.expander]
+        assert not any("Derived analysis" in label for label in labels), labels
+
+    def test_the_flag_restores_the_section(self, monkeypatch):
+        from scanpath_studio import constants
+        from tests.conftest import pin_data_view
+
+        monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["data_source_choice"] = "Synthetic test trial"
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        labels = [e.label for e in at.expander]
+        assert any("Derived analysis" in label for label in labels), labels
 
 
 class TestMultiplEYEUploadGate:

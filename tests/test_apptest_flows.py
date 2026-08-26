@@ -150,7 +150,7 @@ def _frames_with(at: AppTest, *columns: str) -> list[pd.DataFrame]:
 
 def _fixation_durations(at: AppTest) -> list:
     """``duration_ms`` from the rendered fixation-level table (Data Inspection →
-    Raw data → Fixation-level), in render order."""
+    Raw data → Fixations), in render order."""
     frames = _frames_with(at, "duration_ms", "x")
     assert frames, "fixation-level table not rendered"
     return list(frames[0]["duration_ms"])
@@ -158,7 +158,7 @@ def _fixation_durations(at: AppTest) -> list:
 
 def _word_labels(at: AppTest) -> set[str]:
     """Distinct ``text`` values on the rendered word-level table (Data
-    Inspection → Raw data → Word-level)."""
+    Inspection → Raw data → AOIs)."""
     frames = _frames_with(at, "word_id", "text")
     assert frames, "word-level table not rendered"
     return set(frames[0]["text"].dropna().astype(str))

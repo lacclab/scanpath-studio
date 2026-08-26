@@ -31,6 +31,7 @@ from .constants import (
     PUBLIC_DATASETS_CHOICE,
     SYNTHETIC_CHOICE,
     UPLOAD_CHOICE,
+    UPLOAD_MAX_SIZE_MB,
     WIZARD_LEAVE_KEY,
     multipleye_upload_enabled,
 )
@@ -2713,6 +2714,16 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 "```bash\npip install scanpath-studio\nscanpath-studio\n```"
             )
 
+    # UX-124: the size/type line `st.file_uploader` prints under its own
+    # dropzone ("5GB per file • CSV, TSV, …") doesn't fit this narrow column
+    # either — `styles.py` hides it there, so it needs to survive somewhere:
+    # appended to `help_text`, which already reaches both the title's hover
+    # tooltip and the uploader's own accessible help.
+    _upload_types_note = (
+        ", ".join(t.upper() for t in app._UPLOAD_TYPES)
+        + f" — up to {UPLOAD_MAX_SIZE_MB // 1000}GB per file."
+    )
+
     def upload_box(
         host, *, label, help_text, prefix, multi, noun, kind=None, short_label=None
     ):
@@ -2765,7 +2776,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 )
                 preview.caption("First rows:")
                 preview.dataframe(frame.head(), width="stretch", hide_index=True)
-            stats.caption(f"✓ {len(frame):,} {noun} · {n_columns} columns")
+            # UX-124: two short lines, not one that has to wrap mid-count in
+            # this narrow column — and no leading "✓", which read as a stray
+            # mark once split from a sentence it no longer shares a line with.
+            counts = stats.container(key=f"wiz_upload_counts_{prefix}")
+            counts.caption(f"{len(frame):,} {noun}")
+            counts.caption(f"{n_columns} columns")
         return frame
 
     # UX-122: Fixations/Words/Raw gaze no longer upload here — each table's
@@ -2861,12 +2877,19 @@ def _render_data_setup(active: bool) -> _UploadResult:
     derive_host = s2.container()
     derive_gap = s2.container()
 
-    row_fix = s2.columns(_ID_ROW1_W, gap="small", vertical_alignment="center")
+    # UX-125: each table's own block (row 1 + row 2 + keep-picker) is wrapped
+    # in its own container so the uploader — `position: absolute` inside it,
+    # see `styles.py` — can center against the *whole* block's height, not
+    # just row 1's (which the uploader itself was already taller than,
+    # defeating `vertical_alignment="center"` on row 1 alone).
+    fix_block = s2.container(key="wiz_map_block_col_map_fix")
+    row_fix = fix_block.columns(_ID_ROW1_W, gap="small", vertical_alignment="center")
     raw_fix = upload_box(
         row_fix[0].container(key="wiz_map_upload_col_map_fix"),
         label="Fixations table(s)",
         short_label="Fixations",
-        help_text="One or more files (e.g. one per participant); concatenated.",
+        help_text="One or more files (e.g. one per participant); concatenated. "
+        + _upload_types_note,
         prefix="col_map_fix",
         multi=True,
         noun="fixations",
@@ -2875,18 +2898,22 @@ def _render_data_setup(active: bool) -> _UploadResult:
     has_fix = not raw_fix.empty
     if has_fix:
         id_rows["fix"] = row_fix[1:]
-        feature_rows["fix"] = s2.columns(
+        feature_rows["fix"] = fix_block.columns(
             _FIX_ROW2_W, gap="small", vertical_alignment="bottom"
         )
-        keep_rows["fix"] = s2.container()
+        keep_rows["fix"] = fix_block.container()
 
     s2.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
-    row_words = s2.columns(_ID_ROW1_W, gap="small", vertical_alignment="center")
+    words_block = s2.container(key="wiz_map_block_col_map_words")
+    row_words = words_block.columns(
+        _ID_ROW1_W, gap="small", vertical_alignment="center"
+    )
     raw_words = upload_box(
         row_words[0].container(key="wiz_map_upload_col_map_words"),
         label="Words / IA table(s)",
         short_label="AOIs",
-        help_text="One or more files (e.g. one per text); concatenated.",
+        help_text="One or more files (e.g. one per text); concatenated. "
+        + _upload_types_note,
         prefix="col_map_words",
         kind="words",
         multi=True,
@@ -2895,11 +2922,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
     has_words = not raw_words.empty
     if has_words:
         id_rows["words"] = row_words[1:]
-        feature_rows["words"] = s2.columns(
+        feature_rows["words"] = words_block.columns(
             _AOI_ROW2_W, gap="small", vertical_alignment="bottom"
         )
-        extra_rows["words"] = s2.container()
-        keep_rows["words"] = s2.container()
+        extra_rows["words"] = words_block.container()
+        keep_rows["words"] = words_block.container()
 
     # UX-113: stages 3-5 render unconditionally now, rather than exiting here
     # before any of them exist — every `has_words`/`has_fix`/`raw_gaze.empty`
@@ -3141,7 +3168,9 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # in row 1's name column, so — like Fixations/AOI above — row 1 always
     # renders (there is nowhere else to upload); row 2 and everything below
     # only once there is something to map.
-    s3 = sections_host.container()
+    # UX-125: keyed like `fix_block`/`words_block` above — the raw-gaze
+    # uploader centers against this whole block's height too.
+    s3 = sections_host.container(key="wiz_map_block_col_map_raw_gaze")
     if has_words or has_fix:
         # A hairline under the identity block above, same as the gap
         # between the Fixations and AOI blocks — nothing to separate from
@@ -3155,7 +3184,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         rg_row1[0].container(key="wiz_map_upload_col_map_raw_gaze"),
         label="Raw gaze table (optional)",
         short_label="Raw gaze",
-        help_text="Millisecond-level gaze overlay (one file).",
+        help_text="Millisecond-level gaze overlay (one file). " + _upload_types_note,
         prefix="col_map_raw_gaze",
         multi=False,
         noun="gaze points",

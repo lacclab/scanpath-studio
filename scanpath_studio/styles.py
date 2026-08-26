@@ -866,17 +866,80 @@ def get_app_css() -> str:
     /* UX-122 — each Fixations/AOI/Raw gaze row's own uploader sits where the
        row's plain name label used to; a thin rule (not the full column gap
        either side of it) marks it off from the field-mapping pickers that
-       follow, in the same row. UX-123: the row centers this column's block
-       vertically against the (usually taller) mapping pickers beside it —
-       `st.columns(vertical_alignment="center")` centers the *column*, not
-       necessarily the stack of title/uploader/caption inside it, so this
-       column is a flex column in its own right too. */
+       follow. UX-125: `st.columns(vertical_alignment="center")` centers the
+       *column*, not the stack of title/uploader/caption inside it against
+       the block's full height — and that column is only row 1's own height,
+       shorter than the uploader itself, so centering it was a no-op. The
+       uploader now floats free of row 1 entirely: `wiz_map_block_*`
+       (`fix_block`/`words_block`/raw gaze's own `s3`, wrapping row 1 + row 2
+       + the keep-picker) is the positioning parent, and the upload column is
+       an absolutely-positioned overlay spanning and centering against that
+       *whole* block — row 1's own first cell stays reserved (unchanged
+       width, so the pickers beside it don't move) but empty, since its
+       content now lives in the overlay instead. The border-right rides
+       along for the full block height as a side effect, reading as one
+       continuous divider rather than just row 1's own short one. */
+    [class*="st-key-wiz_map_block_"] {
+        position: relative;
+    }
     [class*="st-key-wiz_map_upload_"] {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: 9%;
         border-right: 1px solid rgba(128, 128, 128, 0.3);
         padding-right: 0.5rem;
         display: flex;
         flex-direction: column;
         justify-content: center;
+        overflow: hidden;
+    }
+    /* UX-124 — the "5GB per file • CSV, TSV, …" line `st.file_uploader`
+       prints under its own dropzone doesn't fit this width; the same
+       information now reaches the title's hover tooltip instead (appended to
+       `help_text` in wizard.py). */
+    [class*="st-key-wiz_map_upload_"] [data-testid="stFileUploaderDropzoneInstructions"] {
+        display: none;
+    }
+    /* UX-124 — the uploaded-file chip is sized for a full-width column; in
+       this ~9%-wide one it clipped outright rather than shrinking (its
+       `stFileChips` wrapper has its own `overflow: hidden`, so the chip's
+       natural ~140px width just got cut, delete button and all). Shrink the
+       icon and the delete button, tighten the chip's own padding, and let it
+       use the column's full width instead of a fixed one — the filename
+       stays truncated with an ellipsis (`stFileChipName` already carries the
+       untruncated name as a native `title=`, so hovering shows it in full,
+       no extra work needed there). */
+    [class*="st-key-wiz_map_upload_"] [data-testid="stFileChips"] {
+        width: 100%;
+        overflow: visible;
+    }
+    [class*="st-key-wiz_map_upload_"] [data-testid="stFileChip"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        padding: 0.15rem 0.25rem !important;
+        gap: 0.25rem !important;
+        box-sizing: border-box !important;
+    }
+    [class*="st-key-wiz_map_upload_"] [data-testid="stFileChip"] svg {
+        width: 11px !important;
+        height: 11px !important;
+    }
+    [class*="st-key-wiz_map_upload_"] [data-testid="stFileChipName"] {
+        font-size: 0.7rem !important;
+        max-width: 100% !important;
+    }
+    [class*="st-key-wiz_map_upload_"] [data-testid="stFileChipDeleteBtn"] button {
+        width: 1rem !important;
+        min-width: 1rem !important;
+        height: 1rem !important;
+        padding: 0 !important;
+    }
+    [class*="st-key-wiz_map_upload_"] [data-testid="stFileChipDeleteBtn"] svg {
+        width: 10px !important;
+        height: 10px !important;
     }
 
     /* UX-62 r2 — the header wordmark. `st.logo`'s only sizing control is

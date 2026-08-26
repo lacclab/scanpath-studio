@@ -85,18 +85,23 @@ class WizardStep:
 #: to five — flat and same-size, not the old per-step expanders. UX-114 folded
 #: "Keep extra fields" back into "Map data fields" (each table's own keep
 #: picker now sits directly under that table's own mapping — a cross-table
-#: pick was a second, confusing decision), leaving four. Upload always
-#: precedes mapping (there is nothing to map until a file is read), so the
-#: four are labelled but not navigable: no chips, no accordion, no open state.
-#: `part()` renders each as a one-line numbered headline. The dataset name is
-#: its own numbered stage rather than an unlabeled header above everything,
-#: and Recording setup is its own numbered stage rather than a sub-heading
-#: nested inside "Map data fields" — all four read as one flat sequence.
+#: pick was a second, confusing decision), leaving four. UX-129 folded "Map
+#: data fields" itself into "Upload data tables" — UX-122/127 had already
+#: moved every table's uploader into its own mapping row, so by this point the
+#: two stages held the same content split across two headings for no reason;
+#: a second numbered heading with nothing under it that the one above didn't
+#: already cover just read as a bare divider. `_part("data")` alone now
+#: covers both, leaving three. Upload always precedes mapping (there is
+#: nothing to map until a file is read), so the three are labelled but not
+#: navigable: no chips, no accordion, no open state. `part()` renders each as
+#: a one-line numbered headline. The dataset name is its own numbered stage
+#: rather than an unlabeled header above everything, and Recording setup is
+#: its own numbered stage rather than a sub-heading nested inside "Upload data
+#: tables" — all three read as one flat sequence.
 STEPS: tuple[WizardStep, ...] = (
     WizardStep("name", 1, "Dataset name", "What to call it", True),
     WizardStep("data", 2, "Upload data tables", "The tables you exported", True),
-    WizardStep("mapping", 3, "Map data fields", "Which column is what", True),
-    WizardStep("setup", 4, "Recording setup", "The screen it was recorded on", True),
+    WizardStep("setup", 3, "Recording setup", "The screen it was recorded on", True),
 )
 
 STEPS_BY_ID: dict[str, WizardStep] = {s.id: s for s in STEPS}

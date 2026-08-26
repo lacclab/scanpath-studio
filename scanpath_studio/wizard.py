@@ -982,7 +982,7 @@ def _wizard_trial_step(
         cell = cell_by_table.get(table)
         if values is None or cell is None:
             continue
-        cell.caption(f"✓ {len(values):,} trials")
+        cell.caption(f"~{len(values):,} trials")
     # Only a real problem still gets a box, and it renders where UX-67 put the
     # blockers: directly above **Add dataset**.
     counts_host = extras_host if extras_host is not None else body
@@ -1069,7 +1069,7 @@ def _wizard_participant_text_step(
         if n is not None:
             # UX-67 r2: under the picker that produced it, as small text
             # rather than a banner.
-            cell_by_table.get(slug, fallback_cell).caption(f"✓ {n:,} {noun}")
+            cell_by_table.get(slug, fallback_cell).caption(f"~{n:,} {noun}")
 
 
 def _clean_multiselect_state(key: str, valid) -> None:
@@ -2281,7 +2281,7 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
             else " · no AOI boxes (upload *_aoi.csv for word boxes)"
         )
         body.success(
-            f"✓ **{fixations_norm['participant_id'].nunique()}** readers · "
+            f"~**{fixations_norm['participant_id'].nunique()}** readers · "
             f"**{fixations_norm['trial_id'].nunique()}** page-trials" + boxes_msg
         )
         st.session_state["_wizard_finalize_payload"] = {
@@ -2336,28 +2336,34 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
 #: `width` in `styles.py` alongside it) — the file uploader's own "Browse
 #: files" button didn't fit inside the narrower column. The six picker cells
 #: shrink slightly (evenly) to make room.
-_ID_ROW1_W = (0.135, 0.1444, 0.1444, 0.1444, 0.1444, 0.1444, 0.1444)
+#: UX-129: widened again, from 0.135 to 0.155, *without* moving the CSS
+#: overlay's own `width` (still 13.5%, `styles.py`) — that mismatch is now
+#: deliberate. The overlay (and the border-right line on it) still ends at
+#: 13.5% of the block, but this reserved column is wider than that, so the
+#: extra ~2% sits empty between the line and the first picker cell, reading
+#: as breathing room rather than the pickers crowding the divider.
+_ID_ROW1_W = (0.155, 0.1409, 0.1409, 0.1409, 0.1409, 0.1409, 0.1409)
 
 #: Row 2 of the Fixations block: X · Y · Timestamp · Duration. Same grid as
 #: row 1 (UX-55 r2) so the two halves of the mapping line up down the page —
 #: four equal picker cells under the name column, since these selects hold
 #: column names rather than short ids.
-_FIX_ROW2_W = (0.135, 0.2163, 0.2163, 0.2163, 0.2163)
+_FIX_ROW2_W = (0.155, 0.2113, 0.2113, 0.2113, 0.2113)
 
 #: Row 2 of the AOI block: the word box (a format radio plus four coordinate
 #: selects that lay themselves out) and, sharing the same line, Line index —
 #: the box gets most of the row, Line index the rest (UX-55 r3).
-_AOI_ROW2_W = (0.135, 0.694, 0.171)
+_AOI_ROW2_W = (0.155, 0.678, 0.167)
 
 #: Row 2 of the Raw gaze block (UX-113): X · Y · Timestamp — no Duration, raw
 #: gaze has no such concept (unlike row 1, which reuses `_ID_ROW1_W` outright:
 #: same six identity fields, same shape as Fixations/AOI above it).
-_RAW_GAZE_ROW2_W = (0.135, 0.2883, 0.2883, 0.2884)
+_RAW_GAZE_ROW2_W = (0.155, 0.2817, 0.2817, 0.2816)
 
 #: UX-127: the metadata rows' own two-cell grid — same name-column width as
 #: every other table's row 1, one wide cell for the id-column + keep-fields
 #: picker stack (there is nothing to split across several picker cells here).
-_META_ROW_W = (0.135, 0.865)
+_META_ROW_W = (0.155, 0.845)
 
 
 def _hover_note(host, label: str, note: str, *, link: str = "") -> None:
@@ -2459,7 +2465,6 @@ def _wizard_statuses() -> dict[str, wizard_shell.StepStatus]:
 
     statuses = {
         "name": S.DONE if (ss.get("wizard_dataset_name") or "").strip() else S.TODO,
-        "data": S.DONE if uploaded_any else S.TODO,
         "identity": required(trial_mapped),
         "geometry": required(uploaded_any and not problems),
         "setup": required(setup_answered),
@@ -2471,18 +2476,19 @@ def _wizard_statuses() -> dict[str, wizard_shell.StepStatus]:
         # UX-114: "fields" is not a numbered part any more (its pickers moved
         # into "mapping", one per table) — the key stays for any bookkeeping
         # that still badges it by name, and it's OPTIONAL so it never blocks
-        # "mapping" from reaching DONE below.
+        # "data" from reaching DONE below.
         "fields": S.DONE if fields_touched else S.OPTIONAL,
     }
-    # UX-53/UX-113/UX-114: "identity"/"geometry" are still *sections* nested
-    # inside the "mapping" step, so it aggregates them — a part is only DONE
-    # when every required section under it is. "setup" is a step of its own
-    # and does not roll up into this one. The section keys stay in the dict
+    # UX-53/UX-113/UX-114/UX-129: "identity"/"geometry" are *sections* nested
+    # inside the "data" step (folded from the old "mapping" step, which used
+    # to be a numbered stage of its own), so it aggregates them — a part is
+    # only DONE when every required section under it is, and only once
+    # something has been uploaded at all. The section keys stay in the dict
     # because the section headings, the blocker list and
     # `_wizard_problems_last` all still badge per topic.
-    statuses["mapping"] = (
+    statuses["data"] = (
         S.DONE
-        if all(statuses[k] is S.DONE for k in ("identity", "geometry"))
+        if uploaded_any and all(statuses[k] is S.DONE for k in ("identity", "geometry"))
         else required(False)
     )
     return statuses
@@ -2672,9 +2678,15 @@ def _render_data_setup(active: bool) -> _UploadResult:
         "data",
         trailing=_render_restore_trigger if active and _generic_format else None,
     )
-    s_map = _part("mapping")
+    # UX-129: "mapping" is no longer its own numbered stage — everything that
+    # used to render under it (the identity/geometry sections, each table's
+    # own upload+mapping row) now renders straight into `s1`, the same "data"
+    # part. Kept as its own name (`s_map`, not just reusing `s1` everywhere
+    # below) because the two halves' content is still worth telling apart by
+    # name in the code that follows, even though they share one heading now.
+    s_map = s1
 
-    # === 1 · Upload data tables ==============================================
+    # === Upload data tables: intro note ======================================
     if active and _multipleye_enabled:
         s1.segmented_control(
             "Dataset format",
@@ -2714,7 +2726,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # is just the nudge to open with.
         intro.caption(
             "⬆️ Upload at least one of **Fixations**, **Words / IA**, or "
-            "**Raw gaze** in **Map data fields** below to get started."
+            "**Raw gaze** below to get started."
         )
         app_url = str(getattr(st.context, "url", "") or "")
         if not is_loopback_url(app_url):
@@ -2794,11 +2806,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
             counts.caption(f"{n_columns} columns")
         return frame
 
-    # UX-122/UX-127: none of the six tables upload here any more — each has
-    # its own uploader in "3 Map data fields", replacing that table's
-    # row-name label (see `row_fix`/`row_words`/`rg_row1`/`_render_metadata_
-    # uploads` below). `raw_fix`/`raw_words`/`raw_gaze` are placeholders
-    # until those rows render; this stage now holds only the intro note.
+    # UX-122/UX-127/UX-129: none of the six tables upload at the top of this
+    # stage — each has its own uploader further down, in its own mapping row
+    # (see `row_fix`/`row_words`/`rg_row1`/`_render_metadata_uploads` below),
+    # replacing that table's row-name label. `raw_fix`/`raw_words`/`raw_gaze`
+    # are placeholders until those rows render; the top of this stage holds
+    # only the intro note.
     raw_fix, raw_words, raw_gaze = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
     def _render_metadata_uploads(word_schema, fix_schema) -> None:
@@ -2824,8 +2837,23 @@ def _render_data_setup(active: bool) -> _UploadResult:
         meta_host.markdown(
             '<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True
         )
+        # UX-129: its own keyed container, not just `meta_host` directly —
+        # `emphasis=True` alone made this read as a fourth table name beside
+        # Fixations/AOI/Raw gaze above it, rather than the section heading
+        # for the three rows below it. `styles.py` gives this specific title
+        # its own, more prominent look instead of adding a third
+        # `inline_field_label` style shared with (and so muddying) every
+        # other caller. Confined to the left column (`_META_ROW_W[0]`, same
+        # split `_row_body` uses) and centered within it, rather than
+        # spanning — and centering across — the whole row: this heading
+        # belongs to the Participants/Trials/Texts *titles* below it, which
+        # live in that same narrow column, not to the wide mapping side.
+        meta_heading_row = meta_host.columns(
+            [_META_ROW_W[0], 1 - _META_ROW_W[0]], gap="small"
+        )
+        meta_heading = meta_heading_row[0].container(key="wiz_map_meta_heading")
         inline_field_label(
-            meta_host,
+            meta_heading,
             "Metadata",
             "Optional per-reader, per-trial and per-text tables. Once "
             "attached, their columns behave like fields in the data: "
@@ -2871,7 +2899,9 @@ def _render_data_setup(active: bool) -> _UploadResult:
             _wizard_text_ids(raw_words, word_schema, raw_fix, fix_schema),
         )
 
-    # === 2 · Map data fields =================================================
+    # === Upload data tables: per-table upload + mapping rows ================
+    # UX-129: folded into this same stage — no longer a separate numbered
+    # "Map data fields" heading.
 
     # UX-71: this screen's dropdowns hold column names, so their option lists
     # get to be wider than the selects they drop from (see the docstring — it is
@@ -3211,11 +3241,13 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # into it later lands after all three main tables' rows in the DOM,
     # regardless of how late in the script it actually runs.
     meta_host = sections_host.container()
-    if has_words or has_fix:
-        # A hairline under the identity block above, same as the gap
-        # between the Fixations and AOI blocks — nothing to separate from
-        # on a raw-gaze-only upload, where this is the first block.
-        s3.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
+    # UX-129: unconditional now — UX-125/127's `min-height` fix means the
+    # Fixations/AOI blocks above always render a visible block even with
+    # nothing uploaded, so raw gaze is never actually "the first block" any
+    # more (the `has_words or has_fix` guard this used to carry was stale;
+    # without it, AOI and Raw gaze had no line between them when both were
+    # still empty).
+    s3.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
     # Row 1: Trial ID · Screen ID · Participant ID · Text ID · Word/IA ID ·
     # Word text/label — same six-cell grid, same field order, as the
     # Fixations/AOI row above.
@@ -3369,7 +3401,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # The foot of the wizard: what is still missing, then the button. UX-53 put
     # the alerts *directly above* **Add dataset** — a blocker listed a screen
     # away from the control it blocks is a blocker the user reads after
-    # clicking. UX-113: now trails all five stages, not just "Map data fields".
+    # clicking. UX-113/UX-129: trails every stage, not just the upload/mapping
+    # one.
     s6 = body.container()
 
     setup_blockers = [

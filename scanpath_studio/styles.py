@@ -687,6 +687,31 @@ def get_app_css() -> str:
         font-weight: 700;
         font-size: 1.05rem;
     }
+    /* UX-129 — the wizard's "Metadata" sub-heading (over the Participants /
+       Trials / Texts rows) shares `.sps-flabel-emph` with the Fixations /
+       AOI / Raw gaze table titles above it, which made it read as a fourth
+       table name rather than the section label for the three below it.
+       Confined to the left (name) column in wizard.py and centered within
+       it here, rather than the full row — this heading belongs with the
+       titles underneath it, not the wide mapping side. Bolder and a size up
+       from `.sps-flabel-emph` itself (not down) and in the app's accent
+       color: it introduces three titles at once, so it reads as *more*
+       prominent than any one of them, not less. The tooltip re-centers with
+       it so it still opens under the (now centered) text. */
+    .st-key-wiz_map_meta_heading .sps-flabel-emph {
+        font-weight: 800;
+        font-size: 1.2rem;
+        letter-spacing: 0.02em;
+        color: var(--sps-accent);
+    }
+    .st-key-wiz_map_meta_heading .sps-fhelp,
+    .st-key-wiz_map_meta_heading .sps-flabel {
+        text-align: center;
+    }
+    .st-key-wiz_map_meta_heading .sps-fhelp::after {
+        left: 50%;
+        transform: translateX(-50%);
+    }
     /* …and the tooltip it opens. Deliberately NOT the browser's native `title=`
        (UX-51 shipped that first): a native tooltip waits about a second, which
        reads as broken when every row in a dense form keeps its description
@@ -905,11 +930,30 @@ def get_app_css() -> str:
            button didn't fit at 9%. */
         width: 13.5%;
         border-right: 1px solid rgba(128, 128, 128, 0.3);
-        padding-right: 0.5rem;
+        /* UX-129: 0.5rem -> 0.65rem, paired with wizard.py's `_ID_ROW1_W`
+           (and its row-2/meta siblings) widening from 0.135 to 0.155 — that
+           gives the divider room on the picker side, this gives it room on
+           the upload side, so the line no longer reads as glued to either
+           the Browse-files button or the first mapping field. */
+        padding-right: 0.65rem;
         display: flex;
         flex-direction: column;
         justify-content: center;
         overflow: hidden;
+    }
+    /* UX-129 — the title's own `.sps-fhelp` tooltip (the row's `emphasis=True`
+       title, e.g. "Fixations") lives inside this same `overflow: hidden` box,
+       so its `::after` popup got clipped to the ~13.5%-wide column the
+       moment it tried to render past that edge — cut off mid-sentence
+       instead of floating over the mapping fields like every other tooltip
+       on the page. `overflow: hidden` still has to stay the *default* here
+       (it is what keeps the native dropzone/Browse-files button from
+       spilling into the mapping columns at this width — see UX-127 above),
+       so this only lifts it while the tooltip itself is open, via `:has()`,
+       rather than removing it outright. */
+    [class*="st-key-wiz_map_upload_"]:has(.sps-fhelp:hover),
+    [class*="st-key-wiz_map_upload_"]:has(.sps-fhelp:focus-within) {
+        overflow: visible;
     }
     /* UX-124 — the "5GB per file • CSV, TSV, …" line `st.file_uploader`
        prints under its own dropzone doesn't fit this width; the same

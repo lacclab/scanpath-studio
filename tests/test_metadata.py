@@ -736,14 +736,15 @@ class TestTheWizardStep:
         # UX-53 folded the seven steps into two linear parts; UX-113 unfolded
         # them back to five, flat and same-size; UX-114 folded "Keep extra
         # fields" back into "Map data fields" (per-table pickers now sit
-        # directly under each table's own mapping), leaving four. The
-        # participant table stays up beside the uploads — it is an upload, so
-        # it belongs with them, under no heading of its own (r6).
-        assert [s.number for s in wizard_shell.STEPS] == [1, 2, 3, 4]
+        # directly under each table's own mapping), leaving four; UX-129
+        # folded "Map data fields" itself into "Upload data tables" (every
+        # table already uploaded and mapped in the same row), leaving three.
+        # The participant table stays up beside the uploads — it is an
+        # upload, so it belongs with them, under no heading of its own (r6).
+        assert [s.number for s in wizard_shell.STEPS] == [1, 2, 3]
         assert [s.title for s in wizard_shell.STEPS] == [
             "Dataset name",
             "Upload data tables",
-            "Map data fields",
             "Recording setup",
         ]
         assert "readers" not in wizard_shell.STEPS_BY_ID

@@ -8735,8 +8735,7 @@ def _clear_participant_metadata() -> None:
         st.session_state.pop(key, None)
     # And the uploader's own key: without it the widget still holds the file on
     # the next run, the (now absent) signature check reads as "new file", and
-    # the table re-attaches itself immediately. Safe in an `on_click` callback,
-    # which runs before the widgets instantiate.
+    # the table re-attaches itself immediately.
     st.session_state.pop("participant_metadata_upload", None)
 
 
@@ -8756,9 +8755,10 @@ def render_participant_metadata_section(
     panel skips this step's body entirely — two live copies would be two widgets
     on one key.
 
-    Nothing is guessed. The id column is offered pre-filled but overridable, and
-    the join is reported in full before the fields go anywhere — unmatched on
-    both sides, duplicated rows, and rows that disagree with themselves.
+    Nothing is guessed. The id column is offered pre-filled but overridable,
+    and the join result — matched count, or a loud mismatch warning when
+    nothing joined at all (:func:`_render_key_mismatch`) — is reported before
+    the fields go anywhere.
 
     ``live_join=False`` (UX-116, the wizard's own call) skips the join entirely:
     the upload, the id-column picker and the keep-fields picker still render,
@@ -8769,9 +8769,13 @@ def render_participant_metadata_section(
     ``upload_host`` (UX-127, the wizard's own call) is the thin left-hand
     column the six-table row format puts the uploader in — Fixations/AOI/Raw
     gaze's own left column, via ``upload_box``. When given, the title + file
-    uploader render there instead of ``host``, so ``host`` holds only the
-    id-column picker, the keep-fields picker, the status line and ✕ Detach —
-    the same "left = upload, right = mapping" shape every table now shares.
+    uploader (and, once a table is read, its row-count + preview stats) render
+    there instead of ``host``, so ``host`` holds only the id-column picker, the
+    keep-fields picker and the status line — the same "left = upload, right =
+    mapping" shape every table now shares. UX-129 dropped the ✕ Detach button
+    that used to share this row: removing the uploaded file already detaches
+    the table (see the note above ``_clear_participant_metadata``), so a
+    second control that did the same thing was redundant.
     """
     if host is not None:
         with host:
@@ -8800,45 +8804,33 @@ def _participant_metadata_body(
         "then behave like fields in the data: filters, chips, trial sorting, "
         "inspection and export. CSV / TSV / Parquet / Excel."
     )
-    # UX-127: with `upload_host` (the wizard's row format), the title + file
+    # UX-127/UX-129: with `upload_host` (the wizard's row format), the title +
     # uploader move into that thin left column — mirroring `upload_box`'s
-    # `short_label` — and ✕ Detach renders in the body host (`st`, which the
-    # `with host:` wrapper above already points at the row's right column)
-    # instead of a `detach_col` split of its own. Without it (the Data page),
-    # behavior is unchanged: title + uploader + ✕ Detach share one row here.
+    # `short_label`, including its row-count + preview stats right under the
+    # uploader (see `stats_host` below). Without it (the Data page), the same
+    # block renders at full width in `st` instead. UX-129 also dropped the old
+    # `up_col`/`detach_col` split here — ✕ Detach is gone; see the note above
+    # `_clear_participant_metadata` for why removing the uploaded file already
+    # does everything Detach used to.
     if upload_host is not None:
         inline_field_label(upload_host, "Participants", _pm_help, emphasis=True)
-        upload = upload_host.file_uploader(
-            "Participant metadata table (optional)",
-            type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
-            key="participant_metadata_upload",
-            help=_pm_help,
-            label_visibility="collapsed",
-        )
-        detach_col = st
+        stats_host = upload_host
     else:
         inline_field_label(
             st, "Participant metadata table (optional)", _pm_help, emphasis=True
         )
-        # UX-114: the uploader and ✕ Detach share one row — `detach_col` is
-        # filled much later (once we know whether a table is actually
-        # attached), which works because a Streamlit column is a placeholder
-        # you can write into at any point in the script; only the *order
-        # within* `detach_col` follows execution order, not its position
-        # relative to `up_col`. Same trick this function already uses for
-        # `key_host`/`status_host`/`details` below.
-        up_col, detach_col = st.columns([0.8, 0.2], gap="small")
-        upload = up_col.file_uploader(
-            "Participant metadata table (optional)",
-            type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
-            key="participant_metadata_upload",
-            # No `persist_state` — `st.file_uploader` does not take it. It
-            # does not need it either: the parsed frame is kept in session
-            # state under `md.RAW_SESSION_KEY`, so the attached table
-            # survives even if the uploader widget itself is ever reset.
-            help=_pm_help,
-            label_visibility="collapsed",
-        )
+        stats_host = st
+    upload = stats_host.file_uploader(
+        "Participant metadata table (optional)",
+        type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
+        key="participant_metadata_upload",
+        # No `persist_state` — `st.file_uploader` does not take it. It does
+        # not need it either: the parsed frame is kept in session state under
+        # `md.RAW_SESSION_KEY`, so the attached table survives even if the
+        # uploader widget itself is ever reset.
+        help=_pm_help,
+        label_visibility="collapsed",
+    )
     if upload is None:
         if active_participant_metadata() is None:
             return
@@ -8852,7 +8844,9 @@ def _participant_metadata_body(
         # is active (`wizard_active = not setup_complete`, never toggled
         # mid-flow) and unconditionally on the Data page, so `upload is None`
         # here really does mean "the user just removed it", not "this widget
-        # simply didn't render last run" — safe to clear on sight.
+        # simply didn't render last run" — safe to clear on sight. UX-129:
+        # this is also why there is no separate ✕ Detach button any more —
+        # removing the file from the uploader chip already does exactly this.
         _clear_participant_metadata()
         return
     else:
@@ -8877,16 +8871,22 @@ def _participant_metadata_body(
     if raw is None or raw.empty:
         return
 
+    # UX-129: row-count + preview stats sit right under the uploader, same as
+    # Fixations/AOI/Raw gaze's own `upload_box` — not a separate status line
+    # further down the mapping side.
+    stats = stats_host.container(key="wiz_upload_stats_participant_metadata")
+    preview = stats.popover("👁️", width="content", help="Preview — first rows")
+    preview.caption("First rows:")
+    preview.dataframe(raw.head(), width="stretch", hide_index=True)
+    counts = stats.container(key="wiz_upload_counts_participant_metadata")
+    counts.caption(f"{len(raw):,} row(s)")
+    counts.caption(f"{len(raw.columns)} columns")
+
     columns = [str(column) for column in raw.columns]
     inferred = md.infer_participant_id_column(raw)
-    # UX-105 — the same three slots as the trial table below, for the same
-    # reason: one visible line once the table is in, the picker only while you
-    # are attaching, everything else in the fold.
     key_host = st.container()
     status_host = st.container()
-    details = st.expander("🔎 Join details", expanded=False)
-    picker_host = key_host if upload is not None else details
-    id_column = picker_host.selectbox(
+    id_column = key_host.selectbox(
         "Participant ID column *",
         columns,
         index=columns.index(inferred) if inferred in columns else 0,
@@ -8896,9 +8896,10 @@ def _participant_metadata_body(
         "Required — it is the only thing that makes the join possible.",
     )
     # UX-114: which non-id columns actually become fields — right under the id
-    # picker, on the same fold-once-settled terms.
+    # picker. UX-129: the count of how many are selected now lives in that
+    # picker's own label (see `_metadata_keep_picker`), not a status line here.
     kept = _metadata_keep_picker(
-        picker_host, raw, id_column, prefix="participant_metadata", noun="participant"
+        key_host, raw, id_column, prefix="participant_metadata", noun="participant"
     )
     if not live_join:
         # UX-116: the wizard doesn't have a finished dataset to join against
@@ -8906,16 +8907,6 @@ def _participant_metadata_body(
         # (still changing as identity mapping is worked out) read as noise, or
         # worse — a wrong verdict. Nothing is matched or attached here;
         # `commit_deferred_metadata` does that once "✅ Add dataset" is clicked.
-        status_host.caption(
-            f"{len(raw):,} row(s) · {len(kept)} field(s) selected — "
-            "joins once you click **✅ Add dataset**."
-        )
-        detach_col.button(
-            "✕ Detach participant table",
-            key="participant_metadata_clear",
-            on_click=_clear_participant_metadata,
-            help="Remove the participant metadata from this session.",
-        )
         return
     attached = md.build_participant_metadata(
         raw[[id_column, *kept]],
@@ -8928,23 +8919,19 @@ def _participant_metadata_body(
     report = attached.report
     if not attached.fields:
         status_host.warning(
-            "Nothing kept — pick at least one field above, or detach this table.",
+            "Nothing kept — pick at least one field above, or remove the "
+            "uploaded file to detach this table.",
             icon="⚠️",
         )
         return
-    status_host.caption(f"{len(attached.fields)} field(s) kept")
     id_count = _metadata_id_count(raw, id_column)
     matched = len(report.matched)
     if report.is_clean or matched:
         # UX-114: one small combined line — the distinct-id count (independent
         # of the join) and the join result together, replacing the separate
         # caption + colored banner this used to be.
-        parts = [f"✓ {id_count:,} identified" if id_count is not None else None]
-        parts.append(
-            f"{matched:,} joined"
-            if report.is_clean
-            else f"{matched:,} joined — see **🔎 Join details**"
-        )
+        parts = [f"~{id_count:,} identified" if id_count is not None else None]
+        parts.append(f"{matched:,} joined")
         status_host.caption(" · ".join(p for p in parts if p))
     else:
         # DATA-20 — zero matches is the same silent trap the trial table had
@@ -8953,47 +8940,6 @@ def _participant_metadata_body(
         # above, this stays a real alert.
         with status_host:
             _render_key_mismatch(attached, report, "reader")
-    with details:
-        if report.conflicting:
-            st.warning(
-                f"**{len(report.conflicting)} reader(s) have duplicate ids whose "
-                f"rows disagree** ({_id_list(report.conflicting)}) — rather than "
-                "guessing which row is right, every row for that reader is "
-                "dropped, so their fields read as missing rather than added.",
-                icon="⚠️",
-            )
-        if report.only_in_data:
-            st.caption(
-                f"No row for {len(report.only_in_data)} loaded reader(s): "
-                f"{_id_list(report.only_in_data)}. Their fields read as missing."
-            )
-        if report.only_in_table:
-            st.caption(
-                f"{len(report.only_in_table)} row(s) describe readers that are "
-                f"not loaded: {_id_list(report.only_in_table)}. Ignored."
-            )
-        st.dataframe(
-            [
-                {
-                    "Field": field.label,
-                    "Column": field.name,
-                    "Grain": field.grain,
-                    "Type": field.dtype,
-                    "Distinct": field.n_unique,
-                    "Missing": field.n_missing,
-                }
-                for field in attached.fields
-            ],
-            hide_index=True,
-            width="stretch",
-        )
-        st.dataframe(attached.frame, hide_index=True, width="stretch")
-    detach_col.button(
-        "✕ Detach participant table",
-        key="participant_metadata_clear",
-        on_click=_clear_participant_metadata,
-        help="Remove the participant metadata from this session.",
-    )
 
 
 #: DATA-29 — the trial table's display name, like `_PM_NAME_KEY` for readers.
@@ -9001,7 +8947,9 @@ _TM_NAME_KEY = "_trial_metadata_name"
 
 
 def _clear_trial_metadata() -> None:
-    """Detach the trial table (the ✕ button's ``on_click``) — DATA-29."""
+    """Detach the trial table — DATA-29. UX-129: called only when the
+    uploader's own file chip goes empty; there is no separate ✕ Detach
+    button any more, since that button never did anything this doesn't."""
     from scanpath_studio import metadata as md
 
     for key in (
@@ -9021,7 +8969,6 @@ def _clear_trial_metadata() -> None:
     # the (now absent) signature check reads as "new file", and the table
     # re-attaches itself immediately. Detaching a trial table therefore looked
     # like it had done nothing, and the table came back on the next visit.
-    # Safe in an `on_click` callback, which runs before the widgets instantiate.
     st.session_state.pop("trial_metadata_upload", None)
 
 
@@ -9032,7 +8979,7 @@ def render_trial_metadata_section(
 
     The sibling of :func:`render_participant_metadata_section`, and deliberately
     the same shape: nothing is guessed, the key column is offered pre-filled
-    but overridable, and the join is reported in full before the fields go
+    but overridable, and the join result is reported before the fields go
     anywhere.
 
     **UX-113 — trial id only, no reader column.** A table keyed by trial id
@@ -9067,35 +9014,26 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
         "behave like fields in the data: filters, chips, trial sorting, "
         "inspection and export. CSV / TSV / Parquet / Excel."
     )
-    # UX-127 — see the matching branch in `_participant_metadata_body`.
+    # UX-127/UX-129 — see the matching branch in `_participant_metadata_body`.
     if upload_host is not None:
         inline_field_label(upload_host, "Trials", _tm_help, emphasis=True)
-        upload = upload_host.file_uploader(
-            "Trial metadata table (optional)",
-            type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
-            key="trial_metadata_upload",
-            help=_tm_help,
-            label_visibility="collapsed",
-        )
-        detach_col = st
+        stats_host = upload_host
     else:
         inline_field_label(
             st, "Trial metadata table (optional)", _tm_help, emphasis=True
         )
-        # UX-114: uploader + ✕ Detach share one row — see the matching comment
-        # in `_participant_metadata_body`.
-        up_col, detach_col = st.columns([0.8, 0.2], gap="small")
-        upload = up_col.file_uploader(
-            "Trial metadata table (optional)",
-            type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
-            key="trial_metadata_upload",
-            help=_tm_help,
-            label_visibility="collapsed",
-        )
+        stats_host = st
+    upload = stats_host.file_uploader(
+        "Trial metadata table (optional)",
+        type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
+        key="trial_metadata_upload",
+        help=_tm_help,
+        label_visibility="collapsed",
+    )
     if upload is None:
         if md.active_trials() is None:
             return
-        # UX-115 — see the matching note in `_participant_metadata_body`.
+        # UX-115/UX-129 — see the matching note in `_participant_metadata_body`.
         _clear_trial_metadata()
         return
     else:
@@ -9118,22 +9056,23 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
     if raw is None or raw.empty:
         return
 
+    # UX-129 — see the matching block in `_participant_metadata_body`.
+    stats = stats_host.container(key="wiz_upload_stats_trial_metadata")
+    preview = stats.popover("👁️", width="content", help="Preview — first rows")
+    preview.caption("First rows:")
+    preview.dataframe(raw.head(), width="stretch", hide_index=True)
+    counts = stats.container(key="wiz_upload_counts_trial_metadata")
+    counts.caption(f"{len(raw):,} row(s)")
+    counts.caption(f"{len(raw.columns)} columns")
+
     columns = [str(column) for column in raw.columns]
     inferred = md.infer_trial_id_column(raw)
-    # UX-105 — three slots, filled below, so the section reads as **one line**
-    # once the table is in: the key pickers, the verdict, and everything else
-    # folded away. Reserved in this order because Streamlit's creation order is
-    # screen order and the pickers have to run before the join they decide.
+    # UX-105 — two slots, filled below, so the section reads as **one line**
+    # once the table is in: the key pickers, then the verdict. Reserved in
+    # this order because Streamlit's creation order is screen order and the
+    # pickers have to run before the join they decide.
     key_host = st.container()
     status_host = st.container()
-    details = st.expander("🔎 Join details", expanded=False)
-    # The picker shows while you are **attaching** — a file in the uploader
-    # above — and folds into the details the rest of the time. A table
-    # restored with a session, or attached on another screen, is a table
-    # whose key was settled once; leaving a select and its help icon parked
-    # at the top of every later visit was the ask ("i dont want them to
-    # appear at the start"). It stays one click away, on the same key.
-    picker_host = key_host if upload is not None else details
     # UX-113: one key — the trial id — not a trial-id-plus-reader-id pair.
     # A row-per-reading table (one row per reader × trial) needs its own
     # reader column to disambiguate, but that is no longer offered here; a
@@ -9150,14 +9089,14 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
             [inferred] if inferred in columns else []
         )
     inline_field_label(
-        picker_host,
+        key_host,
         "Trial ID column *",
         "Pick the column holding this table's trial id — or pick SEVERAL "
         "columns to build one on the fly (values joined with '_'), the same "
         "way the uploaded data's own Trial ID mapping does. Required — it is "
         "the only thing that makes the join possible.",
     )
-    trial_columns = picker_host.multiselect(
+    trial_columns = key_host.multiselect(
         "Trial ID column *",
         columns,
         key=trial_key,
@@ -9172,22 +9111,13 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
         )
         return
     # UX-114: which non-id columns actually become fields — right under the id
-    # picker, on the same fold-once-settled terms.
+    # picker. UX-129: the count of how many are selected now lives in that
+    # picker's own label (see `_metadata_keep_picker`), not a status line here.
     kept = _metadata_keep_picker(
-        picker_host, raw, trial_columns, prefix="trial_metadata", noun="trial"
+        key_host, raw, trial_columns, prefix="trial_metadata", noun="trial"
     )
     if not live_join:
         # UX-116 — see the matching branch in `_participant_metadata_body`.
-        status_host.caption(
-            f"{len(raw):,} row(s) · {len(kept)} field(s) selected — "
-            "joins once you click **✅ Add dataset**."
-        )
-        detach_col.button(
-            "✕ Detach trial table",
-            key="trial_metadata_clear",
-            on_click=_clear_trial_metadata,
-            help="Remove the trial metadata from this session.",
-        )
         return
     attached = md.build_trial_metadata(
         raw[[*trial_columns, *kept]],
@@ -9201,24 +9131,20 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
     report = attached.report
     if not attached.fields:
         status_host.warning(
-            "Nothing kept — pick at least one field above, or detach this table.",
+            "Nothing kept — pick at least one field above, or remove the "
+            "uploaded file to detach this table.",
             icon="⚠️",
         )
         return
     grain = "reading" if attached.keyed_by_participant else "trial"
-    status_host.caption(f"{len(attached.fields)} field(s) kept")
     id_count = _metadata_id_count(raw, trial_columns)
     matched = len(report.matched)
     if report.is_clean or matched:
         # UX-114: one small combined line — the distinct-id count (independent
         # of the join) and the join result together, replacing the separate
         # caption + colored banner this used to be.
-        parts = [f"✓ {id_count:,} identified" if id_count is not None else None]
-        parts.append(
-            f"{matched:,} joined"
-            if report.is_clean
-            else f"{matched:,} joined — see **🔎 Join details**"
-        )
+        parts = [f"~{id_count:,} identified" if id_count is not None else None]
+        parts.append(f"{matched:,} joined")
         status_host.caption(" · ".join(p for p in parts if p))
     else:
         # DATA-29 — nothing matched. This used to read as a quiet blue
@@ -9232,50 +9158,6 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
         # purpose — unlike the line above, this stays a real alert.
         with status_host:
             _render_key_mismatch(attached, report, grain)
-    # Everything that is not the verdict lives in the fold. Each of these used
-    # to be its own alert or caption stacked under the section, which on a table
-    # that half-matched meant four blocks of prose for one upload.
-    with details:
-        if report.conflicting:
-            st.warning(
-                f"**{len(report.conflicting)} {grain}(s) have duplicate ids whose "
-                f"rows disagree** ({_id_list(report.conflicting)}) — rather than "
-                f"guessing which row is right, every row for that {grain} is "
-                "dropped, so its fields read as missing rather than added.",
-                icon="⚠️",
-            )
-        if report.only_in_data:
-            st.caption(
-                f"No row for {len(report.only_in_data)} loaded {grain}(s): "
-                f"{_id_list(report.only_in_data)}. Their fields read as missing."
-            )
-        if report.only_in_table:
-            st.caption(
-                f"{len(report.only_in_table)} row(s) describe {grain}s that are "
-                f"not loaded: {_id_list(report.only_in_table)}. Ignored."
-            )
-        st.dataframe(
-            [
-                {
-                    "Field": field.label,
-                    "Column": field.name,
-                    "Grain": field.grain,
-                    "Type": field.dtype,
-                    "Distinct": field.n_unique,
-                    "Missing": field.n_missing,
-                }
-                for field in attached.fields
-            ],
-            hide_index=True,
-            width="stretch",
-        )
-        st.dataframe(attached.frame, hide_index=True, width="stretch")
-    detach_col.button(
-        "✕ Detach trial table",
-        key="trial_metadata_clear",
-        on_click=_clear_trial_metadata,
-        help="Remove the trial metadata from this session.",
-    )
 
 
 #: The text table's display name, like `_PM_NAME_KEY`/`_TM_NAME_KEY`.
@@ -9283,7 +9165,9 @@ _TXM_NAME_KEY = "_text_metadata_name"
 
 
 def _clear_text_metadata() -> None:
-    """Detach the text table (the ✕ button's ``on_click``)."""
+    """Detach the text table — see the matching note on
+    ``_clear_trial_metadata`` (UX-129: no separate ✕ Detach button any
+    more; called only when the uploader's own file chip goes empty)."""
     from scanpath_studio import metadata as md
 
     for key in (
@@ -9304,8 +9188,8 @@ def render_text_metadata_section(
 
     Sibling of :func:`render_participant_metadata_section` and
     :func:`render_trial_metadata_section`, same shape: nothing is guessed, the
-    key column is offered pre-filled but overridable, and the join is
-    reported in full before the fields go anywhere.
+    key column is offered pre-filled but overridable, and the join result is
+    reported before the fields go anywhere.
 
     Flat grain, like the participant table — one row per ``text_id``, never a
     reader-paired key, since a text is a stimulus rather than something one
@@ -9332,35 +9216,26 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
         "behave like fields in the data: filters, chips, trial sorting, "
         "inspection and export. CSV / TSV / Parquet / Excel."
     )
-    # UX-127 — see the matching branch in `_participant_metadata_body`.
+    # UX-127/UX-129 — see the matching branch in `_participant_metadata_body`.
     if upload_host is not None:
         inline_field_label(upload_host, "Texts", _txm_help, emphasis=True)
-        upload = upload_host.file_uploader(
-            "Text metadata table (optional)",
-            type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
-            key="text_metadata_upload",
-            help=_txm_help,
-            label_visibility="collapsed",
-        )
-        detach_col = st
+        stats_host = upload_host
     else:
         inline_field_label(
             st, "Text metadata table (optional)", _txm_help, emphasis=True
         )
-        # UX-114: uploader + ✕ Detach share one row — see the matching comment
-        # in `_participant_metadata_body`.
-        up_col, detach_col = st.columns([0.8, 0.2], gap="small")
-        upload = up_col.file_uploader(
-            "Text metadata table (optional)",
-            type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
-            key="text_metadata_upload",
-            help=_txm_help,
-            label_visibility="collapsed",
-        )
+        stats_host = st
+    upload = stats_host.file_uploader(
+        "Text metadata table (optional)",
+        type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
+        key="text_metadata_upload",
+        help=_txm_help,
+        label_visibility="collapsed",
+    )
     if upload is None:
         if md.active_texts() is None:
             return
-        # UX-115 — see the matching note in `_participant_metadata_body`.
+        # UX-115/UX-129 — see the matching note in `_participant_metadata_body`.
         _clear_text_metadata()
         return
     else:
@@ -9382,12 +9257,19 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
     if raw is None or raw.empty:
         return
 
+    # UX-129 — see the matching block in `_participant_metadata_body`.
+    stats = stats_host.container(key="wiz_upload_stats_text_metadata")
+    preview = stats.popover("👁️", width="content", help="Preview — first rows")
+    preview.caption("First rows:")
+    preview.dataframe(raw.head(), width="stretch", hide_index=True)
+    counts = stats.container(key="wiz_upload_counts_text_metadata")
+    counts.caption(f"{len(raw):,} row(s)")
+    counts.caption(f"{len(raw.columns)} columns")
+
     columns = [str(column) for column in raw.columns]
     inferred = md.infer_text_id_column(raw)
     key_host = st.container()
     status_host = st.container()
-    details = st.expander("🔎 Join details", expanded=False)
-    picker_host = key_host if upload is not None else details
     text_key = "text_metadata_id_column"
     stored = st.session_state.get(text_key)
     if not isinstance(stored, list):
@@ -9398,14 +9280,14 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
             [inferred] if inferred in columns else []
         )
     inline_field_label(
-        picker_host,
+        key_host,
         "Text ID column *",
         "Pick the column holding this table's text id — or pick SEVERAL "
         "columns to build one on the fly (values joined with '_'), the same "
         "way the uploaded data's own Text ID mapping does. Required — it is "
         "the only thing that makes the join possible.",
     )
-    text_columns = picker_host.multiselect(
+    text_columns = key_host.multiselect(
         "Text ID column *",
         columns,
         key=text_key,
@@ -9420,22 +9302,13 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
         )
         return
     # UX-114: which non-id columns actually become fields — right under the id
-    # picker, on the same fold-once-settled terms.
+    # picker. UX-129: the count of how many are selected now lives in that
+    # picker's own label (see `_metadata_keep_picker`), not a status line here.
     kept = _metadata_keep_picker(
-        picker_host, raw, text_columns, prefix="text_metadata", noun="text"
+        key_host, raw, text_columns, prefix="text_metadata", noun="text"
     )
     if not live_join:
         # UX-116 — see the matching branch in `_participant_metadata_body`.
-        status_host.caption(
-            f"{len(raw):,} row(s) · {len(kept)} field(s) selected — "
-            "joins once you click **✅ Add dataset**."
-        )
-        detach_col.button(
-            "✕ Detach text table",
-            key="text_metadata_clear",
-            on_click=_clear_text_metadata,
-            help="Remove the text metadata from this session.",
-        )
         return
     attached = md.build_text_metadata(
         raw[[*text_columns, *kept]],
@@ -9448,70 +9321,25 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
     report = attached.report
     if not attached.fields:
         status_host.warning(
-            "Nothing kept — pick at least one field above, or detach this table.",
+            "Nothing kept — pick at least one field above, or remove the "
+            "uploaded file to detach this table.",
             icon="⚠️",
         )
         return
-    status_host.caption(f"{len(attached.fields)} field(s) kept")
     id_count = _metadata_id_count(raw, text_columns)
     matched = len(report.matched)
     if report.is_clean or matched:
         # UX-114: one small combined line — the distinct-id count (independent
         # of the join) and the join result together, replacing the separate
         # caption + colored banner this used to be.
-        parts = [f"✓ {id_count:,} identified" if id_count is not None else None]
-        parts.append(
-            f"{matched:,} joined"
-            if report.is_clean
-            else f"{matched:,} joined — see **🔎 Join details**"
-        )
+        parts = [f"~{id_count:,} identified" if id_count is not None else None]
+        parts.append(f"{matched:,} joined")
         status_host.caption(" · ".join(p for p in parts if p))
     else:
         # Loud on purpose — unlike the line above, this stays a real alert
         # (DATA-20/29's "a metadata table that joins to nothing says so").
         with status_host:
             _render_key_mismatch(attached, report, "text")
-    with details:
-        if report.conflicting:
-            st.warning(
-                f"**{len(report.conflicting)} text(s) have duplicate ids whose "
-                f"rows disagree** ({_id_list(report.conflicting)}) — rather than "
-                "guessing which row is right, every row for that text is "
-                "dropped, so its fields read as missing rather than added.",
-                icon="⚠️",
-            )
-        if report.only_in_data:
-            st.caption(
-                f"No row for {len(report.only_in_data)} loaded text(s): "
-                f"{_id_list(report.only_in_data)}. Their fields read as missing."
-            )
-        if report.only_in_table:
-            st.caption(
-                f"{len(report.only_in_table)} row(s) describe text(s) that are "
-                f"not loaded: {_id_list(report.only_in_table)}. Ignored."
-            )
-        st.dataframe(
-            [
-                {
-                    "Field": field.label,
-                    "Column": field.name,
-                    "Grain": field.grain,
-                    "Type": field.dtype,
-                    "Distinct": field.n_unique,
-                    "Missing": field.n_missing,
-                }
-                for field in attached.fields
-            ],
-            hide_index=True,
-            width="stretch",
-        )
-        st.dataframe(attached.frame, hide_index=True, width="stretch")
-    detach_col.button(
-        "✕ Detach text table",
-        key="text_metadata_clear",
-        on_click=_clear_text_metadata,
-        help="Remove the text metadata from this session.",
-    )
 
 
 def _render_key_mismatch(attached, report, grain: str) -> None:
@@ -9612,9 +9440,13 @@ def _metadata_keep_picker(host, raw, id_columns, *, prefix: str, noun: str) -> l
             if len(cleaned) != len(stored):
                 st.session_state[key] = cleaned
 
+    # UX-129: the selected-count used to be its own status line further down
+    # ("N field(s) kept") — folded into this label instead, right where the
+    # count changes, so it costs no extra vertical space of its own.
+    n_selected = len(st.session_state.get(key, options))
     inline_field_label(
         host,
-        f"Extra fields to keep — {noun}",
+        f"Extra fields to keep — {noun} · {n_selected} selected",
         "Columns besides the id. Keep the ones you want available later — to "
         "filter trials by, sort by, color by, or show as an info chip. "
         "Anything left out here is never registered as a field.",

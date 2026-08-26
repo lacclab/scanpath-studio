@@ -2090,28 +2090,17 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": "2 · Upload data tables",
         "body": (
-            "You'll need at least one of **Fixations**, **Words / IA**, or "
-            "**Raw gaze** — CSV / TSV / Parquet, several files or one alone. "
-            "Each table uploads right where it's mapped, in **Map data "
-            "fields** below, so there's nothing to upload on this step itself."
+            "Every table uploads and maps in its own row here — Fixations, "
+            "Words / IA, Raw gaze, then Participant/Trial/Text metadata. 👀 "
+            "Right under each table's own mapping, pick which extra columns "
+            "to keep — fewer is faster. Anything still missing is listed "
+            "above **✅ Add dataset**."
         ),
         "selector": ".st-key-wiz_part_data",
         "step_id": "data",
     },
     {
-        "title": "3 · Map data fields",
-        "body": (
-            "Every table uploads and maps in its own row here — Fixations, "
-            "Words / IA, Raw gaze, then Participant/Trial/Text metadata. "
-            "Anything still missing is listed above **✅ Add dataset**. 👀 "
-            "Right under each table's own mapping, pick which extra columns "
-            "to keep — fewer is faster."
-        ),
-        "selector": ".st-key-wiz_part_mapping",
-        "step_id": "mapping",
-    },
-    {
-        "title": "4 · Recording setup",
+        "title": "3 · Recording setup",
         "body": (
             "Say how you know the screen, physical size and text size the "
             "data was recorded with — there is no default, because a wrong "

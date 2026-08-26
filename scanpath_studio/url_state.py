@@ -1764,6 +1764,21 @@ def _restore_plot_config(
                 icon="🗂️",
             )
 
+    # The text table, third grain, same contract and ordering reason.
+    text_payload = config.get("text_metadata")
+    if isinstance(text_payload, dict):
+        from scanpath_studio import metadata as _metadata
+
+        attached_texts = _metadata.text_from_payload(text_payload)
+        if attached_texts is not None:
+            st.session_state[_metadata.TEXT_SESSION_KEY] = attached_texts
+            st.session_state[_metadata.TEXT_RAW_SESSION_KEY] = attached_texts.frame
+            restore.applied += 1
+            st.toast(
+                f"Restored text metadata ({len(attached_texts.fields)} field(s)).",
+                icon="📄",
+            )
+
     # VIZ-39 — the saved-design library. Restored wholesale rather than merged:
     # a config describes one session's designs, and silently blending two
     # libraries would leave the user unable to say which file a design came

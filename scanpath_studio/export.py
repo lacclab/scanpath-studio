@@ -143,6 +143,9 @@ class ExportOptions:
     # grain: a reader attribute re-identifies a person, a trial attribute
     # usually describes the material.
     trial_metadata_fields: tuple[str, ...] | None = None
+    # And the same opt-out for the attached *text* table, written to
+    # `metadata/texts.*` — the third grain, same reasoning again.
+    text_metadata_fields: tuple[str, ...] | None = None
     # When True, export operates on the whole loaded dataset, ignoring the
     # trial-filter funnel; the caller supplies the unfiltered frames.
     export_unfiltered: bool = False
@@ -983,6 +986,45 @@ def _render_trial_metadata_field_picker(key_prefix: str):
     return None if len(ordered) == len(names) else ordered
 
 
+def _render_text_metadata_field_picker(key_prefix: str):
+    """Which text fields ride along — third grain, twin of the two above.
+
+    Same contract: nothing rendered and ``None`` returned when no text table
+    is attached or while every field is still chosen, so an export made
+    without touching it is unchanged.
+    """
+    import streamlit as st
+
+    from scanpath_studio import metadata as md
+
+    attached = md.active_texts()
+    if attached is None or not attached.fields:
+        return None
+    names = [field.name for field in attached.fields]
+    labels = {field.name: field.label for field in attached.fields}
+    state_key = f"{key_prefix}_text_meta_fields"
+    stored = st.session_state.get(state_key)
+    if isinstance(stored, (list, tuple)):
+        kept = [name for name in stored if name in names]
+        if not kept:
+            st.session_state.pop(state_key, None)
+        elif list(stored) != kept:
+            st.session_state[state_key] = kept
+    chosen = panel_field(
+        st,
+        "multiselect",
+        "Text fields to include",
+        options=names,
+        default=names,
+        format_func=lambda name: labels.get(name, name),
+        key=state_key,
+        persist_state="session",
+        help="Text fields to include. The text key is always kept.",
+    )
+    ordered = tuple(name for name in names if name in set(chosen))
+    return None if len(ordered) == len(names) else ordered
+
+
 def _render_naming_options(st, combos: pd.DataFrame, key_prefix: str):
     """The compact **File naming** block: EXP-1's path pattern.
 
@@ -1178,6 +1220,7 @@ def render_export_options(
 
         metadata_fields = _render_metadata_field_picker(key_prefix)
         trial_metadata_fields = _render_trial_metadata_field_picker(key_prefix)
+        text_metadata_fields = _render_text_metadata_field_picker(key_prefix)
         path_pattern = _render_naming_options(st, combos, key_prefix)
         if title_pattern or caption_pattern:
             st.caption(
@@ -1207,6 +1250,7 @@ def render_export_options(
         dataset_name=_session_dataset_name(),
         metadata_fields=metadata_fields,
         trial_metadata_fields=trial_metadata_fields,
+        text_metadata_fields=text_metadata_fields,
         export_unfiltered=export_unfiltered,
         scope=scope,
         scope_participant=scope_pid,
@@ -1459,6 +1503,36 @@ def _selected_trial_metadata_columns(frame, fields: tuple[str, ...] | None):
     keep = [name for name in ("participant_id", "trial_id") if name in frame.columns]
     keep += [name for name in fields if name in frame.columns and name not in keep]
     return frame[keep] if keep else None
+
+
+def _selected_text_metadata_columns(frame, fields: tuple[str, ...] | None):
+    """``frame`` narrowed to ``fields`` (+ the text key), or ``None`` to drop it.
+
+    The text twin of :func:`_selected_metadata_columns`/
+    :func:`_selected_trial_metadata_columns` — a text table shipped without
+    its key cannot be joined back to anything.
+    """
+    if frame is None or fields is None:
+        return frame
+    if not fields:
+        return None
+    keep = ["text_id"] if "text_id" in frame.columns else []
+    keep += [name for name in fields if name in frame.columns and name not in keep]
+    return frame[keep] if keep else None
+
+
+def _session_text_metadata():
+    """The attached text table, when running inside the app.
+
+    Handed over on a private session key for the same reason its two
+    siblings are: the frame must not reach the bulk-export cache signature.
+    """
+    try:
+        import streamlit as st
+
+        return st.session_state.get("_export_text_metadata")
+    except Exception:  # no script run context (API, CLI)
+        return None
 
 
 def _session_trial_metadata():
@@ -1982,6 +2056,21 @@ def bulk_export(
                 zf,
                 f"metadata/trials.{fmt}",
                 trial_metadata,
+                fmt,
+            )
+    # And the text table, the third grain — same reasoning again.
+    text_metadata = (settings or {}).get("text_metadata")
+    if text_metadata is None:
+        text_metadata = _session_text_metadata()
+    text_metadata = _selected_text_metadata_columns(
+        text_metadata, options.text_metadata_fields
+    )
+    if text_metadata is not None and not text_metadata.empty:
+        for fmt in options.table_formats():
+            progress.bytes_written += _write_table(
+                zf,
+                f"metadata/texts.{fmt}",
+                text_metadata,
                 fmt,
             )
     emit_status(

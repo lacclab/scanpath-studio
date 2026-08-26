@@ -69,11 +69,12 @@ PARTICIPANT_ID_CANDIDATES: tuple[str, ...] = (
     "RECORDING_SESSION_LABEL",
 )
 
-# Grain of a field — the entity one row describes. PARTICIPANT (DATA-20) and
-# TRIAL (DATA-29) are ingested; the rest are named so the registry's shape is
-# settled.
+# Grain of a field — the entity one row describes. PARTICIPANT (DATA-20),
+# TRIAL (DATA-29) and TEXT are ingested; the rest are named so the registry's
+# shape is settled.
 GRAIN_PARTICIPANT = "participant"
 GRAIN_TRIAL = "trial"
+GRAIN_TEXT = "text"
 
 # Source columns that plausibly hold the trial id, most explicit first — the
 # trial-grain twin of PARTICIPANT_ID_CANDIDATES, and deliberately the same names
@@ -88,6 +89,17 @@ TRIAL_ID_CANDIDATES: tuple[str, ...] = (
     "item_id",
     "paragraph_id",
     "text_id",
+)
+
+# The text-grain twin of TRIAL_ID_CANDIDATES — most explicit first.
+TEXT_ID_CANDIDATES: tuple[str, ...] = (
+    "text_id",
+    "unique_text_id",
+    "text",
+    "paragraph_id",
+    "item_id",
+    "stimulus_id",
+    "stimulus",
 )
 
 # Loader bookkeeping, never user metadata: `data.read_tables` tags each row with
@@ -110,6 +122,11 @@ FILE_SESSION_KEY = "_participant_metadata_file"
 TRIAL_SESSION_KEY = "_trial_metadata"
 TRIAL_RAW_SESSION_KEY = "_trial_metadata_raw"
 TRIAL_FILE_SESSION_KEY = "_trial_metadata_file"
+
+# The same three, for the text table (one row per text_id) — the third grain.
+TEXT_SESSION_KEY = "_text_metadata"
+TEXT_RAW_SESSION_KEY = "_text_metadata_raw"
+TEXT_FILE_SESSION_KEY = "_text_metadata_file"
 
 _DTYPE_CATEGORICAL = "categorical"
 _DTYPE_NUMERIC = "numeric"
@@ -303,6 +320,63 @@ class TrialMetadata:
             return {}
         row = match.iloc[0]
         return {name: row[name] for name in self.names if name in match.columns}
+
+
+@dataclass(frozen=True)
+class TextMetadata:
+    """A validated text table plus its field registry — the third grain.
+
+    ``frame`` always carries a string ``text_id`` column; conflicting ids have
+    been dropped from it (and named in :attr:`report`), the same rule
+    :class:`ParticipantMetadata`/:class:`TrialMetadata` follow. Flat grain —
+    one row per text, joined the way :class:`ParticipantMetadata` joins by
+    reader, never :class:`TrialMetadata`'s participant-pairing option: a text
+    is a stimulus, not something one reader owns.
+    """
+
+    frame: pd.DataFrame
+    fields: tuple[MetadataField, ...]
+    source_name: str
+    text_column: str
+    report: JoinReport = JoinReport()
+
+    @property
+    def names(self) -> tuple[str, ...]:
+        return tuple(field.name for field in self.fields)
+
+    def field(self, name: str) -> MetadataField | None:
+        for candidate in self.fields:
+            if candidate.name == name:
+                return candidate
+        return None
+
+    def values_for(self, text_id) -> dict[str, object]:
+        """Every registered value for one text (an unknown id gives ``{}``)."""
+        if self.frame.empty:
+            return {}
+        match = self.frame[self.frame["text_id"] == str(text_id)]
+        if match.empty:
+            return {}
+        row = match.iloc[0]
+        return {name: row[name] for name in self.names if name in match.columns}
+
+    @property
+    def joined_frame(self) -> pd.DataFrame:
+        """Only the rows describing texts that are actually loaded.
+
+        Same reasoning as :attr:`ParticipantMetadata.joined_frame` — the
+        controls must be built from what is on screen, not from every text
+        the table happens to mention.
+        """
+        if self.frame.empty:
+            return self.frame
+        return self.frame[self.frame["text_id"].isin(set(self.report.matched))]
+
+    def series(self, name: str) -> pd.Series:
+        """``text_id`` → value for one field, for projection/lookup."""
+        if self.frame.empty or name not in self.frame.columns:
+            return pd.Series(dtype="object")
+        return self.frame.set_index("text_id")[name]
 
 
 def active_trials() -> TrialMetadata | None:
@@ -653,6 +727,287 @@ def trial_from_payload(payload: dict | None) -> TrialMetadata | None:
         trial_column,
         participant_column,
         source_name=str(payload.get("source_name") or "trial metadata"),
+    )
+
+
+def active_texts() -> TextMetadata | None:
+    """The text table attached to this session, or ``None``."""
+    try:
+        import streamlit as st
+
+        return st.session_state.get(TEXT_SESSION_KEY)
+    except Exception:  # no script run context (API, CLI, plain import)
+        return None
+
+
+def text_keys(combos: pd.DataFrame | None) -> set:
+    """The distinct ``text_id`` values the loaded data actually has."""
+    if combos is None or combos.empty or "text_id" not in combos.columns:
+        return set()
+    return {str(value) for value in combos["text_id"].dropna().unique()}
+
+
+def infer_text_id_column(frame: pd.DataFrame) -> str | None:
+    """First plausible text-id column, or ``None`` — the UI's initial guess."""
+    if frame is None or frame.empty:
+        return None
+    lookup = {str(column).lower(): str(column) for column in frame.columns}
+    for candidate in TEXT_ID_CANDIDATES:
+        hit = lookup.get(candidate.lower())
+        if hit is not None:
+            return hit
+    return None
+
+
+def _text_column_label(text_column) -> str:
+    """Display form of a (possibly composite) text-column mapping — joined
+    with " + ", matching how the wizard spells a composite trial id back out."""
+    return " + ".join(trial_mapping_columns(text_column))
+
+
+def build_text_metadata(
+    frame: pd.DataFrame,
+    text_column: str | list[str],
+    *,
+    source_name: str = "text metadata",
+    keys: Iterable | None = None,
+) -> TextMetadata:
+    """Validate a raw text table into a registry + clean frame — third grain.
+
+    ``text_column`` is a single column name, or **several** to build a unique
+    text id on the fly (joined with ``_``, like the Trial ID mapping the
+    uploaded data itself uses — see :func:`data.trial_id_series`), the same
+    composite-key trick :func:`build_trial_metadata` uses. The join/report
+    logic underneath is flat, though — one dimension (``text_id``), never
+    :func:`build_trial_metadata`'s participant-pairing option, since a text is
+    a stimulus and nothing reads it as belonging to one reader.
+
+    ``keys`` is the set of text ids actually present in the loaded data;
+    passing it fills in the two "unmatched" halves of the report. Rows whose
+    id repeats are only a problem when they *disagree* — the rule every grain
+    here follows.
+    """
+    text_cols = trial_mapping_columns(text_column)
+    label = _text_column_label(text_column)
+    empty = TextMetadata(pd.DataFrame(columns=["text_id"]), (), source_name, label)
+    if (
+        frame is None
+        or frame.empty
+        or not text_cols
+        or any(c not in frame.columns for c in text_cols)
+    ):
+        return empty
+
+    work = frame.copy()
+    # See the matching comment in `build_trial_metadata` — the same "one
+    # blank cell spells the id two ways" hazard applies to a text id.
+    work["text_id"] = trial_id_series(work, text_column)
+    work = work[work["text_id"] != ""]
+    reserved = {*text_cols, "text_id", *_BOOKKEEPING_COLUMNS}
+    value_columns = [
+        str(column) for column in frame.columns if str(column) not in reserved
+    ]
+
+    duplicated = tuple(sorted(set(work.loc[work["text_id"].duplicated(), "text_id"])))
+    conflicting: list[str] = []
+    if duplicated:
+        for tid, group in work[work["text_id"].isin(duplicated)].groupby(
+            "text_id", sort=True
+        ):
+            for column in value_columns:
+                if group[column].dropna().nunique() > 1:
+                    conflicting.append(str(tid))
+                    break
+    conflicting_set = set(conflicting)
+    work = work[~work["text_id"].isin(conflicting_set)]
+    work = work.drop_duplicates(subset=["text_id"], keep="first")
+
+    fields: list[MetadataField] = []
+    clean = pd.DataFrame({"text_id": work["text_id"].to_numpy()})
+    for column in value_columns:
+        dtype = _classify(work[column])
+        values = _coerce(work[column], dtype)
+        clean[column] = values.to_numpy()
+        fields.append(
+            MetadataField(
+                name=column,
+                label=field_label(column),
+                grain=GRAIN_TEXT,
+                dtype=dtype,
+                source=source_name,
+                n_unique=int(values.dropna().nunique()),
+                n_missing=int(values.isna().sum()),
+            )
+        )
+
+    table_ids = set(clean["text_id"]) | conflicting_set
+    if keys is None:
+        report = JoinReport(
+            matched=tuple(sorted(clean["text_id"])),
+            duplicated=duplicated,
+            conflicting=tuple(sorted(conflicting_set)),
+        )
+    else:
+        data_ids = {str(tid) for tid in keys}
+        report = JoinReport(
+            matched=tuple(sorted(set(clean["text_id"]) & data_ids)),
+            only_in_table=tuple(sorted(table_ids - data_ids)),
+            only_in_data=tuple(sorted(data_ids - table_ids)),
+            duplicated=duplicated,
+            conflicting=tuple(sorted(conflicting_set)),
+        )
+    return TextMetadata(clean, tuple(fields), source_name, label, report)
+
+
+def rejoin_texts(metadata: TextMetadata, keys: Iterable) -> TextMetadata:
+    """Recompute the join report against a (possibly new) text list."""
+    data_ids = {str(tid) for tid in keys}
+    usable_ids = set(metadata.frame["text_id"]) if not metadata.frame.empty else set()
+    # Conflicting ids are *in the table* but carry no values — not matched,
+    # not "only in data" either (same rule as `rejoin`).
+    table_ids = usable_ids | set(metadata.report.conflicting)
+    return TextMetadata(
+        metadata.frame,
+        metadata.fields,
+        metadata.source_name,
+        metadata.text_column,
+        JoinReport(
+            matched=tuple(sorted(usable_ids & data_ids)),
+            only_in_table=tuple(sorted(table_ids - data_ids)),
+            only_in_data=tuple(sorted(data_ids - table_ids)),
+            duplicated=metadata.report.duplicated,
+            conflicting=metadata.report.conflicting,
+        ),
+    )
+
+
+def texts_matching(
+    metadata: TextMetadata | None,
+    selections: dict[str, Sequence] | None = None,
+    ranges: dict[str, tuple[float, float]] | None = None,
+) -> set | None:
+    """Text ids satisfying every metadata constraint, or ``None`` for "any".
+
+    Flat-grain sibling of :func:`participants_matching` — an empty constraint
+    must not narrow the pool to the texts *listed in the table*, and a numeric
+    range keeps a text with no value (``data.filter_trials``' rule that a
+    range narrows rather than excludes the unmeasured).
+    """
+    if metadata is None or metadata.frame.empty:
+        return None
+    active = {
+        name: list(values)
+        for name, values in (selections or {}).items()
+        if values and name in metadata.frame.columns
+    }
+    active_ranges = {
+        name: bounds
+        for name, bounds in (ranges or {}).items()
+        if bounds and name in metadata.frame.columns
+    }
+    if not active and not active_ranges:
+        return None
+
+    frame = metadata.frame
+    mask = pd.Series(True, index=frame.index)
+    for name, values in active.items():
+        allowed = {str(value) for value in values}
+        mask &= frame[name].astype(str).isin(allowed)
+    for name, (low, high) in active_ranges.items():
+        numeric = pd.to_numeric(frame[name], errors="coerce")
+        mask &= numeric.between(low, high) | numeric.isna()
+    matching = set(frame.loc[mask, "text_id"])
+    if not active:
+        # Range-only narrowing keeps the unmeasured, including a text with no
+        # row at all (`participants_matching`'s rule, one grain over).
+        matching |= set(metadata.report.only_in_data)
+    return matching
+
+
+def project_texts(
+    metadata: TextMetadata | None,
+    frame: pd.DataFrame,
+    columns: Iterable[str] | None = None,
+) -> pd.DataFrame:
+    """Left-join chosen text-metadata columns onto a **small** text-keyed frame.
+
+    For ``combos`` — never for words or fixations, the rule every grain here
+    follows. Columns already present on ``frame`` win, so a recorded column is
+    never shadowed by a metadata field of the same name.
+    """
+    if (
+        metadata is None
+        or metadata.frame.empty
+        or frame is None
+        or frame.empty
+        or "text_id" not in frame.columns
+    ):
+        return frame
+    wanted = [
+        name
+        for name in (list(columns) if columns is not None else list(metadata.names))
+        if name in metadata.frame.columns and name not in frame.columns
+    ]
+    if not wanted:
+        return frame
+    out = frame.copy()
+    keys = out["text_id"].astype(str)
+    for name in wanted:
+        out[name] = keys.map(metadata.series(name))
+    return out
+
+
+def text_options_for(metadata: TextMetadata | None, name: str) -> list[str]:
+    """Sorted distinct values of a categorical text field, for a multiselect."""
+    if metadata is None or metadata.frame.empty or name not in metadata.frame.columns:
+        return []
+    return sorted({str(value) for value in metadata.joined_frame[name].dropna()})
+
+
+def text_bounds_for(
+    metadata: TextMetadata | None, name: str
+) -> tuple[float, float] | None:
+    """``(min, max)`` of a numeric text field, or ``None`` when it has no range."""
+    if metadata is None or metadata.frame.empty or name not in metadata.frame.columns:
+        return None
+    numeric = pd.to_numeric(metadata.joined_frame[name], errors="coerce").dropna()
+    if numeric.empty:
+        return None
+    low, high = float(numeric.min()), float(numeric.max())
+    if low == high:
+        return None
+    return low, high
+
+
+def text_to_payload(metadata: TextMetadata | None) -> dict | None:
+    """Serialize the text table for save & restore."""
+    if metadata is None or metadata.frame.empty:
+        return None
+    return {
+        "source_name": metadata.source_name,
+        "text_column": metadata.text_column,
+        "rows": metadata.frame.to_dict("records"),
+    }
+
+
+def text_from_payload(payload: dict | None) -> TextMetadata | None:
+    """Rebuild a text table from :func:`text_to_payload`'s output."""
+    if not isinstance(payload, dict) or not payload.get("rows"):
+        return None
+    frame = pd.DataFrame(payload["rows"])
+    text_column = str(payload.get("text_column") or "text_id")
+    if "text_id" in frame.columns:
+        # The payload holds the *clean* frame, whose key column is already
+        # canonical — rebuild against that rather than the original name.
+        return build_text_metadata(
+            frame,
+            "text_id",
+            source_name=str(payload.get("source_name") or "text metadata"),
+        )
+    return build_text_metadata(
+        frame,
+        text_column,
+        source_name=str(payload.get("source_name") or "text metadata"),
     )
 
 

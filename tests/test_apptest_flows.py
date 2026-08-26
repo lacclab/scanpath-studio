@@ -403,6 +403,11 @@ class TestTrialFilterFlow:
             # opposite of cleared.
             "trial_keys": None,
             "trial_filter_keys": (),
+            # The text-grain sibling of the two above — widget keys behind a
+            # text-metadata narrowing, folded into the existing "Narrow by →
+            # Text" slot (`metadata`/`metadata_keys`) rather than a value of
+            # its own.
+            "text_filter_keys": (),
             "favorites_only": False,
             "required_tags": [],
             "excluded_tags": [],

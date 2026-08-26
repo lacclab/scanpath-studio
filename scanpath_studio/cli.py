@@ -308,6 +308,14 @@ def _render_parser() -> argparse.ArgumentParser:
         "reading of it inherits that row. Never inferred: nothing in the file "
         "says which of the two a corpus means.",
     )
+    src.add_argument(
+        "--text-metadata",
+        metavar="FILE",
+        help="Text-level metadata table: one row per text, a text-id column "
+        "plus anything known about it. Validated and reported the same way, "
+        "and its fields are added to --list-trials output. Flat grain, never "
+        "keyed by reader — a text is a stimulus, not something one reader owns.",
+    )
 
     parser.add_argument(
         "-p", "--participant", help="Participant id (default: first available)."
@@ -1529,15 +1537,58 @@ def render(argv: list[str]) -> None:
             "column in that table."
         )
 
+    # The third grain, flat like the participant table — a text is a
+    # stimulus, so it always joins on text id alone.
+    attached_texts = None
+    if args.text_metadata:
+        try:
+            attached_texts = api.load_text_metadata(
+                args.text_metadata, texts=words if not words.empty else fixations
+            )
+        except (ValueError, FileNotFoundError, OSError) as exc:
+            raise SystemExit(str(exc))
+        report = attached_texts.report
+        print(
+            f"Text metadata: {len(attached_texts.fields)} field(s) "
+            f"({', '.join(attached_texts.names)}) for {len(report.matched)} text(s).",
+            file=sys.stderr,
+        )
+        for label, ids in (
+            ("no row in the table", report.only_in_data),
+            ("not in the data", report.only_in_table),
+            ("rows that disagree (left empty)", report.conflicting),
+        ):
+            if ids:
+                print(f"  {len(ids)} {label}: {', '.join(ids)}", file=sys.stderr)
+
     if args.list_trials:
         combos = api.list_trials(words, fixations)
-        if args.participant_metadata or attached_trials is not None:
+        if (
+            args.participant_metadata
+            or attached_trials is not None
+            or attached_texts is not None
+        ):
             from scanpath_studio import metadata as _metadata
 
             if args.participant_metadata:
                 combos = _metadata.project(attached, combos)
             if attached_trials is not None:
                 combos = _metadata.project_trials(attached_trials, combos)
+            if attached_texts is not None:
+                # `list_trials`'s combos is deliberately just
+                # (participant_id, trial_id) — text_id isn't part of its
+                # public contract — so bring it in here, from whichever
+                # frame has it, before projecting the text table onto it.
+                source = fixations if not fixations.empty else words
+                if "text_id" in source.columns:
+                    combos = combos.merge(
+                        source[
+                            ["participant_id", "trial_id", "text_id"]
+                        ].drop_duplicates(),
+                        on=["participant_id", "trial_id"],
+                        how="left",
+                    )
+                    combos = _metadata.project_texts(attached_texts, combos)
         print(combos.to_string(index=False))
         return
     if args.list_parts:

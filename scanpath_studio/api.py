@@ -717,6 +717,59 @@ def load_trial_metadata(
     )
 
 
+def load_text_metadata(
+    table: TablesLike,
+    *,
+    id_column: str | list[str] | None = None,
+    texts: pd.DataFrame | list | None = None,
+):
+    """Load a text-level metadata table — the third grain.
+
+    ``table`` has **one row per text** — a text-id column plus anything known
+    about that text (genre, difficulty, a stimulus-level comprehension score).
+    Flat grain, like :func:`load_participant_metadata`: never keyed by reader,
+    since a text is a stimulus rather than something one reader owns.
+    ``id_column`` defaults to the first recognised spelling (``text_id``,
+    ``paragraph_id``, ``stimulus_id``, …) and may be several columns to build
+    a composite id, the same way the uploaded data's own Text ID mapping does.
+
+    Pass ``texts`` — a normalized fixations/words frame, or any iterable of
+    text ids — to have the join validated against the data you actually
+    loaded; the returned ``.report`` then names the texts missing from either
+    side.
+
+    Returns a :class:`~scanpath_studio.metadata.TextMetadata`: the cleaned
+    frame, a field registry, and the join report. As with the other two
+    grains, nothing is broadcast onto the words/fixations frames.
+
+    >>> words, fixations = load_sample_data()
+    >>> meta = load_text_metadata(
+    ...     "texts.csv", texts=words
+    ... )  # doctest: +SKIP
+    >>> meta.names  # doctest: +SKIP
+    ('genre', 'difficulty')
+    """
+    from scanpath_studio import metadata as _metadata
+
+    frame = _as_dataframe(table, "text metadata")
+    resolved = id_column or _metadata.infer_text_id_column(frame)
+    if not resolved or any(
+        c not in frame.columns for c in _metadata.trial_mapping_columns(resolved)
+    ):
+        raise ValueError(
+            "Could not find the text-id column in the metadata table. "
+            f"Columns: {_column_preview(frame)}. Pass id_column= explicitly."
+        )
+    if isinstance(texts, pd.DataFrame):
+        texts = _metadata.text_keys(texts)
+    return _metadata.build_text_metadata(
+        frame,
+        resolved,
+        source_name=getattr(table, "name", None) or "text metadata",
+        keys=texts,
+    )
+
+
 def load_sample_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     """Return the bundled OneStop demo, normalized and ready to plot.
 

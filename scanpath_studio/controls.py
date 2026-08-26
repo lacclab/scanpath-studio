@@ -5745,6 +5745,10 @@ def _chip_field_options(words, fixations, trial_level: set) -> list[str]:
     # definition, which is the property this list is for.
     for field in trial_metadata_fields():
         add(field.name)
+    # Text-grain metadata is constant within a trial by construction too — a
+    # text attribute (genre, difficulty) doesn't vary across the readers of it.
+    for field in text_metadata_fields():
+        add(field.name)
     cols.extend(SUMMARY_CHIP_FIELDS)
     return cols
 
@@ -5801,6 +5805,8 @@ def render_trial_chip_picker(
         # DATA-29 — attaching or detaching the trial table changes the offered
         # set the same way, so it belongs in the signature for the same reason.
         tuple(field.name for field in trial_metadata_fields()),
+        # And the text table, the third grain — same reasoning again.
+        tuple(field.name for field in text_metadata_fields()),
     )
     available = _chip_field_options(
         words, fixations, cached_trial_level_columns(words, fixations)
@@ -6044,6 +6050,18 @@ def trial_metadata_filter_key(name: str, prefix: str = "") -> str:
     return f"{prefix}filter_trialmeta_{name}"
 
 
+def text_metadata_filter_key(name: str, prefix: str = "") -> str:
+    """Session key of a text-metadata filter — the third grain.
+
+    Its own ``filter_textmeta_`` prefix, on the same reasoning as
+    ``trial_metadata_filter_key``: a table's column name may legitimately
+    collide with one at another grain, and a shared prefix would collide the
+    widgets. Still under ``filter_``, so the clear-all sweep, the
+    ``_trial_filters_raw`` mirror and compare-mode B's namespace keep working.
+    """
+    return f"{prefix}filter_textmeta_{name}"
+
+
 def participant_metadata_fields():
     """The attached participant table's fields, or ``()`` when none (DATA-20)."""
     from scanpath_studio.tabs import active_participant_metadata
@@ -6057,6 +6075,14 @@ def trial_metadata_fields():
     from scanpath_studio import metadata as md
 
     attached = md.active_trials()
+    return attached.fields if attached is not None else ()
+
+
+def text_metadata_fields():
+    """The attached text table's fields, or ``()`` when none — third grain."""
+    from scanpath_studio import metadata as md
+
+    attached = md.active_texts()
     return attached.fields if attached is not None else ()
 
 
@@ -6153,6 +6179,88 @@ def _render_trial_metadata_filters(host, *, prefix: str, on_change) -> None:
             on_change=on_change,
             help=f"From your trial table ({field.source}).",
         )
+
+
+def _render_text_metadata_filters(host, *, prefix: str, on_change) -> None:
+    """One control per registered text-grain field — the third grain.
+
+    Flat, like :func:`_render_participant_metadata_filters` — a text attribute
+    narrows by **text**, so `_compute_trial_filters` resolves the selection to
+    a set of text ids and folds it into the existing "Narrow by → Text" slot
+    rather than a new one.
+    """
+    from scanpath_studio import metadata as md
+
+    attached = md.active_texts()
+    if attached is None or not attached.fields:
+        return
+    host.markdown("**By text**")
+    for field in attached.fields:
+        key = text_metadata_filter_key(field.name, prefix)
+        if field.is_numeric:
+            bounds = md.text_bounds_for(attached, field.name)
+            if bounds is None:
+                continue
+            low, high = bounds
+            _seed_range_bounds(key, low, high, prefix=prefix)
+            host.slider(
+                field.label,
+                min_value=low,
+                max_value=high,
+                key=key,
+                on_change=on_change,
+                help=f"From your text table ({field.source}). Texts with no "
+                "value are kept.",
+            )
+            continue
+        options = md.text_options_for(attached, field.name)
+        if len(options) <= 1:
+            continue
+        _seed_filter_widget(key, options, options, prefix=prefix)
+        _labeled(
+            host,
+            "multiselect",
+            field.label,
+            options=options,
+            key=key,
+            on_change=on_change,
+            help=f"From your text table ({field.source}).",
+        )
+
+
+def _text_metadata_narrowing(prefix: str) -> tuple:
+    """``(text ids | None, widget keys)`` for the active text-metadata filters.
+
+    Flat-grain sibling of :func:`_participant_metadata_narrowing` — ``None``
+    means no constraint; an **empty set** means a constraint nothing satisfies.
+    """
+    from scanpath_studio import metadata as md
+
+    attached = md.active_texts()
+    if attached is None or not attached.fields:
+        return None, ()
+    selections: dict[str, list] = {}
+    ranges: dict[str, tuple] = {}
+    keys: list = []
+    for field in attached.fields:
+        key = text_metadata_filter_key(field.name, prefix)
+        chosen = st.session_state.get(key)
+        if field.is_numeric:
+            bounds = md.text_bounds_for(attached, field.name)
+            if (
+                bounds
+                and isinstance(chosen, (tuple, list))
+                and len(chosen) == 2
+                and tuple(chosen) != bounds
+            ):
+                ranges[field.name] = (float(chosen[0]), float(chosen[1]))
+                keys.append(key)
+            continue
+        options = md.text_options_for(attached, field.name)
+        if chosen and len(chosen) < len(options):
+            selections[field.name] = list(chosen)
+            keys.append(key)
+    return md.texts_matching(attached, selections, ranges), tuple(keys)
 
 
 def _trial_metadata_narrowing(prefix: str, keys) -> tuple:
@@ -6288,6 +6396,11 @@ def _compute_trial_filters(
         # `None` = no constraint; an empty set = nothing satisfies it.
         "trial_keys": None,
         "trial_filter_keys": (),
+        # Text-grain metadata's own widget keys, folded into the existing
+        # "Narrow by → Text" slot above (`metadata`/`metadata_keys`) rather
+        # than a fourth top-level slot — this is only for UX-7's per-filter
+        # clear, since the *value* already lives in `metadata[text_field]`.
+        "text_filter_keys": (),
         "favorites_only": False,
         "required_tags": [],
         "excluded_tags": [],
@@ -6339,11 +6452,28 @@ def _compute_trial_filters(
             cache_key=(frame_fingerprint(text_frame), text_field),
         )
         sel = st.session_state.get(f"{prefix}filter_text_id")
-        if sel and len(text_vals) > 1 and len(sel) < len(text_vals):
-            result["metadata"][text_field] = set(sel)
+        by_picker = (
+            set(sel)
+            if sel and len(text_vals) > 1 and len(sel) < len(text_vals)
+            else None
+        )
+        # Text-grain metadata folds into the same slot, the same way
+        # participant-grain metadata folds into `result["participants"]` — an
+        # explicit pick still wins over (intersects with) the table.
+        by_text_meta, text_meta_keys = _text_metadata_narrowing(prefix)
+        combined = None
+        if by_picker is not None and by_text_meta is not None:
+            combined = by_picker & by_text_meta
+        elif by_picker is not None:
+            combined = by_picker
+        elif by_text_meta is not None:
+            combined = by_text_meta & {str(v) for v in text_vals}
+        if combined is not None:
+            result["metadata"][text_field] = combined
             # UX-7's per-filter clear pops exactly this key, so it must be
             # emitted already-prefixed or clearing one of B's filters no-ops.
             result["metadata_keys"][text_field] = f"{prefix}filter_text_id"
+            result["text_filter_keys"] = text_meta_keys
     # UX-49: numeric trial-level columns narrow by range, not by membership. A
     # slider still at full extent is "no filter" and contributes nothing.
     numeric_fields = _numeric_filter_fields(words, fixations)
@@ -6554,6 +6684,7 @@ def render_trial_filters(
 
     _render_participant_metadata_filters(host, prefix=prefix, on_change=_apply)
     _render_trial_metadata_filters(host, prefix=prefix, on_change=_apply)
+    _render_text_metadata_filters(host, prefix=prefix, on_change=_apply)
 
     host.markdown("**By annotation**")
     if f"{prefix}filter_favorites" not in st.session_state:
@@ -6627,6 +6758,8 @@ def render_trial_filters(
         + [metadata_filter_key(f.name, prefix) for f in participant_metadata_fields()]
         # DATA-29 — same reason, one grain down.
         + [trial_metadata_filter_key(f.name, prefix) for f in trial_metadata_fields()]
+        # And the text table, the third grain — same reasoning again.
+        + [text_metadata_filter_key(f.name, prefix) for f in text_metadata_fields()]
     )
     st.session_state[f"{prefix}_trial_filters_raw"] = {
         k: st.session_state[k] for k in keys if k in st.session_state

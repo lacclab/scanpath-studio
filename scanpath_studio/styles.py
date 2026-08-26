@@ -24,6 +24,13 @@ def get_app_css() -> str:
        fill anchored to the wrong end). */
     html, body, [data-testid="stApp"] {
         direction: ltr !important;
+        /* UX-129: the page itself must never grow a side-to-side scrollbar —
+           whatever pushes past the viewport (a too-wide row, a tooltip that
+           escapes its column) should be clipped, not turned into a reason to
+           scroll the whole app sideways. Elements that legitimately need
+           horizontal scroll (a wide dataframe) already carry their own,
+           narrower `overflow-x: auto` and are unaffected by clipping here. */
+        overflow-x: hidden;
     }
     /* UX-99: the page's side gutters. Streamlit's wide layout reserves ~5rem
        either side, which on this app is ~10rem of nothing beside the widest

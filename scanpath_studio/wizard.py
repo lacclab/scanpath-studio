@@ -2332,23 +2332,32 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
 #: column stays narrow for one short word; the six pickers split the rest
 #: evenly — a column name is what has to stay readable, and six is the most
 #: this row fits.
-_ID_ROW1_W = (0.09, 0.152, 0.152, 0.152, 0.152, 0.152, 0.152)
+#: UX-127: the name column widened from 0.09 to 0.135 (and the CSS overlay's
+#: `width` in `styles.py` alongside it) — the file uploader's own "Browse
+#: files" button didn't fit inside the narrower column. The six picker cells
+#: shrink slightly (evenly) to make room.
+_ID_ROW1_W = (0.135, 0.1444, 0.1444, 0.1444, 0.1444, 0.1444, 0.1444)
 
 #: Row 2 of the Fixations block: X · Y · Timestamp · Duration. Same grid as
 #: row 1 (UX-55 r2) so the two halves of the mapping line up down the page —
 #: four equal picker cells under the name column, since these selects hold
 #: column names rather than short ids.
-_FIX_ROW2_W = (0.09, 0.2275, 0.2275, 0.2275, 0.2275)
+_FIX_ROW2_W = (0.135, 0.2163, 0.2163, 0.2163, 0.2163)
 
 #: Row 2 of the AOI block: the word box (a format radio plus four coordinate
 #: selects that lay themselves out) and, sharing the same line, Line index —
 #: the box gets most of the row, Line index the rest (UX-55 r3).
-_AOI_ROW2_W = (0.09, 0.73, 0.18)
+_AOI_ROW2_W = (0.135, 0.694, 0.171)
 
 #: Row 2 of the Raw gaze block (UX-113): X · Y · Timestamp — no Duration, raw
 #: gaze has no such concept (unlike row 1, which reuses `_ID_ROW1_W` outright:
 #: same six identity fields, same shape as Fixations/AOI above it).
-_RAW_GAZE_ROW2_W = (0.09, 0.3033, 0.3033, 0.3034)
+_RAW_GAZE_ROW2_W = (0.135, 0.2883, 0.2883, 0.2884)
+
+#: UX-127: the metadata rows' own two-cell grid — same name-column width as
+#: every other table's row 1, one wide cell for the id-column + keep-fields
+#: picker stack (there is nothing to split across several picker cells here).
+_META_ROW_W = (0.135, 0.865)
 
 
 def _hover_note(host, label: str, note: str, *, link: str = "") -> None:
@@ -2632,10 +2641,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
     _wizard_name_header(s_name, active)
 
     def _render_restore_trigger(host) -> None:
-        # UX-113: beside stage 3's title, not stage 2's — restoring a saved
-        # setup seeds the column mapping (3), kept/filtered fields (4), and
-        # recording setup (5) answers; it never touches the uploads themselves,
-        # so it belongs beside the first stage it actually affects.
+        # UX-127: beside stage 2's title now, not stage 3's — UX-113's reason
+        # (it never touches the uploads themselves) no longer separates the
+        # two stages, since every table now uploads *inside* stage 3 too;
+        # what actually matters is that a restored setup is visible before
+        # the wizard is filled in, and stage 2 is the first thing on screen.
         restore_box = host.popover("↩️ Restore a saved setup (optional)")
         _wizard_restore_config(restore_box)
         _render_restored_config_caption(restore_box)
@@ -2658,13 +2668,13 @@ def _render_data_setup(active: bool) -> _UploadResult:
     _generic_format = (
         st.session_state.get("wizard_dataset_format", "Generic") != "MultiplEYE"
     )
-    s1 = _part("data")
-    s_map = _part(
-        "mapping",
+    s1 = _part(
+        "data",
         trailing=_render_restore_trigger if active and _generic_format else None,
     )
+    s_map = _part("mapping")
 
-    # === 1 · Upload data files ===============================================
+    # === 1 · Upload data tables ==============================================
     if active and _multipleye_enabled:
         s1.segmented_control(
             "Dataset format",
@@ -2784,26 +2794,24 @@ def _render_data_setup(active: bool) -> _UploadResult:
             counts.caption(f"{n_columns} columns")
         return frame
 
-    # UX-122: Fixations/Words/Raw gaze no longer upload here — each table's
-    # own uploader moved into "3 Map data fields", replacing that table's
-    # row-name label (see `row_fix`/`row_words`/`rg_row1` below). `raw_fix`/
-    # `raw_words`/`raw_gaze` are placeholders until those rows render; only
-    # the three metadata tables still upload in this stage.
+    # UX-122/UX-127: none of the six tables upload here any more — each has
+    # its own uploader in "3 Map data fields", replacing that table's
+    # row-name label (see `row_fix`/`row_words`/`rg_row1`/`_render_metadata_
+    # uploads` below). `raw_fix`/`raw_words`/`raw_gaze` are placeholders
+    # until those rows render; this stage now holds only the intro note.
     raw_fix, raw_words, raw_gaze = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
     def _render_metadata_uploads(word_schema, fix_schema) -> None:
-        """DATA-20/DATA-29's participant + trial tables, plus the text table,
-        peers of the uploads above (UX-113: visible from the start, not only
-        once a main table is in). `word_schema`/`fix_schema` are `{}`
-        pre-upload — there is nothing to derive a join report from yet, which
-        is also the correct answer — and the real mapping once identity
-        (stage 3) has resolved it. Still only while `active`: the collapsed
-        *Data & mapping* review panel would otherwise build the same widget
-        keys as the 🗂️ Data page's section.
-
-        UX-114: the three side by side in one row, rather than each its own
-        full-width block — they are read as a set ("what else do I know
-        about the readers / the readings / the texts").
+        """DATA-20/DATA-29's participant + trial tables, plus the text table —
+        UX-127: three more rows of the same "left = upload, right = mapping"
+        format Fixations/AOI/Raw gaze use above, under a small **Metadata**
+        heading, rather than the three-wide block of their own this used to
+        be in stage 2. `word_schema`/`fix_schema` are `{}` pre-upload — there
+        is nothing to derive a join report from yet, which is also the
+        correct answer — and the real mapping once identity (stage 3) has
+        resolved it. Still only while `active`: the collapsed *Data &
+        mapping* review panel would otherwise build the same widget keys as
+        the 🗂️ Data page's section.
         """
         if not active:
             return
@@ -2813,27 +2821,54 @@ def _render_data_setup(active: bool) -> _UploadResult:
             render_trial_metadata_section,
         )
 
-        pm_col, tm_col, txm_col = s1.columns(3, gap="medium")
-        # UX-116: `live_join=False` — there is no finished dataset to join
-        # against yet (the pools below are provisional, still shifting as
-        # identity mapping is worked out), so the wizard only collects the
-        # upload + id-column + keep-fields choices here. The real join runs
-        # once, in `_finalize_wizard_dataset`, against the dataset's own
-        # settled pools — see `tabs.commit_deferred_metadata`.
-        render_participant_metadata_section(
+        meta_host.markdown(
+            '<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True
+        )
+        inline_field_label(
+            meta_host,
+            "Metadata",
+            "Optional per-reader, per-trial and per-text tables. Once "
+            "attached, their columns behave like fields in the data: "
+            "filters, chips, trial sorting, inspection and export.",
+            emphasis=True,
+        )
+
+        def _meta_row(slug, renderer, ids):
+            block = meta_host.container(key=f"wiz_map_block_meta_{slug}")
+            row = block.columns(_META_ROW_W, gap="small")
+            # UX-116: `live_join=False` — there is no finished dataset to join
+            # against yet (the pools below are provisional, still shifting as
+            # identity mapping is worked out), so the wizard only collects the
+            # upload + id-column + keep-fields choices here. The real join
+            # runs once, in `_finalize_wizard_dataset`, against the dataset's
+            # own settled pools — see `tabs.commit_deferred_metadata`.
+            renderer(
+                ids,
+                host=row[1],
+                live_join=False,
+                upload_host=row[0].container(key=f"wiz_map_upload_meta_{slug}"),
+            )
+
+        _meta_row(
+            "participant",
+            render_participant_metadata_section,
             _wizard_reader_ids(raw_words, word_schema, raw_fix, fix_schema),
-            host=pm_col,
-            live_join=False,
         )
-        render_trial_metadata_section(
+        meta_host.markdown(
+            '<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True
+        )
+        _meta_row(
+            "trial",
+            render_trial_metadata_section,
             _wizard_trial_combos(raw_words, word_schema, raw_fix, fix_schema),
-            host=tm_col,
-            live_join=False,
         )
-        render_text_metadata_section(
+        meta_host.markdown(
+            '<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True
+        )
+        _meta_row(
+            "text",
+            render_text_metadata_section,
             _wizard_text_ids(raw_words, word_schema, raw_fix, fix_schema),
-            host=txm_col,
-            live_join=False,
         )
 
     # === 2 · Map data fields =================================================
@@ -3171,6 +3206,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # UX-125: keyed like `fix_block`/`words_block` above — the raw-gaze
     # uploader centers against this whole block's height too.
     s3 = sections_host.container(key="wiz_map_block_col_map_raw_gaze")
+    # UX-127: reserved here, right after `s3` (raw gaze) — a sibling of `s2`/
+    # `s3` in `sections_host`, so whatever `_render_metadata_uploads` fills
+    # into it later lands after all three main tables' rows in the DOM,
+    # regardless of how late in the script it actually runs.
+    meta_host = sections_host.container()
     if has_words or has_fix:
         # A hairline under the identity block above, same as the gap
         # between the Fixations and AOI blocks — nothing to separate from
@@ -3305,11 +3345,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # order-preserving.
     st.session_state["wizard_filter_fields"] = list(dict.fromkeys(filter_fields))
 
-    # DATA-20's participant table (and DATA-29's trial table) render beside the
-    # uploads (UX-53/UX-113) — they are uploads, and they belong with them. Now
-    # that identity (stage 3) has resolved the real mapping, re-render with it:
-    # the join report reads the up-to-date schema instead of the `{}` the
-    # upload-only call above used.
+    # DATA-20's participant table (and DATA-29's trial/text tables) render as
+    # three more rows of this same stage (UX-127) — they are uploads, and
+    # they belong with the others. Called down here, after identity (stage 3)
+    # has resolved the real mapping, so the join report reads the up-to-date
+    # schema rather than the `{}` an earlier call would have had to use.
     _render_metadata_uploads(word_schema, fix_schema)
 
     # UX-113: "Recording setup" is stage 5 — its own numbered part. Its old

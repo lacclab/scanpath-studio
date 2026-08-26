@@ -879,15 +879,31 @@ def get_app_css() -> str:
        content now lives in the overlay instead. The border-right rides
        along for the full block height as a side effect, reading as one
        continuous divider rather than just row 1's own short one. */
+    /* UX-127: before any file is uploaded, row 1's remaining cells (the
+       picker columns — nothing to map yet) are empty, and the uploader that
+       used to hold row 1's own height now lives in an absolutely-positioned
+       overlay (see below) that contributes nothing to normal flow. Left
+       alone the block collapsed to a few px of padding, and the overlay's
+       `overflow: hidden` then clipped the title + Browse-files button down
+       to that same sliver — the "looks awful when closed" bug. A min-height
+       covering the title + collapsed dropzone (measured ~54px) keeps the
+       block, and so the overlay it sizes itself against, tall enough to
+       show the uploader whole even with nothing uploaded yet — measured at
+       ~92px (title + the collapsed-instructions dropzone), rounded up with
+       a little breathing room. */
     [class*="st-key-wiz_map_block_"] {
         position: relative;
+        min-height: 104px;
     }
     [class*="st-key-wiz_map_upload_"] {
         position: absolute;
         top: 0;
         bottom: 0;
         left: 0;
-        width: 9%;
+        /* UX-127: widened from 9% to match `_ID_ROW1_W`/`_META_ROW_W`'s own
+           widened first cell in wizard.py (0.09 -> 0.135) — the Browse-files
+           button didn't fit at 9%. */
+        width: 13.5%;
         border-right: 1px solid rgba(128, 128, 128, 0.3);
         padding-right: 0.5rem;
         display: flex;

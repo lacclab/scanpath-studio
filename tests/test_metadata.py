@@ -742,7 +742,7 @@ class TestTheWizardStep:
         assert [s.number for s in wizard_shell.STEPS] == [1, 2, 3, 4]
         assert [s.title for s in wizard_shell.STEPS] == [
             "Dataset name",
-            "Upload data files",
+            "Upload data tables",
             "Map data fields",
             "Recording setup",
         ]

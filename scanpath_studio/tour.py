@@ -2088,11 +2088,12 @@ _WIZARD_GUIDE_STEPS = [
         "step_id": "name",
     },
     {
-        "title": "2 · Upload data files",
+        "title": "2 · Upload data tables",
         "body": (
-            "Add your **Fixations** and/or **Words / IA** tables — CSV / TSV "
-            "/ Parquet, several files or either alone. Raw gaze and a "
-            "participant table are optional."
+            "You'll need at least one of **Fixations**, **Words / IA**, or "
+            "**Raw gaze** — CSV / TSV / Parquet, several files or one alone. "
+            "Each table uploads right where it's mapped, in **Map data "
+            "fields** below, so there's nothing to upload on this step itself."
         ),
         "selector": ".st-key-wiz_part_data",
         "step_id": "data",
@@ -2100,11 +2101,11 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": "3 · Map data fields",
         "body": (
-            "Say which column is what: **Trials & readers** and **Raw gaze**. "
+            "Every table uploads and maps in its own row here — Fixations, "
+            "Words / IA, Raw gaze, then Participant/Trial/Text metadata. "
             "Anything still missing is listed above **✅ Add dataset**. 👀 "
             "Right under each table's own mapping, pick which extra columns "
-            "to keep — for coloring, sorting, filtering and info chips later; "
-            "fewer columns is faster."
+            "to keep — fewer is faster."
         ),
         "selector": ".st-key-wiz_part_mapping",
         "step_id": "mapping",

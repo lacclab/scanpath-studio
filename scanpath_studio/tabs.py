@@ -8737,7 +8737,7 @@ def _clear_participant_metadata() -> None:
 
 
 def render_participant_metadata_section(
-    participants, *, host=None, live_join: bool = True
+    participants, *, host=None, live_join: bool = True, upload_host=None
 ) -> None:
     """DATA-20 §1 — attach a participant-level table and report the join.
 
@@ -8761,15 +8761,28 @@ def render_participant_metadata_section(
     but nothing is matched against ``participants`` and nothing attaches — see
     :func:`commit_deferred_metadata`, which the wizard's "✅ Add dataset" runs
     instead once the dataset it would join against actually exists.
+
+    ``upload_host`` (UX-127, the wizard's own call) is the thin left-hand
+    column the six-table row format puts the uploader in — Fixations/AOI/Raw
+    gaze's own left column, via ``upload_box``. When given, the title + file
+    uploader render there instead of ``host``, so ``host`` holds only the
+    id-column picker, the keep-fields picker, the status line and ✕ Detach —
+    the same "left = upload, right = mapping" shape every table now shares.
     """
     if host is not None:
         with host:
-            _participant_metadata_body(participants, live_join=live_join)
+            _participant_metadata_body(
+                participants, live_join=live_join, upload_host=upload_host
+            )
         return
-    _participant_metadata_body(participants, live_join=live_join)
+    _participant_metadata_body(
+        participants, live_join=live_join, upload_host=upload_host
+    )
 
 
-def _participant_metadata_body(participants, *, live_join: bool = True) -> None:
+def _participant_metadata_body(
+    participants, *, live_join: bool = True, upload_host=None
+) -> None:
     from scanpath_studio import metadata as md
     from scanpath_studio.data import read_table
 
@@ -8783,27 +8796,45 @@ def _participant_metadata_body(participants, *, live_join: bool = True) -> None:
         "then behave like fields in the data: filters, chips, trial sorting, "
         "inspection and export. CSV / TSV / Parquet / Excel."
     )
-    inline_field_label(
-        st, "Participant metadata table (optional)", _pm_help, emphasis=True
-    )
-    # UX-114: the uploader and ✕ Detach share one row — `detach_col` is filled
-    # much later (once we know whether a table is actually attached), which
-    # works because a Streamlit column is a placeholder you can write into at
-    # any point in the script; only the *order within* `detach_col` follows
-    # execution order, not its position relative to `up_col`. Same trick this
-    # function already uses for `key_host`/`status_host`/`details` below.
-    up_col, detach_col = st.columns([0.8, 0.2], gap="small")
-    upload = up_col.file_uploader(
-        "Participant metadata table (optional)",
-        type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
-        key="participant_metadata_upload",
-        # No `persist_state` — `st.file_uploader` does not take it. It does not
-        # need it either: the parsed frame is kept in session state under
-        # `md.RAW_SESSION_KEY`, so the attached table survives even if the
-        # uploader widget itself is ever reset.
-        help=_pm_help,
-        label_visibility="collapsed",
-    )
+    # UX-127: with `upload_host` (the wizard's row format), the title + file
+    # uploader move into that thin left column — mirroring `upload_box`'s
+    # `short_label` — and ✕ Detach renders in the body host (`st`, which the
+    # `with host:` wrapper above already points at the row's right column)
+    # instead of a `detach_col` split of its own. Without it (the Data page),
+    # behavior is unchanged: title + uploader + ✕ Detach share one row here.
+    if upload_host is not None:
+        inline_field_label(upload_host, "Participants", _pm_help, emphasis=True)
+        upload = upload_host.file_uploader(
+            "Participant metadata table (optional)",
+            type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
+            key="participant_metadata_upload",
+            help=_pm_help,
+            label_visibility="collapsed",
+        )
+        detach_col = st
+    else:
+        inline_field_label(
+            st, "Participant metadata table (optional)", _pm_help, emphasis=True
+        )
+        # UX-114: the uploader and ✕ Detach share one row — `detach_col` is
+        # filled much later (once we know whether a table is actually
+        # attached), which works because a Streamlit column is a placeholder
+        # you can write into at any point in the script; only the *order
+        # within* `detach_col` follows execution order, not its position
+        # relative to `up_col`. Same trick this function already uses for
+        # `key_host`/`status_host`/`details` below.
+        up_col, detach_col = st.columns([0.8, 0.2], gap="small")
+        upload = up_col.file_uploader(
+            "Participant metadata table (optional)",
+            type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
+            key="participant_metadata_upload",
+            # No `persist_state` — `st.file_uploader` does not take it. It
+            # does not need it either: the parsed frame is kept in session
+            # state under `md.RAW_SESSION_KEY`, so the attached table
+            # survives even if the uploader widget itself is ever reset.
+            help=_pm_help,
+            label_visibility="collapsed",
+        )
     if upload is None:
         if active_participant_metadata() is None:
             return
@@ -8990,7 +9021,9 @@ def _clear_trial_metadata() -> None:
     st.session_state.pop("trial_metadata_upload", None)
 
 
-def render_trial_metadata_section(combos, *, host=None, live_join: bool = True) -> None:
+def render_trial_metadata_section(
+    combos, *, host=None, live_join: bool = True, upload_host=None
+) -> None:
     """DATA-29 — attach a trial-level table and report the join.
 
     The sibling of :func:`render_participant_metadata_section`, and deliberately
@@ -9011,15 +9044,16 @@ def render_trial_metadata_section(combos, *, host=None, live_join: bool = True) 
     exposes.
 
     ``live_join=False`` — see :func:`render_participant_metadata_section`.
+    ``upload_host`` — see :func:`render_participant_metadata_section`.
     """
     if host is not None:
         with host:
-            _trial_metadata_body(combos, live_join=live_join)
+            _trial_metadata_body(combos, live_join=live_join, upload_host=upload_host)
         return
-    _trial_metadata_body(combos, live_join=live_join)
+    _trial_metadata_body(combos, live_join=live_join, upload_host=upload_host)
 
 
-def _trial_metadata_body(combos, *, live_join: bool = True) -> None:
+def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) -> None:
     from scanpath_studio import metadata as md
     from scanpath_studio.data import read_table
 
@@ -9029,17 +9063,31 @@ def _trial_metadata_body(combos, *, live_join: bool = True) -> None:
         "behave like fields in the data: filters, chips, trial sorting, "
         "inspection and export. CSV / TSV / Parquet / Excel."
     )
-    inline_field_label(st, "Trial metadata table (optional)", _tm_help, emphasis=True)
-    # UX-114: uploader + ✕ Detach share one row — see the matching comment in
-    # `_participant_metadata_body`.
-    up_col, detach_col = st.columns([0.8, 0.2], gap="small")
-    upload = up_col.file_uploader(
-        "Trial metadata table (optional)",
-        type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
-        key="trial_metadata_upload",
-        help=_tm_help,
-        label_visibility="collapsed",
-    )
+    # UX-127 — see the matching branch in `_participant_metadata_body`.
+    if upload_host is not None:
+        inline_field_label(upload_host, "Trials", _tm_help, emphasis=True)
+        upload = upload_host.file_uploader(
+            "Trial metadata table (optional)",
+            type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
+            key="trial_metadata_upload",
+            help=_tm_help,
+            label_visibility="collapsed",
+        )
+        detach_col = st
+    else:
+        inline_field_label(
+            st, "Trial metadata table (optional)", _tm_help, emphasis=True
+        )
+        # UX-114: uploader + ✕ Detach share one row — see the matching comment
+        # in `_participant_metadata_body`.
+        up_col, detach_col = st.columns([0.8, 0.2], gap="small")
+        upload = up_col.file_uploader(
+            "Trial metadata table (optional)",
+            type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
+            key="trial_metadata_upload",
+            help=_tm_help,
+            label_visibility="collapsed",
+        )
     if upload is None:
         if md.active_trials() is None:
             return
@@ -9245,7 +9293,9 @@ def _clear_text_metadata() -> None:
     st.session_state.pop("text_metadata_upload", None)
 
 
-def render_text_metadata_section(texts, *, host=None, live_join: bool = True) -> None:
+def render_text_metadata_section(
+    texts, *, host=None, live_join: bool = True, upload_host=None
+) -> None:
     """Attach a text-level table and report the join — the third grain.
 
     Sibling of :func:`render_participant_metadata_section` and
@@ -9260,15 +9310,16 @@ def render_text_metadata_section(texts, *, host=None, live_join: bool = True) ->
     :func:`data.trial_id_series`, through :func:`metadata.build_text_metadata`).
 
     ``live_join=False`` — see :func:`render_participant_metadata_section`.
+    ``upload_host`` — see :func:`render_participant_metadata_section`.
     """
     if host is not None:
         with host:
-            _text_metadata_body(texts, live_join=live_join)
+            _text_metadata_body(texts, live_join=live_join, upload_host=upload_host)
         return
-    _text_metadata_body(texts, live_join=live_join)
+    _text_metadata_body(texts, live_join=live_join, upload_host=upload_host)
 
 
-def _text_metadata_body(texts, *, live_join: bool = True) -> None:
+def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> None:
     from scanpath_studio import metadata as md
     from scanpath_studio.data import read_table
 
@@ -9277,17 +9328,31 @@ def _text_metadata_body(texts, *, live_join: bool = True) -> None:
         "behave like fields in the data: filters, chips, trial sorting, "
         "inspection and export. CSV / TSV / Parquet / Excel."
     )
-    inline_field_label(st, "Text metadata table (optional)", _txm_help, emphasis=True)
-    # UX-114: uploader + ✕ Detach share one row — see the matching comment in
-    # `_participant_metadata_body`.
-    up_col, detach_col = st.columns([0.8, 0.2], gap="small")
-    upload = up_col.file_uploader(
-        "Text metadata table (optional)",
-        type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
-        key="text_metadata_upload",
-        help=_txm_help,
-        label_visibility="collapsed",
-    )
+    # UX-127 — see the matching branch in `_participant_metadata_body`.
+    if upload_host is not None:
+        inline_field_label(upload_host, "Texts", _txm_help, emphasis=True)
+        upload = upload_host.file_uploader(
+            "Text metadata table (optional)",
+            type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
+            key="text_metadata_upload",
+            help=_txm_help,
+            label_visibility="collapsed",
+        )
+        detach_col = st
+    else:
+        inline_field_label(
+            st, "Text metadata table (optional)", _txm_help, emphasis=True
+        )
+        # UX-114: uploader + ✕ Detach share one row — see the matching comment
+        # in `_participant_metadata_body`.
+        up_col, detach_col = st.columns([0.8, 0.2], gap="small")
+        upload = up_col.file_uploader(
+            "Text metadata table (optional)",
+            type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
+            key="text_metadata_upload",
+            help=_txm_help,
+            label_visibility="collapsed",
+        )
     if upload is None:
         if md.active_texts() is None:
             return

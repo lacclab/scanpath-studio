@@ -94,7 +94,7 @@ class WizardStep:
 #: nested inside "Map data fields" — all four read as one flat sequence.
 STEPS: tuple[WizardStep, ...] = (
     WizardStep("name", 1, "Dataset name", "What to call it", True),
-    WizardStep("data", 2, "Upload data files", "The tables you exported", True),
+    WizardStep("data", 2, "Upload data tables", "The tables you exported", True),
     WizardStep("mapping", 3, "Map data fields", "Which column is what", True),
     WizardStep("setup", 4, "Recording setup", "The screen it was recorded on", True),
 )

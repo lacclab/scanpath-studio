@@ -1049,3 +1049,94 @@ def test_render_animate_compare_rejects_two_screens(tmp_path):
             ]
         )
     assert "1680" in str(excinfo.value)
+
+
+# ---------------------------------------------------------------------------
+# The three settings the Python form used to carry alone (the four-surface rule)
+# ---------------------------------------------------------------------------
+def _captured_static(tmp_path, monkeypatch, argv):
+    """Run ``render`` with a stubbed builder and return its keyword arguments."""
+    from scanpath_studio import api
+
+    captured = {}
+
+    def fake_plot(words, fixations, participant=None, trial=None, **kwargs):
+        captured.update(kwargs)
+        return "FIG"
+
+    monkeypatch.setattr(api, "plot_scanpath", fake_plot)
+    monkeypatch.setattr(api, "animate_scanpath", fake_plot)
+    monkeypatch.setattr(api, "save_figure", lambda fig, path, **k: path)
+    cli.main(["render", "--sample", *argv, "-o", str(tmp_path / "x.html")])
+    return captured
+
+
+def test_render_forwards_the_fixation_index_window(tmp_path, monkeypatch):
+    """VIZ-7 had no `render` flag at all, so the CLI silently drew the whole
+    trial where the Python form drew a window — a different figure."""
+    captured = _captured_static(tmp_path, monkeypatch, ["--fix-index-range", "3:9"])
+    assert captured["fix_index_range"] == (3, 9)
+
+
+def test_the_replay_takes_the_fixation_index_window_too(tmp_path, monkeypatch):
+    captured = _captured_static(
+        tmp_path, monkeypatch, ["--animate", "--fix-index-range", "2:5"]
+    )
+    assert captured["fix_index_range"] == (2, 5)
+
+
+@pytest.mark.parametrize("bad", ["3", "0:9", "9:3", "a:b"])
+def test_a_malformed_fixation_index_window_is_refused(tmp_path, monkeypatch, bad):
+    with pytest.raises(SystemExit):
+        _captured_static(tmp_path, monkeypatch, ["--fix-index-range", bad])
+
+
+def test_render_forwards_the_critical_span_pair(tmp_path, monkeypatch):
+    captured = _captured_static(
+        tmp_path,
+        monkeypatch,
+        ["--highlight-column", "is_critical", "--critical-span-style", "mark-border"],
+    )
+    assert captured["highlight_column"] == "is_critical"
+    assert captured["critical_span_style"] == "Mark border"
+
+
+def test_an_empty_highlight_column_means_highlight_nothing(tmp_path, monkeypatch):
+    """Not the same as omitting the flag: the default is OneStop's answer span,
+    so "mark nothing" has to be sayable."""
+    captured = _captured_static(tmp_path, monkeypatch, ["--highlight-column", ""])
+    assert captured["highlight_column"] is None
+
+
+def test_render_forwards_fixation_flags_one_category_per_flag(tmp_path, monkeypatch):
+    captured = _captured_static(
+        tmp_path,
+        monkeypatch,
+        [
+            "--fixation-flag",
+            "short=discard,threshold_ms=80",
+            "--fixation-flag",
+            "oob=highlight,symbol=x,color=#ff0000",
+        ],
+    )
+    flags = captured["fixation_flags"]
+    assert flags["short"] == {"mode": "Discard", "threshold_ms": 80.0}
+    assert flags["oob"] == {"mode": "Highlight", "symbol": "x", "color": "#ff0000"}
+    # A category nobody named is absent, which the builder reads as Off.
+    assert "long" not in flags
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "nosuch=discard",
+        "short=nosuch",
+        "short",
+        "oob=discard,threshold_ms=80",  # oob has no duration threshold
+        "short=discard,color=red",  # not #RRGGBB
+        "short=discard,symbol=wiggle",
+    ],
+)
+def test_a_malformed_fixation_flag_is_refused(tmp_path, monkeypatch, bad):
+    with pytest.raises(SystemExit):
+        _captured_static(tmp_path, monkeypatch, ["--fixation-flag", bad])

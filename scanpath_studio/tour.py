@@ -182,9 +182,9 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Verify what was parsed",
-                "**🔎 What's in the selected dataset** opens on the counts — the "
-                "quickest check that the mapping worked. The raw and derived "
-                "tables fold open below them.",
+                "**🔎 What's in the selected dataset** opens on 📊 Stats — the "
+                "counts and their spread, the quickest check that the mapping "
+                "worked. The six raw tables are the tabs beside it.",
                 ".st-key-tutorial_data_inspection",
                 view=_VIEW_DATA,
             ),
@@ -1801,21 +1801,10 @@ def render_use_case_tutorial() -> None:
 # -----------------------------------------------------------------------------
 
 DOCS_FAQ_URL = f"{CITATION['docs_url']}faq/"
-# VAL-5's generated register page — the app's one link into the methodology.
-DOCS_COMPUTATIONS_URL = f"{CITATION['docs_url']}computations/"
 
 # (question, markdown answer). Two-to-four lines each — anything longer belongs
 # on the docs page.
 _FAQ_ITEMS = [
-    (
-        "Why don't the measures match my eye-tracker's?",
-        "Usually they do — because they **are** your eye-tracker's. Pre-computed "
-        "EyeLink `IA_*` columns on your words table take precedence over anything "
-        "this app would compute, matched by **exact column name**. A renamed "
-        "export loses that match and falls back to the app's own computation "
-        "(bounding-box fixation→word assignment, Rayner 1998 / Inhoff & Radach "
-        "1998 definitions).",
-    ),
     (
         "A column was mapped to the wrong field. Where do I fix it?",
         "🗂️ **Data → Column mapping** — an editable form that "
@@ -1832,11 +1821,14 @@ _FAQ_ITEMS = [
     ),
     (
         "Where does my data go?",
-        "Nowhere. No accounts, no database, no analytics — files are read into "
-        "memory and disappear when the session ends. Two caveats: a plain "
-        "`streamlit run` listens on your whole network with no login (start it "
-        "with `--server.address=127.0.0.1`), and the online demo runs on a server "
-        "operated by Streamlit, not by us.",
+        "Nowhere off your machine — no accounts, no database, no analytics, no "
+        "upload. A local or desktop run also keeps a **recovery copy** here "
+        "(added datasets, mappings, settings, annotations), so a refresh "
+        "resumes where you left off; **💾 Session → 🗄️ Automatic recovery** says "
+        "what is stored and turns it off or deletes it. Two caveats: "
+        "`streamlit run` listens on your whole network (use "
+        "`--server.address=127.0.0.1`), and the online demo runs on "
+        "Streamlit's server, with no recovery.",
     ),
     (
         "My uploaded data vanished after a refresh.",
@@ -1913,7 +1905,7 @@ def _faq_dialog() -> None:
             st.markdown(answer)
 
     st.divider()
-    docs_col, tutorials_col, methods_col, close_col = st.columns(4)
+    docs_col, tutorials_col, close_col = st.columns(3)
     docs_col.link_button(
         "📚 Full FAQ ↗",
         DOCS_FAQ_URL,
@@ -1926,17 +1918,6 @@ def _faq_dialog() -> None:
         width="stretch",
         help="Task-by-task walkthroughs: load your own data, compare two "
         "readers, make a paper figure, run it headless. Opens in a new tab.",
-    )
-    # VAL-5 — one link to the whole computation register, rather than a help
-    # anchor per measure picker (the user's call: that end is a much bigger job
-    # for a research tool, and this is where someone goes looking anyway).
-    methods_col.link_button(
-        "🔬 Methodology ↗",
-        DOCS_COMPUTATIONS_URL,
-        width="stretch",
-        help="Every computation the app performs: the exact formula, its units, "
-        "its missing-data behaviour, and how far it has been verified. Opens in "
-        "a new tab.",
     )
     if close_col.button("✓ Close", key="faq_close", width="stretch", type="primary"):
         _close_dialog_clientside()

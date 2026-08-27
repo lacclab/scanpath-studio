@@ -1909,9 +1909,22 @@ def _build_share_query(
                 "link still applies."
             )
     else:
+        # A link carries settings, never files — so for a dataset the user added
+        # there is nothing a URL could do that would save the recipient the
+        # upload. What it *can* do is name the route that saves them the
+        # re-mapping, which is a real second half of "load the same data": the
+        # column mapping and recording setup are exportable as JSON from the
+        # add-dataset screen's ⬇️ Save setup, and re-applied from that screen's
+        # *Restore a saved setup*. The caveat used to stop at "load the same
+        # data" and leave the mapping to be redone by hand.
         caveats.append(
             "This data source can't be rebuilt from a link — the recipient will "
-            "need to load the same data. The view settings below are still shared."
+            "need to load the same files themselves. Send them the dataset's "
+            "**⬇️ Save setup** JSON (on the ➕ Add dataset screen, beside "
+            "✅ Add dataset) along with the files: it carries the column mapping "
+            "and recording setup, and they re-apply it from *Restore a saved "
+            "setup* on that same screen. The view settings below travel in the "
+            "link itself."
         )
 
     # DATA-3: the public OneStop source carries its variant / regime / parts so a

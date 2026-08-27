@@ -40,6 +40,7 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+from streamlit.errors import StreamlitAPIException
 
 # Allow running via `streamlit run scanpath_studio/app.py` by adding the
 # repository root to sys.path when executed as a script instead of a package.
@@ -92,6 +93,7 @@ from scanpath_studio.constants import (
     POTEC_DEFAULT_DIR,
     PUBLIC_DATASETS_CHOICE,
     SYNTHETIC_CHOICE,
+    TRIAL_IDENTITY_CHECK_KEY,
     TRIAL_IDENTITY_FULL_KEY,
     UPLOAD_CHOICE,
     WIZARD_LEAVE_KEY,
@@ -189,6 +191,7 @@ from scanpath_studio.menu import (
 )
 from scanpath_studio.multipart import SCREEN_ID, extract_part, part_catalog
 from scanpath_studio.persistence import (
+    CACHE_DIR_NAME,
     PERSIST_ENV_VAR,
     STATE_DIR_ENV_VAR,
     cache_status,
@@ -325,6 +328,63 @@ _FORCE_LTR_LOCALE_SCRIPT = """
 """
 
 
+#: BUG-48. Streamlit's own `help=` tooltips get **stuck open**: the hover state
+#: lives in a React component, and the pointer can leave a target without that
+#: component ever seeing `mouseleave` — a rerun that re-renders the row under the
+#: cursor is the common way, and the app reruns on every widget touch. The
+#: leftover panel then floats over the page until the same target is hovered and
+#: left again, and (before the `pointer-events` rule in `styles.get_app_css`)
+#: swallowed clicks aimed at whatever it covered, which is the likeliest reason
+#: a rail's ▾ sometimes did nothing on the first press.
+#:
+#: The fix is a *sweeper* installed once on the parent document: on any pointer
+#: move that is not over a tooltip target — and only while a tooltip layer
+#: actually exists, so the common case is one `querySelector` — every hover
+#: target is sent the `mouseout` React synthesizes `onMouseLeave` from. Nothing
+#: is closed while the pointer is genuinely on a target, so a real tooltip is
+#: untouched. Idempotent: the flag on the parent document means re-running this
+#: on a later rerun installs nothing twice.
+_TOOLTIP_SWEEPER_SCRIPT = """
+<script>
+(function () {
+    try {
+        var doc = window.parent.document;
+        if (doc.__spsTooltipSweeper) { return; }
+        doc.__spsTooltipSweeper = true;
+        var TARGET = '[data-testid="stTooltipHoverTarget"]';
+        var LAYER = '[data-baseweb="tooltip"]';
+        var pending = false;
+        function sweep(event) {
+            if (pending) { return; }
+            pending = true;
+            window.parent.requestAnimationFrame(function () {
+                pending = false;
+                /* Nothing open — the whole cost of a quiet pointer move. */
+                if (!doc.querySelector(LAYER)) { return; }
+                var node = event.target;
+                if (node && node.closest && node.closest(TARGET + ',' + LAYER)) {
+                    return;  /* genuinely hovered; leave it alone */
+                }
+                doc.querySelectorAll(TARGET).forEach(function (el) {
+                    el.dispatchEvent(new window.parent.MouseEvent('mouseout', {
+                        bubbles: true,
+                        cancelable: true,
+                        relatedTarget: doc.body,
+                    }));
+                });
+            });
+        }
+        doc.addEventListener('pointermove', sweep, true);
+        /* A pointer that leaves the window entirely fires no move inside it. */
+        doc.addEventListener('pointerleave', sweep, true);
+    } catch (e) {
+        /* Any browser that refuses this is left exactly as it was found. */
+    }
+})();
+</script>
+"""
+
+
 def configure_page() -> None:
     """Streamlit page config + custom CSS.
 
@@ -341,6 +401,7 @@ def configure_page() -> None:
     )
     st.markdown(get_app_css(), unsafe_allow_html=True)
     embed_html_iframe(_FORCE_LTR_LOCALE_SCRIPT, height=0)
+    embed_html_iframe(_TOOLTIP_SWEEPER_SCRIPT, height=0)
 
 
 #: The app's wordmark, shown in Streamlit's own header (UX-62). Inside the
@@ -660,25 +721,29 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
                 st.caption(f"Turned off by `{PERSIST_ENV_VAR}=0`.")
             return
 
-        # UX-99: say what this panel *is* before showing its status line. The
-        # numbers and the folder path underneath only make sense once the reader
-        # knows a copy is being kept and that it never leaves the machine — the
+        # UX-99: say what this panel *is* before showing its status line — the
         # old panel opened straight into "Saved: 0 datasets · 5.9 KB" and left
-        # both questions to a tooltip full of environment variables.
+        # both questions to a tooltip full of environment variables. This round
+        # cut that line to one sentence and moved the rest of the prose (what
+        # the counts cover, the folder, the environment overrides) into the
+        # ❔ **What's saved, and where** popover at the foot of the panel, which
+        # is where a reader goes only once.
         st.caption(
-            "Your uploaded datasets, their column mappings, your settings, "
-            "your saved designs and your annotations are saved on **this "
-            "computer** as you work, and reopened for you next time. Nothing "
-            "is uploaded anywhere."
+            "Saved on **this computer** as you work, and reopened next time. "
+            "Nothing is uploaded anywhere."
         )
 
         if restored_from_cache(st.session_state):
             st.success("Recovered when the app opened.", icon="↩️")
         if status["exists"] and status["readable"]:
             n_sets = len(status["datasets"])
+            # "datasets **you added**", not "datasets": only an upload is copied
+            # here, so the count reads 0 while the bundled demo or a public
+            # corpus is open — which looked like a bug until the line said which
+            # datasets it was counting. The popover below has the full reason.
             st.markdown(
-                f"**Saved:** {n_sets} dataset{'s' if n_sets != 1 else ''} · "
-                f"{status['annotations']} annotation"
+                f"**Saved here:** {n_sets} dataset{'s' if n_sets != 1 else ''} "
+                f"you added · {status['annotations']} annotation"
                 f"{'s' if status['annotations'] != 1 else ''} · "
                 f"{status['designs']} design"
                 f"{'s' if status['designs'] != 1 else ''} · "
@@ -727,12 +792,41 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
             # Right under the button that raised it — see the function's own
             # note on why this is no longer a modal of its own.
             _forget_cache_confirmation(container)
-        st.caption(f"Saved in this folder on your computer: `{status['directory']}`")
-        # The environment-variable escape hatches, spelled out rather than
-        # listed. They used to be the panel's only explanation of itself, packed
-        # into one tooltip on the folder path (UX-99).
-        st.caption(
-            "Prefer to set this outside the app? Start it with "
+        _render_recovery_details(container, status)
+
+
+def _render_recovery_details(host, status: dict) -> None:
+    """The ❔ popover holding 🗄️ Automatic recovery's fine print.
+
+    Three questions that each need a sentence and are each asked once: *which*
+    datasets the count covers, where the folder is (and what the ``v1`` in its
+    name means), and how to set the whole thing from the environment. They used
+    to be three inline captions under the Clear button, which made a wall of
+    environment variables the last thing on a panel about saving.
+
+    A popover rather than an expander so opening it doesn't reflow the modal, and
+    a popover nests fine inside a dialog (only popover-in-popover and
+    dialog-in-dialog are refused).
+    """
+    with host.popover("❔ What's saved, and where", width="stretch"):
+        st.markdown(
+            "**Which datasets.** Only the datasets **you added** are copied "
+            "here. The bundled demo and the public corpora are reloaded from "
+            "their own source instead, so they are never stored — which is why "
+            "the count can read 0 while a dataset is open. Your settings, "
+            "designs and annotations are saved either way, which is what the "
+            "size covers."
+        )
+        st.markdown(f"**Where.** `{status['directory']}`")
+        if str(status["directory"]).endswith(CACHE_DIR_NAME):
+            st.caption(
+                f"`{CACHE_DIR_NAME}` is the *cache format's* version, not the "
+                "app's — it stays the same across app updates, and a future "
+                "format change starts a new folder beside this one rather than "
+                "overwriting a session the new code could not read."
+            )
+        st.markdown(
+            "**From outside the app.** Start it with "
             f"`{PERSIST_ENV_VAR}=0` to never save, or "
             f"`{STATE_DIR_ENV_VAR}=/your/folder` to save somewhere else. "
             "`scanpath-studio cache` reports the same details from a terminal."
@@ -937,32 +1031,26 @@ def _about_dialog() -> None:
 **Scanpath Studio** v{__version__} — interactive visualization of eye
 movements in reading.
 
-Developed by [Omer Shubi](https://omershubi.github.io/)¹,
-[Keren Gruteke Klein](https://kerengruteke.github.io/)¹,
-Maya Grossman¹,
-[Ella Lion](https://ella-lion.github.io/)¹,
-[Deborah N. Jakobi]({_DILI}/lab-members/jakobi.html)²,
-[David R. Reich]({_DILI}/lab-members/reich.html)²,
-[Lena Jäger]({_DILI}/group-leader/jaeger.html)², and
-[Yevgeni Berzak](https://dds.technion.ac.il/people/academic-staff/yevgeni-berzak/)¹.
-
-¹ [Data and Decision Sciences]({CITATION["lab_url"]}), Technion ·
-² [Department of Computational Linguistics](https://www.cl.uzh.ch/en/research-groups/digital-linguistics.html),
-University of Zurich
+Developed by [Omer Shubi](https://omershubi.github.io/),
+[Keren Gruteke Klein](https://kerengruteke.github.io/),
+[Maya Grossman](https://www.linkedin.com/in/maya-harram-32b547292/),
+[Ella Lion](https://ella-lion.github.io/),
+[Deborah N. Jakobi]({_DILI}/lab-members/jakobi.html),
+[David R. Reich]({_DILI}/lab-members/reich.html),
+[Lena Jäger]({_DILI}/group-leader/jaeger.html), and
+[Yevgeni Berzak](https://dds.technion.ac.il/people/academic-staff/yevgeni-berzak/).
 
 📚 [Documentation]({CITATION["docs_url"]}) ↗ ·
-💻 [Code]({CITATION["url"]}) ↗ (MIT)
-
-🔒 [Privacy]({CITATION["docs_url"]}privacy/) ↗ — where your data goes (and doesn't)
-
-🧪 [ACL 2025 Tutorial: Eye Tracking and NLP](https://acl2025-eyetracking-and-nlp.github.io/) ↗
+💻 [Code]({CITATION["url"]}) ↗
 """
     )
     # UX-16: the BibTeX block is tall enough to push everything above it out
     # of view, so it opens on demand — but it stays a named section of its
-    # own (divider + bold label) rather than a footnote, since "how do I cite
-    # this?" is the single most common reason to open About.
-    st.divider()
+    # own (a bold label) rather than a footnote, since "how do I cite this?" is
+    # the single most common reason to open About. The dividers that used to
+    # separate the three blocks are gone (the user's call): on a modal this
+    # short the bold headings already carry the split, and three rules in half a
+    # screen read as clutter.
     st.markdown("**📖 Citing Scanpath Studio** — a paper is in preparation.")
     with st.expander("Show BibTeX", expanded=False):
         st.code(bibtex, language="bibtex", wrap_lines=True)
@@ -976,15 +1064,15 @@ If you use the bundled demo data, also cite
     # UX-20. A bare "built with AI, there may be bugs" is unfalsifiable, so
     # this points at what the reader can verify — not at how much effort went
     # in, which they have no way to check. Deliberately not a liability
-    # disclaimer either: MIT already carries that.
-    st.divider()
+    # disclaimer either: MIT already carries that. The heading says the
+    # "built with AI assistance" half, so the prose no longer repeats it.
     st.markdown("**🤖 Built with AI assistance**")
     st.markdown(
         f"""
-Scanpath Studio was built with AI assistance. Cross-check results before
-publishing. If something looks wrong — or if you have a feature request or
-suggestion —
-[open an issue]({CITATION["url"]}/issues) ↗ with your **💾 Session** JSON.
+Cross-check results before publishing.
+
+If something looks wrong — or if you have a feature request or suggestion —
+[open an issue]({CITATION["url"]}/issues) ↗.
 """
     )
 
@@ -4223,6 +4311,13 @@ def _render_dataset_about_body(token: str, *, registry: dict) -> bool:
     if about.get("description"):
         st.write(about["description"])
         wrote = True
+    if about.get("link"):
+        # The corpus' own home page, right under the description of what it is.
+        # It used to be a **Home** column of its own in the table — a full column
+        # spent on one "Open ↗" per row, next to nothing that said what would
+        # open. Here it reads as the last line of the description.
+        st.markdown(f"[The corpus' own home page ↗]({about['link']})")
+        wrote = True
     if about.get("geometry"):
         # The provenance of the coordinates everything downstream is measured
         # from — real / reconstructed / synthesized. `geometry_badge` already
@@ -4255,10 +4350,12 @@ def _dataset_about_dialog(token: str, *, registry: dict) -> None:
 
     A dialog rather than two more columns: both are sentences, and the table
     already carries nine numeric columns plus its actions. It deliberately
-    repeats **nothing** the row shows — the counts, the language and the home
-    link are all cells, so restating them here was just noise (DATA-35 r2).
-    What is left is the prose that could never fit a cell, which is what the
-    ask meant by "a field that opens up".
+    repeats **nothing** the row shows — the counts and the language are cells,
+    so restating them here was just noise (DATA-35 r2). What is left is the
+    prose that could never fit a cell, which is what the ask meant by "a field
+    that opens up" — plus the corpus' home link, which moved here out of a
+    column of its own so that the link sits beside the description of what it
+    leads to.
     """
     st.markdown(f"### {_dataset_display_name(token, registry)}")
     if not _render_dataset_about_body(token, registry=registry):
@@ -4290,6 +4387,62 @@ def _render_rename_dialog(tokens: list[str], uploaded: set[str]) -> None:
         st.session_state.pop(PENDING_RENAME_KEY, None)
         return
     _rename_dataset_dialog(token, uploaded=uploaded, tokens=tokens)
+
+
+def _open_mapping_editor() -> None:
+    """Raise ✏️ Edit dataset on the open dataset, focused on its mapping."""
+    token = str(st.session_state.get("data_source_choice") or "")
+    if token:
+        st.session_state[FOCUS_MAPPING_KEY] = token
+    st.session_state[DATASET_EDITOR_OPEN_KEY] = True
+
+
+@st.dialog("⚠️ Check the Trial ID mapping")
+def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
+    """VAL-9 — VAL-7's verdict, raised where the Trial ID was just chosen.
+
+    Opened by ``main`` on the run *after* ✅ Add dataset or ✅ Save changes, from
+    the report those buttons' frames produced — so the check runs on the finished
+    dataset (it is the sampled one, PERF-6, which is what keeps it cheap enough
+    to sit in the commit path at all) rather than as a permanent page-wide
+    banner about a decision made twice.
+
+    Two answers, and both are real: **keep it** for a corpus where several
+    readings of one text genuinely are one trial, and **edit the mapping** for
+    the far commoner case where a column was simply left out of the Trial ID.
+    Buttons are handled by their return value, never ``on_click`` — a dialog
+    body is a fragment (see ``_leave_dataset_editor_dialog``).
+    """
+    st.warning(warning, icon="⚠️")
+    st.caption(
+        "A Trial ID that doesn't fully identify one reading concatenates several "
+        "into one scanpath — which renders perfectly happily, as an ordinary "
+        "scanpath with a lot of regressions. The full evidence is on the "
+        "🗂️ Data page, under **🧾 Trial identity**."
+    )
+    edit_col, keep_col = st.columns(2, gap="small")
+    if edit_col.button(
+        "✏️ Edit the mapping",
+        key="trial_identity_alert_edit",
+        type="primary",
+        width="stretch",
+        help="Open ✏️ Edit dataset on the Trial ID mapping this verdict is about.",
+    ):
+        _open_mapping_editor()
+        st.rerun(scope="app")
+    if keep_col.button(
+        "Keep it as is",
+        key="trial_identity_alert_keep",
+        width="stretch",
+        help="Dismiss. Nothing changes, and the verdict stays on the 🗂️ Data "
+        "page under 🧾 Trial identity.",
+    ):
+        st.rerun(scope="app")
+    if asked_by == "add":
+        st.caption(
+            "Checked automatically because the dataset was just added. It is "
+            "already in 📂 Available datasets either way."
+        )
 
 
 #: UX-106 — whether the editor's ✕ Cancel confirmation is open. A pending
@@ -4339,6 +4492,14 @@ def _leave_dataset_editor_dialog() -> None:
     on the reasoning that "an edit is applied by its own button, so leaving
     discards nothing" — which stopped being true once a *table* could be
     uploaded here and be waiting on Save.
+
+    **BUG-49 — both buttons are handled by their return value, never by
+    ``on_click``.**
+    A dialog body is a fragment, so a callback in here reruns *the dialog* — ✕
+    Leave popped the editor's open flag and then sat there with the modal still
+    up, and the next click ("Keep editing") ran the whole-app rerun that finally
+    acted on it. The screen therefore left on *Keep editing* and did nothing on
+    *Leave*. Same lesson as ``_forget_cache_confirmation``.
     """
     st.caption(
         "Changes you have already saved are kept. Anything edited since — the "
@@ -4346,13 +4507,14 @@ def _leave_dataset_editor_dialog() -> None:
         "missing half — is discarded."
     )
     leave, stay = st.columns(2, gap="small")
-    leave.button(
+    if leave.button(
         "✕ Leave",
         key="dataset_editor_leave_confirm",
         type="primary",
         width="stretch",
-        on_click=_close_dataset_editor,
-    )
+    ):
+        _close_dataset_editor()
+        st.rerun(scope="app")
     if stay.button("Keep editing", key="dataset_editor_leave_cancel", width="stretch"):
         _dismiss_leave_dataset_editor()
         st.rerun(scope="app")
@@ -4492,22 +4654,28 @@ def render_dataset_table(
         counts = row_counts.counts
         rows.append(
             {
+                # The kind leads the row: it is the one-glyph answer to "what
+                # sort of thing is this?", and reading it *before* the name is
+                # what lets the eye skip whole classes of row (the user's call —
+                # it used to sit to the right of the name).
+                "Kind": (
+                    f"{kinds[token]} {kind_labels.get(kinds[token], '')}".strip()
+                    if kinds.get(token)
+                    else ("🔒 Private" if own else "")
+                ),
                 # UX-78: the name *is* the button. `ButtonColumn` takes its label
                 # from the cell value, so the column that says which dataset a
                 # row is can also be the control that opens it — which retires
                 # both the ▶ marker column and the separate Open column. The open
                 # dataset is the coloured row instead (see the Styler below).
                 "Dataset": name,
-                "Kind": (
-                    f"{kinds[token]} {kind_labels.get(kinds[token], '')}".strip()
-                    if kinds.get(token)
-                    else ("🔒 Private" if own else "")
-                ),
-                # DATA-35: the two facts about a corpus that fit in a cell. The
-                # description and the coordinate provenance are sentences, so
-                # they live one click away in the ℹ️ About dialog instead.
+                # DATA-35: the one fact about a corpus that fits in a cell. The
+                # description, the coordinate provenance and the corpus' own home
+                # page are sentences or links, so they live one click away in the
+                # ℹ️ About dialog instead — the Home column was a whole column
+                # spent on an "Open ↗" that belongs with the prose describing
+                # what it opens.
                 "Language": about.get("language") or "",
-                "Home": about.get("link") or None,
                 "Counts": _COUNTS_BADGES.get(row_counts.source, "")
                 + (" ⚠️" if row_counts.exceeds_published else ""),
                 "Participants": counts.get("Participants"),
@@ -4619,6 +4787,7 @@ def render_dataset_table(
         width="stretch",
         hide_index=True,
         column_config={
+            "Kind": st.column_config.TextColumn("Kind", width="small"),
             "Dataset": st.column_config.ButtonColumn(
                 "Dataset",
                 width="medium",
@@ -4627,16 +4796,13 @@ def render_dataset_table(
                 on_click=_on_open,
                 key="dataset_table_name",
             ),
-            "Kind": st.column_config.TextColumn("Kind", width="small"),
             "Language": st.column_config.TextColumn("Language", width="small"),
-            "Home": st.column_config.LinkColumn(
-                "Home",
-                width="small",
-                display_text="Open ↗",
-                help="The corpus' own home page or repository.",
-            ),
             "Counts": st.column_config.TextColumn(
-                "Counts",
+                # The ❔ is in the label because a `help=` on a dataframe column
+                # is a hover-only tooltip with nothing on screen to say it is
+                # there — and this header is the one that needs the explanation
+                # (Loaded vs Published is not guessable from the word "Counts").
+                "Counts ❔",
                 width="small",
                 help="Where the numbers to the right come from. **Loaded** — "
                 "counted from the rows this session holds. **Published** — the "
@@ -4662,8 +4828,12 @@ def render_dataset_table(
             "Gaze points": st.column_config.NumberColumn(
                 "Gaze points", width="small", format="%d"
             ),
+            # The four action columns carry their names. They used to be headed
+            # by a blank cell, on the reasoning that the glyph in the row says
+            # what it does — which reads as four unlabelled columns of icons the
+            # first time you meet the table.
             "About": st.column_config.ButtonColumn(
-                "",
+                "About",
                 type="tertiary",
                 width=_DATASET_ACTION_COL_WIDTH,
                 help="What this dataset is, and where its coordinates come from.",
@@ -4671,7 +4841,7 @@ def render_dataset_table(
                 key="dataset_table_about",
             ),
             "Edit": st.column_config.ButtonColumn(
-                "",
+                "Edit",
                 type="tertiary",
                 width=_DATASET_ACTION_COL_WIDTH,
                 help="Open it and edit its column mapping and recording setup.",
@@ -4679,7 +4849,7 @@ def render_dataset_table(
                 key="dataset_table_edit",
             ),
             "Rename": st.column_config.ButtonColumn(
-                "",
+                "Rename",
                 type="tertiary",
                 width=_DATASET_ACTION_COL_WIDTH,
                 help="Rename this dataset.",
@@ -4687,7 +4857,7 @@ def render_dataset_table(
                 key="dataset_table_rename",
             ),
             "Remove": st.column_config.ButtonColumn(
-                "",
+                "Remove",
                 type="tertiary",
                 width=_DATASET_ACTION_COL_WIDTH,
                 help="Remove this dataset from the session.",
@@ -6431,12 +6601,24 @@ def main() -> None:
     )
     st.session_state["_trial_identity_report"] = identity_report
     identity_warning = trial_identity_warning(identity_report)
-    if identity_warning:
-        menu.notices.warning(
-            f"{identity_warning} The evidence is on the 🗂️ **Data** page, "
-            "under **Trial identity**.",
-            icon="⚠️",
-        )
+    # The verdict is raised **once, where the mapping was chosen** — right after
+    # ✅ Add dataset or ✅ Save changes — rather than as a page-wide banner that
+    # stood above every view for as long as the dataset was loaded. Both flows
+    # set `TRIAL_IDENTITY_CHECK_KEY`; the report they are asking about is the one
+    # just computed above, on the frames those buttons produced.
+    asked_by = st.session_state.pop(TRIAL_IDENTITY_CHECK_KEY, None)
+    if asked_by and identity_warning:
+        try:
+            _trial_identity_alert_dialog(str(asked_by), identity_warning)
+        except StreamlitAPIException:
+            # Streamlit allows one dialog per script run, and ❓ Help's three
+            # (FAQ / About / Tutorials) and the welcome tour are served above
+            # this point. They cannot normally be armed on the same run as this
+            # — the flag is set by a button on a screen with no nav reachable —
+            # but a run that returned early with the flag still armed can. Put
+            # it back rather than lose the verdict; the next run has no modal
+            # ahead of it.
+            st.session_state[TRIAL_IDENTITY_CHECK_KEY] = asked_by
 
     # Trial-level filtering / grouping: narrow by participant, by condition
     # (Hunting/Gathering, difficulty, first/repeated reading, correctness), and by
@@ -6708,22 +6890,61 @@ def main() -> None:
         # it immediately before participant metadata on the Data page.
         with setup_metadata_slot:
             st.divider()
-            # UX-114: the three tables side by side — one column each, rather
-            # than stacked full-width blocks with a divider between every
-            # pair. The *unfiltered* pool feeds every report (participants_all
-            # / combos_all): the join describes the dataset, not whatever the
-            # current Narrow-by left standing.
-            pm_col, tm_col, txm_col = st.columns(3, gap="medium")
-            with pm_col:
-                st.subheader("👤 Participant metadata")
-                render_participant_metadata_section(participants_all)
-            with tm_col:
-                st.subheader("🗂️ Trial metadata")
-                # DATA-29: same reasoning one grain down.
-                render_trial_metadata_section(combos_all)
-            with txm_col:
-                st.subheader("📄 Text metadata")
-                render_text_metadata_section(metadata_mod.text_keys(combos_all))
+            # UX-130 r2: the *add screen's* three metadata rows, not three
+            # side-by-side panels. UX-114 put them in one row of three columns
+            # (an improvement on the stacked full-width blocks before it) and
+            # UX-127 then gave the add screen a different shape again — one
+            # "left = upload, right = mapping" row per table, under a small
+            # **Metadata** heading, matching the Fixations/AOI/Raw gaze rows
+            # above them. The two screens ask the same question of the same
+            # dataset, so they draw it the same way; this is the same
+            # `render_*_metadata_section` renderers in the same `_META_ROW_W`
+            # split, under the same `wiz_map_*` key prefix so `styles.py`'s
+            # own `[class*="st-key-wiz_map_…"]` rules apply verbatim — with an
+            # `_edit` suffix, since a container key may be used once per run
+            # and the offscreen editor is built even while the wizard is open.
+            #
+            # The *unfiltered* pool feeds every report (participants_all /
+            # combos_all): the join describes the dataset, not whatever the
+            # current trial filters left standing. `live_join` stays on, unlike
+            # the wizard's (UX-116) — here the dataset exists, so the join is a
+            # real answer rather than a provisional one.
+            from scanpath_studio.controls import inline_field_label
+            from scanpath_studio.wizard import _META_ROW_W
+
+            meta_heading_row = st.columns(
+                [_META_ROW_W[0], 1 - _META_ROW_W[0]], gap="small"
+            )
+            inline_field_label(
+                meta_heading_row[0].container(key="wiz_map_meta_heading_edit"),
+                "Metadata",
+                "Optional per-reader, per-trial and per-text tables. Once "
+                "attached, their columns behave like fields in the data: "
+                "filters, chips, trial sorting, inspection and export.",
+                emphasis=True,
+            )
+            for slug, renderer, ids in (
+                ("participant", render_participant_metadata_section, participants_all),
+                # DATA-29: same reasoning one grain down, and DATA-TBD one more.
+                ("trial", render_trial_metadata_section, combos_all),
+                (
+                    "text",
+                    render_text_metadata_section,
+                    metadata_mod.text_keys(combos_all),
+                ),
+            ):
+                block = st.container(key=f"wiz_map_block_meta_{slug}_edit")
+                row = block.columns(_META_ROW_W, gap="small")
+                renderer(
+                    ids,
+                    host=row[1],
+                    upload_host=row[0].container(
+                        key=f"wiz_map_upload_meta_{slug}_edit"
+                    ),
+                )
+                st.markdown(
+                    '<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True
+                )
         # UX-106 — and the screen's one commit at its foot, in the slot
         # reserved after every section it saves.
         render_dataset_editor_footer(editor_footer_slot)

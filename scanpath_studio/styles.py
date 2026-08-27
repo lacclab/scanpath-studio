@@ -348,10 +348,11 @@ def get_app_css() -> str:
        the clipped ones stayed reachable — the same facts twice, because which
        chips fit is a live-width question Python can't answer. Wrapping means
        nothing is ever cut at any window width, so the duplicate list
-       (and the whole floating-dropdown mechanism) is gone; the derived summary
-       stats live in a real "Summary stats" popover beside the strip instead. This is
-       also the first half of UX-19 — the strip was what broke first on a narrow
-       laptop. */
+       (and the whole floating-dropdown mechanism) is gone. The derived summary
+       stats went to a "Summary stats" popover beside the strip and, this round,
+       became ordinary chips in it — so the popover and its `.sps-stat` rows are
+       gone too. This is also the first half of UX-19 — the strip was what broke
+       first on a narrow laptop. */
     .sps-trial-chips {
         display: flex;
         flex-wrap: wrap;
@@ -360,19 +361,6 @@ def get_app_css() -> str:
         margin: 0.1rem 0 0.5rem;
     }
     .sps-trial-chips .sps-chip { flex: 0 0 auto; }
-    .sps-stat {
-        display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 1.5rem;
-        padding: 0.32rem 0;
-        font-size: 0.9rem;
-        line-height: 1.25;
-        white-space: nowrap;
-    }
-    .sps-stat + .sps-stat { border-top: 1px solid rgba(0, 0, 0, 0.07); }
-    .sps-stat-name { color: #6c757d; }
-    .sps-stat-val { font-weight: 700; color: #212529; }
     .sps-chip {
         display: inline-flex;
         align-items: center;
@@ -587,9 +575,9 @@ def get_app_css() -> str:
 
        So a row's trailing controls now share ONE `railbtn_*` container and this
        rule makes every such container a right-packed flex row. "More" alone,
-       both ◀ ▶ ⇅ picker clusters, and Details + ✏️ therefore all end on the same
-       edge with the same 3px between neighbours, whatever each row's own column
-       split is. Nesting is intentional (`_trail` > `_step`): the outer cluster
+       both ◀ ▶ ⇅ picker clusters, and the chip row's ✏️ therefore all end on the
+       same edge with the same 3px between neighbours, whatever each row's own
+       column split is. Nesting is intentional (`_trail` > `_step`): the outer cluster
        fixes the display order, and the inner containers let a trigger be *filled*
        out of order — the sort popover has to run before the ◀ ▶ it precedes in
        the DOM. */
@@ -610,8 +598,8 @@ def get_app_css() -> str:
         width: auto !important;
     }
     [class*="st-key-railbtn_"] > div + div { margin-left: 3px !important; }
-    /* The two chip-strip controls — "Summary stats" and ✏️ (edit chips) — are
-       additionally nudged down onto the first chip row's baseline:
+    /* The chip strip's ✏️ (edit chips) control is additionally nudged down onto
+       the first chip row's baseline:
        the strip wraps, so the columns are TOP-aligned (a centred control would
        drift to the middle of a tall strip), and this offset is the strip's own
        top margin. (UX-11 also fixed the ✏️ sitting visibly high, when it was
@@ -705,17 +693,21 @@ def get_app_css() -> str:
        color: it introduces three titles at once, so it reads as *more*
        prominent than any one of them, not less. The tooltip re-centers with
        it so it still opens under the (now centered) text. */
-    .st-key-wiz_map_meta_heading .sps-flabel-emph {
+       A prefix match, not the exact class: the ✏️ Edit dataset screen draws the
+       same three rows under the same heading (`wiz_map_meta_heading_edit` — a
+       key may be used once per run, and the offscreen editor is built even
+       while the wizard is open). */
+    [class*="st-key-wiz_map_meta_heading"] .sps-flabel-emph {
         font-weight: 800;
         font-size: 1.2rem;
         letter-spacing: 0.02em;
         color: var(--sps-accent);
     }
-    .st-key-wiz_map_meta_heading .sps-fhelp,
-    .st-key-wiz_map_meta_heading .sps-flabel {
+    [class*="st-key-wiz_map_meta_heading"] .sps-fhelp,
+    [class*="st-key-wiz_map_meta_heading"] .sps-flabel {
         text-align: center;
     }
-    .st-key-wiz_map_meta_heading .sps-fhelp::after {
+    [class*="st-key-wiz_map_meta_heading"] .sps-fhelp::after {
         left: 50%;
         transform: translateX(-50%);
     }
@@ -826,16 +818,21 @@ def get_app_css() -> str:
        buttons. Collapsing `_rest` to zero instead avoids that: three fixed
        widths always fit the first line, so nothing wraps. `!important`
        because these override Streamlit's own stylesheet `flex`. */
-    .st-key-wizard_footer_row [data-testid="stHorizontalBlock"] {
+       A prefix match, not `.st-key-wizard_footer_row`: the ✏️ Edit dataset
+       screen wears this same footer under its own key
+       (`wizard_footer_row_edit`, since the offscreen editor and an open wizard
+       can both exist in one run and two containers may not share a key), and
+       the two screens' last rows have to line up to the pixel. */
+    [class*="st-key-wizard_footer_row"] [data-testid="stHorizontalBlock"] {
         flex-wrap: nowrap !important;
     }
-    .st-key-wizard_footer_row [data-testid="stColumn"]:nth-of-type(1),
-    .st-key-wizard_footer_row [data-testid="stColumn"]:nth-of-type(2) {
+    [class*="st-key-wizard_footer_row"] [data-testid="stColumn"]:nth-of-type(1),
+    [class*="st-key-wizard_footer_row"] [data-testid="stColumn"]:nth-of-type(2) {
         flex: 0 0 10.5rem !important;
         width: 10.5rem !important;
         min-width: 10.5rem !important;
     }
-    .st-key-wizard_footer_row [data-testid="stColumn"]:nth-of-type(3) {
+    [class*="st-key-wizard_footer_row"] [data-testid="stColumn"]:nth-of-type(3) {
         flex: 0 0 0 !important;
         width: 0 !important;
         min-width: 0 !important;
@@ -846,7 +843,7 @@ def get_app_css() -> str:
        than the mapping blocks' own tight `.sps-wiz-blockgap` hairline, which
        undersells that this line is the boundary before the page's one commit,
        not another block gap. */
-    .st-key-wizard_footer_divider hr {
+    [class*="st-key-wizard_footer_divider"] hr {
         margin-top: 1.25rem !important;
         margin-bottom: 1.5rem !important;
     }
@@ -1540,6 +1537,21 @@ def get_app_css() -> str:
     [data-testid="stExpander"] summary p,
     div[data-testid="stTooltipContent"] p {
         font-size: 0.92rem !important;
+    }
+    /* BUG-48 — a `help=` tooltip must never intercept a click. Streamlit's
+       tooltip is a portalled panel whose open state lives in React, and the
+       pointer can leave its target without that component ever seeing
+       `mouseleave` (a rerun that re-renders the row under the cursor is the
+       usual way, and this app reruns on every widget touch). The panel then
+       floats over the page — and, being an ordinary positioned element, ate the
+       next click that landed on whatever it covered, which is the likeliest
+       reason a rail's ▾ sometimes did nothing on the first press.
+       `app._TOOLTIP_SWEEPER_SCRIPT` is what closes the stuck panel; this is the
+       guard that makes a stuck one harmless in the meantime. Safe because no
+       `help=` in this app contains a link — every tooltip is read, never
+       clicked. */
+    div[data-testid="stTooltipContent"] {
+        pointer-events: none;
     }
 
     /* ── UX-19: width breakpoints ────────────────────────────────────────────

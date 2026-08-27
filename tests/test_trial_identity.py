@@ -242,3 +242,83 @@ def test_data_inspection_reports_the_verdict():
     assert any("Trial identity" in h for h in headings), headings
     assert any("single reading" in s.value for s in at.success)
     assert any(e.label == "What was checked" for e in at.expander)
+
+
+class TestTheVerdictIsRaisedWhereTheMappingIsChosen:
+    """The verdict used to ride a page-wide ⚠️ banner, above every view, on every
+    run, for as long as the dataset stayed loaded — a permanent warning about a
+    decision that is made exactly twice: when a dataset is added, and when its
+    mapping is edited. It is now a modal raised at those two moments.
+    """
+
+    def test_adding_a_dataset_asks_for_the_check(self):
+        import streamlit as st
+
+        from scanpath_studio import wizard
+        from scanpath_studio.constants import TRIAL_IDENTITY_CHECK_KEY
+
+        st.session_state.clear()
+        st.session_state["_wizard_finalize_payload"] = {
+            "words": _clean_words(),
+            "fixations": _clean_fixations(),
+            "raw_gaze": pd.DataFrame(),
+        }
+        st.session_state["wizard_dataset_name"] = "My corpus"
+        wizard._finalize_wizard_dataset()
+
+        assert st.session_state[TRIAL_IDENTITY_CHECK_KEY] == "add"
+        st.session_state.clear()
+
+    def test_saving_an_edited_mapping_asks_for_the_check(self):
+        """Source-level: `_apply_remap` needs a whole stored dataset and the
+        editor's pending schemas to run. What must not silently regress is that
+        saving still asks."""
+        import inspect
+
+        from scanpath_studio.tabs import _apply_remap
+
+        source = inspect.getsource(_apply_remap)
+        assert 'st.session_state[TRIAL_IDENTITY_CHECK_KEY] = "edit"' in source
+
+    def test_main_raises_the_modal_and_no_longer_writes_a_banner(self):
+        import inspect
+
+        from scanpath_studio import app
+
+        source = inspect.getsource(app.main)
+        assert "_trial_identity_alert_dialog(" in source
+        assert "TRIAL_IDENTITY_CHECK_KEY" in source
+        # The banner it replaced.
+        assert "menu.notices.warning" not in source
+
+    def test_the_modal_offers_the_mapping_and_a_way_to_keep_it(self):
+        import inspect
+
+        from scanpath_studio import app
+
+        source = inspect.getsource(app._trial_identity_alert_dialog)
+        assert "trial_identity_alert_edit" in source
+        assert "trial_identity_alert_keep" in source
+        # Return values, never `on_click`: a dialog body is a fragment, so a
+        # callback here would rerun the modal and leave the page behind it
+        # untouched (the BUG-36 trap `_leave_dataset_editor_dialog` fell into).
+        assert "on_click=" not in source
+        # Editing means the ✏️ Edit dataset screen, focused on the mapping.
+        assert "_open_mapping_editor()" in source
+
+    def test_opening_the_editor_focuses_the_open_datasets_mapping(self):
+        import streamlit as st
+
+        from scanpath_studio import app
+        from scanpath_studio.constants import (
+            DATASET_EDITOR_OPEN_KEY,
+            FOCUS_MAPPING_KEY,
+        )
+
+        st.session_state.clear()
+        st.session_state["data_source_choice"] = "My corpus"
+        app._open_mapping_editor()
+
+        assert st.session_state[DATASET_EDITOR_OPEN_KEY] is True
+        assert st.session_state[FOCUS_MAPPING_KEY] == "My corpus"
+        st.session_state.clear()

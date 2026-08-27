@@ -738,3 +738,13 @@ SELECTOR_ROW_WIDE_GRID = [
 #: the full census instead. UI-only — it is deliberately not wire format, so it
 #: travels in neither a share link nor a saved config.
 TRIAL_IDENTITY_FULL_KEY = "_trial_identity_full_scan"
+
+#: VAL-7's verdict used to ride a page-wide ⚠️ banner above every view, on every
+#: run, for as long as the dataset stayed loaded — a permanent warning about a
+#: decision that is only made twice: when a dataset is added, and when its
+#: mapping is edited. Both moments now set this flag instead, and ``app.main``
+#: pops it once the (already computed) report for the newly derived frames
+#: exists — raising the verdict as a modal exactly where the Trial ID mapping
+#: was just chosen. The value says which flow asked, so the modal's "go back"
+#: button can name the right screen: ``"add"`` or ``"edit"``.
+TRIAL_IDENTITY_CHECK_KEY = "_trial_identity_check_after"

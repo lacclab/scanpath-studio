@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from importlib import resources
 from pathlib import Path
@@ -469,6 +470,43 @@ def _render_parser() -> argparse.ArgumentParser:
         help="With --saccade-color-by-type: hide the saccade-type colour key on "
         "the figure (the coloured lines still draw). Legend shows by default "
         "(VIZ-8).",
+    )
+    viz.add_argument(
+        "--fix-index-range",
+        dest="fix_index_range",
+        metavar="START:END",
+        help="VIZ-7: draw only fixations START through END of the trial "
+        "(1-based, both inclusive), e.g. --fix-index-range 1:40. Honoured by "
+        "--animate too, which then replays only that window.",
+    )
+    viz.add_argument(
+        "--highlight-column",
+        dest="highlight_column",
+        metavar="COLUMN",
+        help="Boolean words column marking the text to highlight — the "
+        "critical span (default: is_in_aspan, OneStop's answer span). Pass "
+        "--highlight-column '' to highlight nothing. How it is drawn is "
+        "--critical-span-style.",
+    )
+    viz.add_argument(
+        "--critical-span-style",
+        dest="critical_span_style",
+        choices=("mark-text", "mark-border", "none"),
+        help="How the --highlight-column words are marked: mark-text recolours "
+        "them, mark-border outlines their boxes, none draws neither "
+        "(default: mark-text).",
+    )
+    viz.add_argument(
+        "--fixation-flag",
+        dest="fixation_flags",
+        action="append",
+        metavar="SPEC",
+        help="PRE-2 fixation classification, repeatable. SPEC is "
+        "CATEGORY=MODE[,threshold_ms=N][,symbol=S][,color=#RRGGBB] with "
+        "CATEGORY one of short, long, oob, blink and MODE one of off, "
+        "highlight, discard — e.g. --fixation-flag short=discard,threshold_ms=80. "
+        "*discard* drops those fixations from the drawing only; measures and "
+        "exports are untouched. `threshold_ms` applies to short/long alone.",
     )
     viz.add_argument(
         "--saccade-classes",
@@ -1002,6 +1040,84 @@ def _parse_canvas(value: str | None) -> tuple | None:
     return (w, h)
 
 
+def _parse_fix_index_range(value: str | None) -> tuple | None:
+    """``"1:40"`` → ``(1, 40)`` — VIZ-7's fixation-index window (both inclusive)."""
+    if not value:
+        return None
+    try:
+        lo, hi = (int(part) for part in value.replace("-", ":").split(":"))
+    except ValueError:
+        raise SystemExit(
+            f"--fix-index-range expects START:END (e.g. 1:40), got {value!r}"
+        )
+    if lo < 1 or hi < lo:
+        raise SystemExit(
+            f"--fix-index-range needs 1 <= START <= END (1-based, both "
+            f"inclusive), got {value!r}"
+        )
+    return (lo, hi)
+
+
+#: `--critical-span-style` choice → the settings vocabulary's own spelling.
+_CRITICAL_SPAN_STYLES = {
+    "mark-text": "Mark text",
+    "mark-border": "Mark border",
+    "none": "None",
+}
+
+#: PRE-2 category → whether it takes a `threshold_ms`. `oob` and `blink` are
+#: classified from geometry / the recording, not from a duration.
+_FIXCLASS_CATEGORIES = {"short": True, "long": True, "oob": False, "blink": False}
+
+
+def _parse_fixation_flags(specs: list[str]) -> dict:
+    """``["short=discard,threshold_ms=80"]`` → the ``fixation_flags`` dict.
+
+    The app builds the same dict from its ``global_fixclass_*`` keys
+    (``controls._collect_fixation_flags``) and a saved config carries it whole,
+    so the CLI's job is only to spell one category per flag. Unspecified
+    categories are left out entirely, which the builder reads as *Off*.
+    """
+    from .controls import _FIXCLASS_MODES, _OUT_OF_TEXT_MARKERS
+
+    modes = {mode.lower(): mode for mode in _FIXCLASS_MODES}
+    flags: dict = {}
+    for spec in specs:
+        head, _, rest = spec.partition(",")
+        category, _, mode = head.partition("=")
+        category, mode = category.strip().lower(), mode.strip().lower()
+        if category not in _FIXCLASS_CATEGORIES or mode not in modes:
+            raise SystemExit(
+                f"--fixation-flag expects CATEGORY=MODE with CATEGORY one of "
+                f"{', '.join(_FIXCLASS_CATEGORIES)} and MODE one of "
+                f"{', '.join(modes)}; got {spec!r}."
+            )
+        entry: dict = {"mode": modes[mode]}
+        for option in (part.strip() for part in rest.split(",") if part.strip()):
+            name, _, raw = option.partition("=")
+            name, raw = name.strip(), raw.strip()
+            if name == "threshold_ms" and _FIXCLASS_CATEGORIES[category]:
+                try:
+                    entry["threshold_ms"] = float(raw)
+                except ValueError:
+                    raise SystemExit(
+                        f"--fixation-flag threshold_ms expects a number, got {raw!r}."
+                    )
+            elif name == "symbol" and raw in _OUT_OF_TEXT_MARKERS:
+                entry["symbol"] = raw
+            elif name == "color" and re.fullmatch(r"#[0-9A-Fa-f]{6}", raw):
+                entry["color"] = raw
+            else:
+                raise SystemExit(
+                    f"--fixation-flag: unknown or invalid option {option!r} for "
+                    f"category {category!r}. Valid: "
+                    + ("threshold_ms=N, " if _FIXCLASS_CATEGORIES[category] else "")
+                    + f"symbol=<{'|'.join(_OUT_OF_TEXT_MARKERS)}>, color=#RRGGBB."
+                )
+        flags[category] = entry
+    return flags
+
+
 def _snippet_source_from_args(args) -> SnippetSource:
     """Which ``SnippetSource`` the render command's own input flags describe.
 
@@ -1116,6 +1232,10 @@ def _print_reproduction_code(api, args, overrides: dict, canvas, participant, tr
         illustration_label=str(args.illustration_label or "auto").lower(),
         drift_correction=args.drift_correction,
         drift_connectors=bool(args.drift_connectors),
+        # A builder *parameter* rather than a figure keyword, like the drift
+        # pair above — so it has to be named here or the printed recipe would
+        # silently widen the window back to the whole trial.
+        fix_index_range=_parse_fix_index_range(args.fix_index_range),
         playback_speed=args.playback_speed,
         autoplay=args.autoplay,
         compare=compare,
@@ -1694,6 +1814,17 @@ def render(argv: list[str]) -> None:
                 )
             class_colors[cls_name] = color.strip()
         overrides["saccade_class_colors"] = class_colors
+    # The critical-span pair. `--highlight-column ''` is a real request (mark
+    # nothing) and must survive the truthiness test the other options use, so it
+    # is compared against None.
+    if args.highlight_column is not None:
+        overrides["highlight_column"] = args.highlight_column or None
+    if args.critical_span_style:
+        overrides["critical_span_style"] = _CRITICAL_SPAN_STYLES[
+            args.critical_span_style
+        ]
+    if args.fixation_flags:
+        overrides["fixation_flags"] = _parse_fixation_flags(args.fixation_flags)
     # VIZ-31: the reading-class filter. Independent of the colour mode above —
     # "only the regressions, in one colour" is as valid as "all of them, coloured
     # by type" — so it is its own flag rather than a mode.
@@ -1791,6 +1922,10 @@ def render(argv: list[str]) -> None:
                     "saccade_classes",
                     "saccade_render_mode",
                     "fixation_snap_to_word",
+                    # VIZ-23 gave the replay `highlight_column`, but only as the
+                    # text-marking channel — there is no border-overlay style
+                    # there, so the *style* flag has nothing to select.
+                    "critical_span_style",
                 )
                 if key in overrides
             ]
@@ -1832,6 +1967,17 @@ def render(argv: list[str]) -> None:
                     if k in overrides
                 }
             )
+            # VIZ-23 brought these two across to the replay: `highlight_column`
+            # marks the critical span's *text* (there is no border style there,
+            # which is why `critical_span_style` stays in `ignored`), and the
+            # PRE-2 flags discard or overlay-mark the classified fixations.
+            anim_kwargs.update(
+                {
+                    k: overrides[k]
+                    for k in ("highlight_column", "fixation_flags")
+                    if k in overrides
+                }
+            )
             # CMP-9/CMP-11: `--animate --compare-with` is the *dual* co-animation
             # the app renders when both modes are on — both readings on one clock.
             # That is an overlay, so it needs one coordinate space, and it is gated
@@ -1844,6 +1990,8 @@ def render(argv: list[str]) -> None:
             animation_options = dict(
                 playback_speed=args.playback_speed,
                 autoplay=args.autoplay,
+                # VIZ-7's window replays too — same parameter, same semantics.
+                fix_index_range=_parse_fix_index_range(args.fix_index_range),
                 illustration_label=args.illustration_label,
                 anim_grid_step_ms=args.anim_grid_step_ms,
                 anim_max_frames=args.anim_max_frames,
@@ -1912,6 +2060,10 @@ def render(argv: list[str]) -> None:
             static_options = dict(
                 drift_correction=args.drift_correction,
                 drift_connectors=args.drift_connectors,
+                # VIZ-7's fixation-index window is a `plot_scanpath` parameter
+                # rather than a figure keyword, so it is named here alongside
+                # drift correction rather than folded into `overrides`.
+                fix_index_range=_parse_fix_index_range(args.fix_index_range),
                 illustration_label=args.illustration_label,
                 **overrides,
                 **common,

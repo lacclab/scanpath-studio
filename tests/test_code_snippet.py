@@ -115,12 +115,78 @@ def test_settings_with_no_render_flag_are_named_not_dropped():
     assert "fixation_color_range" not in code.cli
 
 
-def test_the_fixation_index_window_is_named_on_the_cli():
-    """VIZ-7 is a `plot_scanpath` parameter with no `render` flag — widening it
-    to the whole trial would silently be a different figure."""
+def test_the_fixation_index_window_reaches_both_forms():
+    """VIZ-7 used to be a `plot_scanpath` parameter with no `render` flag, so the
+    CLI form could only *name* it. `--fix-index-range START:END` closed that gap,
+    and the two forms now describe the same figure."""
     code = cs.reproduction_code(DEMO, _state(fix_index_range=(3, 9)))
     assert "fix_index_range=(3, 9)" in code.python
-    assert "fix_index_range" in code.cli_unsupported
+    assert "--fix-index-range 3:9" in code.cli
+    assert "fix_index_range" not in code.cli_unsupported
+
+
+def test_the_replay_takes_the_fixation_index_window_too():
+    """`animate_scanpath` has the same parameter, so the flag is not static-only."""
+    code = cs.reproduction_code(DEMO, _state(kind="animation", fix_index_range=(3, 9)))
+    assert "--animate" in code.cli
+    assert "--fix-index-range 3:9" in code.cli
+
+
+def test_the_critical_span_pair_reaches_the_cli():
+    """`highlight_column` + `critical_span_style` used to be Python-only."""
+    code = cs.reproduction_code(
+        DEMO,
+        _state(
+            figure={
+                "highlight_column": "is_critical",
+                "critical_span_style": "Mark border",
+            }
+        ),
+    )
+    assert "--highlight-column is_critical" in code.cli
+    assert "--critical-span-style mark-border" in code.cli
+    assert not code.cli_unsupported
+
+
+def test_highlighting_nothing_is_an_empty_highlight_column_not_a_missing_flag():
+    """`highlight_column=None` means "mark nothing", and the CLI default is
+    OneStop's `is_in_aspan` — so omitting the flag would restore the span."""
+    code = cs.reproduction_code(DEMO, _state(figure={"highlight_column": None}))
+    assert "--highlight-column ''" in code.cli
+
+
+def test_the_fixation_flags_reach_the_cli_one_category_per_flag():
+    code = cs.reproduction_code(
+        DEMO,
+        _state(
+            figure={
+                "fixation_flags": {
+                    "short": {"mode": "Discard", "threshold_ms": 80.0},
+                    "long": {"mode": "Off", "threshold_ms": 800.0},
+                    "oob": {"mode": "Highlight", "symbol": "x", "color": "#ff0000"},
+                }
+            }
+        ),
+    )
+    assert "--fixation-flag short=discard,threshold_ms=80" in code.cli
+    # An Off category is the builder's default, so it is not written at all.
+    assert "long=" not in code.cli
+    # The `#` in a colour makes shlex quote the whole value — which is the point
+    # of quoting it, since an unquoted `#` starts a shell comment.
+    assert "--fixation-flag 'oob=highlight,symbol=x,color=#ff0000'" in code.cli
+    assert "fixation_flags" not in code.cli_unsupported
+
+
+def test_the_replay_takes_the_span_column_it_can_draw():
+    """VIZ-23 gave the replay `highlight_column` as a text channel; there is no
+    border overlay there, so `critical_span_style` is not one of the animation
+    builder's options at all and never reaches either form."""
+    code = cs.reproduction_code(
+        DEMO,
+        _state(kind="animation", figure={"highlight_column": "is_critical"}),
+    )
+    assert "--highlight-column is_critical" in code.cli
+    assert "--critical-span-style" not in code.cli
 
 
 # ---------------------------------------------------------------------------
@@ -925,3 +991,59 @@ def test_a_cross_dataset_comparison_says_whose_reader_b_is():
     assert not any(
         "second dataset" in n for n in cs.reproduction_code(DEMO, same).caveats
     )
+
+
+# ---------------------------------------------------------------------------
+# EXP-8 §3 — a stock figure must emit nothing it was not asked for
+# ---------------------------------------------------------------------------
+def test_the_materialized_rail_dicts_normalize_to_the_api_defaults():
+    """`controls._collect_viz_settings` always builds `fixation_flags` (four
+    categories at Off) and the stock `saccade_class_colors`, while
+    `api.figure_options` reports `None` for both — so an untouched figure looked
+    *changed* in both, and the CLI half carried a permanent "no flag for
+    fixation_flags" warning about a setting nobody had set."""
+    from scanpath_studio.constants import SACCADE_CLASS_COLORS
+    from scanpath_studio.tabs import _snippet_settings_at_api_defaults
+
+    stock = _snippet_settings_at_api_defaults(
+        {
+            "fixation_flags": {
+                "short": {"mode": "Off", "threshold_ms": 80.0},
+                "oob": {"mode": "Off", "symbol": "x"},
+            },
+            "saccade_class_colors": dict(SACCADE_CLASS_COLORS),
+        }
+    )
+    assert stock["fixation_flags"] is None
+    assert stock["saccade_class_colors"] is None
+
+
+def test_a_real_choice_survives_the_normalization():
+    from scanpath_studio.constants import SACCADE_CLASS_COLORS
+    from scanpath_studio.tabs import _snippet_settings_at_api_defaults
+
+    touched = _snippet_settings_at_api_defaults(
+        {
+            "fixation_flags": {"short": {"mode": "Discard", "threshold_ms": 80.0}},
+            "saccade_class_colors": {**SACCADE_CLASS_COLORS, "regression": "#000000"},
+        }
+    )
+    assert touched["fixation_flags"]["short"]["mode"] == "Discard"
+    assert touched["saccade_class_colors"]["regression"] == "#000000"
+
+
+def test_a_stock_figure_writes_no_settings_at_all():
+    """The whole point of "only the options you changed": the trial's identity
+    and nothing else."""
+    code = cs.reproduction_code(DEMO, _state())
+    assert code.python.endswith(
+        "fig = sps.plot_scanpath(\n"
+        "    words,\n"
+        "    fixations,\n"
+        "    participant='p1',\n"
+        "    trial='t1',\n"
+        ")\n\n"
+        "sps.save_figure(fig, 'scanpath.png')"
+    ), code.python
+    assert code.cli == "scanpath-studio render --sample -p p1 -t t1 -o scanpath.png"
+    assert not code.cli_unsupported

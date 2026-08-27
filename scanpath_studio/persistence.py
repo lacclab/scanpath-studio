@@ -41,6 +41,13 @@ from .session_keys import (
 )
 
 SCHEMA_VERSION = 1
+
+#: The default cache folder's name. Versioned by :data:`SCHEMA_VERSION` rather
+#: than by the app's version, and derived from it so the two cannot drift: the
+#: "v1" a user sees in the path is the *cache format's* version, so it stays put
+#: across app releases, and a format change starts a new folder beside this one
+#: instead of overwriting a session the new code could not read.
+CACHE_DIR_NAME = f"session-v{SCHEMA_VERSION}"
 PERSIST_ENV_VAR = "SCANPATH_STUDIO_PERSIST"
 STATE_DIR_ENV_VAR = "SCANPATH_STUDIO_STATE_DIR"
 _RESTORED_KEY = "_local_persistence_restored"
@@ -97,7 +104,7 @@ def state_directory(environ: dict | None = None) -> Path:
     configured = str(env.get(STATE_DIR_ENV_VAR, "")).strip()
     if configured:
         return Path(configured).expanduser()
-    return Path.home() / ".cache" / "scanpath-studio" / "session-v1"
+    return Path.home() / ".cache" / "scanpath-studio" / CACHE_DIR_NAME
 
 
 def _json_safe(value: Any) -> Any:

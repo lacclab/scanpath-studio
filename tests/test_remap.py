@@ -281,3 +281,77 @@ class TestDroppedColumns:
     def test_dropped_columns_empty_when_unspecified(self):
         raw = _raw_fixations()
         assert dropped_columns(raw) == []
+
+
+class TestEditorSetupExport:
+    """The ✏️ Edit dataset footer's ⬇️ Save setup — the add screen's own export,
+    for the screen that edits what it created.
+
+    It exists so an already-added dataset's mapping can travel: a share link
+    carries settings but never files, so "send them the files and this JSON" is
+    the only way the recipient skips re-mapping by hand.
+    """
+
+    def _session(self, monkeypatch):
+        import streamlit as st
+
+        st.session_state.clear()
+        return st.session_state
+
+    def test_the_editor_keys_are_rewritten_into_the_add_screens(self, monkeypatch):
+        from scanpath_studio.tabs import _editor_setup_config
+
+        session = self._session(monkeypatch)
+        session["remap_My corpus_words_x"] = "left_px"
+        session["remap_My corpus_words_box_format"] = "Origin + size"
+        session["remap_My corpus_fixations_duration"] = "dur_ms"
+        session["remap_My corpus_fixations_trial"] = ["reader", "item"]
+        session["remap_My corpus_raw_gaze_timestamp"] = "t"
+        # Scaffolding under the same prefix that is not part of the mapping.
+        session["remap_My corpus_words_x_cell_confirm"] = False
+        session["remap_My corpus_words_header"] = ["left_px", "top_px"]
+        session["_remap_pending_setup"] = {"canvas_width": 1920}
+
+        mapping = _editor_setup_config("My corpus")["column_mapping"]
+
+        assert mapping["col_map_words_x"] == "left_px"
+        assert mapping["col_map_words_box_format"] == "Origin + size"
+        assert mapping["col_map_fix_duration"] == "dur_ms"
+        # A composite trial id survives as a list, which is what it means.
+        assert mapping["col_map_fix_trial"] == ["reader", "item"]
+        assert mapping["col_map_raw_gaze_timestamp"] == "t"
+        assert not [k for k in mapping if "_cell" in k or k.endswith("_header")]
+
+    def test_the_file_is_the_shape_the_wizards_restore_reads(self, monkeypatch):
+        """`_seed_column_mapping` only writes keys that start with `col_map_`, so
+        a file whose keys were left in the editor's namespace would restore
+        nothing at all — silently."""
+        from scanpath_studio.tabs import _editor_setup_config
+        from scanpath_studio.url_state import PLOT_CONFIG_SCHEMA, _seed_column_mapping
+
+        session = self._session(monkeypatch)
+        session["remap_My corpus_words_x"] = "left_px"
+        session["_remap_pending_setup"] = {"canvas_width": 1920}
+        config = _editor_setup_config("My corpus")
+
+        assert config["schema"] == PLOT_CONFIG_SCHEMA
+        assert config["data_source"] == "My corpus"
+        assert config["experimental_setup"] == {"canvas_width": 1920}
+
+        session.clear()
+        _seed_column_mapping(config["column_mapping"], overwrite=True)
+        assert session["col_map_words_x"] == "left_px"
+
+    def test_the_footer_offers_both_halves_of_the_add_screens_pair(self):
+        """Source-level: AppTest reports no download_button, and what must not
+        silently regress is that the editor's last row is the *pair*."""
+        import inspect
+
+        from scanpath_studio.tabs import render_dataset_editor_footer
+
+        source = inspect.getsource(render_dataset_editor_footer)
+        assert "⬇️ Save setup" in source
+        assert "✅ Save changes" in source
+        assert "_editor_setup_config" in source
+        # It borrows the wizard's own column widths so the two rows line up.
+        assert "_FOOTER_ROW_W" in source

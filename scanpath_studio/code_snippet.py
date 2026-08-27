@@ -408,6 +408,39 @@ def _comma_list(flag: str) -> Any:
     return emit
 
 
+def _highlight_column(value):
+    """``--highlight-column``. ``None`` is the real request "highlight nothing",
+    which the flag spells as an empty string — not the absence of the flag,
+    which would leave the default (`is_in_aspan`) in place."""
+    return ["--highlight-column", "" if value is None else str(value)]
+
+
+def _fixation_flags(value):
+    """The PRE-2 classification dict → one ``--fixation-flag`` per category.
+
+    Only categories that are actually doing something are written: an *Off*
+    category is the default, and the builder reads a missing one the same way.
+    """
+    argv: list[str] = []
+    for category, spec in (value or {}).items():
+        if not isinstance(spec, dict):
+            continue
+        mode = str(spec.get("mode") or "Off")
+        if mode == "Off":
+            continue
+        parts = [f"{category}={mode.lower()}"]
+        # Only for the two categories that have one — `oob` / `blink` carry a
+        # stale default threshold in the app's dict that the CLI would reject.
+        if category in ("short", "long") and spec.get("threshold_ms") is not None:
+            parts.append(f"threshold_ms={_num(spec['threshold_ms'])}")
+        if spec.get("symbol"):
+            parts.append(f"symbol={spec['symbol']}")
+        if spec.get("color"):
+            parts.append(f"color={spec['color']}")
+        argv += ["--fixation-flag", ",".join(parts)]
+    return argv
+
+
 def _heatmap_metric(value):
     # The figure level spells "counts" as None (`_build_figure_settings` and
     # `api._figure_kwargs` both translate), so the CLI word has to be put back.
@@ -488,6 +521,12 @@ _CLI_EMITTERS: dict[str, Any] = {
         },
     ),
     "heatmap_norm": _mapped("--heatmap-norm", {"Linear": "linear", "Log": "log"}),
+    "highlight_column": _highlight_column,
+    "critical_span_style": _mapped(
+        "--critical-span-style",
+        {"Mark text": "mark-text", "Mark border": "mark-border", "None": "none"},
+    ),
+    "fixation_flags": _fixation_flags,
     "duration_mass_sigma_chars": _valued("--duration-mass-sigma"),
     "marker_size_range": _marker_size_range,
     "saccade_color": _valued("--saccade-color"),
@@ -728,11 +767,13 @@ def cli_snippet(
             # flavours of one recipe disagreeing.
             if state.drift_connectors and state.kind == "static":
                 argv.append("--drift-connectors")
-        # VIZ-7's fixation-index window is a `plot_scanpath` parameter with no
-        # `render` flag — named here rather than silently widened to the whole
-        # trial, which would be a different figure.
-        if state.fix_index_range:
-            unsupported.append("fix_index_range")
+    # VIZ-7's fixation-index window is a `plot_scanpath` / `animate_scanpath`
+    # parameter rather than a figure keyword, so it is written by hand like the
+    # drift pair above rather than through `_CLI_EMITTERS`. Both builders take
+    # it, so it sits outside the static/animation split.
+    if state.fix_index_range:
+        lo, hi = state.fix_index_range
+        argv += ["--fix-index-range", f"{int(lo)}:{int(hi)}"]
     if state.kind == "comparison":
         compare = state.compare or CompareTarget()
         argv += ["--compare-with", f"{compare.participant}:{compare.trial}"]
@@ -797,8 +838,13 @@ def _wrap_command(argv: list[str], width: int = 76, *, env_prefix: str = "") -> 
     lines: list[str] = []
     current = ""
     for group in groups:
+        # `env_prefix and` matters: without it an *empty* token compares equal to
+        # the empty default prefix and is emitted verbatim — so
+        # `--highlight-column ''` (mark nothing) printed as a flag with no value,
+        # which the parser would then read as taking the next flag as its value.
         piece = " ".join(
-            token if token == env_prefix else shlex.quote(token) for token in group
+            token if (env_prefix and token == env_prefix) else shlex.quote(token)
+            for token in group
         )
         if not current:
             current = piece

@@ -30,6 +30,7 @@ from .constants import (
     ONESTOP_CHOICE,
     PUBLIC_DATASETS_CHOICE,
     SYNTHETIC_CHOICE,
+    TRIAL_IDENTITY_CHECK_KEY,
     UPLOAD_CHOICE,
     UPLOAD_MAX_SIZE_MB,
     WIZARD_LEAVE_KEY,
@@ -284,6 +285,13 @@ def _finalize_wizard_dataset() -> None:
     # while the new dataset's first figure builds — otherwise the wizard lingers
     # on screen (stale DOM) for the seconds the heavy first render takes.
     st.session_state["_wizard_finalizing"] = True
+    # …and ask for VAL-7's Trial ID verdict on the dataset this just created.
+    # It runs as part of the load that is about to happen (`main` already
+    # computes the report for the open dataset), so pressing ✅ Add dataset pays
+    # for one sampled scan and hears about a Trial ID that under-specifies while
+    # the mapping that produced it is still fresh — instead of a page-wide
+    # banner it will learn to ignore. See `app._trial_identity_alert_dialog`.
+    st.session_state[TRIAL_IDENTITY_CHECK_KEY] = "add"
 
 
 def _remove_dataset(name: str) -> None:

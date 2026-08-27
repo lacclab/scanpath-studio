@@ -80,12 +80,14 @@ from scanpath_studio.constants import (
     DEMO_CHOICE,
     FOCUS_MAPPING_KEY,
     HIGHLIGHTED_TEXT_COLOR,
+    SACCADE_CLASS_COLORS,
     SACCADE_CLASS_ORDER,
     SACCADE_COLOR,
     SACCADE_DASH_OPTIONS,
     SELECTOR_ROW_GRID,
     SELECTOR_ROW_TRIO,
     SELECTOR_ROW_WIDE_GRID,
+    TRIAL_IDENTITY_CHECK_KEY,
     TRIAL_IDENTITY_FULL_KEY,
     WORD_LABEL_COLOR,
     compare_palette_color,
@@ -1143,6 +1145,37 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
     )
 
 
+def _snippet_settings_at_api_defaults(settings: dict) -> dict:
+    """Settings the rail materializes in full, normalized to the API's default.
+
+    **EXP-8 §3.** ``api.figure_options`` reports ``None`` for ``fixation_flags``
+    and ``saccade_class_colors``, while ``controls._collect_viz_settings`` always
+    builds the full dict — four categories at *Off*, the stock class palette. The
+    snippet diffs against the API's defaults, so an **untouched** figure looked
+    changed in both: the Python form emitted two dicts nobody had asked for, and
+    the CLI form carried a permanent "``render`` has no flag for
+    ``fixation_flags``" warning about a setting that was not set.
+
+    Normalized here, at the snippet's own seam, rather than in
+    ``_collect_viz_settings``: the builders read ``fixation_flags or {}`` and
+    fall back to ``SACCADE_CLASS_COLORS``, so the two spellings draw the same
+    figure — but only the snippet has a reason to prefer one.
+    """
+    out = dict(settings)
+    flags = out.get("fixation_flags")
+    if isinstance(flags, dict) and all(
+        str((spec or {}).get("mode", "Off")) == "Off" for spec in flags.values()
+    ):
+        out["fixation_flags"] = None
+    colors = out.get("saccade_class_colors")
+    if isinstance(colors, dict) and all(
+        str(colors.get(name, default)).lower() == str(default).lower()
+        for name, default in SACCADE_CLASS_COLORS.items()
+    ):
+        out["saccade_class_colors"] = None
+    return out
+
+
 def _publish_snippet_state(
     kind: str,
     figure_settings: dict,
@@ -1158,6 +1191,7 @@ def _publish_snippet_state(
     caption: str,
     playback_speed: float,
     compare: CompareTarget | None,
+    full_fix_range: tuple[int, int] | None = None,
 ) -> None:
     """EXP-7: park the state the Share subtab's code snippet is written from.
 
@@ -1166,10 +1200,19 @@ def _publish_snippet_state(
     `_share_selection` is written here and not rebuilt inside the Share panel.
     A separate emitter reading `session_state` a second time is exactly the
     drift the issue (EXP-7) asked to avoid.
+
+    ``full_fix_range`` is the trial's own ``(first, last)`` fixation index, and
+    is what tells VIZ-7's window apart from *no window*: the slider defaults to
+    the whole trial the instant there are two fixations, so an untouched figure
+    published ``fix_index_range=(1, 154)`` and both code forms wrote a window
+    nobody had chosen (EXP-8 §3).
     """
+    window = viz_settings.get("fix_index_range")
+    if window and full_fix_range and tuple(window) == tuple(full_fix_range):
+        window = None
     st.session_state[SNIPPET_STATE_KEY] = FigureState(
         kind=kind,
-        settings=dict(figure_settings),
+        settings=_snippet_settings_at_api_defaults(figure_settings),
         participant=str(participant),
         trial=str(trial),
         screen=None if screen is None else str(screen),
@@ -1178,7 +1221,7 @@ def _publish_snippet_state(
         font_family=str(font_family),
         title=title,
         caption=caption,
-        fix_index_range=viz_settings.get("fix_index_range"),
+        fix_index_range=window,
         # "Off" is the rail's word for no correction; the API's is None.
         drift_correction=(
             None
@@ -1209,7 +1252,11 @@ def _amend_snippet_settings(settings, kind: str) -> None:
     in the rail came back in the stock palette.
 
     Only keys the chosen builder accepts are merged, so this cannot widen the
-    published dict into something `api` would reject.
+    published dict into something `api` would reject. The merge is normalized
+    through :func:`_snippet_settings_at_api_defaults` for the same reason the
+    publish is — the built ``FigureSettings`` carries the *materialized*
+    `fixation_flags` / `saccade_class_colors`, so without it this step would put
+    straight back what the publish had just normalized away (EXP-8 §3).
     """
     from . import api
 
@@ -1225,7 +1272,9 @@ def _amend_snippet_settings(settings, kind: str) -> None:
             if name in known
         }
     )
-    st.session_state[SNIPPET_STATE_KEY] = replace(state, settings=merged)
+    st.session_state[SNIPPET_STATE_KEY] = replace(
+        state, settings=_snippet_settings_at_api_defaults(merged)
+    )
 
 
 def _amend_snippet_title_caption(title: str, caption: str) -> None:
@@ -3921,23 +3970,24 @@ def _render_trial_condition_chips(
     ones stayed reachable — the same facts shown twice, because which chips fit
     is a live-width question Python can't answer. The fix is to stop asking: the
     strip is a wrapping flex row, so nothing is ever cut at any width or rail
-    state, and the duplicate list has no reason to exist. What's left is split by
-    *kind* rather than by what happened to fit — conditions inline here, the
-    computed summary stats in the **Summary stats** popover the caller renders from the
-    returned list.
+    state, and the duplicate list has no reason to exist.
 
     ``fields`` is the configurable list of fields to surface (the ✏️ Edit chips
     popover). A data column that varies within the trial is shown (first value)
     but flagged with ⚠️.
 
-    Returns the ``(label, value)`` summary stats for that popover; empty
-    when the user has no summary chips selected."""
-    primary: list[tuple[str, str]] = []  # identity + conditions (inline)
-    summary: list[tuple[str, str]] = []  # computed stats (inside "More")
+    **The computed summary stats are chips too.** UX-11 split the strip by
+    *kind* and put reading time / the counts behind a **Summary stats** popover
+    beside it; the user's call this round is that the split cost a click for the
+    two numbers most often wanted (total reading time, fixation count) and left
+    a control on the row that was empty as often as not. They are ordinary chips
+    now — picked, ordered and coloured in the ✏️ popover like every other field
+    — so the popover is gone and this returns nothing."""
+    primary: list[tuple[str, str]] = []  # identity + conditions + computed stats
     summary_lookup: dict | None = None  # computed once, only if a summary chip
     for col in fields or []:
         # Virtual summary fields (reading time / counts) — always trial-level,
-        # computed once from `_summary_rows`; routed to the "More" disclosure.
+        # computed once from `_summary_rows` rather than read off a column.
         if col in SUMMARY_CHIP_FIELDS:
             if summary_lookup is None:
                 summary_lookup = {
@@ -3948,7 +3998,7 @@ def _render_trial_condition_chips(
             value = summary_lookup.get(label)
             if value in (None, ""):
                 continue  # e.g. "Fixations in word boxes" unavailable for this trial
-            summary.append((label, str(value)))
+            primary.append((f"{label} = {value}", _chip_color(col, str(value))))
             continue
         value, trial_level = _chip_value_and_uniqueness(
             col, trial_words, trial_fixations, participant
@@ -3980,33 +4030,6 @@ def _render_trial_condition_chips(
                 for lbl, bg in primary
             )
             + "</div>",
-            unsafe_allow_html=True,
-        )
-    return summary
-
-
-def _render_trial_details_popover(summary: list[tuple[str, str]], host) -> None:
-    """The **Summary stats** popover beside the chip strip: the computed numbers.
-
-    UX-11 split the strip by *kind*: conditions are chips (short, colour-coded,
-    scannable), while reading time / word count / fixation counts are derived
-    numbers that read far better as a key→value list — and are the "on demand"
-    half of the strip's job. Renders nothing when the user has no summary chips
-    selected, so the control never appears empty.
-    """
-    if not summary:
-        return
-    with host.popover(
-        "Summary stats", width="content", help="Summary stats for this trial."
-    ):
-        st.markdown(
-            "".join(
-                '<div class="sps-stat">'
-                f'<span class="sps-stat-name">{html.escape(name)}</span>'
-                f'<span class="sps-stat-val">{html.escape(value)}</span>'
-                "</div>"
-                for name, value in summary
-            ),
             unsafe_allow_html=True,
         )
 
@@ -4953,7 +4976,7 @@ def render_single_trial_tab(
     # the rest, and the row's controls in the trailing track. The line takes
     # `SELECTOR_ROW_TRIO` — the control-line grid with the trial and scrub
     # tracks merged — so the title sits under the dataset picker, the chips
-    # under the trial picker and scrubber, and **Summary stats** / ✏️ under ◀ ▶ ⇅.
+    # under the trial picker and scrubber, and ✏️ under ◀ ▶ ⇅.
     color_a = color_b = None
     if comparing and compare_meta:
         # Each title takes the colour of the scanpath it names (A = primary,
@@ -4969,9 +4992,11 @@ def render_single_trial_tab(
         # Top-aligned, not centre-aligned: the strip wraps to several lines
         # (UX-11), and a centred control would drift to the middle of a tall
         # strip instead of sitting on the first chip's line.
-        # UX-27: **Summary stats** and ✏️ share ONE trailing column, as a `railbtn_*`
-        # cluster — styles.py lays every such container out as a right-packed
-        # flex row, so this row's pair ends flush with the ◀ ▶ ⇅ cluster above.
+        # UX-27: the row's trailing controls share ONE `railbtn_*` cluster —
+        # styles.py lays every such container out as a right-packed flex row, so
+        # this row ends flush with the ◀ ▶ ⇅ cluster above. Only ✏️ is left in it
+        # now that the computed stats are chips of their own (see
+        # `_render_trial_condition_chips`).
         # The Participant chip already identifies the reading. Do not repeat
         # the same id in a title cell; use that width for the chip strip in both
         # ordinary and Compare modes.
@@ -4979,9 +5004,6 @@ def render_single_trial_tab(
             SELECTOR_ROW_WIDE_GRID, vertical_alignment="top"
         )
         trail = trail_col.container(key="railbtn_chip_trail")
-        # Created in display order (Summary stats, then ✏️) but filled out of order:
-        # the popover body needs `summary`, which the strip below computes.
-        details_box = trail.container(key="railbtn_chip_details")
         edit_box = trail.container(key="railbtn_chip_edit")
         with edit_box.popover(
             "✏️",
@@ -4992,7 +5014,7 @@ def render_single_trial_tab(
             render_trial_chip_picker(words_all, fixations_all, host=st.container())
         chip_fields = st.session_state.get("trial_chip_fields") or []
         with strip_col:
-            summary = _render_trial_condition_chips(
+            _render_trial_condition_chips(
                 trial_words,
                 trial_fixations,
                 selected_participant,
@@ -5001,13 +5023,10 @@ def render_single_trial_tab(
                 if comparing and color_a
                 else None,
             )
-        # Rendered after the strip so it reads the *primary* trial's stats.
-        _render_trial_details_popover(summary, details_box)
     if comparing and compare_meta:
         with compare_chips_slot:
-            # B's own line, directly under B's control row. No ✏️ or **Summary stats**
-            # of its own: the chip fields are one setting for both readings, and
-            # the summary popover describes the trial the panels are anchored on.
+            # B's own line, directly under B's control row. No ✏️ of its own:
+            # the chip fields are one setting for both readings.
             b_strip, _b_trail = st.columns(
                 SELECTOR_ROW_WIDE_GRID, vertical_alignment="top"
             )
@@ -5131,6 +5150,7 @@ def render_single_trial_tab(
         title=_snippet_title,
         caption=_snippet_caption,
         playback_speed=playback_speed,
+        full_fix_range=full_fix_range,
         compare=(
             CompareTarget(
                 # The real ids, never the CMP-8 namespaced ones — a snippet
@@ -8436,13 +8456,49 @@ def render_raw_data_tab(
     section below (currently held back — UX-126) and the Corpus Analysis
     view.
 
-    UX-52 folds this whole block into a collapsed expander, so the provenance
-    banner moved out to its caller (it owns an expander, which cannot nest) —
-    see ``render_data_inspection_tab``.
+    UX-52 folded this whole block into a collapsed expander; this round took the
+    expander back off (the tables are what the section is *for*, so paying a
+    click for them was backwards) and put the six tabs on one bar with the
+    dataset's own 📊 Stats tab — see ``render_data_inspection_tab``, which builds
+    that bar itself and calls :func:`_fill_raw_data_tabs`. This entry point is
+    kept for a caller that wants the six alone.
+    """
+    _fill_raw_data_tabs(
+        st.tabs(RAW_DATA_TAB_LABELS),
+        words_filtered,
+        fixations_filtered,
+        raw_gaze_filtered,
+    )
+
+
+#: The six tables a dataset can upload, in the fixed order they are always
+#: shown in — see :func:`render_raw_data_tab`. A module constant because
+#: :func:`render_data_inspection_tab` prepends its own 📊 Stats tab and builds
+#: the whole bar in one `st.tabs` call.
+RAW_DATA_TAB_LABELS = [
+    "Fixations",
+    "AOIs",
+    "Raw gaze",
+    "Participants",
+    "Trials",
+    "Texts",
+]
+
+
+def _fill_raw_data_tabs(
+    tabs,
+    words_filtered: pd.DataFrame,
+    fixations_filtered: pd.DataFrame,
+    raw_gaze_filtered: pd.DataFrame,
+) -> None:
+    """Draw the six raw-data tables into six already-created tab containers.
+
+    Split out of :func:`render_raw_data_tab` so the Data page can put them on
+    *one* bar with its 📊 Stats tab rather than nesting a second `st.tabs`
+    inside a tab.
     """
     from scanpath_studio import metadata as md
 
-    tabs = st.tabs(["Fixations", "AOIs", "Raw gaze", "Participants", "Trials", "Texts"])
     with tabs[0]:
         render_fixations_tab(fixations_filtered)
     with tabs[1]:
@@ -8684,35 +8740,6 @@ def _active_stored_dataset() -> tuple | None:
     name = st.session_state.get("data_source_choice")
     entry = st.session_state.get("_datasets", {}).get(name)
     return (name, entry) if entry is not None else None
-
-
-def _rename_active_dataset(old: str) -> None:
-    """DATA-23: apply the rename (the ✅ Rename button's ``on_click`` callback).
-
-    A callback, not an inline ``if button:`` handler, because the rename reassigns
-    ``data_source_choice`` — a widget key — and that only lands reliably when it
-    happens before the widgets instantiate (see ``wizard._enter_add_data_wizard``).
-    """
-    from scanpath_studio.wizard import rename_dataset
-
-    requested = str(st.session_state.get(f"dataset_rename_{old}", "") or "").strip()
-    if not requested:
-        st.session_state["_dataset_rename_note"] = ("warning", "Enter a dataset name.")
-        return
-    renamed = rename_dataset(old, requested)
-    if renamed is None:
-        st.session_state["_dataset_rename_note"] = (
-            "info",
-            f"Already named “{old}”.",
-        )
-        return
-    note = f"Renamed “{old}” to “{renamed}”."
-    if renamed != requested:
-        # _safe_dataset_name resolved a clash with a built-in source label or
-        # another stored dataset — say so rather than let the picker show a name
-        # the user did not type.
-        note += f" “{requested}” was already taken."
-    st.session_state["_dataset_rename_note"] = ("success", note)
 
 
 # The file name the attached table came from, for the "from **X**" captions.
@@ -9522,47 +9549,6 @@ def commit_deferred_metadata(participants, combos, texts) -> None:
         )
 
 
-def _render_dataset_rename() -> None:
-    """DATA-23: rename the active dataset, for datasets the user added.
-
-    Only a stored upload can be renamed — every other source's name is the app's
-    (the demo, the synthetic trial) or the corpus' own (the public registry), and
-    is what the load path dispatches on. Lives here because Data Inspection is the
-    page about *this dataset*, and the wizard's naming step is a one-shot the user
-    can't get back to without uploading again.
-    """
-    active = _active_stored_dataset()
-    if active is None:
-        return
-    name, _ = active
-    label, rename = st.columns([5, 1.4], vertical_alignment="bottom")
-    label.markdown(f"**Dataset:** {name}")
-    editor = rename.popover("✏️ Rename", width="stretch", help="Rename this dataset.")
-    editor.text_input(
-        "Dataset name",
-        value=name,
-        # Keyed by the dataset so switching sources reseeds the box rather than
-        # carrying the previous dataset's half-typed name into it.
-        key=f"dataset_rename_{name}",
-        # DATA-26 put this on the 🗂️ Data page, so it renders only while that
-        # view is active — and Streamlit drops the key of a widget that did not
-        # render, which would silently reset a half-typed name to the current
-        # one (`value=name`) on the way back. Same rule as ENG-36's rail widgets.
-        persist_state="session",
-        help="Shown in the Data source list.",
-    )
-    editor.button(
-        "✅ Rename",
-        key=f"dataset_rename_apply_{name}",
-        on_click=_rename_active_dataset,
-        args=(name,),
-        width="stretch",
-    )
-    kind, message = st.session_state.pop("_dataset_rename_note", (None, ""))
-    if kind is not None:
-        getattr(st, kind)(message)
-
-
 def _remap_proposed(schema: dict | None, frame_columns, canon: dict) -> dict:
     """Seed the remap editor from the stored schema: each field the dataset had
     mapped → its canonical column (present in the now-normalized frame), else
@@ -9712,6 +9698,11 @@ def _apply_remap() -> None:
         )
     st.session_state["_datasets"][name] = new_entry
     st.session_state["_remap_applied"] = name
+    # Saving *is* the moment the Trial ID mapping is decided, so ask for VAL-7's
+    # verdict on the frames this just re-derived. `app.main` computes the report
+    # on the next run anyway; this only asks it to be *said* — see
+    # `app._trial_identity_alert_dialog`.
+    st.session_state[TRIAL_IDENTITY_CHECK_KEY] = "edit"
     # UX-107 — saving is the end of the edit, so it returns to 📂 Available
     # datasets the way ✅ Add dataset returns from the add screen. The success
     # line travels with it (`_remap_applied`, read above the dataset table);
@@ -10205,37 +10196,127 @@ def dataset_editor_is_dirty() -> bool:
     return bool(st.session_state.get(_REMAP_DIRTY_KEY, True))
 
 
-def render_dataset_editor_footer(host) -> None:
-    """✅ Save changes, at the foot of the ✏️ Edit dataset screen (UX-106).
+#: The editor's own widget namespace → the add screen's. The two screens run the
+#: same ``controls.column_mapping_ui`` over the same field specs, so a key is
+#: ``<prefix>_<field>`` on both sides and the whole difference is the prefix —
+#: which is what lets ⬇️ Save setup write the *add* screen's file from the *edit*
+#: screen's state. The namespaces are deliberately separate (see
+#: ``_render_remap_fields``): an open wizard and an open editor must not
+#: overwrite each other's answers.
+_EDITOR_TO_WIZARD_PREFIX = {
+    "words": "col_map_words",
+    "fixations": "col_map_fix",
+    "raw_gaze": "col_map_raw_gaze",
+}
 
-    The add screen's shape: the one commit is the last thing on the page, under
-    everything it commits. It used to sit at the end of the *Column mapping*
-    section — the first of six — which put it in the middle of the screen,
-    above trial identity, stimulus images and both metadata tables.
+#: Scaffolding *substrings* under those prefixes that are not part of the
+#: mapping: the per-cell confirm state (`<field>_cell_confirm`, so this cannot be
+#: a suffix test), the uploader itself, and the stashed file header.
+_EDITOR_KEY_NOISE = ("_cell", "_upload", "_header")
+
+
+def _editor_setup_config(name: str) -> dict:
+    """The open editor's mapping + recording setup, in the add screen's setup
+    format (``wizard._wizard_setup_config``).
+
+    So ⬇️ Save setup means the same thing on both screens, and a file saved from
+    either is restored by the same *Restore a saved setup* uploader. The mapping
+    is swept out of session state rather than rebuilt from
+    ``_remap_pending_schemas`` because the coordinate-format radio
+    (``*_box_format``) is a widget answer, not a schema field, and a restored
+    file without it opens the wizard on the wrong box format.
+    """
+    from datetime import datetime
+
+    from scanpath_studio import __version__
+    from scanpath_studio.url_state import PLOT_CONFIG_SCHEMA
+
+    mapping: dict = {}
+    for table_key, wizard_prefix in _EDITOR_TO_WIZARD_PREFIX.items():
+        prefix = f"remap_{name}_{table_key}_"
+        for key in sorted(k for k in st.session_state if isinstance(k, str)):
+            if not key.startswith(prefix) or any(
+                noise in key for noise in _EDITOR_KEY_NOISE
+            ):
+                continue
+            value = st.session_state[key]
+            if value is None or isinstance(value, (str, int, float, bool)):
+                mapping[f"{wizard_prefix}_{key[len(prefix) :]}"] = value
+            elif isinstance(value, (list, tuple)):
+                # The composite trial id — a list of component columns.
+                mapping[f"{wizard_prefix}_{key[len(prefix) :]}"] = [
+                    str(item) for item in value
+                ]
+    setup = st.session_state.get("_remap_pending_setup")
+    return {
+        "schema": PLOT_CONFIG_SCHEMA,
+        "app": {"name": "Scanpath Studio", "version": __version__},
+        "exported_at": datetime.now().isoformat(timespec="seconds"),
+        "data_source": name,
+        "column_mapping": mapping,
+        "experimental_setup": dict(setup) if isinstance(setup, dict) else None,
+    }
+
+
+def render_dataset_editor_footer(host) -> None:
+    """⬇️ Save setup · ✅ Save changes, at the foot of the ✏️ Edit dataset screen.
+
+    The add screen's footer, for the screen that edits what it created (UX-106,
+    and this round the *pair* rather than the commit alone): one line, matched
+    widths, the same heavy divider above it, and the same two things you do with
+    a finished mapping — take it away as JSON, or commit it. See
+    ``wizard._wizard_footer``, whose widths this borrows so the two screens'
+    last rows line up.
+
+    ✅ Save changes is the one commit, and it is the last thing on the page,
+    under everything it commits. It used to sit at the end of the *Column
+    mapping* section — the first of six — which put it in the middle of the
+    screen, above trial identity, stimulus images and both metadata tables.
 
     It also prints what blocked the last attempt. `_apply_remap` records those
     in ``_remap_problems``, which until now only tinted the offending selects;
     a mapping the pipeline *rejected* (rather than one with an empty required
     field) has no cell to tint, so pressing Save did nothing and said nothing.
     """
+    import json
+
+    from scanpath_studio.wizard import _FOOTER_ROW_W
+
     active = _active_stored_dataset()
     if active is None:
         return
     name, _stored = active
     problems = st.session_state.get("_remap_problems") or {}
     box = host.container()
-    box.divider()
+    divider_host = box.container(key="wizard_footer_divider_edit")
+    divider_host.divider()
     for table_key, messages in problems.items():
         label = _TABLE_LABELS.get(table_key, table_key)
         for message in messages:
             box.error(f"**{label}** — {message}", icon="🚫")
-    box.button(
+    row = box.container(key="wizard_footer_row_edit")
+    save_col, apply_col, _rest = row.columns(
+        _FOOTER_ROW_W, gap="small", vertical_alignment="center"
+    )
+    save_col.download_button(
+        "⬇️ Save setup",
+        data=json.dumps(_editor_setup_config(name), indent=2),
+        file_name="scanpath_studio_setup.json",
+        mime="application/json",
+        key=f"remap_setup_download_{name}",
+        width="stretch",
+        help="Save this dataset's column mapping and recording setup to re-use "
+        "on similar data — or to send with the files, so whoever loads them "
+        "restores it from *Restore a saved setup* instead of re-mapping by hand.",
+    )
+    apply_col.button(
         # UX-54 r2: the add-dataset screen's ✅ Add dataset, for the screen that
         # edits one — same shape, same place, same filled blue.
         "✅ Save changes",
         type="primary",
         key=f"remap_apply_{name}",
         on_click=_apply_remap,
+        width="stretch",
         help="Save the mapping and recording setup, then re-derive the dataset.",
     )
 
@@ -10528,49 +10609,23 @@ def _c_derived_tables(
     }
 
 
-def render_data_inspection_tab(
+def _render_dataset_stats_tab(
+    stats: dict,
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
-    raw_gaze_filtered: pd.DataFrame,
 ) -> None:
-    """Render the *What's in this dataset* section of the 🗂️ Data page.
+    """The 📊 Stats tab: every number "what's in this dataset" has to offer.
 
-    Combines the former **Raw Data** and **Data Statistics** tabs: the dataset's
-    name (renamable when the user added it — DATA-23), the headline dataset
-    counts, every raw-data table, the per-metric summary statistics, and the
-    trial-identity check — in that order.
+    The headline counts and the per-metric spread used to be two blocks a screen
+    apart, the second behind its own collapsed **📊 Summary statistics**
+    expander. They are the same question at two grains — how much is there, and
+    how it is distributed across readers and trials — so they read as one tab.
 
-    UX-52 gave it one level of hierarchy instead of five equally-weighted
-    ``st.subheader`` + ``st.divider()`` pairs: **the answer stays open** (the
-    dataset's name, the counts, the provenance banner, and the trial-identity
-    verdict) and **the appendix folds away** (raw tables, derived tables,
-    summary statistics, the identity evidence table). The tables were the bulk
-    of the page's scroll and, per DATA-26, are "not checked that often".
-
-    Every expander body still renders on every run — collapse is client-side, so
-    no widget key is dropped. The one thing that could not simply be wrapped is
-    ``_render_data_provenance``: it owns an expander of its own, and Streamlit
-    nests neither expander-in-expander nor popover-in-popover. It is a
-    whole-dataset fact rather than a raw-table one, so it moved *up* beside the
-    counts instead of down inside the fold.
+    **Median is dropped** on the user's call: mean + std + min + max already say
+    what the row is for (is this reader-balanced? is there a one-fixation
+    trial?), and a fifth number per row made a five-column table out of three
+    facts.
     """
-    stats = _dataset_statistics(
-        words_filtered,
-        fixations_filtered,
-        raw_gaze_filtered,
-        cache_key=(
-            frame_fingerprint(words_filtered),
-            frame_fingerprint(fixations_filtered),
-            frame_fingerprint(raw_gaze_filtered),
-        ),
-    )
-
-    # 1. Headline dataset counts — under the dataset's own name, which DATA-23
-    # makes editable here for a dataset the user added. No heading of its own
-    # (UX-52): the counts *are* the opening answer of "what's in this dataset",
-    # and a second same-weight subheader under the section's own only flattened
-    # the hierarchy it was supposed to create.
-    _render_dataset_rename()
     # ENG-36: icons (1.61) so the six counts are scannable rather than a row of
     # equally-weighted numbers — one glyph per *kind* of thing being counted.
     parts = part_catalog(words_filtered, fixations_filtered)
@@ -10584,16 +10639,37 @@ def render_data_inspection_tab(
         "Fixations", f"{stats['n_fixations']:,}", icon=":material/blur_on:"
     )
     top_cols[4].metric("Words", f"{stats['n_words']:,}", icon=":material/abc:")
+    # No `help=` — "Gaze points" says what it counts, and the ❔ beside it was
+    # the only one on the row, which read as though that count meant something
+    # different from its five neighbours.
     top_cols[5].metric(
         "Gaze points",
         f"{stats['n_gaze']:,}" if stats["n_gaze"] else "0",
-        help="Counts raw gaze samples if provided.",
         icon=":material/scatter_plot:",
     )
     if not parts.empty:
         top_cols[6].metric(
             "Screens", f"{len(parts):,}", icon=":material/view_carousel:"
         )
+
+    # The spread behind those totals, right under them.
+    spread = stats["stats_df"]
+    spread = spread.drop(columns=["Median"], errors="ignore")
+    st.dataframe(
+        spread,
+        hide_index=True,
+        width="stretch",
+        column_config={
+            col: st.column_config.NumberColumn(format="%.2f")
+            for col in ["Mean", "Std", "Min", "Max"]
+        },
+    )
+    st.caption(
+        "Statistics computed after filtering; missing values indicate empty "
+        "source data."
+    )
+
+    if not parts.empty:
         with st.expander("Multipart trial screens", expanded=False):
             st.caption(
                 "Recorded parent/child identity and per-screen geometry. Each row is "
@@ -10601,17 +10677,55 @@ def render_data_inspection_tab(
             )
             st.dataframe(parts, hide_index=True, width="stretch")
 
-    # Provenance is a fact about the *dataset*, so it sits with the counts —
-    # and it has to, because it owns an expander and cannot nest inside one.
+    # Provenance is a fact about the *dataset*, so it sits with the counts.
     # Silent for every source but a OneStop server bundle.
     _render_data_provenance()
 
-    # 2. Every raw-data table (Stimuli / Word-level / Fixation-level / Raw gaze).
-    with st.expander(
-        "📋 Raw data — fixations, AOIs, raw gaze, participants, trials, texts",
-        expanded=False,
-    ):
-        render_raw_data_tab(words_filtered, fixations_filtered, raw_gaze_filtered)
+
+def render_data_inspection_tab(
+    words_filtered: pd.DataFrame,
+    fixations_filtered: pd.DataFrame,
+    raw_gaze_filtered: pd.DataFrame,
+) -> None:
+    """Render the *What's in this dataset* section of the 🗂️ Data page.
+
+    Combines the former **Raw Data** and **Data Statistics** tabs onto **one tab
+    bar**: 📊 Stats (the headline counts, the per-metric spread, the multipart
+    screen catalogue and the provenance banner) followed by the six raw tables,
+    in their fixed order.
+
+    UX-52 gave the section one level of hierarchy and folded the bulk away —
+    "the answer stays open, the appendix folds". This round unfolded the raw
+    tables again (the user's call): the appendix *is* the section's job on the
+    page you open to check your data, and a collapsed expander over a tab bar
+    made every table two clicks deep. The name/rename line went with it — a
+    dataset is renamed from its row in 📂 Available datasets, and this section
+    already carries the dataset's name in its own heading.
+
+    Every tab body still renders on every run — tab switching is client-side, so
+    no widget key is dropped, exactly as with the expanders this replaced.
+    """
+    stats = _dataset_statistics(
+        words_filtered,
+        fixations_filtered,
+        raw_gaze_filtered,
+        cache_key=(
+            frame_fingerprint(words_filtered),
+            frame_fingerprint(fixations_filtered),
+            frame_fingerprint(raw_gaze_filtered),
+        ),
+    )
+
+    # One tab bar for the whole section: 📊 Stats first — open by default, and
+    # holding every number the section has to offer — then the six raw tables.
+    # The tables used to sit behind a collapsed "📋 Raw data" expander *over* a
+    # tab bar, so reaching one cost two clicks on the page whose job is to show
+    # them; and the per-metric summary table sat behind a third expander of its
+    # own, far below the counts it belongs with.
+    stats_tab, *raw_tabs = st.tabs(["📊 Stats", *RAW_DATA_TAB_LABELS])
+    with stats_tab:
+        _render_dataset_stats_tab(stats, words_filtered, fixations_filtered)
+    _fill_raw_data_tabs(raw_tabs, words_filtered, fixations_filtered, raw_gaze_filtered)
 
     # UX-126: the whole section — including the computation that backs it — is
     # held back from this release, the same way PRE-21/PRE-22 hold back drift
@@ -10662,22 +10776,6 @@ def render_data_inspection_tab(
                         )
                     else:
                         _render_raw_table(table)
-
-    # 3. Per-metric summary statistics.
-    with st.expander("📊 Summary statistics", expanded=False):
-        st.dataframe(
-            stats["stats_df"],
-            hide_index=True,
-            width="stretch",
-            column_config={
-                col: st.column_config.NumberColumn(format="%.2f")
-                for col in ["Mean", "Std", "Min", "Median", "Max"]
-            },
-        )
-        st.caption(
-            "Statistics computed after filtering; missing values indicate empty "
-            "source data."
-        )
 
     # UX-52 round 3 — VAL-7's "does one trial_id cover several readings?" used to
     # close this panel. It is now its own Data-page section, rendered by

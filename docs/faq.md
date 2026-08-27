@@ -91,9 +91,18 @@ data and settings, not code. See
 
 ## Where does my data go?
 
-Local and desktop use stays on your machine. The hosted demo runs on a third-party
-Streamlit server, so do not upload identifiable participant data there. See
-[Privacy](privacy.md).
+Local and desktop use stays on your machine. Nothing is uploaded, and there are no
+accounts, database or analytics. A local or desktop run additionally keeps a
+**recovery copy** on that computer — the datasets you added, their column
+mappings, your settings, saved designs and annotations — so a refresh or a crash
+picks up where you left off. **💾 Session → 🗄️ Automatic recovery** reports what
+is stored and where, turns saving off, and deletes the copy;
+`SCANPATH_STUDIO_PERSIST=0` is the process-wide opt-out and
+`scanpath-studio cache` reports the same from a terminal.
+
+The hosted demo runs on a third-party Streamlit server, so do not upload
+identifiable participant data there; it keeps no recovery copy, so closing the
+tab loses the session. See [Privacy](privacy.md).
 
 ## How do I cite the app?
 

@@ -5714,6 +5714,15 @@ SUMMARY_CHIP_FIELDS = {
     "@fixation_count": "Number of fixations",
     "@in_text_fixations": "Fixations in word boxes",
 }
+#: …and the two of them that are shown by default. The other two are offered in
+#: *Available* like any other field. All four used to be default chips behind a
+#: **Summary stats** popover; now that they are chips on the strip itself, four
+#: of them crowd out the conditions beside them — and the two here are the ones
+#: worth a permanent chip ("how long was this reading, and how many fixations").
+#: Word count is a property of the text rather than of the reading, and the
+#: in-text count only means something when you are already chasing a geometry
+#: problem.
+_CHIP_DEFAULT_SUMMARY = ("@reading_time_s", "@fixation_count")
 
 
 def _trial_level_columns(words: pd.DataFrame, fixations: pd.DataFrame) -> set:
@@ -5803,7 +5812,7 @@ def _default_chip_fields(available: list[str]) -> list[str]:
         ["participant_id"]
         + ([text_col] if text_col else [])
         + _CHIP_DEFAULT_CONDITIONS
-        + list(SUMMARY_CHIP_FIELDS)
+        + list(_CHIP_DEFAULT_SUMMARY)
     )
     return [f for f in wanted if f in available]
 
@@ -5868,7 +5877,8 @@ def render_trial_chip_picker(
 
     host.caption(
         "Drag fields between **Shown** and **Available**, and reorder within "
-        "**Shown** — these chips appear above the scanpath."
+        "**Shown** — these chips appear above the scanpath. Their colours are "
+        "set below the list."
     )
     buckets = [
         {

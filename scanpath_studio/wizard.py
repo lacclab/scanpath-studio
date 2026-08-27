@@ -47,7 +47,6 @@ from .controls import (
     mark_missing_cells,
 )
 from .data import (
-    FILE_PART_PREFIX,
     FIX_OPTIONAL_FIELDS,
     PARTICIPANT_CANDIDATES,
     SOURCE_FILE_COLUMN,
@@ -713,6 +712,43 @@ _FILENAME_DERIVE_LINE_COUNT_KEY = "wizard_filename_line_count"
 #: two stay in sync.
 _FILENAME_REGEX_EXAMPLE = r"(?P<session>\d+_\w+_ET\d)_.*_(?P<stimulus>.+)_scanpath"
 
+#: UX-129 — the three tables a derivation line can target, display label to
+#: the `col_map_*_header` prefix its derived columns publish into
+#: (`_wizard_filename_derive`'s "make it mappable below" step).
+_DERIVE_TABLE_PREFIX = {
+    "Fixations": "col_map_fix",
+    "Words / IA": "col_map_words",
+    "Raw gaze": "col_map_raw_gaze",
+}
+
+#: UX-129 — one shared column-width tuple for every derivation line (Table ·
+#: Column · How · pattern · Lowercase · ➕ Another · Apply), so the five
+#: shared selectors are pixel-identical whether it's line 0 (which also
+#: carries the two buttons) or a later line (which leaves those two slots
+#: empty) — same `st.columns` call, same weights, every row.
+_DERIVE_LINE_W = (0.14, 0.16, 0.15, 0.24, 0.09, 0.11, 0.11)
+
+
+def _next_available_names(existing: set, base: str, count: int) -> list:
+    """The next ``count`` names ``<base>_<n>`` not already in ``existing``,
+    marking each as claimed as it is picked (UX-129).
+
+    Splitting the same column a second time then continues past whatever the
+    first split already claimed (``source_file_7``, not another
+    ``source_file_1``) instead of colliding with — and silently
+    overwriting — it. ``existing`` is mutated in place so a caller reusing it
+    across several lines against the same table keeps accumulating names.
+    """
+    names = []
+    n = 1
+    while len(names) < count:
+        candidate = f"{base}_{n}"
+        if candidate not in existing:
+            names.append(candidate)
+            existing.add(candidate)
+        n += 1
+    return names
+
 
 def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
     """Optional step: derive columns from an uploaded column's own text — the
@@ -720,19 +756,24 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
     that lives only inside a string (a filename, or a structured value like
     ``question_04111_target``) can be mapped.
 
-    Two modes per line: split into positional ``file_part_N`` columns on a
-    delimiter, or extract *named groups* with a regex (robust to
-    variable-length parts, e.g. a stimulus name whose length varies). UX-129:
-    ➕ **Another** (beside Apply, on the first line) adds another mapping
-    line — the same Column/How/pattern/Lowercase controls, no Apply of its
-    own — for when identity has to be pulled from more than one place (a
-    session id from the filename *and* a question id from a `page` column,
-    say). Nothing is derived, and nothing becomes mappable below, until
-    **Apply**, which commits every line at once — the settings here are a
-    draft until then, so retyping a regex mid-thought never silently changes
-    the committed columns. Returns the (possibly augmented) frames so the
-    identifier pickers below see the new columns; a no-op while the toggle is
-    off.
+    UX-129 — each line picks its **Table** first, then a **Column** within
+    it: Fixations/Words/Raw gaze each carry their own `source_file` (one row
+    per upload, not one shared value), so a line derives from exactly the one
+    table named, never all three at once the way the original single-source
+    version did. Two modes per line: split into positional
+    ``<column>_1``/``<column>_2``/… columns on a delimiter (collision-safe —
+    see :func:`_next_available_names`), or extract *named groups* with a
+    regex (robust to variable-length parts, e.g. a stimulus name whose length
+    varies). ➕ **Another** (beside Apply, on the first line) adds another
+    mapping line — the same Table/Column/How/pattern/Lowercase controls, no
+    Apply of its own — for when identity has to be pulled from more than one
+    place (a session id from Fixations' filename *and* a question id from
+    Words' own `page` column, say). Nothing is derived, and nothing becomes
+    mappable below, until **Apply**, which commits every line at once — the
+    settings here are a draft until then, so retyping a regex mid-thought
+    never silently changes the committed columns. Returns the (possibly
+    augmented) frames so the identifier pickers below see the new columns; a
+    no-op while the toggle is off.
     """
     toggle_col, controls_col = body.columns(
         [0.26, 0.74], gap="small", vertical_alignment="center"
@@ -746,31 +787,21 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
             "stimulus) that you can then map as an id below: split it on a "
             "delimiter into positional columns, or pull out named regex "
             "groups for parts of variable length (e.g. a stimulus name). "
-            "Defaults to the uploaded filename (captured as `source_file`), "
-            "but any other uploaded column works the same way. ➕ Another "
+            "Pick the table first, then any of its own columns — defaults to "
+            "the uploaded filename (captured as `source_file`). ➕ Another "
             "adds a second line when one column's text isn't enough."
         ),
     )
     if not enabled:
         return raw_words, raw_fix, raw_gaze
 
-    # UX-113: which column to read — `source_file` (the filename) by default,
-    # but any column the upload carries. The same trick that pulls a trial id
-    # out of a filename also pulls e.g. a question id + block name out of a
-    # `page`-style column's own text.
-    available_columns = list(
-        dict.fromkeys(
-            c
-            for fr in (raw_words, raw_fix, raw_gaze)
-            if not fr.empty
-            for c in fr.columns
-        )
-    ) or [SOURCE_FILE_COLUMN]
-    default_column = (
-        SOURCE_FILE_COLUMN
-        if SOURCE_FILE_COLUMN in available_columns
-        else available_columns[0]
-    )
+    # UX-129: every table, always — including empty ones — so a line whose
+    # saved config named a table that has since lost its upload still has a
+    # defined (if inert) frame to look up below, no special-casing needed.
+    frames = {"Fixations": raw_fix, "Words / IA": raw_words, "Raw gaze": raw_gaze}
+    table_options = [label for label, fr in frames.items() if not fr.empty] or [
+        "Fixations"
+    ]
 
     # UX-129: one to many lines. Line 0 keeps the original, unsuffixed widget
     # keys (`wizard_filename_column`, not `_0`) — a saved setup written
@@ -784,35 +815,56 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
     drafts: list[dict] = []
     for idx in range(line_count):
         suffix = "" if idx == 0 else f"_{idx}"
+        table_key = f"wizard_filename_table{suffix}"
         column_key = f"wizard_filename_column{suffix}"
         mode_key = f"wizard_filename_mode{suffix}"
         delim_key = f"wizard_filename_delim{suffix}"
         regex_key = f"wizard_filename_regex{suffix}"
         lower_key = f"wizard_filename_regex_lower{suffix}"
 
-        if st.session_state.get(column_key) not in available_columns:
+        if st.session_state.get(table_key) not in table_options:
+            st.session_state[table_key] = table_options[0]
+
+        (
+            table_col,
+            col_col,
+            mode_col,
+            input_col,
+            lower_col,
+            another_col,
+            apply_col,
+        ) = controls_col.columns(
+            _DERIVE_LINE_W, gap="small", vertical_alignment="bottom"
+        )
+        selected_table = table_col.selectbox(
+            "Table",
+            table_options,
+            key=table_key,
+            label_visibility="collapsed",
+            help="Which uploaded table to derive from — its own columns are "
+            "offered next, since two tables' `source_file` rarely mean the "
+            "same thing.",
+        )
+        table_frame = frames[selected_table]
+        table_columns = (
+            list(table_frame.columns) if not table_frame.empty else [SOURCE_FILE_COLUMN]
+        )
+        default_column = (
+            SOURCE_FILE_COLUMN
+            if SOURCE_FILE_COLUMN in table_columns
+            else table_columns[0]
+        )
+        if st.session_state.get(column_key) not in table_columns:
             st.session_state[column_key] = default_column
 
-        if idx == 0:
-            col_col, mode_col, input_col, lower_col, another_col, apply_col = (
-                controls_col.columns(
-                    [0.18, 0.14, 0.28, 0.14, 0.13, 0.13],
-                    gap="small",
-                    vertical_alignment="bottom",
-                )
-            )
-        else:
-            col_col, mode_col, input_col, lower_col = controls_col.columns(
-                [0.2, 0.16, 0.32, 0.16], gap="small", vertical_alignment="bottom"
-            )
         source_column = col_col.selectbox(
             "Column",
-            available_columns,
+            table_columns,
             key=column_key,
             label_visibility="collapsed",
-            help="Which uploaded column to derive from — defaults to the "
-            "filename (`source_file`); pick any other column that encodes "
-            "identity as text.",
+            help="Which of that table's own columns to derive from — "
+            "defaults to the filename (`source_file`); pick any other "
+            "column that encodes identity as text.",
         )
         mode = mode_col.selectbox(
             "How",
@@ -861,6 +913,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
 
         drafts.append(
             {
+                "table": selected_table,
                 "mode": mode,
                 "column": source_column,
                 "delimiter": delimiter if mode == "Split on a delimiter" else None,
@@ -874,7 +927,8 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
         key="wizard_filename_another",
         width="stretch",
         help="Add another mapping line — for when identity has to be pulled "
-        "from more than one column, or the same column two different ways.",
+        "from more than one column (or table), or the same column two "
+        "different ways.",
     ):
         # UX-129: `line_count` was already read (and the lines above already
         # drawn with it) before this button was evaluated, so raising it here
@@ -898,27 +952,53 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
     applied = st.session_state.get(_FILENAME_DERIVE_APPLIED_KEY)
     if not applied:
         return raw_words, raw_fix, raw_gaze
-    # UX-129: a setup saved before multiple lines existed committed one dict;
-    # a current Apply always writes a list. Normalize so both process through
-    # the same loop below, chaining each line's output into the next's input
-    # so a later line can derive from an earlier line's own new column.
+    # UX-129: a setup saved before multiple lines (or per-line tables)
+    # existed committed one dict with no "table" key; a current Apply always
+    # writes a list where every entry has one. Normalize so both process
+    # through the same loop below.
     applied_configs = applied if isinstance(applied, list) else [applied]
+
+    # UX-129: seeded from the ORIGINAL upload, before any config in this pass
+    # has run, then grown as each config below claims names for its table —
+    # what makes a second split of the same column continue numbering rather
+    # than reusing (and silently overwriting) the first split's own columns.
+    existing_by_table = {label: set(fr.columns) for label, fr in frames.items()}
 
     for config in applied_configs:
         # Older sessions' applied state predates the column picker (UX-113) —
         # `source_file` was the only option then, so that's the correct
         # fallback.
         applied_column = config.get("column", SOURCE_FILE_COLUMN)
+        target_table = config.get("table")
+        if target_table not in frames:
+            # UX-129: a config saved before per-line tables existed didn't
+            # record one — the old broadcast-to-all-three behavior applied
+            # the same split/regex to every table that had the column; a
+            # derivation now targets exactly one, so the first match wins.
+            target_table = next(
+                (label for label, fr in frames.items() if applied_column in fr.columns),
+                None,
+            )
+        if target_table is None:
+            continue
+        target = frames[target_table]
+        if target.empty or applied_column not in target.columns:
+            continue
+        existing = existing_by_table.setdefault(target_table, set())
 
         if config["mode"] == "Split on a delimiter":
-            out = [
-                split_source_file(
-                    fr, delimiter=config["delimiter"], column=applied_column
-                )
-                if not fr.empty
-                else fr
-                for fr in (raw_words, raw_fix, raw_gaze)
-            ]
+            split = split_source_file(
+                target, delimiter=config["delimiter"], column=applied_column
+            )
+            # UX-129: `split_source_file` always names positionally
+            # (`file_part_N`) — rename to `<source column>_<n>` here, using
+            # the next names not already claimed in this table, rather than
+            # letting a second split of the same (or another) column collide
+            # with the first's `file_part_1`/`_2`/….
+            temp_cols = [c for c in split.columns if c not in target.columns]
+            new_names = _next_available_names(existing, applied_column, len(temp_cols))
+            target = split.rename(columns=dict(zip(temp_cols, new_names)))
+            new_cols = new_names
         else:
             applied_pattern = config.get("pattern")
             if not applied_pattern:
@@ -926,83 +1006,53 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
             # A group named after an existing column would be skipped (real
             # data wins) — flag it so the user renames the group instead of
             # silently getting the original column.
-            collisions = sorted(
-                {
-                    c
-                    for fr in (raw_words, raw_fix, raw_gaze)
-                    if not fr.empty
-                    for c in source_file_regex_collisions(
-                        fr, applied_pattern, column=applied_column
-                    )
-                }
+            collisions = source_file_regex_collisions(
+                target, applied_pattern, column=applied_column
             )
             if collisions:
                 body.warning(
                     "These group names already exist as columns and were left "
-                    f"untouched: {', '.join(collisions)}. Rename the group(s) "
-                    "and Apply again to extract them."
+                    f"untouched: {', '.join(sorted(collisions))}. Rename the "
+                    "group(s) and Apply again to extract them."
                 )
-            out = [
-                extract_columns_from_source_file(
-                    fr,
-                    applied_pattern,
-                    column=applied_column,
-                    lowercase=config["lower"],
-                )
-                if not fr.empty
-                else fr
-                for fr in (raw_words, raw_fix, raw_gaze)
-            ]
-
-        raw_words, raw_fix, raw_gaze = out
-        # UX-113: prefer whichever table actually carries the derived-from
-        # column — it no longer has to be `source_file`, universally stamped
-        # on every table, so a table that never had `applied_column` (e.g. an
-        # AOI-only `page` value) must not become the preview.
-        preview_candidates = [
-            fr
-            for fr in (raw_fix, raw_words)
-            if not fr.empty and applied_column in fr.columns
-        ]
-        preview = (
-            preview_candidates[0]
-            if preview_candidates
-            else (raw_fix if not raw_fix.empty else raw_words)
-        )
-        if config["mode"] == "Split on a delimiter":
-            new_cols = [c for c in preview.columns if c.startswith(FILE_PART_PREFIX)]
-        else:
+            target = extract_columns_from_source_file(
+                target,
+                applied_pattern,
+                column=applied_column,
+                lowercase=config["lower"],
+            )
             new_cols = [
-                c
-                for c in re.compile(applied_pattern).groupindex
-                if c in preview.columns
+                c for c in re.compile(applied_pattern).groupindex if c in target.columns
             ]
+            existing.update(new_cols)
+
+        frames[target_table] = target
         if new_cols:
-            # UX-113: publish the derived columns into each table's own
-            # header stash. `column_mapping_ui` offers `col_map_<slug>_header`
-            # over the live frame's own columns (PERF-6's narrow-parse plan),
+            # UX-113: publish the derived columns into the table's own header
+            # stash. `column_mapping_ui` offers `col_map_<slug>_header` over
+            # the live frame's own columns (PERF-6's narrow-parse plan),
             # which is the *file's* header stashed at upload time — so a
             # column synthesized in memory afterwards, like these, never
             # showed up in the picker below even though the frame itself
             # already carried it.
-            for prefix, fr in (
-                ("col_map_words", raw_words),
-                ("col_map_fix", raw_fix),
-                ("col_map_raw_gaze", raw_gaze),
-            ):
-                if fr.empty:
-                    continue
-                header_key = f"{prefix}_header"
-                header = list(st.session_state.get(header_key) or fr.columns)
-                missing = [c for c in new_cols if c not in header]
-                if missing:
-                    st.session_state[header_key] = [*header, *missing]
-            body.caption("Derived columns (first rows) — map them as ids below:")
+            header_key = f"{_DERIVE_TABLE_PREFIX[target_table]}_header"
+            header = list(st.session_state.get(header_key) or target.columns)
+            missing = [c for c in new_cols if c not in header]
+            if missing:
+                st.session_state[header_key] = [*header, *missing]
+            body.caption(
+                f"Derived from **{target_table} · {applied_column}** "
+                "(first rows) — map them as ids below:"
+            )
             body.dataframe(
-                preview[[applied_column, *new_cols]].drop_duplicates().head(),
+                target[[applied_column, *new_cols]].drop_duplicates().head(),
                 width="stretch",
                 hide_index=True,
             )
+
+    raw_fix = frames["Fixations"]
+    raw_words = frames["Words / IA"]
+    raw_gaze = frames["Raw gaze"]
     return raw_words, raw_fix, raw_gaze
 
 
@@ -1541,6 +1591,7 @@ def _filename_derive_section() -> dict | None:
         "applied": applied,
         "widgets": {
             "wizard_filename_split": st.session_state.get("wizard_filename_split"),
+            "wizard_filename_table": st.session_state.get("wizard_filename_table"),
             "wizard_filename_column": st.session_state.get("wizard_filename_column"),
             "wizard_filename_mode": st.session_state.get("wizard_filename_mode"),
             "wizard_filename_delim": st.session_state.get("wizard_filename_delim"),

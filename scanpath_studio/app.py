@@ -3672,11 +3672,18 @@ def render_data_source_picker(host=None) -> None:
 #: takes each button's label from the cell *value*, which is what lets a row that
 #: cannot be edited or deleted (a built-in corpus) simply carry no label — and,
 #: since UX-78, what lets the **Dataset** column be both the name and the control
-#: that opens it.
-_DATASET_EDIT_LABEL = ":material/edit: Edit"
-_DATASET_RENAME_LABEL = ":material/drive_file_rename_outline: Rename"
-_DATASET_REMOVE_LABEL = ":material/delete: Remove"
-_DATASET_ABOUT_LABEL = ":material/info: About"
+#: that opens it. Icon-only (no trailing word) so the four action columns read as
+#: a compact icon strip rather than four button-sized columns — the label lives
+#: in each column's `help` tooltip instead.
+_DATASET_EDIT_LABEL = ":material/edit:"
+_DATASET_RENAME_LABEL = ":material/drive_file_rename_outline:"
+_DATASET_REMOVE_LABEL = ":material/delete:"
+_DATASET_ABOUT_LABEL = ":material/info:"
+
+#: Pixel width of an icon-only action column — just enough for one glyph and its
+#: padding, so the four actions don't eat as much of the table's width as the
+#: `"small"` preset (sized for short text, not a bare icon).
+_DATASET_ACTION_COL_WIDTH = 42
 
 #: DATA-36 — what the **Counts** cell says about the numbers beside it. A row
 #: shows either what it loaded or what its corpus publishes, and which one it is
@@ -4001,7 +4008,20 @@ def _select_dataset(name: str) -> None:
 PENDING_DELETE_KEY = "_dataset_pending_delete"
 
 
-@st.dialog("Remove this dataset?")
+def _dismiss_delete_confirmation() -> None:
+    """``on_dismiss`` for the Remove dialog — the native ✕/Escape path.
+
+    Without this, closing the dialog any way other than its own **Remove** /
+    **Keep it** buttons left `PENDING_DELETE_KEY` armed: the fragment reopened
+    the same confirmation on its very next rerun, however that rerun was
+    triggered, and — since only one Streamlit dialog can show at a time — it
+    then also *shadowed* any other row action clicked afterward. Same bug as
+    ``_dismiss_dataset_about`` below, same fix.
+    """
+    st.session_state.pop(PENDING_DELETE_KEY, None)
+
+
+@st.dialog("Remove this dataset?", on_dismiss=_dismiss_delete_confirmation)
 def _delete_confirmation_dialog(
     token: str, *, uploaded: set[str], available: list[str]
 ) -> None:
@@ -4097,7 +4117,12 @@ def _unique_dataset_alias(requested: str, token: str, tokens: list[str]) -> str:
     return candidate
 
 
-@st.dialog("Rename dataset")
+def _dismiss_rename_dataset() -> None:
+    """``on_dismiss`` for the Rename dialog — see ``_dismiss_dataset_about``."""
+    st.session_state.pop(PENDING_RENAME_KEY, None)
+
+
+@st.dialog("Rename dataset", on_dismiss=_dismiss_rename_dataset)
 def _rename_dataset_dialog(
     token: str, *, uploaded: set[str], tokens: list[str]
 ) -> None:
@@ -4138,7 +4163,7 @@ def _rename_dataset_dialog(
         st.rerun(scope="app")
 
 
-def _render_published_figures(token: str, registry: dict) -> None:
+def _render_published_figures(token: str, registry: dict) -> bool:
     """The dataset's published figures, and how this session compares (DATA-36).
 
     Nothing at all for a dataset that publishes none — an upload, or a source
@@ -4146,10 +4171,14 @@ def _render_published_figures(token: str, registry: dict) -> None:
     basis for the numbers is always shown; the side-by-side appears only once
     the dataset has actually been loaded, since before that the row *is* the
     published figures and the dialog would just be repeating it (DATA-35 r2).
+
+    Returns whether it drew anything, so a caller sharing this section with the
+    inline dataset-page summary can skip it entirely rather than show an empty
+    heading.
     """
     published = published_dataset_counts(token, registry)
     if not published:
-        return
+        return False
     st.markdown(f"**Published figures.** {published_counts_source(token, registry)}")
     # No frames: this reads the remembered entry, which the table filled in for
     # every dataset the session has held — so it answers for a corpus opened
@@ -4159,7 +4188,7 @@ def _render_published_figures(token: str, registry: dict) -> None:
         published=published,
     )
     if row.source != "loaded":
-        return
+        return True
     st.dataframe(
         pd.DataFrame(published_comparison_rows(published, row.counts)),
         hide_index=True,
@@ -4177,9 +4206,50 @@ def _render_published_figures(token: str, registry: dict) -> None:
             "regime, one part, one session folder, or an export that was "
             "narrowed before it got here."
         )
+    return True
 
 
-@st.dialog("About this dataset")
+def _render_dataset_about_body(token: str, *, registry: dict) -> bool:
+    """The description / coordinate-provenance / published-figures prose for one
+    dataset — everything the row's ℹ️ About dialog shows, minus its own chrome.
+
+    Shared with the inline "About" summary under the dataset table (below), so
+    the two never drift apart. Returns whether it drew anything, so the inline
+    caller can skip the whole section for a dataset with nothing to say (a
+    plain upload) rather than show a heading over an empty box.
+    """
+    about = dataset_about(token, registry)
+    wrote = False
+    if about.get("description"):
+        st.write(about["description"])
+        wrote = True
+    if about.get("geometry"):
+        # The provenance of the coordinates everything downstream is measured
+        # from — real / reconstructed / synthesized. `geometry_badge` already
+        # writes it as a sentence, so it is shown as one.
+        st.markdown(f"**Where the coordinates come from.** {about['geometry']}")
+        wrote = True
+    if _render_published_figures(token, registry):
+        wrote = True
+    return wrote
+
+
+def _dismiss_dataset_about() -> None:
+    """``on_dismiss`` for the About dialog — the native ✕/Escape path.
+
+    Without this, closing the dialog any way other than its own **Close**
+    button left `PENDING_ABOUT_KEY` armed: since ``render_dataset_table`` is an
+    ``@st.fragment``, the very next fragment rerun — triggered by *anything*,
+    not just another click on this row — read the key, found it still set, and
+    reopened the same dialog. And because only one Streamlit dialog renders at
+    a time, that reopened About then silently pre-empted whichever dialog the
+    user actually clicked next (Rename, Remove), which is what made it look
+    like "the only pop-up that opens even when others should."
+    """
+    st.session_state.pop(PENDING_ABOUT_KEY, None)
+
+
+@st.dialog("About this dataset", on_dismiss=_dismiss_dataset_about)
 def _dataset_about_dialog(token: str, *, registry: dict) -> None:
     """DATA-35 — the row's description and coordinate provenance, nothing else.
 
@@ -4190,17 +4260,8 @@ def _dataset_about_dialog(token: str, *, registry: dict) -> None:
     What is left is the prose that could never fit a cell, which is what the
     ask meant by "a field that opens up".
     """
-    about = dataset_about(token, registry)
     st.markdown(f"### {_dataset_display_name(token, registry)}")
-    if about.get("description"):
-        st.write(about["description"])
-    if about.get("geometry"):
-        # The provenance of the coordinates everything downstream is measured
-        # from — real / reconstructed / synthesized. `geometry_badge` already
-        # writes it as a sentence, so it is shown as one.
-        st.markdown(f"**Where the coordinates come from.** {about['geometry']}")
-    _render_published_figures(token, registry)
-    if not about.get("description") and not about.get("geometry"):
+    if not _render_dataset_about_body(token, registry=registry):
         st.caption(
             "This is a dataset you added, so the app knows only what its own "
             "row shows. Its column mapping and recording setup are under "
@@ -4604,7 +4665,7 @@ def render_dataset_table(
             "About": st.column_config.ButtonColumn(
                 "",
                 type="tertiary",
-                width="small",
+                width=_DATASET_ACTION_COL_WIDTH,
                 help="What this dataset is, and where its coordinates come from.",
                 on_click=_on_about,
                 key="dataset_table_about",
@@ -4612,7 +4673,7 @@ def render_dataset_table(
             "Edit": st.column_config.ButtonColumn(
                 "",
                 type="tertiary",
-                width="small",
+                width=_DATASET_ACTION_COL_WIDTH,
                 help="Open it and edit its column mapping and recording setup.",
                 on_click=_on_edit,
                 key="dataset_table_edit",
@@ -4620,7 +4681,7 @@ def render_dataset_table(
             "Rename": st.column_config.ButtonColumn(
                 "",
                 type="tertiary",
-                width="small",
+                width=_DATASET_ACTION_COL_WIDTH,
                 help="Rename this dataset.",
                 on_click=_on_rename,
                 key="dataset_table_rename",
@@ -4628,7 +4689,7 @@ def render_dataset_table(
             "Remove": st.column_config.ButtonColumn(
                 "",
                 type="tertiary",
-                width="small",
+                width=_DATASET_ACTION_COL_WIDTH,
                 help="Remove this dataset from the session.",
                 on_click=_on_delete,
                 key="dataset_table_delete",
@@ -6668,10 +6729,26 @@ def main() -> None:
         render_dataset_editor_footer(editor_footer_slot)
         with setup_body_slot:
             st.divider()
-            dataset_label = str(
+            active_token = str(
                 st.session_state.get("data_source_choice") or data_choice
             )
-            dataset_label = _dataset_display_name(dataset_label).replace("`", "'")
+            dataset_label = _dataset_display_name(active_token).replace("`", "'")
+            # The open dataset's ℹ️ About prose, inline — the row's own About
+            # button still opens the same content as a dialog for any *other*
+            # row, but the one you're actually looking at reads better as part
+            # of the page than behind another click. Heading reserved via
+            # `st.empty()` so it can be skipped along with the body for a
+            # dataset with nothing to say (an upload with no description or
+            # published figures) instead of showing over an empty box.
+            about_heading = st.empty()
+            about_body = st.container()
+            with about_body:
+                wrote_about = _render_dataset_about_body(
+                    active_token, registry=public_dataset_registry()
+                )
+            if wrote_about:
+                about_heading.subheader(f"ℹ️ About the `{dataset_label}` dataset")
+                st.divider()
             st.subheader(f"🔎 What's in the `{dataset_label}` dataset")
             # Keyed wrapper → the stable `.st-key-…` selector the "Load and
             # verify a dataset" tutorial spotlights (it kept its name across the

@@ -260,7 +260,16 @@ def _finalize_wizard_dataset() -> None:
     click triggers a rerun in which the uploader re-renders and the handler is
     never reached), leaving the dataset unstored. The callback fires as part of
     the click event, before the rerun, so it always runs. The frames were stashed
-    in ``_wizard_finalize_payload`` on the render that drew the button."""
+    in ``_wizard_finalize_payload`` on the render that drew the button.
+
+    **Do not carry this rule into an ``st.dialog`` body — it inverts there.**
+    A dialog body is a fragment, so an ``on_click`` inside one reruns the modal
+    alone and leaves the page under it untouched; those buttons take their
+    *return value* plus an explicit ``st.rerun(scope="app")`` instead. See
+    ``app._forget_cache_confirmation``, which spells the contrast out. The two
+    prescriptions are opposite and both correct; what decides is only whether
+    the button sits in a dialog/fragment or on an ordinary page beside an
+    uploader."""
     payload = st.session_state.pop("_wizard_finalize_payload", None)
     if payload is None:
         return

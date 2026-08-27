@@ -664,6 +664,17 @@ def _forget_cache_confirmation(host) -> None:
     Handled by each button's *return value*, not ``on_click`` — a dialog body is
     a fragment, and an ``on_click`` inside one reruns only the fragment (see
     ``_delete_confirmation_dialog``, which learned that as BUG-36).
+
+    **This is the inverse of the wizard's rule, and that is the trap.**
+    ``wizard._finalize_wizard_dataset`` requires an ``on_click`` for the opposite
+    reason: a real ``st.file_uploader`` on the same screen swallows an inline
+    ``if st.button():`` handler. Both are true, and the deciding factor is only
+    *where the button sits* — inside a dialog or fragment, use the return value
+    plus an explicit ``st.rerun(scope="app")``; on an ordinary page beside an
+    uploader, use ``on_click``. Carrying the wizard's lesson into a dialog is
+    what wrote BUG-36 three times and BUG-49 once: the callback mutates the state
+    correctly, the modal reruns alone, and the *next* click is what finally acts
+    on it — so the screen appears to respond to the wrong button.
     """
     host.warning(
         "Delete the recovery copy from this computer? Your open session and "

@@ -1801,23 +1801,26 @@ nothing to map until a file has been read — with the dataset's name above both
 and <strong>✅ Add dataset</strong> at the foot. Everything in part 2 is on one screen, so the
 whole mapping is visible at once.</p>
 <p><strong>1. Upload data files.</strong> Add the word/IA and fixation files; several files per
-table are allowed. Raw gaze goes here too, as does an optional table with <strong>one
-row per reader</strong> (native language, age, comprehension score) — see
-<a href="../../data-format/#participant-metadata">Participant metadata</a>; the same
-attach-and-report UI is on the 🗂️ <strong>Data</strong> page for datasets that don't come
-through this wizard. A summary card names the columns that were auto-detected and
+table are allowed. Raw gaze goes here too, as do two optional keyed tables —
+<strong>one row per reader</strong> (native language, age, comprehension score) and <strong>one row
+per reading</strong> (list name, presentation order, a per-trial score) — see
+<a href="../../data-format/#participant-metadata">Participant metadata</a> and
+<a href="../../data-format/#trial-metadata">Trial metadata</a>; the same attach-and-report UI
+is on the 🗂️ <strong>Data</strong> page for datasets that don't come through this wizard. A summary card names the columns that were auto-detected and
 the ones still missing — it is a report, not a shortcut: detection matches column
 <em>names</em>, so part 2 is where you confirm it picked the right ones. <em>Restore a
 saved setup</em> lives behind a popover here.</p>
-<p><strong>2. Map data fields</strong>, four sections deep:</p>
+<p><strong>2. Map data fields</strong>, in sections:</p>
 <ol>
-<li><strong>Trials &amp; readers</strong> — check the proposed trial ID, and the optional
-   participant and text IDs. Pick several columns to build a composite ID when one
-   is not unique enough. The readout below the pickers is the fastest sanity
-   check: <em>N trials · N readers · N texts</em>.</li>
-<li><strong>Fixation features</strong> — fixation x/y/duration, then the word ID/text/box under
-   their own heading. Anything unusual (word ID on fixations, timestamps, line
-   index, character-AOI aggregation) is behind <strong>⚙️ Advanced</strong>.</li>
+<li><strong>Trials &amp; readers</strong> — one block per table, its identity line first (trial,
+   screen, reader, text, word and the table's own id) and its own fields under
+   it: x/y/timestamp/duration for fixations, the word box and line index for the
+   AOI table, then whether that table has one row per <strong>character</strong> rather than
+   per word. Pick several columns to build a composite trial ID when one is not
+   unique enough. The readout below the pickers is the fastest sanity check:
+   <em>N trials · N readers · N texts</em>.</li>
+<li><strong>Raw gaze</strong> — the gaze-sample table's own columns; shown only if you
+   uploaded one.</li>
 <li><strong>Recording setup</strong> — see below.</li>
 <li><strong>Extra fields</strong> — keep any condition or analysis fields you will need later,
    and choose which become trial filters.</li>
@@ -1830,7 +1833,11 @@ expected trials and coordinate range.</p>
 dataset summary — participants, texts, trials, fixations, words, gaze points and
 multipart screens; click a name to open it, and the open row is tinted. Rename or
 remove a source from its table row, or open ✏️ <strong>Edit dataset</strong> to change how it
-was mapped. Uploaded data is renamed or deleted in the session; packaged and
+was mapped — the same field grid the wizard draws, and, for a dataset added with
+only one of the two main tables, an uploader for the other one. Adding the
+missing half there normalizes it and joins it to what is already loaded, so a
+fixations-only dataset can gain its word boxes (or an AOI-only one its
+fixations) without being added again. Uploaded data is renamed or deleted in the session; packaged and
 public sources keep their stable identifiers and are renamed for display or
 hidden for this session.</p>
 <p>A public corpus arrives with its own published figures, so a row you have never

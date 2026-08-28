@@ -1947,9 +1947,17 @@ isn't enough. This is unrelated to <strong>Automatic recovery</strong>, which st
 data and settings, not code. See
 <a href="https://github.com/lacclab/scanpath-studio/blob/main/CONTRIBUTING.md#if-a-code-change-doesnt-show-up">Contributing</a>.</p>
 <h2 id="where-does-my-data-go">Where does my data go?<a class="headerlink" href="#where-does-my-data-go" title="Permanent link">&para;</a></h2>
-<p>Local and desktop use stays on your machine. The hosted demo runs on a third-party
-Streamlit server, so do not upload identifiable participant data there. See
-<a href="../privacy/">Privacy</a>.</p>
+<p>Local and desktop use stays on your machine. Nothing is uploaded, and there are no
+accounts, database or analytics. A local or desktop run additionally keeps a
+<strong>recovery copy</strong> on that computer — the datasets you added, their column
+mappings, your settings, saved designs and annotations — so a refresh or a crash
+picks up where you left off. <strong>💾 Session → 🗄️ Automatic recovery</strong> reports what
+is stored and where, turns saving off, and deletes the copy;
+<code>SCANPATH_STUDIO_PERSIST=0</code> is the process-wide opt-out and
+<code>scanpath-studio cache</code> reports the same from a terminal.</p>
+<p>The hosted demo runs on a third-party Streamlit server, so do not upload
+identifiable participant data there; it keeps no recovery copy, so closing the
+tab loses the session. See <a href="../privacy/">Privacy</a>.</p>
 <h2 id="how-do-i-cite-the-app">How do I cite the app?<a class="headerlink" href="#how-do-i-cite-the-app" title="Permanent link">&para;</a></h2>
 <p>Use the repository's
 <a href="https://github.com/lacclab/scanpath-studio/blob/main/CITATION.cff"><code>CITATION.cff</code></a>

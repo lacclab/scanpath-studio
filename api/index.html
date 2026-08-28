@@ -1037,6 +1037,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#scanpath_studio.api.load_trial_metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_trial_metadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#scanpath_studio.api.build_authored_scanpath" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1284,6 +1295,45 @@
     <span class="md-ellipsis">
       
         plot_corpus_figure
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reproduce-a-figure-in-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reproduce a figure in code
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reproduce a figure in code">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.figure_code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        figure_code
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.figure_options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        figure_options
       
     </span>
   </a>
@@ -2027,6 +2077,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#scanpath_studio.api.load_trial_metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_trial_metadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#scanpath_studio.api.build_authored_scanpath" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2286,6 +2347,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#reproduce-a-figure-in-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reproduce a figure in code
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reproduce a figure in code">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.figure_code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        figure_code
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.figure_options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        figure_options
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#save" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2500,6 +2600,55 @@ meta = load_participant_metadata(
 ... )  # doctest: +SKIP
 meta.names  # doctest: +SKIP
 ('native_language', 'age')</p>
+</blockquote>
+</blockquote>
+</blockquote>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.api.load_trial_metadata" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">scanpath_studio.api.load_trial_metadata</span>
+
+
+<a href="#scanpath_studio.api.load_trial_metadata" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">load_trial_metadata</span><span class="p">(</span><span class="n">table</span><span class="p">:</span> <span class="n">TablesLike</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">id_column</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">participant_column</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">trials</span><span class="p">:</span> <span class="n">DataFrame</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Load a trial-level metadata table (DATA-29 — milestone 2).</p>
+<p>The sibling of :func:<code>load_participant_metadata</code>, one grain down: <code>table</code>
+has <strong>one row per reading</strong> — a trial-id column plus anything known about
+that reading (a list name, a condition, a per-trial comprehension score).</p>
+<p><strong>The key is yours to state, and it changes what the table means.</strong> Keyed by
+trial id alone, a row describes a <em>text</em>, and every reader's reading of it
+inherits that row; pass <code>participant_column</code> to key by reader <strong>and</strong>
+trial, so a row describes one <em>reading</em>. Nothing in a file says which world
+a corpus is in, so this is never inferred — unlike <code>id_column</code>, which
+defaults to the first recognised spelling (<code>trial_id</code>, <code>item_id</code>,
+<code>TRIAL_INDEX</code>, …).</p>
+<p>Pass <code>trials</code> — a normalized fixations/words frame, or any frame with
+<code>participant_id</code> + <code>trial_id</code> — to have the join validated against the
+data you actually loaded; the returned <code>.report</code> then names the trials
+missing from either side.</p>
+<p>Returns a :class:<code>~scanpath_studio.metadata.TrialMetadata</code>: the cleaned
+frame, a field registry, and the join report. As with the participant
+table, nothing is broadcast onto the words/fixations frames.</p>
+<blockquote>
+<blockquote>
+<blockquote>
+<p>words, fixations = load_sample_data()
+meta = load_trial_metadata(
+...     "readings.csv", trials=fixations
+... )  # doctest: +SKIP
+meta.names  # doctest: +SKIP
+('list_name', 'comprehension_score')</p>
 </blockquote>
 </blockquote>
 </blockquote>
@@ -3071,6 +3220,92 @@ saccade is ever drawn across the boundary.</p>
 <code>word_id</code> and <code>diff</code>. When <code>series_col</code> is present, it defines the
 overlaid profile/distribution series. This is the API counterpart of the
 Corpus Analysis in-view styling controls (AN-29).</p>
+
+
+    </div>
+
+</div><h2 id="reproduce-a-figure-in-code">Reproduce a figure in code<a class="headerlink" href="#reproduce-a-figure-in-code" title="Permanent link">&para;</a></h2>
+<p>The app's 🔗 <strong>Share</strong> subtab shows the API or CLI code that rebuilds the figure
+currently on screen — copy it into a notebook or a terminal and the same plot
+comes back, ready to run over a batch of trials. <code>figure_code</code> is the headless
+form of that block, and <code>render --print-code</code> prints it for an invocation you
+already have.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nb">print</span><span class="p">(</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">sps</span><span class="o">.</span><span class="n">figure_code</span><span class="p">(</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>        <span class="n">participant</span><span class="o">=</span><span class="s2">"l7_101"</span><span class="p">,</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>        <span class="n">trial</span><span class="o">=</span><span class="s2">"1_Adv_1"</span><span class="p">,</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>        <span class="n">show_heatmap</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>        <span class="n">color_by</span><span class="o">=</span><span class="s2">"duration_ms"</span><span class="p">,</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="p">)</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="p">)</span>
+</code></pre></div>
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.api.figure_code" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">scanpath_studio.api.figure_code</span>
+
+
+<a href="#scanpath_studio.api.figure_code" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">figure_code</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kind</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'static'</span><span class="p">,</span> <span class="n">source</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'demo'</span><span class="p">,</span> <span class="n">source_options</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">participant</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">''</span><span class="p">,</span> <span class="n">trial</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">''</span><span class="p">,</span> <span class="n">screen</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">compare</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">compare_layout</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'overlay'</span><span class="p">,</span> <span class="n">compare_stimulus</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'both'</span><span class="p">,</span> <span class="n">compare_dataset</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">''</span><span class="p">,</span> <span class="n">canvas_size</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">base_font_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span> <span class="n">font_family</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">FONT_FAMILY</span><span class="p">,</span> <span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">''</span><span class="p">,</span> <span class="n">caption</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">''</span><span class="p">,</span> <span class="n">fix_index_range</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">illustration_label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'auto'</span><span class="p">,</span> <span class="n">drift_correction</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">drift_connectors</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">playback_speed</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">autoplay</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">flavor</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'python'</span><span class="p">,</span> <span class="n">explicit</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'scanpath.png'</span><span class="p">,</span> <span class="o">**</span><span class="n">figure_overrides</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>The API or CLI code that reproduces a figure (EXP-7).</p>
+<p>The headless twin of the app's 🔗 Share → <em>Reproduce this figure in code</em>
+block: give it the same arguments you would give :func:<code>plot_scanpath</code>
+(<code>kind="static"</code>), :func:<code>animate_scanpath</code> (<code>"animation"</code>) or
+:func:<code>compare_scanpaths</code> (<code>"comparison"</code>) and it returns the snippet that
+rebuilds that figure, rather than the figure::</p>
+<div class="highlight"><pre><span></span><code>print(sps.api.figure_code(participant="l7_101", trial="1_Adv_1",
+                          show_heatmap=False, flavor="cli"))
+</code></pre></div>
+<p><code>source</code> names how the data is loaded — <code>"demo"</code>, <code>"synthetic"</code>,
+<code>"files"</code>, <code>"potec"</code>, <code>"onestop"</code>, <code>"multipleye"</code>, <code>"benchmark"</code>,
+<code>"author"</code>, or <code>"unknown"</code> for data a snippet can't name — with
+<code>source_options</code> carrying that loader's arguments (<code>{"root": …}</code>,
+<code>{"words": [...], "fixations": [...]}</code>, and so on).</p>
+<p><code>compare_dataset</code> names the corpus scanpath B was loaded from when it is a
+<em>second</em> one (CMP-8). B's participant id belongs to that corpus rather than
+the one the snippet loads, so naming it turns a snippet that would quietly
+reference a missing reader into one that says where B comes from.</p>
+<p>Only the options that differ from :func:<code>figure_options</code> are written, so the
+snippet stays readable; <code>explicit=True</code> emits every option at its current
+value. <code>flavor</code> is <code>"python"</code>, <code>"cli"</code>, or <code>"both"</code> (the two
+separated by a blank line). Settings the CLI has no flag for are named in a
+trailing comment rather than dropped — see
+:class:<code>code_snippet.ReproductionCode</code> for the structured form.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.api.figure_options" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">scanpath_studio.api.figure_options</span>
+
+
+<a href="#scanpath_studio.api.figure_options" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">figure_options</span><span class="p">(</span><span class="n">kind</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'static'</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Every figure keyword a builder accepts → the default it renders with.</p>
+<p><code>kind="static"</code> covers :func:<code>plot_scanpath</code>, <code>kind="animation"</code>
+:func:<code>animate_scanpath</code> (whose builder supports a subset), and
+<code>kind="comparison"</code> :func:<code>compare_scanpaths</code>. The values are
+the <em>effective</em> defaults — :data:<code>CANONICAL_FIGURE_DEFAULTS</code> where it sets
+one, the builder's own signature default otherwise — so a scripted caller
+can diff its intended settings against what it would get::</p>
+<div class="highlight"><pre><span></span><code>{k: v for k, v in sps.api.figure_options().items() if k.startswith("show_")}
+</code></pre></div>
 
 
     </div>

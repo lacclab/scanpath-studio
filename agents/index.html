@@ -2413,7 +2413,11 @@ change <em>which fixations are drawn</em> rather than how:</p>
 <ul>
 <li><code>fix_index_range</code> is the app's fixation-index window; <code>animate_scanpath</code>
   accepts it too, and replays only that stretch. A window that lands outside the
-  trial raises rather than drawing an empty scanpath.</li>
+  trial raises rather than drawing an empty scanpath. It is on all four
+  surfaces: the rail's <em>Fixation index range</em> slider, <code>--fix-index-range
+  START:END</code>, this argument, and a share link's <code>?fix_range=lo,hi</code> — the link
+  carries it only when the window was actually narrowed, since the slider's
+  default is the trial's own full range.</li>
 <li><code>drift_correction</code> needs <code>SCANPATH_EXPERIMENTAL=1</code> (PRE-21) and raises without
   it. It snaps each fixation to its assigned text line and colours by
   line, exactly like the app's <em>Drift correction</em> control. Windowing is applied

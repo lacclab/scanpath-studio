@@ -1924,6 +1924,18 @@ the recorded setup.</p>
 <td><code>--color-by FIELD</code></td>
 </tr>
 <tr>
+<td>draw only part of a trial</td>
+<td><code>--fix-index-range START:END</code> (1-based, both inclusive; honoured by <code>--animate</code> too)</td>
+</tr>
+<tr>
+<td>mark the critical span</td>
+<td><code>--highlight-column COLUMN</code> (<code>''</code> for none) with <code>--critical-span-style mark-text\|mark-border\|none</code></td>
+</tr>
+<tr>
+<td>flag short / long / off-text / blink fixations</td>
+<td><code>--fixation-flag CATEGORY=MODE[,threshold_ms=N][,symbol=S][,color=#RRGGBB]</code>, repeatable</td>
+</tr>
+<tr>
 <td>classify saccades</td>
 <td><code>--saccade-color-by-type</code></td>
 </tr>
@@ -1968,6 +1980,10 @@ the recorded setup.</p>
 <td><code>--participant-metadata readers.csv</code></td>
 </tr>
 <tr>
+<td>attach trial metadata</td>
+<td><code>--trial-metadata readings.csv</code>, <code>--trial-metadata-reader-column</code> to key it by reader <strong>and</strong> trial</td>
+</tr>
+<tr>
 <td>export editable layers</td>
 <td><code>--separable-layers</code></td>
 </tr>
@@ -1994,6 +2010,10 @@ the recorded setup.</p>
 <tr>
 <td>tune the heatmap</td>
 <td><code>--heatmap-metric</code>, <code>--heatmap-colorscale</code>, <code>--heatmap-norm</code></td>
+</tr>
+<tr>
+<td>print the equivalent Python</td>
+<td><code>--print-code python</code> (or <code>cli</code> / <code>both</code>, plus <code>--print-code-explicit</code>)</td>
 </tr>
 </tbody>
 </table>

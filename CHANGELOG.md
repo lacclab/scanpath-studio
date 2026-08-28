@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-08-28
+
 ### Added
 - **Save the plot settings you like as your own design presets** (VIZ-39)
 - **Every dataset arrives with its figures already in the table** (DATA-36)

@@ -3355,13 +3355,36 @@ def _apply_preprocessing_caption(fig, participant, trial) -> None:
     fig.update_layout(meta=metadata)
 
 
+def _combo_row(combos: pd.DataFrame, participant: str, trial: str) -> dict | None:
+    """One trial's `combos` row as a plain dict, or None when the pool lacks it.
+
+    **PERF-7** — the single definition of a mask that used to be written out
+    three times per rerun (twice in `render_single_trial_tab`, once more in
+    `_render_comparison_figure`) plus twice again inside that function's
+    `_lookup_text_id`. ~3.9 ms each on a full-OneStop-grain `combos`
+    (~60k rows), on every widget toggle — including rail toggles that otherwise
+    hit `_cached_scanpath_figure` and draw nothing new.
+
+    Call it through `render_single_trial_tab`'s memoizing closure rather than
+    directly, so the scan happens **once and only when something asks**: the
+    consumer is the title/caption pattern, which is unset by default and whose
+    renderer early-returns before ever looking at the row.
+    """
+    if combos is None or combos.empty:
+        return None
+    match = combos[
+        (combos["participant_id"] == participant) & (combos["trial_id"] == trial)
+    ]
+    return match.iloc[0].to_dict() if not match.empty else None
+
+
 def _rendered_title_caption(
     viz_settings: dict,
     trial_words: pd.DataFrame,
     trial_fixations: pd.DataFrame,
     participant: str,
     trial: str,
-    combo_row: dict | None = None,
+    combo_row: dict | Callable[[], dict | None] | None = None,
     dataset_name: str | None = None,
     compare_row: dict | None = None,
 ) -> tuple[str, str]:
@@ -3376,6 +3399,13 @@ def _rendered_title_caption(
     caption_pattern = viz_settings.get("caption_pattern") or ""
     if not title_pattern and not caption_pattern:
         return "", ""
+    # PERF-7: `combo_row` may be a thunk, and it is resolved *here* — past the
+    # early return above, which fires on the default (neither pattern set). The
+    # row costs a mask over the whole `combos` frame, and it was previously
+    # built eagerly as an argument to this call, i.e. on every rerun, for a
+    # function that usually returns before reading it.
+    if callable(combo_row):
+        combo_row = combo_row()
     settings_summary_input = {
         "show_words": viz_settings.get("show_words", False),
         "show_word_labels": viz_settings.get("show_labels", True),
@@ -3411,7 +3441,7 @@ def _apply_title_caption(
     trial_fixations: pd.DataFrame,
     participant: str,
     trial: str,
-    combo_row: dict | None = None,
+    combo_row: dict | Callable[[], dict | None] | None = None,
     dataset_name: str | None = None,
     compare_row: dict | None = None,
 ) -> None:
@@ -5128,21 +5158,30 @@ def render_single_trial_tab(
     # above the three render branches so it is written whichever one draws,
     # and so an empty-fixations trial (which draws nothing) still has a
     # snippet for the settings on the rail.
-    _snippet_primary_combo = combos[
-        (combos["participant_id"] == selected_participant)
-        & (combos["trial_id"] == selected_trial)
-    ]
+    # PERF-7: the selected trial's `combos` row, masked at most **once** per
+    # rerun and only if something asks. Four call sites want it — the snippet
+    # publish just below, the static branch's `_apply_title_caption`, and two
+    # inside `_render_comparison_figure` — and each used to write the mask out
+    # again (~3.9 ms on a 60k-row `combos`, on every widget toggle). Its only
+    # consumer is the title/caption pattern, unset by default, whose renderer
+    # early-returns before reading the row, so the thunk is what keeps the
+    # default path free of the scan entirely rather than merely down to one.
+    _combo_row_memo: list = []
+
+    def primary_combo_row() -> dict | None:
+        if not _combo_row_memo:
+            _combo_row_memo.append(
+                _combo_row(combos, selected_participant, selected_trial)
+            )
+        return _combo_row_memo[0]
+
     _snippet_title, _snippet_caption = _rendered_title_caption(
         viz_settings,
         trial_words,
         plot_fixations,
         selected_participant,
         selected_trial,
-        combo_row=(
-            _snippet_primary_combo.iloc[0].to_dict()
-            if not _snippet_primary_combo.empty
-            else None
-        ),
+        combo_row=primary_combo_row,
         # Every branch that draws overwrites this pair through
         # `_amend_snippet_title_caption`, so what is rendered here only survives
         # on the one path that draws nothing: animation on a trial with no
@@ -5285,6 +5324,7 @@ def render_single_trial_tab(
                 compare_meta=compare_meta,
                 shared_numeric=shared_numeric,
                 setup_note=compare_setup_note,
+                primary_combo_row=primary_combo_row,
             )
             save_slug = (
                 f"{selected_participant}__{selected_trial}__vs__"
@@ -5319,10 +5359,6 @@ def render_single_trial_tab(
             _apply_preprocessing_caption(
                 displayed_fig, selected_participant, selected_trial
             )
-            _primary_combo = combos[
-                (combos["participant_id"] == selected_participant)
-                & (combos["trial_id"] == selected_trial)
-            ]
             _apply_title_caption(
                 displayed_fig,
                 viz_settings,
@@ -5330,11 +5366,7 @@ def render_single_trial_tab(
                 plot_fixations,
                 selected_participant,
                 selected_trial,
-                combo_row=(
-                    _primary_combo.iloc[0].to_dict()
-                    if not _primary_combo.empty
-                    else None
-                ),
+                combo_row=primary_combo_row,
             )
             _render_true_scale_chart(displayed_fig, key="single")
 
@@ -5633,6 +5665,7 @@ def _render_comparison_figure(
     compare_meta: dict | None = None,
     shared_numeric: frozenset[str] | None = None,
     setup_note: str = "",
+    primary_combo_row: Callable[[], dict | None] | None = None,
 ):
     """Render comparison figure for two trials.
 
@@ -5660,23 +5693,39 @@ def _render_comparison_figure(
     a shared default rather than a recorded screen. Empty when neither applies.
     It surfaces where the user is looking (a warning under an overlay, appended
     to the caption under a split layout) rather than only in the rail's
-    popover."""
+    popover.
+
+    **PERF-7**: ``primary_combo_row`` is the caller's memoized thunk for A's
+    `combos` row (`render_single_trial_tab.primary_combo_row`) — passed in
+    rather than re-masked here, which is what stops the same scan happening a
+    third and fourth time per rerun. It is optional only so this function stays
+    callable on its own; without it the row is masked locally, as before."""
     text_field = "unique_text_id" if "unique_text_id" in combos.columns else "text_id"
     cross_dataset = bool(compare_meta and compare_meta.get("dataset"))
+    # PERF-7: A's row, from the caller's memo when there is one. Both of this
+    # function's consumers — A's text id just below and `_apply_title_caption`
+    # at the end — read the same row, so masking twice more for them was pure
+    # duplicate. B's row is a different trial and is still looked up.
+    _local_memo: list = []
+
+    def _primary_row() -> dict | None:
+        if primary_combo_row is not None:
+            return primary_combo_row()
+        if not _local_memo:
+            _local_memo.append(_combo_row(combos, selected_participant, selected_trial))
+        return _local_memo[0]
 
     def _lookup_text_id(participant_id: str, trial_id: str) -> str | None:
-        match = combos[
-            (combos["participant_id"] == participant_id)
-            & (combos["trial_id"] == trial_id)
-        ]
-        if match.empty or text_field not in match.columns:
-            return None
-        return str(match.iloc[0][text_field])
+        row = _combo_row(combos, participant_id, trial_id)
+        value = None if row is None else row.get(text_field)
+        return None if value is None else str(value)
 
     label_pool: set[str] = set()
-    primary_text_id = selected_text or _lookup_text_id(
-        selected_participant, selected_trial
-    )
+    primary_text_id = selected_text
+    if not primary_text_id:
+        row = _primary_row()
+        value = None if row is None else row.get(text_field)
+        primary_text_id = None if value is None else str(value)
     compare_text_id = (
         compare_meta.get("text_id")
         if cross_dataset
@@ -5757,10 +5806,6 @@ def _render_comparison_figure(
     )
     add_illustration_label(fig_compare, viz_settings.get("illustration_reasons"))
     _apply_preprocessing_caption(fig_compare, selected_participant, selected_trial)
-    _primary_combo = combos[
-        (combos["participant_id"] == selected_participant)
-        & (combos["trial_id"] == selected_trial)
-    ]
     _apply_title_caption(
         fig_compare,
         viz_settings,
@@ -5768,9 +5813,7 @@ def _render_comparison_figure(
         extract_trial(fixations_filtered, selected_participant, selected_trial),
         selected_participant,
         selected_trial,
-        combo_row=(
-            _primary_combo.iloc[0].to_dict() if not _primary_combo.empty else None
-        ),
+        combo_row=_primary_row,
         # VIZ-36: two readings in one figure, so `{dataset_name_b}` and friends
         # have a value to resolve against.
         compare_row={

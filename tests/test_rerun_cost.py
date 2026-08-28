@@ -27,6 +27,7 @@ import pandas as pd
 import pytest
 
 from scanpath_studio import app, tabs
+from scanpath_studio.code_snippet import SNIPPET_STATE_KEY
 from scanpath_studio.constants import DEMO_CHOICE, SYNTHETIC_CHOICE
 
 from tests.conftest import APP_SCRIPT
@@ -265,3 +266,72 @@ class TestTheUntouchedSliderDoesNotMask:
 
         assert not at.exception, at.exception
         assert seen[-1] == (2, 3)
+
+
+class TestTheCombosRowIsMaskedOnceAtMost:
+    """PERF-7: four call sites wanted A's `combos` row; each masked for it.
+
+    ~3.9 ms per mask on a full-OneStop-grain `combos` (~60k rows), on every
+    widget toggle — including rail toggles that otherwise hit
+    `_cached_scanpath_figure` and draw nothing new. The row's only consumer is
+    EXP-5's title/caption pattern, which is unset by default and whose renderer
+    early-returns before reading it, so the fix is a *thunk* rather than one
+    hoisted mask: the default path does no scan at all.
+    """
+
+    @staticmethod
+    def _masks(monkeypatch) -> list:
+        calls: list = []
+        real = tabs._combo_row
+
+        def _counted(combos, participant, trial):
+            calls.append((participant, trial))
+            return real(combos, participant, trial)
+
+        monkeypatch.setattr(tabs, "_combo_row", _counted)
+        return calls
+
+    def _run(self, monkeypatch, **state):
+        calls = self._masks(monkeypatch)
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["data_source_choice"] = SYNTHETIC_CHOICE
+        # EXP-5's master toggle. Off by default — which is exactly why a thunk
+        # beats a hoisted mask: on the default path nothing ever asks.
+        at.session_state["global_show_title_caption"] = bool(state)
+        for key, value in state.items():
+            at.session_state[key] = value
+        at.run(timeout=120)
+        assert not at.exception, at.exception
+        return at, calls
+
+    def test_the_default_path_never_masks(self, monkeypatch):
+        # No title and no caption pattern is the default, and nothing else
+        # reads the row.
+        _at, calls = self._run(monkeypatch)
+
+        assert calls == [], f"nothing asked for the row, yet it was built: {calls}"
+
+    def test_a_title_pattern_masks_exactly_once(self, monkeypatch):
+        _at, calls = self._run(monkeypatch, global_title_pattern="{participant_id}")
+
+        assert len(calls) == 1, (
+            "the snippet publish and the static branch share one memoized row "
+            f"(got {len(calls)} masks)"
+        )
+
+    def test_a_caption_pattern_alone_is_enough_to_ask(self, monkeypatch):
+        _at, calls = self._run(monkeypatch, global_caption_pattern="{trial_id}")
+
+        assert len(calls) == 1
+
+    def test_the_pattern_still_resolves_against_the_row(self, monkeypatch):
+        # The memo must not have turned the row into None on the way through:
+        # `{text_id}` comes off the combos row, not off the trial frames.
+        at, _calls = self._run(monkeypatch, global_title_pattern="T:{text_id}")
+
+        assert at.session_state["global_title_pattern"] == "T:{text_id}"
+        published = at.session_state[SNIPPET_STATE_KEY]
+        assert published.title.startswith("T:"), published.title
+        assert published.title != "T:{text_id}", (
+            "the placeholder should have been rendered against the combos row"
+        )

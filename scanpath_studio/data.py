@@ -6,6 +6,7 @@ import io
 import logging
 import os
 import re
+import string
 import threading
 import uuid
 import weakref
@@ -1651,6 +1652,25 @@ def _resolve_sample_image_paths(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _pattern_placeholders(pattern: str) -> list[str]:
+    """The row fields a filename pattern reads, in first-appearance order.
+
+    ``"{text_id}/{trial_id:0>3}.png"`` reads ``text_id`` and ``trial_id``.
+    An attribute or index suffix is trimmed back to the field the row is keyed
+    by (``{a.b}`` reads ``a``), matching the row-dict lookup this feeds.
+    Auto-numbered fields (``{}``) name no row field and are skipped —
+    ``format_map`` raises for them whether or not they are collected.
+    """
+    names: list[str] = []
+    for _, field_name, _, _ in string.Formatter().parse(pattern):
+        if not field_name:
+            continue
+        name = re.split(r"[.\[]", field_name, maxsplit=1)[0]
+        if name and name not in names:
+            names.append(name)
+    return names
+
+
 def resolve_stimulus_image_paths(
     frame: pd.DataFrame,
     root: str | os.PathLike,
@@ -1667,7 +1687,19 @@ def resolve_stimulus_image_paths(
     or whose file does not exist keep their previous ``image_path`` value.
 
     This pure helper is the headless/API surface for VIZ-14 and is also used by
-    the desktop-only folder controls and the CLI.
+    the desktop-only folder controls and the CLI. It is deliberately
+    **undecorated**: the CLI and the API have no Streamlit session to cache
+    into, so any caching belongs at a call site rather than here.
+
+    **One filesystem probe per distinct placeholder tuple, not per row.** A
+    pattern reads a couple of columns, so a fixation frame of millions of rows
+    still resolves only a few hundred distinct paths — where the per-row form
+    this replaced spent two syscalls each (``Path.resolve`` + ``is_file``) on
+    *every* rerun that had a folder attached. Per-row behaviour is unchanged:
+    the fallback is each row's **own** prior ``image_path``, not a shared one,
+    and a NaN placeholder is still absent from the format mapping rather than
+    the string ``"nan"`` (which would otherwise resolve ``nan.png`` — a miss
+    today, a wrong hit the day such a file exists).
     """
     if frame is None or frame.empty:
         return frame.copy() if isinstance(frame, pd.DataFrame) else pd.DataFrame()
@@ -1679,15 +1711,12 @@ def resolve_stimulus_image_paths(
         def __missing__(self, key):
             raise KeyError(key)
 
-    def _resolved(row: pd.Series) -> object:
-        previous = row.get("image_path")
-        values = _Row(
-            {str(key): str(value) for key, value in row.items() if pd.notna(value)}
-        )
+    def _resolved(values: dict[str, str]) -> str | None:
+        """One placeholder tuple to an absolute path, or None to keep `previous`."""
         try:
-            relative = pattern.format_map(values)
+            relative = pattern.format_map(_Row(values))
         except (KeyError, ValueError, AttributeError):
-            return previous
+            return None
         candidate = (base / relative).resolve()
         try:
             candidate.relative_to(base)
@@ -1696,11 +1725,39 @@ def resolve_stimulus_image_paths(
                 f"Image pattern resolves outside the selected folder: {relative!r}"
             ) from exc
         if require_exists and not candidate.is_file():
-            return previous
+            return None
         return str(candidate)
 
+    # Keyed by the *stringified* column label, as the per-row dict was; a
+    # duplicate label keeps the last column, as that dict's later write did.
+    by_name: dict[str, object] = {str(column): column for column in frame.columns}
+    used = [by_name[name] for name in _pattern_placeholders(pattern) if name in by_name]
+
+    if used:
+        text = pd.DataFrame(index=frame.index)
+        missing = np.zeros(len(frame), dtype=bool)
+        for position, column in enumerate(used):
+            values = frame[column]
+            if isinstance(values, pd.DataFrame):  # duplicate column labels
+                values = values.iloc[:, -1]
+            missing |= values.isna().to_numpy()
+            text[position] = values.astype(str)
+        codes, uniques = pd.factorize(pd.MultiIndex.from_frame(text))
+        names = [str(column) for column in used]
+        resolved = np.asarray(
+            [_resolved(dict(zip(names, key))) for key in uniques], dtype=object
+        )[codes]
+        # A NaN placeholder never reached the format mapping, so the row keeps
+        # its own `image_path`; `astype(str)` above turned it into "nan".
+        resolved[missing] = None
+    else:
+        resolved = np.full(len(frame), _resolved({}), dtype=object)
+
+    series = pd.Series(resolved, index=frame.index, dtype=object)
+    if "image_path" in frame.columns:
+        series = series.where(series.notna(), frame["image_path"])
     result = frame.copy()
-    result["image_path"] = result.apply(_resolved, axis=1)
+    result["image_path"] = series
     return result
 
 

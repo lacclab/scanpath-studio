@@ -1022,8 +1022,18 @@ def _slice_fix_range(fix: pd.DataFrame, fix_range) -> pd.DataFrame:
     frame feeding the figure / animation / comparison builders (and thus the
     Current-figure export, which round-trips the on-screen figure), so the chips,
     panels and bulk multi-trial export keep the complete trial. A ``None`` window
-    or a frame without ``order_in_trial`` is returned unchanged (the default path
-    stays byte-identical)."""
+    or a frame without ``order_in_trial`` returns the very same frame **object**,
+    like `_drift_corrected`'s no-op path — the caller passes the result straight
+    to the builders, so identity is what keeps the untouched default free of a
+    boolean-mask copy and its cache keys byte-identical.
+
+    The **untouched slider** is a `None` window here only because the call site
+    tests it against the trial's own full range first; do not re-derive that
+    range in here. `render_single_trial_tab` already computes it as
+    ``full_fix_range`` — from the *unsliced* frame, which is also what VIZ-40's
+    Share writer publishes — and a length-based shortcut would be wrong anyway:
+    on a multipart trial ``order_in_trial`` is parent-global, so a later screen
+    runs 509-578 and its full window does not start at 1 (BUG-47)."""
     if (
         isinstance(fix_range, (tuple, list))
         and len(fix_range) == 2
@@ -4876,7 +4886,30 @@ def render_single_trial_tab(
     # are sliced to the chosen range; the full frames still drive the chips,
     # panels and exports. A None range leaves the frames untouched.
     fix_range = viz_settings.get("fix_index_range")
-    fig_fixations = _slice_fix_range(trial_fixations, fix_range)
+    # The trial's own ``(first, last)`` fixation index. Computed *above* the
+    # slice rather than after it (a) so the untouched slider — which sits at
+    # exactly this range — skips the mask entirely, and (b) because VIZ-40's
+    # Share writer needs what "the whole trial" is before it can tell a real
+    # window from the slider's default. Published rather than re-derived in
+    # `url_state`, because *this* is the frame the slider was bounded by: on a
+    # multipart trial ``order_in_trial`` is parent-global, so a later screen's
+    # full range starts at 509, not 1 (BUG-47), and a second derivation from the
+    # unsliced trial would disagree.
+    full_fix_range = None
+    if not trial_fixations.empty and "order_in_trial" in trial_fixations.columns:
+        order = pd.to_numeric(
+            trial_fixations["order_in_trial"], errors="coerce"
+        ).dropna()
+        if not order.empty:
+            full_fix_range = (int(order.min()), int(order.max()))
+    if full_fix_range is not None:
+        selection = st.session_state.get("_share_selection")
+        if isinstance(selection, dict):
+            selection["full_fix_range"] = full_fix_range
+    windowed = fix_range is not None and (
+        full_fix_range is None or tuple(fix_range) != full_fix_range
+    )
+    fig_fixations = _slice_fix_range(trial_fixations, fix_range if windowed else None)
     # `fix_range` is A's own window (its bounds and default both come from A's
     # fixation count — `controls._render_fix_range_slider`, "the single
     # fixation-index control for the app"; there is no B-side widget, ENG-8).
@@ -4886,23 +4919,6 @@ def render_single_trial_tab(
     # comparison, whether or not the slider was ever touched. B is never
     # windowed by A's control.
     fig_compare_fix = compare_fix
-    full_fix_range = None
-    if not trial_fixations.empty and "order_in_trial" in trial_fixations.columns:
-        order = pd.to_numeric(
-            trial_fixations["order_in_trial"], errors="coerce"
-        ).dropna()
-        if not order.empty:
-            full_fix_range = (int(order.min()), int(order.max()))
-    # VIZ-40 — the Share writer needs to know what "the whole trial" is before
-    # it can tell a real window from the slider's own default. Published here
-    # rather than recomputed in `url_state`, because *this* is the frame the
-    # slider was bounded by: on a multipart trial `order_in_trial` is
-    # parent-global, so a later screen's full range starts at 509, not 1
-    # (BUG-47), and a second derivation from the unsliced trial would disagree.
-    if full_fix_range is not None:
-        selection = st.session_state.get("_share_selection")
-        if isinstance(selection, dict):
-            selection["full_fix_range"] = full_fix_range
     detected_reasons = illustration_reasons(
         {
             **viz_settings,

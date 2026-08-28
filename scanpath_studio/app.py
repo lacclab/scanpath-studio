@@ -4997,10 +4997,25 @@ def render_dataset_table(
         box.success(note)
 
 
+def _rows_with_local_images(frame: pd.DataFrame) -> int:
+    """How many rows of ``frame`` name a stimulus image that exists on disk.
+
+    One ``os.path.isfile`` per **distinct** path rather than per row. The whole
+    point of `data.resolve_stimulus_image_paths` probing once per placeholder
+    tuple is lost if the caption it feeds then re-stats every row of a
+    multi-million-row corpus.
+    """
+    paths = None if frame is None else frame.get("image_path")
+    if paths is None or paths.empty:
+        return 0
+    counts = paths.dropna().astype(str).value_counts()
+    return int(sum(rows for path, rows in counts.items() if os.path.isfile(path)))
+
+
 def resolve_source_monitor(
     data_choice: str | None,
-    words: pd.DataFrame,
-    fixations: pd.DataFrame,
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
 ) -> tuple[int, int, bool]:
     """The presentation monitor for a data source: ``(width, height, authoritative)``.
 
@@ -5013,6 +5028,12 @@ def resolve_source_monitor(
     A **stored upload** now answers for itself when it recorded a setup snapshot
     — before CMP-8 it declared nothing, so switching to one silently left the
     canvas on the *previous* source's monitor.
+
+    ``words`` / ``fixations`` are read by the **last** branch alone, which
+    estimates a canvas from data extents when nothing else declared one. Pass
+    ``None`` for both to say "don't estimate": the answer degrades to
+    `DEFAULT_FIGURE_SIZE`, still non-authoritative, and the row scan is skipped.
+    Only a caller that will discard a non-authoritative size may do that.
     """
     # OneStop server bundle + bundled demo share the same experimental setup
     # (Dell U2715H, 2560x1440) — cited once in
@@ -5174,8 +5195,25 @@ def seed_canvas_state(
     # ``monitor_is_authoritative`` = the source declares a real presentation
     # monitor (OneStop/demo or a public-dataset registry entry), so the canvas
     # should snap to it rather than to data-derived extents.
+    #
+    # The frames are withheld once the canvas keys exist, because that is the
+    # only thing they are read for. `resolve_source_monitor`'s last-resort
+    # branch scans every row of both to *estimate* a canvas from data extents —
+    # tens of milliseconds per rerun on a full corpus — and a source that needs
+    # estimating is by definition not authoritative, so the number it returns
+    # reaches only `defaults` below, where `_pin` is a setdefault and `_resolved`
+    # prefers the stored key. First run derives it; every rerun after that was
+    # paying for a value it threw away. `tabs._compare_setups` withheld the same
+    # scan from B's side for the same reason (CMP-11).
+    canvas_seeded = {"global_canvas_width", "global_canvas_height"} <= set(
+        st.session_state
+    )
     default_canvas_w, default_canvas_h, monitor_is_authoritative = (
-        resolve_source_monitor(data_choice, words_filtered, fixations_filtered)
+        resolve_source_monitor(
+            data_choice,
+            None if canvas_seeded else words_filtered,
+            None if canvas_seeded else fixations_filtered,
+        )
     )
     canvas_width = min(max(default_canvas_w, 100), 10000)
     canvas_height = min(max(default_canvas_h, 100), 10000)
@@ -6703,11 +6741,7 @@ def main() -> None:
                         fixations_df, image_root, image_pattern
                     )
                     found = sum(
-                        frame.get("image_path", pd.Series(dtype=object))
-                        .dropna()
-                        .astype(str)
-                        .map(os.path.isfile)
-                        .sum()
+                        _rows_with_local_images(frame)
                         for frame in (words_df, fixations_df)
                     )
                     st.caption(f"Matched {int(found):,} table rows to local images.")

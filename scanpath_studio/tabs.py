@@ -4893,7 +4893,7 @@ def render_single_trial_tab(
         ).dropna()
         if not order.empty:
             full_fix_range = (int(order.min()), int(order.max()))
-    # UX-135 — the Share writer needs to know what "the whole trial" is before
+    # VIZ-40 — the Share writer needs to know what "the whole trial" is before
     # it can tell a real window from the slider's own default. Published here
     # rather than recomputed in `url_state`, because *this* is the frame the
     # slider was bounded by: on a multipart trial `order_in_trial` is
@@ -10664,6 +10664,84 @@ def _c_derived_tables(
     }
 
 
+def _format_spread_number(value, *, decimals: int = 2) -> str:
+    """One spread figure, as a reader would write it.
+
+    Whole numbers lose their decimals — "12 trials per participant" is the fact,
+    and "12.00" spends three characters saying the data is not fractional. A
+    missing value is an em dash rather than ``nan``: the row exists because the
+    metric does, and an empty source frame is not a number.
+    """
+    if value is None or not isinstance(value, (int, float)) or pd.isna(value):
+        return "—"
+    number = float(value)
+    if abs(number - round(number)) < 0.005:
+        return f"{round(number):,}"
+    return f"{number:,.{decimals}f}"
+
+
+def _format_spread_mean(value) -> str:
+    """The headline figure on a spread metric — rounded, on the user's call.
+
+    All three metrics count things (trials, fixations, words), so "133.71
+    fixations per trial" spends two decimals on a precision the quantity does
+    not have. Below 10 one decimal is kept: a mean of 0.4 rounded to 0 reads as
+    "none", which is a different claim.
+    """
+    if value is None or not isinstance(value, (int, float)) or pd.isna(value):
+        return "—"
+    number = float(value)
+    if abs(number) < 10 and abs(number - round(number)) >= 0.005:
+        return f"{number:,.1f}"
+    return f"{round(number):,}"
+
+
+def _spread_help(row: dict) -> str | None:
+    """The spread behind one mean, for that metric's own ❔.
+
+    Off the face of the card and onto its hover, on the user's call: the mean is
+    what the row is read for, and the standard deviation and range are the
+    follow-up question. Also where the caveat lives that used to be a caption
+    under the whole table — the statistics describe what the current filters
+    left, not the whole dataset.
+    """
+    std = _format_spread_number(row.get("Std"))
+    low = _format_spread_number(row.get("Min"), decimals=0)
+    high = _format_spread_number(row.get("Max"), decimals=0)
+    pieces = []
+    if std not in ("—", "0"):
+        pieces.append(f"± {std} std")
+    if low != high and "—" not in (low, high):
+        pieces.append(f"range {low}–{high}")
+    spread = " · ".join(pieces) if pieces else "The same for every row"
+    return f"{spread}. Computed after the current filters."
+
+
+def _render_spread_cards(spread: pd.DataFrame) -> None:
+    """The per-metric spread, as metrics beside the counts they explain.
+
+    It was a four-column ``st.dataframe`` — Mean, Std, Min and Max at equal
+    weight, so the number anyone actually reads first ("how long is a trial in
+    this corpus?") had to be picked out from among three that answer a different
+    question. Now each metric is an ``st.metric``, the same widget as the
+    headline counts directly above, so the two rows read as one block instead of
+    a row of figures followed by a table; the standard deviation and the range
+    moved to the metric's own ❔.
+
+    **Median was already dropped** — a fifth number made a five-column table out
+    of three facts.
+    """
+    if spread is None or spread.empty:
+        return
+    rows = spread.to_dict("records")
+    for row, cell in zip(rows, st.columns(len(rows), gap="small")):
+        cell.metric(
+            str(row.get("Metric", "")),
+            _format_spread_mean(row.get("Mean")),
+            help=_spread_help(row),
+        )
+
+
 def _render_dataset_stats_tab(
     stats: dict,
     words_filtered: pd.DataFrame,
@@ -10679,7 +10757,8 @@ def _render_dataset_stats_tab(
     **Median is dropped** on the user's call: mean + std + min + max already say
     what the row is for (is this reader-balanced? is there a one-fixation
     trial?), and a fifth number per row made a five-column table out of three
-    facts.
+    facts. UX-137 then took the remaining four out of a table entirely — see
+    `_render_spread_cards`.
     """
     # ENG-36: icons (1.61) so the six counts are scannable rather than a row of
     # equally-weighted numbers — one glyph per *kind* of thing being counted.
@@ -10708,21 +10787,7 @@ def _render_dataset_stats_tab(
         )
 
     # The spread behind those totals, right under them.
-    spread = stats["stats_df"]
-    spread = spread.drop(columns=["Median"], errors="ignore")
-    st.dataframe(
-        spread,
-        hide_index=True,
-        width="stretch",
-        column_config={
-            col: st.column_config.NumberColumn(format="%.2f")
-            for col in ["Mean", "Std", "Min", "Max"]
-        },
-    )
-    st.caption(
-        "Statistics computed after filtering; missing values indicate empty "
-        "source data."
-    )
+    _render_spread_cards(stats["stats_df"])
 
     if not parts.empty:
         with st.expander("Multipart trial screens", expanded=False):

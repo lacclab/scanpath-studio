@@ -335,7 +335,17 @@ class TestPreprocessingGate:
         pin_data_view(at)
         at.run(timeout=90)
         assert not at.exception, at.exception
-        assert "🧹 Preprocessing" not in [s.value for s in at.subheader]
+        # UX-135 made every ✏️ Edit dataset section a numbered `.sps-wiz-part`
+        # headline, so this can no longer look for an `st.subheader` — nothing
+        # in the app emits one with that text any more, which would make the
+        # assertion pass whether or not the gate regressed.
+        parts = " ".join(
+            str(m.value)
+            for m in at.markdown
+            if str(m.value).startswith('<div class="sps-wiz-part"')
+        )
+        assert "Preprocessing" not in parts, parts
+        assert "Preprocessing" not in " ".join(s.value for s in at.subheader)
         # UX-126: with the experimental flag off (this whole file's default),
         # the 🧮 Derived analysis tables section — Cleaning QA included — is
         # withheld too, so there's nothing preprocessing-specific left to

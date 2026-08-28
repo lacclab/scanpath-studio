@@ -7,8 +7,7 @@ status badge is, which one is open, and the buttons that move between them.
 
 **The one rule that makes the accordion work.** A step's open flag
 (``wiz_open_<id>``) is written *only* by `seed_open_step`, `go_to_step`,
-`continue_button`, the progress chips, and the guide. Nothing inside a step body
-may touch it. The old wizard recomputed ``expanded=`` from whether the step was
+the guide, and `seed_open_step`. Nothing inside a step body may touch it. The old wizard recomputed ``expanded=`` from whether the step was
 "done", so the first pick in a step flipped ``done`` and the expander collapsed
 under the user's cursor mid-edit (DATA-19 patched that with a one-shot marker
 that survived exactly one rerun; this replaces the mechanism rather than
@@ -341,48 +340,6 @@ def step_panel(host, step: WizardStep, status: StepStatus, *, active: bool):
         key=open_key(step.id),
         on_change="rerun",
     )
-
-
-def continue_button(host, step: WizardStep, *, label: str = "Continue →") -> None:
-    """A step-footer button that closes this step and opens the next one."""
-    idx = next((i for i, s in enumerate(STEPS) if s.id == step.id), None)
-    if idx is None or idx + 1 >= len(STEPS):
-        return
-    nxt = STEPS[idx + 1]
-    host.button(
-        label,
-        key=f"wiz_continue_{step.id}",
-        on_click=go_to_step,
-        args=(nxt.id,),
-        help=f"Go to {nxt.number}. {nxt.title}",
-    )
-
-
-def render_progress(host, statuses: Mapping[str, StepStatus]) -> None:
-    """The header: a completion bar plus one clickable chip per step.
-
-    The chips are the navigation — a user who realises at step 5 that the trial
-    id is wrong should be one click from step 2, not scrolling for it.
-    """
-    done_n = sum(
-        1
-        for s in STEPS
-        if statuses.get(s.id, StepStatus.TODO) in (StepStatus.DONE, StepStatus.OPTIONAL)
-    )
-    host.progress(
-        done_n / len(STEPS), text=f"Setup progress — {done_n} / {len(STEPS)} steps"
-    )
-    cols = host.columns(len(STEPS))
-    for col, step in zip(cols, STEPS):
-        status = statuses.get(step.id, StepStatus.TODO)
-        col.button(
-            f"{badge(status)} {step.number}. {step.title}",
-            key=f"wiz_chip_{step.id}",
-            on_click=go_to_step,
-            args=(step.id,),
-            help=step.caption,
-            width="stretch",
-        )
 
 
 def blockers(

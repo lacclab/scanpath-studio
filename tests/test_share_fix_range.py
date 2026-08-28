@@ -36,12 +36,15 @@ def _share_app():
     from scanpath_studio.constants import DEMO_CHOICE
     from scanpath_studio.url_state import _build_share_query
 
-    query, _caveats = _build_share_query(DEMO_CHOICE)
+    query, _caveats = _build_share_query(
+        DEMO_CHOICE, include_trial=st.session_state.get("_include_trial", True)
+    )
     st.session_state["_params"] = parse_qs(query)
 
 
-def _share(*, window, user_set, full=None):
+def _share(*, window, user_set, full=None, include_trial=True):
     at = AppTest.from_function(_share_app)
+    at.session_state["_include_trial"] = include_trial
     at.session_state["single_fix_range"] = window
     at.session_state["single_fix_range_user_set"] = user_set
     selection = {"participant_id": "p1", "trial_id": "t1"}
@@ -115,6 +118,23 @@ class TestTheWriter:
         assert "fix_range" not in params
         params = _share(window=(509, 540), user_set=True, full=(509, 578))
         assert params["fix_range"] == ["509,540"]
+
+    def test_a_link_that_withholds_the_trial_withholds_the_window(self):
+        """An index window means nothing without the trial it indexes into.
+
+        `trial_id`, `screen` and `compare` are all gated on `include_trial`; this
+        one has to be too, or a 509-540 window rides a link that names no trial,
+        the recipient lands on an arbitrary one, and the slider clamps the window
+        to *that* trial's length — a 30-fixation trial silently collapses to a
+        single fixation rather than reporting anything. Only headless callers can
+        set the flag (the UI has no identity-mode picker), which is exactly why
+        the failure would go unnoticed.
+        """
+        params = _share(
+            window=(509, 540), user_set=True, full=(509, 578), include_trial=False
+        )
+        assert "fix_range" not in params
+        assert "trial_id" not in params
 
     def test_without_a_published_full_range_the_flag_alone_decides(self):
         """A trial with no `order_in_trial` publishes none; a dragged window

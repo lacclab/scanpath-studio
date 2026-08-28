@@ -45,7 +45,7 @@ uses it.
    your own tables. Click a dataset's name to open it, or ✏️ **Edit** to change
    how it was read. Map **Multipart screens** only when one logical trial has
    several coordinate spaces.
-2. **🔤 Column mapping** (in ✏️ Edit dataset) — the one thing that decides what
+2. **1 · Data tables & column mapping** (in ✏️ Edit dataset) — the one thing that decides what
    every measure downstream is computed from. Rows marked ✨ were auto-detected;
    override any that guessed wrong. **Recording setup**, 🖼️ **Stimulus images**
    and the 👤 **Participant** / 🗂️ **Trial metadata** tables are on the same
@@ -53,7 +53,7 @@ uses it.
 3. **🔎 What's in the dataset** — back on the overview, the counts come first, as
    the quickest check that the mapping worked. The raw and derived tables fold
    open below them (including, when present, the ordered screen catalogue and
-   per-screen canvas sizes), and **🧾 Trial identity** says whether one trial id
+   per-screen canvas sizes), and **3 · Trial identity** says whether one trial id
    really is one reading.
 
 !!! note "Preprocessing is held back in this release (PRE-22)"

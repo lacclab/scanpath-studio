@@ -637,7 +637,12 @@ class TestDataInspectionTab:
         assert "Per-word measure" not in text
 
         # The filtering note stays under the summary-stats table.
-        assert any("computed after filtering" in c.value for c in at.caption)
+        # UX-137 moved that caveat onto each spread metric's own ❔ — it was the
+        # only prose on the tab, read once and then never again.
+        assert not any("computed after filtering" in c.value for c in at.caption)
+        spread = [m for m in at.metric if m.label.endswith("per trial")]
+        assert spread, [m.label for m in at.metric]
+        assert all("Computed after the current filters" in m.help for m in spread)
 
     def test_column_mapping_uses_the_setup_field_grid(self):
         at = _make_apptest(synthetic=True)

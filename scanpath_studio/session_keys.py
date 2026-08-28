@@ -286,7 +286,7 @@ COMPARE_LAYOUT_PARAM = "cmp_layout"
 COMPARE_STIMULUS_PARAM = "cmp_stimulus"
 #: Widget key holding the picked comparison dataset (`tabs`/`compare_source`).
 COMPARE_SOURCE_STATE_KEY = "cmp_dataset"
-#: UX-135 — VIZ-7's fixation-index window on the wire. Its own constant
+#: VIZ-40 (UX-135) — VIZ-7's fixation-index window on the wire. Its own constant
 #: because two frozen groupings name it: the encoding group
 #: (`SHARE_INT_RANGE_PARAMS`) and `URL_OPTIONAL_PARAMS`, which is what says
 #: a link may legitimately not carry it.

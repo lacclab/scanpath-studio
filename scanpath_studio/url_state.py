@@ -309,7 +309,7 @@ _SHARE_FLOAT_PARAMS = {
 }
 _SHARE_INT_RANGE_PARAMS = {
     "marker_size_range": "global_marker_size_range",
-    # UX-135 closed VIZ-7's last surface gap: the fixation-index window is now
+    # VIZ-40 (UX-135) closed VIZ-7's last surface gap: the window is now
     # linkable. Read like any other "lo,hi" range — `controls`' slider already
     # treats a value present before it first renders as explicit and clamps it
     # to the recipient's own trial. The **write** side is not generic, though:
@@ -2045,7 +2045,7 @@ def _build_share_query(
     if COMPARE_PARAM not in params:
         params.pop(COMPARE_LAYOUT_PARAM, None)
         params.pop(COMPARE_STIMULUS_PARAM, None)
-    # UX-135 — VIZ-7's fixation window travels only when it *is* a window, for
+    # VIZ-40 — VIZ-7's fixation window travels only when it *is* a window, for
     # the same shape of reason as the two compare params above: `single_fix_range`
     # is set to the trial's own full range the moment the slider renders (and
     # re-expanded on every trial change), so the generic range sweep would stamp
@@ -2061,8 +2061,16 @@ def _build_share_query(
     # of the trial is longer would have it silently truncated to the sender's
     # length. When the trial has no `order_in_trial` there is no full range to
     # compare against, and the `user_set` flag alone decides.
+    #
+    # It is also gated on `include_trial`, exactly as `trial_id`, `screen` and
+    # `compare` above are: an index window means nothing without the trial it
+    # indexes into. On a link that withholds trial identity the recipient lands
+    # on an arbitrary trial, and the slider clamps the window to *that* trial's
+    # length — so a 509–540 window arriving at a 30-fixation trial silently
+    # collapses to a single fixation. Only headless callers can reach this (the
+    # UI has no identity-mode picker), which is what makes it worth stating.
     window = st.session_state.get("single_fix_range")
-    if not st.session_state.get("single_fix_range_user_set"):
+    if not include_trial or not st.session_state.get("single_fix_range_user_set"):
         params.pop(FIX_RANGE_PARAM, None)
     elif isinstance(window, (list, tuple)) and len(window) == 2:
         full = (st.session_state.get("_share_selection") or {}).get("full_fix_range")

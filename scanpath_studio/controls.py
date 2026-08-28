@@ -3236,7 +3236,7 @@ def _render_fix_range_slider(fixations: pd.DataFrame | None) -> None:
     rather than sticky state. If it is ever persisted into a saved config it must
     be added to ``session_keys.PLOT_CONFIG_STATE_KEYS``.
 
-    ``single_fix_range`` itself now reaches all four surfaces (UX-135 closed the
+    ``single_fix_range`` itself now reaches all four surfaces (VIZ-40 closed the
     last gap with the ``?fix_range=lo,hi`` param; ``render --fix-index-range``
     and ``api``'s ``fix_index_range`` were already there). The link carries it
     only when the ``single_fix_range_user_set`` flag above says the window was
@@ -3246,6 +3246,14 @@ def _render_fix_range_slider(fixations: pd.DataFrame | None) -> None:
     ``tabs._build_studio_config`` still does not write one: a saved config is
     restored onto whatever trial is open, where a fixation window means even
     less than it does on a link.
+
+    ``single_fix_range_user_set`` itself is deliberately **not** wire format,
+    for the same reason as ``share_identity_mode`` and the checkbox above: it
+    records that *this* user moved *this* slider, which has no referent on the
+    other three surfaces, and a recipient re-derives it here anyway (the
+    ``setdefault`` in the explicit-value branch below). It is nonetheless
+    load-bearing for the ``fix_range`` emission, so if it is ever persisted into
+    a saved config it must be added to ``session_keys.PLOT_CONFIG_STATE_KEYS``.
     """
     if fixations is None:
         return

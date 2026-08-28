@@ -308,7 +308,13 @@ def save_state(session: MutableMapping[str, Any], root: Path) -> bool:
 def restore_state(
     session: MutableMapping[str, Any], root: Path, *, skip_session_keys=()
 ) -> bool:
-    """Restore a manifest once, without overwriting already-seeded values."""
+    """Restore a manifest once, without overwriting already-seeded values.
+
+    Returns whether a manifest was found and applied — the *mechanism*. Whether
+    that is worth telling the user about is a different question, answered by
+    :func:`restored_summary` / :func:`restored_from_cache` and asked by
+    :func:`restore_local_state`; see UX-136 there.
+    """
     if session.get(_RESTORED_KEY):
         return False
     session[_RESTORED_KEY] = True
@@ -332,14 +338,27 @@ def restore_state(
             existing = dict(session.get("_datasets", {}))
             if restored_datasets:
                 session["_datasets"] = {**restored_datasets, **existing}
+            # Only the names that were not already open actually *landed* — an
+            # in-memory dataset of the same name shadows the stored one above.
+            summary = {"datasets": len(set(restored_datasets) - set(existing))}
             skip = set(skip_session_keys)
-            for key, value in dict(manifest.get("session", {})).items():
+            stored_session = dict(manifest.get("session", {}))
+            # Counted before the loop below writes it: `setdefault` means a
+            # design library already in this session keeps its own, so the stored
+            # one restored nothing.
+            summary["designs"] = (
+                len(dict(stored_session.get(DESIGN_PRESETS) or {}))
+                if DESIGN_PRESETS not in skip and DESIGN_PRESETS not in session
+                else 0
+            )
+            for key, value in stored_session.items():
                 if key not in skip:
                     session.setdefault(key, value)
+            summary["annotations"] = 0
             if ANNOTATIONS_STATE_KEY not in session:
-                session[ANNOTATIONS_STATE_KEY] = records_to_store(
-                    list(manifest.get("annotations", []))
-                )
+                records = list(manifest.get("annotations", []))
+                session[ANNOTATIONS_STATE_KEY] = records_to_store(records)
+                summary["annotations"] = len(records)
             # A clean restore can reuse the Parquet files on the first rendered
             # settings change. Pre-existing in-memory datasets still need a save.
             if not existing:
@@ -352,8 +371,9 @@ def restore_state(
                 session[DATASET_COUNTS_STORE_KEY] = dict(counts)
             # Separate from _RESTORED_KEY, which only records that a restore was
             # *attempted* this session. The app reads this one to tell the user
-            # their previous session came back (restored_from_cache).
-            session[_RESTORED_PAYLOAD_KEY] = True
+            # their previous session came back (restored_from_cache), so it holds
+            # the summary rather than a bare flag — see the docstring.
+            session[_RESTORED_PAYLOAD_KEY] = summary
             return True
         except (OSError, ValueError, TypeError, KeyError):
             # A partial/corrupt cache must never prevent the app from opening. The
@@ -458,16 +478,49 @@ def rename_cached_dataset(
 def restore_local_state(
     session, url: str, *, protect_data_source: bool = False
 ) -> bool:
+    """Restore this machine's cached session, once, and say whether to announce it.
+
+    UX-136: the return value is **not** "a manifest was applied" — that is
+    :func:`restore_state`'s answer, and the app used to toast "Recovered your
+    last session from this computer" on it. Every rerun writes the cache, so a
+    session that has only ever changed view settings still leaves a manifest
+    behind, and restoring one announced a recovery that the user could not see
+    anywhere — worst of all immediately after they had cleared the cache by
+    hand, where it reads as "clearing it did nothing". So the announcement is
+    gated on something a user would *recognise* coming back: a dataset they
+    added, an annotation they wrote, a design they saved. Settings still restore;
+    they just do it silently, because nobody can tell a restored canvas width
+    from the default one.
+    """
     if not persistence_enabled(url):
         session[_RESTORED_KEY] = True
         return False
     protected = {"data_source_choice"} if protect_data_source else set()
-    return restore_state(session, state_directory(), skip_session_keys=protected)
+    if not restore_state(session, state_directory(), skip_session_keys=protected):
+        return False
+    return restored_from_cache(session)
+
+
+def restored_summary(session) -> dict:
+    """How much of *what* this session got back from the cache, by kind.
+
+    ``{"datasets": n, "annotations": n, "designs": n}`` — the three things the
+    🗄️ Automatic recovery panel counts, and the three a user would recognise as
+    their last session. View settings are deliberately absent: they restore, but
+    silently (UX-136 — see :func:`restore_state`). Empty when no restore
+    happened, and after :func:`clear_local_state`.
+    """
+    summary = session.get(_RESTORED_PAYLOAD_KEY)
+    return dict(summary) if isinstance(summary, dict) else {}
 
 
 def restored_from_cache(session) -> bool:
-    """Whether this session actually got its state back from the cache."""
-    return bool(session.get(_RESTORED_PAYLOAD_KEY))
+    """Whether this session got back something the user would recognise.
+
+    Not "was a manifest read" — see :func:`restore_state` for why the two came
+    apart.
+    """
+    return any(restored_summary(session).values())
 
 
 def persistence_paused(session) -> bool:

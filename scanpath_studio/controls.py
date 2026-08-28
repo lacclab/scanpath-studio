@@ -3236,11 +3236,16 @@ def _render_fix_range_slider(fixations: pd.DataFrame | None) -> None:
     rather than sticky state. If it is ever persisted into a saved config it must
     be added to ``session_keys.PLOT_CONFIG_STATE_KEYS``.
 
-    Note ``single_fix_range`` *itself* currently reaches only the UI and the
-    headless API — there is no ``fix_range`` URL param and
-    ``tabs._build_studio_config`` doesn't write one — so a window is not
-    shareable today. That is a pre-existing VIZ-7 gap, not something this
-    checkbox introduces; wiring it up would not change the reasoning above.
+    ``single_fix_range`` itself now reaches all four surfaces (UX-135 closed the
+    last gap with the ``?fix_range=lo,hi`` param; ``render --fix-index-range``
+    and ``api``'s ``fix_index_range`` were already there). The link carries it
+    only when the ``single_fix_range_user_set`` flag above says the window was
+    *chosen* — see the ``FIX_RANGE_PARAM`` block in
+    ``url_state._build_share_query`` — because the untouched default is the
+    trial's own full range and would otherwise re-window every recipient.
+    ``tabs._build_studio_config`` still does not write one: a saved config is
+    restored onto whatever trial is open, where a fixation window means even
+    less than it does on a link.
     """
     if fixations is None:
         return

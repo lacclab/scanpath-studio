@@ -172,9 +172,10 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Check the column mapping",
-                "✏️ **Edit** a dataset's row to open its setup screen. "
-                "**🔤 Column mapping** is the one thing that decides what every "
-                "measure downstream is computed from. Rows marked ✨ were "
+                "✏️ **Edit** a dataset's row to open its setup screen — the "
+                "add screen's numbered parts, for a dataset that already "
+                "exists. Part **1 · Data tables & column mapping** decides what "
+                "every measure downstream is computed from. Rows marked ✨ were "
                 "auto-detected; override any that guessed wrong.",
                 ".st-key-tutorial_column_mapping",
                 view=_VIEW_DATA,
@@ -190,7 +191,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Check one trial id is one reading",
-                "**🧾 Trial identity** checks the whole dataset, before any "
+                "Part **3 · Trial identity** checks the whole dataset, before any "
                 "filtering, and says so either way. A warning here means the "
                 "Trial ID above is missing a column — several readings are being "
                 "drawn as one scanpath, which renders happily as a reading with a "
@@ -201,7 +202,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Decide on preprocessing",
-                "**🧹 Preprocessing** (bottom of the ✏️ Edit screen) can "
+                "**Preprocessing**, the last part of the ✏️ Edit screen, can "
                 "soft-exclude or merge short fixations before anything is "
                 "measured. It is off by default, applies to every view, and "
                 "never discards your original rows.",
@@ -1807,7 +1808,8 @@ DOCS_FAQ_URL = f"{CITATION['docs_url']}faq/"
 _FAQ_ITEMS = [
     (
         "A column was mapped to the wrong field. Where do I fix it?",
-        "🗂️ **Data → Column mapping** — an editable form that "
+        "🗂️ **Data → ✏️ Edit → 1 · Data tables & column mapping** — an "
+        "editable form that "
         "re-derives everything in place, no re-upload. It can only offer columns "
         "that survived the import; anything dropped needs a re-upload.",
     ),

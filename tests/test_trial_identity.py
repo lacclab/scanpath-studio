@@ -235,11 +235,17 @@ def test_data_inspection_reports_the_verdict():
     assert not at.exception, at.exception
     # UX-52 round 3 promoted this back to a section of its own on the Data page
     # (round 1 had demoted it to an h5 inside "What's in this dataset"): it
-    # carries a verdict, and the fix it names is an edit to the Column mapping
-    # section right above it. The evidence table stays folded into "What was
-    # checked"; the verdict itself is in the open.
-    headings = [h.value for h in at.subheader]
-    assert any("Trial identity" in h for h in headings), headings
+    # carries a verdict, and the fix it names is an edit to the column mapping
+    # right above it. UX-135 then made every editor section one of the add
+    # screen's numbered parts, so the heading is a `.sps-wiz-part` headline
+    # rather than an `st.subheader`. The evidence table stays folded into "What
+    # was checked"; the verdict itself is in the open.
+    parts = [
+        str(m.value)
+        for m in at.markdown
+        if str(m.value).startswith('<div class="sps-wiz-part"')
+    ]
+    assert any("Trial identity" in part for part in parts), parts
     assert any("single reading" in s.value for s in at.success)
     assert any(e.label == "What was checked" for e in at.expander)
 

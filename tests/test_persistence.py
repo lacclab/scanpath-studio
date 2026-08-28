@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pandas as pd
 
 from scanpath_studio import persistence
+from scanpath_studio.annotations import ANNOTATIONS_STATE_KEY
 from scanpath_studio.persistence import (
     cache_status,
     clear_local_state,
@@ -15,13 +16,16 @@ from scanpath_studio.persistence import (
     persistence_enabled,
     persistence_paused,
     rename_cached_dataset,
+    restore_local_state,
     restore_state,
     restored_from_cache,
+    restored_summary,
     save_local_state,
     save_state,
     set_persistence_paused,
     skip_next_local_save,
 )
+from scanpath_studio.session_keys import DESIGN_PRESETS
 
 
 def _dataset():
@@ -271,16 +275,94 @@ def test_clear_can_skip_one_rewrite_without_pausing_future_saves(tmp_path, monke
 
 
 def test_restored_flag_marks_only_a_session_that_got_data_back(tmp_path):
-    source = {"global_show_heatmap": True}
+    source = {"_datasets": {"Corpus": _dataset()}}
     save_state(source, tmp_path)
 
     restored = {}
     assert restore_state(restored, tmp_path)
     assert restored_from_cache(restored)
+    assert restored_summary(restored)["datasets"] == 1
 
     empty_cache = {}
     assert not restore_state(empty_cache, tmp_path / "elsewhere")
     assert not restored_from_cache(empty_cache)
+    assert restored_summary(empty_cache) == {}
+
+
+class TestOnlyARealRecoveryIsAnnounced:
+    """UX-136 — every rerun writes the cache, so a session that has only ever
+    changed view settings still leaves a manifest behind. Restoring one is not
+    "recovering your last session", and saying so was worst in exactly the case
+    the user hit: right after clearing the cache by hand, where the toast reads
+    as "clearing it did nothing"."""
+
+    def test_settings_alone_restore_silently(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(persistence, "state_directory", lambda *a, **k: tmp_path)
+        save_state({"global_show_heatmap": True}, tmp_path)
+        restored = {}
+
+        # The mechanism ran — silence is about the announcement, not the data …
+        assert restore_state(restored, tmp_path)
+        assert restored["global_show_heatmap"] is True
+        # … and it is the app-facing wrapper that decides whether to say so.
+        assert not restored_from_cache(restored)
+        assert not restore_local_state({}, "http://localhost:8501")
+        assert restored_summary(restored) == {
+            "datasets": 0,
+            "annotations": 0,
+            "designs": 0,
+        }
+
+    def test_an_annotation_is_worth_announcing(self, tmp_path):
+        save_state(
+            {ANNOTATIONS_STATE_KEY: {("p1", "t1"): {"favorite": True, "tags": ["a"]}}},
+            tmp_path,
+        )
+        restored = {}
+
+        assert restore_state(restored, tmp_path)
+        assert restored_from_cache(restored)
+        assert restored_summary(restored)["annotations"] == 1
+
+    def test_a_saved_design_is_worth_announcing(self, tmp_path):
+        save_state({DESIGN_PRESETS: {"Mine": {"global_show_heatmap": True}}}, tmp_path)
+        restored = {}
+
+        assert restore_state(restored, tmp_path)
+        assert restored_from_cache(restored)
+        assert restored_summary(restored)["designs"] == 1
+
+    def test_what_this_session_already_had_is_not_counted_as_recovered(self, tmp_path):
+        """Restoring is a `setdefault`, so a dataset, annotation store or design
+        library already in the session keeps its own — nothing came back."""
+        save_state(
+            {
+                "_datasets": {"Corpus": _dataset()},
+                DESIGN_PRESETS: {"Mine": {}},
+                ANNOTATIONS_STATE_KEY: {("p1", "t1"): {"favorite": True}},
+            },
+            tmp_path,
+        )
+        live = {
+            "_datasets": {"Corpus": _dataset()},
+            DESIGN_PRESETS: {"Mine": {}},
+            ANNOTATIONS_STATE_KEY: {},
+        }
+
+        assert restore_state(live, tmp_path)
+        assert not restored_from_cache(live)
+
+    def test_clearing_the_cache_takes_the_announcement_with_it(
+        self, tmp_path, monkeypatch
+    ):
+        monkeypatch.setattr(persistence, "state_directory", lambda *a, **k: tmp_path)
+        save_state({"_datasets": {"Corpus": _dataset()}}, tmp_path)
+        restored = {}
+        assert restore_state(restored, tmp_path)
+
+        clear_local_state(restored)
+        assert not restored_from_cache(restored)
+        assert restored_summary(restored) == {}
 
 
 def test_human_size_reads_as_a_file_size():
@@ -552,3 +634,31 @@ class TestRememberedDatasetCounts:
         # …and forgetting the cache forgets them, which is what the ask named.
         persistence.clear_local_state(restored, tmp_path)
         assert DATASET_COUNTS_STORE_KEY not in restored
+
+
+class TestTheRecoveryToastPhrase:
+    """UX-136 — the toast names what came back, so the claim can be checked
+    against the 🗄️ Automatic recovery panel it points at."""
+
+    @staticmethod
+    def _recap(**counts):
+        from scanpath_studio.app import _restored_recap
+
+        return _restored_recap({persistence._RESTORED_PAYLOAD_KEY: counts})
+
+    def test_one_kind_reads_as_a_count(self):
+        assert self._recap(datasets=1) == "1 dataset"
+        assert self._recap(datasets=3) == "3 datasets"
+
+    def test_zero_counts_are_left_out_rather_than_padded(self):
+        """The panel legitimately shows "0 designs"; a sentence should not."""
+        assert self._recap(datasets=2, annotations=0, designs=0) == "2 datasets"
+
+    def test_several_kinds_read_as_a_list(self):
+        assert (
+            self._recap(datasets=2, annotations=1, designs=4)
+            == "2 datasets, 1 annotation and 4 designs"
+        )
+
+    def test_nothing_to_report_still_reads_as_a_sentence(self):
+        assert self._recap() == "your last session"

@@ -593,17 +593,25 @@ class TestDataInspectionTab:
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
 
-        # UX-52 gave the page one heading level: the four *stages* are
-        # subheaders, and the bulky tables inside "What's in this dataset" are
-        # collapsed expanders rather than same-weight subheaders of their own.
+        # UX-52 gave the page one heading level. UX-135 then split that level in
+        # two along the DATA-35 screen split: the *overview* keeps its
+        # subheaders, and every section of the ✏️ Edit screen is one of the add
+        # screen's numbered parts, so its headings are `.sps-wiz-part` markdown.
         subheaders = [s.value for s in at.subheader]
         for section in (
             "📂 Available datasets",
-            "🔤 Column mapping",
             "🔎 What's in the `Synthetic test trial` dataset",
-            "🧹 Preprocessing",
         ):
             assert section in subheaders, f"missing stage {section}: {subheaders}"
+        parts = " ".join(
+            str(m.value)
+            for m in at.markdown
+            if str(m.value).startswith('<div class="sps-wiz-part"')
+        )
+        # `SCANPATH_EXPERIMENTAL=1` in conftest, so Preprocessing renders here
+        # even though PRE-22 holds it back from the release build.
+        for section in ("column mapping", "Recording setup", "Preprocessing"):
+            assert section in parts, f"missing part {section}: {parts}"
         # The raw tables and the stats share ONE tab bar now — the collapsed
         # "📋 Raw data" expander over a tab bar, and the separate
         # "📊 Summary statistics" expander below it, are both gone.

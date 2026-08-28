@@ -76,6 +76,7 @@ from .session_keys import (
     COMPARE_SOURCE_PARAM,
     COMPARE_SOURCE_STATE_KEY,
     COMPARE_STIMULUS_PARAM,
+    FIX_RANGE_PARAM,
     PARAM_CORPUS,
     PENDING_COMPARE_STATE_KEY,
     PUBLIC_DATASET_CHOICE,
@@ -306,7 +307,15 @@ _SHARE_FLOAT_PARAMS = {
     "raw_gaze_marker_size": "global_raw_gaze_marker_size",
     "raw_gaze_opacity": "global_raw_gaze_opacity",
 }
-_SHARE_INT_RANGE_PARAMS = {"marker_size_range": "global_marker_size_range"}
+_SHARE_INT_RANGE_PARAMS = {
+    "marker_size_range": "global_marker_size_range",
+    # UX-135 closed VIZ-7's last surface gap: the fixation-index window is now
+    # linkable. Read like any other "lo,hi" range — `controls`' slider already
+    # treats a value present before it first renders as explicit and clamps it
+    # to the recipient's own trial. The **write** side is not generic, though:
+    # see the `FIX_RANGE_PARAM` block in `_build_share_query`.
+    FIX_RANGE_PARAM: "single_fix_range",
+}
 _SHARE_FLOAT_RANGE_PARAMS = {
     "fixation_color_range": "global_fixation_color_range",
     "heatmap_color_range": "global_heatmap_color_range",
@@ -2036,6 +2045,31 @@ def _build_share_query(
     if COMPARE_PARAM not in params:
         params.pop(COMPARE_LAYOUT_PARAM, None)
         params.pop(COMPARE_STIMULUS_PARAM, None)
+    # UX-135 — VIZ-7's fixation window travels only when it *is* a window, for
+    # the same shape of reason as the two compare params above: `single_fix_range`
+    # is set to the trial's own full range the moment the slider renders (and
+    # re-expanded on every trial change), so the generic range sweep would stamp
+    # `fix_range` on every link ever copied. Two things have to hold.
+    #
+    # `single_fix_range_user_set` is the slider's own record of a deliberate
+    # drag — the same flag that stops an untouched window following the user from
+    # trial to trial — so an auto-default never ships.
+    #
+    # And the window must differ from the trial's full range, which
+    # `tabs.render_single_trial_tab` publishes as `full_fix_range`: dragging the
+    # handles back out to both ends restores nothing, and a recipient whose copy
+    # of the trial is longer would have it silently truncated to the sender's
+    # length. When the trial has no `order_in_trial` there is no full range to
+    # compare against, and the `user_set` flag alone decides.
+    window = st.session_state.get("single_fix_range")
+    if not st.session_state.get("single_fix_range_user_set"):
+        params.pop(FIX_RANGE_PARAM, None)
+    elif isinstance(window, (list, tuple)) and len(window) == 2:
+        full = (st.session_state.get("_share_selection") or {}).get("full_fix_range")
+        if full is not None and tuple(int(v) for v in window) == tuple(
+            int(v) for v in full
+        ):
+            params.pop(FIX_RANGE_PARAM, None)
     if st.session_state.get("single_animate"):
         params["tab"] = "animation"
 

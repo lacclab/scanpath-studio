@@ -53,6 +53,7 @@ if __package__ is None or __package__ == "":
         sys.path.insert(0, str(root))
 
 from scanpath_studio import metadata as metadata_mod
+from scanpath_studio import wizard_shell
 from scanpath_studio.annotations import (
     filter_keys,
 )
@@ -201,6 +202,7 @@ from scanpath_studio.persistence import (
     persistence_paused,
     restore_local_state,
     restored_from_cache,
+    restored_summary,
     save_local_state,
     set_persistence_paused,
     skip_next_local_save,
@@ -699,6 +701,36 @@ def _toggle_recovery_saving() -> None:
         st.session_state, not bool(st.session_state.get("persist_local_saving", True))
     )
     st.session_state.pop("_recovery_cache_forgotten", None)
+
+
+#: UX-136 — the three kinds `persistence.restored_summary` counts, in the order
+#: the 🗄️ Automatic recovery panel lists them, with their singular/plural nouns.
+_RESTORED_KIND_NOUNS = (
+    ("datasets", "dataset", "datasets"),
+    ("annotations", "annotation", "annotations"),
+    ("designs", "design", "designs"),
+)
+
+
+def _restored_recap(session=None) -> str:
+    """What came back from the recovery cache, as a phrase for the toast.
+
+    "2 datasets and 3 annotations" — only the kinds that actually restored, so
+    the sentence never pads itself with the zeros the panel legitimately shows.
+    Falls back to "your last session" if it is somehow called with nothing to
+    report, which keeps the toast a sentence rather than a hole.
+    """
+    summary = restored_summary(st.session_state if session is None else session)
+    parts = [
+        f"{summary[key]:,} {singular if summary[key] == 1 else plural}"
+        for key, singular, plural in _RESTORED_KIND_NOUNS
+        if summary.get(key)
+    ]
+    if not parts:
+        return "your last session"
+    if len(parts) == 1:
+        return parts[0]
+    return f"{', '.join(parts[:-1])} and {parts[-1]}"
 
 
 def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
@@ -5943,9 +5975,17 @@ def main() -> None:
         # ENG-30: say it once, where the user is looking. Silently repopulating a
         # session reads as "the app kept my data somewhere" without saying where;
         # the toast points at the menu panel that answers that.
+        #
+        # UX-136: `restore_local_state` is true only when something the user
+        # would *recognise* came back — a dataset, an annotation, a saved design.
+        # Every rerun writes the cache, so a session that only ever changed view
+        # settings still leaves a manifest, and announcing that as "your last
+        # session" was wrong in the one case where it is most alarming: right
+        # after the user cleared the cache by hand. Naming the counts is what
+        # makes the claim checkable against the panel it points at.
         st.toast(
-            "Recovered your last session from this computer — see 💾 Session → "
-            "Automatic recovery.",
+            f"Recovered {_restored_recap()} from this computer — see 💾 Session "
+            "→ Automatic recovery.",
             icon="↩️",
         )
     if url_source == "onestop" and onestop_data_dir() is not None:
@@ -6207,6 +6247,16 @@ def main() -> None:
     # The editor's own header bar — the ✏️ Edit dataset screen's title and its
     # way back, filled below once the dataset's display name is known.
     editor_head_slot = editor_page.container()
+    # UX-135 — the editor's sections are the add screen's numbered *parts*, not
+    # a `st.divider()` + `st.subheader()` + `st.caption()` stack. `_editor_part`
+    # below draws one headline into each of the slots reserved here; the
+    # registry, the numbering and the hover note are `wizard_shell.EDITOR_STEPS`.
+    #
+    # Part 1 opens above the description because everything down to the metadata
+    # tables belongs to it — where the files are, how their columns map, and what
+    # is attached to them — exactly as the add screen's part 2 holds every upload
+    # and every mapping row.
+    editor_part_data_slot = editor_page.container()
     description_slot = editor_page.container()
     source_options_slot = editor_page.container()
     data_location_slot = editor_page.container()
@@ -6229,15 +6279,20 @@ def main() -> None:
     # Keyed → the stable `.st-key-…` selectors the "Load and verify a dataset"
     # tutorial spotlights (UX-40), alongside `tutorial_data_inspection` above.
     column_mapping_slot = editor_page.container(key="tutorial_column_mapping")
-    # The heading belongs to the *section*, not to any one of its three modes —
-    # mode A's panels are written into the body by `prepare_data` during the
-    # load, long before the dispatch below picks a mode, so the title needs a
-    # slot of its own above them (see tabs._render_column_mapping_section).
-    mapping_head_slot = column_mapping_slot.container()
     mapping_body_slot = column_mapping_slot.container()
     # Raw tables for a dataset whose mapping is still broken. Its own slot,
     # *below* the mapping editor, which is the control that fixes them.
     unmapped_slot = editor_page.container()
+    # DATA-20 §1 — the participant/trial/text metadata tables. After the mapping
+    # (they join on the reader id the mapping just settled), and — UX-135 —
+    # *inside* part 1 with it, under their own small **Metadata** heading, which
+    # is exactly where the add screen puts the same three uploaders.
+    setup_metadata_slot = editor_page.container(key="tutorial_participant_metadata")
+    # UX-135 — Recording setup is the add screen's part 3, so it is the editor's
+    # own numbered part too rather than a `##### ` heading buried at the end of
+    # the mapping form. Filled from `tabs._render_column_mapping_section`, which
+    # is handed this slot: it is the same renderer either way, only re-hosted.
+    setup_recording_slot = editor_page.container(key="tutorial_recording_setup")
     # UX-52 round 3 — the VAL-7 trial-identity verdict is its own section, not a
     # `#####` item inside "What's in this dataset" (the user's call). It carries
     # a *verdict* — sometimes a warning — and the fix it names is a change to the
@@ -6246,17 +6301,36 @@ def main() -> None:
     # Keyed → the `.st-key-…` selector the "Load and verify a dataset" tutorial
     # spotlights, alongside its siblings above and below.
     setup_identity_slot = editor_page.container(key="tutorial_trial_identity")
-    # VIZ-14: local stimulus-image paths sit beside the other optional attached
-    # metadata, immediately before the participant table.
+    # VIZ-14: local stimulus-image paths, after the questions that describe the
+    # data itself.
     setup_stimulus_slot = editor_page.container(key="tutorial_stimulus_images")
-    # DATA-20 §1 — the participant-level metadata table. After the mapping (it
-    # joins on the reader id the mapping just settled).
-    setup_metadata_slot = editor_page.container(key="tutorial_participant_metadata")
     setup_preproc_slot = editor_page.container(key="tutorial_preprocessing")
     # UX-106 — the editor's own foot: ✅ Save changes, under everything it
     # saves, the way ✅ Add dataset sits under the whole add screen. Reserved
     # last so it lands after preprocessing; filled at the end of the run.
     editor_footer_slot = editor_page.container(key="dataset_editor_footer")
+
+    # UX-135 — which of the editor's five parts are on screen this run, and so
+    # what each one is numbered. Two are conditional (stimulus images need a
+    # local filesystem; preprocessing is behind PRE-22's flag), and a screen
+    # reading 1 · 2 · 3 · 5 looks like a section that failed to render rather
+    # than one that does not apply here.
+    _editor_shown = {"edit_data", "edit_setup", "edit_identity"}
+    if local_filesystem_enabled():
+        _editor_shown.add("edit_stimulus")
+    if preprocessing_enabled():
+        _editor_shown.add("edit_preproc")
+    editor_parts = wizard_shell.numbered(wizard_shell.EDITOR_STEPS, _editor_shown)
+
+    def _editor_part(host, step_id: str):
+        """One numbered editor part's headline; returns the body to fill.
+
+        The add screen's `wizard_shell.part`, verbatim — same chip, same rule
+        above it, same hover note — so the two screens read as one screen before
+        and after the dataset exists.
+        """
+        step = editor_parts[step_id]
+        return wizard_shell.part(host, step, note=step.caption)
 
     # Data source selection. UX-25: only the *resolution* happens here (it must
     # precede the load); the picker itself renders in the main view — on the
@@ -6300,12 +6374,7 @@ def main() -> None:
     # controls all come from behind the same gate, so the page has no gap where
     # a hidden stage used to be.
     if data_view and preprocessing_enabled():
-        setup_preproc_slot.divider()
-        setup_preproc_slot.subheader("🧹 Preprocessing")
-        setup_preproc_slot.caption(
-            "Optional soft exclusion and merging of short fixations, applied to "
-            "every view. Off by default; original rows remain available."
-        )
+        _editor_part(setup_preproc_slot, "edit_preproc")
 
     preproc_settings = _activate_data_source(
         data_choice, preproc_host=setup_preproc_slot
@@ -6486,9 +6555,7 @@ def main() -> None:
     # filesystem information; the same resolver is available through the API
     # and CLI for reproducible headless renders.
     if local_filesystem_enabled():
-        with setup_stimulus_slot:
-            st.divider()
-            st.subheader("🖼️ Stimulus images")
+        with _editor_part(setup_stimulus_slot, "edit_stimulus"):
             image_root = st.text_input(
                 "Image folder",
                 key="stimulus_image_root",
@@ -6876,31 +6943,27 @@ def main() -> None:
                 fixations=fixations_all,
                 raw_gaze=raw_gaze_df,
             )
-        mapping_head_slot.divider()
-        mapping_head_slot.subheader("🔤 Column mapping")
-        mapping_head_slot.caption(
-            "How each source column maps onto the app's canonical fields — the "
-            "one thing that decides what every measure downstream is computed "
-            "from."
-        )
+        # UX-135 — one numbered headline over the whole first part, drawn into
+        # the slot reserved above the description. Everything from here to the
+        # metadata tables is that part; the mapping no longer titles itself,
+        # any more than the add screen's mapping rows do.
+        _editor_part(editor_part_data_slot, "edit_data")
+        # UX-135 — Recording setup renders into its own numbered part instead of
+        # trailing the mapping form. Same renderer, same state, different host.
+        recording_body = _editor_part(setup_recording_slot, "edit_setup")
         with mapping_body_slot:
             _render_column_mapping_section(
                 editor_rendered=mapping_editor_rendered,
                 uploads_host=editor_uploads_slot,
+                setup_host=recording_body,
             )
-        with setup_identity_slot:
-            st.divider()
-            st.subheader("🧾 Trial identity")
-            st.caption(
-                "Whether the Trial ID above actually identifies one reading — "
-                "checked on the whole dataset, before any filtering."
-            )
+        with _editor_part(setup_identity_slot, "edit_identity"):
             render_trial_identity_section()
         # ``setup_stimulus_slot`` is filled earlier because its values resolve
-        # image paths before filtering and plotting. Its reserved position puts
-        # it immediately before participant metadata on the Data page.
+        # image paths before filtering and plotting; its reserved position is
+        # what puts it after Trial identity on screen regardless (creation order
+        # is screen order, so where a slot is *filled* need not agree).
         with setup_metadata_slot:
-            st.divider()
             # UX-130 r2: the *add screen's* three metadata rows, not three
             # side-by-side panels. UX-114 put them in one row of three columns
             # (an improvement on the stacked full-width blocks before it) and

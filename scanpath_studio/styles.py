@@ -760,6 +760,7 @@ def get_app_css() -> str:
        something is there, which in the rail is supplied by the neighbouring `?`
        affordance and here is not. */
     .sps-wiz-section .sps-fhelp,
+    .sps-wiz-part .sps-fhelp,
     .sps-wiz-note .sps-fhelp {
         display: inline-block;
         max-width: none;

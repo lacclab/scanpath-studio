@@ -4893,6 +4893,16 @@ def render_single_trial_tab(
         ).dropna()
         if not order.empty:
             full_fix_range = (int(order.min()), int(order.max()))
+    # UX-135 — the Share writer needs to know what "the whole trial" is before
+    # it can tell a real window from the slider's own default. Published here
+    # rather than recomputed in `url_state`, because *this* is the frame the
+    # slider was bounded by: on a multipart trial `order_in_trial` is
+    # parent-global, so a later screen's full range starts at 509, not 1
+    # (BUG-47), and a second derivation from the unsliced trial would disagree.
+    if full_fix_range is not None:
+        selection = st.session_state.get("_share_selection")
+        if isinstance(selection, dict):
+            selection["full_fix_range"] = full_fix_range
     detected_reasons = illustration_reasons(
         {
             **viz_settings,
@@ -10055,7 +10065,9 @@ def _render_remap_fields(
     return pending
 
 
-def _render_remap_editor(name: str, stored: dict, uploads_host=None) -> None:
+def _render_remap_editor(
+    name: str, stored: dict, uploads_host=None, setup_host=None
+) -> None:
     """Editable column-mapping form for a stored dataset (the surviving columns).
 
     Renders one ``column_mapping_ui`` per present table seeded with the current
@@ -10065,7 +10077,10 @@ def _render_remap_editor(name: str, stored: dict, uploads_host=None) -> None:
 
     DATA-26: the *Column mapping* heading is the page section's, rendered by
     ``app.main`` above whichever of the three modes applies — this one no longer
-    titles itself."""
+    titles itself. UX-135 took the last heading out of it too: **Recording
+    setup** renders into ``setup_host``, the editor's own numbered part, so this
+    function draws mapping and nothing else. Without a host it stays where it
+    was, under a ``##### `` heading after a rule."""
     # UX-54: the dataset table's ✏️ Edit both opened this dataset and sent the
     # user here, so say so — otherwise the page has silently changed under them
     # and the mapping form is several screens down.
@@ -10098,9 +10113,11 @@ def _render_remap_editor(name: str, stored: dict, uploads_host=None) -> None:
     from scanpath_studio.experimental_setup import SetupSnapshot
     from scanpath_studio.wizard import _wizard_setup_step
 
-    st.divider()
-    st.markdown("##### Recording setup")
-    st.caption("Screen, physical geometry and reading-text setup for this dataset.")
+    setup_box = st if setup_host is None else setup_host
+    if setup_host is None:
+        st.divider()
+        st.markdown("##### Recording setup")
+        st.caption("Screen, physical geometry and reading-text setup for this dataset.")
     initial_setup = SetupSnapshot.from_dict(
         stored.get("setup") or {}, fallback=SetupSnapshot()
     )
@@ -10119,7 +10136,7 @@ def _render_remap_editor(name: str, stored: dict, uploads_host=None) -> None:
         or (added or {}).get("words") is not None
     )
     setup = _wizard_setup_step(
-        st,
+        setup_box,
         word_frame if isinstance(word_frame, pd.DataFrame) else pd.DataFrame(),
         fixation_frame if isinstance(fixation_frame, pd.DataFrame) else pd.DataFrame(),
         has_boxes,
@@ -10430,7 +10447,7 @@ def render_trial_identity_section() -> None:
 
 
 def _render_column_mapping_section(
-    *, editor_rendered: bool = False, uploads_host=None
+    *, editor_rendered: bool = False, uploads_host=None, setup_host=None
 ) -> None:
     """The body of the Data page's **Column mapping** section (DATA-26).
 
@@ -10450,33 +10467,50 @@ def _render_column_mapping_section(
 
     The heading belongs to the page, not to any one mode — ``app.main`` renders
     it into a slot reserved above all three.
+
+    ``setup_host`` (UX-135) is where the **Recording setup** block draws. All
+    three modes end in one — editable in mode B, a read-only provenance summary
+    in A and C — and on the ✏️ Edit dataset screen that block is a numbered part
+    of its own, the way it is on the add screen, rather than a ``##### `` heading
+    trailing the mapping form. Passed straight through, ``None`` included: a
+    callee with no host renders inline under its own heading, as before, and
+    normalizing it to ``st`` here would silently drop that heading for every
+    caller.
     """
     if editor_rendered:
         # The editable built-in mapping now uses the same compact field grid as
         # Add dataset; widen its option menus just as the wizard does.
         st.markdown(mapping_menu_css(), unsafe_allow_html=True)
-        _render_setup_provenance_note()
+        _render_setup_provenance_note(host=setup_host)
         return
     active = _active_stored_dataset()
     if active is not None:
-        _render_remap_editor(*active, uploads_host=uploads_host)
+        _render_remap_editor(*active, uploads_host=uploads_host, setup_host=setup_host)
         return
     mapping = st.session_state.get("_active_column_mapping") or {}
     rows = _column_mapping_rows(mapping)
     if not rows:
         st.info("No column mapping available for the current data source.")
-        return
-    _render_readonly_mapping_grid(rows)
-    st.caption("How each source column maps to the app's canonical fields.")
-    _render_setup_provenance_note()
+    else:
+        _render_readonly_mapping_grid(rows)
+        st.caption("How each source column maps to the app's canonical fields.")
+    # Not behind the `return` that branch used to take: the recording setup is a
+    # *different* question from the mapping and, since UX-135, a numbered part of
+    # its own — leaving it undrawn strands its headline over an empty body.
+    _render_setup_provenance_note(host=setup_host)
 
 
-def _render_setup_provenance_note() -> None:
+def _render_setup_provenance_note(host=None) -> None:
     """DATA-22 §7 surface 1: how this dataset's recording setup is known.
 
     Data Inspection is where someone checks what the app did with their data, so
     it is where an *assumed* monitor has to be visible rather than inferred from
     a plausible-looking number elsewhere in the UI.
+
+    ``host`` (UX-135) is the ✏️ Edit dataset screen's own **Recording setup**
+    part. A caller that supplies one has already titled the block, so the
+    ``##### `` heading is dropped rather than repeated under the part's headline;
+    without one this renders inline, heading and all, as it always has.
     """
     from scanpath_studio.app import active_setup_snapshot
     from scanpath_studio.experimental_setup import (
@@ -10485,10 +10519,29 @@ def _render_setup_provenance_note() -> None:
         Provenance,
     )
 
+    # No host means "render inline", which is where the heading belongs; a
+    # caller that hands one over has already titled the block itself.
+    box = st if host is None else host
     snapshot = active_setup_snapshot()
     if snapshot is None:
+        # Nothing to say — an uploaded dataset carries the wizard's snapshot and
+        # a corpus that declares a monitor reports it, so this is a source that
+        # claims neither (the synthetic trial; a benchmark corpus whose manifest
+        # invents its screen). Inline that is silence, as it has always been.
+        # Given a host it is not: UX-135 made this the body of a *numbered* part,
+        # and a headline standing over nothing reads as a section that failed to
+        # render — the very thing contiguous numbering exists to prevent. So say
+        # which of the two it is.
+        if host is not None:
+            box.caption(
+                "This data source doesn't state the screen it was recorded on, "
+                "so nothing is assumed on its behalf. Set it in "
+                "**📐 Figure & canvas → 🖥️ Screen & framing** on the Scanpath "
+                "view, or add the dataset yourself to record it here."
+            )
         return
-    st.markdown("##### Recording setup")
+    if host is None:
+        box.markdown("##### Recording setup")
     values = {
         "screen": f"{snapshot.canvas_width} × {snapshot.canvas_height} px",
         "geometry": (
@@ -10504,7 +10557,7 @@ def _render_setup_provenance_note() -> None:
         ),
     }
     labels = {"screen": "Screen", "geometry": "Physical size", "text": "Text size"}
-    for cell, group in zip(st.columns(3, gap="medium"), SETUP_GROUPS):
+    for cell, group in zip(box.columns(3, gap="medium"), SETUP_GROUPS):
         label = html.escape(labels.get(group, SETUP_GROUP_LABELS[group]))
         value = html.escape(values[group])
         provenance = html.escape(
@@ -10519,16 +10572,18 @@ def _render_setup_provenance_note() -> None:
             unsafe_allow_html=True,
         )
     if snapshot.geometry_provenance is Provenance.SKIPPED:
-        st.caption(
+        box.caption(
             "Visual-angle units are hidden for this dataset — the physical size "
             "was skipped, so there is nothing honest to derive them from."
         )
     elif snapshot.px_per_degree is not None:
-        st.caption(f"≈ **{snapshot.px_per_degree:.1f} px** per degree of visual angle.")
-    _render_arrived_provenance_note(snapshot)
+        box.caption(
+            f"≈ **{snapshot.px_per_degree:.1f} px** per degree of visual angle."
+        )
+    _render_arrived_provenance_note(snapshot, host=box)
 
 
-def _render_arrived_provenance_note(snapshot) -> None:
+def _render_arrived_provenance_note(snapshot, *, host=None) -> None:
     """What the *sender* of a deep link said about their own setup.
 
     The `setup_prov` badge exists because a link carries the setup's **values**
@@ -10552,7 +10607,7 @@ def _render_arrived_provenance_note(snapshot) -> None:
     ]
     if not differing:
         return
-    st.caption(
+    (st if host is None else host).caption(
         "The link you opened was shared from a setup recorded differently — "
         + " · ".join(differing)
         + ". The table above describes *this* session's data source."

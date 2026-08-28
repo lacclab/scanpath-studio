@@ -107,6 +107,95 @@ STEPS: tuple[WizardStep, ...] = (
 STEPS_BY_ID: dict[str, WizardStep] = {s.id: s for s in STEPS}
 
 
+#: UX-135 — the ✏️ Edit dataset screen's parts, in page order.
+#:
+#: The ask was that the two screens read the same ("make it be as similar as
+#: possible to add dataset page"), so the editor uses this module's `part()`
+#: headline rather than the `st.divider()` + `st.subheader()` + `st.caption()`
+#: stack it grew section by section. The first two ids line up one-for-one with
+#: `STEPS` — an existing dataset's tables and mapping are the same question as
+#: uploading them, and its recording setup is the *same renderer* — and the rest
+#: are the questions that only have an answer once the dataset exists.
+#:
+#: The ids are prefixed ``edit_`` because `part_key` makes them container keys
+#: and a key may be used once per run. The editor's *slots* are reserved on
+#: every run (the screen is hidden by CSS, not skipped — see the slot comments
+#: in `app.main`), and `edit_stimulus` is drawn on every run outside the view
+#: guard, so an unprefixed id could meet the wizard's own while the add screen
+#: is open.
+#:
+#: ``number`` here is a *placeholder*: two of the five are conditional (stimulus
+#: images need a local filesystem, preprocessing is behind PRE-22's flag), and a
+#: screen numbered 1 · 2 · 3 · 5 reads as a missing section rather than as a
+#: hidden one. `numbered()` renumbers whatever is actually on screen.
+EDITOR_STEPS: tuple[WizardStep, ...] = (
+    WizardStep(
+        "edit_data",
+        1,
+        "Data tables & column mapping",
+        "How each source column maps onto the app's canonical fields — the one "
+        "thing that decides what every measure downstream is computed from. Any "
+        "metadata tables attached to the dataset are here too.",
+        True,
+    ),
+    WizardStep(
+        "edit_setup",
+        2,
+        "Recording setup",
+        "Screen, physical geometry and reading-text setup for this dataset.",
+        True,
+    ),
+    WizardStep(
+        "edit_identity",
+        3,
+        "Trial identity",
+        "Whether the Trial ID above actually identifies one reading — checked "
+        "on the whole dataset, before any filtering.",
+        False,
+    ),
+    WizardStep(
+        "edit_stimulus",
+        4,
+        "Stimulus images",
+        "Attach screenshots of the stimulus from a local folder, without adding "
+        "an image_path column to your data.",
+        False,
+    ),
+    WizardStep(
+        "edit_preproc",
+        5,
+        "Preprocessing",
+        "Optional soft exclusion and merging of short fixations, applied to "
+        "every view. Off by default; original rows remain available.",
+        False,
+    ),
+)
+
+EDITOR_STEPS_BY_ID: dict[str, WizardStep] = {s.id: s for s in EDITOR_STEPS}
+
+
+def numbered(
+    steps: Iterable[WizardStep], shown: Iterable[str]
+) -> dict[str, WizardStep]:
+    """``steps`` renumbered 1..n over the subset named in ``shown``.
+
+    Returns a mapping keyed by step id, so a caller can draw a part without
+    knowing where in the sequence it landed. Ids in ``shown`` that no step
+    declares are ignored; steps not in ``shown`` are absent from the result,
+    which is what a caller should check rather than tracking the condition
+    twice.
+    """
+    keep = set(shown)
+    out: dict[str, WizardStep] = {}
+    for step in steps:
+        if step.id not in keep:
+            continue
+        out[step.id] = WizardStep(
+            step.id, len(out) + 1, step.title, step.caption, step.required
+        )
+    return out
+
+
 def open_key(step_id: str) -> str:
     """Session key holding whether ``step_id``'s expander is open."""
     return f"{OPEN_KEY_PREFIX}{step_id}"
@@ -117,7 +206,14 @@ def part_key(step_id: str) -> str:
     return f"wiz_part_{step_id}"
 
 
-def part(host, step: WizardStep, *, status: StepStatus | None = None, trailing=None):
+def part(
+    host,
+    step: WizardStep,
+    *,
+    status: StepStatus | None = None,
+    trailing=None,
+    note: str = "",
+):
     """One linear part of the wizard: a minimal headline, then its body.
 
     UX-53 r8. The parts run in a fixed order — there is nothing to map before a
@@ -130,12 +226,24 @@ def part(host, step: WizardStep, *, status: StepStatus | None = None, trailing=N
     title — e.g. stage 2's "↩️ Restore a saved setup" popover trigger — so it
     reads as part of the title line instead of as the first thing in the body.
     Only the title line splits; the returned body container stays full width.
+
+    ``note`` (UX-135) hangs the part's explanation off the title as the same
+    hover tooltip the rest of the wizard's prose uses, instead of a `st.caption`
+    line under it. The add screen's own three titles say everything they need to
+    ("Dataset name"), so only the ✏️ Edit dataset screen passes one — its parts
+    carry judgements a title cannot ("does the Trial ID identify one reading?").
     """
     box = host.container(key=part_key(step.id))
     mark = f"{badge(status)} " if status else ""
+    title = html.escape(step.title)
+    if note:
+        title = (
+            f'<span class="sps-fhelp" data-tip="{html.escape(note, quote=True)}">'
+            f"{title}</span>"
+        )
     title_html = (
         f'<div class="sps-wiz-part"><span class="sps-wiz-part-n">{step.number}</span>'
-        f"{mark}{html.escape(step.title)}</div>"
+        f"{mark}{title}</div>"
     )
     if trailing is not None:
         title_col, trailing_col = box.columns(

@@ -163,6 +163,9 @@ SINGLE_TRIAL_ID = "single_trial_id"
 SINGLE_PARTICIPANT = "single_participant"
 SINGLE_SLIDER = "single_slider"
 SINGLE_ANIMATE = "single_animate"
+#: VIZ-7 — the fixation-index window. Wire format since UX-135 gave it a
+#: `?fix_range=lo,hi` param; the widget itself predates it.
+SINGLE_FIX_RANGE = "single_fix_range"
 #: Turned on by a `?compare=` deep link, exactly as `?tab=animation` turns on
 #: `single_animate` (CMP-8 §7).
 SINGLE_COMPARE_TOGGLE = "single_compare_toggle"
@@ -283,6 +286,11 @@ COMPARE_LAYOUT_PARAM = "cmp_layout"
 COMPARE_STIMULUS_PARAM = "cmp_stimulus"
 #: Widget key holding the picked comparison dataset (`tabs`/`compare_source`).
 COMPARE_SOURCE_STATE_KEY = "cmp_dataset"
+#: UX-135 — VIZ-7's fixation-index window on the wire. Its own constant
+#: because two frozen groupings name it: the encoding group
+#: (`SHARE_INT_RANGE_PARAMS`) and `URL_OPTIONAL_PARAMS`, which is what says
+#: a link may legitimately not carry it.
+FIX_RANGE_PARAM = "fix_range"
 #: Where an arriving `compare=` selection waits until the candidate list exists.
 #: The picker's own key holds a *label* built at render time, so a link can't
 #: seed it directly — the same problem `PENDING_TRIAL_KEY` solves for A.
@@ -403,6 +411,11 @@ SHARE_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
 SHARE_INT_RANGE_PARAMS: Mapping[str, str] = MappingProxyType(
     {
         "marker_size_range": GLOBAL_MARKER_SIZE_RANGE,
+        # UX-135 — VIZ-7's fixation-index window. Optional on the wire (see
+        # `URL_OPTIONAL_PARAMS`): the slider *defaults* to the trial's own full
+        # range, so an untouched one is not a setting and must not be stamped
+        # onto every link.
+        FIX_RANGE_PARAM: SINGLE_FIX_RANGE,
     }
 )
 
@@ -476,7 +489,13 @@ URL_SOURCE_STATE_KEYS = frozenset({DATA_SOURCE_CHOICE, PUBLIC_DATASET_CHOICE})
 # `corpus` is absent for every source that is not a public corpus, and for the
 # one public corpus that still travels under its own older token.
 URL_OPTIONAL_PARAMS = frozenset(
-    {SETUP_PROVENANCE_PARAM, COMPARE_PARAM, COMPARE_SOURCE_PARAM, PARAM_CORPUS}
+    {
+        SETUP_PROVENANCE_PARAM,
+        COMPARE_PARAM,
+        COMPARE_SOURCE_PARAM,
+        PARAM_CORPUS,
+        FIX_RANGE_PARAM,
+    }
 )
 
 # The exact key set of `url_state._URL_PRESETS` — every param a deep link can

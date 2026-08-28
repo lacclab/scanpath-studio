@@ -161,6 +161,12 @@ arranged on the **[Scanpath Studio board](https://github.com/orgs/lacclab/projec
 `[VIZ-37] <title>`: the stable tracker IDs are cited throughout these docs, the
 `plans/` notes and the git history, so they outlive GitHub's own numbering.
 
+Not every ID has an issue, deliberately: `CHANGELOG.md` allocates the IDs and
+carries the write-up for finished work, and an issue is opened when the item
+needs the **Review** gate, is blocked on the user (`waiting-on-you`), or is
+carried across sessions. So take a new ID's number from all three registries —
+the changelog, `gh issue list`, and `tracker/data.js` — never GitHub alone.
+
 Status (`Backlog · Planned · In progress · On hold · Review`) and priority live
 in the board's single-select columns, and kind is the native issue type
 (`Bug` / `Feature` / `Task`) — structured fields rather than labels, so there is

@@ -61,18 +61,40 @@ you work under `scanpath_studio/`); contributor setup is in
   `gh project item-list 5 --owner lacclab`. The in-repo tracker was migrated on
   2026-08-20 (ENG-32) and is now a **read-only archive** — see *The archive* at
   the end of this section.
+- **Not every ID gets an issue, and that is deliberate.** `CHANGELOG.md` is where
+  IDs are allocated and where the write-up for finished work lives; an issue is
+  opened when an item needs something an issue is *for*. Open one when the item
+  reaches **Review** (the approval gate — the user's sign-off has to have
+  somewhere to happen), when it is blocked on a decision only the user can make
+  (`waiting-on-you`), or when it is carried across sessions and needs a place to
+  hold the brief. Work that is picked up and finished inside one session, whose
+  reasoning fits in the changelog's `### Details`, does not need a second copy on
+  GitHub — 81 of the 93 IDs cited since v0.29.0 are exactly that, including the
+  whole `UX-102`…`UX-137` run, and backfilling them would add noise, not history.
+  Confirmed with the user on 2026-08-28. The rule that is **not** optional: an ID
+  is still allocated for every item, still unique, still cited in the commit
+  subject and the changelog. If you are unsure, open the issue — the cost of one
+  extra is far below the cost of shipping something past the review gate.
 - **Prefer GitHub's structured fields to labels.** Status, priority and kind are
   native — the board's `Status` and `Priority` single-selects and the org's
   issue types — so they are *not* also labels. Only two labels remain, for the
   two things GitHub has no field for: `area:*` and `waiting-on-you`.
 - **Stable IDs are still the currency.** Every issue is titled
   `[VIZ-37] <title>`, because the docs, the `plans/` notes and the git history
-  cite items by that ID and always will. A **new** issue takes the next free
-  number in its area's prefix — `gh issue list --state all --search "[DATA-"`
-  and add one, counting the archive too (`tracker/data.js` holds everything
-  closed before the move). Never reuse or renumber an ID. GitHub's own `#N` is
-  an implementation detail; cite the tracker ID in commits and prose, and the
-  `#N` alongside it when a link helps.
+  cite items by that ID and always will. **Take the next free number by checking
+  all three registries**, because most IDs live in only one of them:
+  `CHANGELOG.md` (where the majority are — see the bullet above),
+  `gh issue list --state all --search "[DATA-"`, and `tracker/data.js` (the
+  pre-migration archive). Searching GitHub alone will hand you a number the
+  changelog already spent:
+
+  ```bash
+  grep -oh "\bDATA-[0-9]*\b" CHANGELOG.md tracker/data.js docs/*.md scanpath_studio/*.py | sort -u -V | tail -3
+  ```
+
+  Never reuse or renumber an ID. GitHub's own `#N` is an implementation detail;
+  cite the tracker ID in commits and prose, and the `#N` alongside it when a
+  link helps.
 - **Where each fact lives.**
   - **Status** → the board's `Status` column: `Backlog · Planned · In progress ·
     On hold · Review`. Closing the issue is the sixth state. Move it on the board,
@@ -90,7 +112,10 @@ you work under `scanpath_studio/`); contributor setup is in
 - **Approval gate.** Finishing implementation means board Status **Review** with
   the issue **open** — never close it yourself. Closing *is* the sign-off, and it
   is the user's to make. An issue closed without being implemented says why in a
-  closing comment and uses `--reason "not planned"`.
+  closing comment and uses `--reason "not planned"`. This is the gate that makes
+  an issue *required*: an item you are handing back for review needs one, even
+  when it was allocated an ID an hour ago and finished in the same session —
+  create it at Review rather than leaving the hand-off in chat.
 - **Claim it and move it to *In progress* when you pick it up**, not when you
   finish: `gh issue edit <n> --add-assignee @me`, and set the board's Status.
   Several sessions and two people share this repo; an unassigned issue reads as

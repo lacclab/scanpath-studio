@@ -831,6 +831,22 @@ def _render_parser() -> argparse.ArgumentParser:
         help="On an overlay, whose word boxes and text to draw (default: both). "
         "Two datasets' AOIs coincide only when the text is identical.",
     )
+    # EXP-8 §1. Named `-a` / `-b` after the `style_a` / `style_b` pair rather
+    # than `--label`, which would read as a sibling of `--no-labels` (the word
+    # labels on the stimulus) and mean something else entirely.
+    cmp_group.add_argument(
+        "--label-a",
+        metavar="TEXT",
+        help="Trace label for the FIRST scanpath, replacing the composed "
+        "default. Applies to the comparison figure and to the --animate "
+        "co-animation alike. Requires --label-b.",
+    )
+    cmp_group.add_argument(
+        "--label-b",
+        metavar="TEXT",
+        help="Trace label for the SECOND scanpath, replacing the composed "
+        "default. Requires --label-a.",
+    )
     cmp_group.add_argument(
         "--compare-words",
         metavar="PATH",
@@ -891,6 +907,17 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Eye-to-screen distance for the SECOND dataset, in millimetres.",
     )
     return parser
+
+
+def _compare_labels(args) -> tuple[str, str] | None:
+    """The `--label-a` / `--label-b` pair, or None for the composed default.
+
+    Validated both-or-neither in `render`'s argument checks, so by the time
+    this runs, one flag being set means both are.
+    """
+    if args.label_a is None:
+        return None
+    return (str(args.label_a), str(args.label_b))
 
 
 def _parse_compare_with(value: str) -> tuple:
@@ -1209,6 +1236,7 @@ def _print_reproduction_code(api, args, overrides: dict, canvas, participant, tr
             trial=compare_trial,
             layout=args.compare_layout,
             compare_stimulus=args.compare_stimulus,
+            labels=_compare_labels(args),
             # CMP-8: B came from a second corpus exactly when its own frames
             # were given, so B's ids are that corpus's — the same caveat the
             # app's Share panel raises.
@@ -1462,6 +1490,20 @@ def render(argv: list[str]) -> None:
             "--compare-with cannot be combined with --all-screens: a comparison "
             "is a single figure of two readings. Render one screen at a time with "
             "--screen SCREEN_ID."
+        )
+    # `compare_scanpaths` takes `labels` as a pair or not at all — there is no
+    # way to name one side and leave the builder to compose the other — so a
+    # lone flag is refused rather than silently dropped.
+    if (args.label_a is None) != (args.label_b is None):
+        raise SystemExit(
+            "--label-a and --label-b go together: `compare_scanpaths` takes the "
+            "two trace labels as a pair, so naming one side would leave the "
+            "other undefined."
+        )
+    if args.label_a is not None and args.compare_with is None:
+        raise SystemExit(
+            "--label-a/--label-b label the two scanpaths of a comparison or of "
+            "an --animate co-animation; both need --compare-with."
         )
     canvas = _parse_canvas(args.canvas)
     if args.coordinate_grid_spacing is not None and args.coordinate_grid_spacing <= 0:
@@ -1987,6 +2029,14 @@ def render(argv: list[str]) -> None:
                     _compare_animation_frames(api, args, words, fixations, canvas)
                 )
                 anim_kwargs["compare_stimulus"] = args.compare_stimulus
+                # EXP-8 §1. `animate_scanpath` names the co-animation's two
+                # trace labels `label_a` / `label_b` where `compare_scanpaths`
+                # takes one `labels=` pair, but to the user they are the same
+                # thing, so one flag pair serves both. They had no flag at all
+                # before, and an animation snippet reported them unsupported.
+                labels = _compare_labels(args)
+                if labels is not None:
+                    anim_kwargs["label_a"], anim_kwargs["label_b"] = labels
             animation_options = dict(
                 playback_speed=args.playback_speed,
                 autoplay=args.autoplay,
@@ -2044,6 +2094,7 @@ def render(argv: list[str]) -> None:
                 dataset_b=args.compare_dataset_name,
                 layout=args.compare_layout,
                 compare_stimulus=args.compare_stimulus,
+                labels=_compare_labels(args),
                 setup=_compare_setup_snapshot(
                     canvas, args.monitor_mm, args.viewing_distance
                 ),

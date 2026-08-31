@@ -1983,6 +1983,7 @@ def figure_code(
     compare_layout: str = "overlay",
     compare_stimulus: str = "both",
     compare_dataset: str = "",
+    compare_labels: tuple[str, str] | None = None,
     canvas_size: tuple[int, int] | None = None,
     base_font_size: int = 16,
     font_family: str = FONT_FAMILY,
@@ -2021,11 +2022,20 @@ def figure_code(
     the one the snippet loads, so naming it turns a snippet that would quietly
     reference a missing reader into one that says where B comes from.
 
+    ``compare_labels`` is the pair you would pass :func:`compare_scanpaths` as
+    ``labels=`` — the two trace labels, when they are not the composed defaults
+    (EXP-8 §1). Both forms carry them: ``labels=`` in the Python snippet,
+    ``--label-a`` / ``--label-b`` in the CLI one.
+
     Only the options that differ from :func:`figure_options` are written, so the
     snippet stays readable; ``explicit=True`` emits every option at its current
     value. ``flavor`` is ``"python"``, ``"cli"``, or ``"both"`` (the two
     separated by a blank line). Settings the CLI has no flag for are named in a
-    trailing comment rather than dropped — see
+    trailing comment rather than dropped, and anything *neither* form can
+    promise — a layer that needs a third frame, an uploaded stimulus image, B's
+    rows when they come from a second corpus — follows as ``# Note:`` comments
+    (EXP-8 §2), matching the ⚠️ captions the app shows and the ``Note:`` lines
+    `render --print-code` writes to stderr. See
     :class:`code_snippet.ReproductionCode` for the structured form.
     """
     from . import code_snippet as _snippet
@@ -2061,6 +2071,11 @@ def figure_code(
                 layout=compare_layout,
                 compare_stimulus=compare_stimulus,
                 dataset=str(compare_dataset),
+                labels=(
+                    (str(compare_labels[0]), str(compare_labels[1]))
+                    if compare_labels
+                    else None
+                ),
             )
             if compare is not None
             else None
@@ -2077,11 +2092,15 @@ def figure_code(
     cli = code.cli
     if code.cli_unsupported:
         cli += "\n# No `render` flag for: " + ", ".join(code.cli_unsupported)
+    # The caveats apply to *both* snippets, so on "both" they are appended once
+    # at the end rather than to each half — two identical blocks would read as
+    # two different warnings.
+    notes = "".join(f"\n# Note: {note}" for note in code.caveats)
     if flavor == "python":
-        return code.python
+        return code.python + notes
     if flavor == "cli":
-        return cli
-    return f"{code.python}\n\n{cli}"
+        return cli + notes
+    return f"{code.python}\n\n{cli}{notes}"
 
 
 def cache_status() -> dict:

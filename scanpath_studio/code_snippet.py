@@ -260,6 +260,14 @@ class CompareTarget:
     layout: str = "overlay"
     compare_stimulus: str = "both"
     dataset: str = ""
+    #: EXP-8 §1. The two trace labels the figure was actually built with —
+    #: `friendly_trial_label`'s output, or UX-31's `cmp{idx}_label_pattern`
+    #: override. They ride here rather than in ``FigureState.settings`` because
+    #: `compare_scanpaths` takes them as a named `labels=` parameter, so
+    #: `api._COMPARISON_FIGURE_PARAMS` subtracts them and the
+    #: `_amend_snippet_settings` merge structurally cannot see them — the same
+    #: reason `layout` and `compare_stimulus` are fields here.
+    labels: tuple[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -328,6 +336,16 @@ _DERIVED_SETTINGS = frozenset(
         "show_raw_gaze",
     }
 )
+
+#: EXP-8 §4. Of the derived settings above, the ones whose *value* scales with
+#: the trial rather than being a scalar choice. ``_DERIVED_SETTINGS`` keeps them
+#: out of the snippet's text; this keeps them out of the published
+#: :class:`FigureState` as well, because `tabs._amend_snippet_settings` merges
+#: every builder keyword it recognizes and would otherwise park one float per
+#: fixation in session state on every rerun — for a key that is guaranteed
+#: never to be emitted. The rest of ``_DERIVED_SETTINGS`` stays in the state:
+#: `show_raw_gaze` is read by :func:`state_caveats`, and the others are scalars.
+UNPUBLISHED_SETTINGS = frozenset({"connector_y"})
 
 #: A stimulus image the user uploaded lives in the figure as a ``data:`` URI —
 #: a megabyte of base64 that would swamp the snippet and mean nothing on
@@ -495,6 +513,12 @@ def _num(value) -> str:
 #: this table has no CLI flag; :func:`cli_snippet` reports those rather than
 #: dropping them, which is what keeps the four-surface rule honest here.
 _CLI_EMITTERS: dict[str, Any] = {
+    # EXP-8 §1. CMP-11's co-animation names its two trace labels as loose
+    # keywords, so the animation half rides the table; the comparison half is
+    # written by hand in `cli_snippet`, because `compare_scanpaths` takes them
+    # as one `labels=` pair rather than as figure options. Same two flags.
+    "label_a": _valued("--label-a"),
+    "label_b": _valued("--label-b"),
     "show_words": _flag_when("--no-words", False),
     "show_word_labels": _flag_when("--no-labels", False),
     "show_fixations": _flag_when("--no-fixations", False),
@@ -678,6 +702,12 @@ def python_snippet(
             call.append(f"    layout={_py(compare.layout)},")
         if explicit or compare.compare_stimulus != "both":
             call.append(f"    compare_stimulus={_py(compare.compare_stimulus)},")
+        # Emitted only when set, `explicit` included: the default is `None`,
+        # and the labels it stands for are composed by the builder from the
+        # trial ids. Writing `labels=None` would be accurate but useless, and
+        # writing the auto pair would freeze a derived value into the recipe.
+        if compare.labels:
+            call.append(f"    labels={_py(tuple(compare.labels))},")
     for name, value in _call_kwargs(state, explicit=explicit):
         call.append(f"    {name}={_py(value)},")
     for name, value in figure_kwargs(
@@ -780,6 +810,12 @@ def cli_snippet(
         argv += ["--compare-layout", _CLI_COMPARE_LAYOUT.get(compare.layout, "overlay")]
         if explicit or compare.compare_stimulus != "both":
             argv += ["--compare-stimulus", str(compare.compare_stimulus).lower()]
+        # Both or neither, matching `render`'s own rule: a lone label would
+        # leave the other side to the builder's auto composition, which is not
+        # a pair `compare_scanpaths` can be given.
+        if compare.labels:
+            label_a, label_b = compare.labels
+            argv += ["--label-a", str(label_a), "--label-b", str(label_b)]
 
     for key, value in figure_kwargs(
         state.settings, state.kind, explicit=explicit

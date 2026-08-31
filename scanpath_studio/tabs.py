@@ -57,6 +57,7 @@ from scanpath_studio.animation_export import (
 from scanpath_studio.annotations import filter_keys, render_trial_annotations
 from scanpath_studio.code_snippet import (
     SNIPPET_STATE_KEY,
+    UNPUBLISHED_SETTINGS,
     CompareTarget,
     FigureState,
 )
@@ -1262,11 +1263,20 @@ def _amend_snippet_settings(settings, kind: str) -> None:
     in the rail came back in the stock palette.
 
     Only keys the chosen builder accepts are merged, so this cannot widen the
-    published dict into something `api` would reject. The merge is normalized
-    through :func:`_snippet_settings_at_api_defaults` for the same reason the
-    publish is — the built ``FigureSettings`` carries the *materialized*
-    `fixation_flags` / `saccade_class_colors`, so without it this step would put
-    straight back what the publish had just normalized away (EXP-8 §3).
+    published dict into something `api` would reject. That `name in known`
+    clause is also what keeps `words_b` / `fixations_b` out: they are
+    `figure_options("animation")` entries but not ``FigureSettings`` fields, so
+    without it every rerun of a two-reading animation would park two full trial
+    frames in session state.
+
+    The merge is normalized through :func:`_snippet_settings_at_api_defaults`
+    for the same reason the publish is — the built ``FigureSettings`` carries
+    the *materialized* `fixation_flags` / `saccade_class_colors`, so without it
+    this step would put straight back what the publish had just normalized away
+    (EXP-8 §3). ``UNPUBLISHED_SETTINGS`` is dropped for the mirror-image reason
+    (EXP-8 §4): `connector_y` is a builder keyword *and* a ``FigureSettings``
+    field, so it passes both filters above, but it is one float per fixation
+    that `code_snippet` is guaranteed never to emit.
     """
     from . import api
 
@@ -1274,12 +1284,16 @@ def _amend_snippet_settings(settings, kind: str) -> None:
     if state is None:
         return
     known = {field.name for field in dataclass_fields(type(settings))}
-    merged = dict(state.settings)
+    merged = {
+        name: value
+        for name, value in state.settings.items()
+        if name not in UNPUBLISHED_SETTINGS
+    }
     merged.update(
         {
             name: getattr(settings, name)
             for name in api.figure_options(kind)
-            if name in known
+            if name in known and name not in UNPUBLISHED_SETTINGS
         }
     )
     st.session_state[SNIPPET_STATE_KEY] = replace(
@@ -1303,6 +1317,26 @@ def _amend_snippet_title_caption(title: str, caption: str) -> None:
     if state is None:
         return
     st.session_state[SNIPPET_STATE_KEY] = replace(state, title=title, caption=caption)
+
+
+def _amend_snippet_compare_labels(labels: tuple[str, str]) -> None:
+    """Correct the published snippet's trace labels to the figure's own (EXP-8 §1).
+
+    The third of the three amenders, and it exists for `_amend_snippet_settings`'s
+    reason applied to a value that one cannot carry: the labels are resolved in
+    `_render_comparison_figure`, *below* `_publish_snippet_state`, because
+    UX-31's `cmp{idx}_label_pattern` is rendered against each side's own trial
+    frames. `compare_scanpaths` takes them as a named `labels=` parameter rather
+    than a loose keyword, so `api._COMPARISON_FIGURE_PARAMS` subtracts them and
+    the settings merge can never see them — without this, a comparison the user
+    labelled by hand in the rail reproduced under the builder's auto labels.
+    """
+    state = st.session_state.get(SNIPPET_STATE_KEY)
+    if state is None or state.compare is None:
+        return
+    st.session_state[SNIPPET_STATE_KEY] = replace(
+        state, compare=replace(state.compare, labels=(str(labels[0]), str(labels[1])))
+    )
 
 
 def _figure_input_key(
@@ -5756,6 +5790,8 @@ def _render_comparison_figure(
             extract_trial(fixations_filtered, compare_participant, compare_trial),
             dataset_name=_compare_dataset_name(compare_meta),
         )
+
+    _amend_snippet_compare_labels((primary_label, compare_label))
 
     overrides: dict = dict(
         trial_labels=(primary_label, compare_label),

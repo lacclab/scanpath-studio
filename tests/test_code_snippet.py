@@ -1047,3 +1047,250 @@ def test_a_stock_figure_writes_no_settings_at_all():
     ), code.python
     assert code.cli == "scanpath-studio render --sample -p p1 -t t1 -o scanpath.png"
     assert not code.cli_unsupported
+
+
+# ---------------------------------------------------------------------------
+# EXP-8 — the fidelity gaps EXP-7's review rounds found and left
+# ---------------------------------------------------------------------------
+def _compare_state(**compare) -> cs.FigureState:
+    """A comparison state with B named, plus whatever `CompareTarget` fields."""
+    return _state(
+        "comparison", compare=cs.CompareTarget(participant="p2", trial="t2", **compare)
+    )
+
+
+def test_hand_set_comparison_labels_reach_both_flavours():
+    """EXP-8 §1 — the gap: a comparison labelled in the rail came back auto-labelled.
+
+    `compare_scanpaths` takes them as a named `labels=` parameter, so
+    `api._COMPARISON_FIGURE_PARAMS` subtracts them and the settings merge can
+    never carry them. They ride `CompareTarget` instead, beside `layout` and
+    `compare_stimulus`, which have the same shape for the same reason."""
+    code = cs.reproduction_code(DEMO, _compare_state(labels=("Reader A", "Reader B")))
+    assert "    labels=('Reader A', 'Reader B')," in code.python
+    flat = code.cli.replace(" \\\n ", " ")
+    assert "--label-a 'Reader A' --label-b 'Reader B'" in flat
+    assert not code.cli_unsupported
+
+
+def test_auto_labels_are_written_by_neither_flavour():
+    """The default is composed by the builder from the trial ids, so quoting it
+    would freeze a derived value into the recipe — even under `explicit`."""
+    for explicit in (False, True):
+        code = cs.reproduction_code(DEMO, _compare_state(), explicit=explicit)
+        # `    labels=`, not `labels=`: under `explicit` the call also carries
+        # `show_word_labels=`, which the looser needle would match.
+        assert "\n    labels=" not in code.python, explicit
+        assert "--label-a" not in code.cli, explicit
+
+
+def test_the_co_animations_labels_are_no_longer_cli_unsupported():
+    """EXP-8 §1's other half. CMP-11's two-reading animation names them
+    `label_a` / `label_b` as loose keywords, and `render` had no flag for
+    either — so an animation snippet dropped them *and* warned about them.
+    One flag pair now serves the comparison and the co-animation alike."""
+    state = _state("animation", figure={"label_a": "A", "label_b": "B"})
+    code = cs.reproduction_code(DEMO, state)
+    assert "--label-a A" in code.cli.replace(" \\\n ", " ")
+    assert "--label-b B" in code.cli.replace(" \\\n ", " ")
+    assert not code.cli_unsupported
+
+
+def test_render_takes_the_label_flags_it_is_handed():
+    """The one thing that would make a copied command fail outright."""
+    args = cli._render_parser().parse_args(
+        [
+            "--sample",
+            "-p",
+            "x",
+            "-t",
+            "y",
+            "--compare-with",
+            "p2:t2",
+            "--label-a",
+            "Reader A",
+            "--label-b",
+            "Reader B",
+        ]
+    )
+    assert (args.label_a, args.label_b) == ("Reader A", "Reader B")
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [
+        (["--compare-with", "p2:t2", "--label-a", "only"], "go together"),
+        (["--compare-with", "p2:t2", "--label-b", "only"], "go together"),
+        (["--label-a", "a", "--label-b", "b"], "need --compare-with"),
+    ],
+)
+def test_a_half_given_label_pair_is_refused_rather_than_dropped(
+    argv, expected, tmp_path
+):
+    """`compare_scanpaths` takes the labels as a pair or not at all — there is
+    no way to name one side and leave the builder to compose the other."""
+    base = ["--sample", "-p", "x", "-t", "y", "-o", str(tmp_path / "o.png")]
+    with pytest.raises(SystemExit, match=expected):
+        cli.render(base + argv)
+
+
+def test_figure_code_carries_the_labels_across_the_headless_seam():
+    """The fourth surface: what the app publishes, `api.figure_code` accepts."""
+    for flavor, needle in (
+        ("python", "labels=('Reader A', 'Reader B')"),
+        ("cli", "--label-a 'Reader A'"),
+    ):
+        out = api.figure_code(
+            kind="comparison",
+            participant="p1",
+            trial="t1",
+            compare=("p2", "t2"),
+            compare_labels=("Reader A", "Reader B"),
+            flavor=flavor,
+        )
+        assert needle in out.replace(" \\\n ", " "), (flavor, out)
+
+
+def test_figure_code_writes_the_caveats_it_used_to_throw_away():
+    """EXP-8 §2 — `figure_code` appended only `cli_unsupported`, so the headless
+    surface was the one that stayed silent about what neither form can promise.
+    The UI shows these as ⚠️ captions and `render --print-code` prints them as
+    `Note:` on stderr; that also made `compare_dataset=` inert, since the CMP-8
+    note is the only thing that argument produces."""
+
+    def notes(flavor):
+        out = api.figure_code(
+            kind="comparison",
+            participant="p1",
+            trial="t1",
+            compare=("p2", "t2"),
+            compare_dataset="PoTeC",
+            flavor=flavor,
+        )
+        return [line for line in out.splitlines() if line.startswith("# Note:")]
+
+    for flavor in ("python", "cli", "both"):
+        assert any("second dataset" in line for line in notes(flavor)), flavor
+    # On "both" they apply to the pair, so they are written once — two identical
+    # blocks would read as two different warnings.
+    assert len(notes("both")) == len(notes("python")) == 1
+
+
+def test_a_figure_with_nothing_to_disclose_writes_no_notes():
+    out = api.figure_code(participant="p1", trial="t1", flavor="both")
+    assert "# Note:" not in out
+
+
+def _amended(
+    built_overrides: dict,
+    kind: str = "static",
+    figure: dict | None = None,
+    bare: bool = False,
+):
+    """Run `_amend_snippet_settings` inside a Streamlit run and hand back state.
+
+    A bare script rather than the whole app: the merge is what is under test,
+    and driving `connector_y` through the real app would need PRE-21's
+    experimental gate and a drift-corrected trial to say anything about it."""
+    from streamlit.testing.v1 import AppTest
+
+    script = f"""
+import streamlit as st
+import scanpath_studio.api as api
+from scanpath_studio.code_snippet import SNIPPET_STATE_KEY, FigureState
+from scanpath_studio.plots import FigureSettings
+from scanpath_studio.tabs import _amend_snippet_settings
+
+st.session_state[SNIPPET_STATE_KEY] = FigureState(
+    kind={kind!r},
+    settings={{}} if {bare!r} else dict(api.figure_options({kind!r})),
+    participant="p1", trial="t1",
+)
+st.session_state[SNIPPET_STATE_KEY].settings.update({(figure or {})!r})
+_amend_snippet_settings(
+    FigureSettings(canvas_width=1024, canvas_height=768, base_font_size=16)
+    .with_overrides(**{built_overrides!r}),
+    {kind!r},
+)
+"""
+    at = AppTest.from_string(script)
+    at.run(timeout=60)
+    assert not at.exception, at.exception
+    return at.session_state[cs.SNIPPET_STATE_KEY]
+
+
+def test_the_merge_parks_no_per_fixation_data_in_session_state():
+    """EXP-8 §4 — `connector_y` is a builder keyword *and* a `FigureSettings`
+    field, so it passed both of the merge's filters, copying one float per
+    fixation into session state on every rerun that drift correction and
+    connectors were on. `_DERIVED_SETTINGS` already kept it out of the snippet's
+    text; `UNPUBLISHED_SETTINGS` keeps it out of the state as well."""
+    state = _amended(
+        {"connector_y": tuple(float(i) for i in range(500)), "show_connectors": True}
+    )
+    assert "connector_y" not in state.settings
+    # Only the per-fixation one is dropped: the scalar derived settings cost
+    # nothing to keep, and `show_raw_gaze` is read by `state_caveats`.
+    assert state.settings["show_connectors"] is True
+    assert "show_raw_gaze" in state.settings
+
+
+def test_a_stale_connector_y_is_swept_out_of_an_older_published_state():
+    """The drop covers what the publish already carried, not only the merge —
+    otherwise a state published before the layer was turned off would keep it."""
+    state = _amended({"show_connectors": False}, figure={"connector_y": (1.0, 2.0)})
+    assert "connector_y" not in state.settings
+
+
+def test_an_animation_merge_parks_no_trial_frames_in_session_state():
+    """`figure_options("animation")` lists `words_b` / `fixations_b`, and the
+    merge's `name in known` clause is the only thing keeping them out of the
+    published state: they are builder keywords but not `FigureSettings` fields.
+
+    Worth stating precisely, because the guard is stricter than it looks. The
+    branch hands the merge a `FigureSettings` (`settings.with_overrides(...)`),
+    which has no such attribute — so dropping the clause would raise
+    `AttributeError` on every two-reading animation rather than silently parking
+    two trial frames in session state. Either way it is load-bearing; this pins
+    the outcome rather than the failure mode."""
+    seeded = {
+        key: value
+        for key, value in api.figure_options("animation").items()
+        if key not in _UNPUBLISHABLE
+    }
+    state = _amended({}, kind="animation", figure=seeded, bare=True)
+    assert _UNPUBLISHABLE.isdisjoint(state.settings)
+
+
+@pytest.mark.timeout(600)
+def test_the_running_app_publishes_the_labels_the_comparison_drew():
+    """The seam for EXP-8 §1: every unit test above would pass on an amender
+    that is never called, which is the failure mode worth pinning.
+
+    The labels are resolved in `_render_comparison_figure`, *below*
+    `_publish_snippet_state`, because UX-31's `cmp{idx}_label_pattern` renders
+    against each side's own trial frames — so only the amend can carry them."""
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file(APP_SCRIPT)
+    at.session_state["single_compare_toggle"] = True
+    at.run(timeout=250)
+    assert not at.exception, at.exception
+    state = at.session_state[cs.SNIPPET_STATE_KEY]
+    assert state.kind == "comparison"
+    assert state.compare is not None and state.compare.labels, (
+        "a comparison publishes the labels its figure was built with"
+    )
+    auto = state.compare.labels
+
+    # UX-31: a hand-set pattern overrides A's label, and has to reach the
+    # snippet — reproducing under the auto label is the gap EXP-8 §1 names.
+    at.session_state["cmp0_label_pattern"] = "MINE-{participant_id}"
+    at.run(timeout=250)
+    assert not at.exception, at.exception
+    labels = at.session_state[cs.SNIPPET_STATE_KEY].compare.labels
+    assert labels[0].startswith("MINE-"), labels
+    assert labels[1] == auto[1], "only A was relabelled"
+    # And it reaches both flavours rather than stopping at the dataclass.
+    code = cs.reproduction_code(DEMO, at.session_state[cs.SNIPPET_STATE_KEY])
+    assert labels[0] in code.python and labels[0] in code.cli

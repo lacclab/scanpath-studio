@@ -99,10 +99,16 @@ scanpath-studio render --potec ./potec -p 12 -t b0 \
 | pick B | `--compare-with PARTICIPANT:TRIAL` |
 | arrange the panels | `--compare-layout {overlay,side-by-side,stacked}` (default `overlay`) |
 | whose stimulus an overlay draws | `--compare-stimulus {both,a,b}` (default `both`) |
+| name the two traces | `--label-a TEXT --label-b TEXT` (both or neither) |
 | B from another dataset | `--compare-words PATH… --compare-fixations PATH…` |
 | name that dataset | `--compare-dataset-name NAME` |
 | declare the screens | `--canvas WxH`, `--compare-canvas WxH` |
 | co-animate both readings | add `--animate` (HTML output) |
+
+`--label-a` / `--label-b` replace the composed trace labels — the CLI form of the
+app's per-scanpath label pattern. They go together, because `compare_scanpaths`
+takes the pair or neither, and they apply to the co-animation below just as they
+do to the static comparison.
 
 `--animate --compare-with` replays **both** readings on one clock, the same dual
 co-animation the app renders with Animate and Compare both on. That is an

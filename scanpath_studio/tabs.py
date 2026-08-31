@@ -432,10 +432,23 @@ _TRUE_SCALE_TEMPLATE = """
   var size = document.getElementById("size-__KEY__");
   var box = document.getElementById("box-__KEY__");
   var label = document.getElementById("zoomlabel-__KEY__");
+  var wrap = document.getElementById("wrap-__KEY__");
   var zoom = 1, base = 1;
+  // VIZ-37 fullscreen state. Declared up here because `baseScale` branches on
+  // it, and `render()` runs before the fullscreen wiring below.
+  var fsOn = false, fsSavedStyle = null, fsSavedZoom = 1, fsSavedOverflow = null;
 
   function baseScale() {
     var avail = outer.clientWidth || W;
+    // VIZ-37: fullscreen fits *both* dimensions and is allowed above 1x — the
+    // point of it is to use the screen, and on a large monitor the fit-to-width
+    // rule below would leave the figure at true size in the middle of it. Still
+    // the one uniform transform, so the aspect ratio holds and boxes, markers,
+    // strokes and text keep the same relationship to each other they have at 1x.
+    if (fsOn) {
+      var availH = (window.innerHeight || H) - 8;
+      return Math.min(avail / W, availH / H);
+    }
     return __SCALE_JS__;
   }
   // One uniform transform for fit x zoom: boxes, fixations, labels and stroke
@@ -513,6 +526,126 @@ _TRUE_SCALE_TEMPLATE = """
     zoom = 1; render(); outer.scrollLeft = 0; outer.scrollTop = 0;
   });
 
+  // --- VIZ-37: fullscreen -------------------------------------------------
+  // The plot lives in a same-origin iframe whose height Streamlit fixes, so
+  // *the iframe element* is what has to grow — the figure alone cannot escape
+  // it. Two ways up, tried in order: the real Fullscreen API on the frame, and
+  // a fixed overlay for when a permissions policy blocks it (`st.iframe`
+  // exposes no `allowfullscreen`, so that is a live possibility rather than a
+  // theoretical one). Both leave the inside identical, so only `enter`/`exit`
+  // differ; `applyFs` is the single place the view changes.
+  var fsBtn = document.getElementById("fsbtn-__KEY__");
+
+  function frameEl() { try { return window.frameElement; } catch (e) { return null; } }
+  function parentDoc() { try { return window.parent.document; } catch (e) { return null; } }
+  function nativeFs() {
+    var pd = parentDoc();
+    var fr = frameEl();
+    return !!(pd && fr && pd.fullscreenElement === fr);
+  }
+
+  function applyFs(on) {
+    if (fsOn === on) { return; }
+    fsOn = on;
+    // Zoom is reset on the way in and restored on the way out: "expand the
+    // complete figure to the available screen" means the whole figure, and a
+    // 3x zoom multiplied by the larger fullscreen fit would not be that.
+    if (on) { fsSavedZoom = zoom; zoom = 1; } else { zoom = fsSavedZoom; }
+    var b = document.body;
+    b.style.margin = on ? "0" : "";
+    b.style.height = on ? "100vh" : "";
+    b.style.display = on ? "flex" : "";
+    b.style.alignItems = on ? "center" : "";
+    b.style.background = on ? "#fff" : "";
+    if (wrap) { wrap.style.width = "100%"; }
+    if (fsBtn) {
+      fsBtn.innerHTML = on ? "&#10005;" : "&#9974;";
+      fsBtn.title = on ? "Exit fullscreen (Esc)" : "Fullscreen";
+    }
+    render();
+    outer.scrollLeft = 0; outer.scrollTop = 0;
+    // Belt and braces, the way the initial mount already does it: the frame's
+    // new box is not guaranteed to be laid out by the time the `render()` above
+    // measures it, and a stale width fits the figure to the wrong viewport.
+    if (window.requestAnimationFrame) { window.requestAnimationFrame(render); }
+    setTimeout(render, 150);
+  }
+
+  function overlayOn(fr) {
+    if (fsOn) { return; }
+    var pd = parentDoc();
+    fr.style.cssText = "position:fixed;top:0;left:0;width:100vw;height:100vh;" +
+      "z-index:2147483647;border:0;background:#fff;";
+    if (pd && pd.body) {
+      fsSavedOverflow = pd.body.style.overflow;
+      pd.body.style.overflow = "hidden";
+    }
+    applyFs(true);
+  }
+
+  function overlayOff(fr) {
+    fr.setAttribute("style", fsSavedStyle || "");
+    var pd = parentDoc();
+    if (pd && pd.body && fsSavedOverflow !== null) {
+      pd.body.style.overflow = fsSavedOverflow;
+      fsSavedOverflow = null;
+    }
+    applyFs(false);
+  }
+
+  function toggleFs() {
+    var fr = frameEl();
+    if (!fr) { return; }
+    var pd = parentDoc();
+    if (fsOn) {
+      if (nativeFs() && pd.exitFullscreen) { pd.exitFullscreen(); }
+      else { overlayOff(fr); }
+      return;
+    }
+    fsSavedStyle = fr.getAttribute("style") || "";
+    var req = fr.requestFullscreen || fr.webkitRequestFullscreen;
+    if (!req) { overlayOn(fr); return; }
+    try {
+      var p = req.call(fr);
+      if (p && p.catch) { p.catch(function() { overlayOn(fr); }); }
+    } catch (e) { overlayOn(fr); return; }
+    // A permissions policy can refuse *silently* rather than rejecting, which
+    // would otherwise leave the button looking broken. If nothing happened by
+    // the next few frames, take the overlay instead.
+    setTimeout(function() { if (!fsOn && !nativeFs()) { overlayOn(fr); } }, 400);
+  }
+
+  if (fsBtn) { fsBtn.addEventListener("click", toggleFs); }
+
+  // Native fullscreen is exited by Escape, the browser's own control, or our
+  // button — all of which surface here, so the view follows the browser rather
+  // than our idea of it.
+  (function watchNative() {
+    var pd = parentDoc();
+    if (!pd) { return; }
+    pd.addEventListener("fullscreenchange", function() {
+      if (nativeFs()) { applyFs(true); }
+      else if (fsOn && fsSavedStyle !== null) {
+        var fr = frameEl();
+        if (fr) { fr.setAttribute("style", fsSavedStyle); }
+        applyFs(false);
+      }
+    });
+  })();
+
+  // The overlay has no browser-supplied Escape, so it needs its own — on both
+  // documents, because focus may sit either side of the frame boundary.
+  function onEsc(e) {
+    if (e.key !== "Escape" || !fsOn || nativeFs()) { return; }
+    var fr = frameEl();
+    if (fr) { overlayOff(fr); }
+  }
+  document.addEventListener("keydown", onEsc);
+  (function() {
+    var pd = parentDoc();
+    if (pd) { pd.addEventListener("keydown", onEsc); }
+  })();
+
   // Switch off Plotly's own drag interactions so a drag on the plot pans this
   // block instead of box-zooming the axes (which is what broke the sizing).
   (function killNativeZoom() {
@@ -533,6 +666,7 @@ _ZOOM_TOOLBAR = """
     <span id="zoomlabel-__KEY__" style="min-width:34px;text-align:center;">100%</span>
     <button id="zoomin-__KEY__" title="Zoom in" style="__BTN__">+</button>
     <button id="zoomreset-__KEY__" title="Reset zoom" style="__BTN__">&#8635;</button>
+    <button id="fsbtn-__KEY__" title="Fullscreen" style="__BTN__">&#9974;</button>
   </div>
 """
 

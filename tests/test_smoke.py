@@ -451,3 +451,55 @@ def test_true_scale_html_small_multiples_have_no_zoom() -> None:
     assert iframe_height == 252
     assert "240 / H" in html
     assert "zoombar" not in html
+
+
+def test_true_scale_html_offers_fullscreen() -> None:
+    """VIZ-37 — the control has to live in this embed, not on the chart wrapper.
+
+    Streamlit 1.61 adds a fullscreen button to `st.plotly_chart`, but the
+    spatial figures deliberately do not go through it: a responsive re-layout
+    is exactly what breaks the data-to-pixel scale this embed exists to hold.
+    """
+    from scanpath_studio import tabs
+
+    html, _ = tabs._true_scale_html(
+        '<div id="truescale-single"></div>',
+        key="single",
+        width=900,
+        height=600,
+        max_height=None,
+        zoomable=True,
+    )
+    assert 'id="fsbtn-single"' in html
+    # Fullscreen fits *both* dimensions and may magnify past 1x, where the
+    # in-column rule fits width and never scales up.
+    assert "Math.min(avail / W, availH / H)" in html
+    assert "Math.min(1, avail / W)" in html
+    # Two ways up, because `st.iframe` exposes no `allowfullscreen` and a
+    # permissions policy may refuse — silently, hence the timeout fallback.
+    assert "requestFullscreen" in html and "overlayOn" in html
+    # Escape leaves the overlay; native fullscreen's own Escape arrives as
+    # `fullscreenchange` on the parent document.
+    assert '"Escape"' in html and "fullscreenchange" in html
+
+
+def test_true_scale_html_small_multiples_have_no_fullscreen() -> None:
+    """Fullscreen follows zoom: standalone figures get both, grid cells neither.
+
+    The shared renderer serves the main scanpath, the animation, the comparison
+    and the stimulus figure (all `max_height=None`), plus the line-assignment
+    and Multiple Comparison panels (capped). A per-cell fullscreen button in a
+    grid is chrome on every tile for a figure sized to a cell, so the capped
+    call sites keep the plain fit-to-cell behaviour — one predicate, not two.
+    """
+    from scanpath_studio import tabs
+
+    html, _ = tabs._true_scale_html(
+        '<div id="truescale-grid"></div>',
+        key="grid",
+        width=900,
+        height=600,
+        max_height=240,
+        zoomable=False,
+    )
+    assert 'id="fsbtn-grid"' not in html

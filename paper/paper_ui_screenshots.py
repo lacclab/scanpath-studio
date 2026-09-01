@@ -480,13 +480,6 @@ def capture(page: Page) -> None:
             "saccade_render_mode": "Straight",
             "full_monitor": 1,
             "palette": "Default (colourblind-safe)",
-            # BUG: every multipart screen after the first trips the "fixation
-            # subset" disclosure — the window slider sizes itself to the screen's
-            # highest parent-global fixation index (1..578) while the label
-            # compares against the screen's own span (509..578), so they never
-            # match and the figure is stamped for a subset nobody asked for.
-            # Nothing here is subset, so the false stamp is turned off.
-            "illustration_label": "Hide",
         },
     )
     shot_plot(page, "fig_ui_plot_multipleye_question", "single")

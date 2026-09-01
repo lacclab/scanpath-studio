@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **The AI-assistance note asks for an issue, and stops asking for a Session JSON backup** (ENG-45)
+- **The manuscript's MultiplEYE figure no longer hides the Illustration label to work around BUG-47** (BUG-47)
 
 ### Fixed
 - **A comparison you labelled by hand reproduces under your labels, not the builder's** (EXP-8)
@@ -32,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Changed
 - **The AI-assistance note asks for an issue, and stops asking for a Session JSON backup** (ENG-45) — the note is on three surfaces (the app's ℹ️ About, `README.md`, `docs/index.md`) and two of them closed with *"with your 💾 Session → ⬇️ JSON backup"*. The app's did not: UX-130/UX-137 trimmed that block, moving the "built with AI assistance" half up into the heading so the prose stopped repeating it. Rather than restore the sentence to bring the three back into line, the ask is dropped from all three — it is one click away inside the app, and a bug report that needs it can ask for it in the issue thread, where it will be read. What survives is the part that changed under ENG-45 in the first place: *"if you have a feature request or suggestion"*, so the invitation is not only for things that went wrong. `tests/test_disclosure.py` pins that phrase, the cross-check line and the issues link on all three.
+
+- **The manuscript's MultiplEYE figure no longer hides the Illustration label to work around BUG-47** (BUG-47) — `paper/paper_ui_screenshots.py` was written while the bug was live and passed `illustration_label=Hide` on the question-screen figure, because every multipart screen after the first was falsely stamped **Illustration · fixation subset**. The fix landed in v0.30.0 and [#140](https://github.com/lacclab/scanpath-studio/pull/140) has since merged, so the workaround is removed: the figure now renders with the disclosure logic live, which is what the manuscript should be showing. Suppressing it was always the wrong shape for a *figure script* — a real alteration would have gone unlabelled too.
 
 #### Fixed
 - **A comparison you labelled by hand reproduces under your labels, not the builder's** (EXP-8 §1) — UX-31 lets each scanpath in a Compare figure carry a label pattern, and the Share subtab's reproduction snippet silently ignored it: `compare_scanpaths` takes `labels=` as a *named parameter*, so `api._COMPARISON_FIGURE_PARAMS` subtracts it and the `_amend_snippet_settings` merge — which is what carries `style_a` / `style_b` / `show_legend` across the same seam — structurally could not see it. The labels now ride `CompareTarget` beside `layout` and `compare_stimulus`, the two context fields that already travel that way for that reason. They are resolved *below* `_publish_snippet_state` (UX-31's pattern renders against each side's own trial frames), so a third amender hands them back, joining the settings and title/caption pair. Emitted only when set, `explicit=True` included: the default is composed by the builder from the trial ids, so writing it out would freeze a derived value into the recipe.

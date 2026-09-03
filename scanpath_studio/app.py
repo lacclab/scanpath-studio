@@ -2033,13 +2033,12 @@ def _benchmark_description(entry, *, harmonised_overlap: bool) -> str:
 
     name = entry_name(entry)
     lead = (
-        f"{name}, re-derived by the EyeGenBench pipeline into the benchmark's "
-        f"common schema — the same corpus as this app's own {name} entry, "
-        "prepared for cross-corpus comparison rather than for the publisher's "
-        "own geometry."
+        f"{name}, re-derived by EyeGenBench into the benchmark's common "
+        f"schema — the same corpus as this app's own {name} entry, prepared for "
+        "cross-corpus comparison rather than the publisher's own geometry."
         if harmonised_overlap
-        else f"{name} — a public reading corpus harmonised by the EyeGenBench "
-        "pipeline to one common schema and prepared locally."
+        else f"{name} — a public reading corpus, harmonised by EyeGenBench to "
+        "one common schema."
     )
     tail = []
     if source := str(entry.get("geometry_source") or "").strip():
@@ -2176,19 +2175,16 @@ PUBLIC_DATASET_REGISTRY: dict = {
             "Fixations": 404420,
         },
         published_counts_source=(
-            "PoTeC's own README: 75 participants each reading all 12 texts, and "
-            "“900 trials (75 participants * 12 trials)” in the data formats this "
-            "loader reads. The word and fixation totals were measured from the "
-            "released corpus with this app's loader — the fixation total agrees "
-            "with the harmonised bundle's manifest to the row."
+            "PoTeC's own README for readers, texts and trials. Words and "
+            "fixations were measured from the released corpus; the fixation "
+            "total agrees with the harmonised bundle's manifest to the row."
         ),
         # Word boxes come from the corpus' own `.ias` character files, but the
         # release discards the recorded screen (x, y) — `datasets._potec_fixations`
         # places each fixation at the centre of the character it names.
         geometry="🛠️ **Reconstructed** fixation coordinates — the release keeps "
         "no recorded (x, y), so each fixation sits at the centre of the "
-        "character it names, from the corpus' own `.ias` boxes. The word boxes "
-        "themselves are the corpus'.",
+        "character it names. The word boxes are the corpus' own `.ias` files.",
     ),
     "MultiplEYE — multilingual reading (ZH-CH sample)": dict(
         loader=_load_multipleye_source,
@@ -2218,11 +2214,13 @@ PUBLIC_DATASET_REGISTRY: dict = {
         # Verified against the OneStop docs (lacclab.github.io/OneStop-Eye-Movements
         # / Berzak et al. 2025): 360 participants, 30 Guardian articles = 162
         # paragraphs (each in Advanced + Elementary), ~19.4k regular trials.
+        # The release also ships a practice article (`article_id` 0) that those
+        # figures do not count: 2 paragraphs, Advanced only, repeated in all
+        # three batches. That is the whole of the gap to the 330 texts below.
         size="360 readers · 30 articles (162 paragraphs) · ~19.4k trials",
         description="OneStop Eye Movements — English L1 reading of Guardian "
         "articles across four regimes (ordinary / information-seeking, each also "
-        "repeated) and seven trial parts (title / question / paragraph / answers "
-        "/ feedback). Downloaded from OSF, or read from a LaCC lab export.",
+        "repeated). From OSF, or a LaCC lab export.",
         link="https://github.com/lacclab/OneStop-Eye-Movements",
         # DATA-36. **Texts** counts one paragraph at one difficulty level: the
         # composed `unique_paragraph_id` (BUG-43) makes Advanced and Elementary
@@ -2238,17 +2236,15 @@ PUBLIC_DATASET_REGISTRY: dict = {
             "Fixations": 2400788,
         },
         published_counts_source=(
-            "360 readers is the corpus' own figure (Berzak et al. 2025). The "
-            "text, trial, word and fixation totals were measured from the public "
-            "OSF release's Paragraph reports across all four regimes — one regime "
-            "is what this source loads at a time, so a single load holds a "
-            "fraction of them. 330 texts is 165 paragraphs at two difficulty "
-            "levels, and matches the distinct `unique_paragraph_id` count in the "
-            "lab export, which composes that id a different way."
+            "360 readers is the corpus' own figure (Berzak et al. 2025); the rest "
+            "was measured from the public OSF release across all four regimes, so "
+            "one load holds a fraction of them. 330 texts is the 162 paragraphs "
+            "at two difficulty levels, plus the six Advanced-only texts of the "
+            "practice article (`article_id` 0), which the corpus' published "
+            "30 articles / 162 paragraphs does not count."
         ),
         geometry="✅ **Real** — recorded fixation coordinates and EyeLink's own "
-        "interest-area boxes (DATA-30 recovers the measured boxes from the raw "
-        "export; DATA-31 keeps the recorded fixation y with them).",
+        "interest-area boxes.",
     ),
 }
 
@@ -2281,8 +2277,8 @@ _BUILTIN_DATASET_ABOUT: dict[str, dict] = {
             "Counted from the files bundled with this release of the package."
         ),
         geometry="✅ **Real** — OneStop's recorded fixations and interest-area "
-        "boxes. The raw-gaze overlay is the one exception: it is **synthesized** "
-        "from the fixations, because OneStop publishes no raw samples.",
+        "boxes. The raw-gaze overlay is **synthesized**, as OneStop publishes "
+        "no raw samples.",
     ),
     ONESTOP_CHOICE: dict(
         language="English (L1)",
@@ -2299,15 +2295,15 @@ _BUILTIN_DATASET_ABOUT: dict[str, dict] = {
         published_counts={"Participants": 360},
         published_counts_source=(
             "The public release's own figure (Berzak et al. 2025). A lab export "
-            "can hold more than the public corpus — the L2 cohort is not in the "
-            "public release — so treat this as a floor until it is opened."
+            "can hold more — the L2 cohort is not in the public release — so "
+            "treat this as a floor."
         ),
     ),
     SYNTHETIC_CHOICE: dict(
         language="English",
         description="A hand-built trial with every measure traced by hand — the "
-        "same fixture the test suite asserts against. Use it to check what a "
-        "measure or a plot option does against a known answer.",
+        "fixture the test suite asserts against. Check what a measure or a plot "
+        "option does against a known answer.",
         published_counts={
             "Participants": 1,
             "Texts": 1,
@@ -2408,11 +2404,9 @@ def _benchmark_registry_entries() -> dict:
             # a caption, one column each.
             published_counts=benchmark_published_counts(entry),
             published_counts_source=(
-                "The prepared bundle's own manifest, written when the corpus "
-                "was prepared. Its readers and fixations are counted from what "
-                "was actually written; its texts count distinct texts, so a "
-                "corpus with repeated readings publishes fewer texts than the "
-                "app counts reading instances."
+                "The prepared bundle's own manifest. Texts counts *distinct* "
+                "texts, so a corpus with repeated readings publishes fewer than "
+                "the app counts reading instances."
             ),
             # Marks the entry as coming from a prepared bundle, and names the
             # corpus inside it. `compare_source` dispatches on this rather than

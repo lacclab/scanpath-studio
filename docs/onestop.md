@@ -30,6 +30,11 @@ trials.
     two renderings of one, and the app counts **330** of them across the four
     regimes (the lab export, which composes the id its own way, agrees).
 
+    That 330 is the 162 paragraphs at two levels (324), plus **six** more from
+    the practice article — `article_id` 0, two paragraphs, Advanced only,
+    repeated in all three batches. The published *30 articles / 162 paragraphs*
+    counts experimental material and leaves it out, so both figures are right.
+
     Before this ([BUG-43](https://github.com/lacclab/scanpath-studio/issues/133))
     `text_id` was the paragraph's index *within its article*, so paragraphs from
     different articles collided and the whole corpus read as **7 texts** —

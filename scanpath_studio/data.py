@@ -419,14 +419,27 @@ def load_onestop_server_bundle(
     return words, fixations
 
 
+_TRAILING_UNIT = re.compile(r"\s*[\[(][^\[\]()]*[\])]\s*$")
+
+
 def _norm_col(name) -> str:
     """Fold a column name to its case- and separator-insensitive key.
 
     Lowercases and drops every non-alphanumeric char, so ``IA_LEFT``,
     ``ia_left``, ``Ia-Left`` and ``ia left`` all collapse to ``ialeft`` —
     letting auto-detection match real-world column names that differ only in
-    capitalization or word separators."""
-    return re.sub(r"[^a-z0-9]", "", str(name).lower())
+    capitalization or word separators.
+
+    A trailing unit or coordinate-system block is dropped first (DATA-25):
+    Tobii Pro Lab writes ``Fixation point X [DACS px]``, SMI BeGaze
+    ``Fixation Duration [ms]``, Pupil Labs Neon ``fixation x [px]`` and Tobii
+    Studio ``FixationPointX (MCSpx)``. Folding the brackets' *letters* into the
+    key (``fixationpointxdacspx``) made every one of them miss a candidate that
+    names the same thing, so the export of three major vendors landed in the
+    manual mapping step. Only one trailing block goes — a bracket in the middle
+    of a name is part of the name."""
+    text = _TRAILING_UNIT.sub("", str(name))
+    return re.sub(r"[^a-z0-9]", "", text.lower())
 
 
 def pick_column(df: pd.DataFrame, candidates: Iterable[str]) -> str | None:
@@ -531,9 +544,13 @@ PARTICIPANT_CANDIDATES = [
     "participant_id",
     "unique_participant_id",  # EyeGenBench's own harmonized column name (DATA-27)
     "subject_id",
-    "participant",
+    "participant",  # also SMI BeGaze's event export
+    "participant_name",  # Tobii Pro Lab `Participant name` / Tobii Studio `ParticipantName`
     "recording_session_label",
     "reader_id",
+    "USER",  # Gazepoint
+    "recording_name",  # Tobii Pro Lab — one recording per participant session
+    "recording_id",  # Pupil Labs Neon
 ]
 TRIAL_CANDIDATES = [
     "unique_trial_id",
@@ -543,6 +560,12 @@ TRIAL_CANDIDATES = [
     "text_id",
     "trial",
     "trial_index",
+    "trial_number",  # SMI BeGaze event export `Trial Number`
+    # One stimulus per trial is how Tobii, SMI and Gazepoint exports are
+    # shaped, so the stimulus name is the trial key when nothing above exists.
+    "presented_stimulus_name",  # Tobii Pro Lab
+    "media_name",  # Tobii Studio `MediaName` / Gazepoint `MEDIA_NAME`
+    "stimulus",  # SMI BeGaze
 ]
 SCREEN_ID_CANDIDATES = ["screen_id", "part_id", "page_id", "screen", "page", "part"]
 SCREEN_INDEX_CANDIDATES = [
@@ -574,6 +597,9 @@ TEXT_ID_CANDIDATES = [
     "paragraph_id",
     "unique_text_id",
     "text_id",
+    "presented_stimulus_name",  # Tobii Pro Lab — the stimulus *is* the text
+    "media_name",  # Tobii Studio / Gazepoint
+    "stimulus",  # SMI BeGaze
 ]
 TEXT_CANDIDATES = [
     "text",
@@ -607,15 +633,43 @@ WORD_TOP_CANDIDATES = ["IA_TOP", "top", "start_y", "top_left_y"]
 WORD_BOTTOM_CANDIDATES = ["IA_BOTTOM", "bottom", "end_y"]
 
 # `location_x` / `location_y` are MultiplEYE's fixation pixel coordinates.
-FIX_X_CANDIDATES = ["x", "CURRENT_FIX_X", "FPOGX", "location_x"]
-FIX_Y_CANDIDATES = ["y", "CURRENT_FIX_Y", "FPOGY", "location_y"]
+# Tobii Pro Lab: `Fixation point X [DACS px]`; Tobii Studio: `FixationPointX
+# (MCSpx)`; SMI BeGaze: `Position X [px]` / `Fixation Position X`; Pupil Labs
+# Neon: `fixation x [px]`. Gazepoint's FPOGX and Pupil Core's `norm_pos_x` are
+# screen *fractions* (0–1), not pixels — matched here so the column is found,
+# and left to the canvas / unit handling downstream, as FPOGX already was.
+FIX_X_CANDIDATES = [
+    "x",
+    "CURRENT_FIX_X",
+    "FPOGX",
+    "location_x",
+    "fixation_point_x",
+    "fixation_x",
+    "position_x",
+    "fixation_position_x",
+    "norm_pos_x",
+]
+FIX_Y_CANDIDATES = [
+    "y",
+    "CURRENT_FIX_Y",
+    "FPOGY",
+    "location_y",
+    "fixation_point_y",
+    "fixation_y",
+    "position_y",
+    "fixation_position_y",
+    "norm_pos_y",
+]
 FIX_DURATION_CANDIDATES = [
     "duration_ms",
     "CURRENT_FIX_DURATION",
     "CURRENT_FIX_LEN",
-    "duration",
-    "fixation_duration",
+    "duration",  # also SMI `Duration [ms]`, Pupil Labs `duration [ms]` / `duration`
+    "fixation_duration",  # SMI BeGaze `Fixation Duration [ms]`
     "fix_duration",  # EyeGenBench's own harmonized column name (DATA-27)
+    "eye_movement_event_duration",  # Tobii Pro Lab (current name)
+    "gaze_event_duration",  # Tobii Pro Lab (older) / Tobii Studio `GazeEventDuration`
+    "FPOGD",  # Gazepoint — seconds, not ms
 ]
 FIX_TIMESTAMP_CANDIDATES = [
     "timestamp_ms",
@@ -624,13 +678,20 @@ FIX_TIMESTAMP_CANDIDATES = [
     "CURRENT_FIX_TIME",
     "CURRENT_FIX_ONSET",
     "onset",  # MultiplEYE fixation onset (ms)
+    "fixation_start",  # SMI BeGaze `Fixation Start [ms]`
+    "event_start_trial_time",  # SMI BeGaze `Event Start Trial Time [ms]`
+    "start_timestamp",  # Pupil Labs Core `start_timestamp` / Neon `start timestamp [ns]`
+    "recording_timestamp",  # Tobii Pro Lab `Recording timestamp [ms]` / Studio `RecordingTimestamp`
+    "FPOGS",  # Gazepoint — seconds
 ]
 FIX_FIXATION_ID_CANDIDATES = [
-    "fixation_id",
+    "fixation_id",  # also Pupil Labs Neon `fixation id`
     "CURRENT_FIX_INDEX",
     "CURRENT_FIX_NUM",
-    "fixation_index",
+    "fixation_index",  # also Tobii Studio `FixationIndex`
     "fix_index",  # EyeGenBench's own harmonized column name (DATA-27)
+    "eye_movement_type_index",  # Tobii Pro Lab
+    "FPOGID",  # Gazepoint
 ]
 FIX_WORD_ID_CANDIDATES = [
     "word_id",
@@ -643,14 +704,18 @@ FIX_WORD_ID_CANDIDATES = [
     "word_idx",  # MultiplEYE word index (resets per page)
     "char_idx",  # MultiplEYE character index
 ]
-RAW_GAZE_X_CANDIDATES = ["x", "FPOGX", "gaze_x"]
-RAW_GAZE_Y_CANDIDATES = ["y", "FPOGY", "gaze_y"]
+# Tobii Pro Lab `Gaze point X [DACS px]`, Tobii Studio `GazePointX`, Pupil Labs
+# Neon `gaze x [px]`, SMI raw IDF `L POR X [px]` (left eye first; the right eye
+# is the fallback when only it was recorded).
+RAW_GAZE_X_CANDIDATES = ["x", "FPOGX", "gaze_x", "gaze_point_x", "l_por_x", "r_por_x"]
+RAW_GAZE_Y_CANDIDATES = ["y", "FPOGY", "gaze_y", "gaze_point_y", "l_por_y", "r_por_y"]
 RAW_GAZE_TIMESTAMP_CANDIDATES = [
-    "timestamp",
-    "time",
+    "timestamp",  # also Pupil Labs Neon `timestamp [ns]`
+    "time",  # also SMI raw IDF `Time`, Gazepoint `TIME`
     "ms",
     "timestamp_ms",
     "time_ms",
+    "recording_timestamp",  # Tobii Pro Lab / Tobii Studio
 ]
 
 

@@ -1084,3 +1084,232 @@ class TestFingerprintMemo:
             frame_fingerprint(hot)
         # `hot` was hashed once and has stayed memoized throughout.
         assert calls.count((500, 1)) == 1
+
+
+# ---------------------------------------------------------------------------
+# DATA-25 — vendor export column names, and the unit suffixes they carry
+# ---------------------------------------------------------------------------
+
+
+class TestNormColDropsTrailingUnits:
+    """`_norm_col` strips one trailing ``[unit]`` / ``(unit)`` block before folding.
+
+    Every name here is one a real export writes. Before DATA-25 the brackets'
+    letters were folded into the key (``fixationpointxdacspx``), so none of them
+    could match a candidate that names the same thing."""
+
+    @pytest.mark.parametrize(
+        "raw, key",
+        [
+            ("Fixation point X [DACS px]", "fixationpointx"),  # Tobii Pro Lab
+            ("Recording timestamp [ms]", "recordingtimestamp"),
+            ("Eye movement event duration [ms]", "eyemovementeventduration"),
+            ("FixationPointX (MCSpx)", "fixationpointx"),  # Tobii Studio
+            ("Fixation Duration [ms]", "fixationduration"),  # SMI BeGaze
+            ("Event Start Trial Time [ms]", "eventstarttrialtime"),
+            ("L POR X [px]", "lporx"),  # SMI raw IDF
+            ("fixation x [px]", "fixationx"),  # Pupil Labs Neon
+            ("start timestamp [ns]", "starttimestamp"),
+            ("Amplitude [°]", "amplitude"),
+        ],
+    )
+    def test_a_trailing_unit_block_is_dropped(self, raw, key):
+        assert data_module._norm_col(raw) == key
+
+    def test_only_the_trailing_block_goes(self):
+        # A bracket in the middle of a name is part of the name.
+        assert data_module._norm_col("gaze [left] x") == "gazeleftx"
+        # Two trailing blocks: only the last one is a unit.
+        assert data_module._norm_col("x (mapped) [px]") == "xmapped"
+
+    def test_names_without_units_are_unchanged(self):
+        assert data_module._norm_col("IA_LEFT") == "ialeft"
+        assert data_module._norm_col("Participant ID") == "participantid"
+        assert data_module._norm_col("x") == "x"
+
+    def test_an_empty_or_bracket_only_name_does_not_crash(self):
+        assert data_module._norm_col("") == ""
+        assert data_module._norm_col("[ms]") == ""
+
+
+class TestVendorExportsAreAutoDetected:
+    """`propose_fix_schema` / `propose_raw_gaze_schema` find the fields in each
+    vendor's export without the manual mapping step (DATA-25)."""
+
+    def test_tobii_pro_lab_fixation_export(self):
+        df = pd.DataFrame(
+            {
+                "Recording timestamp [ms]": [0, 250],
+                "Participant name": ["P01", "P01"],
+                "Recording name": ["Rec 1", "Rec 1"],
+                "Presented Stimulus name": ["text_03.png", "text_03.png"],
+                "Eye movement type": ["Fixation", "Fixation"],
+                "Eye movement event duration [ms]": [230, 190],
+                "Eye movement type index": [1, 2],
+                "Fixation point X [DACS px]": [412.0, 530.5],
+                "Fixation point Y [DACS px]": [300.0, 301.2],
+                "Gaze point X [DACS px]": [412.0, 530.5],
+                "Gaze point Y [DACS px]": [300.0, 301.2],
+            }
+        )
+        schema = propose_fix_schema(df)
+        assert schema["participant"] == "Participant name"
+        assert schema["trial"] == "Presented Stimulus name"
+        assert schema["text_id"] == "Presented Stimulus name"
+        assert schema["x"] == "Fixation point X [DACS px]"
+        assert schema["y"] == "Fixation point Y [DACS px]"
+        assert schema["duration"] == "Eye movement event duration [ms]"
+        assert schema["timestamp"] == "Recording timestamp [ms]"
+        assert schema["fixation_id"] == "Eye movement type index"
+
+    def test_tobii_studio_legacy_export(self):
+        df = pd.DataFrame(
+            {
+                "RecordingTimestamp": [0, 250],
+                "ParticipantName": ["P01", "P01"],
+                "MediaName": ["text_03.png", "text_03.png"],
+                "GazeEventType": ["Fixation", "Fixation"],
+                "GazeEventDuration": [230, 190],
+                "FixationIndex": [1, 2],
+                "FixationPointX (MCSpx)": [412, 530],
+                "FixationPointY (MCSpx)": [300, 301],
+            }
+        )
+        schema = propose_fix_schema(df)
+        assert schema["participant"] == "ParticipantName"
+        assert schema["trial"] == "MediaName"
+        assert schema["x"] == "FixationPointX (MCSpx)"
+        assert schema["y"] == "FixationPointY (MCSpx)"
+        assert schema["duration"] == "GazeEventDuration"
+        assert schema["timestamp"] == "RecordingTimestamp"
+        assert schema["fixation_id"] == "FixationIndex"
+
+    def test_smi_begaze_fixation_details_export(self):
+        df = pd.DataFrame(
+            {
+                "Trial Number": [1, 1],
+                "Stimulus": ["text_03.jpg", "text_03.jpg"],
+                "Participant": ["s01", "s01"],
+                "Fixation Start [ms]": [0, 250],
+                "Fixation Duration [ms]": [230, 190],
+                "Fixation End [ms]": [230, 440],
+                "Position X [px]": [412.0, 530.5],
+                "Position Y [px]": [300.0, 301.2],
+                "Dispersion [px]": [12.0, 9.5],
+            }
+        )
+        schema = propose_fix_schema(df)
+        assert schema["participant"] == "Participant"
+        assert schema["trial"] == "Trial Number"
+        assert schema["text_id"] == "Stimulus"
+        assert schema["x"] == "Position X [px]"
+        assert schema["y"] == "Position Y [px]"
+        assert schema["duration"] == "Fixation Duration [ms]"
+        assert schema["timestamp"] == "Fixation Start [ms]"
+
+    def test_smi_raw_idf_gaze_export(self):
+        df = pd.DataFrame(
+            {
+                "Time": [0, 4, 8],
+                "Type": ["SMP", "SMP", "SMP"],
+                "L POR X [px]": [412.0, 413.0, 414.0],
+                "L POR Y [px]": [300.0, 300.5, 301.0],
+                "R POR X [px]": [413.0, 414.0, 415.0],
+                "R POR Y [px]": [300.2, 300.7, 301.2],
+            }
+        )
+        schema = data_module.propose_raw_gaze_schema(df)
+        assert schema["x"] == "L POR X [px]"  # left eye first
+        assert schema["y"] == "L POR Y [px]"
+        assert schema["timestamp"] == "Time"
+
+    def test_pupil_labs_neon_fixations_export(self):
+        df = pd.DataFrame(
+            {
+                "section id": ["a", "a"],
+                "recording id": ["r1", "r1"],
+                "fixation id": [1, 2],
+                "start timestamp [ns]": [0, 250_000_000],
+                "end timestamp [ns]": [230_000_000, 440_000_000],
+                "duration [ms]": [230, 190],
+                "fixation x [px]": [412.0, 530.5],
+                "fixation y [px]": [300.0, 301.2],
+            }
+        )
+        schema = propose_fix_schema(df)
+        assert schema["participant"] == "recording id"
+        assert schema["fixation_id"] == "fixation id"
+        assert schema["x"] == "fixation x [px]"
+        assert schema["y"] == "fixation y [px]"
+        assert schema["duration"] == "duration [ms]"
+        assert schema["timestamp"] == "start timestamp [ns]"
+
+    def test_pupil_labs_core_fixations_export(self):
+        df = pd.DataFrame(
+            {
+                "id": [1, 2],
+                "start_timestamp": [10.0, 10.25],
+                "duration": [230.0, 190.0],
+                "norm_pos_x": [0.41, 0.53],
+                "norm_pos_y": [0.30, 0.31],
+                "dispersion": [0.5, 0.4],
+            }
+        )
+        schema = propose_fix_schema(df)
+        assert schema["x"] == "norm_pos_x"
+        assert schema["y"] == "norm_pos_y"
+        assert schema["duration"] == "duration"
+        assert schema["timestamp"] == "start_timestamp"
+
+    def test_gazepoint_fixation_export(self):
+        df = pd.DataFrame(
+            {
+                "MEDIA_NAME": ["text_03.png", "text_03.png"],
+                "USER": ["u01", "u01"],
+                "TIME": [0.0, 0.25],
+                "FPOGX": [0.41, 0.53],
+                "FPOGY": [0.30, 0.31],
+                "FPOGS": [0.0, 0.25],
+                "FPOGD": [0.23, 0.19],
+                "FPOGID": [1, 2],
+                "FPOGV": [1, 1],
+            }
+        )
+        schema = propose_fix_schema(df)
+        assert schema["participant"] == "USER"
+        assert schema["trial"] == "MEDIA_NAME"
+        assert schema["x"] == "FPOGX"
+        assert schema["y"] == "FPOGY"
+        assert schema["duration"] == "FPOGD"
+        assert schema["timestamp"] == "FPOGS"
+        assert schema["fixation_id"] == "FPOGID"
+
+    def test_tobii_pro_lab_raw_gaze_export(self):
+        df = pd.DataFrame(
+            {
+                "Recording timestamp [ms]": [0, 8, 16],
+                "Participant name": ["P01"] * 3,
+                "Gaze point X [DACS px]": [412.0, 413.0, 414.0],
+                "Gaze point Y [DACS px]": [300.0, 300.5, 301.0],
+            }
+        )
+        schema = data_module.propose_raw_gaze_schema(df)
+        assert schema["x"] == "Gaze point X [DACS px]"
+        assert schema["y"] == "Gaze point Y [DACS px]"
+        assert schema["timestamp"] == "Recording timestamp [ms]"
+        assert schema["participant"] == "Participant name"
+
+    def test_eyelink_still_wins_when_both_conventions_are_present(self):
+        # Candidate order is priority order: an EyeLink IA report that also
+        # happens to carry a Tobii-named column keeps its EyeLink mapping.
+        df = pd.DataFrame(
+            {
+                "CURRENT_FIX_X": [1.0],
+                "Fixation point X [DACS px]": [2.0],
+                "CURRENT_FIX_DURATION": [200],
+                "Fixation Duration [ms]": [210],
+            }
+        )
+        schema = propose_fix_schema(df)
+        assert schema["x"] == "CURRENT_FIX_X"
+        assert schema["duration"] == "CURRENT_FIX_DURATION"

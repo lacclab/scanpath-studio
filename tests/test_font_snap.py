@@ -66,8 +66,9 @@ def session(monkeypatch):
 
 
 def _seed(choice, words):
-    from scanpath_studio import app
     import streamlit as st
+
+    from scanpath_studio import app
 
     st.session_state["data_source_choice"] = choice
     st.session_state["public_dataset_choice"] = choice

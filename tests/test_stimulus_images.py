@@ -126,11 +126,15 @@ class TestTheFallbackIsPerRow:
 
         resolved = resolve_stimulus_image_paths(frame, images, "{text_id}.png")
 
-        assert resolved["image_path"].tolist() == [
-            str(images / "a.png"),
-            "/old/1.png",
-            None,
-        ]
+        hit, kept, still_missing = resolved["image_path"].tolist()
+        assert hit == str(images / "a.png")
+        assert kept == "/old/1.png"
+        # A row whose prior value was already missing stays missing — but assert
+        # that, not the sentinel: pandas 3 infers a string dtype for this column,
+        # so the None this frame was built with reads back as NaN. Both spell
+        # "no image", and pinning either one makes the test a pandas-version
+        # detector rather than a behaviour test.
+        assert pd.isna(still_missing)
 
     def test_a_frame_with_no_image_path_column_gets_one(self, images):
         frame = pd.DataFrame({"text_id": ["a", "nope"]})

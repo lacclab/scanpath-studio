@@ -222,6 +222,10 @@ The version lives in **one** place — `__version__` in
    publishing, and `.github/workflows/desktop.yml` builds the per-OS
    standalone desktop bundles and attaches them to the GitHub release for
    the tag — check both workflows succeeded.
+   On the macOS leg, check the log says the bundle was notarized: a missing
+   signing secret only logs a warning, so an unsigned build still goes out
+   green. Then download the released `.dmg` on a Mac that has never seen it
+   and open it — that is the only real test of the Gatekeeper path.
 5. Optionally create a GitHub Release with the changelog notes.
 
 ## Regenerating the demo assets

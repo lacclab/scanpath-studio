@@ -208,8 +208,9 @@ ruff format --exclude other_vis .
 python -m scanpath_studio.update_sample_data
 
 # Standalone desktop bundle (ENG-15; needs `pip install . pyinstaller` — non-editable)
+# Output: dist/ScanpathStudio.app on macOS, dist/ScanpathStudio/ elsewhere.
 pyinstaller --clean --noconfirm desktop/scanpath_studio.spec
-python desktop/smoke_test.py     # selfcheck + server-boot smoke test
+python desktop/smoke_test.py     # signature + selfcheck + server-boot smoke test
 
 # Docs site (MkDocs Material; API autodoc via mkdocstrings from docstrings)
 pip install -e ".[docs]"
@@ -332,4 +333,7 @@ link / CLI / API silently can't be shared, scripted, or rendered headlessly.
 6. The `Desktop builds` workflow (`.github/workflows/desktop.yml`) builds the
    standalone per-OS desktop bundles (`desktop/` — PyInstaller launcher + spec
    + smoke test; design in `plans/eng-15-desktop-app.md`) and attaches them to
-   the GitHub release for the tag.
+   the GitHub release for the tag. The macOS leg additionally signs, notarizes
+   and staples a `.app` + `.dmg` when the Apple secrets are configured
+   (ENG-21, `plans/eng-21-signing-notarization.md`); without them it still
+   builds, unsigned, rather than failing.

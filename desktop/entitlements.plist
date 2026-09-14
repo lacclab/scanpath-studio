@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  ENG-21: hardened-runtime entitlements for the signed macOS .app.
+
+  Deliberately one key. The hardened runtime itself (`codesign --options
+  runtime`, which PyInstaller enables whenever a signing identity is passed) is
+  mandatory for notarization; the entitlements usually pasted into Python-bundle
+  guides are not. Each omission was tested rather than assumed — see
+  `plans/eng-21-signing-notarization.md` → Entitlements:
+
+    * allow-unsigned-executable-memory — omitted. Plain mmap(PROT_WRITE|
+      PROT_EXEC) without MAP_JIT fails with EPERM on Apple silicon even *with*
+      the entitlement granted; it only ever did anything on x86_64. The
+      PyInstaller ctypes MemoryError it is cargo-culted from (#4629) was an
+      Intel-era bug in old libffi.
+    * disable-library-validation — omitted. It papers over dyld's "mapping
+      process and mapped file (non-platform) have different Team IDs", i.e.
+      nested binaries that do not carry our Team ID. Signing all of them is the
+      real fix, and PyInstaller's inside-out signing does exactly that. Kaleido's
+      downloaded Chrome is a separate *process*, not a loaded library, so library
+      validation does not apply to it.
+    * com.apple.security.network.* — omitted. App Sandbox keys; a non-sandboxed
+      Developer ID app ignores them, and the Application Firewall does not prompt
+      for loopback listeners.
+
+  allow-jit is kept only as cheap insurance against a libffi built without static
+  trampolines (libffi >= 3.4.2 uses them and needs no JIT entitlement at all).
+
+  If a notarization log or a runtime crash proves one of the omitted keys is
+  needed, add it *with that log line as the justification* — not pre-emptively.
+-->
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+</dict>
+</plist>

@@ -22,10 +22,12 @@ bundled sample, so no data preparation is required.
 
 === "Desktop app"
 
-    Download the archive for your operating system from the
-    [latest release](https://github.com/lacclab/scanpath-studio/releases/latest),
-    unpack it, and launch Scanpath Studio. See the [desktop notes](desktop.md)
-    if your OS blocks the unsigned build.
+    Download the build for your operating system from the
+    [latest release](https://github.com/lacclab/scanpath-studio/releases/latest)
+    and launch Scanpath Studio — no Python needed. On macOS that is a signed,
+    Apple-notarized `.dmg` you drag to Applications; on Windows and Linux an
+    archive you unpack, and those are still unsigned, so see the
+    [desktop notes](desktop.md) for the extra first-launch click.
 
 ## 2. Make the first plot
 

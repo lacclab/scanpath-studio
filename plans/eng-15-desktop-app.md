@@ -27,10 +27,14 @@ GitHub Actions.
   (streamlit, plotly, streamlit-sortables, kaleido, imageio-ffmpeg).
 - `onedir`, not `onefile`: starts in seconds instead of unpacking a huge
   archive on every launch, and trips antivirus heuristics far less. CI archives
-  the directory (`.tar.gz` on Linux/macOS to keep the executable bit, `.zip` on
-  Windows).
+  the directory (`.tar.gz` on Linux to keep the executable bit, `.zip` on
+  Windows). **Superseded for macOS by ENG-21**, which wraps the same onedir
+  output in a `.app` and ships it as a `.dmg` — a plain folder can be neither
+  notarized nor stapled.
 - Console stays visible (`console=True`) in v1 so server logs and errors are
   observable; a windowed/native-window build is a follow-up (below).
+  **Superseded for macOS by ENG-21**: a `.app` gets no console either way, so
+  the macOS build is windowed and logs to `~/Library/Logs` instead.
 
 ## Alternatives considered
 
@@ -92,6 +96,7 @@ lines + fixation dots + saccade arcs) and committed under `desktop/icons/`
 - An Intel-macOS build (a `macos-13` matrix leg) if users ask — v1 ships
   Apple-silicon only (`macos-latest`), and the docs say so.
 - Native window (pywebview) or Tauri shell instead of a browser tab.
-- Code signing / notarization (macOS Gatekeeper and Windows SmartScreen will
-  warn on unsigned builds — documented in the download instructions).
-- A proper macOS `.app` bundle + `.dmg`, and a Windows installer (Inno Setup).
+- ~~Code signing / notarization~~ and ~~a proper macOS `.app` bundle + `.dmg`~~ —
+  **done for macOS in ENG-21** ([`eng-21-signing-notarization.md`](eng-21-signing-notarization.md)),
+  which also retired the `console=True` decision above on that platform. Windows
+  SmartScreen is ENG-47; a Windows installer (Inno Setup) is still open.

@@ -29,7 +29,6 @@ import pytest
 from scanpath_studio import app, tabs
 from scanpath_studio.code_snippet import SNIPPET_STATE_KEY
 from scanpath_studio.constants import DEMO_CHOICE, SYNTHETIC_CHOICE
-
 from tests.conftest import APP_SCRIPT
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")

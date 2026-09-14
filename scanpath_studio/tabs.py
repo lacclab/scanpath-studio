@@ -98,6 +98,7 @@ from scanpath_studio.constants import (
     similarity_enabled,
 )
 from scanpath_studio.controls import (
+    CHIP_FIELD_LABELS,
     FIX_FIELD_SPECS,
     RAW_GAZE_FIELD_SPECS,
     SUMMARY_CHIP_FIELDS,
@@ -4074,31 +4075,18 @@ def _render_export_panel(
 
 
 _CHIP_NEUTRAL_BG = "#EEF2F7"
-# Friendly labels for the identity fields; everything else is humanized.
-_CHIP_FIELD_LABELS = {
-    "participant_id": "Participant",
-    "unique_text_id": "Text",
-    "text_id": "Text",
-    "unique_paragraph_id": "Text",
-    "paragraph_id": "Text",
-    # MultiplEYE facets + reader metadata.
-    "genre": "Genre",
-    "session": "Session",
-    "is_practice": "Practice",
-    "trial_num": "Trial #",
-    "pp_age": "Age",
-    "pp_gender": "Gender",
-    "pp_native_language": "Native language",
-    "pp_years_education": "Years of education",
-    "pp_education_level": "Education",
-}
 
 
 def _chip_field_label(col: str) -> str:
-    """Friendly label for a chip field (summary / identity, else humanized)."""
+    """Friendly label for a chip field (summary / identity, else humanized).
+
+    The map is `controls.CHIP_FIELD_LABELS`, shared with the ✏️ Edit chips
+    picker that offers the same fields — keeping a private copy here is how a
+    field came to read "Age" on the chip and "Pp age" in the picker.
+    """
     if col in SUMMARY_CHIP_FIELDS:
         return SUMMARY_CHIP_FIELDS[col]
-    return _CHIP_FIELD_LABELS.get(col, _humanize_field(col))
+    return CHIP_FIELD_LABELS.get(col, _humanize_field(col))
 
 
 def _chip_value_and_uniqueness(col, trial_words, trial_fixations, participant):

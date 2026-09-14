@@ -5808,12 +5808,44 @@ def _chip_field_options(words, fixations, trial_level: set) -> list[str]:
     return cols
 
 
+#: Friendly labels for chip fields whose column name does not humanize into
+#: anything a reader can act on. Lives here, beside `SUMMARY_CHIP_FIELDS`,
+#: because **two** surfaces name these fields — the ✏️ Edit chips picker below
+#: and the chip strip itself (`tabs._chip_field_label`, which imports this) —
+#: and they used to keep separate maps, so the same field read "Age" on a chip
+#: and "Pp age" in the picker that offers it.
+CHIP_FIELD_LABELS = {
+    "participant_id": "Participant",
+    "unique_text_id": "Text",
+    "text_id": "Text",
+    "unique_paragraph_id": "Text",
+    "paragraph_id": "Text",
+    # The stimulus-image placement columns (`data.resolve_stimulus_image_paths`
+    # and the corpora that stamp their own). They humanize to "Image x" /
+    # "Image y", which reads like an image *identifier* rather than where on
+    # the monitor the page was drawn — so they say so.
+    "image_path": "Stimulus image",
+    "image_x": "Stimulus image left (px)",
+    "image_y": "Stimulus image top (px)",
+    # MultiplEYE facets + reader metadata.
+    "genre": "Genre",
+    "session": "Session",
+    "is_practice": "Practice",
+    "trial_num": "Trial #",
+    "pp_age": "Age",
+    "pp_gender": "Gender",
+    "pp_native_language": "Native language",
+    "pp_years_education": "Years of education",
+    "pp_education_level": "Education",
+}
+
+
 def _chip_option_label(col: str) -> str:
     """Display label for a chip-field option (identity / virtual / humanized)."""
     if col in SUMMARY_CHIP_FIELDS:
         return SUMMARY_CHIP_FIELDS[col]
-    if col == "participant_id":
-        return "Participant"
+    if col in CHIP_FIELD_LABELS:
+        return CHIP_FIELD_LABELS[col]
     if col in _CHIP_TEXT_ID_COLS:
         return "Text"
     return col.replace("_", " ").strip().capitalize()

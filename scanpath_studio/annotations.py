@@ -303,12 +303,17 @@ def render_trial_annotations(
             vertical_alignment="center",
         )
         row_label(label_col, "Tags", tags_help)
+        # ENG-49: built directly in a column, so it does not go through
+        # `fields.labeled` and needs its own `wrap` — a trial's tags are the
+        # thing this row exists to show, and 1.63 would otherwise scroll all
+        # but the first one or two out of sight.
         tags = tags_col.multiselect(
             "Tags",
             options=options,
             key=tags_key,
             help=tags_help,
             label_visibility="collapsed",
+            wrap=True,
         )
         add_col.text_input(
             "Add a tag",

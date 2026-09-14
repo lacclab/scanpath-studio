@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **The replay starts at ×1 — real time — instead of ×4** (VIZ-42)
 - **The welcome tour names the app's own icons, picks a trial before narrowing the pool, and says where you already are** (UX-139)
+- **Compare warns when the two readings are of different texts, under the figure rather than inside a popover** (CMP-19)
 - **The AI-assistance note asks for an issue, and stops asking for a Session JSON backup** (ENG-45)
 - **The manuscript's MultiplEYE figure no longer hides the Illustration label to work around BUG-47** (BUG-47)
 - **The ℹ️ About a dataset blurbs are shorter, and OneStop's 330 texts is explained correctly** (BUG-43)
@@ -44,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The welcome tour names the app's own icons, picks a trial before narrowing the pool, and says where you already are** (UX-139) — five corrections to `_SPOTLIGHT_STEPS`, all of them the tour having drifted from the app it describes. *The scanpath* said "each **dot** is a fixation" where the markers are circles. *Narrow the pool* said "the **funnel** beside the trial picker", which sent readers hunting for an emoji the app never draws — UX-98 made that trigger Streamlit's Material `filter_alt`, so the step shows the icon itself. *Animate & compare* promised "a ⚙ popover for its settings", a gear UX-68/UX-80 replaced with the ▾ that is actually on screen. *The nav* named Corpus Analysis and Data but never **Scanpath**, leaving the one view the reader had been looking at for nine steps unnamed. And *Pick a trial* now comes **before** *Narrow the pool*: UX-34 had ordered them by screen position, top to bottom, but narrowing only means something once you have seen the pool it narrows.
 
 
+- **Compare warns when the two readings are of different texts, under the figure rather than inside a popover** (CMP-19) — an overlay draws both scanpaths over **one** set of word boxes, so a pair that does not share a text is not merely uninformative, it is misleading: the picture invites you to read one reading's fixations against the other's words. The warning for that existed only for the animated co-replay, and only inside the rail's Playback popover — which is to say, only for someone who had already opened a menu they had no reason to open. One `_different_texts_note` now serves both paths and renders under the figure, where the figure it qualifies is. The wording **and the register** split on the consequence, not the mode: an overlay says the word boxes are shared and says it as a warning, because that figure is actively misleading; a side-by-side or stacked layout says each panel is drawn over its own stimulus so positions do not compare, and says it as a caption, because comparing two texts side by side is an ordinary thing to want and a yellow box on every one of them would be crying wolf. Silent when either side has no text id — a dataset with no text column cannot answer the question and is not asked it.
 
 
 

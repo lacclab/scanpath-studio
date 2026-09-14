@@ -736,7 +736,7 @@ _SPOTLIGHT_STEPS = [
     {
         "selector": ".st-key-tour_grp_plot",
         "title": "🗺️ The scanpath",
-        "body": "This is the main plot. Each dot is a **fixation**, sized by "
+        "body": "This is the main plot. Each circle is a **fixation**, sized by "
         "duration; the lines are **saccades** between them.",
     },
     {
@@ -746,25 +746,29 @@ _SPOTLIGHT_STEPS = [
         "of the control line. Every dataset is listed on the 🗂️ **Data** page — "
         "click a name there to open it, ➕ **Add dataset** for your own.",
     },
-    # UX-34: narrowing comes before picking, both on screen (the Filter-by row
-    # sits above the picker) and in the workflow, so the spotlight now walks them
-    # top-to-bottom instead of jumping down to the picker and back up. Each step
+    # Picking comes before narrowing: the picker is the control a new reader
+    # reaches for first, and narrowing only means something once they have seen
+    # the pool it narrows. (UX-34 walked them the other way round, top-to-bottom
+    # by screen position; the workflow order reads better in the tour.) Each step
     # targets its own container — they used to share one wrapper, so both lit up
     # the whole block.
-    {
-        "selector": ".st-key-tour_grp_narrow_by",
-        "popover": FUNNEL_TRIGGER,
-        "title": "🔍 Narrow the pool",
-        "body": "The funnel beside the trial picker — opened behind this card — "
-        "holds every way to narrow the pool: the text and participant pickers "
-        "first (*All texts* / *All participants*), then condition and "
-        "annotation filters (favorites, tags).",
-    },
     {
         "selector": ".st-key-tour_grp_trial_picker",
         "title": "🎯 Pick a trial",
         "body": "Step through trials with the selector and ◀ ▶, or scrub the "
         "slider — it shows the trial's position and id.",
+    },
+    {
+        "selector": ".st-key-tour_grp_narrow_by",
+        "popover": FUNNEL_TRIGGER,
+        "title": "🔍 Narrow the pool",
+        # The icon, not the word: the trigger beside the picker is Streamlit's
+        # Material funnel (`tabs._FILTER_ICON`), and "the funnel" sent readers
+        # hunting for an emoji the app never draws.
+        "body": ":material/filter_alt: beside the trial picker — opened for you "
+        "here — holds every way to narrow the pool: the text and participant "
+        "pickers first (*All texts* / *All participants*), then condition and "
+        "annotation filters (favorites, tags).",
     },
     {
         "selector": ".st-key-tour_grp_chips",
@@ -778,8 +782,8 @@ _SPOTLIGHT_STEPS = [
         "title": "🎬 Animate & compare",
         "body": "**Animate** replays the trial fixation by fixation, and "
         "**Compare** adds a second scanpath beside it — from this dataset or, "
-        "via **Compare with**, from another one. Each has a ⚙ popover for its "
-        "settings.",
+        "via **Compare with**, from another one. The ▾ beside each toggle "
+        "opens its settings.",
     },
     {
         "selector": ".st-key-tour_grp_viz_controls",
@@ -804,10 +808,11 @@ _SPOTLIGHT_STEPS = [
         # nav entries themselves, which makes this the same target.
         "selector": NAV_SELECTOR,
         "title": "🧭 The nav",
-        "body": "**📊 Corpus Analysis** aggregates across readers and texts; "
-        "**🗂️ Data** sets one up. **💾 Session** (backups, the on-device cache) "
-        "and **❓ Help** open over your work rather than taking you anywhere — "
-        "this tour included, under **Tutorials**. 👀",
+        "body": "**🗺️ Scanpath** is what you see now. "
+        "**📊 Corpus Analysis** aggregates across readers and texts; "
+        "**🗂️ Data** sets one up. **💾 Session** and **❓ Help** open over your "
+        "work rather than navigating away — replay this tour under "
+        "**Tutorials**. 👀",
     },
 ]
 

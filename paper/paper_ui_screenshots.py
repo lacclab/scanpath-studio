@@ -162,7 +162,7 @@ def plot_frame(page: Page, key: str) -> Frame:
             try:
                 if frame.locator(f"#truescale-{key}").count():
                     return frame
-            except Exception:  # noqa: BLE001 - a frame detached mid-scan
+            except Exception:
                 pass
         page.wait_for_timeout(500)
     raise RuntimeError(f"no plot frame for #truescale-{key} — is a trial selected?")

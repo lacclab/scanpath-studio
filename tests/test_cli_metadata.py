@@ -172,7 +172,7 @@ class TestTrialMetadata:
     ):
         """Windows consoles print a single-glyph ellipsis as a replacement mark,
         so the truncation marker is three dots."""
-        _words, fixations = sample
+        _words, _fixations = sample
         path = tmp_path / "trials.csv"
         pd.DataFrame(
             {"trial_id": [f"ghost_{i}" for i in range(30)], "x": range(30)}

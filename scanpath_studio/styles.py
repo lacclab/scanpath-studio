@@ -1181,7 +1181,11 @@ def get_app_css() -> str:
         font-weight: 700;
         letter-spacing: 0.02em;
         opacity: 0.72;
-        margin: 0.55rem 0 0.15rem;
+        /* More room above than below, so the label still reads as belonging to
+           the block under it — but 0.15rem below put "🖥️ Screen & framing"
+           almost on the baseline of the "Show full monitor" switch, which made
+           the two look like one control. */
+        margin: 0.8rem 0 0.45rem;
         padding-top: 0.4rem;
         border-top: 1px solid rgba(128, 128, 128, 0.28);
     }

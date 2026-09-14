@@ -40,6 +40,14 @@ from typing import Any
 #: its own and is deliberately absent from ``session_keys``.
 SNIPPET_STATE_KEY = "_snippet_state"
 
+#: How to get the package the snippets import. Shown *above* both flavours in
+#: the app (`url_state._render_code_snippet_body`) rather than baked into
+#: :func:`python_snippet` / :func:`cli_snippet`: a snippet pulled through
+#: ``api.figure_code`` is being composed by something that already has the
+#: package installed, so the line is presentation for the reader who is about to
+#: paste this into a fresh notebook or shell, not part of the recipe.
+INSTALL_COMMAND = "pip install scanpath-studio"
+
 #: The figure kinds a snippet can reproduce, matching ``api.figure_options``.
 KINDS = ("static", "animation", "comparison")
 

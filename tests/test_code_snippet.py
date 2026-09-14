@@ -636,7 +636,11 @@ def test_the_panel_switches_flavour():
         }
     )
     assert at.code[0].language == "bash"
-    assert at.code[0].value.startswith("scanpath-studio render")
+    # The install line leads the block so the whole thing pastes into a fresh
+    # shell; the command itself follows it.
+    block = at.code[0].value
+    assert block.startswith(f"{cs.INSTALL_COMMAND}\n\n")
+    assert block.split("\n\n", 1)[1].startswith("scanpath-studio render")
 
 
 def test_the_panel_names_what_the_cli_cannot_say():

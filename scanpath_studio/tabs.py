@@ -4771,67 +4771,96 @@ def render_single_trial_tab(
                             cmp_gate,
                         ),
                     )
-                    if not animate:
-                        # Seed so the control shows "Overlay" selected by default
-                        # (the body reads this key to resolve compare_layout).
-                        st.session_state.setdefault(SINGLE_COMPARE_LAYOUT, "Overlay")
+                    # Animate used to make this whole block *vanish*, which read
+                    # as "Compare has almost no settings" and hid one control
+                    # (Stimulus from) that a co-replay honours perfectly well.
+                    # Same contract as the two ▾ triggers themselves: what a mode
+                    # offers stays on screen, and only what genuinely does not
+                    # apply goes grey, with the reason in its tooltip.
+                    layout_gate = cmp_gate or (
+                        "⚠️ An animated comparison replays both readings on one "
+                        "clock, in one coordinate space, so it always overlays."
+                        if animate
+                        else ""
+                    )
+                    # Seed so the control shows "Overlay" selected by default
+                    # (the body reads this key to resolve compare_layout).
+                    st.session_state.setdefault(SINGLE_COMPARE_LAYOUT, "Overlay")
+                    _labeled(
+                        st,
+                        "segmented_control",
+                        "View",
+                        options=["Overlay", "Side by side", "Stacked"],
+                        format_func=lambda value: (
+                            "Top & bottom" if value == "Stacked" else value
+                        ),
+                        label_width=0.2,
+                        width="stretch",
+                        key=SINGLE_COMPARE_LAYOUT,
+                        persist_state="session",
+                        disabled=cmp_disabled or animate,
+                        help=_gated_help(
+                            "Top & bottom places one plot above the other.",
+                            layout_gate,
+                        ),
+                    )
+                    # "Resolve, don't rewrite": the stored layout is untouched
+                    # while Animate holds the figure on overlay, so say where the
+                    # user's own choice went instead of letting a greyed control
+                    # show a layout the plot isn't in.
+                    stored_layout = st.session_state.get(SINGLE_COMPARE_LAYOUT)
+                    if animate and stored_layout != "Overlay":
+                        st.caption(
+                            "Overlaid while **Animate** is on; your layout comes "
+                            "back when you turn it off."
+                        )
+                    # CMP-8 §5.3 / CMP-11: overlay pools both trials into one
+                    # axis range, so across datasets it is allowed only when
+                    # both were recorded on the same known screen. This note
+                    # stays generic — the popover renders before B is loaded,
+                    # so it cannot see B's screen. The caption under the
+                    # figure has the specific answer, and the resolve happens
+                    # there too, *without* rewriting the key, so a
+                    # same-dataset pair gets the user's Overlay back.
+                    overlaid = animate or stored_layout == "Overlay"
+                    if _compare_source_name() is not None and overlaid:
+                        st.caption(
+                            "Overlay needs one coordinate space, so across "
+                            "datasets it applies only when both were recorded "
+                            "on the same screen. The caption under the plot "
+                            "says which you got."
+                        )
+                    # CMP-11: two datasets' AOIs coincide only when the text
+                    # is identical, so an overlay can otherwise stack two
+                    # offset sets of rectangles. Overlay-only — each panel of
+                    # a split layout owns its own stimulus, and dropping one
+                    # would just blank half the figure. A co-replay *is* an
+                    # overlay, and `make_scanpath_animation` reads
+                    # `compare_stimulus` (it is what stops a cross-dataset
+                    # replay running B's trace over A's text), so this one is
+                    # live under Animate rather than greyed.
+                    if overlaid:
+                        st.session_state.setdefault(SINGLE_COMPARE_STIMULUS, "Both")
                         _labeled(
                             st,
                             "segmented_control",
-                            "View",
-                            options=["Overlay", "Side by side", "Stacked"],
-                            format_func=lambda value: (
-                                "Top & bottom" if value == "Stacked" else value
-                            ),
-                            label_width=0.2,
-                            width="stretch",
-                            key=SINGLE_COMPARE_LAYOUT,
+                            "Stimulus from",
+                            options=["Both", "A", "B"],
+                            key=SINGLE_COMPARE_STIMULUS,
                             persist_state="session",
                             disabled=cmp_disabled,
                             help=_gated_help(
-                                "Top & bottom places one plot above the other.",
+                                "Which reading supplies the word boxes and "
+                                "text. Across datasets the two rarely line up."
+                                + (
+                                    " A replay draws one stimulus layer, so "
+                                    "**Both** means A's."
+                                    if animate
+                                    else ""
+                                ),
                                 cmp_gate,
                             ),
                         )
-                        # CMP-8 §5.3 / CMP-11: overlay pools both trials into one
-                        # axis range, so across datasets it is allowed only when
-                        # both were recorded on the same known screen. This note
-                        # stays generic — the popover renders before B is loaded,
-                        # so it cannot see B's screen. The caption under the
-                        # figure has the specific answer, and the resolve happens
-                        # there too, *without* rewriting the key, so a
-                        # same-dataset pair gets the user's Overlay back.
-                        if (
-                            _compare_source_name() is not None
-                            and st.session_state.get(SINGLE_COMPARE_LAYOUT) == "Overlay"
-                        ):
-                            st.caption(
-                                "Overlay needs one coordinate space, so across "
-                                "datasets it applies only when both were recorded "
-                                "on the same screen. The caption under the plot "
-                                "says which you got."
-                            )
-                        # CMP-11: two datasets' AOIs coincide only when the text
-                        # is identical, so an overlay can otherwise stack two
-                        # offset sets of rectangles. Overlay-only — each panel of
-                        # a split layout owns its own stimulus, and dropping one
-                        # would just blank half the figure.
-                        if st.session_state.get(SINGLE_COMPARE_LAYOUT) == "Overlay":
-                            st.session_state.setdefault(SINGLE_COMPARE_STIMULUS, "Both")
-                            _labeled(
-                                st,
-                                "segmented_control",
-                                "Stimulus from",
-                                options=["Both", "A", "B"],
-                                key=SINGLE_COMPARE_STIMULUS,
-                                persist_state="session",
-                                disabled=cmp_disabled,
-                                help=_gated_help(
-                                    "Which reading supplies the word boxes and "
-                                    "text. Across datasets the two rarely line up.",
-                                    cmp_gate,
-                                ),
-                            )
                     show_legend_now = _labeled(
                         st,
                         "checkbox",

@@ -21,6 +21,7 @@ from scanpath_studio.html_embed import embed_html_iframe
 
 from .annotations import restore_records
 from .code_snippet import (
+    INSTALL_COMMAND,
     SNIPPET_STATE_KEY,
     SOURCE_AUTHOR,
     SOURCE_BENCHMARK,
@@ -2378,9 +2379,11 @@ def _render_code_snippet_body(data_choice: str) -> None:
                 + " — the 🐍 Python form carries "
                 + ("them." if len(code.cli_unsupported) > 1 else "it.")
             )
-        st.code(code.cli, language="bash")
+        # The install line rides *in* the copied block (one 📋 copies both), so
+        # pasting into a fresh shell works without hunting for the package name.
+        st.code(f"{INSTALL_COMMAND}\n\n{code.cli}", language="bash")
     else:
-        st.code(code.python, language="python")
+        st.code(f"# {INSTALL_COMMAND}\n{code.python}", language="python")
 
 
 def _render_share_body(data_choice: str) -> None:

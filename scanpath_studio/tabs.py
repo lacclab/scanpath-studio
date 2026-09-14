@@ -782,6 +782,42 @@ def _render_true_scale_chart(fig, *, key: str, max_height: int | None = None) ->
     _embed_html_iframe(html, height=iframe_height)
 
 
+def _different_texts_note(
+    text_a: str | None, text_b: str | None, *, overlaid: bool
+) -> str | None:
+    """What to say when the two compared readings are of **different texts**.
+
+    ``None`` when they match, or when either side's text id is unknown — a
+    dataset without a text column must not be nagged about something it cannot
+    answer.
+
+    The wording *and the register* both split on the consequence. An overlay
+    draws both scanpaths over **one** set of word boxes, so a mismatched pair is
+    actively misleading — it invites you to read one reading's fixations against
+    the other's words — and that earns a ``st.warning``. A split layout gives
+    each panel its own stimulus, where comparing two texts is an ordinary thing
+    to want; the only caveat is that positions don't compare across the panels,
+    so it is a caption. The caller picks the element from ``overlaid``.
+
+    Rendered under the figure (both the static comparison and the animated
+    co-replay) rather than inside the rail's popover: a caveat about what the
+    figure *means* has to be where the figure is.
+    """
+    if not text_a or not text_b or str(text_a) == str(text_b):
+        return None
+    heads = f"**A** reads `{text_a}`, **B** reads `{text_b}` — different texts."
+    if overlaid:
+        return (
+            f"{heads} Both scanpaths are drawn over one set of word boxes, so "
+            "the spatial overlay isn't meaningful. Compare two readings of the "
+            "same text, or switch to a side-by-side layout."
+        )
+    return (
+        f"{heads} Each panel is drawn over its own stimulus, so positions and "
+        "per-word measures don't compare across the two."
+    )
+
+
 def _trial_text_id(trial_words: pd.DataFrame) -> str | None:
     """Best-available text identifier for a trial's words (for same-text checks)."""
     for col in ("unique_text_id", "text_id"):
@@ -3422,9 +3458,7 @@ _ANIM_QUALITY_PRESETS = {
 
 
 def _render_anim_info_box(
-    trial_words: pd.DataFrame,
     trial_fixations: pd.DataFrame,
-    words_b: pd.DataFrame | None,
     fixations_b: pd.DataFrame | None,
     selected_participant: str,
     selected_trial: str,
@@ -3453,20 +3487,13 @@ def _render_anim_info_box(
             f"**A** reading time {span_a / 1000:.1f}s · **B** {span_b / 1000:.1f}s "
             f"· Playback ×{playback_speed:g}: {playback_ms / 1000:.1f}s"
         )
+        # The different-texts caveat used to live here too; it is under the
+        # figure now (`_different_texts_note`), where it is actually read.
         if (compare_participant, compare_trial) == (
             selected_participant,
             selected_trial,
         ):
             st.caption("⚠️ The second scanpath is the same trial as the first.")
-        else:
-            text_a = _trial_text_id(trial_words)
-            text_b = _trial_text_id(words_b)
-            if text_a is not None and text_b is not None and text_a != text_b:
-                st.warning(
-                    "The two scanpaths are **different texts**, so the shared "
-                    "word boxes don't line up — the spatial overlay isn't "
-                    "meaningful. Best for two readings of the same paragraph."
-                )
     # VIZ-11 follow-up: state what the chosen grid actually produced. The cap
     # coarsening the step used to be invisible, which is the whole reason the
     # setting felt arbitrary. UX-30 folded it INTO the box below rather than
@@ -5423,9 +5450,7 @@ def render_single_trial_tab(
                 else None
             )
             _render_anim_info_box(
-                trial_words,
                 info_fixations,
-                compare_meta["words"] if dual_anim else None,
                 info_compare_fix,
                 selected_participant,
                 selected_trial,
@@ -5477,6 +5502,16 @@ def render_single_trial_tab(
                     "The selected second scanpath has no fixations after "
                     "filtering — showing only the first scanpath."
                 )
+            elif dual_anim:
+                # A co-replay is always one coordinate space (`requested_layout`
+                # is forced to overlay above), so the overlay wording applies.
+                text_note = _different_texts_note(
+                    _trial_text_id(trial_words),
+                    _trial_text_id(compare_meta["words"]),
+                    overlaid=True,
+                )
+                if text_note:
+                    st.warning(text_note, icon="⚠️")
         elif comparing:
             displayed_fig = _render_comparison_figure(
                 combos,
@@ -5996,6 +6031,18 @@ def _render_comparison_figure(
         },
     )
     _render_true_scale_chart(fig_compare, key="compare")
+    overlaid = layout == "overlay"
+    text_note = _different_texts_note(
+        primary_text_id, compare_text_id, overlaid=overlaid
+    )
+    if text_note:
+        # A warning only where the figure is misleading (see the note's
+        # docstring); a split layout comparing two texts is a legitimate thing
+        # to do, and a yellow box on every one of them would be crying wolf.
+        if overlaid:
+            st.warning(text_note, icon="⚠️")
+        else:
+            st.caption(f"⚠️ {text_note}")
     if cross_dataset:
         # §5.3: the one thing a cross-dataset figure must never be is silent
         # about its own geometry. Each panel is true-to-scale on its *own*

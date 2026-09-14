@@ -9783,14 +9783,10 @@ def _metadata_keep_picker(host, raw, id_columns, *, prefix: str, noun: str) -> l
         "filter trials by, sort by, color by, or show as an info chip. "
         "Anything left out here is never registered as a field.",
     )
-    picker_col, all_col, none_col = host.columns(
-        [0.72, 0.14, 0.14], gap="small", vertical_alignment="bottom"
-    )
-    if all_col.button("Select all", key=f"{key}_all", width="stretch"):
-        st.session_state[key] = list(options)
-    if none_col.button("None", key=f"{key}_none", width="stretch"):
-        st.session_state[key] = []
-    return picker_col.multiselect(
+    # ENG-49: the wizard's twin of this row lost its bulk-select buttons for the
+    # same reason — 1.63's `select_all` lives in the dropdown and the ✕ already
+    # cleared, so the pair was a second copy of the widget's own controls.
+    return host.multiselect(
         f"Extra fields to keep — {noun}",
         options=options,
         key=key,

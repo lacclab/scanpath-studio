@@ -1448,15 +1448,13 @@ def _wizard_table_keep_picker(
         "as an info chip. Anything left out here is dropped when the "
         "dataset is added.",
     )
-    picker_col, all_col, none_col = host.columns(
-        [0.72, 0.14, 0.14], gap="small", vertical_alignment="bottom"
-    )
-    if all_col.button("Select all", key=f"{key}_all", width="stretch"):
-        st.session_state[key] = list(opts)
-    if none_col.button("None", key=f"{key}_none", width="stretch"):
-        st.session_state[key] = []
+    # ENG-49: the bulk-select buttons that used to take 28% of this row are
+    # gone — Streamlit 1.63 puts "Select all" inside the dropdown itself
+    # (`select_all`, on by default under 1000 options) and has always drawn a ✕
+    # to clear, so the pair had become a second copy of controls the widget now
+    # carries. The picker gets the whole row back.
     chosen = set(
-        picker_col.multiselect(
+        host.multiselect(
             f"Extra fields to keep — {noun}",
             options=opts,
             format_func=lambda s: labels.get(s, s),

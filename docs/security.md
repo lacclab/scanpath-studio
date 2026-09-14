@@ -11,8 +11,8 @@ too. Nothing here is inferred from documentation alone.
 - **Audited version:** `scanpath_studio` 0.25.0
 - **Dependency versions the runtime claims were checked against:** Streamlit
   1.58.0, pandas 2.3.3, CPython 3.12.12. The runtime has since moved to
-  Streamlit **1.62.0** (ENG-43); see *After the audit — Streamlit 1.61/1.62*
-  below for the relevant runtime changes.
+  Streamlit **1.63.0** (ENG-43, ENG-49); see *After the audit — Streamlit
+  1.61–1.63* below for the relevant runtime changes.
 - **Method:** source read of every write-to-disk, URL-building, path-handling,
   archive-reading and `@st.cache_data` site, plus targeted scripts that exercised
   the share-link builder, the bulk exporter, the export path sanitizer, the
@@ -32,10 +32,10 @@ too. Nothing here is inferred from documentation alone.
     **🗄️ Recovery cache**) and from `scanpath-studio cache --clear`, and it is
     described for researchers in [privacy.md](privacy.md#what-happens-to-a-file-you-upload).
 
-!!! note "After the audit — Streamlit 1.61/1.62 (ENG-31, ENG-43)"
-    The runtime moved from 1.58.0 to 1.61.1 and then 1.62.0. Two of the config options that
-    arrived in between touch the surfaces this page describes, and **both are
-    left at their defaults**:
+!!! note "After the audit — Streamlit 1.61–1.63 (ENG-31, ENG-43, ENG-49)"
+    The runtime moved from 1.58.0 to 1.61.1, then 1.62.0, then 1.63.0. Two of the
+    config options that arrived in between touch the surfaces this page
+    describes, and **both are left at their defaults**:
 
     - **`server.allowedHosts`** (1.61) — an allow-list of `Host` headers for
       incoming WebSocket connections, against DNS rebinding. Empty by default,
@@ -53,6 +53,17 @@ too. Nothing here is inferred from documentation alone.
     rerun's aggregate widget state, not session state — an uploaded corpus lives
     in session state and is unaffected; the only widget-borne payload is the
     Session JSON backup, which is kilobytes.
+
+    **1.63 (ENG-49) changes nothing on this page's surfaces.** Its additions are
+    UI-layer — layout wrapping, `st.multiselect`'s built-in select-all,
+    event-scoped fragment reruns, timeline containers — and its one new config
+    option, `runner.cacheBackgroundRefreshTTLMultiplier` (default `2.0`), widens
+    the stale-while-revalidate window on Streamlit's *own* cache rather than
+    changing what is written, where, or who may connect. It is left at its
+    default, as is `runner.cacheBackgroundRefreshMaxWorkers`. This is a
+    read of the changed surfaces, **not** a re-run of the audit: the method
+    above has not been repeated against 1.63, and the version-specific claims
+    below still cite what was read at the version named beside them.
 
     Streamlit 1.62 also randomizes/configures the sample used to hash large
     pandas and NumPy values in its own caches. That is useful defense in depth,

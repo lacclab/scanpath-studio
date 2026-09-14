@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **The replay starts at ×1 — real time — instead of ×4** (VIZ-42)
+- **The welcome tour names the app's own icons, picks a trial before narrowing the pool, and says where you already are** (UX-139)
 - **The AI-assistance note asks for an issue, and stops asking for a Session JSON backup** (ENG-45)
 - **The manuscript's MultiplEYE figure no longer hides the Illustration label to work around BUG-47** (BUG-47)
 - **The ℹ️ About a dataset blurbs are shorter, and OneStop's 330 texts is explained correctly** (BUG-43)
@@ -40,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **The replay starts at ×1 — real time — instead of ×4** (VIZ-42) — the rail's default was a quarter of real time, chosen as "brisk enough for quick review". It also disagreed with every other surface: `api.animate_scanpath`, `render --playback-speed` and `CANONICAL_FIGURE_DEFAULTS` all default to `1.0`, so the same trial replayed four times faster in the app than in the figure a script produced from it — and a non-1× speed is exactly what `illustration.py` stamps an **Illustration** disclosure for, which every app replay was therefore carrying by default. The slider still runs ×0.25 – ×8 from there.
 
+- **The welcome tour names the app's own icons, picks a trial before narrowing the pool, and says where you already are** (UX-139) — five corrections to `_SPOTLIGHT_STEPS`, all of them the tour having drifted from the app it describes. *The scanpath* said "each **dot** is a fixation" where the markers are circles. *Narrow the pool* said "the **funnel** beside the trial picker", which sent readers hunting for an emoji the app never draws — UX-98 made that trigger Streamlit's Material `filter_alt`, so the step shows the icon itself. *Animate & compare* promised "a ⚙ popover for its settings", a gear UX-68/UX-80 replaced with the ▾ that is actually on screen. *The nav* named Corpus Analysis and Data but never **Scanpath**, leaving the one view the reader had been looking at for nine steps unnamed. And *Pick a trial* now comes **before** *Narrow the pool*: UX-34 had ordered them by screen position, top to bottom, but narrowing only means something once you have seen the pool it narrows.
 
 
 

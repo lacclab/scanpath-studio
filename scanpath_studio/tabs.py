@@ -3408,9 +3408,11 @@ _ANIM_SPEED_LABELS = [
     "×6",
     "×8",
 ]
-# Default playback speed — brisk enough for quick review (real-time ÷ 4) but
-# still legible; the Playback popover's speed slider slows it down (to ×0.25).
-_ANIM_DEFAULT_SPEED = 4.0
+# Default playback speed — real time, so the replay a user first sees runs at
+# the pace the reading was actually recorded at, and matches what the headless
+# API / CLI produce by default (`api.animate_scanpath(playback_speed=1.0)`).
+# The Playback popover's speed slider goes ×0.25 – ×8 from here.
+_ANIM_DEFAULT_SPEED = 1.0
 _ANIM_QUALITY_PRESETS = {
     # Fast enough for trial browsing and compact GIF/MP4 drafts.
     "Coarse": (300, 120),

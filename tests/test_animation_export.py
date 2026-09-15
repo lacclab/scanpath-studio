@@ -43,10 +43,14 @@ def _solid_frames(n: int) -> list[bytes]:
 
 
 def _mp4_frame_count(data: bytes) -> int:
-    path = tempfile.mktemp(suffix=".mp4")
-    with open(path, "wb") as fh:
-        fh.write(data)
+    # `mkstemp`, not `mktemp`: the latter only reserves a *name* and leaves a
+    # window in which anything else can create that path first, which is why it
+    # is deprecated. `mkstemp` creates the file atomically, 0600, and hands back
+    # an already-open descriptor.
+    fd, path = tempfile.mkstemp(suffix=".mp4")
     try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
         return sum(1 for _ in iio.imiter(path))
     finally:
         os.unlink(path)

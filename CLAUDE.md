@@ -92,6 +92,23 @@ you work under `scanpath_studio/`); contributor setup is in
   grep -oh "\bDATA-[0-9]*\b" CHANGELOG.md tracker/data.js docs/*.md scanpath_studio/*.py | sort -u -V | tail -3
   ```
 
+  **Three registries stopped being enough once `main` became protected.** An ID
+  that lives in an *unmerged branch* is invisible to all three — it is in that
+  branch's `CHANGELOG.md`, not main's, and it has no issue yet — so the command
+  above can hand you a number another open PR already spent, while you are
+  following this rule to the letter. It happened on 2026-09-15 in both
+  directions at once: `ENG-48` existed only on `eng-21-macos-signing`, so every
+  registry reported `ENG-47` as the maximum, and `ENG-46` was on GitHub and
+  nowhere else. So **also check the open PRs** before taking a number:
+
+  ```bash
+  gh pr list --state open --json number,headRefName,title
+  gh pr diff <n> -- CHANGELOG.md | grep -oE "\b[A-Z]+-[0-9]+\b" | sort -u -V | tail
+  ```
+
+  And when another session or person is working right now, just ask which IDs
+  they have allocated — that is what actually resolved it, faster than any search.
+
   Never reuse or renumber an ID. GitHub's own `#N` is an implementation detail;
   cite the tracker ID in commits and prose, and the `#N` alongside it when a
   link helps.

@@ -165,7 +165,9 @@ Not every ID has an issue, deliberately: `CHANGELOG.md` allocates the IDs and
 carries the write-up for finished work, and an issue is opened when the item
 needs the **Review** gate, is blocked on the user (`waiting-on-you`), or is
 carried across sessions. So take a new ID's number from all three registries —
-the changelog, `gh issue list`, and `tracker/data.js` — never GitHub alone.
+the changelog, `gh issue list`, and `tracker/data.js` — never GitHub alone, and
+since `main` became protected, **check the open PRs too**: an ID sitting in an
+unmerged branch's changelog is in none of the three.
 
 Status (`Backlog · Planned · In progress · On hold · Review`) and priority live
 in the board's single-select columns, and kind is the native issue type

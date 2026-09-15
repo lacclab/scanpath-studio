@@ -14,8 +14,10 @@
     },
     {
       "name": "scanpath-studio",
-      "runtimeExecutable": "streamlit",
+      "runtimeExecutable": "uv",
       "runtimeArgs": [
+        "run",
+        "streamlit",
         "run",
         "streamlit_app.py",
         "--server.port",

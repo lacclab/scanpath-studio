@@ -1,7 +1,7 @@
 """Tests for app.py utility functions."""
 
 import json
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlsplit
 
 import pandas as pd
 import pytest
@@ -594,7 +594,11 @@ class TestStimulusFontInstallHint:
     def test_other_named_font_links_to_google_fonts(self):
         name, url = app_module._stimulus_font_install_hint("'Courier Prime', monospace")
         assert name == "Courier Prime"
-        assert "fonts.google.com" in url and "Courier+Prime" in url
+        # The *host*, not a substring: "fonts.google.com" anywhere in the
+        # string would also be satisfied by `evil.com/?x=fonts.google.com`,
+        # so the substring form asserted less than it looked like it did.
+        assert urlsplit(url).hostname == "fonts.google.com"
+        assert "Courier+Prime" in url
 
     def test_no_hint_for_generic_or_missing(self):
         # A bare CSS generic has nothing to install; None stays None.

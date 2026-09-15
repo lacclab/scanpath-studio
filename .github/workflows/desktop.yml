@@ -8,6 +8,11 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+# Least privilege by default; the `release` job below raises its own to
+# `contents: write`, which is the only thing here that writes.
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build on ${{ matrix.os }}

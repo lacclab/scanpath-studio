@@ -4,6 +4,13 @@ on:
   pull_request:
     branches: [main]
 
+# Least privilege for the default GITHUB_TOKEN: every job here checks out,
+# installs and runs pytest/ruff — none of them write anything back. Declared at
+# the top so a job added later inherits read-only rather than the repository
+# default, which is what `actions/missing-workflow-permissions` flags.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true

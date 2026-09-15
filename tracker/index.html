@@ -461,7 +461,7 @@
   });
 
   /* ---------- tiny markdown ---------- */
-  const esc = s => s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  const esc = s => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const ID_RE = /\b([A-Z]{2,4}-\d+[a-z]?)\b/g;
 
   function inline(src) {

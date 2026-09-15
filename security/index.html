@@ -2016,8 +2016,8 @@ too. Nothing here is inferred from documentation alone.</p>
 <li><strong>Audited version:</strong> <code>scanpath_studio</code> 0.25.0</li>
 <li><strong>Dependency versions the runtime claims were checked against:</strong> Streamlit
   1.58.0, pandas 2.3.3, CPython 3.12.12. The runtime has since moved to
-  Streamlit <strong>1.62.0</strong> (ENG-43); see <em>After the audit — Streamlit 1.61/1.62</em>
-  below for the relevant runtime changes.</li>
+  Streamlit <strong>1.63.0</strong> (ENG-43, ENG-49); see <em>After the audit — Streamlit
+  1.61–1.63</em> below for the relevant runtime changes.</li>
 <li><strong>Method:</strong> source read of every write-to-disk, URL-building, path-handling,
   archive-reading and <code>@st.cache_data</code> site, plus targeted scripts that exercised
   the share-link builder, the bulk exporter, the export path sanitizer, the
@@ -2039,10 +2039,10 @@ account-readable; it is disclosed and deletable in-app (💾 <strong>Session</st
 described for researchers in <a href="../privacy/#what-happens-to-a-file-you-upload">privacy.md</a>.</p>
 </div>
 <div class="admonition note">
-<p class="admonition-title">After the audit — Streamlit 1.61/1.62 (ENG-31, ENG-43)</p>
-<p>The runtime moved from 1.58.0 to 1.61.1 and then 1.62.0. Two of the config options that
-arrived in between touch the surfaces this page describes, and <strong>both are
-left at their defaults</strong>:</p>
+<p class="admonition-title">After the audit — Streamlit 1.61–1.63 (ENG-31, ENG-43, ENG-49)</p>
+<p>The runtime moved from 1.58.0 to 1.61.1, then 1.62.0, then 1.63.0. Two of the
+config options that arrived in between touch the surfaces this page
+describes, and <strong>both are left at their defaults</strong>:</p>
 <ul>
 <li><strong><code>server.allowedHosts</code></strong> (1.61) — an allow-list of <code>Host</code> headers for
   incoming WebSocket connections, against DNS rebinding. Empty by default,
@@ -2060,6 +2060,16 @@ left at their defaults</strong>:</p>
 rerun's aggregate widget state, not session state — an uploaded corpus lives
 in session state and is unaffected; the only widget-borne payload is the
 Session JSON backup, which is kilobytes.</p>
+<p><strong>1.63 (ENG-49) changes nothing on this page's surfaces.</strong> Its additions are
+UI-layer — layout wrapping, <code>st.multiselect</code>'s built-in select-all,
+event-scoped fragment reruns, timeline containers — and its one new config
+option, <code>runner.cacheBackgroundRefreshTTLMultiplier</code> (default <code>2.0</code>), widens
+the stale-while-revalidate window on Streamlit's <em>own</em> cache rather than
+changing what is written, where, or who may connect. It is left at its
+default, as is <code>runner.cacheBackgroundRefreshMaxWorkers</code>. This is a
+read of the changed surfaces, <strong>not</strong> a re-run of the audit: the method
+above has not been repeated against 1.63, and the version-specific claims
+below still cite what was read at the version named beside them.</p>
 <p>Streamlit 1.62 also randomizes/configures the sample used to hash large
 pandas and NumPy values in its own caches. That is useful defense in depth,
 but does not replace <code>data.frame_fingerprint</code>: Scanpath Studio intentionally

@@ -1849,6 +1849,10 @@ first — the headless form of the app's <strong>Compare</strong> mode.</p>
 <td><code>--compare-stimulus {both,a,b}</code> (default <code>both</code>)</td>
 </tr>
 <tr>
+<td>name the two traces</td>
+<td><code>--label-a TEXT --label-b TEXT</code> (both or neither)</td>
+</tr>
+<tr>
 <td>B from another dataset</td>
 <td><code>--compare-words PATH… --compare-fixations PATH…</code></td>
 </tr>
@@ -1866,6 +1870,10 @@ first — the headless form of the app's <strong>Compare</strong> mode.</p>
 </tr>
 </tbody>
 </table>
+<p><code>--label-a</code> / <code>--label-b</code> replace the composed trace labels — the CLI form of the
+app's per-scanpath label pattern. They go together, because <code>compare_scanpaths</code>
+takes the pair or neither, and they apply to the co-animation below just as they
+do to the static comparison.</p>
 <p><code>--animate --compare-with</code> replays <strong>both</strong> readings on one clock, the same dual
 co-animation the app renders with Animate and Compare both on. That is an
 overlay, so it needs one shared screen on the same terms as <code>--compare-layout

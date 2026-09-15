@@ -126,11 +126,14 @@ class TestTheFallbackIsPerRow:
 
         resolved = resolve_stimulus_image_paths(frame, images, "{text_id}.png")
 
-        assert resolved["image_path"].tolist() == [
-            str(images / "a.png"),
-            "/old/1.png",
-            None,
-        ]
+        paths = resolved["image_path"].tolist()
+        assert paths[:2] == [str(images / "a.png"), "/old/1.png"]
+        # The third row had no prior value to keep, and how "no value" comes
+        # back out of a column depends on the pandas major: 2 returns the None
+        # it was given, 3 normalizes it to NaN. The claim under test is that
+        # the row stays *empty* — asserting the literal None pinned the
+        # storage detail instead, and broke on pandas 3.
+        assert pd.isna(paths[2])
 
     def test_a_frame_with_no_image_path_column_gets_one(self, images):
         frame = pd.DataFrame({"text_id": ["a", "nope"]})

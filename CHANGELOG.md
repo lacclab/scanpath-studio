@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Column auto-detection catches a vendor prefix or suffix on a known column name** (DATA-25)
+
+### Details
+
+#### Added
+- **Column auto-detection catches a vendor prefix or suffix on a known column name** (DATA-25) — the unique-survivor token pass the 0.31.0 entry left for later. `pick_column`'s exact pass still runs first; when it finds nothing, a second pass splits each column on its separators and accepts a whole-token match against a candidate (`AOI_LEFT`, `LEFT_px`), with no prefix vocabulary to maintain. It is accepted only when exactly one column in the table survives it across the whole candidate list — `top_left_x`/`top_left_y` both contain "left", `max_x`/`fix_x` both contain "x" — so an ambiguous table falls through to the manual mapping step instead of guessing. Both passes carry the same auto-detected caption.
+
 ## [0.31.0] - 2026-09-24
 
 ### Added

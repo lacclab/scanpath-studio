@@ -477,7 +477,9 @@ def _schema_error(
     if not explicit:
         lines.append(
             "Matching ignores case and separators (IA_LEFT == ia_left == 'Ia Left') "
-            "and takes the first candidate that matches."
+            "and takes the first candidate that matches; failing that, a vendor "
+            "prefix or suffix on a known name (AOI_LEFT, LEFT_px) is tried next, "
+            "accepted only when exactly one column qualifies."
         )
     hint = (
         f"An explicit {param} replaces auto-detection wholesale, so it needs every "

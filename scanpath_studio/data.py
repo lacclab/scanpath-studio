@@ -482,13 +482,41 @@ def _norm_col(name) -> str:
     return re.sub(r"[^a-z0-9]", "", text.lower())
 
 
+_COL_SEPARATORS = re.compile(r"[^a-zA-Z0-9]+")
+
+
+def _col_tokens(name) -> list[str]:
+    """Split a raw column name into its separator-delimited tokens (DATA-25
+    second pass), each folded like ``_norm_col``.
+
+    The trailing-unit block is dropped from the *whole* name first, same as
+    ``_norm_col`` — so a vendor's ``LEFT_px`` tokenizes to ``["left", "px"]``
+    with the unit noise already gone, not left to coincidentally never match
+    a candidate."""
+    text = _TRAILING_UNIT.sub("", str(name))
+    return [tok.lower() for tok in _COL_SEPARATORS.split(text) if tok]
+
+
 def pick_column(df: pd.DataFrame, candidates: Iterable[str]) -> str | None:
     """Return the first matching column name from a candidate list.
 
     Matching is case- and separator-insensitive (see ``_norm_col``). Candidate
     order is still priority order — the first candidate with any match wins (so
     EyeLink names keep beating Gazepoint), and among equally-normalized columns
-    the leftmost one wins."""
+    the leftmost one wins.
+
+    If nothing matches exactly, a second pass (DATA-25) catches a vendor
+    prefix or suffix on a known name — ``AOI_LEFT``, ``LEFT_px`` — by
+    splitting each column on its separators and checking whether any *whole*
+    token equals a candidate. There is no prefix vocabulary to maintain, and
+    no substring matching, so ``top`` never matches ``stop_time`` (the whole
+    token is ``stop``, not ``top``) and ``id`` never matches ``guid``. That
+    still leaves real ambiguity — ``top_left_x`` and ``top_left_y`` both
+    contain the token ``left``; ``max_x`` and ``fix_x`` both contain ``x`` —
+    so the second pass is accepted only when it turns up **exactly one**
+    column across every candidate in the list. Two or more survivors is
+    ambiguity, and ambiguity means the manual mapping step, not a guess: the
+    safety here is uniqueness, not a whitelist."""
     lookup: dict[str, str] = {}
     for col in df.columns:
         lookup.setdefault(_norm_col(col), col)
@@ -496,6 +524,11 @@ def pick_column(df: pd.DataFrame, candidates: Iterable[str]) -> str | None:
         hit = lookup.get(_norm_col(name))
         if hit is not None:
             return hit
+
+    normed_candidates = {_norm_col(name) for name in candidates}
+    survivors = [col for col in df.columns if normed_candidates & set(_col_tokens(col))]
+    if len(survivors) == 1:
+        return survivors[0]
     return None
 
 

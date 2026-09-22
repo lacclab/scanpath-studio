@@ -124,24 +124,31 @@ def test_words_schema_error_names_field_candidates_and_columns():
     assert "Trial ID (word_schema key 'trial'): no column matched" in message
     assert "Looked for: unique_trial_id, trial_id" in message
     assert "Word/IA ID (word_schema key 'word_id')" in message
-    # The either/or box requirement names which keys each convention still needs
-    # (`start_x` already resolved `left`, so only right/top/bottom are missing).
+    # The either/or box requirement names which keys each convention still needs.
+    # `start_x` is a literal `left` candidate (exact pass) *and*, since it is
+    # the only column carrying the whole token "x", the DATA-25 second pass
+    # also hands it to `x` — one column resolving two canonical fields, same
+    # as `top_left_x` already could. So only y/width/height and
+    # right/top/bottom are left missing from either convention.
     assert (
         "need either (x, y, width, height) or (left, right, top, bottom) — "
-        "(x, y, width, height) is missing x, y, width, height; "
+        "(x, y, width, height) is missing y, width, height; "
         "(left, right, top, bottom) is missing right, top, bottom." in message
     )
     # What auto-detection *did* find, and the table it was looking at.
-    assert "Fields that did resolve: text='word', left='start_x'" in message
+    assert (
+        "Fields that did resolve: text='word', x='start_x', left='start_x'" in message
+    )
     assert (
         "Columns present in the words/IA table (4): subject, para, word, start_x"
         in message
     )
-    # A copy-pasteable override that keeps the columns already resolved.
+    # A copy-pasteable override that keeps the columns already resolved — the
+    # x/y/width/height convention is suggested since it now has fewer gaps.
     assert (
         "word_schema={'trial': '<column>', 'word_id': '<column>', "
-        "'left': 'start_x', 'right': '<column>', 'top': '<column>', "
-        "'bottom': '<column>'}" in message
+        "'x': 'start_x', 'y': '<column>', 'width': '<column>', "
+        "'height': '<column>'}" in message
     )
     assert "api.propose_schema(df, 'words')" in message
 
@@ -256,7 +263,11 @@ def test_explicit_schema_error_points_at_the_mapping_not_at_detection():
 def test_propose_schema_is_the_documented_repair_path():
     """The mapping the error points at actually loads the renamed table."""
     words_raw, fix_raw = data_module.load_sample_data()
-    renamed = words_raw.rename(columns={"IA_ID": "aoi_number"})
+    # Renamed to something with no candidate token at all (not "aoi_number" —
+    # DATA-25's second pass would now auto-detect that one via the whole
+    # token "aoi", which is itself a WORD_ID_CANDIDATES entry; see
+    # TestPickColumnPrefixSuffixSecondPass in test_data.py).
+    renamed = words_raw.rename(columns={"IA_ID": "internal_id"})
     # `IA_ID` was the only Word/IA ID candidate present, so detection now fails…
     with pytest.raises(ValueError, match="missing Word/IA ID"):
         sps.load_scanpath_data(words=renamed, fixations=fix_raw)
@@ -265,7 +276,7 @@ def test_propose_schema_is_the_documented_repair_path():
     assert schema["word_id"] is None
     assert schema["trial"] == "unique_trial_id"
     assert schema["left"] == "IA_LEFT"
-    schema["word_id"] = "aoi_number"
+    schema["word_id"] = "internal_id"
     words, fixations = sps.load_scanpath_data(
         words=renamed, fixations=fix_raw, word_schema=schema
     )

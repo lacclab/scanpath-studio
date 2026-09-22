@@ -155,15 +155,21 @@ columns are `subject, para, word, start_x`:
 ```text
 Words/IA schema problems: missing Trial ID; missing Word/IA ID; need either (x, y, width, height) or (left, right, top, bottom)
 Could not infer these canonical fields from the words/IA table:
-  - Trial ID (word_schema key 'trial'): no column matched. Looked for: unique_trial_id, trial_id, unique_paragraph_id, paragraph_id, text_id, trial, trial_index
+  - Trial ID (word_schema key 'trial'): no column matched. Looked for: unique_trial_id, trial_id, unique_paragraph_id, paragraph_id, text_id, trial, trial_index, trial_number, presented_stimulus_name, media_name, stimulus
   - Word/IA ID (word_schema key 'word_id'): no column matched. Looked for: word_id, IA_ID, ia_index, word_index, aoi, word_idx, char_idx
-  - Word box (word_schema keys): need either (x, y, width, height) or (left, right, top, bottom) — (x, y, width, height) is missing x, y, width, height; (left, right, top, bottom) is missing right, top, bottom.
-      Looked for → x: x, left, top_left_x | y: y, top, top_left_y | width: width | height: height | right: IA_RIGHT, right, end_x | top: IA_TOP, top, start_y, top_left_y | bottom: IA_BOTTOM, bottom, end_y
-Fields that did resolve: text='word', left='start_x'
+  - Word box (word_schema keys): need either (x, y, width, height) or (left, right, top, bottom) — (x, y, width, height) is missing y, width, height; (left, right, top, bottom) is missing right, top, bottom.
+      Looked for → y: y, top, top_left_y | width: width | height: height | right: IA_RIGHT, right, end_x | top: IA_TOP, top, start_y, top_left_y | bottom: IA_BOTTOM, bottom, end_y
+Fields that did resolve: text='word', x='start_x', left='start_x'
 Columns present in the words/IA table (4): subject, para, word, start_x
-Matching ignores case and separators (IA_LEFT == ia_left == 'Ia Left') and takes the first candidate that matches.
-To override auto-detection pass the full mapping, e.g. word_schema={'trial': '<column>', 'word_id': '<column>', 'left': 'start_x', 'right': '<column>', 'top': '<column>', 'bottom': '<column>'} — api.propose_schema(df, 'words') returns what was detected.
+Matching ignores case and separators (IA_LEFT == ia_left == 'Ia Left') and takes the first candidate that matches; failing that, a vendor prefix or suffix on a known name (AOI_LEFT, LEFT_px) is tried next, accepted only when exactly one column qualifies.
+To override auto-detection pass the full mapping, e.g. word_schema={'trial': '<column>', 'word_id': '<column>', 'x': 'start_x', 'y': '<column>', 'width': '<column>', 'height': '<column>'} — api.propose_schema(df, 'words') returns what was detected.
 ```
+
+(`x` and `left` both resolve to `start_x` here — `start_x` is a literal
+`WORD_LEFT_CANDIDATES` entry *and*, since no other column carries the whole
+token `x`, the second pass also hands it to `x`. One column satisfying two
+canonical fields is already how `top_left_x` behaves for `x` and `left`
+together; it is not a conflict, just two names for the same box edge.)
 
 Repair it by starting from what *was* detected and filling the gaps — an
 explicit schema replaces auto-detection wholesale, so it has to be complete:

@@ -72,6 +72,72 @@ class TestPickColumn:
         assert pick_column(df, ["ia_left"]) == "IA_LEFT"
 
 
+class TestPickColumnPrefixSuffixSecondPass:
+    """`pick_column`'s second pass (DATA-25): a vendor prefix or suffix on a
+    known name (`AOI_LEFT`, `LEFT_px`) is caught by matching whole,
+    separator-split tokens — but only when exactly one column survives it
+    across the whole candidate list. Two or more survivors is ambiguity and
+    falls back to `None`, same as no match at all."""
+
+    def test_prefixed_column_is_matched(self):
+        df = pd.DataFrame({"AOI_LEFT": [1], "other": [2]})
+        assert pick_column(df, ["left"]) == "AOI_LEFT"
+
+    def test_suffixed_column_is_matched(self):
+        df = pd.DataFrame({"LEFT_px": [1], "other": [2]})
+        assert pick_column(df, ["left"]) == "LEFT_px"
+
+    def test_exact_pass_wins_before_the_second_pass_is_even_tried(self):
+        # A literal "left" column wins outright; AOI_LEFT is never considered.
+        df = pd.DataFrame({"left": [1], "AOI_LEFT": [2]})
+        assert pick_column(df, ["left"]) == "left"
+
+    def test_ambiguous_shared_token_falls_back_to_none(self):
+        # Both columns contain the whole token "left" — ambiguity, not a guess.
+        df = pd.DataFrame({"top_left_x": [1], "top_left_y": [2]})
+        assert pick_column(df, ["left"]) is None
+
+    def test_ambiguous_single_letter_token_falls_back_to_none(self):
+        # Both contain the whole token "x" — same ambiguity, different shape.
+        df = pd.DataFrame({"max_x": [1], "fix_x": [2]})
+        assert pick_column(df, ["x"]) is None
+
+    def test_unique_survivor_among_similar_names_still_wins(self):
+        # Only one column carries the token "x" this time — no ambiguity.
+        df = pd.DataFrame({"fix_x": [1], "other": [2]})
+        assert pick_column(df, ["x"]) == "fix_x"
+
+    def test_whole_token_match_not_substring(self):
+        # "top" must never match inside "stop_time" — whole tokens only.
+        df = pd.DataFrame({"stop_time": [1]})
+        assert pick_column(df, ["top"]) is None
+
+    def test_whole_token_match_not_substring_for_short_candidates(self):
+        # "id" must never match inside "guid".
+        df = pd.DataFrame({"guid": [1]})
+        assert pick_column(df, ["id"]) is None
+
+    def test_second_pass_checks_every_candidate_in_the_list(self):
+        df = pd.DataFrame({"AOI_RIGHT": [1], "other": [2]})
+        assert pick_column(df, ["IA_RIGHT", "right", "end_x"]) == "AOI_RIGHT"
+
+    def test_survivors_are_scoped_to_one_candidate_list_at_a_time(self):
+        df = pd.DataFrame({"AOI_LEFT": [1], "AOI_RIGHT": [2]})
+        assert pick_column(df, ["left"]) == "AOI_LEFT"
+        assert pick_column(df, ["right"]) == "AOI_RIGHT"
+
+    def test_a_word_id_candidate_stays_safe_next_to_aoi_edge_columns(self):
+        # "aoi" is itself a literal WORD_ID_CANDIDATES entry (some exports
+        # call an interest-area index column "aoi"). With all four AOI edge
+        # columns present, "aoi" is a token on every one of them — ambiguous,
+        # so a missing word-id column correctly falls to manual mapping
+        # instead of silently grabbing one of the edges.
+        df = pd.DataFrame(
+            {"AOI_LEFT": [1], "AOI_RIGHT": [2], "AOI_TOP": [3], "AOI_BOTTOM": [4]}
+        )
+        assert pick_column(df, ["word_id", "IA_ID", "aoi"]) is None
+
+
 class TestProposeWordSchemaMatching:
     """propose_word_schema resolves real-world column-name variants."""
 
@@ -95,6 +161,45 @@ class TestProposeWordSchemaMatching:
         assert schema["right"] == "IA Right"
         assert schema["top"] == "IA Top"
         assert schema["bottom"] == "IA Bottom"
+
+    def test_aoi_prefixed_edges_are_auto_detected(self):
+        # DATA-25 second pass: a vendor's AOI_LEFT/RIGHT/TOP/BOTTOM naming
+        # reaches the same fields IA_LEFT etc. do, without the manual
+        # column-mapping step.
+        df = pd.DataFrame(
+            {
+                "participant_id": ["p1"],
+                "trial_id": ["t1"],
+                "AOI_LEFT": [100],
+                "AOI_RIGHT": [150],
+                "AOI_TOP": [50],
+                "AOI_BOTTOM": [100],
+            }
+        )
+        schema = propose_word_schema(df)
+        assert schema["left"] == "AOI_LEFT"
+        assert schema["right"] == "AOI_RIGHT"
+        assert schema["top"] == "AOI_TOP"
+        assert schema["bottom"] == "AOI_BOTTOM"
+
+    def test_unit_suffixed_edges_are_auto_detected(self):
+        # A different shape of the same problem: a bare unit suffix rather
+        # than a vendor prefix.
+        df = pd.DataFrame(
+            {
+                "participant_id": ["p1"],
+                "trial_id": ["t1"],
+                "LEFT_px": [100],
+                "RIGHT_px": [150],
+                "TOP_px": [50],
+                "BOTTOM_px": [100],
+            }
+        )
+        schema = propose_word_schema(df)
+        assert schema["left"] == "LEFT_px"
+        assert schema["right"] == "RIGHT_px"
+        assert schema["top"] == "TOP_px"
+        assert schema["bottom"] == "BOTTOM_px"
 
 
 class TestProposeFixSchemaMatching:

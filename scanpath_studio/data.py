@@ -2689,6 +2689,14 @@ def _copy_screen_fields(
             continue
         values = source[column]
         df[destination] = pd.to_numeric(values, errors="coerce") if numeric else values
+    # BUG-79: UX-88 took `screen_index` out of the mapping on the premise that
+    # the public corpora stamp it onto their frames — but this function rebuilds
+    # the frame from the mapping, so the stamp was dropped and screen order
+    # re-derived from row order: AOI-file order on the words, each reader's
+    # onset order on the fixations. MultiplEYE's per-reader question order then
+    # conflicted and the 🗂️ Data page crashed. A canonical column rides through.
+    if SCREEN_INDEX not in df.columns and SCREEN_INDEX in source.columns:
+        df[SCREEN_INDEX] = pd.to_numeric(source[SCREEN_INDEX], errors="coerce")
     return normalize_screen_identity(df)
 
 

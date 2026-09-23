@@ -4164,7 +4164,15 @@ def _dataset_counts(
         return len(values) if found else None
 
     text_column = "unique_text_id" if "unique_text_id" in words else "text_id"
-    screens = len(part_catalog(words, fixations, raw_gaze)) or None
+    # BUG-79: a count must not take the page down. `part_catalog` validates as
+    # it counts and raises on screen metadata that disagrees across tables —
+    # which is worth reporting where the figure is built, not by blanking the
+    # whole 🗂️ Data page (and with it the way to switch to another dataset).
+    try:
+        screens = len(part_catalog(words, fixations, raw_gaze)) or None
+    except ValueError as exc:
+        logging.getLogger(__name__).warning("Screen count unavailable: %s", exc)
+        screens = None
     # DATA-36: a trial is a **(participant, trial_id) pair** — the row the trial
     # picker lists, since `utils.build_combo_options` de-duplicates on exactly
     # that — not a distinct `trial_id`. The two coincide only where a corpus

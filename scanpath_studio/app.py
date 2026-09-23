@@ -3256,7 +3256,7 @@ def _uploaded_file_key(uploaded) -> tuple:
 
 @st.cache_data(show_spinner="Reading uploaded data…")
 def _read_uploaded_table_cached(
-    _uploaded, file_key, kind=None, chosen=()
+    _uploaded, file_key, kind=None, chosen=(), text_column=None
 ) -> pd.DataFrame:
     try:
         _uploaded.seek(0)
@@ -3268,12 +3268,13 @@ def _read_uploaded_table_cached(
     # own picks need. `kind` and `chosen` are part of the cache key, so naming
     # a new column simply re-reads the file under the new plan.
     header = read_table_columns(_uploaded)
-    return read_table(_uploaded, plan=upload_read_plan(header, kind, chosen=chosen))
+    plan = upload_read_plan(header, kind, chosen=chosen, text_column=text_column)
+    return read_table(_uploaded, plan=plan)
 
 
 @st.cache_data(show_spinner="Reading uploaded data…")
 def _read_uploaded_tables_cached(
-    _uploaded_list, file_keys, kind=None, chosen=()
+    _uploaded_list, file_keys, kind=None, chosen=(), text_column=None
 ) -> pd.DataFrame:
     for f in _uploaded_list:
         try:
@@ -3284,7 +3285,9 @@ def _read_uploaded_tables_cached(
     if kind is not None:
 
         def plan_for(header):
-            return upload_read_plan(header, kind, chosen=chosen)
+            return upload_read_plan(
+                header, kind, chosen=chosen, text_column=text_column
+            )
 
     return read_tables(list(_uploaded_list), plan_for=plan_for)
 
@@ -3317,14 +3320,17 @@ def _columns_chosen_in_state(state, header) -> set:
     return chosen
 
 
-def upload_read_plan(header, kind: str, *, chosen=()) -> ReadPlan:
+def upload_read_plan(
+    header, kind: str, *, chosen=(), text_column: str | None = None
+) -> ReadPlan:
     """Plan an uploaded table's read from its header (PERF-6, decision 2a).
 
     The mapping is auto-proposed from the column names, so the plan exists
     before the user has touched anything; ``chosen`` folds back in the columns
     they *have* named, which is what keeps a hand-picked mapping or a kept extra
     from being dropped. A column named later simply changes the plan, and the
-    read runs again against the new one.
+    read runs again against the new one. ``text_column`` is the user's own
+    word-text pick, read verbatim in place of the proposed one (BUG-53).
     """
     propose = propose_word_schema if kind == "words" else propose_fix_schema
     registry = WORD_OPTIONAL_FIELDS if kind == "words" else FIX_OPTIONAL_FIELDS
@@ -3334,6 +3340,7 @@ def upload_read_plan(header, kind: str, *, chosen=()) -> ReadPlan:
         propose(pd.DataFrame(columns=names)),
         registry,
         keep_columns=set(chosen),
+        text_column=text_column,
     )
 
 
@@ -3433,9 +3440,15 @@ def _read_uploaded_frame(
     # rides in the cache key.
     header: list = []
     chosen: tuple = ()
+    text_column = None
     if kind is not None:
         header = _upload_header(uploaded, multi=multi)
         chosen = tuple(sorted(_columns_chosen_in_state(st.session_state, header)))
+        # BUG-53: the word-text column the user mapped by hand (the mapping
+        # widget's own key) is the one to read verbatim, not the proposed one.
+        picked = st.session_state.get(f"{state_prefix}_text")
+        if kind == "words" and isinstance(picked, str) and picked in header:
+            text_column = picked
     st.session_state[f"{state_prefix}_header"] = header
     if multi:
         return _read_uploaded_tables_cached(
@@ -3443,9 +3456,14 @@ def _read_uploaded_frame(
             tuple(_uploaded_file_key(f) for f in uploaded),
             kind=kind,
             chosen=chosen,
+            text_column=text_column,
         )
     return _read_uploaded_table_cached(
-        uploaded, _uploaded_file_key(uploaded), kind=kind, chosen=chosen
+        uploaded,
+        _uploaded_file_key(uploaded),
+        kind=kind,
+        chosen=chosen,
+        text_column=text_column,
     )
 
 

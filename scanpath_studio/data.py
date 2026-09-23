@@ -1098,7 +1098,7 @@ def _read_by_extension(buf, name: str, plan: ReadPlan | None = None) -> pd.DataF
         return pd.read_feather(buf, columns=columns)
     if name.endswith((".xlsx", ".xls")):
         # First sheet (e.g. MultiplEYE questions workbook).
-        frame = pd.read_excel(buf)
+        frame = pd.read_excel(buf, **_excel_na_kwargs(buf, plan))
         return frame[[c for c in columns if c in frame.columns]] if columns else frame
     if name.endswith((".tsv", ".tab")):
         return pd.read_csv(buf, sep="\t", low_memory=False, **_read_kwargs(plan))
@@ -1147,6 +1147,11 @@ class ReadPlan:
 
     columns: tuple[str, ...] | None = None
     na_values: dict[str, list[str]] = field(default_factory=dict)
+    #: Columns read as the literal text of each cell, with no cell taken as
+    #: missing (BUG-53). The word-text column: "None", "NA" and "null" are
+    #: words a stimulus can contain, and pandas' default NA spellings turned
+    #: every one of them into NaN before normalization saw it.
+    verbatim: tuple[str, ...] = ()
 
     def narrowed_to(self, available: Iterable[str]) -> ReadPlan:
         """This plan restricted to the columns one file actually has.
@@ -1165,10 +1170,11 @@ class ReadPlan:
         present = set(available)
         columns = tuple(name for name in self.columns if name in present)
         if not columns:
-            return ReadPlan()
+            return ReadPlan(verbatim=tuple(c for c in self.verbatim if c in present))
         return ReadPlan(
             columns=columns,
             na_values={k: v for k, v in self.na_values.items() if k in present},
+            verbatim=tuple(c for c in self.verbatim if c in present),
         )
 
 
@@ -1186,7 +1192,73 @@ def _read_kwargs(plan: ReadPlan | None) -> dict:
         kwargs["usecols"] = list(plan.columns)
     if plan.na_values:
         kwargs["na_values"] = plan.na_values
+    if plan.verbatim:
+        # A converter receives the cell's raw text before NA detection runs, and
+        # leaves every other column's NA handling exactly as it was (BUG-53).
+        kwargs["converters"] = {column: str for column in plan.verbatim}
     return kwargs
+
+
+#: pandas' own default missing-value spellings (``read_csv``'s ``na_values``
+#: docs). Spelled out because an Excel read with a verbatim column has to switch
+#: the defaults off and hand them back to every *other* column by name.
+PANDAS_DEFAULT_NA = frozenset(
+    {
+        "",
+        "#N/A",
+        "#N/A N/A",
+        "#NA",
+        "-1.#IND",
+        "-1.#QNAN",
+        "-NaN",
+        "-nan",
+        "1.#IND",
+        "1.#QNAN",
+        "<NA>",
+        "N/A",
+        "NA",
+        "NULL",
+        "NaN",
+        "None",
+        "n/a",
+        "nan",
+        "null",
+    }
+)
+
+
+def _excel_na_kwargs(buf, plan: ReadPlan | None) -> dict:
+    """``read_excel`` keywords that keep a plan's verbatim columns literal.
+
+    ``read_excel`` applies its NA spellings before a converter sees the cell,
+    so the CSV path's converter trick does not reach it: the defaults are turned
+    off and given back to every other column by name, which needs the header
+    first. Excel is never the large-file format, so the second pass is cheap.
+    """
+    if plan is None or not plan.verbatim:
+        return {}
+    header = list(pd.read_excel(buf, nrows=0).columns)
+    _rewind(buf)
+    na_values = {
+        column: sorted(PANDAS_DEFAULT_NA | set(plan.na_values.get(column, ())))
+        for column in header
+        if column not in plan.verbatim
+    }
+    return {"keep_default_na": False, "na_values": na_values}
+
+
+def verbatim_text_plan(header: Sequence[str], schema: dict | None = None) -> ReadPlan:
+    """A whole-table plan that only keeps the word-text column verbatim (BUG-53).
+
+    For readers that parse every column (the headless API) but still must not
+    lose a word spelled "None" or "NA". ``schema`` is the caller's own word
+    mapping; without one the text column is auto-detected from the header, the
+    way the mapping itself will be.
+    """
+    names = list(header)
+    schema = schema or propose_word_schema(pd.DataFrame(columns=names))
+    text = schema.get("text")
+    return ReadPlan(verbatim=(text,) if isinstance(text, str) and text in names else ())
 
 
 def plan_table_read(
@@ -1196,6 +1268,7 @@ def plan_table_read(
     *,
     filter_fields: Iterable[str] | None = None,
     keep_columns: Iterable[str] | None = None,
+    text_column: str | None = None,
 ) -> ReadPlan:
     """Narrow a read to the columns ``normalize_*`` keeps (PERF-6).
 
@@ -1209,18 +1282,23 @@ def plan_table_read(
     the plan is made before a single row is parsed. ``filter_fields`` and
     ``keep_columns`` carry the columns the user chose to keep beyond the
     mapping, exactly as :func:`compute_keep_columns` takes them.
+
+    The word-text column — ``text_column`` when the user has mapped one by
+    hand, else the schema's own ``text`` — is read verbatim (BUG-53).
     """
     names = list(header)
     present = set(names)
+    text = text_column or schema.get("text")
+    verbatim = (text,) if isinstance(text, str) and text in present else ()
     if not (set(_schema_source_columns(schema)) & present):
         # Nothing is mapped yet — an unmapped upload, or a table this schema
         # does not describe. Dropping columns here would be guessing.
-        return ReadPlan()
+        return ReadPlan(verbatim=verbatim)
     keep = compute_keep_columns(
         schema,
         optional_sources=[row[0] for row in registry if row[0] in present],
         filter_fields=filter_fields,
-        keep_columns=keep_columns,
+        keep_columns=set(keep_columns or ()) | set(verbatim),
     )
     numeric = {row[0] for row in registry if row[2] == "numeric"}
     numeric |= {
@@ -1232,6 +1310,7 @@ def plan_table_read(
     return ReadPlan(
         columns=columns,
         na_values={name: [MISSING_MARKER] for name in columns if name in numeric},
+        verbatim=verbatim,
     )
 
 
@@ -2694,7 +2773,11 @@ def normalize_words(
     df = _copy_screen_fields(df, words, schema)
     df["word_id"] = pd.to_numeric(words[schema["word_id"]], errors="coerce")
     if schema.get("text"):
-        df["text"] = words[schema["text"]].astype(str)
+        # BUG-53: a missing cell is an empty word, never NaN — pandas 3's
+        # `astype(str)` keeps NaN as NaN, and every " ".join over a trial's text
+        # downstream then raises on the float.
+        text = words[schema["text"]]
+        df["text"] = text.where(text.notna(), "").astype(str)
     else:
         df["text"] = df["word_id"].apply(lambda v: f"w{int(v)}" if pd.notna(v) else "")
     df["text"] = df["text"].str.replace(r"\s+", " ", regex=True).str.strip()

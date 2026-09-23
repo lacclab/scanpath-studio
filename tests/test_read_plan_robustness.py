@@ -108,3 +108,69 @@ class TestEmptyPlan:
         path = tmp_path / "a.parquet"
         pd.DataFrame(CORE).to_parquet(path)
         assert list(read_table(path, plan=ReadPlan(columns=())).columns) == list(CORE)
+
+
+class TestWordTextIsReadVerbatim:
+    """BUG-53: "None", "NA", "null" and a blank cell are words, not missing.
+
+    pandas' default NA spellings turned each into NaN at read time, pandas 3's
+    `astype(str)` kept the NaN, and the load then died in a `" ".join` over the
+    trial's text — reported by the wizard as "this column mapping doesn't work".
+    """
+
+    WORDS = ["None", "NA", "null", "", "fox"]
+
+    def _table(self):
+        n = len(self.WORDS)
+        return pd.DataFrame(
+            {
+                "RECORDING_SESSION_LABEL": ["p1"] * n,
+                "paragraph_id": ["t1"] * n,
+                "IA_ID": list(range(1, n + 1)),
+                "IA_LABEL": self.WORDS,
+                "IA_LEFT": [10 * i for i in range(n)],
+                "IA_RIGHT": [10 * i + 9 for i in range(n)],
+                "IA_TOP": [100] * n,
+                "IA_BOTTOM": [".", 130, 130, 130, 130],
+            }
+        )
+
+    def test_a_planned_csv_read_keeps_the_words(self, tmp_path):
+        path = tmp_path / "ia.tsv"
+        self._table().to_csv(path, sep="\t", index=False)
+        frame = read_table(path, plan=_plan(read_table_columns(path)))
+        assert frame["IA_LABEL"].tolist() == self.WORDS
+        # The numeric columns still read EyeLink's "." as missing.
+        assert frame["IA_BOTTOM"].isna().tolist() == [True] + [False] * 4
+
+    def test_an_excel_read_keeps_the_words(self, tmp_path):
+        path = tmp_path / "ia.xlsx"
+        self._table().to_excel(path, index=False)
+        frame = read_table(path, plan=_plan(read_table_columns(path)))
+        assert frame["IA_LABEL"].tolist() == self.WORDS
+
+    def test_the_headless_api_loads_them(self, tmp_path):
+        from scanpath_studio import api
+
+        path = tmp_path / "ia.tsv"
+        self._table().to_csv(path, sep="\t", index=False)
+        words, _ = api.load_scanpath_data(words=str(path))
+        assert words["text"].tolist() == self.WORDS
+
+    def test_a_hand_mapped_text_column_is_the_one_kept(self):
+        from scanpath_studio.app import upload_read_plan
+
+        header = [*self._table().columns, "word_form"]
+        plan = upload_read_plan(header, "words", text_column="word_form")
+        assert plan.verbatim == ("word_form",)
+        assert "word_form" in plan.columns
+
+    def test_a_missing_word_normalizes_to_an_empty_string(self):
+        """A frame read without a plan (a parquet null, a DataFrame passed in)
+        still normalizes and harmonizes instead of raising."""
+        table = self._table()
+        table.loc[0, "IA_LABEL"] = None
+        schema = propose_word_schema(table)
+        words = data_module.normalize_words(table, schema)
+        assert words["text"].tolist()[0] == ""
+        data_module.harmonize_frames(words, data_module.empty_fixations_frame())

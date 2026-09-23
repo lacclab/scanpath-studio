@@ -217,14 +217,14 @@ CANONICAL_FIGURE_DEFAULTS: dict = FigureSettings.defaults(
 )
 
 
-def _as_dataframe(table: TablesLike, label: str) -> pd.DataFrame:
+def _as_dataframe(table: TablesLike, label: str, *, plan_for=None) -> pd.DataFrame:
     if isinstance(table, pd.DataFrame):
         return table
     items = _data.expand_table_inputs(table)
     for item in items:
         if not isinstance(item, pd.DataFrame) and not Path(item).is_file():
             raise FileNotFoundError(f"{label} table not found: {item}")
-    return _data.read_tables(items)
+    return _data.read_tables(items, plan_for=plan_for)
 
 
 # ---------------------------------------------------------------------------
@@ -558,7 +558,12 @@ def load_scanpath_data(
         raise ValueError("Provide at least one of words= or fixations=.")
 
     if words is not None:
-        words_df = _as_dataframe(words, "words/IA")
+        # BUG-53: a word spelled "None" or "NA" is a word, not a missing cell.
+        words_df = _as_dataframe(
+            words,
+            "words/IA",
+            plan_for=lambda header: _data.verbatim_text_plan(header, word_schema),
+        )
         explicit = word_schema is not None
         word_schema = word_schema or _data.propose_word_schema(words_df)
         _check_mapped_columns("words", words_df, word_schema)

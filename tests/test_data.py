@@ -685,6 +685,26 @@ class TestCompositeTrialId:
             "p2_B_False",
         ]
 
+    def test_a_single_column_pick_wins_over_a_raw_unique_trial_id(self):
+        """BUG-58: a hand-picked single column used to be replaced by any
+        literal `unique_trial_id` column, silently — here only the fixations
+        carry one, so the two tables joined on nothing."""
+        words = self._words()
+        fixations = self._words(unique_trial_id=["u1", "u1", "u2", "u3"])[
+            ["participant_id", "para", "unique_trial_id", "x", "y"]
+        ].assign(duration=200)
+        schema = {"participant": "participant_id", "trial": "para"}
+        w = normalize_words(words, {**self.WORD_SCHEMA, "trial": "para"})
+        f = normalize_fixations(
+            fixations, {**schema, "x": "x", "y": "y", "duration": "duration"}
+        )
+        assert f["trial_id"].tolist() == ["A", "A", "A", "B"]
+        # …and the picker's key column agrees with it, not with the raw column.
+        assert (f["unique_trial_id"] == f["trial_id"]).all()
+        assert set(zip(f.participant_id, f.trial_id)) == set(
+            zip(w.participant_id, w.trial_id)
+        )
+
     def test_single_element_list_matches_plain_string_mapping(self):
         words = self._words()
         as_list = normalize_words(words, {**self.WORD_SCHEMA, "trial": ["para"]})

@@ -11,14 +11,16 @@ prepared, which is fewer -- some publishers require manual acquisition. Read
 the manifest for what is actually there rather than assuming a count.
 
 Bundle contract for `fixations.parquet`: it must NOT carry a column literally
-named `unique_trial_id`. `data.normalize_fixations` hard-codes that exact
-column name to `trial_id` whenever it's present, which would override
-`EYEGENBENCH_FIX_SCHEMA`'s `trial` mapping below and break the words
+named `unique_trial_id`. `data.normalize_fixations` used to key `trial_id` on
+that exact column name whenever it was present, overriding
+`EYEGENBENCH_FIX_SCHEMA`'s `trial` mapping below and breaking the words
 broadcast (paragraph-keyed stimulus-level words vs. reading-keyed fixations
-would never match, silently broadcasting zero word boxes). If the prep
-script carries EyeGenBench's own finer-grained (per-reading) trial identity
-through at all, it must use the column name `eyegenbench_trial_id` instead --
-registered as an opaque passthrough in Task 7. It must also give repeated
+never matched, silently broadcasting zero word boxes). BUG-58 made the mapping
+authoritative, but the name stays reserved: the normalized frame's own
+`unique_trial_id` is the mapped trial id, so the raw values would not survive
+under it. If the prep script carries EyeGenBench's own finer-grained
+(per-reading) trial identity through at all, it must use the column name
+`eyegenbench_trial_id` instead -- registered as an opaque passthrough in Task 7. It must also give repeated
 readings of the same paragraph by the same participant distinct
 `unique_paragraph_id` values: this loader keys `trial_id` on that column
 directly and does not disambiguate repeats itself.
@@ -59,7 +61,7 @@ EYEGENBENCH_WORD_SCHEMA = dict(
 
 # `trial` is `unique_paragraph_id`, matching the word schema above -- not
 # EyeGenBench's own (finer-grained, per-reading) `unique_trial_id`. See the
-# module docstring: a raw `unique_trial_id` column would silently override
+# module docstring: a raw `unique_trial_id` column used to silently override
 # this mapping and break the stimulus-level words broadcast. Keying on
 # unique_paragraph_id is what makes that broadcast join work; repeated
 # readings of the same paragraph by the same participant are NOT separated

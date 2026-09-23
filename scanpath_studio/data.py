@@ -1329,21 +1329,12 @@ def numeric_parse_issues(raw: pd.DataFrame, schema: dict, *, table: str) -> list
     return issues
 
 
-def _single_trial_column(source: pd.DataFrame, trial_col: str) -> str:
-    """The source column a single-column trial mapping is read from."""
-    return "unique_trial_id" if "unique_trial_id" in source.columns else trial_col
-
-
 def _identity_columns(source: pd.DataFrame, schema: dict) -> list[str]:
     """The source columns a row's (participant, trial) identity is built from."""
     columns: list = []
     if schema.get("participant"):
         columns += trial_mapping_columns(schema["participant"])
-    trial_cols = trial_mapping_columns(schema["trial"])
-    if len(trial_cols) > 1:
-        columns += trial_cols
-    else:
-        columns.append(_single_trial_column(source, trial_cols[0]))
+    columns += trial_mapping_columns(schema["trial"])
     return [c for c in dict.fromkeys(columns) if c in source.columns]
 
 
@@ -2296,10 +2287,13 @@ def normalize_raw_gaze(
         df["trial_id"] = trial_id_series(raw_gaze, trial_cols)
         df["unique_trial_id"] = df["trial_id"]
     else:
-        trial_col = _single_trial_column(raw_gaze, trial_cols[0])
+        trial_col = trial_cols[0]  # the mapped column (BUG-58)
         df["trial_id"] = stable_id(raw_gaze[trial_col])
         if "unique_trial_id" in raw_gaze.columns:
-            df["unique_trial_id"] = stable_id(raw_gaze["unique_trial_id"])
+            # The mapped id *is* the unique trial id (BUG-58) — never the raw
+            # column's own values, which the trial picker would otherwise key
+            # on (`utils.build_combo_options` prefers `unique_trial_id`).
+            df["unique_trial_id"] = df["trial_id"]
     # UX-113: mapped when the export carries its own text/passage column;
     # otherwise raw gaze has no text/passage concept of its own, so mirror
     # trial_id — a raw-gaze-only dataset still needs *a* text_id column for
@@ -2625,7 +2619,7 @@ def _disambiguate_repeated_readings(
     Groups on the already-computed ``df["participant_id"]`` (1:1 with ``source``),
     so a composite participant id is handled without recomputing the join.
     """
-    if "unique_trial_id" in source.columns:
+    if trial_col == "unique_trial_id":
         return df
     idx_col = next(
         (c for c in ("TRIAL_INDEX", "trial_index") if c in source.columns), None
@@ -2888,9 +2882,9 @@ FIX_OPTIONAL_FIELDS = [
     # placed this fixation at its word box's centre.
     ("fixation_y_source", "fixation_y_source", "passthrough", "meta"),
     # DATA-27: EyeGenBench's own composite trial id, kept for traceability back to the
-    # benchmark. Deliberately NOT named `unique_trial_id` — normalize_fixations hardcodes
-    # trial_id from any column with that literal name, which breaks the stimulus-word
-    # broadcast join and yields zero word boxes.
+    # benchmark. Deliberately NOT named `unique_trial_id` — normalize_fixations used to
+    # key trial_id on any column with that literal name (BUG-58), and the normalized
+    # frame's own `unique_trial_id` is the mapped trial id, so these would not survive.
     ("eyegenbench_trial_id", "eyegenbench_trial_id", "passthrough", "meta"),
 ]
 
@@ -3099,12 +3093,20 @@ def normalize_words(
         df["trial_id"] = trial_id_series(words, trial_cols)
         df["unique_trial_id"] = df["trial_id"]
     else:
-        trial_col = _single_trial_column(words, trial_cols[0])
+        # The mapped column, always (BUG-58). A literal `unique_trial_id`
+        # column used to win over whatever the mapping named, so a Trial ID
+        # picked by hand was silently replaced on any table that carried one —
+        # and a pair where only one side did joined on nothing. Auto-detection
+        # proposes `unique_trial_id` first, so it is still used by default.
+        trial_col = trial_cols[0]
         df["trial_id"] = stable_id(words[trial_col])
         if schema.get("participant"):
             df = _disambiguate_repeated_readings(df, words, trial_col)
         if "unique_trial_id" in words.columns:
-            df["unique_trial_id"] = stable_id(words["unique_trial_id"])
+            # The mapped id *is* the unique trial id (BUG-58) — never the raw
+            # column's own values, which the trial picker would otherwise key
+            # on (`utils.build_combo_options` prefers `unique_trial_id`).
+            df["unique_trial_id"] = df["trial_id"]
     if "unique_paragraph_id" in words.columns:
         df["unique_text_id"] = stable_id(words["unique_paragraph_id"])
         df["text_id"] = df["unique_text_id"]
@@ -3176,12 +3178,15 @@ def normalize_fixations(
         df["trial_id"] = trial_id_series(fixations, trial_cols)
         df["unique_trial_id"] = df["trial_id"]
     else:
-        trial_col = _single_trial_column(fixations, trial_cols[0])
+        trial_col = trial_cols[0]  # the mapped column (BUG-58)
         df["trial_id"] = stable_id(fixations[trial_col])
         if schema.get("participant"):
             df = _disambiguate_repeated_readings(df, fixations, trial_col)
         if "unique_trial_id" in fixations.columns:
-            df["unique_trial_id"] = stable_id(fixations["unique_trial_id"])
+            # The mapped id *is* the unique trial id (BUG-58) — never the raw
+            # column's own values, which the trial picker would otherwise key
+            # on (`utils.build_combo_options` prefers `unique_trial_id`).
+            df["unique_trial_id"] = df["trial_id"]
     if "unique_paragraph_id" in fixations.columns:
         df["text_id"] = stable_id(fixations["unique_paragraph_id"])
     elif schema.get("text_id"):

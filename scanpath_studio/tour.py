@@ -1907,8 +1907,8 @@ def _faq_dialog() -> None:
         "🎓 Tutorials ↗",
         DOCS_TUTORIALS_URL,
         width="stretch",
-        help="Task-by-task walkthroughs: load your own data, compare two "
-        "readers, make a paper figure, run it headless. Opens in a new tab.",
+        help="Task-by-task walkthroughs: data collection, data filtering, "
+        "exporting figures, corpus analysis. Opens in a new tab.",
     )
     if close_col.button("✓ Close", key="faq_close", width="stretch", type="primary"):
         _close_dialog_clientside()

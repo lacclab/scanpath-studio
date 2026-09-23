@@ -1,27 +1,30 @@
-"""The Add-dataset wizard's shell: step registry, status, accordion, progress
-and navigation (DATA-22).
+"""The Add-dataset wizard's shell: part registries, status badges, and the few
+navigation helpers that survive (DATA-22 → UX-135).
 
-Knows nothing about columns or dataframes — ``wizard.py`` keeps the step bodies
-and finalize. What lives here is the *chrome*: which steps exist, what each one's
-status badge is, which one is open, and the buttons that move between them.
+Knows nothing about columns or dataframes — ``wizard.py`` keeps the part bodies
+and finalize. What lives here is the *chrome*:
 
-**The one rule that makes the accordion work.** A step's open flag
-(``wiz_open_<id>``) is written *only* by `seed_open_step`, `go_to_step`,
-the guide, and `seed_open_step`. Nothing inside a step body may touch it. The old wizard recomputed ``expanded=`` from whether the step was
-"done", so the first pick in a step flipped ``done`` and the expander collapsed
-under the user's cursor mid-edit (DATA-19 patched that with a one-shot marker
-that survived exactly one rerun; this replaces the mechanism rather than
-patching it again). Here the flag is a keyed-expander widget value: the user's
-own click owns it, and code only moves it on an explicit navigation.
+- `STEPS` — the add screen's three linear parts (name → data → setup), drawn by
+  `part()` as numbered one-line headlines. They are labels, not navigation: there
+  is nothing to map until a file is read, so no chips, no accordion, no open state.
+- `EDITOR_STEPS` + `numbered()` — the ✏️ Edit dataset screen's parts, renumbered
+  over the ones that actually render.
+- `step_panel` — the collapsed *Data & mapping* review panel's per-step block, and
+  the keyed-expander form it had while the wizard was an accordion.
+- `go_to_step` / `seed_open_step` / `reset_accordion` / `first_incomplete` /
+  `blockers` — the accordion-era open-flag helpers, still called by the guide
+  (`tour.py`) and the wizard's reset.
+
+**The rule those helpers keep.** A step's open flag (``wiz_open_<id>``) is
+written *only* by them and the guide. Nothing inside a step body may touch it:
+the old wizard recomputed ``expanded=`` from whether the step was "done", so the
+first pick in a step collapsed the expander under the user's cursor mid-edit
+(DATA-19).
 
 **A keyed expander's label and icon must be CONSTANT.** Changing either remounts
 the widget at its default — i.e. collapsed — on the very next run, no matter what
-its key holds. That is not a theory: an upload flips step 1 from *action* to
-*done*, and while the status badge was passed as ``icon=`` the step slammed shut
-the instant the file finished uploading, which is exactly the DATA-19 symptom
-this design set out to remove, arriving through a different door. The badge
-therefore lives on the progress chips (`render_progress`) and nowhere else; the
-expander header carries only the fixed number + title. Reproduced and pinned by
+its key holds, which is why `step_panel` never renders a status badge into the
+expander header. Reproduced and pinned by
 ``tests/test_wizard_helpers.py::TestWizardAccordion::
 test_a_changing_header_would_collapse_a_keyed_expander``.
 
@@ -329,8 +332,7 @@ def step_panel(host, step: WizardStep, status: StepStatus, *, active: bool):
     ``status`` is deliberately **not** rendered into the active header. A keyed
     expander whose label or icon changes remounts collapsed on the next run, so a
     status badge there would slam the step shut the moment an upload or a mapping
-    pick completed it — see the module docstring. The badges live on the progress
-    chips directly above, which are buttons and re-render harmlessly.
+    pick completed it — see the module docstring.
     """
     if not active:
         host.markdown(f"**{badge(status)} {step.number}. {step.title}**")

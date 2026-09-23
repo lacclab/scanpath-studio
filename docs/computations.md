@@ -329,7 +329,7 @@ Fold a short fixation into a neighbour within a character distance.
 | **Precedence & caveats** | #BUG-27: the conversion reads the shared letter scale. It used to divide by `len(text)`, so on a tiling corpus "within 1 character" meant 1.25 characters for a four-letter word and 1.07 for a fifteen-letter one — a threshold whose meaning varied with the word it was applied to. |
 | **Reference** | A common cleaning step; thresholds are the user's choice. |
 | **Code** | `scanpath_studio/preprocessing.py:merge_short_fixations` |
-| **Consumers** | UI, API, Export |
+| **Consumers** | UI (Preprocessing panel, only with SCANPATH_EXPERIMENTAL=1 — PRE-22), API, CLI, Export |
 | **Tests** | `tests/test_preprocessing.py` |
 | **Verification** | tier A, C — **Partially verified** |
 
@@ -344,7 +344,7 @@ Soft-exclude fixations outside a duration window.
 | **Unit** | ms |
 | **Missing & edge cases** | Soft: excluded rows are reported, not deleted from the source. |
 | **Code** | `scanpath_studio/preprocessing.py:preprocess_fixations` |
-| **Consumers** | UI, API, Export |
+| **Consumers** | UI (Preprocessing panel, only with SCANPATH_EXPERIMENTAL=1 — PRE-22), API, CLI, Export |
 | **Tests** | `tests/test_preprocessing.py` |
 | **Verification** | tier C — **Partially verified** |
 
@@ -358,7 +358,7 @@ Drop fixations immediately before/after a blink.
 | --- | --- |
 | **Missing & edge cases** | No blink column ⇒ the option has no effect. |
 | **Code** | `scanpath_studio/preprocessing.py:preprocess_fixations` |
-| **Consumers** | UI, API, Export |
+| **Consumers** | UI (Preprocessing panel, only with SCANPATH_EXPERIMENTAL=1 — PRE-22), API, CLI, Export |
 | **Tests** | `tests/test_preprocessing.py` |
 | **Verification** | tier C — **Partially verified** |
 
@@ -372,7 +372,7 @@ What the preprocessing pass would remove, and why.
 | --- | --- |
 | **Output** | Cleaning QA table |
 | **Code** | `scanpath_studio/preprocessing.py:cleaning_report` |
-| **Consumers** | UI, Export, Data Inspection |
+| **Consumers** | UI (Preprocessing panel, only with SCANPATH_EXPERIMENTAL=1 — PRE-22), API, CLI, Export, Data Inspection (derived tables, only with SCANPATH_EXPERIMENTAL=1 — UX-126) |
 | **Tests** | `tests/test_preprocessing.py` |
 | **Verification** | tier C — **Partially verified** |
 
@@ -388,7 +388,7 @@ Per-sentence reading time and counts.
 | **Unit** | ms, counts |
 | **Missing & edge cases** | Sentence inference is textual, not annotated — approximate. |
 | **Code** | `scanpath_studio/preprocessing.py:sentence_measures` |
-| **Consumers** | UI, API, Export, Data Inspection |
+| **Consumers** | Corpus Analysis, API, CLI, Export, Data Inspection (derived tables, only with SCANPATH_EXPERIMENTAL=1 — UX-126) |
 | **Tests** | `tests/test_preprocessing.py` |
 | **Verification** | tier C — **Partially verified** |
 
@@ -404,7 +404,7 @@ One row per saccade, with amplitude, angle and class.
 | **Unit** | px, deg (when geometry is known), ms |
 | **Missing & edge cases** | Assumed geometry ⇒ the degree columns inherit that assumption. |
 | **Code** | `scanpath_studio/preprocessing.py:saccade_table` |
-| **Consumers** | UI, API, Export, Data Inspection |
+| **Consumers** | API, CLI, Export, Data Inspection (derived tables, only with SCANPATH_EXPERIMENTAL=1 — UX-126) |
 | **Tests** | `tests/test_preprocessing.py` |
 | **Verification** | tier C — **Partially verified** |
 
@@ -420,7 +420,7 @@ Per-character boxes derived from word boxes.
 | **Missing & edge cases** | Proportional fonts make this an approximation. |
 | **Precedence & caveats** | #BUG-27: the advance is the shared letter scale, not `width / len(text)` — which on a tiling corpus stretched the glyph row across the trailing inter-word padding, so each character box after the first sat progressively further right than its glyph. |
 | **Code** | `scanpath_studio/preprocessing.py:character_grid` |
-| **Consumers** | UI, Export, Data Inspection |
+| **Consumers** | API, CLI, Export, Data Inspection (derived tables, only with SCANPATH_EXPERIMENTAL=1 — UX-126) |
 | **Tests** | `tests/test_preprocessing.py` |
 | **Verification** | tier A, C — **Intentional convention** |
 
@@ -440,14 +440,14 @@ Whether a word's script runs right to left.
 
 ### `pre.sensitivity` — Measure sensitivity
 
-How much a measure moves under different cleaning settings.
+How much the word measures move under different line assignments.
 
-**Formula.** The measure is recomputed per setting and compared to baseline.
+**Formula.** Each trial's fixations are line-assigned by every method in `methods` (default `attach`, `slice`, `consensus`), FFD / FPRT / RPD / TFD are recomputed per method, and each word's spread (max − min across methods) is reported beside a per-trial correction report (PRE-18).
 
 | | |
 | --- | --- |
 | **Code** | `scanpath_studio/preprocessing.py:measure_sensitivity` |
-| **Consumers** | UI, API |
+| **Consumers** | API (raises unless SCANPATH_EXPERIMENTAL=1 — PRE-21) |
 | **Tests** | `tests/test_preprocessing.py` |
 | **Verification** | tier C — **Partially verified** |
 

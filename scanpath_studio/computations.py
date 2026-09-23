@@ -111,6 +111,15 @@ _CLI = "CLI"
 _EXPORT = "Export"
 _CORPUS = "Corpus Analysis"
 _INSPECT = "Data Inspection"
+# Surfaces held back from the app this release behind `SCANPATH_EXPERIMENTAL=1`,
+# named as such so the register does not advertise a panel a user cannot open.
+_UI_PREPROCESSING = (
+    "UI (Preprocessing panel, only with SCANPATH_EXPERIMENTAL=1 — PRE-22)"
+)
+_INSPECT_DERIVED = (
+    "Data Inspection (derived tables, only with SCANPATH_EXPERIMENTAL=1 — UX-126)"
+)
+_API_EXPERIMENTAL = "API (raises unless SCANPATH_EXPERIMENTAL=1 — PRE-21)"
 
 
 REGISTER: tuple[Computation, ...] = (
@@ -748,7 +757,7 @@ REGISTER: tuple[Computation, ...] = (
         tiers="A, C",
         status=STATUS_PARTIAL,
         reference="A common cleaning step; thresholds are the user's choice.",
-        consumers=(_UI, _API, _EXPORT),
+        consumers=(_UI_PREPROCESSING, _API, _CLI, _EXPORT),
         tests=("tests/test_preprocessing.py",),
     ),
     Computation(
@@ -762,7 +771,7 @@ REGISTER: tuple[Computation, ...] = (
         missing="Soft: excluded rows are reported, not deleted from the source.",
         tiers="C",
         status=STATUS_PARTIAL,
-        consumers=(_UI, _API, _EXPORT),
+        consumers=(_UI_PREPROCESSING, _API, _CLI, _EXPORT),
         tests=("tests/test_preprocessing.py",),
     ),
     Computation(
@@ -775,7 +784,7 @@ REGISTER: tuple[Computation, ...] = (
         missing="No blink column ⇒ the option has no effect.",
         tiers="C",
         status=STATUS_PARTIAL,
-        consumers=(_UI, _API, _EXPORT),
+        consumers=(_UI_PREPROCESSING, _API, _CLI, _EXPORT),
         tests=("tests/test_preprocessing.py",),
     ),
     Computation(
@@ -788,7 +797,7 @@ REGISTER: tuple[Computation, ...] = (
         output="Cleaning QA table",
         tiers="C",
         status=STATUS_PARTIAL,
-        consumers=(_UI, _EXPORT, _INSPECT),
+        consumers=(_UI_PREPROCESSING, _API, _CLI, _EXPORT, _INSPECT_DERIVED),
         tests=("tests/test_preprocessing.py",),
     ),
     Computation(
@@ -807,7 +816,7 @@ REGISTER: tuple[Computation, ...] = (
         missing="Sentence inference is textual, not annotated — approximate.",
         tiers="C",
         status=STATUS_PARTIAL,
-        consumers=(_UI, _API, _EXPORT, _INSPECT),
+        consumers=(_CORPUS, _API, _CLI, _EXPORT, _INSPECT_DERIVED),
         tests=("tests/test_preprocessing.py",),
     ),
     Computation(
@@ -825,7 +834,7 @@ REGISTER: tuple[Computation, ...] = (
         missing="Assumed geometry ⇒ the degree columns inherit that assumption.",
         tiers="C",
         status=STATUS_PARTIAL,
-        consumers=(_UI, _API, _EXPORT, _INSPECT),
+        consumers=(_API, _CLI, _EXPORT, _INSPECT_DERIVED),
         tests=("tests/test_preprocessing.py",),
     ),
     Computation(
@@ -848,7 +857,7 @@ REGISTER: tuple[Computation, ...] = (
         ),
         tiers="A, C",
         status=STATUS_CONVENTION,
-        consumers=(_UI, _EXPORT, _INSPECT),
+        consumers=(_API, _CLI, _EXPORT, _INSPECT_DERIVED),
         tests=("tests/test_preprocessing.py",),
     ),
     Computation(
@@ -868,12 +877,18 @@ REGISTER: tuple[Computation, ...] = (
         id="pre.sensitivity",
         name="Measure sensitivity",
         category=CATEGORY_PREPROCESSING,
-        summary="How much a measure moves under different cleaning settings.",
-        formula="The measure is recomputed per setting and compared to baseline.",
+        summary="How much the word measures move under different line assignments.",
+        formula=(
+            "Each trial's fixations are line-assigned by every method in "
+            "`methods` (default `attach`, `slice`, `consensus`), FFD / FPRT / "
+            "RPD / TFD are recomputed per method, and each word's spread (max − "
+            "min across methods) is reported beside a per-trial correction "
+            "report (PRE-18)."
+        ),
         code="scanpath_studio/preprocessing.py:measure_sensitivity",
         tiers="C",
         status=STATUS_PARTIAL,
-        consumers=(_UI, _API),
+        consumers=(_API_EXPERIMENTAL,),
         tests=("tests/test_preprocessing.py",),
     ),
     Computation(

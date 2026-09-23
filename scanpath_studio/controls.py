@@ -3960,9 +3960,9 @@ def _rail_section(host, label: str, *, slug: str, **toggle):
 
     Passing ``toggle`` kwargs (``key=``, ``disabled=``) draws the switch and
     returns its value. Omitting them leaves the section's **name** on its own,
-    for the sections that have no single thing to switch: 📄 Stimulus
-    and 🔥 Overlays hold several layers, 📐 Figure & canvas holds none, and 🧹
-    Filter is not a layer at all. ``note=`` is a line written into the top of
+    for the sections that have no layer to switch: 📐 Figure & canvas holds
+    none, and 🧹 Filter is not a layer at all. (📄 Stimulus has a master switch
+    over its three layers since UX-128.) ``note=`` is a line written into the top of
     the popover — used for the ⚠️ that says why a switch is greyed.
 
     Returns ``(value, body)`` — ``value`` is ``None`` for a name-only section.

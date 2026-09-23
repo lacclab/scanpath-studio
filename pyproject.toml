@@ -35,15 +35,15 @@ classifiers = [
 ]
 dependencies = [
     "streamlit>=1.64.0",
-    "pandas>=2.3.3",
-    "plotly>=6.5.2",
-    "numpy>=2.4.1",
+    "pandas>=3.0",
+    "plotly>=7.1",
+    "numpy>=2.4",
     # Effect-size + significance tests for the group-comparison analysis views
     # (AN-21: Welch t-test, Mann–Whitney U). BSD-3, MIT-compatible — see the
     # PRE-0 ADR, which also earmarks scipy for the PRE-3 drift-correction port.
-    "scipy>=1.13",
-    "pyarrow>=23.0.0",
-    "kaleido>=1.2.0",
+    "scipy>=1.17",
+    "pyarrow>=25.0",
+    "kaleido>=1.4",
     # Optional Streamlit runtime dep: enables fast event-based file-watching
     # (hot reload) for `streamlit run`. Not imported by app code — Streamlit
     # auto-detects it and falls back to polling (+ an "install Watchdog" log) if
@@ -53,8 +53,8 @@ dependencies = [
     "streamlit-sortables>=0.3.1",
     # Rasterized animation export (GIF/MP4): Pillow encodes GIF; imageio's ffmpeg
     # extra bundles an ffmpeg binary for MP4 (no system package needed).
-    "pillow>=10.0",
-    "imageio[ffmpeg]>=2.34",
+    "pillow>=12.3",
+    "imageio[ffmpeg]>=2.37",
     # pandas' .xlsx engine. Not optional in practice: the upload path reads
     # spreadsheets (`data._read_one`) and MultiplEYE's comprehension-questions
     # workbook is a shipped enrichment, so without it an upload raises and the

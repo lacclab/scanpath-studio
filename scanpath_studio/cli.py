@@ -216,6 +216,50 @@ def _max_upload_cli_flags(extra_args) -> list[str]:
     return [f"--server.maxUploadSize={UPLOAD_MAX_SIZE_MB}"]
 
 
+#: Where ``scanpath-studio`` listens unless told otherwise (ENG-55).
+LOOPBACK_ADDRESS = "127.0.0.1"
+
+
+def _configured_server_address() -> str | None:
+    """``server.address`` from a ``config.toml`` that ``streamlit run`` reads.
+
+    Read here with ``tomllib`` rather than through ``streamlit.config``, whose
+    parse is cached: parsing once now and again (with the flags) at launch makes
+    Streamlit log that the ``[server]`` section changed and must be restarted."""
+    import tomllib
+
+    from streamlit import config as st_config
+
+    for path in st_config.get_config_files("config.toml"):
+        try:
+            with open(path, "rb") as handle:
+                address = (tomllib.load(handle).get("server") or {}).get("address")
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+        if address:
+            return str(address)
+    return None
+
+
+def _bind_cli_flags(extra_args) -> list[str]:
+    """Bind to loopback unless the caller chose an address (ENG-55).
+
+    Streamlit's own default is every interface (``0.0.0.0``), and the app has
+    no login: a local run on a campus or café network served the loaded corpus
+    — and the on-device recovery cache — to anyone who could reach the port.
+    The desktop launcher already bound loopback (S1); every other launch now
+    does too. An address the user set anywhere Streamlit reads one — a
+    ``--server.address`` flag, ``STREAMLIT_SERVER_ADDRESS``, or a
+    ``config.toml`` — wins, so serving on a network stays one flag away."""
+    if any(str(arg).startswith("--server.address") for arg in extra_args):
+        return []
+    if os.environ.get("STREAMLIT_SERVER_ADDRESS"):
+        return []
+    if _configured_server_address() is not None:
+        return []
+    return [f"--server.address={LOOPBACK_ADDRESS}"]
+
+
 def launch_app(extra_args: list[str]) -> None:
     """Launch the Streamlit app via ``streamlit run``, forwarding extra args."""
     from streamlit.web import cli as stcli
@@ -256,6 +300,7 @@ def launch_app(extra_args: list[str]) -> None:
             *theme_args,
             *stats_args,
             *_max_upload_cli_flags(extra_args),
+            *_bind_cli_flags(extra_args),
             *extra_args,
         ]
         sys.exit(stcli.main())
@@ -2531,7 +2576,9 @@ usage:
   scanpath-studio --version        print the version
 
 Unrecognized flags are forwarded to `streamlit run` (e.g.
-`scanpath-studio --server.port 8502`); an unknown command word is an error."""
+`scanpath-studio --server.port 8502`); an unknown command word is an error.
+The app listens on this computer only; `--server.address 0.0.0.0` serves it
+on your network (it has no login)."""
 
 
 #: The subcommands `main` dispatches, for the did-you-mean below.

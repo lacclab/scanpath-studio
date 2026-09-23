@@ -1630,3 +1630,68 @@ def test_the_sample_help_does_not_promise_three_renderable_readers(capsys):
     out = " ".join(capsys.readouterr().out.split())
     assert "3-participant" not in out
     assert "fixations — so trials to render — for 2 of them" in out
+
+
+# ---------------------------------------------------------------------------
+# ENG-55 — a local launch listens on this computer only
+# ---------------------------------------------------------------------------
+def _launch_argv(monkeypatch, tmp_path, extra_args, *, config: str | None = None):
+    """`launch_app`'s argv with Streamlit stubbed and its config files pinned
+    to one temp file, so a developer's own ~/.streamlit cannot leak in."""
+    from streamlit import config as st_config
+    from streamlit.web import cli as st_cli
+
+    config_path = tmp_path / "config.toml"
+    if config is not None:
+        config_path.write_text(config, encoding="utf-8")
+    monkeypatch.setattr(st_config, "get_config_files", lambda name: [str(config_path)])
+    monkeypatch.delenv("STREAMLIT_SERVER_ADDRESS", raising=False)
+    seen: dict = {}
+
+    def fake_main():
+        seen["argv"] = list(cli.sys.argv)
+        return 0
+
+    monkeypatch.setattr(st_cli, "main", fake_main)
+    monkeypatch.setattr(cli.sys, "exit", lambda *a, **k: None)
+    monkeypatch.setattr(cli.sys, "argv", list(cli.sys.argv))
+    cli.launch_app(extra_args)
+    return seen["argv"]
+
+
+def test_a_launch_binds_loopback_by_default(monkeypatch, tmp_path):
+    """Streamlit's default is 0.0.0.0, and the app has no login."""
+    argv = _launch_argv(monkeypatch, tmp_path, [])
+    assert "--server.address=127.0.0.1" in argv
+
+
+@pytest.mark.parametrize(
+    "extra", [["--server.address", "0.0.0.0"], ["--server.address=0.0.0.0"]]
+)
+def test_an_address_flag_the_user_passes_wins(monkeypatch, tmp_path, extra):
+    argv = _launch_argv(monkeypatch, tmp_path, extra)
+    assert "--server.address=127.0.0.1" not in argv
+    assert argv[-len(extra) :] == extra
+
+
+def test_an_address_from_the_environment_or_config_wins(monkeypatch, tmp_path):
+    argv = _launch_argv(
+        monkeypatch, tmp_path, [], config='[server]\naddress = "0.0.0.0"\n'
+    )
+    assert not any(arg.startswith("--server.address") for arg in argv)
+
+    from streamlit import config as st_config
+    from streamlit.web import cli as st_cli
+
+    monkeypatch.setattr(st_config, "get_config_files", lambda name: [])
+    monkeypatch.setenv("STREAMLIT_SERVER_ADDRESS", "0.0.0.0")
+    monkeypatch.setattr(st_cli, "main", lambda: 0)
+    cli.launch_app([])
+    assert not any(arg.startswith("--server.address") for arg in cli.sys.argv)
+
+
+def test_the_address_flag_is_a_real_streamlit_option():
+    from streamlit import config as st_config
+
+    st_config.get_config_options()
+    assert "server.address" in st_config._config_options_template

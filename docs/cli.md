@@ -11,6 +11,15 @@ scanpath-studio --server.port 8600
 scanpath-studio --no-persist          # don't cache the session on this computer
 ```
 
+The app listens on this computer only (`127.0.0.1`). It has no login, so
+serving it to other machines is a deliberate step — pass
+`--server.address 0.0.0.0` (or set `server.address` in a Streamlit
+`config.toml`, or `STREAMLIT_SERVER_ADDRESS`), and only on a network you trust:
+
+```bash
+scanpath-studio --server.address 0.0.0.0
+```
+
 Additional launch flags are forwarded to Streamlit. A word that is not one of
 the commands (`run`, `render`, `analyze`, `corpus`, `cache`) is an error that
 names the closest one, rather than an argument handed to Streamlit.

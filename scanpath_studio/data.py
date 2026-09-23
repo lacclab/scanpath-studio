@@ -2708,6 +2708,39 @@ def broadcast_stimulus_words(
     return stimulus.merge(pairs, on=merge_on, how="inner").drop(columns=[_WORD_TRIAL])
 
 
+def repair_stranded_stimulus_words(
+    words: pd.DataFrame, fixations: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame] | None:
+    """DATA-39 — re-broadcast a stored AOI table the old ✅ Save changes stranded.
+
+    Before DATA-39 was fixed, saving an edit to a dataset whose AOI table has no
+    participant column left every word on the ``""`` placeholder reader with
+    the ``_stimulus_words`` flag still set, so no trial found its boxes. A
+    *stored* frame can only carry that flag through that bug —
+    ``broadcast_stimulus_words`` always drops it — so its presence is the
+    diagnosis, and running the broadcast it missed is the repair. Returns the
+    repaired ``(words, fixations)``, or ``None`` when there is nothing to repair
+    or the frames will not harmonize (the dataset is then left as it was).
+    """
+    if not isinstance(words, pd.DataFrame) or STIMULUS_WORDS_FLAG not in words.columns:
+        return None
+    has_fixations = isinstance(fixations, pd.DataFrame) and not fixations.empty
+    try:
+        repaired, harmonized = harmonize_frames(
+            words, fixations if has_fixations else empty_fixations_frame()
+        )
+    except Exception:  # a repair must never break the load
+        _LOGGER.warning(
+            "DATA-39: could not repair a stored AOI table left on the placeholder "
+            "reader; press Save changes on the Edit dataset screen to retry.",
+            exc_info=True,
+        )
+        return None
+    if repaired.empty:
+        return None
+    return repaired, (harmonized if has_fixations else fixations)
+
+
 def fill_fixation_xy_from_words(
     fixations: pd.DataFrame, words: pd.DataFrame
 ) -> pd.DataFrame:

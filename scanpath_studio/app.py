@@ -158,6 +158,7 @@ from scanpath_studio.data import (
     read_table,
     read_table_columns,
     read_tables,
+    repair_stranded_stimulus_words,
     reset_fingerprint_memo,
     resolve_stimulus_image_paths,
     trial_identity_warning,
@@ -6959,6 +6960,14 @@ def main() -> None:
         # to it is instant (no re-upload, no re-mapping). See _render_data_setup's
         # finalize and resolve_data_source.
         stored = st.session_state["_datasets"][data_choice]
+        # DATA-39 — a dataset saved on ✏️ Edit dataset before that fix has its
+        # AOI table stranded on the placeholder reader, so every scanpath drew
+        # without its boxes and text. Repair it once, in the store itself, so
+        # the recovery cache writes the repaired frames and it stays fixed.
+        repaired = repair_stranded_stimulus_words(stored["words"], stored["fixations"])
+        if repaired is not None:
+            stored = {**stored, "words": repaired[0], "fixations": repaired[1]}
+            st.session_state["_datasets"][data_choice] = stored
         words_df, fixations_df = stored["words"], stored["fixations"]
         raw_gaze_df = stored["raw_gaze"]
         raw_words_df, raw_fixations_df = words_df, fixations_df

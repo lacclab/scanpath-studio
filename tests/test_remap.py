@@ -498,6 +498,58 @@ class TestStimulusLevelWordsRemap:
         assert saved is entry
         assert self._boxes(saved["words"]) == self._boxes(words)
 
+    # -- datasets the bug already saved --------------------------------------
+
+    def _stranded(self):
+        """What the old ✅ Save changes stored: every word on the ``""``
+        placeholder reader, the broadcast flag still set."""
+        from scanpath_studio.data import STIMULUS_WORDS_FLAG
+
+        words, fixations = self._stored()
+        broken = words.drop_duplicates(subset=["trial_id", "word_id"]).copy()
+        broken["participant_id"] = ""
+        broken[STIMULUS_WORDS_FLAG] = True
+        return words, broken, fixations
+
+    def test_a_stranded_table_is_repaired(self):
+        from scanpath_studio.data import repair_stranded_stimulus_words
+
+        healthy, broken, fixations = self._stranded()
+        repaired = repair_stranded_stimulus_words(broken, fixations)
+        assert repaired is not None
+        assert self._boxes(repaired[0]) == self._boxes(healthy)
+        assert "_stimulus_words" not in repaired[0].columns
+
+    def test_a_healthy_table_is_left_alone(self):
+        from scanpath_studio.data import repair_stranded_stimulus_words
+
+        words, fixations = self._stored()
+        assert repair_stranded_stimulus_words(words, fixations) is None
+
+    def test_opening_a_stranded_dataset_repairs_it_in_the_store(self):
+        """The app repairs it on load — in `_datasets` itself, so the recovery
+        cache writes the repaired frames and it stays fixed."""
+        from streamlit.testing.v1 import AppTest
+
+        from tests.conftest import APP_SCRIPT
+
+        healthy, broken, fixations = self._stranded()
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["_datasets"] = {
+            "study": {
+                "words": broken,
+                "fixations": fixations,
+                "raw_gaze": pd.DataFrame(),
+                "schemas": {"words": self._WORD_SCHEMA, "fixations": self._FIX_SCHEMA},
+            }
+        }
+        at.session_state["data_source_choice"] = "study"
+        at.session_state["setup_complete"] = True
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        stored = at.session_state["_datasets"]["study"]["words"]
+        assert self._boxes(stored) == self._boxes(healthy)
+
     def test_per_reader_aoi_tables_are_untouched(self):
         """The ordinary shape — a Participant mapped on the words — takes the
         same save and comes back identical."""

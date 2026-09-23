@@ -67,9 +67,14 @@ trial identifiers should not be exposed there.
 
 Downloading a public corpus contacts its host, and only when you click
 **⬇ Download**. The scanpath, animation and comparison figures load the Plotly
-charting library from **cdn.plot.ly** each time they are drawn, so your browser
-fetches it from that host; your data is not sent with the request, but the
-figure needs an internet connection to appear — including in the desktop app.
+charting library from the app's own server — the copy installed with the app —
+so drawing a figure contacts no other host and works without an internet
+connection, the desktop app included. A figure you download as **HTML** is
+different: a saved file has no app server behind it, so it loads the library
+from **cdn.plot.ly** when you open it, which needs an internet connection and
+tells that host the file was opened (no data travels with the request). HTML
+written headlessly (`save_figure`, `scanpath-studio render -o figure.html`)
+embeds the library instead and makes no request.
 Streamlit's own usage statistics are switched off on every launch path
 (`scanpath-studio run`, the desktop app and the repository's
 `.streamlit/config.toml`). The application adds no analytics service of its own.

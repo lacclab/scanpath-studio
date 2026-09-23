@@ -62,6 +62,7 @@ from .data import (
     extract_columns_from_source_file,
     frame_fingerprint,
     normalize_raw_gaze,
+    numeric_parse_issues,
     pick_column,
     propose_fix_schema,
     propose_raw_gaze_schema,
@@ -597,6 +598,13 @@ def _c_categorize_columns(_raw, _schema, _registry, fingerprint: tuple, key: tup
 @st.cache_data(show_spinner="Aggregating character boxes…")
 def _c_aggregate_char_boxes(_raw, _schema, fingerprint: tuple, key: tuple):
     return aggregate_char_boxes(_raw, _schema)
+
+
+@st.cache_data(show_spinner=False)
+def _c_numeric_parse_issues(
+    _raw, _schema, fingerprint: tuple, key: tuple, table: str
+) -> list:
+    return numeric_parse_issues(_raw, _schema, table=table)
 
 
 def _schema_key(schema: dict | None) -> tuple:
@@ -3712,6 +3720,24 @@ def _render_data_setup(active: bool) -> _UploadResult:
         st.session_state["_composite_trial_columns"] = (
             rg_trial_cols if len(rg_trial_cols) > 1 else None
         )
+
+    if active:
+        # BUG-54: a complete mapping can still name a numeric column that did
+        # not parse — a decimal-comma export pandas could not read, a text
+        # column picked as a coordinate. The load carries on with a fallback
+        # for those rows, so say which column and what the fallback was, where
+        # the other blockers are: directly above ✅ Add dataset.
+        tables = (
+            ("Words/IA", raw_words, word_schema, has_words),
+            ("Fixations", raw_fix, fix_schema, has_fix),
+        )
+        for table, raw, schema, present in tables:
+            if not present:
+                continue
+            for line in _c_numeric_parse_issues(
+                raw, schema, frame_fingerprint(raw), _schema_key(schema), table
+            ):
+                s6.warning(f"⚠️ {line}")
 
     raw_gaze_norm = pd.DataFrame()
     if not raw_gaze.empty:

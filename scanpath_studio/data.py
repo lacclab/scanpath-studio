@@ -9,6 +9,7 @@ import re
 import string
 import threading
 import uuid
+import warnings
 import weakref
 import zipfile
 from collections import OrderedDict
@@ -1034,16 +1035,16 @@ def aggregate_char_boxes(
 
     df = df.copy()
     if has_xywh:
-        left = pd.to_numeric(df[schema["x"]], errors="coerce")
-        top = pd.to_numeric(df[schema["y"]], errors="coerce")
+        left = _to_number(df[schema["x"]])
+        top = _to_number(df[schema["y"]])
         df["_box_l"], df["_box_t"] = left, top
-        df["_box_r"] = left + pd.to_numeric(df[schema["width"]], errors="coerce")
-        df["_box_b"] = top + pd.to_numeric(df[schema["height"]], errors="coerce")
+        df["_box_r"] = left + _to_number(df[schema["width"]])
+        df["_box_b"] = top + _to_number(df[schema["height"]])
     else:
-        df["_box_l"] = pd.to_numeric(df[schema["left"]], errors="coerce")
-        df["_box_r"] = pd.to_numeric(df[schema["right"]], errors="coerce")
-        df["_box_t"] = pd.to_numeric(df[schema["top"]], errors="coerce")
-        df["_box_b"] = pd.to_numeric(df[schema["bottom"]], errors="coerce")
+        df["_box_l"] = _to_number(df[schema["left"]])
+        df["_box_r"] = _to_number(df[schema["right"]])
+        df["_box_t"] = _to_number(df[schema["top"]])
+        df["_box_b"] = _to_number(df[schema["bottom"]])
 
     temp = {"_box_l", "_box_r", "_box_t", "_box_b"}
     agg = {c: "first" for c in df.columns if c not in group_cols and c not in temp}
@@ -1134,6 +1135,121 @@ NUMERIC_SCHEMA_FIELDS = frozenset(
         "y",
     }
 )
+
+#: One number written with a decimal comma (``117,7``) — how a German- or
+#: French-locale export writes every fractional value (BUG-54).
+_DECIMAL_COMMA = re.compile(r"^[+-]?\d+,\d+$")
+#: ...and the shape a *thousands* separator gives the same characters
+#: (``1,204``). A column whose every comma looks like this could be either, so it
+#: is reported rather than guessed at.
+_THOUSANDS_GROUPED = re.compile(r"^[+-]?[1-9]\d{0,2}(,\d{3})+$")
+
+
+def _filled_cells(values: pd.Series) -> pd.Series:
+    """The cells of ``values`` that hold something, as stripped text.
+
+    EyeLink's ``.`` marker and a blank cell are *missing*, not unreadable, so
+    they are left out — a planned read already turned them into NaN, and an
+    unplanned one must not report them as garbage either.
+    """
+    text = values[values.notna()].astype(str).str.strip()
+    return text[(text != "") & (text != MISSING_MARKER)]
+
+
+def _unparsed_cells(values: pd.Series, parsed: pd.Series) -> pd.Series:
+    """The filled cells of ``values`` that ``parsed`` could not read, as text."""
+    failed = parsed.isna() & values.notna()
+    if not failed.any():
+        return pd.Series([], dtype=str)
+    return _filled_cells(values[failed])
+
+
+def _to_number(values: pd.Series) -> pd.Series:
+    """``pd.to_numeric(errors="coerce")``, reading a decimal-comma column too.
+
+    A decimal-comma export (``117,7``) made every fractional cell unparseable,
+    and NaN then fell through to the silent fallbacks downstream — each fixation
+    snapped to its word's centre, each duration read as 0 (BUG-54). The commas
+    are converted only when **every** cell that failed is a decimal-comma number
+    and not all of them could be a thousands separator instead; anything else
+    stays NaN, for :func:`numeric_parse_issues` to report.
+    """
+    parsed = pd.to_numeric(values, errors="coerce")
+    if pd.api.types.is_numeric_dtype(values):
+        return parsed
+    failed = _unparsed_cells(values, parsed)
+    if failed.empty or not failed.str.fullmatch(_DECIMAL_COMMA).all():
+        return parsed
+    if failed.str.fullmatch(_THOUSANDS_GROUPED).all():
+        return parsed
+    converted = pd.to_numeric(failed.str.replace(",", ".", regex=False))
+    parsed = parsed.copy()
+    parsed.loc[converted.index] = converted
+    return parsed
+
+
+#: What becomes of a fixation or word whose mapped numeric cell is unreadable —
+#: said in the warning, because "left empty" means something different per field.
+_UNPARSED_CONSEQUENCE = {
+    "duration": "those fixations are read as 0 ms long",
+    "timestamp": "those fixations are read as starting at 0",
+    "x": "those fixations are placed at their word's centre when they have a word id, "
+    "and left off the plot otherwise",
+    "y": "those fixations are placed at their word's centre when they have a word id, "
+    "and left off the plot otherwise",
+    "word_id": "those rows have no word id",
+}
+
+
+def numeric_parse_issues(raw: pd.DataFrame, schema: dict, *, table: str) -> list[str]:
+    """Plain-language warnings for mapped numeric columns that did not parse.
+
+    One line per column, naming the table, the column, how many of its cells
+    were unreadable, a few examples, and what the load did with those rows —
+    because the load carries on either way, and a column read as all-NaN used to
+    produce a plausible-looking figure with nothing said (BUG-54). A
+    decimal-comma column that :func:`_to_number` converts is not an issue; one
+    whose commas could equally be thousands separators is, with that named.
+    """
+    issues: list[str] = []
+    seen: set = set()
+    for key, column in schema.items():
+        if key not in NUMERIC_SCHEMA_FIELDS or not isinstance(column, str):
+            continue
+        if column in seen or column not in raw.columns:
+            continue
+        seen.add(column)
+        values = raw[column]
+        if pd.api.types.is_numeric_dtype(values) or pd.api.types.is_bool_dtype(values):
+            continue
+        failed = _unparsed_cells(values, _to_number(values))
+        if failed.empty:
+            continue
+        examples = ", ".join(f"'{v}'" for v in failed.drop_duplicates().head(3))
+        line = (
+            f"{table}: {len(failed):,} of {len(_filled_cells(values)):,} values in "
+            f"`{column}` aren't numbers (e.g. {examples})"
+        )
+        if failed.str.fullmatch(_THOUSANDS_GROUPED).all():
+            line += (
+                ". They could be a decimal comma or a thousands separator, so they "
+                "were not guessed at — re-export the table with a '.' decimal point "
+                "and no thousands separator"
+            )
+        consequence = _UNPARSED_CONSEQUENCE.get(key, "those cells are left empty")
+        issues.append(f"{line}; {consequence}.")
+    return issues
+
+
+def _warn_numeric_issues(raw: pd.DataFrame, schema: dict, *, table: str) -> None:
+    """Raise each :func:`numeric_parse_issues` line as a ``UserWarning``.
+
+    The headless API and ``render`` have no page to put a warning on, so the
+    normalizers say it themselves; the wizard shows the same lines above
+    ✅ Add dataset.
+    """
+    for issue in numeric_parse_issues(raw, schema, table=table):
+        warnings.warn(issue.replace("`", "'"), UserWarning, stacklevel=3)
 
 
 @dataclass(frozen=True)
@@ -1994,12 +2110,10 @@ def normalize_raw_gaze(
     # through only when the export already names one, not computed.
     if schema.get("word_id"):
         df["word_id"] = raw_gaze[schema["word_id"]]
-    df["x"] = pd.to_numeric(raw_gaze[schema["x"]], errors="coerce")
-    df["y"] = pd.to_numeric(raw_gaze[schema["y"]], errors="coerce")
+    df["x"] = _to_number(raw_gaze[schema["x"]])
+    df["y"] = _to_number(raw_gaze[schema["y"]])
     if schema.get("timestamp"):
-        df["timestamp_ms"] = pd.to_numeric(
-            raw_gaze[schema["timestamp"]], errors="coerce"
-        )
+        df["timestamp_ms"] = _to_number(raw_gaze[schema["timestamp"]])
     else:
         # Each row represents one millisecond, so use row index within trial as timestamp
         df["timestamp_ms"] = df.groupby(list(PARENT_KEY), sort=False).cumcount()
@@ -2644,7 +2758,7 @@ def _apply_optional_fields(
         emitted.add(src)
         col = source[src]
         if kind == "numeric":
-            df[dest] = pd.to_numeric(col, errors="coerce")
+            df[dest] = _to_number(col)
         elif kind == "string":
             df[dest] = col.astype(str)
         elif kind == "boolean":
@@ -2728,13 +2842,14 @@ def _copy_screen_fields(
         if not column:
             continue
         values = source[column]
-        df[destination] = pd.to_numeric(values, errors="coerce") if numeric else values
+        df[destination] = _to_number(values) if numeric else values
     return normalize_screen_identity(df)
 
 
 def normalize_words(
     words: pd.DataFrame, schema: dict[str, str], *, keep_columns: set | None = None
 ) -> pd.DataFrame:
+    _warn_numeric_issues(words, schema, table="Words/IA")
     # The explicit index makes scalar assignments (e.g. the stimulus-level
     # participant placeholder) fill every row even when assigned first.
     df = pd.DataFrame(index=words.index)
@@ -2771,7 +2886,7 @@ def normalize_words(
     else:
         df["text_id"] = df["trial_id"]
     df = _copy_screen_fields(df, words, schema)
-    df["word_id"] = pd.to_numeric(words[schema["word_id"]], errors="coerce")
+    df["word_id"] = _to_number(words[schema["word_id"]])
     if schema.get("text"):
         # BUG-53: a missing cell is an empty word, never NaN — pandas 3's
         # `astype(str)` keeps NaN as NaN, and every " ".join over a trial's text
@@ -2782,20 +2897,20 @@ def normalize_words(
         df["text"] = df["word_id"].apply(lambda v: f"w{int(v)}" if pd.notna(v) else "")
     df["text"] = df["text"].str.replace(r"\s+", " ", regex=True).str.strip()
     if schema.get("line"):
-        df["line_idx"] = pd.to_numeric(words[schema["line"]], errors="coerce")
+        df["line_idx"] = _to_number(words[schema["line"]])
     else:
         df["line_idx"] = 1
 
     if all(schema.get(k) for k in ["x", "y", "width", "height"]):
-        df["x"] = pd.to_numeric(words[schema["x"]], errors="coerce")
-        df["y"] = pd.to_numeric(words[schema["y"]], errors="coerce")
-        df["width"] = pd.to_numeric(words[schema["width"]], errors="coerce")
-        df["height"] = pd.to_numeric(words[schema["height"]], errors="coerce")
+        df["x"] = _to_number(words[schema["x"]])
+        df["y"] = _to_number(words[schema["y"]])
+        df["width"] = _to_number(words[schema["width"]])
+        df["height"] = _to_number(words[schema["height"]])
     else:
-        left = pd.to_numeric(words[schema["left"]], errors="coerce")
-        right = pd.to_numeric(words[schema["right"]], errors="coerce")
-        top = pd.to_numeric(words[schema["top"]], errors="coerce")
-        bottom = pd.to_numeric(words[schema["bottom"]], errors="coerce")
+        left = _to_number(words[schema["left"]])
+        right = _to_number(words[schema["right"]])
+        top = _to_number(words[schema["top"]])
+        bottom = _to_number(words[schema["bottom"]])
         df["x"] = left
         df["y"] = top
         df["width"] = right - left
@@ -2817,6 +2932,7 @@ def normalize_fixations(
     *,
     keep_columns: set | None = None,
 ) -> pd.DataFrame:
+    _warn_numeric_issues(fixations, schema, table="Fixations")
     # Explicit index so a constant participant placeholder fills every row.
     df = pd.DataFrame(index=fixations.index)
     if schema.get("participant"):
@@ -2855,17 +2971,15 @@ def normalize_fixations(
     # left NaN here and filled from word-box centers by harmonize_frames().
     for coord in ("x", "y"):
         if schema.get(coord):
-            df[coord] = pd.to_numeric(fixations[schema[coord]], errors="coerce")
+            df[coord] = _to_number(fixations[schema[coord]])
         else:
             df[coord] = np.nan
-    df["duration_ms"] = pd.to_numeric(
-        fixations[schema["duration"]], errors="coerce"
-    ).fillna(0)
+    # An unreadable duration / onset still falls back to 0, but no longer
+    # silently: `_warn_numeric_issues` below names the column (BUG-54).
+    df["duration_ms"] = _to_number(fixations[schema["duration"]]).fillna(0)
 
     if schema.get("timestamp"):
-        df["timestamp_ms"] = pd.to_numeric(
-            fixations[schema["timestamp"]], errors="coerce"
-        ).fillna(0)
+        df["timestamp_ms"] = _to_number(fixations[schema["timestamp"]]).fillna(0)
     else:
         df["timestamp_ms"] = df.groupby(list(PARENT_KEY), sort=False).cumcount()
 
@@ -2882,7 +2996,7 @@ def normalize_fixations(
             df[SCREEN_FIXATION_ID] = df.groupby(part_keys, sort=False).cumcount().add(1)
 
     if schema.get("word_id"):
-        df["word_id"] = pd.to_numeric(fixations[schema["word_id"]], errors="coerce")
+        df["word_id"] = _to_number(fixations[schema["word_id"]])
     else:
         df["word_id"] = np.nan
 
@@ -3528,12 +3642,24 @@ def compute_canvas_size(
     default_w, default_h = DEFAULT_FIGURE_SIZE
     x_candidates: list[float] = []
     y_candidates: list[float] = []
+
+    def extent(frame: pd.DataFrame, position: str, size: str | None = None) -> float:
+        # Coerced (BUG-54): the wizard estimates from the *raw* upload, where a
+        # column that merely happens to be named `x` can be text — a
+        # decimal-comma export, a unit suffix — and `float(max())` raised.
+        if position not in frame.columns:
+            return np.nan
+        value = _to_number(frame[position])
+        if size is not None and size in frame.columns:
+            value = value + _to_number(frame[size])
+        return float(value.max())
+
     if words is not None and not words.empty and "x" in words.columns:
-        x_candidates.append(float((words["x"] + words.get("width", 0)).max()))
-        y_candidates.append(float((words["y"] + words.get("height", 0)).max()))
+        x_candidates.append(extent(words, "x", "width"))
+        y_candidates.append(extent(words, "y", "height"))
     if fixations is not None and not fixations.empty and "x" in fixations.columns:
-        x_candidates.append(float(fixations["x"].max()))
-        y_candidates.append(float(fixations["y"].max()))
+        x_candidates.append(extent(fixations, "x"))
+        y_candidates.append(extent(fixations, "y"))
     # NaN maxima happen when fixations ship without coordinates (AOI-sequence
     # data) and no word boxes were available to fill them in.
     x_candidates = [v for v in x_candidates if np.isfinite(v)]

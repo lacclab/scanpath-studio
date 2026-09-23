@@ -260,3 +260,25 @@ def test_the_multipleye_preset_reports_a_rejected_load_instead_of_dying(monkeypa
     assert not at.exception
     assert any("orphan screens" in e.value for e in at.error)
     assert "_wizard_finalize_payload" not in at.session_state
+
+
+# --- a complete mapping whose numbers don't parse (BUG-54) --------------------
+
+
+def test_the_wizard_names_a_numeric_column_that_did_not_parse(monkeypatch):
+    """The mapping is complete and the load carries on — which is exactly why
+    an unreadable coordinate column has to be said, above ✅ Add dataset."""
+    from scanpath_studio import app
+
+    fixations = _WIZARD_FIXATIONS.assign(x=["15px", "65px", "115px"])
+    monkeypatch.setattr(
+        app,
+        "_read_uploaded_frame",
+        lambda **kw: {"col_map_fix": fixations}.get(kw["state_prefix"], pd.DataFrame()),
+    )
+    at = _upload_apptest(wizard_active=True)
+
+    assert not at.exception
+    said = [w.value for w in at.warning if "aren't numbers" in w.value]
+    assert said, "an unreadable X column loaded without a word"
+    assert "`x`" in said[0] and "'15px'" in said[0]

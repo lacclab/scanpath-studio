@@ -1,5 +1,6 @@
 """Tests for data.py module."""
 
+import warnings
 from unittest.mock import patch
 
 import numpy as np
@@ -448,6 +449,71 @@ class TestNormalizeFixations:
         }
         result = normalize_fixations(df, schema)
         assert result["is_blink"].tolist() == [False, True]
+
+
+class TestUnreadableNumbers:
+    """BUG-54: a mapped numeric column that does not parse is never silent.
+
+    A decimal-comma export (`117,7`) read as all-NaN, and the fallbacks then
+    snapped every fixation to its word's centre and made every duration 0 — a
+    plausible figure, nothing said.
+    """
+
+    SCHEMA = {
+        "participant": "RECORDING_SESSION_LABEL",
+        "trial": "TRIAL_INDEX",
+        "x": "CURRENT_FIX_X",
+        "y": "CURRENT_FIX_Y",
+        "duration": "CURRENT_FIX_DURATION",
+        "word_id": "CURRENT_FIX_INTEREST_AREA_ID",
+    }
+
+    def _fixations(self, x, duration):
+        return pd.DataFrame(
+            {
+                "RECORDING_SESSION_LABEL": ["p1"] * len(x),
+                "TRIAL_INDEX": [1] * len(x),
+                "CURRENT_FIX_X": x,
+                "CURRENT_FIX_Y": ["221,7"] * len(x),
+                "CURRENT_FIX_DURATION": duration,
+                "CURRENT_FIX_INTEREST_AREA_ID": ["1", "."] + ["2"] * (len(x) - 2),
+            }
+        )
+
+    def test_a_decimal_comma_export_reads_as_numbers(self, tmp_path):
+        path = tmp_path / "fix.tsv"
+        self._fixations(["117,7", "171,7", "180"], ["187,5", "194", "201,5"]).to_csv(
+            path, sep="\t", index=False
+        )
+        raw = data_module.read_table(path)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")  # converted, so nothing to report
+            fixations = normalize_fixations(raw, self.SCHEMA)
+        assert fixations["x"].tolist() == [117.7, 171.7, 180.0]
+        assert fixations["duration_ms"].tolist() == [187.5, 194.0, 201.5]
+
+    def test_a_thousands_shaped_column_is_reported_not_guessed(self):
+        raw = self._fixations(["1,204", "1,512", "2,105"], [200, 200, 200])
+        issues = data_module.numeric_parse_issues(raw, self.SCHEMA, table="Fixations")
+        assert len(issues) == 1
+        assert "`CURRENT_FIX_X`" in issues[0]
+        assert "thousands separator" in issues[0]
+        with pytest.warns(UserWarning, match="CURRENT_FIX_X"):
+            fixations = normalize_fixations(raw, self.SCHEMA)
+        assert fixations["x"].isna().all()
+
+    def test_an_unreadable_duration_is_named_with_what_was_done(self):
+        raw = self._fixations(["10", "20", "30"], ["200", "2OO", "n/a?"])
+        issues = data_module.numeric_parse_issues(raw, self.SCHEMA, table="Fixations")
+        assert issues == [
+            "Fixations: 2 of 3 values in `CURRENT_FIX_DURATION` aren't numbers "
+            "(e.g. '2OO', 'n/a?'); those fixations are read as 0 ms long."
+        ]
+
+    def test_the_eyelink_missing_marker_is_not_an_issue(self):
+        """`.` is EyeLink's "no value" — the word-id column above carries one."""
+        raw = self._fixations(["10", "20", "30"], [200, 200, 200])
+        assert data_module.numeric_parse_issues(raw, self.SCHEMA, table="F") == []
 
 
 class TestNormalizeRawGaze:

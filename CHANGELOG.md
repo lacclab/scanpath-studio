@@ -70,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`api.figure_code()`'s defaults write a recipe that runs, with both flavours drawing the same figure** (EXP-14)
 - **An export bundle no longer holds two `aggregate/all_fixations` files** (EXP-15)
 - **A headless comparison draws the app's default marker opacity** (CMP-20)
+- **`analyze` writes a readable `cleaning_qa.csv`, and `corpus --kind difference` refuses a table with no `diff`** (EXP-16)
 
 ### Details
 
@@ -155,6 +156,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **An export bundle no longer holds two `aggregate/all_fixations` files** (EXP-15) — with both **Mega-table** and **Full measure family** ticked, `aggregate/all_fixations.csv` (and `.parquet`) was written twice — once as the raw concatenation, once as the family's word-enriched table. A zip keeps both entries under one name, Python's `zipfile` warns, and an unzip tool or `pd.read_csv(zf.open(...))` silently takes one of them. The mega-table now leaves that file to the family, the rule the per-trial `fixations` file already followed. `all_measures` stays beside `all_word_measures`: the two carry the same rows, but under different names, and scripts read the former.
 
 - **A headless comparison draws the app's default marker opacity** (CMP-20) — the app seeds each comparison scanpath's marker alpha at 0.7 (`controls._seed_compare_styles`, VIZ-6), but the comparison builder's own fallback — the only value `compare_scanpaths` and `render --compare-with` ever passed — was 1.0, so the default headless comparison was drawn opaque where the app's showed overlaps through. Both now read `constants.COMPARE_FIXATION_OPACITY`, beside the `compare_palette_color` pair the two already shared for the same reason (CMP-3).
+
+- **`analyze` writes a readable `cleaning_qa.csv`, and `corpus --kind difference` refuses a table with no `diff`** (EXP-16) — two commands exited 0 having written nothing usable. `analyze` with its default `--short-policy off` wrote the empty report `preprocess_data` returns when preprocessing is off over the family's own one, so `cleaning_qa.csv` was a single newline that `pd.read_csv` refuses; it now keeps the family's per-trial table (policy "Off", nothing excluded) — what the export bundle writes — unless preprocessing actually ran. And `corpus --kind difference` on a table with no `diff` column rendered the builder's "no data" placeholder; `plot_corpus_figure` now names the missing column, as it does for the other two kinds (EXP-13).
 
 ## [0.30.1] - 2026-08-28
 

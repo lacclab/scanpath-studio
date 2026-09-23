@@ -935,6 +935,10 @@ def alignment_sensitivity(
 _CORPUS_COLUMNS = {
     "profile": ("word_id", "<value>"),
     "distribution": ("<value>",),
+    # EXP-16: the builder draws its "no data" placeholder for a table with no
+    # `diff` — right for the app's empty states, but headlessly it meant a
+    # figure with nothing on it and an exit code of 0.
+    "difference": ("word_id", "diff"),
 }
 
 

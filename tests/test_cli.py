@@ -1496,3 +1496,87 @@ def test_compare_stimulus_on_an_overlay_is_not_warned_about(tmp_path, capsys):
         ]
     )
     assert "--compare-stimulus" not in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# EXP-16 — no empty artefacts from a successful exit
+# ---------------------------------------------------------------------------
+def test_analyze_writes_a_readable_cleaning_qa_with_preprocessing_off(tmp_path):
+    """The default `--short-policy off` wrote `cleaning_qa.csv` as a single
+    newline, which `pd.read_csv` refuses — the bundle writes one "Off" row per
+    trial instead, and so does `analyze` now."""
+    import pandas as pd
+
+    from scanpath_studio import data as data_module
+
+    words, fixations = data_module.load_sample_data()
+    words.to_csv(tmp_path / "ia.csv", index=False)
+    fixations.to_csv(tmp_path / "fix.csv", index=False)
+    out = tmp_path / "analysis"
+    cli.main(
+        [
+            "analyze",
+            "--words",
+            str(tmp_path / "ia.csv"),
+            "--fixations",
+            str(tmp_path / "fix.csv"),
+            "--output-dir",
+            str(out),
+        ]
+    )
+    qa = pd.read_csv(out / "cleaning_qa.csv")
+    assert not qa.empty
+    assert set(qa["short_policy"]) == {"Off"}
+    assert (qa["n_excluded"] == 0).all()
+    # Every table `analyze` writes has at least a header.
+    for path in out.glob("*.csv"):
+        assert path.stat().st_size > 1, path.name
+
+
+def test_analyze_keeps_the_preprocessing_report_when_it_ran(tmp_path):
+    import pandas as pd
+
+    from scanpath_studio import data as data_module
+
+    words, fixations = data_module.load_sample_data()
+    words.to_csv(tmp_path / "ia.csv", index=False)
+    fixations.to_csv(tmp_path / "fix.csv", index=False)
+    out = tmp_path / "analysis"
+    cli.main(
+        [
+            "analyze",
+            "--words",
+            str(tmp_path / "ia.csv"),
+            "--fixations",
+            str(tmp_path / "fix.csv"),
+            "--output-dir",
+            str(out),
+            "--short-policy",
+            "discard",
+        ]
+    )
+    qa = pd.read_csv(out / "cleaning_qa.csv")
+    assert set(qa["short_policy"]) == {"Discard"}
+
+
+def test_corpus_difference_without_a_diff_column_is_refused(tmp_path):
+    """The builder's "no data" placeholder is right for the app's empty states,
+    but headlessly it was an empty figure behind an exit code of 0."""
+    import pandas as pd
+
+    tidy = tmp_path / "tidy.csv"
+    pd.DataFrame({"word_id": [1, 2], "value": [3.0, 4.0]}).to_csv(tidy, index=False)
+    out = tmp_path / "x.html"
+    with pytest.raises(SystemExit, match="'diff'"):
+        cli.main(
+            [
+                "corpus",
+                "--input",
+                str(tidy),
+                "--kind",
+                "difference",
+                "--output",
+                str(out),
+            ]
+        )
+    assert not out.exists()

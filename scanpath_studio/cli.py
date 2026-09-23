@@ -2378,7 +2378,13 @@ def analyze(argv: list[str]) -> None:
     tables = api.analysis_tables(
         words, fixations, pixels_per_degree=args.pixels_per_degree
     )
-    tables["cleaning_qa"] = qa
+    # EXP-16: with preprocessing off `preprocess_data` returns an empty report,
+    # and writing it over the family's own one left `cleaning_qa.csv` a single
+    # newline that `pd.read_csv` refuses. The family's report is the per-trial
+    # "nothing excluded, policy Off" table the export bundle writes, so it
+    # stands unless preprocessing actually ran.
+    if not qa.empty:
+        tables["cleaning_qa"] = qa
     destination = Path(args.output_dir)
     destination.mkdir(parents=True, exist_ok=True)
     for name, table in tables.items():

@@ -568,11 +568,11 @@ Besides the three shown below, two more are worth knowing about:
   group-comparison helpers behind the Corpus Analysis view; see
   [Corpus analysis](corpus-analysis.md).
 
-There is also no entry point that *normalizes* a raw-gaze table
-(`propose_schema(df, "raw_gaze")` gives you the schema, but
-`data.normalize_raw_gaze` is its only consumer); a normalized raw-gaze frame
-can then be passed to `plot_scanpath(raw_gaze=…)`, which filters it to the
-trial and switches the layer on.
+A raw-gaze table is loaded with `load_raw_gaze(path_or_frame)` (columns
+auto-detected; `raw_gaze_schema=` overrides, starting from
+`propose_schema(df, "raw_gaze")`), or `load_sample_raw_gaze()` for the demo's.
+Pass the result to `plot_scanpath(raw_gaze=…)`, which filters it to the trial
+and switches the layer on — `render --raw-gaze PATH` on the command line.
 
 **Two-scanpath comparison** (the app's Compare mode). Takes the whole frames and
 two `(participant_id, trial_id)` tuples, not per-trial frames:

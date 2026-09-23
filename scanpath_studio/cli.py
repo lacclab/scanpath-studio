@@ -18,6 +18,7 @@ import os
 import re
 import shlex
 import sys
+from dataclasses import replace
 from importlib import resources
 from pathlib import Path
 
@@ -94,8 +95,12 @@ def _colorscale_name(value: str) -> str:
     return str(value)
 
 
-#: The API keyword each schema flag stands for (EXP-13).
-_SCHEMA_FLAGS = {"word_schema": "--word-schema", "fix_schema": "--fix-schema"}
+#: The API keyword each schema flag stands for (EXP-13; the raw-gaze one EXP-20).
+_SCHEMA_FLAGS = {
+    "word_schema": "--word-schema",
+    "fix_schema": "--fix-schema",
+    "raw_gaze_schema": "--raw-gaze-schema",
+}
 
 
 def _add_schema_flags(group) -> None:
@@ -632,7 +637,9 @@ def _render_parser() -> argparse.ArgumentParser:
         action="append",
         help="Override a reading-type colour, e.g. --saccade-type-color "
         "regression=#000000 (repeatable; classes: forward, skip, refixation, "
-        "return_sweep, regression). Implies --saccade-color-by-type.",
+        "return_sweep, regression). Implies --saccade-color-by-type, unless "
+        "--saccade-color-by-direction is given — then it recolours that two-way "
+        "split (its forward and regression colours).",
     )
     viz.add_argument(
         "--no-saccade-type-legend",
@@ -867,6 +874,186 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Stimulus-image opacity 0.1–1.0 (default: 1.0 = opaque). Lower it to "
         "dim a busy image so the fixations / saccades / word boxes read over it.",
     )
+    # EXP-20 — a flag for every figure option `render` could not say before, so
+    # the command the Share subtab prints (`code_snippet._CLI_EMITTERS`) draws
+    # the figure rather than naming what it left out. Each is spelled after its
+    # figure option and takes that option's own value; `_DIRECT_OPTION_FLAGS` /
+    # `_SWITCH_OPTION_FLAGS` below hand them to the builder.
+    viz.add_argument(
+        "--fixation-opacity",
+        type=float,
+        metavar="O",
+        help="Fixation marker opacity, 0.1–1.0 (default: 0.7, so overlapping "
+        "fixations show through).",
+    )
+    viz.add_argument(
+        "--hollow-fixations",
+        action="store_true",
+        help="Draw the fixations as outlines instead of filled markers.",
+    )
+    viz.add_argument(
+        "--color-by-line",
+        action="store_true",
+        help="Colour each fixation by the text line it lands on (lines inferred "
+        "from the word boxes); overrides --color-by.",
+    )
+    viz.add_argument(
+        "--fixation-color-range",
+        nargs=2,
+        type=float,
+        metavar=("LO", "HI"),
+        help="Pin the --color-by colour scale to LO..HI instead of the trial's "
+        "own range, so several figures share one scale.",
+    )
+    viz.add_argument(
+        "--heatmap-range",
+        nargs=2,
+        type=float,
+        metavar=("LO", "HI"),
+        help="Pin the heatmap's colour scale to LO..HI instead of the trial's "
+        "own range.",
+    )
+    viz.add_argument(
+        "--order-font-size",
+        type=int,
+        metavar="PX",
+        help="Fixation index label size (default: 10).",
+    )
+    viz.add_argument(
+        "--order-font-color",
+        metavar="COLOR",
+        help="Fixation index label colour (default: #111111).",
+    )
+    viz.add_argument(
+        "--text-color",
+        metavar="COLOR",
+        help="Reading-text colour (default: #000000).",
+    )
+    viz.add_argument(
+        "--highlight-text-color",
+        metavar="COLOR",
+        help="Colour of the --highlight-column words under --critical-span-style "
+        "mark-text (default: #D55E00).",
+    )
+    viz.add_argument(
+        "--span-border-color",
+        metavar="COLOR",
+        help="Box colour under --critical-span-style mark-border (default: #000000).",
+    )
+    viz.add_argument(
+        "--background-color",
+        metavar="COLOR",
+        help="Plot background colour (default: #ffffff).",
+    )
+    viz.add_argument(
+        "--line-spacing",
+        type=float,
+        metavar="N",
+        help="Line slots each word box stands for, which sizes the reading text "
+        "(default: 3 — OneStop's one blank line above and below).",
+    )
+    viz.add_argument(
+        "--no-scale-text-to-boxes",
+        dest="scale_text_to_boxes",
+        action="store_false",
+        help="Draw the reading text at --font-size instead of sizing it from the "
+        "word boxes.",
+    )
+    viz.add_argument(
+        "--word-hover-measure",
+        metavar="FIELD",
+        help="The reading measure a word's hover shows (default: "
+        "total_fixation_duration_ms).",
+    )
+    viz.add_argument(
+        "--word-heatmap-col",
+        metavar="COLUMN",
+        help="For a words-only dataset (no fixations): tint each word box by this "
+        "numeric words column — e.g. gpt2_surprisal — instead of its dwell time.",
+    )
+    viz.add_argument(
+        "--word-heatmap-title",
+        metavar="TEXT",
+        help="Colour-bar title for --word-heatmap-col (default: Value).",
+    )
+    viz.add_argument(
+        "--x-field",
+        metavar="FIELD",
+        help="Fixation column on the x axis (default: x). A non-spatial one "
+        "draws a chart of the fixations instead of the scanpath.",
+    )
+    viz.add_argument(
+        "--y-field",
+        metavar="FIELD",
+        help="Fixation column on the y axis (default: y).",
+    )
+    viz.add_argument(
+        "--no-full-monitor",
+        dest="fit_to_monitor",
+        action="store_false",
+        help="Frame the axes on the data instead of the whole --canvas monitor.",
+    )
+    viz.add_argument(
+        "--colorbars",
+        dest="show_colorbars",
+        action="store_true",
+        help="Draw the colour bars for --color-by and the heatmap.",
+    )
+    viz.add_argument(
+        "--colorbar-orientation",
+        choices=["vertical", "horizontal"],
+        help="With --colorbars: beside the plot (vertical, default) or below it.",
+    )
+    viz.add_argument(
+        "--colorbar-tickangle",
+        type=int,
+        metavar="DEG",
+        help="With --colorbars: tick-label angle, -90–90 (default: 0).",
+    )
+    viz.add_argument(
+        "--colorbar-tickfont-size",
+        type=int,
+        metavar="PX",
+        help="With --colorbars: tick-label size (default: 12).",
+    )
+    viz.add_argument(
+        "--raw-gaze",
+        metavar="PATH",
+        nargs="+",
+        help="Raw (sample-level) gaze table(s) to draw under the fixations, "
+        "columns auto-detected like --fixations (csv/tsv/parquet/feather; several "
+        "paths or a quoted glob concatenate). Static figures only.",
+    )
+    viz.add_argument(
+        "--sample-raw-gaze",
+        action="store_true",
+        help="With --sample: draw the bundled demo's raw gaze (synthesized, for "
+        "one trial — the one the app overlays it on).",
+    )
+    viz.add_argument(
+        "--raw-gaze-schema",
+        metavar="JSON",
+        help="Column mapping for the --raw-gaze table, replacing auto-detection "
+        "(same shape as --fix-schema); needed only when a column isn't "
+        "recognised.",
+    )
+    viz.add_argument(
+        "--raw-gaze-color",
+        metavar="COLOR",
+        help="Raw-gaze sample colour (default: #888888).",
+    )
+    viz.add_argument(
+        "--raw-gaze-marker-size",
+        type=float,
+        metavar="PX",
+        help="Raw-gaze sample size, 1–12 (default: 4).",
+    )
+    viz.add_argument(
+        "--raw-gaze-opacity",
+        type=float,
+        metavar="O",
+        help="Raw-gaze sample opacity, 0.1–1.0 (default: 0.6).",
+    )
     viz.add_argument(
         "--width",
         type=int,
@@ -1022,6 +1209,45 @@ def _render_parser() -> argparse.ArgumentParser:
         "default. Requires --label-a.",
     )
     cmp_group.add_argument(
+        "--compare-legend",
+        dest="show_legend",
+        action="store_true",
+        help="Draw a legend naming the two scanpaths (the app's A/B legend). "
+        "Applies to the --animate co-animation too.",
+    )
+    # EXP-20. Named after `compare_scanpaths`'s `style_a` / `style_b`, like the
+    # `--label-a` / `--label-b` pair above.
+    for side, which in (("a", "FIRST"), ("b", "SECOND")):
+        cmp_group.add_argument(
+            f"--style-{side}",
+            dest=f"style_{side}",
+            action="append",
+            metavar="SPEC",
+            help=f"Styling for the {which} scanpath, repeatable: KEY=VALUE[,...] "
+            "with KEY one of fix_color / saccade_color (#RRGGBB), saccade_style "
+            f"({'|'.join(SACCADE_DASH_OPTIONS.values())}), saccade_width (px), "
+            "marker_size_range (MIN:MAX), opacity (0.1–1), hollow (true|false) — "
+            f"e.g. --style-{side} fix_color=#D55E00,opacity=0.5.",
+        )
+    cmp_group.add_argument(
+        "--stimulus-image-b",
+        metavar="PATH",
+        help="The SECOND scanpath's stimulus image, for a side-by-side or stacked "
+        "comparison across two datasets (each panel draws its own page). Sized "
+        "and placed like --stimulus-image.",
+    )
+    cmp_group.add_argument(
+        "--stimulus-image-size-b",
+        metavar="WxH",
+        help="Size of --stimulus-image-b in px (default: the PNG's own size, "
+        "else --compare-canvas, else --canvas).",
+    )
+    cmp_group.add_argument(
+        "--stimulus-image-origin-b",
+        metavar="X,Y",
+        help="Top-left of --stimulus-image-b in the second screen's px (default: 0,0).",
+    )
+    cmp_group.add_argument(
         "--compare-words",
         metavar="PATH",
         nargs="+",
@@ -1081,6 +1307,97 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Eye-to-screen distance for the SECOND dataset, in millimetres.",
     )
     return parser
+
+
+#: EXP-20 — flags whose value *is* the figure option's value, each named after
+#: the option (`--fixation-opacity` → `fixation_opacity`), so they reach the
+#: builder unchanged whenever given.
+_DIRECT_OPTION_FLAGS = (
+    "fixation_opacity",
+    "order_font_size",
+    "order_font_color",
+    "text_color",
+    "highlight_text_color",
+    "span_border_color",
+    "background_color",
+    "line_spacing",
+    "word_hover_measure",
+    "x_field",
+    "y_field",
+    "colorbar_tickangle",
+    "colorbar_tickfont_size",
+    "raw_gaze_color",
+    "raw_gaze_marker_size",
+    "raw_gaze_opacity",
+    "word_heatmap_col",
+    "word_heatmap_title",
+)
+
+#: …and the switches, as ``option → the value the flag sets``. Passed only when
+#: flipped, so a bare `render` keeps handing the builder its own defaults.
+_SWITCH_OPTION_FLAGS = {
+    "hollow_fixations": True,
+    "color_by_line": True,
+    "show_colorbars": True,
+    "scale_text_to_boxes": False,
+    "fit_to_monitor": False,
+}
+
+#: The keys `--style-a` / `--style-b` take, each with its value parser.
+_STYLE_KEYS = (
+    "fix_color",
+    "saccade_color",
+    "saccade_style",
+    "saccade_width",
+    "marker_size_range",
+    "opacity",
+    "hollow",
+)
+
+
+def _parse_style_spec(specs: list[str] | None, flag: str) -> dict | None:
+    """``["fix_color=#aa0000,opacity=0.5"]`` → ``compare_scanpaths``'s style dict.
+
+    The inverse of `code_snippet._style_spec`. Colours are ``#RRGGBB`` only —
+    the value is split on commas, so a CSS ``rgb(…)`` could never arrive whole —
+    and every value is checked here rather than left to fail inside the builder.
+    """
+    if not specs:
+        return None
+    dashes = tuple(SACCADE_DASH_OPTIONS.values())
+    style: dict = {}
+    for spec in specs:
+        for option in (part.strip() for part in spec.split(",") if part.strip()):
+            name, sep, raw = option.partition("=")
+            name, raw = name.strip(), raw.strip()
+            try:
+                if not sep or name not in _STYLE_KEYS:
+                    raise ValueError
+                if name in ("fix_color", "saccade_color"):
+                    if not re.fullmatch(r"#[0-9A-Fa-f]{6}", raw):
+                        raise ValueError
+                    style[name] = raw
+                elif name == "saccade_style":
+                    if raw not in dashes:
+                        raise ValueError
+                    style[name] = raw
+                elif name == "marker_size_range":
+                    lo, hi = (int(part) for part in raw.split(":"))
+                    style[name] = (min(lo, hi), max(lo, hi))
+                elif name == "hollow":
+                    if raw.lower() not in ("1", "0", "true", "false", "yes", "no"):
+                        raise ValueError
+                    style[name] = raw.lower() in ("1", "true", "yes")
+                else:  # saccade_width, opacity
+                    style[name] = float(raw)
+            except ValueError:
+                raise SystemExit(
+                    f"{flag}: can't read {option!r}. Expected KEY=VALUE with KEY "
+                    f"one of {', '.join(_STYLE_KEYS)} — colours as #RRGGBB, "
+                    f"saccade_style one of {', '.join(dashes)}, marker_size_range "
+                    "as MIN:MAX, hollow as true/false."
+                )
+    return style
 
 
 def _compare_labels(args) -> tuple[str, str] | None:
@@ -1376,7 +1693,9 @@ def _snippet_source_from_args(args) -> SnippetSource:
     return cs.SnippetSource(kind=cs.SOURCE_DEMO, label="Bundled Demo")
 
 
-def _print_reproduction_code(api, args, overrides: dict, canvas, participant, trial):
+def _print_reproduction_code(
+    api, args, overrides: dict, canvas, participant, trial, *, raw_gaze: bool = False
+):
     """EXP-7: print the snippet that rebuilds the figure this invocation renders.
 
     Built from ``overrides`` — the very dict handed to the builder a few lines
@@ -1395,6 +1714,10 @@ def _print_reproduction_code(api, args, overrides: dict, canvas, participant, tr
         else "static"
     )
     settings = {**api.figure_options(kind), **api._expand_palette(dict(overrides))}
+    # EXP-20: `plot_scanpath` turns the raw-gaze layer on for the frame it is
+    # handed, so the flag never reaches `overrides`; the snippet reads it here.
+    if raw_gaze and kind == "static":
+        settings["show_raw_gaze"] = True
     # These two are passed to `animate_scanpath` beside the overrides rather
     # than through them, so they never reached `settings` — a straight silent
     # drop of two real `figure_options("animation")` keys.
@@ -1405,6 +1728,14 @@ def _print_reproduction_code(api, args, overrides: dict, canvas, participant, tr
         ):
             if value is not None:
                 settings[name] = value
+        # EXP-20: the co-animation's B-side keywords ride `anim_kwargs`, not
+        # `overrides`, for the same reason — so a printed recipe for `--animate
+        # --compare-with … --label-a …` quietly lost its labels and stimulus.
+        if args.compare_with is not None:
+            settings["compare_stimulus"] = args.compare_stimulus
+            labels = _compare_labels(args)
+            if labels is not None:
+                settings["label_a"], settings["label_b"] = labels
     compare = None
     if args.compare_with is not None:
         compare_participant, compare_trial = _parse_compare_with(args.compare_with)
@@ -1484,8 +1815,17 @@ def _print_reproduction_code(api, args, overrides: dict, canvas, participant, tr
             f"--screen-transition {args.screen_transition} only affects the "
             "--all-screens metadata, which the single-figure snippet omits."
         )
+    source = _snippet_source_from_args(args)
+    if args.raw_gaze:
+        # EXP-20: the raw-gaze table is part of the data half — the snippet's
+        # loader reads it beside the corpus, under the same mapping.
+        extra = {"raw_gaze": list(args.raw_gaze)}
+        schema = _parse_schema_arg(args.raw_gaze_schema, "--raw-gaze-schema")
+        if schema is not None:
+            extra["raw_gaze_schema"] = schema
+        source = replace(source, options={**source.options, **extra})
     code = cs.reproduction_code(
-        _snippet_source_from_args(args),
+        source,
         state,
         explicit=bool(args.print_code_explicit),
         output=args.output or "scanpath.png",
@@ -1667,6 +2007,39 @@ def render(argv: list[str]) -> None:
         )
     word_schema = _parse_schema_arg(args.word_schema, "--word-schema")
     fix_schema = _parse_schema_arg(args.fix_schema, "--fix-schema")
+    # EXP-20: raw gaze is a third table, from a file or — for the demo — the
+    # bundled one. Checked before the load, like the two schemas above.
+    if args.sample_raw_gaze and not args.sample:
+        raise SystemExit(
+            "--sample-raw-gaze draws the bundled demo's raw gaze; it needs "
+            "--sample. Pass your own table with --raw-gaze PATH."
+        )
+    if args.sample_raw_gaze and args.raw_gaze:
+        raise SystemExit("Pass --raw-gaze PATH or --sample-raw-gaze, not both.")
+    if args.raw_gaze_schema is not None and not args.raw_gaze:
+        raise SystemExit(
+            "--raw-gaze-schema maps the --raw-gaze table; pass --raw-gaze too."
+        )
+    raw_gaze_schema = _parse_schema_arg(args.raw_gaze_schema, "--raw-gaze-schema")
+    # EXP-20: these describe the second scanpath of a comparison, so on their
+    # own there is nothing for them to style — refused, like a lone --label-a.
+    compare_only = [
+        flag
+        for flag, given in (
+            ("--compare-legend", args.show_legend),
+            ("--style-a", args.style_a),
+            ("--style-b", args.style_b),
+            ("--stimulus-image-b", args.stimulus_image_b),
+            ("--stimulus-image-size-b", args.stimulus_image_size_b),
+            ("--stimulus-image-origin-b", args.stimulus_image_origin_b),
+        )
+        if given
+    ]
+    if compare_only and args.compare_with is None:
+        raise SystemExit(
+            f"{', '.join(compare_only)} style a comparison of two scanpaths; "
+            "pass --compare-with PARTICIPANT:TRIAL too."
+        )
     # A comparison is one figure of two readings; --all-screens writes one figure
     # per child screen of a multipart trial. There is no defined pairing between
     # the two, and without this guard the compare branch left `figures` unbound
@@ -1968,6 +2341,17 @@ def render(argv: list[str]) -> None:
             print(parts.to_string(index=False))
         return
 
+    raw_gaze = None
+    if args.raw_gaze or args.sample_raw_gaze:
+        try:
+            raw_gaze = (
+                api.load_sample_raw_gaze()
+                if args.sample_raw_gaze
+                else api.load_raw_gaze(args.raw_gaze, raw_gaze_schema=raw_gaze_schema)
+            )
+        except (ValueError, OSError) as exc:
+            raise SystemExit("--raw-gaze: " + _load_error_message(exc)) from exc
+
     try:
         # A given -p/-t must match exactly (mistyped ids are errors, never
         # silently swapped for another trial); only genuinely unspecified
@@ -2047,7 +2431,12 @@ def render(argv: list[str]) -> None:
     # split wins if both are given (it's the more specific request).
     if args.saccade_color_by_direction:
         overrides["saccade_color_mode"] = "Forward / regression"
-    if args.saccade_color_by_type or args.saccade_type_colors:
+    # EXP-20: a class colour beside --saccade-color-by-direction recolours the
+    # two-way split rather than overriding the mode the user asked for, so the
+    # fold's own colours have a flag too.
+    if args.saccade_color_by_type or (
+        args.saccade_type_colors and not args.saccade_color_by_direction
+    ):
         overrides["saccade_color_mode"] = "By type"
     if not args.saccade_type_legend:
         overrides["saccade_type_legend"] = False
@@ -2126,6 +2515,42 @@ def render(argv: list[str]) -> None:
         ) or (0.0, 0.0)
     if args.stimulus_image_opacity is not None:
         overrides["background_image_opacity"] = args.stimulus_image_opacity
+    # EXP-20: the rest of the figure options. After `--illustration` on purpose,
+    # so an explicit flag wins over the preset — the order `plot_scanpath`'s own
+    # `illustration=True` applies them in.
+    for key in _DIRECT_OPTION_FLAGS:
+        value = getattr(args, key)
+        if value is not None:
+            overrides[key] = value
+    for key, flipped in _SWITCH_OPTION_FLAGS.items():
+        if getattr(args, key) == flipped:
+            overrides[key] = flipped
+    if args.fixation_color_range:
+        overrides["fixation_color_range"] = tuple(args.fixation_color_range)
+    if args.heatmap_range:
+        overrides["heatmap_range"] = tuple(args.heatmap_range)
+    if args.colorbar_orientation:
+        overrides["colorbar_orientation"] = args.colorbar_orientation.capitalize()
+    if args.compare_with is not None:
+        if args.show_legend:
+            overrides["show_legend"] = True
+        for side in ("a", "b"):
+            style = _parse_style_spec(getattr(args, f"style_{side}"), f"--style-{side}")
+            if style:
+                overrides[f"style_{side}"] = style
+        if args.stimulus_image_b:
+            from .plots import _png_pixel_size
+
+            overrides["background_image_b"] = args.stimulus_image_b
+            overrides["background_image_size_b"] = (
+                _parse_canvas(args.stimulus_image_size_b)
+                or _png_pixel_size(args.stimulus_image_b)
+                or _parse_canvas(args.compare_canvas)
+                or canvas
+            )
+            overrides["background_image_origin_b"] = _parse_xy(
+                args.stimulus_image_origin_b
+            ) or (0.0, 0.0)
 
     common = dict(
         canvas_size=canvas,
@@ -2135,7 +2560,15 @@ def render(argv: list[str]) -> None:
         caption=args.caption or "",
     )
     if args.print_code:
-        _print_reproduction_code(api, args, overrides, canvas, participant, trial)
+        _print_reproduction_code(
+            api,
+            args,
+            overrides,
+            canvas,
+            participant,
+            trial,
+            raw_gaze=raw_gaze is not None,
+        )
     try:
         if args.animate:
             # EXP-10: which options the replay takes is `figure_options
@@ -2169,6 +2602,9 @@ def render(argv: list[str]) -> None:
                 ignored.append("drift_correction")
             if args.drift_connectors:
                 ignored.append("drift_connectors")
+            # Raw gaze is a `plot_scanpath` frame; the replay draws none.
+            if raw_gaze is not None:
+                ignored.append("raw_gaze")
             if ignored:
                 print(
                     f"Warning: not supported with --animate, ignoring: "
@@ -2235,6 +2671,12 @@ def render(argv: list[str]) -> None:
             loaded_b, loaded_fix_b, cross_dataset = _compare_second_dataset(
                 api, args, words, fixations
             )
+            if raw_gaze is not None:
+                print(
+                    "Warning: --raw-gaze draws on the single-trial figure only; "
+                    "a comparison has no raw-gaze layer. Ignoring it.",
+                    file=sys.stderr,
+                )
             # None keeps `compare_scanpaths` on its same-dataset path, which is
             # what skips the namespacing.
             words_b = loaded_b if cross_dataset else None
@@ -2269,6 +2711,7 @@ def render(argv: list[str]) -> None:
             )
         else:
             static_options = dict(
+                raw_gaze=raw_gaze,
                 drift_correction=args.drift_correction,
                 drift_connectors=args.drift_connectors,
                 # VIZ-7's fixation-index window is a `plot_scanpath` parameter

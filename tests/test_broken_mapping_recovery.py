@@ -301,3 +301,40 @@ def test_the_wizard_says_when_the_readers_do_not_line_up(monkeypatch):
 
     assert not at.exception
     assert any("share trial ids but no reader" in w.value for w in at.warning)
+
+
+def test_a_words_table_that_joins_nothing_is_said_on_every_page(monkeypatch):
+    """BUG-32: the words loaded, joined to none of the fixations, and the app
+    drew every trial without its text — silently, because only the empty-*pool*
+    case (all three frames empty) had a message."""
+    from scanpath_studio import app
+
+    words = _WIZARD_WORDS.drop(columns=["page"]).assign(trial_id="another_trial")
+    monkeypatch.setattr(
+        app,
+        "_read_uploaded_frame",
+        lambda **kw: {"col_map_words": words, "col_map_fix": _WIZARD_FIXATIONS}.get(
+            kw["state_prefix"], pd.DataFrame()
+        ),
+    )
+    at = _upload_apptest(wizard_active=False)
+
+    assert not at.exception
+    assert any("No fixation has word boxes" in w.value for w in at.warning)
+
+
+def test_a_fixations_only_dataset_is_not_warned_about(monkeypatch):
+    """No words table was loaded at all — a legitimate dataset, not a failed join."""
+    from scanpath_studio import app
+
+    monkeypatch.setattr(
+        app,
+        "_read_uploaded_frame",
+        lambda **kw: {"col_map_fix": _WIZARD_FIXATIONS}.get(
+            kw["state_prefix"], pd.DataFrame()
+        ),
+    )
+    at = _upload_apptest(wizard_active=False)
+
+    assert not at.exception
+    assert not any("No fixation has word boxes" in w.value for w in at.warning)

@@ -2613,6 +2613,29 @@ def _stimulus_font_install_hint(css_family: str | None) -> tuple[str, str] | Non
 
 
 @st.cache_data(show_spinner=False)
+def _cached_words_join_nothing(
+    _words: pd.DataFrame, _fixations: pd.DataFrame, cache_key
+) -> bool:
+    """Whether a loaded words table shares no (participant, trial) with the
+    fixations (BUG-32) — memoized, since it dedups both whole frames."""
+    if _fixations.empty:
+        return False
+    return not trial_keys(_words) & trial_keys(_fixations)
+
+
+#: BUG-32 — said once per page, in the notices strip, while it holds.
+WORDS_JOIN_NOTHING_WARNING = (
+    "⚠️ **No fixation has word boxes.** A words / AOI table was loaded, but none "
+    "of its participant + trial pairs is in the fixations, so every trial draws "
+    "without its text or its word-level measures. The usual cause is a **Trial "
+    "ID** or **Participant ID** mapping that names different trials in the two "
+    "tables — for instance one carried over from another dataset with the same "
+    "columns. Check it on 🗂️ **Data → Column mapping**, or start again from "
+    "**↩️ Reset to the auto-detected mapping**."
+)
+
+
+@st.cache_data(show_spinner=False)
 def _cached_trial_identity_report(
     _words: pd.DataFrame, _fixations: pd.DataFrame, cache_key, sample_trials=None
 ) -> dict:
@@ -6938,6 +6961,19 @@ def main() -> None:
     )
     st.session_state["_trial_identity_report"] = identity_report
     identity_warning = trial_identity_warning(identity_report)
+    # BUG-32: an empty (or unjoinable) words frame beside healthy fixations is
+    # a legitimate *fixations-only* dataset only when no words table was loaded
+    # at all — otherwise it is a mapping that joins on nothing, and the figure
+    # just draws without text. A warning, not an error: the fixations are still
+    # worth drawing, but the silence has to go.
+    if (st.session_state.get("_active_column_mapping") or {}).get(
+        "words"
+    ) and _cached_words_join_nothing(
+        words_all,
+        fixations_all,
+        cache_key=(frame_fingerprint(words_all), frame_fingerprint(fixations_all)),
+    ):
+        menu.notices.warning(WORDS_JOIN_NOTHING_WARNING)
     # The verdict is raised **once, where the mapping was chosen** — right after
     # ✅ Add dataset or ✅ Save changes — rather than as a page-wide banner that
     # stood above every view for as long as the dataset was loaded. Both flows

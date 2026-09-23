@@ -294,8 +294,13 @@ class TestTheVerdictIsRaisedWhereTheMappingIsChosen:
         source = inspect.getsource(app.main)
         assert "_trial_identity_alert_dialog(" in source
         assert "TRIAL_IDENTITY_CHECK_KEY" in source
-        # The banner it replaced.
-        assert "menu.notices.warning" not in source
+        # The banner it replaced (`menu.notices.warning(f"{identity_warning} …")`).
+        # Pinned by what it said rather than by `menu.notices.warning` itself:
+        # BUG-32's "no fixation has word boxes" is a banner there on purpose —
+        # a state where every trial draws without text, not a verdict to raise
+        # once where the mapping is chosen.
+        assert "{identity_warning}" not in source
+        assert "WORDS_JOIN_NOTHING_WARNING" in source
 
     def test_the_modal_offers_the_mapping_and_a_way_to_keep_it(self):
         import inspect

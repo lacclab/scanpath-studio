@@ -584,10 +584,54 @@ def test_the_cli_prints_the_recipe_for_its_own_invocation(tmp_path, capsys):
 # The headless API
 # ---------------------------------------------------------------------------
 def test_figure_code_matches_the_module_it_wraps():
+    # EXP-14: `figure_code` fills in the demo's own monitor, the canvas `render
+    # --sample` assumes, so the module call it is compared with names it too.
     python = api.figure_code(participant="p1", trial="t1", show_heatmap=False)
     assert python == cs.python_snippet(
-        DEMO, _state(figure={"show_heatmap": False}), output="scanpath.png"
+        DEMO,
+        _state(figure={"show_heatmap": False}, canvas=(2560, 1440)),
+        output="scanpath.png",
     )
+
+
+def test_figure_code_with_no_trial_draws_what_render_draws(tmp_path, monkeypatch):
+    """EXP-14: with no ids the Python half quoted `participant=''` (no such
+    trial — it raised) and no canvas (960×480 estimated from the data), while
+    the CLI half rendered the first trial at 2560×1440. Both halves now draw
+    the same figure."""
+    figures: list = []
+
+    def capture(fig, path, **_kwargs):
+        figures.append(fig)
+        return path
+
+    monkeypatch.setattr(api, "save_figure", capture)
+    python = api.figure_code(show_heatmap=False)
+    exec(compile(python, "<snippet>", "exec"), {})  # noqa: S102
+    command = api.figure_code(show_heatmap=False, flavor="cli", output="x.html")
+    cli.main(shlex.split(command.replace(" \\\n", " "))[1:])
+    python_fig, cli_fig = figures
+    assert _figure_fingerprint(python_fig) == _figure_fingerprint(cli_fig)
+    assert python_fig.layout.width == cli_fig.layout.width
+
+
+def test_figure_code_names_a_trial_half_given(monkeypatch):
+    python = api.figure_code(participant="l7_1090")
+    assert "trials['participant_id'] == 'l7_1090'" in python
+    monkeypatch.setattr(api, "save_figure", lambda fig, path, **kwargs: path)
+    namespace: dict = {}
+    exec(compile(python, "<snippet>", "exec"), namespace)  # noqa: S102
+    assert namespace["participant"] == "l7_1090"
+
+
+def test_figure_code_writes_an_animation_to_html(tmp_path, monkeypatch):
+    """`render --animate` refuses anything but HTML, and `figure_code` wrote
+    `scanpath.png` for every kind."""
+    command = api.figure_code(kind="animation", flavor="cli")
+    assert command.rstrip().endswith("-o scanpath.html")
+    monkeypatch.chdir(tmp_path)
+    cli.main(shlex.split(command.replace(" \\\n", " "))[1:])
+    assert (tmp_path / "scanpath.html").is_file()
 
 
 def test_figure_code_flavours():

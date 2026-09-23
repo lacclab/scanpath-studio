@@ -102,6 +102,44 @@ class SnippetSource:
     cli_unsupported: tuple[str, ...] = ()
 
 
+#: The file a snippet saves to when the caller names none, per figure kind. An
+#: animation is interactive HTML — `render --animate` refuses anything else —
+#: while the static and comparison figures raster. EXP-14: `api.figure_code`
+#: used `scanpath.png` for every kind, so its animation command exited on its
+#: first line. The Share subtab keeps its own copy (`url_state._SNIPPET_OUTPUT`).
+DEFAULT_OUTPUT = {
+    "static": "scanpath.png",
+    "comparison": "comparison.png",
+    "animation": "scanpath.html",
+}
+
+
+def source_canvas(kind: str) -> tuple[int, int] | None:
+    """The screen ``render`` assumes for a source when ``--canvas`` is omitted.
+
+    EXP-14: one table for both surfaces. `render --sample` drew the demo at its
+    real 2560×1440 monitor while the Python snippet ``api.figure_code`` wrote
+    for the same request estimated 960×480 from the data extents, so the two
+    flavours of one recipe produced different figures. ``None`` means the
+    screen is read off the data (or, for a benchmark corpus, its manifest)."""
+    if kind in (SOURCE_DEMO, SOURCE_ONESTOP):
+        # OneStop's Dell U2715H — cited in eyegenbench_geometry.DISPLAY_SPECS
+        # ["onestop"] (Berzak et al. 2025); the demo is a subset of OneStop.
+        from .constants import DEFAULT_FIGURE_SIZE
+
+        return tuple(DEFAULT_FIGURE_SIZE)
+    if kind == SOURCE_POTEC:
+        return (1680, 1050)  # PoTeC monitor (DELL P2210)
+    if kind == SOURCE_AUTHOR:
+        return (1200, 800)
+    if kind == SOURCE_MULTIPLEYE:
+        # Coordinates are offset onto the centred stimulus on the real screen.
+        from .datasets import MULTIPLEYE_MONITOR
+
+        return tuple(MULTIPLEYE_MONITOR)
+    return None
+
+
 def _root(source: SnippetSource, fallback: str) -> str:
     return str(source.options.get("root") or fallback)
 
@@ -766,14 +804,28 @@ def python_snippet(
     lines.append("")
 
     func = _API_FUNCTION[state.kind]
+    participant, trial = _py(state.participant), _py(state.trial)
+    if not (state.participant and state.trial):
+        # EXP-14: an unnamed trial is `render`'s "first available" — so the
+        # Python half picks that same one rather than quoting `participant=''`,
+        # which matches no trial and raised on the snippet's first run.
+        lines.append("trials = sps.list_trials(words, fixations)")
+        for column, value in (
+            ("participant_id", state.participant),
+            ("trial_id", state.trial),
+        ):
+            if value:
+                lines.append(f"trials = trials[trials[{column!r}] == {_py(value)}]")
+        lines += ["participant, trial = trials.iloc[0]", ""]
+        participant, trial = "participant", "trial"
     args = ["words", "fixations"]
     if state.kind == "comparison":
         compare = state.compare or CompareTarget()
-        args.append(f"({_py(state.participant)}, {_py(state.trial)})")
+        args.append(f"({participant}, {trial})")
         args.append(f"({_py(compare.participant)}, {_py(compare.trial)})")
     else:
-        args.append(f"participant={_py(state.participant)}")
-        args.append(f"trial={_py(state.trial)}")
+        args.append(f"participant={participant}")
+        args.append(f"trial={trial}")
 
     call = [f"fig = sps.{func}("]
     call += [f"    {arg}," for arg in args]

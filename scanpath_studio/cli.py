@@ -24,7 +24,15 @@ from pathlib import Path
 import pandas as pd
 
 from . import __version__
-from .code_snippet import SnippetSource
+from .code_snippet import (
+    SOURCE_AUTHOR,
+    SOURCE_DEMO,
+    SOURCE_MULTIPLEYE,
+    SOURCE_ONESTOP,
+    SOURCE_POTEC,
+    SnippetSource,
+    source_canvas,
+)
 from .constants import (
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_SYMBOL,
@@ -1673,16 +1681,17 @@ def render(argv: list[str]) -> None:
 
     from . import api
 
+    # Each fixed-screen source's monitor is `code_snippet.source_canvas`, the
+    # table `api.figure_code` reads too, so both flavours of a recipe agree.
     if args.sample:
         words, fixations = api.load_sample_data()
-        # OneStop monitor — cited in eyegenbench_geometry.DISPLAY_SPECS["onestop"].
-        canvas = canvas or (2560, 1440)
+        canvas = canvas or source_canvas(SOURCE_DEMO)
     elif args.authoring:
         try:
             words, fixations = api.load_authored_scanpath(args.authoring)
         except (ValueError, OSError) as exc:
             raise SystemExit(str(exc)) from exc
-        canvas = canvas or (1200, 800)
+        canvas = canvas or source_canvas(SOURCE_AUTHOR)
     elif args.potec:
         from .datasets import load_potec
 
@@ -1698,7 +1707,7 @@ def render(argv: list[str]) -> None:
             )
         except (ValueError, FileNotFoundError, OSError) as exc:
             raise SystemExit(str(exc))
-        canvas = canvas or (1680, 1050)  # PoTeC monitor (DELL P2210)
+        canvas = canvas or source_canvas(SOURCE_POTEC)
     elif args.eyegenbench:
         if not args.eyegenbench_dataset:
             parser.error("--eyegenbench requires --eyegenbench-dataset NAME")
@@ -1733,12 +1742,8 @@ def render(argv: list[str]) -> None:
             )
         except (ValueError, FileNotFoundError, OSError) as exc:
             raise SystemExit(str(exc))
-        # OneStop monitor (Dell U2715H) — cited once in
-        # eyegenbench_geometry.DISPLAY_SPECS["onestop"] (Berzak et al. 2025).
-        canvas = canvas or (2560, 1440)
+        canvas = canvas or source_canvas(SOURCE_ONESTOP)
     elif args.source == "multipleye":
-        from .datasets import MULTIPLEYE_MONITOR
-
         try:
             words, fixations, args.participant, args.trial = _load_multipleye_render(
                 args.export,
@@ -1751,7 +1756,7 @@ def render(argv: list[str]) -> None:
             raise SystemExit(str(exc))
         # Same authoritative monitor the viewer's MultiplEYE bundle source snaps
         # to — coords are offset onto the centered stimulus on the real screen.
-        canvas = canvas or MULTIPLEYE_MONITOR
+        canvas = canvas or source_canvas(SOURCE_MULTIPLEYE)
     else:
         manifest = None
         if args.trial_parts_manifest:

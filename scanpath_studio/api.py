@@ -2059,7 +2059,7 @@ def figure_code(
     autoplay: bool = True,
     flavor: str = "python",
     explicit: bool = False,
-    output: str = "scanpath.png",
+    output: str | None = None,
     **figure_overrides,
 ) -> str:
     """The API or CLI code that reproduces a figure (EXP-7).
@@ -2089,6 +2089,13 @@ def figure_code(
     (EXP-8 §1). Both forms carry them: ``labels=`` in the Python snippet,
     ``--label-a`` / ``--label-b`` in the CLI one.
 
+    With ``participant`` / ``trial`` left empty the snippet renders the first
+    available trial, as ``render`` does. ``canvas_size`` defaults to the screen
+    ``render`` assumes for the source (the demo's 2560×1440, PoTeC's 1680×1050,
+    …), so both flavours draw the same figure; ``output`` defaults to
+    ``scanpath.html`` for an animation — ``render --animate`` writes only HTML —
+    and to a PNG otherwise.
+
     Only the options that differ from :func:`figure_options` are written, so the
     snippet stays readable; ``explicit=True`` emits every option at its current
     value. ``flavor`` is ``"python"``, ``"cli"``, or ``"both"`` (the two
@@ -2109,6 +2116,11 @@ def figure_code(
         set(figure_options(kind)) | {"palette"},
         "figure_code",
     )
+    if canvas_size is None:
+        # EXP-14: `render` snaps these sources to their recorded screen while
+        # `plot_scanpath` estimates one from the data, so leaving the canvas
+        # unnamed made the two flavours of one recipe disagree.
+        canvas_size = _snippet.source_canvas(source)
     state = _snippet.FigureState(
         kind=kind,
         settings={**figure_options(kind), **_expand_palette(figure_overrides)},
@@ -2149,7 +2161,7 @@ def figure_code(
         ),
         state,
         explicit=explicit,
-        output=output,
+        output=output or _snippet.DEFAULT_OUTPUT.get(kind, "scanpath.png"),
     )
     cli = code.cli
     if code.cli_unsupported:

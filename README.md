@@ -72,15 +72,13 @@ looking at, rather than taking you away from it):
 
 ![The Scanpath Studio app](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/docs/assets/app_screenshot.png)
 
-## Project map
+## Roadmap
 
-![Project map: built vs. planned capabilities](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/project_map.png)
-
-*Solid = built, dashed = planned. Planned and in-flight work is tracked in
+Planned and in-flight work is tracked in
 [GitHub Issues](https://github.com/lacclab/scanpath-studio/issues). The archive
 of everything closed before 2026-08-20 is browsable offline: double-click
 `tracker/start.command` (macOS) or `tracker/start.bat` (Windows) — or run
-`python3 tracker/server.py` (`python tracker\server.py` on Windows).*
+`python3 tracker/server.py` (`python tracker\server.py` on Windows).
 
 ## Your data
 

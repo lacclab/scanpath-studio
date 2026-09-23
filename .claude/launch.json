@@ -23,7 +23,9 @@
         "--server.port",
         "8511",
         "--server.headless",
-        "true"
+        "true",
+        "--server.address",
+        "127.0.0.1"
       ],
       "port": 8511
     },

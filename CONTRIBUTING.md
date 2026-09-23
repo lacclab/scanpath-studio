@@ -11,8 +11,12 @@ requests.
 git clone https://github.com/lacclab/scanpath-studio.git
 cd scanpath-studio
 pip install -e ".[test]"          # or: uv sync
-streamlit run streamlit_app.py    # run the app locally
+streamlit run streamlit_app.py --server.address 127.0.0.1   # run the app locally
 ```
+
+`--server.address 127.0.0.1` keeps the server on your own machine; it is also
+what turns the on-device recovery cache on (ENG-56 gates it on the server's bind
+address, and a bare `streamlit run` listens on every interface).
 
 Tested on Python 3.11–3.14.
 

@@ -98,7 +98,7 @@ Contributors can install the repository directly:
 git clone https://github.com/lacclab/scanpath-studio.git
 cd scanpath-studio
 pip install -e ".[test,docs]"
-streamlit run streamlit_app.py
+streamlit run streamlit_app.py --server.address 127.0.0.1
 ```
 
 Development commands belong in the

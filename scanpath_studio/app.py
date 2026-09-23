@@ -3431,8 +3431,22 @@ def _upload_header(uploaded, *, multi: bool) -> list:
     sources = list(uploaded) if multi else [uploaded]
     header: list = []
     for source in sources:
-        header.extend(c for c in read_table_columns(source) if c not in header)
+        columns = _upload_columns_cached(source, _uploaded_file_key(source))
+        header.extend(c for c in columns if c not in header)
     return header
+
+
+@st.cache_data(show_spinner=False, max_entries=64)
+def _upload_columns_cached(_uploaded, file_key) -> list:
+    """One uploaded file's column names, read once per file (PERF-6's header pass).
+
+    Keyed like the planned read. A delimited file's header is cheap, but a
+    workbook or a zipped Parquet / Feather / Excel member has no header-only
+    read — :func:`data.read_table_columns` parses it whole — so an uncached pass
+    re-parsed the file on every rerun of the wizard: 1.4 s a click on a full
+    ``.xls`` sheet, and a second decompressed copy of a large zip held at once.
+    """
+    return read_table_columns(_uploaded)
 
 
 def _uploaded_header(state_prefix: str) -> list:

@@ -169,3 +169,33 @@ class TestUploadedTableRead:
         )
         assert len(frame) == 4
         assert "IA_AREA" not in frame.columns
+
+
+class TestTheHeaderPassReadsEachFileOnce:
+    """A workbook or a zipped binary member has no header-only read, so the
+    header pass parses it whole — it must not do that on every rerun."""
+
+    class _Upload:
+        def __init__(self, name: str, file_id: str):
+            self.name, self.file_id, self.size = name, file_id, 1
+
+    def test_a_rerun_does_not_parse_the_file_again(self, monkeypatch):
+        calls = []
+
+        def fake_columns(source):
+            calls.append(source.name)
+            return ["a", "b"]
+
+        monkeypatch.setattr(app, "read_table_columns", fake_columns)
+        app._upload_columns_cached.clear()
+        upload = self._Upload("words.xls", "perf-header-1")
+        for _ in range(3):
+            assert app._upload_header(upload, multi=False) == ["a", "b"]
+        assert calls == ["words.xls"]
+
+    def test_a_new_file_is_read(self, monkeypatch):
+        monkeypatch.setattr(app, "read_table_columns", lambda source: [source.name])
+        app._upload_columns_cached.clear()
+        first = app._upload_header(self._Upload("a.xls", "perf-header-2"), multi=False)
+        second = app._upload_header(self._Upload("b.xls", "perf-header-3"), multi=False)
+        assert (first, second) == (["a.xls"], ["b.xls"])

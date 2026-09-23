@@ -3238,8 +3238,11 @@ def _render_offpage_setup_notice(data_view: bool) -> None:
 
 
 # File types accepted by every upload box. ``zip`` covers single-member
-# archives wrapping any of the others (e.g. ``data.csv.zip``).
-_UPLOAD_TYPES = ["csv", "tsv", "parquet", "feather", "zip", "xlsx", "xls"]
+# archives wrapping any of the others (e.g. ``data.csv.zip``). ``txt`` is the
+# tab-separated report many exporters write (DATA-41); a text file's delimiter
+# is read off its header line, and an ``.xls`` that is really text (EyeLink
+# Data Viewer's "Excel" export) is read as text (BUG-55).
+_UPLOAD_TYPES = ["csv", "tsv", "txt", "parquet", "feather", "zip", "xlsx", "xls"]
 
 
 def _uploaded_file_key(uploaded) -> tuple:

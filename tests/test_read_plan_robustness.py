@@ -259,3 +259,42 @@ class TestFilesTheReadersUsedToRefuse:
         at = AppTest.from_function(script).run(timeout=60)
         assert not at.exception
         assert any("Couldn't read **empty.csv**" in e.value for e in at.error)
+
+
+class TestTheDelimiterIsReadOffTheHeader:
+    """DATA-41: a `;`-separated CSV and a tab-separated `.txt` both loaded as
+    one column holding the whole line."""
+
+    def test_a_semicolon_csv_with_decimal_commas(self, tmp_path):
+        path = tmp_path / "words_euro.csv"
+        pd.DataFrame({**CORE, "IA_LEFT": [10.5]}).to_csv(
+            path, sep=";", decimal=",", index=False
+        )
+        assert read_table_columns(path) == list(CORE)
+        frame = read_table(path, plan=_plan(read_table_columns(path)))
+        words = data_module.normalize_words(frame, propose_word_schema(frame))
+        assert words["x"].tolist() == [10.5]
+
+    def test_a_tab_separated_txt(self, tmp_path):
+        path = tmp_path / "ia_report.txt"
+        path.write_text(pd.DataFrame(CORE).to_csv(sep="\t", index=False))
+        assert read_table_columns(path) == list(CORE)
+        assert read_table(path)["IA_LABEL"].tolist() == ["Hello"]
+
+    def test_a_semicolon_csv_inside_a_zip(self, tmp_path):
+        path = tmp_path / "words.zip"
+        with zipfile.ZipFile(path, "w") as zf:
+            zf.writestr("words.csv", pd.DataFrame(CORE).to_csv(sep=";", index=False))
+        assert read_table_columns(path) == list(CORE)
+        frame = read_table(path, plan=_plan(read_table_columns(path)))
+        assert frame["IA_LABEL"].tolist() == ["Hello"]
+
+    def test_a_delimiter_inside_a_quoted_name_does_not_count(self, tmp_path):
+        path = tmp_path / "a.csv"
+        path.write_text('"a;b;c",d\n1,2\n')
+        assert read_table_columns(path) == ["a;b;c", "d"]
+
+    def test_a_one_column_csv_keeps_the_comma(self, tmp_path):
+        path = tmp_path / "ids.csv"
+        path.write_text("participant_id\np1\np2\n")
+        assert read_table(path)["participant_id"].tolist() == ["p1", "p2"]

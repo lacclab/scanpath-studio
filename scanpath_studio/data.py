@@ -1160,8 +1160,14 @@ def aggregate_char_boxes(
     return out.drop(columns=list(temp))
 
 
-def _read_by_extension(buf, name: str, plan: ReadPlan | None = None) -> pd.DataFrame:
+def _read_by_extension(
+    buf, name: str, plan: ReadPlan | None = None, *, sep: str | None = None
+) -> pd.DataFrame:
     """Dispatch a buffer/path to a pandas reader by its (lowercased) name.
+
+    ``sep`` is the delimiter of a text table when the caller already knows it
+    (a zip member, which cannot be peeked at); otherwise it is read off the
+    header line (DATA-41).
 
     ``plan`` (PERF-6) narrows the read to the columns normalization keeps and
     declares EyeLink's ``.`` missing in the numeric ones. Delimited text and
@@ -1187,13 +1193,57 @@ def _read_by_extension(buf, name: str, plan: ReadPlan | None = None) -> pd.DataF
         if not _is_workbook(buf, name):
             # BUG-55: EyeLink Data Viewer's "Excel" export is tab-separated text
             # with an .xls name — read it as what it is.
-            return _read_delimited(buf, "\t", plan)
+            return _read_delimited(buf, sep or _sniff_delimiter(buf, name), plan)
         # First sheet (e.g. MultiplEYE questions workbook).
         frame = pd.read_excel(buf, **_excel_na_kwargs(buf, plan))
         return frame[[c for c in columns if c in frame.columns]] if columns else frame
-    if name.endswith((".tsv", ".tab")):
-        return _read_delimited(buf, "\t", plan)
-    return _read_delimited(buf, ",", plan)
+    return _read_delimited(buf, sep or _sniff_delimiter(buf, name), plan)
+
+
+#: The delimiters a text table is looked for with, and the one assumed when its
+#: header line settles nothing (DATA-41).
+_DELIMITERS = ("\t", ",", ";", "|")
+_QUOTED = re.compile(r'"[^"]*"')
+
+
+def _default_delimiter(name: str) -> str:
+    """The delimiter a text file's extension implies: tab for ``.tsv`` /
+    ``.tab`` and for the tab-separated exports named ``.txt`` or ``.xls``,
+    comma for everything else."""
+    return "\t" if name.lower().endswith((".tsv", ".tab", ".txt", ".xls")) else ","
+
+
+def _delimiter_of(header_line: bytes, name: str) -> str:
+    """The delimiter a table's header line uses (DATA-41).
+
+    A ``;``-separated CSV (Excel's export wherever the decimal separator is a
+    comma) and a tab-separated ``.txt`` both used to load as a single column
+    holding the whole line. Counting each candidate in the header, outside
+    quotes, is enough: a column name never contains the delimiter, while a
+    sniffer that also reads the rows is misled by the decimal commas in them.
+    A ``.tsv`` is always tab-separated; a header with no candidate in it (a
+    one-column table) keeps the extension's default.
+    """
+    default = _default_delimiter(name)
+    if name.lower().endswith((".tsv", ".tab")):
+        return default
+    text = _QUOTED.sub("", header_line.decode("latin-1"))
+    counts = {sep: text.count(sep) for sep in _DELIMITERS}
+    best = max(counts, key=lambda sep: counts[sep])
+    return best if counts[best] > counts[default] else default
+
+
+def _first_line(head: bytes) -> bytes:
+    """The header line of a text table's opening bytes."""
+    return head.split(b"\n", 1)[0].rstrip(b"\r")
+
+
+def _sniff_delimiter(buf, name: str) -> str:
+    """:func:`_delimiter_of` for an upload or a path, read without consuming
+    it; a stream that cannot be rewound keeps the extension's default."""
+    if not _can_reread(buf):
+        return _default_delimiter(name)
+    return _delimiter_of(_first_line(_peek(buf, _HEADER_MAX_BYTES)), name)
 
 
 #: The first bytes of a legacy (OLE2) Excel workbook, and of a zip container —
@@ -1786,10 +1836,8 @@ def read_table_columns(file_like_or_path) -> list[str]:
             from pyarrow import feather
 
             return list(feather.read_table(file_like_or_path, columns=[]).schema.names)
-        if name.endswith((".tsv", ".tab")):
-            return _header(file_like_or_path, "\t")
-        if name.endswith(".csv"):
-            return _header(file_like_or_path, ",")
+        if name.endswith((".tsv", ".tab", ".csv", ".txt")):
+            return _header(file_like_or_path, _sniff_delimiter(file_like_or_path, name))
         # Rewound afterwards too (the `finally`): the caller reads the table
         # again, and a buffer left at its end reads as an empty file.
         return list(read_table(file_like_or_path).columns)
@@ -1817,18 +1865,21 @@ def _empty_file_error(name: str) -> ValueError:
 _HEADER_MAX_BYTES = 1024 * 1024
 
 
-def _member_header(zf: zipfile.ZipFile, info: zipfile.ZipInfo, sep: str) -> list:
-    """Column names of one delimited zip member, from its first line alone.
+def _member_layout(zf: zipfile.ZipFile, info: zipfile.ZipInfo) -> tuple[list, str]:
+    """Column names and delimiter of one delimited zip member, from its first
+    line alone.
 
     A member stream cannot be rewound, so the encoding fallback runs over just
-    the header line held in memory — cut at the newline, never mid-character.
+    the header line held in memory — cut at the newline, never mid-character —
+    and the delimiter (DATA-41) is read off the same line.
     """
     with zf.open(info) as inner:
         head = inner.read(_HEADER_MAX_BYTES)
-    line = head.split(b"\n", 1)[0]
+    line = _first_line(head)
     if not line.strip():
         raise _empty_file_error(info.filename)
-    return _header(io.BytesIO(line + b"\n"), sep)
+    sep = _delimiter_of(line, info.filename)
+    return _header(io.BytesIO(line + b"\n"), sep), sep
 
 
 def _zipped_table_columns(file_like_or_path) -> list[str]:
@@ -1854,14 +1905,13 @@ def _zipped_table_columns(file_like_or_path) -> list[str]:
         _check_zip_limits(infos)
         for info in infos:
             name = info.filename.lower()
-            if not name.endswith((".tsv", ".tab", ".csv")):
+            if not name.endswith((".tsv", ".tab", ".csv", ".txt")):
                 # Columnar/workbook members seek, so there is no header-only
                 # read: defer to `_read_zipped_table`, which reads every member
                 # under a running byte budget (declared sizes are forgeable, so
                 # the check above is not sufficient on its own).
                 return list(_read_zipped_table(file_like_or_path).columns)
-            sep = "\t" if name.endswith((".tsv", ".tab")) else ","
-            names = _member_header(zf, info, sep)
+            names, _sep = _member_layout(zf, info)
             columns.extend(c for c in names if c not in columns)
     return columns
 
@@ -2132,14 +2182,14 @@ def _read_zipped_table(
                     # PERF-6: one archive can hold members with different
                     # columns, and the plan is built from their union — narrow
                     # it to this member's own header or `usecols` rejects it.
+                    header, sep = _member_layout(zf, info)
                     member_plan = plan
                     if plan is not None and plan.columns:
-                        sep = "\t" if name.endswith((".tsv", ".tab")) else ","
-                        member_plan = plan.narrowed_to(_member_header(zf, info, sep))
+                        member_plan = plan.narrowed_to(header)
                     try:
                         frames.append(
                             _read_by_extension(
-                                io.BufferedReader(stream), name, member_plan
+                                io.BufferedReader(stream), name, member_plan, sep=sep
                             )
                         )
                     except UnicodeDecodeError:
@@ -2151,7 +2201,9 @@ def _read_zipped_table(
                                 again, member_budget, member, limit_label=limit_label
                             )
                             buf = io.BytesIO(stream.read())
-                        frames.append(_read_by_extension(buf, name, member_plan))
+                        frames.append(
+                            _read_by_extension(buf, name, member_plan, sep=sep)
+                        )
             remaining -= stream.consumed
             labels.append(Path(member).stem)
     return _tag_and_concat(frames, labels, SOURCE_FILE_COLUMN)

@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from urllib.parse import urlencode
 
@@ -815,6 +817,170 @@ _PLOT_CONFIG_LAYER_KEYS = {
 _CANVAS_BOUNDS = (100, 10000)
 _FONT_BOUNDS = (6, 72)
 _MARKER_BOUNDS = (4, 40)
+
+
+# --- Seeding a stored session value (BUG-71) --------------------------------
+#
+# The recovery cache (`persistence.restore_state`) seeds session state straight
+# from a JSON file on disk, one key at a time, before any widget renders — the
+# same position a deep link is in, without the link's parsers. A value a widget
+# refuses (an opacity of 7, a size range of "abc") or one Plotly refuses (a
+# colour of "zzz") stopped the app on every launch. `sanitize_session_value`
+# holds a stored value to the rules the two readers above already apply:
+# `_URL_BOUNDED` (plus the saved-config-only widget bounds below), the `#rrggbb`
+# colour check, and the closed vocabularies whose widgets raise on anything else.
+
+#: Bounds of the numeric widgets a saved config writes but a link does not carry
+#: — the same limits `_restore_plot_config` clamps to inline. `None` is an open
+#: side (the fixation-flag thresholds are a `number_input` with only a minimum).
+_CONFIG_BOUNDED = {
+    "global_canvas_width": _CANVAS_BOUNDS,
+    "global_canvas_height": _CANVAS_BOUNDS,
+    "global_base_font_size": _FONT_BOUNDS,
+    "global_monitor_width_mm": (100.0, 3000.0),
+    "global_viewing_distance_mm": (100.0, 3000.0),
+    "global_display_dpi": (20.0, 1000.0),
+    "global_stimulus_font_pt": (4.0, 144.0),
+    "global_colorbar_tickangle": (-90, 90),
+    "global_colorbar_tickfont_size": (6, 20),
+    "global_fixclass_short_threshold_ms": (1, None),
+    "global_fixclass_long_threshold_ms": (1, None),
+    **{f"cmp{i}_opacity": (0.1, 1.0) for i in (0, 1)},
+    **{f"cmp{i}_saccade_width": SACCADE_WIDTH_BOUNDS for i in (0, 1)},
+    **{f"cmp{i}_marker_size_range": _MARKER_BOUNDS for i in (0, 1)},
+}
+_FIXCLASS_CATEGORIES = ("short", "long", "oob", "blink")
+#: Every session key that holds a colour — the link's, plus the ones only a
+#: saved config carries.
+_COLOR_STATE_KEYS = frozenset(
+    {
+        *(_SHARE_VALUE_PARAMS[p] for p in _SHARE_COLOR_PARAMS),
+        "global_span_border_color",
+        *(f"global_fixclass_{c}_color" for c in _FIXCLASS_CATEGORIES),
+        *(f"cmp{i}_{part}" for i in (0, 1) for part in ("fix_color", "saccade_color")),
+    }
+)
+#: Keys whose widget is a toggle or checkbox: a stored non-bool is not a setting.
+_BOOL_STATE_KEYS = frozenset(
+    {
+        *_SHARE_TOGGLE_PARAMS.values(),
+        *_PLOT_CONFIG_LAYER_KEYS.values(),
+        "global_use_stimulus_font_pt",
+        "global_show_compare_legend",
+        "single_animate",
+        "single_compare_toggle",
+        "cmp0_hollow",
+        "cmp1_hollow",
+    }
+)
+#: Two-number ranges with no widget bound of their own: the colour ranges are
+#: clamped to the live data by the rail, so they only have to be numbers.
+_FREE_RANGE_STATE_KEYS = frozenset(
+    {"global_fixation_color_range", "global_heatmap_color_range"}
+)
+
+
+def _closed_choice(options) -> Callable[[object], object]:
+    def parse(value):
+        if value not in options:
+            raise ValueError(f"not one of the widget's options: {value!r}")
+        return value
+
+    return parse
+
+
+#: Closed vocabularies — the same sets `_restore_plot_config` checks with
+#: `put_valid`, and the links' own validating parsers where there is one. `None`
+#: passes (a deselected segmented control stores it, and the rail coerces it).
+_CHOICE_STATE_PARSERS = {
+    "global_align_algorithm": _parse_align_algorithm,
+    "global_saccade_classes": lambda v: _parse_saccade_classes(
+        ",".join(str(item) for item in v) if isinstance(v, (list, tuple)) else v
+    ),
+    "single_compare_layout": _parse_compare_layout,
+    "single_compare_stimulus": _parse_compare_stimulus,
+    "global_illustration_label": _closed_choice(("Auto", "Show", "Hide")),
+    "global_preproc_short_policy": _closed_choice(
+        ("Off", "Merge", "Merge then discard", "Discard")
+    ),
+    "global_heatmap_style": _closed_choice(
+        ("Word boxes", "Interpolated", "Duration mass")
+    ),
+    "global_heatmap_norm": _closed_choice(("Linear", "Log")),
+    "global_heatmap_metric": _closed_choice(("duration_ms", "counts")),
+    "global_fixation_colorscale": _closed_choice(tuple(COLORSCALES)),
+    "global_heatmap_colorscale": _closed_choice(tuple(COLORSCALES)),
+    "global_saccade_style": _closed_choice(tuple(SACCADE_DASH_OPTIONS)),
+    "global_saccade_render_mode": _closed_choice(("Straight", "Arc")),
+    "global_saccade_color_mode": _closed_choice(tuple(SACCADE_COLOR_MODES)),
+    "global_fixation_symbol": _closed_choice(tuple(FIXATION_SYMBOLS)),
+    "global_colorbar_orientation": _closed_choice(("Vertical", "Horizontal")),
+    "global_critical_span_style": _closed_choice(("Mark text", "Mark border", "None")),
+    "global_palette": _closed_choice((*PALETTES, CUSTOM_PALETTE)),
+    **{
+        f"global_fixclass_{c}_mode": _closed_choice(tuple(_FIXCLASS_MODES))
+        for c in _FIXCLASS_CATEGORIES
+    },
+    **{
+        f"global_fixclass_{c}_symbol": _closed_choice(tuple(_OUT_OF_TEXT_MARKERS))
+        for c in _FIXCLASS_CATEGORIES
+    },
+}
+
+
+def _bounded_number(value, lo, hi):
+    """``value`` as a finite number of the bounds' type, clamped to them."""
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        raise TypeError(f"not a number: {value!r}")
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError(f"not a finite number: {value!r}")
+    if lo is not None:
+        number = max(lo, number)
+    if hi is not None:
+        number = min(hi, number)
+    integral = all(isinstance(b, int) for b in (lo, hi) if b is not None)
+    return int(number) if integral else number
+
+
+def sanitize_session_value(key: str, value):
+    """A stored session value as it may be seeded, or ``ValueError``/``TypeError``.
+
+    For the recovery cache (BUG-71), which has no parser of its own: the caller
+    drops a value this rejects rather than seeding it, so one bad entry costs the
+    user that one setting, never the launch. Numbers and ranges are clamped to
+    their widget's bounds (a range comes back as a sorted tuple, the shape the
+    widgets write); colours must be ``#rrggbb``; toggles must be booleans; closed
+    vocabularies must name an option. A key with no rule — a data-dependent
+    field the rail heals against the loaded data, a trial id, a mapping — passes
+    through unchanged.
+    """
+    if key in _COLOR_STATE_KEYS:
+        if not isinstance(value, str):
+            raise TypeError(f"not a colour: {value!r}")
+        return _parse_hex_color(value)
+    bounds = _URL_BOUNDED.get(key) or _CONFIG_BOUNDED.get(key)
+    if bounds is not None:
+        lo, hi = bounds
+        if key.endswith("_range"):
+            if not isinstance(value, (list, tuple)) or len(value) != 2:
+                raise TypeError(f"not a two-number range: {value!r}")
+            a, b = (_bounded_number(v, lo, hi) for v in value)
+            return (min(a, b), max(a, b))
+        return _bounded_number(value, lo, hi)
+    if key in _FREE_RANGE_STATE_KEYS:
+        if not isinstance(value, (list, tuple)) or len(value) != 2:
+            raise TypeError(f"not a two-number range: {value!r}")
+        a, b = (_bounded_number(v, None, None) for v in value)
+        return (float(min(a, b)), float(max(a, b)))
+    if key in _BOOL_STATE_KEYS:
+        if not isinstance(value, bool):
+            raise TypeError(f"not a switch value: {value!r}")
+        return value
+    parser = _CHOICE_STATE_PARSERS.get(key)
+    if parser is not None and value is not None:
+        return parser(value)
+    return value
 
 
 # --- Save & restore config schema versioning (ENG-11) ---------------------

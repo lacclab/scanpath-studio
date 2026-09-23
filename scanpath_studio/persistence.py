@@ -58,6 +58,14 @@ _SKIP_NEXT_SAVE_KEY = "_local_persistence_skip_next_save"
 _LAST_FINGERPRINT_KEY = "_local_persistence_fingerprint"
 _LAST_DATASET_IDENTITY_KEY = "_local_persistence_dataset_identity"
 _LAST_DATASET_ENTRIES_KEY = "_local_persistence_dataset_entries"
+#: BUG-71 — the crash-loop breaker. Written beside the manifest just before a
+#: restore is applied, removed once a run that applied one reaches
+#: `save_local_state` (the epilogue, i.e. the run rendered). Finding it at the
+#: start of a session means the last session to restore this cache never got
+#: that far, so this one opens without it — see `restore_local_state`.
+RESTORE_MARKER_NAME = "restore-in-progress"
+_RESTORE_PENDING_KEY = "_local_persistence_restore_pending"
+_RESTORE_SKIPPED_KEY = "_local_persistence_restore_skipped"
 _FRAME_KEYS = ("words", "fixations", "raw_gaze")
 _STATE_LOCK = threading.RLock()
 _LOGGER = logging.getLogger(__name__)
@@ -353,18 +361,37 @@ def restore_state(
         if not path.exists():
             return False
         try:
-            manifest = json.loads(path.read_text(encoding="utf-8"))
+            # BUG-71: read and check the whole manifest *before* touching the
+            # session. It is a file on disk, so any JSON value can be in it —
+            # `[]`, `null`, a dataset entry that is a string — and each of those
+            # used to escape as an AttributeError the handler below did not
+            # catch, on every launch. A wrong shape now abandons the restore
+            # with nothing half-applied.
+            manifest = _as_mapping(json.loads(path.read_text(encoding="utf-8")))
             if int(manifest.get("schema", 0)) != SCHEMA_VERSION:
                 return False
             restored_datasets = {}
-            for name, entry in dict(manifest.get("datasets", {})).items():
-                payload = dict(entry.get("metadata", {}))
-                for frame_key, relative in dict(entry.get("frames", {})).items():
+            stored_entries = {}
+            for name, entry in _as_mapping(manifest.get("datasets", {})).items():
+                entry = _as_mapping(entry)
+                payload = dict(_as_mapping(entry.get("metadata", {})))
+                for frame_key, relative in _as_mapping(entry.get("frames", {})).items():
                     frame_path = root / str(relative)
                     payload[frame_key] = pd.read_parquet(frame_path)
                 for frame_key in _FRAME_KEYS:
                     payload.setdefault(frame_key, pd.DataFrame())
                 restored_datasets[str(name)] = payload
+                stored_entries[str(name)] = entry
+            stored_session = _restorable_session(manifest.get("session", {}))
+            annotations = manifest.get("annotations", [])
+            # One malformed record costs that record, not the rest.
+            records = [
+                record
+                for record in (annotations if isinstance(annotations, list) else [])
+                if isinstance(record, dict)
+            ]
+            store = records_to_store(records)
+
             existing = dict(session.get("_datasets", {}))
             if restored_datasets:
                 session["_datasets"] = {**restored_datasets, **existing}
@@ -372,12 +399,11 @@ def restore_state(
             # in-memory dataset of the same name shadows the stored one above.
             summary = {"datasets": len(set(restored_datasets) - set(existing))}
             skip = set(skip_session_keys)
-            stored_session = dict(manifest.get("session", {}))
             # Counted before the loop below writes it: `setdefault` means a
             # design library already in this session keeps its own, so the stored
             # one restored nothing.
             summary["designs"] = (
-                len(dict(stored_session.get(DESIGN_PRESETS) or {}))
+                len(stored_session.get(DESIGN_PRESETS) or {})
                 if DESIGN_PRESETS not in skip and DESIGN_PRESETS not in session
                 else 0
             )
@@ -386,14 +412,13 @@ def restore_state(
                     session.setdefault(key, value)
             summary["annotations"] = 0
             if ANNOTATIONS_STATE_KEY not in session:
-                records = list(manifest.get("annotations", []))
-                session[ANNOTATIONS_STATE_KEY] = records_to_store(records)
+                session[ANNOTATIONS_STATE_KEY] = store
                 summary["annotations"] = len(records)
             # A clean restore can reuse the Parquet files on the first rendered
             # settings change. Pre-existing in-memory datasets still need a save.
             if not existing:
                 session[_LAST_DATASET_IDENTITY_KEY] = _dataset_identity(session)
-                session[_LAST_DATASET_ENTRIES_KEY] = dict(manifest.get("datasets", {}))
+                session[_LAST_DATASET_ENTRIES_KEY] = stored_entries
             counts = manifest.get("dataset_counts")
             if isinstance(counts, dict):
                 # DATA-32 — a manifest written before this existed simply has
@@ -405,10 +430,63 @@ def restore_state(
             # the summary rather than a bare flag — see the docstring.
             session[_RESTORED_PAYLOAD_KEY] = summary
             return True
-        except (OSError, ValueError, TypeError, KeyError):
+        except (OSError, ValueError, TypeError, KeyError, AttributeError):
             # A partial/corrupt cache must never prevent the app from opening. The
             # user can simply work normally; the next successful save replaces it.
+            # AttributeError is the backstop for a shape `_as_mapping` did not
+            # anticipate (BUG-71) — it is what every wrong shape used to raise.
             return False
+
+
+def _as_mapping(value: Any) -> dict:
+    """``value`` if it is a JSON object, else ``ValueError`` (BUG-71)."""
+    if not isinstance(value, dict):
+        raise ValueError(
+            f"expected an object in the manifest, got {type(value).__name__}"
+        )
+    return value
+
+
+def _restorable_session(stored: Any) -> dict:
+    """The manifest's ``session`` block, cut down to what is safe to seed (BUG-71).
+
+    Only keys this module writes are restored — the durable settings and the
+    column mapping — so a hand-edited or foreign manifest cannot seed arbitrary
+    session state. Each value is held to its widget's rules by
+    ``url_state.sanitize_session_value`` (clamped into range, or dropped): a
+    restored value is seeded before its widget renders, exactly like a deep link,
+    so an opacity of 7 or a colour of ``"zzz"`` stopped the app on every launch.
+    Dropping it costs the user that one setting. Imported here, not at the top,
+    because ``url_state`` pulls in Streamlit and the cache CLI must not.
+    """
+    from .url_state import sanitize_session_value
+
+    clean = {}
+    for key, value in _as_mapping(stored).items():
+        if not isinstance(key, str) or not (
+            key in _SESSION_KEYS or key.startswith(COLUMN_MAPPING_PREFIX)
+        ):
+            continue
+        if key == DESIGN_PRESETS:
+            # The design library is the user's own work: keep every well-formed
+            # design rather than all-or-nothing.
+            if isinstance(value, dict):
+                clean[key] = {
+                    str(name): dict(design)
+                    for name, design in value.items()
+                    if isinstance(design, dict)
+                }
+            continue
+        try:
+            clean[key] = sanitize_session_value(key, value)
+        except (TypeError, ValueError, OverflowError):
+            _LOGGER.warning(
+                "Dropped %s from the recovery cache: %.80r is not a value its "
+                "control accepts.",
+                key,
+                value,
+            )
+    return clean
 
 
 def forget_state(root: Path) -> None:
@@ -417,6 +495,7 @@ def forget_state(root: Path) -> None:
         manifest = root / "manifest.json"
         if manifest.exists():
             manifest.unlink()
+        (root / RESTORE_MARKER_NAME).unlink(missing_ok=True)
         frames_dir = root / "datasets"
         if frames_dir.is_dir():
             for path in frames_dir.glob("*.parquet"):
@@ -525,10 +604,62 @@ def restore_local_state(
     if not persistence_enabled(url):
         session[_RESTORED_KEY] = True
         return False
+    if session.get(_RESTORED_KEY):
+        return False
+    root = state_directory()
+    marker = root / RESTORE_MARKER_NAME
+    if marker.is_file():
+        # BUG-71: the last session that applied this cache never finished a run,
+        # and a restore that breaks the app breaks it before the 💾 Session
+        # dialog can offer a reset — so every launch would break again. Open
+        # without it, once. The files stay, and saving is paused so this
+        # session's (empty) state cannot overwrite them; the marker goes, so a
+        # reload tries again — one strike, because a tab closed mid-way through a
+        # slow first run leaves the marker too, and that must not cost the cache.
+        session[_RESTORED_KEY] = True
+        session[_RESTORE_SKIPPED_KEY] = True
+        session[_PAUSED_KEY] = True
+        _unlink_quietly(marker)
+        _LOGGER.warning(
+            "The previous session never finished opening with the recovery cache "
+            "at %s; opened without restoring it (the files are kept).",
+            root,
+        )
+        return False
+    if (root / "manifest.json").is_file():
+        try:
+            marker.write_text(datetime.now().isoformat(timespec="seconds"), "utf-8")
+            session[_RESTORE_PENDING_KEY] = str(marker)
+        except OSError:
+            pass  # a cache we cannot write to simply goes without the breaker
     protected = {"data_source_choice"} if protect_data_source else set()
-    if not restore_state(session, state_directory(), skip_session_keys=protected):
+    if not restore_state(session, root, skip_session_keys=protected):
+        _finish_restore(session)
         return False
     return restored_from_cache(session)
+
+
+def _unlink_quietly(path: Path) -> None:
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        _LOGGER.warning("Could not remove %s.", path)
+
+
+def _finish_restore(session) -> None:
+    """This session's restore held (or never happened): drop its marker."""
+    marker = session.pop(_RESTORE_PENDING_KEY, None)
+    if marker:
+        _unlink_quietly(Path(marker))
+
+
+def consume_restore_skipped(session) -> bool:
+    """Whether this session opened without its cache because the last one broke.
+
+    One-shot, so the app says it once: the notice belongs to the launch, not to
+    every rerun after it. See :func:`restore_local_state` (BUG-71).
+    """
+    return bool(session.pop(_RESTORE_SKIPPED_KEY, False))
 
 
 def restored_summary(session) -> dict:
@@ -618,7 +749,7 @@ def clear_local_state(session=None, root: Path | None = None) -> bool:
 
 def _cache_files(root: Path) -> list:
     """The files this module owns under ``root`` (mirrors forget_state)."""
-    files = [root / "manifest.json"]
+    files = [root / "manifest.json", root / RESTORE_MARKER_NAME]
     frames_dir = root / "datasets"
     if frames_dir.is_dir():
         files.extend(sorted(frames_dir.glob("*.parquet")))
@@ -719,6 +850,10 @@ def cache_status(
 
 
 def save_local_state(session, url: str) -> bool:
+    # BUG-71: reaching the epilogue means this run rendered, so a restore it
+    # applied is not the kind that breaks the app — before any early return, since
+    # a paused or skipped save still ran to here.
+    _finish_restore(session)
     if session.pop(_SKIP_NEXT_SAVE_KEY, False):
         return False
     if not persistence_enabled(url) or persistence_paused(session):

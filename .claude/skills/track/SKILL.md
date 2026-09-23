@@ -28,25 +28,38 @@ implementing).
   the tracker ID in prose and commits, with `#N` alongside when a link helps.
   Prefixes: `AN` (analysis), `BUG`, `CMP` (compare mode), `DATA`, `ENG`, `EXP`
   (export), `PERF`, `PRE` (preprocessing), `UX`, `VAL`, `VIZ`. A new item takes
-  the next free number in its prefix — check **both** the issues and the
-  archive, which holds every number used before the migration:
+  the next free number in its prefix, and most IDs live in only **one** place, so
+  check all four (the procedure in `CLAUDE.md` → *Tracking work*):
+  `CHANGELOG.md` (where most IDs are allocated — not every ID gets an issue),
+  the issues, the pre-migration archive, and **the open PRs**, whose unmerged
+  changelogs are invisible to the other three:
 
   ```bash
+  grep -oh "\bDATA-[0-9]*\b" CHANGELOG.md tracker/data.js docs/*.md scanpath_studio/*.py | sort -u -V | tail -3
   gh issue list --state all --limit 200 --search "[DATA-" --json title
-  grep -o '"id": "DATA-[0-9]*"' tracker/data.js | sort -uV | tail -3
+  gh pr list --state open --json number,headRefName,title
+  gh pr diff <n> -- CHANGELOG.md | grep -oE "\b[A-Z]+-[0-9]+\b" | sort -u -V | tail
   ```
+
+  When another session or person is working right now, ask which IDs they have
+  allocated — that settles it faster than any search.
 
 - **Status** is the board's `Status` column: `Backlog · Planned · In progress ·
-  On hold · Review`. Closing the issue is the sixth state. Moving it from the CLI
-  needs the `project` token scope (`gh auth refresh -s project`, once):
+  On hold · Review`. Closing the issue is the sixth state. Drag the card in the
+  web UI, or move it from the CLI with `gh project item-edit` (needs the
+  `project` token scope — `gh auth refresh -s project`, once):
 
   ```bash
-  python3 tracker/to_github_issues.py --sync-board   # the archive's statuses, in bulk
+  gh project view 5 --owner lacclab --format json --jq .id            # project id
+  gh project field-list 5 --owner lacclab --format json               # Status / Priority field + option ids
+  gh project item-list 5 --owner lacclab --format json --limit 500    # the issue's item id
+  gh project item-edit --project-id <project-id> --id <item-id> \
+      --field-id <status-field-id> --single-select-option-id <option-id>
   ```
 
-  For a single move, drag the card in the web UI, or use `gh project item-edit`
-  with the item, project, field and option ids from `gh project item-list 5
-  --owner lacclab --format json` and `gh project field-list 5 --owner lacclab`.
+  Never use `tracker/to_github_issues.py --sync-board` for this: it is the
+  migration script's record, acts only on archived items, and **overwrites** the
+  live board's Status and Priority with the frozen archive's values.
 - **Priority** is the board's `Priority` column: `Urgent · High · Medium · Low`,
   Medium being the default.
 - **Kind** is the native issue type — `Bug`, `Feature` (a capability) or `Task`
@@ -141,7 +154,8 @@ plus the `waiting-on-you` label — both the design calls that block the work
 # tone and level of detail.
 gh issue create --title "[VIZ-38] <title>" --label area:viz --body-file body.md
 gh api -X PATCH repos/lacclab/scanpath-studio/issues/<n> -f type=Feature
-# then add it to the board and set Status — `--sync-board` does this in bulk
+gh project item-add 5 --owner lacclab --url <issue-url> --format json --jq .id
+# then set its Status (and Priority) with `gh project item-edit` — see Conventions
 
 # Finish implementing → review (never close it yourself)
 gh issue edit 117 --add-label waiting-on-you --body-file body.md

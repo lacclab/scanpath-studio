@@ -187,8 +187,8 @@ See *Releasing* in `@AGENTS.md`: bump `__version__` in
 ## Repo automation (`.claude/`)
 
 - **Skills** — `/release`, `/track`, `/new-feature`, `/preflight`,
-  `/paper-figs` package the workflows above; invoke them instead of
-  re-deriving the steps.
+  `/paper-figs` and `/gazegenie` package the workflows above; invoke them
+  instead of re-deriving the steps.
 - **Hook** — every edited `.py` file is auto-run through `ruff format` +
   `ruff check` (`.claude/hooks/ruff-on-edit.sh`); fix what it reports
   immediately rather than batching.

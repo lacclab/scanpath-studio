@@ -16,13 +16,17 @@ output). Fix trivial failures (formatting) directly; report anything else.
 2. **Format** — `ruff format .` (CI gates on both; this
    one rewrites files — if it changed anything, say which files). Run these
    even for "docs-only" changes — repo rule.
-3. **Tests** — `pytest -n auto`. If the diff is small and clearly scoped,
+3. **Tests** — `pytest -n auto`, in the project's environment (e.g.
+   `uv run --extra test pytest -n auto` — not a bare `pytest` from `PATH`, which
+   may be another interpreter and another pandas). If the diff is small and clearly scoped,
    you may first run the affected test files for fast feedback, but the full
    suite is the gate.
 4. **Changelog** — `git diff` + `git status` to see the pending work; if it
-   is user-visible or a bug fix, `CHANGELOG.md` must have a matching
-   one-scannable-line entry under `[Unreleased]` (grouped Added / Changed /
-   Fixed). If missing, draft the line and add it.
+   is user-visible or a bug fix, `CHANGELOG.md` must have a matching entry
+   under `[Unreleased]` in the two-tier shape — a `- **Bold lead** (ID)`
+   headline under Added / Changed / Fixed, plus a short paragraph under the
+   matching `#### <Group>` in `### Details` (`CLAUDE.md` → *Before every
+   commit*). If missing, draft both halves and add them.
 5. **Issue** — if the pending work corresponds to a GitHub issue
    (`gh issue list`), check its board Status and body write-up are current.
    Finished work goes to Status **Review** with the review ask in its
@@ -33,3 +37,4 @@ output). Fix trivial failures (formatting) directly; report anything else.
 
 - Never add a `Co-Authored-By: Claude …` (or any AI co-author) trailer.
 - Commit only when the user asked to commit.
+- `main` is protected: commit on a branch and land it through a PR.

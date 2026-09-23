@@ -64,7 +64,7 @@ cross-cutting files. The load-bearing ones:
 - `test_measures.py`, `test_data.py`, `test_plots.py`, `test_aggregation.py`,
   `test_alignment.py`, `test_similarity.py` — the pure computation +
   figure-builder core.
-- `test_apptest.py`, `test_apptest_flows.py`, and ~15 more `AppTest`-based
+- `test_apptest.py`, `test_apptest_flows.py`, and ~48 more `AppTest`-based
   files — boot the whole app headless via
   `streamlit.testing.v1.AppTest.from_file("streamlit_app.py")` and drive
   widgets. This is the house-preferred way to test app behavior (see

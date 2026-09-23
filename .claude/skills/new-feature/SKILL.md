@@ -17,10 +17,14 @@ just the UI. Follow the matching recipe, then close out with the checklist.
 1. Compute it in `measures.compute_per_word_measures` per trial.
 2. Add it to `WORD_OPTIONAL_FIELDS` in `data.py` if it can come
    pre-computed from EyeLink IA columns.
-3. Surface it in `controls.color_field_options` (if useful for coloring)
+3. Add a `computations.py` register entry (VAL-5) — formula, unit, grouping
+   keys, missing behaviour and precedence — and regenerate
+   `docs/computations.md` (`python -m scanpath_studio.computations`). A
+   `MEASURES` entry with no register row fails `tests/test_computations.py`.
+4. Surface it in `controls.color_field_options` (if useful for coloring)
    and register it in `aggregation.MEASURES` (feeds the measure pickers via
    `aggregation.available_measures`).
-4. Add a test under `tests/test_measures.py`.
+5. Add a test under `tests/test_measures.py`.
 
 **New figure type**
 1. Add a `make_*_figure` function in `plots.py` using the helpers
@@ -58,7 +62,9 @@ Optional passthrough columns go through the `WORD_OPTIONAL_FIELDS` /
 - [ ] All four surfaces wired (or explicitly agreed out of scope with the user)
 - [ ] Tests added (`tests/`), suite passes: `pytest -n auto`
 - [ ] `ruff check .` + `ruff format .`
-- [ ] One-line entry under `[Unreleased]` in `CHANGELOG.md`
+- [ ] Two-tier entry under `[Unreleased]` in `CHANGELOG.md` — a
+      `- **Bold lead** (ID)` headline plus a short `### Details` paragraph
+      (`CLAUDE.md` → *Before every commit*)
 - [ ] Docs page updated if user-visible behavior changed (`docs/`)
 - [ ] Tracker item updated → `Review` (use the `track` skill)
 

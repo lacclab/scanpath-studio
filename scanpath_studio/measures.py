@@ -725,6 +725,19 @@ def compute_per_word_measures(
         )
     )
 
+    # PERF-12: each trial's word rows, found once. The landing measures below
+    # used to locate a fixated word by masking the *whole* words frame — one
+    # full-frame comparison per fixated word, per identity column — which made
+    # this function quadratic in corpus size (1.7 s on the demo, 22 s at 8×).
+    word_num = pd.to_numeric(words["word_id"], errors="coerce").to_numpy(dtype=float)
+    identity_cols = grouping_columns(enriched) if not enriched.empty else []
+    word_rows: dict[tuple, np.ndarray] = {}
+    if identity_cols and set(identity_cols) <= set(words.columns):
+        grouped = words.groupby(identity_cols, sort=False).indices
+        word_rows = {
+            (k if isinstance(k, tuple) else (k,)): v for k, v in grouped.items()
+        }
+
     analysis_fixations = enriched
     if "excluded" in enriched.columns:
         analysis_fixations = enriched[~enriched["excluded"].fillna(False).astype(bool)]
@@ -850,17 +863,19 @@ def compute_per_word_measures(
             # Windows still open at the end: the reader never moved past them.
             regression_path.update(go_past_open)
 
+            trial_rows = word_rows.get(tuple(values))
+            first_row: dict[float, int] = {}
+            if trial_rows is not None:
+                for pos in trial_rows:
+                    first_row.setdefault(word_num[pos], pos)
             for w in tot.index:
-                word_mask = pd.to_numeric(words["word_id"], errors="coerce") == w
-                for column, value in identity.items():
-                    word_mask &= words[column] == value
-                trial_word = words[word_mask]
                 landing_position = landing_distance = np.nan
-                if not trial_word.empty:
-                    target = trial_word.iloc[0]
+                pos = first_row.get(float(w))
+                if pos is not None:
+                    target = words.iloc[pos]
                     text_len = max(len(str(target.get("text", ""))), 1)
                     width = float(pd.to_numeric(target.get("width"), errors="coerce"))
-                    char_width = float(char_advance.loc[trial_word.index[0]])
+                    char_width = float(char_advance.iloc[pos])
                     if np.isfinite(char_width) and char_width > 0 and width > 0:
                         rtl = bool(target.get("right_to_left", False))
                         # BUG-27: RTL counts from where the glyphs *end*

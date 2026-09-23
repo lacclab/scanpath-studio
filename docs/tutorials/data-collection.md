@@ -28,9 +28,9 @@ Turn on **Animate**. Watch once at the default speed, then slow playback only if
 an event is unclear. Look for long missing periods, repeated off-text points,
 frequent interruptions, or a vertical shift that grows during the trial.
 
-Use **🧹 Filter → 👁️ Fixations** in the plot rail to *mark* short, long, or
-out-of-bounds fixations. Marking keeps the full trial visible; discarding is
-better reserved for a later, documented filtering decision.
+Use **🧹 Filter → 👁️ Fixations** in the plot rail to **Highlight** short, long,
+or out-of-bounds fixations. Highlighting keeps the full trial visible; **Discard**
+is better reserved for a later, documented filtering decision.
 
 ## 4. Record the decision
 

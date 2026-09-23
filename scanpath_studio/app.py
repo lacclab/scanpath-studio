@@ -3165,7 +3165,7 @@ def _render_unmapped_view(
         for problem in rejected:
             st.error(problem, icon="🚫")
         st.caption(
-            "Change the field it names in the **Column mapping** section above, "
+            "Change the field it names in **1 · Data tables & column mapping** above, "
             "or start again from what auto-detection proposes."
         )
         st.button(
@@ -3176,7 +3176,7 @@ def _render_unmapped_view(
     else:
         st.warning(
             "**Finish the column mapping to draw scanpaths.** Map the missing "
-            "field(s) in the **Column mapping** section above — the raw data is "
+            "field(s) in **1 · Data tables & column mapping** above — the raw data is "
             "shown below to help you choose. "
             "Still needed:\n\n" + "\n".join(f"- {p}" for p in problems)
         )

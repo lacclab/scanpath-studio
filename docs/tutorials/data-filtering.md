@@ -18,7 +18,8 @@ which filter removed it.
 ## 2. Review candidate trials
 
 For each candidate, inspect the default scanpath and turn on **Animate** only
-when timing helps. Open **🧹 Filter → 👁️ Fixations** in the plot rail and mark:
+when timing helps. Open **🧹 Filter → 👁️ Fixations** in the plot rail and set
+**Highlight** for:
 
 - out-of-bounds points;
 - fixations below or above your duration thresholds;

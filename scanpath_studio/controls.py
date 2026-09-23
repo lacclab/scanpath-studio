@@ -4380,7 +4380,7 @@ def render_plot_controls(
                 "on, so the scanpath reads as a diagram rather than as "
                 "recorded gaze. Drift correction (above) instead nudges the "
                 "raw coordinates onto their true text line. Pairs with "
-                "Saccades → ⚙️ Style → Line shape → **Arc**.",
+                "↗️ Saccades ▾ → Line shape → **Arc**.",
                 static_reason,
             ),
         )
@@ -4658,8 +4658,8 @@ def render_plot_controls(
             disabled=class_disabled,
             help=_gated_help(
                 "Straight connectors, or upward **arcs** over the text "
-                "(the classic linear-reading diagram). Pairs with Fixations → "
-                "Fixations → ⚙️ Style → **Snap fixations above words**.",
+                "(the classic linear-reading diagram). Pairs with 👁️ Fixations ▾ "
+                "→ **Snap fixations above words**.",
                 class_reason,
             ),
         )

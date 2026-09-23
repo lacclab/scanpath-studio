@@ -43,18 +43,18 @@ uses it.
 
 1. **📂 Available datasets** — keep the demo, or use **➕ Add dataset** to add
    your own tables. Click a dataset's name to open it, or ✏️ **Edit** to change
-   how it was read. Map **Multipart screens** only when one logical trial has
-   several coordinate spaces.
+   how it was read.
 2. **1 · Data tables & column mapping** (in ✏️ Edit dataset) — the one thing that decides what
    every measure downstream is computed from. Rows marked ✨ were auto-detected;
-   override any that guessed wrong. **Recording setup**, 🖼️ **Stimulus images**
-   and the 👤 **Participant** / 🗂️ **Trial metadata** tables are on the same
-   screen.
+   override any that guessed wrong; open **⚙️ Multipart screens & canvas —
+   advanced** only when one logical trial has several coordinate spaces.
+   **Recording setup**, 🖼️ **Stimulus images** and the **Metadata** rows
+   (Participants, Trials, Texts) are on the same screen.
 3. **🔎 What's in the dataset** — back on the overview, the counts come first, as
    the quickest check that the mapping worked. The raw and derived tables fold
    open below them (including, when present, the ordered screen catalogue and
-   per-screen canvas sizes), and **3 · Trial identity** says whether one trial id
-   really is one reading.
+   per-screen canvas sizes); back in ✏️ Edit dataset, part **3 · Trial identity**
+   says whether one trial id really is one reading.
 
 !!! note "Preprocessing is held back in this release (PRE-22)"
     Optional soft exclusion and merging of short fixations is finished and
@@ -87,7 +87,7 @@ See [Data filtering](data-filtering.md) for a complete review protocol.
 **Outcome:** a ready download plus reproducible settings. *About 4 minutes;
 requires words or fixations.*
 
-1. Choose a quick view and palette, then keep only layers that answer the
+1. Choose a design preset and palette, then keep only layers that answer the
    question.
 2. Choose static or animated output. Multipart replay changes screens at an
    explicit boundary and never draws a cross-screen saccade.

@@ -44,6 +44,7 @@ from .controls import (
     TOUCHED_FIELDS_KEY,
     WORD_FIELD_SPECS,
     column_mapping_ui,
+    forget_mapped_table,
     inline_field_label,
     mark_missing_cells,
 )
@@ -113,9 +114,24 @@ class _UploadResult(NamedTuple):
     problems: list
 
 
+#: BUG-32: the dataset the wizard's `col_map_*` mapping describes. The 🗂️ Data
+#: page maps a built-in source under the same keys, keyed by its source, so
+#: this identity is what tells the two apart when the headers match: a pick
+#: made here never carries back into the demo or a public corpus, and theirs
+#: never into a new upload. One constant serves every add-dataset session,
+#: because entering the wizard resets its mapping anyway.
+WIZARD_MAPPING_DATASET = "add-dataset wizard"
+_WIZARD_MAPPING_PREFIXES = ("col_map_words", "col_map_fix", "col_map_raw_gaze")
+
+
 def _reset_wizard_widgets() -> None:
     """Clear the wizard's per-table mapping + keep-field widgets so 'Add data'
     starts a fresh dataset."""
+    # BUG-32: the tables these keys meet next are this new dataset's, so their
+    # first sighting only records — a setup restored before the first upload
+    # would otherwise be cleared as "another dataset's" mapping.
+    for prefix in _WIZARD_MAPPING_PREFIXES:
+        forget_mapped_table(prefix)
     for key in [
         k
         for k in list(st.session_state.keys())
@@ -484,6 +500,7 @@ def _map_section(
         header=False,
         columns_per_row=per_row,
         stack_labels=stacked,
+        dataset=WIZARD_MAPPING_DATASET,
     )
 
 

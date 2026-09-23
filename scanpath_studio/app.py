@@ -3045,6 +3045,7 @@ def prepare_data(
     mapping_host=None,
     declared_word_schema: dict | None = None,
     declared_fix_schema: dict | None = None,
+    mapping_dataset: object = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, list]:
     """Infer schemas and normalize incoming dataframes to canonical column names.
 
@@ -3064,6 +3065,11 @@ def prepare_data(
     frame and its mapping UI is skipped. Cross-frame fixups (stimulus-level
     words broadcast across participants, AOI-only fixations placed at word-box
     centers) run at the end via ``harmonize_frames``.
+
+    ``mapping_dataset`` identifies the source these tables came from, so a
+    column pick made for another dataset — the add-dataset wizard shares these
+    ``col_map_*`` keys — is dropped rather than inherited because the headers
+    happen to match (BUG-32; ``controls.forget_mapping_for_other_table``).
     """
     has_words = not words_df.empty
     has_fixations = not fixations_df.empty
@@ -3091,6 +3097,7 @@ def prepare_data(
                 # stretching every mapping across a full row.
                 columns_per_row=4,
                 stack_labels=True,
+                dataset=mapping_dataset,
             )
         else:
             word_schema = word_proposed
@@ -3114,6 +3121,7 @@ def prepare_data(
                 use_expander=False,
                 columns_per_row=4,
                 stack_labels=True,
+                dataset=mapping_dataset,
             )
         else:
             fix_schema = fix_proposed
@@ -3645,6 +3653,11 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
                     field_specs=RAW_GAZE_FIELD_SPECS,
                     proposed=proposed,
                     problems=initial_problems,
+                    # BUG-32: the same source key `main` scopes the tables by.
+                    dataset=(
+                        data_choice,
+                        st.session_state.get("public_dataset_choice"),
+                    ),
                 )
             problems = validate_raw_gaze_schema(raw_gaze_schema)
             if problems:
@@ -6935,6 +6948,10 @@ def main() -> None:
             # panels stay editable — this only changes what they start at.
             declared_word_schema=declared_word_schema,
             declared_fix_schema=declared_fix_schema,
+            # BUG-32: the add-dataset wizard writes these same `col_map_*` keys
+            # and its field widgets persist, so coming back here from it would
+            # otherwise inherit its picks whenever the headers match.
+            mapping_dataset=source_key,
         )
         mapping_editor_rendered = data_choice in (PUBLIC_DATASETS_CHOICE, DEMO_CHOICE)
     if mapping_problems:

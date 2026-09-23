@@ -2093,8 +2093,21 @@ def _field_state(
 #: restore. It describes this session's widget state, not the mapping, and has
 #: no business in a file that opens on another machine.
 def _mapped_columns_key(state_key_prefix: str) -> str:
-    """Session key holding the column signature ``state_key_prefix`` maps."""
+    """Session key holding the ``(dataset, columns)`` ``state_key_prefix`` maps."""
     return f"_mapped_columns_{state_key_prefix}"
+
+
+def forget_mapped_table(state_key_prefix: str) -> None:
+    """Let the next table ``state_key_prefix``'s mapping meets adopt it (BUG-32).
+
+    Called where mapping keys are *seeded for* a table that has not been read
+    yet — a restored config, a wizard entering a fresh dataset. Without it the
+    marker still names the table those keys used to describe, so the first
+    sighting of the new one would count as a dataset change and clear exactly
+    the picks that were just restored. With it, that sighting is a first one,
+    which only records.
+    """
+    st.session_state.pop(_mapped_columns_key(state_key_prefix), None)
 
 
 def _mapping_state_keys(state_key_prefix: str, field_specs: list[dict]) -> list[str]:
@@ -2110,7 +2123,11 @@ def _mapping_state_keys(state_key_prefix: str, field_specs: list[dict]) -> list[
 
 
 def forget_mapping_for_other_table(
-    df: pd.DataFrame, state_key_prefix: str, field_specs: list[dict]
+    df: pd.DataFrame,
+    state_key_prefix: str,
+    field_specs: list[dict],
+    *,
+    dataset: object = None,
 ) -> None:
     """Drop a stored mapping that was made for a *different* table (DATA-24).
 
@@ -2139,15 +2156,37 @@ def forget_mapping_for_other_table(
     steps the user had already filled in. What gets cleared is a field left at
     ``(none)`` or pointing at a column that is gone — in both cases there is no
     user choice to lose, and auto-detection deserves another go.
+
+    **BUG-32: the column universe alone is not the table.** Two datasets that
+    share an AOI file have identical headers by construction, so under a
+    columns-only signature the second silently inherited every pick made for
+    the first — and nothing was cleared or said, because every pick still named
+    a real column. ``dataset`` is the caller's identity for the data the
+    mapping describes (the source key on the 🗂️ Data page, the add-dataset
+    wizard's own), and a change of dataset drops **every** pick, however valid
+    it still looks: a choice made for one dataset is not a choice for another.
+    The same-dataset rules above are unchanged, so the wizard growing its own
+    frame keeps what was filled in. A caller seeding keys *for* the next table
+    (a restored config) calls :func:`forget_mapped_table` first, so that table's
+    first sighting only records.
     """
-    signature = tuple(str(column) for column in df.columns)
+    columns_seen = tuple(str(column) for column in df.columns)
+    signature = (dataset, columns_seen)
     marker = _mapped_columns_key(state_key_prefix)
     previous = st.session_state.get(marker)
     st.session_state[marker] = signature
-    if previous is None or previous == signature:
+    if not (isinstance(previous, tuple) and len(previous) == 2):
+        return  # first sighting: record only
+    if previous == signature:
         return
-    columns = set(signature)
-    for key in _mapping_state_keys(state_key_prefix, field_specs):
+    keys = _mapping_state_keys(state_key_prefix, field_specs)
+    if previous[0] != dataset:
+        for key in keys:
+            st.session_state.pop(key, None)
+            st.session_state.get(TOUCHED_FIELDS_KEY, set()).discard(key)
+        return
+    columns = set(columns_seen)
+    for key in keys:
         stored = st.session_state.get(key)
         if isinstance(stored, str) and stored != NONE_OPTION and stored in columns:
             continue
@@ -2173,6 +2212,8 @@ def resolve_column_mapping(
     field_specs: list[dict],
     proposed: dict[str, str | None],
     only_keys: list[str] | None = None,
+    *,
+    dataset: object = None,
 ) -> dict[str, str | None]:
     """The mapping :func:`column_mapping_ui` *would* return, without rendering it.
 
@@ -2192,9 +2233,9 @@ def resolve_column_mapping(
     A stored column that no longer exists in ``df`` — a new upload with different
     headers — falls back to the auto-detected proposal rather than to ``None``,
     matching the rendering editor, whose selectbox ``index`` lookup self-heals the
-    same way.
+    same way. ``dataset`` is :func:`forget_mapping_for_other_table`'s (BUG-32).
     """
-    forget_mapping_for_other_table(df, state_key_prefix, field_specs)
+    forget_mapping_for_other_table(df, state_key_prefix, field_specs, dataset=dataset)
     columns = set(df.columns)
 
     def _stored(field_key: str) -> str | None:
@@ -2248,6 +2289,7 @@ def column_mapping_ui(
     detected_label: str = "auto-detected",
     columns_per_row: int = 1,
     stack_labels: bool | None = None,
+    dataset: object = None,
 ) -> dict[str, str | None]:
     """Render a column-mapping expander letting users override the inferred mapping.
 
@@ -2276,8 +2318,12 @@ def column_mapping_ui(
     the stacked shape, and inferring it from the field count got that wrong
     (UX-53 r17: the screen fields landed on the identity rows with their titles
     beside them while every neighbour had its title above).
+
+    ``dataset`` names the data this mapping is for, so picks made for one
+    dataset never carry into another with the same headers (BUG-32) — see
+    :func:`forget_mapping_for_other_table`.
     """
-    forget_mapping_for_other_table(df, state_key_prefix, field_specs)
+    forget_mapping_for_other_table(df, state_key_prefix, field_specs, dataset=dataset)
     # UX-108 — PERF-6 narrows `df` to only the columns a plan decided to
     # actually *parse* (auto-detect + the optional-field registry + whatever a
     # `col_map_*` key already names, session-wide); a column nobody has named

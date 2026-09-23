@@ -70,6 +70,7 @@ from .controls import (
     _OUT_OF_TEXT_MARKERS,
     color_field_options,
     forget_color_range,
+    forget_mapped_table,
     numeric_field_options,
     palette_state,
 )
@@ -1370,9 +1371,15 @@ def _seed_column_mapping(mapping, *, overwrite: bool = False) -> None:
     previous render, so those keys already exist; ``setdefault`` would be a no-op
     and the restore would silently do nothing. There, pass ``overwrite=True`` so
     an explicit restore wins (the step reruns afterwards, and it runs before the
-    mapping widgets re-instantiate, so writing the keys is safe)."""
+    mapping widgets re-instantiate, so writing the keys is safe).
+
+    BUG-32: a table whose keys this writes has them *restored for it*, so its
+    "which dataset was this mapped for" marker is dropped — else, since the
+    mapping is scoped to a dataset now, the next table to meet the keys could
+    count as a different dataset and clear exactly what was just restored."""
     if not isinstance(mapping, dict):
         return
+    written: set[str] = set()
     for raw_key, value in mapping.items():
         if (
             not isinstance(raw_key, str)
@@ -1383,10 +1390,12 @@ def _seed_column_mapping(mapping, *, overwrite: bool = False) -> None:
         key = raw_key
         if key.endswith("_paragraph"):
             key = key[: -len("_paragraph")] + "_text_id"
-        if overwrite:
+        if overwrite or key not in st.session_state:
             st.session_state[key] = value
-        else:
-            st.session_state.setdefault(key, value)
+            written.add(key)
+    for prefix in ("col_map_words", "col_map_fix", "col_map_raw_gaze"):
+        if any(key.startswith(f"{prefix}_") for key in written):
+            forget_mapped_table(prefix)
 
 
 @dataclass

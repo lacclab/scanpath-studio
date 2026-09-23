@@ -346,16 +346,18 @@ def _render_parser() -> argparse.ArgumentParser:
         "--words",
         metavar="PATH",
         nargs="+",
-        help="Words/IA table(s) (csv/tsv/parquet/feather). Multiple paths or a "
-        "quoted glob pattern concatenate multi-file datasets.",
+        help="Words/IA table(s) (csv/tsv/txt/tab/parquet/feather/xlsx/xls, or a .zip of them); columns are "
+        "auto-detected from EyeLink, Gazepoint, Tobii, SMI, Pupil Labs and "
+        "snake_case names. Multiple paths or a quoted glob pattern concatenate "
+        "multi-file datasets.",
     )
     src.add_argument(
         "--fixations",
         metavar="PATH",
         nargs="+",
-        help="Fixations table(s) (csv/tsv/parquet/feather). Multiple paths or "
-        "a quoted glob pattern concatenate multi-file datasets (e.g. one file "
-        "per participant).",
+        help="Fixations table(s) (csv/tsv/txt/tab/parquet/feather/xlsx/xls, or a .zip of them), auto-detected like "
+        "--words. Multiple paths or a quoted glob pattern concatenate "
+        "multi-file datasets (e.g. one file per participant).",
     )
     src.add_argument(
         "--image-root",
@@ -747,7 +749,7 @@ def _render_parser() -> argparse.ArgumentParser:
             default=None,
             help="Correct vertical drift before plotting (PRE-3): snap each "
             "fixation to its assigned text line and colour the fixations by "
-            "line, exactly like the app's Fixations ⚙️ → Drift correction. "
+            "line, exactly like the app's 👁️ Fixations ▾ → Drift correction. "
             f"ALGORITHM is one of: {', '.join(ALGORITHMS)} "
             "(default: no correction). Static figures only — not honored with "
             "--animate.",
@@ -1027,7 +1029,7 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         nargs="+",
         help="Raw (sample-level) gaze table(s) to draw under the fixations, "
-        "columns auto-detected like --fixations (csv/tsv/parquet/feather; several "
+        "columns auto-detected like --fixations (same formats; several "
         "paths or a quoted glob concatenate). Static figures only.",
     )
     viz.add_argument(
@@ -2831,22 +2833,58 @@ def analyze(argv: list[str]) -> None:
         description="Write fixation, saccade, word, sentence, trial, reader, "
         "character, and cleaning-QA tables without launching the app.",
     )
-    parser.add_argument("--words", nargs="+", required=True)
-    parser.add_argument("--fixations", nargs="+", required=True)
+    parser.add_argument(
+        "--words", nargs="+", required=True, help="Words/IA table(s), as for render."
+    )
+    parser.add_argument(
+        "--fixations",
+        nargs="+",
+        required=True,
+        help="Fixations table(s), as for render.",
+    )
     parser.add_argument(
         "--trial-parts-manifest",
         help="JSON manifest assigning source rows to ordered screens.",
     )
-    parser.add_argument("--output-dir", required=True)
+    parser.add_argument(
+        "--output-dir",
+        required=True,
+        help="Folder for the CSV tables and run_config.json (created if missing).",
+    )
     parser.add_argument(
         "--short-policy",
         choices=["off", "merge", "merge-then-discard", "discard"],
         default="off",
+        help="Fixations shorter than --short-threshold-ms: merge folds each "
+        "into its nearer neighbour within --merge-distance-chars (a short last "
+        "fixation that cannot merge is excluded); merge-then-discard also "
+        "excludes every other one that cannot merge; discard excludes them "
+        "all. Excluded rows are marked, never dropped (default: off).",
     )
-    parser.add_argument("--short-threshold-ms", type=float, default=80.0)
-    parser.add_argument("--merge-distance-chars", type=float, default=1.0)
-    parser.add_argument("--discard-blink-adjacent", action="store_true")
-    parser.add_argument("--pixels-per-degree", type=float)
+    parser.add_argument(
+        "--short-threshold-ms",
+        type=float,
+        default=80.0,
+        help="What counts as a short fixation, in ms (default: 80).",
+    )
+    parser.add_argument(
+        "--merge-distance-chars",
+        type=float,
+        default=1.0,
+        help="How close, in character widths, a neighbour must be for a short "
+        "fixation to merge into it (default: 1.0).",
+    )
+    parser.add_argument(
+        "--discard-blink-adjacent",
+        action="store_true",
+        help="Exclude blinks and the fixations either side of one.",
+    )
+    parser.add_argument(
+        "--pixels-per-degree",
+        type=float,
+        help="Screen pixels per degree of visual angle; adds degree-valued "
+        "amplitudes to the saccade table.",
+    )
     _add_schema_flags(parser)
     args = parser.parse_args(argv)
     word_schema = _parse_schema_arg(args.word_schema, "--word-schema")
@@ -2916,17 +2954,54 @@ def analyze(argv: list[str]) -> None:
 
 def corpus(argv: list[str]) -> None:
     """Render a styled corpus figure from a tidy CSV (AN-29)."""
-    parser = argparse.ArgumentParser(prog="scanpath-studio corpus")
-    parser.add_argument("--input", required=True)
-    parser.add_argument(
-        "--kind", choices=["profile", "distribution", "difference"], required=True
+    parser = argparse.ArgumentParser(
+        prog="scanpath-studio corpus",
+        description="Render a styled corpus figure from a tidy CSV you already "
+        "have (api.plot_corpus_figure).",
     )
-    parser.add_argument("--output", required=True)
-    parser.add_argument("--measure-label", default="Value")
-    parser.add_argument("--series-col", default="series")
-    parser.add_argument("--value-col", default="value")
-    parser.add_argument("--primary-color", default="#1f77b4")
-    parser.add_argument("--secondary-color", default="#e45756")
+    parser.add_argument(
+        "--input",
+        required=True,
+        help="The CSV. profile reads word_id plus the value column (and "
+        "optional lo / hi), distribution the value column, difference word_id "
+        "and diff.",
+    )
+    parser.add_argument(
+        "--kind",
+        choices=["profile", "distribution", "difference"],
+        required=True,
+        help="A per-word profile, a distribution, or a difference profile.",
+    )
+    parser.add_argument(
+        "--output",
+        required=True,
+        help="Output file; any extension save_figure writes (.html, .png, .svg, .pdf).",
+    )
+    parser.add_argument(
+        "--measure-label",
+        default="Value",
+        help="Axis / legend label for the value (default: Value).",
+    )
+    parser.add_argument(
+        "--series-col",
+        default="series",
+        help="Column naming the overlaid series, when present (default: series).",
+    )
+    parser.add_argument(
+        "--value-col",
+        default="value",
+        help="The value column (default: value).",
+    )
+    parser.add_argument(
+        "--primary-color",
+        default="#1f77b4",
+        help="First series colour (default: #1f77b4).",
+    )
+    parser.add_argument(
+        "--secondary-color",
+        default="#e45756",
+        help="Second series colour (default: #e45756).",
+    )
     args = parser.parse_args(argv)
     from . import api
 
@@ -2955,7 +3030,8 @@ def corpus(argv: list[str]) -> None:
 def cache(argv: list[str]) -> None:
     """Inspect or clear the on-device recovery cache (ENG-30).
 
-    The terminal counterpart of the app's 🗄️ Recovery cache panel, so the
+    The terminal counterpart of the app's 💾 Session → 🗄️ Automatic recovery
+    block, so the
     storage a local run creates can be found, measured and deleted without
     launching the app (or after closing it).
     """

@@ -219,7 +219,7 @@ the recorded setup.
 | show monitor-pixel axes | `--coordinate-grid` and optionally `--coordinate-grid-spacing PX` |
 | color fixations | `--color-by FIELD` |
 | draw only part of a trial | `--fix-index-range START:END` (1-based, both inclusive; honoured by `--animate` and `--compare-with` too) |
-| mark the critical span | `--highlight-column COLUMN` (`''` for none) with `--critical-span-style mark-text\|mark-border\|none` |
+| mark the critical span | `--highlight-column COLUMN` (`''` for none) with `--critical-span-style mark-text|mark-border|none` |
 | flag short / long / off-text / blink fixations | `--fixation-flag CATEGORY=MODE[,threshold_ms=N][,symbol=S][,color=#RRGGBB]`, repeatable |
 | classify saccades | `--saccade-color-by-type` |
 | correct vertical drift (needs `SCANPATH_EXPERIMENTAL=1`) | `--drift-correction ALGORITHM` |
@@ -279,10 +279,42 @@ scanpath-studio analyze --words ia.csv --fixations fixations.csv --output-dir an
 ```
 
 This creates word, sentence, saccade, trial, reader, character, cleaning-QA,
-and run-configuration files. `scanpath-studio corpus` goes the other way: it
-reads a tidy CSV you already have (`--input`, one row per word or value) and
-renders a styled corpus figure — a per-word `profile`, a `distribution`, or a
-`difference` profile. The `render` command still renders one
+and run-configuration files. It takes the same `--words` / `--fixations`
+(several paths each), `--trial-parts-manifest`, `--word-schema` and
+`--fix-schema` as `render`, plus the optional preprocessing stage
+([`api.preprocess_data`](api.md#scanpath_studio.api.preprocess_data)), which is
+off unless a flag below turns it on and never deletes a row — excluded fixations
+keep `excluded` / `excluded_reason`:
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `--short-policy {off,merge,merge-then-discard,discard}` | `off` | What to do with fixations shorter than the threshold: `merge` folds each into its nearer neighbour within the merge distance (a short last fixation that cannot merge is excluded), `merge-then-discard` also excludes every other one that cannot merge, and `discard` excludes them all. |
+| `--short-threshold-ms MS` | `80` | What counts as short. |
+| `--merge-distance-chars N` | `1.0` | How close, in character widths, a neighbour must be to merge into. |
+| `--discard-blink-adjacent` | off | Exclude blinks and the fixations either side of one. |
+| `--pixels-per-degree PX` | none | Adds degree-valued saccade amplitudes to the saccade table. |
+
+Every value lands in `run_config.json` beside the tables.
+
+`scanpath-studio corpus` goes the other way: it reads a tidy CSV you already
+have and renders a styled corpus figure
+([`api.plot_corpus_figure`](api.md#scanpath_studio.api.plot_corpus_figure)):
+
+```bash
+scanpath-studio corpus --input profile.csv --kind profile --output profile.svg
+```
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `--input CSV` | required | The table. `profile` reads `word_id` plus the value column (and optional `lo` / `hi`), `distribution` the value column, `difference` `word_id` and `diff`. |
+| `--kind {profile,distribution,difference}` | required | A per-word profile, a distribution, or a difference profile. |
+| `--output PATH` | required | Any extension `save_figure` writes (`.html`, `.png`, `.svg`, `.pdf`). |
+| `--value-col NAME` | `value` | The value column. |
+| `--series-col NAME` | `series` | When present, one overlaid series per value. |
+| `--measure-label TEXT` | `Value` | Axis / legend label. |
+| `--primary-color`, `--secondary-color` | `#1f77b4`, `#e45756` | The series colours. |
+
+The `render` command still renders one
 trial per invocation; use the [Python batch pattern](automation.md#batch-pattern)
 or **Export → Export bundle** for many figures.
 

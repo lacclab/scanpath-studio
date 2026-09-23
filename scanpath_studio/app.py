@@ -2844,9 +2844,10 @@ def _normalize_pair(
     the trial id is built from several columns) so the trial picker can offer one
     cascading selector per component. Shared by the upload and non-upload paths.
 
-    The heavy normalization is delegated to the cached ``_normalize_pair_cached``
-    so it doesn't re-run on every rerun (e.g. selecting a different trial); only
-    the lightweight session-state bookkeeping below runs each time.
+    The heavy normalization is ``_normalize_pair_uncached``, cached through
+    ``frame_cache`` on a fingerprint key (PERF-6) so it doesn't re-run on every
+    rerun (e.g. selecting a different trial); only the lightweight session-state
+    bookkeeping below runs each time.
     """
     trial_mapping = (word_schema or fix_schema)["trial"]
     trial_cols = trial_mapping_columns(trial_mapping)

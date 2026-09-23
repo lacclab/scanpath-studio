@@ -1520,8 +1520,8 @@ def _wizard_restore_config(host) -> None:
         "Restore a saved setup (optional)",
         type=["json"],
         key="wizard_config_restore",
-        help="Re-apply a column mapping + field choices you exported earlier "
-        "(from the 💾 Session panel).",
+        help="Re-apply a column mapping + field choices you saved earlier "
+        "(⬇️ Save setup at the foot of this page, or a 💾 Session JSON backup).",
         max_upload_size=upload_limit_mb(),
     )
     if uploaded is None:
@@ -1752,7 +1752,7 @@ def _render_setup_download(host) -> None:
         key="wizard_setup_download",
         width="stretch",
         help="Save this column mapping to re-use on similar data — restore it "
-        "from *Restore a saved setup* at the top of Column mapping.",
+        "from *↩️ Restore a saved setup* beside *Upload data tables*.",
     )
 
 
@@ -2739,9 +2739,9 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 # opens — "Data guide" reads like one more wizard step on a row
                 # of wizard controls, which is the one thing it is not.
                 "📖 More documentation ↗",
-                "https://lacclab.github.io/scanpath-studio/bring-your-own-data/",
-                help="What your export needs, worked EyeLink and plain-CSV "
-                "examples, and what each failure symptom means.",
+                "https://lacclab.github.io/scanpath-studio/guides/loading-data/",
+                help="What your export needs, how this wizard maps it, and the "
+                "recording setup it asks for.",
                 width="stretch",
             )
         # The way out, on the row that stays on screen.

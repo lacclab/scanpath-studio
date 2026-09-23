@@ -23,6 +23,14 @@ readers or stimuli. A
 directory load surfaces all the rich side data (below); the browser-upload path
 supports a subset (see *Uploading* at the end).
 
+!!! note "On a server other machines can reach"
+    When the app is served to other machines (the hosted demo, or
+    `--server.address 0.0.0.0`), the *Data directory* box and the 📁 folder
+    picker are turned off: the corpus is read from the server's
+    configured data location, and whoever runs it places the files there — or,
+    on a trusted network, starts it with `SCANPATH_LOCAL_FS=1`. See
+    [Launch](cli.md#launch) and [Security](security.md).
+
 ## How the corpus is laid out
 
 A MultiplEYE release has **no identity columns** — participant, session, trial,

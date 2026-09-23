@@ -1,37 +1,36 @@
 # Copilot Instructions — Scanpath Studio
 
-## Big Picture
-This repo’s primary product is a Streamlit workbench packaged as `scanpath_studio/`. It visualizes eye-tracking scanpaths over text (word boxes + fixations + saccades + heatmaps + comparisons).
+This file is deliberately short: a second copy of the house rules drifts. The
+sources of truth are
 
-## Architecture & Data Flow (core path)
-- Entry/UI: `scanpath_studio/app.py` (tabs, uploads, trial selection, filtering, calls plotting)
-- Data handling: `scanpath_studio/data.py` (schema inference + normalization + filtering + metrics)
-- Plotting: `scanpath_studio/plots.py` (Plotly figure builders)
-- Controls/defaults: `scanpath_studio/controls.py`, `scanpath_studio/constants.py`
+- [`AGENTS.md`](../AGENTS.md) — the architecture map: modules, pipeline,
+  canonical columns, code style, the "adding a new …" recipes, releasing;
+- [`CLAUDE.md`](../CLAUDE.md) — the working agreements: commits, changelog,
+  tracking work, the approval gate;
+- [`scanpath_studio/CLAUDE.md`](../scanpath_studio/CLAUDE.md) — the per-module
+  reference and gotchas;
+- [`CONTRIBUTING.md`](../CONTRIBUTING.md) — setup and the checks CI gates on.
 
-Pipeline: uploaded CSVs → `infer_*_schema()` → `normalize_*()` to canonical columns → filters/metrics → `make_*_figure()` → Streamlit render.
+Read them before changing code. The rules most worth repeating:
 
-## Input Formats & Normalization
-- The Streamlit app currently accepts **CSV** uploads (“Words/IA csv” + “Fixations csv”) and ships demo CSVs in `scanpath_studio/sample_data/`.
-- Canonical columns used by plotting:
-	- Words: `participant_id`, `trial_id`, `paragraph_id`, `word_id`, `text`, `line_idx`, `x`, `y`, `width`, `height`
-	- Fixations: `participant_id`, `trial_id`, `paragraph_id`, `x`, `y`, `duration_ms`, `timestamp_ms` (+ optional `word_id`, `pass_index`, `saccade_type`, `eye`, `noise_flag`)
-	- Raw gaze (optional overlay): normalized by `infer_raw_gaze_schema()` / `normalize_raw_gaze()`.
-
-## Column Auto-Detection Convention
-Schema inference uses `pick_column(df, candidates)` with **priority-ordered candidate lists**. When adding support for new upstream names, update the relevant `infer_*_schema` candidate lists in `scanpath_studio/data.py`.
-
-## Plot/Coordinate Conventions
-- Screen coordinates: Plotly y-axis is inverted (`y_range = [max, min]`) in `make_scanpath_figure()`.
-- Word boxes and word-level heatmap overlays are implemented with Plotly `layout.shapes` (see `build_word_boxes()` and heatmap shape generation).
-
-## Running & Dev Workflows
-- Use the existing conda env `scanpath-studio` (prefer `mamba activate scanpath-studio` if available).
-- Run app (dev): `streamlit run scanpath_studio/app.py`
-- Run app (packaged): `python -m scanpath_studio` (see `scanpath_studio/__main__.py`) or the console script `scanpath-studio`.
-- Fast dev setup (if you have uv): `uv sync` then `uv run streamlit run scanpath_studio/app.py`.
-- Tests: `conda run -n scanpath-studio pytest` (see `tests/README.md`). Streamlit calls are mocked in tests, so test utilities rather than full UI runtime.
-- Lint/format: use the same conda env: `conda run -n scanpath-studio ruff check --fix .`, then `conda run -n scanpath-studio ruff check --select I --fix .`, then `conda run -n scanpath-studio ruff format .`.
-
-## Import Mode Gotcha
-`app.py` supports both package imports (`from .data import ...`) and a fallback “direct run” path tweak for `streamlit run .../app.py`. Keep this pattern intact when refactoring imports.
+- **Use the project's toolchain**, not whatever is on `PATH`:
+  `pip install -e ".[test,lint]"` or `uv sync --extra test --extra lint`. CI
+  runs pandas 3 and ruff pinned in the `lint` extra.
+- **Run the app on loopback**: `scanpath-studio`, or
+  `streamlit run streamlit_app.py --server.address 127.0.0.1`.
+- **Before every commit**: `ruff check .` and `ruff format .` (CI gates on both),
+  and `pytest -n auto`.
+- **A user-facing feature reaches every surface** — the UI, the deep link /
+  Share, the CLI and the headless API (`AGENTS.md` → *Exposing a feature on
+  every surface*).
+- **Never rename the `global_*` / `single_*` / `filter_*` widget keys** — deep
+  links and saved configs depend on them — and keep the spatial plot on
+  `tabs._render_true_scale_chart`, never `st.plotly_chart`.
+- **Every item has a stable ID** (`VIZ-37`), cited in the commit subject and a
+  two-tier `CHANGELOG.md` entry. Take the next number from `CHANGELOG.md`, the
+  GitHub issues, `tracker/data.js` *and* the open PRs (`CLAUDE.md` → *Tracking
+  work*).
+- **`main` is protected** — land work through a branch and a pull request. No AI
+  co-author trailers in commit messages.
+- **Don't edit** `tracker/` (a frozen archive), `uv.lock`, `site/` or
+  `*.egg-info`.

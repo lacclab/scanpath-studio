@@ -7,15 +7,13 @@ This directory contains the test suite for the scanpath visualization Streamlit 
 ### Install test dependencies
 
 ```bash
-# Using conda/mamba (recommended)
-conda env create -f environment.yml
+# Using conda/mamba: environment.yml installs the app; add the test extras
+conda env create -f environment.yml   # or: mamba env create -f environment.yml
 conda activate scanpath-studio
-# or with mamba (faster)
-mamba env create -f environment.yml
-mamba activate scanpath-studio
-
-# Using pip (alternative): development mode with test dependencies
 pip install -e ".[test]"
+
+# Using pip or uv: development mode with test dependencies
+pip install -e ".[test]"              # or: uv sync --extra test
 ```
 
 ### Run all tests

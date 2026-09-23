@@ -1869,6 +1869,20 @@ def _restore_plot_config(
     if isinstance(sbc, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", sbc):
         put("global_span_border_color", sbc)
 
+    # VIZ-43 — raw gaze's own style. The section's `available` / `points`
+    # describe the trial the config was saved on, not a setting. Absent in a
+    # config saved before this existed, which keeps the seeded defaults.
+    raw_gaze = section("raw_gaze")
+    rg_color = raw_gaze.get("color")
+    if isinstance(rg_color, str) and _HEX_COLOR.fullmatch(rg_color):
+        put("global_raw_gaze_color", rg_color)
+    for cfg_key, state_key, label in (
+        ("marker_size", "global_raw_gaze_marker_size", "raw gaze marker size"),
+        ("opacity", "global_raw_gaze_opacity", "raw gaze opacity"),
+    ):
+        if cfg_key in raw_gaze:
+            put_float(raw_gaze[cfg_key], state_key, *_URL_BOUNDED[state_key], label)
+
     # CMP-11 — the compare *view* (layout + whose stimulus an overlay draws).
     # Validated against the segmented controls' exact options for the same
     # reason the URL params are: seeding a value outside them makes the widget

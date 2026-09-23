@@ -1281,6 +1281,11 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         show_coordinate_grid=viz_settings.get("show_coordinate_grid", False),
         coordinate_grid_spacing=viz_settings.get("coordinate_grid_spacing"),
         show_raw_gaze=effective_show_raw_gaze,
+        # VIZ-43: raw gaze's own style (UX-86). The rail wrote these keys and
+        # nothing handed them on, so every figure drew the builder's defaults.
+        raw_gaze_color=viz_settings.get("raw_gaze_color", "#888888"),
+        raw_gaze_marker_size=viz_settings.get("raw_gaze_marker_size", 4.0),
+        raw_gaze_opacity=viz_settings.get("raw_gaze_opacity", 0.6),
         color_by=viz_settings["color_by"],
         heatmap_metric=(
             viz_settings["heatmap_metric"]
@@ -3071,6 +3076,11 @@ def _build_studio_config(
         "raw_gaze": {
             "available": not trial_raw_gaze.empty,
             "points": len(trial_raw_gaze) if not trial_raw_gaze.empty else 0,
+            # VIZ-43: the layer's own style — the two keys above describe the
+            # trial the config was saved on and are not read back.
+            "color": viz_settings.get("raw_gaze_color", "#888888"),
+            "marker_size": float(viz_settings.get("raw_gaze_marker_size", 4.0)),
+            "opacity": float(viz_settings.get("raw_gaze_opacity", 0.6)),
         },
         # Per-scanpath styling for the two-trial comparison (None when the caller
         # didn't collect it). Each entry holds raw widget values so it restores 1:1.

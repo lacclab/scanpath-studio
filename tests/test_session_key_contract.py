@@ -512,6 +512,8 @@ def _restore_config_app():
             "title_pattern": "{participant_id} · {trial_id}",
             "caption_pattern": "{text_id} · {n_fixations} fixations",
         },
+        # VIZ-43 — raw gaze's own style (`available`/`points` are read-only).
+        "raw_gaze": {"color": "#445566", "marker_size": 6.0, "opacity": 0.4},
         "compare": [compare_entry, dict(compare_entry)],
         # CMP-11 — the compare *view*, distinct from the per-scanpath styling
         # list above. Both fields are validated against the segmented controls'

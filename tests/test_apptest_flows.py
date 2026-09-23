@@ -569,7 +569,7 @@ class TestBulkExportFlow:
 
 @pytest.mark.timeout(180)
 class TestRecoveryCachePanelFlow:
-    """ENG-30 — the sidebar 🗄️ Recovery cache panel is the on-device cache's
+    """ENG-30 — the 💾 Session → Automatic recovery panel is the on-device cache's
     only user-visible surface, so it has to report the real store and its two
     controls have to reach ``persistence`` (pause saving, forget what's saved).
     """

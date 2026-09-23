@@ -494,9 +494,9 @@ output controls (`--fixation-symbol`, `--saccade-arcs`, `--snap-fixations`,
 `--saccade-color-by-type` / `-by-direction`, the `--stimulus-image*` family,
 `--width` / `--height` / `--scale`, `--anim-grid-step-ms` /
 `--anim-max-frames`, `--no-autoplay`). Without `-p` / `-t` it renders the
-first available trial instead of raising. Most `plot_scanpath` keywords have
-a flag; check `scanpath-studio render --help` (or the
-[CLI reference](cli.md)) before assuming one doesn't.
+first available trial instead of raising. Every `plot_scanpath` figure
+option has a flag (EXP-20) — see `scanpath-studio render --help` or the
+[CLI reference](cli.md) for its spelling.
 
 ## Errors and what they mean
 

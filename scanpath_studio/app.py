@@ -98,6 +98,7 @@ from scanpath_studio.constants import (
     TRIAL_IDENTITY_CHECK_KEY,
     TRIAL_IDENTITY_FULL_KEY,
     UPLOAD_CHOICE,
+    UPLOAD_FILE_TYPES,
     WIZARD_LEAVE_KEY,
     WIZARD_STAY_KEY,
     WORD_LABEL_COLOR,
@@ -3308,7 +3309,7 @@ def _render_offpage_setup_notice(data_view: bool) -> None:
 # tab-separated report many exporters write (DATA-41); a text file's delimiter
 # is read off its header line, and an ``.xls`` that is really text (EyeLink
 # Data Viewer's "Excel" export) is read as text (BUG-55).
-_UPLOAD_TYPES = ["csv", "tsv", "txt", "parquet", "feather", "zip", "xlsx", "xls"]
+_UPLOAD_TYPES = list(UPLOAD_FILE_TYPES)
 
 
 def _uploaded_file_key(uploaded) -> tuple:

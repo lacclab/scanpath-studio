@@ -451,12 +451,17 @@ UPLOAD_MAX_SIZE_MB = 5000
 UPLOAD_LIMIT_ENV = "SCANPATH_MAX_UPLOAD_MB"
 
 
-def upload_limit_mb() -> int | None:
-    """The per-file cap every ``st.file_uploader`` passes as ``max_upload_size``.
+#: The file types every table upload box accepts (``zip`` wraps any of the
+#: others; ``txt`` is a tab-separated report; ``xls`` is a legacy workbook or
+#: EyeLink Data Viewer's text-in-an-``.xls`` export, DATA-53 / BUG-55).
+UPLOAD_FILE_TYPES = ("csv", "tsv", "txt", "parquet", "feather", "zip", "xlsx", "xls")
 
-    ``None`` — the server's own ``server.maxUploadSize`` — unless
-    ``SCANPATH_MAX_UPLOAD_MB`` is a positive whole number of MB. Read at call
-    time, like the other deployment switches, so tests can toggle it.
+
+def configured_upload_limit_mb() -> int | None:
+    """``SCANPATH_MAX_UPLOAD_MB`` as a positive whole number of MB, else ``None``.
+
+    The raw deployment setting, before it meets the server's own limit — what
+    ``scanpath-studio run`` hands the server (ENG-68).
     """
     raw = os.environ.get(UPLOAD_LIMIT_ENV, "").strip()
     try:
@@ -464,6 +469,38 @@ def upload_limit_mb() -> int | None:
     except ValueError:
         return None
     return limit if limit > 0 else None
+
+
+def upload_limit_mb() -> int | None:
+    """The per-file cap every ``st.file_uploader`` passes as ``max_upload_size``.
+
+    ``None`` — the server's own ``server.maxUploadSize`` — unless
+    ``SCANPATH_MAX_UPLOAD_MB`` sets one, which is held to the server's limit so
+    the browser never accepts a file the server then refuses. Read at call
+    time, like the other deployment switches, so tests can toggle it.
+
+    The per-widget cap is checked **in the browser**: Streamlit's upload route
+    only enforces ``server.maxUploadSize``, which cannot change once the server
+    runs. ``scanpath-studio run`` therefore passes the cap to the server too;
+    on Community Cloud, where secrets load after the server config, a scripted
+    client can still send up to the config file's limit.
+    """
+    limit = configured_upload_limit_mb()
+    if limit is None:
+        return None
+    try:
+        import streamlit as st
+
+        server = int(st.get_option("server.maxUploadSize"))
+    except Exception:
+        server = UPLOAD_MAX_SIZE_MB
+    return min(limit, server)
+
+
+def upload_limit_label() -> str:
+    """The per-file limit in force, as Streamlit writes it (``5GB``, ``200MB``)."""
+    mb = upload_limit_mb() or UPLOAD_MAX_SIZE_MB
+    return f"{mb // 1000}GB" if mb >= 1000 and mb % 1000 == 0 else f"{mb}MB"
 
 
 CITATION = {

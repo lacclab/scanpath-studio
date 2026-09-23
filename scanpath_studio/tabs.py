@@ -92,6 +92,7 @@ from scanpath_studio.constants import (
     SELECTOR_ROW_WIDE_GRID,
     TRIAL_IDENTITY_CHECK_KEY,
     TRIAL_IDENTITY_FULL_KEY,
+    UPLOAD_FILE_TYPES,
     WORD_LABEL_COLOR,
     compare_palette_color,
     derived_analysis_tables_enabled,
@@ -9286,7 +9287,7 @@ def _participant_metadata_body(
         stats_host = st
     upload = stats_host.file_uploader(
         "Participant metadata table (optional)",
-        type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
+        type=list(UPLOAD_FILE_TYPES),
         key="participant_metadata_upload",
         # No `persist_state` — `st.file_uploader` does not take it. It does
         # not need it either: the parsed frame is kept in session state under
@@ -9490,7 +9491,7 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
         stats_host = st
     upload = stats_host.file_uploader(
         "Trial metadata table (optional)",
-        type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
+        type=list(UPLOAD_FILE_TYPES),
         key="trial_metadata_upload",
         help=_tm_help,
         label_visibility="collapsed",
@@ -9693,7 +9694,7 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
         stats_host = st
     upload = stats_host.file_uploader(
         "Text metadata table (optional)",
-        type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
+        type=list(UPLOAD_FILE_TYPES),
         key="text_metadata_upload",
         help=_txm_help,
         label_visibility="collapsed",
@@ -10286,7 +10287,7 @@ def _render_missing_table_uploads(name: str, stored: dict, *, host=None) -> dict
         )
         uploads = box.file_uploader(
             prompt,
-            type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
+            type=list(UPLOAD_FILE_TYPES),
             accept_multiple_files=True,
             key=f"remap_add_upload_{name}_{table_key}",
             max_upload_size=upload_limit_mb(),

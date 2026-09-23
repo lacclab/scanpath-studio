@@ -28,7 +28,12 @@ from scanpath_studio.app import (
     data_root,
     local_filesystem_enabled,
 )
-from scanpath_studio.constants import UPLOAD_LIMIT_ENV, upload_limit_mb
+from scanpath_studio.constants import (
+    UPLOAD_LIMIT_ENV,
+    UPLOAD_MAX_SIZE_MB,
+    upload_limit_label,
+    upload_limit_mb,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -243,3 +248,50 @@ class TestTheUploadCap:
                     missing.append(f"{path.name}:{node.lineno}")
         assert not missing, f"file_uploader without max_upload_size: {missing}"
         assert package.joinpath("app.py").read_text().count("file_uploader(") >= 3
+
+    def test_it_never_exceeds_the_servers_own_limit(self, monkeypatch):
+        """A browser that accepts a file the server then refuses is a 413."""
+        import streamlit as st
+
+        monkeypatch.setenv(UPLOAD_LIMIT_ENV, "999999")
+        assert upload_limit_mb() == int(st.get_option("server.maxUploadSize"))
+
+    def test_the_wizard_names_the_limit_in_force(self, monkeypatch):
+        """UX-124 hides Streamlit's own size line, so this label is the only one."""
+        assert upload_limit_label() == f"{UPLOAD_MAX_SIZE_MB // 1000}GB"
+        monkeypatch.setenv(UPLOAD_LIMIT_ENV, "200")
+        assert upload_limit_label() == "200MB"
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [(None, UPLOAD_MAX_SIZE_MB), ("200", 200), ("999999", UPLOAD_MAX_SIZE_MB)],
+    )
+    def test_scanpath_studio_run_hands_it_to_the_server(
+        self, monkeypatch, value, expected
+    ):
+        """The one launch path where the server itself can enforce it."""
+        from scanpath_studio.cli import _max_upload_cli_flags
+
+        if value is not None:
+            monkeypatch.setenv(UPLOAD_LIMIT_ENV, value)
+        assert _max_upload_cli_flags([]) == [f"--server.maxUploadSize={expected}"]
+        assert _max_upload_cli_flags(["--server.maxUploadSize=10"]) == []
+
+    def test_every_table_upload_box_takes_xls(self):
+        """DATA-53 reads legacy workbooks; a picker that greys them out hides it."""
+        package = Path(app_module.__file__).parent
+        narrow = []
+        for path in sorted(package.glob("*.py")):
+            for node in ast.walk(ast.parse(path.read_text())):
+                if not (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "file_uploader"
+                ):
+                    continue
+                for kw in node.keywords:
+                    if kw.arg == "type" and isinstance(kw.value, ast.List):
+                        kinds = {getattr(e, "value", None) for e in kw.value.elts}
+                        if "xlsx" in kinds and "xls" not in kinds:
+                            narrow.append(f"{path.name}:{node.lineno}")
+        assert not narrow, f"table upload box without .xls: {narrow}"

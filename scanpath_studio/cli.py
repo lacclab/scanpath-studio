@@ -214,12 +214,17 @@ def _max_upload_cli_flags(extra_args) -> list[str]:
     ``server.maxUploadSize`` and rejected any table over 200 MB — which is a
     normal size for a real fixation report. An explicit ``--server.*`` flag from
     the caller still wins.
+
+    ENG-68: a deployment's own ``SCANPATH_MAX_UPLOAD_MB``, when lower, is
+    passed to the server as well, so the cap the upload boxes show is one the
+    server enforces rather than only the browser.
     """
-    from .constants import UPLOAD_MAX_SIZE_MB
+    from .constants import UPLOAD_MAX_SIZE_MB, configured_upload_limit_mb
 
     if any(str(arg).startswith("--server.maxUploadSize") for arg in extra_args):
         return []
-    return [f"--server.maxUploadSize={UPLOAD_MAX_SIZE_MB}"]
+    limit = min(configured_upload_limit_mb() or UPLOAD_MAX_SIZE_MB, UPLOAD_MAX_SIZE_MB)
+    return [f"--server.maxUploadSize={limit}"]
 
 
 #: Where ``scanpath-studio`` listens unless told otherwise (ENG-55).

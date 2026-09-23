@@ -941,7 +941,13 @@ no `<` can reach it.
   `SCANPATH_MAX_UPLOAD_MB=200` lowers every upload box's per-file limit on that
   deployment alone, below the 5,000 MB the app otherwise allows. On Streamlit
   Community Cloud, put it in the app's secrets as a root-level key; Streamlit
-  loads those into the environment when the server starts.
+  loads those into the environment when the server starts. **Know what it
+  enforces:** the per-box limit is checked by the browser, and Streamlit's
+  upload route enforces only `server.maxUploadSize`, which is read before the
+  secrets and cannot change while the server runs. `scanpath-studio run` passes
+  the cap to the server too, so there it is a hard limit; on Community Cloud it
+  stops anyone using the page, but a scripted client posting straight to the
+  upload endpoint can still send up to `.streamlit/config.toml`'s 5,000 MB.
 - **A share link is identifying.** It names a participant and a trial alongside
   the visualization settings (S3). A saved plot config likewise carries the
   selection *and* every annotation note you have typed, for every trial — read it

@@ -31,9 +31,9 @@ from .constants import (
     SYNTHETIC_CHOICE,
     TRIAL_IDENTITY_CHECK_KEY,
     UPLOAD_CHOICE,
-    UPLOAD_MAX_SIZE_MB,
     WIZARD_LEAVE_KEY,
     multipleye_upload_enabled,
+    upload_limit_label,
     upload_limit_mb,
 )
 from .controls import (
@@ -2905,7 +2905,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # tooltip and the uploader's own accessible help.
     _upload_types_note = (
         ", ".join(t.upper() for t in app._UPLOAD_TYPES)
-        + f" — up to {UPLOAD_MAX_SIZE_MB // 1000}GB per file."
+        + f" — up to {upload_limit_label()} per file."
     )
 
     def upload_box(

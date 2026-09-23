@@ -24,7 +24,6 @@ from scanpath_studio.aggregation import (
     cohort_word_profile,
     ensure_fixation_enrichment,
     group_word_difference,
-    grouped_metric_values,
     landing_positions,
     metric_by_trial_index,
     paired_group_summary,
@@ -88,8 +87,8 @@ def demo():
     )
 
 
-class TestLegacyTrendFigures:
-    """The trial-index / fixation-index trends (``metric_by_*_index``)."""
+class TestTrendFigures:
+    """The trial-index trend (``metric_by_trial_index``)."""
 
     def test_trend_figure_band_and_line(self, demo):
         fx = demo.fixations.assign(trial_index=derive_trial_index(demo.fixations))
@@ -131,26 +130,6 @@ class TestLegacyTrendFigures:
             fig.add_scatter(x=grp["trial_index"], y=grp["value"], mode="lines")
         # Band + cohort line + one faint line per reader.
         assert len(fig.data) == 2 + len(readers)
-
-    def test_aggregated_histogram_shares_bin_edges(self, demo):
-        groups, dropped = grouped_metric_values(
-            demo.fixations, "duration_ms", "difficulty_level"
-        )
-        assert dropped == 0 and set(groups) == {"Adv", "Ele"}
-        fig = plots.make_aggregated_histogram(
-            groups, metric_label="Fixation duration (ms)", bins=25, **_FW
-        )
-        assert [t.type for t in fig.data] == ["bar", "bar"]
-        assert [t.name for t in fig.data] == ["Adv", "Ele"]
-        # One shared set of bin centres, so the overlaid series line up.
-        np.testing.assert_array_equal(fig.data[0].x, fig.data[1].x)
-        assert len(fig.data[0].x) == 25
-        # Binning is server-side: every value lands in a bin, none are dropped.
-        for trace, name in zip(fig.data, ("Adv", "Ele")):
-            assert int(np.sum(trace.y)) == groups[name].size
-        assert fig.layout.barmode == "overlay"
-        assert fig.layout.xaxis.title.text == "Fixation duration (ms)"
-        assert fig.layout.yaxis.title.text == "Count"
 
 
 class TestPerTextFigures:
@@ -511,7 +490,6 @@ class TestNoDataFallbacks:
             plots.make_trend_figure(
                 empty, x_col="trial_index", y_label="y", title="Trend", **_FW
             ),
-            plots.make_aggregated_histogram({}, metric_label="m", **_FW),
             plots.make_small_multiples_figure(empty, measure_label="m", **_FW),
             plots.make_word_matrix_heatmap(
                 empty, row_col="participant_id", measure_label="m", **_FW

@@ -1108,51 +1108,6 @@ def compute_trial_stats(
     )
 
 
-def gather_trial_metadata(
-    trial_words: pd.DataFrame, trial_fixations: pd.DataFrame, fields: Iterable[str]
-) -> pd.DataFrame:
-    """Gather metadata for selected fields from words and fixations."""
-    rows = []
-    for field in fields:
-        if field in trial_words.columns:
-            series = pd.Series(trial_words[field])
-        elif field in trial_fixations.columns:
-            series = pd.Series(trial_fixations[field])
-        else:
-            continue
-
-        cleaned = series.dropna()
-        if cleaned.empty:
-            value = "—"
-        else:
-            unique_values = cleaned.unique()
-            if len(unique_values) == 1:
-                value = unique_values[0]
-            else:
-                numeric_series = pd.to_numeric(cleaned, errors="coerce")
-                numeric_values = numeric_series.dropna()
-                is_numeric = (
-                    not pd.api.types.is_bool_dtype(cleaned)
-                    and (
-                        pd.api.types.is_numeric_dtype(cleaned)
-                        or len(numeric_values) == len(cleaned)
-                    )
-                    and not numeric_values.empty
-                )
-                if is_numeric:
-                    value = f"mean={numeric_values.mean():.2f}, std={numeric_values.std():.2f}"
-                else:
-                    modes = cleaned.mode(dropna=True)
-                    mode_value = modes.iloc[0] if not modes.empty else "—"
-                    value = f"{mode_value} (mode, {len(unique_values)} unique)"
-        rows.append({"Field": field, "Value": value})
-
-    df = pd.DataFrame(rows)
-    if not df.empty:
-        df["Value"] = df["Value"].astype(str)
-    return df
-
-
 def safe_summary(series: pd.Series) -> dict:
     """Compute summary statistics for a series, handling empty data."""
     if series.empty:

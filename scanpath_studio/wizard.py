@@ -181,7 +181,7 @@ def _reset_wizard_widgets() -> None:
         "_wizard_problems_last",
     ):
         st.session_state.pop(key, None)
-    # Re-seed the accordion on the next entry instead of opening wherever the
+    # Clear the steps' open flags so the next entry does not open wherever the
     # previous dataset was left.
     wizard_shell.reset_accordion()
 

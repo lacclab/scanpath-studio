@@ -23,7 +23,6 @@ from scanpath_studio.aggregation import (
     Measure,
     add_normalized_column,
     aggregate_value,
-    aggregate_word_measures_by_text,
     apply_group,
     available_features,
     available_measures,
@@ -34,10 +33,8 @@ from scanpath_studio.aggregation import (
     group_effect_size,
     group_mask,
     group_word_difference,
-    grouped_metric_values,
     landing_positions,
     measure_values,
-    metric_by_fixation_index,
     metric_by_trial_index,
     metric_over_time,
     paired_group_summary,
@@ -245,93 +242,6 @@ class TestMetricByTrialIndex:
         assert list(out.columns) == ["trial_index", "value", "sem", "n_trials"]
 
 
-class TestMetricByFixationIndex:
-    def test_groups_by_order_in_trial(self):
-        fix = pd.DataFrame(
-            {
-                "order_in_trial": [1, 1, 2, 2],
-                "duration_ms": [100, 200, 50, 50],
-            }
-        )
-        out = metric_by_fixation_index(fix, "duration_ms")
-        assert list(out["fixation_index"]) == [1, 2]
-        assert list(out["value"]) == [150.0, 50.0]
-
-    def test_respects_max_index(self):
-        fix = pd.DataFrame({"order_in_trial": [1, 2, 3], "duration_ms": [10, 20, 30]})
-        out = metric_by_fixation_index(fix, "duration_ms", max_index=2)
-        assert list(out["fixation_index"]) == [1, 2]
-
-    def test_pools_across_participants_with_sem(self):
-        out = metric_by_fixation_index(_tidy_fixations(), "duration_ms")
-        assert list(out["fixation_index"]) == [1, 2, 3]
-        assert list(out["value"]) == [150.0, 165.0, 130.0]
-        assert list(out["n"]) == [2, 2, 1]
-        assert list(out["sem"]) == pytest.approx([50.0, 15.0, 0.0])
-
-    def test_nan_index_or_metric_rows_are_dropped(self):
-        fix = pd.DataFrame(
-            {
-                "order_in_trial": [1, 1, np.nan, 2],
-                "duration_ms": [100.0, np.nan, 50.0, 40.0],
-            }
-        )
-        out = metric_by_fixation_index(fix, "duration_ms")
-        assert list(out["fixation_index"]) == [1.0, 2.0]
-        assert list(out["value"]) == [100.0, 40.0]
-        assert list(out["n"]) == [1, 1]  # the NaN-metric row never reaches index 1
-
-    def test_missing_order_column_returns_empty(self):
-        fix = _tidy_fixations().drop(columns=["order_in_trial"])
-        out = metric_by_fixation_index(fix, "duration_ms")
-        assert out.empty
-        assert list(out.columns) == ["fixation_index", "value", "sem", "n"]
-
-
-class TestGroupedMetricValues:
-    def test_all_data_single_group(self):
-        df = pd.DataFrame({"duration_ms": [1.0, 2.0, 3.0]})
-        groups, dropped = grouped_metric_values(df, "duration_ms")
-        assert set(groups) == {"All"}
-        assert dropped == 0
-        np.testing.assert_array_equal(groups["All"], np.array([1.0, 2.0, 3.0]))
-
-    def test_keeps_the_largest_groups_and_reports_the_rest(self):
-        # Sizes 5/4/3/2/1 → the cap keeps the two *largest*, not the first two
-        # encountered, and the other three are reported through ``n_dropped``.
-        sizes = {"e": 1, "c": 3, "a": 5, "d": 2, "b": 4}
-        labels = [k for k, n in sizes.items() for _ in range(n)]
-        df = pd.DataFrame({"m": np.arange(len(labels), dtype=float), "g": labels})
-        groups, dropped = grouped_metric_values(df, "m", "g", max_groups=2)
-        assert set(groups) == {"a", "b"}
-        assert dropped == 3
-        # "a" holds rows 4-8 (it follows "e" and "c" in the frame), "b" the last 4.
-        np.testing.assert_array_equal(groups["a"], np.arange(4.0, 9.0))
-        np.testing.assert_array_equal(groups["b"], np.arange(11.0, 15.0))
-
-    def test_nan_values_dropped_and_all_nan_group_omitted(self):
-        df = pd.DataFrame(
-            {"m": [1.0, 2.0, np.nan, np.nan, 5.0], "g": ["a", "a", "a", "b", "c"]}
-        )
-        groups, dropped = grouped_metric_values(df, "m", "g")
-        # "b" is all-NaN so it produces no entry — and it is NOT counted in
-        # `dropped`, which only reports groups cut by `max_groups`.
-        assert set(groups) == {"a", "c"}
-        assert dropped == 0
-        np.testing.assert_array_equal(groups["a"], np.array([1.0, 2.0]))
-        np.testing.assert_array_equal(groups["c"], np.array([5.0]))
-
-    def test_unknown_group_col_falls_back_to_all(self):
-        df = pd.DataFrame({"m": [1.0, 2.0]})
-        groups, dropped = grouped_metric_values(df, "m", "not_a_column")
-        assert set(groups) == {"All"}
-        assert dropped == 0
-
-    def test_missing_metric_and_empty_frame(self):
-        assert grouped_metric_values(pd.DataFrame({"m": [1.0]}), "nope") == ({}, 0)
-        assert grouped_metric_values(pd.DataFrame(), "m") == ({}, 0)
-
-
 class TestPerTextAggregates:
     def _words(self):
         return pd.DataFrame(
@@ -350,44 +260,10 @@ class TestPerTextAggregates:
             }
         )
 
-    def test_aggregate_word_measures_by_text(self):
-        out = aggregate_word_measures_by_text(self._words(), "text_id", "A")
-        assert len(out) == 2  # one row per word_id
-        word0 = out[out["word_id"] == 0].iloc[0]
-        assert word0["total_fixation_duration_ms"] == 200.0  # mean(100, 300)
-        assert {"x", "y", "width", "height", "text"} <= set(out.columns)
-
     def test_text_read_counts(self):
         counts = text_read_counts(self._words(), "text_id")
         assert list(counts["text"]) == ["A"]
         assert list(counts["n_participants"]) == [2]
-
-    def test_aggregate_skips_nans_and_stamps_synthetic_trial(self):
-        out = aggregate_word_measures_by_text(_tidy_words(), "text_id", "A")
-        assert list(out["word_id"]) == [0, 1, 2]
-        # word 2: p1 is NaN → the mean is p2's value alone, not NaN.
-        assert list(out["total_fixation_duration_ms"]) == [150.0, 400.0, 150.0]
-        assert list(out["n_fixations"]) == [1.0, 2.5, 0.5]
-        assert list(out["text"]) == ["the", "cat", "sat"]
-        # Synthetic identity so the words-only heatmap path accepts the frame.
-        assert set(out["participant_id"]) == {"aggregate"}
-        assert set(out["trial_id"]) == {"A"}
-
-    def test_aggregate_honours_agg_and_text_scope(self):
-        out = aggregate_word_measures_by_text(_tidy_words(), "text_id", "A", agg="sum")
-        assert list(out["total_fixation_duration_ms"]) == [300.0, 800.0, 150.0]
-        # Text B (p3, TFD 900) must not leak into text A.
-        assert 900.0 not in set(out["total_fixation_duration_ms"])
-
-    def test_aggregate_needs_word_id_and_geometry(self):
-        assert aggregate_word_measures_by_text(
-            _tidy_words().drop(columns=["word_id"]), "text_id", "A"
-        ).empty
-        no_geom = _tidy_words().drop(columns=["x", "y", "width", "height", "text"])
-        assert aggregate_word_measures_by_text(no_geom, "text_id", "A").empty
-        assert aggregate_word_measures_by_text(
-            _tidy_words(), "text_id", "does-not-exist"
-        ).empty
 
     def test_text_read_counts_sorted_by_readers_desc(self):
         counts = text_read_counts(_tidy_words(), "text_id")

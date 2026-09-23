@@ -2,9 +2,8 @@
 
 Headless (no Streamlit), so they're unit-testable. They turn the filtered
 words / fixations frames into the small summary tables the plot builders draw:
-per-trial-index trends, per-fixation-index trends, grouped metric distributions,
-and per-text word-level aggregates for heatmaps. The heavy work is plain pandas
-groupby; the tabs cache the results with ``@st.cache_data``.
+the per-trial-index trend and per-text read counts first. The heavy work is
+plain pandas groupby; the tabs cache the results with ``@st.cache_data``.
 
 The lower block (from :data:`MEASURES` onward) backs the question-oriented
 analysis sections — *per text* (one text, many readers), *per reader* (one
@@ -59,113 +58,6 @@ def metric_by_trial_index(
     out.columns = ["trial_index", "value", "sem", "n_trials"]
     out["sem"] = out["sem"].fillna(0.0)
     return out.sort_values("trial_index").reset_index(drop=True)
-
-
-def metric_by_fixation_index(
-    fixations: pd.DataFrame, metric: str, *, max_index: int | None = None
-) -> pd.DataFrame:
-    """Average of ``metric`` per within-trial fixation index (``order_in_trial``).
-
-    Returns ``DataFrame[fixation_index, value, sem, n]`` sorted by index. Only
-    meaningful for per-fixation metrics (duration, saccade amplitude, …).
-    """
-    if (
-        fixations.empty
-        or metric not in fixations.columns
-        or "order_in_trial" not in fixations.columns
-    ):
-        return pd.DataFrame(columns=["fixation_index", "value", "sem", "n"])
-    df = pd.DataFrame(
-        {
-            "fixation_index": pd.to_numeric(
-                fixations["order_in_trial"], errors="coerce"
-            ),
-            "_m": pd.to_numeric(fixations[metric], errors="coerce"),
-        }
-    ).dropna()
-    if df.empty:
-        return pd.DataFrame(columns=["fixation_index", "value", "sem", "n"])
-    out = df.groupby("fixation_index")["_m"].agg(["mean", "sem", "count"]).reset_index()
-    out.columns = ["fixation_index", "value", "sem", "n"]
-    out["sem"] = out["sem"].fillna(0.0)
-    if max_index is not None:
-        out = out[out["fixation_index"] <= max_index]
-    return out.sort_values("fixation_index").reset_index(drop=True)
-
-
-def grouped_metric_values(
-    frame: pd.DataFrame,
-    metric: str,
-    group_col: str | None = None,
-    *,
-    max_groups: int = 12,
-) -> tuple[dict[str, np.ndarray], int]:
-    """Return ``({group_label: values_array}, n_dropped)`` for histograms.
-
-    ``group_col=None`` yields a single ``"All"`` group. Otherwise one entry per
-    distinct value of ``group_col``, keeping the ``max_groups`` largest by row
-    count; ``n_dropped`` reports how many groups were left out (so the caller can
-    note the cap rather than silently truncating).
-    """
-    if frame.empty or metric not in frame.columns:
-        return {}, 0
-    vals = pd.to_numeric(frame[metric], errors="coerce")
-    if group_col is None or group_col not in frame.columns:
-        arr = vals.dropna().to_numpy()
-        return ({"All": arr} if arr.size else {}), 0
-    counts = frame[group_col].value_counts()
-    kept = list(counts.index[:max_groups])
-    dropped = max(0, len(counts) - len(kept))
-    groups: dict[str, np.ndarray] = {}
-    for g in kept:
-        arr = vals[frame[group_col] == g].dropna().to_numpy()
-        if arr.size:
-            groups[str(g)] = arr
-    return groups, dropped
-
-
-def aggregate_word_measures_by_text(
-    words: pd.DataFrame, text_col: str, text_id, *, agg: str = "mean", screen_id=None
-) -> pd.DataFrame:
-    """One-row-per-word frame for a text: word boxes + reading measures averaged
-    across every participant who read it.
-
-    The returned frame keeps the canonical measure column names
-    (``total_fixation_duration_ms`` / ``n_fixations``) and the word-box geometry,
-    so it can be fed straight to ``plots.make_scanpath_figure`` (words-only
-    heatmap branch) for a per-text aggregated heatmap. Returns an empty frame
-    when the text or geometry is missing.
-    """
-    if words.empty or "word_id" not in words.columns:
-        return pd.DataFrame()
-    # One screen only, like every other per-text helper (BUG-26) — grouping on
-    # `word_id` across screens pools two coordinate spaces.
-    sub = _text_subset(words, text_col, text_id, screen_id)
-    if sub.empty:
-        return pd.DataFrame()
-    measure_cols = [
-        c
-        for c in ("total_fixation_duration_ms", "n_fixations", "first_fixation_ms")
-        if c in sub.columns
-    ]
-    geom_cols = [
-        c for c in ("x", "y", "width", "height", "text", "line_idx") if c in sub.columns
-    ]
-    if not geom_cols:
-        return pd.DataFrame()
-    grouped = sub.groupby("word_id")
-    out = grouped[geom_cols].first()
-    for col in measure_cols:
-        out[col] = grouped[col].agg(
-            lambda s: pd.to_numeric(s, errors="coerce").agg(agg)
-        )
-    out = out.reset_index()
-    # The heatmap path keys off participant/trial existence only for filtering;
-    # tag a synthetic single "trial" so downstream code that expects the columns
-    # doesn't choke.
-    out["participant_id"] = "aggregate"
-    out["trial_id"] = str(text_id)
-    return out
 
 
 def text_read_counts(words: pd.DataFrame, text_col: str) -> pd.DataFrame:

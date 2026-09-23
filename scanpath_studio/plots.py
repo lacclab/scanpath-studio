@@ -5360,164 +5360,8 @@ def _render_comparison_figure(
 
 
 # =============================================================================
-# Reading-research figures: per-word bar, fixation-duration histogram
+# Line figures: metric convergence, trial-index trend
 # =============================================================================
-
-
-def make_word_measure_bar_figure(
-    words: pd.DataFrame,
-    *,
-    measure: str,
-    canvas_width: int,
-    base_font_size: int,
-    font_family: str,
-    height: int = 360,
-) -> go.Figure:
-    """Vertical bar plot of a per-word measure, with word text on the x-axis."""
-    fig = go.Figure()
-    font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
-    if words.empty or measure not in words.columns:
-        fig.update_layout(
-            template="plotly_white",
-            font=font_settings,
-            title=f"No data for '{measure}'",
-            height=height,
-        )
-        return fig
-    ordered = words.sort_values(["line_idx", "word_id"]).reset_index(drop=True)
-    labels = [
-        f"{int(wid)}: {txt}" if pd.notna(wid) else str(txt)
-        for wid, txt in zip(ordered["word_id"], ordered.get("text", ordered["word_id"]))
-    ]
-    values = pd.to_numeric(ordered[measure], errors="coerce")
-    fig.add_trace(
-        go.Bar(
-            x=labels,
-            y=values,
-            marker=dict(
-                color=values,
-                colorscale=DEFAULT_HEATMAP_COLORSCALE,
-                showscale=True,
-                colorbar=dict(title=measure.replace("_", " ").title()),
-            ),
-            hovertemplate="%{x}<br>" + measure + ": %{y}<extra></extra>",
-        )
-    )
-    mean_value = float(values.dropna().mean()) if values.dropna().size else None
-    if mean_value is not None:
-        fig.add_hline(
-            y=mean_value,
-            line=dict(color=COMPARISON_PALETTE[1], width=2, dash="dot"),
-            annotation_text=f"mean {mean_value:.2f}",
-            annotation_position="top right",
-        )
-    fig.update_layout(
-        height=height,
-        width=canvas_width,
-        autosize=False,
-        margin=dict(l=40, r=10, t=40, b=80),
-        template="plotly_white",
-        font=font_settings,
-        xaxis=dict(title="Word", tickangle=-45, automargin=True),
-        yaxis=dict(title=measure.replace("_", " ").title()),
-        title=f"Per-word {measure.replace('_', ' ')}",
-    )
-    return fig
-
-
-def make_fixation_duration_histogram(
-    fixations: pd.DataFrame,
-    *,
-    canvas_width: int,
-    base_font_size: int,
-    font_family: str,
-    bins: int = 30,
-    overlay_words: pd.DataFrame | None = None,
-    height: int = 320,
-) -> go.Figure:
-    """Histogram of fixation durations, optionally with overlaid summary stats."""
-    fig = go.Figure()
-    font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
-    if fixations.empty:
-        fig.update_layout(
-            template="plotly_white",
-            font=font_settings,
-            title="Fixation duration distribution (no data)",
-            height=height,
-        )
-        return fig
-    durations = pd.to_numeric(fixations["duration_ms"], errors="coerce").dropna()
-
-    # Pre-bin server-side and draw bars instead of go.Histogram, which would
-    # serialize *every* raw value to the browser — prohibitive for millions of
-    # fixations. All series share one set of bin edges so the overlays align.
-    series_list = [("All fixations", durations.to_numpy(), COMPARISON_PALETTE[0], 1.0)]
-    if overlay_words is not None and not overlay_words.empty:
-        for name, col in (
-            ("FFD", "first_fixation_ms"),
-            ("FPRT", "first_pass_gaze_duration_ms"),
-            ("TFD", "total_fixation_duration_ms"),
-        ):
-            if col in overlay_words.columns:
-                vals = pd.to_numeric(overlay_words[col], errors="coerce").dropna()
-                if not vals.empty:
-                    series_list.append((name, vals.to_numpy(), None, 0.4))
-
-    all_vals = np.concatenate([arr for _, arr, _, _ in series_list])
-    lo = float(all_vals.min()) if all_vals.size else 0.0
-    hi = float(all_vals.max()) if all_vals.size else 1.0
-    if hi <= lo:
-        hi = lo + 1.0
-    edges = np.linspace(lo, hi, bins + 1)
-    centers = (edges[:-1] + edges[1:]) / 2.0
-    bar_width = float(edges[1] - edges[0])
-
-    for name, arr, color, opacity in series_list:
-        counts, _ = np.histogram(arr, bins=edges)
-        marker = (
-            dict(color=color, line=dict(color="white", width=0.5))
-            if color is not None
-            else None
-        )
-        fig.add_trace(
-            go.Bar(
-                x=centers,
-                y=counts,
-                width=bar_width,
-                name=name,
-                opacity=opacity,
-                marker=marker,
-            )
-        )
-
-    mean_ms = float(durations.mean()) if len(durations) else 0.0
-    median_ms = float(durations.median()) if len(durations) else 0.0
-    fig.add_vline(
-        x=mean_ms,
-        line=dict(color=COMPARISON_PALETTE[1], width=2, dash="dash"),
-        annotation_text=f"mean {mean_ms:.0f} ms",
-        annotation_position="top right",
-    )
-    fig.add_vline(
-        x=median_ms,
-        line=dict(color=SACCADE_COLOR, width=2, dash="dot"),
-        annotation_text=f"median {median_ms:.0f} ms",
-        annotation_position="top left",
-    )
-    fig.update_layout(
-        height=height,
-        width=canvas_width,
-        autosize=False,
-        margin=dict(l=40, r=10, t=40, b=40),
-        template="plotly_white",
-        font=font_settings,
-        xaxis=dict(title="Duration (ms)"),
-        yaxis=dict(title="Count"),
-        barmode="overlay",
-        title="Fixation duration distribution",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-    )
-    return fig
 
 
 def make_metric_convergence_figure(
@@ -5600,9 +5444,8 @@ def make_trend_figure(
     """Line+marker trend of ``value`` vs ``x_col`` with a ±SEM shaded band.
 
     ``df`` has columns ``[x_col, "value", "sem"]`` (see
-    ``aggregation.metric_by_trial_index`` / ``metric_by_fixation_index``). Used
-    by the Aggregated Views subtab for the trial-index and within-trial
-    fixation-index trends.
+    ``aggregation.metric_by_trial_index``). Used by the Per reader and Groups
+    subtabs for the trial-index trend.
     """
     fig = go.Figure()
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
@@ -5656,72 +5499,6 @@ def make_trend_figure(
     return fig
 
 
-def make_aggregated_histogram(
-    groups: dict,
-    *,
-    metric_label: str,
-    canvas_width: int,
-    base_font_size: int,
-    font_family: str,
-    bins: int = 30,
-    height: int = 360,
-) -> go.Figure:
-    """Overlaid binned histograms — one series per group.
-
-    ``groups`` maps a label → a 1-D array of metric values. All series share one
-    set of bin edges so they line up; binning is server-side (counts only) so a
-    corpus of millions of fixations doesn't serialize every raw value. Used by
-    the Aggregated Views subtab's distribution plot.
-    """
-    fig = go.Figure()
-    font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
-    arrays = [(str(name), np.asarray(arr)) for name, arr in groups.items() if len(arr)]
-    if not arrays:
-        fig.update_layout(
-            template="plotly_white",
-            font=font_settings,
-            title=f"{metric_label} distribution (no data)",
-            height=height,
-        )
-        return fig
-    all_vals = np.concatenate([arr for _, arr in arrays])
-    lo, hi = float(all_vals.min()), float(all_vals.max())
-    if hi <= lo:
-        hi = lo + 1.0
-    edges = np.linspace(lo, hi, bins + 1)
-    centers = (edges[:-1] + edges[1:]) / 2.0
-    bar_width = float(edges[1] - edges[0])
-    single = len(arrays) == 1
-    for i, (name, arr) in enumerate(arrays):
-        counts, _ = np.histogram(arr, bins=edges)
-        color = _QUALITATIVE_PALETTE[i % len(_QUALITATIVE_PALETTE)]
-        fig.add_trace(
-            go.Bar(
-                x=centers,
-                y=counts,
-                width=bar_width,
-                name=name,
-                opacity=0.95 if single else 0.55,
-                marker=dict(color=color, line=dict(color="white", width=0.4)),
-            )
-        )
-    fig.update_layout(
-        height=height,
-        width=canvas_width,
-        autosize=False,
-        margin=dict(l=50, r=10, t=40, b=45),
-        template="plotly_white",
-        font=font_settings,
-        xaxis=dict(title=metric_label),
-        yaxis=dict(title="Count"),
-        barmode="overlay",
-        title=f"{metric_label} distribution",
-        showlegend=not single,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-    )
-    return fig
-
-
 # =============================================================================
 # Analysis section figures (AN-1 … AN-22)
 # =============================================================================
@@ -5729,7 +5506,7 @@ def make_aggregated_histogram(
 # Builders for the question-oriented Corpus Analysis subtabs. Each takes a tidy
 # frame from ``aggregation.py`` plus the usual ``canvas_width`` / ``base_font_size``
 # / ``font_family`` and returns a ``go.Figure``. Empty input → a "(no data)"
-# placeholder, matching ``make_trend_figure`` / ``make_aggregated_histogram``.
+# placeholder, matching ``make_trend_figure``.
 
 _DIVERGING_COLORSCALE = "RdBu"
 

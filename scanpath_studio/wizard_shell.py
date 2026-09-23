@@ -11,9 +11,8 @@ and finalize. What lives here is the *chrome*:
   over the ones that actually render.
 - `step_panel` — the collapsed *Data & mapping* review panel's per-step block, and
   the keyed-expander form it had while the wizard was an accordion.
-- `go_to_step` / `seed_open_step` / `reset_accordion` / `first_incomplete` —
-  the accordion-era open-flag helpers, still called by the guide (`tour.py`)
-  and the wizard's reset.
+- `go_to_step` / `reset_accordion` — the accordion-era open-flag helpers,
+  still called by the guide (`tour.py`) and the wizard's reset.
 
 **The rule those helpers keep.** A step's open flag (``wiz_open_<id>``) is
 written *only* by them and the guide. Nothing inside a step body may touch it:
@@ -39,7 +38,7 @@ at the `step_panel` call sites in ``wizard.py``.
 from __future__ import annotations
 
 import html
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
 
@@ -263,21 +262,6 @@ def badge(status: StepStatus) -> str:
     return _BADGES.get(status, _BADGES[StepStatus.TODO])
 
 
-def first_incomplete(statuses: Mapping[str, StepStatus]) -> str | None:
-    """Id of the first step that still wants attention, or ``None`` when the
-    wizard is fully answered.
-
-    "Wants attention" excludes ``OPTIONAL``: an untouched optional step must not
-    stop the accordion advancing past it, or *Extra fields* would grab focus
-    ahead of *Name & add* on every fresh upload.
-    """
-    for step in STEPS:
-        status = statuses.get(step.id, StepStatus.TODO)
-        if status in (StepStatus.TODO, StepStatus.ACTION):
-            return step.id
-    return None
-
-
 def go_to_step(step_id: str) -> None:
     """Open exactly one step and close the others.
 
@@ -290,27 +274,13 @@ def go_to_step(step_id: str) -> None:
         st.session_state[open_key(step.id)] = step.id == step_id
 
 
-def seed_open_step(statuses: Mapping[str, StepStatus]) -> None:
-    """On first entry to the wizard, open the first step that needs attention.
-
-    Runs once per wizard entry (guarded by ``_wizard_accordion_seeded``) — after
-    that the accordion is the user's to drive, and re-seeding on later runs would
-    be exactly the auto-advance-under-the-cursor behaviour this design removes.
-    """
-    if st.session_state.get("_wizard_accordion_seeded"):
-        return
-    st.session_state["_wizard_accordion_seeded"] = True
-    go_to_step(first_incomplete(statuses) or STEPS[0].id)
-
-
 def reset_accordion() -> None:
-    """Forget the accordion state so the next wizard entry re-seeds.
+    """Forget every step's open flag.
 
     Called by ``wizard._reset_wizard_widgets`` when *Add data* starts a fresh
     dataset; without it the second dataset would open on whichever step the
     first one was left on.
     """
-    st.session_state.pop("_wizard_accordion_seeded", None)
     for step in STEPS:
         st.session_state.pop(open_key(step.id), None)
 

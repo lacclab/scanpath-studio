@@ -318,6 +318,9 @@ def test_render_bad_canvas_exits():
 
 
 def test_render_animate_warns_on_unsupported_flags(tmp_path, capsys):
+    # EXP-10: this test used to pin `color_by` as unsupported, which it never
+    # was — `animate_scanpath` colours the replay by it. The heatmap and the
+    # arc schematic are what the replay genuinely cannot draw.
     out_file = tmp_path / "anim.html"
     cli.main(
         [
@@ -325,6 +328,7 @@ def test_render_animate_warns_on_unsupported_flags(tmp_path, capsys):
             "--sample",
             "--animate",
             "--no-heatmap",
+            "--saccade-arcs",
             "--color-by",
             "pass_index",
             "-o",
@@ -334,7 +338,67 @@ def test_render_animate_warns_on_unsupported_flags(tmp_path, capsys):
     assert out_file.is_file()
     err = capsys.readouterr().err
     assert "ignoring" in err
-    assert "color_by" in err and "show_heatmap" in err
+    assert "show_heatmap" in err and "saccade_render_mode" in err
+    assert "color_by" not in err
+
+
+def test_render_animate_forwards_every_option_the_replay_takes(tmp_path, monkeypatch):
+    """EXP-10: the forwarded set is `figure_options("animation")`, not a list.
+
+    The hand-kept list silently dropped the marker shape, the flat colour and
+    the palette, and refused three options the builder honours — so an
+    animation snippet copied from the app replayed a different figure."""
+    from scanpath_studio import api
+
+    captured = {}
+
+    def fake_anim(words, fixations, participant=None, trial=None, **kwargs):
+        captured.update(kwargs)
+        return "FIG"
+
+    monkeypatch.setattr(api, "animate_scanpath", fake_anim)
+    monkeypatch.setattr(api, "save_figure", lambda fig, path, **k: path)
+    cli.main(
+        [
+            "render",
+            "--sample",
+            "--animate",
+            "--fixation-symbol",
+            "diamond",
+            "--fixation-color",
+            "#ff0000",
+            "--palette",
+            "High contrast",
+            "--color-by",
+            "duration_ms",
+            "--marker-size-range",
+            "4",
+            "12",
+            "--fixation-colorscale",
+            "Blues",
+            "-o",
+            str(tmp_path / "a.html"),
+        ]
+    )
+    assert captured["fixation_symbol"] == "diamond"
+    assert captured["fixation_color"] == "#ff0000"
+    assert captured["palette"] == "High contrast"
+    assert captured["color_by"] == "duration_ms"
+    assert captured["marker_size_range"] == (4, 12)
+    assert captured["fixation_colorscale"] == "Blues"
+    # Nothing outside the replay's own option set is handed to it.
+    assert set(captured) - {"palette"} <= set(api.figure_options("animation")) | {
+        "playback_speed",
+        "autoplay",
+        "fix_index_range",
+        "illustration_label",
+        "canvas_size",
+        "base_font_size",
+        "font_family",
+        "title",
+        "caption",
+        "screen",
+    }
 
 
 _PNG_1x1 = bytes.fromhex(

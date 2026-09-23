@@ -1931,45 +1931,30 @@ def render(argv: list[str]) -> None:
         _print_reproduction_code(api, args, overrides, canvas, participant, trial)
     try:
         if args.animate:
-            # The animation builder supports a subset of the static layers;
-            # warn (rather than silently ignore) flags it can't honor.
-            anim_keys = (
-                "show_words",
-                "show_word_labels",
-                "show_saccades",
-                "show_order",
-            )
-            # Saccade styling is honored by the animation builder too.
-            saccade_keys = ("saccade_color", "saccade_style", "saccade_width")
-            static_defaults = {
-                "show_fixations": True,
-                "show_heatmap": True,
-                "show_saccade_arrows": False,
+            # EXP-10: which options the replay takes is `figure_options
+            # ("animation")` — the set `animate_scanpath` validates against and
+            # the snippet serializer diffs against. A hand-kept list here drifted
+            # from it twice over: `--fixation-symbol` / `--fixation-color` /
+            # `--palette` were dropped without a word, and `--color-by` /
+            # `--marker-size-range` / `--fixation-colorscale` were refused as
+            # unsupported though the builder honours them — so an animation
+            # snippet copied from the app drew a different figure. `palette` is
+            # not an option but `animate_scanpath` expands it, keeping only the
+            # colours the replay can draw.
+            animation_options = api.figure_options("animation")
+            anim_kwargs = {
+                key: value
+                for key, value in overrides.items()
+                if key in animation_options or key == "palette"
             }
+            # `overrides` always carries the seven layer toggles, so a key the
+            # replay can't take is only worth a warning when it was moved off
+            # the static figure's default — `--no-heatmap`, not the bare run.
+            static_defaults = api.figure_options("static")
             ignored = [
                 key
-                for key, default in static_defaults.items()
-                if overrides[key] != default
-            ] + [
-                key
-                for key in (
-                    "color_by",
-                    "heatmap_metric",
-                    "heatmap_colorscale",
-                    "heatmap_norm",
-                    "fixation_colorscale",
-                    "marker_size_range",
-                    "saccade_color_mode",
-                    "saccade_class_colors",
-                    "saccade_classes",
-                    "saccade_render_mode",
-                    "fixation_snap_to_word",
-                    # VIZ-23 gave the replay `highlight_column`, but only as the
-                    # text-marking channel — there is no border-overlay style
-                    # there, so the *style* flag has nothing to select.
-                    "critical_span_style",
-                )
-                if key in overrides
+                for key, value in overrides.items()
+                if key not in anim_kwargs and value != static_defaults.get(key)
             ]
             # PRE-3 drift correction is a plot_scanpath-only parameter (the
             # animation builder has no line-snapping path), so name it here too.
@@ -1983,43 +1968,6 @@ def render(argv: list[str]) -> None:
                     f"{', '.join(sorted(ignored))}",
                     file=sys.stderr,
                 )
-            anim_kwargs = {k: overrides[k] for k in anim_keys}
-            anim_kwargs.update(
-                {k: overrides[k] for k in saccade_keys if k in overrides}
-            )
-            # VIZ-4: the stimulus-image background is honoured by the animation too.
-            image_keys = (
-                "background_image",
-                "background_image_size",
-                "background_image_origin",
-                "background_image_opacity",
-            )
-            anim_kwargs.update({k: overrides[k] for k in image_keys if k in overrides})
-            anim_kwargs.update(
-                {
-                    k: overrides[k]
-                    for k in ("show_coordinate_grid", "coordinate_grid_spacing")
-                    if k in overrides
-                }
-            )
-            anim_kwargs.update(
-                {
-                    k: overrides[k]
-                    for k in ("word_hover_fields", "fixation_hover_fields")
-                    if k in overrides
-                }
-            )
-            # VIZ-23 brought these two across to the replay: `highlight_column`
-            # marks the critical span's *text* (there is no border style there,
-            # which is why `critical_span_style` stays in `ignored`), and the
-            # PRE-2 flags discard or overlay-mark the classified fixations.
-            anim_kwargs.update(
-                {
-                    k: overrides[k]
-                    for k in ("highlight_column", "fixation_flags")
-                    if k in overrides
-                }
-            )
             # CMP-9/CMP-11: `--animate --compare-with` is the *dual* co-animation
             # the app renders when both modes are on — both readings on one clock.
             # That is an overlay, so it needs one coordinate space, and it is gated

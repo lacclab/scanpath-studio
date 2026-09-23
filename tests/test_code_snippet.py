@@ -519,6 +519,44 @@ def test_the_cli_snippet_parses_and_runs(tmp_path, demo_trial):
     assert out.exists() and out.stat().st_size > 0
 
 
+def test_an_animation_cli_snippet_replays_the_same_figure(
+    tmp_path, monkeypatch, demo_trial
+):
+    """EXP-10: the snippet emitted every animation option it was given, but
+    `render --animate` forwarded a hand-kept subset of them — so the marker
+    shape and flat colour were dropped and `--color-by` was refused. Executed,
+    the command has to hand the replay what the snippet names."""
+    _words, _fixations, participant, trial = demo_trial
+    changed = {
+        "fixation_symbol": "diamond",
+        "fixation_color": "#aa0000",
+        "color_by": "duration_ms",
+        "fixation_colorscale": "Blues",
+        "marker_size_range": (4, 12),
+    }
+    state = cs.FigureState(
+        kind="animation",
+        settings={**api.figure_options("animation"), **changed},
+        participant=participant,
+        trial=trial,
+    )
+    command, unsupported = cs.cli_snippet(
+        DEMO, state, output=str(tmp_path / "anim.html")
+    )
+    assert not unsupported
+    seen: dict = {}
+    real = api.animate_scanpath
+
+    def spy(*args, **kwargs):
+        seen.update(kwargs)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(api, "animate_scanpath", spy)
+    cli.main(shlex.split(command.replace(" \\\n", " "))[1:])
+    for key, value in changed.items():
+        assert cs._comparable(seen.get(key)) == cs._comparable(value), key
+
+
 def test_the_cli_prints_the_recipe_for_its_own_invocation(tmp_path, capsys):
     out = tmp_path / "printed.html"
     cli.main(

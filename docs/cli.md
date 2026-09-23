@@ -151,7 +151,7 @@ the recorded setup.
 | Goal | Option |
 | --- | --- |
 | hide a layer | `--no-words`, `--no-labels`, `--no-fixations`, `--no-saccades`, `--no-heatmap` |
-| animate | `--animate` and optionally `--playback-speed X` |
+| animate | `--animate` and optionally `--playback-speed X`; every styling flag the replay can draw (`api.figure_options("animation")`) is honoured, and the rest are named in a warning |
 | set display geometry | `--canvas WIDTHxHEIGHT` |
 | show monitor-pixel axes | `--coordinate-grid` and optionally `--coordinate-grid-spacing PX` |
 | color fixations | `--color-by FIELD` |

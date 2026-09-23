@@ -174,3 +174,88 @@ class TestWordTextIsReadVerbatim:
         words = data_module.normalize_words(table, schema)
         assert words["text"].tolist()[0] == ""
         data_module.harmonize_frames(words, data_module.empty_fixations_frame())
+
+
+class TestFilesTheReadersUsedToRefuse:
+    """BUG-55: an Excel-named text export, a non-UTF-8 CSV and an empty file.
+
+    Each used to escape the wizard as a raw traceback over the whole page.
+    """
+
+    def _tsv(self, **extra) -> bytes:
+        return pd.DataFrame({**CORE, **extra}).to_csv(sep="\t", index=False).encode()
+
+    def test_a_tab_separated_export_named_xls_reads_as_text(self, tmp_path):
+        """EyeLink Data Viewer's "Excel" export is tab-separated text."""
+        path = tmp_path / "fix_report.xls"
+        path.write_bytes(self._tsv())
+        assert read_table_columns(path) == list(CORE)
+        frame = read_table(path, plan=_plan(read_table_columns(path)))
+        assert frame["IA_LABEL"].tolist() == ["Hello"]
+
+    def test_a_legacy_workbook_is_refused_with_the_fix(self, tmp_path):
+        path = tmp_path / "old.xls"
+        path.write_bytes(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\0" * 512)
+        with pytest.raises(ValueError, match=r"save it as \.xlsx or \.csv"):
+            read_table(path)
+
+    def test_a_windows_encoded_csv_reads(self, tmp_path):
+        path = tmp_path / "fix_latin1.csv"
+        path.write_bytes(
+            pd.DataFrame({**CORE, "IA_LABEL": ["Straße"]})
+            .to_csv(index=False)
+            .encode("cp1252")
+        )
+        frame = read_table(path, plan=_plan(read_table_columns(path)))
+        assert frame["IA_LABEL"].tolist() == ["Straße"]
+
+    def test_a_windows_encoded_csv_inside_a_zip_reads(self, tmp_path):
+        """A zip member cannot be rewound, so it is retried from memory."""
+        path = tmp_path / "words.zip"
+        body = pd.DataFrame({**CORE, "IA_LABEL": ["Straße"]}).to_csv(index=False)
+        with zipfile.ZipFile(path, "w") as zf:
+            zf.writestr("words.csv", body.encode("cp1252"))
+        frame = read_table(path, plan=_plan(read_table_columns(path)))
+        assert frame["IA_LABEL"].tolist() == ["Straße"]
+
+    def test_an_empty_file_says_it_is_empty(self, tmp_path):
+        path = tmp_path / "empty.csv"
+        path.write_bytes(b"")
+        with pytest.raises(ValueError, match="'empty.csv' is empty"):
+            read_table_columns(path)
+        with pytest.raises(ValueError, match="'empty.csv' is empty"):
+            read_table(path)
+
+    def test_the_upload_box_reports_it_instead_of_crashing(self):
+        from streamlit.testing.v1 import AppTest
+
+        def script():
+            import io
+
+            import streamlit as st
+
+            from scanpath_studio import app
+
+            class Upload(io.BytesIO):
+                name, size, file_id = "empty.csv", 0, "empty"
+
+            class Host:
+                def file_uploader(self, *args, **kwargs):
+                    return Upload(b"")
+
+                def error(self, body):
+                    st.error(body)
+
+            frame = app._read_uploaded_frame(
+                uploader_label="Fixations",
+                upload_help="",
+                state_prefix="col_map_fix",
+                multi=False,
+                container=Host(),
+                kind="fixations",
+            )
+            st.write(f"rows={len(frame)}")
+
+        at = AppTest.from_function(script).run(timeout=60)
+        assert not at.exception
+        assert any("Couldn't read **empty.csv**" in e.value for e in at.error)

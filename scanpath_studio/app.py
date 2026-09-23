@@ -3438,6 +3438,25 @@ def _read_uploaded_frame(
     # the wizard's column pickers are built from, so it happens first and is
     # stashed for `_uploaded_header`. `chosen` is sorted into a tuple because it
     # rides in the cache key.
+    # BUG-55: a file the readers refuse — a legacy .xls workbook, an empty
+    # file, a corrupt archive — is the user's to fix, so it is said in the box
+    # that took it, the way the metadata uploaders already do, instead of a
+    # traceback over the whole page.
+    try:
+        return _read_upload(uploaded, state_prefix, multi=multi, kind=kind)
+    except Exception as exc:  # unreadable file — say so, keep the page
+        logging.getLogger(__name__).warning(
+            "Could not read upload %s", state_prefix, exc_info=True
+        )
+        st.session_state.pop(f"{state_prefix}_header", None)
+        files = uploaded if multi else [uploaded]
+        names = ", ".join(str(getattr(f, "name", "the file")) for f in files)
+        host.error(f"Couldn't read **{names}**: {exc}")
+        return pd.DataFrame()
+
+
+def _read_upload(uploaded, state_prefix: str, *, multi: bool, kind) -> pd.DataFrame:
+    """The header pass and the (cached) planned read behind one upload box."""
     header: list = []
     chosen: tuple = ()
     text_column = None
@@ -3522,7 +3541,11 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
             help="Optional: millisecond-level gaze with participant_id, trial_id, x, y.",
         )
         if uploaded_raw_gaze:
-            raw_gaze_df = read_table(uploaded_raw_gaze)
+            try:
+                raw_gaze_df = read_table(uploaded_raw_gaze)
+            except Exception as exc:  # unreadable file — say so, keep the page
+                cfg.error(f"Couldn't read **{uploaded_raw_gaze.name}**: {exc}")
+                return pd.DataFrame()
             proposed = propose_raw_gaze_schema(raw_gaze_df)
             initial_problems = validate_raw_gaze_schema(proposed)
             with cfg:

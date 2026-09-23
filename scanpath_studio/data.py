@@ -1098,12 +1098,100 @@ def _read_by_extension(buf, name: str, plan: ReadPlan | None = None) -> pd.DataF
     if name.endswith(".feather"):
         return pd.read_feather(buf, columns=columns)
     if name.endswith((".xlsx", ".xls")):
+        if not _is_workbook(buf, name):
+            # BUG-55: EyeLink Data Viewer's "Excel" export is tab-separated text
+            # with an .xls name — read it as what it is.
+            return _read_delimited(buf, "\t", plan)
         # First sheet (e.g. MultiplEYE questions workbook).
         frame = pd.read_excel(buf, **_excel_na_kwargs(buf, plan))
         return frame[[c for c in columns if c in frame.columns]] if columns else frame
     if name.endswith((".tsv", ".tab")):
-        return pd.read_csv(buf, sep="\t", low_memory=False, **_read_kwargs(plan))
-    return pd.read_csv(buf, low_memory=False, **_read_kwargs(plan))
+        return _read_delimited(buf, "\t", plan)
+    return _read_delimited(buf, ",", plan)
+
+
+#: The first bytes of a legacy (OLE2) Excel workbook, and of a zip container —
+#: which is what an .xlsx is (BUG-55).
+_OLE2_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+_ZIP_MAGIC = b"PK\x03\x04"
+
+#: Tried in order when a delimited file is not UTF-8 (BUG-55): Windows' default
+#: for Western European text first, since that is what Excel writes there, then
+#: Latin-1, which decodes any byte and so always ends the search.
+_TEXT_ENCODINGS = ("utf-8", "cp1252", "latin-1")
+
+
+def _peek(file_like_or_path, size: int = 8) -> bytes:
+    """The first ``size`` bytes of an upload or a path, leaving it rewound."""
+    if hasattr(file_like_or_path, "read"):
+        _rewind(file_like_or_path)
+        head = file_like_or_path.read(size)
+        _rewind(file_like_or_path)
+        return head if isinstance(head, bytes) else str(head).encode()
+    try:
+        with open(file_like_or_path, "rb") as handle:
+            return handle.read(size)
+    except OSError:
+        return b""
+
+
+def _is_workbook(buf, name: str) -> bool:
+    """Whether an Excel-named file is a real workbook pandas can open.
+
+    A zip container is an .xlsx; anything else that is not a legacy OLE2
+    workbook is delimited text wearing an Excel extension. A legacy workbook is
+    refused with the fix, rather than failing on a reader (``xlrd``) this
+    package does not install for a format Excel itself stopped writing in 2007.
+    """
+    head = _peek(buf)
+    if head.startswith(_OLE2_MAGIC):
+        raise ValueError(
+            f"'{Path(name).name}' is a legacy Excel 97–2003 (.xls) workbook, which "
+            "can't be read here. Open it in Excel and save it as .xlsx or .csv, "
+            "then upload that."
+        )
+    return head.startswith(_ZIP_MAGIC)
+
+
+def _can_reread(buf) -> bool:
+    """Whether ``buf`` can be read a second time from the start."""
+    if isinstance(buf, (str, os.PathLike)):
+        return True
+    seekable = getattr(buf, "seekable", None)
+    try:
+        return bool(seekable()) if callable(seekable) else False
+    except (OSError, ValueError):
+        return False
+
+
+def _read_delimited(buf, sep: str, plan: ReadPlan | None, **extra) -> pd.DataFrame:
+    """``read_csv`` with the encoding fallback a non-UTF-8 export needs (BUG-55).
+
+    A CSV saved by Excel on Windows is cp1252, and one umlaut in it made the
+    whole upload fail with a raw ``UnicodeDecodeError``. Each encoding in
+    ``_TEXT_ENCODINGS`` is tried in turn; a stream that cannot be rewound (a zip
+    member) re-raises, and :func:`_read_zipped_table` retries it from memory.
+    """
+    for encoding in _TEXT_ENCODINGS:
+        try:
+            return pd.read_csv(
+                buf,
+                sep=sep,
+                low_memory=False,
+                encoding=encoding,
+                **_read_kwargs(plan),
+                **extra,
+            )
+        except UnicodeDecodeError:
+            if encoding == _TEXT_ENCODINGS[-1] or not _can_reread(buf):
+                raise
+            _rewind(buf)
+            _LOGGER.info(
+                "%s is not %s; reading it again as the next encoding",
+                getattr(buf, "name", buf),
+                encoding,
+            )
+    raise AssertionError("unreachable: latin-1 decodes every byte")
 
 
 #: EyeLink writes a value it could not measure as a bare period. Declared
@@ -1453,12 +1541,48 @@ def read_table_columns(file_like_or_path) -> list[str]:
 
             return list(feather.read_table(file_like_or_path, columns=[]).schema.names)
         if name.endswith((".tsv", ".tab")):
-            return list(pd.read_csv(file_like_or_path, sep="\t", nrows=0).columns)
+            return _header(file_like_or_path, "\t")
         if name.endswith(".csv"):
-            return list(pd.read_csv(file_like_or_path, nrows=0).columns)
+            return _header(file_like_or_path, ",")
+        # Rewound afterwards too (the `finally`): the caller reads the table
+        # again, and a buffer left at its end reads as an empty file.
+        return list(read_table(file_like_or_path).columns)
+    except pd.errors.EmptyDataError as exc:
+        raise _empty_file_error(name) from exc
     finally:
         _rewind(file_like_or_path)
-    return list(read_table(file_like_or_path).columns)
+
+
+def _header(buf, sep: str) -> list[str]:
+    """A delimited table's column names, read under the encoding fallback."""
+    return list(_read_delimited(buf, sep, None, nrows=0).columns)
+
+
+def _empty_file_error(name: str) -> ValueError:
+    """The error an empty upload raises, in place of pandas' "No columns to
+    parse from file" (BUG-55)."""
+    return ValueError(
+        f"'{Path(name).name}' is empty — it has no header row. Check the export "
+        "finished writing, then upload it again."
+    )
+
+
+#: How far into a zip member the header line is looked for.
+_HEADER_MAX_BYTES = 1024 * 1024
+
+
+def _member_header(zf: zipfile.ZipFile, info: zipfile.ZipInfo, sep: str) -> list:
+    """Column names of one delimited zip member, from its first line alone.
+
+    A member stream cannot be rewound, so the encoding fallback runs over just
+    the header line held in memory — cut at the newline, never mid-character.
+    """
+    with zf.open(info) as inner:
+        head = inner.read(_HEADER_MAX_BYTES)
+    line = head.split(b"\n", 1)[0]
+    if not line.strip():
+        raise _empty_file_error(info.filename)
+    return _header(io.BytesIO(line + b"\n"), sep)
 
 
 def _zipped_table_columns(file_like_or_path) -> list[str]:
@@ -1491,8 +1615,7 @@ def _zipped_table_columns(file_like_or_path) -> list[str]:
                 # the check above is not sufficient on its own).
                 return list(_read_zipped_table(file_like_or_path).columns)
             sep = "\t" if name.endswith((".tsv", ".tab")) else ","
-            with zf.open(info) as inner:
-                names = pd.read_csv(inner, sep=sep, nrows=0).columns
+            names = _member_header(zf, info, sep)
             columns.extend(c for c in names if c not in columns)
     return columns
 
@@ -1765,14 +1888,24 @@ def _read_zipped_table(
                     # it to this member's own header or `usecols` rejects it.
                     member_plan = plan
                     if plan is not None and plan.columns:
-                        with zf.open(info) as head:
-                            sep = "\t" if name.endswith((".tsv", ".tab")) else ","
-                            member_plan = plan.narrowed_to(
-                                pd.read_csv(head, sep=sep, nrows=0).columns
+                        sep = "\t" if name.endswith((".tsv", ".tab")) else ","
+                        member_plan = plan.narrowed_to(_member_header(zf, info, sep))
+                    try:
+                        frames.append(
+                            _read_by_extension(
+                                io.BufferedReader(stream), name, member_plan
                             )
-                    frames.append(
-                        _read_by_extension(io.BufferedReader(stream), name, member_plan)
-                    )
+                        )
+                    except UnicodeDecodeError:
+                        # BUG-55: not UTF-8, and a member stream cannot be
+                        # rewound for the encoding fallback — read it again
+                        # into memory, under the same budget, where it can.
+                        with zf.open(info) as again:
+                            stream = _BudgetedZipMember(
+                                again, member_budget, member, limit_label=limit_label
+                            )
+                            buf = io.BytesIO(stream.read())
+                        frames.append(_read_by_extension(buf, name, member_plan))
             remaining -= stream.consumed
             labels.append(Path(member).stem)
     return _tag_and_concat(frames, labels, SOURCE_FILE_COLUMN)
@@ -1815,9 +1948,12 @@ def read_table(file_like_or_path, *, plan: ReadPlan | None = None) -> pd.DataFra
     ``plan`` (PERF-6) is a :class:`ReadPlan` from :func:`plan_table_read`,
     narrowing the read to the columns normalization keeps."""
     name = getattr(file_like_or_path, "name", str(file_like_or_path)).lower()
-    if name.endswith(".zip"):
-        return _read_zipped_table(file_like_or_path, plan=plan)
-    return _read_by_extension(file_like_or_path, name, plan)
+    try:
+        if name.endswith(".zip"):
+            return _read_zipped_table(file_like_or_path, plan=plan)
+        return _read_by_extension(file_like_or_path, name, plan)
+    except pd.errors.EmptyDataError as exc:
+        raise _empty_file_error(name) from exc
 
 
 def expand_table_inputs(inputs: TablesInput) -> list:

@@ -93,6 +93,37 @@ _FINGERPRINT_MEMO = threading.local()
 _FINGERPRINT_MEMO_MAX = 64
 
 
+#: PERF-10: fingerprints that outlive the per-run memo, for the frames
+#: `frame_cache` hands back as the *same object* run after run. Those are never
+#: written in place (tests/test_frame_immutability.py), so their fingerprint
+#: cannot change — yet the per-run reset threw it away, and the normalized pair
+#: was fully re-hashed on every rerun: ~0.5 s of a 1.9 s rerun at 50× the demo.
+#: `id → (weakref, fingerprint | None)`; the weak ref is what makes the id key
+#: safe (a reissued id finds a dead ref), and `None` means "vouched for, not yet
+#: hashed". Process-wide on purpose — a fingerprint depends only on content.
+_STABLE_FINGERPRINTS: dict[int, tuple[weakref.ref, tuple | None]] = {}
+_STABLE_FINGERPRINTS_MAX = 64
+
+
+def _vouch_for_frames(value) -> None:
+    """Mark the frames in a `frame_cache` value as never mutated (PERF-10)."""
+    if isinstance(value, pd.DataFrame):
+        parts = (value,)
+    elif isinstance(value, dict):
+        parts = tuple(value.values())
+    elif isinstance(value, (tuple, list)):
+        parts = value
+    else:
+        return
+    for dead in [k for k, (ref, _) in _STABLE_FINGERPRINTS.items() if ref() is None]:
+        _STABLE_FINGERPRINTS.pop(dead, None)
+    for frame in parts:
+        if len(_STABLE_FINGERPRINTS) >= _STABLE_FINGERPRINTS_MAX:
+            break
+        if isinstance(frame, pd.DataFrame) and not frame.empty:
+            _STABLE_FINGERPRINTS.setdefault(id(frame), (weakref.ref(frame), None))
+
+
 #: Session-state home of the no-copy frame caches (PERF-6), one entry per slot.
 _FRAME_CACHE_KEY = "_sps_frame_cache"
 
@@ -132,6 +163,7 @@ def frame_cache(slot: str, key, build):
         return entry[1]
     value = build()
     store[slot] = (key, value)
+    _vouch_for_frames(value)
     return value
 
 
@@ -203,7 +235,14 @@ def frame_fingerprint(df: pd.DataFrame | None) -> tuple:
     if hit is not None and hit[0]() is df:
         memo.move_to_end(key)
         return hit[1]
+    stable = _STABLE_FINGERPRINTS.get(key)
+    if stable is not None and stable[0]() is not df:
+        stable = None
+    if stable is not None and stable[1] is not None:
+        return stable[1]
     value = _compute_frame_fingerprint(df)
+    if stable is not None:
+        _STABLE_FINGERPRINTS[key] = (stable[0], value)
     # Drop entries whose frame has already been collected before evicting a live
     # one — those are pure bookkeeping and cost nothing to lose.
     if len(memo) >= _FINGERPRINT_MEMO_MAX:

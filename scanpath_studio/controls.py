@@ -3019,6 +3019,36 @@ def _pin(key: str, default) -> None:
         pass
 
 
+def compare_style_defaults() -> dict:
+    """Every per-scanpath comparison styling key → the value a session seeds.
+
+    One table for the seeding below and for EXP-19's share link, which leaves a
+    style off the link while it still equals this (`url_state._link_defaults`).
+    ``cmp{idx}_label_pattern`` is not seeded — its absence *is* the auto label —
+    so it is listed here as the empty string it reads as.
+    """
+    defaults: dict = {}
+    for idx, _ in _COMPARE_SCANPATHS:
+        defaults.update(
+            {
+                f"cmp{idx}_fix_color": compare_palette_color(idx),
+                f"cmp{idx}_saccade_color": compare_palette_color(idx),
+                f"cmp{idx}_saccade_style": "Solid",
+                f"cmp{idx}_saccade_width": DEFAULT_SACCADE_WIDTH,
+                f"cmp{idx}_marker_size_range": DEFAULT_MARKER_SIZE_RANGE,
+                # VIZ-6: per-scanpath marker alpha (replaces the per-scanpath
+                # hollow checkbox). Default 0.7 matches the single-trial default
+                # so overlapping fixations show through. `cmp{idx}_hollow` kept
+                # seeded for saved-config / deep-link backward compatibility (no
+                # widget renders it anymore).
+                f"cmp{idx}_opacity": COMPARE_FIXATION_OPACITY,
+                f"cmp{idx}_hollow": False,
+                f"cmp{idx}_label_pattern": "",
+            }
+        )
+    return defaults
+
+
 def _seed_compare_styles() -> None:
     """Seed the per-scanpath comparison styling keys (so the collected dicts have
     values even when the relevant layer popover isn't open this run).
@@ -3026,18 +3056,9 @@ def _seed_compare_styles() -> None:
     Seeding is all that is needed: the widgets themselves carry
     ``persist_state="session"``, which keeps the value alive through the runs
     where the popover isn't open (ENG-36)."""
-    for idx, _ in _COMPARE_SCANPATHS:
-        _pin(f"cmp{idx}_fix_color", compare_palette_color(idx))
-        _pin(f"cmp{idx}_saccade_color", compare_palette_color(idx))
-        _pin(f"cmp{idx}_saccade_style", "Solid")
-        _pin(f"cmp{idx}_saccade_width", DEFAULT_SACCADE_WIDTH)
-        _pin(f"cmp{idx}_marker_size_range", DEFAULT_MARKER_SIZE_RANGE)
-        # VIZ-6: per-scanpath marker alpha (replaces the per-scanpath hollow
-        # checkbox). Default 0.7 matches the single-trial default so overlapping
-        # fixations show through. `cmp{idx}_hollow` kept seeded for saved-config /
-        # deep-link backward compatibility (no widget renders it anymore).
-        _pin(f"cmp{idx}_opacity", COMPARE_FIXATION_OPACITY)
-        _pin(f"cmp{idx}_hollow", False)
+    for key, default in compare_style_defaults().items():
+        if not key.endswith("_label_pattern"):
+            _pin(key, default)
 
 
 def _render_compare_fix_styles() -> None:

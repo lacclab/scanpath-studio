@@ -160,7 +160,9 @@ figure plus both scanpaths' tables and a manifest naming each side's dataset,
 trial and recording setup. The image alone can't be reproduced; the bundle can.
 
 A share link carries the comparison as `?compare=<participant>:<trial>` plus
-`&cmp_source=<dataset>`, `&cmp_layout=` and `&cmp_stimulus=`. An uploaded dataset
+`&cmp_source=<dataset>`, `&cmp_layout=` and `&cmp_stimulus=`, and each
+scanpath's own styling as `cmp_a_*` / `cmp_b_*` wherever you changed it (see
+[Outputs and sharing](outputs-sharing.md#share-a-view)). An uploaded dataset
 lives only in your session, so a link can't rebuild it — the Share panel says so
 rather than sending half a comparison.
 

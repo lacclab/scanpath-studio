@@ -20,6 +20,12 @@ serving it to other machines is a deliberate step — pass
 scanpath-studio --server.address 0.0.0.0
 ```
 
+Served on a network, the app also turns off everything that reads or writes the
+server's own folders — the data-location box, the 📁 folder picker, ⬇ Download
+for the public corpora and stimulus-image folders — since any visitor could use
+them. On a lab server you trust, turn them back on with `SCANPATH_LOCAL_FS=1`
+(`SCANPATH_LOCAL_FS=1 scanpath-studio --server.address 0.0.0.0`).
+
 Additional launch flags are forwarded to Streamlit. A word that is not one of
 the commands (`run`, `render`, `analyze`, `corpus`, `cache`) is an error that
 names the closest one, rather than an argument handed to Streamlit.

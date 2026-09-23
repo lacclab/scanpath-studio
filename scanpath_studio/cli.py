@@ -2578,7 +2578,8 @@ usage:
 Unrecognized flags are forwarded to `streamlit run` (e.g.
 `scanpath-studio --server.port 8502`); an unknown command word is an error.
 The app listens on this computer only; `--server.address 0.0.0.0` serves it
-on your network (it has no login)."""
+on your network (it has no login) with local folder access off, unless
+SCANPATH_LOCAL_FS=1."""
 
 
 #: The subcommands `main` dispatches, for the did-you-mean below.

@@ -6,15 +6,17 @@ file picker. On any deployment someone else can reach it is a path-existence
 oracle plus an arbitrary-directory write, and the app has no authentication on
 any deployment.
 
-Default is local (flipping it would break every existing install on upgrade); a
-shared deployment sets ``SCANPATH_LOCAL_FS=0``. ``SCANPATH_DATA_ROOT`` confines
-paths to a subtree and is useful either way.
+ENG-66: unset, the gate follows the server's bind address — on for a server
+listening on loopback only (``scanpath-studio run``, the desktop app), off for
+one other machines can reach — and ``SCANPATH_LOCAL_FS`` overrides it either
+way. ``SCANPATH_DATA_ROOT`` confines paths to a subtree and is useful either way.
 """
 
 from __future__ import annotations
 
 import pytest
 
+from scanpath_studio import app as app_module
 from scanpath_studio.app import (
     DATA_ROOT_ENV,
     LOCAL_FS_ENV,
@@ -31,20 +33,63 @@ def _clean_env(monkeypatch):
     monkeypatch.delenv(DATA_ROOT_ENV, raising=False)
 
 
+def _gate_app():
+    import streamlit as st
+
+    from scanpath_studio.app import local_filesystem_enabled
+
+    st.session_state["answer"] = local_filesystem_enabled()
+
+
+def _serving(monkeypatch, *, loopback: bool) -> None:
+    """Pretend to run inside a Streamlit server bound to loopback, or not."""
+    monkeypatch.setattr(app_module.runtime, "exists", lambda: True)
+    monkeypatch.setattr(app_module, "server_bound_to_loopback", lambda: loopback)
+
+
 class TestTheGate:
-    def test_local_by_default(self):
-        """An existing local install must keep its path box on upgrade."""
+    def test_on_for_a_server_on_loopback(self, monkeypatch):
+        """``scanpath-studio run`` and the desktop app keep their path box."""
+        _serving(monkeypatch, loopback=True)
         assert local_filesystem_enabled() is True
 
-    @pytest.mark.parametrize("value", ["0", "false", "FALSE", "no", " No "])
+    def test_off_for_a_server_other_machines_can_reach(self, monkeypatch):
+        """ENG-66: a hosted demo is safe without remembering to set anything."""
+        _serving(monkeypatch, loopback=False)
+        assert local_filesystem_enabled() is False
+
+    def test_on_outside_a_server(self, monkeypatch):
+        """The API and the CLI read the user's own paths."""
+        monkeypatch.setattr(app_module.runtime, "exists", lambda: False)
+        assert local_filesystem_enabled() is True
+
+    @pytest.mark.parametrize("value", ["0", "false", "FALSE", "no", " No ", "off"])
     def test_a_deployment_can_turn_it_off(self, monkeypatch, value):
+        _serving(monkeypatch, loopback=True)
         monkeypatch.setenv(LOCAL_FS_ENV, value)
         assert local_filesystem_enabled() is False
 
-    @pytest.mark.parametrize("value", ["1", "true", "yes", "", "anything"])
-    def test_anything_else_stays_local(self, monkeypatch, value):
+    @pytest.mark.parametrize("value", ["1", "true", "yes", " ON "])
+    def test_a_trusted_lab_server_can_turn_it_on(self, monkeypatch, value):
+        _serving(monkeypatch, loopback=False)
         monkeypatch.setenv(LOCAL_FS_ENV, value)
         assert local_filesystem_enabled() is True
+
+    @pytest.mark.parametrize("value", ["", "anything"])
+    def test_anything_else_follows_the_bind_address(self, monkeypatch, value):
+        _serving(monkeypatch, loopback=False)
+        monkeypatch.setenv(LOCAL_FS_ENV, value)
+        assert local_filesystem_enabled() is False
+
+    def test_a_real_server_on_every_interface_is_off(self):
+        """End to end, unpatched: an AppTest's ``server.address`` is unset, which
+        is Streamlit's every-interface default — a hosted demo's setting."""
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_function(_gate_app)
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state["answer"] is False
 
     def test_the_folder_picker_refuses_on_a_shared_deployment(self, monkeypatch):
         """Degrading to None on a *headless* host was never the guarantee: on a
@@ -150,5 +195,10 @@ class TestUploadedImagePaths:
         monkeypatch.setenv(LOCAL_FS_ENV, "0")
         assert self._answer("Bundled demo") == "/srv/secret.png"
 
-    def test_a_local_run_keeps_an_uploads_images(self):
+    def test_a_server_nobody_configured_reads_nothing(self):
+        """ENG-66: the demo's case — no variable set, every interface."""
+        assert self._answer("my upload") is None
+
+    def test_a_local_run_keeps_an_uploads_images(self, monkeypatch):
+        monkeypatch.setenv(LOCAL_FS_ENV, "1")
         assert self._answer("my upload") == "/srv/secret.png"

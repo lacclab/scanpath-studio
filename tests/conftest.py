@@ -32,6 +32,20 @@ def _experimental_features_on():
         yield
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _local_filesystem_on():
+    """Run the suite as a local install sees it: the path box, picker and ⬇ on.
+
+    ENG-66 made the default follow the server's bind address, and an AppTest's
+    ``server.address`` is unset — every interface, which reads as a shared
+    deployment — so without this every Data-page test would see the hosted
+    build. The gate's own tests (``tests/test_deployment_gate.py``) unset it.
+    """
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("SCANPATH_LOCAL_FS", "1")
+        yield
+
+
 @pytest.fixture
 def experimental_off(monkeypatch):
     """Force PRE-21's gated features **hidden**, as a default build sees them."""

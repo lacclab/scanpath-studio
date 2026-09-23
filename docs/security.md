@@ -226,10 +226,12 @@ its own docstring says "Enabled by default".)
   `_resolve_data_dir` untouched.
 
 **Status:** **fixed** 2026-07-28 — `app.local_filesystem_enabled()`
-(`SCANPATH_LOCAL_FS`, default *local*, so an existing install is unaffected on
-upgrade) gates the path box, the 📁 picker and the ⬇ Download button; a shared
-deployment sets it to `0` and supplies the corpus location through
-`SCANPATH_DATA_ROOT`. That variable also acts as an allow-root wherever it is
+(`SCANPATH_LOCAL_FS`) gates the path box, the 📁 picker and the ⬇ Download
+button, and a shared deployment supplies the corpus location through
+`SCANPATH_DATA_ROOT`. The default was *local* until 2026-09-23 (ENG-66), which
+left any deployment that forgot the variable open; unset, it now follows the
+server's bind address, like the recovery cache — on for loopback only, off for
+a server other machines can reach — and `1` or `0` overrides it. That variable also acts as an allow-root wherever it is
 set: `app._resolve_data_dir` compares the *resolved* path against it, so `..`
 and symlinks collapse to the root rather than being stat'd or written into.
 Covered by `tests/test_deployment_gate.py`.
@@ -922,9 +924,13 @@ no `<` can reach it.
   loopback (S1), but a bare `streamlit run` still binds `0.0.0.0` — pass
   `--server.address=127.0.0.1` there, and for remote access keep loopback and
   use an SSH tunnel rather than `--server.address 0.0.0.0`.
-- **A shared/hosted deployment should set `SCANPATH_LOCAL_FS=0`** and supply the
-  corpus location through `SCANPATH_DATA_ROOT` (S2), which removes the directory
-  input, the folder picker and the download-to-arbitrary-path button.
+- **A shared/hosted deployment has local file access off by default** (ENG-66):
+  unless `SCANPATH_LOCAL_FS` says otherwise, the directory input, the folder
+  picker and the download-to-arbitrary-path button appear only when the server
+  listens on loopback alone. Supply the corpus location through
+  `SCANPATH_DATA_ROOT` (S2). Setting `SCANPATH_LOCAL_FS=0` as well costs nothing
+  and survives a config change; `SCANPATH_LOCAL_FS=1` turns access back on for a
+  lab server on a network you trust.
 - **A share link is identifying.** It names a participant and a trial alongside
   the visualization settings (S3). A saved plot config likewise carries the
   selection *and* every annotation note you have typed, for every trial — read it

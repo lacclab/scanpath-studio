@@ -40,6 +40,7 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+from streamlit import runtime
 from streamlit.errors import StreamlitAPIException
 
 # Allow running via `streamlit run scanpath_studio/app.py` by adding the
@@ -206,6 +207,7 @@ from scanpath_studio.persistence import (
     restored_from_cache,
     restored_summary,
     save_local_state,
+    server_bound_to_loopback,
     set_persistence_paused,
     skip_next_local_save,
 )
@@ -1295,23 +1297,35 @@ def _user_data_home() -> Path:
 # an arbitrary-directory write, and the app has no authentication on any
 # deployment.
 #
-# Default is LOCAL, because that's how this is overwhelmingly run and flipping it
-# would break every existing install on upgrade. A shared deployment sets
-# `SCANPATH_LOCAL_FS=0`, which hides the path box, the folder picker and the
-# download button; `SCANPATH_DATA_ROOT` then supplies the corpus location
+# ENG-66: unset, it follows the server's bind address — on for a server that
+# listens on loopback only (`scanpath-studio run`, the desktop app), off for one
+# other machines can reach (a bare `streamlit run`, a hosted demo), the same rule
+# as the recovery cache. `SCANPATH_LOCAL_FS=1` turns it on for a trusted lab
+# server and `=0` forces it off. Off hides the path box, the folder picker and
+# the download button; `SCANPATH_DATA_ROOT` then supplies the corpus location
 # server-side. Setting `SCANPATH_DATA_ROOT` alone is also useful locally: it
 # confines every entered path to that subtree.
 LOCAL_FS_ENV = "SCANPATH_LOCAL_FS"
+_LOCAL_FS_ON = frozenset({"1", "true", "yes", "on"})
+_LOCAL_FS_OFF = frozenset({"0", "false", "no", "off"})
 DATA_ROOT_ENV = "SCANPATH_DATA_ROOT"
 
 
 def local_filesystem_enabled() -> bool:
     """Whether the user may point the app at an arbitrary local directory.
 
-    True unless ``SCANPATH_LOCAL_FS`` is ``0`` / ``false`` / ``no``. Read at call
-    time so tests can toggle it."""
+    ``SCANPATH_LOCAL_FS`` set to ``1``/``true``/``yes``/``on`` or
+    ``0``/``false``/``no``/``off`` decides. Otherwise, inside a Streamlit server,
+    it is on only when that server listens on loopback alone
+    (:func:`persistence.server_bound_to_loopback`, ENG-66) — so a hosted
+    deployment is safe without remembering to set anything — and outside one
+    (the API, the CLI) it is on. Read at call time so tests can toggle it."""
     raw = os.environ.get(LOCAL_FS_ENV, "").strip().lower()
-    return raw not in ("0", "false", "no")
+    if raw in _LOCAL_FS_ON:
+        return True
+    if raw in _LOCAL_FS_OFF:
+        return False
+    return server_bound_to_loopback() if runtime.exists() else True
 
 
 def data_root() -> Path | None:
@@ -1558,7 +1572,8 @@ def _dataset_access_status(
     if not local_filesystem_enabled():
         cfg.caption(
             "Downloading is disabled on this deployment — ask whoever runs it to "
-            "place the corpus in the configured data location."
+            "place the corpus in the configured data location, or, on a trusted "
+            "network, to start it with `SCANPATH_LOCAL_FS=1`."
         )
         _note_dataset_unavailable(
             label=label,

@@ -3,8 +3,10 @@
 ## Why is the plot empty or misaligned?
 
 Check the 🗂️ **Data** page. The words and fixations must share trial IDs and the
-same pixel coordinate system. Also set the monitor size used in the experiment;
-the app cannot infer it from an export. See [Loading data](guides/loading-data.md).
+same pixel coordinate system. Also set the monitor size used in the experiment:
+an export does not record it, and the recording setup's *Estimate from my data*
+gives only a lower bound from the extent of your data. See
+[Loading data](guides/loading-data.md).
 
 ## Why do the measures differ from EyeLink or my pipeline?
 

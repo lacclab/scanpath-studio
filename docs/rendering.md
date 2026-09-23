@@ -72,24 +72,22 @@ labels match the stimulus precisely rather than relying on inference.
 
 ## Pixels, not points
 
-!!! warning "Font-size controls are in pixels (px), not points (pt)"
-    Every font-size control in the app — the base label size, order-number size,
-    colour-bar tick size — is in **pixels**. Stimulus typography, however, is
-    usually specified in **points**. The two are not interchangeable: a point is a
-    physical unit (1 pt = 1/72 inch), a pixel is a screen unit, and the conversion
-    depends on the display's DPI:
+!!! warning "Font-size controls are in pixels (px) unless you choose points"
+    The base label size, order-number size and colour-bar tick size are in
+    **pixels**. Stimulus typography, however, is usually specified in **points**.
+    The two are not interchangeable: a point is a physical unit (1 pt = 1/72 inch),
+    a pixel is a screen unit, and the conversion depends on the display's DPI:
 
     ```
     px = pt × DPI / 72          pt = px × 72 / DPI
     ```
 
     So "18 pt" is only "18 px" on a 72-DPI display; on a 96-DPI monitor it is
-    24 px. If you're trying to reproduce an original stimulus font exactly, convert
-    through the experiment's DPI — or, better, use a dataset that stamps its real
-    `stimulus_font_px` (see above) and let the app snap to it. Folding the
-    experimental-setup values (screen resolution, viewing distance, DPI, stimulus
-    font pt) into the display settings so this conversion is automatic is tracked
-    as a roadmap item.
+    24 px. To give the reading text's size in points, open **📄 Stimulus → Text**,
+    untick **Scale text to boxes** and set **Font unit** to **Points (pt)**: the
+    app converts it with the **Display DPI** from the dataset's recording setup
+    (🗂️ Data → ✏️ Edit dataset → Recording setup). A dataset that stamps its real
+    `stimulus_font_px` (see above) still snaps to that directly.
 
 ## Why the spatial plot needs a special render path
 

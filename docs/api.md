@@ -32,6 +32,10 @@ app's default view and change only the needed layers.
 
 ::: scanpath_studio.api.load_trial_metadata
 
+::: scanpath_studio.api.load_text_metadata
+
+::: scanpath_studio.api.propose_schema
+
 ::: scanpath_studio.api.build_authored_scanpath
 
 ::: scanpath_studio.api.load_authored_scanpath
@@ -107,7 +111,8 @@ print(
 
 ## Recovery cache
 
-The app caches a local session on the machine it runs on (see
+The app caches a local session on the machine it runs on — 💾 **Session →
+🗄️ Automatic recovery** (see
 [Privacy](privacy.md#what-happens-to-a-file-you-upload)). These inspect and
 remove that store from a script; `scanpath-studio cache` is the CLI equivalent.
 

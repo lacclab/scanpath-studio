@@ -11,7 +11,7 @@ workflow, use a [tutorial](../tutorials/index.md).
 
 - :material-database-import:{ .lg .middle } **[Loading public and own data](loading-data.md)**
 
-    Sources, upload, column mapping, derived fields, and trial filters.
+    Sources, upload, column mapping, the recording setup, and derived fields.
 
 - :material-chart-box:{ .lg .middle } **[Corpus workspace](corpus-workspace.md)**
 

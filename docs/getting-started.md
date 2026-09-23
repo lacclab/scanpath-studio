@@ -29,7 +29,7 @@ bundled sample, so no data preparation is required.
 
 ## 2. Make the first plot
 
-1. Keep **Bundled demo** as the data source.
+1. Keep **Bundled Demo** as the data source.
 2. Keep the default participant and trial.
 3. Use the layer controls beside the plot to show or hide text, fixations,
    saccades, word boxes, and the heatmap.
@@ -60,7 +60,8 @@ wizard:
 then select **✅ Add dataset**.
 
 The dataset then appears under 📂 **Available datasets**, and ✏️ **Edit dataset**
-reopens everything above at any time.
+reopens its tables, mapping and recording setup at any time (rename it from its
+row in the table).
 
 See [Loading public and own data](guides/loading-data.md) for accepted formats,
 manual mapping, and common checks, and

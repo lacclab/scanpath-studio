@@ -130,7 +130,8 @@ words, fixations = sps.load_scanpath_data(fixations="fix.parquet")  # one table
 ```
 
 - Accepts DataFrames, paths, glob patterns, or lists of paths
-  (`.csv` / `.tsv` / `.parquet` / `.feather`). Multi-file datasets are
+  (`.csv` / `.tsv` / `.txt` / `.tab` / `.parquet` / `.feather` / `.xlsx` /
+  `.xls`, or a `.zip` of any of them). Multi-file datasets are
   concatenated and each row keeps its file stem in `source_file` — useful when
   the participant or text id only exists in the filename.
 - Either table may be omitted. The missing side comes back as an empty canonical
@@ -155,7 +156,7 @@ columns are `subject, para, word, start_x`:
 ```text
 Words/IA schema problems: missing Trial ID; missing Word/IA ID; need either (x, y, width, height) or (left, right, top, bottom)
 Could not infer these canonical fields from the words/IA table:
-  - Trial ID (word_schema key 'trial'): no column matched. Looked for: unique_trial_id, trial_id, unique_paragraph_id, paragraph_id, text_id, trial, trial_index
+  - Trial ID (word_schema key 'trial'): no column matched. Looked for: unique_trial_id, trial_id, unique_paragraph_id, paragraph_id, text_id, trial, trial_index, trial_number, presented_stimulus_name, media_name, stimulus
   - Word/IA ID (word_schema key 'word_id'): no column matched. Looked for: word_id, IA_ID, ia_index, word_index, aoi, word_idx, char_idx
   - Word box (word_schema keys): need either (x, y, width, height) or (left, right, top, bottom) — (x, y, width, height) is missing x, y, width, height; (left, right, top, bottom) is missing right, top, bottom.
       Looked for → x: x, left, top_left_x | y: y, top, top_left_y | width: width | height: height | right: IA_RIGHT, right, end_x | top: IA_TOP, top, start_y, top_left_y | bottom: IA_BOTTOM, bottom, end_y
@@ -301,7 +302,8 @@ plus replay-only knobs — `figure_options("animation")` is the full list).
 
 `color_by` is a *fixation column name* (`"duration_ms"`, `"pass_index"`, …) or
 the sentinel `"(uniform)"` for one flat colour; a name the frame doesn't have
-falls back to uniform. Colouring by text line is the separate `color_by_line=True`
+raises a `ValueError` naming the closest columns (see
+[Errors](#errors-and-what-they-mean)). Colouring by text line is the separate `color_by_line=True`
 flag (the lines are inferred from word-box geometry), which overrides `color_by`.
 Marker size already encodes duration, which is why hue is unmapped by default.
 
@@ -479,10 +481,11 @@ scanpath-studio render --sample --animate --playback-speed 4 -o replay.html
 Flags carry the API's option names: layers are `--no-words` / `--no-labels` /
 `--no-fixations` / `--no-order` / `--no-saccades` / `--no-heatmap`, plus
 `--color-by`, `--heatmap-metric`, `--heatmap-norm`, `--palette`, `--canvas WxH`,
-`--separable-layers`. Drift correction is on the CLI too:
-`--drift-correction ALGORITHM` (any of the ten names) and
-`--drift-connectors`. So are the public corpora — `--potec DIR`,
-`--onestop DIR` (+ `--onestop-regime` / `--onestop-part` /
+`--separable-layers`. Drift correction is on the CLI too, but only with
+`SCANPATH_EXPERIMENTAL=1` set (PRE-21) — without it the flags don't exist and
+argparse rejects them: `--drift-correction ALGORITHM` (any of the twelve names
+in `alignment.ALGORITHMS`) and `--drift-connectors`. So are the public
+corpora — `--potec DIR`, `--onestop DIR` (+ `--onestop-regime` / `--onestop-part` /
 `--onestop-variant`), `--source multipleye --export DIR`
 (+ `--no-question-screens`; a MultiplEYE trial is a whole stimulus, so pick a
 page or question screen inside it with `--screen` / `--all-screens` /
@@ -547,6 +550,10 @@ paths = sps.save_figure_layers(fig, "fig1_layers", fmt="pdf")  # {layer: Path}
 
 **Compare drift-correction algorithms**
 
+Drift correction is held back behind `SCANPATH_EXPERIMENTAL=1` (PRE-21); without
+it, `drift_correction=` raises `ValueError` rather than returning uncorrected
+fixations.
+
 ```python
 from scanpath_studio.alignment import ALGORITHMS
 
@@ -563,10 +570,11 @@ Several things the app can do have no `api.py` entry point. They are still
 reachable through the internal modules — on the same normalized frames, but
 without the API layer's conveniences: no trial resolution, no
 `CANONICAL_FIGURE_DEFAULTS`, and canvas/font settings you must pass yourself.
-Besides the three shown below, two more are worth knowing about:
+Besides the two shown below, two more are worth knowing about:
 
-- **Scanpath similarity** (`scanpath_studio.similarity`) — the Comparisons
-  tab's scoring surface: `compute_similarity_table`,
+- **Scanpath similarity** (`scanpath_studio.similarity`) — the scoring behind
+  the Comparisons subtab's NLD column, which the app itself shows only with
+  `SCANPATH_EXPERIMENTAL=1` (PRE-21): `compute_similarity_table`,
   `normalized_levenshtein`, `aoi_sequence`, `nld_by_fixation_index`,
   `nld_by_time`.
 - **Corpus-level aggregation** (`scanpath_studio.aggregation`) — the
@@ -580,29 +588,12 @@ auto-detected; `raw_gaze_schema=` overrides, starting from
 Pass the result to `plot_scanpath(raw_gaze=…)`, which filters it to the trial
 and switches the layer on — `render --raw-gaze PATH` on the command line.
 
-**Two-scanpath comparison** (the app's Compare mode). Takes the whole frames and
-two `(participant_id, trial_id)` tuples, not per-trial frames:
-
-```python
-from scanpath_studio import plots
-
-fig = plots.make_comparison_figure(
-    words,
-    fixations,
-    ("l37_1129", "l37_1129_2_1_1_Ele_r0"),  # trial A
-    ("l7_1090", "l7_1090_2_1_1_Ele_r0"),  # trial B
-    canvas_width=2560,
-    canvas_height=1440,
-    font_family="Arial",
-    base_font_size=16,
-    layout="overlay",  # or "side_by_side" / "stacked"
-    trial_labels=("A", "B"),
-    show_legend=True,
-)
-```
-
-`animate_scanpath` *does* overlay a second reading itself, via `words_b=` /
-`fixations_b=` / `label_a=` / `label_b=` / `show_legend=`.
+Two-scanpath comparison (the app's Compare mode) *is* covered:
+`sps.compare_scanpaths(words, fixations, trial_a, trial_b, layout=…)` takes two
+`(participant_id, trial_id)` pairs — and `words_b=` / `fixations_b=` to draw B
+from another corpus — and `animate_scanpath` overlays a second reading itself via
+`words_b=` / `fixations_b=` / `label_a=` / `label_b=` / `show_legend=`. See the
+[API reference](api.md).
 
 **GIF / MP4 of a replay** — returns bytes, keyword-only, and needs an explicit
 per-frame duration (Kaleido + Chrome; ffmpeg rides along with `imageio-ffmpeg`):

@@ -14,8 +14,8 @@ Drop in a trial and see the scanpath the way the reader saw it — words at thei
 true on-screen positions, with fixations, saccades, a density heatmap, and
 animated replay layered on top, all exportable as publication-ready figures.
 
-It is **dataset-agnostic** (auto-detects EyeLink / Gazepoint / snake-case
-columns) and ships with a small [OneStop][onestop-paper] demo, so you can try it
+It is **dataset-agnostic** (auto-detects EyeLink / Gazepoint / Tobii / SMI /
+Pupil Labs / snake-case columns) and ships with a small [OneStop][onestop-paper] demo, so you can try it
 with zero setup.
 
 > **Authors:** Omer Shubi, Keren Gruteke Klein, Maya Grossman, Ella Lion, Deborah N. Jakobi,
@@ -84,9 +84,10 @@ of everything closed before 2026-08-20 is browsable offline: double-click
 
 ## Your data
 
-Upload **CSV, TSV, Parquet, or Feather** tables for words/AoIs, fixations, and
-(optionally) raw gaze. Columns are auto-detected from common EyeLink, Gazepoint,
-and snake-case conventions; the **Column mapping** on 🗂️ Data → ✏️ **Edit
+Upload **CSV, TSV, TXT, Parquet, Feather, or Excel (.xlsx / .xls)** tables — or a
+**.zip** of them — for words/AoIs, fixations, and (optionally) raw gaze. Columns
+are auto-detected from common EyeLink, Gazepoint, Tobii, SMI, Pupil Labs, and
+snake-case conventions; the **Column mapping** on 🗂️ Data → ✏️ **Edit
 dataset** overrides any guess. The loader bends to fit real corpora — many files
 per table (concatenated with a `source_file` tag), a single report (words- or
 fixations-only), stimulus-level word boxes broadcast across readers, AoI-sequence
@@ -104,7 +105,8 @@ Several public corpora need no upload at all: **OneStop**,
 [**PoTeC**](https://github.com/DiLi-Lab/PoTeC) (Potsdam Textbook Corpus) and
 **MultiplEYE** have ready-made loaders, and thirty-one
 [harmonised benchmark corpora](https://lacclab.github.io/scanpath-studio/benchmark-corpora/)
-— German, Chinese, Persian, English — load from one locally prepared bundle in a
+— German, Chinese, Persian, Danish, Spanish, Dutch, Russian, English, and the
+multilingual MECO waves — load from one locally prepared bundle in a
 single common schema, which is what makes cross-corpus comparison practical. The
 PoTeC loader exercises that flexible pipeline end to end:
 
@@ -146,12 +148,12 @@ HTML export is browser-free; PNG/SVG/PDF/GIF/MP4 go through Kaleido (run
 ```bash
 git clone https://github.com/lacclab/scanpath-studio.git
 cd scanpath-studio
-pip install -e ".[test]"          # or: uv sync
+pip install -e ".[test]"          # or: uv sync --extra test --extra lint
 streamlit run streamlit_app.py --server.address 127.0.0.1
 ```
 
-Tested on Python 3.11–3.14. Run the tests with `uv run pytest`; see
-[AGENTS.md](https://github.com/lacclab/scanpath-studio/blob/main/AGENTS.md) for an architectural overview.
+Tested on Python 3.11–3.14. Run the tests with `pytest` (or
+`uv run --extra test pytest`); see [AGENTS.md](https://github.com/lacclab/scanpath-studio/blob/main/AGENTS.md) for an architectural overview.
 
 Joining the project? [CONTRIBUTING.md](https://github.com/lacclab/scanpath-studio/blob/main/CONTRIBUTING.md) is the whole of it —
 setup, where the work is tracked

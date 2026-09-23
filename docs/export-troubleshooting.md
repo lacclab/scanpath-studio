@@ -85,6 +85,8 @@ numbers can be reproduced later.
     `(2560, 1440)` for OneStop.
 
 ??? question "OneStop server data"
-    Pointing the app at a full OneStop export uses `$ONESTOP_DATA_DIR`; see
-    [AGENTS.md](https://github.com/lacclab/scanpath-studio/blob/main/AGENTS.md)
-    for the sharding/loader details.
+    Pointing the app at a full OneStop export uses `$ONESTOP_DATA_DIR`; shard it
+    once with `python -m scanpath_studio.onestop_shard --data-dir …` so a
+    deep-linked participant loads in under a second. The loader details are in
+    [`scanpath_studio/CLAUDE.md`](https://github.com/lacclab/scanpath-studio/blob/main/scanpath_studio/CLAUDE.md)
+    (`onestop_shard.py`, `data.load_onestop_server_bundle`).

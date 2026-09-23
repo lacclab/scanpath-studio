@@ -2789,19 +2789,21 @@ def correct_word_id_offset(
     """Shift fixation ``word_id`` back onto the words table when it's 1-based.
 
     No-op unless :func:`detect_word_id_offset` finds an unambiguous shift.
-    Renumbering someone's ids is never silent — it's logged at WARNING, which
-    `debug_log.install_log_capture` surfaces in the in-app 🐛 Debug panel as
-    well as the server terminal. A `st.warning` would be wrong here: the bundled
-    demo corpus trips this on *every* load, so the banner would be permanent
-    furniture on the default landing view rather than a signal.
+    Renumbering someone's ids is never silent — it's logged at INFO, which
+    `debug_log.install_log_capture` surfaces in the in-app 🐛 Debug panel. Not a
+    `st.warning`, and not a WARNING either (BUG-76): the bundled demo corpus
+    trips this on *every* load, so a banner would be permanent furniture on the
+    landing view, and a WARNING was the first line `render --sample`,
+    `load_sample_data()` and the README quickstart printed to a new user's
+    terminal — about a correction that needs nothing from them.
     """
     offset = detect_word_id_offset(words, fixations)
     if not offset:
         return fixations
     fixations = fixations.copy()
     fixations["word_id"] = pd.to_numeric(fixations["word_id"], errors="coerce") - offset
-    _LOGGER.warning(
-        "BUG-8: the fixation report's word ids are numbered from 1 while the word "
+    _LOGGER.info(
+        "The fixation report's word ids are numbered from 1 while the word "
         "boxes are numbered from 0, so every fixation pointed at the next word. "
         "Shifted the fixation word ids down by %d to line the two tables up.",
         offset,

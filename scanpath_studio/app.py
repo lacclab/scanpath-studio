@@ -3493,8 +3493,8 @@ def _read_uploaded_frame(
     # the wizard's column pickers are built from, so it happens first and is
     # stashed for `_uploaded_header`. `chosen` is sorted into a tuple because it
     # rides in the cache key.
-    # BUG-55: a file the readers refuse — a legacy .xls workbook, an empty
-    # file, a corrupt archive — is the user's to fix, so it is said in the box
+    # BUG-55: a file the readers refuse — an empty file, a corrupt archive or
+    # workbook — is the user's to fix, so it is said in the box
     # that took it, the way the metadata uploaders already do, instead of a
     # traceback over the whole page.
     try:

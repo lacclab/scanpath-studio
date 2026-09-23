@@ -60,6 +60,8 @@ dependencies = [
     # workbook is a shipped enrichment, so without it an upload raises and the
     # questions column silently never appears (#BUG-41).
     "openpyxl>=3.1.5",
+    # The legacy Excel 97–2003 (.xls) engine, for the same readers (#DATA-53).
+    "xlrd>=2.0.2",
 ]
 
 [project.optional-dependencies]

@@ -35,7 +35,9 @@ hiddenimports += collect_submodules("streamlit")
 # used for MP4 animation export.
 for pkg in ("plotly", "streamlit_sortables", "kaleido", "imageio_ffmpeg"):
     datas += collect_data_files(pkg)
-hiddenimports += ["streamlit_sortables", "imageio_ffmpeg"]
+# pandas imports its Excel engines by name at call time, which the analysis
+# cannot see: openpyxl reads .xlsx, xlrd legacy .xls (#DATA-53).
+hiddenimports += ["streamlit_sortables", "imageio_ffmpeg", "openpyxl", "xlrd"]
 
 if sys.platform == "darwin":
     icon = [os.path.join(SPECPATH, "icons", "icon.icns")]  # noqa: F821

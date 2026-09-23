@@ -1313,19 +1313,12 @@ def _peek(file_like_or_path, size: int = 8) -> bytes:
 def _is_workbook(buf, name: str) -> bool:
     """Whether an Excel-named file is a real workbook pandas can open.
 
-    A zip container is an .xlsx; anything else that is not a legacy OLE2
-    workbook is delimited text wearing an Excel extension. A legacy workbook is
-    refused with the fix, rather than failing on a reader (``xlrd``) this
-    package does not install for a format Excel itself stopped writing in 2007.
+    A zip container is an .xlsx (openpyxl) and an OLE2 container is a legacy
+    Excel 97–2003 workbook (xlrd, DATA-53); anything else is delimited text
+    wearing an Excel extension (BUG-55).
     """
     head = _peek(buf)
-    if head.startswith(_OLE2_MAGIC):
-        raise ValueError(
-            f"'{Path(name).name}' is a legacy Excel 97–2003 (.xls) workbook, which "
-            "can't be read here. Open it in Excel and save it as .xlsx or .csv, "
-            "then upload that."
-        )
-    return head.startswith(_ZIP_MAGIC)
+    return head.startswith((_ZIP_MAGIC, _OLE2_MAGIC))
 
 
 def _can_reread(buf) -> bool:

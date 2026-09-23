@@ -26,12 +26,11 @@ The default workflow uses two tables:
 
 Participant ID, text ID, fixation timestamps, raw gaze, conditions, questions,
 and precomputed reading measures are optional but enable more features. Accepted
-files are CSV, TSV and tab-separated TXT, Parquet, Feather, Excel (`.xlsx`), and
-a `.zip` wrapping any of them. A text file's delimiter (comma, semicolon, tab or
-pipe) is read off its header line, a file that is not UTF-8 is read as Windows
-text, and an `.xls` that is really tab-separated text — EyeLink Data Viewer's
-"Excel" export — is read as text; a genuine Excel 97–2003 workbook has to be
-saved as `.xlsx` or `.csv` first. See [Data format](../data-format.md) for
+files are CSV, TSV and tab-separated TXT, Parquet, Feather, Excel (`.xlsx` and
+the older `.xls`), and a `.zip` wrapping any of them. A text file's delimiter
+(comma, semicolon, tab or pipe) is read off its header line, a file that is not
+UTF-8 is read as Windows text, and an `.xls` that is really tab-separated text —
+EyeLink Data Viewer's "Excel" export — is read as text. See [Data format](../data-format.md) for
 canonical fields and units.
 
 ## Use the setup wizard

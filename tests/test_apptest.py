@@ -2937,12 +2937,21 @@ class TestCorpusAnalysisTab:
     (Per text / Per reader / Groups). Generations moved to the Scanpath view's
     Comparisons subtab (ENG-8)."""
 
-    def test_analysis_sections_render(self):
+    @pytest.mark.parametrize(
+        ("subtab", "view_key"),
+        [
+            ("Per text", "ptext_view"),
+            ("Per reader", "prdr_view"),
+            ("Groups", "pgrp_view"),
+        ],
+    )
+    def test_analysis_sections_render(self, subtab, view_key):
         # Demo source: several participants / trials / texts, so every section
-        # has data. AppTest renders all st.tabs bodies, so one run exercises the
-        # default view of each section.
+        # has data. PERF-9 made the subtabs lazy — only the open one runs — so
+        # each section is opened by name through the keyed tab bar.
         at = _make_apptest()
         at.session_state["main_nav"] = "Corpus Analysis"
+        at.session_state["corpus_subtab"] = subtab
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
@@ -2950,12 +2959,37 @@ class TestCorpusAnalysisTab:
         # The Groups tab defaults to a single group (compare toggle off), so its
         # single-group view selector (pgrp_view) is present; cmp_view appears only
         # when 'Compare a second group' is on (see test_each_analysis_view_renders).
-        for view_key in ("ptext_view", "prdr_view", "pgrp_view"):
-            assert view_key in keys, f"{view_key} view selector not found"
+        assert view_key in keys, f"{view_key} view selector not found"
         # BUG-26: the Screen picker is offered only by a multipart corpus. The
         # demo has no `screen_id`, so it must not appear — and its absence is
         # what pins that every single-screen dataset is untouched by the fix.
         assert "ptext_screen" not in keys
+
+    def test_only_the_open_subtab_runs(self, monkeypatch):
+        """PERF-9: the hidden Per sentence table ran on every Corpus rerun."""
+        from scanpath_studio import tabs
+
+        calls = []
+        real = tabs._render_per_sentence_tab
+        monkeypatch.setattr(
+            tabs,
+            "_render_per_sentence_tab",
+            lambda *a, **k: calls.append(1) or real(*a, **k),
+        )
+        at = _make_apptest()
+        at.session_state["main_nav"] = "Corpus Analysis"
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert calls == [], "Per sentence ran while Per text was open"
+        # A fresh app per tab: AppTest's router does not follow the app's own
+        # `st.switch_page`, so a second run would land back on Scanpath.
+        at = _make_apptest()
+        at.session_state["main_nav"] = "Corpus Analysis"
+        at.session_state["corpus_subtab"] = "Per sentence"
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert calls, "Per sentence never ran once opened"
+        assert "sentence_measure" in {s.key for s in at.selectbox}
 
     @pytest.mark.parametrize(
         ("view_key", "view"),
@@ -2984,6 +3018,10 @@ class TestCorpusAnalysisTab:
         # The two-group comparison views live behind the Groups 'Compare a second
         # group' toggle; the single-group views show with it off.
         at.session_state["groups_compare"] = view_key == "cmp_view"
+        at.session_state["corpus_subtab"] = {
+            "ptext_view": "Per text",
+            "prdr_view": "Per reader",
+        }.get(view_key, "Groups")
         at.session_state[view_key] = view
         at.run(timeout=60)
         assert not at.exception, f"{view_key}={view!r}: {at.exception}"
@@ -2997,6 +3035,7 @@ class TestCorpusAnalysisTab:
         # (compare off) and two-group (compare on) cases of the Groups tab.
         single = _make_apptest()
         single.session_state["main_nav"] = "Corpus Analysis"
+        single.session_state["corpus_subtab"] = "Groups"
         single.session_state["pgrp_mode"] = "Independent filter sets"
         single.run(timeout=60)
         assert not single.exception, f"Streamlit exceptions: {single.exception}"
@@ -3004,6 +3043,7 @@ class TestCorpusAnalysisTab:
 
         compare = _make_apptest()
         compare.session_state["main_nav"] = "Corpus Analysis"
+        compare.session_state["corpus_subtab"] = "Groups"
         compare.session_state["groups_compare"] = True
         compare.session_state["cmp_mode"] = "Independent filter sets"
         compare.run(timeout=60)

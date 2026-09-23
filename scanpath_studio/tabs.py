@@ -253,6 +253,10 @@ SUBTAB_LINE_ASSIGNMENT = "📐 Line assignment"
 SUBTAB_EXPORT = "📤 Export"
 SUBTAB_SHARE = "🔗 Share"
 
+#: The Corpus Analysis subtabs, in bar order — also the values the keyed tab bar
+#: (`corpus_subtab`) takes, so a test or a tutorial can open one by name.
+CORPUS_SUBTABS = ("Per text", "Per sentence", "Per reader", "Groups")
+
 
 def _safe_filename(text: str) -> str:
     return "".join(c if c.isalnum() or c in "-_." else "_" for c in str(text))
@@ -6690,64 +6694,87 @@ def render_corpus_analysis_tab(
     # widget key, so a tutorial can only *point* at it, never switch it.
     with st.container(key="tutorial_corpus_subtabs"):
         text_tab, sentence_tab, reader_tab, groups_tab = st.tabs(
-            ["Per text", "Per sentence", "Per reader", "Groups"]
+            list(CORPUS_SUBTABS),
+            # PERF-9: the same PERF-3 fix the Scanpath subtabs got — `st.tabs`
+            # runs every body on every run, so the hidden Per sentence table
+            # (uncached, masking the whole fixation frame per sentence) was
+            # recomputed on every click anywhere in this view: 26 s per click at
+            # 16× the demo. Keyed + `on_change="rerun"`, only the open tab runs.
+            key="corpus_subtab",
+            on_change="rerun",
         )
-    with text_tab:
-        render_per_text_tab(
-            words_filtered, fixations_filtered, viz_settings=viz_settings, **common
-        )
-    with reader_tab:
-        render_per_reader_tab(
-            words_filtered,
-            fixations_filtered,
-            viz_settings=viz_settings,
-            **common,
-        )
-    with sentence_tab:
-        from scanpath_studio.preprocessing import sentence_measures
+    if text_tab.open:
+        with text_tab:
+            render_per_text_tab(
+                words_filtered, fixations_filtered, viz_settings=viz_settings, **common
+            )
+    if reader_tab.open:
+        with reader_tab:
+            render_per_reader_tab(
+                words_filtered,
+                fixations_filtered,
+                viz_settings=viz_settings,
+                **common,
+            )
+    if sentence_tab.open:
+        with sentence_tab:
+            _render_per_sentence_tab(words_filtered, fixations_filtered)
+    if groups_tab.open:
+        with groups_tab:
+            render_groups_tab(
+                words_filtered,
+                fixations_filtered,
+                viz_settings=viz_settings,
+                **common,
+            )
 
-        sentence_table = sentence_measures(
-            compute_word_metrics(words_filtered, fixations_filtered),
-            fixations_filtered,
+
+@st.cache_data(show_spinner="Computing sentence measures…")
+def _c_sentence_measures(_words, _fix, fwkey, ffkey):
+    from scanpath_studio.preprocessing import sentence_measures
+
+    return sentence_measures(compute_word_metrics(_words, _fix), _fix)
+
+
+def _render_per_sentence_tab(
+    words_filtered: pd.DataFrame, fixations_filtered: pd.DataFrame
+) -> None:
+    """The Per sentence subtab: one measure per text/sentence, across readers."""
+    sentence_table = _c_sentence_measures(
+        words_filtered,
+        fixations_filtered,
+        frame_fingerprint(words_filtered),
+        frame_fingerprint(fixations_filtered),
+    )
+    st.caption(
+        "Sentence is a first-class aggregation unit: combine one measure "
+        "across readers for each text/sentence pair."
+    )
+    numeric = [
+        column
+        for column in sentence_table.select_dtypes(include="number").columns
+        if column not in {"sentence_id"}
+    ]
+    if sentence_table.empty or not numeric:
+        st.info("No sentence-level measures are available for this selection.")
+    else:
+        controls = st.columns(2)
+        metric = controls[0].selectbox(
+            "Sentence measure", numeric, key="sentence_measure"
         )
-        st.caption(
-            "Sentence is a first-class aggregation unit: combine one measure "
-            "across readers for each text/sentence pair."
+        aggregate = controls[1].selectbox(
+            "Aggregate", ["Mean", "Median"], key="sentence_aggregate"
         )
-        numeric = [
-            column
-            for column in sentence_table.select_dtypes(include="number").columns
-            if column not in {"sentence_id"}
+        identity = [
+            column for column in ("text_id", "sentence_id") if column in sentence_table
         ]
-        if sentence_table.empty or not numeric:
-            st.info("No sentence-level measures are available for this selection.")
-        else:
-            controls = st.columns(2)
-            metric = controls[0].selectbox(
-                "Sentence measure", numeric, key="sentence_measure"
-            )
-            aggregate = controls[1].selectbox(
-                "Aggregate", ["Mean", "Median"], key="sentence_aggregate"
-            )
-            identity = [
-                column
-                for column in ("text_id", "sentence_id")
-                if column in sentence_table
-            ]
-            reducer = "mean" if aggregate == "Mean" else "median"
-            summary = (
-                sentence_table.groupby(identity, dropna=False)[metric]
-                .agg(reducer)
-                .reset_index(name=f"{reducer}_{metric}")
-            )
-            st.dataframe(summary, hide_index=True, width="stretch")
-    with groups_tab:
-        render_groups_tab(
-            words_filtered,
-            fixations_filtered,
-            viz_settings=viz_settings,
-            **common,
+        reducer = "mean" if aggregate == "Mean" else "median"
+        summary = (
+            sentence_table.groupby(identity, dropna=False)[metric]
+            .agg(reducer)
+            .reset_index(name=f"{reducer}_{metric}")
         )
+        st.dataframe(summary, hide_index=True, width="stretch")
 
 
 # -----------------------------------------------------------------------------

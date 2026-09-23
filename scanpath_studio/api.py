@@ -503,9 +503,11 @@ def propose_schema(table: TablesLike, kind: str = "words") -> dict:
     detection got a field wrong or couldn't find one: edit the dict and pass it
     back as ``word_schema=`` / ``fix_schema=``::
 
-        schema = sps.api.propose_schema("ia.csv", "words")
+        from scanpath_studio import api
+
+        schema = api.propose_schema("ia.csv", "words")
         schema["trial"] = "TRIAL_LABEL"
-        words, fixations = sps.load_scanpath_data("ia.csv", "fix.csv",
+        words, fixations = api.load_scanpath_data("ia.csv", "fix.csv",
                                                   word_schema=schema)
 
     ``table`` is a DataFrame, path, glob or list of paths, like the loader's.
@@ -1311,7 +1313,7 @@ def figure_options(kind: str = "static") -> dict:
     one, the builder's own signature default otherwise — so a scripted caller
     can diff its intended settings against what it would get::
 
-        {k: v for k, v in sps.api.figure_options().items() if k.startswith("show_")}
+        {k: v for k, v in sps.figure_options().items() if k.startswith("show_")}
     """
     if kind == "static":
         params = _STATIC_FIGURE_PARAMS
@@ -2068,8 +2070,8 @@ def figure_code(
     :func:`compare_scanpaths` (``"comparison"``) and it returns the snippet that
     rebuilds that figure, rather than the figure::
 
-        print(sps.api.figure_code(participant="l7_101", trial="1_Adv_1",
-                                  show_heatmap=False, flavor="cli"))
+        print(sps.figure_code(participant="l7_1090", trial="l7_1090_2_1_1_Ele_r0",
+                              show_heatmap=False, flavor="cli"))
 
     ``source`` names how the data is loaded — ``"demo"``, ``"synthetic"``,
     ``"files"``, ``"potec"``, ``"onestop"``, ``"multipleye"``, ``"benchmark"``,

@@ -1631,6 +1631,22 @@ def render(argv: list[str]) -> None:
             "two trace labels as a pair, so naming one side would leave the "
             "other undefined."
         )
+    # ENG-53: each panel of a split layout draws its own reading's stimulus, so
+    # there is no shared set of word boxes to pick from — the builder ignores
+    # the choice there. Say so, rather than letting the docs' old "side by side,
+    # showing only B's word boxes" example quietly draw both.
+    if (
+        args.compare_with is not None
+        and not args.animate
+        and args.compare_layout != "overlay"
+        and args.compare_stimulus != "both"
+    ):
+        print(
+            f"Warning: --compare-stimulus {args.compare_stimulus} only applies to "
+            f"--compare-layout overlay; each {args.compare_layout} panel draws its "
+            "own reading's stimulus. Ignoring it.",
+            file=sys.stderr,
+        )
     if args.label_a is not None and args.compare_with is None:
         raise SystemExit(
             "--label-a/--label-b label the two scanpaths of a comparison or of "

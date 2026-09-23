@@ -1448,3 +1448,51 @@ def test_a_reversed_or_lowercase_colorscale_is_accepted():
     )
     assert args.heatmap_colorscale == "greens"
     assert args.fixation_colorscale == "Viridis_r"
+
+
+@pytest.mark.parametrize("layout", ["side-by-side", "stacked"])
+def test_compare_stimulus_on_a_split_layout_is_named_as_ignored(
+    tmp_path, capsys, layout
+):
+    """ENG-53: each split panel draws its own stimulus, so the choice does
+    nothing there — and the docs' example claimed it did."""
+    cli.main(
+        [
+            "render",
+            "--sample",
+            "-p",
+            _SAMPLE_PARTICIPANT,
+            "-t",
+            _SAMPLE_TRIAL_A,
+            "--compare-with",
+            f"{_SAMPLE_PARTICIPANT}:{_SAMPLE_TRIAL_B}",
+            "--compare-layout",
+            layout,
+            "--compare-stimulus",
+            "b",
+            "-o",
+            str(tmp_path / "x.html"),
+        ]
+    )
+    err = capsys.readouterr().err
+    assert "--compare-stimulus b only applies to --compare-layout overlay" in err
+
+
+def test_compare_stimulus_on_an_overlay_is_not_warned_about(tmp_path, capsys):
+    cli.main(
+        [
+            "render",
+            "--sample",
+            "-p",
+            _SAMPLE_PARTICIPANT,
+            "-t",
+            _SAMPLE_TRIAL_A,
+            "--compare-with",
+            f"{_SAMPLE_PARTICIPANT}:{_SAMPLE_TRIAL_B}",
+            "--compare-stimulus",
+            "b",
+            "-o",
+            str(tmp_path / "x.html"),
+        ]
+    )
+    assert "--compare-stimulus" not in capsys.readouterr().err

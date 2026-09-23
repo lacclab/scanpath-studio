@@ -117,7 +117,8 @@ words, fixations = sps.load_onestop(
     variant="public",  # or "lacclab" for a local export
     download=True,  # public variant only
 )
-fig = sps.plot_scanpath(words, fixations, canvas_size=(2560, 1440))
+pid, tid = sps.list_trials(words, fixations).iloc[0]  # or any row you want
+fig = sps.plot_scanpath(words, fixations, pid, tid, canvas_size=(2560, 1440))
 ```
 
 For the raw (pre-normalization) frames, use

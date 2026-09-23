@@ -6,7 +6,7 @@
 |--------|-----|---------------|
 | **HTML** | `save_figure(fig, "x.html")` / `render -o x.html` | No — browser-free (`fig.to_html`) |
 | **PNG / SVG / PDF** | `save_figure(fig, "x.png")` / `render -o x.png` | **Yes** — via Kaleido |
-| **GIF / MP4** | `animation_export.export_animation(anim, "x.mp4")` | **Yes** (Kaleido) — ffmpeg is bundled |
+| **GIF / MP4** | `animation_export.export_animation(anim, fmt="mp4", frame_duration_ms=…)` → bytes (see [below](#mp4-gif)) | **Yes** (Kaleido) — ffmpeg is bundled |
 
 ## Kaleido needs a Chrome/Chromium binary
 
@@ -24,6 +24,26 @@ If Chrome is unavailable, fall back to **HTML** export (it's browser-free) — t
 in-app export buttons pre-flight for Chrome and point you here when it's missing.
 
 ## MP4 / GIF
+
+`export_animation` takes the replay figure and returns the encoded bytes; the
+format and the per-frame duration are keyword-only:
+
+```python
+from pathlib import Path
+
+import scanpath_studio as sps
+from scanpath_studio.animation_export import export_animation
+from scanpath_studio.plots import animation_autoplay_frame_duration
+
+words, fixations = sps.load_sample_data()
+anim = sps.animate_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele_r0")
+clip = export_animation(
+    anim,
+    fmt="mp4",  # or "gif"
+    frame_duration_ms=animation_autoplay_frame_duration(anim),  # keeps the speed
+)
+Path("replay.mp4").write_bytes(clip)
+```
 
 - **GIF** is encoded by Pillow; **MP4** uses the ffmpeg binary bundled by the
   `imageio[ffmpeg]` dependency — no system ffmpeg needed.

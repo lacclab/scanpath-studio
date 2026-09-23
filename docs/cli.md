@@ -77,7 +77,7 @@ scanpath-studio render --onestop ./onestop --onestop-variant public \
 
 # One corpus out of a prepared harmonised bundle
 scanpath-studio render --eyegenbench ./data/EyeGenBench \
-  --eyegenbench-dataset Provo -p 1 -t 1 -o provo.svg
+  --eyegenbench-dataset Provo -p Provo_Sub01 -t Provo_1 -o provo.svg
 
 # MultiplEYE, from its raw export
 scanpath-studio render --source multipleye --export ./multipleye_session \
@@ -96,14 +96,19 @@ root (`load_potec`, `load_onestop`, `load_multipleye`, `load_eyegenbench`).
 first — the headless form of the app's **Compare** mode.
 
 ```bash
-# Two readings from the same dataset
-scanpath-studio render --sample -p p1 -t t1 \
-  --compare-with p2:t5 -o compare.html
+# Two readers of the same paragraph, overlaid
+scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 -o compare.html
 
-# Side by side, showing only B's word boxes and text
-scanpath-studio render --sample -p p1 -t t1 \
-  --compare-with p2:t5 \
-  --compare-layout side-by-side --compare-stimulus b -o compare.svg
+# The same overlay, drawing only B's word boxes and text
+scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 --compare-stimulus b \
+  -o compare_b.html
+
+# Side by side — each panel draws its own reading's stimulus
+scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 \
+  --compare-layout side-by-side -o compare.svg
 
 # B from a second dataset
 scanpath-studio render --potec ./potec -p 12 -t b0 \
@@ -182,7 +187,7 @@ the recorded setup.
 | correct vertical drift (needs `SCANPATH_EXPERIMENTAL=1`) | `--drift-correction ALGORITHM` |
 | add the stimulus image | `--stimulus-image PATH` |
 | resolve per-trial images | `--image-root DIR --image-pattern '{text_id}.png'` |
-| use Gaussian duration mass | `--heatmap-style 'Duration mass' --duration-mass-sigma 1.0` |
+| use Gaussian duration mass | `--heatmap-style duration-mass --duration-mass-sigma 1.0` |
 | mark a schematic | `--illustration` or `--illustration-label MODE` |
 | render an authored trial | `--authoring PATH` |
 | select or inspect a child screen | `--screen ID`, `--list-parts` |
@@ -213,8 +218,10 @@ scanpath-studio analyze --words ia.csv --fixations fixations.csv --output-dir an
 ```
 
 This creates word, sentence, saccade, trial, reader, character, cleaning-QA,
-and run-configuration files. `scanpath-studio corpus` produces a tidy
-corpus-analysis table for scripting. The `render` command still renders one
+and run-configuration files. `scanpath-studio corpus` goes the other way: it
+reads a tidy CSV you already have (`--input`, one row per word or value) and
+renders a styled corpus figure — a per-word `profile`, a `distribution`, or a
+`difference` profile. The `render` command still renders one
 trial per invocation; use the [Python batch pattern](automation.md#batch-pattern)
 or **Export → Export bundle** for many figures.
 

@@ -62,6 +62,7 @@ from .constants import (
     SACCADE_DASH_OPTIONS,
     SACCADE_WIDTH_BOUNDS,
     SYNTHETIC_CHOICE,
+    UNIFORM_COLOR_FIELD,
     drift_correction_enabled,
 )
 from .controls import (
@@ -1750,6 +1751,15 @@ def _restore_plot_config(
     # current data via `controls._clamped_pair`. VIZ-46: a stored range means
     # *explicit*, so a config saved while the range was auto (`null`) restores
     # as auto rather than keeping whatever range this session happened to hold.
+    # The writer records the figure's *gated* range, though, so `null` says
+    # "auto" only where the saved figure drew that range at all — a config saved
+    # with the heatmap off says nothing about the heatmap's range.
+    in_effect = {
+        "fixation_range": bool(layers.get("fixations"))
+        and coloring.get("color_by") not in (None, UNIFORM_COLOR_FIELD, "line"),
+        "heatmap_range": bool(layers.get("heatmap"))
+        and coloring.get("heatmap_metric") == "duration_ms",
+    }
     for cfg_key, state_key, label in (
         ("fixation_range", "global_fixation_color_range", "fixation color range"),
         ("heatmap_range", "global_heatmap_color_range", "heatmap color range"),
@@ -1758,7 +1768,7 @@ def _restore_plot_config(
         if isinstance(rng, (list, tuple)) and len(rng) == 2:
             lo, hi = number(rng[0]), number(rng[1])
             put_valid(lo is not None and hi is not None, state_key, (lo, hi), label)
-        elif cfg_key in coloring and rng is None:
+        elif cfg_key in coloring and rng is None and in_effect[cfg_key]:
             forget_color_range(state_key)
 
     sizing = section("sizing")

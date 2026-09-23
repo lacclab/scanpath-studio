@@ -1066,6 +1066,22 @@ _VIEW_PRESETS: dict[str, dict[str, object]] = {
 }
 
 
+def _drop_linked_view_params() -> None:
+    """Take a deep link's view params off the URL once a design is chosen.
+
+    ``url_state._apply_url_preset`` re-applies them at the top of every rerun,
+    as ``setdefault`` — so any key the chosen design leaves unset is refilled
+    from the link. Every design leaves some unset; since VIZ-46 an *auto*
+    colour range is one of them (absent means auto), so a design saved on auto
+    came back showing the link's range. Selection/source params are not in
+    ``URL_PRESET_PARAMS`` and stay.
+    """
+    from . import session_keys as _sk
+
+    for param in _sk.URL_PRESET_PARAMS:
+        st.query_params.pop(param, None)
+
+
 def _apply_view_preset(name: str) -> None:
     """Apply one deterministic named view, or restore the Custom snapshot.
 
@@ -1106,6 +1122,7 @@ def _apply_view_preset(name: str) -> None:
         ss.pop("_font_seeded_for", None)
         ss.pop("_palette_picked", None)
         ss.pop(_PRE_ILLUSTRATION_STATE, None)
+        _drop_linked_view_params()
         ss[_QUICK_VIEW_SELECTION_KEY] = _design_selection(name)
         ss.pop(_QUICK_VIEW_APPLIED_STATE, None)
         return
@@ -1119,6 +1136,7 @@ def _apply_view_preset(name: str) -> None:
             for key, value in custom.items():
                 if _is_restorable_global(key):
                     ss[key] = deepcopy(value)
+            _drop_linked_view_params()
         ss[_QUICK_VIEW_SELECTION_KEY] = _CUSTOM_VIEW
         ss.pop(_QUICK_VIEW_APPLIED_STATE, None)
         return
@@ -1140,10 +1158,7 @@ def _apply_view_preset(name: str) -> None:
     # A deep-link preset is applied at the top of every rerun. Once the user has
     # explicitly chosen a design preset it must not immediately put the old visual
     # settings back; selection/source parameters are not part of this list.
-    from . import session_keys as _sk
-
-    for param in _sk.URL_PRESET_PARAMS:
-        st.query_params.pop(param, None)
+    _drop_linked_view_params()
 
     for key, value in _VIEW_PRESETS[name].items():
         ss[key] = deepcopy(value)

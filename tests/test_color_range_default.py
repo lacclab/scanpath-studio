@@ -87,6 +87,9 @@ def _rail_app():
     from scanpath_studio.constants import DEMO_CHOICE
     from scanpath_studio.url_state import _apply_url_preset, _build_share_query
 
+    design = st.session_state.pop("_apply_design", None)
+    if design:
+        controls._apply_view_preset(design)  # a button on_click: runs first
     _apply_url_preset()  # app.main's order: the link, then the widgets
     words, fixations = api.load_sample_data()
     pid, tid = st.session_state["_trial"]
@@ -327,6 +330,30 @@ class TestTheLink:
         assert opened.session_state["_viz"]["heatmap_range"] is None
 
 
+class TestADesign:
+    def test_a_design_saved_on_auto_is_not_refilled_by_the_link(self, two_trials):
+        """`_apply_url_preset` re-applies a link on every rerun as `setdefault`,
+        so a design that leaves the range unset — which is what *auto* is now —
+        would get the link's range back. Choosing a design takes the link's view
+        params off the URL, as the built-in presets always did."""
+        from scanpath_studio.session_keys import DESIGN_PRESETS
+
+        at = AppTest.from_function(_rail_app)
+        at.session_state["_trial"] = two_trials[0]
+        for key, value in COLOURED.items():
+            at.session_state[key] = value
+        at.session_state[DESIGN_PRESETS] = {"mine": dict(COLOURED)}
+        at.query_params["heatmap_color_range"] = "100.0,400.0"
+        _rerun(at)
+        assert at.session_state[HEAT_KEY] == (100.0, 400.0)
+
+        at.session_state["_apply_design"] = "mine"
+        _rerun(at)
+        _rerun(at)
+        assert HEAT_KEY not in at.session_state
+        assert at.session_state["_viz"]["heatmap_range"] is None
+
+
 def _restore_app():
     import pandas as pd
     import streamlit as st
@@ -354,11 +381,38 @@ class TestTheSavedConfig:
         """`null` is what the writer records for an auto range, so restoring it
         must not keep whatever range this session happened to hold."""
         at = self._restore(
-            {"coloring": {"fixation_range": None, "heatmap_range": None}},
+            {
+                "layers": {"heatmap": True, "fixations": True},
+                "coloring": {
+                    "color_by": "duration_ms",
+                    "heatmap_metric": "duration_ms",
+                    "fixation_range": None,
+                    "heatmap_range": None,
+                },
+            },
             **{FIX_KEY: (1.0, 2.0), HEAT_KEY: (3.0, 4.0)},
         )
         assert FIX_KEY not in at.session_state
         assert HEAT_KEY not in at.session_state
+
+    def test_a_null_for_a_layer_the_figure_did_not_draw_says_nothing(self):
+        """The writer records the figure's *gated* range, so a config saved
+        with the heatmap off has `null` there whatever the range was — it must
+        not reset the restorer's pinned heatmap range."""
+        at = self._restore(
+            {
+                "layers": {"heatmap": False, "fixations": True},
+                "coloring": {
+                    "color_by": "(uniform)",
+                    "heatmap_metric": "duration_ms",
+                    "fixation_range": None,
+                    "heatmap_range": None,
+                },
+            },
+            **{FIX_KEY: (1.0, 2.0), HEAT_KEY: (3.0, 4.0)},
+        )
+        assert at.session_state[FIX_KEY] == (1.0, 2.0)
+        assert at.session_state[HEAT_KEY] == (3.0, 4.0)
 
     def test_a_config_without_the_field_leaves_the_range_alone(self):
         at = self._restore(

@@ -179,10 +179,7 @@ cython_debug/
 
 # macOS
 .DS_Store
-data/
-
-# MkDocs build output
-site/
+/data/
 
 # uv lockfile — generated locally by `uv sync`/`uv run`; not used by CI
 # (which installs via `uv pip install`), and the project doesn't pin deps.
@@ -191,7 +188,6 @@ uv.lock
 # Stray OneStop CSV exports dropped at the repo root (raw source data)
 /*.csv.zip
 .claude/skills/developing-with-streamlit
-.gitignore
 
 # Tracker machine-local state (ENG-39): the save counter and which of the
 # people in tracker/data.js is at this keyboard. Neither travels between
@@ -204,3 +200,15 @@ tracker/.local.json
 
 # DATA-27: EyeGenBench preprocessing venv (torch/lightning); never the app venv.
 .venv-eyegenbench/
+
+# Local-only config and scratch that must never be committed: Streamlit
+# secrets (ENG-68 puts deployment settings there), Claude Code's per-user
+# settings and worktrees, editor folders, agent-skill symlinks into the venv,
+# and the paper scripts' default output folder.
+.streamlit/secrets.toml
+.claude/settings.local.json
+.claude/worktrees/
+.agents/
+.vscode/
+.idea/
+paper/figures/

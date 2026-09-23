@@ -372,11 +372,10 @@ def _check_mapped_columns(kind: str, frame: pd.DataFrame, schema: dict) -> None:
     """Reject a schema that maps a column the table doesn't have.
 
     Only reachable with a caller-supplied schema — auto-detection only ever
-    picks columns that exist. Without this check a mistyped mapping either
-    raises a bare ``KeyError: '<column>'`` from inside ``normalize_*``, or is
-    **silently ignored**: ``normalize_words`` prefers a literal
-    ``unique_trial_id`` column over the mapped one, so a typo'd ``'trial'``
-    would come back keyed on a column the caller never asked for."""
+    picks columns that exist. Without this check a mistyped mapping raises a
+    bare ``KeyError: '<column>'`` from inside ``normalize_*``. (It could also be
+    silently ignored until BUG-58: ``normalize_words`` used to prefer a literal
+    ``unique_trial_id`` column over the mapped trial id; the mapping wins now.)"""
     spec = _SCHEMA_SPECS[kind]
     present = {str(c) for c in frame.columns}
     missing = [(key, col) for key, col in _schema_columns(schema) if col not in present]

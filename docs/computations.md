@@ -224,14 +224,14 @@ Attach a participant-level table without broadcasting it (DATA-20).
 
 The single highest-risk step: which word a fixation counts for.
 
-**Formula.** 1. Bounding-box containment against the trial's word boxes — the experiment's own rectangles (`geom.word_box_bounds`), so on a tiling corpus a fixation on the space *after* a word is credited to that word, as EyeLink's interest-area report credits it. 2. Otherwise the nearest word **center** within `LINE_MISREGISTRATION_PX` = 50 px. 3. Otherwise `word_id = NaN` (out of text).
+**Formula.** 1. Bounding-box containment against the trial's word boxes — the experiment's own rectangles (`geom.word_box_bounds`), so on a tiling corpus a fixation on the space *after* a word is credited to that word, as EyeLink's interest-area report credits it. Boxes are half-open, `x0 ≤ x < x1` and `y0 ≤ y < y1` (`measures.word_box_contains`), so a point on an edge two boxes share goes to the one that starts there — the next word, the line below — as EyeLink assigns it. 2. Otherwise the nearest word **center** within `LINE_MISREGISTRATION_PX` = 50 px. 3. Otherwise `word_id = NaN` (out of text).
 
 | | |
 | --- | --- |
 | **Output** | word_id |
 | **Grouping / ordering** | (participant_id, trial_id[, screen_id]) — never across screens |
 | **Missing & edge cases** | Unassignable fixations keep NaN and are excluded from word measures. |
-| **Precedence & caveats** | An imported `word_id` is kept unless `overwrite=True` — so on the bundled demo, whose fixation report carries EyeLink's `CURRENT_FIX_INTEREST_AREA_ID`, the reading measures follow EyeLink's assignment and geometry only fills the fixations it left blank. #BUG-83: geometry now agrees with that column on 99.1% of the demo's fixations (BUG-11's half-space shift: 92.6%). |
+| **Precedence & caveats** | An imported `word_id` is kept unless `overwrite=True` — so on the bundled demo, whose fixation report carries EyeLink's `CURRENT_FIX_INTEREST_AREA_ID`, the reading measures follow EyeLink's assignment and geometry only fills the fixations it left blank. #BUG-83: geometry now agrees with that column on all 3,208 of the demo's EyeLink-assigned fixations (BUG-11's half-space shift: 92.6%; closed containment on the shared edges: 99.1%). |
 | **Reference** | The nearest-center fallback is common practice for line misregistration; the 50 px radius is this app's choice, not a standard. |
 | **Code** | `scanpath_studio/measures.py:assign_fixations_to_words` |
 | **Consumers** | UI, API, CLI, Export, Corpus Analysis |
@@ -242,7 +242,7 @@ The single highest-risk step: which word a fixation counts for.
 
 Whether a fixation landed on any word of the stimulus.
 
-**Formula.** The fixation falls inside some word box (`word_box_bounds`). Box containment only — a fixation the 50 px nearest-centre fallback of `assign.fixation_to_word` gives a word still counts as out-of-text.
+**Formula.** The fixation falls inside some word box (`word_box_bounds`, tested half-open by `word_box_contains`, as `assign.fixation_to_word` tests it). Box containment only — a fixation the 50 px nearest-centre fallback of `assign.fixation_to_word` gives a word still counts as out-of-text.
 
 | | |
 | --- | --- |

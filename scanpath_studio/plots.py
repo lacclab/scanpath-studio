@@ -2718,13 +2718,14 @@ def _add_word_level_heatmap(
         if weights is not None
         else None
     )
-    # Bin against the experiment's boxes (BUG-83) — the same boundary the
-    # assignment uses and the heatmap then draws.
-    from .measures import word_box_bounds
+    # Bin against the experiment's boxes (BUG-83) with the assignment's own
+    # containment rule — the same boundary it uses and the heatmap then draws,
+    # and half-open, so a fixation on a shared edge counts towards one word.
+    from .measures import word_box_bounds, word_box_contains
 
     word_values = []
     for wx0, wy0, wx1, wy1 in zip(*word_box_bounds(words)):
-        in_word = (fx >= wx0) & (fx <= wx1) & (fy >= wy0) & (fy <= wy1)
+        in_word = word_box_contains(fx, fy, wx0, wy0, wx1, wy1)
         val = (
             float(np.nansum(w_arr[in_word]))
             if w_arr is not None

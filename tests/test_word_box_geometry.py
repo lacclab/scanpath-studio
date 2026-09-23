@@ -175,6 +175,25 @@ class TestAssignment:
     def test_glyph_tight_assignment_is_unchanged(self):
         assert self._assign_at(_glyph_tight_words(), 110.0) == 0
 
+    def test_a_shared_edge_belongs_to_the_box_that_starts_there(self):
+        """491 is both Robert's right edge and Myslajek's left one. Boxes are
+        half-open, ``[x, x + width)``, so it is Myslajek's — where EyeLink put
+        every such fixation in the demo. A closed test gave it to Robert."""
+        words = _tiling_words()
+        assert self._assign_at(words, 491.0) == 1
+        assert self._assign_at(words, 490.0) == 0
+
+    def test_a_shared_line_edge_belongs_to_the_line_below(self):
+        above = _tiling_words()
+        below = _tiling_words()
+        below["word_id"] += len(above)
+        below["y"] += 30.0  # the next line starts where this one ends
+        words = pd.concat([above, below], ignore_index=True)
+        fix = _fixation(400.0)
+        fix["y"] = 130.0
+        out = assign_fixations_to_words(fix, words, overwrite=True)
+        assert out["word_id"].iloc[0] == len(above)  # 'Robert', second line
+
 
 class TestInTextMask:
     def _mask_at(self, words: pd.DataFrame, x: float) -> bool:
@@ -230,6 +249,27 @@ class TestDependentConsumers:
         # The fixation on the space counts towards Robert, and only Robert.
         assert rects == {(358.0, 491.0)}
         assert rects <= outlines
+
+    def test_a_fixation_on_a_shared_edge_is_counted_once(self):
+        """The heatmap bins with the assignment's rule. A closed test per word
+        counted a fixation at 491 towards both Robert and Myslajek."""
+        from scanpath_studio import plots
+
+        words = _tiling_words()
+        fig = plots.go.Figure()
+        plots._add_word_level_heatmap(
+            fig,
+            words,
+            _fixation(491.0, timestamp_ms=0.0),
+            x_field="x",
+            y_field="y",
+            weights=None,
+            heatmap_colorscale="Viridis",
+            heatmap_range=None,
+            show_colorbars=False,
+        )
+        rects = [(s.x0, s.x1) for s in fig.layout.shapes if "heatmap" in (s.name or "")]
+        assert rects == [(491.0, 662.0)]
 
     def test_the_critical_span_outline_uses_the_experiments_edges(self):
         from scanpath_studio import plots
@@ -337,7 +377,8 @@ class TestTheBundledDemoAgreesWithEyeLink:
 
     def test_geometry_assigns_fixations_as_eyelink_did(self, demo):
         """`CURRENT_FIX_INTEREST_AREA_ID` is EyeLink's own assignment against the
-        same rectangles. The half-space shift disagreed on 7.4% of them."""
+        same rectangles. The half-space shift disagreed on 7.4% of them, and a
+        closed containment test on the 0.9% that sit exactly on a shared edge."""
         words, fix = demo
         eyelink = pd.to_numeric(fix["word_id"], errors="coerce")
         ours = pd.to_numeric(
@@ -345,7 +386,8 @@ class TestTheBundledDemoAgreesWithEyeLink:
             errors="coerce",
         )
         assigned = eyelink.notna()
-        assert (ours[assigned] == eyelink[assigned]).mean() > 0.99
+        assert assigned.sum() > 3000
+        assert (ours[assigned] == eyelink[assigned]).all()
 
     def test_no_landing_fraction_piles_up_at_the_end_of_the_word(self, demo):
         """15% of the demo's first-fixation landings read exactly 1.0 — the

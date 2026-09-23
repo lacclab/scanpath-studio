@@ -73,11 +73,8 @@ def _assign_word_ids_single(
     fx = pd.to_numeric(fix_chunk["x"], errors="coerce").to_numpy(dtype=float)
     fy = pd.to_numeric(fix_chunk["y"], errors="coerce").to_numpy(dtype=float)
 
-    in_box = (
-        (fx[:, None] >= wx0[None, :])
-        & (fx[:, None] <= wx1[None, :])
-        & (fy[:, None] >= wy0[None, :])
-        & (fy[:, None] <= wy1[None, :])
+    in_box = word_box_contains(
+        fx[:, None], fy[:, None], wx0[None, :], wy0[None, :], wx1[None, :], wy1[None, :]
     )
     word_idx = np.where(in_box.any(axis=1), in_box.argmax(axis=1), -1)
 
@@ -218,6 +215,28 @@ def word_box_bounds(
     w = pd.to_numeric(words["width"], errors="coerce").to_numpy(dtype=float)
     h = pd.to_numeric(words["height"], errors="coerce").to_numpy(dtype=float)
     return x, y, x + w, y + h
+
+
+def word_box_contains(
+    px: np.ndarray,
+    py: np.ndarray,
+    x0: np.ndarray,
+    y0: np.ndarray,
+    x1: np.ndarray,
+    y1: np.ndarray,
+) -> np.ndarray:
+    """Is each point inside each box? **The** containment rule, broadcasting.
+
+    Half-open — ``x0 <= x < x1`` and ``y0 <= y < y1`` — so a box ``width`` px
+    wide holds exactly ``width`` pixel columns, and a point on the edge two
+    tiling boxes share belongs to the box that *starts* there: the word to the
+    right, the line below. That is how EyeLink assigned every such fixation in
+    the bundled demo (30 of them, all integer coordinates on a shared edge),
+    where a closed test handed each to the earlier box instead (BUG-83).
+    Assignment, the out-of-text flag and the word heatmap all test with this,
+    so a fixation is counted towards exactly one word.
+    """
+    return (px >= x0) & (px < x1) & (py >= y0) & (py < y1)
 
 
 def word_char_advance(
@@ -590,11 +609,8 @@ def _in_any_box(fix_chunk: pd.DataFrame, word_chunk: pd.DataFrame) -> np.ndarray
     x0, y0, x1, y1 = word_box_bounds(word_chunk)
     fx = pd.to_numeric(fix_chunk["x"], errors="coerce").to_numpy(dtype=float)
     fy = pd.to_numeric(fix_chunk["y"], errors="coerce").to_numpy(dtype=float)
-    inside = (
-        (fx[:, None] >= x0[None, :])
-        & (fx[:, None] <= x1[None, :])
-        & (fy[:, None] >= y0[None, :])
-        & (fy[:, None] <= y1[None, :])
+    inside = word_box_contains(
+        fx[:, None], fy[:, None], x0[None, :], y0[None, :], x1[None, :], y1[None, :]
     )
     return inside.any(axis=1)
 

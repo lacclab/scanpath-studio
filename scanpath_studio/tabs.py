@@ -10020,6 +10020,7 @@ def _apply_remap() -> None:
     # fixations placed at word-box centres) are exactly what makes a half
     # uploaded today line up with a half uploaded weeks ago. Both halves are
     # written back, because harmonizing can change either.
+    harmonized = False
     for table_key in added:
         raw = st.session_state.get(_added_raw_key(name, table_key))
         if raw is None or raw.empty or table_key not in pending:
@@ -10045,6 +10046,7 @@ def _apply_remap() -> None:
                     other = empty_words_frame()
                 other, fresh = harmonize_frames(other, fresh)
                 new_entry["words"], new_entry["fixations"] = other, fresh
+            harmonized = True
         except Exception as exc:
             # The mapping is complete but the pipeline rejects the combination
             # (`app.mapping_failure_problem` names the usual causes). Reported
@@ -10057,6 +10059,58 @@ def _apply_remap() -> None:
             }
             return
         new_schemas[table_key] = schema
+    # DATA-39 — the same cross-frame fixups for the tables this save *remapped*,
+    # which until now never got them. A remapped AOI table with no Participant
+    # comes back stimulus-level (the first reader's copy of each trial, on the
+    # "" placeholder reader), and only `harmonize_frames` broadcasts it back
+    # onto the readers in the fixations; without it no trial found its word
+    # boxes, so every scanpath lost its AOIs and its text the moment ✅ Save
+    # changes was pressed — which is what attaching a metadata table on this
+    # screen asks for. Idempotent on frames that were already harmonized, so the
+    # ordinary per-reader case saves exactly as before. After the added tables,
+    # not before: a table added above has *already* been harmonized with these,
+    # and harmonizing a stimulus-level words frame against the empty fixations
+    # of a words-only dataset first would stamp it with the synthetic reader and
+    # leave nothing for the added fixations to broadcast onto.
+    before = new_entry.get("words")
+    if (
+        not harmonized
+        and "words" in pending
+        and isinstance(before, pd.DataFrame)
+        and not before.empty
+    ):
+        fixations = new_entry.get("fixations")
+        has_fixations = isinstance(fixations, pd.DataFrame) and not fixations.empty
+        try:
+            words, fixations = harmonize_frames(
+                before, fixations if has_fixations else empty_fixations_frame()
+            )
+        except Exception as exc:
+            # Same reason as the added tables above: an `on_click` must report,
+            # not raise — e.g. a changed Trial/Screen pick whose parts no longer
+            # match the stored fixations (`validate_matching_parts`).
+            from scanpath_studio.app import mapping_failure_problem
+
+            st.session_state["_remap_problems"] = {
+                "words": [mapping_failure_problem(exc)]
+            }
+            return
+        if words.empty:
+            # The broadcast keeps only trials some reader has fixations for.
+            # Import drops the rest too, but here the stored boxes would be
+            # overwritten by nothing — refuse rather than lose them.
+            st.session_state["_remap_problems"] = {
+                "words": [
+                    "No AOI row matches a trial in the fixations under this "
+                    "mapping, so saving would leave the dataset with no word "
+                    "boxes. Check the Trial ID (and Screen) picks for both "
+                    "tables."
+                ]
+            }
+            return
+        new_entry["words"] = words
+        if has_fixations:
+            new_entry["fixations"] = fixations
     new_entry["schemas"] = new_schemas
     # Recompute the composite trial components from the new trial mapping so the
     # cascading trial picker stays in sync (mirrors the wizard finalize).

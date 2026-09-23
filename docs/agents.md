@@ -501,6 +501,7 @@ a flag; check `scanpath-studio render --help` (or the
 | `Ambiguous selection: N trials match` | `participant` / `trial` left out with several combos loaded. | Pass both; `list_trials` shows what exists. |
 | `No trial matches participant=…` | Unknown id. | The message lists available ids and the closest spellings. |
 | `plot_scanpath() got an unexpected keyword argument` | Misspelled or unsupported option. | The message suggests the nearest names; `api.figure_options()` is the full list. |
+| `color_by='…' names no column of the fixations table` (or `highlight_column=`, words) | The option's *value* is a column the data doesn't have. | The message names the closest columns and lists them all; `color_by` also takes `'(uniform)'` and `'line'`. |
 | `Options not supported by the animation:` | A static-only option (heatmap, arcs, saccade types) passed to `animate_scanpath`. | Drop it, or render the static figure. |
 | `Static .png export failed:` | Kaleido has no Chrome. | `plotly_get_chrome -y`, or save `.html`. |
 | `Fixations … have no usable coordinates` | AOI-sequence fixations with no matching word boxes. | Supply the words table whose `word_id`s match. |

@@ -946,3 +946,49 @@ def test_save_figure_layers_one_file_per_layer(sample, tmp_path, monkeypatch):
     for layer, path in written.items():
         assert path.name == f"{layer}.svg"
         assert path.is_file()
+
+
+# ---------------------------------------------------------------------------
+# EXP-17 — an option naming a column that isn't there raises
+# ---------------------------------------------------------------------------
+_EXP17_TRIAL = ("l37_1129", "l37_1129_2_1_1_Ele_r0")
+
+
+@pytest.mark.parametrize("builder", ["plot_scanpath", "animate_scanpath"])
+def test_a_misspelled_color_by_column_raises_with_the_closest(builder):
+    """The builder looks the column up and draws a flat colour when it is not
+    there, so `color_by="duraton_ms"` rendered without a word."""
+    words, fixations = api.load_sample_data()
+    with pytest.raises(ValueError, match="duraton_ms.*Closest: 'duration_ms'"):
+        getattr(api, builder)(words, fixations, *_EXP17_TRIAL, color_by="duraton_ms")
+
+
+def test_a_misspelled_highlight_column_raises():
+    words, fixations = api.load_sample_data()
+    with pytest.raises(ValueError, match="highlight_column='is_in_aspn'.*is_in_aspan"):
+        api.plot_scanpath(
+            words, fixations, *_EXP17_TRIAL, highlight_column="is_in_aspn"
+        )
+
+
+def test_a_comparison_checks_the_column_across_both_readings():
+    words, fixations = api.load_sample_data()
+    with pytest.raises(ValueError, match="color_by='nosuch'"):
+        api.compare_scanpaths(
+            words,
+            fixations,
+            _EXP17_TRIAL,
+            ("l7_1090", "l7_1090_2_1_1_Ele_r0"),
+            color_by="nosuch",
+        )
+
+
+def test_the_synthetic_color_by_values_and_the_default_span_are_accepted():
+    """`uniform` / `line` are not columns, and the default `is_in_aspan` span
+    column is skipped quietly on data that has none — only a *named* column
+    that is missing is an error."""
+    words, fixations = api.load_sample_data()
+    for value in ("(uniform)", "line", "duration_ms"):
+        api.plot_scanpath(words, fixations, *_EXP17_TRIAL, color_by=value)
+    api.plot_scanpath(words.drop(columns=["is_in_aspan"]), fixations, *_EXP17_TRIAL)
+    api.plot_scanpath(words, fixations, *_EXP17_TRIAL, highlight_column=None)

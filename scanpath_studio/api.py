@@ -1307,6 +1307,54 @@ def _reject_unknown_options(overrides: dict, valid, func_name: str) -> None:
     )
 
 
+#: Figure options whose value names a column → (the table it is read from, its
+#: CLI flag, the values that are not columns, what to do instead). EXP-17: the
+#: builders look the column up and draw *nothing* when it is missing, so a
+#: misspelling rendered a flat-coloured / unmarked figure without a word.
+_COLUMN_OPTIONS = {
+    "color_by": (
+        "fixations",
+        "--color-by",
+        (UNIFORM_COLOR_FIELD, "line"),
+        f"Use {UNIFORM_COLOR_FIELD!r} for one flat colour, 'line' to colour by "
+        "text line, or one of the columns below.",
+    ),
+    "highlight_column": (
+        "words",
+        "--highlight-column",
+        (),
+        "It names the boolean words column marking the text to highlight; pass "
+        "None ('' on the CLI) to highlight nothing.",
+    ),
+}
+
+
+def _check_column_options(
+    overrides: dict, *, words: pd.DataFrame, fixations: pd.DataFrame
+) -> None:
+    """Raise when an option the caller *named* points at no column (EXP-17).
+
+    Only explicit values are checked: ``highlight_column`` defaults to OneStop's
+    ``is_in_aspan``, which most corpora do not have and which the builder then
+    rightly skips. An empty table is not checked — there is nothing to colour."""
+    frames = {"words": words, "fixations": fixations}
+    for name, (kind, flag, synthetic, advice) in _COLUMN_OPTIONS.items():
+        value = overrides.get(name)
+        if value is None or value == "" or value in synthetic:
+            continue
+        frame = frames[kind]
+        present = [str(column) for column in frame.columns]
+        if frame.empty or str(value) in present:
+            continue
+        close = difflib.get_close_matches(str(value), present, n=3, cutoff=0.6)
+        hint = f" Closest: {', '.join(repr(c) for c in close)}." if close else ""
+        raise ValueError(
+            f"{name}={value!r} ({flag} on the CLI) names no column of the "
+            f"{kind} table.{hint} {advice} Columns present ({len(present)}): "
+            f"{_column_preview(frame)}."
+        )
+
+
 def figure_options(kind: str = "static") -> dict:
     """Every figure keyword a builder accepts → the default it renders with.
 
@@ -1461,7 +1509,9 @@ def plot_scanpath(
     :func:`plots.make_scanpath_figure` (e.g. ``show_heatmap=False``,
     ``color_by="pass_index"``, ``x_field="order_in_trial"``); an unknown keyword
     raises a ``TypeError`` naming the closest valid options, and
-    :func:`figure_options` lists them all with their defaults.
+    :func:`figure_options` lists them all with their defaults. A ``color_by`` /
+    ``highlight_column`` naming a column the trial's table doesn't have raises a
+    ``ValueError`` naming the closest ones, rather than drawing without it.
     """
     if illustration:
         figure_overrides = {
@@ -1484,6 +1534,9 @@ def plot_scanpath(
     )
     trial_words, trial_fixations, pid, tid, selected_screen = _select_part(
         words, fixations, participant, trial, screen
+    )
+    _check_column_options(
+        figure_overrides, words=trial_words, fixations=trial_fixations
     )
     full_fix_range = None
     if not trial_fixations.empty and "order_in_trial" in trial_fixations.columns:
@@ -1619,6 +1672,7 @@ def animate_scanpath(
             f"Options not supported by the animation: {sorted(unknown)}. "
             f"Valid overrides: {sorted(valid)}."
         )
+    named = {k: v for k, v in animation_overrides.items() if k in explicit}
     # Same defaults as the static figure for every option both builders share, so
     # `plot_scanpath` and `animate_scanpath` don't render the same trial
     # differently (the app feeds both from one settings dict).
@@ -1626,6 +1680,7 @@ def animate_scanpath(
     trial_words, trial_fixations, pid, tid, _selected_screen = _select_part(
         words, fixations, participant, trial, screen
     )
+    _check_column_options(named, words=trial_words, fixations=trial_fixations)
     full_fix_range = None
     if not trial_fixations.empty and "order_in_trial" in trial_fixations.columns:
         full_order = pd.to_numeric(
@@ -1881,6 +1936,13 @@ def compare_scanpaths(
                 f"No fixations for participant={pid!r}, trial={tid!r}. "
                 f"list_trials() shows what the frames contain."
             )
+    # Either reading may carry the column (two corpora need not share them), so
+    # it is looked for across both.
+    _check_column_options(
+        figure_overrides,
+        words=pd.concat([trial_words_a, trial_words_b], ignore_index=True),
+        fixations=pd.concat([trial_fix_a, trial_fix_b], ignore_index=True),
+    )
 
     setup_a = _compare_setup(
         setup, canvas_size, trial_words_a, trial_fix_a, side="setup"

@@ -71,6 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **An export bundle no longer holds two `aggregate/all_fixations` files** (EXP-15)
 - **A headless comparison draws the app's default marker opacity** (CMP-20)
 - **`analyze` writes a readable `cleaning_qa.csv`, and `corpus --kind difference` refuses a table with no `diff`** (EXP-16)
+- **A `color_by` / `highlight_column` naming a missing column raises, instead of drawing a flat figure** (EXP-17)
 
 ### Details
 
@@ -158,6 +159,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A headless comparison draws the app's default marker opacity** (CMP-20) — the app seeds each comparison scanpath's marker alpha at 0.7 (`controls._seed_compare_styles`, VIZ-6), but the comparison builder's own fallback — the only value `compare_scanpaths` and `render --compare-with` ever passed — was 1.0, so the default headless comparison was drawn opaque where the app's showed overlaps through. Both now read `constants.COMPARE_FIXATION_OPACITY`, beside the `compare_palette_color` pair the two already shared for the same reason (CMP-3).
 
 - **`analyze` writes a readable `cleaning_qa.csv`, and `corpus --kind difference` refuses a table with no `diff`** (EXP-16) — two commands exited 0 having written nothing usable. `analyze` with its default `--short-policy off` wrote the empty report `preprocess_data` returns when preprocessing is off over the family's own one, so `cleaning_qa.csv` was a single newline that `pd.read_csv` refuses; it now keeps the family's per-trial table (policy "Off", nothing excluded) — what the export bundle writes — unless preprocessing actually ran. And `corpus --kind difference` on a table with no `diff` column rendered the builder's "no data" placeholder; `plot_corpus_figure` now names the missing column, as it does for the other two kinds (EXP-13).
+
+- **A `color_by` / `highlight_column` naming a missing column raises, instead of drawing a flat figure** (EXP-17) — the builders look a `color_by` or `highlight_column` column up and quietly draw without it when it is missing, so `render --color-by nosuchfield`, `plot_scanpath(color_by="duraton_ms")` and `--highlight-column nosuchcol` all exited 0 with a flat-coloured or unmarked figure — while `docs/agents.md` promises a misspelled option raises. `plot_scanpath`, `animate_scanpath` and `compare_scanpaths` (across both readings) now raise a `ValueError` naming the option, its CLI flag, the closest columns and the ones present, as a mistyped trial id already did; `render` prints it and exits. Only a value the caller *named* is checked: the default `is_in_aspan` span column is still skipped quietly on data that has none. A CLI test had coloured the demo by `pass_index`, a column it does not carry; it now uses `duration_ms`.
 
 ## [0.30.1] - 2026-08-28
 

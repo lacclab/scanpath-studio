@@ -329,8 +329,10 @@ def test_render_animate_warns_on_unsupported_flags(tmp_path, capsys):
             "--animate",
             "--no-heatmap",
             "--saccade-arcs",
+            # EXP-17: a real column — the demo's fixations carry no
+            # `pass_index`, which this test used to colour by, silently flat.
             "--color-by",
-            "pass_index",
+            "duration_ms",
             "-o",
             str(out_file),
         ]
@@ -1579,4 +1581,15 @@ def test_corpus_difference_without_a_diff_column_is_refused(tmp_path):
                 str(out),
             ]
         )
+    assert not out.exists()
+
+
+@pytest.mark.parametrize(
+    ("flag", "value"), [("--color-by", "nosuchfield"), ("--highlight-column", "nosuch")]
+)
+def test_render_refuses_a_column_the_data_does_not_have(tmp_path, flag, value):
+    """EXP-17: both used to exit 0 with a flat-coloured / unmarked figure."""
+    out = tmp_path / "x.html"
+    with pytest.raises(SystemExit, match=f"{flag} on the CLI"):
+        cli.main(["render", "--sample", flag, value, "-o", str(out)])
     assert not out.exists()

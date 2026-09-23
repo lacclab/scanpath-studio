@@ -1254,13 +1254,36 @@ separate download).
 
 
 def _project_root() -> Path:
-    """Repo/install root — the parent of the ``scanpath_studio`` package.
+    """Where the *relative* data dirs (``data/OneStop`` etc.) resolve.
 
-    Used to anchor the *relative* default data dirs (``data/OneStop`` etc.) and
-    relative user-entered paths, so the "found vs. download" status resolves
-    regardless of the process cwd (the server may run from anywhere). Computed
-    from this module's location, not ``os.getcwd()``."""
-    return Path(__file__).resolve().parent.parent
+    Used to anchor the relative default data dirs and relative user-entered
+    paths, so the "found vs. download" status resolves regardless of the
+    process cwd (the server may run from anywhere). Computed from this module's
+    location, not ``os.getcwd()``.
+
+    ENG-59: that location is only a *project* in a source checkout. In an
+    installed copy the folder above the package is ``site-packages`` (or the
+    desktop bundle's ``_internal/``), so ⬇ Download wrote the corpora into the
+    environment — orphaned by ``pip uninstall``, lost with the venv, refused on
+    a read-only install. There they resolve under a per-user data directory
+    instead (``SCANPATH_STUDIO_DATA_HOME`` overrides it).
+    """
+    checkout = Path(__file__).resolve().parent.parent
+    if (checkout / "pyproject.toml").is_file():
+        return checkout
+    return _user_data_home()
+
+
+def _user_data_home() -> Path:
+    """Per-user home for downloaded corpora in an installed copy (ENG-59)."""
+    override = os.environ.get("SCANPATH_STUDIO_DATA_HOME", "").strip()
+    if override:
+        return Path(override).expanduser()
+    if os.name == "nt":
+        base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+        return Path(base) / "scanpath-studio"
+    base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+    return Path(base) / "scanpath-studio"
 
 
 # DATA-16 (security audit S2). The corpus **Data directory** box takes a

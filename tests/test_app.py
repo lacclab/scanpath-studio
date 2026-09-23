@@ -629,6 +629,30 @@ class TestResolveDataDir:
         p = str(tmp_path)
         assert app_module._resolve_data_dir(p) == p
 
+    def test_an_installed_copy_anchors_to_a_user_data_home(self, monkeypatch, tmp_path):
+        """ENG-59: installed, the folder above the package is `site-packages`,
+        so ⬇ Download wrote corpora into the environment. A source checkout is
+        recognised by the `pyproject.toml` beside the package."""
+        package = tmp_path / "site-packages" / "scanpath_studio"
+        package.mkdir(parents=True)
+        monkeypatch.setattr(app_module, "__file__", str(package / "app.py"))
+        monkeypatch.setenv("SCANPATH_STUDIO_DATA_HOME", str(tmp_path / "home"))
+        assert app_module._resolve_data_dir("data/OneStop") == str(
+            (tmp_path / "home" / "data/OneStop").resolve()
+        )
+        monkeypatch.delenv("SCANPATH_STUDIO_DATA_HOME")
+        monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
+        if app_module.os.name != "nt":
+            assert app_module._project_root() == tmp_path / "xdg" / "scanpath-studio"
+        assert "site-packages" not in str(app_module._project_root())
+
+    def test_a_source_checkout_still_anchors_to_the_repo(self):
+        from pathlib import Path
+
+        repo = Path(app_module.__file__).resolve().parent.parent
+        assert (repo / "pyproject.toml").is_file()
+        assert app_module._project_root() == repo
+
     def test_blank_stays_blank(self):
         assert app_module._resolve_data_dir("") == ""
         assert app_module._resolve_data_dir("  ") == ""

@@ -47,6 +47,7 @@ Later grains (stimulus, screen, word, fixation) add rows to the same registry;
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
 
@@ -1327,11 +1328,8 @@ def bounds_for(
 
 
 # -----------------------------------------------------------------------------
-# Serialization — 💾 Save & restore (the JSON config) and the payload
-# NOT the ENG-26 on-device recovery cache: that stores uploaded *datasets*, and
-# wiring the participant table into it is a separate piece of work. An attached
-# table therefore survives a save/restore round trip but not a recovery-cache
-# restore. Also the payload
+# Serialization — 💾 Save & restore (the JSON config), the ENG-26 on-device
+# recovery cache (DATA-38, see `session_payloads` below), and the payload
 # `api`/`cli` hand in. Records rather than a pickled frame, so it round-trips
 # through JSON like every other saved setting.
 # -----------------------------------------------------------------------------
@@ -1359,3 +1357,169 @@ def from_payload(payload: dict | None) -> ParticipantMetadata | None:
         "participant_id",
         source_name=str(payload.get("source_name") or "participant metadata"),
     )
+
+
+# -----------------------------------------------------------------------------
+# DATA-38 — attached tables in the ENG-26 on-device recovery cache.
+#
+# The three tables are session state, like the annotations (they outlive a
+# data-source switch — see `app._refresh_participant_metadata`), so they are
+# stored beside the annotations in the cache's manifest rather than beside any
+# one dataset. Before this they were in neither of the lists `persistence.py`
+# writes, so a refresh brought the dataset back and silently dropped every
+# table attached to it — and with them every metadata field in the filter
+# funnel, the chip picker and the trial-sort popover.
+# -----------------------------------------------------------------------------
+
+#: What a grain's ``*_FILE_SESSION_KEY`` holds when its table came back from the
+#: recovery cache or a saved config, rather than from a file in the uploader.
+#: The metadata sections read an empty uploader as "the user just removed the
+#: file" and detach on sight (UX-115) — and a restored table has no file in the
+#: uploader, so without this marker the first visit to the 🗂️ Data page would
+#: detach exactly what the restore brought back.
+RESTORED_FILE_SIGNATURE = "restored"
+
+#: ``(grain, table key, raw key, file key, to_payload, from_payload)`` per grain.
+_GRAINS = (
+    (
+        GRAIN_PARTICIPANT,
+        SESSION_KEY,
+        RAW_SESSION_KEY,
+        FILE_SESSION_KEY,
+        to_payload,
+        from_payload,
+    ),
+    (
+        "trial",
+        TRIAL_SESSION_KEY,
+        TRIAL_RAW_SESSION_KEY,
+        TRIAL_FILE_SESSION_KEY,
+        trial_to_payload,
+        trial_from_payload,
+    ),
+    (
+        "text",
+        TEXT_SESSION_KEY,
+        TEXT_RAW_SESSION_KEY,
+        TEXT_FILE_SESSION_KEY,
+        text_to_payload,
+        text_from_payload,
+    ),
+)
+_GRAIN_KEYS = {grain: (key, raw, file) for grain, key, raw, file, *_ in _GRAINS}
+
+
+#: The payloads' row lists — `to_payload` says ``records``, the other two ``rows``.
+_ROW_KEYS = ("records", "rows")
+
+
+def session_payloads(session) -> dict[str, dict]:
+    """Every attached table as its save & restore payload, keyed by grain.
+
+    Each carries its frame's ``columns`` too: the cache writes its manifest with
+    sorted keys, which would otherwise hand the rows back alphabetised and
+    reorder the table's fields everywhere they are listed.
+    """
+    payloads = {}
+    for grain, key, _raw, _file, dump, _load in _GRAINS:
+        attached = session.get(key)
+        payload = dump(attached)
+        if payload is not None:
+            payloads[grain] = {**payload, "columns": list(attached.frame.columns)}
+    return payloads
+
+
+def _in_column_order(payload):
+    """``payload`` with each row's keys back in its ``columns`` order."""
+    columns = payload.get("columns") if isinstance(payload, dict) else None
+    if not columns:
+        return payload
+    ordered = dict(payload)
+    for rows_key in _ROW_KEYS:
+        rows = payload.get(rows_key)
+        if isinstance(rows, list):
+            ordered[rows_key] = [
+                {column: row[column] for column in columns if column in row}
+                for row in rows
+                if isinstance(row, dict)
+            ]
+    return ordered
+
+
+def session_signature(session) -> list:
+    """A cheap content fingerprint of the attached tables.
+
+    For the recovery cache's every-rerun "did anything change" check. Object
+    identity will not do: the tables are rebuilt on every render of the Data
+    page, and the participant one is re-joined on every run, so a new object
+    arrives when nothing changed. The frames are small (one row per reader,
+    trial or text), so hashing their content is cheap.
+    """
+    signature = []
+    for grain, key, *_ in _GRAINS:
+        attached = session.get(key)
+        frame = getattr(attached, "frame", None)
+        if not isinstance(frame, pd.DataFrame) or frame.empty:
+            continue
+        try:
+            # Row hashes in row order — a sum would miss a reordered table.
+            cells = pd.util.hash_pandas_object(frame, index=False).to_numpy().tobytes()
+        except (TypeError, ValueError):  # unhashable cells — hash their text
+            cells = frame.to_csv(index=False).encode("utf-8")
+        digest = hashlib.sha256(cells).hexdigest()
+        signature.append(
+            [
+                grain,
+                str(getattr(attached, "source_name", "")),
+                list(frame.columns),
+                digest,
+            ]
+        )
+    return signature
+
+
+def grain_keys(grain: str) -> tuple[str, str, str]:
+    """``(table key, raw key, file key)`` in session state for ``grain``."""
+    return _GRAIN_KEYS[grain]
+
+
+def mark_restored(session, grain: str, attached) -> None:
+    """Attach ``attached`` as a table with no live upload behind it.
+
+    Shared by the recovery cache and 💾 Save & restore, which both hand back a
+    table the uploader never saw — see :data:`RESTORED_FILE_SIGNATURE`.
+    """
+    key, raw, file = _GRAIN_KEYS[grain]
+    session[key] = attached
+    session[raw] = attached.frame
+    session[file] = RESTORED_FILE_SIGNATURE
+
+
+def is_restored(session, grain: str) -> bool:
+    """Whether ``grain``'s attached table came back without a file behind it."""
+    return session.get(_GRAIN_KEYS[grain][2]) == RESTORED_FILE_SIGNATURE
+
+
+def restore_payloads(session, payloads) -> int:
+    """Re-attach the tables :func:`session_payloads` wrote; how many landed.
+
+    A grain already attached in this session keeps its own table — the same
+    "never overwrite what is already seeded" rule the rest of the restore
+    follows — and a payload that no longer builds is skipped, not raised: a
+    stale cache must never stop the app opening.
+    """
+    if not isinstance(payloads, dict):
+        return 0
+    restored = 0
+    for grain, key, _raw, _file, _dump, load in _GRAINS:
+        if session.get(key) is not None:
+            continue
+        try:
+            attached = load(_in_column_order(payloads.get(grain)))
+        except (ValueError, TypeError, KeyError):
+            attached = None
+        if attached is None:
+            continue
+        mark_restored(session, grain, attached)
+        restored += 1
+    return restored

@@ -748,12 +748,14 @@ def _toggle_recovery_saving() -> None:
     st.session_state.pop("_recovery_cache_forgotten", None)
 
 
-#: UX-136 — the three kinds `persistence.restored_summary` counts, in the order
-#: the 🗄️ Automatic recovery panel lists them, with their singular/plural nouns.
+#: UX-136 — the kinds `persistence.restored_summary` counts, in the order the
+#: 🗄️ Automatic recovery panel lists them, with their singular/plural nouns.
+#: DATA-38 added the attached metadata tables.
 _RESTORED_KIND_NOUNS = (
     ("datasets", "dataset", "datasets"),
     ("annotations", "annotation", "annotations"),
     ("designs", "design", "designs"),
+    ("metadata", "metadata table", "metadata tables"),
 )
 
 
@@ -835,7 +837,15 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
                 f"{'s' if status['annotations'] != 1 else ''} · "
                 f"{status['designs']} design"
                 f"{'s' if status['designs'] != 1 else ''} · "
-                f"{human_size(status['bytes'])}"
+                # DATA-38 — named only when there are any, so the common
+                # line keeps its length.
+                + (
+                    f"{status['metadata']} metadata table"
+                    f"{'s' if status['metadata'] != 1 else ''} · "
+                    if status.get("metadata")
+                    else ""
+                )
+                + f"{human_size(status['bytes'])}"
             )
         elif status["exists"]:
             st.warning(
@@ -902,8 +912,8 @@ def _render_recovery_details(host, status: dict) -> None:
             "here. The bundled demo and the public corpora are reloaded from "
             "their own source instead, so they are never stored — which is why "
             "the count can read 0 while a dataset is open. Your settings, "
-            "designs and annotations are saved either way, which is what the "
-            "size covers."
+            "designs, annotations and attached metadata tables are saved "
+            "either way, which is what the size covers."
         )
         st.markdown(f"**Where.** `{status['directory']}`")
         if str(status["directory"]).endswith(CACHE_DIR_NAME):

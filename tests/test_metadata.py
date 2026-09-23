@@ -366,6 +366,106 @@ class TestTheAppSurfaces:
         assert url_state is not None
 
 
+class TestARestoredTableSurvivesTheDataPage:
+    """DATA-38 — a table the recovery cache (or a saved config) brings back has
+    no file in its uploader, and the Data page reads an empty uploader as "the
+    user just removed it" (UX-115). Unmarked, the first visit to that page
+    detached exactly what the restore brought back."""
+
+    def _booted_with(self, *, restored: bool):
+        from tests.conftest import pin_data_view
+
+        at, readers = TestTheAppSurfaces()._booted()
+        built = md.build_participant_metadata(
+            pd.DataFrame(
+                {
+                    "participant_id": readers,
+                    "native_language": ["Hebrew"] + ["English"] * (len(readers) - 1),
+                }
+            ),
+            "participant_id",
+            source_name="readers.csv",
+        )
+        if restored:
+            md.mark_restored(at.session_state, "participant", built)
+        else:
+            # A table attached from a file that has since left the uploader.
+            at.session_state[md.SESSION_KEY] = built
+            at.session_state[md.RAW_SESSION_KEY] = built.frame
+            at.session_state[md.FILE_SESSION_KEY] = "some-file-id"
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        self.readers = readers
+        return at
+
+    def test_a_restored_table_stays_attached(self):
+        from scanpath_studio.constants import _VIEW_SCANPATH
+        from tests.conftest import pin_view
+
+        at = self._booted_with(restored=True)
+        assert at.session_state[md.SESSION_KEY].names == ("native_language",)
+        # … and its field still narrows the pool, which is what the bug took.
+        pin_view(at, _VIEW_SCANPATH)
+        at.session_state["filter_meta_native_language"] = ["Hebrew"]
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        assert at.session_state["_trial_filters"]["participants"] == [self.readers[0]]
+
+    def test_a_restored_table_can_still_be_detached(self):
+        """No file chip to dismiss, so the ✕ Detach comes back for this case."""
+        from tests.conftest import pin_data_view
+
+        at = self._booted_with(restored=True)
+        detach = [
+            b for b in at.button if b.key == "participant_metadata_detach_restored"
+        ]
+        assert detach, "no ✕ Detach for a restored table"
+        detach[0].click()
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        assert md.SESSION_KEY not in at.session_state
+        assert not md.is_restored(at.session_state, "participant")
+
+    def test_removing_an_uploaded_file_still_detaches_it(self):
+        """UX-115 unchanged: a table that *did* come from the uploader goes when
+        its file does."""
+        at = self._booted_with(restored=False)
+        assert md.SESSION_KEY not in at.session_state
+
+
+class TestAConfigRestoreBesideALiveFile:
+    """💾 Save & restore marks the table it brings back as restored — unless
+    the uploader still holds a file, whose identity it then keeps, so the next
+    render does not read that file as new and replace the restored table."""
+
+    def _restore(self, *, uploader):
+        import streamlit as st
+
+        from scanpath_studio import url_state
+
+        st.session_state.clear()
+        if uploader is not None:
+            st.session_state["participant_metadata_upload"] = uploader
+        st.session_state[md.FILE_SESSION_KEY] = "live-file-id"
+        built = md.build_participant_metadata(
+            pd.DataFrame({"participant_id": ["p1"], "age": [30]}), "participant_id"
+        )
+        url_state._attach_restored_metadata("participant", built)
+        return st.session_state
+
+    def test_an_empty_uploader_marks_the_table_restored(self):
+        session = self._restore(uploader=None)
+        assert md.is_restored(session, "participant")
+        assert session[md.SESSION_KEY].names == ("age",)
+
+    def test_a_live_file_keeps_its_identity(self):
+        session = self._restore(uploader=object())
+        assert session[md.FILE_SESSION_KEY] == "live-file-id"
+        assert session[md.SESSION_KEY].names == ("age",)
+
+
 def test_loader_bookkeeping_is_not_registered_as_a_field():
     """`data.read_tables` tags rows with `source_file`; that is not metadata.
 

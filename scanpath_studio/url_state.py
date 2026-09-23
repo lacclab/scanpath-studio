@@ -1570,6 +1570,25 @@ class _RestoreContext:
             self.put(key, max(lo, min(float(number), hi)))
 
 
+def _attach_restored_metadata(grain: str, attached) -> None:
+    """Attach a metadata table a saved config carried (DATA-20/DATA-29/DATA-38).
+
+    Marked as restored (``metadata.mark_restored``) so the Data page does not
+    read its empty uploader as "the user removed the file" and detach it —
+    unless the uploader *does* still hold a file: then the table is attached
+    under that file's identity, as before, so the next render does not take
+    the live file for a new one and replace what this restore just announced.
+    """
+    from scanpath_studio import metadata as _metadata
+
+    if st.session_state.get(f"{grain}_metadata_upload") is None:
+        _metadata.mark_restored(st.session_state, grain, attached)
+        return
+    key, raw_key, _file_key = _metadata.grain_keys(grain)
+    st.session_state[key] = attached
+    st.session_state[raw_key] = attached.frame
+
+
 def _restore_plot_config(
     config: dict, combos: pd.DataFrame, fixations: pd.DataFrame
 ) -> tuple[int, list]:
@@ -2273,8 +2292,9 @@ def _restore_plot_config(
 
         attached = _metadata.from_payload(payload)
         if attached is not None:
-            st.session_state[_metadata.SESSION_KEY] = attached
-            st.session_state[_metadata.RAW_SESSION_KEY] = attached.frame
+            # DATA-38: marked as restored, so the Data page's metadata section
+            # does not read its empty uploader as "detach".
+            _attach_restored_metadata("participant", attached)
             restore.applied += 1
             st.toast(
                 f"Restored participant metadata ({len(attached.fields)} field(s)).",
@@ -2288,8 +2308,7 @@ def _restore_plot_config(
 
         attached_trials = _metadata.trial_from_payload(trial_payload)
         if attached_trials is not None:
-            st.session_state[_metadata.TRIAL_SESSION_KEY] = attached_trials
-            st.session_state[_metadata.TRIAL_RAW_SESSION_KEY] = attached_trials.frame
+            _attach_restored_metadata("trial", attached_trials)
             restore.applied += 1
             st.toast(
                 f"Restored trial metadata ({len(attached_trials.fields)} field(s)).",
@@ -2303,8 +2322,7 @@ def _restore_plot_config(
 
         attached_texts = _metadata.text_from_payload(text_payload)
         if attached_texts is not None:
-            st.session_state[_metadata.TEXT_SESSION_KEY] = attached_texts
-            st.session_state[_metadata.TEXT_RAW_SESSION_KEY] = attached_texts.frame
+            _attach_restored_metadata("text", attached_texts)
             restore.applied += 1
             st.toast(
                 f"Restored text metadata ({len(attached_texts.fields)} field(s)).",

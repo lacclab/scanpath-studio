@@ -664,6 +664,45 @@ class TestRecoveryCachePanelFlow:
         _clean(at, "after changing the cleared session:")
         assert manifest.is_file()
 
+    def test_an_attached_metadata_table_survives_a_refresh(self, tmp_path, monkeypatch):
+        """DATA-38 — the reported bug end to end: attach a table, refresh, and
+        its field is still in the filter funnel. A fresh ``AppTest`` is a fresh
+        browser session on the same machine, which is what a refresh is."""
+        from scanpath_studio import metadata as md
+
+        monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
+        monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
+        at = AppTest.from_file(APP_SCRIPT)
+        at.run(timeout=90)
+        _clean(at, "first session:")
+        readers = list(at.multiselect(key="filter_participants").options)
+        languages = ["Hebrew"] + ["English"] * (len(readers) - 1)
+        attached = md.build_participant_metadata(
+            pd.DataFrame({"participant_id": readers, "native_language": languages}),
+            "participant_id",
+            source_name="readers.csv",
+            participants=readers,
+        )
+        # As the uploader leaves it: the table, its raw frame, the file's id.
+        at.session_state[md.SESSION_KEY] = attached
+        at.session_state[md.RAW_SESSION_KEY] = attached.frame
+        at.session_state[md.FILE_SESSION_KEY] = "readers-file-id"
+        at.run(timeout=90)
+        _clean(at, "after attaching:")
+
+        refreshed = AppTest.from_file(APP_SCRIPT)
+        refreshed.run(timeout=90)
+        _clean(refreshed, "after the refresh:")
+        assert refreshed.session_state[md.SESSION_KEY].names == ("native_language",)
+        refreshed.session_state["filter_meta_native_language"] = ["Hebrew"]
+        refreshed.run(timeout=90)
+        _clean(refreshed, "filtering on the restored field:")
+        assert refreshed.session_state["_trial_filters"]["participants"] == [readers[0]]
+        # And visiting the Data page — whose uploader is empty now — keeps it.
+        _rerun(refreshed, view=VIEW_DATA)
+        _clean(refreshed, "on the Data page:")
+        assert md.SESSION_KEY in refreshed.session_state
+
     def test_panel_says_nothing_is_stored_on_a_hosted_deployment(self, monkeypatch):
         # No override and no loopback URL under AppTest == the hosted case.
         monkeypatch.delenv("SCANPATH_STUDIO_PERSIST", raising=False)

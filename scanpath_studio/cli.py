@@ -2370,6 +2370,8 @@ def cache(argv: list[str]) -> None:
     print(
         f"         {rows} · {status['annotations']} annotated "
         f"trial(s) · {status['designs']} saved design(s) · "
+        # DATA-38 — the attached metadata tables, the panel's own count.
+        f"{status.get('metadata', 0)} metadata table(s) · "
         f"{status['settings']} setting(s)"
     )
     print(f"Size:    {_human_size(status['bytes'])}")

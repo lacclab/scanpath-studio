@@ -311,6 +311,7 @@ class TestOnlyARealRecoveryIsAnnounced:
             "datasets": 0,
             "annotations": 0,
             "designs": 0,
+            "metadata": 0,
         }
 
     def test_an_annotation_is_worth_announcing(self, tmp_path):
@@ -662,3 +663,209 @@ class TestTheRecoveryToastPhrase:
 
     def test_nothing_to_report_still_reads_as_a_sentence(self):
         assert self._recap() == "your last session"
+
+    def test_metadata_tables_are_named_in_the_toast(self):
+        """DATA-38 — a restored participant table is something a user would
+        recognise coming back, so the toast says so."""
+        assert self._recap(datasets=1, metadata=2) == "1 dataset and 2 metadata tables"
+
+
+class TestMetadataTablesInTheRecoveryCache:
+    """DATA-38 — attached participant / trial / text tables survive a refresh.
+
+    They were in neither list the cache writes, so a refresh brought the
+    dataset back and silently dropped every table attached to it — and with
+    them every metadata field in the filter funnel, the chip picker and the
+    trial-sort popover."""
+
+    @staticmethod
+    def _attached():
+        from scanpath_studio import metadata as md
+
+        return {
+            md.SESSION_KEY: md.build_participant_metadata(
+                pd.DataFrame(
+                    {
+                        "participant_id": ["p1", "p2"],
+                        "age": [30, 41],
+                        "L1": ["he", "en"],
+                    }
+                ),
+                "participant_id",
+                source_name="readers.csv",
+            ),
+            md.TRIAL_SESSION_KEY: md.build_trial_metadata(
+                pd.DataFrame({"trial_id": ["t1", "t2"], "condition": ["easy", "hard"]}),
+                "trial_id",
+                source_name="trials.csv",
+            ),
+            md.TEXT_SESSION_KEY: md.build_text_metadata(
+                pd.DataFrame({"text_id": ["x1"], "genre": ["news"]}),
+                "text_id",
+                source_name="texts.csv",
+            ),
+        }
+
+    def test_all_three_grains_round_trip(self, tmp_path):
+        from scanpath_studio import metadata as md
+
+        session = {"_datasets": {"study": _dataset()}, **self._attached()}
+        assert save_state(session, tmp_path)
+        restored = {}
+        assert restore_state(restored, tmp_path)
+
+        for key, source in (
+            (md.SESSION_KEY, "readers.csv"),
+            (md.TRIAL_SESSION_KEY, "trials.csv"),
+            (md.TEXT_SESSION_KEY, "texts.csv"),
+        ):
+            assert restored[key].names == session[key].names
+            assert restored[key].source_name == source
+        assert list(restored[md.SESSION_KEY].frame["age"]) == [30, 41]
+        assert list(restored[md.TRIAL_SESSION_KEY].frame["condition"]) == [
+            "easy",
+            "hard",
+        ]
+        assert restored_summary(restored)["metadata"] == 3
+        assert restored_from_cache(restored)
+
+    def test_restored_tables_are_marked_so_the_empty_uploader_keeps_them(
+        self, tmp_path
+    ):
+        """The Data page reads an empty uploader as "detach"; a restored table
+        has no file in it, so it has to be told apart."""
+        from scanpath_studio import metadata as md
+
+        save_state(self._attached(), tmp_path)
+        restored = {}
+        restore_state(restored, tmp_path)
+        for grain in ("participant", "trial", "text"):
+            assert md.is_restored(restored, grain)
+        assert restored[md.RAW_SESSION_KEY] is restored[md.SESSION_KEY].frame
+
+    def test_a_table_already_attached_is_not_overwritten(self, tmp_path):
+        from scanpath_studio import metadata as md
+
+        save_state(self._attached(), tmp_path)
+        own = md.build_participant_metadata(
+            pd.DataFrame({"participant_id": ["p9"], "hand": ["left"]}),
+            "participant_id",
+            source_name="mine.csv",
+        )
+        restored = {md.SESSION_KEY: own}
+        restore_state(restored, tmp_path)
+        assert restored[md.SESSION_KEY] is own
+        assert not md.is_restored(restored, "participant")
+        assert restored_summary(restored)["metadata"] == 2
+
+    def test_attaching_or_changing_a_table_is_a_change_worth_saving(self, tmp_path):
+        from scanpath_studio import metadata as md
+
+        session = {"global_show_heatmap": True}
+        assert save_state(session, tmp_path)
+        assert not save_state(session, tmp_path)
+        session.update(self._attached())
+        assert save_state(session, tmp_path)
+        # Rebuilt from the same rows — what the Data page does on every render,
+        # and the participant re-join on every run — is *not* a change …
+        session[md.SESSION_KEY] = md.build_participant_metadata(
+            session[md.SESSION_KEY].frame, "participant_id", source_name="readers.csv"
+        )
+        assert not save_state(session, tmp_path)
+        # … but a different row is.
+        session[md.TEXT_SESSION_KEY] = md.build_text_metadata(
+            pd.DataFrame({"text_id": ["x1"], "genre": ["fiction"]}),
+            "text_id",
+            source_name="texts.csv",
+        )
+        assert save_state(session, tmp_path)
+        restored = {}
+        restore_state(restored, tmp_path)
+        assert list(restored[md.TEXT_SESSION_KEY].frame["genre"]) == ["fiction"]
+
+    def test_a_manifest_without_metadata_still_restores(self, tmp_path):
+        """Every manifest written before DATA-38 lacks the key."""
+        from scanpath_studio import metadata as md
+
+        save_state({"_datasets": {"study": _dataset()}}, tmp_path)
+        manifest = json.loads((tmp_path / "manifest.json").read_text("utf-8"))
+        assert "metadata" not in manifest
+        restored = {}
+        assert restore_state(restored, tmp_path)
+        assert md.SESSION_KEY not in restored
+        assert restored_summary(restored)["metadata"] == 0
+
+    def test_a_payload_that_no_longer_builds_is_skipped(self, tmp_path):
+        from scanpath_studio import metadata as md
+
+        save_state(self._attached(), tmp_path)
+        path = tmp_path / persistence.METADATA_FILE
+        payloads = json.loads(path.read_text("utf-8"))
+        payloads["participant"]["records"] = [{"no_id": 1}]
+        path.write_text(json.dumps(payloads), "utf-8")
+        restored = {}
+        assert restore_state(restored, tmp_path)
+        assert md.SESSION_KEY not in restored
+        assert md.TRIAL_SESSION_KEY in restored
+
+    def test_the_tables_are_not_rewritten_on_every_settings_change(self, tmp_path):
+        """The manifest is rewritten on every layer toggle and trial switch; a
+        trial table can run to tens of thousands of rows, so it lives beside the
+        manifest and is written only when its content changes."""
+        session = {"global_show_heatmap": True, **self._attached()}
+        assert save_state(session, tmp_path)
+        sidecar = tmp_path / persistence.METADATA_FILE
+        manifest = json.loads((tmp_path / "manifest.json").read_text("utf-8"))
+        assert manifest["metadata"] == {
+            "file": persistence.METADATA_FILE,
+            "tables": ["participant", "trial", "text"],
+        }
+        # Mark the file (trailing whitespace is still valid JSON): a rewrite
+        # would drop the mark.
+        sidecar.write_text(sidecar.read_text("utf-8") + " ", "utf-8")
+        session["global_show_heatmap"] = False
+        assert save_state(session, tmp_path)
+        assert sidecar.read_text("utf-8").endswith(" ")
+
+    def test_a_reordered_table_is_a_change(self, tmp_path):
+        from scanpath_studio import metadata as md
+
+        session = self._attached()
+        save_state(session, tmp_path)
+        frame = session[md.TRIAL_SESSION_KEY].frame.iloc[::-1]
+        session[md.TRIAL_SESSION_KEY] = md.build_trial_metadata(
+            frame.reset_index(drop=True), "trial_id", source_name="trials.csv"
+        )
+        assert save_state(session, tmp_path)
+
+    def test_detaching_every_table_removes_the_file(self, tmp_path):
+        session = self._attached()
+        save_state(session, tmp_path)
+        assert (tmp_path / persistence.METADATA_FILE).is_file()
+        for key in list(session):
+            session.pop(key)
+        session["global_show_heatmap"] = True
+        assert save_state(session, tmp_path)
+        assert not (tmp_path / persistence.METADATA_FILE).exists()
+        manifest = json.loads((tmp_path / "manifest.json").read_text("utf-8"))
+        assert "metadata" not in manifest
+
+    def test_a_missing_file_costs_the_tables_not_the_datasets(self, tmp_path):
+        from scanpath_studio import metadata as md
+
+        save_state({"_datasets": {"study": _dataset()}, **self._attached()}, tmp_path)
+        (tmp_path / persistence.METADATA_FILE).unlink()
+        restored = {}
+        assert restore_state(restored, tmp_path)
+        assert "study" in restored["_datasets"]
+        assert md.SESSION_KEY not in restored
+        assert restored_summary(restored)["metadata"] == 0
+
+    def test_clearing_the_cache_removes_the_file(self, tmp_path):
+        save_state(self._attached(), tmp_path)
+        forget_state(tmp_path)
+        assert not (tmp_path / persistence.METADATA_FILE).exists()
+
+    def test_cache_status_counts_the_tables(self, tmp_path):
+        save_state(self._attached(), tmp_path)
+        assert cache_status(tmp_path, environ={})["metadata"] == 3

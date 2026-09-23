@@ -9071,6 +9071,31 @@ def _clear_participant_metadata() -> None:
     st.session_state.pop("participant_metadata_upload", None)
 
 
+def _restored_metadata_note(host, attached, *, grain: str, on_detach) -> None:
+    """DATA-38 — the uploader-side line for a table with no file behind it.
+
+    A table that came back from the recovery cache or a saved config has
+    nothing in its uploader, so the file chip that normally *is* the detach
+    control (UX-129) is not there to press. This says where the table came from
+    and puts a ✕ Detach back, for this case only. Changing its key or its
+    fields means uploading the file again — the raw table it was cut from is
+    not part of what is restored.
+    """
+    n_fields = len(attached.fields)
+    host.caption(
+        f"↩️ **{attached.source_name}** — restored, {n_fields} "
+        f"field{'s' if n_fields != 1 else ''}. Upload the file again to change "
+        "its key or its fields."
+    )
+    host.button(
+        "✕ Detach",
+        key=f"{grain}_metadata_detach_restored",
+        on_click=on_detach,
+        help="Remove this table. Its fields leave the filters, the chips and "
+        "trial sorting.",
+    )
+
+
 def render_participant_metadata_section(
     participants, *, host=None, live_join: bool = True, upload_host=None
 ) -> None:
@@ -9179,6 +9204,16 @@ def _participant_metadata_body(
         # simply didn't render last run" — safe to clear on sight. UX-129:
         # this is also why there is no separate ✕ Detach button any more —
         # removing the file from the uploader chip already does exactly this.
+        # DATA-38: except for a *restored* table, which never had a file in
+        # this uploader — clearing it here would undo the restore on sight.
+        if md.is_restored(st.session_state, "participant"):
+            _restored_metadata_note(
+                stats_host,
+                active_participant_metadata(),
+                grain="participant",
+                on_detach=_clear_participant_metadata,
+            )
+            return
         _clear_participant_metadata()
         return
     else:
@@ -9365,7 +9400,16 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
     if upload is None:
         if md.active_trials() is None:
             return
-        # UX-115/UX-129 — see the matching note in `_participant_metadata_body`.
+        # UX-115/UX-129/DATA-38 — see the matching note in
+        # `_participant_metadata_body`.
+        if md.is_restored(st.session_state, "trial"):
+            _restored_metadata_note(
+                stats_host,
+                md.active_trials(),
+                grain="trial",
+                on_detach=_clear_trial_metadata,
+            )
+            return
         _clear_trial_metadata()
         return
     else:
@@ -9567,7 +9611,16 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
     if upload is None:
         if md.active_texts() is None:
             return
-        # UX-115/UX-129 — see the matching note in `_participant_metadata_body`.
+        # UX-115/UX-129/DATA-38 — see the matching note in
+        # `_participant_metadata_body`.
+        if md.is_restored(st.session_state, "text"):
+            _restored_metadata_note(
+                stats_host,
+                md.active_texts(),
+                grain="text",
+                on_detach=_clear_text_metadata,
+            )
+            return
         _clear_text_metadata()
         return
     else:

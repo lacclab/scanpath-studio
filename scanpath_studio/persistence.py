@@ -58,6 +58,12 @@ _LAST_FINGERPRINT_KEY = "_local_persistence_fingerprint"
 _LAST_DATASET_IDENTITY_KEY = "_local_persistence_dataset_identity"
 _LAST_DATASET_ENTRIES_KEY = "_local_persistence_dataset_entries"
 _FRAME_KEYS = ("words", "fixations", "raw_gaze")
+#: DATA-38 — the attached metadata tables live beside the manifest, not in it,
+#: and are rewritten only when their content changes: the manifest is rewritten
+#: on every durable settings change (a layer toggle, a trial switch), and a
+#: trial table can run to tens of thousands of rows.
+METADATA_FILE = "metadata.json"
+_LAST_METADATA_SIGNATURE_KEY = "_local_persistence_metadata_signature"
 _STATE_LOCK = threading.RLock()
 _LOGGER = logging.getLogger(__name__)
 _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
@@ -122,6 +128,18 @@ def _json_safe(value: Any) -> Any:
     return str(value)
 
 
+def _metadata_signature(session: MutableMapping[str, Any]) -> list:
+    """DATA-38 — the attached metadata tables' content fingerprint.
+
+    Imported here rather than at module level: `metadata` pulls in `data`, and
+    with it Streamlit, which :func:`cache_status` (the CLI's `cache` subcommand)
+    promises not to import.
+    """
+    from . import metadata as metadata_mod
+
+    return metadata_mod.session_signature(session)
+
+
 def _dataset_slug(name: str) -> str:
     return hashlib.sha256(name.encode("utf-8")).hexdigest()[:20]
 
@@ -147,8 +165,12 @@ def _dataset_identity(session: MutableMapping[str, Any]) -> list:
     return datasets
 
 
-def _state_fingerprint(session: MutableMapping[str, Any]) -> str:
+def _state_fingerprint(
+    session: MutableMapping[str, Any], metadata_signature: list | None = None
+) -> str:
     """Cheap rerun fingerprint over datasets plus durable UI state."""
+    if metadata_signature is None:
+        metadata_signature = _metadata_signature(session)
     datasets = _dataset_identity(session)
     values = {
         key: _json_safe(value)
@@ -157,7 +179,9 @@ def _state_fingerprint(session: MutableMapping[str, Any]) -> str:
     }
     annotations = store_to_records(session.get(ANNOTATIONS_STATE_KEY, {}))
     encoded = json.dumps(
-        [datasets, values, annotations], ensure_ascii=False, sort_keys=True
+        [datasets, values, annotations, metadata_signature],
+        ensure_ascii=False,
+        sort_keys=True,
     )
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
@@ -275,10 +299,36 @@ def _manifest_for(
     }
 
 
+def _save_metadata(
+    session: MutableMapping[str, Any], root: Path, signature: list
+) -> dict | None:
+    """DATA-38 — write the attached tables to :data:`METADATA_FILE` if they changed.
+
+    Returns the manifest's pointer to them, or ``None`` (and removes the file)
+    when nothing is attached. The tables are the same payloads 💾 Save & restore
+    writes; the pointer is optional, so a manifest without it (every one written
+    before this) still restores, and the schema version does not move.
+    """
+    path = root / METADATA_FILE
+    if not signature:
+        path.unlink(missing_ok=True)
+        session.pop(_LAST_METADATA_SIGNATURE_KEY, None)
+        return None
+    if session.get(_LAST_METADATA_SIGNATURE_KEY) != signature or not path.is_file():
+        from . import metadata as metadata_mod
+
+        payloads = _json_safe(metadata_mod.session_payloads(session))
+        # No `sort_keys`: each row keeps its columns in the table's own order.
+        _atomic_text(json.dumps(payloads, ensure_ascii=False), path)
+        session[_LAST_METADATA_SIGNATURE_KEY] = signature
+    return {"file": METADATA_FILE, "tables": [entry[0] for entry in signature]}
+
+
 def save_state(session: MutableMapping[str, Any], root: Path) -> bool:
     """Atomically save local datasets and durable session preferences."""
     with _STATE_LOCK:
-        fingerprint = _state_fingerprint(session)
+        metadata_signature = _metadata_signature(session)
+        fingerprint = _state_fingerprint(session, metadata_signature)
         if session.get(_LAST_FINGERPRINT_KEY) == fingerprint:
             return False
         root.mkdir(parents=True, exist_ok=True)
@@ -289,6 +339,11 @@ def save_state(session: MutableMapping[str, Any], root: Path) -> bool:
             session.get(_LAST_DATASET_ENTRIES_KEY), dict
         )
         manifest = _manifest_for(session, root, reuse_datasets=reuse_datasets)
+        # Written before the manifest, so a manifest never names a file that is
+        # not there yet.
+        metadata = _save_metadata(session, root, metadata_signature)
+        if metadata:
+            manifest["metadata"] = metadata
         # DATA-32: the dataset table's remembered counts ride along with the
         # datasets they describe — one small dict, and it is what stops a
         # restored session recounting every corpus it has ever opened. Written
@@ -359,6 +414,12 @@ def restore_state(
                 records = list(manifest.get("annotations", []))
                 session[ANNOTATIONS_STATE_KEY] = records_to_store(records)
                 summary["annotations"] = len(records)
+            # DATA-38 — the attached metadata tables. Counted, because a user
+            # recognises their participant table coming back (UX-136's test for
+            # what is worth announcing), unlike a restored canvas width.
+            summary["metadata"] = _restore_metadata(
+                session, root, manifest.get("metadata")
+            )
             # A clean restore can reuse the Parquet files on the first rendered
             # settings change. Pre-existing in-memory datasets still need a save.
             if not existing:
@@ -381,12 +442,30 @@ def restore_state(
             return False
 
 
+def _restore_metadata(session: MutableMapping[str, Any], root: Path, pointer) -> int:
+    """DATA-38 — re-attach the tables :func:`_save_metadata` wrote; how many.
+
+    Its own error boundary: a missing or unreadable sidecar costs the tables,
+    never the datasets and settings the rest of the manifest restores.
+    """
+    if not isinstance(pointer, dict) or not pointer.get("file"):
+        return 0
+    try:
+        payloads = json.loads((root / str(pointer["file"])).read_text("utf-8"))
+    except (OSError, ValueError):
+        return 0
+    from . import metadata as metadata_mod
+
+    return metadata_mod.restore_payloads(session, payloads)
+
+
 def forget_state(root: Path) -> None:
     """Remove the known persistence files without recursively deleting ``root``."""
     with _STATE_LOCK:
         manifest = root / "manifest.json"
         if manifest.exists():
             manifest.unlink()
+        (root / METADATA_FILE).unlink(missing_ok=True)
         frames_dir = root / "datasets"
         if frames_dir.is_dir():
             for path in frames_dir.glob("*.parquet"):
@@ -504,9 +583,10 @@ def restore_local_state(
 def restored_summary(session) -> dict:
     """How much of *what* this session got back from the cache, by kind.
 
-    ``{"datasets": n, "annotations": n, "designs": n}`` — the three things the
-    🗄️ Automatic recovery panel counts, and the three a user would recognise as
-    their last session. View settings are deliberately absent: they restore, but
+    ``{"datasets": n, "annotations": n, "designs": n, "metadata": n}`` — what
+    the 🗄️ Automatic recovery panel counts, and what a user would recognise as
+    their last session (``metadata`` is the number of attached participant /
+    trial / text tables, DATA-38). View settings are deliberately absent: they restore, but
     silently (UX-136 — see :func:`restore_state`). Empty when no restore
     happened, and after :func:`clear_local_state`.
     """
@@ -578,6 +658,7 @@ def clear_local_state(session=None, root: Path | None = None) -> bool:
             _LAST_DATASET_IDENTITY_KEY,
             _LAST_DATASET_ENTRIES_KEY,
             _RESTORED_PAYLOAD_KEY,
+            _LAST_METADATA_SIGNATURE_KEY,
             # DATA-32: the remembered counts are part of what "forget this
             # session" means — the ask named clearing the cache explicitly.
             DATASET_COUNTS_STORE_KEY,
@@ -588,7 +669,7 @@ def clear_local_state(session=None, root: Path | None = None) -> bool:
 
 def _cache_files(root: Path) -> list:
     """The files this module owns under ``root`` (mirrors forget_state)."""
-    files = [root / "manifest.json"]
+    files = [root / "manifest.json", root / METADATA_FILE]
     frames_dir = root / "datasets"
     if frames_dir.is_dir():
         files.extend(sorted(frames_dir.glob("*.parquet")))
@@ -642,6 +723,7 @@ def cache_status(
         "rows": 0,
         "annotations": 0,
         "designs": 0,
+        "metadata": 0,
         "settings": 0,
         "bytes": 0,
         "saved_at": None,
@@ -679,6 +761,9 @@ def cache_status(
         status["annotations"] = len(list(manifest.get("annotations", [])))
         stored_session = dict(manifest.get("session", {}))
         status["designs"] = len(dict(stored_session.get(DESIGN_PRESETS, {})))
+        status["metadata"] = len(
+            list(dict(manifest.get("metadata") or {}).get("tables") or [])
+        )
         status["settings"] = len(stored_session)
         # A newer/unknown schema is present but will not restore — say so here
         # rather than let the panel claim the work is safely stored.

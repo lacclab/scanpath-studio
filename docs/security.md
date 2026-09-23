@@ -11,8 +11,8 @@ too. Nothing here is inferred from documentation alone.
 - **Audited version:** `scanpath_studio` 0.25.0
 - **Dependency versions the runtime claims were checked against:** Streamlit
   1.58.0, pandas 2.3.3, CPython 3.12.12. The runtime has since moved to
-  Streamlit **1.63.0** (ENG-43, ENG-49); see *After the audit — Streamlit
-  1.61–1.63* below for the relevant runtime changes.
+  Streamlit **1.64.0** (ENG-43, ENG-49, ENG-52); see *After the audit — Streamlit
+  1.61–1.64* below for the relevant runtime changes.
 - **Method:** source read of every write-to-disk, URL-building, path-handling,
   archive-reading and `@st.cache_data` site, plus targeted scripts that exercised
   the share-link builder, the bulk exporter, the export path sanitizer, the
@@ -32,8 +32,8 @@ too. Nothing here is inferred from documentation alone.
     **🗄️ Recovery cache**) and from `scanpath-studio cache --clear`, and it is
     described for researchers in [privacy.md](privacy.md#what-happens-to-a-file-you-upload).
 
-!!! note "After the audit — Streamlit 1.61–1.63 (ENG-31, ENG-43, ENG-49)"
-    The runtime moved from 1.58.0 to 1.61.1, then 1.62.0, then 1.63.0. Two of the
+!!! note "After the audit — Streamlit 1.61–1.64 (ENG-31, ENG-43, ENG-49, ENG-52)"
+    The runtime moved from 1.58.0 to 1.61.1, then 1.62.0, 1.63.0 and 1.64.0. Two of the
     config options that arrived in between touch the surfaces this page
     describes, and **both are left at their defaults**:
 
@@ -64,6 +64,17 @@ too. Nothing here is inferred from documentation alone.
     read of the changed surfaces, **not** a re-run of the audit: the method
     above has not been repeated against 1.63, and the version-specific claims
     below still cite what was read at the version named beside them.
+
+    **1.64 (ENG-52) tightens two things this page relies on, and removes one
+    option nothing here sets.** A download's filename is now encoded rather than
+    written raw into a quoted `Content-Disposition` header, so a name carrying a
+    quote or newline can no longer break out of it — the export names are
+    already built from `tabs._safe_filename`, which keeps only letters, digits
+    and `-_.`, so for this app it is defense in depth. Error traces shown in
+    the browser now hide Streamlit's own frames, which shortens
+    what a traceback discloses without changing whether one is shown. The
+    `mapbox.token` config option is gone; the app never set it. Same caveat as
+    1.63: a read of the changed surfaces, not a re-run of the audit.
 
     Streamlit 1.62 also randomizes/configures the sample used to hash large
     pandas and NumPy values in its own caches. That is useful defense in depth,

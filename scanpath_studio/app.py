@@ -6625,6 +6625,50 @@ def main() -> None:
         _finalizing_box = _finalizing_bridge.container()
         _finalizing_box.info("✅ Dataset added — loading your scanpaths…", icon="⏳")
         _finalizing_box.skeleton(height=420)
+
+    def _clear_loading_bridges() -> None:
+        """Drop the "⏳ Loading…" banners once the page has something to show.
+
+        BUG-81: only the normal path cleared them, so every early return below
+        (the wizard, a mapping that can't be satisfied, a filter that empties
+        the pool) left the banner + skeleton above the real content until the
+        next click — on the very page the warning had just sent the user to.
+        """
+        for bridge in (_finalizing_bridge, _view_bridge):
+            if bridge is not None:
+                bridge.empty()
+
+    def _render_datasets_table(words, fixations, raw_gaze) -> None:
+        """📂 Available datasets, whenever the Data page is showing its overview.
+
+        BUG-81: this used to render only after a successful load, so a dataset
+        whose mapping can't be satisfied — or a filter that empties the pool —
+        left the heading with no table under it, and no way to switch to
+        another dataset short of ♻️ Reset.
+        """
+        if not data_view or wizard_owns_page:
+            return
+        # UX-107 — ✅ Save changes closes the editor, so its success line
+        # belongs here, on the screen it returns to.
+        saved = st.session_state.pop("_remap_applied", None)
+        if saved:
+            dataset_table_slot.success(
+                f"**{_dataset_display_name(str(saved))}** updated — mapping, "
+                "recording setup and any table you added are saved.",
+                icon="✅",
+            )
+        render_dataset_table(
+            host=dataset_table_slot,
+            # Public corpora load through the historical category token,
+            # while the table rows use concrete registry labels. Preserve
+            # that concrete canonical selection so the active row and its
+            # remembered counts are keyed to the row the user can revisit.
+            active=str(st.session_state.get("data_source_choice") or data_choice),
+            words=words,
+            fixations=fixations,
+            raw_gaze=raw_gaze,
+        )
+
     # (DATA-9's ordered source-config group — description · options · data
     # location · column mapping — is now the top of the Data page reserved
     # above. VIZ-31 had already moved "Experimental Setup" out of it: monitor
@@ -6686,6 +6730,7 @@ def main() -> None:
         if wizard_active:
             _render_offpage_setup_notice(data_view)
             _fill_recovery_cache_panel()
+            _clear_loading_bridges()
             return
     elif data_choice == AUTHOR_CHOICE:
         words_df, fixations_df = _render_authoring_source()
@@ -6775,6 +6820,8 @@ def main() -> None:
             _render_unmapped_view(raw_words_df, raw_fixations_df, mapping_problems)
         _render_offpage_setup_notice(data_view)
         _fill_recovery_cache_panel()
+        _render_datasets_table(None, None, None)
+        _clear_loading_bridges()
         return
 
     # VIZ-14: local/desktop users can attach stimulus screenshots without
@@ -7007,6 +7054,8 @@ def main() -> None:
     if words_filtered.empty and fixations_filtered.empty and raw_gaze_filtered.empty:
         _render_empty_after_filtering(words_all, fixations_all, trial_filters)
         _fill_recovery_cache_panel()
+        _render_datasets_table(words_all, fixations_all, raw_gaze_df)
+        _clear_loading_bridges()
         return
 
     # Build trial combinations for selection UI — from fixations normally, then
@@ -7111,10 +7160,7 @@ def main() -> None:
 
     # Clear the "loading" bridges now that the real content is about to render
     # in their place — the post-finalize one, and the view-switch one.
-    if _finalizing_bridge is not None:
-        _finalizing_bridge.empty()
-    if _view_bridge is not None:
-        _view_bridge.empty()
+    _clear_loading_bridges()
 
     # Render tabbed interface. Animation is now a checkbox inside the Scanpath
     # Visualization tab (no separate Animated Scanpath tab); Bulk Export has its
@@ -7146,27 +7192,7 @@ def main() -> None:
         # dataset are this run's frames, which do not exist until the load has
         # happened. Unfiltered on purpose — the table describes the *dataset*,
         # not what the current Narrow-by left standing.
-        if not wizard_owns_page:
-            # UX-107 — ✅ Save changes closes the editor, so its success line
-            # belongs here, on the screen it returns to.
-            saved = st.session_state.pop("_remap_applied", None)
-            if saved:
-                dataset_table_slot.success(
-                    f"**{_dataset_display_name(str(saved))}** updated — mapping, "
-                    "recording setup and any table you added are saved.",
-                    icon="✅",
-                )
-            render_dataset_table(
-                host=dataset_table_slot,
-                # Public corpora load through the historical category token,
-                # while the table rows use concrete registry labels. Preserve
-                # that concrete canonical selection so the active row and its
-                # remembered counts are keyed to the row the user can revisit.
-                active=str(st.session_state.get("data_source_choice") or data_choice),
-                words=words_all,
-                fixations=fixations_all,
-                raw_gaze=raw_gaze_df,
-            )
+        _render_datasets_table(words_all, fixations_all, raw_gaze_df)
         # UX-135 — one numbered headline over the whole first part, drawn into
         # the slot reserved above the description. Everything from here to the
         # metadata tables is that part; the mapping no longer titles itself,

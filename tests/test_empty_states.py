@@ -245,3 +245,32 @@ class TestDatasetUnavailableState:
         st.session_state.pop(app._UNAVAILABLE_KEY, None)
         assert app._dataset_access_status(st, root="/here", present=True) is True
         assert app._UNAVAILABLE_KEY not in st.session_state
+
+
+@pytest.mark.timeout(180)
+class TestADeadEndStillShowsTheWayOut:
+    """BUG-81: a mapping that can't be satisfied (or a filter that empties the
+    pool) returned early — before the "⏳ Loading…" banner was cleared and
+    before 📂 Available datasets was drawn — so the Data page the warning sent
+    you to showed a stuck spinner over a heading with no table under it, and no
+    way to switch to another dataset."""
+
+    def test_a_broken_mapping_leaves_the_datasets_table_and_no_spinner(self):
+        from streamlit.testing.v1 import AppTest
+
+        from scanpath_studio.constants import _VIEW_DATA
+        from tests.conftest import APP_SCRIPT, pin_view
+
+        at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
+        at.run()
+        duration = next(s for s in at.selectbox if s.key == "col_map_fix_duration")
+        duration.set_value(None)
+        at.run()
+        pin_view(at, _VIEW_DATA)
+        at.run()
+        assert not at.exception, at.exception
+        assert not [i for i in at.info if i.value.startswith("Loading")]
+        tables = [df.value for df in at.dataframe]
+        assert any("Dataset" in t.columns for t in tables), [
+            list(t.columns)[:3] for t in tables
+        ]

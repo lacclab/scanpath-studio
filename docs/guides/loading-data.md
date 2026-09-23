@@ -26,44 +26,63 @@ The default workflow uses two tables:
 
 Participant ID, text ID, fixation timestamps, raw gaze, conditions, questions,
 and precomputed reading measures are optional but enable more features. Accepted
-files are CSV, TSV, Parquet, and Feather. See [Data format](../data-format.md)
-for canonical fields.
+files are CSV, TSV and tab-separated TXT, Parquet, Feather, Excel (`.xlsx`), and
+a `.zip` wrapping any of them. A text file's delimiter (comma, semicolon, tab or
+pipe) is read off its header line, a file that is not UTF-8 is read as Windows
+text, and an `.xls` that is really tab-separated text — EyeLink Data Viewer's
+"Excel" export — is read as text; a genuine Excel 97–2003 workbook has to be
+saved as `.xlsx` or `.csv` first. See [Data format](../data-format.md) for
+canonical fields and units.
 
 ## Use the setup wizard
 
-The wizard is **two parts**, in the only order they can happen in — there is
-nothing to map until a file has been read — with the dataset's name above both
-and **✅ Add dataset** at the foot. Everything in part 2 is on one screen, so the
-whole mapping is visible at once.
+The wizard is **three numbered parts**, in the only order they can happen in —
+there is nothing to map until a file has been read — with **⬇️ Save setup** and
+**✅ Add dataset** at the foot. Everything is on one screen, so the whole mapping
+is visible at once.
 
-**1. Upload data files.** Add the word/IA and fixation files; several files per
-table are allowed. Raw gaze goes here too, as do two optional keyed tables —
-**one row per reader** (native language, age, comprehension score) and **one row
-per reading** (list name, presentation order, a per-trial score) — see
-[Participant metadata](../data-format.md#participant-metadata) and
-[Trial metadata](../data-format.md#trial-metadata); the same attach-and-report UI
-is on the 🗂️ **Data** page for datasets that don't come through this wizard. A summary card names the columns that were auto-detected and
-the ones still missing — it is a report, not a shortcut: detection matches column
-*names*, so part 2 is where you confirm it picked the right ones. *Restore a
-saved setup* lives behind a popover here.
+**1. Dataset name** — what the dataset is called in 📂 **Available datasets**.
 
-**2. Map data fields**, in sections:
+**2. Upload data tables.** One row per table — **Fixations**, **AOIs** (the
+words / interest areas) and **Raw gaze** — with the table's uploader on the left
+and its column mapping beside it; upload at least one, and several files per
+table if your export is split (one per participant, say). Each row's pickers are
+pre-filled from the column names, and the tint says which were auto-detected:
+detection matches *names*, so this is where you confirm it picked the right
+columns.
 
-1. **Trials & readers** — one block per table, its identity line first (trial,
-   screen, reader, text, word and the table's own id) and its own fields under
-   it: x/y/timestamp/duration for fixations, the word box and line index for the
-   AOI table, then whether that table has one row per **character** rather than
-   per word. Pick several columns to build a composite trial ID when one is not
-   unique enough. The readout below the pickers is the fastest sanity check:
-   *N trials · N readers · N texts*.
-2. **Raw gaze** — the gaze-sample table's own columns; shown only if you
-   uploaded one.
-3. **Recording setup** — see below.
-4. **Extra fields** — keep any condition or analysis fields you will need later,
-   and choose which become trial filters.
+- The first line of each row is its **identity** — trial, screen, reader, text,
+  word and the table's own id. Pick several columns to build a composite trial
+  ID when one is not unique enough; the trial count under each picker is the
+  fastest sanity check, and a warning appears when the two tables share no
+  trial — or share trials but no reader.
+- The second line is the table's own **fields**: x/y, timestamp and duration for
+  fixations; the word box (edges or origin + size) and line index for the AOI
+  table, plus whether it has one row per **character** rather than per word.
+- Under each table, **Extra fields to keep** lists every column the mapping
+  does not use — recognised measures and conditions come pre-ticked — and
+  whatever you keep is there later to filter, sort or colour by; the rest is
+  dropped at normalization.
+- **Derive columns from the filename** sits at the top once a table is in, for
+  ids that live only in the file name.
+- Below the three tables, under **Metadata**, are three optional keyed tables:
+  **one row per reader** (native language, age, comprehension score), **one row
+  per reading** (list name, presentation order, a per-trial score) and **one row
+  per text** — see [Participant metadata](../data-format.md#participant-metadata)
+  and [Trial metadata](../data-format.md#trial-metadata). The same
+  attach-and-report UI is on 🗂️ **Data → ✏️ Edit dataset** for datasets that do
+  not come through this wizard.
+
+↩️ **Restore a saved setup** is a popover beside this part's title.
+
+**3. Recording setup** — the screen the data was recorded on; see below.
 
 The wizard objects only once you press **✅ Add dataset**, and then about
-everything at once rather than one field at a time.
+everything at once rather than one field at a time: a required field left empty
+turns red in place. Rows it cannot use are named directly above the button —
+cells in a mapped number column that don't parse, rows with no trial or reader
+id, positions that are screen fractions rather than pixels — together with what
+the load does with them.
 
 After loading, open the 🗂️ **Data** page and confirm that both tables share the
 expected trials and coordinate range.
@@ -108,8 +127,8 @@ a skipped group is shown: with no physical width there is no honest pixels-per-
 degree or point-to-pixel conversion, so those are hidden rather than computed from
 a default.
 
-The answer travels with the dataset. It appears in the review table beside
-**✅ Add dataset** and under 🗂️ **Data → ✏️ Edit dataset → Recording setup**,
+The answer travels with the dataset. It appears beside each value in the
+wizard and under 🗂️ **Data → ✏️ Edit dataset → Recording setup**,
 rides a share link as `setup_prov`, and is written into the saved-setup JSON and
 into `plot_config.json` in a bulk export — so a figure set records that its
 monitor size was assumed, and whoever opens your link can tell your measurements

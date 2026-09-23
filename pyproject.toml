@@ -78,7 +78,7 @@ test = [
 # unpinned ruff means a local run and CI can disagree — a new release lands new
 # rules and reds a branch that changed nothing. Bump both together.
 lint = [
-    "ruff==0.16.3",
+    "ruff==0.16.8",
 ]
 # Build the documentation site (MkDocs Material + API autodoc from docstrings).
 docs = [
@@ -134,7 +134,7 @@ include = ["scanpath_studio", "scanpath_studio.*"]
 # families instead would enable far more than the default (selecting `S` alone
 # turns on S101 and flags all 4,734 asserts in the test suite). The residual
 # risk is that a future ruff moves the default again — the guard against that
-# is the pinned version (`ruff==0.16.3` in `.github/workflows/ci.yml` and in the
+# is the pinned version (`ruff==0.16.8` in `.github/workflows/ci.yml` and in the
 # `lint` extra above), so a new default arrives only with a deliberate bump.
 #
 # These three are named explicitly because the codebase carries `# noqa`

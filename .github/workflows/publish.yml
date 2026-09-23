@@ -15,7 +15,7 @@ jobs:
       id-token: write  # required for trusted publishing
       contents: write  # required to create the GitHub release
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # ENG-62: a tag pushed without bumping the version rebuilt the old one,
       # `skip-existing` below let PyPI skip it without a word, and the job went
@@ -30,14 +30,14 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
       - name: Install build tooling
         run: |
           python -m pip install --upgrade pip
-          pip install build==1.5.0 twine==7.0.0
+          pip install build==1.6.1 twine==7.0.0
 
       - name: Build wheel + sdist
         run: python -m build

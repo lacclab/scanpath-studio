@@ -86,6 +86,44 @@ class TestZeroPaddedReaderIds:
         assert md.rejoin(built, ["007", "012"]).report.matched == ("007", "012")
 
 
+class TestABlankRowIsNoOne:
+    """BUG-60: the blank row a spreadsheet leaves at the end became a reader,
+    trial or text named "nan" — pandas 3 keeps a missing id as NaN, and the
+    `!= ""` guard let it through."""
+
+    def test_participant_table(self, tmp_path):
+        path = tmp_path / "readers.csv"
+        path.write_text("participant_id,age\np01,24\np02,31\n,\n")
+        built = md.build_participant_metadata(
+            pd.read_csv(path), "participant_id", participants=["p01", "p02"]
+        )
+        assert built.frame["participant_id"].tolist() == ["p01", "p02"]
+        assert built.report.only_in_table == ()
+
+    def test_trial_table_keyed_by_reader_and_trial(self):
+        table = pd.DataFrame(
+            {
+                "pid": ["p1", None, "p1"],
+                "trial": ["t1", "t2", None],
+                "list": list("ABC"),
+            }
+        )
+        built = md.build_trial_metadata(table, "trial", participant_column="pid")
+        assert built.frame["trial_id"].tolist() == ["t1"]
+
+    def test_text_table_with_a_composite_id(self):
+        """A missing part used to raise inside the join, not just leak."""
+        table = pd.DataFrame(
+            {
+                "article": ["a1", "a1", None],
+                "level": ["Adv", None, "Ele"],
+                "n": [1, 2, 3],
+            }
+        )
+        built = md.build_text_metadata(table, ["article", "level"])
+        assert built.frame["text_id"].tolist() == ["a1_Adv"]
+
+
 class TestValidationNeverGuesses:
     def test_unmatched_ids_are_reported_on_both_sides(self, meta):
         assert meta.report.matched == ("p1", "p2")

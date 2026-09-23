@@ -894,13 +894,19 @@ scanpath-studio run` from an arbitrary directory, which gets no config file, is
 covered too. A bare `streamlit run streamlit_app.py` outside the repository is
 the one path that still inherits Streamlit's default.
 
-**One third-party request is made on every figure render.** The true-scale
-figure embed (`tabs._render_true_scale_chart`, `fig.to_html(include_plotlyjs="cdn")`)
-loads plotly.js from `cdn.plot.ly` rather than from the installed package. No
-data travels with it, but it is a per-render request to a third party, the
-script carries no integrity pin, and it means the main figure stays blank
-without network access — the desktop app included. [privacy.md](privacy.md)
-discloses it; serving the bundled plotly.js locally is an open decision.
+**The figure makes no third-party request (ENG-64).** The true-scale figure
+embed (`tabs._render_true_scale_chart`) used to be
+`fig.to_html(include_plotlyjs="cdn")`: a request to `cdn.plot.ly` on every
+render, and a blank figure without network access, the desktop app included. It
+now loads the installed plotly package's own `plotly.min.js` from the app's own
+server. `html_embed.plotlyjs_src` registers that package folder as a Streamlit
+custom-component directory, served at `component/<name>/plotly.min.js`; the
+route rejects paths that leave the folder (`build_safe_abspath`), and the folder
+holds only plotly's public package data. The page keeps a Blob URL copy of the
+script for later redraws (`html_embed.plotlyjs_script`), because the component
+route sends no max-age. Figures *downloaded* as HTML, from the Export subtab or in
+a bulk-export bundle, still reference `cdn.plot.ly`, since a saved file has no
+server to load from. [privacy.md](privacy.md) says so.
 
 **Streamlit's own request-level protections are on.** `server.enableXsrfProtection`
 and `server.enableCORS` both default to `True` (`config.py`) and nothing in the

@@ -168,7 +168,7 @@ from scanpath_studio.export_status import (
     static_export_signature,
 )
 from scanpath_studio.fields import labeled, panel_field
-from scanpath_studio.html_embed import embed_html_iframe
+from scanpath_studio.html_embed import embed_html_iframe, plotlyjs_script
 from scanpath_studio.illustration import illustration_reasons, resolve_label_reasons
 from scanpath_studio.multipart import (
     SCREEN_ID,
@@ -766,8 +766,10 @@ def _render_true_scale_chart(fig, *, key: str, max_height: int | None = None) ->
     config: dict = {"responsive": False, "displaylogo": False}
     if zoomable:
         config["modeBarButtonsToRemove"] = list(_NATIVE_ZOOM_BUTTONS)
-    plot_html = fig.to_html(
-        include_plotlyjs="cdn",
+    # ENG-64: the installed plotly's own plotly.min.js, served by this app's
+    # server — not cdn.plot.ly, so the figure draws offline too.
+    plot_html = plotlyjs_script() + fig.to_html(
+        include_plotlyjs=False,
         full_html=False,
         config=config,
         div_id=f"truescale-{key}",
@@ -1043,7 +1045,11 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
             file_name=f"{file_stem}.html",
             mime="text/html",
             key="anim_export_html",
-            help="Self-contained HTML you can open in any browser; keeps play/slider interactivity.",
+            # ENG-64: not self-contained — a saved file has no app server to
+            # load plotly.js from, so it keeps the CDN (see docs/privacy.md).
+            help="HTML you can open in any browser; keeps play/slider "
+            "interactivity. It loads the Plotly library from cdn.plot.ly, so "
+            "opening it needs an internet connection.",
         )
         return
 

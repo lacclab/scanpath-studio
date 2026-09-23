@@ -102,6 +102,11 @@ single-trial, animation, and comparison plots all go through
 size and CSS-scales the whole block uniformly to the column width. Static image
 export bumps the raster `scale` to stay crisp; SVG/PDF are vector and need no bump.
 
+The embed loads plotly.js from the app's own server, never a CDN:
+`html_embed.plotlyjs_script()` goes ahead of `fig.to_html(include_plotlyjs=False)`
+and loads the `plotly.min.js` that ships with the installed plotly package, so the
+figure draws offline and in the desktop app (ENG-64).
+
 If you add a new spatial figure, keep it on `_render_true_scale_chart` — never
 `st.plotly_chart` — or the reading text will drift from the boxes.
 

@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_multipart_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.1">coverage.py v7.16.1</a>,
-            created at 2026-09-23 18:34 +0000
+            created at 2026-09-23 22:57 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -276,9 +276,9 @@
     <p class="mis show_mis"><span class="n"><a id="t194" href="#t194">194</a></span><span class="t">        <span class="key">return</span> <span class="nam">_empty_fix_frame</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t195" href="#t195">195</a></span><span class="t">    <span class="nam">n_words</span> <span class="op">=</span> <span class="nam">len</span><span class="op">(</span><span class="nam">ordered</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t196" href="#t196">196</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t197" href="#t197">197</a></span><span class="t">    <span class="com"># BUG-11: generate inside the corrected boxes, so a model scanpath lands on</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t198" href="#t198">198</a></span><span class="t">    <span class="com"># the glyphs rather than half a character to their right.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t199" href="#t199">199</a></span><span class="t">    <span class="nam">x_box</span><span class="op">,</span> <span class="nam">y_box</span><span class="op">,</span> <span class="nam">x_right</span><span class="op">,</span> <span class="nam">y_bottom</span> <span class="op">=</span> <span class="nam">word_box_bounds</span><span class="op">(</span><span class="nam">ordered</span><span class="op">,</span> <span class="nam">layout</span><span class="op">=</span><span class="nam">words</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t197" href="#t197">197</a></span><span class="t">    <span class="com"># Generate inside the experiment&#x27;s own boxes (BUG-83), so a model fixation</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t198" href="#t198">198</a></span><span class="t">    <span class="com"># is assigned to the word it was generated for.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t199" href="#t199">199</a></span><span class="t">    <span class="nam">x_box</span><span class="op">,</span> <span class="nam">y_box</span><span class="op">,</span> <span class="nam">x_right</span><span class="op">,</span> <span class="nam">y_bottom</span> <span class="op">=</span> <span class="nam">word_box_bounds</span><span class="op">(</span><span class="nam">ordered</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t200" href="#t200">200</a></span><span class="t">    <span class="nam">w_box</span> <span class="op">=</span> <span class="nam">x_right</span> <span class="op">-</span> <span class="nam">x_box</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t201" href="#t201">201</a></span><span class="t">    <span class="nam">h_box</span> <span class="op">=</span> <span class="nam">y_bottom</span> <span class="op">-</span> <span class="nam">y_box</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t202" href="#t202">202</a></span><span class="t">    <span class="key">if</span> <span class="str">&quot;text&quot;</span> <span class="key">in</span> <span class="nam">ordered</span><span class="op">.</span><span class="nam">columns</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
@@ -376,7 +376,7 @@
             <a class="nav" href="z_370c57a259db20f3_multipart_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.1">coverage.py v7.16.1</a>,
-            created at 2026-09-23 18:34 +0000
+            created at 2026-09-23 22:57 +0000
         </p>
     </div>
 </footer>

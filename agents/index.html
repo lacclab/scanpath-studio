@@ -2329,7 +2329,8 @@ here, so both frames come back under one synthetic reader: <code>list_trials</co
 </code></pre></div>
 <ul>
 <li>Accepts DataFrames, paths, glob patterns, or lists of paths
-  (<code>.csv</code> / <code>.tsv</code> / <code>.parquet</code> / <code>.feather</code>). Multi-file datasets are
+  (<code>.csv</code> / <code>.tsv</code> / <code>.txt</code> / <code>.tab</code> / <code>.parquet</code> / <code>.feather</code> / <code>.xlsx</code> /
+  <code>.xls</code>, or a <code>.zip</code> of any of them). Multi-file datasets are
   concatenated and each row keeps its file stem in <code>source_file</code> — useful when
   the participant or text id only exists in the filename.</li>
 <li>Either table may be omitted. The missing side comes back as an empty canonical
@@ -2350,7 +2351,7 @@ and the columns your table actually has. In full, for a words table whose
 columns are <code>subject, para, word, start_x</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>Words/IA schema problems: missing Trial ID; missing Word/IA ID; need either (x, y, width, height) or (left, right, top, bottom)
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>Could not infer these canonical fields from the words/IA table:
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>  - Trial ID (word_schema key 'trial'): no column matched. Looked for: unique_trial_id, trial_id, unique_paragraph_id, paragraph_id, text_id, trial, trial_index
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>  - Trial ID (word_schema key 'trial'): no column matched. Looked for: unique_trial_id, trial_id, unique_paragraph_id, paragraph_id, text_id, trial, trial_index, trial_number, presented_stimulus_name, media_name, stimulus
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>  - Word/IA ID (word_schema key 'word_id'): no column matched. Looked for: word_id, IA_ID, ia_index, word_index, aoi, word_idx, char_idx
 <a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>  - Word box (word_schema keys): need either (x, y, width, height) or (left, right, top, bottom) — (x, y, width, height) is missing x, y, width, height; (left, right, top, bottom) is missing right, top, bottom.
 <a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>      Looked for → x: x, left, top_left_x | y: y, top, top_left_y | width: width | height: height | right: IA_RIGHT, right, end_x | top: IA_TOP, top, start_y, top_left_y | bottom: IA_BOTTOM, bottom, end_y
@@ -2586,7 +2587,8 @@ plus replay-only knobs — <code>figure_options("animation")</code> is the full 
 </table>
 <p><code>color_by</code> is a <em>fixation column name</em> (<code>"duration_ms"</code>, <code>"pass_index"</code>, …) or
 the sentinel <code>"(uniform)"</code> for one flat colour; a name the frame doesn't have
-falls back to uniform. Colouring by text line is the separate <code>color_by_line=True</code>
+raises a <code>ValueError</code> naming the closest columns (see
+<a href="#errors-and-what-they-mean">Errors</a>). Colouring by text line is the separate <code>color_by_line=True</code>
 flag (the lines are inferred from word-box geometry), which overrides <code>color_by</code>.
 Marker size already encodes duration, which is why hue is unmapped by default.</p>
 <p><code>fixation_flags</code> marks or drops suspicious fixations (display only — reading
@@ -2734,6 +2736,11 @@ the linear-reading schematic.</p>
 <code>heatmap_metric="counts"</code> weights by fixation count instead of dwell time;
 <code>heatmap_norm="Log"</code> compresses heavy-tailed dwell times. Duration mass spreads
 dwell over nearby characters; <code>duration_mass_sigma_chars</code> controls its Gaussian.</p>
+<p><code>fixation_color_range</code> and <code>heatmap_range</code> are <code>(min, max)</code> pairs in the
+metric's own units. Left at <code>None</code> each trial is scaled to its own values, and
+a comparison shares one scale across A and B — which is also the app's default,
+with its <em>Auto range</em> box ticked. Pass a range to put every trial on the same
+scale.</p>
 <h3 id="raw-gaze">Raw gaze<a class="headerlink" href="#raw-gaze" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -2955,10 +2962,11 @@ fixations and word boxes.</p>
 <p>Flags carry the API's option names: layers are <code>--no-words</code> / <code>--no-labels</code> /
 <code>--no-fixations</code> / <code>--no-order</code> / <code>--no-saccades</code> / <code>--no-heatmap</code>, plus
 <code>--color-by</code>, <code>--heatmap-metric</code>, <code>--heatmap-norm</code>, <code>--palette</code>, <code>--canvas WxH</code>,
-<code>--separable-layers</code>. Drift correction is on the CLI too:
-<code>--drift-correction ALGORITHM</code> (any of the ten names) and
-<code>--drift-connectors</code>. So are the public corpora — <code>--potec DIR</code>,
-<code>--onestop DIR</code> (+ <code>--onestop-regime</code> / <code>--onestop-part</code> /
+<code>--separable-layers</code>. Drift correction is on the CLI too, but only with
+<code>SCANPATH_EXPERIMENTAL=1</code> set (PRE-21) — without it the flags don't exist and
+argparse rejects them: <code>--drift-correction ALGORITHM</code> (any of the twelve names
+in <code>alignment.ALGORITHMS</code>) and <code>--drift-connectors</code>. So are the public
+corpora — <code>--potec DIR</code>, <code>--onestop DIR</code> (+ <code>--onestop-regime</code> / <code>--onestop-part</code> /
 <code>--onestop-variant</code>), <code>--source multipleye --export DIR</code>
 (+ <code>--no-question-screens</code>; a MultiplEYE trial is a whole stimulus, so pick a
 page or question screen inside it with <code>--screen</code> / <code>--all-screens</code> /
@@ -2967,9 +2975,9 @@ output controls (<code>--fixation-symbol</code>, <code>--saccade-arcs</code>, <c
 <code>--saccade-color-by-type</code> / <code>-by-direction</code>, the <code>--stimulus-image*</code> family,
 <code>--width</code> / <code>--height</code> / <code>--scale</code>, <code>--anim-grid-step-ms</code> /
 <code>--anim-max-frames</code>, <code>--no-autoplay</code>). Without <code>-p</code> / <code>-t</code> it renders the
-first available trial instead of raising. Most <code>plot_scanpath</code> keywords have
-a flag; check <code>scanpath-studio render --help</code> (or the
-<a href="../cli/">CLI reference</a>) before assuming one doesn't.</p>
+first available trial instead of raising. Every <code>plot_scanpath</code> figure
+option has a flag (EXP-20) — see <code>scanpath-studio render --help</code> or the
+<a href="../cli/">CLI reference</a> for its spelling.</p>
 <h2 id="errors-and-what-they-mean">Errors and what they mean<a class="headerlink" href="#errors-and-what-they-mean" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -3068,6 +3076,9 @@ looping by hand.</p>
 <a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="n">paths</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">save_figure_layers</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="s2">"fig1_layers"</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s2">"pdf"</span><span class="p">)</span>  <span class="c1"># {layer: Path}</span>
 </code></pre></div>
 <p><strong>Compare drift-correction algorithms</strong></p>
+<p>Drift correction is held back behind <code>SCANPATH_EXPERIMENTAL=1</code> (PRE-21); without
+it, <code>drift_correction=</code> raises <code>ValueError</code> rather than returning uncorrected
+fixations.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scanpath_studio.alignment</span><span class="w"> </span><span class="kn">import</span> <span class="n">ALGORITHMS</span>
 <a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>
 <a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="k">for</span> <span class="n">method</span> <span class="ow">in</span> <span class="n">ALGORITHMS</span><span class="p">:</span>
@@ -3081,10 +3092,11 @@ looping by hand.</p>
 reachable through the internal modules — on the same normalized frames, but
 without the API layer's conveniences: no trial resolution, no
 <code>CANONICAL_FIGURE_DEFAULTS</code>, and canvas/font settings you must pass yourself.
-Besides the three shown below, two more are worth knowing about:</p>
+Besides the two shown below, two more are worth knowing about:</p>
 <ul>
-<li><strong>Scanpath similarity</strong> (<code>scanpath_studio.similarity</code>) — the Comparisons
-  tab's scoring surface: <code>compute_similarity_table</code>,
+<li><strong>Scanpath similarity</strong> (<code>scanpath_studio.similarity</code>) — the scoring behind
+  the Comparisons subtab's NLD column, which the app itself shows only with
+  <code>SCANPATH_EXPERIMENTAL=1</code> (PRE-21): <code>compute_similarity_table</code>,
   <code>normalized_levenshtein</code>, <code>aoi_sequence</code>, <code>nld_by_fixation_index</code>,
   <code>nld_by_time</code>.</li>
 <li><strong>Corpus-level aggregation</strong> (<code>scanpath_studio.aggregation</code>) — the
@@ -3092,45 +3104,31 @@ Besides the three shown below, two more are worth knowing about:</p>
   group-comparison helpers behind the Corpus Analysis view; see
   <a href="../corpus-analysis/">Corpus analysis</a>.</li>
 </ul>
-<p>There is also no entry point that <em>normalizes</em> a raw-gaze table
-(<code>propose_schema(df, "raw_gaze")</code> gives you the schema, but
-<code>data.normalize_raw_gaze</code> is its only consumer); a normalized raw-gaze frame
-can then be passed to <code>plot_scanpath(raw_gaze=…)</code>, which filters it to the
-trial and switches the layer on.</p>
-<p><strong>Two-scanpath comparison</strong> (the app's Compare mode). Takes the whole frames and
-two <code>(participant_id, trial_id)</code> tuples, not per-trial frames:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scanpath_studio</span><span class="w"> </span><span class="kn">import</span> <span class="n">plots</span>
-<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>
-<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="n">fig</span> <span class="o">=</span> <span class="n">plots</span><span class="o">.</span><span class="n">make_comparison_figure</span><span class="p">(</span>
-<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>    <span class="n">words</span><span class="p">,</span>
-<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>    <span class="n">fixations</span><span class="p">,</span>
-<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>    <span class="p">(</span><span class="s2">"l37_1129"</span><span class="p">,</span> <span class="s2">"l37_1129_2_1_1_Ele_r0"</span><span class="p">),</span>  <span class="c1"># trial A</span>
-<a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>    <span class="p">(</span><span class="s2">"l7_1090"</span><span class="p">,</span> <span class="s2">"l7_1090_2_1_1_Ele_r0"</span><span class="p">),</span>  <span class="c1"># trial B</span>
-<a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>    <span class="n">canvas_width</span><span class="o">=</span><span class="mi">2560</span><span class="p">,</span>
-<a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>    <span class="n">canvas_height</span><span class="o">=</span><span class="mi">1440</span><span class="p">,</span>
-<a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a>    <span class="n">font_family</span><span class="o">=</span><span class="s2">"Arial"</span><span class="p">,</span>
-<a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a>    <span class="n">base_font_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
-<a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a>    <span class="n">layout</span><span class="o">=</span><span class="s2">"overlay"</span><span class="p">,</span>  <span class="c1"># or "side_by_side" / "stacked"</span>
-<a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a>    <span class="n">trial_labels</span><span class="o">=</span><span class="p">(</span><span class="s2">"A"</span><span class="p">,</span> <span class="s2">"B"</span><span class="p">),</span>
-<a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a>    <span class="n">show_legend</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a><span class="p">)</span>
-</code></pre></div>
-<p><code>animate_scanpath</code> <em>does</em> overlay a second reading itself, via <code>words_b=</code> /
-<code>fixations_b=</code> / <code>label_a=</code> / <code>label_b=</code> / <code>show_legend=</code>.</p>
+<p>A raw-gaze table is loaded with <code>load_raw_gaze(path_or_frame)</code> (columns
+auto-detected; <code>raw_gaze_schema=</code> overrides, starting from
+<code>propose_schema(df, "raw_gaze")</code>), or <code>load_sample_raw_gaze()</code> for the demo's.
+Pass the result to <code>plot_scanpath(raw_gaze=…)</code>, which filters it to the trial
+and switches the layer on — <code>render --raw-gaze PATH</code> on the command line.</p>
+<p>Two-scanpath comparison (the app's Compare mode) <em>is</em> covered:
+<code>sps.compare_scanpaths(words, fixations, trial_a, trial_b, layout=…)</code> takes two
+<code>(participant_id, trial_id)</code> pairs — and <code>words_b=</code> / <code>fixations_b=</code> to draw B
+from another corpus — and <code>animate_scanpath</code> overlays a second reading itself via
+<code>words_b=</code> / <code>fixations_b=</code> / <code>label_a=</code> / <code>label_b=</code> / <code>show_legend=</code>. See the
+<a href="../api/">API reference</a>.</p>
 <p><strong>GIF / MP4 of a replay</strong> — returns bytes, keyword-only, and needs an explicit
 per-frame duration (Kaleido + Chrome; ffmpeg rides along with <code>imageio-ffmpeg</code>):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
-<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>
-<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scanpath_studio.animation_export</span><span class="w"> </span><span class="kn">import</span> <span class="n">export_animation</span>
-<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scanpath_studio.plots</span><span class="w"> </span><span class="kn">import</span> <span class="n">animation_autoplay_frame_duration</span>
-<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>
-<a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="n">anim</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">animate_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="n">pid</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">playback_speed</span><span class="o">=</span><span class="mf">4.0</span><span class="p">)</span>
-<a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="n">clip</span> <span class="o">=</span> <span class="n">export_animation</span><span class="p">(</span>
-<a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>    <span class="n">anim</span><span class="p">,</span>
-<a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a>    <span class="n">fmt</span><span class="o">=</span><span class="s2">"mp4"</span><span class="p">,</span>  <span class="c1"># or "gif"</span>
-<a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a>    <span class="n">frame_duration_ms</span><span class="o">=</span><span class="n">animation_autoplay_frame_duration</span><span class="p">(</span><span class="n">anim</span><span class="p">),</span>  <span class="c1"># keeps the speed</span>
-<a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a><span class="p">)</span>
-<a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a><span class="n">Path</span><span class="p">(</span><span class="s2">"replay.mp4"</span><span class="p">)</span><span class="o">.</span><span class="n">write_bytes</span><span class="p">(</span><span class="n">clip</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scanpath_studio.animation_export</span><span class="w"> </span><span class="kn">import</span> <span class="n">export_animation</span>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scanpath_studio.plots</span><span class="w"> </span><span class="kn">import</span> <span class="n">animation_autoplay_frame_duration</span>
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="n">anim</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">animate_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="n">pid</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">playback_speed</span><span class="o">=</span><span class="mf">4.0</span><span class="p">)</span>
+<a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="n">clip</span> <span class="o">=</span> <span class="n">export_animation</span><span class="p">(</span>
+<a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>    <span class="n">anim</span><span class="p">,</span>
+<a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>    <span class="n">fmt</span><span class="o">=</span><span class="s2">"mp4"</span><span class="p">,</span>  <span class="c1"># or "gif"</span>
+<a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a>    <span class="n">frame_duration_ms</span><span class="o">=</span><span class="n">animation_autoplay_frame_duration</span><span class="p">(</span><span class="n">anim</span><span class="p">),</span>  <span class="c1"># keeps the speed</span>
+<a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="p">)</span>
+<a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="n">Path</span><span class="p">(</span><span class="s2">"replay.mp4"</span><span class="p">)</span><span class="o">.</span><span class="n">write_bytes</span><span class="p">(</span><span class="n">clip</span><span class="p">)</span>
 </code></pre></div>
 <p><strong>Bulk export</strong> (many trials → one zip of figures and tables):
 <code>export.bulk_export(combos, words, fixations, …)</code> with an <code>export.ExportOptions</code>.</p>

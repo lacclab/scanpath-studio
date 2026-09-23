@@ -1826,13 +1826,13 @@ and this page is the contract for adding a fourth.</p>
 <div class="admonition tip">
 <p class="admonition-title">You probably don't need this page</p>
 <p>To load a corpus <strong>you already have</strong>, no code is needed at all — see
-<a href="../bring-your-own-data/">Bring your own data</a>. This page is only for making a
+<a href="../guides/loading-data/">Loading public and own data</a>. This page is only for making a
 corpus appear as a built-in source for everyone.</p>
 </div>
 <h2 id="do-you-need-an-adapter">Do you need an adapter?<a class="headerlink" href="#do-you-need-an-adapter" title="Permanent link">&para;</a></h2>
 <p>If your corpus is two tables with recognisable column names, <strong>no</strong>. The generic
-loader already takes a list or glob of files and auto-detects EyeLink, Gazepoint
-and snake_case columns.</p>
+loader already takes a list or glob of files and auto-detects EyeLink, Gazepoint,
+Tobii, SMI, Pupil Labs and snake_case columns.</p>
 <p>Adapters exist for what the generic path <em>can't</em> guess. That's what the three
 existing ones are for:</p>
 <table>
@@ -1853,7 +1853,7 @@ existing ones are for:</p>
 </tr>
 <tr>
 <td><strong>MultiplEYE</strong></td>
-<td>Participant, session, trial and stimulus exist only in folder and file names; AOIs are per-character and must be combined into words; each page of a stimulus reuses the same screen coordinates, so each page has to become its own trial.</td>
+<td>Participant, session, trial and stimulus exist only in folder and file names; AOIs are per-character and must be combined into words; each page of a stimulus reuses the same screen coordinates, so one reading of a stimulus becomes one trial whose ordered <strong>screens</strong> are its pages and comprehension-question screens (DATA-24).</td>
 </tr>
 </tbody>
 </table>
@@ -1862,8 +1862,8 @@ existing ones are for:</p>
 before writing code — the answer is often "the generic loader already handles
 this".</p>
 <h2 id="where-the-data-lives">Where the data lives<a class="headerlink" href="#where-the-data-lives" title="Permanent link">&para;</a></h2>
-<p>Nothing corpus-scale goes into the installed package: it's ~1.3 MB of Python plus
-4.4 MB of demo data, and that's the whole budget. So in practice a new corpus is
+<p>Nothing corpus-scale goes into the installed package: it's ~3.3 MB of Python plus
+~4.5 MB of demo data, and that's the whole budget. So in practice a new corpus is
 either <strong>downloaded on demand</strong> into a folder the user picks (PoTeC, OneStop) or
 <strong>read from a directory the user already has</strong> (MultiplEYE). Both look identical
 from the user's side — one picker entry, one <code>load_*</code> function.</p>
@@ -2070,8 +2070,8 @@ its <strong>on-disk size</strong>.</p>
 <p>Before you open it:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">".[test,docs]"</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>pytest
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>ruff<span class="w"> </span>check<span class="w"> </span>--exclude<span class="w"> </span>other_vis<span class="w"> </span>.
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>ruff<span class="w"> </span>format<span class="w"> </span>--exclude<span class="w"> </span>other_vis<span class="w"> </span>.
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>ruff<span class="w"> </span>check<span class="w"> </span>.
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>ruff<span class="w"> </span>format<span class="w"> </span>.
 <a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>mkdocs<span class="w"> </span>build<span class="w"> </span>--strict<span class="w">          </span><span class="c1"># if you added or edited a docs page</span>
 </code></pre></div>
 <p>Add a line under <code>[Unreleased]</code> in <code>CHANGELOG.md</code>, and see

@@ -1828,6 +1828,11 @@ recovery below possible: it reads the raw files the pipeline downloaded.</p>
    readers).</p>
 </li>
 </ol>
+<p>On a server other machines can reach (the hosted demo, or
+<code>--server.address 0.0.0.0</code>) there is no <em>Data directory</em> box to set: the app
+reads the bundle from the server's configured data location
+(<code>SCANPATH_DATA_ROOT</code>, else the default above), unless it was started with
+<code>SCANPATH_LOCAL_FS=1</code>. See <a href="../cli/#launch">Launch</a> and <a href="../security/">Security</a>.</p>
 <p>A caption under the picker states the corpus's geometry provenance, and the
 description carries its licence and citation. If the bundle isn't where you
 pointed, the app says so and keeps the bundled demo loaded rather than failing.</p>
@@ -1839,11 +1844,13 @@ public corpus, <code>SCANPATH_PUBLIC_DATASETS=0</code> hides them all.</p>
 entries are kept on purpose. The harmonised copy is labelled
 <em>(harmonised benchmark)</em> in the picker (so: <em>PoTeC (harmonised benchmark) (WIP)</em>
 beside the native <em>PoTeC</em>). They are not interchangeable: the
-benchmark discards screen geometry, so the harmonised OneStop's word boxes are
-a <em>reconstruction</em> of the corpus's published layout rather than the measured
-coordinates the publisher's release carries — same screen (2560×1440), boxes
-placed by a wrapping model instead of by EyeLink. Pick the publisher's release
-to study that corpus; pick the harmonised one to compare it with the other 30.</p>
+benchmark discards screen geometry, so the harmonised copy's word boxes are
+<em>recovered</em> during preparation (see
+<a href="#where-the-word-boxes-come-from">Where the word boxes come from</a>) — for OneStop,
+parsed back out of the raw EyeLink export for all but six of its 345 texts,
+which fall back to a reconstructed layout — and its trials follow the
+benchmark's model, not the publisher's release. Pick the publisher's release to
+study that corpus; pick the harmonised one to compare it with the other 30.</p>
 <h2 id="the-catalogue">The catalogue<a class="headerlink" href="#the-catalogue" title="Permanent link">&para;</a></h2>
 <p>Thirty-one corpora, ~14.0 million fixations, 22,255 distinct texts. This table is
 generated from <code>data/EyeGenBench/manifest.json</code>, which is the authoritative
@@ -2041,7 +2048,7 @@ that corpus or the bundle will keep reporting the old tier.</p>
 <td style="text-align: right;">360</td>
 <td style="text-align: right;">345</td>
 <td style="text-align: right;">2,259,082</td>
-<td>reconstructed</td>
+<td>real</td>
 <td>2560×1440</td>
 </tr>
 <tr>
@@ -2059,7 +2066,7 @@ that corpus or the bundle will keep reporting the old tier.</p>
 <td style="text-align: right;">84</td>
 <td style="text-align: right;">55</td>
 <td style="text-align: right;">219,556</td>
-<td>reconstructed</td>
+<td>real</td>
 <td>1600×900</td>
 </tr>
 <tr>
@@ -2186,16 +2193,16 @@ Studio recovers it during preparation. Recovery has four tiers, first hit wins:<
 <li><strong>Measured boxes carried on the corpus's own text table</strong> — some corpora
    (verified: PoTeC) ship EyeLink's coordinates there directly.</li>
 <li><strong>Measured boxes parsed out of the raw EyeLink export</strong> the pipeline
-   downloaded (<code>CURRENT_FIX_INTEREST_AREA_DATA</code>). This is why the raw downloads
-   are kept.</li>
+   downloaded (OneStop's <code>CURRENT_FIX_INTEREST_AREA_DATA</code>, Provo's <code>IA_LEFT</code> /
+   <code>IA_TOP</code> / <code>IA_RIGHT</code> / <code>IA_BOTTOM</code>). This is why the raw downloads are kept.</li>
 <li><strong>A layout reconstructed from the corpus's published display parameters</strong> —
    screen size, font size, character width, line pitch and margin, taken from
    what the corpus documents.</li>
 <li><strong>A synthesized layout on generic defaults</strong>, when nothing is published.</li>
 </ol>
 <p>The first two collapse into <code>geometry_source: real</code> in the manifest, the third
-into <code>reconstructed</code>, the fourth into <code>synthesized</code>. Today's catalogue: <strong>1 real</strong>
-(PoTeC), <strong>20 reconstructed</strong>, <strong>10 synthesized</strong>.</p>
+into <code>reconstructed</code>, the fourth into <code>synthesized</code>. Today's catalogue: <strong>3 real</strong>
+(OneStop, PoTeC, Provo), <strong>18 reconstructed</strong>, <strong>10 synthesized</strong>.</p>
 <p>Tier 3 requires a <strong>published</strong> parameter, not a plausible one. A corpus whose
 screen was never documented at corpus level stays <code>synthesized</code> even when a
 number would be easy to guess — a plausible-but-unsourced reconstruction is
@@ -2209,8 +2216,8 @@ does: a complete apparatus is published for those sentences, but for the
 silent-reading collection under <code>PSC2</code>.</p>
 <p>Real boxes only exist for interest areas somebody actually fixated, so gaps
 inside an otherwise-measured paragraph are interpolated from their neighbours and
-the fraction is reported (<code>interpolated_fraction</code>; 0.16% on PoTeC, zero
-everywhere else).</p>
+the fraction is reported (<code>interpolated_fraction</code>; 2.4% on OneStop, 0.16% on
+PoTeC, zero everywhere else).</p>
 <p>Two consequences worth understanding before you publish a figure:</p>
 <p><strong>The corpus-level tier is the best tier <em>any</em> paragraph reached.</strong> It is stamped
 per paragraph and summarised per corpus, so a corpus labelled <code>real</code> may hold
@@ -2221,9 +2228,9 @@ texts; the rest fall back to reconstructed layout</em>. The distinction matters:
 measured geometry you can trust absolute positions (where on the screen a reader
 looked, how far a saccade travelled in pixels); on a reconstructed or synthesized
 layout you can trust reading order and relative structure, but the coordinates
-are a plausible rendering of the text, not the one the reader saw. PoTeC is
-uniformly measured (no text falls back), so the qualifier does not currently fire
-for any corpus in the catalogue.</p>
+are a plausible rendering of the text, not the one the reader saw. PoTeC and
+Provo are uniformly measured (no text falls back); OneStop is not — six of its
+345 texts have no measured boxes — so its caption carries the qualifier.</p>
 <p><strong>A corpus with no documented screen declares no monitor at all.</strong> Ten of the
 thirty-one document no display, and the fallback layout is drawn on a generic
 1920×1080 — an invented number. Declaring it as the corpus's screen would present
@@ -2231,9 +2238,9 @@ a made-up geometry as a measurement, so the app declines: those entries carry no
 monitor, and the canvas falls back to the data's own extents. <code>eyegenbench.declared_monitor</code>
 is the single implementation of that rule, read by <strong>both</strong> the app and
 <code>render --eyegenbench</code>, so a corpus renders at the same scale whichever surface
-you ask. <code>geometry_source</code> and <code>monitor_source</code> move together across all 30 rows:
+you ask. <code>geometry_source</code> and <code>monitor_source</code> move together across all 31 rows:
 a corpus with a documented screen is the same corpus whose layout could be
-reconstructed from it.</p>
+reconstructed (or measured) on it.</p>
 <h2 id="preparing-a-bundle">Preparing a bundle<a class="headerlink" href="#preparing-a-bundle" title="Permanent link">&para;</a></h2>
 <p>The prep script runs EyeGenBench's own pipeline unmodified, then — while the raw
 downloads are still on disk — recovers geometry and writes the app-native bundle.
@@ -2317,7 +2324,7 @@ fixation rows.</p>
   the catalogue is reconstructed or synthesized. Reading order, fixation
   durations and word-level measures are the corpus's own data; pixel coordinates
   on a non-<code>real</code> corpus are a rendering.</li>
-<li><strong>Licences are mostly unstated.</strong> Twenty-four corpora record
+<li><strong>Licences are mostly unstated.</strong> Twenty-five corpora record
   <em>unknown — consult the corpus</em>. Check the publisher's terms before
   redistributing data or figures.</li>
 <li><strong>Word boxes are laid out monospaced</strong> on most reconstructed and synthesized

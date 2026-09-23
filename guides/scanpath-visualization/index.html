@@ -1863,9 +1863,10 @@ the previous/next buttons or screen menu to move between them. Figure links and
 saved configurations retain the active screen, and <strong>Annotations</strong> lets you
 choose parent-trial or current-screen scope.</p>
 <h2 id="control-the-layers">Control the layers<a class="headerlink" href="#control-the-layers" title="Permanent link">&para;</a></h2>
-<p>The <strong>Plot controls</strong> rail beside the plot starts with four <strong>Design presets</strong>
-(👁️ Scanpath, 🔥 Heatmap, ✏️ Illustration, 🛠️ Custom) and a <strong>Palette</strong> — often
-all you need — followed by seven sections:</p>
+<p>The <strong>🎛️ Plot controls</strong> rail beside the plot opens with the <strong>🎬 Animate</strong> and
+<strong>⚖️ Compare</strong> mode rows, then four <strong>Design presets</strong> (👁️ Scanpath, 🔥 Heatmap,
+✏️ Illustration, 🛠️ Custom) and a <strong>Palette</strong> — often all you need — followed by
+seven sections:</p>
 <p>Scanpath, Heatmap, and Illustration are deterministic presets: selecting one
 starts from the app defaults before applying that view. <strong>Custom</strong> remembers the
 last settings you changed by hand and restores them after you visit a preset.</p>
@@ -1891,7 +1892,7 @@ last settings you changed by hand and restores them after you visit a preset.</p
 <tr>
 <td>📄 Stimulus</td>
 <td>Text, Bounding boxes, Stimulus image</td>
-<td>verify stimulus geometry and fixation-to-word alignment; compare against the original display</td>
+<td>verify stimulus geometry and fixation-to-word alignment; compare against the original display; text font, text colour and plot background</td>
 </tr>
 <tr>
 <td>🔥 Heatmap</td>
@@ -1911,22 +1912,34 @@ last settings you changed by hand and restores them after you visit a preset.</p
 <tr>
 <td>📐 Figure &amp; canvas</td>
 <td>—</td>
-<td>monitor framing, plot background, colour bars, axes, title and labels</td>
+<td>monitor framing, colour bars, axes, title and labels</td>
 </tr>
 </tbody>
 </table>
-<p>Every section is <strong>one line</strong>: its on/off switch, where it has a single thing to
-switch, and a <strong>▾</strong> holding everything else in a popover that opens over the page
-instead of being cropped by the narrow rail. 📄 Stimulus carries three layers and
-so takes its name instead, with each layer's toggle leading its own group inside;
-🧹 Filter and 📐 Figure &amp; canvas have no layer to switch at all. A layer's
-settings stay readable while the layer is off, so you can set a layer up before
-turning it on. Marker size already encodes duration by default, so uniform
-fixation color is usually the clearest starting point.</p>
+<p>Every section is <strong>one line</strong>: its on/off switch and a <strong>▾</strong> holding everything
+else in a popover that opens over the page instead of being cropped by the narrow
+rail. 📄 Stimulus's switch covers all three of its layers, and each layer's own
+toggle leads its group inside; 🧹 Filter and 📐 Figure &amp; canvas have no layer to
+switch at all. While a layer is off its settings stay on screen but greyed — turn
+the layer on to change them; whatever you set is kept either way. The exception is
+📄 Stimulus: with the section switched off, its three layer toggles and their
+settings stay live, so you can choose what will show when you switch it back on.
+Marker size already encodes duration by default, so uniform fixation color is
+usually the clearest starting point.</p>
 <p><strong>Stimulus → Text</strong> keeps typography beside the layer it controls. Text can
 scale from word boxes, or use one fixed size entered in pixels or points; point
-sizes use the dataset DPI. <strong>📐 Figure &amp; canvas</strong> contains <strong>🖥️ Screen &amp;
+sizes use the dataset DPI. The text font, text colour and <strong>Plot background</strong>
+live there too, so they are only on screen while the Text layer is on (your
+choices are kept while it is off). <strong>📐 Figure &amp; canvas</strong> contains <strong>🖥️ Screen &amp;
 framing</strong>, <strong>📊 Axes &amp; grid</strong>, and <strong>🏷️ Title &amp; labels</strong>.</p>
+<p><strong>Colour ranges</strong> — the fixation colour range (👁️ Fixations <strong>▾</strong>, once
+fixations are coloured by a column) and the heatmap's (🔥 Heatmap <strong>▾</strong>) start
+on <strong>Auto range</strong>: each trial is scaled to its own values, exactly as the API and
+<code>render</code> draw it, and a comparison shares one scale across both readings. Drag
+the range, type a bound, or untick <em>Auto range</em> to pin one. A pinned range stays
+as you step through trials, which is what makes them comparable, and travels on
+a Share link, until you tick <em>Auto range</em> again. Choosing another <em>Color
+fixations by</em> column puts the fixation range back to auto.</p>
 <h3 id="show-screen-coordinates">Show screen coordinates<a class="headerlink" href="#show-screen-coordinates" title="Permanent link">&para;</a></h3>
 <p>Open <strong>📐 Figure &amp; canvas → 📊 Axes &amp; grid</strong> and turn on <strong>Coordinate grid</strong> to
 read the stimulus in monitor pixels. Automatic spacing chooses a readable
@@ -1955,7 +1968,8 @@ computation.</p>
 <ul>
 <li><strong>Animate</strong> replays the selected trial. The <strong>▾</strong> beside it controls speed,
   autoplay, and frame quality.</li>
-<li><strong>Compare</strong> adds a second reading beside the selected one.</li>
+<li><strong>Compare</strong> adds a second reading to the selected one — overlaid on the same
+  stimulus by default, or side by side / top &amp; bottom from the <strong>▾</strong> beside it.</li>
 <li><strong>Comparisons</strong> shows trials whose chosen field matches the selected trial.
   Choosing text id finds other readings of the text; choosing participant id
   finds that reader's other trials.</li>
@@ -1968,8 +1982,9 @@ at the end of B's line, and the trial's screen geometry all come from that
 dataset instead.</p>
 <p>B's line is the same shape as the trial line above it — dataset, trial, scrub
 slider, then ◀ ▶ ⇅ and the funnel — so the two read down the page as one pair of
-controls. B's funnel appears only when B has a dataset of its own to narrow;
-under <em>This dataset</em> the candidates come out of the pool your own funnel defines.</p>
+controls. B's funnel is always its own: under <em>This dataset</em> it starts from the
+whole dataset, unfiltered, so your own funnel narrows scanpath A's pool and never
+B's, and narrowing B never changes A.</p>
 <p>Any loaded upload, the bundled demo and the synthetic trial are always
 available. A public corpus is offered too, but only loads when its files are
 already where you last pointed the app — otherwise it shows <em>(needs setup)</em> and
@@ -2030,7 +2045,9 @@ overlays exactly as they were.</p>
 figure plus both scanpaths' tables and a manifest naming each side's dataset,
 trial and recording setup. The image alone can't be reproduced; the bundle can.</p>
 <p>A share link carries the comparison as <code>?compare=&lt;participant&gt;:&lt;trial&gt;</code> plus
-<code>&amp;cmp_source=&lt;dataset&gt;</code>, <code>&amp;cmp_layout=</code> and <code>&amp;cmp_stimulus=</code>. An uploaded dataset
+<code>&amp;cmp_source=&lt;dataset&gt;</code>, <code>&amp;cmp_layout=</code> and <code>&amp;cmp_stimulus=</code>, and each
+scanpath's own styling as <code>cmp_a_*</code> / <code>cmp_b_*</code> wherever you changed it (see
+<a href="../outputs-sharing/#share-a-view">Outputs and sharing</a>). An uploaded dataset
 lives only in your session, so a link can't rebuild it — the Share panel says so
 rather than sending half a comparison.</p>
 <p>Compare mode is also available headlessly — see

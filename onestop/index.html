@@ -1749,7 +1749,7 @@ will not resolve.</p>
 </tr>
 <tr>
 <td>LaCC lab (local export)</td>
-<td>A lab-processed export with extra derived columns (<code>unique_paragraph_id</code>, span indices, normalized dwell, …). No download — point at your local folder (default is the lab OneDrive path, editable / <code>ONESTOP_LACCLAB_DIR</code>).</td>
+<td>A lab-processed export with extra derived columns (<code>unique_paragraph_id</code>, span indices, normalized dwell, …). No download — point at your local folder (blank by default; type the path or set <code>ONESTOP_LACCLAB_DIR</code>).</td>
 </tr>
 </tbody>
 </table>
@@ -1843,6 +1843,15 @@ demo, with a <strong>⬇ Download now</strong> panel). For the Public variant, i
 present the corpus loads with no network access; if not, click <strong>⬇ Download</strong> to
 fetch them into the folder (cached on disk, so only the first load pays the
 download — reports range from tens to a few hundred MB each).</p>
+<div class="admonition note">
+<p class="admonition-title">On a server other machines can reach</p>
+<p>When the app is served to other machines (the hosted demo, or
+<code>--server.address 0.0.0.0</code>), the <em>Data directory</em> box, the 📁 folder picker
+and <strong>⬇ Download</strong> are turned off: the corpus is read from the server's
+configured data location, and whoever runs it places the files there — or,
+on a trusted network, starts it with <code>SCANPATH_LOCAL_FS=1</code>. See
+<a href="../cli/#launch">Launch</a> and <a href="../security/">Security</a>.</p>
+</div>
 <p>OneStop's reports use the same schema as the bundled demo, so they flow through
 the normal auto-detect → normalize pipeline — the <strong>Column mapping</strong> panels still
 appear and stay overridable. Fixation and interest-area coordinates are

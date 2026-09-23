@@ -1851,21 +1851,19 @@ CJK-capable family (and turns scale-to-boxes off) on a source switch, so the
 labels match the stimulus precisely rather than relying on inference.</p>
 <h2 id="pixels-not-points">Pixels, not points<a class="headerlink" href="#pixels-not-points" title="Permanent link">&para;</a></h2>
 <div class="admonition warning">
-<p class="admonition-title">Font-size controls are in pixels (px), not points (pt)</p>
-<p>Every font-size control in the app — the base label size, order-number size,
-colour-bar tick size — is in <strong>pixels</strong>. Stimulus typography, however, is
-usually specified in <strong>points</strong>. The two are not interchangeable: a point is a
-physical unit (1 pt = 1/72 inch), a pixel is a screen unit, and the conversion
-depends on the display's DPI:</p>
+<p class="admonition-title">Font-size controls are in pixels (px) unless you choose points</p>
+<p>The base label size, order-number size and colour-bar tick size are in
+<strong>pixels</strong>. Stimulus typography, however, is usually specified in <strong>points</strong>.
+The two are not interchangeable: a point is a physical unit (1 pt = 1/72 inch),
+a pixel is a screen unit, and the conversion depends on the display's DPI:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>px = pt × DPI / 72          pt = px × 72 / DPI
 </code></pre></div>
 <p>So "18 pt" is only "18 px" on a 72-DPI display; on a 96-DPI monitor it is
-24 px. If you're trying to reproduce an original stimulus font exactly, convert
-through the experiment's DPI — or, better, use a dataset that stamps its real
-<code>stimulus_font_px</code> (see above) and let the app snap to it. Folding the
-experimental-setup values (screen resolution, viewing distance, DPI, stimulus
-font pt) into the display settings so this conversion is automatic is tracked
-as a roadmap item.</p>
+24 px. To give the reading text's size in points, open <strong>📄 Stimulus → Text</strong>,
+untick <strong>Scale text to boxes</strong> and set <strong>Font unit</strong> to <strong>Points (pt)</strong>: the
+app converts it with the <strong>Display DPI</strong> from the dataset's recording setup
+(🗂️ Data → ✏️ Edit dataset → Recording setup). A dataset that stamps its real
+<code>stimulus_font_px</code> (see above) still snaps to that directly.</p>
 </div>
 <h2 id="why-the-spatial-plot-needs-a-special-render-path">Why the spatial plot needs a special render path<a class="headerlink" href="#why-the-spatial-plot-needs-a-special-render-path" title="Permanent link">&para;</a></h2>
 <p>The true-to-scale text only holds if the figure is embedded at its <strong>exact pixel
@@ -1876,6 +1874,10 @@ single-trial, animation, and comparison plots all go through
 <code>tabs._render_true_scale_chart</code>, which embeds the figure's own HTML at its exact
 size and CSS-scales the whole block uniformly to the column width. Static image
 export bumps the raster <code>scale</code> to stay crisp; SVG/PDF are vector and need no bump.</p>
+<p>The embed loads plotly.js from the app's own server, never a CDN:
+<code>html_embed.plotlyjs_script()</code> goes ahead of <code>fig.to_html(include_plotlyjs=False)</code>
+and loads the <code>plotly.min.js</code> that ships with the installed plotly package, so the
+figure draws offline and in the desktop app (ENG-64).</p>
 <p>If you add a new spatial figure, keep it on <code>_render_true_scale_chart</code> — never
 <code>st.plotly_chart</code> — or the reading text will drift from the boxes.</p>
 <h2 id="duration-mass-and-illustration-disclosure">Duration mass and illustration disclosure<a class="headerlink" href="#duration-mass-and-illustration-disclosure" title="Permanent link">&para;</a></h2>

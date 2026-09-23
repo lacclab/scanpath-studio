@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_animation_export_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.1">coverage.py v7.16.1</a>,
-            created at 2026-09-23 18:34 +0000
+            created at 2026-09-23 22:57 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -720,9 +720,9 @@
     <p class="run"><span class="n"><a id="t638" href="#t638">638</a></span><span class="t"><span class="key">def</span> <span class="nam">_word_centers_reading_order</span><span class="op">(</span><span class="nam">words</span><span class="op">:</span> <span class="nam">pd</span><span class="op">.</span><span class="nam">DataFrame</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="nam">np</span><span class="op">.</span><span class="nam">ndarray</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t639" href="#t639">639</a></span><span class="t">    <span class="str">&quot;&quot;&quot;Word-box centers ``(x_center, y_center)`` in reading order, NaN-geometry dropped.&quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t640" href="#t640">640</a></span><span class="t">    <span class="nam">ordered</span> <span class="op">=</span> <span class="nam">_ordered_word_rows</span><span class="op">(</span><span class="nam">words</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t641" href="#t641">641</a></span><span class="t">    <span class="com"># BUG-11: the corrected box centre is the glyph centre &#8212; which is what warp /</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t642" href="#t642">642</a></span><span class="t">    <span class="com"># compare are matching fixations against.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t643" href="#t643">643</a></span><span class="t">    <span class="nam">x0</span><span class="op">,</span> <span class="nam">y0</span><span class="op">,</span> <span class="nam">x1</span><span class="op">,</span> <span class="nam">y1</span> <span class="op">=</span> <span class="nam">word_box_bounds</span><span class="op">(</span><span class="nam">ordered</span><span class="op">,</span> <span class="nam">layout</span><span class="op">=</span><span class="nam">words</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t641" href="#t641">641</a></span><span class="t">    <span class="com"># The interest-area centres, from the experiment&#x27;s own boxes (BUG-83) &#8212; the</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t642" href="#t642">642</a></span><span class="t">    <span class="com"># same rectangles the fixations are assigned against.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t643" href="#t643">643</a></span><span class="t">    <span class="nam">x0</span><span class="op">,</span> <span class="nam">y0</span><span class="op">,</span> <span class="nam">x1</span><span class="op">,</span> <span class="nam">y1</span> <span class="op">=</span> <span class="nam">word_box_bounds</span><span class="op">(</span><span class="nam">ordered</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t644" href="#t644">644</a></span><span class="t">    <span class="nam">finite</span> <span class="op">=</span> <span class="nam">np</span><span class="op">.</span><span class="nam">isfinite</span><span class="op">(</span><span class="nam">x0</span><span class="op">)</span> <span class="op">&amp;</span> <span class="nam">np</span><span class="op">.</span><span class="nam">isfinite</span><span class="op">(</span><span class="nam">y0</span><span class="op">)</span> <span class="op">&amp;</span> <span class="nam">np</span><span class="op">.</span><span class="nam">isfinite</span><span class="op">(</span><span class="nam">x1</span><span class="op">)</span> <span class="op">&amp;</span> <span class="nam">np</span><span class="op">.</span><span class="nam">isfinite</span><span class="op">(</span><span class="nam">y1</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t645" href="#t645">645</a></span><span class="t">    <span class="nam">cx</span> <span class="op">=</span> <span class="op">(</span><span class="op">(</span><span class="nam">x0</span> <span class="op">+</span> <span class="nam">x1</span><span class="op">)</span> <span class="op">/</span> <span class="num">2.0</span><span class="op">)</span><span class="op">[</span><span class="nam">finite</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t646" href="#t646">646</a></span><span class="t">    <span class="nam">cy</span> <span class="op">=</span> <span class="op">(</span><span class="op">(</span><span class="nam">y0</span> <span class="op">+</span> <span class="nam">y1</span><span class="op">)</span> <span class="op">/</span> <span class="num">2.0</span><span class="op">)</span><span class="op">[</span><span class="nam">finite</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
@@ -835,7 +835,7 @@
             <a class="nav" href="z_370c57a259db20f3_animation_export_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.1">coverage.py v7.16.1</a>,
-            created at 2026-09-23 18:34 +0000
+            created at 2026-09-23 22:57 +0000
         </p>
     </div>
 </footer>

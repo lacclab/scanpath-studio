@@ -1827,9 +1827,11 @@ visualization rail, or <code>canvas_size=(W, H)</code> in the API) — e.g.
 </details>
 <details class="question">
 <summary>OneStop server data</summary>
-<p>Pointing the app at a full OneStop export uses <code>$ONESTOP_DATA_DIR</code>; see
-<a href="https://github.com/lacclab/scanpath-studio/blob/main/AGENTS.md">AGENTS.md</a>
-for the sharding/loader details.</p>
+<p>Pointing the app at a full OneStop export uses <code>$ONESTOP_DATA_DIR</code>; shard it
+once with <code>python -m scanpath_studio.onestop_shard --data-dir …</code> so a
+deep-linked participant loads in under a second. The loader details are in
+<a href="https://github.com/lacclab/scanpath-studio/blob/main/scanpath_studio/CLAUDE.md"><code>scanpath_studio/CLAUDE.md</code></a>
+(<code>onestop_shard.py</code>, <code>data.load_onestop_server_bundle</code>).</p>
 </details>
 
 

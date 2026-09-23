@@ -1745,8 +1745,9 @@ which any client on the network could set to <code>localhost</code>.</p>
 <p>The cache is visible and removable from inside the app: 💾 <strong>Session →
 🗄️ Automatic recovery</strong> (the dialog the nav's 💾 Session entry opens) names the
 folder, reports what is stored and how large it
-is, pauses saving for the session, and deletes the stored copy (<strong>Forget saved
-session</strong>). The same from a terminal, with the app closed:</p>
+is, pauses saving for the session (<strong>Save changes automatically</strong>), and deletes
+the stored copy (<strong>🗑 Clear recovery cache</strong>, which leaves saving on). The same
+from a terminal, with the app closed:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">                       </span><span class="c1"># what is stored, where, how big</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">               </span><span class="c1"># delete it</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nv">SCANPATH_STUDIO_PERSIST</span><span class="o">=</span><span class="m">0</span><span class="w"> </span>scanpath-studio<span class="w">   </span><span class="c1"># disable recovery storage</span>
@@ -1756,9 +1757,16 @@ session</strong>). The same from a terminal, with the app closed:</p>
 folder like the data files it came from (disk encryption, shared-machine
 accounts). It is single-user and unencrypted: anyone with your account on that
 machine can read it.</p>
-<p>The desktop app binds to your machine only. A direct Streamlit launch may listen
-on the local network; on a shared or untrusted network, bind explicitly:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>scanpath-studio<span class="w"> </span>--server.address<span class="o">=</span><span class="m">127</span>.0.0.1
+<p>Exporting an <strong>MP4</strong> replay is the one other time the app writes to disk: the
+encoder needs a real file, so the clip is written to a temporary file in the
+system's temp folder (readable by your account only) and deleted as soon as it
+has been read back. Only a crash or a forced kill mid-encode leaves it behind,
+and it holds the rendered frames, not your tables.</p>
+<p>The desktop app and every <code>scanpath-studio</code> launch bind to your machine only
+(<code>127.0.0.1</code>) unless you pass <code>--server.address</code> yourself. A bare
+<code>streamlit run streamlit_app.py</code> does not — it listens on every interface — so
+from a source checkout, bind explicitly:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>streamlit<span class="w"> </span>run<span class="w"> </span>streamlit_app.py<span class="w"> </span>--server.address<span class="w"> </span><span class="m">127</span>.0.0.1
 </code></pre></div>
 <h2 id="the-online-demo">The online demo<a class="headerlink" href="#the-online-demo" title="Permanent link">&para;</a></h2>
 <p>The public demo has no account or data-use agreement. Use it with the bundled
@@ -1767,7 +1775,9 @@ provider. Sessions are temporary and server resources are limited.</p>
 <h2 id="whats-in-a-link-a-config-file-and-an-export">What's in a link, a config file, and an export<a class="headerlink" href="#whats-in-a-link-a-config-file-and-an-export" title="Permanent link">&para;</a></h2>
 <ul>
 <li>A <strong>share link</strong> contains the participant and trial IDs plus the visualization
-  settings. It does not contain the data tables.</li>
+  settings. It does not contain the data tables — except for a scanpath made
+  with <strong>✏️ Author a scanpath</strong>, whose link carries the typed text and every
+  hand-placed fixation, because they <em>are</em> its data.</li>
 <li>A <strong>saved configuration</strong> can contain column names and annotation notes.</li>
 <li>An <strong>exported table</strong> contains the selected research data.</li>
 </ul>
@@ -1776,10 +1786,17 @@ history, logs, or chat previews, so do not copy one when its participant or
 trial identifiers should not be exposed there.</p>
 <h2 id="network-activity">Network activity<a class="headerlink" href="#network-activity" title="Permanent link">&para;</a></h2>
 <p>Downloading a public corpus contacts its host, and only when you click
-<strong>⬇ Download</strong>. The scanpath, animation and comparison figures load the Plotly
-charting library from <strong>cdn.plot.ly</strong> each time they are drawn, so your browser
-fetches it from that host; your data is not sent with the request, but the
-figure needs an internet connection to appear — including in the desktop app.
+<strong>⬇ Download</strong> — or, headlessly, the first time <code>scanpath-studio render --potec</code>
+or <code>--onestop</code> (the Public variant) runs against a folder that doesn't have it
+yet. The scanpath, animation and comparison figures load the Plotly
+charting library from the app's own server — the copy installed with the app —
+so drawing a figure contacts no other host and works without an internet
+connection, the desktop app included. A figure you download as <strong>HTML</strong> is
+different: a saved file has no app server behind it, so it loads the library
+from <strong>cdn.plot.ly</strong> when you open it, which needs an internet connection and
+tells that host the file was opened (no data travels with the request). HTML
+written headlessly (<code>save_figure</code>, <code>scanpath-studio render -o figure.html</code>)
+embeds the library instead and makes no request.
 Streamlit's own usage statistics are switched off on every launch path
 (<code>scanpath-studio run</code>, the desktop app and the repository's
 <code>.streamlit/config.toml</code>). The application adds no analytics service of its own.</p>

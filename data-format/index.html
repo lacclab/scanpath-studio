@@ -1081,6 +1081,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#text-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Text metadata
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#flexible-loading" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1721,6 +1732,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#text-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Text metadata
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#flexible-loading" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1799,7 +1821,8 @@
 <p>Scanpath Studio reads up to three tables — <strong>words / areas-of-interest</strong>,
 <strong>fixations</strong>, and (optionally) <strong>raw gaze</strong> — as <strong>CSV, TSV, TXT, Parquet,
 Feather, or Excel</strong>, or a <code>.zip</code> of any of them. Columns are auto-detected from
-common EyeLink, Gazepoint, and snake-case conventions; the app's <strong>Column
+common EyeLink, Gazepoint, Tobii, SMI, Pupil Labs, and snake-case conventions;
+the app's <strong>Column
 mapping</strong> panel (and the
 <code>word_schema</code> / <code>fix_schema</code> arguments of
 <a class="autorefs autorefs-internal" title="scanpath_studio.api.load_scanpath_data" href="../api/#scanpath_studio.api.load_scanpath_data"><code>load_scanpath_data</code></a>) override
@@ -1839,6 +1862,11 @@ any guess.</p>
 <td>one row per reading</td>
 <td>trial id (optionally participant id too), plus anything you know about that reading</td>
 </tr>
+<tr>
+<td><strong>Text metadata</strong> <em>(optional)</em></td>
+<td>one row per text</td>
+<td>text id, plus anything you know about that text</td>
+</tr>
 </tbody>
 </table>
 <p><strong>Units.</strong> Durations and timestamps are read in milliseconds. A column whose
@@ -1857,8 +1885,8 @@ gain the other later on 🗂️ <strong>Data → ✏️ Edit dataset</strong>, w
 <p>Attach a table of <strong>one row per reader</strong> — native language, age, a
 comprehension score, a group label. When you upload your own data it is one of
 the <strong>Metadata</strong> uploaders in part 2 of the setup wizard; for the demo, a public
-corpus, or a dataset you added earlier, the same panel is on 🗂️ <strong>Data → ✏️ Edit dataset</strong>
-under <strong>👤 Participant metadata</strong>. Its columns then behave like fields in the
+corpus, or a dataset you added earlier, the same uploader is on 🗂️ <strong>Data → ✏️ Edit dataset</strong>
+under <strong>Metadata → Participants</strong>. Its columns then behave like fields in the
 data: they filter trials (the filter funnel's <em>By reader</em> section), show up as
 chips above the plot, sort the trial picker, group cohorts in Corpus Analysis,
 appear in the dataset's inspection tables, and travel with exports and saved
@@ -1887,7 +1915,7 @@ and <a href="../api/"><code>load_participant_metadata()</code></a> in the Python
 name, a presentation order, a per-trial comprehension score, whatever your
 design recorded about the trial rather than about the reader. It attaches
 beside the participant table — under <strong>Metadata</strong> in part 2 of the add-dataset
-wizard, and on 🗂️ <strong>Data → ✏️ Edit dataset</strong> under 🗂️ <strong>Trial metadata</strong> for a
+wizard, and on 🗂️ <strong>Data → ✏️ Edit dataset</strong> under <strong>Metadata → Trials</strong> for a
 dataset that is already loaded — and its columns behave like fields in the data in the same
 way: they filter trials, show up as chips above the plot, sort the trial picker,
 appear in the inspection tables, and travel with exports
@@ -1896,18 +1924,32 @@ appear in the inspection tables, and travel with exports
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>t01,A,1,1
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>t02,A,2,0
 </code></pre></div>
-<p><strong>The key is your call, and it decides what a row means.</strong> Keyed by trial id
-alone, a row describes a <em>text</em>, and every reader's reading of it inherits that
-row — right for a design where the trial id names the material. Add a
-participant column (the <em>Reader column</em> picker, <code>--trial-metadata-reader-column</code>
-on the CLI) and a row describes <strong>one reading</strong>, which is what you need as soon
-as the same reader reads the same text twice. Nothing in a file says which of
-the two you meant, so this is never guessed: the picker starts at <em>(none)</em>.</p>
+<p><strong>The key decides what a row means.</strong> Keyed by trial id alone, a row describes
+a <em>text</em>, and every reader's reading of it inherits that row — right for a design
+where the trial id names the material. The app always keys the table this way:
+its <strong>Trial ID column</strong> picker takes one column, or several to build the id the
+way the data's own Trial ID mapping does. Keyed by reader <strong>and</strong> trial, a row
+describes <strong>one reading</strong>, which is what you need as soon as the same reader
+reads the same text twice — and that table attaches headlessly only, with
+<code>--trial-metadata-reader-column</code> on the CLI or <code>participant_column=</code> in the
+Python API. Nothing in a file says which of the two you meant, so this is never
+guessed.</p>
 <p>Everything else matches the participant table — the join is reported before it
 is used, duplicate rows that disagree are dropped and named rather than
 resolved, and the table is never copied onto your fixations.</p>
 <p>Headless, it is <code>--trial-metadata FILE</code> on <code>scanpath-studio render</code> and
 <a href="../api/"><code>load_trial_metadata()</code></a> in the Python API.</p>
+<h2 id="text-metadata">Text metadata<a class="headerlink" href="#text-metadata" title="Permanent link">&para;</a></h2>
+<p>The third grain: a table of <strong>one row per text</strong> — a genre, a difficulty rating,
+a stimulus-level comprehension score. It attaches beside the other two (under
+<strong>Metadata → Texts</strong> in the wizard and on ✏️ <strong>Edit dataset</strong>), keyed by text id
+alone — never by reader, since a text is a stimulus rather than something one
+reader owns — and, like the trial table, the id may be built from several
+columns. Its columns behave like fields in the data in the same way, travel with
+exports (<code>metadata/texts.csv</code>) and saved sessions, and follow the same join
+rules.</p>
+<p>Headless, it is <code>--text-metadata FILE</code> on <code>scanpath-studio render</code> and
+<a href="../api/"><code>load_text_metadata()</code></a> in the Python API.</p>
 <h2 id="flexible-loading">Flexible loading<a class="headerlink" href="#flexible-loading" title="Permanent link">&para;</a></h2>
 <p>The loader bends to fit real corpora:</p>
 <ul>
@@ -2017,11 +2059,12 @@ and a character grid with letter-based landing/launch positions. Trial text is
 also auto-tagged <code>right_to_left</code> for Hebrew/Arabic-majority content; an explicit
 column takes precedence.</p>
 <h2 id="setup-wizard-saved-setups">Setup wizard &amp; saved setups<a class="headerlink" href="#setup-wizard-saved-setups" title="Permanent link">&para;</a></h2>
-<p>Uploading through the app's <strong>➕ Add data</strong> wizard walks you through naming the
-dataset, the experimental setup (monitor resolution keeps everything
-true-to-scale), upload, and column mapping. You can <strong>download a setup</strong> (the
-column mapping as JSON) and <strong>restore</strong> it later on similar data to skip the
-manual mapping. Finished uploads become first-class, switchable data sources.</p>
+<p>Uploading through the 🗂️ Data page's <strong>➕ Add dataset</strong> wizard walks you through
+three parts: naming the dataset, uploading the tables and mapping their columns,
+and the recording setup (monitor resolution keeps everything true-to-scale). You
+can <strong>⬇️ Save setup</strong> (the column mapping and recording setup as JSON) and
+<strong>↩️ Restore a saved setup</strong> later on similar data to skip the manual mapping.
+Finished uploads become first-class, switchable data sources.</p>
 
 
 

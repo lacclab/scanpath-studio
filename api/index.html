@@ -1026,6 +1026,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#scanpath_studio.api.load_raw_gaze" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_raw_gaze
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.load_sample_raw_gaze" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_sample_raw_gaze
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#scanpath_studio.api.load_participant_metadata" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1041,6 +1063,28 @@
     <span class="md-ellipsis">
       
         load_trial_metadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.load_text_metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_text_metadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.propose_schema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        propose_schema
       
     </span>
   </a>
@@ -2066,6 +2110,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#scanpath_studio.api.load_raw_gaze" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_raw_gaze
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.load_sample_raw_gaze" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_sample_raw_gaze
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#scanpath_studio.api.load_participant_metadata" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2081,6 +2147,28 @@
     <span class="md-ellipsis">
       
         load_trial_metadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.load_text_metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_text_metadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.propose_schema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        propose_schema
       
     </span>
   </a>
@@ -2513,14 +2601,15 @@ app's default view and change only the needed layers.</p>
     <div class="doc doc-contents first">
 
         <p>Load and normalize a words/IA table and/or a fixations table.</p>
-<p><code>words</code> / <code>fixations</code> may be DataFrames, paths to <code>.csv</code> / <code>.tsv</code>
-/ <code>.parquet</code> / <code>.feather</code> files, glob patterns, or lists of paths —
-multi-file datasets (one file per participant and/or text) are
-concatenated, with each file's stem kept in a <code>source_file</code> column.
-Column schemas are auto-detected (EyeLink, Gazepoint, and snake_case
-names); pass <code>word_schema</code> / <code>fix_schema</code> mappings (field → column
-name, see <code>controls.WORD_FIELD_SPECS</code>) to override detection. For
-per-word reading measures, pass the result to :func:<code>compute_word_metrics</code>.</p>
+<p><code>words</code> / <code>fixations</code> may be DataFrames, paths to <code>.csv</code> / <code>.tsv</code> /
+<code>.txt</code> / <code>.tab</code> / <code>.parquet</code> / <code>.feather</code> / <code>.xlsx</code> / <code>.xls</code> files (or
+a <code>.zip</code> of them), glob patterns, or lists of paths — multi-file datasets (one
+file per participant and/or text) are concatenated, with each file's stem kept in
+a <code>source_file</code> column. Column schemas are auto-detected (EyeLink, Gazepoint,
+Tobii, SMI, Pupil Labs, and snake_case names); pass <code>word_schema</code> /
+<code>fix_schema</code> mappings (field → column name, see <code>controls.WORD_FIELD_SPECS</code>)
+to override detection. For per-word reading measures, pass the result to
+<a class="autorefs autorefs-internal" title="scanpath_studio.api.compute_word_metrics" href="#scanpath_studio.api.compute_word_metrics"><code>compute_word_metrics</code></a>.</p>
 <p><code>trial_parts_manifest</code> accepts a nested parent-trial/parts definition for
 datasets whose source tables identify screens through arbitrary selector
 columns; explicit <code>screen_id</code> / <code>screen_index</code> columns can instead be
@@ -2556,7 +2645,62 @@ looked for, and the columns the table actually has.</p>
 
         <p>Return the bundled OneStop demo, normalized and ready to plot.</p>
 <p>Three readers' word boxes ship with the package but only two of them have
-fixations, so :func:<code>list_trials</code> reports the two plottable readers.</p>
+fixations, so <a class="autorefs autorefs-internal" title="scanpath_studio.api.list_trials" href="#scanpath_studio.api.list_trials"><code>list_trials</code></a> reports the two
+plottable readers.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.api.load_raw_gaze" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">scanpath_studio.api.load_raw_gaze</span>
+
+
+<a href="#scanpath_studio.api.load_raw_gaze" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">load_raw_gaze</span><span class="p">(</span><span class="n">table</span><span class="p">:</span> <span class="n">TablesLike</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">raw_gaze_schema</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Load and normalize a raw (sample-level) gaze table for <code>raw_gaze=</code> (EXP-20).</p>
+<p>The third table <a class="autorefs autorefs-internal" title="scanpath_studio.api.plot_scanpath" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a> can draw, under
+the fixations: one row per eye-tracker sample, with a participant, a trial, <code>x</code> /
+<code>y</code> and usually a timestamp. <code>table</code> is a DataFrame, path, glob or list of
+paths, like <a class="autorefs autorefs-internal" title="scanpath_studio.api.load_scanpath_data" href="#scanpath_studio.api.load_scanpath_data"><code>load_scanpath_data</code></a>'s, and
+the columns are auto-detected the same way; pass <code>raw_gaze_schema</code> (field →
+column, see <code>api.propose_schema(table, "raw_gaze")</code>) to override the detection.
+<code>plot_scanpath</code> keeps only the plotted trial's (and screen's) samples, so one
+table can serve a whole corpus::</p>
+<div class="highlight"><pre><span></span><code>raw_gaze = sps.load_raw_gaze("gaze_samples.csv")
+fig = sps.plot_scanpath(words, fixations, "p1", "t3", raw_gaze=raw_gaze)
+</code></pre></div>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.api.load_sample_raw_gaze" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">scanpath_studio.api.load_sample_raw_gaze</span>
+
+
+<a href="#scanpath_studio.api.load_sample_raw_gaze" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">load_sample_raw_gaze</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>The bundled demo's raw gaze, normalized — what the app overlays on it.</p>
+<p>OneStop ships no sample-level gaze, so this is <strong>synthesized</strong> from one of
+the demo's real trials (see <code>update_sample_data.synthesize_raw_gaze</code>) and
+covers that trial alone.</p>
 
 
     </div>
@@ -2586,10 +2730,10 @@ defaults to the first recognised spelling (<code>participant_id</code>, <code>su
 join validated against the data you actually loaded; the returned object's
 <code>.report</code> then names the readers missing from either side.</p>
 <p>Returns a
-:class:<code>~scanpath_studio.metadata.ParticipantMetadata</code>: the cleaned frame,
+<code>ParticipantMetadata</code>: the cleaned frame,
 a field registry (name, label, grain, dtype, missingness), and the join
 report. Nothing is broadcast onto the words/fixations frames — use
-:func:<code>scanpath_studio.metadata.project</code> to attach chosen columns to a
+<code>scanpath_studio.metadata.project</code> to attach chosen columns to a
 per-trial frame, or <code>.values_for(pid)</code> for one reader.</p>
 <blockquote>
 <blockquote>
@@ -2623,9 +2767,11 @@ meta.names  # doctest: +SKIP
     <div class="doc doc-contents first">
 
         <p>Load a trial-level metadata table (DATA-29 — milestone 2).</p>
-<p>The sibling of :func:<code>load_participant_metadata</code>, one grain down: <code>table</code>
-has <strong>one row per reading</strong> — a trial-id column plus anything known about
-that reading (a list name, a condition, a per-trial comprehension score).</p>
+<p>The sibling of
+<a class="autorefs autorefs-internal" title="scanpath_studio.api.load_participant_metadata" href="#scanpath_studio.api.load_participant_metadata"><code>load_participant_metadata</code></a>, one
+grain down: <code>table</code> has <strong>one row per reading</strong> — a trial-id column plus anything
+known about that reading (a list name, a condition, a per-trial comprehension
+score).</p>
 <p><strong>The key is yours to state, and it changes what the table means.</strong> Keyed by
 trial id alone, a row describes a <em>text</em>, and every reader's reading of it
 inherits that row; pass <code>participant_column</code> to key by reader <strong>and</strong>
@@ -2637,7 +2783,7 @@ defaults to the first recognised spelling (<code>trial_id</code>, <code>item_id<
 <code>participant_id</code> + <code>trial_id</code> — to have the join validated against the
 data you actually loaded; the returned <code>.report</code> then names the trials
 missing from either side.</p>
-<p>Returns a :class:<code>~scanpath_studio.metadata.TrialMetadata</code>: the cleaned
+<p>Returns a <code>TrialMetadata</code>: the cleaned
 frame, a field registry, and the join report. As with the participant
 table, nothing is broadcast onto the words/fixations frames.</p>
 <blockquote>
@@ -2661,6 +2807,85 @@ meta.names  # doctest: +SKIP
 <div class="doc doc-object doc-function">
 
 
+<h3 id="scanpath_studio.api.load_text_metadata" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">scanpath_studio.api.load_text_metadata</span>
+
+
+<a href="#scanpath_studio.api.load_text_metadata" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">load_text_metadata</span><span class="p">(</span><span class="n">table</span><span class="p">:</span> <span class="n">TablesLike</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">id_column</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">texts</span><span class="p">:</span> <span class="n">DataFrame</span> <span class="o">|</span> <span class="nb">list</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Load a text-level metadata table — the third grain.</p>
+<p><code>table</code> has <strong>one row per text</strong> — a text-id column plus anything known about that
+text (genre, difficulty, a stimulus-level comprehension score). Flat grain, like
+<a class="autorefs autorefs-internal" title="scanpath_studio.api.load_participant_metadata" href="#scanpath_studio.api.load_participant_metadata"><code>load_participant_metadata</code></a>: never
+keyed by reader, since a text is a stimulus rather than something one reader owns.
+<code>id_column</code> defaults to the first recognised spelling (<code>text_id</code>,
+<code>paragraph_id</code>, <code>stimulus_id</code>, …) and may be several columns to build a
+composite id, the same way the uploaded data's own Text ID mapping does.</p>
+<p>Pass <code>texts</code> — a normalized fixations/words frame, or any iterable of
+text ids — to have the join validated against the data you actually
+loaded; the returned <code>.report</code> then names the texts missing from either
+side.</p>
+<p>Returns a <code>TextMetadata</code>: the cleaned
+frame, a field registry, and the join report. As with the other two
+grains, nothing is broadcast onto the words/fixations frames.</p>
+<blockquote>
+<blockquote>
+<blockquote>
+<p>words, fixations = load_sample_data()
+meta = load_text_metadata(
+...     "texts.csv", texts=words
+... )  # doctest: +SKIP
+meta.names  # doctest: +SKIP
+('genre', 'difficulty')</p>
+</blockquote>
+</blockquote>
+</blockquote>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.api.propose_schema" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">scanpath_studio.api.propose_schema</span>
+
+
+<a href="#scanpath_studio.api.propose_schema" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">propose_schema</span><span class="p">(</span><span class="n">table</span><span class="p">:</span> <span class="n">TablesLike</span><span class="p">,</span> <span class="n">kind</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'words'</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Auto-detected column mapping for a <strong>raw</strong> (un-normalized) table.</p>
+<p><code>kind</code> is <code>"words"</code>, <code>"fixations"</code> or <code>"raw_gaze"</code>. Returns
+<code>{canonical field: source column or None}</code> — the same mapping
+<a class="autorefs autorefs-internal" title="scanpath_studio.api.load_scanpath_data" href="#scanpath_studio.api.load_scanpath_data"><code>load_scanpath_data</code></a> infers internally,
+so it's the place to start when detection got a field wrong or couldn't find one:
+edit the dict and pass it back as <code>word_schema=</code> / <code>fix_schema=</code>::</p>
+<div class="highlight"><pre><span></span><code>from scanpath_studio import api
+
+schema = api.propose_schema("ia.csv", "words")
+schema["trial"] = "TRIAL_LABEL"
+words, fixations = api.load_scanpath_data("ia.csv", "fix.csv",
+                                          word_schema=schema)
+</code></pre></div>
+<p><code>table</code> is a DataFrame, path, glob or list of paths, like the loader's.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h3 id="scanpath_studio.api.build_authored_scanpath" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">scanpath_studio.api.build_authored_scanpath</span>
 
@@ -2673,7 +2898,7 @@ meta.names  # doctest: +SKIP
 
         <p>Build normalized word/fixation frames from hand-authored reading events.</p>
 <p>When <code>events</code> is omitted, one centered fixation per laid-out word is used.
-<code>layout_options</code> are forwarded to :func:<code>authoring.layout_text</code>.</p>
+<code>layout_options</code> are forwarded to <code>authoring.layout_text</code>.</p>
 
 
     </div>
@@ -2724,9 +2949,8 @@ corpus is 75 readers × 12 texts = 900 trials.</p>
 <div class="highlight"><pre><span></span><code>words, fixations = load_potec("data/PoTeC", readers=[0], texts=["b0"])
 fig = scanpath_studio.plot_scanpath(words, fixations)
 </code></pre></div>
-<p>The PoTeC monitor was 1680×1050 (DELL P2210, 60 Hz); pass that as
-<code>canvas_size</code> to :func:<code>scanpath_studio.plot_scanpath</code> for true-to-scale
-rendering.</p>
+<p>The PoTeC monitor was 1680×1050 (DELL P2210, 60 Hz); pass that as <code>canvas_size</code> to
+<a class="autorefs autorefs-internal" title="scanpath_studio.api.plot_scanpath" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a> for true-to-scale rendering.</p>
 
 
     </div>
@@ -2762,12 +2986,12 @@ fig = scanpath_studio.plot_scanpath(
     words, fixations, canvas_size=(2560, 1440)
 )
 </code></pre></div>
-<p>OneStop's presentation monitor was 2560×1440 (Dell U2715H) — the citation
-lives in :data:<code>scanpath_studio.eyegenbench_geometry.DISPLAY_SPECS</code>'s
-<code>"onestop"</code> entry (Berzak et al. 2025, Methods → Apparatus); pass that as
-<code>canvas_size</code> to :func:<code>scanpath_studio.plot_scanpath</code> for true-to-scale
-rendering. The reports already match the bundled demo's schema, so this reuses
-the generic auto-detect → normalize path (no OneStop-specific column mapping).</p>
+<p>OneStop's presentation monitor was 2560×1440 (Dell U2715H) — the citation lives in
+<code>scanpath_studio.eyegenbench_geometry.DISPLAY_SPECS</code>'s <code>"onestop"</code> entry (Berzak
+et al. 2025, Methods → Apparatus); pass that as <code>canvas_size</code> to
+<a class="autorefs autorefs-internal" title="scanpath_studio.api.plot_scanpath" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a> for true-to-scale rendering.
+The reports already match the bundled demo's schema, so this reuses the generic
+auto-detect → normalize path (no OneStop-specific column mapping).</p>
 
 
     </div>
@@ -2917,9 +3141,9 @@ identity from the compatibility default.</p>
     <div class="doc doc-contents first">
 
         <p>Per-word reading measures (FFD/FPRT/RPD/TFD, skips, regressions, …).</p>
-<p>Pre-aggregated columns in <code>words</code> (EyeLink IA exports) are preserved;
-anything missing is computed from fixations + word bounding boxes. Takes
-the normalized frames from :func:<code>load_scanpath_data</code>.</p>
+<p>Pre-aggregated columns in <code>words</code> (EyeLink IA exports) are preserved; anything
+missing is computed from fixations + word bounding boxes. Takes the normalized
+frames from <a class="autorefs autorefs-internal" title="scanpath_studio.api.load_scanpath_data" href="#scanpath_studio.api.load_scanpath_data"><code>load_scanpath_data</code></a>.</p>
 
 
     </div>
@@ -3044,20 +3268,22 @@ it and raises rather than returning something that looks like a result.</p>
 
         <p>Build the canonical scanpath figure for one trial.</p>
 <p><code>words</code> / <code>fixations</code> are normalized frames from
-:func:<code>load_scanpath_data</code>. <code>participant</code> / <code>trial</code> may be omitted when
-the frames contain exactly one combo. <code>canvas_size</code> is the monitor size
-in px; by default it is estimated from the data extents — pass the real
-monitor resolution (e.g. <code>(2560, 1440)</code> for OneStop) to keep coordinates
-true to scale. For a multipart trial, <code>screen</code> selects one child screen;
-omitting it selects the first recorded screen and never concatenates
-coordinate spaces. <code>raw_gaze</code> is a normalized frame (see
-:func:<code>data.normalize_raw_gaze</code>) and is filtered to the selected trial.</p>
+<a class="autorefs autorefs-internal" title="scanpath_studio.api.load_scanpath_data" href="#scanpath_studio.api.load_scanpath_data"><code>load_scanpath_data</code></a>. <code>participant</code> /
+<code>trial</code> may be omitted when the frames contain exactly one combo. <code>canvas_size</code>
+is the monitor size in px; by default it is estimated from the data extents — pass
+the real monitor resolution (e.g. <code>(2560, 1440)</code> for OneStop) to keep coordinates
+true to scale. For a multipart trial, <code>screen</code> selects one child screen; omitting
+it selects the first recorded screen and never concatenates coordinate spaces.
+<code>raw_gaze</code> is a normalized frame (see <code>data.normalize_raw_gaze</code>) and is filtered
+to the selected trial.</p>
 <p><code>drift_correction</code> (PRE-3/PRE-17) names a method from
 <code>alignment.ALGORITHMS</code>: the ten Carr et al. (2021) algorithms plus
 run-based <code>"slice"</code> and <code>"consensus"</code>. Each fixation is snapped to its
 assigned text line and coloured by line, exactly as the app's <em>Drift
 correction</em> control does. <code>drift_connectors=True</code> also draws a faint line
-from each fixation's original y to its corrected one.</p>
+from each fixation's original y to its corrected one. Drift correction is held
+back behind <code>SCANPATH_EXPERIMENTAL=1</code> (PRE-21): without it, any
+<code>drift_correction</code> other than <code>None</code> / <code>"off"</code> raises <code>ValueError</code>.</p>
 <p><code>fix_index_range=(start, end)</code> (VIZ-7) draws only fixations <code>start</code>
 through <code>end</code> (1-based, both inclusive) of the trial — the headless form of
 the app's fixation-index window. It is applied before the drift correction,
@@ -3067,12 +3293,13 @@ without shrinking the plot area, exactly like the rail's <em>Title &amp; caption
 the figure</em> control — literal text here, not the rail's <code>{trial_id}</code>-style
 pattern, since the caller already knows which trial this is.</p>
 <p>Remaining keywords override the app's defaults and are forwarded to
-:func:<code>plots.make_scanpath_figure</code> (e.g. <code>show_heatmap=False</code>,
-<code>color_by="pass_index"</code>, <code>x_field="order_in_trial"</code>); an unknown keyword
-raises a <code>TypeError</code> naming the closest valid options, and
-:func:<code>figure_options</code> lists them all with their defaults. A <code>color_by</code> /
-<code>highlight_column</code> naming a column the trial's table doesn't have raises a
-<code>ValueError</code> naming the closest ones, rather than drawing without it.</p>
+<code>plots.make_scanpath_figure</code> (e.g. <code>show_heatmap=False</code>,
+<code>color_by="pass_index"</code>, <code>x_field="order_in_trial"</code>); an unknown keyword raises
+a <code>TypeError</code> naming the closest valid options, and
+<a class="autorefs autorefs-internal" title="scanpath_studio.api.figure_options" href="#scanpath_studio.api.figure_options"><code>figure_options</code></a> lists them all with their
+defaults. A <code>color_by</code> / <code>highlight_column</code> naming a column the trial's table
+doesn't have raises a <code>ValueError</code> naming the closest ones, rather than drawing
+without it.</p>
 
 
     </div>
@@ -3093,32 +3320,34 @@ raises a <code>TypeError</code> naming the closest valid options, and
     <div class="doc doc-contents first">
 
         <p>Build the animated scanpath replay for one trial.</p>
-<p>Same trial selection and canvas semantics as :func:<code>plot_scanpath</code>, including
-<code>screen</code> selection for multipart trials. The
-returned Plotly figure plays in real reading time scaled by
-<code>playback_speed</code>; save it as interactive HTML with :func:<code>save_figure</code>,
-or rasterize to GIF/MP4 with :func:<code>animation_export.export_animation</code>.
-<code>fix_index_range=(start, end)</code> replays only that window of the trial's
-fixations (1-based, inclusive), like :func:<code>plot_scanpath</code>.</p>
-<p>With <code>autoplay</code> (default <code>True</code>, VIZ-10) the saved interactive HTML
-auto-starts the replay on load <em>at <code>playback_speed</code></em> — :func:<code>save_figure</code>
-honors the marker the builder stamps on the figure. Pass <code>autoplay=False</code>
-to save a figure that opens paused (press ▶ Play to run it). Autoplay only
-affects the interactive HTML; GIF/MP4 rasterization renders every frame
-regardless.</p>
+<p>Same trial selection and canvas semantics as
+<a class="autorefs autorefs-internal" title="scanpath_studio.api.plot_scanpath" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a>, including <code>screen</code> selection
+for multipart trials. The returned Plotly figure plays in real reading time scaled
+by <code>playback_speed</code>; save it as interactive HTML with
+<a class="autorefs autorefs-internal" title="scanpath_studio.api.save_figure" href="#scanpath_studio.api.save_figure"><code>save_figure</code></a>, or rasterize to GIF/MP4 with
+<code>animation_export.export_animation</code>. <code>fix_index_range=(start, end)</code> replays only
+that window of the trial's fixations (1-based, inclusive), like
+<a class="autorefs autorefs-internal" title="scanpath_studio.api.plot_scanpath" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a>.</p>
+<p>With <code>autoplay</code> (default <code>True</code>, VIZ-10) the saved interactive HTML auto-starts
+the replay on load <em>at <code>playback_speed</code></em> —
+<a class="autorefs autorefs-internal" title="scanpath_studio.api.save_figure" href="#scanpath_studio.api.save_figure"><code>save_figure</code></a> honors the marker the builder
+stamps on the figure. Pass <code>autoplay=False</code> to save a figure that opens paused
+(press ▶ Play to run it). Autoplay only affects the interactive HTML; GIF/MP4
+rasterization renders every frame regardless.</p>
 <p>When <code>playback_speed</code> is not <code>1</code>, the automatic Illustration label says
 the replay timing was changed. <code>illustration_label</code> accepts <code>"auto"</code>,
-<code>"show"</code>, or <code>"hide"</code> like :func:<code>plot_scanpath</code>.</p>
+<code>"show"</code>, or <code>"hide"</code> like <a class="autorefs autorefs-internal" title="scanpath_studio.api.plot_scanpath" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a>.</p>
 <p>The animation builder accepts a subset of the static figure's options
-(<code>show_words</code>, <code>show_word_labels</code>, <code>show_saccades</code>, <code>show_order</code>,
-styling, and second-scanpath overlays) — see <code>figure_options("animation")</code>;
-an unsupported key raises a <code>ValueError</code> naming the valid ones rather than
-an opaque <code>TypeError</code>. The shared options default to the same values as
-:func:<code>plot_scanpath</code> (:data:<code>CANONICAL_FIGURE_DEFAULTS</code>), so the replay
-matches the static figure. <code>palette=</code> (VIZ-18) works here too; the colours
-it implies that the animation doesn't support are dropped rather than
+(<code>show_words</code>, <code>show_word_labels</code>, <code>show_saccades</code>, <code>show_order</code>, styling,
+and second-scanpath overlays) — see <code>figure_options("animation")</code>; an unsupported
+key raises a <code>ValueError</code> naming the valid ones rather than an opaque
+<code>TypeError</code>. The shared options default to the same values as
+<a class="autorefs autorefs-internal" title="scanpath_studio.api.plot_scanpath" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a> (<code>CANONICAL_FIGURE_DEFAULTS</code>),
+so the replay matches the static figure. <code>palette=</code> (VIZ-18) works here too; the
+colours it implies that the animation doesn't support are dropped rather than
 raising, since the caller named a look, not those individual keys.</p>
-<p><code>title</code> / <code>caption</code> (EXP-5) — same as :func:<code>plot_scanpath</code>.</p>
+<p><code>title</code> / <code>caption</code> (EXP-5) — same as
+<a class="autorefs autorefs-internal" title="scanpath_studio.api.plot_scanpath" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a>.</p>
 
 
     </div>
@@ -3157,14 +3386,14 @@ what they got — this <strong>raises</strong> <code>ValueError</code>: silently
 differently-shaped figure than the one a script asked for is the wrong
 failure mode headlessly. Ask for <code>layout="side_by_side"</code> to get the app's
 fallback. Nothing is ever rescaled or reprojected.</p>
-<p><code>setup</code> / <code>setup_b</code> are :class:<code>experimental_setup.SetupSnapshot</code>
+<p><code>setup</code> / <code>setup_b</code> are <code>experimental_setup.SetupSnapshot</code>
 values — what the gate reads. <code>canvas_size</code> covers A when you only have a
 resolution; omit both and the canvas is read off the data.</p>
 <p><code>compare_stimulus</code> picks whose word boxes and text an <strong>overlay</strong> draws —
 <code>"both"</code> (default), <code>"a"</code> or <code>"b"</code>. Two datasets' AOIs coincide only
 when the text is identical. Split layouts ignore it; each panel owns its own
 stimulus.</p>
-<p>Remaining keywords are forwarded to :func:<code>plots.make_comparison_figure</code>
+<p>Remaining keywords are forwarded to <code>plots.make_comparison_figure</code>
 (e.g. <code>show_words=False</code>, <code>color_by="duration_ms"</code>); an unknown one
 raises <code>TypeError</code> naming the closest valid options. Which settings a
 comparison figure actually honours is the table in
@@ -3191,12 +3420,13 @@ path</em>.</p>
 
         <p>Render every screen of one logical trial without stitching coordinates.</p>
 <p>The ordered mapping is keyed by <code>screen_id</code>. Each value is the same figure
-returned by :func:<code>plot_scanpath</code> or :func:<code>animate_scanpath</code>; callers can
-save them into deterministic per-screen files. <code>transition_mode</code> is
-<code>"instant"</code> or <code>"recorded"</code>. For animated output, each figure's
-<code>layout.meta['transition_after_ms']</code> records the delay before the next
-screen (zero for instant mode, or the observed parent-clock gap). No visual
-saccade is ever drawn across the boundary.</p>
+returned by <a class="autorefs autorefs-internal" title="scanpath_studio.api.plot_scanpath" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a> or
+<a class="autorefs autorefs-internal" title="scanpath_studio.api.animate_scanpath" href="#scanpath_studio.api.animate_scanpath"><code>animate_scanpath</code></a>; callers can save them
+into deterministic per-screen files. <code>transition_mode</code> is <code>"instant"</code> or
+<code>"recorded"</code>. For animated output, each figure's
+<code>layout.meta['transition_after_ms']</code> records the delay before the next screen
+(zero for instant mode, or the observed parent-clock gap). No visual saccade is ever
+drawn across the boundary.</p>
 
 
     </div>
@@ -3258,43 +3488,49 @@ already have.</p>
     <div class="doc doc-contents first">
 
         <p>The API or CLI code that reproduces a figure (EXP-7).</p>
-<p>The headless twin of the app's 🔗 Share → <em>Reproduce this figure in code</em>
-block: give it the same arguments you would give :func:<code>plot_scanpath</code>
-(<code>kind="static"</code>), :func:<code>animate_scanpath</code> (<code>"animation"</code>) or
-:func:<code>compare_scanpaths</code> (<code>"comparison"</code>) and it returns the snippet that
-rebuilds that figure, rather than the figure::</p>
+<p>The headless twin of the app's 🔗 Share → <em>Reproduce this figure in code</em> block: give
+it the same arguments you would give
+<a class="autorefs autorefs-internal" title="scanpath_studio.api.plot_scanpath" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a> (<code>kind="static"</code>),
+<a class="autorefs autorefs-internal" title="scanpath_studio.api.animate_scanpath" href="#scanpath_studio.api.animate_scanpath"><code>animate_scanpath</code></a> (<code>"animation"</code>) or
+<a class="autorefs autorefs-internal" title="scanpath_studio.api.compare_scanpaths" href="#scanpath_studio.api.compare_scanpaths"><code>compare_scanpaths</code></a> (<code>"comparison"</code>) and
+it returns the snippet that rebuilds that figure, rather than the figure::</p>
 <div class="highlight"><pre><span></span><code>print(sps.figure_code(participant="l7_1090", trial="l7_1090_2_1_1_Ele_r0",
                       show_heatmap=False, flavor="cli"))
 </code></pre></div>
-<p><code>source</code> names how the data is loaded — <code>"demo"</code>, <code>"synthetic"</code>,
-<code>"files"</code>, <code>"potec"</code>, <code>"onestop"</code>, <code>"multipleye"</code>, <code>"benchmark"</code>,
-<code>"author"</code>, or <code>"unknown"</code> for data a snippet can't name — with
-<code>source_options</code> carrying that loader's arguments (<code>{"root": …}</code>,
-<code>{"words": [...], "fixations": [...]}</code>, and so on).</p>
+<p><code>source</code> names how the data is loaded — <code>"demo"</code>, <code>"synthetic"</code>, <code>"files"</code>,
+<code>"potec"</code>, <code>"onestop"</code>, <code>"multipleye"</code>, <code>"benchmark"</code>, <code>"author"</code>, or
+<code>"unknown"</code> for data a snippet can't name — with <code>source_options</code> carrying that
+loader's arguments (<code>{"root": …}</code>, <code>{"words": [...], "fixations": [...]}</code>, and
+so on). With <code>show_raw_gaze=True</code> the raw-gaze table is read too: the demo's own,
+or the path(s) given as <code>source_options["raw_gaze"]</code> (plus an optional
+<code>"raw_gaze_schema"</code>) — <a class="autorefs autorefs-internal" title="scanpath_studio.api.load_raw_gaze" href="#scanpath_studio.api.load_raw_gaze"><code>load_raw_gaze</code></a> in the
+Python form, <code>--raw-gaze</code> in the CLI one.</p>
 <p><code>compare_dataset</code> names the corpus scanpath B was loaded from when it is a
 <em>second</em> one (CMP-8). B's participant id belongs to that corpus rather than
 the one the snippet loads, so naming it turns a snippet that would quietly
 reference a missing reader into one that says where B comes from.</p>
-<p><code>compare_labels</code> is the pair you would pass :func:<code>compare_scanpaths</code> as
-<code>labels=</code> — the two trace labels, when they are not the composed defaults
-(EXP-8 §1). Both forms carry them: <code>labels=</code> in the Python snippet,
-<code>--label-a</code> / <code>--label-b</code> in the CLI one.</p>
+<p><code>compare_labels</code> is the pair you would pass
+<a class="autorefs autorefs-internal" title="scanpath_studio.api.compare_scanpaths" href="#scanpath_studio.api.compare_scanpaths"><code>compare_scanpaths</code></a> as <code>labels=</code> — the
+two trace labels, when they are not the composed defaults (EXP-8 §1). Both forms
+carry them: <code>labels=</code> in the Python snippet, <code>--label-a</code> / <code>--label-b</code> in the
+CLI one.</p>
 <p>With <code>participant</code> / <code>trial</code> left empty the snippet renders the first
 available trial, as <code>render</code> does. <code>canvas_size</code> defaults to the screen
 <code>render</code> assumes for the source (the demo's 2560×1440, PoTeC's 1680×1050,
 …), so both flavours draw the same figure; <code>output</code> defaults to
 <code>scanpath.html</code> for an animation — <code>render --animate</code> writes only HTML —
 and to a PNG otherwise.</p>
-<p>Only the options that differ from :func:<code>figure_options</code> are written, so the
-snippet stays readable; <code>explicit=True</code> emits every option at its current
-value. <code>flavor</code> is <code>"python"</code>, <code>"cli"</code>, or <code>"both"</code> (the two
-separated by a blank line). Settings the CLI has no flag for are named in a
-trailing comment rather than dropped, and anything <em>neither</em> form can
-promise — a layer that needs a third frame, an uploaded stimulus image, B's
-rows when they come from a second corpus — follows as <code># Note:</code> comments
-(EXP-8 §2), matching the ⚠️ captions the app shows and the <code>Note:</code> lines
-<code>render --print-code</code> writes to stderr. See
-:class:<code>code_snippet.ReproductionCode</code> for the structured form.</p>
+<p>Only the options that differ from
+<a class="autorefs autorefs-internal" title="scanpath_studio.api.figure_options" href="#scanpath_studio.api.figure_options"><code>figure_options</code></a> are written, so the snippet
+stays readable; <code>explicit=True</code> emits every option at its current value.
+<code>flavor</code> is <code>"python"</code>, <code>"cli"</code>, or <code>"both"</code> (the two separated by a blank
+line). Every figure option has a <code>render</code> flag (EXP-20); one that ever did not
+would be named in a trailing comment rather than dropped, and anything <em>neither</em>
+form can promise — a raw-gaze table with no path to name, an uploaded stimulus
+image, B's rows when they come from a second corpus — follows as <code># Note:</code>
+comments (EXP-8 §2), matching the ⚠️ captions the app shows and the <code>Note:</code> lines
+<code>render --print-code</code> writes to stderr. See <code>code_snippet.ReproductionCode</code> for the
+structured form.</p>
 
 
     </div>
@@ -3315,12 +3551,13 @@ rows when they come from a second corpus — follows as <code># Note:</code> com
     <div class="doc doc-contents first">
 
         <p>Every figure keyword a builder accepts → the default it renders with.</p>
-<p><code>kind="static"</code> covers :func:<code>plot_scanpath</code>, <code>kind="animation"</code>
-:func:<code>animate_scanpath</code> (whose builder supports a subset), and
-<code>kind="comparison"</code> :func:<code>compare_scanpaths</code>. The values are
-the <em>effective</em> defaults — :data:<code>CANONICAL_FIGURE_DEFAULTS</code> where it sets
-one, the builder's own signature default otherwise — so a scripted caller
-can diff its intended settings against what it would get::</p>
+<p><code>kind="static"</code> covers <a class="autorefs autorefs-internal" title="scanpath_studio.api.plot_scanpath" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a>,
+<code>kind="animation"</code> <a class="autorefs autorefs-internal" title="scanpath_studio.api.animate_scanpath" href="#scanpath_studio.api.animate_scanpath"><code>animate_scanpath</code></a>
+(whose builder supports a subset), and <code>kind="comparison"</code>
+<a class="autorefs autorefs-internal" title="scanpath_studio.api.compare_scanpaths" href="#scanpath_studio.api.compare_scanpaths"><code>compare_scanpaths</code></a>. The values are the
+<em>effective</em> defaults — <code>CANONICAL_FIGURE_DEFAULTS</code> where it sets one, the builder's
+own signature default otherwise — so a scripted caller can diff its intended
+settings against what it would get::</p>
 <div class="highlight"><pre><span></span><code>{k: v for k, v in sps.figure_options().items() if k.startswith("show_")}
 </code></pre></div>
 
@@ -3370,18 +3607,20 @@ both ignored for <code>.html</code>. Returns the written path.</p>
         <p>Split a scanpath figure into its layers and save one file per layer (VIZ-5).</p>
 <p>Writes <code>&lt;directory&gt;/&lt;layer&gt;.&lt;fmt&gt;</code> for each <em>visible</em> layer (word boxes /
 fixations / saccades / heatmap / labels / stimulus image / frame) and returns
-<code>{layer: Path}</code>. Each layer is the full figure with only that layer's
-elements and a transparent background, at the same size and axis ranges — so
-the files register perfectly when stacked in Illustrator / Inkscape. <code>fmt</code>
-is any :func:<code>save_figure</code> extension without the dot (<code>svg</code> / <code>pdf</code> are
-vector and best for editing; <code>png</code> / <code>html</code> also work). <code>scale</code> /
-<code>width</code> / <code>height</code> are forwarded to :func:<code>save_figure</code>.</p>
+<code>{layer: Path}</code>. Each layer is the full figure with only that layer's elements
+and a transparent background, at the same size and axis ranges — so the files
+register perfectly when stacked in Illustrator / Inkscape. <code>fmt</code> is any
+<a class="autorefs autorefs-internal" title="scanpath_studio.api.save_figure" href="#scanpath_studio.api.save_figure"><code>save_figure</code></a> extension without the dot
+(<code>svg</code> / <code>pdf</code> are vector and best for editing; <code>png</code> / <code>html</code> also
+work). <code>scale</code> / <code>width</code> / <code>height</code> are forwarded to
+<a class="autorefs autorefs-internal" title="scanpath_studio.api.save_figure" href="#scanpath_studio.api.save_figure"><code>save_figure</code></a>.</p>
 
 
     </div>
 
 </div><h2 id="recovery-cache">Recovery cache<a class="headerlink" href="#recovery-cache" title="Permanent link">&para;</a></h2>
-<p>The app caches a local session on the machine it runs on (see
+<p>The app caches a local session on the machine it runs on — 💾 <strong>Session →
+🗄️ Automatic recovery</strong> (see
 <a href="../privacy/#what-happens-to-a-file-you-upload">Privacy</a>). These inspect and
 remove that store from a script; <code>scanpath-studio cache</code> is the CLI equivalent.</p>
 
@@ -3400,15 +3639,15 @@ remove that store from a script; <code>scanpath-studio cache</code> is the CLI e
     <div class="doc doc-contents first">
 
         <p>Describe the on-device recovery cache a local app run keeps (ENG-30).</p>
-<p>The app stores completed uploaded datasets, column mappings, view settings
-and annotations under the user's cache directory so a refresh or restart
-resumes where it left off — on localhost/desktop only, never on a hosted
-deployment. This reports that store without launching the app: <code>enabled</code>,
-<code>directory</code>, <code>datasets</code> (name + per-frame row counts), <code>rows</code>,
-<code>annotations</code>, <code>settings</code>, <code>bytes</code>, <code>saved_at</code>, plus <code>exists</code> /
-<code>readable</code> for a missing or unreadable manifest. Delete it with
-:func:<code>clear_cache</code>; the same information is in the app's 💾 Session → 🗄️ Recovery cache
-panel and in <code>scanpath-studio cache</code>.</p>
+<p>The app stores completed uploaded datasets, column mappings, view settings and
+annotations under the user's cache directory so a refresh or restart resumes
+where it left off — on localhost/desktop only, never on a hosted deployment. This
+reports that store without launching the app: <code>enabled</code>, <code>directory</code>,
+<code>datasets</code> (name + per-frame row counts), <code>rows</code>, <code>annotations</code>,
+<code>settings</code>, <code>bytes</code>, <code>saved_at</code>, plus <code>exists</code> / <code>readable</code> for a
+missing or unreadable manifest. Delete it with
+<a class="autorefs autorefs-internal" title="scanpath_studio.api.clear_cache" href="#scanpath_studio.api.clear_cache"><code>clear_cache</code></a>; the same information is in the
+app's 💾 Session → 🗄️ Automatic recovery panel and in <code>scanpath-studio cache</code>.</p>
 
 
     </div>
@@ -3431,9 +3670,10 @@ panel and in <code>scanpath-studio cache</code>.</p>
         <p>Delete the on-device recovery cache and return its status afterwards.</p>
 <p>Removes only the files this app wrote (<code>manifest.json</code> and the dataset
 Parquet files); anything else in the folder is left alone. A <em>running</em> local
-app writes its session back out at the end of its next run — use the app's
-<strong>Forget saved session</strong> button, or <code>SCANPATH_STUDIO_PERSIST=0</code>, to stop
-that.</p>
+app writes its session back out at the end of its next run — turn off <strong>Save
+changes automatically</strong> in its 💾 Session → 🗄️ Automatic recovery panel (the
+panel's <strong>Clear recovery cache</strong> button, like this function, leaves saving on),
+or set <code>SCANPATH_STUDIO_PERSIST=0</code>, to stop that.</p>
 
 
     </div>

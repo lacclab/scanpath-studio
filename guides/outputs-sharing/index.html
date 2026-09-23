@@ -1708,9 +1708,9 @@
 <ul>
 <li><strong>Current figure</strong> exports the visible static or animated figure.</li>
 <li><strong>Export bundle</strong> packages figures, tables, and configuration metadata for
-  this trial, a filtered subset, or the whole dataset.</li>
-<li><strong>Separable layers</strong> writes aligned text, boxes, fixations, saccades, heatmap,
-  and image layers for editing.</li>
+  this trial, a filtered subset, or the whole dataset. Its <strong>Also include →
+  Separable layers</strong> toggle adds aligned text, boxes, fixations, saccades,
+  heatmap, and image layers as separate files for editing.</li>
 </ul>
 <p>With a <a href="../../data-format/#participant-metadata">participant metadata</a> table
 attached, the bundle also carries <code>metadata/participants.*</code>, and <strong>Participant
@@ -1731,8 +1731,56 @@ MP4 use Chrome/Chromium through Kaleido. See
 <p>The <strong>Share</strong> subtab creates a deep link containing the selected data source and
 visualization settings. <strong>Refresh &amp; Copy</strong> rebuilds the URL from the current
 trial and settings and places it on the clipboard in one step.</p>
-<p>A link never contains the fixation or word tables. Built-in data can be reopened
-from the URL; a recipient of an uploaded-data link must load the same dataset.</p>
+<p>A link never contains an uploaded or public dataset's fixation or word tables.
+Built-in data can be reopened from the URL; a recipient of an uploaded-data link
+must load the same dataset. The one exception is <strong>✏️ Author a scanpath</strong>: there
+the text and every hand-placed fixation <em>are</em> the dataset, so its link carries
+them (<code>author_text</code>, <code>author_events</code>).</p>
+<p>The link carries every figure setting, including the recording setup and
+Compare's per-scanpath styles. Those two groups are written only when they
+differ from what the recipient would get anyway — a link to the demo at its own
+2560×1440 monitor doesn't restate it — so a link stays short until you change
+them:</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Link parameter</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Monitor size in pixels</td>
+<td><code>canvas_width</code>, <code>canvas_height</code></td>
+</tr>
+<tr>
+<td>Plot font size</td>
+<td><code>base_font_size</code></td>
+</tr>
+<tr>
+<td>Physical width, viewing distance, display DPI</td>
+<td><code>monitor_width_mm</code>, <code>viewing_distance_mm</code>, <code>display_dpi</code></td>
+</tr>
+<tr>
+<td>A font given in points</td>
+<td><code>use_stimulus_font_pt</code>, <code>stimulus_font_pt</code></td>
+</tr>
+<tr>
+<td>Scanpath 1's styles in Compare</td>
+<td><code>cmp_a_fix_color</code>, <code>cmp_a_saccade_color</code>, <code>cmp_a_saccade_style</code>, <code>cmp_a_saccade_width</code>, <code>cmp_a_marker_size_range</code>, <code>cmp_a_opacity</code>, <code>cmp_a_hollow</code>, <code>cmp_a_label_pattern</code></td>
+</tr>
+<tr>
+<td>Scanpath 2's styles in Compare</td>
+<td>the same, as <code>cmp_b_*</code></td>
+</tr>
+</tbody>
+</table>
+<p>The monitor size of a source that declares no screen of its own (the synthetic
+trial, an authored scanpath) is always written, since there is nothing to compare
+it with. The Compare styles travel only with the comparison they describe
+(<code>?compare=</code>). A value outside its control's range is clamped to it, and one
+the control can't show at all — an unknown line style, a colour that isn't
+<code>#rrggbb</code> — is dropped with a warning.</p>
 <p>Public corpora travel too: the link names the corpus (<code>?source=corpus&amp;corpus=…</code>)
 rather than its data. For a harmonised benchmark corpus the recipient needs their
 own prepared bundle containing it — the Share panel says which corpus the link

@@ -1799,6 +1799,11 @@ serving it to other machines is a deliberate step — pass
 <code>config.toml</code>, or <code>STREAMLIT_SERVER_ADDRESS</code>), and only on a network you trust:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>scanpath-studio<span class="w"> </span>--server.address<span class="w"> </span><span class="m">0</span>.0.0.0
 </code></pre></div>
+<p>Served on a network, the app also turns off everything that reads or writes the
+server's own folders — the data-location box, the 📁 folder picker, ⬇ Download
+for the public corpora and stimulus-image folders — since any visitor could use
+them. On a lab server you trust, turn them back on with <code>SCANPATH_LOCAL_FS=1</code>
+(<code>SCANPATH_LOCAL_FS=1 scanpath-studio --server.address 0.0.0.0</code>).</p>
 <p>Additional launch flags are forwarded to Streamlit. A word that is not one of
 the commands (<code>run</code>, <code>render</code>, <code>analyze</code>, <code>corpus</code>, <code>cache</code>) is an error that
 names the closest one, rather than an argument handed to Streamlit.</p>
@@ -1915,6 +1920,18 @@ first — the headless form of the app's <strong>Compare</strong> mode.</p>
 <td><code>--label-a TEXT --label-b TEXT</code> (both or neither)</td>
 </tr>
 <tr>
+<td>style each scanpath</td>
+<td><code>--style-a SPEC</code>, <code>--style-b SPEC</code> (below)</td>
+</tr>
+<tr>
+<td>the A/B legend</td>
+<td><code>--compare-legend</code></td>
+</tr>
+<tr>
+<td>B's own stimulus page (split layouts)</td>
+<td><code>--stimulus-image-b PATH</code>, with <code>--stimulus-image-size-b WxH</code> / <code>--stimulus-image-origin-b X,Y</code></td>
+</tr>
+<tr>
 <td>B from another dataset</td>
 <td><code>--compare-words PATH… --compare-fixations PATH…</code></td>
 </tr>
@@ -1936,6 +1953,20 @@ first — the headless form of the app's <strong>Compare</strong> mode.</p>
 app's per-scanpath label pattern. They go together, because <code>compare_scanpaths</code>
 takes the pair or neither, and they apply to the co-animation below just as they
 do to the static comparison.</p>
+<p><code>--style-a</code> / <code>--style-b</code> are the app's per-scanpath styling (the Compare rows
+under 👁️ Fixations and ↗️ Saccades), <code>compare_scanpaths</code>'s <code>style_a</code> / <code>style_b</code>:
+a comma-separated <code>KEY=VALUE</code> list, repeatable, with <code>fix_color</code> and
+<code>saccade_color</code> (<code>#RRGGBB</code>), <code>saccade_style</code> (<code>solid</code>, <code>dash</code>, <code>dot</code>,
+<code>dashdot</code>), <code>saccade_width</code> (px), <code>marker_size_range</code> (<code>MIN:MAX</code>), <code>opacity</code>
+(0.1–1) and <code>hollow</code> (<code>true</code> / <code>false</code>). A key left out keeps that scanpath's
+default.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_1_1_Ele_r0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_1090:l7_1090_2_1_1_Ele_r0<span class="w"> </span>--compare-legend<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>--style-a<span class="w"> </span><span class="nv">fix_color</span><span class="o">=</span><span class="c1">#D55E00,opacity=0.5 --style-b saccade_style=dash \</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span>-o<span class="w"> </span>compare_styled.html
+</code></pre></div>
+<p>These, <code>--compare-legend</code> and the <code>--stimulus-image-b</code> trio describe the second
+scanpath, so they are refused without <code>--compare-with</code>.</p>
 <p><code>--animate --compare-with</code> replays <strong>both</strong> readings on one clock, the same dual
 co-animation the app renders with Animate and Compare both on. That is an
 overlay, so it needs one shared screen on the same terms as <code>--compare-layout
@@ -1945,10 +1976,10 @@ is a single figure of two readings, so render one screen at a time with
 <p><strong>Overlay across two datasets requires matching canvases.</strong> Overlaying pools both
 readings into one set of pixel coordinates, so <code>--compare-layout overlay</code> on two
 different screens <strong>fails</strong> rather than quietly falling back:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="gp">$ </span>scanpath-studio<span class="w"> </span>render<span class="w"> </span>…<span class="w"> </span>--canvas<span class="w"> </span>2560x1440<span class="w"> </span>--compare-canvas<span class="w"> </span>1680x1050
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="go">These readings were recorded on different screens — 2560x1440 and 1680x1050. …</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="go">Pass layout='side_by_side' (or 'stacked') to compare them anyway, each panel</span>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="go">drawn to its own screen.</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="gp">$ </span>scanpath-studio<span class="w"> </span>render<span class="w"> </span>…<span class="w"> </span>--canvas<span class="w"> </span>2560x1440<span class="w"> </span>--compare-canvas<span class="w"> </span>1680x1050
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="go">These readings were recorded on different screens — 2560x1440 and 1680x1050. …</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="go">Pass layout='side_by_side' (or 'stacked') to compare them anyway, each panel</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="go">drawn to its own screen.</span>
 </code></pre></div>
 <p>The app resolves that case to Side by side because a user can see what they got;
 a script cannot, so the CLI refuses instead of returning a differently-shaped
@@ -1999,7 +2030,7 @@ the recorded setup.</p>
 </tr>
 <tr>
 <td>mark the critical span</td>
-<td><code>--highlight-column COLUMN</code> (<code>''</code> for none) with <code>--critical-span-style mark-text\|mark-border\|none</code></td>
+<td><code>--highlight-column COLUMN</code> (<code>''</code> for none) with <code>--critical-span-style mark-text|mark-border|none</code></td>
 </tr>
 <tr>
 <td>flag short / long / off-text / blink fixations</td>
@@ -2059,11 +2090,39 @@ the recorded setup.</p>
 </tr>
 <tr>
 <td>style the fixations</td>
-<td><code>--fixation-color</code>, <code>--fixation-symbol</code>, <code>--fixation-colorscale</code>, <code>--marker-size-range</code></td>
+<td><code>--fixation-color</code>, <code>--fixation-symbol</code>, <code>--fixation-colorscale</code>, <code>--fixation-color-range LO HI</code>, <code>--fixation-opacity</code>, <code>--hollow-fixations</code>, <code>--marker-size-range</code>, <code>--color-by-line</code></td>
+</tr>
+<tr>
+<td>style the index labels</td>
+<td><code>--order-font-size</code>, <code>--order-font-color</code></td>
 </tr>
 <tr>
 <td>style the saccades</td>
-<td><code>--saccade-style</code>, <code>--saccade-width</code>, <code>--saccade-arcs</code>, <code>--saccade-arrows</code>, <code>--saccade-classes</code></td>
+<td><code>--saccade-style</code>, <code>--saccade-width</code>, <code>--saccade-arcs</code>, <code>--saccade-arrows</code>, <code>--saccade-classes</code>, <code>--saccade-type-color</code> (also beside <code>--saccade-color-by-direction</code>, where it recolours that two-way split)</td>
+</tr>
+<tr>
+<td>style the text and the page</td>
+<td><code>--text-color</code>, <code>--highlight-text-color</code>, <code>--span-border-color</code>, <code>--background-color</code>, <code>--line-spacing</code>, <code>--no-scale-text-to-boxes</code>, <code>--word-hover-measure</code></td>
+</tr>
+<tr>
+<td>draw the raw gaze</td>
+<td><code>--raw-gaze PATH…</code> (or <code>--sample-raw-gaze</code> with <code>--sample</code>), <code>--raw-gaze-schema JSON</code>, <code>--raw-gaze-color</code>, <code>--raw-gaze-marker-size</code>, <code>--raw-gaze-opacity</code></td>
+</tr>
+<tr>
+<td>frame on the data, not the monitor</td>
+<td><code>--no-full-monitor</code></td>
+</tr>
+<tr>
+<td>plot other fixation columns</td>
+<td><code>--x-field FIELD</code>, <code>--y-field FIELD</code></td>
+</tr>
+<tr>
+<td>show and style the colour bars</td>
+<td><code>--colorbars</code>, <code>--colorbar-orientation</code>, <code>--colorbar-tickangle</code>, <code>--colorbar-tickfont-size</code></td>
+</tr>
+<tr>
+<td>tint a words-only dataset by a column</td>
+<td><code>--word-heatmap-col COLUMN</code>, <code>--word-heatmap-title TEXT</code></td>
 </tr>
 <tr>
 <td>pick a palette</td>
@@ -2079,7 +2138,7 @@ the recorded setup.</p>
 </tr>
 <tr>
 <td>tune the heatmap</td>
-<td><code>--heatmap-metric</code>, <code>--heatmap-colorscale</code>, <code>--heatmap-norm</code></td>
+<td><code>--heatmap-metric</code>, <code>--heatmap-colorscale</code>, <code>--heatmap-norm</code>, <code>--heatmap-range LO HI</code></td>
 </tr>
 <tr>
 <td>print the equivalent Python</td>
@@ -2087,18 +2146,121 @@ the recorded setup.</p>
 </tr>
 </tbody>
 </table>
+<p>Every figure option <code>api.figure_options()</code> lists has a flag, spelled after the
+option (<code>fixation_opacity</code> → <code>--fixation-opacity</code>; a switch that defaults on is
+turned off with <code>--no-…</code>). That is what lets the 🔗 Share subtab's <em>Reproduce this
+figure</em> block and <code>--print-code cli</code> print a command drawing exactly the figure
+on screen, rather than a list of settings the CLI could not say.</p>
+<p>Raw gaze is a third table rather than an option: <code>--raw-gaze</code> reads it (columns
+auto-detected like <code>--fixations</code>) and draws the plotted trial's samples under the
+fixations. It is a single-trial layer, so <code>--animate</code> and <code>--compare-with</code>
+ignore it with a warning.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_2_2_Adv_r0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span>--sample-raw-gaze<span class="w"> </span>--raw-gaze-opacity<span class="w"> </span><span class="m">0</span>.4<span class="w"> </span>-o<span class="w"> </span>raw_gaze.html
+</code></pre></div>
 <p>Use the installed command as the authoritative full reference:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>scanpath-studio<span class="w"> </span>--help
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--help
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>scanpath-studio<span class="w"> </span>--help
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--help
 </code></pre></div>
 <p>The <code>analyze</code> command writes the full tabular family without opening the app:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>scanpath-studio<span class="w"> </span>analyze<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv<span class="w"> </span>--output-dir<span class="w"> </span>analysis
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>scanpath-studio<span class="w"> </span>analyze<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv<span class="w"> </span>--output-dir<span class="w"> </span>analysis
 </code></pre></div>
 <p>This creates word, sentence, saccade, trial, reader, character, cleaning-QA,
-and run-configuration files. <code>scanpath-studio corpus</code> goes the other way: it
-reads a tidy CSV you already have (<code>--input</code>, one row per word or value) and
-renders a styled corpus figure — a per-word <code>profile</code>, a <code>distribution</code>, or a
-<code>difference</code> profile. The <code>render</code> command still renders one
+and run-configuration files. It takes the same <code>--words</code> / <code>--fixations</code>
+(several paths each), <code>--trial-parts-manifest</code>, <code>--word-schema</code> and
+<code>--fix-schema</code> as <code>render</code>, plus the optional preprocessing stage
+(<a href="../api/#scanpath_studio.api.preprocess_data"><code>api.preprocess_data</code></a>), which is
+off unless a flag below turns it on and never deletes a row — excluded fixations
+keep <code>excluded</code> / <code>excluded_reason</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--short-policy {off,merge,merge-then-discard,discard}</code></td>
+<td><code>off</code></td>
+<td>What to do with fixations shorter than the threshold: <code>merge</code> folds each into its nearer neighbour within the merge distance (a short last fixation that cannot merge is excluded), <code>merge-then-discard</code> also excludes every other one that cannot merge, and <code>discard</code> excludes them all.</td>
+</tr>
+<tr>
+<td><code>--short-threshold-ms MS</code></td>
+<td><code>80</code></td>
+<td>What counts as short.</td>
+</tr>
+<tr>
+<td><code>--merge-distance-chars N</code></td>
+<td><code>1.0</code></td>
+<td>How close, in character widths, a neighbour must be to merge into.</td>
+</tr>
+<tr>
+<td><code>--discard-blink-adjacent</code></td>
+<td>off</td>
+<td>Exclude blinks and the fixations either side of one.</td>
+</tr>
+<tr>
+<td><code>--pixels-per-degree PX</code></td>
+<td>none</td>
+<td>Adds degree-valued saccade amplitudes to the saccade table.</td>
+</tr>
+</tbody>
+</table>
+<p>Every value lands in <code>run_config.json</code> beside the tables.</p>
+<p><code>scanpath-studio corpus</code> goes the other way: it reads a tidy CSV you already
+have and renders a styled corpus figure
+(<a href="../api/#scanpath_studio.api.plot_corpus_figure"><code>api.plot_corpus_figure</code></a>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>scanpath-studio<span class="w"> </span>corpus<span class="w"> </span>--input<span class="w"> </span>profile.csv<span class="w"> </span>--kind<span class="w"> </span>profile<span class="w"> </span>--output<span class="w"> </span>profile.svg
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--input CSV</code></td>
+<td>required</td>
+<td>The table. <code>profile</code> reads <code>word_id</code> plus the value column (and optional <code>lo</code> / <code>hi</code>), <code>distribution</code> the value column, <code>difference</code> <code>word_id</code> and <code>diff</code>.</td>
+</tr>
+<tr>
+<td><code>--kind {profile,distribution,difference}</code></td>
+<td>required</td>
+<td>A per-word profile, a distribution, or a difference profile.</td>
+</tr>
+<tr>
+<td><code>--output PATH</code></td>
+<td>required</td>
+<td>Any extension <code>save_figure</code> writes (<code>.html</code>, <code>.png</code>, <code>.svg</code>, <code>.pdf</code>).</td>
+</tr>
+<tr>
+<td><code>--value-col NAME</code></td>
+<td><code>value</code></td>
+<td>The value column.</td>
+</tr>
+<tr>
+<td><code>--series-col NAME</code></td>
+<td><code>series</code></td>
+<td>When present, one overlaid series per value.</td>
+</tr>
+<tr>
+<td><code>--measure-label TEXT</code></td>
+<td><code>Value</code></td>
+<td>Axis / legend label.</td>
+</tr>
+<tr>
+<td><code>--primary-color</code>, <code>--secondary-color</code></td>
+<td><code>#1f77b4</code>, <code>#e45756</code></td>
+<td>The series colours.</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>render</code> command still renders one
 trial per invocation; use the <a href="../automation/#batch-pattern">Python batch pattern</a>
 or <strong>Export → Export bundle</strong> for many figures.</p>
 <p><code>--all-screens</code> is the multipart exception: it writes one deterministic
@@ -2110,10 +2272,10 @@ accepted by <code>analyze</code>.</p>
 <p>A local or desktop run caches your session on your own machine — uploaded
 datasets, column mappings, view settings, and annotations — so a refresh or a
 restart resumes where you left off. <code>cache</code> shows what is stored and removes it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
-<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the stored session</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the stored session</span>
 </code></pre></div>
 <p>The same information and controls are in <strong>Session → Automatic recovery</strong>;
 <strong>Clear recovery cache</strong> removes the saved copy without closing the current

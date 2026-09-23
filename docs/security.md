@@ -48,8 +48,8 @@ too. Nothing here is inferred from documentation alone.
     - **`server.allowedHosts`** (1.61) — an allow-list of `Host` headers for
       incoming WebSocket connections, against DNS rebinding. Empty by default,
       which accepts any host, so it changes nothing about S1: a
-      `scanpath-studio run` on an untrusted network is still reachable by
-      anyone who can route to the port. A fixed-hostname deployment can now
+      `scanpath-studio run` served on the network (`--server.address 0.0.0.0`)
+      is still reachable by anyone who can route to the port. A fixed-hostname deployment can now
       narrow that (e.g. `['localhost']` for a desktop/loopback run).
     - **`client.allowedOrigins`** (1.60) — origins allowed to drive the app by
       `postMessage` when it is embedded in an iframe. It defaults to Streamlit's
@@ -151,11 +151,16 @@ seconds.
 `desktop/launcher.py:main`. One line, no behaviour change for the intended user.
 
 !!! note "Same exposure, different visibility, for `scanpath-studio run`"
-    `cli.launch_app` also passes no address, so `scanpath-studio run` and a bare
-    `streamlit run` bind `0.0.0.0` too. That is standard Streamlit behaviour and
-    Streamlit prints a "Network URL" line announcing it, so the user is at least
-    told. The desktop launcher suppresses Streamlit's own output and prints a
-    loopback URL instead, which is why it is ranked separately and higher.
+    `cli.launch_app` also passed no address, so `scanpath-studio run` bound
+    `0.0.0.0` too. That is standard Streamlit behaviour and Streamlit prints a
+    "Network URL" line announcing it, so the user was at least told. The
+    desktop launcher suppresses Streamlit's own output and prints a loopback URL
+    instead, which is why it is ranked separately and higher. **Fixed**
+    2026-09-23 (ENG-55): `launch_app` now passes `--server.address=127.0.0.1`
+    unless the user set an address themselves — a `--server.address` flag,
+    `STREAMLIT_SERVER_ADDRESS`, or `server.address` in a `config.toml` — so
+    every `scanpath-studio` launch is loopback by default. A bare
+    `streamlit run` is untouched and still binds `0.0.0.0`.
 
 **Status:** **fixed** 2026-07-28 — `desktop/launcher.py` now passes
 `--server.address=127.0.0.1`. [privacy.md](privacy.md) states the same thing in user-facing
@@ -913,10 +918,10 @@ no `<` can reach it.
 ## Deployment guidance that follows from this
 
 - **A machine holding participant data should not run this app on an
-  untrusted network.** The desktop bundle now binds loopback (S1), but
-  `scanpath-studio run` and a bare `streamlit run` still bind `0.0.0.0` — pass
-  `--server.address=127.0.0.1` explicitly, or bind to loopback and use an SSH
-  tunnel for remote access.
+  untrusted network.** The desktop bundle and `scanpath-studio run` bind
+  loopback (S1), but a bare `streamlit run` still binds `0.0.0.0` — pass
+  `--server.address=127.0.0.1` there, and for remote access keep loopback and
+  use an SSH tunnel rather than `--server.address 0.0.0.0`.
 - **A shared/hosted deployment should set `SCANPATH_LOCAL_FS=0`** and supply the
   corpus location through `SCANPATH_DATA_ROOT` (S2), which removes the directory
   input, the folder picker and the download-to-arbitrary-path button.

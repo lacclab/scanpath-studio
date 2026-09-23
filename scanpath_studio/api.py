@@ -307,10 +307,30 @@ def _column_preview(frame: pd.DataFrame, limit: int = 40) -> str:
     return shown
 
 
-def _schema_skeleton(kind: str, schema: dict) -> str:
-    """A copy-pasteable mapping literal: what was detected, ``'<column>'`` for
-    the rest. An explicit schema replaces auto-detection wholesale, so every
-    required key has to be in it — not just the ones that failed."""
+class SchemaError(ValueError):
+    """A table whose columns don't resolve onto the canonical fields.
+
+    Still a ``ValueError`` with the same message, so ``except ValueError``
+    callers are unaffected. The parts are kept apart for the CLI (EXP-13), whose
+    users cannot pass ``word_schema=``: it keeps :attr:`detail` and replaces
+    :attr:`hint` — the API-vocabulary "pass ``word_schema={…}``" line — with its
+    own ``--word-schema`` one, built from :attr:`mapping` (the mapping skeleton,
+    ``None`` when the fix is to correct a mapping rather than write one)."""
+
+    def __init__(
+        self, lines: list[str], hint: str, *, param: str, mapping: dict | None = None
+    ) -> None:
+        self.detail = "\n".join(lines)
+        self.hint = hint
+        self.param = param
+        self.mapping = mapping
+        super().__init__(f"{self.detail}\n{hint}")
+
+
+def _schema_skeleton_mapping(kind: str, schema: dict) -> dict:
+    """What was detected, ``'<column>'`` for the rest. An explicit schema
+    replaces auto-detection wholesale, so every required key has to be in it —
+    not just the ones that failed."""
     spec = _SCHEMA_SPECS[kind]
     keys = [key for key, _, _ in spec["required"]]
     if spec["groups"]:
@@ -320,9 +340,14 @@ def _schema_skeleton(kind: str, schema: dict) -> str:
             key=lambda group: sum(1 for key in group if not schema.get(key)),
         )
         keys += [key for key in best if key not in keys]
+    return {key: schema[key] if schema.get(key) else "<column>" for key in keys}
+
+
+def _schema_skeleton(kind: str, schema: dict) -> str:
+    """:func:`_schema_skeleton_mapping` as a copy-pasteable Python literal."""
     items = ", ".join(
-        f"{key!r}: {schema[key]!r}" if schema.get(key) else f"{key!r}: '<column>'"
-        for key in keys
+        f"{key!r}: {value!r}"
+        for key, value in _schema_skeleton_mapping(kind, schema).items()
     )
     return "{" + items + "}"
 
@@ -370,16 +395,17 @@ def _check_mapped_columns(kind: str, frame: pd.DataFrame, schema: dict) -> None:
         f"Columns present in the {spec['noun']} table ({len(frame.columns)}): "
         f"{_column_preview(frame)}"
     )
-    lines.append(
+    raise SchemaError(
+        lines,
         f"api.propose_schema(table, {kind!r}) returns the auto-detected mapping to "
-        "start from."
+        "start from.",
+        param=spec["param"],
     )
-    raise ValueError("\n".join(lines))
 
 
 def _schema_error(
     kind: str, frame: pd.DataFrame, schema: dict, problems: list, explicit: bool = False
-) -> ValueError:
+) -> SchemaError:
     """Build the ``ValueError`` for a table whose canonical fields don't resolve.
 
     Names every canonical field that could not be resolved, the candidate column
@@ -454,7 +480,7 @@ def _schema_error(
             "Matching ignores case and separators (IA_LEFT == ia_left == 'Ia Left') "
             "and takes the first candidate that matches."
         )
-    lines.append(
+    hint = (
         f"An explicit {param} replaces auto-detection wholesale, so it needs every "
         f"required key, e.g. {param}={_schema_skeleton(kind, schema)} — "
         f"api.propose_schema(df, {kind!r}) returns the auto-detected mapping."
@@ -463,7 +489,9 @@ def _schema_error(
         f"{param}={_schema_skeleton(kind, schema)} — "
         f"api.propose_schema(df, {kind!r}) returns what was detected."
     )
-    return ValueError("\n".join(lines))
+    return SchemaError(
+        lines, hint, param=param, mapping=_schema_skeleton_mapping(kind, schema)
+    )
 
 
 def propose_schema(table: TablesLike, kind: str = "words") -> dict:
@@ -475,9 +503,11 @@ def propose_schema(table: TablesLike, kind: str = "words") -> dict:
     detection got a field wrong or couldn't find one: edit the dict and pass it
     back as ``word_schema=`` / ``fix_schema=``::
 
-        schema = sps.api.propose_schema("ia.csv", "words")
+        from scanpath_studio import api
+
+        schema = api.propose_schema("ia.csv", "words")
         schema["trial"] = "TRIAL_LABEL"
-        words, fixations = sps.load_scanpath_data("ia.csv", "fix.csv",
+        words, fixations = api.load_scanpath_data("ia.csv", "fix.csv",
                                                   word_schema=schema)
 
     ``table`` is a DataFrame, path, glob or list of paths, like the loader's.
@@ -904,6 +934,40 @@ def alignment_sensitivity(
     return measure_sensitivity(words, fixations, methods)
 
 
+#: The columns each corpus-figure kind reads; ``"<value>"`` stands for
+#: ``value_col``. EXP-13: without the check a table lacking one surfaced as a
+#: bare ``KeyError: 'value'`` from inside the builder.
+_CORPUS_COLUMNS = {
+    "profile": ("word_id", "<value>"),
+    "distribution": ("<value>",),
+    # EXP-16: the builder draws its "no data" placeholder for a table with no
+    # `diff` — right for the app's empty states, but headlessly it meant a
+    # figure with nothing on it and an exit code of 0.
+    "difference": ("word_id", "diff"),
+}
+
+
+def _require_corpus_columns(data: pd.DataFrame, kind: str, value_col: str) -> None:
+    required = [
+        value_col if column == "<value>" else column
+        for column in _CORPUS_COLUMNS.get(kind, ())
+    ]
+    missing = [column for column in required if column not in data.columns]
+    if not missing:
+        return
+    hint = (
+        f" Name the measure column with value_col= (--value-col on the CLI); "
+        f"it is {value_col!r} now."
+        if value_col in missing
+        else ""
+    )
+    raise ValueError(
+        f"A {kind!r} corpus figure reads the column(s) "
+        f"{', '.join(repr(column) for column in missing)}, which the table doesn't "
+        f"have. Columns present ({len(data.columns)}): {_column_preview(data)}.{hint}"
+    )
+
+
 def plot_corpus_figure(
     data: pd.DataFrame,
     *,
@@ -922,9 +986,11 @@ def plot_corpus_figure(
     ``hi``); ``distribution`` expects ``value_col``; ``difference`` expects
     ``word_id`` and ``diff``. When ``series_col`` is present, it defines the
     overlaid profile/distribution series. This is the API counterpart of the
-    Corpus Analysis in-view styling controls (AN-29).
+    Corpus Analysis in-view styling controls (AN-29). A table missing a column
+    its ``kind`` reads raises ``ValueError`` naming it and the columns present.
     """
     kind = str(kind).lower()
+    _require_corpus_columns(data, kind, value_col)
     if kind == "profile":
         profiles = (
             {
@@ -1246,6 +1312,54 @@ def _reject_unknown_options(overrides: dict, valid, func_name: str) -> None:
     )
 
 
+#: Figure options whose value names a column → (the table it is read from, its
+#: CLI flag, the values that are not columns, what to do instead). EXP-17: the
+#: builders look the column up and draw *nothing* when it is missing, so a
+#: misspelling rendered a flat-coloured / unmarked figure without a word.
+_COLUMN_OPTIONS = {
+    "color_by": (
+        "fixations",
+        "--color-by",
+        (UNIFORM_COLOR_FIELD, "line"),
+        f"Use {UNIFORM_COLOR_FIELD!r} for one flat colour, 'line' to colour by "
+        "text line, or one of the columns below.",
+    ),
+    "highlight_column": (
+        "words",
+        "--highlight-column",
+        (),
+        "It names the boolean words column marking the text to highlight; pass "
+        "None ('' on the CLI) to highlight nothing.",
+    ),
+}
+
+
+def _check_column_options(
+    overrides: dict, *, words: pd.DataFrame, fixations: pd.DataFrame
+) -> None:
+    """Raise when an option the caller *named* points at no column (EXP-17).
+
+    Only explicit values are checked: ``highlight_column`` defaults to OneStop's
+    ``is_in_aspan``, which most corpora do not have and which the builder then
+    rightly skips. An empty table is not checked — there is nothing to colour."""
+    frames = {"words": words, "fixations": fixations}
+    for name, (kind, flag, synthetic, advice) in _COLUMN_OPTIONS.items():
+        value = overrides.get(name)
+        if value is None or value == "" or value in synthetic:
+            continue
+        frame = frames[kind]
+        present = [str(column) for column in frame.columns]
+        if frame.empty or str(value) in present:
+            continue
+        close = difflib.get_close_matches(str(value), present, n=3, cutoff=0.6)
+        hint = f" Closest: {', '.join(repr(c) for c in close)}." if close else ""
+        raise ValueError(
+            f"{name}={value!r} ({flag} on the CLI) names no column of the "
+            f"{kind} table.{hint} {advice} Columns present ({len(present)}): "
+            f"{_column_preview(frame)}."
+        )
+
+
 def figure_options(kind: str = "static") -> dict:
     """Every figure keyword a builder accepts → the default it renders with.
 
@@ -1256,7 +1370,7 @@ def figure_options(kind: str = "static") -> dict:
     one, the builder's own signature default otherwise — so a scripted caller
     can diff its intended settings against what it would get::
 
-        {k: v for k, v in sps.api.figure_options().items() if k.startswith("show_")}
+        {k: v for k, v in sps.figure_options().items() if k.startswith("show_")}
     """
     if kind == "static":
         params = _STATIC_FIGURE_PARAMS
@@ -1400,7 +1514,9 @@ def plot_scanpath(
     :func:`plots.make_scanpath_figure` (e.g. ``show_heatmap=False``,
     ``color_by="pass_index"``, ``x_field="order_in_trial"``); an unknown keyword
     raises a ``TypeError`` naming the closest valid options, and
-    :func:`figure_options` lists them all with their defaults.
+    :func:`figure_options` lists them all with their defaults. A ``color_by`` /
+    ``highlight_column`` naming a column the trial's table doesn't have raises a
+    ``ValueError`` naming the closest ones, rather than drawing without it.
     """
     if illustration:
         figure_overrides = {
@@ -1423,6 +1539,9 @@ def plot_scanpath(
     )
     trial_words, trial_fixations, pid, tid, selected_screen = _select_part(
         words, fixations, participant, trial, screen
+    )
+    _check_column_options(
+        figure_overrides, words=trial_words, fixations=trial_fixations
     )
     full_fix_range = None
     if not trial_fixations.empty and "order_in_trial" in trial_fixations.columns:
@@ -1558,6 +1677,7 @@ def animate_scanpath(
             f"Options not supported by the animation: {sorted(unknown)}. "
             f"Valid overrides: {sorted(valid)}."
         )
+    named = {k: v for k, v in animation_overrides.items() if k in explicit}
     # Same defaults as the static figure for every option both builders share, so
     # `plot_scanpath` and `animate_scanpath` don't render the same trial
     # differently (the app feeds both from one settings dict).
@@ -1565,6 +1685,7 @@ def animate_scanpath(
     trial_words, trial_fixations, pid, tid, _selected_screen = _select_part(
         words, fixations, participant, trial, screen
     )
+    _check_column_options(named, words=trial_words, fixations=trial_fixations)
     full_fix_range = None
     if not trial_fixations.empty and "order_in_trial" in trial_fixations.columns:
         full_order = pd.to_numeric(
@@ -1820,6 +1941,13 @@ def compare_scanpaths(
                 f"No fixations for participant={pid!r}, trial={tid!r}. "
                 f"list_trials() shows what the frames contain."
             )
+    # Either reading may carry the column (two corpora need not share them), so
+    # it is looked for across both.
+    _check_column_options(
+        figure_overrides,
+        words=pd.concat([trial_words_a, trial_words_b], ignore_index=True),
+        fixations=pd.concat([trial_fix_a, trial_fix_b], ignore_index=True),
+    )
 
     setup_a = _compare_setup(
         setup, canvas_size, trial_words_a, trial_fix_a, side="setup"
@@ -1966,13 +2094,23 @@ def save_figure_layers(
     vector and best for editing; ``png`` / ``html`` also work). ``scale`` /
     ``width`` / ``height`` are forwarded to :func:`save_figure`."""
     directory = Path(directory)
+    # ENG-54: a failed render (most often Kaleido with no Chrome) used to leave
+    # an empty `<output>_layers/` behind, which reads as "exported, but lost".
+    # Whatever this call created is removed again if nothing was written to it.
+    created = [path for path in (directory, *directory.parents) if not path.exists()]
     directory.mkdir(parents=True, exist_ok=True)
     written: dict = {}
-    for layer, layer_fig in split_scanpath_layers(fig).items():
-        path = directory / f"{layer}.{fmt.lstrip('.')}"
-        written[layer] = save_figure(
-            layer_fig, path, scale=scale, width=width, height=height
-        )
+    try:
+        for layer, layer_fig in split_scanpath_layers(fig).items():
+            path = directory / f"{layer}.{fmt.lstrip('.')}"
+            written[layer] = save_figure(
+                layer_fig, path, scale=scale, width=width, height=height
+            )
+    except Exception:
+        for path in created:  # deepest first
+            if path.is_dir() and not any(path.iterdir()):
+                path.rmdir()
+        raise
     return written
 
 
@@ -2002,7 +2140,7 @@ def figure_code(
     autoplay: bool = True,
     flavor: str = "python",
     explicit: bool = False,
-    output: str = "scanpath.png",
+    output: str | None = None,
     **figure_overrides,
 ) -> str:
     """The API or CLI code that reproduces a figure (EXP-7).
@@ -2013,8 +2151,8 @@ def figure_code(
     :func:`compare_scanpaths` (``"comparison"``) and it returns the snippet that
     rebuilds that figure, rather than the figure::
 
-        print(sps.api.figure_code(participant="l7_101", trial="1_Adv_1",
-                                  show_heatmap=False, flavor="cli"))
+        print(sps.figure_code(participant="l7_1090", trial="l7_1090_2_1_1_Ele_r0",
+                              show_heatmap=False, flavor="cli"))
 
     ``source`` names how the data is loaded — ``"demo"``, ``"synthetic"``,
     ``"files"``, ``"potec"``, ``"onestop"``, ``"multipleye"``, ``"benchmark"``,
@@ -2031,6 +2169,13 @@ def figure_code(
     ``labels=`` — the two trace labels, when they are not the composed defaults
     (EXP-8 §1). Both forms carry them: ``labels=`` in the Python snippet,
     ``--label-a`` / ``--label-b`` in the CLI one.
+
+    With ``participant`` / ``trial`` left empty the snippet renders the first
+    available trial, as ``render`` does. ``canvas_size`` defaults to the screen
+    ``render`` assumes for the source (the demo's 2560×1440, PoTeC's 1680×1050,
+    …), so both flavours draw the same figure; ``output`` defaults to
+    ``scanpath.html`` for an animation — ``render --animate`` writes only HTML —
+    and to a PNG otherwise.
 
     Only the options that differ from :func:`figure_options` are written, so the
     snippet stays readable; ``explicit=True`` emits every option at its current
@@ -2052,6 +2197,11 @@ def figure_code(
         set(figure_options(kind)) | {"palette"},
         "figure_code",
     )
+    if canvas_size is None:
+        # EXP-14: `render` snaps these sources to their recorded screen while
+        # `plot_scanpath` estimates one from the data, so leaving the canvas
+        # unnamed made the two flavours of one recipe disagree.
+        canvas_size = _snippet.source_canvas(source)
     state = _snippet.FigureState(
         kind=kind,
         settings={**figure_options(kind), **_expand_palette(figure_overrides)},
@@ -2092,7 +2242,7 @@ def figure_code(
         ),
         state,
         explicit=explicit,
-        output=output,
+        output=output or _snippet.DEFAULT_OUTPUT.get(kind, "scanpath.png"),
     )
     cli = code.cli
     if code.cli_unsupported:

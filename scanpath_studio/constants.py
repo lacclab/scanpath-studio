@@ -169,6 +169,15 @@ def compare_palette_color(idx: int) -> str:
     return COMPARISON_PALETTE[idx % len(COMPARISON_PALETTE)]
 
 
+#: Each comparison scanpath's default marker alpha, shared the same way: the
+#: rail seeds ``cmp{idx}_opacity`` from it (``controls._seed_compare_styles``)
+#: and the builder falls back to it (``plots._comparison_scanpath_style``).
+#: CMP-20: the builder's own 1.0 was what every headless ``compare_scanpaths`` /
+#: ``render --compare-with`` drew, so the default comparison differed from the
+#: app's. 0.7 matches the single-trial default, so overlaps show through.
+COMPARE_FIXATION_OPACITY = 0.7
+
+
 # Saccade line styles offered in the plot rail. Maps the friendly UI label to the
 # Plotly ``line.dash`` value used in the figure builders.
 SACCADE_DASH_OPTIONS = {

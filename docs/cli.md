@@ -11,7 +11,18 @@ scanpath-studio --server.port 8600
 scanpath-studio --no-persist          # don't cache the session on this computer
 ```
 
-Additional launch flags are forwarded to Streamlit.
+The app listens on this computer only (`127.0.0.1`). It has no login, so
+serving it to other machines is a deliberate step — pass
+`--server.address 0.0.0.0` (or set `server.address` in a Streamlit
+`config.toml`, or `STREAMLIT_SERVER_ADDRESS`), and only on a network you trust:
+
+```bash
+scanpath-studio --server.address 0.0.0.0
+```
+
+Additional launch flags are forwarded to Streamlit. A word that is not one of
+the commands (`run`, `render`, `analyze`, `corpus`, `cache`) is an error that
+names the closest one, rather than an argument handed to Streamlit.
 
 ## Render
 
@@ -42,6 +53,26 @@ scanpath-studio render --words ia.csv --fixations fix.csv \
 HTML is interactive and browser-free. PNG, SVG, and PDF require
 Chrome/Chromium (`plotly_get_chrome -y`).
 
+### When a column isn't recognised
+
+Column names are auto-detected (EyeLink, Tobii, SMI, Pupil Labs, Gazepoint and
+snake_case spellings). When one isn't, `render` stops and prints which field it
+could not find, the names it looked for, the columns your table has, and a
+mapping to start from. Pass that mapping back as JSON — inline, or as a path to
+a `.json` file — with `--word-schema` (the `--words` table) and/or
+`--fix-schema` (the `--fixations` table). `analyze` takes the same two flags.
+
+```bash
+scanpath-studio render --words ia.csv --fixations fix.csv \
+  --word-schema '{"trial": "TRIAL_LABEL", "word_id": "IA_ID", "text": "IA_LABEL",
+                  "left": "IA_LEFT", "right": "IA_RIGHT", "top": "IA_TOP", "bottom": "IA_BOTTOM"}' \
+  --fix-schema fix_schema.json -o scanpath.html
+```
+
+A mapping replaces auto-detection for that table, so it has to name every
+required field, not only the one that failed. It is the same dict
+`load_scanpath_data(word_schema=…, fix_schema=…)` takes in Python.
+
 ## Public corpora
 
 A public corpus loads headlessly the same way the app loads it — no export step
@@ -57,7 +88,7 @@ scanpath-studio render --onestop ./onestop --onestop-variant public \
 
 # One corpus out of a prepared harmonised bundle
 scanpath-studio render --eyegenbench ./data/EyeGenBench \
-  --eyegenbench-dataset Provo -p 1 -t 1 -o provo.svg
+  --eyegenbench-dataset Provo -p Provo_Sub01 -t Provo_1 -o provo.svg
 
 # MultiplEYE, from its raw export
 scanpath-studio render --source multipleye --export ./multipleye_session \
@@ -76,14 +107,19 @@ root (`load_potec`, `load_onestop`, `load_multipleye`, `load_eyegenbench`).
 first — the headless form of the app's **Compare** mode.
 
 ```bash
-# Two readings from the same dataset
-scanpath-studio render --sample -p p1 -t t1 \
-  --compare-with p2:t5 -o compare.html
+# Two readers of the same paragraph, overlaid
+scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 -o compare.html
 
-# Side by side, showing only B's word boxes and text
-scanpath-studio render --sample -p p1 -t t1 \
-  --compare-with p2:t5 \
-  --compare-layout side-by-side --compare-stimulus b -o compare.svg
+# The same overlay, drawing only B's word boxes and text
+scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 --compare-stimulus b \
+  -o compare_b.html
+
+# Side by side — each panel draws its own reading's stimulus
+scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 \
+  --compare-layout side-by-side -o compare.svg
 
 # B from a second dataset
 scanpath-studio render --potec ./potec -p 12 -t b0 \
@@ -151,18 +187,18 @@ the recorded setup.
 | Goal | Option |
 | --- | --- |
 | hide a layer | `--no-words`, `--no-labels`, `--no-fixations`, `--no-saccades`, `--no-heatmap` |
-| animate | `--animate` and optionally `--playback-speed X` |
+| animate | `--animate` and optionally `--playback-speed X`; every styling flag the replay can draw (`api.figure_options("animation")`) is honoured, and the rest are named in a warning |
 | set display geometry | `--canvas WIDTHxHEIGHT` |
 | show monitor-pixel axes | `--coordinate-grid` and optionally `--coordinate-grid-spacing PX` |
 | color fixations | `--color-by FIELD` |
-| draw only part of a trial | `--fix-index-range START:END` (1-based, both inclusive; honoured by `--animate` too) |
+| draw only part of a trial | `--fix-index-range START:END` (1-based, both inclusive; honoured by `--animate` and `--compare-with` too) |
 | mark the critical span | `--highlight-column COLUMN` (`''` for none) with `--critical-span-style mark-text\|mark-border\|none` |
 | flag short / long / off-text / blink fixations | `--fixation-flag CATEGORY=MODE[,threshold_ms=N][,symbol=S][,color=#RRGGBB]`, repeatable |
 | classify saccades | `--saccade-color-by-type` |
 | correct vertical drift (needs `SCANPATH_EXPERIMENTAL=1`) | `--drift-correction ALGORITHM` |
 | add the stimulus image | `--stimulus-image PATH` |
 | resolve per-trial images | `--image-root DIR --image-pattern '{text_id}.png'` |
-| use Gaussian duration mass | `--heatmap-style 'Duration mass' --duration-mass-sigma 1.0` |
+| use Gaussian duration mass | `--heatmap-style duration-mass --duration-mass-sigma 1.0` |
 | mark a schematic | `--illustration` or `--illustration-label MODE` |
 | render an authored trial | `--authoring PATH` |
 | select or inspect a child screen | `--screen ID`, `--list-parts` |
@@ -193,8 +229,10 @@ scanpath-studio analyze --words ia.csv --fixations fixations.csv --output-dir an
 ```
 
 This creates word, sentence, saccade, trial, reader, character, cleaning-QA,
-and run-configuration files. `scanpath-studio corpus` produces a tidy
-corpus-analysis table for scripting. The `render` command still renders one
+and run-configuration files. `scanpath-studio corpus` goes the other way: it
+reads a tidy CSV you already have (`--input`, one row per word or value) and
+renders a styled corpus figure — a per-word `profile`, a `distribution`, or a
+`difference` profile. The `render` command still renders one
 trial per invocation; use the [Python batch pattern](automation.md#batch-pattern)
 or **Export → Export bundle** for many figures.
 

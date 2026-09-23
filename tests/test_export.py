@@ -155,6 +155,52 @@ class TestBulkExport:
             assert "aggregate/all_word_measures.csv" in names
             assert "aggregate/all_reader_summary.csv" in names
 
+    @pytest.mark.parametrize("table_format", ["csv", "both"])
+    def test_every_zip_member_name_is_unique(
+        self,
+        minimal_combos,
+        minimal_words,
+        minimal_fixations,
+        base_settings,
+        table_format,
+    ):
+        """EXP-15: with the mega-table *and* the full family ticked,
+        `aggregate/all_fixations.*` was written twice with different columns —
+        a zip keeps both entries, and a reader silently sees only one."""
+        import collections
+
+        opts = ExportOptions(
+            include_png=False,
+            include_svg=False,
+            include_fixations=True,
+            include_measures=True,
+            include_mega_table=True,
+            include_analysis_family=True,
+            table_format=table_format,
+        )
+        zip_bytes, progress = bulk_export(
+            minimal_combos,
+            minimal_words,
+            minimal_fixations,
+            canvas_width=800,
+            canvas_height=400,
+            base_font_size=14,
+            font_family="monospace",
+            x_field="x",
+            y_field="y",
+            settings=base_settings,
+            options=opts,
+        )
+        assert progress.errors == []
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+            names = zf.namelist()
+            duplicates = [n for n, c in collections.Counter(names).items() if c > 1]
+            assert duplicates == []
+            # The one that survives is the family's word-enriched table.
+            fixations = pd.read_csv(zf.open("aggregate/all_fixations.csv"))
+            assert "word_id" in fixations.columns
+            assert "aggregate/all_measures.csv" in names
+
     def test_html_figures_need_no_kaleido(
         self, minimal_combos, minimal_words, minimal_fixations, base_settings
     ):

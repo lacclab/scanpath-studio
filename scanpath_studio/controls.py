@@ -17,6 +17,7 @@ from .annotations import known_tags
 from .constants import (
     BACKGROUND_PRESETS,
     COLORSCALES,
+    COMPARE_FIXATION_OPACITY,
     CUSTOM_PALETTE,
     DEFAULT_BACKGROUND_COLOR,
     DEFAULT_FIXATION_COLOR,
@@ -3035,7 +3036,7 @@ def _seed_compare_styles() -> None:
         # checkbox). Default 0.7 matches the single-trial default so overlapping
         # fixations show through. `cmp{idx}_hollow` kept seeded for saved-config /
         # deep-link backward compatibility (no widget renders it anymore).
-        _pin(f"cmp{idx}_opacity", 0.7)
+        _pin(f"cmp{idx}_opacity", COMPARE_FIXATION_OPACITY)
         _pin(f"cmp{idx}_hollow", False)
 
 

@@ -519,6 +519,44 @@ def test_the_cli_snippet_parses_and_runs(tmp_path, demo_trial):
     assert out.exists() and out.stat().st_size > 0
 
 
+def test_an_animation_cli_snippet_replays_the_same_figure(
+    tmp_path, monkeypatch, demo_trial
+):
+    """EXP-10: the snippet emitted every animation option it was given, but
+    `render --animate` forwarded a hand-kept subset of them — so the marker
+    shape and flat colour were dropped and `--color-by` was refused. Executed,
+    the command has to hand the replay what the snippet names."""
+    _words, _fixations, participant, trial = demo_trial
+    changed = {
+        "fixation_symbol": "diamond",
+        "fixation_color": "#aa0000",
+        "color_by": "duration_ms",
+        "fixation_colorscale": "Blues",
+        "marker_size_range": (4, 12),
+    }
+    state = cs.FigureState(
+        kind="animation",
+        settings={**api.figure_options("animation"), **changed},
+        participant=participant,
+        trial=trial,
+    )
+    command, unsupported = cs.cli_snippet(
+        DEMO, state, output=str(tmp_path / "anim.html")
+    )
+    assert not unsupported
+    seen: dict = {}
+    real = api.animate_scanpath
+
+    def spy(*args, **kwargs):
+        seen.update(kwargs)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(api, "animate_scanpath", spy)
+    cli.main(shlex.split(command.replace(" \\\n", " "))[1:])
+    for key, value in changed.items():
+        assert cs._comparable(seen.get(key)) == cs._comparable(value), key
+
+
 def test_the_cli_prints_the_recipe_for_its_own_invocation(tmp_path, capsys):
     out = tmp_path / "printed.html"
     cli.main(
@@ -546,10 +584,54 @@ def test_the_cli_prints_the_recipe_for_its_own_invocation(tmp_path, capsys):
 # The headless API
 # ---------------------------------------------------------------------------
 def test_figure_code_matches_the_module_it_wraps():
+    # EXP-14: `figure_code` fills in the demo's own monitor, the canvas `render
+    # --sample` assumes, so the module call it is compared with names it too.
     python = api.figure_code(participant="p1", trial="t1", show_heatmap=False)
     assert python == cs.python_snippet(
-        DEMO, _state(figure={"show_heatmap": False}), output="scanpath.png"
+        DEMO,
+        _state(figure={"show_heatmap": False}, canvas=(2560, 1440)),
+        output="scanpath.png",
     )
+
+
+def test_figure_code_with_no_trial_draws_what_render_draws(tmp_path, monkeypatch):
+    """EXP-14: with no ids the Python half quoted `participant=''` (no such
+    trial — it raised) and no canvas (960×480 estimated from the data), while
+    the CLI half rendered the first trial at 2560×1440. Both halves now draw
+    the same figure."""
+    figures: list = []
+
+    def capture(fig, path, **_kwargs):
+        figures.append(fig)
+        return path
+
+    monkeypatch.setattr(api, "save_figure", capture)
+    python = api.figure_code(show_heatmap=False)
+    exec(compile(python, "<snippet>", "exec"), {})  # noqa: S102
+    command = api.figure_code(show_heatmap=False, flavor="cli", output="x.html")
+    cli.main(shlex.split(command.replace(" \\\n", " "))[1:])
+    python_fig, cli_fig = figures
+    assert _figure_fingerprint(python_fig) == _figure_fingerprint(cli_fig)
+    assert python_fig.layout.width == cli_fig.layout.width
+
+
+def test_figure_code_names_a_trial_half_given(monkeypatch):
+    python = api.figure_code(participant="l7_1090")
+    assert "trials['participant_id'] == 'l7_1090'" in python
+    monkeypatch.setattr(api, "save_figure", lambda fig, path, **kwargs: path)
+    namespace: dict = {}
+    exec(compile(python, "<snippet>", "exec"), namespace)  # noqa: S102
+    assert namespace["participant"] == "l7_1090"
+
+
+def test_figure_code_writes_an_animation_to_html(tmp_path, monkeypatch):
+    """`render --animate` refuses anything but HTML, and `figure_code` wrote
+    `scanpath.png` for every kind."""
+    command = api.figure_code(kind="animation", flavor="cli")
+    assert command.rstrip().endswith("-o scanpath.html")
+    monkeypatch.chdir(tmp_path)
+    cli.main(shlex.split(command.replace(" \\\n", " "))[1:])
+    assert (tmp_path / "scanpath.html").is_file()
 
 
 def test_figure_code_flavours():
@@ -575,6 +657,87 @@ def test_a_palette_is_expanded_not_named():
     code = api.figure_code(palette="Print / greyscale")
     assert "palette=" not in code
     assert "saccade_color=" in code
+
+
+def _rendered_figures(monkeypatch, argv_list) -> list:
+    """Run each ``render`` argv with `save_figure` capturing the figure."""
+    figures: list = []
+
+    def capture(fig, path, **_kwargs):
+        figures.append(fig)
+        return path
+
+    monkeypatch.setattr(api, "save_figure", capture)
+    for argv in argv_list:
+        cli.main(argv)
+    return figures
+
+
+@pytest.mark.parametrize("palette", ["Print / greyscale", "High contrast"])
+def test_a_palette_choice_reproduces_through_the_cli(
+    tmp_path, monkeypatch, capsys, palette
+):
+    """EXP-12: a palette rewrites the five class colours, and the CLI form
+    spelled them as `--saccade-type-color` flags — which imply *By type*, so
+    every palette choice printed a command that recoloured saccades by type
+    (and named `text_color` / `highlight_text_color` unsupported). The CLI form
+    names the palette instead, and executed it draws the same figure."""
+    original = [
+        "render",
+        "--sample",
+        "--palette",
+        palette,
+        "--print-code",
+        "cli",
+        "-o",
+        str(tmp_path / "a.html"),
+    ]
+    _rendered_figures(monkeypatch, [original])
+    printed = capsys.readouterr().out
+    assert "--saccade-type-color" not in printed
+    assert "No `render` flag" not in printed
+    assert shlex.quote(palette) in printed
+    replay = shlex.split(printed.strip().replace(" \\\n", " "))[1:]
+    first, second = _rendered_figures(
+        monkeypatch, [original[:-4] + original[-2:], replay]
+    )
+    assert _figure_fingerprint(first) == _figure_fingerprint(second)
+
+
+def test_class_colours_a_uniform_figure_does_not_draw_are_not_emitted():
+    """`--saccade-type-color` switches the mode, so it must never carry colours
+    the figure is not drawing."""
+    from scanpath_studio.constants import palette_settings
+
+    colors = palette_settings("High contrast")["saccade_class_colors"]
+    colors["regression"] = "#abcdef"  # no palette matches this set
+    state = _state(figure={"saccade_class_colors": colors})
+    command, unsupported = cs.cli_snippet(DEMO, state)
+    assert "--saccade-type-color" not in command
+    assert "saccade_class_colors" not in unsupported
+
+
+def test_two_way_class_colours_no_flag_can_restate_are_named_unsupported():
+    """The two-way fold draws the class colours, but `--saccade-type-color`
+    would turn it into the five-way split — so unless a palette supplies them,
+    they are named rather than emitted."""
+    state = _state(
+        figure={
+            "saccade_color_mode": "Forward / regression",
+            "saccade_class_colors": {"regression": "#abcdef", "forward": "#123456"},
+        }
+    )
+    command, unsupported = cs.cli_snippet(DEMO, state)
+    assert "--saccade-color-by-direction" in command
+    assert "--saccade-type-color" not in command
+    assert "saccade_class_colors" in unsupported
+
+
+def test_a_stock_figure_names_no_palette():
+    command, _ = cs.cli_snippet(DEMO, _state())
+    assert "--palette" not in command
+    by_type = _state(figure={"saccade_color_mode": "By type"})
+    assert "--palette" not in cs.cli_snippet(DEMO, by_type)[0]
 
 
 # ---------------------------------------------------------------------------

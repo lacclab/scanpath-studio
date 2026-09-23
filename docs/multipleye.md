@@ -54,7 +54,7 @@ canonical schema:
   screens the reader saw are `screen_id` values — `page_1 … page_N` and
   `question_<id>` — each with its own coordinate space. Step through them with
   the screen navigator beside the trial picker, `?screen=` on a share link,
-  `render --screen` / `--all-screens` / `--list-screens`, or
+  `render --screen` / `--all-screens` / `--list-parts`, or
   `plot_scanpath(..., screen=…)`. Pages reuse the same on-screen coordinates, so
   screens (never a merged trial) are what keeps them from stacking.
 - **`screen_index` comes from the reader's own fixation onsets**, never from the

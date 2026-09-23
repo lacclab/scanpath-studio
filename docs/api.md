@@ -10,7 +10,7 @@ load data → list trials → plot or measure → save
 import scanpath_studio as sps
 
 words, fixations = sps.load_scanpath_data("ia.csv", "fixations.csv")
-fig = sps.plot_scanpath(words, fixations, participant_id="p1", trial_id="t3")
+fig = sps.plot_scanpath(words, fixations, participant="p1", trial="t3")
 sps.save_figure(fig, "scanpath.html")
 ```
 
@@ -83,8 +83,8 @@ already have.
 ```python
 print(
     sps.figure_code(
-        participant="l7_101",
-        trial="1_Adv_1",
+        participant="l7_1090",
+        trial="l7_1090_2_1_1_Ele_r0",
         show_heatmap=False,
         color_by="duration_ms",
     )

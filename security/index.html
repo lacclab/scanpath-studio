@@ -2016,8 +2016,8 @@ too. Nothing here is inferred from documentation alone.</p>
 <li><strong>Audited version:</strong> <code>scanpath_studio</code> 0.25.0</li>
 <li><strong>Dependency versions the runtime claims were checked against:</strong> Streamlit
   1.58.0, pandas 2.3.3, CPython 3.12.12. The runtime has since moved to
-  Streamlit <strong>1.63.0</strong> (ENG-43, ENG-49); see <em>After the audit — Streamlit
-  1.61–1.63</em> below for the relevant runtime changes.</li>
+  Streamlit <strong>1.64.0</strong> (ENG-43, ENG-49, ENG-52); see <em>After the audit — Streamlit
+  1.61–1.64</em> below for the relevant runtime changes.</li>
 <li><strong>Method:</strong> source read of every write-to-disk, URL-building, path-handling,
   archive-reading and <code>@st.cache_data</code> site, plus targeted scripts that exercised
   the share-link builder, the bulk exporter, the export path sanitizer, the
@@ -2039,8 +2039,8 @@ account-readable; it is disclosed and deletable in-app (💾 <strong>Session</st
 described for researchers in <a href="../privacy/#what-happens-to-a-file-you-upload">privacy.md</a>.</p>
 </div>
 <div class="admonition note">
-<p class="admonition-title">After the audit — Streamlit 1.61–1.63 (ENG-31, ENG-43, ENG-49)</p>
-<p>The runtime moved from 1.58.0 to 1.61.1, then 1.62.0, then 1.63.0. Two of the
+<p class="admonition-title">After the audit — Streamlit 1.61–1.64 (ENG-31, ENG-43, ENG-49, ENG-52)</p>
+<p>The runtime moved from 1.58.0 to 1.61.1, then 1.62.0, 1.63.0 and 1.64.0. Two of the
 config options that arrived in between touch the surfaces this page
 describes, and <strong>both are left at their defaults</strong>:</p>
 <ul>
@@ -2070,6 +2070,16 @@ default, as is <code>runner.cacheBackgroundRefreshMaxWorkers</code>. This is a
 read of the changed surfaces, <strong>not</strong> a re-run of the audit: the method
 above has not been repeated against 1.63, and the version-specific claims
 below still cite what was read at the version named beside them.</p>
+<p><strong>1.64 (ENG-52) tightens two things this page relies on, and removes one
+option nothing here sets.</strong> A download's filename is now encoded rather than
+written raw into a quoted <code>Content-Disposition</code> header, so a name carrying a
+quote or newline can no longer break out of it — the export names are
+already built from <code>tabs._safe_filename</code>, which keeps only letters, digits
+and <code>-_.</code>, so for this app it is defense in depth. Error traces shown in
+the browser now hide Streamlit's own frames, which shortens
+what a traceback discloses without changing whether one is shown. The
+<code>mapbox.token</code> config option is gone; the app never set it. Same caveat as
+1.63: a read of the changed surfaces, not a re-run of the audit.</p>
 <p>Streamlit 1.62 also randomizes/configures the sample used to hash large
 pandas and NumPy values in its own caches. That is useful defense in depth,
 but does not replace <code>data.frame_fingerprint</code>: Scanpath Studio intentionally

@@ -13,7 +13,6 @@ from scanpath_studio.authoring import (
     event_problems,
     layout_text,
     parse_authoring_document,
-    parse_authoring_json,
     reconcile_event_table,
     unusable_event_rows,
 )
@@ -101,8 +100,7 @@ def test_schema_2_keeps_layout_settings_and_stable_ids():
     document = parse_authoring_document(payload)
     assert document.layout["canvas_width"] == 500
     assert document.events["fixation_id"].tolist() == [1, 42]
-    _, restored = parse_authoring_json(payload)
-    assert list(restored.index) == [0, 1]
+    assert list(document.events.index) == [0, 1]
 
 
 def test_xy_is_primary_and_target_word_is_optional():
@@ -188,5 +186,5 @@ def test_duplicate_ids_and_orders_are_rejected_with_actionable_messages():
 def test_a_restored_file_comes_back_range_indexed():
     words = layout_text("alpha beta gamma")
     events = default_events(words).drop(index=1)
-    _, restored = parse_authoring_json(authoring_json("alpha beta gamma", events))
-    assert list(restored.index) == [0, 1]
+    restored = parse_authoring_document(authoring_json("alpha beta gamma", events))
+    assert list(restored.events.index) == [0, 1]

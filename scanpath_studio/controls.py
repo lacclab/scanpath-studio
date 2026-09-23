@@ -1959,13 +1959,8 @@ def _assemble_mapping(
     The **shape** of a mapping — which keys exist, that a ``kind: "box"`` field
     expands into all eight box keys with the inactive four set to ``None``, that
     a ``multi`` field collapses to a plain string when exactly one column is
-    picked — is defined once, here. :func:`column_mapping_ui` supplies choices by
-    rendering widgets; :func:`resolve_column_mapping` supplies them by reading the
-    session keys those widgets wrote. Sharing the loop is what stops the two
-    answering differently for the same dataset (DATA-26): the resolver runs on
-    every view where the editor is *not* on screen, so a divergence would show up
-    as the app quietly normalizing under a different mapping than the one the
-    user can see.
+    picked — is defined once, here; :func:`column_mapping_ui` supplies the
+    choices by rendering widgets.
     """
     mapping: dict[str, str | None] = {}
     for spec in field_specs:
@@ -1975,9 +1970,7 @@ def _assemble_mapping(
         if only_keys is not None and key not in only_keys:
             continue
         default = proposed.get(key)
-        # Resolved from auto-detection, never offered as a row (UX-53). Both
-        # callers share this loop, so the editor and the resolver stay in
-        # agreement — the whole reason `_assemble_mapping` exists.
+        # Resolved from auto-detection, never offered as a row (UX-53).
         if key in _HIDDEN_MAPPING_KEYS:
             mapping[key] = default
             continue
@@ -2220,74 +2213,6 @@ def forget_mapping_for_other_table(
         # The approval goes with the answer it approved (UX-53 r11): a field
         # re-proposed for a different table has not been confirmed by anyone.
         st.session_state.get(TOUCHED_FIELDS_KEY, set()).discard(key)
-
-
-def resolve_column_mapping(
-    df: pd.DataFrame,
-    state_key_prefix: str,
-    field_specs: list[dict],
-    proposed: dict[str, str | None],
-    only_keys: list[str] | None = None,
-    *,
-    dataset: object = None,
-) -> dict[str, str | None]:
-    """The mapping :func:`column_mapping_ui` *would* return, without rendering it.
-
-    **DATA-26.** The column-mapping editor used to live in a menu popover, which
-    executes on every rerun, so the load path could simply render it and use what
-    came back. On the **Data** page it executes only while that page is the
-    active view — and the mapping still has to drive ``prepare_data`` on the
-    Scanpath and Corpus views, which is precisely the trap that item flags.
-
-    Both halves of the answer are needed. The widgets carry
-    ``persist_state="session"`` so Streamlit keeps their values through the runs
-    in which they don't render (ENG-36; without it the keys are dropped at the
-    end of any such run and the mapping silently reverts to auto-detection).
-    This function then reads those values instead of re-rendering, so no view has
-    to draw the editor just to know the answer.
-
-    A stored column that no longer exists in ``df`` — a new upload with different
-    headers — falls back to the auto-detected proposal rather than to ``None``,
-    matching the rendering editor, whose selectbox ``index`` lookup self-heals the
-    same way. ``dataset`` is :func:`forget_mapping_for_other_table`'s (BUG-32).
-    """
-    forget_mapping_for_other_table(df, state_key_prefix, field_specs, dataset=dataset)
-    columns = set(df.columns)
-
-    def _stored(field_key: str) -> str | None:
-        value = st.session_state.get(f"{state_key_prefix}_{field_key}")
-        if value == NONE_OPTION:
-            return None
-        if isinstance(value, str) and value in columns:
-            return value
-        # Nothing usable stored: fall back to what auto-detection proposed.
-        fallback = proposed.get(field_key)
-        return fallback if fallback in columns else None
-
-    def _pick(field_key: str, _label, _help=None) -> str | None:
-        return _stored(field_key)
-
-    def _pick_box_format(_spec) -> str:
-        fmt = st.session_state.get(f"{state_key_prefix}_box_format")
-        return fmt if fmt in _BOX_SUBFIELDS else _default_box_format(proposed)
-
-    def _pick_multi(spec, default, _label) -> list[str]:
-        stored = st.session_state.get(f"{state_key_prefix}_{spec['key']}")
-        if isinstance(stored, (list, tuple)):
-            valid = [c for c in stored if c in columns]
-            if valid:
-                return valid
-        return [default] if default in columns else []
-
-    return _assemble_mapping(
-        df,
-        field_specs,
-        proposed,
-        only_keys,
-        pick=_pick,
-        pick_box_format=_pick_box_format,
-        pick_multi=_pick_multi,
-    )
 
 
 def column_mapping_ui(
@@ -2551,8 +2476,7 @@ def column_mapping_ui(
                 unsafe_allow_html=True,
             )
         # `NONE_OPTION` is still tolerated on the way out: a config restored
-        # before this run could have seeded it, and `resolve_column_mapping`
-        # reads the same keys.
+        # before this run could have seeded it.
         return None if chosen in (None, NONE_OPTION) else chosen
 
     host = container if container is not None else st.container()

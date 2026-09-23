@@ -18,9 +18,8 @@ from scanpath_studio.app import (
 )
 from scanpath_studio.data import compute_canvas_size
 
-# Imported from their real home (utils); app.py no longer re-exports these
-# test-only helpers.
-from scanpath_studio.utils import compute_trial_stats, gather_trial_metadata
+# Imported from its real home (utils); app.py does not re-export it.
+from scanpath_studio.utils import compute_trial_stats
 
 
 class TestBuildComboOptions:
@@ -124,51 +123,6 @@ class TestComputeTrialStats:
         stats = compute_trial_stats(normalized_words_df, empty_fixations)
         assert stats["fixation_count"] == 0
         assert stats["total_reading_time_ms"] == 0
-
-
-class TestGatherTrialMetadata:
-    """Tests for gather_trial_metadata function."""
-
-    def test_gather_trial_metadata_single_value(
-        self, normalized_words_df, normalized_fixations_df
-    ):
-        normalized_words_df["difficulty_level"] = ["Adv", "Adv", "Adv"]
-        metadata = gather_trial_metadata(
-            normalized_words_df, normalized_fixations_df, ["difficulty_level"]
-        )
-        assert len(metadata) == 1
-        assert metadata.iloc[0]["Field"] == "difficulty_level"
-        assert "Adv" in str(metadata.iloc[0]["Value"])
-
-    def test_gather_trial_metadata_numeric(
-        self, normalized_words_df, normalized_fixations_df
-    ):
-        normalized_fixations_df["duration_ms"] = [200, 250, 180]
-        metadata = gather_trial_metadata(
-            normalized_words_df, normalized_fixations_df, ["duration_ms"]
-        )
-        assert len(metadata) == 1
-        assert "mean" in str(metadata.iloc[0]["Value"]).lower()
-
-    def test_gather_trial_metadata_missing_field(
-        self, normalized_words_df, normalized_fixations_df
-    ):
-        metadata = gather_trial_metadata(
-            normalized_words_df, normalized_fixations_df, ["nonexistent_field"]
-        )
-        assert len(metadata) == 0
-
-    def test_gather_trial_metadata_multiple_fields(
-        self, normalized_words_df, normalized_fixations_df
-    ):
-        normalized_words_df["difficulty_level"] = ["Adv", "Adv", "Adv"]
-        normalized_fixations_df["pass_index"] = [1, 1, 1]
-        metadata = gather_trial_metadata(
-            normalized_words_df,
-            normalized_fixations_df,
-            ["difficulty_level", "pass_index"],
-        )
-        assert len(metadata) == 2
 
 
 class TestBuildComparisonOptions:

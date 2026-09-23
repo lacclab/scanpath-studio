@@ -2691,49 +2691,6 @@ def _span_fixated_note(
     return f' <span style="color:#198754;">— {n} fixations, {dwell:.0f} ms</span>'
 
 
-def _render_trial_header(
-    participant: str,
-    trial_id: str,
-    trial_words: pd.DataFrame,
-    prefix: str = "Trial:",
-) -> None:
-    """Render the trial id header with participant + text id stacked below it.
-
-    The paragraph text / question / spans live in
-    `_render_paragraph_panel` so they can sit under the figure (single tab)
-    while the header stays in the side panel.
-    """
-    lines = [f"**{prefix}** `{trial_id}`", f"Participant: `{participant}`"]
-    # The text/passage id may live under its canonical name or a pre-rename
-    # source name (unique_paragraph_id etc.), which can also double as a composite
-    # component — recognise all of them so the line reads "Text:" either way.
-    text_cols = ("unique_text_id", "text_id", "unique_paragraph_id", "paragraph_id")
-    text_id = None
-    for col in text_cols:
-        if col in trial_words.columns and not trial_words.empty:
-            value = trial_words[col].iloc[0]
-            if pd.notna(value):
-                text_id = value
-                break
-    if text_id is not None:
-        lines.append(f"Text: `{text_id}`")
-    # When the trial id was composed from several columns, surface its remaining
-    # parts on their own labeled lines too — the same way Participant and Text
-    # are shown — so the opaque `a_b_c` id is spelled out. Participant and the
-    # paragraph/text column are already covered above, so they're skipped.
-    composite_cols = st.session_state.get("_composite_trial_columns") or []
-    already_shown = {"participant_id", *text_cols}
-    for col in composite_cols:
-        if col in already_shown or col not in trial_words.columns or trial_words.empty:
-            continue
-        value = trial_words[col].iloc[0]
-        if pd.notna(value):
-            lines.append(f"{col.replace('_', ' ').capitalize()}: `{value}`")
-    # Participant and Text sit on their own lines under the trial id (a markdown
-    # hard line break is two trailing spaces + newline).
-    st.markdown("  \n".join(lines))
-
-
 def _render_paragraph_panel(
     trial_words: pd.DataFrame,
     *,

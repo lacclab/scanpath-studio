@@ -20,10 +20,8 @@ from scanpath_studio.data import (
 from scanpath_studio.measures import cluster_word_lines
 from scanpath_studio.plots import (
     make_comparison_figure,
-    make_fixation_duration_histogram,
     make_scanpath_animation,
     make_scanpath_figure,
-    make_word_measure_bar_figure,
 )
 
 
@@ -164,48 +162,6 @@ class TestPipelineFigures:
         # Expect (in any order): saccades trace (1) + fixations trace (1) + optional word labels.
         # Never one-per-saccade.
         assert len(fig.data) <= 5, f"Too many traces: {len(fig.data)}"
-
-    def test_word_measure_bar(self, normalized_demo):
-        words, fixations = normalized_demo
-        pid = words["participant_id"].iloc[0]
-        tid = words["trial_id"].iloc[0]
-        tw = words[(words["participant_id"] == pid) & (words["trial_id"] == tid)]
-        tf = fixations[
-            (fixations["participant_id"] == pid) & (fixations["trial_id"] == tid)
-        ]
-        measures = compute_word_metrics(tw, tf)
-        # Pick whatever first-fixation measure is present
-        measure = next(
-            (
-                c
-                for c in [
-                    "first_fixation_ms",
-                    "first_pass_gaze_duration_ms",
-                    "total_fixation_duration_ms",
-                ]
-                if c in measures.columns
-            ),
-            None,
-        )
-        assert measure is not None
-        fig = make_word_measure_bar_figure(
-            measures,
-            measure=measure,
-            canvas_width=1024,
-            base_font_size=14,
-            font_family="monospace",
-        )
-        assert isinstance(fig, go.Figure)
-
-    def test_fixation_duration_histogram(self, normalized_demo):
-        _, fixations = normalized_demo
-        fig = make_fixation_duration_histogram(
-            fixations.head(200),
-            canvas_width=800,
-            base_font_size=14,
-            font_family="monospace",
-        )
-        assert isinstance(fig, go.Figure)
 
     def test_animation_has_frames(self, normalized_demo):
         words, fixations = normalized_demo

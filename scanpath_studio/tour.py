@@ -44,13 +44,12 @@ Mechanics worth knowing before editing:
   same-origin script (``_tour_optout_script``); ``tour_opted_out()`` reads it.
   The replay button ignores the opt-out entirely, so the tour is never lost.
 - **The FAQ (UX-15)** is the other half of the ❓ Help menu group: a short
-  ``st.dialog`` of recurring questions (``render_faq_button``), deliberately
-  kept to a handful of answers with the complete version on the docs site
-  (``docs/faq.md``). It is armed exactly like the tour — the button's
-  ``on_click`` sets a request flag that ``maybe_show_faq`` serves early in
-  ``main()`` — because the button renders at the *bottom* of ``main()``:
-  opening the dialog from its return value made the modal wait out the whole
-  rerun (~10 s of plot embeds) before appearing.
+  ``st.dialog`` of recurring questions (``_faq_dialog``), deliberately kept to a
+  handful of answers with the complete version on the docs site
+  (``docs/faq.md``). It is armed exactly like the tour — the ❓ Help nav entry
+  (``menu._arm_help_action``) calls ``_arm_faq``, which sets a request flag that
+  ``maybe_show_faq`` serves early in ``main()``, so the modal never waits out the
+  rest of the rerun (~10 s of plot embeds) before appearing.
 """
 
 from __future__ import annotations
@@ -1507,7 +1506,8 @@ def _tutorial_surface_is_open(step: TutorialStep) -> bool:
 
 
 def _arm_tutorial_library() -> None:
-    """``on_click`` callback for the Tutorials button: request the dialog."""
+    """Request the tutorial chooser. Called by the ❓ Help nav entry
+    (``menu._arm_help_action``)."""
     st.session_state["_tutorial_library_requested"] = True
 
 
@@ -1529,24 +1529,6 @@ def stash_tutorial_context(context: dict[str, object]) -> None:
     and it can be opened from any view, so the stash has to happen every run.
     """
     st.session_state["_tutorial_context"] = dict(context)
-
-
-def render_tutorial_library(context: dict[str, object], *, host=None) -> None:
-    """Button in the ❓ Help menu popover that opens the tutorial chooser.
-
-    A dialog rather than the nested ``🧭 Tutorials`` popover it used to be: the
-    Help group is itself a popover now, and Streamlit nests no popover in a
-    popover. The chooser is a modal-shaped thing anyway — pick an outcome, start,
-    and the tutorial takes over the page.
-    """
-    stash_tutorial_context(context)
-    (host if host is not None else st).button(
-        "🧭 Tutorials",
-        key="tutorial_library_open",
-        width="stretch",
-        help="Welcome and task-oriented walkthroughs.",
-        on_click=_arm_tutorial_library,
-    )
 
 
 @st.dialog("🧭 Tutorials", width="large")
@@ -1915,11 +1897,11 @@ def _faq_dialog() -> None:
 
 
 def _arm_faq() -> None:
-    """``on_click`` callback for the FAQ button: request the dialog.
+    """Request the FAQ dialog. Called by the ❓ Help nav entry
+    (``menu._arm_help_action``).
 
-    Dialogs can't be opened from a callback, so this only sets a flag that
-    :func:`maybe_show_faq` — called early in ``main()`` — serves. Callbacks run
-    *before* the rerun, so the request is picked up within the same run.
+    Dialogs can't be opened from there, so this only sets a flag that
+    :func:`maybe_show_faq` — called early in ``main()`` — serves.
     """
     st.session_state["_faq_dialog_requested"] = True
 
@@ -1936,23 +1918,6 @@ def maybe_show_faq() -> None:
     """
     if st.session_state.pop("_faq_dialog_requested", False):
         _faq_dialog()
-
-
-def render_faq_button(host=None) -> None:
-    """Button in the ❓ Help menu popover that opens the in-app FAQ dialog.
-
-    Armed the way the other Help entries are: an
-    ``on_click`` callback sets a request flag that the early
-    :func:`maybe_show_faq` call serves, so the modal doesn't wait on the heavy
-    data / plot work this button renders after.
-    """
-    (host if host is not None else st).button(
-        "❓ FAQ",
-        key="faq_open",
-        width="stretch",
-        help="Short answers to common questions, plus a link to the full docs.",
-        on_click=_arm_faq,
-    )
 
 
 # -----------------------------------------------------------------------------

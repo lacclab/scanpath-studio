@@ -1614,15 +1614,16 @@ class TestUnmappedRawDataView:
         # fixations side, and what matters is the *value*: unresolved, each
         # falls back to `(none)` and every reader collapses into one synthetic
         # id, with no error anywhere to say so.
+        # Read the keys one by one: Streamlit 1.64 stopped forwarding the
+        # private `filtered_state` attribute through `AppTest.session_state`.
         assert {
-            k: v
-            for k, v in at.session_state.filtered_state.items()
-            if k
-            in (
+            k: at.session_state[k]
+            for k in (
                 "col_map_fix_participant",
                 "col_map_fix_fixation_id",
                 "col_map_fix_word_id",
             )
+            if k in at.session_state
         } == {
             "col_map_fix_participant": "unique_participant_id",
             "col_map_fix_fixation_id": "fix_index",

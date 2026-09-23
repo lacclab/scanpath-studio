@@ -2936,13 +2936,40 @@ def remap_normalized_frame(
     normalization ``unique_trial_id`` / ``unique_text_id`` are restored
     (= ``trial_id`` / ``text_id``) when the single-column path didn't set them,
     so the frame's identity columns stay consistent with the composite path and
-    downstream readers of ``unique_text_id`` keep working."""
+    downstream readers of ``unique_text_id`` keep working.
+
+    DATA-39: a **words** frame remapped with no Participant is a stimulus-level
+    AOI table, exactly as it was at import — ``normalize_words`` re-flags it for
+    ``broadcast_stimulus_words``. But the stored frame was *already* broadcast
+    (one copy of every trial's words per reader), so only the first reader's
+    copy of each trial is kept here, and the caller must run
+    ``harmonize_frames`` to broadcast it again. Skipping either step is the bug
+    this fixes: without the collapse every reader gets every reader's boxes;
+    without the harmonize every word is left on the ``""`` placeholder reader,
+    so no trial finds its boxes and the scanpath plot loses its AOIs and its
+    text. The collapse picks a *reader*, never a key: deduplicating on
+    ``word_id`` would also merge rows that are not copies at all — character
+    AOIs sharing a word id, or ids that do not parse as numbers and all fold to
+    NaN."""
     referenced = _schema_source_columns(schema)
     working = frame.drop(
         columns=[
             c for c in _REMAP_DERIVED_IDS if c in frame.columns and c not in referenced
         ]
     )
+    if (
+        kind == "words"
+        and not schema.get("participant")
+        and "participant_id" in working.columns
+        and "trial_id" in working.columns
+        and not working.empty
+    ):
+        copy_keys = [c for c in ("trial_id", SCREEN_ID) if c in working.columns]
+        reader = working["participant_id"].astype(str)
+        first = reader.groupby(
+            [working[c] for c in copy_keys], dropna=False, sort=False
+        ).transform("first")
+        working = working[reader == first]
     keep = set(working.columns)
     if kind == "words":
         result = normalize_words(working, schema, keep_columns=keep)

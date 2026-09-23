@@ -262,6 +262,282 @@ def test_remap_proposed_always_seeds_text_id():
     assert proposed["text_id"] == "text_id"
 
 
+class TestStimulusLevelWordsRemap:
+    """DATA-39 — a per-*text* AOI table (no participant column) is broadcast onto
+    the readers at import, so the stored words carry real reader ids while their
+    schema maps no Participant. ✅ Save changes on the ✏️ Edit dataset screen —
+    which attaching a metadata table there requires — re-derived those words onto
+    the ``""`` placeholder reader and never broadcast them back, so every
+    scanpath lost its AOIs and its text."""
+
+    _WORD_SCHEMA = {
+        "trial": "tr",
+        "word_id": "wid",
+        "text": "txt",
+        "left": "L",
+        "right": "R",
+        "top": "T",
+        "bottom": "B",
+    }
+    _FIX_SCHEMA = {
+        "participant": "subj",
+        "trial": "tr",
+        "x": "fx",
+        "y": "fy",
+        "duration": "dur",
+    }
+
+    def _stored(self):
+        """The frames a finished upload stores: normalized, then harmonized."""
+        from scanpath_studio.data import harmonize_frames
+
+        raw_w = pd.DataFrame(
+            {
+                "tr": ["t1", "t1", "t2"],
+                "wid": [0, 1, 0],
+                "txt": ["The", "cat", "Dogs"],
+                "L": [0.0, 50.0, 0.0],
+                "R": [40.0, 90.0, 60.0],
+                "T": [0.0, 0.0, 0.0],
+                "B": [20.0, 20.0, 20.0],
+            }
+        )
+        raw_f = pd.DataFrame(
+            {
+                "subj": ["p1", "p1", "p2", "p2"],
+                "tr": ["t1", "t1", "t1", "t2"],
+                "fx": [10.0, 60.0, 12.0, 20.0],
+                "fy": [5.0, 5.0, 5.0, 5.0],
+                "dur": [100, 150, 90, 120],
+            }
+        )
+        return harmonize_frames(
+            normalize_words(raw_w, self._WORD_SCHEMA),
+            normalize_fixations(raw_f, self._FIX_SCHEMA),
+        )
+
+    def _save(self, words, fixations):
+        """What ✅ Save changes does to an untouched mapping."""
+        from scanpath_studio.data import harmonize_frames
+        from scanpath_studio.tabs import (
+            _FIX_REMAP_CANON,
+            _WORD_REMAP_CANON,
+            _remap_proposed,
+        )
+
+        w_schema = _remap_proposed(self._WORD_SCHEMA, words.columns, _WORD_REMAP_CANON)
+        f_schema = _remap_proposed(
+            self._FIX_SCHEMA, fixations.columns, _FIX_REMAP_CANON
+        )
+        # The premise: the editor seeds no Participant for these words.
+        assert w_schema["participant"] is None
+        return harmonize_frames(
+            remap_normalized_frame(words, w_schema, kind="words"),
+            remap_normalized_frame(fixations, f_schema, kind="fixations"),
+        )
+
+    @staticmethod
+    def _boxes(words):
+        return sorted(
+            zip(words["participant_id"], words["trial_id"], words["text"]),
+        )
+
+    def test_every_reader_keeps_their_boxes_after_a_save(self):
+        from scanpath_studio.utils import extract_trial
+
+        words, fixations = self._stored()
+        before = self._boxes(words)
+        words, fixations = self._save(words, fixations)
+        assert self._boxes(words) == before
+        assert len(extract_trial(words, "p1", "t1")) == 2
+        assert len(extract_trial(words, "p2", "t2")) == 1
+        assert "_stimulus_words" not in words.columns
+
+    def test_saving_twice_neither_duplicates_nor_drops_boxes(self):
+        words, fixations = self._stored()
+        before = self._boxes(words)
+        for _ in range(2):
+            words, fixations = self._save(words, fixations)
+        assert self._boxes(words) == before
+
+    def test_a_dataset_saved_before_the_fix_is_repaired_by_the_next_save(self):
+        """The broken shape the bug stored — every word on the ``""`` reader,
+        still flagged — is broadcast back rather than kept broken."""
+        from scanpath_studio.data import STIMULUS_WORDS_FLAG
+
+        words, fixations = self._stored()
+        before = self._boxes(words)
+        broken = words.drop_duplicates(subset=["trial_id", "word_id"]).copy()
+        broken["participant_id"] = ""
+        broken[STIMULUS_WORDS_FLAG] = True
+        words, fixations = self._save(broken, fixations)
+        assert self._boxes(words) == before
+
+    # -- through ✅ Save changes itself (`tabs._apply_remap`) -------------------
+
+    @staticmethod
+    def _apply(entry, pending, *, added=(), raws=None):
+        """Press ✅ Save changes on ``entry`` with ``pending`` mappings."""
+        import streamlit as st
+
+        from scanpath_studio import tabs
+
+        st.session_state.clear()
+        st.session_state["data_source_choice"] = "study"
+        st.session_state["_datasets"] = {"study": entry}
+        st.session_state["_remap_pending_schemas"] = pending
+        st.session_state["_remap_added_tables"] = list(added)
+        for table_key, raw in (raws or {}).items():
+            st.session_state[tabs._added_raw_key("study", table_key)] = raw
+        tabs._apply_remap()
+        problems = st.session_state.get("_remap_problems")
+        return problems, st.session_state["_datasets"]["study"]
+
+    def _entry_and_pending(self, words, fixations):
+        from scanpath_studio.tabs import (
+            _FIX_REMAP_CANON,
+            _WORD_REMAP_CANON,
+            _remap_proposed,
+        )
+
+        entry = {
+            "words": words,
+            "fixations": fixations,
+            "raw_gaze": pd.DataFrame(),
+            "schemas": {"words": self._WORD_SCHEMA, "fixations": self._FIX_SCHEMA},
+        }
+        pending = {
+            "words": _remap_proposed(
+                self._WORD_SCHEMA, words.columns, _WORD_REMAP_CANON
+            )
+        }
+        if not fixations.empty:
+            pending["fixations"] = _remap_proposed(
+                self._FIX_SCHEMA, fixations.columns, _FIX_REMAP_CANON
+            )
+        return entry, pending
+
+    def test_save_changes_keeps_every_readers_boxes(self):
+        words, fixations = self._stored()
+        entry, pending = self._entry_and_pending(words, fixations)
+        problems, saved = self._apply(entry, pending)
+        assert not problems
+        assert self._boxes(saved["words"]) == self._boxes(words)
+
+    def test_a_fixations_table_added_to_a_words_only_dataset_gets_the_boxes(self):
+        """UX-104 — adding the missing fixations on the edit screen harmonizes
+        the added table with the words itself. Harmonizing the words against
+        the (still empty) fixations *first* would stamp them with the synthetic
+        reader and leave nothing to broadcast onto the added readers."""
+        from scanpath_studio.data import harmonize_frames
+        from scanpath_studio.utils import extract_trial
+
+        words_only, _empty = harmonize_frames(
+            normalize_words(
+                pd.DataFrame(
+                    {
+                        "tr": ["t1", "t1"],
+                        "wid": [0, 1],
+                        "txt": ["The", "cat"],
+                        "L": [0.0, 50.0],
+                        "R": [40.0, 90.0],
+                        "T": [0.0, 0.0],
+                        "B": [20.0, 20.0],
+                    }
+                ),
+                self._WORD_SCHEMA,
+            ),
+            normalize_fixations(
+                pd.DataFrame(columns=["subj", "tr", "fx", "fy", "dur"]),
+                self._FIX_SCHEMA,
+            ),
+        )
+        entry, pending = self._entry_and_pending(words_only, pd.DataFrame())
+        pending["fixations"] = self._FIX_SCHEMA
+        raw_fix = pd.DataFrame(
+            {
+                "subj": ["p1", "p2"],
+                "tr": ["t1", "t1"],
+                "fx": [10.0, 60.0],
+                "fy": [5.0, 5.0],
+                "dur": [100, 90],
+            }
+        )
+        problems, saved = self._apply(
+            entry, pending, added=["fixations"], raws={"fixations": raw_fix}
+        )
+        assert not problems
+        for reader in ("p1", "p2"):
+            assert sorted(extract_trial(saved["words"], reader, "t1")["text"]) == [
+                "The",
+                "cat",
+            ]
+
+    def test_rows_that_are_not_reader_copies_are_never_merged(self):
+        """The collapse keeps one *reader's* copy, never one row per word id:
+        character AOIs share a word id, and word ids that are not numbers all
+        fold to NaN — deduplicating on the id would merge either into one box."""
+        words, fixations = self._stored()
+        # Two boxes per word (character AOIs) for t1, on every reader's copy.
+        doubled = pd.concat([words, words.assign(x=words["x"] + 5)])
+        doubled.loc[doubled["trial_id"] == "t2", "word_id"] = float("nan")
+        entry, pending = self._entry_and_pending(doubled, fixations)
+        problems, saved = self._apply(entry, pending)
+        assert not problems
+        assert len(saved["words"]) == len(doubled)
+
+    def test_a_mapping_that_matches_no_trial_is_refused_not_saved(self):
+        """The broadcast keeps only trials someone read; a Trial pick that
+        matches none would otherwise overwrite the boxes with nothing."""
+        words, fixations = self._stored()
+        words = words.assign(item=["zz"] * len(words))
+        entry, pending = self._entry_and_pending(words, fixations)
+        pending["words"] = {**pending["words"], "trial": "item"}
+        problems, saved = self._apply(entry, pending)
+        assert problems and "words" in problems
+        assert saved is entry
+        assert self._boxes(saved["words"]) == self._boxes(words)
+
+    def test_per_reader_aoi_tables_are_untouched(self):
+        """The ordinary shape — a Participant mapped on the words — takes the
+        same save and comes back identical."""
+        from scanpath_studio.data import harmonize_frames
+
+        raw_w = pd.DataFrame(
+            {
+                "subj": ["p1", "p1"],
+                "tr": ["t1", "t1"],
+                "wid": [0, 1],
+                "txt": ["The", "cat"],
+                "L": [0.0, 50.0],
+                "R": [40.0, 90.0],
+                "T": [0.0, 0.0],
+                "B": [20.0, 20.0],
+            }
+        )
+        raw_f = pd.DataFrame(
+            {"subj": ["p1"], "tr": ["t1"], "fx": [10.0], "fy": [5.0], "dur": [100]}
+        )
+        w_schema = {**self._WORD_SCHEMA, "participant": "subj"}
+        words, fixations = harmonize_frames(
+            normalize_words(raw_w, w_schema),
+            normalize_fixations(raw_f, self._FIX_SCHEMA),
+        )
+        canonical = {
+            "participant": "participant_id",
+            "trial": "trial_id",
+            "word_id": "word_id",
+            "text": "text",
+            "x": "x",
+            "y": "y",
+            "width": "width",
+            "height": "height",
+        }
+        out = remap_normalized_frame(words, canonical, kind="words")
+        out, _ = harmonize_frames(out, fixations)
+        assert self._boxes(out) == self._boxes(words)
+
+
 class TestDroppedColumns:
     def test_dropped_columns_from_keep_set(self):
         """Everything in the raw frame that's not in the keep set is dropped."""

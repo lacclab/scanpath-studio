@@ -2532,6 +2532,81 @@ class TestSetupWizard:
         assert entry["schemas"]["words"]["text"] == "difficulty_level"
         assert list(entry["words"]["text"]) == ["Adv", "Adv", "Ele", "Ele"]
 
+    def test_saving_a_text_level_aoi_table_keeps_every_trials_boxes(self, monkeypatch):
+        """DATA-39 — an AOI table with no participant column (one row per word
+        per *text*) is broadcast onto the readers at import. ✅ Save changes on
+        the ✏️ Edit dataset screen — what attaching a metadata table there asks
+        for — used to re-derive it onto the ``""`` placeholder reader and never
+        broadcast it back, so every trial lost its word boxes and its text."""
+        import pandas as pd
+
+        from scanpath_studio import app
+        from scanpath_studio.constants import DATASET_EDITOR_OPEN_KEY
+        from scanpath_studio.utils import extract_trial
+
+        raw_words = pd.DataFrame(
+            {
+                "trial_id": ["t1", "t1"],
+                "word_id": [1, 2],
+                "IA_LEFT": [0, 10],
+                "IA_RIGHT": [10, 20],
+                "IA_TOP": [0, 0],
+                "IA_BOTTOM": [10, 10],
+                "IA_LABEL": ["a", "b"],
+            }
+        )
+        raw_fix = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1", "p2"],
+                "trial_id": ["t1", "t1", "t1"],
+                "CURRENT_FIX_X": [5.0, 15.0, 5.0],
+                "CURRENT_FIX_Y": [5.0, 5.0, 5.0],
+                "CURRENT_FIX_DURATION": [100, 120, 90],
+            }
+        )
+        monkeypatch.setattr(
+            app,
+            "_read_uploaded_frame",
+            lambda **kw: (
+                raw_words
+                if kw["state_prefix"] == "col_map_words"
+                else raw_fix
+                if kw["state_prefix"] == "col_map_fix"
+                else pd.DataFrame()
+            ),
+        )
+
+        def boxes_per_trial(entry):
+            words, fixations = entry["words"], entry["fixations"]
+            pairs = fixations[["participant_id", "trial_id"]].drop_duplicates()
+            return {
+                (p, t): sorted(extract_trial(words, p, t)["text"])
+                for p, t in pairs.itertuples(index=False)
+            }
+
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        answer_setup_step(at)
+        at.run(timeout=60)
+        next(b for b in at.button if b.key == "wizard_finalize").click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        name = at.session_state["data_source_choice"]
+        before = boxes_per_trial(at.session_state["_datasets"][name])
+        assert before and all(v == ["a", "b"] for v in before.values()), before
+
+        at.session_state[DATASET_EDITOR_OPEN_KEY] = name
+        pin_data_view(at)
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        next(b for b in at.button if b.key == f"remap_apply_{name}").click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+        entry = at.session_state["_datasets"][name]
+        assert boxes_per_trial(entry) == before
+        assert "_stimulus_words" not in entry["words"].columns
+
     def test_per_table_trial_pickers_and_setup_step(self, monkeypatch):
         """Group A + C: a Trial ID picker per table (UX-53 r13 dropped the
         unified picker and its toggle) and the inline Experimental Setup

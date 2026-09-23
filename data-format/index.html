@@ -1797,9 +1797,10 @@
 
 <h1 id="data-format">Data format<a class="headerlink" href="#data-format" title="Permanent link">&para;</a></h1>
 <p>Scanpath Studio reads up to three tables — <strong>words / areas-of-interest</strong>,
-<strong>fixations</strong>, and (optionally) <strong>raw gaze</strong> — as <strong>CSV, TSV, Parquet, or
-Feather</strong>. Columns are auto-detected from common EyeLink, Gazepoint, and
-snake-case conventions; the app's <strong>Column mapping</strong> panel (and the
+<strong>fixations</strong>, and (optionally) <strong>raw gaze</strong> — as <strong>CSV, TSV, TXT, Parquet,
+Feather, or Excel</strong>, or a <code>.zip</code> of any of them. Columns are auto-detected from
+common EyeLink, Gazepoint, and snake-case conventions; the app's <strong>Column
+mapping</strong> panel (and the
 <code>word_schema</code> / <code>fix_schema</code> arguments of
 <a class="autorefs autorefs-internal" title="scanpath_studio.api.load_scanpath_data" href="../api/#scanpath_studio.api.load_scanpath_data"><code>load_scanpath_data</code></a>) override
 any guess.</p>
@@ -1840,6 +1841,14 @@ any guess.</p>
 </tr>
 </tbody>
 </table>
+<p><strong>Units.</strong> Durations and timestamps are read in milliseconds. A column whose
+header names another unit — <code>[s]</code>, <code>[μs]</code>, <code>[ns]</code>, as Tobii and Pupil Labs Neon
+write — is converted, and so are the vendor columns documented in seconds
+(Gazepoint <code>FPOGD</code> / <code>FPOGS</code>, Pupil Labs Core <code>start_timestamp</code>). Positions must
+be <strong>pixels</strong>: screen fractions (Gazepoint <code>FPOGX</code> / <code>FPOGY</code>, Pupil Labs Core
+<code>norm_pos_x</code> / <code>norm_pos_y</code>) are flagged with a warning but not converted, since
+the load does not know the screen size — multiply them by the screen width and
+height in pixels first.</p>
 <p>Either main table may be omitted for single-report datasets — the missing layer
 is simply skipped. A words-only table still draws a heatmap from its
 pre-aggregated reading measures, and a dataset added with only one of the two can
@@ -1847,8 +1856,8 @@ gain the other later on 🗂️ <strong>Data → ✏️ Edit dataset</strong>, w
 <h2 id="participant-metadata">Participant metadata<a class="headerlink" href="#participant-metadata" title="Permanent link">&para;</a></h2>
 <p>Attach a table of <strong>one row per reader</strong> — native language, age, a
 comprehension score, a group label. When you upload your own data it is one of
-the uploaders in part 1 of the setup wizard; for the demo, a public corpus, or a
-dataset you added earlier, the same panel is on 🗂️ <strong>Data → ✏️ Edit dataset</strong>
+the <strong>Metadata</strong> uploaders in part 2 of the setup wizard; for the demo, a public
+corpus, or a dataset you added earlier, the same panel is on 🗂️ <strong>Data → ✏️ Edit dataset</strong>
 under <strong>👤 Participant metadata</strong>. Its columns then behave like fields in the
 data: they filter trials (the filter funnel's <em>By reader</em> section), show up as
 chips above the plot, sort the trial picker, group cohorts in Corpus Analysis,
@@ -1877,9 +1886,9 @@ and <a href="../api/"><code>load_participant_metadata()</code></a> in the Python
 <p>The same idea one grain down: a table of <strong>one row per reading</strong> — a list
 name, a presentation order, a per-trial comprehension score, whatever your
 design recorded about the trial rather than about the reader. It attaches
-beside the participant table — in part 1 of the add-dataset wizard, and on
-🗂️ <strong>Data → ✏️ Edit dataset</strong> under 🗂️ <strong>Trial metadata</strong> for a dataset that is
-already loaded — and its columns behave like fields in the data in the same
+beside the participant table — under <strong>Metadata</strong> in part 2 of the add-dataset
+wizard, and on 🗂️ <strong>Data → ✏️ Edit dataset</strong> under 🗂️ <strong>Trial metadata</strong> for a
+dataset that is already loaded — and its columns behave like fields in the data in the same
 way: they filter trials, show up as chips above the plot, sort the trial picker,
 appear in the inspection tables, and travel with exports
 (<code>metadata/trials.csv</code>) and saved sessions.</p>

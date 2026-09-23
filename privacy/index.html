@@ -1735,8 +1735,13 @@ your own machine. Do not upload identifiable recordings to the hosted demo.</p>
 <h2 id="what-happens-to-a-file-you-upload">What happens to a file you upload<a class="headerlink" href="#what-happens-to-a-file-you-upload" title="Permanent link">&para;</a></h2>
 <p>Uploaded tables are parsed locally. Completed datasets, mappings, view settings,
 and annotations are stored in an on-device recovery cache so a refresh does not
-erase the session. This happens on local and desktop runs only; a hosted
-deployment stores nothing.</p>
+erase the session. This happens only when the app listens on this machine
+alone — the desktop app, or a launch with <code>server.address</code> set to <code>127.0.0.1</code>,
+<code>::1</code> or <code>localhost</code> — or when you opt in with <code>SCANPATH_STUDIO_PERSIST=1</code>. A
+server other machines can reach stores nothing: a hosted deployment, and a bare
+<code>streamlit run</code>, which listens on every interface. The app decides this from the
+address its own server is bound to, never from the address a browser reports,
+which any client on the network could set to <code>localhost</code>.</p>
 <p>The cache is visible and removable from inside the app: 💾 <strong>Session →
 🗄️ Automatic recovery</strong> (the dialog the nav's 💾 Session entry opens) names the
 folder, reports what is stored and how large it
@@ -1770,8 +1775,14 @@ provider. Sessions are temporary and server resources are limited.</p>
 history, logs, or chat previews, so do not copy one when its participant or
 trial identifiers should not be exposed there.</p>
 <h2 id="network-activity">Network activity<a class="headerlink" href="#network-activity" title="Permanent link">&para;</a></h2>
-<p>Downloading a public corpus contacts its host. Interactive plots may load
-Plotly in the browser. The application does not add its own analytics service.</p>
+<p>Downloading a public corpus contacts its host, and only when you click
+<strong>⬇ Download</strong>. The scanpath, animation and comparison figures load the Plotly
+charting library from <strong>cdn.plot.ly</strong> each time they are drawn, so your browser
+fetches it from that host; your data is not sent with the request, but the
+figure needs an internet connection to appear — including in the desktop app.
+Streamlit's own usage statistics are switched off on every launch path
+(<code>scanpath-studio run</code>, the desktop app and the repository's
+<code>.streamlit/config.toml</code>). The application adds no analytics service of its own.</p>
 <p>The code-level audit and accepted limitations are in the
 <a href="../security/">security audit</a>.</p>
 

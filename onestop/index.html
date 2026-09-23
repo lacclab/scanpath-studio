@@ -1692,7 +1692,8 @@
 360-participant English eye-tracking-while-reading corpus (Berzak, Malmaud,
 Shubi, Meiri, Lion, Levy, <em>Scientific Data</em> 2025,
 <a href="https://doi.org/10.1038/s41597-025-06272-2">doi:10.1038/s41597-025-06272-2</a>).
-The app's bundled demo is a 3-participant subset of it; this page covers loading
+The app's bundled demo is a small subset of it (word boxes for 3 readers,
+fixations for 2 of them); this page covers loading
 the <strong>full public corpus</strong> from <a href="https://osf.io/2prdq/">OSF</a> as a public dataset.</p>
 <div class="admonition note">
 <p class="admonition-title">Two ways to load OneStop</p>
@@ -1730,8 +1731,8 @@ affecting the <em>Per text</em> analyses, text-based comparisons, and the counts
 will not resolve.</p>
 </div>
 <h2 id="loading-it">Loading it<a class="headerlink" href="#loading-it" title="Permanent link">&para;</a></h2>
-<p>OneStop is exposed as a <strong>Public dataset</strong>. In the app, open 🗂️ <strong>Data</strong> and
-choose <strong>OneStop</strong> as the data source, then in its <strong>Options</strong> pick a
+<p>OneStop is exposed as a <strong>Public dataset</strong>. In the app, open 🗂️ <strong>Data</strong>, click
+<strong>OneStop</strong> in <strong>📂 Available datasets</strong>, then <strong>✏️ Edit</strong> it; its <strong>Options</strong> pick a
 <strong>Variant</strong>, a <strong>Reading regime</strong>, and one or more <strong>Parts</strong>:</p>
 <p><strong>Variant</strong></p>
 <table>
@@ -1836,8 +1837,9 @@ its own trial (the part is folded into the trial id, e.g. <code>Paragraph::1</co
 <code>Title::1</code>, so their word boxes don't collide). On OSF only <em>Paragraph</em> is
 regime-split; the other parts come from the all-regimes full release, so they
 load regardless of the chosen regime.</p>
-<p>The <strong>Data location</strong> section of the 🗂️ Data page lists the <strong>Expected files</strong> and
-shows whether they're already present. For the Public variant, if they're
+<p>The <strong>✏️ Edit</strong> screen's data-location part lists the <strong>Expected files</strong> and
+shows whether they're already present (until they are, the app shows the bundled
+demo, with a <strong>⬇ Download now</strong> panel). For the Public variant, if they're
 present the corpus loads with no network access; if not, click <strong>⬇ Download</strong> to
 fetch them into the folder (cached on disk, so only the first load pays the
 download — reports range from tens to a few hundred MB each).</p>
@@ -1859,7 +1861,8 @@ plot-ready frames:</p>
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">variant</span><span class="o">=</span><span class="s2">"public"</span><span class="p">,</span>  <span class="c1"># or "lacclab" for a local export</span>
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">download</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>  <span class="c1"># public variant only</span>
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="p">)</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="n">fig</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">plot_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="n">canvas_size</span><span class="o">=</span><span class="p">(</span><span class="mi">2560</span><span class="p">,</span> <span class="mi">1440</span><span class="p">))</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="n">pid</span><span class="p">,</span> <span class="n">tid</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">list_trials</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">)</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>  <span class="c1"># or any row you want</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="n">fig</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">plot_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="n">pid</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">canvas_size</span><span class="o">=</span><span class="p">(</span><span class="mi">2560</span><span class="p">,</span> <span class="mi">1440</span><span class="p">))</span>
 </code></pre></div>
 <p>For the raw (pre-normalization) frames, use
 <code>scanpath_studio.datasets.onestop_raw_frames(...)</code> with the same arguments.</p>

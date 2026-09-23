@@ -4236,7 +4236,7 @@
 </table>
 <h3 id="assignin_text-out-of-text-flag"><code>assign.in_text</code> — Out-of-text flag<a class="headerlink" href="#assignin_text-out-of-text-flag" title="Permanent link">&para;</a></h3>
 <p>Whether a fixation landed on any word of the stimulus.</p>
-<p><strong>Formula.</strong> <code>word_id</code> is not NaN after <code>assign.fixation_to_word</code>.</p>
+<p><strong>Formula.</strong> The fixation falls inside some word box (<code>word_box_bounds</code>). Box containment only — a fixation the 50 px nearest-centre fallback of <code>assign.fixation_to_word</code> gives a word still counts as out-of-text.</p>
 <table>
 <thead>
 <tr>
@@ -4800,8 +4800,8 @@
 </table>
 <h2 id="scientific-measure">Scientific measure<a class="headerlink" href="#scientific-measure" title="Permanent link">&para;</a></h2>
 <h3 id="measureffd-first-fixation-duration-ffd"><code>measure.ffd</code> — First fixation duration (FFD)<a class="headerlink" href="#measureffd-first-fixation-duration-ffd" title="Permanent link">&para;</a></h3>
-<p>Duration of the first fixation on a word during first pass.</p>
-<p><strong>Formula.</strong> Duration of the first fixation of the word's first-pass run.</p>
+<p>Duration of the first fixation on a word.</p>
+<p><strong>Formula.</strong> Duration of the word's first fixation, whenever it comes — as EyeLink's <code>IA_FIRST_FIXATION_DURATION</code>, so a computed and an imported value mean the same. Not conditioned on first pass: a word first reached by a regression has an FFD and <code>skip_flag = True</code>; filter on <code>skip_flag</code> for first-pass-only analyses.</p>
 <table>
 <thead>
 <tr>
@@ -4824,7 +4824,7 @@
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
-<td>Skipped word ⇒ NaN, not 0.</td>
+<td>Never fixated ⇒ NaN, not 0 — an imported 0 on a word with no fixations is blanked too (BUG-63).</td>
 </tr>
 <tr>
 <td><strong>Precedence &amp; caveats</strong></td>
@@ -4854,7 +4854,7 @@
 </table>
 <h3 id="measurefprt-first-pass-gaze-duration-fprt"><code>measure.fprt</code> — First-pass gaze duration (FPRT)<a class="headerlink" href="#measurefprt-first-pass-gaze-duration-fprt" title="Permanent link">&para;</a></h3>
 <p>Sum of first-pass fixations on a word.</p>
-<p><strong>Formula.</strong> Sum of every fixation in the word's <strong>first</strong> run, i.e. before the gaze leaves the word for the first time.</p>
+<p><strong>Formula.</strong> Sum of every fixation in the word's <strong>first</strong> run, i.e. before the gaze leaves the word for the first time — whenever that run starts (EyeLink's <code>IA_FIRST_RUN_DWELL_TIME</code>; not conditioned on first pass, as <code>measure.ffd</code>). A fixation outside every word ends the run (BUG-66), as it does for <code>measure.second_pass</code>.</p>
 <table>
 <thead>
 <tr>
@@ -4877,7 +4877,7 @@
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
-<td>Skipped word ⇒ NaN.</td>
+<td>Never fixated ⇒ NaN (an imported 0 is blanked, BUG-63).</td>
 </tr>
 <tr>
 <td><strong>Precedence &amp; caveats</strong></td>
@@ -4907,7 +4907,7 @@
 </table>
 <h3 id="measurerpd-regression-path-duration-rpd-go-past"><code>measure.rpd</code> — Regression-path duration (RPD / go-past)<a class="headerlink" href="#measurerpd-regression-path-duration-rpd-go-past" title="Permanent link">&para;</a></h3>
 <p>First entry to the word until the gaze passes it to the right.</p>
-<p><strong>Formula.</strong> Total time from the first first-pass fixation on the word until the first fixation on a <strong>later</strong> word — including any regressions to earlier words in between.</p>
+<p><strong>Formula.</strong> Total time from the word's first fixation until the first fixation on a <strong>later</strong> word — every fixation in between, including a first visit to an earlier, skipped word during the regression (BUG-61). Matches EyeLink's <code>IA_REGRESSION_PATH_DURATION</code> on 1779 of the bundled demo's 1780 fixated words. Fixations outside every word neither extend nor close the window.</p>
 <table>
 <thead>
 <tr>
@@ -4930,7 +4930,7 @@
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
-<td>Skipped word ⇒ NaN.</td>
+<td>Never fixated ⇒ NaN (an imported 0 is blanked, BUG-63).</td>
 </tr>
 <tr>
 <td><strong>Reference</strong></td>
@@ -5079,7 +5079,7 @@
 </table>
 <h3 id="measureregressions-regression-inout-flags"><code>measure.regressions</code> — Regression in/out flags<a class="headerlink" href="#measureregressions-regression-inout-flags" title="Permanent link">&para;</a></h3>
 <p>Whether a word was returned to, or left backwards.</p>
-<p><strong>Formula.</strong> <code>regression_in_flag</code> — some later fixation lands on this word after the gaze had moved past it. <code>regression_out_flag</code> — a fixation on this word is followed by a fixation on an earlier word.</p>
+<p><strong>Formula.</strong> <code>regression_in_flag</code> — some later fixation lands on this word after the gaze had moved past it. <code>regression_out_flag</code> — a regression to an earlier word is made from this word during first pass, before the eyes first leave it forwards (EyeLink's <code>IA_REGRESSION_OUT</code>, BUG-64); a regression from it later in the trial does not count.</p>
 <table>
 <thead>
 <tr>
@@ -5120,7 +5120,7 @@
 </table>
 <h3 id="measurelanding_position-initial-landing-position"><code>measure.landing_position</code> — Initial landing position<a class="headerlink" href="#measurelanding_position-initial-landing-position" title="Permanent link">&para;</a></h3>
 <p>Where in the word the first fixation landed, in letters.</p>
-<p><strong>Formula.</strong> <code>char_width = geom.word_char_advance</code>; <code>offset = first_fix_x − word.x</code> (LTR) or <code>word.x + width − first_fix_x</code> (RTL); <code>landing_position = offset / char_width + 1</code> — so the first letter starts at 1 and its centre is 1.5.</p>
+<p><strong>Formula.</strong> <code>char_width = geom.word_char_advance</code>; <code>offset = first_fix_x − word.x</code> (LTR) or <code>word.x + n·advance − first_fix_x</code> (RTL, BUG-27); <code>landing_position = offset / char_width + 1</code> — so the first letter starts at 1 and its centre is 1.5.</p>
 <table>
 <thead>
 <tr>
@@ -5139,7 +5139,7 @@
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
-<td>No first-pass fixation, zero width, or no text ⇒ NaN.</td>
+<td>Never fixated, zero width, or no text ⇒ NaN. Measured from the word's first fixation, first pass or not (as <code>measure.ffd</code>).</td>
 </tr>
 <tr>
 <td><strong>Precedence &amp; caveats</strong></td>
@@ -5169,7 +5169,7 @@
 </table>
 <h3 id="measurelanding_distance-centred-landing-distance"><code>measure.landing_distance</code> — Centred landing distance<a class="headerlink" href="#measurelanding_distance-centred-landing-distance" title="Permanent link">&para;</a></h3>
 <p>Landing position relative to the word's centre.</p>
-<p><strong>Formula.</strong> <code>landing_position − (len(text) + 1) / 2</code>.</p>
+<p><strong>Formula.</strong> <code>landing_position − (1 + len(text) / 2)</code> — the glyphs span <code>[1, n + 1)</code>, so that is the word's centre (BUG-65).</p>
 <table>
 <thead>
 <tr>
@@ -5229,7 +5229,7 @@
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
-<td>Fewer than two passes ⇒ 0.</td>
+<td>Fewer than two runs ⇒ 0 — an imported blank <code>IA_SECOND_RUN_DWELL_TIME</code> is filled with 0 too, so the mean means the same whichever source the value came from.</td>
 </tr>
 <tr>
 <td><strong>Code</strong></td>
@@ -5270,7 +5270,7 @@
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
-<td>Multi-fixation or skipped first pass ⇒ NaN.</td>
+<td>A first run of more than one fixation, or never fixated ⇒ NaN.</td>
 </tr>
 <tr>
 <td><strong>Reference</strong></td>
@@ -5296,7 +5296,7 @@
 </table>
 <h3 id="measurereg_in_count-regressions-into-word"><code>measure.reg_in_count</code> — Regressions into word<a class="headerlink" href="#measurereg_in_count-regressions-into-word" title="Permanent link">&para;</a></h3>
 <p>How many times the gaze came back to this word.</p>
-<p><strong>Formula.</strong> Number of runs on the word after the first.</p>
+<p><strong>Formula.</strong> Number of regressions into the word — entries from a later word (EyeLink's <code>IA_REGRESSION_IN_COUNT</code>). A re-entry from an <em>earlier</em> word is a new run but not a regression in.</p>
 <table>
 <thead>
 <tr>
@@ -5311,7 +5311,7 @@
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
-<td>Never revisited ⇒ 0.</td>
+<td>Never regressed into ⇒ 0.</td>
 </tr>
 <tr>
 <td><strong>Code</strong></td>

@@ -1755,8 +1755,8 @@
 
 <h1 id="multipleye-dataset">MultiplEYE dataset<a class="headerlink" href="#multipleye-dataset" title="Permanent link">&para;</a></h1>
 <p><a href="https://multipleye.eu/">MultiplEYE</a> is a large multilingual eye-tracking-while-reading
-corpus. Scanpath Studio has first-class support for loading it, both from a local
-directory and via the browser-upload wizard. This page covers how the corpus is
+corpus. Scanpath Studio has first-class support for loading it from a local
+directory. This page covers how the corpus is
 structured and the modelling decisions the loader makes; the implementation lives
 in <a href="https://github.com/lacclab/scanpath-studio/blob/main/scanpath_studio/datasets.py"><code>datasets.py</code></a>
 and <a href="https://github.com/lacclab/scanpath-studio/blob/main/scanpath_studio/data.py"><code>data.py</code></a>.</p>
@@ -1764,9 +1764,10 @@ and <a href="https://github.com/lacclab/scanpath-studio/blob/main/scanpath_studi
 <p>MultiplEYE is exposed as a <strong>Public dataset</strong>, which is on by default. To hide
 the public-dataset sources (e.g. on a deployment that should only take uploads),
 set <code>SCANPATH_PUBLIC_DATASETS=0</code>.</p>
-<p>On the 🗂️ <strong>Data</strong> page, pick <strong>MultiplEYE</strong> as the data source, point
-<em>Data directory</em> at a session set (the <em>Expected files</em> panel lists the layout it
-looks for), and choose the <strong>fixation source</strong> (<code>scanpaths</code> or <code>fixations</code>). The
+<p>On the 🗂️ <strong>Data</strong> page, click <strong>MultiplEYE</strong> in <strong>📂 Available datasets</strong>, then
+<strong>✏️ Edit</strong> it: point <em>Data directory</em> at a session set (the <em>Expected files</em>
+panel lists the layout it looks for) and choose the <strong>fixation source</strong>
+(<code>scanpaths</code> or <code>fixations</code>). The
 whole session set loads — use the <strong>filter funnel</strong> beside the trial picker
 (text and participant pickers, then the condition filters) to focus on specific
 readers or stimuli. A
@@ -1801,7 +1802,7 @@ canonical schema:</p>
   screens the reader saw are <code>screen_id</code> values — <code>page_1 … page_N</code> and
   <code>question_&lt;id&gt;</code> — each with its own coordinate space. Step through them with
   the screen navigator beside the trial picker, <code>?screen=</code> on a share link,
-  <code>render --screen</code> / <code>--all-screens</code> / <code>--list-screens</code>, or
+  <code>render --screen</code> / <code>--all-screens</code> / <code>--list-parts</code>, or
   <code>plot_scanpath(..., screen=…)</code>. Pages reuse the same on-screen coordinates, so
   screens (never a merged trial) are what keeps them from stacking.</li>
 <li><strong><code>screen_index</code> comes from the reader's own fixation onsets</strong>, never from the
@@ -1846,7 +1847,7 @@ canonical schema:</p>
 the loaded frames so the app's existing panels render them:</p>
 <ul>
 <li><strong>Reader metadata</strong> from <code>participant_data.csv</code> (age, gender, languages, …) →
-  Trial Info chips and Corpus Analysis grouping facets.</li>
+  the trial chip strip and Corpus Analysis grouping facets.</li>
 <li><strong>Comprehension questions</strong> from <code>multipleye_comprehension_questions_*.xlsx</code> →
   the Stimulus &amp; Context panel, joined by stimulus.</li>
 <li><strong>Pre-computed reading measures</strong> from <code>reading_measures/</code> → canonical <code>IA_*</code>
@@ -1891,7 +1892,15 @@ the loaded frames so the app's existing panels render them:</p>
 <li><strong>Don't write into the dataset tree</strong> — treat the corpus as read-only.</li>
 </ul>
 <h2 id="uploading-via-the-browser">Uploading via the browser<a class="headerlink" href="#uploading-via-the-browser" title="Permanent link">&para;</a></h2>
-<p>The Add-dataset wizard has a <strong>Dataset format</strong> selector with a <strong>MultiplEYE</strong>
+<div class="admonition note">
+<p class="admonition-title">Held back in this release</p>
+<p>The Add-dataset wizard's <strong>Dataset format</strong> selector — and with it the
+<strong>MultiplEYE</strong> upload preset below — is hidden unless the app is started
+with <code>SCANPATH_EXPERIMENTAL=1</code> (UX-114). Every upload otherwise goes through
+the generic flow. The same path is available headlessly as
+<code>datasets.load_multipleye_uploads</code>.</p>
+</div>
+<p>With it enabled, the wizard's <strong>Dataset format</strong> selector offers a <strong>MultiplEYE</strong>
 preset. Because browsers strip folder structure, identity is recovered from each
 row's <code>source_file</code>; the lowercase AOI filenames are case-matched to the
 CamelCase fixation stimuli. Reading measures and stimulus images require the full

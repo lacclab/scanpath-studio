@@ -1756,7 +1756,7 @@ loops or analysis pipelines.</p>
 </table>
 <h2 id="cli-one-figure">CLI: one figure<a class="headerlink" href="#cli-one-figure" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>--list-trials
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span><span class="m">1</span><span class="w"> </span>-t<span class="w"> </span><span class="m">1</span><span class="w"> </span>-o<span class="w"> </span>scanpath.html
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_1_1_Ele_r0<span class="w"> </span>-o<span class="w"> </span>scanpath.html
 </code></pre></div>
 <p>Replace <code>--sample</code> with <code>--words ia.csv --fixations fixations.csv</code>. Run
 <code>scanpath-studio render --help</code> for every visualization flag, or use the
@@ -1785,7 +1785,11 @@ in either flavour, with an escape hatch for the full explicit form.</p>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>--no-heatmap<span class="w"> </span>--print-code<span class="w"> </span>python<span class="w"> </span>-o<span class="w"> </span>out.png
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># ...or ask for it directly</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">print</span><span class="p">(</span><span class="n">sps</span><span class="o">.</span><span class="n">figure_code</span><span class="p">(</span><span class="n">participant</span><span class="o">=</span><span class="s2">"l7_101"</span><span class="p">,</span> <span class="n">trial</span><span class="o">=</span><span class="s2">"1_Adv_1"</span><span class="p">,</span> <span class="n">show_heatmap</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">print</span><span class="p">(</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">sps</span><span class="o">.</span><span class="n">figure_code</span><span class="p">(</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>        <span class="n">participant</span><span class="o">=</span><span class="s2">"l7_1090"</span><span class="p">,</span> <span class="n">trial</span><span class="o">=</span><span class="s2">"l7_1090_2_1_1_Ele_r0"</span><span class="p">,</span> <span class="n">show_heatmap</span><span class="o">=</span><span class="kc">False</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="p">)</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="p">)</span>
 </code></pre></div>
 <p>The CLI exposes a curated subset of the figure options, so a setting with no
 <code>render</code> flag is <strong>named</strong> in a trailing comment rather than dropped — a copied

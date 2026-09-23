@@ -1039,6 +1039,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Render">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#when-a-column-isnt-recognised" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When a column isn't recognised
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1685,6 +1702,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Render">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#when-a-column-isnt-recognised" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When a column isn't recognised
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1759,49 +1793,72 @@ one trial without opening the UI.</p>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>scanpath-studio<span class="w"> </span>--server.port<span class="w"> </span><span class="m">8600</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>scanpath-studio<span class="w"> </span>--no-persist<span class="w">          </span><span class="c1"># don't cache the session on this computer</span>
 </code></pre></div>
-<p>Additional launch flags are forwarded to Streamlit.</p>
+<p>The app listens on this computer only (<code>127.0.0.1</code>). It has no login, so
+serving it to other machines is a deliberate step — pass
+<code>--server.address 0.0.0.0</code> (or set <code>server.address</code> in a Streamlit
+<code>config.toml</code>, or <code>STREAMLIT_SERVER_ADDRESS</code>), and only on a network you trust:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>scanpath-studio<span class="w"> </span>--server.address<span class="w"> </span><span class="m">0</span>.0.0.0
+</code></pre></div>
+<p>Additional launch flags are forwarded to Streamlit. A word that is not one of
+the commands (<code>run</code>, <code>render</code>, <code>analyze</code>, <code>corpus</code>, <code>cache</code>) is an error that
+names the closest one, rather than an argument handed to Streamlit.</p>
 <h2 id="render">Render<a class="headerlink" href="#render" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Inspect available IDs</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>--list-trials
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Render the bundled sample</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-o<span class="w"> </span>scanpath.html
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="c1"># Render your data</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">  </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">  </span>--participant<span class="w"> </span>p1<span class="w"> </span>--trial<span class="w"> </span>t3<span class="w"> </span>--output<span class="w"> </span>scanpath.svg
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="c1"># Render a portable file saved by the in-app scanpath author</span>
-<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--authoring<span class="w"> </span>authored-scanpath.json<span class="w"> </span>-o<span class="w"> </span>authored.html
-<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>
-<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="c1"># Inspect and render an ordered multipart trial</span>
-<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span>--list-parts
-<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="w">  </span>-p<span class="w"> </span>p1<span class="w"> </span>-t<span class="w"> </span>t3<span class="w"> </span>--screen<span class="w"> </span>question<span class="w"> </span>-o<span class="w"> </span>question.svg
-<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="w">  </span>-p<span class="w"> </span>p1<span class="w"> </span>-t<span class="w"> </span>t3<span class="w"> </span>--all-screens<span class="w"> </span>--animate<span class="w"> </span>--screen-transition<span class="w"> </span>recorded<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="w">  </span>-o<span class="w"> </span>replay.html
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Inspect available IDs</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>--list-trials
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Render the bundled sample</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-o<span class="w"> </span>scanpath.html
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Render your data</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">  </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">  </span>--participant<span class="w"> </span>p1<span class="w"> </span>--trial<span class="w"> </span>t3<span class="w"> </span>--output<span class="w"> </span>scanpath.svg
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="c1"># Render a portable file saved by the in-app scanpath author</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--authoring<span class="w"> </span>authored-scanpath.json<span class="w"> </span>-o<span class="w"> </span>authored.html
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="c1"># Inspect and render an ordered multipart trial</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span>--list-parts
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">  </span>-p<span class="w"> </span>p1<span class="w"> </span>-t<span class="w"> </span>t3<span class="w"> </span>--screen<span class="w"> </span>question<span class="w"> </span>-o<span class="w"> </span>question.svg
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">  </span>-p<span class="w"> </span>p1<span class="w"> </span>-t<span class="w"> </span>t3<span class="w"> </span>--all-screens<span class="w"> </span>--animate<span class="w"> </span>--screen-transition<span class="w"> </span>recorded<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">  </span>-o<span class="w"> </span>replay.html
 </code></pre></div>
 <p>HTML is interactive and browser-free. PNG, SVG, and PDF require
 Chrome/Chromium (<code>plotly_get_chrome -y</code>).</p>
+<h3 id="when-a-column-isnt-recognised">When a column isn't recognised<a class="headerlink" href="#when-a-column-isnt-recognised" title="Permanent link">&para;</a></h3>
+<p>Column names are auto-detected (EyeLink, Tobii, SMI, Pupil Labs, Gazepoint and
+snake_case spellings). When one isn't, <code>render</code> stops and prints which field it
+could not find, the names it looked for, the columns your table has, and a
+mapping to start from. Pass that mapping back as JSON — inline, or as a path to
+a <code>.json</code> file — with <code>--word-schema</code> (the <code>--words</code> table) and/or
+<code>--fix-schema</code> (the <code>--fixations</code> table). <code>analyze</code> takes the same two flags.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>--word-schema<span class="w"> </span><span class="s1">'{"trial": "TRIAL_LABEL", "word_id": "IA_ID", "text": "IA_LABEL",</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="s1">                  "left": "IA_LEFT", "right": "IA_RIGHT", "top": "IA_TOP", "bottom": "IA_BOTTOM"}'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>--fix-schema<span class="w"> </span>fix_schema.json<span class="w"> </span>-o<span class="w"> </span>scanpath.html
+</code></pre></div>
+<p>A mapping replaces auto-detection for that table, so it has to name every
+required field, not only the one that failed. It is the same dict
+<code>load_scanpath_data(word_schema=…, fix_schema=…)</code> takes in Python.</p>
 <h2 id="public-corpora">Public corpora<a class="headerlink" href="#public-corpora" title="Permanent link">&para;</a></h2>
 <p>A public corpus loads headlessly the same way the app loads it — no export step
 in between:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># PoTeC, downloaded on first use</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--potec<span class="w"> </span>./potec<span class="w"> </span>-p<span class="w"> </span><span class="m">12</span><span class="w"> </span>-t<span class="w"> </span>b0<span class="w"> </span>-o<span class="w"> </span>potec.html
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># OneStop, choosing the variant, regime and part</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--onestop<span class="w"> </span>./onestop<span class="w"> </span>--onestop-variant<span class="w"> </span>public<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span>--onestop-regime<span class="w"> </span>ordinary<span class="w"> </span>--onestop-part<span class="w"> </span>Paragraph<span class="w"> </span>--list-trials
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="c1"># One corpus out of a prepared harmonised bundle</span>
-<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--eyegenbench<span class="w"> </span>./data/EyeGenBench<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">  </span>--eyegenbench-dataset<span class="w"> </span>Provo<span class="w"> </span>-p<span class="w"> </span><span class="m">1</span><span class="w"> </span>-t<span class="w"> </span><span class="m">1</span><span class="w"> </span>-o<span class="w"> </span>provo.svg
-<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
-<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="c1"># MultiplEYE, from its raw export</span>
-<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--source<span class="w"> </span>multipleye<span class="w"> </span>--export<span class="w"> </span>./multipleye_session<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">  </span>--list-trials
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># PoTeC, downloaded on first use</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--potec<span class="w"> </span>./potec<span class="w"> </span>-p<span class="w"> </span><span class="m">12</span><span class="w"> </span>-t<span class="w"> </span>b0<span class="w"> </span>-o<span class="w"> </span>potec.html
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># OneStop, choosing the variant, regime and part</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--onestop<span class="w"> </span>./onestop<span class="w"> </span>--onestop-variant<span class="w"> </span>public<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span>--onestop-regime<span class="w"> </span>ordinary<span class="w"> </span>--onestop-part<span class="w"> </span>Paragraph<span class="w"> </span>--list-trials
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c1"># One corpus out of a prepared harmonised bundle</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--eyegenbench<span class="w"> </span>./data/EyeGenBench<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">  </span>--eyegenbench-dataset<span class="w"> </span>Provo<span class="w"> </span>-p<span class="w"> </span>Provo_Sub01<span class="w"> </span>-t<span class="w"> </span>Provo_1<span class="w"> </span>-o<span class="w"> </span>provo.svg
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="c1"># MultiplEYE, from its raw export</span>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--source<span class="w"> </span>multipleye<span class="w"> </span>--export<span class="w"> </span>./multipleye_session<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">  </span>--list-trials
 </code></pre></div>
 <p><code>--eyegenbench-dataset</code> names one of the thirty-one
 <a href="../benchmark-corpora/">harmonised benchmark corpora</a> in a bundle you prepared
@@ -1811,22 +1868,27 @@ root (<code>load_potec</code>, <code>load_onestop</code>, <code>load_multipleye<
 <h2 id="compare-two-scanpaths">Compare two scanpaths<a class="headerlink" href="#compare-two-scanpaths" title="Permanent link">&para;</a></h2>
 <p><code>--compare-with PARTICIPANT:TRIAL</code> draws a second reading beside or over the
 first — the headless form of the app's <strong>Compare</strong> mode.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Two readings from the same dataset</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>p1<span class="w"> </span>-t<span class="w"> </span>t1<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--compare-with<span class="w"> </span>p2:t5<span class="w"> </span>-o<span class="w"> </span>compare.html
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># Side by side, showing only B's word boxes and text</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>p1<span class="w"> </span>-t<span class="w"> </span>t1<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span>--compare-with<span class="w"> </span>p2:t5<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span>--compare-layout<span class="w"> </span>side-by-side<span class="w"> </span>--compare-stimulus<span class="w"> </span>b<span class="w"> </span>-o<span class="w"> </span>compare.svg
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1"># B from a second dataset</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--potec<span class="w"> </span>./potec<span class="w"> </span>-p<span class="w"> </span><span class="m">12</span><span class="w"> </span>-t<span class="w"> </span>b0<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">  </span>--compare-with<span class="w"> </span>p1:t1<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">  </span>--compare-words<span class="w"> </span>other/ia.csv<span class="w"> </span>--compare-fixations<span class="w"> </span>other/fix.csv<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">  </span>--compare-dataset-name<span class="w"> </span><span class="s2">"Our lab"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">  </span>--canvas<span class="w"> </span>1680x1050<span class="w"> </span>--compare-canvas<span class="w"> </span>1680x1050<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="w">  </span>-o<span class="w"> </span>cross.html
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Two readers of the same paragraph, overlaid</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_1_1_Ele_r0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_1090:l7_1090_2_1_1_Ele_r0<span class="w"> </span>-o<span class="w"> </span>compare.html
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1"># The same overlay, drawing only B's word boxes and text</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_1_1_Ele_r0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_1090:l7_1090_2_1_1_Ele_r0<span class="w"> </span>--compare-stimulus<span class="w"> </span>b<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">  </span>-o<span class="w"> </span>compare_b.html
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="c1"># Side by side — each panel draws its own reading's stimulus</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_1_1_Ele_r0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_1090:l7_1090_2_1_1_Ele_r0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">  </span>--compare-layout<span class="w"> </span>side-by-side<span class="w"> </span>-o<span class="w"> </span>compare.svg
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="c1"># B from a second dataset</span>
+<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--potec<span class="w"> </span>./potec<span class="w"> </span>-p<span class="w"> </span><span class="m">12</span><span class="w"> </span>-t<span class="w"> </span>b0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="w">  </span>--compare-with<span class="w"> </span>p1:t1<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="w">  </span>--compare-words<span class="w"> </span>other/ia.csv<span class="w"> </span>--compare-fixations<span class="w"> </span>other/fix.csv<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="w">  </span>--compare-dataset-name<span class="w"> </span><span class="s2">"Our lab"</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="w">  </span>--canvas<span class="w"> </span>1680x1050<span class="w"> </span>--compare-canvas<span class="w"> </span>1680x1050<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="w">  </span>-o<span class="w"> </span>cross.html
 </code></pre></div>
 <table>
 <thead>
@@ -1883,10 +1945,10 @@ is a single figure of two readings, so render one screen at a time with
 <p><strong>Overlay across two datasets requires matching canvases.</strong> Overlaying pools both
 readings into one set of pixel coordinates, so <code>--compare-layout overlay</code> on two
 different screens <strong>fails</strong> rather than quietly falling back:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="gp">$ </span>scanpath-studio<span class="w"> </span>render<span class="w"> </span>…<span class="w"> </span>--canvas<span class="w"> </span>2560x1440<span class="w"> </span>--compare-canvas<span class="w"> </span>1680x1050
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="go">These readings were recorded on different screens — 2560x1440 and 1680x1050. …</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="go">Pass layout='side_by_side' (or 'stacked') to compare them anyway, each panel</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="go">drawn to its own screen.</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="gp">$ </span>scanpath-studio<span class="w"> </span>render<span class="w"> </span>…<span class="w"> </span>--canvas<span class="w"> </span>2560x1440<span class="w"> </span>--compare-canvas<span class="w"> </span>1680x1050
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="go">These readings were recorded on different screens — 2560x1440 and 1680x1050. …</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="go">Pass layout='side_by_side' (or 'stacked') to compare them anyway, each panel</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="go">drawn to its own screen.</span>
 </code></pre></div>
 <p>The app resolves that case to Side by side because a user can see what they got;
 a script cannot, so the CLI refuses instead of returning a differently-shaped
@@ -1917,7 +1979,7 @@ the recorded setup.</p>
 </tr>
 <tr>
 <td>animate</td>
-<td><code>--animate</code> and optionally <code>--playback-speed X</code></td>
+<td><code>--animate</code> and optionally <code>--playback-speed X</code>; every styling flag the replay can draw (<code>api.figure_options("animation")</code>) is honoured, and the rest are named in a warning</td>
 </tr>
 <tr>
 <td>set display geometry</td>
@@ -1933,7 +1995,7 @@ the recorded setup.</p>
 </tr>
 <tr>
 <td>draw only part of a trial</td>
-<td><code>--fix-index-range START:END</code> (1-based, both inclusive; honoured by <code>--animate</code> too)</td>
+<td><code>--fix-index-range START:END</code> (1-based, both inclusive; honoured by <code>--animate</code> and <code>--compare-with</code> too)</td>
 </tr>
 <tr>
 <td>mark the critical span</td>
@@ -1961,7 +2023,7 @@ the recorded setup.</p>
 </tr>
 <tr>
 <td>use Gaussian duration mass</td>
-<td><code>--heatmap-style 'Duration mass' --duration-mass-sigma 1.0</code></td>
+<td><code>--heatmap-style duration-mass --duration-mass-sigma 1.0</code></td>
 </tr>
 <tr>
 <td>mark a schematic</td>
@@ -2026,15 +2088,17 @@ the recorded setup.</p>
 </tbody>
 </table>
 <p>Use the installed command as the authoritative full reference:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>scanpath-studio<span class="w"> </span>--help
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--help
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>scanpath-studio<span class="w"> </span>--help
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--help
 </code></pre></div>
 <p>The <code>analyze</code> command writes the full tabular family without opening the app:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>scanpath-studio<span class="w"> </span>analyze<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv<span class="w"> </span>--output-dir<span class="w"> </span>analysis
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>scanpath-studio<span class="w"> </span>analyze<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv<span class="w"> </span>--output-dir<span class="w"> </span>analysis
 </code></pre></div>
 <p>This creates word, sentence, saccade, trial, reader, character, cleaning-QA,
-and run-configuration files. <code>scanpath-studio corpus</code> produces a tidy
-corpus-analysis table for scripting. The <code>render</code> command still renders one
+and run-configuration files. <code>scanpath-studio corpus</code> goes the other way: it
+reads a tidy CSV you already have (<code>--input</code>, one row per word or value) and
+renders a styled corpus figure — a per-word <code>profile</code>, a <code>distribution</code>, or a
+<code>difference</code> profile. The <code>render</code> command still renders one
 trial per invocation; use the <a href="../automation/#batch-pattern">Python batch pattern</a>
 or <strong>Export → Export bundle</strong> for many figures.</p>
 <p><code>--all-screens</code> is the multipart exception: it writes one deterministic
@@ -2046,10 +2110,10 @@ accepted by <code>analyze</code>.</p>
 <p>A local or desktop run caches your session on your own machine — uploaded
 datasets, column mappings, view settings, and annotations — so a refresh or a
 restart resumes where you left off. <code>cache</code> shows what is stored and removes it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the stored session</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the stored session</span>
 </code></pre></div>
 <p>The same information and controls are in <strong>Session → Automatic recovery</strong>;
 <strong>Clear recovery cache</strong> removes the saved copy without closing the current

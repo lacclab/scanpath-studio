@@ -292,3 +292,25 @@ def test_canvas_settings_survive_a_corpus_analysis_round_trip():
         "not setdefault them, because only the Scanpath rail renders their "
         f"widgets: {survived}"
     )
+
+
+def test_the_selected_trial_survives_a_trip_to_another_view():
+    """BUG-80: the trial picker renders only on the Scanpath view, and Streamlit
+    drops an unrendered widget's key at the end of the run — so every trip to
+    Corpus Analysis or the 🗂️ Data page came back on trial 1 (in Compare, with A
+    and B left on different texts)."""
+    from tests.conftest import pin_view
+
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
+    at.run()
+    picker = next(s for s in at.selectbox if s.key == "single_trial_id")
+    chosen = picker.options[3]
+    picker.set_value(chosen)
+    at.run()
+    assert at.session_state["single_trial_id"] == chosen
+
+    for view in ("Corpus Analysis", "Data", "Scanpath"):
+        pin_view(at, view)
+        at.run()
+        assert not at.exception, at.exception
+    assert at.session_state["single_trial_id"] == chosen

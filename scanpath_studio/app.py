@@ -3487,16 +3487,28 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
         # skip the uploader entirely.
         return raw_gaze_df
 
+    # PERF-11: raw gaze is recorded at up to 1000 Hz, so a real table is
+    # millions of rows — and both branches below re-read and re-normalized it on
+    # every rerun (~1.4 s per click at 1M rows). `frame_cache` keeps the result
+    # while its inputs hold and hands back the same object, as for the corpus.
     if data_choice == DEMO_CHOICE:
-        raw_gaze_df = load_sample_raw_gaze()
-        if not raw_gaze_df.empty:
-            raw_gaze_schema = infer_raw_gaze_schema(raw_gaze_df)
-            if raw_gaze_schema:
-                _stash_active_mapping("raw_gaze", raw_gaze_schema)
-                raw_gaze_df = normalize_raw_gaze(raw_gaze_df, raw_gaze_schema)
-            else:
-                warn.warning("Could not infer raw gaze schema from sample data")
-                raw_gaze_df = pd.DataFrame()
+
+        def _demo_raw_gaze() -> tuple[pd.DataFrame, dict | None, bool]:
+            sample = load_sample_raw_gaze()
+            if sample.empty:
+                return sample, None, False
+            schema = infer_raw_gaze_schema(sample)
+            if not schema:
+                return pd.DataFrame(), None, True
+            return normalize_raw_gaze(sample, schema), schema, False
+
+        raw_gaze_df, raw_gaze_schema, unmappable = frame_cache(
+            "raw_gaze", ("demo",), _demo_raw_gaze
+        )
+        if raw_gaze_schema:
+            _stash_active_mapping("raw_gaze", raw_gaze_schema)
+        elif unmappable:
+            warn.warning("Could not infer raw gaze schema from sample data")
     else:
         uploaded_raw_gaze = cfg.file_uploader(
             "Raw gaze table (optional)",
@@ -3504,7 +3516,10 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
             help="Optional: millisecond-level gaze with participant_id, trial_id, x, y.",
         )
         if uploaded_raw_gaze:
-            raw_gaze_df = read_table(uploaded_raw_gaze)
+            upload_key = (uploaded_raw_gaze.file_id, uploaded_raw_gaze.size)
+            raw_gaze_df = frame_cache(
+                "raw_gaze_upload", upload_key, lambda: read_table(uploaded_raw_gaze)
+            )
             proposed = propose_raw_gaze_schema(raw_gaze_df)
             initial_problems = validate_raw_gaze_schema(proposed)
             with cfg:
@@ -3522,7 +3537,12 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
                 raw_gaze_df = pd.DataFrame()
             else:
                 _stash_active_mapping("raw_gaze", raw_gaze_schema)
-                raw_gaze_df = normalize_raw_gaze(raw_gaze_df, raw_gaze_schema)
+                source = raw_gaze_df
+                raw_gaze_df = frame_cache(
+                    "raw_gaze",
+                    (upload_key, _schema_key(raw_gaze_schema)),
+                    lambda: normalize_raw_gaze(source, raw_gaze_schema),
+                )
 
     return raw_gaze_df
 

@@ -44,6 +44,7 @@ from .controls import (
     RAW_GAZE_FIELD_SPECS,
     TOUCHED_FIELDS_KEY,
     WORD_FIELD_SPECS,
+    claim_mapping,
     column_mapping_ui,
     inline_field_label,
     mark_missing_cells,
@@ -114,9 +115,24 @@ class _UploadResult(NamedTuple):
     problems: list
 
 
+#: BUG-32: the dataset the wizard's `col_map_*` mapping describes. The 🗂️ Data
+#: page maps a built-in source under the same keys, keyed by its source, so
+#: this identity is what tells the two apart when the headers match: a pick
+#: made here never carries back into the demo or a public corpus, and theirs
+#: never into a new upload. One constant serves every add-dataset session,
+#: because entering the wizard resets its mapping anyway.
+WIZARD_MAPPING_DATASET = "add-dataset wizard"
+_WIZARD_MAPPING_PREFIXES = ("col_map_words", "col_map_fix", "col_map_raw_gaze")
+
+
 def _reset_wizard_widgets() -> None:
     """Clear the wizard's per-table mapping + keep-field widgets so 'Add data'
     starts a fresh dataset."""
+    # BUG-32: from here these keys describe the dataset being added. Its first
+    # upload keeps a setup restored before it; ✕ Cancel leaves nothing the demo
+    # would adopt as its own.
+    for prefix in _WIZARD_MAPPING_PREFIXES:
+        claim_mapping(prefix, WIZARD_MAPPING_DATASET)
     for key in [
         k
         for k in list(st.session_state.keys())
@@ -485,6 +501,7 @@ def _map_section(
         header=False,
         columns_per_row=per_row,
         stack_labels=stacked,
+        dataset=WIZARD_MAPPING_DATASET,
     )
 
 
@@ -1525,7 +1542,11 @@ def _wizard_restore_config(host) -> None:
         # render, so their keys exist — setdefault would no-op and the restore
         # would silently fail. This step runs before the widgets re-instantiate
         # this pass, so writing the keys is safe, and it reruns afterwards.
-        _seed_column_mapping(config.get("column_mapping"), overwrite=True)
+        _seed_column_mapping(
+            config.get("column_mapping"),
+            overwrite=True,
+            dataset=WIZARD_MAPPING_DATASET,
+        )
         # Remember the restored config's provenance so the caller can show which
         # dataset (and when) it was exported from, below the upload box (9.1).
         st.session_state["_wizard_restored_meta"] = {

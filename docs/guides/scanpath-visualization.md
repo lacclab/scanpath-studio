@@ -52,6 +52,15 @@ scale from word boxes, or use one fixed size entered in pixels or points; point
 sizes use the dataset DPI. **📐 Figure & canvas** contains **🖥️ Screen &
 framing**, **📊 Axes & grid**, and **🏷️ Title & labels**.
 
+**Colour ranges** — the fixation colour range (👁️ Fixations **▾**, once
+fixations are coloured by a column) and the heatmap's (🔥 Heatmap **▾**) start
+on **Auto range**: each trial is scaled to its own values, exactly as the API and
+`render` draw it, and a comparison shares one scale across both readings. Drag
+the range, type a bound, or untick *Auto range* to pin one. A pinned range stays
+as you step through trials, which is what makes them comparable, and travels on
+a Share link, until you tick *Auto range* again. Choosing another *Color
+fixations by* column puts the fixation range back to auto.
+
 ### Show screen coordinates
 
 Open **📐 Figure & canvas → 📊 Axes & grid** and turn on **Coordinate grid** to

@@ -62,13 +62,16 @@ from .constants import (
     SACCADE_DASH_OPTIONS,
     SACCADE_WIDTH_BOUNDS,
     SYNTHETIC_CHOICE,
+    UNIFORM_COLOR_FIELD,
     drift_correction_enabled,
 )
 from .controls import (
     _ALIGN_OPTIONS,
     _FIXCLASS_MODES,
     _OUT_OF_TEXT_MARKERS,
+    claim_mapping,
     color_field_options,
+    forget_color_range,
     numeric_field_options,
     palette_state,
 )
@@ -271,7 +274,7 @@ def _parse_align_algorithm(v) -> str:
 # `_build_share_query` (write) and `_apply_url_preset` (read) both iterate these,
 # so the two sides can't drift. Data-dependent fields (color ranges, highlight
 # column, axis/color-by fields) self-heal on load via the rail's _drop_stale /
-# _clamp_range, so a link opened on a different trial degrades gracefully.
+# _clamped_pair, so a link opened on a different trial degrades gracefully.
 _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "preproc_enabled": "global_preproc_enabled",
     "preproc_blink_adjacent": "global_preproc_blink_adjacent",
@@ -511,7 +514,7 @@ _URL_PRESETS = {
 # (slider / number_input). A hand-crafted link with an out-of-range value would
 # otherwise crash the widget on render — Streamlit raises when a Session-State
 # value falls outside the widget's range. Clamp on the way in. (Data-dependent
-# colour ranges aren't here — the rail's `_clamp_range` handles those against
+# colour ranges aren't here — the rail's `_clamped_pair` handles those against
 # the live data.)
 _URL_BOUNDED = {
     "global_preproc_short_threshold_ms": (1.0, 500.0),
@@ -1354,7 +1357,9 @@ def _apply_pending_trial_selection(combos: pd.DataFrame) -> None:
     st.session_state.pop(PENDING_TRIAL_KEY, None)
 
 
-def _seed_column_mapping(mapping, *, overwrite: bool = False) -> None:
+def _seed_column_mapping(
+    mapping, *, overwrite: bool = False, dataset: object = None
+) -> None:
     """Seed the ``col_map_*`` session keys from a saved config's ``column_mapping``
     so a restored config pre-fills the wizard mapping + kept-field choices (and
     the user skips re-mapping). Stale values that don't match the current data are
@@ -1369,9 +1374,18 @@ def _seed_column_mapping(mapping, *, overwrite: bool = False) -> None:
     previous render, so those keys already exist; ``setdefault`` would be a no-op
     and the restore would silently do nothing. There, pass ``overwrite=True`` so
     an explicit restore wins (the step reruns afterwards, and it runs before the
-    mapping widgets re-instantiate, so writing the keys is safe)."""
+    mapping widgets re-instantiate, so writing the keys is safe).
+
+    BUG-32: the mapping is scoped to a dataset, so a caller restoring keys *for*
+    a dataset whose table has not been read yet names it as ``dataset`` — the
+    wizard's *Restore a saved setup* — and the keys are claimed for it
+    (``controls.claim_mapping``): its first table keeps them, another dataset
+    meeting them first drops them. Without ``dataset`` (the 💾 plot-config
+    restore) the keys describe whatever those prefixes already map, and the
+    marker is left alone."""
     if not isinstance(mapping, dict):
         return
+    written: set[str] = set()
     for raw_key, value in mapping.items():
         if (
             not isinstance(raw_key, str)
@@ -1382,10 +1396,14 @@ def _seed_column_mapping(mapping, *, overwrite: bool = False) -> None:
         key = raw_key
         if key.endswith("_paragraph"):
             key = key[: -len("_paragraph")] + "_text_id"
-        if overwrite:
+        if overwrite or key not in st.session_state:
             st.session_state[key] = value
-        else:
-            st.session_state.setdefault(key, value)
+            written.add(key)
+    if dataset is None:
+        return
+    for prefix in ("col_map_words", "col_map_fix", "col_map_raw_gaze"):
+        if any(key.startswith(f"{prefix}_") for key in written):
+            claim_mapping(prefix, dataset)
 
 
 @dataclass
@@ -1736,8 +1754,19 @@ def _restore_plot_config(
             20,
             "color bar tick size",
         )
-    # Range sliders only render when colour bars are on; store them anyway —
-    # the widgets clamp to the current data via `controls._clamp_range`.
+    # Store them even when their layer is off — the rail clamps them to the
+    # current data via `controls._clamped_pair`. VIZ-46: a stored range means
+    # *explicit*, so a config saved while the range was auto (`null`) restores
+    # as auto rather than keeping whatever range this session happened to hold.
+    # The writer records the figure's *gated* range, though, so `null` says
+    # "auto" only where the saved figure drew that range at all — a config saved
+    # with the heatmap off says nothing about the heatmap's range.
+    in_effect = {
+        "fixation_range": bool(layers.get("fixations"))
+        and coloring.get("color_by") not in (None, UNIFORM_COLOR_FIELD, "line"),
+        "heatmap_range": bool(layers.get("heatmap"))
+        and coloring.get("heatmap_metric") == "duration_ms",
+    }
     for cfg_key, state_key, label in (
         ("fixation_range", "global_fixation_color_range", "fixation color range"),
         ("heatmap_range", "global_heatmap_color_range", "heatmap color range"),
@@ -1746,6 +1775,8 @@ def _restore_plot_config(
         if isinstance(rng, (list, tuple)) and len(rng) == 2:
             lo, hi = number(rng[0]), number(rng[1])
             put_valid(lo is not None and hi is not None, state_key, (lo, hi), label)
+        elif cfg_key in coloring and rng is None and in_effect[cfg_key]:
+            forget_color_range(state_key)
 
     sizing = section("sizing")
     marker = sizing.get("marker_size_range")

@@ -20,8 +20,9 @@ too. Nothing here is inferred from documentation alone.
   Dependency claims were checked against the installed source, never the docs.
 
 !!! note "Amended after the audit — the on-device recovery cache (ENG-26)"
-    Version 0.27.0 added `persistence.py`: on a **localhost or desktop** run, the
-    app writes completed uploaded datasets to
+    Version 0.27.0 added `persistence.py`: on a run whose server listens on
+    **loopback only** (the desktop app; any launch with
+    `server.address=127.0.0.1`), the app writes completed uploaded datasets to
     `~/.cache/scanpath-studio/session-v1` as Parquet, plus a JSON manifest with
     mappings, view settings and annotations, and restores them on the next
     session. That post-dates the audit below, so every "no on-disk residue of
@@ -31,6 +32,13 @@ too. Nothing here is inferred from documentation alone.
     account-readable; it is disclosed and deletable in-app (💾 **Session** →
     **🗄️ Recovery cache**) and from `scanpath-studio cache --clear`, and it is
     described for researchers in [privacy.md](privacy.md#what-happens-to-a-file-you-upload).
+    **ENG-56:** until the pre-beta audit the gate asked whether `st.context.url`
+    was a loopback URL — a value Streamlit copies from the browser's own message
+    — so a machine on the network could connect to a server listening on every
+    interface, claim to be at `http://localhost/`, and have the owner's cached
+    datasets restored into its session. The gate now reads the server's own
+    `server.address` (`persistence.server_bound_to_loopback`); the URL is
+    consulted only outside a Streamlit server (the `cache` CLI, the API).
 
 !!! note "After the audit — Streamlit 1.61–1.64 (ENG-31, ENG-43, ENG-49, ENG-52)"
     The runtime moved from 1.58.0 to 1.61.1, then 1.62.0, 1.63.0 and 1.64.0. Two of the
@@ -40,8 +48,8 @@ too. Nothing here is inferred from documentation alone.
     - **`server.allowedHosts`** (1.61) — an allow-list of `Host` headers for
       incoming WebSocket connections, against DNS rebinding. Empty by default,
       which accepts any host, so it changes nothing about S1: a
-      `scanpath-studio run` on an untrusted network is still reachable by
-      anyone who can route to the port. A fixed-hostname deployment can now
+      `scanpath-studio run` served on the network (`--server.address 0.0.0.0`)
+      is still reachable by anyone who can route to the port. A fixed-hostname deployment can now
       narrow that (e.g. `['localhost']` for a desktop/loopback run).
     - **`client.allowedOrigins`** (1.60) — origins allowed to drive the app by
       `postMessage` when it is embedded in an iframe. It defaults to Streamlit's
@@ -143,11 +151,16 @@ seconds.
 `desktop/launcher.py:main`. One line, no behaviour change for the intended user.
 
 !!! note "Same exposure, different visibility, for `scanpath-studio run`"
-    `cli.launch_app` also passes no address, so `scanpath-studio run` and a bare
-    `streamlit run` bind `0.0.0.0` too. That is standard Streamlit behaviour and
-    Streamlit prints a "Network URL" line announcing it, so the user is at least
-    told. The desktop launcher suppresses Streamlit's own output and prints a
-    loopback URL instead, which is why it is ranked separately and higher.
+    `cli.launch_app` also passed no address, so `scanpath-studio run` bound
+    `0.0.0.0` too. That is standard Streamlit behaviour and Streamlit prints a
+    "Network URL" line announcing it, so the user was at least told. The
+    desktop launcher suppresses Streamlit's own output and prints a loopback URL
+    instead, which is why it is ranked separately and higher. **Fixed**
+    2026-09-23 (ENG-55): `launch_app` now passes `--server.address=127.0.0.1`
+    unless the user set an address themselves — a `--server.address` flag,
+    `STREAMLIT_SERVER_ADDRESS`, or `server.address` in a `config.toml` — so
+    every `scanpath-studio` launch is loopback by default. A bare
+    `streamlit run` is untouched and still binds `0.0.0.0`.
 
 **Status:** **fixed** 2026-07-28 — `desktop/launcher.py` now passes
 `--server.address=127.0.0.1`. [privacy.md](privacy.md) states the same thing in user-facing
@@ -796,9 +809,11 @@ created. Uploads go to Streamlit's `MemoryUploadedFileManager` (RAM, dropped by
 annotations in session state.
 
 Since 0.27.0 that is the whole story only where `persistence.persistence_enabled`
-returns False — a hosted deployment, or any run with
-`SCANPATH_STUDIO_PERSIST=0`. On **localhost or the desktop app** the opposite is
-true by design: `persistence.save_state` writes those same session datasets to
+returns False — a server other machines can reach (a hosted deployment, a bare
+`streamlit run` on every interface), or any run with
+`SCANPATH_STUDIO_PERSIST=0`. On a server bound to **loopback only** (the
+desktop app; `server.address=127.0.0.1`), or with `SCANPATH_STUDIO_PERSIST=1`,
+the opposite is true by design: `persistence.save_state` writes those same session datasets to
 `~/.cache/scanpath-studio/session-v1` (Parquet frames + `manifest.json`) at the
 end of every run whose state changed, and `restore_state` reads them back on the
 next session. So the disk writes in the package are the corpus downloads in
@@ -868,16 +883,22 @@ types (`app._UPLOAD_TYPES`) exclude macro-enabled workbook formats.
 the single cookie the app sets (`tour.TOUR_OPTOUT_COOKIE` = `sps_tour_optout`,
 `SameSite=Lax`, `path=/`, one year) holds the literal `"1"` and no identifier.
 
-Streamlit's *own* telemetry is a different matter and is not fully covered.
-`browser.gatherUsageStats` defaults to `True` (`config.py`, `default_val=True`).
-It is turned off in the repo's `.streamlit/config.toml` and explicitly on the
-desktop launcher's command line — but `cli.launch_app` injects only the
-`--theme.*` flags, and the config file is not in the wheel (same packaging gap as
-S6), so `pip install scanpath-studio && scanpath-studio run` from an arbitrary
-directory leaves it **on**. That is Streamlit's collection, not ours;
-[privacy.md](privacy.md) enumerates what it sends and how to turn it off per
-deployment. Adding `--browser.gatherUsageStats=false` to `cli.launch_app`'s
-injected flags would close the gap for every launch path at once.
+Streamlit's *own* telemetry, `browser.gatherUsageStats`, defaults to `True`
+(`config.py`, `default_val=True`). It is off on every launch path now: the repo's
+`.streamlit/config.toml`, the desktop launcher's command line, and
+`cli.launch_app`, which injects `--browser.gatherUsageStats=false` unless the
+caller passes their own value — so a `pip install scanpath-studio &&
+scanpath-studio run` from an arbitrary directory, which gets no config file, is
+covered too. A bare `streamlit run streamlit_app.py` outside the repository is
+the one path that still inherits Streamlit's default.
+
+**One third-party request is made on every figure render.** The true-scale
+figure embed (`tabs._render_true_scale_chart`, `fig.to_html(include_plotlyjs="cdn")`)
+loads plotly.js from `cdn.plot.ly` rather than from the installed package. No
+data travels with it, but it is a per-render request to a third party, the
+script carries no integrity pin, and it means the main figure stays blank
+without network access — the desktop app included. [privacy.md](privacy.md)
+discloses it; serving the bundled plotly.js locally is an open decision.
 
 **Streamlit's own request-level protections are on.** `server.enableXsrfProtection`
 and `server.enableCORS` both default to `True` (`config.py`) and nothing in the
@@ -897,10 +918,10 @@ no `<` can reach it.
 ## Deployment guidance that follows from this
 
 - **A machine holding participant data should not run this app on an
-  untrusted network.** The desktop bundle now binds loopback (S1), but
-  `scanpath-studio run` and a bare `streamlit run` still bind `0.0.0.0` — pass
-  `--server.address=127.0.0.1` explicitly, or bind to loopback and use an SSH
-  tunnel for remote access.
+  untrusted network.** The desktop bundle and `scanpath-studio run` bind
+  loopback (S1), but a bare `streamlit run` still binds `0.0.0.0` — pass
+  `--server.address=127.0.0.1` there, and for remote access keep loopback and
+  use an SSH tunnel rather than `--server.address 0.0.0.0`.
 - **A shared/hosted deployment should set `SCANPATH_LOCAL_FS=0`** and supply the
   corpus location through `SCANPATH_DATA_ROOT` (S2), which removes the directory
   input, the folder picker and the download-to-arbitrary-path button.

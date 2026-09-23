@@ -1,9 +1,10 @@
 # Data format
 
 Scanpath Studio reads up to three tables — **words / areas-of-interest**,
-**fixations**, and (optionally) **raw gaze** — as **CSV, TSV, Parquet, or
-Feather**. Columns are auto-detected from common EyeLink, Gazepoint, and
-snake-case conventions; the app's **Column mapping** panel (and the
+**fixations**, and (optionally) **raw gaze** — as **CSV, TSV, TXT, Parquet,
+Feather, or Excel**, or a `.zip` of any of them. Columns are auto-detected from
+common EyeLink, Gazepoint, and snake-case conventions; the app's **Column
+mapping** panel (and the
 `word_schema` / `fix_schema` arguments of
 [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data]) override
 any guess.
@@ -18,6 +19,15 @@ any guess.
 | **Participant metadata** *(optional)* | one row per reader | participant id, plus anything you know about them |
 | **Trial metadata** *(optional)* | one row per reading | trial id (optionally participant id too), plus anything you know about that reading |
 
+**Units.** Durations and timestamps are read in milliseconds. A column whose
+header names another unit — `[s]`, `[μs]`, `[ns]`, as Tobii and Pupil Labs Neon
+write — is converted, and so are the vendor columns documented in seconds
+(Gazepoint `FPOGD` / `FPOGS`, Pupil Labs Core `start_timestamp`). Positions must
+be **pixels**: screen fractions (Gazepoint `FPOGX` / `FPOGY`, Pupil Labs Core
+`norm_pos_x` / `norm_pos_y`) are flagged with a warning but not converted, since
+the load does not know the screen size — multiply them by the screen width and
+height in pixels first.
+
 Either main table may be omitted for single-report datasets — the missing layer
 is simply skipped. A words-only table still draws a heatmap from its
 pre-aggregated reading measures, and a dataset added with only one of the two can
@@ -27,8 +37,8 @@ gain the other later on 🗂️ **Data → ✏️ Edit dataset**, without being 
 
 Attach a table of **one row per reader** — native language, age, a
 comprehension score, a group label. When you upload your own data it is one of
-the uploaders in part 1 of the setup wizard; for the demo, a public corpus, or a
-dataset you added earlier, the same panel is on 🗂️ **Data → ✏️ Edit dataset**
+the **Metadata** uploaders in part 2 of the setup wizard; for the demo, a public
+corpus, or a dataset you added earlier, the same panel is on 🗂️ **Data → ✏️ Edit dataset**
 under **👤 Participant metadata**. Its columns then behave like fields in the
 data: they filter trials (the filter funnel's *By reader* section), show up as
 chips above the plot, sort the trial picker, group cohorts in Corpus Analysis,
@@ -62,9 +72,9 @@ and [`load_participant_metadata()`](api.md) in the Python API.
 The same idea one grain down: a table of **one row per reading** — a list
 name, a presentation order, a per-trial comprehension score, whatever your
 design recorded about the trial rather than about the reader. It attaches
-beside the participant table — in part 1 of the add-dataset wizard, and on
-🗂️ **Data → ✏️ Edit dataset** under 🗂️ **Trial metadata** for a dataset that is
-already loaded — and its columns behave like fields in the data in the same
+beside the participant table — under **Metadata** in part 2 of the add-dataset
+wizard, and on 🗂️ **Data → ✏️ Edit dataset** under 🗂️ **Trial metadata** for a
+dataset that is already loaded — and its columns behave like fields in the data in the same
 way: they filter trials, show up as chips above the plot, sort the trial picker,
 appear in the inspection tables, and travel with exports
 (`metadata/trials.csv`) and saved sessions.

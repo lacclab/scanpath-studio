@@ -118,6 +118,7 @@ from scanpath_studio.controls import (
 )
 from scanpath_studio.data import (
     FIX_OPTIONAL_FIELDS,
+    IDENTITY_SCHEMA_FIELDS,
     TRIAL_IDENTITY_SAMPLE,
     WORD_OPTIONAL_FIELDS,
     ReadPlan,
@@ -197,6 +198,7 @@ from scanpath_studio.persistence import (
     STATE_DIR_ENV_VAR,
     cache_status,
     clear_local_state,
+    consume_restore_skipped,
     human_size,
     is_loopback_url,
     persistence_paused,
@@ -1254,13 +1256,36 @@ separate download).
 
 
 def _project_root() -> Path:
-    """Repo/install root — the parent of the ``scanpath_studio`` package.
+    """Where the *relative* data dirs (``data/OneStop`` etc.) resolve.
 
-    Used to anchor the *relative* default data dirs (``data/OneStop`` etc.) and
-    relative user-entered paths, so the "found vs. download" status resolves
-    regardless of the process cwd (the server may run from anywhere). Computed
-    from this module's location, not ``os.getcwd()``."""
-    return Path(__file__).resolve().parent.parent
+    Used to anchor the relative default data dirs and relative user-entered
+    paths, so the "found vs. download" status resolves regardless of the
+    process cwd (the server may run from anywhere). Computed from this module's
+    location, not ``os.getcwd()``.
+
+    ENG-59: that location is only a *project* in a source checkout. In an
+    installed copy the folder above the package is ``site-packages`` (or the
+    desktop bundle's ``_internal/``), so ⬇ Download wrote the corpora into the
+    environment — orphaned by ``pip uninstall``, lost with the venv, refused on
+    a read-only install. There they resolve under a per-user data directory
+    instead (``SCANPATH_STUDIO_DATA_HOME`` overrides it).
+    """
+    checkout = Path(__file__).resolve().parent.parent
+    if (checkout / "pyproject.toml").is_file():
+        return checkout
+    return _user_data_home()
+
+
+def _user_data_home() -> Path:
+    """Per-user home for downloaded corpora in an installed copy (ENG-59)."""
+    override = os.environ.get("SCANPATH_STUDIO_DATA_HOME", "").strip()
+    if override:
+        return Path(override).expanduser()
+    if os.name == "nt":
+        base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+        return Path(base) / "scanpath-studio"
+    base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+    return Path(base) / "scanpath-studio"
 
 
 # DATA-16 (security audit S2). The corpus **Data directory** box takes a
@@ -2612,6 +2637,29 @@ def _stimulus_font_install_hint(css_family: str | None) -> tuple[str, str] | Non
 
 
 @st.cache_data(show_spinner=False)
+def _cached_words_join_nothing(
+    _words: pd.DataFrame, _fixations: pd.DataFrame, cache_key
+) -> bool:
+    """Whether a loaded words table shares no (participant, trial) with the
+    fixations (BUG-32) — memoized, since it dedups both whole frames."""
+    if _fixations.empty:
+        return False
+    return not trial_keys(_words) & trial_keys(_fixations)
+
+
+#: BUG-32 — said once per page, in the notices strip, while it holds.
+WORDS_JOIN_NOTHING_WARNING = (
+    "⚠️ **No fixation has word boxes.** A words / AOI table was loaded, but none "
+    "of its participant + trial pairs is in the fixations, so every trial draws "
+    "without its text or its word-level measures. The usual cause is a **Trial "
+    "ID** or **Participant ID** mapping that names different trials in the two "
+    "tables — for instance one carried over from another dataset with the same "
+    "columns. Check it on 🗂️ **Data → Column mapping**, or start again from "
+    "**↩️ Reset to the auto-detected mapping**."
+)
+
+
+@st.cache_data(show_spinner=False)
 def _cached_trial_identity_report(
     _words: pd.DataFrame, _fixations: pd.DataFrame, cache_key, sample_trials=None
 ) -> dict:
@@ -3142,7 +3190,7 @@ def _render_unmapped_view(
         for problem in rejected:
             st.error(problem, icon="🚫")
         st.caption(
-            "Change the field it names in the **Column mapping** section above, "
+            "Change the field it names in **1 · Data tables & column mapping** above, "
             "or start again from what auto-detection proposes."
         )
         st.button(
@@ -3153,7 +3201,7 @@ def _render_unmapped_view(
     else:
         st.warning(
             "**Finish the column mapping to draw scanpaths.** Map the missing "
-            "field(s) in the **Column mapping** section above — the raw data is "
+            "field(s) in **1 · Data tables & column mapping** above — the raw data is "
             "shown below to help you choose. "
             "Still needed:\n\n" + "\n".join(f"- {p}" for p in problems)
         )
@@ -3237,8 +3285,11 @@ def _render_offpage_setup_notice(data_view: bool) -> None:
 
 
 # File types accepted by every upload box. ``zip`` covers single-member
-# archives wrapping any of the others (e.g. ``data.csv.zip``).
-_UPLOAD_TYPES = ["csv", "tsv", "parquet", "feather", "zip", "xlsx", "xls"]
+# archives wrapping any of the others (e.g. ``data.csv.zip``). ``txt`` is the
+# tab-separated report many exporters write (DATA-41); a text file's delimiter
+# is read off its header line, and an ``.xls`` that is really text (EyeLink
+# Data Viewer's "Excel" export) is read as text (BUG-55).
+_UPLOAD_TYPES = ["csv", "tsv", "txt", "parquet", "feather", "zip", "xlsx", "xls"]
 
 
 def _uploaded_file_key(uploaded) -> tuple:
@@ -3256,7 +3307,7 @@ def _uploaded_file_key(uploaded) -> tuple:
 
 @st.cache_data(show_spinner="Reading uploaded data…")
 def _read_uploaded_table_cached(
-    _uploaded, file_key, kind=None, chosen=()
+    _uploaded, file_key, kind=None, chosen=(), text_column=None, identity=()
 ) -> pd.DataFrame:
     try:
         _uploaded.seek(0)
@@ -3268,12 +3319,15 @@ def _read_uploaded_table_cached(
     # own picks need. `kind` and `chosen` are part of the cache key, so naming
     # a new column simply re-reads the file under the new plan.
     header = read_table_columns(_uploaded)
-    return read_table(_uploaded, plan=upload_read_plan(header, kind, chosen=chosen))
+    plan = upload_read_plan(
+        header, kind, chosen=chosen, text_column=text_column, identity=identity
+    )
+    return read_table(_uploaded, plan=plan)
 
 
 @st.cache_data(show_spinner="Reading uploaded data…")
 def _read_uploaded_tables_cached(
-    _uploaded_list, file_keys, kind=None, chosen=()
+    _uploaded_list, file_keys, kind=None, chosen=(), text_column=None, identity=()
 ) -> pd.DataFrame:
     for f in _uploaded_list:
         try:
@@ -3284,7 +3338,9 @@ def _read_uploaded_tables_cached(
     if kind is not None:
 
         def plan_for(header):
-            return upload_read_plan(header, kind, chosen=chosen)
+            return upload_read_plan(
+                header, kind, chosen=chosen, text_column=text_column, identity=identity
+            )
 
     return read_tables(list(_uploaded_list), plan_for=plan_for)
 
@@ -3317,14 +3373,18 @@ def _columns_chosen_in_state(state, header) -> set:
     return chosen
 
 
-def upload_read_plan(header, kind: str, *, chosen=()) -> ReadPlan:
+def upload_read_plan(
+    header, kind: str, *, chosen=(), text_column: str | None = None, identity=()
+) -> ReadPlan:
     """Plan an uploaded table's read from its header (PERF-6, decision 2a).
 
     The mapping is auto-proposed from the column names, so the plan exists
     before the user has touched anything; ``chosen`` folds back in the columns
     they *have* named, which is what keeps a hand-picked mapping or a kept extra
     from being dropped. A column named later simply changes the plan, and the
-    read runs again against the new one.
+    read runs again against the new one. ``text_column`` is the user's own
+    word-text pick, read verbatim in place of the proposed one (BUG-53), and
+    ``identity`` their own id-column picks, read as text (BUG-59).
     """
     propose = propose_word_schema if kind == "words" else propose_fix_schema
     registry = WORD_OPTIONAL_FIELDS if kind == "words" else FIX_OPTIONAL_FIELDS
@@ -3334,6 +3394,8 @@ def upload_read_plan(header, kind: str, *, chosen=()) -> ReadPlan:
         propose(pd.DataFrame(columns=names)),
         registry,
         keep_columns=set(chosen),
+        text_column=text_column,
+        identity_columns=identity,
     )
 
 
@@ -3431,11 +3493,40 @@ def _read_uploaded_frame(
     # the wizard's column pickers are built from, so it happens first and is
     # stashed for `_uploaded_header`. `chosen` is sorted into a tuple because it
     # rides in the cache key.
+    # BUG-55: a file the readers refuse — a legacy .xls workbook, an empty
+    # file, a corrupt archive — is the user's to fix, so it is said in the box
+    # that took it, the way the metadata uploaders already do, instead of a
+    # traceback over the whole page.
+    try:
+        return _read_upload(uploaded, state_prefix, multi=multi, kind=kind)
+    except Exception as exc:  # unreadable file — say so, keep the page
+        logging.getLogger(__name__).warning(
+            "Could not read upload %s", state_prefix, exc_info=True
+        )
+        st.session_state.pop(f"{state_prefix}_header", None)
+        files = uploaded if multi else [uploaded]
+        names = ", ".join(str(getattr(f, "name", "the file")) for f in files)
+        host.error(f"Couldn't read **{names}**: {exc}")
+        return pd.DataFrame()
+
+
+def _read_upload(uploaded, state_prefix: str, *, multi: bool, kind) -> pd.DataFrame:
+    """The header pass and the (cached) planned read behind one upload box."""
     header: list = []
     chosen: tuple = ()
+    text_column = None
+    identity: tuple = ()
     if kind is not None:
         header = _upload_header(uploaded, multi=multi)
         chosen = tuple(sorted(_columns_chosen_in_state(st.session_state, header)))
+        # BUG-53: the word-text column the user mapped by hand (the mapping
+        # widget's own key) is the one to read verbatim, not the proposed one.
+        picked = st.session_state.get(f"{state_prefix}_text")
+        if kind == "words" and isinstance(picked, str) and picked in header:
+            text_column = picked
+        # BUG-59: likewise the id columns picked by hand, read as text so a
+        # zero-padded id keeps its zeros.
+        identity = _picked_columns(state_prefix, IDENTITY_SCHEMA_FIELDS, header)
     st.session_state[f"{state_prefix}_header"] = header
     if multi:
         return _read_uploaded_tables_cached(
@@ -3443,10 +3534,28 @@ def _read_uploaded_frame(
             tuple(_uploaded_file_key(f) for f in uploaded),
             kind=kind,
             chosen=chosen,
+            text_column=text_column,
+            identity=identity,
         )
     return _read_uploaded_table_cached(
-        uploaded, _uploaded_file_key(uploaded), kind=kind, chosen=chosen
+        uploaded,
+        _uploaded_file_key(uploaded),
+        kind=kind,
+        chosen=chosen,
+        text_column=text_column,
+        identity=identity,
     )
+
+
+def _picked_columns(state_prefix: str, fields, header) -> tuple:
+    """The header columns the mapping widgets for ``fields`` currently name."""
+    columns = set(header)
+    picked: list = []
+    for name in fields:
+        value = st.session_state.get(f"{state_prefix}_{name}")
+        values = value if isinstance(value, (list, tuple)) else [value]
+        picked += [v for v in values if isinstance(v, str) and v in columns]
+    return tuple(sorted(set(picked)))
 
 
 def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataFrame:
@@ -3487,16 +3596,28 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
         # skip the uploader entirely.
         return raw_gaze_df
 
+    # PERF-11: raw gaze is recorded at up to 1000 Hz, so a real table is
+    # millions of rows — and both branches below re-read and re-normalized it on
+    # every rerun (~1.4 s per click at 1M rows). `frame_cache` keeps the result
+    # while its inputs hold and hands back the same object, as for the corpus.
     if data_choice == DEMO_CHOICE:
-        raw_gaze_df = load_sample_raw_gaze()
-        if not raw_gaze_df.empty:
-            raw_gaze_schema = infer_raw_gaze_schema(raw_gaze_df)
-            if raw_gaze_schema:
-                _stash_active_mapping("raw_gaze", raw_gaze_schema)
-                raw_gaze_df = normalize_raw_gaze(raw_gaze_df, raw_gaze_schema)
-            else:
-                warn.warning("Could not infer raw gaze schema from sample data")
-                raw_gaze_df = pd.DataFrame()
+
+        def _demo_raw_gaze() -> tuple[pd.DataFrame, dict | None, bool]:
+            sample = load_sample_raw_gaze()
+            if sample.empty:
+                return sample, None, False
+            schema = infer_raw_gaze_schema(sample)
+            if not schema:
+                return pd.DataFrame(), None, True
+            return normalize_raw_gaze(sample, schema), schema, False
+
+        raw_gaze_df, raw_gaze_schema, unmappable = frame_cache(
+            "raw_gaze", ("demo",), _demo_raw_gaze
+        )
+        if raw_gaze_schema:
+            _stash_active_mapping("raw_gaze", raw_gaze_schema)
+        elif unmappable:
+            warn.warning("Could not infer raw gaze schema from sample data")
     else:
         uploaded_raw_gaze = cfg.file_uploader(
             "Raw gaze table (optional)",
@@ -3504,7 +3625,16 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
             help="Optional: millisecond-level gaze with participant_id, trial_id, x, y.",
         )
         if uploaded_raw_gaze:
-            raw_gaze_df = read_table(uploaded_raw_gaze)
+            upload_key = (uploaded_raw_gaze.file_id, uploaded_raw_gaze.size)
+            try:
+                raw_gaze_df = frame_cache(
+                    "raw_gaze_upload",
+                    upload_key,
+                    lambda: read_table(uploaded_raw_gaze),
+                )
+            except Exception as exc:  # unreadable file — say so, keep the page
+                cfg.error(f"Couldn't read **{uploaded_raw_gaze.name}**: {exc}")
+                return pd.DataFrame()
             proposed = propose_raw_gaze_schema(raw_gaze_df)
             initial_problems = validate_raw_gaze_schema(proposed)
             with cfg:
@@ -3522,7 +3652,12 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
                 raw_gaze_df = pd.DataFrame()
             else:
                 _stash_active_mapping("raw_gaze", raw_gaze_schema)
-                raw_gaze_df = normalize_raw_gaze(raw_gaze_df, raw_gaze_schema)
+                source = raw_gaze_df
+                raw_gaze_df = frame_cache(
+                    "raw_gaze",
+                    (upload_key, _schema_key(raw_gaze_schema)),
+                    lambda: normalize_raw_gaze(source, raw_gaze_schema),
+                )
 
     return raw_gaze_df
 
@@ -4144,7 +4279,15 @@ def _dataset_counts(
         return len(values) if found else None
 
     text_column = "unique_text_id" if "unique_text_id" in words else "text_id"
-    screens = len(part_catalog(words, fixations, raw_gaze)) or None
+    # BUG-79: a count must not take the page down. `part_catalog` validates as
+    # it counts and raises on screen metadata that disagrees across tables —
+    # which is worth reporting where the figure is built, not by blanking the
+    # whole 🗂️ Data page (and with it the way to switch to another dataset).
+    try:
+        screens = len(part_catalog(words, fixations, raw_gaze)) or None
+    except ValueError as exc:
+        logging.getLogger(__name__).warning("Screen count unavailable: %s", exc)
+        screens = None
     # DATA-36: a trial is a **(participant, trial_id) pair** — the row the trial
     # picker lists, since `utils.build_combo_options` de-duplicates on exactly
     # that — not a distinct `trial_id`. The two coincide only where a corpus
@@ -6185,6 +6328,17 @@ def main() -> None:
             "→ Automatic recovery.",
             icon="↩️",
         )
+    elif consume_restore_skipped(st.session_state):
+        # BUG-71: the last launch that restored the cache never finished, so this
+        # one opened without it rather than failing the same way again.
+        st.toast(
+            "Your last session didn't finish opening, so it wasn't restored this "
+            "time. It is still saved on this computer and saving is paused, so it "
+            "stays that way: reload to try again, or clear it in 💾 Session → "
+            "Automatic recovery.",
+            icon="⚠️",
+            duration="long",
+        )
     if url_source == "onestop" and onestop_data_dir() is not None:
         st.session_state.setdefault("data_source_choice", ONESTOP_CHOICE)
     elif url_source == "multipleye" and multipleye_bundle_dir() is not None:
@@ -6543,7 +6697,10 @@ def main() -> None:
     # belong to. Reserved here (so it keeps its place at the top of the page)
     # and filled after the load, which is the first point this run's counts for
     # the open dataset exist.
-    dataset_table_slot = setup_source_slot.container()
+    # Keyed: the "Load and verify a dataset" tutorial spotlights it — the data
+    # source picker it used to aim at is not on this page (only Scanpath and
+    # Corpus Analysis draw one), so the step outlined nothing.
+    dataset_table_slot = setup_source_slot.container(key="tutorial_available_datasets")
     # DATA-35: under the table, not on the heading's line. Left-aligned in a
     # narrow column so a stretched button doesn't run the width of the page.
     add_dataset_slot = None
@@ -6594,6 +6751,50 @@ def main() -> None:
         _finalizing_box = _finalizing_bridge.container()
         _finalizing_box.info("✅ Dataset added — loading your scanpaths…", icon="⏳")
         _finalizing_box.skeleton(height=420)
+
+    def _clear_loading_bridges() -> None:
+        """Drop the "⏳ Loading…" banners once the page has something to show.
+
+        BUG-81: only the normal path cleared them, so every early return below
+        (the wizard, a mapping that can't be satisfied, a filter that empties
+        the pool) left the banner + skeleton above the real content until the
+        next click — on the very page the warning had just sent the user to.
+        """
+        for bridge in (_finalizing_bridge, _view_bridge):
+            if bridge is not None:
+                bridge.empty()
+
+    def _render_datasets_table(words, fixations, raw_gaze) -> None:
+        """📂 Available datasets, whenever the Data page is showing its overview.
+
+        BUG-81: this used to render only after a successful load, so a dataset
+        whose mapping can't be satisfied — or a filter that empties the pool —
+        left the heading with no table under it, and no way to switch to
+        another dataset short of ♻️ Reset.
+        """
+        if not data_view or wizard_owns_page:
+            return
+        # UX-107 — ✅ Save changes closes the editor, so its success line
+        # belongs here, on the screen it returns to.
+        saved = st.session_state.pop("_remap_applied", None)
+        if saved:
+            dataset_table_slot.success(
+                f"**{_dataset_display_name(str(saved))}** updated — mapping, "
+                "recording setup and any table you added are saved.",
+                icon="✅",
+            )
+        render_dataset_table(
+            host=dataset_table_slot,
+            # Public corpora load through the historical category token,
+            # while the table rows use concrete registry labels. Preserve
+            # that concrete canonical selection so the active row and its
+            # remembered counts are keyed to the row the user can revisit.
+            active=str(st.session_state.get("data_source_choice") or data_choice),
+            words=words,
+            fixations=fixations,
+            raw_gaze=raw_gaze,
+        )
+
     # (DATA-9's ordered source-config group — description · options · data
     # location · column mapping — is now the top of the Data page reserved
     # above. VIZ-31 had already moved "Experimental Setup" out of it: monitor
@@ -6655,6 +6856,7 @@ def main() -> None:
         if wizard_active:
             _render_offpage_setup_notice(data_view)
             _fill_recovery_cache_panel()
+            _clear_loading_bridges()
             return
     elif data_choice == AUTHOR_CHOICE:
         words_df, fixations_df = _render_authoring_source()
@@ -6744,6 +6946,8 @@ def main() -> None:
             _render_unmapped_view(raw_words_df, raw_fixations_df, mapping_problems)
         _render_offpage_setup_notice(data_view)
         _fill_recovery_cache_panel()
+        _render_datasets_table(None, None, None)
+        _clear_loading_bridges()
         return
 
     # VIZ-14: local/desktop users can attach stimulus screenshots without
@@ -6872,6 +7076,19 @@ def main() -> None:
     )
     st.session_state["_trial_identity_report"] = identity_report
     identity_warning = trial_identity_warning(identity_report)
+    # BUG-32: an empty (or unjoinable) words frame beside healthy fixations is
+    # a legitimate *fixations-only* dataset only when no words table was loaded
+    # at all — otherwise it is a mapping that joins on nothing, and the figure
+    # just draws without text. A warning, not an error: the fixations are still
+    # worth drawing, but the silence has to go.
+    if (st.session_state.get("_active_column_mapping") or {}).get(
+        "words"
+    ) and _cached_words_join_nothing(
+        words_all,
+        fixations_all,
+        cache_key=(frame_fingerprint(words_all), frame_fingerprint(fixations_all)),
+    ):
+        menu.notices.warning(WORDS_JOIN_NOTHING_WARNING)
     # The verdict is raised **once, where the mapping was chosen** — right after
     # ✅ Add dataset or ✅ Save changes — rather than as a page-wide banner that
     # stood above every view for as long as the dataset was loaded. Both flows
@@ -6976,6 +7193,8 @@ def main() -> None:
     if words_filtered.empty and fixations_filtered.empty and raw_gaze_filtered.empty:
         _render_empty_after_filtering(words_all, fixations_all, trial_filters)
         _fill_recovery_cache_panel()
+        _render_datasets_table(words_all, fixations_all, raw_gaze_df)
+        _clear_loading_bridges()
         return
 
     # Build trial combinations for selection UI — from fixations normally, then
@@ -7080,10 +7299,7 @@ def main() -> None:
 
     # Clear the "loading" bridges now that the real content is about to render
     # in their place — the post-finalize one, and the view-switch one.
-    if _finalizing_bridge is not None:
-        _finalizing_bridge.empty()
-    if _view_bridge is not None:
-        _view_bridge.empty()
+    _clear_loading_bridges()
 
     # Render tabbed interface. Animation is now a checkbox inside the Scanpath
     # Visualization tab (no separate Animated Scanpath tab); Bulk Export has its
@@ -7115,27 +7331,7 @@ def main() -> None:
         # dataset are this run's frames, which do not exist until the load has
         # happened. Unfiltered on purpose — the table describes the *dataset*,
         # not what the current Narrow-by left standing.
-        if not wizard_owns_page:
-            # UX-107 — ✅ Save changes closes the editor, so its success line
-            # belongs here, on the screen it returns to.
-            saved = st.session_state.pop("_remap_applied", None)
-            if saved:
-                dataset_table_slot.success(
-                    f"**{_dataset_display_name(str(saved))}** updated — mapping, "
-                    "recording setup and any table you added are saved.",
-                    icon="✅",
-                )
-            render_dataset_table(
-                host=dataset_table_slot,
-                # Public corpora load through the historical category token,
-                # while the table rows use concrete registry labels. Preserve
-                # that concrete canonical selection so the active row and its
-                # remembered counts are keyed to the row the user can revisit.
-                active=str(st.session_state.get("data_source_choice") or data_choice),
-                words=words_all,
-                fixations=fixations_all,
-                raw_gaze=raw_gaze_df,
-            )
+        _render_datasets_table(words_all, fixations_all, raw_gaze_df)
         # UX-135 — one numbered headline over the whole first part, drawn into
         # the slot reserved above the description. Everything from here to the
         # metadata tables is that part; the mapping no longer titles itself,

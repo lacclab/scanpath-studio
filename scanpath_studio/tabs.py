@@ -34,6 +34,7 @@ from scanpath_studio.aggregation import (
     per_participant_trend,
     per_reader_word_measure,
     progressive_regressive_counts,
+    reader_means,
     reader_summary,
     reader_summary_table,
     reader_vs_cohort_values,
@@ -49,6 +50,7 @@ from scanpath_studio.aggregation import (
 )
 from scanpath_studio.animation_export import (
     CHROME_INSTALL_HINT,
+    AnimationBudgetError,
     AnimationExportError,
     chrome_available,
     export_animation,
@@ -129,6 +131,7 @@ from scanpath_studio.data import (
     empty_words_frame,
     filter_to_keys,
     filter_trials,
+    frame_cache,
     frame_fingerprint,
     harmonize_frames,
     has_explicit_trial_index,
@@ -206,6 +209,7 @@ from scanpath_studio.session_keys import (
     SINGLE_COMPARE_LAYOUT,
     SINGLE_COMPARE_STIMULUS,
     SINGLE_COMPARE_TOGGLE,
+    SINGLE_PLAYBACK_SPEED,
 )
 from scanpath_studio.similarity import (
     METRICS,
@@ -252,6 +256,10 @@ SUBTAB_COMPARISONS = "🔬 Comparisons"
 SUBTAB_LINE_ASSIGNMENT = "📐 Line assignment"
 SUBTAB_EXPORT = "📤 Export"
 SUBTAB_SHARE = "🔗 Share"
+
+#: The Corpus Analysis subtabs, in bar order — also the values the keyed tab bar
+#: (`corpus_subtab`) takes, so a test or a tutorial can open one by name.
+CORPUS_SUBTABS = ("Per text", "Per sentence", "Per reader", "Groups")
 
 
 def _safe_filename(text: str) -> str:
@@ -1155,8 +1163,12 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
             )
         except AnimationExportError as exc:
             progress_slot.empty()
+            # SEC1: an over-budget GIF is refused before Chrome starts, and its
+            # message already says what to change — the browser advice would not.
             st.warning(
-                f"Could not render {fmt}: {exc}\n\n"
+                f"Could not render {fmt}: {exc}"
+                if isinstance(exc, AnimationBudgetError)
+                else f"Could not render {fmt}: {exc}\n\n"
                 "GIF/MP4 export rasterizes each frame with a Chrome/Chromium browser "
                 "(Kaleido). On Streamlit Cloud this is installed via `packages.txt`; "
                 "if it still fails, use the **HTML** format above — it needs no browser."
@@ -1276,6 +1288,11 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         show_coordinate_grid=viz_settings.get("show_coordinate_grid", False),
         coordinate_grid_spacing=viz_settings.get("coordinate_grid_spacing"),
         show_raw_gaze=effective_show_raw_gaze,
+        # VIZ-43: raw gaze's own style (UX-86). The rail wrote these keys and
+        # nothing handed them on, so every figure drew the builder's defaults.
+        raw_gaze_color=viz_settings.get("raw_gaze_color", "#888888"),
+        raw_gaze_marker_size=viz_settings.get("raw_gaze_marker_size", 4.0),
+        raw_gaze_opacity=viz_settings.get("raw_gaze_opacity", 0.6),
         color_by=viz_settings["color_by"],
         heatmap_metric=(
             viz_settings["heatmap_metric"]
@@ -1563,6 +1580,38 @@ def _cached_scanpath_figure(
     ):
         return make_scanpath_figure(
             _words, _fixations, settings=_settings, raw_gaze=_raw_gaze
+        )
+
+
+@st.cache_data(show_spinner="Building the replay…", max_entries=8)
+def _cached_scanpath_animation(
+    _words: pd.DataFrame,
+    _fixations: pd.DataFrame,
+    _settings: FigureSettings,
+    _fixations_b: pd.DataFrame | None,
+    _words_b: pd.DataFrame | None,
+    anim_key,
+):
+    """Build + cache the animated scanpath, as ``_cached_scanpath_figure`` does
+    for the static one (PERF-13).
+
+    Uncached, every click anywhere while 🎬 Animate was on — opening a subtab,
+    ticking a checkbox back to what it was — rebuilt every frame: ~3 s on the
+    demo at the default smoothness, 22 s at the finest. ``anim_key`` is every
+    ``FigureSettings`` field plus both scanpaths' fingerprints, so any change that
+    reaches the builder still rebuilds. Few entries: a replay is megabytes.
+    """
+    with timed(
+        "build scanpath animation (cache miss)",
+        words=len(_words),
+        fixations=len(_fixations),
+    ):
+        return make_scanpath_animation(
+            _words,
+            _fixations,
+            settings=_settings,
+            fixations_b=_fixations_b,
+            words_b=_words_b,
         )
 
 
@@ -2516,11 +2565,11 @@ def _render_paragraph_with_spans(
         span_bg = {c: _span_bg_for(c, i) for i, c in enumerate(cols)}
     active = [c for c in span_bg if c in ordered.columns]
     if not active:
-        st.write(" ".join(ordered["text"].astype(str).tolist()))
+        st.write(" ".join(ordered["text"].fillna("").astype(str).tolist()))
         return
     import html as _html
 
-    texts = ordered["text"].astype(str).tolist()
+    texts = ordered["text"].fillna("").astype(str).tolist()
     masks = {c: ordered[c].fillna(False).astype(bool).tolist() for c in active}
     parts: list[str] = []
     for i, raw_word in enumerate(texts):
@@ -2550,7 +2599,7 @@ def _span_text(trial_words: pd.DataFrame, mask_col: str) -> str:
         return ""
     ordered = _ordered_words(trial_words)
     mask = ordered[mask_col].fillna(False).astype(bool)
-    return " ".join(ordered.loc[mask, "text"].astype(str).tolist())
+    return " ".join(ordered.loc[mask, "text"].fillna("").astype(str).tolist())
 
 
 def _first_str(df: pd.DataFrame, col: str) -> str | None:
@@ -2560,6 +2609,31 @@ def _first_str(df: pd.DataFrame, col: str) -> str | None:
         if not vals.empty:
             return str(vals.iloc[0])
     return None
+
+
+def _servable_image_path(path: str | None) -> str | None:
+    """``path`` if the server may read it into a figure, else ``None`` (ENG-57).
+
+    The stimulus layer reads the file off the *server's* disk and sends it to the
+    browser as a data URI. On a local run that is the user's own disk, so any
+    path goes. With local file access off (``SCANPATH_LOCAL_FS=0``, a shared
+    deployment) an **uploaded** dataset's ``image_path`` is only a column someone
+    typed — the image-folder step that fills it legitimately needs local access —
+    so honouring it let an upload read any PNG on the server. Paths the app
+    resolved itself (the bundled demo, a server-side corpus) are unaffected.
+    """
+    if not path:
+        return None
+    from scanpath_studio.app import local_filesystem_enabled
+
+    if local_filesystem_enabled():
+        return path
+    from scanpath_studio.constants import UPLOAD_CHOICE
+
+    source = st.session_state.get("data_source_choice")
+    if source == UPLOAD_CHOICE or source in (st.session_state.get("_datasets") or {}):
+        return None
+    return path
 
 
 def _first_num(df: pd.DataFrame, col: str) -> float | None:
@@ -2914,7 +2988,10 @@ def _build_studio_config(
             "saccades": figure_settings["show_saccades"],
             "saccade_arrows": figure_settings.get("show_saccade_arrows", False),
             "heatmap": figure_settings["show_heatmap"],
-            "raw_gaze": figure_settings["show_raw_gaze"],
+            # BUG-72: the switch, not the figure's *effective* raw gaze (switch
+            # AND this trial has samples) — saving on a trial without raw gaze
+            # used to record the layer as off.
+            "raw_gaze": bool(viz_settings.get("show_raw_gaze", False)),
             "stimulus_image": viz_settings.get("show_stimulus_image", False),
             "full_monitor": figure_settings.get("fit_to_monitor", True),
             # VIZ-10: autoplay the animated replay on load.
@@ -2942,6 +3019,10 @@ def _build_studio_config(
         "animation": {
             "grid_step_ms": int(viz_settings.get("anim_grid_step_ms", 100) or 100),
             "max_frames": int(viz_settings.get("anim_max_frames", 360) or 360),
+            # BUG-72: the replay speed — a non-1× speed is an Illustration.
+            "playback_speed": float(
+                st.session_state.get(SINGLE_PLAYBACK_SPEED, 1.0) or 1.0
+            ),
         },
         "coloring": {
             "color_by": figure_settings["color_by"],
@@ -3066,6 +3147,11 @@ def _build_studio_config(
         "raw_gaze": {
             "available": not trial_raw_gaze.empty,
             "points": len(trial_raw_gaze) if not trial_raw_gaze.empty else 0,
+            # VIZ-43: the layer's own style — the two keys above describe the
+            # trial the config was saved on and are not read back.
+            "color": viz_settings.get("raw_gaze_color", "#888888"),
+            "marker_size": float(viz_settings.get("raw_gaze_marker_size", 4.0)),
+            "opacity": float(viz_settings.get("raw_gaze_opacity", 0.6)),
         },
         # Per-scanpath styling for the two-trial comparison (None when the caller
         # didn't collect it). Each entry holds raw widget values so it restores 1:1.
@@ -3076,6 +3162,8 @@ def _build_studio_config(
         "compare_view": {
             "layout": st.session_state.get(SINGLE_COMPARE_LAYOUT, "Overlay"),
             "stimulus": st.session_state.get(SINGLE_COMPARE_STIMULUS, "Both"),
+            # BUG-72: the A/B legend, the one compare setting that is a switch.
+            "legend": bool(viz_settings.get("show_compare_legend", False)),
         },
         "annotations": annotation_records,
         # DATA-20: the participant table travels with the saved session, so a
@@ -3794,12 +3882,19 @@ def _build_and_render_animation(
         anim_max_frames=max_frames,
     )
     _amend_snippet_settings(animation_settings, "animation")
-    fig = make_scanpath_animation(
+    anim_inputs = {
+        field.name: getattr(animation_settings, field.name)
+        for field in dataclass_fields(animation_settings)
+    }
+    anim_inputs["fixations_b"] = fixations_b if dual else None
+    anim_inputs["words_b"] = words_b if dual else None
+    fig = _cached_scanpath_animation(
         trial_words,
         trial_fixations,
-        settings=animation_settings,
-        fixations_b=fixations_b if dual else None,
-        words_b=words_b if dual else None,
+        animation_settings,
+        anim_inputs["fixations_b"],
+        anim_inputs["words_b"],
+        anim_key=_figure_input_key(trial_words, trial_fixations, anim_inputs),
     )
     add_illustration_label(fig, viz_settings.get("illustration_reasons"))
     _apply_preprocessing_caption(fig, selected_participant, selected_trial)
@@ -4448,12 +4543,13 @@ def render_single_trial_tab(
     has_raw_gaze = raw_gaze is not None and not raw_gaze.empty
 
     # Stimulus-page background image (MultiplEYE): the per-trial image path lives
-    # on the trial's rows (directory load only — uploads carry no path). The image
-    # is offered only when it exists and its pixel size is readable. Its origin
-    # (image_x/image_y, where the centered stimulus sits on the monitor) places it
-    # to align with the fixations, which carry the same offset.
-    trial_image_path = _first_str(trial_words, "image_path") or _first_str(
-        trial_fixations, "image_path"
+    # on the trial's rows. The image is offered only when it exists and its pixel
+    # size is readable. Its origin (image_x/image_y, where the centered stimulus
+    # sits on the monitor) places it to align with the fixations, which carry the
+    # same offset.
+    trial_image_path = _servable_image_path(
+        _first_str(trial_words, "image_path")
+        or _first_str(trial_fixations, "image_path")
     )
     trial_image_size = (
         _png_pixel_size(trial_image_path)
@@ -5508,10 +5604,17 @@ def render_single_trial_tab(
                     )
                 )
             if comparing and cross_dataset and not compare_comparable:
+                # UX-144: the note's own ending ("so they are shown side by
+                # side instead") is the *static* figure's fallback; the replay
+                # has no split layout and shows A alone, so say only that.
+                reason = compare_setup_note.removesuffix(
+                    ", so they are shown side by side instead."
+                )
+                reason += "" if reason.endswith(".") else "."
                 st.warning(
                     "An animated comparison replays both scanpaths on one clock "
-                    f"in one coordinate space. {compare_setup_note} Showing "
-                    "only the first scanpath.",
+                    f"in one coordinate space. {reason} Showing only the first "
+                    "scanpath.",
                     icon="⚠️",
                 )
             elif comparing and compare_fix.empty:
@@ -6688,66 +6791,107 @@ def render_corpus_analysis_tab(
     # Keyed → the `.st-key-…` selector the "Explore a corpus question" tutorial
     # spotlights when it names the subtab to open (UX-40). The tab bar carries no
     # widget key, so a tutorial can only *point* at it, never switch it.
+    from scanpath_studio.measures import compute_per_word_measures
+
+    # BUG-78: every subtab reads its measures off the words frame, and only an
+    # IA export ships them — so a Tobii/SMI upload, the synthetic trial or an
+    # authored scanpath (boxes + fixations, nothing pre-aggregated) got "No
+    # aggregatable measures" on Per text and one or two fixation-level measures
+    # elsewhere. Computed once per filtered pool, imported IA values still
+    # winning column by column, and handed back as the same object (no copy).
+    words_filtered = frame_cache(
+        "corpus_measures",
+        (frame_fingerprint(words_filtered), frame_fingerprint(fixations_filtered)),
+        lambda: (
+            compute_per_word_measures(fixations_filtered, words_filtered)
+            if not words_filtered.empty and not fixations_filtered.empty
+            else words_filtered
+        ),
+    )
     with st.container(key="tutorial_corpus_subtabs"):
         text_tab, sentence_tab, reader_tab, groups_tab = st.tabs(
-            ["Per text", "Per sentence", "Per reader", "Groups"]
+            list(CORPUS_SUBTABS),
+            # PERF-9: the same PERF-3 fix the Scanpath subtabs got — `st.tabs`
+            # runs every body on every run, so the hidden Per sentence table
+            # (uncached, masking the whole fixation frame per sentence) was
+            # recomputed on every click anywhere in this view: 26 s per click at
+            # 16× the demo. Keyed + `on_change="rerun"`, only the open tab runs.
+            key="corpus_subtab",
+            on_change="rerun",
         )
-    with text_tab:
-        render_per_text_tab(
-            words_filtered, fixations_filtered, viz_settings=viz_settings, **common
-        )
-    with reader_tab:
-        render_per_reader_tab(
-            words_filtered,
-            fixations_filtered,
-            viz_settings=viz_settings,
-            **common,
-        )
-    with sentence_tab:
-        from scanpath_studio.preprocessing import sentence_measures
+    if text_tab.open:
+        with text_tab:
+            render_per_text_tab(
+                words_filtered, fixations_filtered, viz_settings=viz_settings, **common
+            )
+    if reader_tab.open:
+        with reader_tab:
+            render_per_reader_tab(
+                words_filtered,
+                fixations_filtered,
+                viz_settings=viz_settings,
+                **common,
+            )
+    if sentence_tab.open:
+        with sentence_tab:
+            _render_per_sentence_tab(words_filtered, fixations_filtered)
+    if groups_tab.open:
+        with groups_tab:
+            render_groups_tab(
+                words_filtered,
+                fixations_filtered,
+                viz_settings=viz_settings,
+                **common,
+            )
 
-        sentence_table = sentence_measures(
-            compute_word_metrics(words_filtered, fixations_filtered),
-            fixations_filtered,
+
+@st.cache_data(show_spinner="Computing sentence measures…")
+def _c_sentence_measures(_words, _fix, fwkey, ffkey):
+    from scanpath_studio.preprocessing import sentence_measures
+
+    # `_words` already carries the per-word measures (BUG-78).
+    return sentence_measures(_words, _fix)
+
+
+def _render_per_sentence_tab(
+    words_filtered: pd.DataFrame, fixations_filtered: pd.DataFrame
+) -> None:
+    """The Per sentence subtab: one measure per text/sentence, across readers."""
+    sentence_table = _c_sentence_measures(
+        words_filtered,
+        fixations_filtered,
+        frame_fingerprint(words_filtered),
+        frame_fingerprint(fixations_filtered),
+    )
+    st.caption(
+        "Sentence is a first-class aggregation unit: combine one measure "
+        "across readers for each text/sentence pair."
+    )
+    numeric = [
+        column
+        for column in sentence_table.select_dtypes(include="number").columns
+        if column not in {"sentence_id"}
+    ]
+    if sentence_table.empty or not numeric:
+        st.info("No sentence-level measures are available for this selection.")
+    else:
+        controls = st.columns(2)
+        metric = controls[0].selectbox(
+            "Sentence measure", numeric, key="sentence_measure"
         )
-        st.caption(
-            "Sentence is a first-class aggregation unit: combine one measure "
-            "across readers for each text/sentence pair."
+        aggregate = controls[1].selectbox(
+            "Aggregate", ["Mean", "Median"], key="sentence_aggregate"
         )
-        numeric = [
-            column
-            for column in sentence_table.select_dtypes(include="number").columns
-            if column not in {"sentence_id"}
+        identity = [
+            column for column in ("text_id", "sentence_id") if column in sentence_table
         ]
-        if sentence_table.empty or not numeric:
-            st.info("No sentence-level measures are available for this selection.")
-        else:
-            controls = st.columns(2)
-            metric = controls[0].selectbox(
-                "Sentence measure", numeric, key="sentence_measure"
-            )
-            aggregate = controls[1].selectbox(
-                "Aggregate", ["Mean", "Median"], key="sentence_aggregate"
-            )
-            identity = [
-                column
-                for column in ("text_id", "sentence_id")
-                if column in sentence_table
-            ]
-            reducer = "mean" if aggregate == "Mean" else "median"
-            summary = (
-                sentence_table.groupby(identity, dropna=False)[metric]
-                .agg(reducer)
-                .reset_index(name=f"{reducer}_{metric}")
-            )
-            st.dataframe(summary, hide_index=True, width="stretch")
-    with groups_tab:
-        render_groups_tab(
-            words_filtered,
-            fixations_filtered,
-            viz_settings=viz_settings,
-            **common,
+        reducer = "mean" if aggregate == "Mean" else "median"
+        summary = (
+            sentence_table.groupby(identity, dropna=False)[metric]
+            .agg(reducer)
+            .reset_index(name=f"{reducer}_{metric}")
         )
+        st.dataframe(summary, hide_index=True, width="stretch")
 
 
 # -----------------------------------------------------------------------------
@@ -7763,8 +7907,14 @@ def render_group_comparison_tab(
             return
         test = c[1].selectbox("Test", ["Mann–Whitney", "t-test"], key="cmp21_test")
         frame = fixations_filtered if measure.frame == "fixations" else words_filtered
-        a = measure_values(apply_group(frame, spec_a), measure)
-        b = measure_values(apply_group(frame, spec_b), measure)
+        group_a, group_b = apply_group(frame, spec_a), apply_group(frame, spec_b)
+        # BUG-82: test readers, not pooled words/fixations — one reader's
+        # observations are not independent of each other.
+        a, b = reader_means(group_a, measure), reader_means(group_b, measure)
+        unit = "readers"
+        if a is None or b is None:
+            a, b = measure_values(group_a, measure), measure_values(group_b, measure)
+            unit = "observations"
         res = group_effect_size(a, b, test=test)
         cols = st.columns(4)
         cols[0].metric(
@@ -7790,6 +7940,16 @@ def render_group_comparison_tab(
         st.markdown(
             f"**{test}** — statistic = {res['statistic']:.3g}, p = {p_txt}. "
             f"_Exploratory, not pre-registered._"
+        )
+        st.caption(
+            "n = readers: each reader contributes the mean of their values, so "
+            "the test compares readers rather than pooled words or fixations, "
+            "which are not independent of each other. Readers in both groups "
+            "(e.g. a within-reader condition) count once in each."
+            if unit == "readers"
+            else "n = observations — this dataset names no readers, so the test "
+            "pools every value; observations from one reader are not "
+            "independent, so read the p-value as descriptive only."
         )
     elif view == "Two-group word heatmap":  # AN-22
         c = st.columns([3, 1, 1])

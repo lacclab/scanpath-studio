@@ -90,3 +90,40 @@ class TestClearFrameCache:
 
         monkeypatch.setattr(data_module, "st", _NoState())
         clear_frame_cache()  # must not raise
+
+
+class TestFingerprintsOutliveTheRun:
+    """PERF-10: a frame `frame_cache` hands back as the same object run after
+    run cannot change, so its fingerprint must not be recomputed every run —
+    the per-run memo reset used to force a full re-hash of the normalized pair
+    on every rerun (~0.5 s of a 1.9 s rerun at 50× the demo)."""
+
+    def _counting(self, monkeypatch):
+        from scanpath_studio import data
+
+        calls = []
+        real = data._compute_frame_fingerprint
+        monkeypatch.setattr(
+            data,
+            "_compute_frame_fingerprint",
+            lambda df: calls.append(1) or real(df),
+        )
+        return data, calls
+
+    def test_a_cached_frame_is_hashed_once_across_runs(self, monkeypatch):
+        data, calls = self._counting(monkeypatch)
+        pair = frame_cache("t_fp_stable", "k", lambda: (_frame(5), _frame(7)))
+        seen = set()
+        for _ in range(3):
+            data.reset_fingerprint_memo()
+            seen.add(tuple(data.frame_fingerprint(f) for f in pair))
+        assert len(calls) == 2
+        assert len(seen) == 1
+
+    def test_any_other_frame_is_still_hashed_every_run(self, monkeypatch):
+        data, calls = self._counting(monkeypatch)
+        frame = _frame(5)
+        for _ in range(3):
+            data.reset_fingerprint_memo()
+            data.frame_fingerprint(frame)
+        assert len(calls) == 3

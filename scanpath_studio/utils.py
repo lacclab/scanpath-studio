@@ -939,6 +939,12 @@ def _select_trial_none_mode(
         picker_label,
         options=trial_options,
         key=trial_id_key,
+        # BUG-80: the picker renders only on the Scanpath view, and Streamlit
+        # drops an unrendered widget's key at the end of the run — so a trip to
+        # Corpus Analysis or 🗂️ Data came back on trial 1 (and, in Compare,
+        # left A and B on different texts). A value the pool no longer holds is
+        # still reset above, before this renders.
+        persist_state="session",
         format_func=_option_label,
         help="Click this dropdown, then type to narrow the list. "
         "★ favorite · 🏷️ tagged · 📝 has notes. When a sort key is active, each "
@@ -951,6 +957,7 @@ def _select_trial_none_mode(
                 "Trial",
                 options=trial_options,
                 key=slider_key,
+                persist_state="session",
                 on_change=_on_trial_slider,
                 help=f"Scrub through the {n_trials} trials (index/total · id, "
                 "plus the sort value when one is active); the dropdown jumps to "

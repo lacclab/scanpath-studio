@@ -127,22 +127,15 @@ GLOBAL_COORDINATE_GRID_SPACING = "global_coordinate_grid_spacing"
 GLOBAL_SHOW_TITLE_CAPTION = "global_show_title_caption"
 GLOBAL_TITLE_PATTERN = "global_title_pattern"
 GLOBAL_CAPTION_PATTERN = "global_caption_pattern"
-
-# --- Saved-config-only settings (no share-link param) ----------------------
-GLOBAL_BASE_FONT_SIZE = "global_base_font_size"
-GLOBAL_CANVAS_WIDTH = "global_canvas_width"
-GLOBAL_CANVAS_HEIGHT = "global_canvas_height"
-GLOBAL_MONITOR_WIDTH_MM = "global_monitor_width_mm"
-GLOBAL_VIEWING_DISTANCE_MM = "global_viewing_distance_mm"
-GLOBAL_DISPLAY_DPI = "global_display_dpi"
-GLOBAL_STIMULUS_FONT_PT = "global_stimulus_font_pt"
-GLOBAL_USE_STIMULUS_FONT_PT = "global_use_stimulus_font_pt"
+# EXP-18: settings that change the figure and used to travel in the saved config
+# only — colour-bar styling, the span border colour, the PRE-2 fixation flags
+# (one mode/threshold/symbol/colour group per category; `oob` and `blink` have no
+# threshold — geometry and blink tests, not durations) — plus Compare's A/B
+# legend and the replay speed, which travelled in neither.
 GLOBAL_COLORBAR_ORIENTATION = "global_colorbar_orientation"
 GLOBAL_COLORBAR_TICKANGLE = "global_colorbar_tickangle"
 GLOBAL_COLORBAR_TICKFONT_SIZE = "global_colorbar_tickfont_size"
 GLOBAL_SPAN_BORDER_COLOR = "global_span_border_color"
-# PRE-2 fixation classification: one (mode, threshold, symbol, colour) group per
-# category. `oob` has no threshold — it is a geometry test, not a duration one.
 GLOBAL_FIXCLASS_SHORT_MODE = "global_fixclass_short_mode"
 GLOBAL_FIXCLASS_SHORT_THRESHOLD_MS = "global_fixclass_short_threshold_ms"
 GLOBAL_FIXCLASS_SHORT_SYMBOL = "global_fixclass_short_symbol"
@@ -154,6 +147,20 @@ GLOBAL_FIXCLASS_LONG_COLOR = "global_fixclass_long_color"
 GLOBAL_FIXCLASS_OOB_MODE = "global_fixclass_oob_mode"
 GLOBAL_FIXCLASS_OOB_SYMBOL = "global_fixclass_oob_symbol"
 GLOBAL_FIXCLASS_OOB_COLOR = "global_fixclass_oob_color"
+GLOBAL_FIXCLASS_BLINK_MODE = "global_fixclass_blink_mode"
+GLOBAL_FIXCLASS_BLINK_SYMBOL = "global_fixclass_blink_symbol"
+GLOBAL_FIXCLASS_BLINK_COLOR = "global_fixclass_blink_color"
+GLOBAL_SHOW_COMPARE_LEGEND = "global_show_compare_legend"
+
+# --- Saved-config-only settings (no share-link param) ----------------------
+GLOBAL_BASE_FONT_SIZE = "global_base_font_size"
+GLOBAL_CANVAS_WIDTH = "global_canvas_width"
+GLOBAL_CANVAS_HEIGHT = "global_canvas_height"
+GLOBAL_MONITOR_WIDTH_MM = "global_monitor_width_mm"
+GLOBAL_VIEWING_DISTANCE_MM = "global_viewing_distance_mm"
+GLOBAL_DISPLAY_DPI = "global_display_dpi"
+GLOBAL_STIMULUS_FONT_PT = "global_stimulus_font_pt"
+GLOBAL_USE_STIMULUS_FONT_PT = "global_use_stimulus_font_pt"
 
 # --- Trial-picker keys a link / config seeds (utils.select_trial owns them) --
 # `_SELECTION_PREFIXES` in url_state is ("single",); these are that prefix's
@@ -163,6 +170,9 @@ SINGLE_TRIAL_ID = "single_trial_id"
 SINGLE_PARTICIPANT = "single_participant"
 SINGLE_SLIDER = "single_slider"
 SINGLE_ANIMATE = "single_animate"
+#: The ⚙ Playback replay speed (EXP-18 put it on the link). Mode-local, like
+#: `single_animate`, which is why it is `single_*` rather than `global_*`.
+SINGLE_PLAYBACK_SPEED = "single_playback_speed"
 #: VIZ-7 — the fixation-index window. Wire format since UX-135 gave it a
 #: `?fix_range=lo,hi` param; the widget itself predates it.
 SINGLE_FIX_RANGE = "single_fix_range"
@@ -327,6 +337,9 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         "coordinate_grid_auto": GLOBAL_COORDINATE_GRID_AUTO,
         "preproc_enabled": GLOBAL_PREPROC_ENABLED,
         "preproc_blink_adjacent": GLOBAL_PREPROC_BLINK_ADJACENT,
+        "show_stimulus_image": GLOBAL_SHOW_STIMULUS_IMAGE,
+        "fit_to_monitor": GLOBAL_FIT_TO_MONITOR,
+        "show_compare_legend": GLOBAL_SHOW_COMPARE_LEGEND,
     }
 )
 
@@ -376,6 +389,21 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
         # layout nor the stimulus source restores the wrong figure.
         COMPARE_LAYOUT_PARAM: SINGLE_COMPARE_LAYOUT,
         COMPARE_STIMULUS_PARAM: SINGLE_COMPARE_STIMULUS,
+        # EXP-18.
+        "colorbar_orientation": GLOBAL_COLORBAR_ORIENTATION,
+        "span_border_color": GLOBAL_SPAN_BORDER_COLOR,
+        "fixclass_short_mode": GLOBAL_FIXCLASS_SHORT_MODE,
+        "fixclass_short_symbol": GLOBAL_FIXCLASS_SHORT_SYMBOL,
+        "fixclass_short_color": GLOBAL_FIXCLASS_SHORT_COLOR,
+        "fixclass_long_mode": GLOBAL_FIXCLASS_LONG_MODE,
+        "fixclass_long_symbol": GLOBAL_FIXCLASS_LONG_SYMBOL,
+        "fixclass_long_color": GLOBAL_FIXCLASS_LONG_COLOR,
+        "fixclass_oob_mode": GLOBAL_FIXCLASS_OOB_MODE,
+        "fixclass_oob_symbol": GLOBAL_FIXCLASS_OOB_SYMBOL,
+        "fixclass_oob_color": GLOBAL_FIXCLASS_OOB_COLOR,
+        "fixclass_blink_mode": GLOBAL_FIXCLASS_BLINK_MODE,
+        "fixclass_blink_symbol": GLOBAL_FIXCLASS_BLINK_SYMBOL,
+        "fixclass_blink_color": GLOBAL_FIXCLASS_BLINK_COLOR,
     }
 )
 
@@ -385,6 +413,11 @@ SHARE_INT_PARAMS: Mapping[str, str] = MappingProxyType(
         "order_font_size": GLOBAL_ORDER_FONT_SIZE,
         "anim_grid_step_ms": GLOBAL_ANIM_GRID_STEP_MS,
         "anim_max_frames": GLOBAL_ANIM_MAX_FRAMES,
+        # EXP-18.
+        "colorbar_tickangle": GLOBAL_COLORBAR_TICKANGLE,
+        "colorbar_tickfont_size": GLOBAL_COLORBAR_TICKFONT_SIZE,
+        "fixclass_short_threshold_ms": GLOBAL_FIXCLASS_SHORT_THRESHOLD_MS,
+        "fixclass_long_threshold_ms": GLOBAL_FIXCLASS_LONG_THRESHOLD_MS,
     }
 )
 
@@ -404,6 +437,8 @@ SHARE_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
         "coordinate_grid_spacing": GLOBAL_COORDINATE_GRID_SPACING,
         "raw_gaze_marker_size": GLOBAL_RAW_GAZE_MARKER_SIZE,
         "raw_gaze_opacity": GLOBAL_RAW_GAZE_OPACITY,
+        # EXP-18.
+        "playback_speed": SINGLE_PLAYBACK_SPEED,
     }
 )
 
@@ -528,6 +563,12 @@ URL_BOUNDED_STATE_KEYS = frozenset(
         GLOBAL_PREPROC_SHORT_THRESHOLD_MS,
         GLOBAL_PREPROC_MERGE_DISTANCE_CHARS,
         GLOBAL_COORDINATE_GRID_SPACING,
+        GLOBAL_RAW_GAZE_MARKER_SIZE,
+        GLOBAL_RAW_GAZE_OPACITY,
+        GLOBAL_COLORBAR_TICKANGLE,
+        GLOBAL_COLORBAR_TICKFONT_SIZE,
+        GLOBAL_FIXCLASS_SHORT_THRESHOLD_MS,
+        GLOBAL_FIXCLASS_LONG_THRESHOLD_MS,
     }
 )
 
@@ -685,10 +726,20 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_FIXCLASS_OOB_MODE,
         GLOBAL_FIXCLASS_OOB_SYMBOL,
         GLOBAL_FIXCLASS_OOB_COLOR,
+        # BUG-72: the fourth category, always written, until now never read back.
+        GLOBAL_FIXCLASS_BLINK_MODE,
+        GLOBAL_FIXCLASS_BLINK_SYMBOL,
+        GLOBAL_FIXCLASS_BLINK_COLOR,
+        # compare_view (BUG-72) — a `global_*` key, unlike the view's other two.
+        GLOBAL_SHOW_COMPARE_LEGEND,
         # labels
         GLOBAL_SHOW_TITLE_CAPTION,
         GLOBAL_TITLE_PATTERN,
         GLOBAL_CAPTION_PATTERN,
+        # raw_gaze (VIZ-43)
+        GLOBAL_RAW_GAZE_COLOR,
+        GLOBAL_RAW_GAZE_MARKER_SIZE,
+        GLOBAL_RAW_GAZE_OPACITY,
     }
 )
 
@@ -706,6 +757,8 @@ PLOT_CONFIG_OTHER_STATE_KEYS = frozenset(
         # in `PLOT_CONFIG_STATE_KEYS`.
         SINGLE_COMPARE_LAYOUT,
         SINGLE_COMPARE_STIMULUS,
+        # BUG-72 — the replay speed, restored from the config's `animation`.
+        SINGLE_PLAYBACK_SPEED,
     }
 )
 

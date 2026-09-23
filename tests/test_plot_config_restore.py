@@ -718,3 +718,164 @@ class TestConfigMigration:
         # The common case (an old/current config) must NOT nag the user.
         at = _run(_restore_app, _config=_full_config())
         assert not any("newer version" in t.value for t in at.toast)
+
+
+# --- BUG-72: what the saved config and the recovery cache used to leave out ---
+
+
+def _minimal_figure_settings(**extra) -> dict:
+    """The keys `_build_studio_config` indexes without a default."""
+    return {
+        "show_words": True,
+        "show_word_labels": True,
+        "show_fixations": True,
+        "show_order": True,
+        "show_saccades": True,
+        "show_heatmap": False,
+        "show_raw_gaze": False,
+        "color_by": "duration_ms",
+        "show_colorbars": False,
+        "fixation_color_range": None,
+        "heatmap_range": None,
+        "fixation_colorscale": "Blues",
+        "heatmap_colorscale": "Greens",
+        "marker_size_range": (8, 24),
+        "order_font_size": 12,
+        "order_font_color": "#000000",
+        **extra,
+    }
+
+
+def _build_config_app():
+    import pandas as pd
+    import streamlit as st
+
+    from scanpath_studio.tabs import _build_studio_config
+    from scanpath_studio.url_state import _restore_plot_config
+
+    config = _build_studio_config(
+        selected_participant="p1",
+        selected_trial="t1",
+        canvas_width=1000,
+        canvas_height=800,
+        x_field="x",
+        y_field="y",
+        figure_settings=st.session_state["_figure_settings"],
+        viz_settings=st.session_state["_viz_settings"],
+        base_font_size=14,
+        trial_raw_gaze=pd.DataFrame(),
+        font_family="Arial",
+        annotation_records=[],
+        column_mapping={},
+        data_source="demo",
+        app_version="0.0.0",
+        exported_at="2026-09-23T00:00:00",
+    )
+    st.session_state["_config"] = config
+    for key in st.session_state["_clear"]:
+        st.session_state.pop(key, None)
+    _, skipped = _restore_plot_config(config, pd.DataFrame(), pd.DataFrame())
+    st.session_state["_skipped"] = skipped
+
+
+@pytest.mark.timeout(60)
+class TestSavedStateCoverage:
+    def test_the_raw_gaze_layer_is_saved_as_its_switch(self):
+        """Saving on a trial without raw gaze used to record the layer as off —
+        the figure's *effective* value (switch AND samples), not the switch."""
+        from scanpath_studio.session_keys import SINGLE_PLAYBACK_SPEED
+
+        at = _run(
+            _build_config_app,
+            _figure_settings=_minimal_figure_settings(show_raw_gaze=False),
+            _viz_settings={"heatmap_metric": "duration_ms", "show_raw_gaze": True},
+            _clear=[SINGLE_PLAYBACK_SPEED],
+        )
+        assert at.session_state["_config"]["layers"]["raw_gaze"] is True
+        assert at.session_state["global_show_raw_gaze"] is True
+
+    def test_speed_legend_and_blink_flags_round_trip(self):
+        from scanpath_studio.session_keys import SINGLE_PLAYBACK_SPEED
+
+        blink = {"mode": "Discard", "symbol": "star", "color": "#123456"}
+        at = _run(
+            _build_config_app,
+            _figure_settings=_minimal_figure_settings(fixation_flags={"blink": blink}),
+            _viz_settings={
+                "heatmap_metric": "duration_ms",
+                "show_compare_legend": True,
+            },
+            _clear=[SINGLE_PLAYBACK_SPEED, "global_show_compare_legend"],
+            **{SINGLE_PLAYBACK_SPEED: 4.0},
+        )
+        ss = at.session_state
+        # Restored onto an empty frame, so only the data-dependent fields skip.
+        assert "playback speed" not in ss["_skipped"]
+        assert ss["_config"]["animation"]["playback_speed"] == 4.0
+        assert ss["_config"]["compare_view"]["legend"] is True
+        assert ss[SINGLE_PLAYBACK_SPEED] == 4.0
+        assert ss["global_show_compare_legend"] is True
+        assert ss["global_fixclass_blink_mode"] == "Discard"
+        assert ss["global_fixclass_blink_symbol"] == "star"
+        assert ss["global_fixclass_blink_color"] == "#123456"
+
+    def test_a_speed_the_slider_does_not_offer_is_skipped(self):
+        at = _run(
+            _restore_app,
+            _config={"animation": {"playback_speed": 3.3}, "layers": {}},
+        )
+        assert "playback speed" in at.session_state["_skipped"]
+        assert "single_playback_speed" not in at.session_state
+
+
+def test_the_recovery_cache_keeps_compare_mode_and_the_replay_speed(tmp_path):
+    from scanpath_studio import persistence
+
+    session = {
+        "single_compare_toggle": True,
+        "single_compare_layout": "Side by side",
+        "single_compare_stimulus": "A",
+        "single_playback_speed": 2.0,
+        "cmp0_fix_color": "#111111",
+        "cmp1_marker_size_range": (6, 18),
+        "cmp1_label_pattern": "B!",
+    }
+    expected = dict(session)
+    assert persistence.save_state(session, tmp_path)
+    restored: dict = {}
+    assert persistence.restore_state(restored, tmp_path)
+    assert {key: restored.get(key) for key in expected} == expected
+
+
+# --- BUG-73: an annotations-only backup restores annotations, nothing else ---
+
+
+def test_migrating_an_annotations_only_file_adds_no_plot_section():
+    from scanpath_studio.url_state import _migrate_plot_config
+
+    migrated, note = _migrate_plot_config({"schema": 2, "annotations": []})
+    assert note is None
+    assert "axes" not in migrated
+
+
+@pytest.mark.timeout(60)
+def test_restoring_annotations_leaves_the_view_settings_alone():
+    """The 2→3 migration stamped `axes` onto every v2 file, which made the
+    reader treat notes-only JSON as a full plot config and reset the grid,
+    illustration label, preprocessing and title to their defaults."""
+    seeded = {
+        "global_show_coordinate_grid": True,
+        "global_coordinate_grid_auto": False,
+        "global_coordinate_grid_spacing": 250.0,
+        "global_illustration_label": "Hide",
+        "global_show_title_caption": True,
+        "global_title_pattern": "Mine",
+    }
+    config = {
+        "schema": 2,
+        "annotations": [{"participant_id": "p1", "trial_id": "t1", "star": True}],
+    }
+    ss = _run(_restore_app, _config=config, **seeded).session_state
+    assert {key: ss[key] for key in seeded} == seeded
+    assert ss["_applied"] == 1  # the annotations, and only them
+    assert len(ss["trial_annotations"]) == 1

@@ -292,6 +292,15 @@ def test_deep_link_seeds_frozen_state_keys():
         sk.COMPARE_LAYOUT_PARAM: "side-by-side",
         sk.COMPARE_STIMULUS_PARAM: "B",
     }
+    # BUG-69: colours are read as `#rrggbb` only, so a placeholder is rejected.
+    from scanpath_studio.url_state import _SHARE_COLOR_PARAMS
+
+    validated.update({param: "#123456" for param in _SHARE_COLOR_PARAMS})
+    # EXP-18: the settings that joined the link are closed vocabularies too.
+    validated["colorbar_orientation"] = "Horizontal"
+    for category in ("short", "long", "oob", "blink"):
+        validated[f"fixclass_{category}_mode"] = "Discard"
+        validated[f"fixclass_{category}_symbol"] = "x"
     for param in sk.SHARE_TOGGLE_PARAMS:
         query[param] = "1"
     for param in sk.SHARE_VALUE_PARAMS:
@@ -478,7 +487,7 @@ def _restore_config_app():
             "order_font_color": "#000000",
             "base_font_size": 14,
         },
-        "animation": {"grid_step_ms": 100, "max_frames": 360},
+        "animation": {"grid_step_ms": 100, "max_frames": 360, "playback_speed": 2.0},
         "canvas_px": {"width": 1000, "height": 800},
         "axes": {
             "x_field": numeric[0],
@@ -496,7 +505,12 @@ def _restore_config_app():
         "highlighting": {
             "critical_span_style": "Mark text",
             "highlight_column": "is_in_aspan",
-            "fixation_flags": {"short": flag, "long": flag, "oob": flag},
+            "fixation_flags": {
+                "short": flag,
+                "long": flag,
+                "oob": flag,
+                "blink": flag,
+            },
             "highlight_text_color": "#123456",
             # Deliberately NOT a BACKGROUND_PRESETS value, so the custom-colour
             # branch runs and both background keys are exercised.
@@ -508,11 +522,13 @@ def _restore_config_app():
             "title_pattern": "{participant_id} · {trial_id}",
             "caption_pattern": "{text_id} · {n_fixations} fixations",
         },
+        # VIZ-43 — raw gaze's own style (`available`/`points` are read-only).
+        "raw_gaze": {"color": "#445566", "marker_size": 6.0, "opacity": 0.4},
         "compare": [compare_entry, dict(compare_entry)],
         # CMP-11 — the compare *view*, distinct from the per-scanpath styling
         # list above. Both fields are validated against the segmented controls'
         # options, so placeholders would be skipped rather than written.
-        "compare_view": {"layout": "Stacked", "stimulus": "A"},
+        "compare_view": {"layout": "Stacked", "stimulus": "A", "legend": True},
         "selection": {"participant_id": "p1", "trial_id": "t1"},
         "annotations": [],
     }

@@ -12,6 +12,7 @@ __all__ = [
     "clear_cache",
     "compare_scanpaths",
     "compute_word_metrics",
+    "eyegenbench_datasets",
     "figure_code",
     "figure_options",
     "list_parts",
@@ -24,11 +25,13 @@ __all__ = [
     "load_potec",
     "load_sample_data",
     "load_scanpath_data",
+    "load_text_metadata",
     "load_trial_metadata",
     "main",
     "plot_corpus_figure",
     "plot_scanpath",
     "preprocess_data",
+    "propose_schema",
     "reader_summary",
     "render_parent_trial",
     "save_figure",
@@ -41,7 +44,7 @@ __version__ = "0.30.1"
 # `import scanpath_studio` stays cheap and doesn't pull in pandas/plotly/
 # streamlit until first use.
 _DATASET_EXPORTS = frozenset({"load_potec", "load_multipleye", "load_onestop"})
-_EYEGENBENCH_EXPORTS = frozenset({"load_eyegenbench"})
+_EYEGENBENCH_EXPORTS = frozenset({"load_eyegenbench", "eyegenbench_datasets"})
 _API_EXPORTS = (
     frozenset(__all__)
     - {"__version__", "main"}

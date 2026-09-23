@@ -102,6 +102,44 @@ class SnippetSource:
     cli_unsupported: tuple[str, ...] = ()
 
 
+#: The file a snippet saves to when the caller names none, per figure kind. An
+#: animation is interactive HTML — `render --animate` refuses anything else —
+#: while the static and comparison figures raster. EXP-14: `api.figure_code`
+#: used `scanpath.png` for every kind, so its animation command exited on its
+#: first line. The Share subtab keeps its own copy (`url_state._SNIPPET_OUTPUT`).
+DEFAULT_OUTPUT = {
+    "static": "scanpath.png",
+    "comparison": "comparison.png",
+    "animation": "scanpath.html",
+}
+
+
+def source_canvas(kind: str) -> tuple[int, int] | None:
+    """The screen ``render`` assumes for a source when ``--canvas`` is omitted.
+
+    EXP-14: one table for both surfaces. `render --sample` drew the demo at its
+    real 2560×1440 monitor while the Python snippet ``api.figure_code`` wrote
+    for the same request estimated 960×480 from the data extents, so the two
+    flavours of one recipe produced different figures. ``None`` means the
+    screen is read off the data (or, for a benchmark corpus, its manifest)."""
+    if kind in (SOURCE_DEMO, SOURCE_ONESTOP):
+        # OneStop's Dell U2715H — cited in eyegenbench_geometry.DISPLAY_SPECS
+        # ["onestop"] (Berzak et al. 2025); the demo is a subset of OneStop.
+        from .constants import DEFAULT_FIGURE_SIZE
+
+        return tuple(DEFAULT_FIGURE_SIZE)
+    if kind == SOURCE_POTEC:
+        return (1680, 1050)  # PoTeC monitor (DELL P2210)
+    if kind == SOURCE_AUTHOR:
+        return (1200, 800)
+    if kind == SOURCE_MULTIPLEYE:
+        # Coordinates are offset onto the centred stimulus on the real screen.
+        from .datasets import MULTIPLEYE_MONITOR
+
+        return tuple(MULTIPLEYE_MONITOR)
+    return None
+
+
 def _root(source: SnippetSource, fallback: str) -> str:
     return str(source.options.get("root") or fallback)
 
@@ -494,6 +532,79 @@ def _saccade_class_colors(value):
     return argv
 
 
+def _effective_color(key: str, value):
+    """``saccade_class_colors=None`` means the stock class colours, so compare
+    it as those — otherwise the default palette would read as a change."""
+    if key == "saccade_class_colors" and value is None:
+        from .constants import SACCADE_CLASS_COLORS
+
+        return dict(SACCADE_CLASS_COLORS)
+    return value
+
+
+def _palette_colors(name: str) -> dict:
+    """The figure keywords palette ``name`` writes, as `api` expands them."""
+    from . import api
+
+    return api._expand_palette({"palette": name})
+
+
+def _classes_coloured(settings: dict) -> bool:
+    """Whether the reading-class colours are drawn at all. In *Uniform* they are
+    not, so they can be neither a reason to name a palette nor a flag to emit."""
+    return settings.get("saccade_color_mode") in ("By type", "Forward / regression")
+
+
+def _flag_can_override(key: str, settings: dict) -> bool:
+    """Whether ``render`` can restate ``key`` after a ``--palette``.
+
+    `--saccade-type-color` *implies* By type, so it can only restate class
+    colours in a figure that is already By type — in the two-way fold it would
+    switch the figure to the five-way split."""
+    if key == "saccade_class_colors":
+        return settings.get("saccade_color_mode") == "By type"
+    return key in _CLI_EMITTERS
+
+
+def _matching_palette(settings: dict, kind: str) -> tuple[str | None, dict]:
+    """The ``--palette`` a CLI snippet can name instead of spelling it out.
+
+    EXP-12. A palette writes eight colours at once. Spelled key by key, three of
+    them (`text_color`, `highlight_text_color`, `background_color`) have no
+    `render` flag and were named unsupported, and the class colours became five
+    ``--saccade-type-color`` flags — which switch saccades to *By type*, so any
+    palette choice produced a command drawing a different figure. A palette
+    matches when every colour it writes that this kind draws either equals the
+    figure's or has a flag to restate it; the match explaining the most
+    non-default colours wins, and one that explains none (the default palette
+    on a stock figure) is not named at all.
+
+    Returns ``(name, colours)`` — the colours the named palette supplies — or
+    ``(None, {})``."""
+    from . import api
+    from .constants import PALETTES
+
+    defaults = api.figure_options(kind)
+    best: tuple[str | None, dict] = (None, {})
+    best_score = 0
+    for name in PALETTES:
+        colors = {k: v for k, v in _palette_colors(name).items() if k in defaults}
+        score = 0
+        for key, value in colors.items():
+            if key == "saccade_class_colors" and not _classes_coloured(settings):
+                continue
+            current = _effective_color(key, settings.get(key, defaults[key]))
+            if _comparable(current) == _comparable(value):
+                default = _effective_color(key, defaults[key])
+                score += int(_comparable(value) != _comparable(default))
+            elif not _flag_can_override(key, settings):
+                break
+        else:
+            if score > best_score:
+                best, best_score = (name, colors), score
+    return best
+
+
 def _marker_size_range(value):
     if not value:
         return []
@@ -693,14 +804,28 @@ def python_snippet(
     lines.append("")
 
     func = _API_FUNCTION[state.kind]
+    participant, trial = _py(state.participant), _py(state.trial)
+    if not (state.participant and state.trial):
+        # EXP-14: an unnamed trial is `render`'s "first available" — so the
+        # Python half picks that same one rather than quoting `participant=''`,
+        # which matches no trial and raised on the snippet's first run.
+        lines.append("trials = sps.list_trials(words, fixations)")
+        for column, value in (
+            ("participant_id", state.participant),
+            ("trial_id", state.trial),
+        ):
+            if value:
+                lines.append(f"trials = trials[trials[{column!r}] == {_py(value)}]")
+        lines += ["participant, trial = trials.iloc[0]", ""]
+        participant, trial = "participant", "trial"
     args = ["words", "fixations"]
     if state.kind == "comparison":
         compare = state.compare or CompareTarget()
-        args.append(f"({_py(state.participant)}, {_py(state.trial)})")
+        args.append(f"({participant}, {trial})")
         args.append(f"({_py(compare.participant)}, {_py(compare.trial)})")
     else:
-        args.append(f"participant={_py(state.participant)}")
-        args.append(f"trial={_py(state.trial)}")
+        args.append(f"participant={participant}")
+        args.append(f"trial={trial}")
 
     call = [f"fig = sps.{func}("]
     call += [f"    {arg}," for arg in args]
@@ -825,9 +950,27 @@ def cli_snippet(
             label_a, label_b = compare.labels
             argv += ["--label-a", str(label_a), "--label-b", str(label_b)]
 
+    palette, palette_colors = _matching_palette(state.settings, state.kind)
+    if palette:
+        argv += ["--palette", palette]
     for key, value in figure_kwargs(
         state.settings, state.kind, explicit=explicit
     ).items():
+        if key in palette_colors and _comparable(
+            _effective_color(key, value)
+        ) == _comparable(palette_colors[key]):
+            continue  # `--palette` writes it
+        if key == "saccade_class_colors":
+            # EXP-12: never emit class colours the figure isn't drawing —
+            # `--saccade-type-color` implies By type, so emitting them into a
+            # Uniform figure switched its saccades to the five-way split.
+            if not _classes_coloured(state.settings) or not _saccade_class_colors(
+                value
+            ):
+                continue
+            if not _flag_can_override(key, state.settings):
+                unsupported.append(key)
+                continue
         emit = _CLI_EMITTERS.get(key)
         if emit is None:
             if key not in _CLI_IMPLICIT:

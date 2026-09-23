@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=69.0", "wheel"]
+requires = ["setuptools>=77.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -18,11 +18,11 @@ authors = [
     { name = "Lena Jäger" },
     { name = "Yevgeni Berzak" },
 ]
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE", "NOTICE"]
 keywords = ["eye-tracking", "scanpath", "visualization", "streamlit", "reading", "psycholinguistics"]
 classifiers = [
     "Development Status :: 4 - Beta",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
@@ -102,7 +102,11 @@ package-dir = {"" = "."}
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["scanpath_studio"]
+# ENG-61: the data folders (assets/, sample_data/, sample_data/images/) have no
+# __init__.py, so they are namespace packages setuptools only ships when they
+# are *listed* — `include = ["scanpath_studio"]` left them in the wheel by a
+# deprecated leniency the build warned will end.
+include = ["scanpath_studio", "scanpath_studio.*"]
 
 [tool.setuptools.package-data]
 "scanpath_studio" = [
@@ -112,7 +116,6 @@ include = ["scanpath_studio"]
     "assets/*.png",
     "sample_data/*.csv",
     "sample_data/*.parquet",
-    "sample_data/*.feather",
     "sample_data/images/*.png",
     "sample_data/images/*.csv",
 ]

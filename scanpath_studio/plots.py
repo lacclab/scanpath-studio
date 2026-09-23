@@ -18,6 +18,7 @@ import plotly.graph_objects as go
 from .constants import (
     CANVAS_PAD_FRACTION,
     CANVAS_PAD_MIN_PX,
+    COMPARE_FIXATION_OPACITY,
     COMPARISON_PALETTE,
     CURRENT_FIX_COLOR,
     CURRENT_FIX_OUTLINE,
@@ -4245,7 +4246,7 @@ def _comparison_scanpath_style(
         "saccade_width": DEFAULT_SACCADE_WIDTH,
         "marker_size_range": default_marker_size_range,
         "hollow": False,
-        "opacity": 1.0,
+        "opacity": COMPARE_FIXATION_OPACITY,
     }
     if override:
         # Drop falsy values (None / "") so a blank colour can't override the

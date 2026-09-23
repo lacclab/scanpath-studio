@@ -13,7 +13,7 @@ loops or analysis pipelines.
 
 ```bash
 scanpath-studio render --sample --list-trials
-scanpath-studio render --sample -p 1 -t 1 -o scanpath.html
+scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 -o scanpath.html
 ```
 
 Replace `--sample` with `--words ia.csv --fixations fixations.csv`. Run
@@ -54,7 +54,11 @@ scanpath-studio render --sample --no-heatmap --print-code python -o out.png
 
 ```python
 # ...or ask for it directly
-print(sps.figure_code(participant="l7_101", trial="1_Adv_1", show_heatmap=False))
+print(
+    sps.figure_code(
+        participant="l7_1090", trial="l7_1090_2_1_1_Ele_r0", show_heatmap=False
+    )
+)
 ```
 
 The CLI exposes a curated subset of the figure options, so a setting with no

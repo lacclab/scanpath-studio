@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from urllib.parse import urlencode
 
@@ -164,6 +166,83 @@ def _parse_compare_stimulus(v) -> str:
     return _parse_choice(v, _COMPARE_STIMULUS_OPTIONS, "compare stimulus source")
 
 
+#: The one colour spelling every `st.color_picker` holds and every figure
+#: builder accepts. The saved-config reader has always checked colours against
+#: it; the deep link now does too (BUG-69).
+_HEX_COLOR = re.compile(r"#[0-9A-Fa-f]{6}")
+
+
+def _parse_hex_color(v) -> str:
+    """A colour param → ``#rrggbb``, raising on anything else (BUG-69).
+
+    A colour reaches Plotly straight from session state on the render path, so
+    ``?order_font_color=zzz`` used to raise inside the figure builder — before
+    the picker that would have coerced it ever rendered. Raising here instead
+    turns a mangled link into the reader's "Ignored bad URL param" warning.
+    """
+    text = str(v).strip()
+    if not _HEX_COLOR.fullmatch(text):
+        raise ValueError(f"not a #rrggbb colour: {text!r}")
+    return text
+
+
+#: A markup tag: `<` + a letter (or `/` + a letter) up to the next `>`. Plotly
+#: draws a small HTML subset in a figure's title and caption, and `<a href>` in
+#: it is a working link. Requiring a letter after `<` keeps a literal `<->` or
+#: `a < b` in a title intact.
+_MARKUP_TAG = re.compile(r"</?[A-Za-z][^<>]*>")
+
+
+def _strip_markup(v) -> str:
+    """``v`` with every markup tag removed (SEC6 / BUG-75).
+
+    For figure text that arrives from someone else — a share link, a saved
+    config — which must not be able to put a clickable link to anywhere in the
+    recipient's figure (``?title_pattern=<a href="…">Session expired</a>``).
+    What a user types into the box themselves is theirs and is left alone. It
+    repeats until nothing changes, so a tag split around another
+    (``<<b>a href=…>``) cannot reassemble itself.
+    """
+    text = str(v)
+    while True:
+        stripped = _MARKUP_TAG.sub("", text)
+        if stripped == text:
+            return text
+        text = stripped
+
+
+def _parse_playback_speed(v) -> float:
+    """A replay speed → the ⚙ Playback slider's own option (EXP-18).
+
+    It is an `st.select_slider`, which raises on a value outside its options,
+    so ``?playback_speed=3.3`` is rejected here (the "Ignored bad URL param"
+    warning) rather than wedging the popover. The options belong to `tabs`,
+    which imports this module — hence the import at call time.
+    """
+    from scanpath_studio.tabs import _ANIM_SPEED_OPTIONS
+
+    speed = float(v)
+    for option in _ANIM_SPEED_OPTIONS:
+        if math.isclose(speed, option):
+            return option
+    raise ValueError(f"not a playback speed the slider offers: {v!r}")
+
+
+def _parse_fixclass_mode(v) -> str:
+    return _parse_choice(v, tuple(_FIXCLASS_MODES), "fixation-flag mode")
+
+
+def _parse_fixclass_symbol(v) -> str:
+    name = str(v).strip()
+    if name not in _OUT_OF_TEXT_MARKERS:
+        raise ValueError(f"unknown fixation-flag marker {name!r}")
+    return name
+
+
+def _parse_colorbar_orientation(v) -> str:
+    return _parse_choice(v, ("Vertical", "Horizontal"), "colour-bar orientation")
+
+
 def _parse_align_algorithm(v) -> str:
     """PRE-3 drift-correction algorithm name → the picker's exact spelling.
 
@@ -181,9 +260,14 @@ def _parse_align_algorithm(v) -> str:
 
 
 # --- Share-link parameter groups -------------------------------------------
-# The Share link round-trips the *entire* Visualization-controls panel (plus the
-# text/background settings from Experimental Setup), not just a handful of
-# toggles. Each group maps a short URL key → the session_state key it reads/writes.
+# The Share link round-trips the rail's figure settings — the layers, colours,
+# sizes, fixation flags, colour bars and labels, plus the font family, line
+# spacing and background — and the replay speed. It does **not** carry the
+# recording setup (canvas size, base font size, monitor mm, viewing distance,
+# DPI) or Compare's per-scanpath `cmp{idx}_*` styles: those travel in the 💾
+# saved config, and the Share panel says so (EXP-18 — whether they should ride
+# the link too is a maintainer decision still open). Each group maps a short
+# URL key → the session_state key it reads/writes.
 # `_build_share_query` (write) and `_apply_url_preset` (read) both iterate these,
 # so the two sides can't drift. Data-dependent fields (color ranges, highlight
 # column, axis/color-by fields) self-heal on load via the rail's _drop_stale /
@@ -218,6 +302,11 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "scale_text_to_boxes": "global_scale_text_to_boxes",
     # EXP-5: title/caption on the figure — off by default.
     "show_title_caption": "global_show_title_caption",
+    # EXP-18: three switches that change the figure and never rode the link —
+    # the stimulus-image layer, Show full monitor, and Compare's A/B legend.
+    "show_stimulus_image": "global_show_stimulus_image",
+    "fit_to_monitor": "global_fit_to_monitor",
+    "show_compare_legend": "global_show_compare_legend",
 }
 _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when set)
     "preproc_short_policy": "global_preproc_short_policy",
@@ -280,13 +369,50 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     # parsers, since each is a closed vocabulary.
     "cmp_layout": "single_compare_layout",
     "cmp_stimulus": "single_compare_stimulus",
+    # EXP-18: colour-bar orientation, the span's border colour, and the PRE-2
+    # fixation flags. *Discard* changes which fixations are drawn at all, so a
+    # link without it showed the recipient a different scanpath — and without
+    # the Illustration label the sender's figure carried.
+    "colorbar_orientation": "global_colorbar_orientation",
+    "span_border_color": "global_span_border_color",
+    **{
+        f"fixclass_{cat}_{part}": f"global_fixclass_{cat}_{part}"
+        for cat in ("short", "long", "oob", "blink")
+        for part in ("mode", "symbol", "color")
+    },
 }
+#: The `_SHARE_VALUE_PARAMS` that carry a colour — read through
+#: `_parse_hex_color` rather than `str` (BUG-69).
+_SHARE_COLOR_PARAMS = (
+    "fixation_color",
+    "saccade_color",
+    "raw_gaze_color",
+    "saccade_color_forward",
+    "saccade_color_skip",
+    "saccade_color_refixation",
+    "saccade_color_return_sweep",
+    "saccade_color_regression",
+    "order_font_color",
+    "text_color",
+    "highlight_text_color",
+    "bg_custom",
+    "span_border_color",
+    "fixclass_short_color",
+    "fixclass_long_color",
+    "fixclass_oob_color",
+    "fixclass_blink_color",
+)
 _SHARE_INT_PARAMS = {
     "order_font_size": "global_order_font_size",
     # VIZ-11 follow-up: the animation frame grid. Worth sharing — a link that
     # says "look at this replay" should reproduce the same smoothness.
     "anim_grid_step_ms": "global_anim_grid_step_ms",
     "anim_max_frames": "global_anim_max_frames",
+    # EXP-18: colour-bar tick styling and the two fixation-flag thresholds.
+    "colorbar_tickangle": "global_colorbar_tickangle",
+    "colorbar_tickfont_size": "global_colorbar_tickfont_size",
+    "fixclass_short_threshold_ms": "global_fixclass_short_threshold_ms",
+    "fixclass_long_threshold_ms": "global_fixclass_long_threshold_ms",
 }
 _SHARE_FLOAT_PARAMS = {
     "preproc_short_threshold_ms": "global_preproc_short_threshold_ms",
@@ -307,6 +433,9 @@ _SHARE_FLOAT_PARAMS = {
     # UX-86: raw gaze's own style.
     "raw_gaze_marker_size": "global_raw_gaze_marker_size",
     "raw_gaze_opacity": "global_raw_gaze_opacity",
+    # EXP-18: the replay speed. A non-1× speed stamps an Illustration label, so
+    # a link without it reopened a figure that disclosed something else.
+    "playback_speed": "single_playback_speed",
 }
 _SHARE_INT_RANGE_PARAMS = {
     "marker_size_range": "global_marker_size_range",
@@ -357,6 +486,25 @@ _URL_PRESETS = {
     # CMP-11 — same rule again: both are `st.segmented_control` options.
     "cmp_layout": ("single_compare_layout", _parse_compare_layout),
     "cmp_stimulus": ("single_compare_stimulus", _parse_compare_stimulus),
+    # BUG-69 — and for every colour, which Plotly rejects outright.
+    **{k: (_SHARE_VALUE_PARAMS[k], _parse_hex_color) for k in _SHARE_COLOR_PARAMS},
+    # BUG-75 — figure text from a link is text, never markup.
+    "title_pattern": ("global_title_pattern", _strip_markup),
+    "caption_pattern": ("global_caption_pattern", _strip_markup),
+    # EXP-18 — the settings that joined the link, each a closed vocabulary.
+    "playback_speed": ("single_playback_speed", _parse_playback_speed),
+    "colorbar_orientation": (
+        "global_colorbar_orientation",
+        _parse_colorbar_orientation,
+    ),
+    **{
+        f"fixclass_{cat}_{part}": (f"global_fixclass_{cat}_{part}", parse)
+        for cat in ("short", "long", "oob", "blink")
+        for part, parse in (
+            ("mode", _parse_fixclass_mode),
+            ("symbol", _parse_fixclass_symbol),
+        )
+    },
 }
 
 # Widget bounds for the URL-restorable params that feed a min/max-bounded widget
@@ -382,6 +530,17 @@ _URL_BOUNDED = {
     "global_stimulus_image_offset_y": (-5000.0, 5000.0),
     "global_stimulus_image_scale": (0.25, 3.0),
     "global_coordinate_grid_spacing": (10.0, 5000.0),
+    # UX-86 put raw gaze's style on the link without its bounds (BUG-69), so
+    # `?raw_gaze_opacity=5` crashed the slider. Mirrors controls.py's widgets.
+    "global_raw_gaze_marker_size": (1.0, 12.0),
+    "global_raw_gaze_opacity": (0.1, 1.0),
+    # EXP-18: the colour-bar tick sliders, and the fixation-flag thresholds —
+    # a `number_input` with only a minimum, capped at a minute here so a link
+    # cannot carry a number no fixation reaches.
+    "global_colorbar_tickangle": (-90, 90),
+    "global_colorbar_tickfont_size": (6, 20),
+    "global_fixclass_short_threshold_ms": (1, 60_000),
+    "global_fixclass_long_threshold_ms": (1, 60_000),
 }
 
 
@@ -775,6 +934,168 @@ _FONT_BOUNDS = (6, 72)
 _MARKER_BOUNDS = (4, 40)
 
 
+# --- Seeding a stored session value (BUG-71) --------------------------------
+#
+# The recovery cache (`persistence.restore_state`) seeds session state straight
+# from a JSON file on disk, one key at a time, before any widget renders — the
+# same position a deep link is in, without the link's parsers. A value a widget
+# refuses (an opacity of 7, a size range of "abc") or one Plotly refuses (a
+# colour of "zzz") stopped the app on every launch. `sanitize_session_value`
+# holds a stored value to the rules the two readers above already apply:
+# `_URL_BOUNDED` (plus the saved-config-only widget bounds below), the `#rrggbb`
+# colour check, and the closed vocabularies whose widgets raise on anything else.
+
+#: Bounds of the numeric widgets a saved config writes but a link does not carry
+#: — the same limits `_restore_plot_config` clamps to inline.
+_CONFIG_BOUNDED = {
+    "global_canvas_width": _CANVAS_BOUNDS,
+    "global_canvas_height": _CANVAS_BOUNDS,
+    "global_base_font_size": _FONT_BOUNDS,
+    "global_monitor_width_mm": (100.0, 3000.0),
+    "global_viewing_distance_mm": (100.0, 3000.0),
+    "global_display_dpi": (20.0, 1000.0),
+    "global_stimulus_font_pt": (4.0, 144.0),
+    **{f"cmp{i}_opacity": (0.1, 1.0) for i in (0, 1)},
+    **{f"cmp{i}_saccade_width": SACCADE_WIDTH_BOUNDS for i in (0, 1)},
+    **{f"cmp{i}_marker_size_range": _MARKER_BOUNDS for i in (0, 1)},
+}
+_FIXCLASS_CATEGORIES = ("short", "long", "oob", "blink")
+#: Every session key that holds a colour — the link's, plus the ones only a
+#: saved config carries.
+_COLOR_STATE_KEYS = frozenset(
+    {
+        *(_SHARE_VALUE_PARAMS[p] for p in _SHARE_COLOR_PARAMS),
+        *(f"cmp{i}_{part}" for i in (0, 1) for part in ("fix_color", "saccade_color")),
+    }
+)
+#: Keys whose widget is a toggle or checkbox: a stored non-bool is not a setting.
+_BOOL_STATE_KEYS = frozenset(
+    {
+        *_SHARE_TOGGLE_PARAMS.values(),
+        *_PLOT_CONFIG_LAYER_KEYS.values(),
+        "global_use_stimulus_font_pt",
+        "global_show_compare_legend",
+        "single_animate",
+        "single_compare_toggle",
+        "cmp0_hollow",
+        "cmp1_hollow",
+    }
+)
+#: Two-number ranges with no widget bound of their own: the colour ranges are
+#: clamped to the live data by the rail, so they only have to be numbers.
+_FREE_RANGE_STATE_KEYS = frozenset(
+    {"global_fixation_color_range", "global_heatmap_color_range"}
+)
+
+
+def _closed_choice(options) -> Callable[[object], object]:
+    def parse(value):
+        if value not in options:
+            raise ValueError(f"not one of the widget's options: {value!r}")
+        return value
+
+    return parse
+
+
+#: Closed vocabularies — the same sets `_restore_plot_config` checks with
+#: `put_valid`, and the links' own validating parsers where there is one. `None`
+#: passes (a deselected segmented control stores it, and the rail coerces it).
+_CHOICE_STATE_PARSERS = {
+    "global_align_algorithm": _parse_align_algorithm,
+    "global_saccade_classes": lambda v: _parse_saccade_classes(
+        ",".join(str(item) for item in v) if isinstance(v, (list, tuple)) else v
+    ),
+    "single_compare_layout": _parse_compare_layout,
+    "single_compare_stimulus": _parse_compare_stimulus,
+    "single_playback_speed": _parse_playback_speed,
+    **{
+        f"cmp{i}_saccade_style": _closed_choice(tuple(SACCADE_DASH_OPTIONS))
+        for i in (0, 1)
+    },
+    "global_illustration_label": _closed_choice(("Auto", "Show", "Hide")),
+    "global_preproc_short_policy": _closed_choice(
+        ("Off", "Merge", "Merge then discard", "Discard")
+    ),
+    "global_heatmap_style": _closed_choice(
+        ("Word boxes", "Interpolated", "Duration mass")
+    ),
+    "global_heatmap_norm": _closed_choice(("Linear", "Log")),
+    "global_heatmap_metric": _closed_choice(("duration_ms", "counts")),
+    "global_fixation_colorscale": _closed_choice(tuple(COLORSCALES)),
+    "global_heatmap_colorscale": _closed_choice(tuple(COLORSCALES)),
+    "global_saccade_style": _closed_choice(tuple(SACCADE_DASH_OPTIONS)),
+    "global_saccade_render_mode": _closed_choice(("Straight", "Arc")),
+    "global_saccade_color_mode": _closed_choice(tuple(SACCADE_COLOR_MODES)),
+    "global_fixation_symbol": _closed_choice(tuple(FIXATION_SYMBOLS)),
+    "global_colorbar_orientation": _closed_choice(("Vertical", "Horizontal")),
+    "global_critical_span_style": _closed_choice(("Mark text", "Mark border", "None")),
+    "global_palette": _closed_choice((*PALETTES, CUSTOM_PALETTE)),
+    **{
+        f"global_fixclass_{c}_mode": _closed_choice(tuple(_FIXCLASS_MODES))
+        for c in _FIXCLASS_CATEGORIES
+    },
+    **{
+        f"global_fixclass_{c}_symbol": _closed_choice(tuple(_OUT_OF_TEXT_MARKERS))
+        for c in _FIXCLASS_CATEGORIES
+    },
+}
+
+
+def _bounded_number(value, lo, hi):
+    """``value`` as a finite number of the bounds' type, clamped to them."""
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        raise TypeError(f"not a number: {value!r}")
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError(f"not a finite number: {value!r}")
+    if lo is not None:
+        number = max(lo, number)
+    if hi is not None:
+        number = min(hi, number)
+    integral = all(isinstance(b, int) for b in (lo, hi) if b is not None)
+    return int(number) if integral else number
+
+
+def sanitize_session_value(key: str, value):
+    """A stored session value as it may be seeded, or ``ValueError``/``TypeError``.
+
+    For the recovery cache (BUG-71), which has no parser of its own: the caller
+    drops a value this rejects rather than seeding it, so one bad entry costs the
+    user that one setting, never the launch. Numbers and ranges are clamped to
+    their widget's bounds (a range comes back as a sorted tuple, the shape the
+    widgets write); colours must be ``#rrggbb``; toggles must be booleans; closed
+    vocabularies must name an option. A key with no rule — a data-dependent
+    field the rail heals against the loaded data, a trial id, a mapping — passes
+    through unchanged.
+    """
+    if key in _COLOR_STATE_KEYS:
+        if not isinstance(value, str):
+            raise TypeError(f"not a colour: {value!r}")
+        return _parse_hex_color(value)
+    bounds = _URL_BOUNDED.get(key) or _CONFIG_BOUNDED.get(key)
+    if bounds is not None:
+        lo, hi = bounds
+        if key.endswith("_range"):
+            if not isinstance(value, (list, tuple)) or len(value) != 2:
+                raise TypeError(f"not a two-number range: {value!r}")
+            a, b = (_bounded_number(v, lo, hi) for v in value)
+            return (min(a, b), max(a, b))
+        return _bounded_number(value, lo, hi)
+    if key in _FREE_RANGE_STATE_KEYS:
+        if not isinstance(value, (list, tuple)) or len(value) != 2:
+            raise TypeError(f"not a two-number range: {value!r}")
+        a, b = (_bounded_number(v, None, None) for v in value)
+        return (float(min(a, b)), float(max(a, b)))
+    if key in _BOOL_STATE_KEYS:
+        if not isinstance(value, bool):
+            raise TypeError(f"not a switch value: {value!r}")
+        return value
+    parser = _CHOICE_STATE_PARSERS.get(key)
+    if parser is not None and value is not None:
+        return parser(value)
+    return value
+
+
 # --- Save & restore config schema versioning (ENG-11) ---------------------
 #
 # Single source of truth for the "💾 Save & restore" JSON schema version. The
@@ -825,14 +1146,40 @@ def _migrate_config_1_to_2(config: dict) -> dict:
     return config
 
 
+#: The sections that make a saved config a *plot* config, as opposed to a file
+#: that carries only annotations (or only a design library). Their presence is
+#: what licenses the reader — and the 2→3 migration — to fill in defaults for
+#: sections an older build did not write.
+_PLOT_SECTIONS = (
+    "layers",
+    "coloring",
+    "sizing",
+    "canvas_px",
+    "axes",
+    "text",
+    "highlighting",
+)
+
+
+def _has_plot_section(config: dict) -> bool:
+    return any(isinstance(config.get(name), dict) for name in _PLOT_SECTIONS)
+
+
 def _migrate_config_2_to_3(config: dict) -> dict:
     """Upgrade to the optional VIZ-34 coordinate-grid axes fields.
 
     Stamp explicit defaults so a v1/v2 file restores the complete current
-    settings contract without changing its rendered result.
+    settings contract without changing its rendered result — but only a file
+    that *has* plot settings. BUG-73: an annotations-only backup
+    (``{"schema": 2, "annotations": [...]}``) came out of this with an ``axes``
+    section, which made the reader take it for a full plot config and pin the
+    defaults of every section it lacked: restoring your notes reset your grid,
+    illustration label, preprocessing and title to factory settings.
     """
     migrated = dict(config)
     if "axes" in config and not isinstance(config.get("axes"), dict):
+        return migrated
+    if not _has_plot_section(config):
         return migrated
     axes = dict(config.get("axes") or {})
     axes.setdefault("coordinate_grid", False)
@@ -1114,18 +1461,7 @@ def _restore_plot_config(
     # Older valid configs predate the illustration/preprocessing sections. They
     # still need deterministic defaults for the newly frozen state keys, while
     # a document made entirely of wrong-typed sections must remain a true no-op.
-    has_valid_plot_section = any(
-        isinstance(config.get(name), dict)
-        for name in (
-            "layers",
-            "coloring",
-            "sizing",
-            "canvas_px",
-            "axes",
-            "text",
-            "highlighting",
-        )
-    )
+    has_valid_plot_section = _has_plot_section(config)
 
     # Re-apply the saved column mapping + kept-field choices (so restoring a
     # config skips re-mapping). Seeded before the mapping widgets render.
@@ -1457,6 +1793,15 @@ def _restore_plot_config(
             2000,
             "animation frame cap",
         )
+    # BUG-72: the replay speed, against the ⚙ Playback slider's own options.
+    if "playback_speed" in animation:
+        try:
+            put(
+                "single_playback_speed",
+                _parse_playback_speed(animation["playback_speed"]),
+            )
+        except (TypeError, ValueError):
+            skipped.append("playback speed")
 
     canvas = section("canvas_px")
     if "width" in canvas:
@@ -1591,10 +1936,11 @@ def _restore_plot_config(
     labels = section("labels")
     if "show_title_caption" in labels:
         put("global_show_title_caption", bool(labels["show_title_caption"]))
+    # BUG-75: a config can come from someone else, like a link — no markup.
     if isinstance(labels.get("title_pattern"), str):
-        put("global_title_pattern", labels["title_pattern"])
+        put("global_title_pattern", _strip_markup(labels["title_pattern"]))
     if isinstance(labels.get("caption_pattern"), str):
-        put("global_caption_pattern", labels["caption_pattern"])
+        put("global_caption_pattern", _strip_markup(labels["caption_pattern"]))
     elif "labels" not in config and has_valid_plot_section:
         # Pre-EXP-5 configs have no labels block; pin the off defaults so the
         # frozen state-key set is still fully written.
@@ -1621,14 +1967,16 @@ def _restore_plot_config(
     # Fixation classification (PRE-2): short/long/out-of-bounds highlight or discard.
     flags = highlighting.get("fixation_flags")
     if isinstance(flags, dict):
-        for cat in ("short", "long", "oob"):
+        # BUG-72: `blink` too — the writer has always saved all four categories,
+        # and the reader used to drop the fourth.
+        for cat in _FIXCLASS_CATEGORIES:
             spec = flags.get(cat)
             if not isinstance(spec, dict):
                 continue
             mode = spec.get("mode")
             if mode in _FIXCLASS_MODES:
                 put(f"global_fixclass_{cat}_mode", mode)
-            if cat != "oob" and spec.get("threshold_ms") is not None:
+            if cat in ("short", "long") and spec.get("threshold_ms") is not None:
                 try:
                     put(
                         f"global_fixclass_{cat}_threshold_ms",
@@ -1661,6 +2009,20 @@ def _restore_plot_config(
     if isinstance(sbc, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", sbc):
         put("global_span_border_color", sbc)
 
+    # VIZ-43 — raw gaze's own style. The section's `available` / `points`
+    # describe the trial the config was saved on, not a setting. Absent in a
+    # config saved before this existed, which keeps the seeded defaults.
+    raw_gaze = section("raw_gaze")
+    rg_color = raw_gaze.get("color")
+    if isinstance(rg_color, str) and _HEX_COLOR.fullmatch(rg_color):
+        put("global_raw_gaze_color", rg_color)
+    for cfg_key, state_key, label in (
+        ("marker_size", "global_raw_gaze_marker_size", "raw gaze marker size"),
+        ("opacity", "global_raw_gaze_opacity", "raw gaze opacity"),
+    ):
+        if cfg_key in raw_gaze:
+            put_float(raw_gaze[cfg_key], state_key, *_URL_BOUNDED[state_key], label)
+
     # CMP-11 — the compare *view* (layout + whose stimulus an overlay draws).
     # Validated against the segmented controls' exact options for the same
     # reason the URL params are: seeding a value outside them makes the widget
@@ -1668,6 +2030,9 @@ def _restore_plot_config(
     # restores unchanged and no schema bump is needed.
     compare_view = config.get("compare_view")
     if isinstance(compare_view, dict):
+        # BUG-72: the A/B legend switch rides in the same section.
+        if "legend" in compare_view:
+            put("global_show_compare_legend", bool(compare_view["legend"]))
         for field, options, label in (
             ("layout", _COMPARE_LAYOUT_OPTIONS, "compare layout"),
             ("stimulus", _COMPARE_STIMULUS_OPTIONS, "compare stimulus source"),
@@ -1730,7 +2095,8 @@ def _restore_plot_config(
                 )
             # UX-31: the A/B legend label override.
             if isinstance(entry.get("label_pattern"), str):
-                put(f"cmp{idx}_label_pattern", entry["label_pattern"])
+                # BUG-75: legend text is figure text too.
+                put(f"cmp{idx}_label_pattern", _strip_markup(entry["label_pattern"]))
 
     selection = section("selection")
     if selection:
@@ -2083,9 +2449,12 @@ def _build_share_query(
         params["tab"] = "animation"
 
     # DATA-22 §7 surface 2: a compact provenance badge for the recording setup.
-    # A link carries the *values* (canvas, mm, font) already; without this the
-    # recipient cannot tell a monitor the sender measured from one the app
-    # assumed on their behalf. Metadata about settings, not a setting — it takes
+    # The link carries none of the setup's *values* — canvas, monitor mm and base
+    # font travel only in the 💾 saved config (EXP-18), so the recipient draws
+    # with the corpus' own declared setup — but it does carry how the sender's
+    # setup was known: without this the recipient cannot tell a monitor the
+    # sender measured from one the app assumed on their behalf. Metadata about
+    # settings, not a setting — it takes
     # no input and changes no figure, which is why it stops here and never
     # becomes a `render` flag or a builder argument.
     from scanpath_studio.app import active_setup_snapshot
@@ -2405,6 +2774,13 @@ def _render_share_body(data_choice: str) -> None:
     for note in caveats:
         st.caption("⚠️ " + note)
     _render_share_link_widget(query)
+    # EXP-18: say what the link leaves out, rather than let a figure reopen at
+    # the recipient's own canvas and font without a word.
+    st.caption(
+        "The recording setup (canvas, base font size, monitor) and Compare's "
+        "per-scanpath styles aren't in the link — they travel in a 💾 Session → "
+        "JSON backup."
+    )
     st.caption(
         "If the recipient runs Scanpath Studio at a different address or port, "
         "replace the start of the URL before opening it."

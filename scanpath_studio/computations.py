@@ -296,7 +296,11 @@ REGISTER: tuple[Computation, ...] = (
         name="Out-of-text flag",
         category=CATEGORY_ASSIGNMENT,
         summary="Whether a fixation landed on any word of the stimulus.",
-        formula="`word_id` is not NaN after `assign.fixation_to_word`.",
+        formula=(
+            "The fixation falls inside some word box (`word_box_bounds`). Box "
+            "containment only — a fixation the 50 px nearest-centre fallback of "
+            "`assign.fixation_to_word` gives a word still counts as out-of-text."
+        ),
         code="scanpath_studio/measures.py:fixation_in_text_mask",
         output="bool mask",
         tiers="A, C",
@@ -384,13 +388,22 @@ REGISTER: tuple[Computation, ...] = (
         id="measure.ffd",
         name="First fixation duration (FFD)",
         category=CATEGORY_MEASURE,
-        summary="Duration of the first fixation on a word during first pass.",
-        formula="Duration of the first fixation of the word's first-pass run.",
+        summary="Duration of the first fixation on a word.",
+        formula=(
+            "Duration of the word's first fixation, whenever it comes — as "
+            "EyeLink's `IA_FIRST_FIXATION_DURATION`, so a computed and an "
+            "imported value mean the same. Not conditioned on first pass: a word "
+            "first reached by a regression has an FFD and `skip_flag = True`; "
+            "filter on `skip_flag` for first-pass-only analyses."
+        ),
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="first_fixation_ms",
         unit="ms",
         grouping="(participant, trial, word)",
-        missing="Skipped word ⇒ NaN, not 0.",
+        missing=(
+            "Never fixated ⇒ NaN, not 0 — an imported 0 on a word with no "
+            "fixations is blanked too (BUG-63)."
+        ),
         precedence="A precomputed `IA_FIRST_FIXATION_DURATION` wins.",
         tiers="A, D",
         status=STATUS_PARTIAL,
@@ -405,13 +418,16 @@ REGISTER: tuple[Computation, ...] = (
         summary="Sum of first-pass fixations on a word.",
         formula=(
             "Sum of every fixation in the word's **first** run, i.e. before the "
-            "gaze leaves the word for the first time."
+            "gaze leaves the word for the first time — whenever that run starts "
+            "(EyeLink's `IA_FIRST_RUN_DWELL_TIME`; not conditioned on first pass, "
+            "as `measure.ffd`). A fixation outside every word ends the run "
+            "(BUG-66), as it does for `measure.second_pass`."
         ),
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="first_pass_gaze_duration_ms",
         unit="ms",
         grouping="(participant, trial, word)",
-        missing="Skipped word ⇒ NaN.",
+        missing="Never fixated ⇒ NaN (an imported 0 is blanked, BUG-63).",
         precedence="A precomputed IA gaze duration wins.",
         tiers="A, D",
         status=STATUS_PARTIAL,
@@ -425,15 +441,18 @@ REGISTER: tuple[Computation, ...] = (
         category=CATEGORY_MEASURE,
         summary="First entry to the word until the gaze passes it to the right.",
         formula=(
-            "Total time from the first first-pass fixation on the word until the "
-            "first fixation on a **later** word — including any regressions to "
-            "earlier words in between."
+            "Total time from the word's first fixation until the first fixation "
+            "on a **later** word — every fixation in between, including a first "
+            "visit to an earlier, skipped word during the regression (BUG-61). "
+            "Matches EyeLink's `IA_REGRESSION_PATH_DURATION` on 1779 of the "
+            "bundled demo's 1780 fixated words. Fixations outside every word "
+            "neither extend nor close the window."
         ),
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="regression_path_duration_ms",
         unit="ms",
         grouping="(participant, trial, word)",
-        missing="Skipped word ⇒ NaN.",
+        missing="Never fixated ⇒ NaN (an imported 0 is blanked, BUG-63).",
         tiers="A",
         status=STATUS_PARTIAL,
         reference=(
@@ -496,8 +515,10 @@ REGISTER: tuple[Computation, ...] = (
         summary="Whether a word was returned to, or left backwards.",
         formula=(
             "`regression_in_flag` — some later fixation lands on this word after "
-            "the gaze had moved past it. `regression_out_flag` — a fixation on "
-            "this word is followed by a fixation on an earlier word."
+            "the gaze had moved past it. `regression_out_flag` — a regression "
+            "to an earlier word is made from this word during first pass, before "
+            "the eyes first leave it forwards (EyeLink's `IA_REGRESSION_OUT`, "
+            "BUG-64); a regression from it later in the trial does not count."
         ),
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="regression_in_flag, regression_out_flag",
@@ -516,14 +537,17 @@ REGISTER: tuple[Computation, ...] = (
         formula=(
             "`char_width = geom.word_char_advance`; "
             "`offset = first_fix_x − word.x` (LTR) or "
-            "`word.x + width − first_fix_x` (RTL); "
+            "`word.x + n·advance − first_fix_x` (RTL, BUG-27); "
             "`landing_position = offset / char_width + 1` — so the first letter "
             "starts at 1 and its centre is 1.5."
         ),
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="initial_landing_position",
         unit="letters",
-        missing="No first-pass fixation, zero width, or no text ⇒ NaN.",
+        missing=(
+            "Never fixated, zero width, or no text ⇒ NaN. Measured from the "
+            "word's first fixation, first pass or not (as `measure.ffd`)."
+        ),
         precedence=(
             "VAL-5: the scale is `geom.word_char_advance`, not the local "
             "`width / len(text)` this used before — on a tiling corpus that "
@@ -544,7 +568,10 @@ REGISTER: tuple[Computation, ...] = (
         name="Centred landing distance",
         category=CATEGORY_MEASURE,
         summary="Landing position relative to the word's centre.",
-        formula="`landing_position − (len(text) + 1) / 2`.",
+        formula=(
+            "`landing_position − (1 + len(text) / 2)` — the glyphs span "
+            "`[1, n + 1)`, so that is the word's centre (BUG-65)."
+        ),
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="initial_landing_distance",
         unit="letters (0 = word centre, negative = left of centre)",
@@ -563,7 +590,11 @@ REGISTER: tuple[Computation, ...] = (
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="second_pass_duration_ms",
         unit="ms",
-        missing="Fewer than two passes ⇒ 0.",
+        missing=(
+            "Fewer than two runs ⇒ 0 — an imported blank "
+            "`IA_SECOND_RUN_DWELL_TIME` is filled with 0 too, so the mean means "
+            "the same whichever source the value came from."
+        ),
         tiers="A",
         status=STATUS_PARTIAL,
         consumers=(_UI, _API, _EXPORT, _CORPUS),
@@ -578,7 +609,7 @@ REGISTER: tuple[Computation, ...] = (
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="single_fixation_duration_ms",
         unit="ms",
-        missing="Multi-fixation or skipped first pass ⇒ NaN.",
+        missing="A first run of more than one fixation, or never fixated ⇒ NaN.",
         tiers="A",
         status=STATUS_PARTIAL,
         reference="Rayner (1998).",
@@ -590,10 +621,14 @@ REGISTER: tuple[Computation, ...] = (
         name="Regressions into word",
         category=CATEGORY_MEASURE,
         summary="How many times the gaze came back to this word.",
-        formula="Number of runs on the word after the first.",
+        formula=(
+            "Number of regressions into the word — entries from a later word "
+            "(EyeLink's `IA_REGRESSION_IN_COUNT`). A re-entry from an *earlier* "
+            "word is a new run but not a regression in."
+        ),
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="number_of_regressions_in",
-        missing="Never revisited ⇒ 0.",
+        missing="Never regressed into ⇒ 0.",
         tiers="A",
         status=STATUS_PARTIAL,
         consumers=(_UI, _API, _EXPORT, _CORPUS),

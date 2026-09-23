@@ -9,8 +9,8 @@ Use the trial picker on the control line above the plot. The filter funnel
 beside it holds every way to narrow the pool — pickers for text and participant
 at the top (*All texts* / *All participants* until you choose), then the
 condition and annotation filters — and the ⇅ popover orders the list, which helps
-surface long, short, early, or late trials. The detail popover shows the active
-trial's summary fields.
+surface long, short, early, or late trials. The chip strip under the picker
+shows the active trial's summary fields.
 
 When a trial contains ordered screens, a second navigator appears below the
 trial picker. The plot always shows one screen in its own recorded canvas; use
@@ -20,7 +20,7 @@ choose parent-trial or current-screen scope.
 
 ## Control the layers
 
-The **Plot controls** rail beside the plot starts with four **Quick views**
+The **Plot controls** rail beside the plot starts with four **Design presets**
 (👁️ Scanpath, 🔥 Heatmap, ✏️ Illustration, 🛠️ Custom) and a **Palette** — often
 all you need — followed by seven sections:
 
@@ -64,18 +64,18 @@ The grid is off by default and does not shrink or rescale the spatial data area.
 ## Filter fixations and saccades
 
 One **🧹 Filter** section thins the whole figure, in two blocks. Not to be
-confused with the 🔎 funnel on the control line above the plot, which narrows the
+confused with the filter funnel on the control line above the plot, which narrows the
 *trial pool* — which readings you can pick; this one thins the reading you are
 looking at.
 
 **👁️ Fixations** contains duration thresholds, out-of-bounds handling, and the
-fixation-index range. Marking preserves context; discarding removes points from
+fixation-index range. **Highlight** keeps flagged fixations in view, marked; **Discard** removes them from
 the rendered scanpath.
 
 **↗️ Saccades** picks which reading classes are drawn at all — forward,
 skip, refixation, return sweep, regression. Hidden classes lose their line
 *and* their direction arrow, which is how you get a regressions-only figure.
-Classes come from the same split as Saccades → ⚙️ Style → **By type**, so the two
+Classes come from the same split as the **By type** colouring in the ↗️ Saccades **▾** menu, so the two
 always agree on what a regression is; clearing the list means *no filter*, not
 an empty plot. The section shows a badge while either half is narrowing, so a
 thinned figure never looks like missing data.
@@ -85,7 +85,7 @@ computation.
 
 ## Replay and compare
 
-- **Animate** replays the selected trial. **⚙ Playback** controls speed,
+- **Animate** replays the selected trial. The **▾** beside it controls speed,
   autoplay, and frame quality.
 - **Compare** adds a second reading beside the selected one.
 - **Comparisons** shows trials whose chosen field matches the selected trial.
@@ -96,14 +96,14 @@ computation.
 
 **Compare with** (the first control on scanpath B's line, directly under the
 dataset picker on your own) chooses which dataset scanpath B comes from. It
-defaults to *This dataset*; pick another and the candidate list, the 🔎 filters
+defaults to *This dataset*; pick another and the candidate list, the filter funnel
 at the end of B's line, and the trial's screen geometry all come from that
 dataset instead.
 
 B's line is the same shape as the trial line above it — dataset, trial, scrub
-slider, then ◀ ▶ ⇅ and 🔎 — so the two read down the page as one pair of
-controls. B's 🔎 appears only when B has a dataset of its own to narrow;
-under *This dataset* the candidates come out of the pool your own 🔎 defines.
+slider, then ◀ ▶ ⇅ and the funnel — so the two read down the page as one pair of
+controls. B's funnel appears only when B has a dataset of its own to narrow;
+under *This dataset* the candidates come out of the pool your own funnel defines.
 
 Any loaded upload, the bundled demo and the synthetic trial are always
 available. A public corpus is offered too, but only loads when its files are
@@ -147,7 +147,7 @@ readings on one clock, which is an overlay, so it needs the same shared screen.
 
 #### Whose text does an overlay show?
 
-**Stimulus from** (⚙️ *Compare options*, overlay only) picks which reading
+**Stimulus from** (in the **▾** beside Compare, overlay only) picks which reading
 supplies the word boxes and text: **Both**, **A**, or **B**. Two datasets' word
 boxes line up only when the text, font and wrapping are identical, so across
 corpora *Both* often draws two offset sets of rectangles under the two traces.

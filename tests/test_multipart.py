@@ -397,3 +397,24 @@ def test_ux47_screen_steps_live_in_a_railbtn_cluster():
     assert 'trail.button(\n        "▶"' in source
     # ...and the shared rule must actually match that key.
     assert '[class*="st-key-railbtn_"] {' in get_app_css()
+
+
+def test_a_stamped_screen_order_survives_a_mapping_that_does_not_name_it():
+    """BUG-79: UX-88 took `screen_index` out of the mapping, trusting the corpora
+    that stamp it onto their frames — but normalization rebuilt the frame from
+    the mapping, so the stamp was dropped and order re-derived from row order.
+    MultiplEYE's per-reader question order then disagreed between the tables and
+    the 🗂️ Data page crashed. A schema without `screen_index` must keep it."""
+    from scanpath_studio.data import normalize_words, propose_word_schema
+
+    words, _ = make_multipart_synthetic_data()
+    # Rows in the *reverse* of the recorded screen order: row order is what
+    # the stamp has to beat.
+    stamped = words.assign(
+        screen_index=words[SCREEN_ID].map({"intro": 1, "question": 2})
+    ).iloc[::-1]
+    schema = propose_word_schema(stamped)
+    schema.pop("screen_index", None)
+    out = normalize_words(stamped, schema)
+    order = out.drop_duplicates(SCREEN_ID).set_index(SCREEN_ID)["screen_index"]
+    assert order.to_dict() == {"intro": 1, "question": 2}

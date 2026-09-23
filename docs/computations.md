@@ -241,7 +241,7 @@ The single highest-risk step: which word a fixation counts for.
 
 Whether a fixation landed on any word of the stimulus.
 
-**Formula.** `word_id` is not NaN after `assign.fixation_to_word`.
+**Formula.** The fixation falls inside some word box (`word_box_bounds`). Box containment only — a fixation the 50 px nearest-centre fallback of `assign.fixation_to_word` gives a word still counts as out-of-text.
 
 | | |
 | --- | --- |
@@ -470,16 +470,16 @@ Line-assignment algorithms, ported natively (PRE-3).
 
 ### `measure.ffd` — First fixation duration (FFD)
 
-Duration of the first fixation on a word during first pass.
+Duration of the first fixation on a word.
 
-**Formula.** Duration of the first fixation of the word's first-pass run.
+**Formula.** Duration of the word's first fixation, whenever it comes — as EyeLink's `IA_FIRST_FIXATION_DURATION`, so a computed and an imported value mean the same. Not conditioned on first pass: a word first reached by a regression has an FFD and `skip_flag = True`; filter on `skip_flag` for first-pass-only analyses.
 
 | | |
 | --- | --- |
 | **Output** | first_fixation_ms |
 | **Unit** | ms |
 | **Grouping / ordering** | (participant, trial, word) |
-| **Missing & edge cases** | Skipped word ⇒ NaN, not 0. |
+| **Missing & edge cases** | Never fixated ⇒ NaN, not 0 — an imported 0 on a word with no fixations is blanked too (BUG-63). |
 | **Precedence & caveats** | A precomputed `IA_FIRST_FIXATION_DURATION` wins. |
 | **Reference** | Rayner (1998), standard reading-measure definitions. |
 | **Code** | `scanpath_studio/measures.py:compute_per_word_measures` |
@@ -491,14 +491,14 @@ Duration of the first fixation on a word during first pass.
 
 Sum of first-pass fixations on a word.
 
-**Formula.** Sum of every fixation in the word's **first** run, i.e. before the gaze leaves the word for the first time.
+**Formula.** Sum of every fixation in the word's **first** run, i.e. before the gaze leaves the word for the first time — whenever that run starts (EyeLink's `IA_FIRST_RUN_DWELL_TIME`; not conditioned on first pass, as `measure.ffd`). A fixation outside every word ends the run (BUG-66), as it does for `measure.second_pass`.
 
 | | |
 | --- | --- |
 | **Output** | first_pass_gaze_duration_ms |
 | **Unit** | ms |
 | **Grouping / ordering** | (participant, trial, word) |
-| **Missing & edge cases** | Skipped word ⇒ NaN. |
+| **Missing & edge cases** | Never fixated ⇒ NaN (an imported 0 is blanked, BUG-63). |
 | **Precedence & caveats** | A precomputed IA gaze duration wins. |
 | **Reference** | Rayner (1998). |
 | **Code** | `scanpath_studio/measures.py:compute_per_word_measures` |
@@ -510,14 +510,14 @@ Sum of first-pass fixations on a word.
 
 First entry to the word until the gaze passes it to the right.
 
-**Formula.** Total time from the first first-pass fixation on the word until the first fixation on a **later** word — including any regressions to earlier words in between.
+**Formula.** Total time from the word's first fixation until the first fixation on a **later** word — every fixation in between, including a first visit to an earlier, skipped word during the regression (BUG-61). Matches EyeLink's `IA_REGRESSION_PATH_DURATION` on 1779 of the bundled demo's 1780 fixated words. Fixations outside every word neither extend nor close the window.
 
 | | |
 | --- | --- |
 | **Output** | regression_path_duration_ms |
 | **Unit** | ms |
 | **Grouping / ordering** | (participant, trial, word) |
-| **Missing & edge cases** | Skipped word ⇒ NaN. |
+| **Missing & edge cases** | Never fixated ⇒ NaN (an imported 0 is blanked, BUG-63). |
 | **Reference** | Definitions differ across toolkits (go-past vs regression path); #PRE-4 names `eyekit` as the intended comparison. Unresolved until #VAL-4 runs. |
 | **Code** | `scanpath_studio/measures.py:compute_per_word_measures` |
 | **Consumers** | UI, API, CLI, Export, Corpus Analysis |
@@ -576,7 +576,7 @@ Whether a word received no first-pass fixation.
 
 Whether a word was returned to, or left backwards.
 
-**Formula.** `regression_in_flag` — some later fixation lands on this word after the gaze had moved past it. `regression_out_flag` — a fixation on this word is followed by a fixation on an earlier word.
+**Formula.** `regression_in_flag` — some later fixation lands on this word after the gaze had moved past it. `regression_out_flag` — a regression to an earlier word is made from this word during first pass, before the eyes first leave it forwards (EyeLink's `IA_REGRESSION_OUT`, BUG-64); a regression from it later in the trial does not count.
 
 | | |
 | --- | --- |
@@ -592,13 +592,13 @@ Whether a word was returned to, or left backwards.
 
 Where in the word the first fixation landed, in letters.
 
-**Formula.** `char_width = geom.word_char_advance`; `offset = first_fix_x − word.x` (LTR) or `word.x + width − first_fix_x` (RTL); `landing_position = offset / char_width + 1` — so the first letter starts at 1 and its centre is 1.5.
+**Formula.** `char_width = geom.word_char_advance`; `offset = first_fix_x − word.x` (LTR) or `word.x + n·advance − first_fix_x` (RTL, BUG-27); `landing_position = offset / char_width + 1` — so the first letter starts at 1 and its centre is 1.5.
 
 | | |
 | --- | --- |
 | **Output** | initial_landing_position |
 | **Unit** | letters |
-| **Missing & edge cases** | No first-pass fixation, zero width, or no text ⇒ NaN. |
+| **Missing & edge cases** | Never fixated, zero width, or no text ⇒ NaN. Measured from the word's first fixation, first pass or not (as `measure.ffd`). |
 | **Precedence & caveats** | VAL-5: the scale is `geom.word_char_advance`, not the local `width / len(text)` this used before — on a tiling corpus that divided a box of `n + 1` advances by `n` characters, reporting every landing ~`(n+1)/n` too far into the word. |
 | **Reference** | Assumes a monospaced advance within the word box — exact for the app's monospace default, approximate for proportional fonts. |
 | **Code** | `scanpath_studio/measures.py:compute_per_word_measures` |
@@ -610,7 +610,7 @@ Where in the word the first fixation landed, in letters.
 
 Landing position relative to the word's centre.
 
-**Formula.** `landing_position − (len(text) + 1) / 2`.
+**Formula.** `landing_position − (1 + len(text) / 2)` — the glyphs span `[1, n + 1)`, so that is the word's centre (BUG-65).
 
 | | |
 | --- | --- |
@@ -632,7 +632,7 @@ Time spent on the word during its second visit.
 | --- | --- |
 | **Output** | second_pass_duration_ms |
 | **Unit** | ms |
-| **Missing & edge cases** | Fewer than two passes ⇒ 0. |
+| **Missing & edge cases** | Fewer than two runs ⇒ 0 — an imported blank `IA_SECOND_RUN_DWELL_TIME` is filled with 0 too, so the mean means the same whichever source the value came from. |
 | **Code** | `scanpath_studio/measures.py:compute_per_word_measures` |
 | **Consumers** | UI, API, Export, Corpus Analysis |
 | **Tests** | `tests/test_measures.py` |
@@ -648,7 +648,7 @@ First-pass duration when the first pass was exactly one fixation.
 | --- | --- |
 | **Output** | single_fixation_duration_ms |
 | **Unit** | ms |
-| **Missing & edge cases** | Multi-fixation or skipped first pass ⇒ NaN. |
+| **Missing & edge cases** | A first run of more than one fixation, or never fixated ⇒ NaN. |
 | **Reference** | Rayner (1998). |
 | **Code** | `scanpath_studio/measures.py:compute_per_word_measures` |
 | **Consumers** | UI, API, Export, Corpus Analysis |
@@ -659,12 +659,12 @@ First-pass duration when the first pass was exactly one fixation.
 
 How many times the gaze came back to this word.
 
-**Formula.** Number of runs on the word after the first.
+**Formula.** Number of regressions into the word — entries from a later word (EyeLink's `IA_REGRESSION_IN_COUNT`). A re-entry from an *earlier* word is a new run but not a regression in.
 
 | | |
 | --- | --- |
 | **Output** | number_of_regressions_in |
-| **Missing & edge cases** | Never revisited ⇒ 0. |
+| **Missing & edge cases** | Never regressed into ⇒ 0. |
 | **Code** | `scanpath_studio/measures.py:compute_per_word_measures` |
 | **Consumers** | UI, API, Export, Corpus Analysis |
 | **Tests** | `tests/test_measures.py` |

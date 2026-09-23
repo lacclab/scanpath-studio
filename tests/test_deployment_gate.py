@@ -109,3 +109,46 @@ class TestTheAllowRoot:
         resolved = _resolve_data_dir("data/OneStop")
         assert resolved.endswith("/data/OneStop")
         assert resolved.startswith("/")
+
+
+def _servable_app():
+    import streamlit as st
+
+    from scanpath_studio.tabs import _servable_image_path
+
+    st.session_state["_datasets"] = {"my upload": {}}
+    st.session_state["answer"] = _servable_image_path(st.session_state["probe_path"])
+
+
+class TestUploadedImagePaths:
+    """ENG-57: the stimulus layer reads ``image_path`` off the server's disk and
+    sends it to the browser. With local access off, an uploaded table's
+    ``image_path`` must not reach that read — it let an upload exfiltrate any PNG
+    on the server (a real file with a secret appended came back base64-encoded)."""
+
+    def _answer(self, source, path="/srv/secret.png"):
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_function(_servable_app)
+        at.session_state["data_source_choice"] = source
+        at.session_state["probe_path"] = path
+        at.run()
+        assert not at.exception, at.exception
+        return at.session_state["answer"]
+
+    def test_an_upload_on_a_shared_deployment_reads_nothing(self, monkeypatch):
+        monkeypatch.setenv(LOCAL_FS_ENV, "0")
+        assert self._answer("my upload") is None
+
+    def test_an_upload_in_progress_reads_nothing_either(self, monkeypatch):
+        from scanpath_studio.constants import UPLOAD_CHOICE
+
+        monkeypatch.setenv(LOCAL_FS_ENV, "0")
+        assert self._answer(UPLOAD_CHOICE) is None
+
+    def test_a_server_side_source_keeps_its_images(self, monkeypatch):
+        monkeypatch.setenv(LOCAL_FS_ENV, "0")
+        assert self._answer("Bundled demo") == "/srv/secret.png"
+
+    def test_a_local_run_keeps_an_uploads_images(self):
+        assert self._answer("my upload") == "/srv/secret.png"

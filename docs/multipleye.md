@@ -1,8 +1,8 @@
 # MultiplEYE dataset
 
 [MultiplEYE](https://multipleye.eu/) is a large multilingual eye-tracking-while-reading
-corpus. Scanpath Studio has first-class support for loading it, both from a local
-directory and via the browser-upload wizard. This page covers how the corpus is
+corpus. Scanpath Studio has first-class support for loading it from a local
+directory. This page covers how the corpus is
 structured and the modelling decisions the loader makes; the implementation lives
 in [`datasets.py`](https://github.com/lacclab/scanpath-studio/blob/main/scanpath_studio/datasets.py)
 and [`data.py`](https://github.com/lacclab/scanpath-studio/blob/main/scanpath_studio/data.py).
@@ -13,9 +13,10 @@ MultiplEYE is exposed as a **Public dataset**, which is on by default. To hide
 the public-dataset sources (e.g. on a deployment that should only take uploads),
 set `SCANPATH_PUBLIC_DATASETS=0`.
 
-On the 🗂️ **Data** page, pick **MultiplEYE** as the data source, point
-*Data directory* at a session set (the *Expected files* panel lists the layout it
-looks for), and choose the **fixation source** (`scanpaths` or `fixations`). The
+On the 🗂️ **Data** page, click **MultiplEYE** in **📂 Available datasets**, then
+**✏️ Edit** it: point *Data directory* at a session set (the *Expected files*
+panel lists the layout it looks for) and choose the **fixation source**
+(`scanpaths` or `fixations`). The
 whole session set loads — use the **filter funnel** beside the trial picker
 (text and participant pickers, then the condition filters) to focus on specific
 readers or stimuli. A
@@ -53,7 +54,7 @@ canonical schema:
   screens the reader saw are `screen_id` values — `page_1 … page_N` and
   `question_<id>` — each with its own coordinate space. Step through them with
   the screen navigator beside the trial picker, `?screen=` on a share link,
-  `render --screen` / `--all-screens` / `--list-screens`, or
+  `render --screen` / `--all-screens` / `--list-parts`, or
   `plot_scanpath(..., screen=…)`. Pages reuse the same on-screen coordinates, so
   screens (never a merged trial) are what keeps them from stacking.
 - **`screen_index` comes from the reader's own fixation onsets**, never from the
@@ -100,7 +101,7 @@ When loading from a directory, several extra surfaces are populated by enriching
 the loaded frames so the app's existing panels render them:
 
 - **Reader metadata** from `participant_data.csv` (age, gender, languages, …) →
-  Trial Info chips and Corpus Analysis grouping facets.
+  the trial chip strip and Corpus Analysis grouping facets.
 - **Comprehension questions** from `multipleye_comprehension_questions_*.xlsx` →
   the Stimulus & Context panel, joined by stimulus.
 - **Pre-computed reading measures** from `reading_measures/` → canonical `IA_*`
@@ -146,7 +147,14 @@ the loaded frames so the app's existing panels render them:
 
 ## Uploading via the browser
 
-The Add-dataset wizard has a **Dataset format** selector with a **MultiplEYE**
+!!! note "Held back in this release"
+    The Add-dataset wizard's **Dataset format** selector — and with it the
+    **MultiplEYE** upload preset below — is hidden unless the app is started
+    with `SCANPATH_EXPERIMENTAL=1` (UX-114). Every upload otherwise goes through
+    the generic flow. The same path is available headlessly as
+    `datasets.load_multipleye_uploads`.
+
+With it enabled, the wizard's **Dataset format** selector offers a **MultiplEYE**
 preset. Because browsers strip folder structure, identity is recovered from each
 row's `source_file`; the lowercase AOI filenames are case-matched to the
 CamelCase fixation stimuli. Reading measures and stimulus images require the full

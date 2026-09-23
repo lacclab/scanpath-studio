@@ -169,6 +169,15 @@ def compare_palette_color(idx: int) -> str:
     return COMPARISON_PALETTE[idx % len(COMPARISON_PALETTE)]
 
 
+#: Each comparison scanpath's default marker alpha, shared the same way: the
+#: rail seeds ``cmp{idx}_opacity`` from it (``controls._seed_compare_styles``)
+#: and the builder falls back to it (``plots._comparison_scanpath_style``).
+#: CMP-20: the builder's own 1.0 was what every headless ``compare_scanpaths`` /
+#: ``render --compare-with`` drew, so the default comparison differed from the
+#: app's. 0.7 matches the single-trial default, so overlaps show through.
+COMPARE_FIXATION_OPACITY = 0.7
+
+
 # Saccade line styles offered in the plot rail. Maps the friendly UI label to the
 # Plotly ``line.dash`` value used in the figure builders.
 SACCADE_DASH_OPTIONS = {
@@ -579,12 +588,10 @@ ONESTOP_CHOICE = "OneStop server bundle"
 ONESTOP_PUBLIC_CHOICE = "OneStop — 360-participant English corpus"
 ONESTOP_PUBLIC_DEFAULT_DIR = "data/OneStop"
 # Default folder for the lacclab OneStop variant (a lab-processed local export;
-# superset schema, no download). Path-editable on the 🗂️ Data page and overridable via
-# the `ONESTOP_LACCLAB_DIR` env var — never the *only* option, just the default.
-ONESTOP_LACCLAB_DEFAULT_DIR = (
-    "/Users/shubi/Library/CloudStorage/OneDrive-Technion/In-lab Experiments/"
-    "OneStopGaze L1 English/Reports/lacclab"
-)
+# superset schema, no download). Blank: ENG-60 — it was one maintainer's own
+# OneDrive path, prefilled into the Data directory box for every user who picked
+# the option. Set `ONESTOP_LACCLAB_DIR`, or type the path on the 🗂️ Data page.
+ONESTOP_LACCLAB_DEFAULT_DIR = ""
 ONESTOP_REGIME_LABELS = {
     "ordinary": "Ordinary reading",
     "information_seeking": "Information seeking",

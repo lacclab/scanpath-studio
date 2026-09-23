@@ -1976,7 +1976,11 @@ def bulk_export(
 
     if options.include_mega_table and (mega_fixations or mega_measures):
         for fmt in options.table_formats():
-            if mega_fixations:
+            # EXP-15: the full family writes its own, word-enriched
+            # `all_fixations` below — the same rule the per-trial `fixations`
+            # file follows above. Writing both put two members with one name in
+            # the zip, and a reader keeps only one of them, silently.
+            if mega_fixations and not options.include_analysis_family:
                 progress.bytes_written += _write_table(
                     zf,
                     f"aggregate/all_fixations.{fmt}",

@@ -7,7 +7,7 @@
 [![Docs](https://img.shields.io/badge/docs-mkdocs-blue)](https://lacclab.github.io/scanpath-studio/)
 [![CI](https://github.com/lacclab/scanpath-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/lacclab/scanpath-studio/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Flacclab.github.io%2Fscanpath-studio%2Fcoverage%2Fbadge.json)](https://lacclab.github.io/scanpath-studio/coverage/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/lacclab/scanpath-studio/blob/main/LICENSE)
 
 An interactive workbench for visualizing **eye-tracking-while-reading** data.
 Drop in a trial and see the scanpath the way the reader saw it — words at their
@@ -58,7 +58,7 @@ On top of that:
 
 *Two readers of the same bundled-demo paragraph, overlaid on one canvas — 305
 fixations between them
-([watch it animated](https://lacclab.github.io/scanpath-studio/#the-app-in-one-paragraph)).*
+([watch it animated](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/docs/assets/demo_dual_scanpath.gif)).*
 
 The app is organized into three views, chosen from the navigation in the header
 (💾 **Session** and ❓ **Help** sit beside them and open over whatever you are
@@ -147,13 +147,13 @@ HTML export is browser-free; PNG/SVG/PDF/GIF/MP4 go through Kaleido (run
 git clone https://github.com/lacclab/scanpath-studio.git
 cd scanpath-studio
 pip install -e ".[test]"          # or: uv sync
-streamlit run streamlit_app.py
+streamlit run streamlit_app.py --server.address 127.0.0.1
 ```
 
 Tested on Python 3.11–3.14. Run the tests with `uv run pytest`; see
-[AGENTS.md](AGENTS.md) for an architectural overview.
+[AGENTS.md](https://github.com/lacclab/scanpath-studio/blob/main/AGENTS.md) for an architectural overview.
 
-Joining the project? [CONTRIBUTING.md](CONTRIBUTING.md) is the whole of it —
+Joining the project? [CONTRIBUTING.md](https://github.com/lacclab/scanpath-studio/blob/main/CONTRIBUTING.md) is the whole of it —
 setup, where the work is tracked
 ([GitHub Issues](https://github.com/lacclab/scanpath-studio/issues)), the checks
 that gate CI, and how two people stay out of each other's way.
@@ -173,7 +173,7 @@ mkdocs serve
 
 A system-demo paper is in preparation — **citation TBD**. Until then, cite the
 software via GitHub's **"Cite this repository"** button (generated from
-[`CITATION.cff`](CITATION.cff)).
+[`CITATION.cff`](https://github.com/lacclab/scanpath-studio/blob/main/CITATION.cff)).
 
 If you use the bundled demo data, please cite the OneStop corpus:
 
@@ -207,4 +207,4 @@ something looks wrong — or if you have a feature request or suggestion —
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](https://github.com/lacclab/scanpath-studio/blob/main/LICENSE); the bundled demo data carries its own licenses (see [NOTICE](https://github.com/lacclab/scanpath-studio/blob/main/NOTICE)).

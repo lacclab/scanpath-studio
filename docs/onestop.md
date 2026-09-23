@@ -4,7 +4,8 @@
 360-participant English eye-tracking-while-reading corpus (Berzak, Malmaud,
 Shubi, Meiri, Lion, Levy, *Scientific Data* 2025,
 [doi:10.1038/s41597-025-06272-2](https://doi.org/10.1038/s41597-025-06272-2)).
-The app's bundled demo is a 3-participant subset of it; this page covers loading
+The app's bundled demo is a small subset of it (word boxes for 3 readers,
+fixations for 2 of them); this page covers loading
 the **full public corpus** from [OSF](https://osf.io/2prdq/) as a public dataset.
 
 !!! note "Two ways to load OneStop"
@@ -44,8 +45,8 @@ trials.
 
 ## Loading it
 
-OneStop is exposed as a **Public dataset**. In the app, open 🗂️ **Data** and
-choose **OneStop** as the data source, then in its **Options** pick a
+OneStop is exposed as a **Public dataset**. In the app, open 🗂️ **Data**, click
+**OneStop** in **📂 Available datasets**, then **✏️ Edit** it; its **Options** pick a
 **Variant**, a **Reading regime**, and one or more **Parts**:
 
 **Variant**
@@ -88,8 +89,9 @@ its own trial (the part is folded into the trial id, e.g. `Paragraph::1` vs
 regime-split; the other parts come from the all-regimes full release, so they
 load regardless of the chosen regime.
 
-The **Data location** section of the 🗂️ Data page lists the **Expected files** and
-shows whether they're already present. For the Public variant, if they're
+The **✏️ Edit** screen's data-location part lists the **Expected files** and
+shows whether they're already present (until they are, the app shows the bundled
+demo, with a **⬇ Download now** panel). For the Public variant, if they're
 present the corpus loads with no network access; if not, click **⬇ Download** to
 fetch them into the folder (cached on disk, so only the first load pays the
 download — reports range from tens to a few hundred MB each).
@@ -116,7 +118,8 @@ words, fixations = sps.load_onestop(
     variant="public",  # or "lacclab" for a local export
     download=True,  # public variant only
 )
-fig = sps.plot_scanpath(words, fixations, canvas_size=(2560, 1440))
+pid, tid = sps.list_trials(words, fixations).iloc[0]  # or any row you want
+fig = sps.plot_scanpath(words, fixations, pid, tid, canvas_size=(2560, 1440))
 ```
 
 For the raw (pre-normalization) frames, use

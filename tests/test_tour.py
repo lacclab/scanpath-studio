@@ -716,6 +716,50 @@ class TestSpotlightSelectorsResolve:
             f"exist: {missing}"
         )
 
+    def test_every_step_names_a_real_subtab(self):
+        """BUG-77: two steps wrote ``subtab="Export"`` while the tab is labelled
+        "📤 Export", so no tab opened, the card claimed it had, and the spotlight
+        aimed at a panel that never rendered. The selector test above cannot see
+        this — the container exists, just never on screen."""
+        from scanpath_studio import tabs
+        from scanpath_studio.tour import TUTORIALS
+
+        scanpath = {
+            tabs.SUBTAB_ANNOTATIONS,
+            tabs.SUBTAB_STIMULUS,
+            tabs.SUBTAB_COMPARISONS,
+            tabs.SUBTAB_LINE_ASSIGNMENT,
+            tabs.SUBTAB_EXPORT,
+            tabs.SUBTAB_SHARE,
+        }
+        steps = [step for tutorial in TUTORIALS for step in tutorial.steps]
+        assert {s.subtab for s in steps if s.subtab} <= scanpath
+        assert {s.corpus_subtab for s in steps if s.corpus_subtab} <= set(
+            tabs.CORPUS_SUBTABS
+        )
+
+    def test_the_data_page_draws_the_datasets_table_the_tutorial_points_at(self):
+        """BUG-77: "Load and verify a dataset" opened the Data page and outlined
+        the data-source picker — which only Scanpath and Corpus Analysis draw."""
+        from pathlib import Path
+
+        from streamlit.testing.v1 import AppTest
+
+        from scanpath_studio.constants import _VIEW_DATA
+
+        app_script = Path(__file__).resolve().parent.parent / "streamlit_app.py"
+        at = AppTest.from_file(str(app_script), default_timeout=60)
+        at.session_state["main_nav"] = _VIEW_DATA
+        at.run()
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+        def keys(node):
+            yield getattr(node, "key", None)
+            for child in getattr(node, "children", {}).values():
+                yield from keys(child)
+
+        assert "tutorial_available_datasets" in set(keys(at.main))
+
     def test_no_two_steps_spotlight_the_same_area(self):
         """UX-34: two steps sharing a selector lit up both areas at once.
 

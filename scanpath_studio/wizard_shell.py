@@ -11,9 +11,9 @@ and finalize. What lives here is the *chrome*:
   over the ones that actually render.
 - `step_panel` — the collapsed *Data & mapping* review panel's per-step block, and
   the keyed-expander form it had while the wizard was an accordion.
-- `go_to_step` / `seed_open_step` / `reset_accordion` / `first_incomplete` /
-  `blockers` — the accordion-era open-flag helpers, still called by the guide
-  (`tour.py`) and the wizard's reset.
+- `go_to_step` / `seed_open_step` / `reset_accordion` / `first_incomplete` —
+  the accordion-era open-flag helpers, still called by the guide (`tour.py`)
+  and the wizard's reset.
 
 **The rule those helpers keep.** A step's open flag (``wiz_open_<id>``) is
 written *only* by them and the guide. Nothing inside a step body may touch it:

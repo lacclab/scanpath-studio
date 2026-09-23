@@ -17,6 +17,18 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # ENG-62: a tag pushed without bumping the version rebuilt the old one,
+      # `skip-existing` below let PyPI skip it without a word, and the job went
+      # on to cut a GitHub release and post "published" to Slack with a link
+      # that 404s. Refuse up front instead.
+      - name: Tag matches the package version
+        run: |
+          VERSION="$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' scanpath_studio/__init__.py)"
+          if [ "${GITHUB_REF_NAME#v}" != "$VERSION" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match __version__ ${VERSION} — bump scanpath_studio/__init__.py (and CITATION.cff) before tagging."
+            exit 1
+          fi
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -58,12 +70,23 @@ jobs:
           if [ ! -s "$NOTES_FILE" ]; then
             printf 'Release %s of scanpath-studio.' "$TAG" > "$NOTES_FILE"
           fi
-          printf '\n\n---\nInstall/upgrade: `pip install -U scanpath-studio`\n' >> "$NOTES_FILE"
+          if printf '%s' "$VERSION" | grep -Eq '(a|b|rc)[0-9]+$'; then
+            printf '\n\n---\nInstall/upgrade: `pip install -U --pre scanpath-studio`\n' >> "$NOTES_FILE"
+          else
+            printf '\n\n---\nInstall/upgrade: `pip install -U scanpath-studio`\n' >> "$NOTES_FILE"
+          fi
           # Idempotent: edit notes if the release already exists, else create it.
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release edit "$TAG" --notes-file "$NOTES_FILE"
           else
-            gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$NOTES_FILE"
+            # A PEP 440 pre-release (0.31.0b1, 1.0.0rc1) must not become
+            # "Latest": pip skips it unless --pre, so the release page would
+            # advertise a version `pip install -U` never installs.
+            PRERELEASE=""
+            if printf '%s' "$VERSION" | grep -Eq '(a|b|rc)[0-9]+$'; then
+              PRERELEASE="--prerelease"
+            fi
+            gh release create "$TAG" --verify-tag --title "$TAG" $PRERELEASE --notes-file "$NOTES_FILE"
           fi
 
       - name: Notify Slack

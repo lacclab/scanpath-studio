@@ -980,6 +980,10 @@ _CHOICE_STATE_PARSERS = {
     "single_compare_layout": _parse_compare_layout,
     "single_compare_stimulus": _parse_compare_stimulus,
     "single_playback_speed": _parse_playback_speed,
+    **{
+        f"cmp{i}_saccade_style": _closed_choice(tuple(SACCADE_DASH_OPTIONS))
+        for i in (0, 1)
+    },
     "global_illustration_label": _closed_choice(("Auto", "Show", "Hide")),
     "global_preproc_short_policy": _closed_choice(
         ("Off", "Merge", "Merge then discard", "Discard")
@@ -1746,6 +1750,15 @@ def _restore_plot_config(
             2000,
             "animation frame cap",
         )
+    # BUG-72: the replay speed, against the ⚙ Playback slider's own options.
+    if "playback_speed" in animation:
+        try:
+            put(
+                "single_playback_speed",
+                _parse_playback_speed(animation["playback_speed"]),
+            )
+        except (TypeError, ValueError):
+            skipped.append("playback speed")
 
     canvas = section("canvas_px")
     if "width" in canvas:
@@ -1910,14 +1923,16 @@ def _restore_plot_config(
     # Fixation classification (PRE-2): short/long/out-of-bounds highlight or discard.
     flags = highlighting.get("fixation_flags")
     if isinstance(flags, dict):
-        for cat in ("short", "long", "oob"):
+        # BUG-72: `blink` too — the writer has always saved all four categories,
+        # and the reader used to drop the fourth.
+        for cat in _FIXCLASS_CATEGORIES:
             spec = flags.get(cat)
             if not isinstance(spec, dict):
                 continue
             mode = spec.get("mode")
             if mode in _FIXCLASS_MODES:
                 put(f"global_fixclass_{cat}_mode", mode)
-            if cat != "oob" and spec.get("threshold_ms") is not None:
+            if cat in ("short", "long") and spec.get("threshold_ms") is not None:
                 try:
                     put(
                         f"global_fixclass_{cat}_threshold_ms",
@@ -1971,6 +1986,9 @@ def _restore_plot_config(
     # restores unchanged and no schema bump is needed.
     compare_view = config.get("compare_view")
     if isinstance(compare_view, dict):
+        # BUG-72: the A/B legend switch rides in the same section.
+        if "legend" in compare_view:
+            put("global_show_compare_legend", bool(compare_view["legend"]))
         for field, options, label in (
             ("layout", _COMPARE_LAYOUT_OPTIONS, "compare layout"),
             ("stimulus", _COMPARE_STIMULUS_OPTIONS, "compare stimulus source"),

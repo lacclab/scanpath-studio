@@ -726,6 +726,12 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_FIXCLASS_OOB_MODE,
         GLOBAL_FIXCLASS_OOB_SYMBOL,
         GLOBAL_FIXCLASS_OOB_COLOR,
+        # BUG-72: the fourth category, always written, until now never read back.
+        GLOBAL_FIXCLASS_BLINK_MODE,
+        GLOBAL_FIXCLASS_BLINK_SYMBOL,
+        GLOBAL_FIXCLASS_BLINK_COLOR,
+        # compare_view (BUG-72) — a `global_*` key, unlike the view's other two.
+        GLOBAL_SHOW_COMPARE_LEGEND,
         # labels
         GLOBAL_SHOW_TITLE_CAPTION,
         GLOBAL_TITLE_PATTERN,
@@ -751,6 +757,8 @@ PLOT_CONFIG_OTHER_STATE_KEYS = frozenset(
         # in `PLOT_CONFIG_STATE_KEYS`.
         SINGLE_COMPARE_LAYOUT,
         SINGLE_COMPARE_STIMULUS,
+        # BUG-72 — the replay speed, restored from the config's `animation`.
+        SINGLE_PLAYBACK_SPEED,
     }
 )
 

@@ -487,7 +487,7 @@ def _restore_config_app():
             "order_font_color": "#000000",
             "base_font_size": 14,
         },
-        "animation": {"grid_step_ms": 100, "max_frames": 360},
+        "animation": {"grid_step_ms": 100, "max_frames": 360, "playback_speed": 2.0},
         "canvas_px": {"width": 1000, "height": 800},
         "axes": {
             "x_field": numeric[0],
@@ -505,7 +505,12 @@ def _restore_config_app():
         "highlighting": {
             "critical_span_style": "Mark text",
             "highlight_column": "is_in_aspan",
-            "fixation_flags": {"short": flag, "long": flag, "oob": flag},
+            "fixation_flags": {
+                "short": flag,
+                "long": flag,
+                "oob": flag,
+                "blink": flag,
+            },
             "highlight_text_color": "#123456",
             # Deliberately NOT a BACKGROUND_PRESETS value, so the custom-colour
             # branch runs and both background keys are exercised.
@@ -523,7 +528,7 @@ def _restore_config_app():
         # CMP-11 — the compare *view*, distinct from the per-scanpath styling
         # list above. Both fields are validated against the segmented controls'
         # options, so placeholders would be skipped rather than written.
-        "compare_view": {"layout": "Stacked", "stimulus": "A"},
+        "compare_view": {"layout": "Stacked", "stimulus": "A", "legend": True},
         "selection": {"participant_id": "p1", "trial_id": "t1"},
         "annotations": [],
     }

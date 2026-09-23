@@ -42,6 +42,11 @@ from .session_keys import (
     COLUMN_MAPPING_PREFIX,
     DESIGN_PRESETS,
     PLOT_CONFIG_STATE_KEYS,
+    SINGLE_COMPARE_LAYOUT,
+    SINGLE_COMPARE_STIMULUS,
+    SINGLE_COMPARE_TOGGLE,
+    SINGLE_PLAYBACK_SPEED,
+    compare_state_keys,
 )
 
 SCHEMA_VERSION = 1
@@ -86,6 +91,15 @@ _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
     # setting derived from a dataset, so it belongs in the cache for the same
     # reason annotations do: closing the app must not be how you lose it.
     DESIGN_PRESETS,
+    # BUG-72 — Compare mode and the replay speed: `single_animate` was already
+    # here, so a restart kept Animate but dropped Compare, its layout, whose
+    # stimulus an overlay draws, and each scanpath's styling.
+    SINGLE_COMPARE_TOGGLE,
+    SINGLE_COMPARE_LAYOUT,
+    SINGLE_COMPARE_STIMULUS,
+    SINGLE_PLAYBACK_SPEED,
+    *compare_state_keys(0),
+    *compare_state_keys(1),
 }
 
 

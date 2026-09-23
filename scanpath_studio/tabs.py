@@ -207,6 +207,7 @@ from scanpath_studio.session_keys import (
     SINGLE_COMPARE_LAYOUT,
     SINGLE_COMPARE_STIMULUS,
     SINGLE_COMPARE_TOGGLE,
+    SINGLE_PLAYBACK_SPEED,
 )
 from scanpath_studio.similarity import (
     METRICS,
@@ -2924,7 +2925,10 @@ def _build_studio_config(
             "saccades": figure_settings["show_saccades"],
             "saccade_arrows": figure_settings.get("show_saccade_arrows", False),
             "heatmap": figure_settings["show_heatmap"],
-            "raw_gaze": figure_settings["show_raw_gaze"],
+            # BUG-72: the switch, not the figure's *effective* raw gaze (switch
+            # AND this trial has samples) — saving on a trial without raw gaze
+            # used to record the layer as off.
+            "raw_gaze": bool(viz_settings.get("show_raw_gaze", False)),
             "stimulus_image": viz_settings.get("show_stimulus_image", False),
             "full_monitor": figure_settings.get("fit_to_monitor", True),
             # VIZ-10: autoplay the animated replay on load.
@@ -2952,6 +2956,10 @@ def _build_studio_config(
         "animation": {
             "grid_step_ms": int(viz_settings.get("anim_grid_step_ms", 100) or 100),
             "max_frames": int(viz_settings.get("anim_max_frames", 360) or 360),
+            # BUG-72: the replay speed — a non-1× speed is an Illustration.
+            "playback_speed": float(
+                st.session_state.get(SINGLE_PLAYBACK_SPEED, 1.0) or 1.0
+            ),
         },
         "coloring": {
             "color_by": figure_settings["color_by"],
@@ -3091,6 +3099,8 @@ def _build_studio_config(
         "compare_view": {
             "layout": st.session_state.get(SINGLE_COMPARE_LAYOUT, "Overlay"),
             "stimulus": st.session_state.get(SINGLE_COMPARE_STIMULUS, "Both"),
+            # BUG-72: the A/B legend, the one compare setting that is a switch.
+            "legend": bool(viz_settings.get("show_compare_legend", False)),
         },
         "annotations": annotation_records,
         # DATA-20: the participant table travels with the saved session, so a

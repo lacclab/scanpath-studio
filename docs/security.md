@@ -868,16 +868,22 @@ types (`app._UPLOAD_TYPES`) exclude macro-enabled workbook formats.
 the single cookie the app sets (`tour.TOUR_OPTOUT_COOKIE` = `sps_tour_optout`,
 `SameSite=Lax`, `path=/`, one year) holds the literal `"1"` and no identifier.
 
-Streamlit's *own* telemetry is a different matter and is not fully covered.
-`browser.gatherUsageStats` defaults to `True` (`config.py`, `default_val=True`).
-It is turned off in the repo's `.streamlit/config.toml` and explicitly on the
-desktop launcher's command line — but `cli.launch_app` injects only the
-`--theme.*` flags, and the config file is not in the wheel (same packaging gap as
-S6), so `pip install scanpath-studio && scanpath-studio run` from an arbitrary
-directory leaves it **on**. That is Streamlit's collection, not ours;
-[privacy.md](privacy.md) enumerates what it sends and how to turn it off per
-deployment. Adding `--browser.gatherUsageStats=false` to `cli.launch_app`'s
-injected flags would close the gap for every launch path at once.
+Streamlit's *own* telemetry, `browser.gatherUsageStats`, defaults to `True`
+(`config.py`, `default_val=True`). It is off on every launch path now: the repo's
+`.streamlit/config.toml`, the desktop launcher's command line, and
+`cli.launch_app`, which injects `--browser.gatherUsageStats=false` unless the
+caller passes their own value — so a `pip install scanpath-studio &&
+scanpath-studio run` from an arbitrary directory, which gets no config file, is
+covered too. A bare `streamlit run streamlit_app.py` outside the repository is
+the one path that still inherits Streamlit's default.
+
+**One third-party request is made on every figure render.** The true-scale
+figure embed (`tabs._render_true_scale_chart`, `fig.to_html(include_plotlyjs="cdn")`)
+loads plotly.js from `cdn.plot.ly` rather than from the installed package. No
+data travels with it, but it is a per-render request to a third party, the
+script carries no integrity pin, and it means the main figure stays blank
+without network access — the desktop app included. [privacy.md](privacy.md)
+discloses it; serving the bundled plotly.js locally is an open decision.
 
 **Streamlit's own request-level protections are on.** `server.enableXsrfProtection`
 and `server.enableCORS` both default to `True` (`config.py`) and nothing in the

@@ -60,8 +60,14 @@ trial identifiers should not be exposed there.
 
 ## Network activity
 
-Downloading a public corpus contacts its host. Interactive plots may load
-Plotly in the browser. The application does not add its own analytics service.
+Downloading a public corpus contacts its host, and only when you click
+**⬇ Download**. The scanpath, animation and comparison figures load the Plotly
+charting library from **cdn.plot.ly** each time they are drawn, so your browser
+fetches it from that host; your data is not sent with the request, but the
+figure needs an internet connection to appear — including in the desktop app.
+Streamlit's own usage statistics are switched off on every launch path
+(`scanpath-studio run`, the desktop app and the repository's
+`.streamlit/config.toml`). The application adds no analytics service of its own.
 
 The code-level audit and accepted limitations are in the
 [security audit](security.md).

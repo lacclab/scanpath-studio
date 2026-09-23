@@ -44,8 +44,8 @@ trials.
 
 ## Loading it
 
-OneStop is exposed as a **Public dataset**. In the app, open 🗂️ **Data** and
-choose **OneStop** as the data source, then in its **Options** pick a
+OneStop is exposed as a **Public dataset**. In the app, open 🗂️ **Data**, click
+**OneStop** in **📂 Available datasets**, then **✏️ Edit** it; its **Options** pick a
 **Variant**, a **Reading regime**, and one or more **Parts**:
 
 **Variant**
@@ -88,8 +88,9 @@ its own trial (the part is folded into the trial id, e.g. `Paragraph::1` vs
 regime-split; the other parts come from the all-regimes full release, so they
 load regardless of the chosen regime.
 
-The **Data location** section of the 🗂️ Data page lists the **Expected files** and
-shows whether they're already present. For the Public variant, if they're
+The **✏️ Edit** screen's data-location part lists the **Expected files** and
+shows whether they're already present (until they are, the app shows the bundled
+demo, with a **⬇ Download now** panel). For the Public variant, if they're
 present the corpus loads with no network access; if not, click **⬇ Download** to
 fetch them into the folder (cached on disk, so only the first load pays the
 download — reports range from tens to a few hundred MB each).

@@ -65,6 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`render --animate` honours every styling flag the replay can draw** (EXP-10)
 - **`render --compare-with` honours `--fix-index-range`** (EXP-11)
 - **A palette choice no longer reproduces as a command that colours saccades by type** (EXP-12)
+- **Bad CLI input is a message, not a traceback — and `--word-schema` / `--fix-schema` map unrecognised columns** (EXP-13)
 
 ### Details
 
@@ -140,6 +141,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`render --compare-with` honours `--fix-index-range`** (EXP-11) — `compare_scanpaths` has always taken `fix_index_range`, but `render`'s compare branch never passed it, so `--compare-with … --fix-index-range 1:10` drew both whole trials — while the `--print-code` recipe for the same command wrote the window into the Python form. It is now forwarded, windowing both scanpaths as the app's slider does.
 
 - **A palette choice no longer reproduces as a command that colours saccades by type** (EXP-12) — a palette rewrites the five reading-class saccade colours, and the CLI half of the reproduction snippet spelled them out as `--saccade-type-color` flags — which *imply* `--saccade-color-by-type`. So choosing any palette, in the app or with `render --palette … --print-code cli`, printed a command that recoloured every saccade by type, and named `text_color` / `highlight_text_color` "unsupported" besides. The CLI form now names the palette itself (`--palette 'Print / greyscale'`) whenever one explains the figure's colours, restating only the colours changed on top of it; class colours are never emitted into a figure that is not drawing them, and in the two-way *Forward / regression* fold, where `--saccade-type-color` would switch the mode, they are named unsupported unless a palette supplies them. The Python form still expands the palette, as before.
+
+- **Bad CLI input is a message, not a traceback — and `--word-schema` / `--fix-schema` map unrecognised columns** (EXP-13) — the own-data branch of `render` was the one input path with no guard, so a missing `--words` file ended in a `FileNotFoundError` traceback and an unrecognised column in a `ValueError` traceback whose hint said to pass `word_schema={…}` — an argument the command line had no way to give. `corpus` did the same for a missing `--input` or a table without the column `--kind` reads (a bare `KeyError: 'value'`), `analyze` for either table, and an unknown `--heatmap-colorscale` surfaced as a `PlotlyError` after the data had loaded. Each is now a plain message naming the file, flag or column; colorscale names are checked by the parser, with the closest real ones. And the hint now has something to point at: **`--word-schema` / `--fix-schema`** on `render` and `analyze` take the same mapping `load_scanpath_data` does, as inline JSON or a path to a `.json` file, and the error prints the one to start from. `api.SchemaError` (a `ValueError`, message unchanged) carries the parts so the CLI can rephrase the hint.
 
 ## [0.30.1] - 2026-08-28
 

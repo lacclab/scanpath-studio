@@ -16,6 +16,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import sys
 from importlib import resources
 from pathlib import Path
@@ -59,6 +60,120 @@ def _drift_algorithm(value: str) -> str:
             f"unknown algorithm {value!r}; choose one of {', '.join(ALGORITHMS)}."
         )
     return name
+
+
+def _colorscale_name(value: str) -> str:
+    """Validate ``--heatmap-colorscale`` / ``--fixation-colorscale`` (EXP-13).
+
+    An argparse ``type=`` like :func:`_drift_algorithm`: a name Plotly doesn't
+    know otherwise surfaced as a ``PlotlyError`` traceback from deep inside the
+    builder, after the data had already loaded."""
+    import difflib
+
+    from plotly.colors import get_colorscale, named_colorscales
+    from plotly.exceptions import PlotlyError
+
+    try:
+        get_colorscale(str(value))
+    except PlotlyError:
+        names = named_colorscales()
+        close = difflib.get_close_matches(str(value).lower(), names, n=3, cutoff=0.6)
+        hint = f" Closest: {', '.join(close)}." if close else ""
+        raise argparse.ArgumentTypeError(
+            f"unknown colorscale {value!r}.{hint} Any Plotly named colorscale "
+            "works, e.g. Viridis, Greens, Blues, Cividis; append _r to reverse one."
+        )
+    return str(value)
+
+
+#: The API keyword each schema flag stands for (EXP-13).
+_SCHEMA_FLAGS = {"word_schema": "--word-schema", "fix_schema": "--fix-schema"}
+
+
+def _add_schema_flags(group) -> None:
+    """``--word-schema`` / ``--fix-schema`` on ``render`` and ``analyze``."""
+    for flag, table in (("--word-schema", "--words"), ("--fix-schema", "--fixations")):
+        group.add_argument(
+            flag,
+            metavar="JSON",
+            help=f"Column mapping for the {table} table, replacing auto-detection: "
+            "a JSON object (or a path to a .json file holding one) from each "
+            'field to a column name, e.g. \'{"trial": "TRIAL_INDEX", '
+            '"word_id": "IA_ID", ...}\' — the same dict '
+            "api.load_scanpath_data takes. Needed only when a column isn't "
+            "recognised; the error then prints a mapping to start from.",
+        )
+
+
+def _parse_schema_arg(value: str | None, flag: str) -> dict | None:
+    """``--word-schema`` / ``--fix-schema`` → the mapping dict (EXP-13).
+
+    Inline JSON when it starts with ``{``, a path to a ``.json`` file otherwise,
+    so a mapping too long for a shell line can live next to the data."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text.startswith("{"):
+        try:
+            text = Path(text).expanduser().read_text(encoding="utf-8")
+        except OSError as exc:
+            raise SystemExit(
+                f"{flag}: {value!r} is neither a JSON object nor a readable file "
+                f"({exc.strerror or exc})."
+            )
+    try:
+        mapping = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(
+            f"{flag}: not valid JSON ({exc.msg}, line {exc.lineno} column "
+            f'{exc.colno}). Expected an object such as \'{{"trial": "TRIAL_INDEX"}}\'.'
+        )
+
+    def is_column(item) -> bool:
+        return item is None or isinstance(item, str)
+
+    if not isinstance(mapping, dict) or not all(
+        isinstance(key, str)
+        and (
+            is_column(column)
+            or (isinstance(column, list) and all(isinstance(c, str) for c in column))
+        )
+        for key, column in mapping.items()
+    ):
+        raise SystemExit(
+            f"{flag} expects a JSON object from each field to a column name (a "
+            "list of names for a composite id, or null to leave a field unmapped)."
+        )
+    return mapping
+
+
+def _load_error_message(exc: Exception, *, schema_flags: bool = True) -> str:
+    """A load failure as the command line should say it (EXP-13).
+
+    A :class:`api.SchemaError` ends with the API's "pass ``word_schema={…}``"
+    hint, which a shell user has no way to act on; this swaps it for the
+    ``--word-schema`` / ``--fix-schema`` form. ``schema_flags=False`` is for the
+    second comparison dataset, which has no mapping flag of its own."""
+    from .api import SchemaError
+
+    if not isinstance(exc, SchemaError):
+        return str(exc)
+    flag = _SCHEMA_FLAGS.get(exc.param)
+    if flag is None or not schema_flags:
+        return (
+            f"{exc.detail}\nThis table's columns have to be auto-detected here — "
+            "rename them, or build the figure in Python, where "
+            f"api.load_scanpath_data takes {exc.param}=."
+        )
+    detail = exc.detail.replace(exc.param, flag)
+    if exc.mapping is None:
+        return f"{detail}\nCorrect the column names in {flag}, or drop it to use auto-detection."
+    example = json.dumps(exc.mapping)
+    return (
+        f"{detail}\nTo map the columns yourself, pass the full mapping as JSON — it "
+        "replaces auto-detection, so it needs every required key:\n"
+        f"  {flag} {shlex.quote(example)}\n(or a path to a .json file holding it)."
+    )
 
 
 def _theme_cli_flags() -> list[str]:
@@ -196,6 +311,7 @@ def _render_parser() -> argparse.ArgumentParser:
         "inside each logical trial. Use with --words/--fixations when the source "
         "tables have no explicit screen columns.",
     )
+    _add_schema_flags(src)
     src.add_argument(
         "--potec",
         metavar="DIR",
@@ -623,6 +739,7 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--heatmap-colorscale",
         metavar="NAME",
+        type=_colorscale_name,
         help="Heatmap colorscale, e.g. Greens (default: the app's default).",
     )
     viz.add_argument(
@@ -635,6 +752,7 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--fixation-colorscale",
         metavar="NAME",
+        type=_colorscale_name,
         help="Fixation-marker colorscale, e.g. Blues (default: the app's default).",
     )
     viz.add_argument(
@@ -952,7 +1070,10 @@ def _compare_second_dataset(api, args, words, fixations):
             True,
         )
     except (ValueError, FileNotFoundError, OSError) as exc:
-        raise SystemExit(f"--compare-words/--compare-fixations: {exc}")
+        raise SystemExit(
+            "--compare-words/--compare-fixations: "
+            + _load_error_message(exc, schema_flags=False)
+        )
 
 
 def _compare_animation_frames(api, args, words, fixations, canvas) -> dict:
@@ -1482,6 +1603,15 @@ def render(argv: list[str]) -> None:
         raise SystemExit("Missing -o/--output (or use --list-trials/--list-parts).")
     if args.trial_parts_manifest and not (args.words or args.fixations):
         raise SystemExit("--trial-parts-manifest requires --words and/or --fixations.")
+    # EXP-13: a mapping describes one of *your* tables, so it needs that table.
+    if args.word_schema is not None and not args.words:
+        raise SystemExit("--word-schema maps the --words table; pass --words too.")
+    if args.fix_schema is not None and not args.fixations:
+        raise SystemExit(
+            "--fix-schema maps the --fixations table; pass --fixations too."
+        )
+    word_schema = _parse_schema_arg(args.word_schema, "--word-schema")
+    fix_schema = _parse_schema_arg(args.fix_schema, "--fix-schema")
     # A comparison is one figure of two readings; --all-screens writes one figure
     # per child screen of a multipart trial. There is no defined pairing between
     # the two, and without this guard the compare branch left `figures` unbound
@@ -1615,13 +1745,21 @@ def render(argv: list[str]) -> None:
                 )
             except (OSError, json.JSONDecodeError) as exc:
                 raise SystemExit(f"Could not read trial-parts manifest: {exc}") from exc
-        words, fixations = api.load_scanpath_data(
-            args.words,
-            args.fixations,
-            image_root=args.image_root,
-            image_pattern=args.image_pattern,
-            trial_parts_manifest=manifest,
-        )
+        # EXP-13: the one input branch that had no guard, so a missing file or
+        # an unrecognised column ended the run in a traceback — whose hint
+        # named a `word_schema=` argument the command line could not pass.
+        try:
+            words, fixations = api.load_scanpath_data(
+                args.words,
+                args.fixations,
+                word_schema=word_schema,
+                fix_schema=fix_schema,
+                image_root=args.image_root,
+                image_pattern=args.image_pattern,
+                trial_parts_manifest=manifest,
+            )
+        except (ValueError, OSError) as exc:
+            raise SystemExit(_load_error_message(exc)) from exc
 
     if args.image_root and not (args.words or args.fixations):
         from .data import resolve_stimulus_image_paths
@@ -2176,7 +2314,10 @@ def analyze(argv: list[str]) -> None:
     parser.add_argument("--merge-distance-chars", type=float, default=1.0)
     parser.add_argument("--discard-blink-adjacent", action="store_true")
     parser.add_argument("--pixels-per-degree", type=float)
+    _add_schema_flags(parser)
     args = parser.parse_args(argv)
+    word_schema = _parse_schema_arg(args.word_schema, "--word-schema")
+    fix_schema = _parse_schema_arg(args.fix_schema, "--fix-schema")
 
     from . import api
 
@@ -2188,11 +2329,16 @@ def analyze(argv: list[str]) -> None:
             )
         except (OSError, json.JSONDecodeError) as exc:
             raise SystemExit(f"Could not read trial-parts manifest: {exc}") from exc
-    words, fixations = api.load_scanpath_data(
-        args.words,
-        args.fixations,
-        trial_parts_manifest=manifest,
-    )
+    try:
+        words, fixations = api.load_scanpath_data(
+            args.words,
+            args.fixations,
+            word_schema=word_schema,
+            fix_schema=fix_schema,
+            trial_parts_manifest=manifest,
+        )
+    except (ValueError, OSError) as exc:
+        raise SystemExit(_load_error_message(exc)) from exc
     policy = {
         "off": "Off",
         "merge": "Merge",
@@ -2245,16 +2391,25 @@ def corpus(argv: list[str]) -> None:
     args = parser.parse_args(argv)
     from . import api
 
-    data = pd.read_csv(args.input)
-    fig = api.plot_corpus_figure(
-        data,
-        kind=args.kind,
-        measure_label=args.measure_label,
-        series_col=args.series_col,
-        value_col=args.value_col,
-        colors=(args.primary_color, args.secondary_color),
-    )
-    out = api.save_figure(fig, args.output)
+    # EXP-13: each of these ended in a traceback — a missing or unparseable
+    # --input, a table without the columns --kind reads, an output extension
+    # save_figure doesn't write.
+    try:
+        data = pd.read_csv(args.input)
+    except (OSError, ValueError) as exc:
+        raise SystemExit(f"--input: could not read {args.input!r}: {exc}") from exc
+    try:
+        fig = api.plot_corpus_figure(
+            data,
+            kind=args.kind,
+            measure_label=args.measure_label,
+            series_col=args.series_col,
+            value_col=args.value_col,
+            colors=(args.primary_color, args.secondary_color),
+        )
+        out = api.save_figure(fig, args.output)
+    except (ValueError, RuntimeError, OSError) as exc:
+        raise SystemExit(str(exc)) from exc
     print(f"Wrote {out}")
 
 

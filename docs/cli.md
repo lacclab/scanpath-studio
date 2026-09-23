@@ -42,6 +42,26 @@ scanpath-studio render --words ia.csv --fixations fix.csv \
 HTML is interactive and browser-free. PNG, SVG, and PDF require
 Chrome/Chromium (`plotly_get_chrome -y`).
 
+### When a column isn't recognised
+
+Column names are auto-detected (EyeLink, Tobii, SMI, Pupil Labs, Gazepoint and
+snake_case spellings). When one isn't, `render` stops and prints which field it
+could not find, the names it looked for, the columns your table has, and a
+mapping to start from. Pass that mapping back as JSON — inline, or as a path to
+a `.json` file — with `--word-schema` (the `--words` table) and/or
+`--fix-schema` (the `--fixations` table). `analyze` takes the same two flags.
+
+```bash
+scanpath-studio render --words ia.csv --fixations fix.csv \
+  --word-schema '{"trial": "TRIAL_LABEL", "word_id": "IA_ID", "text": "IA_LABEL",
+                  "left": "IA_LEFT", "right": "IA_RIGHT", "top": "IA_TOP", "bottom": "IA_BOTTOM"}' \
+  --fix-schema fix_schema.json -o scanpath.html
+```
+
+A mapping replaces auto-detection for that table, so it has to name every
+required field, not only the one that failed. It is the same dict
+`load_scanpath_data(word_schema=…, fix_schema=…)` takes in Python.
+
 ## Public corpora
 
 A public corpus loads headlessly the same way the app loads it — no export step

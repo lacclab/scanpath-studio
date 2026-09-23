@@ -1239,3 +1239,212 @@ def test_render_forwards_fixation_flags_one_category_per_flag(tmp_path, monkeypa
 def test_a_malformed_fixation_flag_is_refused(tmp_path, monkeypatch, bad):
     with pytest.raises(SystemExit):
         _captured_static(tmp_path, monkeypatch, ["--fixation-flag", bad])
+
+
+# ---------------------------------------------------------------------------
+# EXP-13 — a user-triggerable mistake is a message, never a traceback
+# ---------------------------------------------------------------------------
+def _renamed_sample(tmp_path):
+    """The raw demo with its id/box columns renamed past auto-detection."""
+    from scanpath_studio import data as data_module
+
+    words, fixations = data_module.load_sample_data()
+    words = words.rename(
+        columns={
+            "unique_trial_id": "reading",
+            "IA_ID": "tok",
+            "IA_LEFT": "l",
+            "IA_RIGHT": "r",
+            "IA_TOP": "t",
+            "IA_BOTTOM": "b",
+        }
+    ).drop(columns=["paragraph_id", "trial_index"], errors="ignore")
+    fixations = fixations.rename(
+        columns={"unique_trial_id": "reading", "CURRENT_FIX_DURATION": "dur"}
+    ).drop(columns=["paragraph_id", "trial_index"], errors="ignore")
+    words_path, fix_path = tmp_path / "ia.csv", tmp_path / "fix.csv"
+    words.to_csv(words_path, index=False)
+    fixations.to_csv(fix_path, index=False)
+    return words_path, fix_path
+
+
+def test_render_a_missing_table_is_a_message(tmp_path):
+    missing = tmp_path / "nope.csv"
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main(["render", "--words", str(missing), "-o", str(tmp_path / "x.html")])
+    assert str(missing) in str(excinfo.value)
+
+
+def test_render_unrecognised_columns_point_at_the_schema_flag(tmp_path):
+    """The API's hint names `word_schema={…}`, which a shell cannot pass."""
+    words_path, fix_path = _renamed_sample(tmp_path)
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main(
+            [
+                "render",
+                "--words",
+                str(words_path),
+                "--fixations",
+                str(fix_path),
+                "-o",
+                str(tmp_path / "x.html"),
+            ]
+        )
+    message = str(excinfo.value)
+    assert "--word-schema '{" in message
+    assert "word_schema=" not in message
+    assert "Word/IA ID" in message
+
+
+def test_render_maps_unrecognised_columns_with_the_schema_flags(tmp_path):
+    """Inline JSON for one table, a .json file for the other."""
+    import json
+
+    words_path, fix_path = _renamed_sample(tmp_path)
+    word_schema = {
+        "participant": "participant_id",
+        "trial": "reading",
+        "word_id": "tok",
+        "text": "IA_LABEL",
+        "left": "l",
+        "right": "r",
+        "top": "t",
+        "bottom": "b",
+    }
+    fix_schema_path = tmp_path / "fix_schema.json"
+    fix_schema_path.write_text(
+        json.dumps(
+            {
+                "participant": "participant_id",
+                "trial": "reading",
+                "duration": "dur",
+                "x": "CURRENT_FIX_X",
+                "y": "CURRENT_FIX_Y",
+            }
+        ),
+        encoding="utf-8",
+    )
+    out = tmp_path / "mapped.html"
+    cli.main(
+        [
+            "render",
+            "--words",
+            str(words_path),
+            "--fixations",
+            str(fix_path),
+            "--word-schema",
+            json.dumps(word_schema),
+            "--fix-schema",
+            str(fix_schema_path),
+            "-o",
+            str(out),
+        ]
+    )
+    assert out.is_file()
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [
+        (["--sample", "--word-schema", "{}"], "--words"),
+        (["--words", "w.csv", "--word-schema", "{not json"], "not valid JSON"),
+        (["--words", "w.csv", "--word-schema", '["trial"]'], "JSON object"),
+        (["--words", "w.csv", "--word-schema", "no/such.json"], "readable file"),
+    ],
+)
+def test_a_malformed_schema_flag_is_refused(tmp_path, argv, expected):
+    with pytest.raises(SystemExit, match=expected):
+        cli.main(["render", *argv, "-o", str(tmp_path / "x.html")])
+
+
+def test_a_mistyped_mapped_column_points_at_the_flag(tmp_path):
+    words_path, _ = _renamed_sample(tmp_path)
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main(
+            [
+                "render",
+                "--words",
+                str(words_path),
+                "--word-schema",
+                '{"trial": "readng", "word_id": "tok", "left": "l", "right": "r", '
+                '"top": "t", "bottom": "b"}',
+                "-o",
+                str(tmp_path / "x.html"),
+            ]
+        )
+    message = str(excinfo.value)
+    assert "--word-schema['trial'] = 'readng'" in message
+    assert "'reading'" in message  # the closest real column
+
+
+def test_analyze_takes_the_schema_flags_and_reports_cleanly(tmp_path):
+    words_path, fix_path = _renamed_sample(tmp_path)
+    base = [
+        "analyze",
+        "--words",
+        str(words_path),
+        "--fixations",
+        str(fix_path),
+        "--output-dir",
+        str(tmp_path / "out"),
+    ]
+    with pytest.raises(SystemExit, match="--word-schema"):
+        cli.main(base)
+    with pytest.raises(SystemExit, match="nope.csv"):
+        cli.main([*base[:2], str(tmp_path / "nope.csv"), *base[3:]])
+
+
+def test_corpus_reports_a_missing_input_and_a_missing_column(tmp_path):
+    import pandas as pd
+
+    with pytest.raises(SystemExit, match="--input"):
+        cli.main(
+            [
+                "corpus",
+                "--input",
+                str(tmp_path / "nope.csv"),
+                "--kind",
+                "profile",
+                "--output",
+                str(tmp_path / "x.html"),
+            ]
+        )
+    tidy = tmp_path / "tidy.csv"
+    pd.DataFrame({"word_id": [1, 2], "val": [3.0, 4.0]}).to_csv(tidy, index=False)
+    with pytest.raises(SystemExit, match="'value'.*--value-col"):
+        cli.main(
+            [
+                "corpus",
+                "--input",
+                str(tidy),
+                "--kind",
+                "profile",
+                "--output",
+                str(tmp_path / "x.html"),
+            ]
+        )
+
+
+@pytest.mark.parametrize("flag", ["--heatmap-colorscale", "--fixation-colorscale"])
+def test_an_unknown_colorscale_is_refused_before_the_load(tmp_path, capsys, flag):
+    out = tmp_path / "x.html"
+    with pytest.raises(SystemExit):
+        cli.main(["render", "--sample", flag, "Viridiss", "-o", str(out)])
+    assert not out.exists()
+    err = capsys.readouterr().err
+    assert "unknown colorscale 'Viridiss'" in err and "viridis" in err
+
+
+def test_a_reversed_or_lowercase_colorscale_is_accepted():
+    parser = cli._render_parser()
+    args = parser.parse_args(
+        [
+            "--sample",
+            "--heatmap-colorscale",
+            "greens",
+            "--fixation-colorscale",
+            "Viridis_r",
+        ]
+    )
+    assert args.heatmap_colorscale == "greens"
+    assert args.fixation_colorscale == "Viridis_r"

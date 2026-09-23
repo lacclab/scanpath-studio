@@ -307,10 +307,30 @@ def _column_preview(frame: pd.DataFrame, limit: int = 40) -> str:
     return shown
 
 
-def _schema_skeleton(kind: str, schema: dict) -> str:
-    """A copy-pasteable mapping literal: what was detected, ``'<column>'`` for
-    the rest. An explicit schema replaces auto-detection wholesale, so every
-    required key has to be in it — not just the ones that failed."""
+class SchemaError(ValueError):
+    """A table whose columns don't resolve onto the canonical fields.
+
+    Still a ``ValueError`` with the same message, so ``except ValueError``
+    callers are unaffected. The parts are kept apart for the CLI (EXP-13), whose
+    users cannot pass ``word_schema=``: it keeps :attr:`detail` and replaces
+    :attr:`hint` — the API-vocabulary "pass ``word_schema={…}``" line — with its
+    own ``--word-schema`` one, built from :attr:`mapping` (the mapping skeleton,
+    ``None`` when the fix is to correct a mapping rather than write one)."""
+
+    def __init__(
+        self, lines: list[str], hint: str, *, param: str, mapping: dict | None = None
+    ) -> None:
+        self.detail = "\n".join(lines)
+        self.hint = hint
+        self.param = param
+        self.mapping = mapping
+        super().__init__(f"{self.detail}\n{hint}")
+
+
+def _schema_skeleton_mapping(kind: str, schema: dict) -> dict:
+    """What was detected, ``'<column>'`` for the rest. An explicit schema
+    replaces auto-detection wholesale, so every required key has to be in it —
+    not just the ones that failed."""
     spec = _SCHEMA_SPECS[kind]
     keys = [key for key, _, _ in spec["required"]]
     if spec["groups"]:
@@ -320,9 +340,14 @@ def _schema_skeleton(kind: str, schema: dict) -> str:
             key=lambda group: sum(1 for key in group if not schema.get(key)),
         )
         keys += [key for key in best if key not in keys]
+    return {key: schema[key] if schema.get(key) else "<column>" for key in keys}
+
+
+def _schema_skeleton(kind: str, schema: dict) -> str:
+    """:func:`_schema_skeleton_mapping` as a copy-pasteable Python literal."""
     items = ", ".join(
-        f"{key!r}: {schema[key]!r}" if schema.get(key) else f"{key!r}: '<column>'"
-        for key in keys
+        f"{key!r}: {value!r}"
+        for key, value in _schema_skeleton_mapping(kind, schema).items()
     )
     return "{" + items + "}"
 
@@ -370,16 +395,17 @@ def _check_mapped_columns(kind: str, frame: pd.DataFrame, schema: dict) -> None:
         f"Columns present in the {spec['noun']} table ({len(frame.columns)}): "
         f"{_column_preview(frame)}"
     )
-    lines.append(
+    raise SchemaError(
+        lines,
         f"api.propose_schema(table, {kind!r}) returns the auto-detected mapping to "
-        "start from."
+        "start from.",
+        param=spec["param"],
     )
-    raise ValueError("\n".join(lines))
 
 
 def _schema_error(
     kind: str, frame: pd.DataFrame, schema: dict, problems: list, explicit: bool = False
-) -> ValueError:
+) -> SchemaError:
     """Build the ``ValueError`` for a table whose canonical fields don't resolve.
 
     Names every canonical field that could not be resolved, the candidate column
@@ -454,7 +480,7 @@ def _schema_error(
             "Matching ignores case and separators (IA_LEFT == ia_left == 'Ia Left') "
             "and takes the first candidate that matches."
         )
-    lines.append(
+    hint = (
         f"An explicit {param} replaces auto-detection wholesale, so it needs every "
         f"required key, e.g. {param}={_schema_skeleton(kind, schema)} — "
         f"api.propose_schema(df, {kind!r}) returns the auto-detected mapping."
@@ -463,7 +489,9 @@ def _schema_error(
         f"{param}={_schema_skeleton(kind, schema)} — "
         f"api.propose_schema(df, {kind!r}) returns what was detected."
     )
-    return ValueError("\n".join(lines))
+    return SchemaError(
+        lines, hint, param=param, mapping=_schema_skeleton_mapping(kind, schema)
+    )
 
 
 def propose_schema(table: TablesLike, kind: str = "words") -> dict:
@@ -899,6 +927,36 @@ def alignment_sensitivity(
     return measure_sensitivity(words, fixations, methods)
 
 
+#: The columns each corpus-figure kind reads; ``"<value>"`` stands for
+#: ``value_col``. EXP-13: without the check a table lacking one surfaced as a
+#: bare ``KeyError: 'value'`` from inside the builder.
+_CORPUS_COLUMNS = {
+    "profile": ("word_id", "<value>"),
+    "distribution": ("<value>",),
+}
+
+
+def _require_corpus_columns(data: pd.DataFrame, kind: str, value_col: str) -> None:
+    required = [
+        value_col if column == "<value>" else column
+        for column in _CORPUS_COLUMNS.get(kind, ())
+    ]
+    missing = [column for column in required if column not in data.columns]
+    if not missing:
+        return
+    hint = (
+        f" Name the measure column with value_col= (--value-col on the CLI); "
+        f"it is {value_col!r} now."
+        if value_col in missing
+        else ""
+    )
+    raise ValueError(
+        f"A {kind!r} corpus figure reads the column(s) "
+        f"{', '.join(repr(column) for column in missing)}, which the table doesn't "
+        f"have. Columns present ({len(data.columns)}): {_column_preview(data)}.{hint}"
+    )
+
+
 def plot_corpus_figure(
     data: pd.DataFrame,
     *,
@@ -917,9 +975,11 @@ def plot_corpus_figure(
     ``hi``); ``distribution`` expects ``value_col``; ``difference`` expects
     ``word_id`` and ``diff``. When ``series_col`` is present, it defines the
     overlaid profile/distribution series. This is the API counterpart of the
-    Corpus Analysis in-view styling controls (AN-29).
+    Corpus Analysis in-view styling controls (AN-29). A table missing a column
+    its ``kind`` reads raises ``ValueError`` naming it and the columns present.
     """
     kind = str(kind).lower()
+    _require_corpus_columns(data, kind, value_col)
     if kind == "profile":
         profiles = (
             {

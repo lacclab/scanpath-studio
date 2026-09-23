@@ -18,6 +18,15 @@ any guess.
 | **Participant metadata** *(optional)* | one row per reader | participant id, plus anything you know about them |
 | **Trial metadata** *(optional)* | one row per reading | trial id (optionally participant id too), plus anything you know about that reading |
 
+**Units.** Durations and timestamps are read in milliseconds. A column whose
+header names another unit — `[s]`, `[μs]`, `[ns]`, as Tobii and Pupil Labs Neon
+write — is converted, and so are the vendor columns documented in seconds
+(Gazepoint `FPOGD` / `FPOGS`, Pupil Labs Core `start_timestamp`). Positions must
+be **pixels**: screen fractions (Gazepoint `FPOGX` / `FPOGY`, Pupil Labs Core
+`norm_pos_x` / `norm_pos_y`) are flagged with a warning but not converted, since
+the load does not know the screen size — multiply them by the screen width and
+height in pixels first.
+
 Either main table may be omitted for single-report datasets — the missing layer
 is simply skipped. A words-only table still draws a heatmap from its
 pre-aggregated reading measures, and a dataset added with only one of the two can

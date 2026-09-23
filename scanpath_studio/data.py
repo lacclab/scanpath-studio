@@ -460,6 +460,51 @@ def pick_column(df: pd.DataFrame, candidates: Iterable[str]) -> str | None:
     return None
 
 
+#: Milliseconds per unit, for a time column whose header names its unit —
+#: Tobii Pro Lab's `Recording timestamp [μs]`, Pupil Labs Neon's
+#: `start timestamp [ns]` (DATA-40). DATA-25 taught auto-detection to look past
+#: that block; this is what reads it.
+_TIME_UNIT_MS = {
+    "s": 1000.0,
+    "sec": 1000.0,
+    "secs": 1000.0,
+    "seconds": 1000.0,
+    "ms": 1.0,
+    "msec": 1.0,
+    "milliseconds": 1.0,
+    "us": 1e-3,
+    "µs": 1e-3,  # MICRO SIGN
+    "μs": 1e-3,  # GREEK SMALL LETTER MU — what Tobii writes
+    "microseconds": 1e-3,
+    "ns": 1e-6,
+    "nanoseconds": 1e-6,
+}
+#: Vendor time columns whose unit is in the manual, not the header: Gazepoint's
+#: fixation start/duration and Pupil Labs Core's fixation onset are seconds.
+_SECONDS_WITHOUT_A_SUFFIX = frozenset({"fpogd", "fpogs", "starttimestamp"})
+
+
+def time_unit_ms(column) -> float:
+    """Milliseconds per unit of the time column named ``column`` (DATA-40).
+
+    Read from the header's trailing unit block (``[s]``, ``(ns)``, ``[μs]``) or,
+    for a vendor column that carries none, from its documented unit. Anything
+    else — no block, ``[ms]``, a block that names no time unit — is 1: the app's
+    unit, and the only safe guess.
+    """
+    match = _TRAILING_UNIT.search(str(column))
+    if match:
+        unit = match.group(0).strip().strip("[]()").strip().lower()
+        return _TIME_UNIT_MS.get(unit, 1.0)
+    return 1000.0 if _norm_col(column) in _SECONDS_WITHOUT_A_SUFFIX else 1.0
+
+
+def _as_ms(values: pd.Series, column) -> pd.Series:
+    """``values`` of the time column ``column`` converted to milliseconds."""
+    factor = time_unit_ms(column)
+    return values if factor == 1.0 else values * factor
+
+
 def trial_mapping_columns(trial_mapping) -> list:
     """Column list behind a trial mapping — a plain column name or a list of
     names (the column-mapping UI returns a list when the user composes a
@@ -678,7 +723,8 @@ WORD_BOTTOM_CANDIDATES = ["IA_BOTTOM", "bottom", "end_y"]
 # (MCSpx)`; SMI BeGaze: `Position X [px]` / `Fixation Position X`; Pupil Labs
 # Neon: `fixation x [px]`. Gazepoint's FPOGX and Pupil Core's `norm_pos_x` are
 # screen *fractions* (0–1), not pixels — matched here so the column is found,
-# and left to the canvas / unit handling downstream, as FPOGX already was.
+# and reported as fractions by `screen_fraction_issues` (DATA-40), which is as
+# far as the load can go without knowing the screen size.
 FIX_X_CANDIDATES = [
     "x",
     "CURRENT_FIX_X",
@@ -710,7 +756,7 @@ FIX_DURATION_CANDIDATES = [
     "fix_duration",  # EyeGenBench's own harmonized column name (DATA-27)
     "eye_movement_event_duration",  # Tobii Pro Lab (current name)
     "gaze_event_duration",  # Tobii Pro Lab (older) / Tobii Studio `GazeEventDuration`
-    "FPOGD",  # Gazepoint — seconds, not ms
+    "FPOGD",  # Gazepoint — seconds, not ms (`time_unit_ms` converts, DATA-40)
 ]
 FIX_TIMESTAMP_CANDIDATES = [
     "timestamp_ms",
@@ -1427,23 +1473,70 @@ def identity_issues(raw: pd.DataFrame, schema: dict, *, table: str) -> list[str]
     return [f"{table}: {said.format(named)}."]
 
 
-def normalization_issues(raw: pd.DataFrame, schema: dict, *, table: str) -> list[str]:
+#: Positions that never leave this band are fractions of the screen, not
+#: pixels: Gazepoint's FPOGX/FPOGY and Pupil Labs Core's norm_pos_x/y. Wider
+#: than 0–1, because a fraction strays a little off-screen.
+_FRACTION_BAND = (-0.5, 1.5)
+
+
+def screen_fraction_issues(raw: pd.DataFrame, schema: dict, *, table: str) -> list:
+    """A warning when the mapped X/Y are screen fractions rather than pixels.
+
+    Not converted (DATA-40): the load knows no screen size to scale by, and a
+    guessed one would put every fixation in the wrong place while looking
+    plausible — the one outcome worse than a figure that is obviously wrong.
+    """
+    x, y = schema.get("x"), schema.get("y")
+    if not (isinstance(x, str) and isinstance(y, str)):
+        return []
+    if x not in raw.columns or y not in raw.columns:
+        return []
+    xs, ys = _to_number(raw[x]), _to_number(raw[y])
+    both = xs.notna() & ys.notna()
+    if not both.any():
+        return []
+    low, high = _FRACTION_BAND
+    xs, ys = xs[both], ys[both]
+    if not (xs.between(low, high).all() and ys.between(low, high).all()):
+        return []
+    if not (xs.between(0, 1, inclusive="neither").any()):
+        return []  # all 0 / all 1 is degenerate data, not a fraction
+    return [
+        f"{table}: every position in `{x}` / `{y}` lies between 0 and 1 — these "
+        "look like fractions of the screen (Gazepoint's FPOGX/FPOGY, Pupil Labs "
+        "Core's norm_pos), not pixels, so the scanpath is drawn in a 1-pixel "
+        "corner of the canvas. They are not converted, because the screen size "
+        "is not known here: multiply them by the screen width and height in "
+        "pixels before uploading (for Pupil Core, whose y points up, use "
+        "(1 − y) × height)."
+    ]
+
+
+def normalization_issues(
+    raw: pd.DataFrame, schema: dict, *, table: str, fixations: bool = False
+) -> list[str]:
     """Everything the load will do to ``raw`` under ``schema`` that the user
-    should hear about: rows left out for want of an id (BUG-56), and mapped
-    numeric columns that did not parse (BUG-54)."""
-    return identity_issues(raw, schema, table=table) + numeric_parse_issues(
-        raw, schema, table=table
-    )
+    should hear about: rows left out for want of an id (BUG-56), mapped numeric
+    columns that did not parse (BUG-54), and — for ``fixations``, whose X/Y
+    are gaze positions rather than box origins — positions that are screen
+    fractions rather than pixels (DATA-40)."""
+    issues = identity_issues(raw, schema, table=table)
+    issues += numeric_parse_issues(raw, schema, table=table)
+    if fixations:
+        issues += screen_fraction_issues(raw, schema, table=table)
+    return issues
 
 
-def _warn_normalization_issues(raw: pd.DataFrame, schema: dict, *, table: str) -> None:
+def _warn_normalization_issues(
+    raw: pd.DataFrame, schema: dict, *, table: str, fixations: bool = False
+) -> None:
     """Raise each :func:`normalization_issues` line as a ``UserWarning``.
 
     The headless API and ``render`` have no page to put a warning on, so the
     normalizers say it themselves; the wizard shows the same lines above
     ✅ Add dataset.
     """
-    for issue in normalization_issues(raw, schema, table=table):
+    for issue in normalization_issues(raw, schema, table=table, fixations=fixations):
         warnings.warn(issue.replace("`", "'"), UserWarning, stacklevel=3)
 
 
@@ -2401,7 +2494,8 @@ def normalize_raw_gaze(
     df["x"] = _to_number(raw_gaze[schema["x"]])
     df["y"] = _to_number(raw_gaze[schema["y"]])
     if schema.get("timestamp"):
-        df["timestamp_ms"] = _to_number(raw_gaze[schema["timestamp"]])
+        onset = schema["timestamp"]
+        df["timestamp_ms"] = _as_ms(_to_number(raw_gaze[onset]), onset)  # DATA-40
     else:
         # Each row represents one millisecond, so use row index within trial as timestamp
         df["timestamp_ms"] = df.groupby(list(PARENT_KEY), sort=False).cumcount()
@@ -3294,7 +3388,7 @@ def normalize_fixations(
     *,
     keep_columns: set | None = None,
 ) -> pd.DataFrame:
-    _warn_normalization_issues(fixations, schema, table="Fixations")
+    _warn_normalization_issues(fixations, schema, table="Fixations", fixations=True)
     fixations = _drop_rows_missing_identity(fixations, schema)
     # Explicit index so a constant participant placeholder fills every row.
     df = pd.DataFrame(index=fixations.index)
@@ -3338,10 +3432,14 @@ def normalize_fixations(
             df[coord] = np.nan
     # An unreadable duration / onset still falls back to 0, but no longer
     # silently: `_warn_numeric_issues` below names the column (BUG-54).
-    df["duration_ms"] = _to_number(fixations[schema["duration"]]).fillna(0)
+    # DATA-40: a duration / onset in seconds (Gazepoint), microseconds (Tobii)
+    # or nanoseconds (Pupil Labs Neon) is read in milliseconds.
+    duration = schema["duration"]
+    df["duration_ms"] = _as_ms(_to_number(fixations[duration]), duration).fillna(0)
 
     if schema.get("timestamp"):
-        df["timestamp_ms"] = _to_number(fixations[schema["timestamp"]]).fillna(0)
+        onset = schema["timestamp"]
+        df["timestamp_ms"] = _as_ms(_to_number(fixations[onset]), onset).fillna(0)
     else:
         df["timestamp_ms"] = df.groupby(list(PARENT_KEY), sort=False).cumcount()
 

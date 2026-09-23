@@ -621,7 +621,9 @@ def _readers_do_not_line_up(words: pd.DataFrame, fixations: pd.DataFrame) -> boo
 def _c_normalization_issues(
     _raw, _schema, fingerprint: tuple, key: tuple, table: str
 ) -> list:
-    return normalization_issues(_raw, _schema, table=table)
+    return normalization_issues(
+        _raw, _schema, table=table, fixations=table == "Fixations"
+    )
 
 
 def _schema_key(schema: dict | None) -> tuple:

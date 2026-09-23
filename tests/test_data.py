@@ -1518,3 +1518,47 @@ class TestVendorExportsAreAutoDetected:
         schema = propose_fix_schema(df)
         assert schema["x"] == "CURRENT_FIX_X"
         assert schema["duration"] == "CURRENT_FIX_DURATION"
+
+
+class TestVendorUnitsAreRead:
+    """DATA-40: auto-detection found each vendor's time and position columns
+    (DATA-25) but read their numbers as if they were milliseconds and pixels."""
+
+    @pytest.mark.parametrize(
+        "column, factor",
+        [
+            ("Recording timestamp [μs]", 1e-3),  # Tobii Pro Lab
+            ("Recording timestamp [µs]", 1e-3),  # the micro sign, not mu
+            ("start timestamp [ns]", 1e-6),  # Pupil Labs Neon
+            ("Fixation Duration [ms]", 1.0),
+            ("duration (s)", 1000.0),
+            ("FPOGD", 1000.0),  # Gazepoint: seconds, by the manual
+            ("start_timestamp", 1000.0),  # Pupil Labs Core: seconds
+            ("CURRENT_FIX_DURATION", 1.0),
+            ("Fixation point X [DACS px]", 1.0),  # a unit, just not a time
+        ],
+    )
+    def test_the_header_names_the_unit(self, column, factor):
+        assert data_module.time_unit_ms(column) == factor
+
+    def test_a_gazepoint_export_reads_in_milliseconds(self):
+        raw = pd.DataFrame(
+            {
+                "USER": ["P1", "P1"],
+                "MEDIA_NAME": ["page1.png"] * 2,
+                "FPOGX": [0.21, 0.33],
+                "FPOGY": [0.30, 0.31],
+                "FPOGS": [1.204, 1.512],
+                "FPOGD": [0.248, 0.221],
+            }
+        )
+        schema = propose_fix_schema(raw)
+        with pytest.warns(UserWarning, match="fractions of the screen"):
+            fixations = normalize_fixations(raw, schema)
+        assert fixations["duration_ms"].tolist() == pytest.approx([248.0, 221.0])
+        assert fixations["timestamp_ms"].tolist() == pytest.approx([1204.0, 1512.0])
+
+    def test_pixel_positions_raise_no_fraction_warning(self):
+        raw = pd.DataFrame({"x": [120.5, 300.0], "y": [80.0, 80.0]})
+        schema = {"x": "x", "y": "y"}
+        assert data_module.screen_fraction_issues(raw, schema, table="F") == []

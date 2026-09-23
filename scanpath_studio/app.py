@@ -209,11 +209,7 @@ from scanpath_studio.persistence import (
     set_persistence_paused,
     skip_next_local_save,
 )
-from scanpath_studio.session_keys import (
-    COLUMN_MAPPING_PREFIX,
-    LINK_SETUP_STATE_KEY,
-    PARAM_CORPUS,
-)
+from scanpath_studio.session_keys import COLUMN_MAPPING_PREFIX, PARAM_CORPUS
 from scanpath_studio.styles import get_app_css
 from scanpath_studio.tabs import (
     _build_figure_settings,
@@ -248,6 +244,8 @@ from scanpath_studio.url_state import (
     _go_data,
     _render_share_body,
     corpus_choice_for_slug,
+    link_setup_keys_for,
+    scope_link_setup,
 )
 
 # NOTE: ``scanpath_studio.wizard`` is imported lazily inside the two functions
@@ -5435,10 +5433,12 @@ def seed_canvas_state(
     # these keys before this first run gets here, and carries the canvas / font
     # only when the sender's differs from the corpus', so snapping over them
     # would undo exactly the part of the link that was worth sending. The link
-    # names what it seeded; that list is consumed by the first seeding, which is
-    # the only one that can snap for a source the session just opened.
-    from_link = frozenset(st.session_state.pop(LINK_SETUP_STATE_KEY, None) or ())
+    # names what it seeded *and for which source*; the first seeding consumes
+    # that, and honours it only for the linked source — a link that fell back to
+    # another corpus, or a first run that never got this far, must not leave the
+    # next source opened without its own monitor.
     source_key = (data_choice, st.session_state.get("public_dataset_choice"))
+    from_link = link_setup_keys_for(source_key)
     if monitor_is_authoritative and st.session_state.get("_canvas_seeded_for") != (
         source_key
     ):
@@ -5481,8 +5481,10 @@ def seed_canvas_state(
     # come back, and your own size is still there. Stashed only on the **first**
     # snap of a run of them, so MultiplEYE → another font-declaring corpus →
     # Demo restores the pre-MultiplEYE state and not MultiplEYE's.
-    font_px, font_css = _dataset_font(words_filtered)
     if st.session_state.get("_font_seeded_for") != source_key:
+        # Read only when the snap can fire: on a font-declaring corpus it is a
+        # numeric parse over every word row, and every other run discards it.
+        font_px, font_css = _dataset_font(words_filtered)
         if font_px is not None:
             # A value a link seeded is this source's own, not something to put
             # back on the way out — so it is stashed as absent, and leaving the
@@ -6374,20 +6376,29 @@ def main() -> None:
             icon="⚠️",
             duration="long",
         )
+    linked_choice = None
     if url_source == "onestop" and onestop_data_dir() is not None:
-        st.session_state.setdefault("data_source_choice", ONESTOP_CHOICE)
+        linked_choice = st.session_state.setdefault(
+            "data_source_choice", ONESTOP_CHOICE
+        )
     elif url_source == "multipleye" and multipleye_bundle_dir() is not None:
-        st.session_state.setdefault("data_source_choice", MULTIPLEYE_BUNDLE_CHOICE)
+        linked_choice = st.session_state.setdefault(
+            "data_source_choice", MULTIPLEYE_BUNDLE_CHOICE
+        )
     elif url_source == "demo":
-        st.session_state.setdefault("data_source_choice", DEMO_CHOICE)
+        linked_choice = st.session_state.setdefault("data_source_choice", DEMO_CHOICE)
     elif url_source == "synthetic":
-        st.session_state.setdefault("data_source_choice", SYNTHETIC_CHOICE)
+        linked_choice = st.session_state.setdefault(
+            "data_source_choice", SYNTHETIC_CHOICE
+        )
     elif url_source == "author":
-        st.session_state.setdefault("data_source_choice", AUTHOR_CHOICE)
+        linked_choice = st.session_state.setdefault("data_source_choice", AUTHOR_CHOICE)
     elif url_source == "onestop_public" and public_datasets_enabled():
         # DATA-3: the public OneStop corpus is shareable. Land on it in the flat
         # picker; _apply_url_preset already seeded onestop_variant/regime/parts.
-        st.session_state.setdefault("data_source_choice", ONESTOP_PUBLIC_CHOICE)
+        linked_choice = st.session_state.setdefault(
+            "data_source_choice", ONESTOP_PUBLIC_CHOICE
+        )
     elif url_source == CORPUS_SOURCE_TOKEN:
         # DATA-27 (Task 12): `?source=corpus&corpus=<slug>` names ONE entry of
         # `public_dataset_registry()` — a built-in public corpus or a locally
@@ -6408,7 +6419,9 @@ def main() -> None:
             corpus_choice_for_slug(slug) if public_datasets_enabled() else None
         )
         if corpus_choice:
-            st.session_state.setdefault("data_source_choice", corpus_choice)
+            linked_choice = st.session_state.setdefault(
+                "data_source_choice", corpus_choice
+            )
         elif slug:
             # The common case, not an edge case: the recipient has no prepared
             # bundle, or a different subset of one. Say which corpus was named
@@ -6429,6 +6442,11 @@ def main() -> None:
             )
     elif url_source == "upload":
         st.session_state.setdefault("_show_upload_wizard", True)
+    # EXP-19: the canvas / font a link seeded belong to the source it names.
+    # Scope their protection from the source snap to that source — or drop it
+    # when the link named none this app can open, so the fallback source still
+    # snaps to its own monitor rather than wearing another corpus' canvas.
+    scope_link_setup(linked_choice)
 
     # Chrome first, page heading second: Streamlit's native top nav, then the
     # settings menu bar, then the title.

@@ -240,10 +240,11 @@ def _compare_style_params(*fields: str) -> dict[str, str]:
     }
 
 
-#: EXP-19 — where a deep link parks the recording-setup keys it seeded, so the
-#: source's own monitor / typeface snap (`app.seed_canvas_state`) leaves them
-#: alone on the recipient's first run instead of overwriting the sender's values
-#: with the corpus defaults. A one-shot handoff, not a setting.
+#: EXP-19 — where a deep link parks the recording-setup keys it seeded, and the
+#: source it resolved to (`url_state.scope_link_setup`), so that source's own
+#: monitor / typeface snap (`app.seed_canvas_state`) leaves them alone on the
+#: recipient's first run instead of overwriting the sender's values with the
+#: corpus defaults. A one-shot handoff, not a setting.
 LINK_SETUP_STATE_KEY = "_link_setup_keys"
 
 # ---------------------------------------------------------------------------

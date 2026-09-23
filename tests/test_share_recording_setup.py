@@ -352,11 +352,14 @@ def test_a_linked_canvas_and_font_survive_the_source_snap():
         global_canvas_height=1080,
         global_base_font_size=20,
         **{
-            sk.LINK_SETUP_STATE_KEY: [
-                "global_base_font_size",
-                "global_canvas_height",
-                "global_canvas_width",
-            ]
+            sk.LINK_SETUP_STATE_KEY: {
+                "keys": [
+                    "global_base_font_size",
+                    "global_canvas_height",
+                    "global_canvas_width",
+                ],
+                "choice": "Bundled Demo",
+            }
         },
     )
     width, height, font = at.session_state["_resolved"][:3]
@@ -370,10 +373,179 @@ def test_a_linked_canvas_and_font_survive_the_source_snap():
 
 def test_the_reader_names_what_it_seeded_for_the_snap():
     at = _open_link(canvas_width="1920", base_font_size="20", show_words="1")
-    assert sorted(at.session_state[sk.LINK_SETUP_STATE_KEY]) == [
-        "global_base_font_size",
-        "global_canvas_width",
-    ]
+    marker = at.session_state[sk.LINK_SETUP_STATE_KEY]
+    assert marker["keys"] == ["global_base_font_size", "global_canvas_width"]
+    # Unscoped until `app.main` knows which source the link resolved to.
+    assert marker["choice"] is None
+
+
+def test_a_link_to_another_source_leaves_this_ones_snap_alone():
+    """The link fell back (a corpus the recipient doesn't have), or its first
+    run returned early and the user then opened something else: the marker
+    names another source, so the demo still snaps to its own monitor — and the
+    marker is spent, so no later source skips its snap either."""
+    at = _seed(
+        global_canvas_width=1920,
+        global_canvas_height=1080,
+        **{
+            sk.LINK_SETUP_STATE_KEY: {
+                "keys": ["global_canvas_height", "global_canvas_width"],
+                "choice": "PoTeC — some other corpus",
+            }
+        },
+    )
+    assert at.session_state["_resolved"][:2] == (2560, 1440)
+    assert at.session_state["_marker_left"] is False
+
+
+def test_an_unscoped_marker_protects_nothing():
+    """`scope_link_setup` never ran — nothing says which source it was for."""
+    at = _seed(
+        global_canvas_width=1920,
+        global_canvas_height=1080,
+        **{
+            sk.LINK_SETUP_STATE_KEY: {
+                "keys": ["global_canvas_height", "global_canvas_width"],
+                "choice": None,
+            }
+        },
+    )
+    assert at.session_state["_resolved"][:2] == (2560, 1440)
+
+
+def test_a_link_whose_source_did_not_resolve_protects_nothing():
+    """`scope_link_setup(None)`: an uploaded-dataset link (no `source=`), a
+    corpus this machine can't open — the recipient stays on their own source,
+    which must snap to its own monitor."""
+    from scanpath_studio.constants import DEMO_CHOICE
+
+    for choice, expected in ((None, None), (DEMO_CHOICE, DEMO_CHOICE)):
+        at = AppTest.from_function(_scope_app_body)
+        at.session_state["_choice"] = choice
+        at.query_params["canvas_width"] = "1920"
+        at.run(timeout=30)
+        assert not at.exception, at.exception
+        marker = at.session_state["_marker"]
+        assert (marker or {}).get("choice") == expected
+
+
+def _scope_app_body():
+    import streamlit as st
+
+    from scanpath_studio.session_keys import LINK_SETUP_STATE_KEY
+    from scanpath_studio.url_state import _apply_url_preset, scope_link_setup
+
+    _apply_url_preset()
+    scope_link_setup(st.session_state["_choice"])
+    st.session_state["_marker"] = st.session_state.get(LINK_SETUP_STATE_KEY)
+
+
+def _boot_link(**params):
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=250)
+    for key, value in params.items():
+        at.query_params[key] = value
+    at.run()
+    assert not at.exception, [e.message for e in at.exception]
+    return at.session_state["_snippet_state"]
+
+
+@pytest.mark.timeout(600)
+@pytest.mark.parametrize(
+    "params",
+    [
+        # What an uploaded-dataset link used to carry: no `source=` at all.
+        {"canvas_width": "1920", "canvas_height": "1080"},
+        # A corpus the recipient has no bundle for — the app stays on the demo.
+        {
+            "source": "corpus",
+            "corpus": "harmonised-nothing-here",
+            "canvas_width": "1920",
+            "canvas_height": "1080",
+        },
+    ],
+)
+def test_a_canvas_for_a_source_the_app_did_not_open_is_not_pinned(params):
+    """The demo is 2560x1440; a link's canvas belongs to the source the link
+    named, and must not become the demo's because the link fell back to it."""
+    assert _boot_link(**params).canvas == (2560, 1440)
+
+
+def _upload_link_app():
+    import streamlit as st
+
+    from scanpath_studio.url_state import _build_share_query
+
+    st.session_state["global_canvas_width"] = 1920
+    st.session_state["global_canvas_height"] = 1080
+    st.session_state["global_base_font_size"] = 20
+    st.session_state["_share_selection"] = {"participant_id": "p1", "trial_id": "t1"}
+    st.session_state["_query"] = _build_share_query("My upload")[0]
+
+
+def test_a_link_that_cannot_name_its_source_carries_no_recording_setup():
+    """An uploaded dataset's setup travels in its ⬇️ Save setup JSON, which the
+    link's caveat points at; on the link it would land on another source."""
+    at = AppTest.from_function(_upload_link_app)
+    at.run(timeout=30)
+    assert not at.exception, at.exception
+    emitted = set(parse_qs(at.session_state["_query"]))
+    assert "source" not in emitted
+    assert not emitted & set(sk.SETUP_PARAMS)
+
+
+def _font_corpus_link_app():
+    import streamlit as st
+
+    from scanpath_studio.constants import DEMO_CHOICE
+    from scanpath_studio.url_state import _build_share_query
+
+    st.session_state["global_base_font_size"] = 16
+    if st.session_state["_snapped"]:
+        # What `seed_canvas_state` leaves behind on a font-declaring corpus.
+        st.session_state["_font_snap_restore"] = {"global_base_font_size": None}
+    st.session_state["_share_selection"] = {"participant_id": "p1", "trial_id": "t1"}
+    st.session_state["_query"] = _build_share_query(DEMO_CHOICE)[0]
+
+
+@pytest.mark.parametrize(("snapped", "carried"), [(False, False), (True, True)])
+def test_the_factory_font_travels_from_a_font_declaring_corpus(snapped, carried):
+    """On MultiplEYE the first seeding snaps the base font to the corpus'; a
+    sender who then picked 16 has to say so, or the recipient gets the corpus
+    size back."""
+    at = AppTest.from_function(_font_corpus_link_app)
+    at.session_state["_snapped"] = snapped
+    at.run(timeout=30)
+    assert not at.exception, at.exception
+    emitted = parse_qs(at.session_state["_query"])
+    assert (emitted.get("base_font_size") == ["16"]) is carried
+
+
+def _font_read_app():
+    import pandas as pd
+    import streamlit as st
+
+    from scanpath_studio import app
+    from scanpath_studio.constants import DEMO_CHOICE
+
+    calls = []
+    real = app._dataset_font
+    app._dataset_font = lambda words: calls.append(1) or real(words)
+    try:
+        words = pd.DataFrame({"x": [10.0], "y": [10.0], "stimulus_font_px": [30.0]})
+        for _ in range(3):
+            app.seed_canvas_state(words, pd.DataFrame(), DEMO_CHOICE)
+    finally:
+        app._dataset_font = real
+    st.session_state["_calls"] = len(calls)
+
+
+def test_the_stimulus_font_is_read_only_when_the_snap_can_fire():
+    """PERF: a numeric parse over every word row of a font-declaring corpus,
+    which every run after the first discarded."""
+    at = AppTest.from_function(_font_read_app)
+    at.run(timeout=30)
+    assert not at.exception, at.exception
+    assert at.session_state["_calls"] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -422,3 +594,30 @@ def test_the_whole_app_reopens_the_senders_comparison():
     for key in ("style_a", "style_b", "show_legend", "marker_size_range"):
         assert got_state.settings[key] == sent_state.settings[key], key
     assert got_state == sent_state
+
+
+def _early_return_app():
+    """A link to a corpus whose first run never reached the canvas seeding —
+    its load failed, or its mapping was broken — then the user opens the demo."""
+    import pandas as pd
+    import streamlit as st
+
+    from scanpath_studio.app import seed_canvas_state
+    from scanpath_studio.constants import DEMO_CHOICE
+    from scanpath_studio.url_state import _apply_url_preset, scope_link_setup
+
+    _apply_url_preset()
+    scope_link_setup("PoTeC — the corpus the link named")
+    # (the run returns early here; no `seed_canvas_state`)
+    st.session_state["_resolved"] = seed_canvas_state(
+        pd.DataFrame(), pd.DataFrame(), DEMO_CHOICE
+    )
+
+
+def test_a_first_run_that_returned_early_does_not_skip_the_next_sources_snap():
+    at = AppTest.from_function(_early_return_app)
+    at.query_params["canvas_width"] = "1920"
+    at.query_params["canvas_height"] = "1080"
+    at.run(timeout=30)
+    assert not at.exception, at.exception
+    assert at.session_state["_resolved"][:2] == (2560, 1440)

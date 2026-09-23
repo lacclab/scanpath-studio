@@ -932,10 +932,13 @@ def _apply_url_preset() -> str | None:
     # and font controls to it the first time it is seeded — on a recipient's
     # first run, that is, *after* this link has seeded them — so without a word
     # from here the sender's canvas would be replaced by the corpus default the
-    # link had just been careful not to repeat. `app.seed_canvas_state` consumes
-    # this once and leaves the named keys alone.
+    # link had just been careful not to repeat. `app.main` scopes this to the
+    # source the link resolves to (`scope_link_setup`) and `app.seed_canvas_state`
+    # consumes it (`link_setup_keys_for`), leaving the named keys alone.
     if snapped_from_link:
-        st.session_state.setdefault(LINK_SETUP_STATE_KEY, sorted(snapped_from_link))
+        st.session_state.setdefault(
+            LINK_SETUP_STATE_KEY, {"keys": sorted(snapped_from_link), "choice": None}
+        )
 
     # DATA-22 §7 surface 2 (read side): badge the values this link is carrying
     # with how the *sender* knew them, so an assumed monitor arrives labelled as
@@ -1017,6 +1020,40 @@ def _apply_url_preset() -> str | None:
 
     source = qp.get("source")
     return source.lower() if source else None
+
+
+def scope_link_setup(choice: str | None) -> None:
+    """Tie the keys a link seeded (EXP-19) to the data source it resolved to.
+
+    Called by `app.main` once its `?source=` dispatch has run, with the choice
+    the link landed on — or ``None`` when it named no source this app can open
+    (an uploaded dataset, a corpus the recipient has no bundle for, a server
+    bundle with no data directory). Then there is nothing to protect: the
+    recipient is on whatever source they already had, and it snaps to its own
+    monitor exactly as if no link had been opened."""
+    marker = st.session_state.get(LINK_SETUP_STATE_KEY)
+    if not isinstance(marker, dict) or marker.get("choice") is not None:
+        return  # nothing seeded this run, or already scoped on the first one
+    if choice is None:
+        st.session_state.pop(LINK_SETUP_STATE_KEY, None)
+    else:
+        st.session_state[LINK_SETUP_STATE_KEY] = {**marker, "choice": str(choice)}
+
+
+def link_setup_keys_for(source_key: tuple) -> frozenset:
+    """The linked keys the source snap must leave alone for ``source_key``.
+
+    ``source_key`` is `seed_canvas_state`'s ``(data_choice,
+    public_dataset_choice)``: a public corpus the link named by its registry
+    label is seeded under the collapsed picker choice, with the label second.
+    Consumes the marker either way — it describes the first seeding only, so a
+    link that is not honoured now never will be."""
+    marker = st.session_state.pop(LINK_SETUP_STATE_KEY, None)
+    if not isinstance(marker, dict) or marker.get("choice") is None:
+        return frozenset()
+    if marker["choice"] not in {str(part) for part in source_key if part}:
+        return frozenset()
+    return frozenset(marker.get("keys") or ())
 
 
 # plot-config layer key → viz-control session_state key. The inverse of the
@@ -2539,7 +2576,13 @@ def _build_share_query(
     for url_key, state_key in {**SETUP_PARAMS, **COMPARE_STYLE_PARAMS}.items():
         if url_key not in params:
             continue
-        orphaned = url_key in COMPARE_STYLE_PARAMS and COMPARE_PARAM not in params
+        # The recording setup is the *source's*: a link that cannot name the
+        # source (an uploaded dataset) would pin its canvas on whatever the
+        # recipient happens to have open. It travels in the dataset's own ⬇️ Save
+        # setup JSON instead, which the source caveat above already points at.
+        orphaned = (
+            url_key in COMPARE_STYLE_PARAMS and COMPARE_PARAM not in params
+        ) or (url_key in SETUP_PARAMS and "source" not in params)
         restated = state_key in defaults and _same_setting(
             st.session_state.get(state_key), defaults[state_key]
         )
@@ -2581,13 +2624,29 @@ def _link_defaults(data_choice: str) -> dict:
       physical width the recipient will have. Those are the sender's own (each
       either on the link or re-resolved to the same value), so a DPI that still
       follows from them is re-derived identically and need not be sent.
+    * **Base font** — the factory 16, except on a source that declares its own
+      typeface: that one snaps the font on first seeding, so it has no default
+      the sender can leave off and always travels.
     * **Everything else** — the factory values a fresh session pins
       (`app.SETUP_DEFAULTS`, `controls.compare_style_defaults`).
+
+    The elision assumes a *fresh* recipient session. On a machine with the
+    recovery cache, the cache restores after the link's presets, so a setting
+    left off takes the recipient's cached value rather than the default.
     """
-    from scanpath_studio.app import SETUP_DEFAULTS, resolve_source_monitor
+    from scanpath_studio.app import (
+        _FONT_SNAP_RESTORE_KEY,
+        SETUP_DEFAULTS,
+        resolve_source_monitor,
+    )
     from scanpath_studio.controls import compare_style_defaults
 
     defaults = dict(SETUP_DEFAULTS)
+    if _FONT_SNAP_RESTORE_KEY in st.session_state:
+        # The source declares its typeface (MultiplEYE), so its first seeding
+        # snaps the base font to *that* — a sender who chose the factory 16
+        # there has to say so, or the recipient gets the corpus' size.
+        defaults.pop("global_base_font_size")
     width, height, authoritative = resolve_source_monitor(data_choice, None, None)
     if authoritative:
         lo, hi = _CANVAS_BOUNDS

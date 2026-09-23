@@ -2,8 +2,11 @@
 
 The hosted app deliberately does not persist anything: there is no user identity
 there, so a process-wide cache could expose one visitor's data to another.  A
-localhost/desktop session stores uploaded datasets as Parquet plus a small JSON
-manifest and restores them on the next browser or process session.
+session served on loopback only (the desktop app, a launch bound to
+``127.0.0.1``) stores uploaded datasets as Parquet plus a small JSON manifest and
+restores them on the next browser or process session. Which of the two a server
+is comes from its own bind address, never from the browser — see
+:func:`persistence_enabled`.
 
 Storing a researcher's tables on their disk is invisible by nature, so the cache
 is also *inspectable*: :func:`cache_status` reports what is stored, where, how
@@ -125,8 +128,19 @@ def persistence_enabled(url: str = "", environ: dict | None = None) -> bool:
     """Return whether disk persistence is safe for this process.
 
     ``SCANPATH_STUDIO_PERSIST=1`` explicitly enables it and ``=0`` disables it.
-    Without an override it is enabled only for loopback URLs, which covers the
-    desktop app and ``streamlit run`` while keeping public deployments isolated.
+    Without an override, inside a Streamlit server it is enabled only when that
+    server listens on loopback alone (:func:`server_bound_to_loopback`) — the
+    desktop app and ``scanpath-studio run`` bind ``127.0.0.1``; a bare
+    ``streamlit run``, which listens on every interface, does not persist unless
+    opted in.
+
+    ENG-56: this used to ask whether ``url`` was a loopback URL, and the app
+    passes ``st.context.url`` — which Streamlit copies from the browser's own
+    message. So any machine that could reach the port could claim to be at
+    ``http://localhost/`` and have the owner's cached datasets restored into its
+    session. The URL is still consulted **outside** a Streamlit server (the
+    ``cache`` CLI, the API, tests), where no browser supplies it and the caller
+    is describing where the app would be served.
     """
     env = os.environ if environ is None else environ
     override = str(env.get(PERSIST_ENV_VAR, "")).strip().lower()
@@ -134,7 +148,13 @@ def persistence_enabled(url: str = "", environ: dict | None = None) -> bool:
         return True
     if override in {"0", "false", "no", "off"}:
         return False
-    return is_loopback_url(url)
+    try:
+        from streamlit import runtime
+
+        serving = runtime.exists()
+    except Exception:  # pragma: no cover - streamlit is a hard dependency
+        serving = False
+    return server_bound_to_loopback() if serving else is_loopback_url(url)
 
 
 def state_directory(environ: dict | None = None) -> Path:

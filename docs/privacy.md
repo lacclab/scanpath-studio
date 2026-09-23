@@ -13,8 +13,13 @@ your own machine. Do not upload identifiable recordings to the hosted demo.
 
 Uploaded tables are parsed locally. Completed datasets, mappings, view settings,
 and annotations are stored in an on-device recovery cache so a refresh does not
-erase the session. This happens on local and desktop runs only; a hosted
-deployment stores nothing.
+erase the session. This happens only when the app listens on this machine
+alone — the desktop app, or a launch with `server.address` set to `127.0.0.1`,
+`::1` or `localhost` — or when you opt in with `SCANPATH_STUDIO_PERSIST=1`. A
+server other machines can reach stores nothing: a hosted deployment, and a bare
+`streamlit run`, which listens on every interface. The app decides this from the
+address its own server is bound to, never from the address a browser reports,
+which any client on the network could set to `localhost`.
 
 The cache is visible and removable from inside the app: 💾 **Session →
 🗄️ Automatic recovery** (the dialog the nav's 💾 Session entry opens) names the

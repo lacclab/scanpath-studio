@@ -52,6 +52,61 @@ def test_enabled_only_for_loopback_without_override():
     )
 
 
+class TestTheGateTrustsTheServerNotTheBrowser:
+    """ENG-56 — inside a Streamlit server the gate reads ``server.address``.
+
+    It used to read ``st.context.url``, which Streamlit copies from the browser's
+    own message, so a peer on the network could connect to an all-interfaces
+    server claiming ``http://localhost/`` and get the owner's cached datasets.
+    """
+
+    @pytest.fixture
+    def serving(self, monkeypatch):
+        from streamlit import config, runtime
+
+        monkeypatch.setattr(runtime, "exists", lambda: True)
+        before = config.get_option("server.address")
+        yield lambda address: config.set_option("server.address", address)
+        config.set_option("server.address", before)
+
+    def test_a_claimed_localhost_url_is_not_enough(self, serving):
+        serving(None)  # Streamlit's default: every interface
+        assert not persistence_enabled("http://localhost:8501", {})
+        serving("0.0.0.0")
+        assert not persistence_enabled("http://127.0.0.1:8501", {})
+
+    @pytest.mark.parametrize("address", ["127.0.0.1", "::1", "[::1]", "localhost"])
+    def test_a_loopback_bound_server_persists(self, serving, address):
+        serving(address)
+        assert persistence_enabled("https://any.example", {})
+        assert persistence.server_bound_to_loopback()
+
+    def test_the_environment_still_wins_both_ways(self, serving):
+        serving(None)
+        assert persistence_enabled("", {"SCANPATH_STUDIO_PERSIST": "1"})
+        serving("127.0.0.1")
+        assert not persistence_enabled("", {"SCANPATH_STUDIO_PERSIST": "0"})
+
+    def test_cache_status_reports_the_same_gate(self, serving, tmp_path):
+        serving(None)
+        assert not cache_status(tmp_path, url="http://localhost", environ={})["enabled"]
+        serving("127.0.0.1")
+        assert cache_status(tmp_path, url="", environ={})["enabled"]
+
+
+def test_the_desktop_app_binds_loopback_so_it_keeps_its_cache():
+    """ENG-56 made the cache follow the bind address, so the launcher's is load-bearing."""
+    import re
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parents[1] / "desktop" / "launcher.py"
+    ).read_text(encoding="utf-8")
+    bound = re.findall(r'"--server\.address=([^"]+)"', source)
+    assert bound, "desktop/launcher.py no longer passes --server.address"
+    assert all(persistence._is_loopback_host(address) for address in bound), bound
+
+
 def test_is_loopback_url_is_independent_of_persistence_overrides():
     assert is_loopback_url("http://localhost:8501")
     assert is_loopback_url("http://127.0.0.1:8501/path")

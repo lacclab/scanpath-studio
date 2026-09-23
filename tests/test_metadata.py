@@ -652,6 +652,8 @@ class TestGroupingEndToEnd:
         languages = ["Hebrew" if i % 2 == 0 else "English" for i in range(len(readers))]
         _attach(at, readers, languages)
         pin_view(at, _VIEW_CORPUS)
+        # PERF-9: only the open Corpus subtab renders.
+        at.session_state["corpus_subtab"] = "Groups"
         at.run(timeout=120)
         assert not at.exception, at.exception
 

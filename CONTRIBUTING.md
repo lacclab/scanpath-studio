@@ -207,12 +207,14 @@ The version lives in **one** place — `__version__` in
 
 ## Dependencies
 
-- `pyproject.toml` carries the **library** dependency bounds (`>=`) used when
-  installing the package with pip.
-- `requirements.txt` is the **deployment manifest** for the Streamlit Cloud
-  demo, using compatible-release pins (`~=`) so the live app stays on a
-  known-good minor while still getting patch updates. Update both when you add
-  or upgrade a dependency.
+- `pyproject.toml` is the **one** place dependencies are declared (`>=`
+  bounds). Add or bump a dependency there and nowhere else.
+- The Streamlit Community Cloud demo installs from `environment.yml`, which
+  pip-installs this package, so it follows `pyproject.toml` onto the latest
+  releases with nothing to keep in sync. Community Cloud uses the first
+  dependency file it finds — `uv.lock`, `Pipfile`, `environment.yml`,
+  `requirements.txt`, `pyproject.toml` — so committing a `uv.lock` (it is
+  gitignored) would silently switch the demo onto it.
 
 ## Releasing
 

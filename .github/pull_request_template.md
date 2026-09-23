@@ -18,4 +18,4 @@ See CONTRIBUTING.md for the full pre-PR checklist.
 - [ ] Added/updated tests for any new behavior
 - [ ] `ruff check --exclude other_vis .` and `ruff format --check --exclude other_vis .` are clean
 - [ ] Added a `[Unreleased]` entry to [`CHANGELOG.md`](https://github.com/lacclab/scanpath-studio/blob/main/CHANGELOG.md) (every feature/bugfix/notable change)
-- [ ] Dependency change? Updated **both** `pyproject.toml` and `requirements.txt`
+- [ ] Dependency change? Declared in `pyproject.toml` (the only dependency manifest)

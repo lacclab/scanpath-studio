@@ -14,9 +14,7 @@ conda activate scanpath-studio
 mamba env create -f environment.yml
 mamba activate scanpath-studio
 
-# Using pip (alternative)
-pip install -r requirements.txt
-# Or install in development mode with test dependencies:
+# Using pip (alternative): development mode with test dependencies
 pip install -e ".[test]"
 ```
 

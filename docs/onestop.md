@@ -54,7 +54,7 @@ OneStop is exposed as a **Public dataset**. In the app, open 🗂️ **Data**, c
 | Variant | What it is |
 | --- | --- |
 | Public (OSF download) | Reports fetched from [OSF](https://osf.io/2prdq/) on demand, cached on disk. |
-| LaCC lab (local export) | A lab-processed export with extra derived columns (`unique_paragraph_id`, span indices, normalized dwell, …). No download — point at your local folder (default is the lab OneDrive path, editable / `ONESTOP_LACCLAB_DIR`). |
+| LaCC lab (local export) | A lab-processed export with extra derived columns (`unique_paragraph_id`, span indices, normalized dwell, …). No download — point at your local folder (blank by default; type the path or set `ONESTOP_LACCLAB_DIR`). |
 
 **Reading regime**
 
@@ -95,6 +95,14 @@ demo, with a **⬇ Download now** panel). For the Public variant, if they're
 present the corpus loads with no network access; if not, click **⬇ Download** to
 fetch them into the folder (cached on disk, so only the first load pays the
 download — reports range from tens to a few hundred MB each).
+
+!!! note "On a server other machines can reach"
+    When the app is served to other machines (the hosted demo, or
+    `--server.address 0.0.0.0`), the *Data directory* box, the 📁 folder picker
+    and **⬇ Download** are turned off: the corpus is read from the server's
+    configured data location, and whoever runs it places the files there — or,
+    on a trusted network, starts it with `SCANPATH_LOCAL_FS=1`. See
+    [Launch](cli.md#launch) and [Security](security.md).
 
 OneStop's reports use the same schema as the bundled demo, so they flow through
 the normal auto-detect → normalize pipeline — the **Column mapping** panels still

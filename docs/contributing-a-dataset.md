@@ -6,14 +6,14 @@ and this page is the contract for adding a fourth.
 
 !!! tip "You probably don't need this page"
     To load a corpus **you already have**, no code is needed at all — see
-    [Bring your own data](bring-your-own-data.md). This page is only for making a
+    [Loading public and own data](guides/loading-data.md). This page is only for making a
     corpus appear as a built-in source for everyone.
 
 ## Do you need an adapter?
 
 If your corpus is two tables with recognisable column names, **no**. The generic
-loader already takes a list or glob of files and auto-detects EyeLink, Gazepoint
-and snake_case columns.
+loader already takes a list or glob of files and auto-detects EyeLink, Gazepoint,
+Tobii, SMI, Pupil Labs and snake_case columns.
 
 Adapters exist for what the generic path *can't* guess. That's what the three
 existing ones are for:
@@ -22,7 +22,7 @@ existing ones are for:
 | --- | --- |
 | **OneStop** | Picking the right regime × part files out of the OSF release, and keeping the parts of one trial from colliding. The columns themselves are already fine. |
 | **PoTeC** | 900 per-trial files to concatenate; word AOIs with no participant column; and fixations with **no coordinates at all** — x/y has to be reconstructed from which character was fixated. |
-| **MultiplEYE** | Participant, session, trial and stimulus exist only in folder and file names; AOIs are per-character and must be combined into words; each page of a stimulus reuses the same screen coordinates, so each page has to become its own trial. |
+| **MultiplEYE** | Participant, session, trial and stimulus exist only in folder and file names; AOIs are per-character and must be combined into words; each page of a stimulus reuses the same screen coordinates, so one reading of a stimulus becomes one trial whose ordered **screens** are its pages and comprehension-question screens (DATA-24). |
 
 If none of that sounds like your corpus, open an
 [issue](https://github.com/lacclab/scanpath-studio/issues) describing its shape
@@ -31,8 +31,8 @@ this".
 
 ## Where the data lives
 
-Nothing corpus-scale goes into the installed package: it's ~1.3 MB of Python plus
-4.4 MB of demo data, and that's the whole budget. So in practice a new corpus is
+Nothing corpus-scale goes into the installed package: it's ~3.3 MB of Python plus
+~4.5 MB of demo data, and that's the whole budget. So in practice a new corpus is
 either **downloaded on demand** into a folder the user picks (PoTeC, OneStop) or
 **read from a directory the user already has** (MultiplEYE). Both look identical
 from the user's side — one picker entry, one `load_*` function.
@@ -282,8 +282,8 @@ Before you open it:
 ```bash
 pip install -e ".[test,docs]"
 pytest
-ruff check --exclude other_vis .
-ruff format --exclude other_vis .
+ruff check .
+ruff format .
 mkdocs build --strict          # if you added or edited a docs page
 ```
 

@@ -1014,14 +1014,16 @@ def _snap_fixations_to_words(
         wid = pd.to_numeric(
             assign_fixations_to_words(out, words)["word_id"], errors="coerce"
         )
-    # BUG-11: the *corrected* box centre is the glyph centre. The raw box carries
-    # the inter-word space as trailing padding, so its centre sits half a
-    # character to the right — visibly off-centre once a fixation snaps to it.
-    from .measures import word_box_bounds
+    # Snap above the word's *glyphs*, where its label is drawn — not the middle
+    # of its interest area. A tiling box carries the following space as its last
+    # cell, so the box centre sits half a character right of the text, visibly
+    # off-centre once a fixation snaps to it. Render-only: which word a fixation
+    # belongs to is still `assign_fixations_to_words`, against the raw boxes.
+    from .measures import word_glyph_span
 
-    wx0, wy0, wx1, _ = word_box_bounds(words)
-    cx_by_id = dict(zip(words["word_id"], (wx0 + wx1) / 2.0))
-    top_by_id = dict(zip(words["word_id"], wy0))
+    start, run = word_glyph_span(words)
+    cx_by_id = dict(zip(words["word_id"], start + run / 2.0))
+    top_by_id = dict(zip(words["word_id"], pd.to_numeric(words["y"], errors="coerce")))
     snap_x = wid.map(cx_by_id)
     snap_y = wid.map(top_by_id)
     out[x_field] = snap_x.where(snap_x.notna(), out[x_field])
@@ -1143,11 +1145,12 @@ def _saccade_arrow_markers(
 def build_word_boxes(words: pd.DataFrame, color: str = WORD_BOX_COLOR) -> list:
     """Rectangles for the word interest areas.
 
-    BUG-11: drawn from ``measures.word_box_bounds``, so what's on screen is
-    exactly what ``assign_fixations_to_words`` assigns against. The word *labels*
-    keep the original frame — ``x`` still means "where the glyphs start", which is
-    what keeps the true-to-scale text on top of the stimulus image. For a
-    glyph-tight corpus the correction is zero.
+    Drawn from ``measures.word_box_bounds`` — the experiment's own rectangles
+    (BUG-83) — so what's on screen is exactly what ``assign_fixations_to_words``
+    assigns against. On a tiling corpus each outline therefore runs on across
+    the space after its word, while the word *label* sits on the glyphs
+    (``measures.word_glyph_span``), which is what keeps the true-to-scale text on
+    top of the stimulus image.
     """
     from .measures import word_box_bounds
 
@@ -1208,10 +1211,9 @@ def build_critical_span_overlay(
     line_ids = (y_sorted.diff().fillna(0) > typical_h * 0.5).cumsum()
     span["_line_id"] = line_ids.reindex(span.index)
 
-    # BUG-11: `span` is a subset, so detection runs on the full `words` frame.
     from .measures import word_box_bounds
 
-    span_x0, _, span_x1, _ = word_box_bounds(span, layout=words)
+    span_x0, _, span_x1, _ = word_box_bounds(span)
     span["_box_x0"], span["_box_x1"] = span_x0, span_x1
 
     shapes = []
@@ -1436,7 +1438,7 @@ def _add_word_label_trace(
         ]
     else:
         label_color = text_color
-    # BUG-30 — the label is **centred in the box as drawn**, so whatever room the
+    # BUG-30 — the label is **centred on its word's glyphs**, so whatever room the
     # text does not fill splits evenly instead of piling up on one side.
     #
     # It used to anchor at the box's leading edge (raw `x` for LTR, `x + width`
@@ -1445,18 +1447,18 @@ def _add_word_label_trace(
     # back on a short word, all showed up as a gap on the *trailing* side and none
     # on the leading one — "no space from the left side of the AOI".
     #
-    # The box is `measures.word_box_bounds`, not the raw frame, which is what
-    # makes this a no-op where it should be one: a tiling corpus' box carries the
-    # following space as trailing padding and BUG-11 pulls every edge back half a
-    # space, so its centre already *is* the glyph run's centre (checked on the
-    # bundled demo: 415.0 against a glyph centre of 416.3 for the first word).
-    # Where the boxes hug the glyphs the centre is the box's own, and the padding
-    # lands half on each side — which is the reported ask, as a rendering.
+    # Centred on the word's *glyph run* (`measures.word_glyph_span`), not on its
+    # interest area. Where the boxes hug the glyphs the two are the same, and the
+    # padding lands half on each side — which is the reported ask, as a
+    # rendering. A tiling corpus' box carries the following space as its last
+    # cell (BUG-83 keeps it there, as the experiment defined it), so its centre
+    # sits half a space right of the text; centring the label there would draw
+    # every word off the stimulus image and off the fixations that read it.
     #
     # Centring also retires the LTR/RTL anchor split: centred text is centred in
     # either direction. The Unicode direction isolates stay — they are about
     # *shaping* mixed Hebrew/Arabic + punctuation, not about placement.
-    from .measures import word_box_bounds
+    from .measures import word_glyph_span
     from .preprocessing import detect_right_to_left
 
     rtl = words.get("right_to_left")
@@ -1464,8 +1466,8 @@ def _add_word_label_trace(
         rtl = words["text"].astype(str).map(detect_right_to_left)
     else:
         rtl = rtl.fillna(False).astype(bool)
-    box_x0, _box_y0, box_x1, _box_y1 = word_box_bounds(words)
-    label_x = (box_x0 + box_x1) / 2.0
+    glyph_start, glyph_run = word_glyph_span(words)
+    label_x = glyph_start + glyph_run / 2.0
     label_text = [
         f"\u2067{value}\u2069" if is_rtl else value
         for value, is_rtl in zip(words["text"].astype(str), rtl)
@@ -2716,13 +2718,14 @@ def _add_word_level_heatmap(
         if weights is not None
         else None
     )
-    # BUG-11: bin against the corrected boxes, so a fixation in the space before a
-    # word counts towards that word — the same boundary the heatmap then draws.
-    from .measures import word_box_bounds
+    # Bin against the experiment's boxes (BUG-83) with the assignment's own
+    # containment rule — the same boundary it uses and the heatmap then draws,
+    # and half-open, so a fixation on a shared edge counts towards one word.
+    from .measures import word_box_bounds, word_box_contains
 
     word_values = []
     for wx0, wy0, wx1, wy1 in zip(*word_box_bounds(words)):
-        in_word = (fx >= wx0) & (fx <= wx1) & (fy >= wy0) & (fy <= wy1)
+        in_word = word_box_contains(fx, fy, wx0, wy0, wx1, wy1)
         val = (
             float(np.nansum(w_arr[in_word]))
             if w_arr is not None
@@ -2794,8 +2797,8 @@ def _draw_word_value_heatmap(
 
     # Nonzero test on the RAW values (a word with no dwell stays uncoloured); the
     # colour position then maps through the chosen normalization (VIZ-3). Boxes
-    # come from word_box_bounds (BUG-11) so the tinted rects sit exactly on the
-    # outlines build_word_boxes draws.
+    # come from word_box_bounds so the tinted rects sit exactly on the outlines
+    # build_word_boxes draws.
     boxes = zip(*word_box_bounds(words))
     nonzero_rows = [(box, v) for box, v in zip(boxes, word_values) if v > 0]
     if not nonzero_rows:
@@ -5357,164 +5360,8 @@ def _render_comparison_figure(
 
 
 # =============================================================================
-# Reading-research figures: per-word bar, fixation-duration histogram
+# Line figures: metric convergence, trial-index trend
 # =============================================================================
-
-
-def make_word_measure_bar_figure(
-    words: pd.DataFrame,
-    *,
-    measure: str,
-    canvas_width: int,
-    base_font_size: int,
-    font_family: str,
-    height: int = 360,
-) -> go.Figure:
-    """Vertical bar plot of a per-word measure, with word text on the x-axis."""
-    fig = go.Figure()
-    font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
-    if words.empty or measure not in words.columns:
-        fig.update_layout(
-            template="plotly_white",
-            font=font_settings,
-            title=f"No data for '{measure}'",
-            height=height,
-        )
-        return fig
-    ordered = words.sort_values(["line_idx", "word_id"]).reset_index(drop=True)
-    labels = [
-        f"{int(wid)}: {txt}" if pd.notna(wid) else str(txt)
-        for wid, txt in zip(ordered["word_id"], ordered.get("text", ordered["word_id"]))
-    ]
-    values = pd.to_numeric(ordered[measure], errors="coerce")
-    fig.add_trace(
-        go.Bar(
-            x=labels,
-            y=values,
-            marker=dict(
-                color=values,
-                colorscale=DEFAULT_HEATMAP_COLORSCALE,
-                showscale=True,
-                colorbar=dict(title=measure.replace("_", " ").title()),
-            ),
-            hovertemplate="%{x}<br>" + measure + ": %{y}<extra></extra>",
-        )
-    )
-    mean_value = float(values.dropna().mean()) if values.dropna().size else None
-    if mean_value is not None:
-        fig.add_hline(
-            y=mean_value,
-            line=dict(color=COMPARISON_PALETTE[1], width=2, dash="dot"),
-            annotation_text=f"mean {mean_value:.2f}",
-            annotation_position="top right",
-        )
-    fig.update_layout(
-        height=height,
-        width=canvas_width,
-        autosize=False,
-        margin=dict(l=40, r=10, t=40, b=80),
-        template="plotly_white",
-        font=font_settings,
-        xaxis=dict(title="Word", tickangle=-45, automargin=True),
-        yaxis=dict(title=measure.replace("_", " ").title()),
-        title=f"Per-word {measure.replace('_', ' ')}",
-    )
-    return fig
-
-
-def make_fixation_duration_histogram(
-    fixations: pd.DataFrame,
-    *,
-    canvas_width: int,
-    base_font_size: int,
-    font_family: str,
-    bins: int = 30,
-    overlay_words: pd.DataFrame | None = None,
-    height: int = 320,
-) -> go.Figure:
-    """Histogram of fixation durations, optionally with overlaid summary stats."""
-    fig = go.Figure()
-    font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
-    if fixations.empty:
-        fig.update_layout(
-            template="plotly_white",
-            font=font_settings,
-            title="Fixation duration distribution (no data)",
-            height=height,
-        )
-        return fig
-    durations = pd.to_numeric(fixations["duration_ms"], errors="coerce").dropna()
-
-    # Pre-bin server-side and draw bars instead of go.Histogram, which would
-    # serialize *every* raw value to the browser — prohibitive for millions of
-    # fixations. All series share one set of bin edges so the overlays align.
-    series_list = [("All fixations", durations.to_numpy(), COMPARISON_PALETTE[0], 1.0)]
-    if overlay_words is not None and not overlay_words.empty:
-        for name, col in (
-            ("FFD", "first_fixation_ms"),
-            ("FPRT", "first_pass_gaze_duration_ms"),
-            ("TFD", "total_fixation_duration_ms"),
-        ):
-            if col in overlay_words.columns:
-                vals = pd.to_numeric(overlay_words[col], errors="coerce").dropna()
-                if not vals.empty:
-                    series_list.append((name, vals.to_numpy(), None, 0.4))
-
-    all_vals = np.concatenate([arr for _, arr, _, _ in series_list])
-    lo = float(all_vals.min()) if all_vals.size else 0.0
-    hi = float(all_vals.max()) if all_vals.size else 1.0
-    if hi <= lo:
-        hi = lo + 1.0
-    edges = np.linspace(lo, hi, bins + 1)
-    centers = (edges[:-1] + edges[1:]) / 2.0
-    bar_width = float(edges[1] - edges[0])
-
-    for name, arr, color, opacity in series_list:
-        counts, _ = np.histogram(arr, bins=edges)
-        marker = (
-            dict(color=color, line=dict(color="white", width=0.5))
-            if color is not None
-            else None
-        )
-        fig.add_trace(
-            go.Bar(
-                x=centers,
-                y=counts,
-                width=bar_width,
-                name=name,
-                opacity=opacity,
-                marker=marker,
-            )
-        )
-
-    mean_ms = float(durations.mean()) if len(durations) else 0.0
-    median_ms = float(durations.median()) if len(durations) else 0.0
-    fig.add_vline(
-        x=mean_ms,
-        line=dict(color=COMPARISON_PALETTE[1], width=2, dash="dash"),
-        annotation_text=f"mean {mean_ms:.0f} ms",
-        annotation_position="top right",
-    )
-    fig.add_vline(
-        x=median_ms,
-        line=dict(color=SACCADE_COLOR, width=2, dash="dot"),
-        annotation_text=f"median {median_ms:.0f} ms",
-        annotation_position="top left",
-    )
-    fig.update_layout(
-        height=height,
-        width=canvas_width,
-        autosize=False,
-        margin=dict(l=40, r=10, t=40, b=40),
-        template="plotly_white",
-        font=font_settings,
-        xaxis=dict(title="Duration (ms)"),
-        yaxis=dict(title="Count"),
-        barmode="overlay",
-        title="Fixation duration distribution",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-    )
-    return fig
 
 
 def make_metric_convergence_figure(
@@ -5597,9 +5444,8 @@ def make_trend_figure(
     """Line+marker trend of ``value`` vs ``x_col`` with a ±SEM shaded band.
 
     ``df`` has columns ``[x_col, "value", "sem"]`` (see
-    ``aggregation.metric_by_trial_index`` / ``metric_by_fixation_index``). Used
-    by the Aggregated Views subtab for the trial-index and within-trial
-    fixation-index trends.
+    ``aggregation.metric_by_trial_index``). Used by the Per reader and Groups
+    subtabs for the trial-index trend.
     """
     fig = go.Figure()
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
@@ -5653,72 +5499,6 @@ def make_trend_figure(
     return fig
 
 
-def make_aggregated_histogram(
-    groups: dict,
-    *,
-    metric_label: str,
-    canvas_width: int,
-    base_font_size: int,
-    font_family: str,
-    bins: int = 30,
-    height: int = 360,
-) -> go.Figure:
-    """Overlaid binned histograms — one series per group.
-
-    ``groups`` maps a label → a 1-D array of metric values. All series share one
-    set of bin edges so they line up; binning is server-side (counts only) so a
-    corpus of millions of fixations doesn't serialize every raw value. Used by
-    the Aggregated Views subtab's distribution plot.
-    """
-    fig = go.Figure()
-    font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
-    arrays = [(str(name), np.asarray(arr)) for name, arr in groups.items() if len(arr)]
-    if not arrays:
-        fig.update_layout(
-            template="plotly_white",
-            font=font_settings,
-            title=f"{metric_label} distribution (no data)",
-            height=height,
-        )
-        return fig
-    all_vals = np.concatenate([arr for _, arr in arrays])
-    lo, hi = float(all_vals.min()), float(all_vals.max())
-    if hi <= lo:
-        hi = lo + 1.0
-    edges = np.linspace(lo, hi, bins + 1)
-    centers = (edges[:-1] + edges[1:]) / 2.0
-    bar_width = float(edges[1] - edges[0])
-    single = len(arrays) == 1
-    for i, (name, arr) in enumerate(arrays):
-        counts, _ = np.histogram(arr, bins=edges)
-        color = _QUALITATIVE_PALETTE[i % len(_QUALITATIVE_PALETTE)]
-        fig.add_trace(
-            go.Bar(
-                x=centers,
-                y=counts,
-                width=bar_width,
-                name=name,
-                opacity=0.95 if single else 0.55,
-                marker=dict(color=color, line=dict(color="white", width=0.4)),
-            )
-        )
-    fig.update_layout(
-        height=height,
-        width=canvas_width,
-        autosize=False,
-        margin=dict(l=50, r=10, t=40, b=45),
-        template="plotly_white",
-        font=font_settings,
-        xaxis=dict(title=metric_label),
-        yaxis=dict(title="Count"),
-        barmode="overlay",
-        title=f"{metric_label} distribution",
-        showlegend=not single,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-    )
-    return fig
-
-
 # =============================================================================
 # Analysis section figures (AN-1 … AN-22)
 # =============================================================================
@@ -5726,7 +5506,7 @@ def make_aggregated_histogram(
 # Builders for the question-oriented Corpus Analysis subtabs. Each takes a tidy
 # frame from ``aggregation.py`` plus the usual ``canvas_width`` / ``base_font_size``
 # / ``font_family`` and returns a ``go.Figure``. Empty input → a "(no data)"
-# placeholder, matching ``make_trend_figure`` / ``make_aggregated_histogram``.
+# placeholder, matching ``make_trend_figure``.
 
 _DIVERGING_COLORSCALE = "RdBu"
 
@@ -6411,7 +6191,12 @@ def make_landing_curve_figure(
     as_fraction: bool = True,
     height: int = 360,
 ) -> go.Figure:
-    """Preferred-viewing-location curve — landing-position histogram (AN-12)."""
+    """Preferred-viewing-location curve — landing-position histogram (AN-12).
+
+    ``values`` come from ``aggregation.landing_positions``: fractions of the
+    experiment's word box, unclipped (BUG-83), so a landing assigned from beside
+    the box shows as a bar outside 0–1 instead of a spike on the edge.
+    """
     arr = np.asarray(values, dtype="float64")
     arr = arr[~np.isnan(arr)]
     if arr.size == 0:
@@ -6432,7 +6217,7 @@ def make_landing_curve_figure(
         )
     )
     x_title = (
-        "Landing position within word (0 = start, 1 = end)"
+        "Landing position within the word's interest area (0 = start, 1 = end)"
         if as_fraction
         else "Landing distance from word start (px)"
     )

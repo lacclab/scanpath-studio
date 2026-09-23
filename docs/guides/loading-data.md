@@ -5,7 +5,7 @@ from your own experiment.
 
 ## Choose a source
 
-- **Bundled demo:** immediate, small, and suitable for learning the interface.
+- **Bundled Demo:** immediate, small, and suitable for learning the interface.
 - **Public corpus:** choose the corpus and local data directory; download when
   prompted. Corpora prepared from a local benchmark bundle appear here too, one
   entry each — see [Harmonised benchmark corpora](../benchmark-corpora.md).
@@ -26,12 +26,11 @@ The default workflow uses two tables:
 
 Participant ID, text ID, fixation timestamps, raw gaze, conditions, questions,
 and precomputed reading measures are optional but enable more features. Accepted
-files are CSV, TSV and tab-separated TXT, Parquet, Feather, Excel (`.xlsx`), and
-a `.zip` wrapping any of them. A text file's delimiter (comma, semicolon, tab or
-pipe) is read off its header line, a file that is not UTF-8 is read as Windows
-text, and an `.xls` that is really tab-separated text — EyeLink Data Viewer's
-"Excel" export — is read as text; a genuine Excel 97–2003 workbook has to be
-saved as `.xlsx` or `.csv` first. See [Data format](../data-format.md) for
+files are CSV, TSV and tab-separated TXT, Parquet, Feather, Excel (`.xlsx` and
+the older `.xls`), and a `.zip` wrapping any of them. A text file's delimiter
+(comma, semicolon, tab or pipe) is read off its header line, a file that is not
+UTF-8 is read as Windows text, and an `.xls` that is really tab-separated text —
+EyeLink Data Viewer's "Excel" export — is read as text. See [Data format](../data-format.md) for
 canonical fields and units.
 
 ## Use the setup wizard
@@ -45,8 +44,9 @@ is visible at once.
 
 **2. Upload data tables.** One row per table — **Fixations**, **AOIs** (the
 words / interest areas) and **Raw gaze** — with the table's uploader on the left
-and its column mapping beside it; upload at least one, and several files per
-table if your export is split (one per participant, say). Each row's pickers are
+and its column mapping beside it; upload at least one. Fixations and AOIs take
+several files each if your export is split (one per participant, say); raw gaze
+takes one. Each row's pickers are
 pre-filled from the column names, and the tint says which were auto-detected:
 detection matches *names*, so this is where you confirm it picked the right
 columns.
@@ -113,14 +113,21 @@ flagged; loading **more** is, because only a wrong published figure explains it.
 screen you are reading this on. It has **no defaults**: a wrong monitor size
 silently rescales every figure, so the app will not guess one for you. Each of
 the three groups — *Screen*, *Physical size & viewing distance*, and *Reading
-text size* — asks how you know the value:
+text size* — asks how you know the value, with choices of its own:
 
-| Choice | Recorded as | Use when |
+| Group | Choice | Recorded as |
 | --- | --- | --- |
-| *I know these* | `measured` | You have the real numbers. |
-| *Estimate from my data* | `estimated` | You don't. Derived from the extent of your word boxes and fixations — always available, always succeeds, and reported as a **lower bound**, since text rarely fills the whole screen. |
-| *Use a named default* | `assumed` | A typical lab value is good enough for what you are doing. |
-| *Skip* | `skipped` | Only on **physical size & viewing distance**, when you don't need visual-angle units. |
+| Screen | *I know the resolution* | `measured` |
+| | *Estimate from my data* — derived from the extent of your word boxes and fixations; always available, always succeeds, and reported as a **lower bound**, since text rarely fills the whole screen | `estimated` |
+| | *Use a common default (2560×1440)* | `assumed` |
+| Physical size & viewing distance | *I know them* | `measured` |
+| | *Use typical lab values (597 mm / 800 mm)* | `assumed` |
+| | *Skip — I don't need visual-angle units* | `skipped` |
+| Reading text size | *Scale to the word boxes* or *I know the stimulus font* | `measured` |
+| | *Use a default (16 px)* | `assumed` |
+
+Only the screen can be estimated from your data, and only the physical size can
+be skipped.
 
 **Add dataset** stays disabled until all three are answered. Nothing derived from
 a skipped group is shown: with no physical width there is no honest pixels-per-
@@ -129,7 +136,8 @@ a default.
 
 The answer travels with the dataset. It appears beside each value in the
 wizard and under 🗂️ **Data → ✏️ Edit dataset → Recording setup**,
-rides a share link as `setup_prov`, and is written into the saved-setup JSON and
+rides a share link as `setup_prov` (beside the values themselves, wherever they
+differ from the source's own), and is written into the saved-setup JSON and
 into `plot_config.json` in a bulk export — so a figure set records that its
 monitor size was assumed, and whoever opens your link can tell your measurements
 from the app's guesses.
@@ -149,5 +157,5 @@ may be dropped during normalization.
 
 Download the setup JSON from the wizard and restore it for the next export from
 the same pipeline. If a mapping was wrong, edit it under
-🗂️ **Data → ✏️ Edit dataset → Column mapping** or reload the files when a
+🗂️ **Data → ✏️ Edit dataset → Data tables & column mapping** or reload the files when a
 required column was not retained.

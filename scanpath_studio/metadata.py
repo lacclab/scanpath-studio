@@ -877,28 +877,6 @@ def build_text_metadata(
     return TextMetadata(clean, tuple(fields), source_name, label, report)
 
 
-def rejoin_texts(metadata: TextMetadata, keys: Iterable) -> TextMetadata:
-    """Recompute the join report against a (possibly new) text list."""
-    data_ids = {str(tid) for tid in keys}
-    usable_ids = set(metadata.frame["text_id"]) if not metadata.frame.empty else set()
-    # Conflicting ids are *in the table* but carry no values — not matched,
-    # not "only in data" either (same rule as `rejoin`).
-    table_ids = usable_ids | set(metadata.report.conflicting)
-    return TextMetadata(
-        metadata.frame,
-        metadata.fields,
-        metadata.source_name,
-        metadata.text_column,
-        JoinReport(
-            matched=tuple(sorted(usable_ids & data_ids)),
-            only_in_table=tuple(sorted(table_ids - data_ids)),
-            only_in_data=tuple(sorted(data_ids - table_ids)),
-            duplicated=metadata.report.duplicated,
-            conflicting=metadata.report.conflicting,
-        ),
-    )
-
-
 def texts_matching(
     metadata: TextMetadata | None,
     selections: dict[str, Sequence] | None = None,

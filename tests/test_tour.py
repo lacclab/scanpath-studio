@@ -402,10 +402,29 @@ def _use_case_tutorial_app():
     render_use_case_tutorial()
 
 
-def _tutorial_library_optout_app():
-    """Mirrors app.main's ordering: serve the chooser early, render its button late.
+def _choose_help_entry(at, entry: str) -> None:
+    """Pick a ❓ Help nav entry the way ``menu.render_nav`` does, then rerun.
 
-    The chooser is a dialog off the ❓ Help menu group (the menu bar made the old
+    An action entry only arms its dialog (``menu._arm_help_action``); the next
+    run's early ``maybe_show_*`` call serves it. The arming writes through
+    ``st.session_state``, which outside a script run is not this AppTest's
+    state — so point it at the right one.
+    """
+    from unittest.mock import patch
+
+    import streamlit as st
+
+    from scanpath_studio import menu
+
+    with patch.object(st, "session_state", at.session_state):
+        menu._arm_help_action(entry)
+    at.run()
+
+
+def _tutorial_library_optout_app():
+    """Mirrors app.main's ordering: serve the chooser early, stash its context late.
+
+    The chooser is a dialog off the ❓ Help nav entry (the menu bar made the old
     nested ``🧭 Tutorials`` popover a popover-inside-a-popover), armed the same
     way as the FAQ — see ``tour.maybe_show_tutorial_library``.
     """
@@ -413,12 +432,12 @@ def _tutorial_library_optout_app():
 
     from scanpath_studio.tour import (
         maybe_show_tutorial_library,
-        render_tutorial_library,
+        stash_tutorial_context,
     )
 
     st.session_state["tour_dont_show"] = True
     maybe_show_tutorial_library()
-    render_tutorial_library(
+    stash_tutorial_context(
         {
             "n_trials": 2,
             "has_words": True,
@@ -524,9 +543,9 @@ class TestUseCaseTutorials:
     def test_library_remains_available_after_welcome_opt_out(self):
         at = AppTest.from_function(_tutorial_library_optout_app).run()
         assert not at.exception, at.exception
-        # Opening the chooser is a click on the ❓ Help menu button, which arms
-        # the dialog the next run serves.
-        at.button(key="tutorial_library_open").click().run()
+        # Opening the chooser is picking ❓ Help → Tutorials in the nav, which
+        # arms the dialog the next run serves.
+        _choose_help_entry(at, "help_tutorials")
         assert not at.exception, at.exception
         keys = {button.key for button in at.button if button.key}
         assert "tutorial_start_load_inspect" in keys
@@ -539,54 +558,32 @@ class TestUseCaseTutorials:
 
 
 def _faq_app():
-    """Mirrors app.main's ordering: serve the dialog early, render the button late.
+    """Mirrors app.main: the dialog is served early, once the nav has armed it.
 
-    The button only arms the dialog (``on_click``) so the modal doesn't wait on
-    the heavy data/plot work it renders after — see ``tour.maybe_show_faq``.
+    The ❓ Help → FAQ entry only arms the dialog, so the modal doesn't wait on
+    the heavy data/plot work after it — see ``tour.maybe_show_faq``.
     """
-    from scanpath_studio.tour import maybe_show_faq, render_faq_button
+    from scanpath_studio.tour import maybe_show_faq
 
     maybe_show_faq()
-    render_faq_button()
 
 
 class TestFaq:
     """The in-app FAQ dialog (UX-15) and its links out to the docs site."""
 
-    def test_button_opens_a_dialog_with_every_item(self):
+    def test_help_entry_opens_a_dialog_with_every_item(self):
         # PRE-21: the set is conditional — a gated feature's entry is only
         # offered when that feature is. `faq_items()` is the resolved list.
         from scanpath_studio.tour import faq_items
 
         at = AppTest.from_function(_faq_app)
         at.run()
-        assert any(b.key == "faq_open" for b in at.button)
         assert not at.error
+        assert not at.expander, "the dialog opened before anything armed it"
 
-        at.button(key="faq_open").click().run()
+        _choose_help_entry(at, "help_faq")
         assert not at.error
         assert len(at.expander) == len(faq_items())
-
-    def test_button_only_arms_the_dialog(self):
-        """The click must set a flag, not open the dialog from its return value.
-
-        The button renders at the bottom of ``app.main``; opening the dialog
-        there made it wait out the whole rerun (~10 s of plot embeds). Rendering
-        the button *alone* must therefore produce no dialog — the early
-        ``maybe_show_faq`` call is what serves it.
-        """
-
-        def _button_only():
-            from scanpath_studio.tour import render_faq_button
-
-            render_faq_button()
-
-        at = AppTest.from_function(_button_only)
-        at.run()
-        at.button(key="faq_open").click().run()
-        assert not at.error
-        assert not at.expander, "the button opened the dialog itself"
-        assert at.session_state["_faq_dialog_requested"] is True
 
     def test_docs_links_point_at_the_published_pages(self):
         """The FAQ is the app's help-context route into the docs — if these

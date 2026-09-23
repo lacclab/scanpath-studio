@@ -2193,7 +2193,7 @@ class TestPlotEnhancements:
     def test_rtl_word_labels_are_centred_and_kept_isolated(
         self, synthetic_words_df, synthetic_fixations_df
     ):
-        """BUG-30: labels centre in their box, in either direction.
+        """BUG-30: labels centre on their glyphs, in either direction.
 
         They used to anchor at the leading edge — `x` for LTR, `x + width` for
         RTL — which left all of the box's spare room on the trailing side. A
@@ -2220,16 +2220,11 @@ class TestPlotEnhancements:
         assert trace.text[0].startswith(isolate)
         assert trace.text[0].endswith(pop_isolate)
 
-    def test_labels_centre_in_the_box_as_drawn(
+    def test_labels_centre_in_a_glyph_tight_box(
         self, synthetic_words_df, synthetic_fixations_df
     ):
-        """The centre is the *corrected* box's, not the raw frame's.
-
-        On a corpus whose boxes tile the line, BUG-11 pulls every edge back half
-        a space, so the corrected centre already coincides with the glyph run's
-        and this change is a no-op there — which is the property that makes it
-        safe to apply to every corpus rather than gating it behind an option.
-        """
+        """The synthetic boxes leave real gaps, so each box is its glyph run and
+        the label sits in the middle of the box as drawn."""
         from scanpath_studio.measures import word_box_bounds
 
         fig = self._figure(
@@ -2240,6 +2235,29 @@ class TestPlotEnhancements:
         trace = next(t for t in fig.data if t.name == "words")
         x0, _, x1, _ = word_box_bounds(synthetic_words_df)
         assert list(trace.x) == pytest.approx(list((x0 + x1) / 2.0))
+
+    def test_labels_on_a_tiling_corpus_sit_on_the_glyphs_not_the_box(self):
+        """BUG-83 draws the experiment's boxes, and on the demo each one runs on
+        across the space after its word. The label stays on the glyphs — the
+        demo's first word, 'Robert', is six 19 px letters from x = 358, centred
+        at 415 — rather than moving half a space right to the box's 424.5."""
+        from scanpath_studio import api, plots
+        from scanpath_studio.measures import word_box_bounds
+
+        words, _ = api.load_sample_data()
+        first_trial = words.iloc[0][["participant_id", "trial_id"]]
+        trial = words[
+            (words["participant_id"] == first_trial["participant_id"])
+            & (words["trial_id"] == first_trial["trial_id"])
+        ]
+        fig = go.Figure()
+        plots._add_word_label_trace(fig, trial, base_font_size=12, font_family="mono")
+        trace = next(t for t in fig.data if t.name == "words")
+        first = trial.iloc[0]
+        assert (first["text"], first["x"], first["width"]) == ("Robert", 358, 133)
+        assert trace.x[0] == pytest.approx(415.0)
+        x0, _, x1, _ = word_box_bounds(trial)
+        assert (x0[0] + x1[0]) / 2.0 == pytest.approx(424.5)
 
 
 class TestTrueToScaleText:

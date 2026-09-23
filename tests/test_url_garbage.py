@@ -53,8 +53,11 @@ def test_out_of_range_values_are_clamped_not_crashed_on(side):
     for url_key, (_state, (lo, hi)) in params.items():
         span = abs(hi - lo) or 1
         value = hi + 10 * span if side == "above" else lo - 10 * span
-        ranged = url_key == "marker_size_range"
+        ranged = url_key.endswith("_range")
         query[url_key] = f"{value},{value}" if ranged else f"{value}"
+    # The source it names, as every Share link does: since EXP-19 a link's
+    # canvas and font are held against the source snap only for that source.
+    query["source"] = "demo"
     at = _boot(query)
 
     assert not at.exception, [e.message for e in at.exception]

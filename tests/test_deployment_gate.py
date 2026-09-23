@@ -6,15 +6,20 @@ file picker. On any deployment someone else can reach it is a path-existence
 oracle plus an arbitrary-directory write, and the app has no authentication on
 any deployment.
 
-Default is local (flipping it would break every existing install on upgrade); a
-shared deployment sets ``SCANPATH_LOCAL_FS=0``. ``SCANPATH_DATA_ROOT`` confines
-paths to a subtree and is useful either way.
+ENG-66: unset, the gate follows the server's bind address — on for a server
+listening on loopback only (``scanpath-studio run``, the desktop app), off for
+one other machines can reach — and ``SCANPATH_LOCAL_FS`` overrides it either
+way. ``SCANPATH_DATA_ROOT`` confines paths to a subtree and is useful either way.
 """
 
 from __future__ import annotations
 
+import ast
+from pathlib import Path
+
 import pytest
 
+from scanpath_studio import app as app_module
 from scanpath_studio.app import (
     DATA_ROOT_ENV,
     LOCAL_FS_ENV,
@@ -22,6 +27,12 @@ from scanpath_studio.app import (
     _resolve_data_dir,
     data_root,
     local_filesystem_enabled,
+)
+from scanpath_studio.constants import (
+    UPLOAD_LIMIT_ENV,
+    UPLOAD_MAX_SIZE_MB,
+    upload_limit_label,
+    upload_limit_mb,
 )
 
 
@@ -31,20 +42,63 @@ def _clean_env(monkeypatch):
     monkeypatch.delenv(DATA_ROOT_ENV, raising=False)
 
 
+def _gate_app():
+    import streamlit as st
+
+    from scanpath_studio.app import local_filesystem_enabled
+
+    st.session_state["answer"] = local_filesystem_enabled()
+
+
+def _serving(monkeypatch, *, loopback: bool) -> None:
+    """Pretend to run inside a Streamlit server bound to loopback, or not."""
+    monkeypatch.setattr(app_module.runtime, "exists", lambda: True)
+    monkeypatch.setattr(app_module, "server_bound_to_loopback", lambda: loopback)
+
+
 class TestTheGate:
-    def test_local_by_default(self):
-        """An existing local install must keep its path box on upgrade."""
+    def test_on_for_a_server_on_loopback(self, monkeypatch):
+        """``scanpath-studio run`` and the desktop app keep their path box."""
+        _serving(monkeypatch, loopback=True)
         assert local_filesystem_enabled() is True
 
-    @pytest.mark.parametrize("value", ["0", "false", "FALSE", "no", " No "])
+    def test_off_for_a_server_other_machines_can_reach(self, monkeypatch):
+        """ENG-66: a hosted demo is safe without remembering to set anything."""
+        _serving(monkeypatch, loopback=False)
+        assert local_filesystem_enabled() is False
+
+    def test_on_outside_a_server(self, monkeypatch):
+        """The API and the CLI read the user's own paths."""
+        monkeypatch.setattr(app_module.runtime, "exists", lambda: False)
+        assert local_filesystem_enabled() is True
+
+    @pytest.mark.parametrize("value", ["0", "false", "FALSE", "no", " No ", "off"])
     def test_a_deployment_can_turn_it_off(self, monkeypatch, value):
+        _serving(monkeypatch, loopback=True)
         monkeypatch.setenv(LOCAL_FS_ENV, value)
         assert local_filesystem_enabled() is False
 
-    @pytest.mark.parametrize("value", ["1", "true", "yes", "", "anything"])
-    def test_anything_else_stays_local(self, monkeypatch, value):
+    @pytest.mark.parametrize("value", ["1", "true", "yes", " ON "])
+    def test_a_trusted_lab_server_can_turn_it_on(self, monkeypatch, value):
+        _serving(monkeypatch, loopback=False)
         monkeypatch.setenv(LOCAL_FS_ENV, value)
         assert local_filesystem_enabled() is True
+
+    @pytest.mark.parametrize("value", ["", "anything"])
+    def test_anything_else_follows_the_bind_address(self, monkeypatch, value):
+        _serving(monkeypatch, loopback=False)
+        monkeypatch.setenv(LOCAL_FS_ENV, value)
+        assert local_filesystem_enabled() is False
+
+    def test_a_real_server_on_every_interface_is_off(self):
+        """End to end, unpatched: an AppTest's ``server.address`` is unset, which
+        is Streamlit's every-interface default — a hosted demo's setting."""
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_function(_gate_app)
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state["answer"] is False
 
     def test_the_folder_picker_refuses_on_a_shared_deployment(self, monkeypatch):
         """Degrading to None on a *headless* host was never the guarantee: on a
@@ -150,5 +204,94 @@ class TestUploadedImagePaths:
         monkeypatch.setenv(LOCAL_FS_ENV, "0")
         assert self._answer("Bundled demo") == "/srv/secret.png"
 
-    def test_a_local_run_keeps_an_uploads_images(self):
+    def test_a_server_nobody_configured_reads_nothing(self):
+        """ENG-66: the demo's case — no variable set, every interface."""
+        assert self._answer("my upload") is None
+
+    def test_a_local_run_keeps_an_uploads_images(self, monkeypatch):
+        monkeypatch.setenv(LOCAL_FS_ENV, "1")
         assert self._answer("my upload") == "/srv/secret.png"
+
+
+class TestTheUploadCap:
+    """ENG-68: a deployment's own per-file cap, set on the hosted demo only."""
+
+    @pytest.fixture(autouse=True)
+    def _unset(self, monkeypatch):
+        monkeypatch.delenv(UPLOAD_LIMIT_ENV, raising=False)
+
+    def test_unset_leaves_the_servers_limit(self):
+        assert upload_limit_mb() is None
+
+    def test_a_deployment_sets_it_in_mb(self, monkeypatch):
+        monkeypatch.setenv(UPLOAD_LIMIT_ENV, " 200 ")
+        assert upload_limit_mb() == 200
+
+    @pytest.mark.parametrize("value", ["", "0", "-5", "200MB", "1.5", "lots"])
+    def test_anything_but_a_positive_whole_number_is_ignored(self, monkeypatch, value):
+        monkeypatch.setenv(UPLOAD_LIMIT_ENV, value)
+        assert upload_limit_mb() is None
+
+    def test_every_upload_box_passes_it(self):
+        """One uncapped box is the whole server limit again — so every
+        ``file_uploader`` call in the package has to pass the cap."""
+        package = Path(app_module.__file__).parent
+        missing = []
+        for path in sorted(package.glob("*.py")):
+            for node in ast.walk(ast.parse(path.read_text())):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "file_uploader"
+                    and not any(k.arg == "max_upload_size" for k in node.keywords)
+                ):
+                    missing.append(f"{path.name}:{node.lineno}")
+        assert not missing, f"file_uploader without max_upload_size: {missing}"
+        assert package.joinpath("app.py").read_text().count("file_uploader(") >= 3
+
+    def test_it_never_exceeds_the_servers_own_limit(self, monkeypatch):
+        """A browser that accepts a file the server then refuses is a 413."""
+        import streamlit as st
+
+        monkeypatch.setenv(UPLOAD_LIMIT_ENV, "999999")
+        assert upload_limit_mb() == int(st.get_option("server.maxUploadSize"))
+
+    def test_the_wizard_names_the_limit_in_force(self, monkeypatch):
+        """UX-124 hides Streamlit's own size line, so this label is the only one."""
+        assert upload_limit_label() == f"{UPLOAD_MAX_SIZE_MB // 1000}GB"
+        monkeypatch.setenv(UPLOAD_LIMIT_ENV, "200")
+        assert upload_limit_label() == "200MB"
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [(None, UPLOAD_MAX_SIZE_MB), ("200", 200), ("999999", UPLOAD_MAX_SIZE_MB)],
+    )
+    def test_scanpath_studio_run_hands_it_to_the_server(
+        self, monkeypatch, value, expected
+    ):
+        """The one launch path where the server itself can enforce it."""
+        from scanpath_studio.cli import _max_upload_cli_flags
+
+        if value is not None:
+            monkeypatch.setenv(UPLOAD_LIMIT_ENV, value)
+        assert _max_upload_cli_flags([]) == [f"--server.maxUploadSize={expected}"]
+        assert _max_upload_cli_flags(["--server.maxUploadSize=10"]) == []
+
+    def test_every_table_upload_box_takes_xls(self):
+        """DATA-53 reads legacy workbooks; a picker that greys them out hides it."""
+        package = Path(app_module.__file__).parent
+        narrow = []
+        for path in sorted(package.glob("*.py")):
+            for node in ast.walk(ast.parse(path.read_text())):
+                if not (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "file_uploader"
+                ):
+                    continue
+                for kw in node.keywords:
+                    if kw.arg == "type" and isinstance(kw.value, ast.List):
+                        kinds = {getattr(e, "value", None) for e in kw.value.elts}
+                        if "xlsx" in kinds and "xls" not in kinds:
+                            narrow.append(f"{path.name}:{node.lineno}")
+        assert not narrow, f"table upload box without .xls: {narrow}"

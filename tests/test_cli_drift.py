@@ -1,7 +1,7 @@
 """ENG-22: drift correction (PRE-3) on the `render` CLI surface.
 
 `api.plot_scanpath` has taken `drift_correction=` / `drift_connectors=` since
-PRE-3 and the app exposes them under Fixations ⚙️ → Drift correction, but the
+PRE-3 and the app exposes them under 👁️ Fixations ▾ → Drift correction, but the
 CLI had no matching flags. These tests pin the flags, their mapping onto the
 API call, the validation of the algorithm name, and the fact that leaving them
 off reproduces the uncorrected figure exactly.

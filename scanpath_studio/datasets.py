@@ -330,9 +330,8 @@ def load_potec(
         words, fixations = load_potec("data/PoTeC", readers=[0], texts=["b0"])
         fig = scanpath_studio.plot_scanpath(words, fixations)
 
-    The PoTeC monitor was 1680×1050 (DELL P2210, 60 Hz); pass that as
-    ``canvas_size`` to :func:`scanpath_studio.plot_scanpath` for true-to-scale
-    rendering.
+    The PoTeC monitor was 1680×1050 (DELL P2210, 60 Hz); pass that as ``canvas_size`` to
+    [`plot_scanpath`][scanpath_studio.api.plot_scanpath] for true-to-scale rendering.
     """
     words_raw, fixations_raw = potec_raw_frames(
         root, readers=readers, texts=texts, download=download
@@ -777,12 +776,12 @@ def load_onestop(
             words, fixations, canvas_size=(2560, 1440)
         )
 
-    OneStop's presentation monitor was 2560×1440 (Dell U2715H) — the citation
-    lives in :data:`scanpath_studio.eyegenbench_geometry.DISPLAY_SPECS`'s
-    ``"onestop"`` entry (Berzak et al. 2025, Methods → Apparatus); pass that as
-    ``canvas_size`` to :func:`scanpath_studio.plot_scanpath` for true-to-scale
-    rendering. The reports already match the bundled demo's schema, so this reuses
-    the generic auto-detect → normalize path (no OneStop-specific column mapping).
+    OneStop's presentation monitor was 2560×1440 (Dell U2715H) — the citation lives in
+    `scanpath_studio.eyegenbench_geometry.DISPLAY_SPECS`'s ``"onestop"`` entry (Berzak
+    et al. 2025, Methods → Apparatus); pass that as ``canvas_size`` to
+    [`plot_scanpath`][scanpath_studio.api.plot_scanpath] for true-to-scale rendering.
+    The reports already match the bundled demo's schema, so this reuses the generic
+    auto-detect → normalize path (no OneStop-specific column mapping).
     """
     words_raw, fixations_raw = onestop_raw_frames(
         root, regime=regime, parts=parts, variant=variant, download=download
@@ -836,8 +835,6 @@ def load_onestop(
 
 MULTIPLEYE_FIXATION_SOURCES = ("scanpaths", "fixations")
 
-# The screen kinds a MultiplEYE trial is modelled from, in presentation order.
-MULTIPLEYE_SCREEN_KINDS = ("reading", "question")
 
 # Presentation monitor (px) for the ZH-CH-Zurich sample, from its lab config
 # (``Monitor_resolution_in_px`` / ``RESOLUTION``) — the physical screen the data

@@ -39,7 +39,6 @@ from .code_snippet import (
     reproduction_code,
 )
 from .constants import (
-    _VIEW_CORPUS,
     _VIEW_DATA,
     _VIEW_SCANPATH,
     AUTHOR_CHOICE,
@@ -62,13 +61,16 @@ from .constants import (
     SACCADE_DASH_OPTIONS,
     SACCADE_WIDTH_BOUNDS,
     SYNTHETIC_CHOICE,
+    UNIFORM_COLOR_FIELD,
     drift_correction_enabled,
 )
 from .controls import (
     _ALIGN_OPTIONS,
     _FIXCLASS_MODES,
     _OUT_OF_TEXT_MARKERS,
+    claim_mapping,
     color_field_options,
+    forget_color_range,
     numeric_field_options,
     palette_state,
 )
@@ -79,10 +81,13 @@ from .session_keys import (
     COMPARE_SOURCE_PARAM,
     COMPARE_SOURCE_STATE_KEY,
     COMPARE_STIMULUS_PARAM,
+    COMPARE_STYLE_PARAMS,
     FIX_RANGE_PARAM,
+    LINK_SETUP_STATE_KEY,
     PARAM_CORPUS,
     PENDING_COMPARE_STATE_KEY,
     PUBLIC_DATASET_CHOICE,
+    SETUP_PARAMS,
     SETUP_PROVENANCE_PARAM,
     SETUP_PROVENANCE_STATE_KEY,
     SINGLE_COMPARE_TOGGLE,
@@ -239,6 +244,18 @@ def _parse_fixclass_symbol(v) -> str:
     return name
 
 
+def _parse_saccade_style_label(v) -> str:
+    """A per-scanpath line style → the selectbox's own label (EXP-19).
+
+    Not `_parse_choice`, which reads a hyphen as a space for the compare layout's
+    sake and so could never match *Dash-dot*."""
+    name = str(v).strip()
+    for option in SACCADE_DASH_OPTIONS:
+        if option.lower() == name.lower():
+            return option
+    raise ValueError(f"unknown line style {name!r}")
+
+
 def _parse_colorbar_orientation(v) -> str:
     return _parse_choice(v, ("Vertical", "Horizontal"), "colour-bar orientation")
 
@@ -262,16 +279,32 @@ def _parse_align_algorithm(v) -> str:
 # --- Share-link parameter groups -------------------------------------------
 # The Share link round-trips the rail's figure settings — the layers, colours,
 # sizes, fixation flags, colour bars and labels, plus the font family, line
-# spacing and background — and the replay speed. It does **not** carry the
-# recording setup (canvas size, base font size, monitor mm, viewing distance,
-# DPI) or Compare's per-scanpath `cmp{idx}_*` styles: those travel in the 💾
-# saved config, and the Share panel says so (EXP-18 — whether they should ride
-# the link too is a maintainer decision still open). Each group maps a short
-# URL key → the session_state key it reads/writes.
+# spacing and background — and the replay speed. Since EXP-19 it also carries
+# what used to travel in the 💾 saved config alone: the recording setup (canvas,
+# base font size, monitor mm, viewing distance, DPI, the point-size font) and
+# Compare's per-scanpath `cmp{idx}_*` styles, as `cmp_a_*` / `cmp_b_*`. Those two
+# groups (`session_keys.SETUP_PARAMS` / `COMPARE_STYLE_PARAMS`) are written only
+# when they differ from what the recipient would resolve anyway — see
+# `_link_defaults`. Each group maps a short URL key → the session_state key it
+# reads/writes.
 # `_build_share_query` (write) and `_apply_url_preset` (read) both iterate these,
 # so the two sides can't drift. Data-dependent fields (color ranges, highlight
 # column, axis/color-by fields) self-heal on load via the rail's _drop_stale /
-# _clamp_range, so a link opened on a different trial degrades gracefully.
+# _clamped_pair, so a link opened on a different trial degrades gracefully.
+#
+# EXP-19's per-scanpath styles are spelled per side: `cmp_a_<field>` is the first
+# scanpath's `cmp0_<field>`, `cmp_b_<field>` the second's `cmp1_<field>`.
+_CMP_STYLE_SIDES = (("a", 0), ("b", 1))
+
+
+def _cmp_style_params(*fields: str) -> dict[str, str]:
+    return {
+        f"cmp_{side}_{name}": f"cmp{idx}_{name}"
+        for side, idx in _CMP_STYLE_SIDES
+        for name in fields
+    }
+
+
 _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "preproc_enabled": "global_preproc_enabled",
     "preproc_blink_adjacent": "global_preproc_blink_adjacent",
@@ -307,6 +340,10 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "show_stimulus_image": "global_show_stimulus_image",
     "fit_to_monitor": "global_fit_to_monitor",
     "show_compare_legend": "global_show_compare_legend",
+    # EXP-19: the point-size font switch, and the per-scanpath hollow markers
+    # (no widget since VIZ-6, but a saved config still sets them).
+    "use_stimulus_font_pt": "global_use_stimulus_font_pt",
+    **_cmp_style_params("hollow"),
 }
 _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when set)
     "preproc_short_policy": "global_preproc_short_policy",
@@ -380,6 +417,8 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
         for cat in ("short", "long", "oob", "blink")
         for part in ("mode", "symbol", "color")
     },
+    # EXP-19: Compare's per-scanpath colours, line style and legend label.
+    **_cmp_style_params("fix_color", "saccade_color", "saccade_style", "label_pattern"),
 }
 #: The `_SHARE_VALUE_PARAMS` that carry a colour — read through
 #: `_parse_hex_color` rather than `str` (BUG-69).
@@ -401,6 +440,7 @@ _SHARE_COLOR_PARAMS = (
     "fixclass_long_color",
     "fixclass_oob_color",
     "fixclass_blink_color",
+    *_cmp_style_params("fix_color", "saccade_color"),
 )
 _SHARE_INT_PARAMS = {
     "order_font_size": "global_order_font_size",
@@ -413,6 +453,11 @@ _SHARE_INT_PARAMS = {
     "colorbar_tickfont_size": "global_colorbar_tickfont_size",
     "fixclass_short_threshold_ms": "global_fixclass_short_threshold_ms",
     "fixclass_long_threshold_ms": "global_fixclass_long_threshold_ms",
+    # EXP-19: the pixel canvas and the base font — the recording setup's half
+    # that every figure is drawn at.
+    "canvas_width": "global_canvas_width",
+    "canvas_height": "global_canvas_height",
+    "base_font_size": "global_base_font_size",
 }
 _SHARE_FLOAT_PARAMS = {
     "preproc_short_threshold_ms": "global_preproc_short_threshold_ms",
@@ -436,6 +481,14 @@ _SHARE_FLOAT_PARAMS = {
     # EXP-18: the replay speed. A non-1× speed stamps an Illustration label, so
     # a link without it reopened a figure that disclosed something else.
     "playback_speed": "single_playback_speed",
+    # EXP-19: the physical half of the recording setup (px/degree, and the
+    # point-to-pixel conversion of a font given in points), plus Compare's
+    # per-scanpath line width and marker opacity.
+    "monitor_width_mm": "global_monitor_width_mm",
+    "viewing_distance_mm": "global_viewing_distance_mm",
+    "display_dpi": "global_display_dpi",
+    "stimulus_font_pt": "global_stimulus_font_pt",
+    **_cmp_style_params("saccade_width", "opacity"),
 }
 _SHARE_INT_RANGE_PARAMS = {
     "marker_size_range": "global_marker_size_range",
@@ -445,6 +498,8 @@ _SHARE_INT_RANGE_PARAMS = {
     # to the recipient's own trial. The **write** side is not generic, though:
     # see the `FIX_RANGE_PARAM` block in `_build_share_query`.
     FIX_RANGE_PARAM: "single_fix_range",
+    # EXP-19.
+    **_cmp_style_params("marker_size_range"),
 }
 _SHARE_FLOAT_RANGE_PARAMS = {
     "fixation_color_range": "global_fixation_color_range",
@@ -505,13 +560,30 @@ _URL_PRESETS = {
             ("symbol", _parse_fixclass_symbol),
         )
     },
+    # EXP-19 — the per-scanpath line style is a selectbox (raises on anything
+    # else), and the legend label is figure text from someone else (BUG-75).
+    **{
+        param: (state_key, _parse_saccade_style_label)
+        for param, state_key in _cmp_style_params("saccade_style").items()
+    },
+    **{
+        param: (state_key, _strip_markup)
+        for param, state_key in _cmp_style_params("label_pattern").items()
+    },
 }
+
+# Static widget bounds, mirrored from controls.render_plot_controls /
+# render_canvas_controls, so a restored value is clamped to a range the
+# widget will accept.
+_CANVAS_BOUNDS = (100, 10000)
+_FONT_BOUNDS = (6, 72)
+_MARKER_BOUNDS = (4, 40)
 
 # Widget bounds for the URL-restorable params that feed a min/max-bounded widget
 # (slider / number_input). A hand-crafted link with an out-of-range value would
 # otherwise crash the widget on render — Streamlit raises when a Session-State
 # value falls outside the widget's range. Clamp on the way in. (Data-dependent
-# colour ranges aren't here — the rail's `_clamp_range` handles those against
+# colour ranges aren't here — the rail's `_clamped_pair` handles those against
 # the live data.)
 _URL_BOUNDED = {
     "global_preproc_short_threshold_ms": (1.0, 500.0),
@@ -541,7 +613,35 @@ _URL_BOUNDED = {
     "global_colorbar_tickfont_size": (6, 20),
     "global_fixclass_short_threshold_ms": (1, 60_000),
     "global_fixclass_long_threshold_ms": (1, 60_000),
+    # EXP-19: the recording setup and the per-scanpath styles, which used to be
+    # saved-config only and clamped by `_CONFIG_BOUNDED` alone. Mirrors the
+    # widgets (`app.render_canvas_controls`, `controls._render_compare_*`).
+    "global_canvas_width": _CANVAS_BOUNDS,
+    "global_canvas_height": _CANVAS_BOUNDS,
+    "global_base_font_size": _FONT_BOUNDS,
+    "global_monitor_width_mm": (100.0, 3000.0),
+    "global_viewing_distance_mm": (100.0, 3000.0),
+    "global_display_dpi": (20.0, 1000.0),
+    "global_stimulus_font_pt": (4.0, 144.0),
+    **{f"cmp{i}_opacity": (0.1, 1.0) for i in (0, 1)},
+    **{f"cmp{i}_saccade_width": SACCADE_WIDTH_BOUNDS for i in (0, 1)},
+    **{f"cmp{i}_marker_size_range": _MARKER_BOUNDS for i in (0, 1)},
 }
+
+
+#: EXP-19 — the settings a source's own declared monitor or typeface overwrites
+#: the first time that source is seeded (`app.seed_canvas_state`: the canvas
+#: pair, and `app._FONT_SNAP_KEYS`). A link that carries one names it under
+#: `LINK_SETUP_STATE_KEY`, so the snap keeps the sender's value.
+_SOURCE_SNAPPED_KEYS = frozenset(
+    {
+        "global_canvas_width",
+        "global_canvas_height",
+        "global_base_font_size",
+        "global_font_family",
+        "global_scale_text_to_boxes",
+    }
+)
 
 
 def _clamp_url_value(state_key: str, value):
@@ -807,6 +907,7 @@ def _apply_url_preset() -> str | None:
 
     _apply_url_palette(qp)
 
+    snapped_from_link: set[str] = set()
     for url_key, (state_key, coerce) in _URL_PRESETS.items():
         if url_key not in qp:
             continue
@@ -825,7 +926,21 @@ def _apply_url_preset() -> str | None:
         # Clamp bounded widgets so a hand-crafted out-of-range link can't crash
         # the slider / number_input on render.
         value = _clamp_url_value(state_key, value)
+        if state_key in _SOURCE_SNAPPED_KEYS and state_key not in st.session_state:
+            snapped_from_link.add(state_key)
         st.session_state.setdefault(state_key, value)
+
+    # EXP-19: a source that declares its own monitor or typeface snaps the canvas
+    # and font controls to it the first time it is seeded — on a recipient's
+    # first run, that is, *after* this link has seeded them — so without a word
+    # from here the sender's canvas would be replaced by the corpus default the
+    # link had just been careful not to repeat. `app.main` scopes this to the
+    # source the link resolves to (`scope_link_setup`) and `app.seed_canvas_state`
+    # consumes it (`link_setup_keys_for`), leaving the named keys alone.
+    if snapped_from_link:
+        st.session_state.setdefault(
+            LINK_SETUP_STATE_KEY, {"keys": sorted(snapped_from_link), "choice": None}
+        )
 
     # DATA-22 §7 surface 2 (read side): badge the values this link is carrying
     # with how the *sender* knew them, so an assumed monitor arrives labelled as
@@ -909,6 +1024,40 @@ def _apply_url_preset() -> str | None:
     return source.lower() if source else None
 
 
+def scope_link_setup(choice: str | None) -> None:
+    """Tie the keys a link seeded (EXP-19) to the data source it resolved to.
+
+    Called by `app.main` once its `?source=` dispatch has run, with the choice
+    the link landed on — or ``None`` when it named no source this app can open
+    (an uploaded dataset, a corpus the recipient has no bundle for, a server
+    bundle with no data directory). Then there is nothing to protect: the
+    recipient is on whatever source they already had, and it snaps to its own
+    monitor exactly as if no link had been opened."""
+    marker = st.session_state.get(LINK_SETUP_STATE_KEY)
+    if not isinstance(marker, dict) or marker.get("choice") is not None:
+        return  # nothing seeded this run, or already scoped on the first one
+    if choice is None:
+        st.session_state.pop(LINK_SETUP_STATE_KEY, None)
+    else:
+        st.session_state[LINK_SETUP_STATE_KEY] = {**marker, "choice": str(choice)}
+
+
+def link_setup_keys_for(source_key: tuple) -> frozenset:
+    """The linked keys the source snap must leave alone for ``source_key``.
+
+    ``source_key`` is `seed_canvas_state`'s ``(data_choice,
+    public_dataset_choice)``: a public corpus the link named by its registry
+    label is seeded under the collapsed picker choice, with the label second.
+    Consumes the marker either way — it describes the first seeding only, so a
+    link that is not honoured now never will be."""
+    marker = st.session_state.pop(LINK_SETUP_STATE_KEY, None)
+    if not isinstance(marker, dict) or marker.get("choice") is None:
+        return frozenset()
+    if marker["choice"] not in {str(part) for part in source_key if part}:
+        return frozenset()
+    return frozenset(marker.get("keys") or ())
+
+
 # plot-config layer key → viz-control session_state key. The inverse of the
 # `layers` block written by `tabs._render_plot_config_expander`.
 _PLOT_CONFIG_LAYER_KEYS = {
@@ -926,12 +1075,6 @@ _PLOT_CONFIG_LAYER_KEYS = {
     "full_monitor": "global_fit_to_monitor",
     "autoplay": "global_anim_autoplay",
 }
-# Static widget bounds, mirrored from controls.render_plot_controls /
-# render_canvas_controls, so a restored value is clamped to a range the
-# widget will accept.
-_CANVAS_BOUNDS = (100, 10000)
-_FONT_BOUNDS = (6, 72)
-_MARKER_BOUNDS = (4, 40)
 
 
 # --- Seeding a stored session value (BUG-71) --------------------------------
@@ -942,32 +1085,12 @@ _MARKER_BOUNDS = (4, 40)
 # refuses (an opacity of 7, a size range of "abc") or one Plotly refuses (a
 # colour of "zzz") stopped the app on every launch. `sanitize_session_value`
 # holds a stored value to the rules the two readers above already apply:
-# `_URL_BOUNDED` (plus the saved-config-only widget bounds below), the `#rrggbb`
-# colour check, and the closed vocabularies whose widgets raise on anything else.
-
-#: Bounds of the numeric widgets a saved config writes but a link does not carry
-#: — the same limits `_restore_plot_config` clamps to inline.
-_CONFIG_BOUNDED = {
-    "global_canvas_width": _CANVAS_BOUNDS,
-    "global_canvas_height": _CANVAS_BOUNDS,
-    "global_base_font_size": _FONT_BOUNDS,
-    "global_monitor_width_mm": (100.0, 3000.0),
-    "global_viewing_distance_mm": (100.0, 3000.0),
-    "global_display_dpi": (20.0, 1000.0),
-    "global_stimulus_font_pt": (4.0, 144.0),
-    **{f"cmp{i}_opacity": (0.1, 1.0) for i in (0, 1)},
-    **{f"cmp{i}_saccade_width": SACCADE_WIDTH_BOUNDS for i in (0, 1)},
-    **{f"cmp{i}_marker_size_range": _MARKER_BOUNDS for i in (0, 1)},
-}
+# `_URL_BOUNDED` (which since EXP-19 also holds the widget bounds a saved config
+# alone used to need), the `#rrggbb` colour check, and the closed vocabularies
+# whose widgets raise on anything else.
 _FIXCLASS_CATEGORIES = ("short", "long", "oob", "blink")
-#: Every session key that holds a colour — the link's, plus the ones only a
-#: saved config carries.
-_COLOR_STATE_KEYS = frozenset(
-    {
-        *(_SHARE_VALUE_PARAMS[p] for p in _SHARE_COLOR_PARAMS),
-        *(f"cmp{i}_{part}" for i in (0, 1) for part in ("fix_color", "saccade_color")),
-    }
-)
+#: Every session key that holds a colour — all of them on the link since EXP-19.
+_COLOR_STATE_KEYS = frozenset(_SHARE_VALUE_PARAMS[p] for p in _SHARE_COLOR_PARAMS)
 #: Keys whose widget is a toggle or checkbox: a stored non-bool is not a setting.
 _BOOL_STATE_KEYS = frozenset(
     {
@@ -1072,7 +1195,7 @@ def sanitize_session_value(key: str, value):
         if not isinstance(value, str):
             raise TypeError(f"not a colour: {value!r}")
         return _parse_hex_color(value)
-    bounds = _URL_BOUNDED.get(key) or _CONFIG_BOUNDED.get(key)
+    bounds = _URL_BOUNDED.get(key)
     if bounds is not None:
         lo, hi = bounds
         if key.endswith("_range"):
@@ -1354,7 +1477,9 @@ def _apply_pending_trial_selection(combos: pd.DataFrame) -> None:
     st.session_state.pop(PENDING_TRIAL_KEY, None)
 
 
-def _seed_column_mapping(mapping, *, overwrite: bool = False) -> None:
+def _seed_column_mapping(
+    mapping, *, overwrite: bool = False, dataset: object = None
+) -> None:
     """Seed the ``col_map_*`` session keys from a saved config's ``column_mapping``
     so a restored config pre-fills the wizard mapping + kept-field choices (and
     the user skips re-mapping). Stale values that don't match the current data are
@@ -1369,9 +1494,18 @@ def _seed_column_mapping(mapping, *, overwrite: bool = False) -> None:
     previous render, so those keys already exist; ``setdefault`` would be a no-op
     and the restore would silently do nothing. There, pass ``overwrite=True`` so
     an explicit restore wins (the step reruns afterwards, and it runs before the
-    mapping widgets re-instantiate, so writing the keys is safe)."""
+    mapping widgets re-instantiate, so writing the keys is safe).
+
+    BUG-32: the mapping is scoped to a dataset, so a caller restoring keys *for*
+    a dataset whose table has not been read yet names it as ``dataset`` — the
+    wizard's *Restore a saved setup* — and the keys are claimed for it
+    (``controls.claim_mapping``): its first table keeps them, another dataset
+    meeting them first drops them. Without ``dataset`` (the 💾 plot-config
+    restore) the keys describe whatever those prefixes already map, and the
+    marker is left alone."""
     if not isinstance(mapping, dict):
         return
+    written: set[str] = set()
     for raw_key, value in mapping.items():
         if (
             not isinstance(raw_key, str)
@@ -1382,10 +1516,14 @@ def _seed_column_mapping(mapping, *, overwrite: bool = False) -> None:
         key = raw_key
         if key.endswith("_paragraph"):
             key = key[: -len("_paragraph")] + "_text_id"
-        if overwrite:
+        if overwrite or key not in st.session_state:
             st.session_state[key] = value
-        else:
-            st.session_state.setdefault(key, value)
+            written.add(key)
+    if dataset is None:
+        return
+    for prefix in ("col_map_words", "col_map_fix", "col_map_raw_gaze"):
+        if any(key.startswith(f"{prefix}_") for key in written):
+            claim_mapping(prefix, dataset)
 
 
 @dataclass
@@ -1736,8 +1874,19 @@ def _restore_plot_config(
             20,
             "color bar tick size",
         )
-    # Range sliders only render when colour bars are on; store them anyway —
-    # the widgets clamp to the current data via `controls._clamp_range`.
+    # Store them even when their layer is off — the rail clamps them to the
+    # current data via `controls._clamped_pair`. VIZ-46: a stored range means
+    # *explicit*, so a config saved while the range was auto (`null`) restores
+    # as auto rather than keeping whatever range this session happened to hold.
+    # The writer records the figure's *gated* range, though, so `null` says
+    # "auto" only where the saved figure drew that range at all — a config saved
+    # with the heatmap off says nothing about the heatmap's range.
+    in_effect = {
+        "fixation_range": bool(layers.get("fixations"))
+        and coloring.get("color_by") not in (None, UNIFORM_COLOR_FIELD, "line"),
+        "heatmap_range": bool(layers.get("heatmap"))
+        and coloring.get("heatmap_metric") == "duration_ms",
+    }
     for cfg_key, state_key, label in (
         ("fixation_range", "global_fixation_color_range", "fixation color range"),
         ("heatmap_range", "global_heatmap_color_range", "heatmap color range"),
@@ -1746,6 +1895,8 @@ def _restore_plot_config(
         if isinstance(rng, (list, tuple)) and len(rng) == 2:
             lo, hi = number(rng[0]), number(rng[1])
             put_valid(lo is not None and hi is not None, state_key, (lo, hi), label)
+        elif cfg_key in coloring and rng is None and in_effect[cfg_key]:
+            forget_color_range(state_key)
 
     sizing = section("sizing")
     marker = sizing.get("marker_size_range")
@@ -2445,18 +2596,39 @@ def _build_share_query(
             int(v) for v in full
         ):
             params.pop(FIX_RANGE_PARAM, None)
+    # EXP-19 — the recording setup and Compare's per-scanpath styles travel only
+    # when they say something the recipient's own session would not: the
+    # generic sweeps above stamp every seeded key, and a demo link that restated
+    # the demo's 2560x1440 would pin that canvas even where the source is later
+    # re-declared. The styles additionally need a comparison to describe — the
+    # same rule as `cmp_layout` / `cmp_stimulus`.
+    defaults = _link_defaults(data_choice)
+    for url_key, state_key in {**SETUP_PARAMS, **COMPARE_STYLE_PARAMS}.items():
+        if url_key not in params:
+            continue
+        # The recording setup is the *source's*: a link that cannot name the
+        # source (an uploaded dataset) would pin its canvas on whatever the
+        # recipient happens to have open. It travels in the dataset's own ⬇️ Save
+        # setup JSON instead, which the source caveat above already points at.
+        orphaned = (
+            url_key in COMPARE_STYLE_PARAMS and COMPARE_PARAM not in params
+        ) or (url_key in SETUP_PARAMS and "source" not in params)
+        restated = state_key in defaults and _same_setting(
+            st.session_state.get(state_key), defaults[state_key]
+        )
+        if orphaned or restated:
+            params.pop(url_key)
     if st.session_state.get("single_animate"):
         params["tab"] = "animation"
 
     # DATA-22 §7 surface 2: a compact provenance badge for the recording setup.
-    # The link carries none of the setup's *values* — canvas, monitor mm and base
-    # font travel only in the 💾 saved config (EXP-18), so the recipient draws
-    # with the corpus' own declared setup — but it does carry how the sender's
-    # setup was known: without this the recipient cannot tell a monitor the
-    # sender measured from one the app assumed on their behalf. Metadata about
-    # settings, not a setting — it takes
-    # no input and changes no figure, which is why it stops here and never
-    # becomes a `render` flag or a builder argument.
+    # Since EXP-19 the link carries the setup's *values* too, wherever they
+    # differ from the corpus' own — but it also carries how the sender's setup
+    # was known: without this the recipient cannot tell a monitor the sender
+    # measured from one the app assumed on their behalf. Metadata about
+    # settings, not a setting — it takes no input and changes no figure, which
+    # is why it stops here and never becomes a `render` flag or a builder
+    # argument.
     from scanpath_studio.app import active_setup_snapshot
 
     snapshot = active_setup_snapshot(data_choice)
@@ -2464,6 +2636,84 @@ def _build_share_query(
         params[SETUP_PROVENANCE_PARAM] = format_provenance_param(snapshot)
 
     return urlencode(params), caveats
+
+
+def _link_defaults(data_choice: str) -> dict:
+    """EXP-19 — what a recipient's own session resolves for the settings a link
+    carries only when they differ, as ``{session key: value}``.
+
+    A key missing from the result has no default the sender can know, so it
+    always travels: the canvas of a source that declares no monitor is estimated
+    from the data extents, which this function does not have (and, on a session
+    that has switched sources, the live canvas may not be that estimate at all).
+
+    * **Canvas** — the source's declared monitor (`app.resolve_source_monitor`,
+      without frames: an authoritative source answers from its registry, and the
+      recipient's first run snaps to exactly that).
+    * **DPI** — derived, as `app.seed_canvas_state` pins it, from the canvas and
+      physical width the recipient will have. Those are the sender's own (each
+      either on the link or re-resolved to the same value), so a DPI that still
+      follows from them is re-derived identically and need not be sent.
+    * **Base font** — the factory 16, except on a source that declares its own
+      typeface: that one snaps the font on first seeding, so it has no default
+      the sender can leave off and always travels.
+    * **Everything else** — the factory values a fresh session pins
+      (`app.SETUP_DEFAULTS`, `controls.compare_style_defaults`).
+
+    The elision assumes a *fresh* recipient session. On a machine with the
+    recovery cache, the cache restores after the link's presets, so a setting
+    left off takes the recipient's cached value rather than the default.
+    """
+    from scanpath_studio.app import (
+        _FONT_SNAP_RESTORE_KEY,
+        SETUP_DEFAULTS,
+        resolve_source_monitor,
+    )
+    from scanpath_studio.controls import compare_style_defaults
+
+    defaults = dict(SETUP_DEFAULTS)
+    if _FONT_SNAP_RESTORE_KEY in st.session_state:
+        # The source declares its typeface (MultiplEYE), so its first seeding
+        # snaps the base font to *that* — a sender who chose the factory 16
+        # there has to say so, or the recipient gets the corpus' size.
+        defaults.pop("global_base_font_size")
+    width, height, authoritative = resolve_source_monitor(data_choice, None, None)
+    if authoritative:
+        lo, hi = _CANVAS_BOUNDS
+        defaults["global_canvas_width"] = min(max(int(width), lo), hi)
+        defaults["global_canvas_height"] = min(max(int(height), lo), hi)
+    canvas = st.session_state.get("global_canvas_width")
+    monitor_mm = st.session_state.get(
+        "global_monitor_width_mm", SETUP_DEFAULTS["global_monitor_width_mm"]
+    )
+    try:
+        defaults["global_display_dpi"] = round(
+            float(canvas) / (float(monitor_mm) / 25.4), 2
+        )
+    except (TypeError, ValueError, ZeroDivisionError):
+        pass  # no canvas yet — the DPI, if set at all, travels as it is
+    defaults.update(compare_style_defaults())
+    return defaults
+
+
+def _same_setting(value, default) -> bool:
+    """Whether a session value restates ``default`` (EXP-19's elision test).
+
+    Colours compare case-blind (the pickers hand back lowercase hex, the
+    constants are upper-case), numbers numerically (an int canvas against a
+    float, a tuple range against a list), everything else by equality."""
+    if isinstance(value, bool) or isinstance(default, bool):
+        return value is default
+    if isinstance(value, str) and isinstance(default, str):
+        return value.strip().lower() == default.strip().lower()
+    if isinstance(value, (list, tuple)) and isinstance(default, (list, tuple)):
+        return len(value) == len(default) and all(
+            _same_setting(a, b) for a, b in zip(value, default, strict=True)
+        )
+    try:
+        return math.isclose(float(value), float(default), rel_tol=0.0, abs_tol=1e-9)
+    except (TypeError, ValueError):
+        return value == default
 
 
 def _render_share_link_widget(query: str) -> None:
@@ -2774,13 +3024,6 @@ def _render_share_body(data_choice: str) -> None:
     for note in caveats:
         st.caption("⚠️ " + note)
     _render_share_link_widget(query)
-    # EXP-18: say what the link leaves out, rather than let a figure reopen at
-    # the recipient's own canvas and font without a word.
-    st.caption(
-        "The recording setup (canvas, base font size, monitor) and Compare's "
-        "per-scanpath styles aren't in the link — they travel in a 💾 Session → "
-        "JSON backup."
-    )
     st.caption(
         "If the recipient runs Scanpath Studio at a different address or port, "
         "replace the start of the URL before opening it."
@@ -2790,36 +3033,16 @@ def _render_share_body(data_choice: str) -> None:
 
 
 # -----------------------------------------------------------------------------
-# Data loading
+# View navigation
 # -----------------------------------------------------------------------------
 # These *request* a view by writing `main_nav`; `menu.render_nav` reconciles the
 # router to it on the next run. They are used as `on_click` callbacks, where
 # Streamlit forbids `st.switch_page` — hence the request-then-reconcile split
 # rather than navigating directly (`menu.switch_to_view` is the direct form, for
 # top-level script code).
-def _go_corpus() -> None:
-    st.session_state["main_nav"] = _VIEW_CORPUS
-
-
 def _go_scanpath() -> None:
     st.session_state["main_nav"] = _VIEW_SCANPATH
 
 
 def _go_data() -> None:
     st.session_state["main_nav"] = _VIEW_DATA
-
-
-def _active_view() -> str:
-    """The active top-level view, normalized to one of the nav's entries.
-
-    Reads the `main_nav` mirror `menu.render_nav` writes from the router's
-    selection, so it stays the one answer every caller shares. It may also carry
-    a legacy/stale value (e.g. "Data Inspection", the old standalone view, or
-    "Session", which UX-100 turned back into a popover — and note that DATA-26's
-    page is `_VIEW_DATA`, a different string, so an old cached value does *not*
-    silently resolve to it), or a view *requested* for the next run; anything
-    unrecognized resolves to the Scanpath page."""
-    requested = st.session_state.get("main_nav")
-    if requested in (_VIEW_CORPUS, _VIEW_DATA):
-        return requested
-    return _VIEW_SCANPATH

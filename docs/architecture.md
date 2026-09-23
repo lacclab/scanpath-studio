@@ -29,7 +29,8 @@ the repo root (kept current as the code changes); this is the short version.
 | `annotations.py` | Parent-trial and optional screen-scoped favorites / tags / notes (session state + JSON). |
 | `persistence.py` | On-device recovery cache for a local/desktop session (datasets, mappings, settings, annotations), inspected and cleared from the 💾 Session dialog's 🗄️ Automatic recovery block, `scanpath-studio cache`, and `api.cache_status`. |
 | `alignment.py` | Vertical drift correction: native port of the ten Carr et al. (2021) line-assignment algorithms. Gated off by default (PRE-21). |
-| `datasets.py` | Ready-made loaders for public corpora (OneStop, PoTeC, MultiplEYE) and for the thirty-one [harmonised benchmark corpora](benchmark-corpora.md), each its own data source. |
+| `datasets.py` | Ready-made loaders for the built-in public corpora (OneStop, PoTeC, MultiplEYE). |
+| `eyegenbench.py` / `eyegenbench_geometry.py` | The thirty-one [harmonised benchmark corpora](benchmark-corpora.md): reading a locally prepared bundle (each corpus its own data source) and recovering the word boxes the harmonised output discards, in labelled fidelity tiers. |
 | `metadata.py` | Keyed participant-metadata tables: a validated frame + field registry, joined only onto the per-trial combos and turned into reader ids for the participant filter — never broadcast onto words or fixations. |
 | `computations.py` | The computation register behind [Computations & methodology](computations.md): one entry per user-visible derived value, and the generator for that page. |
 | `compare_source.py` | The second dataset compare mode can draw scanpath B from: a widget-free readiness gate + loader, so a comparison can cross corpora without the picker having to render a corpus' folder/download controls. |
@@ -55,8 +56,8 @@ uploaded / sample table(s)
 ```bash
 pip install -e ".[test]"     # add ,docs for the docs site
 pytest
-ruff check --exclude other_vis .
-ruff format --exclude other_vis .
+ruff check .
+ruff format .
 
 # Serve these docs locally
 pip install -e ".[docs]"

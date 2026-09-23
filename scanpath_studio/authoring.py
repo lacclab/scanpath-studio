@@ -434,9 +434,3 @@ def parse_authoring_document(payload: str) -> AuthoringDocument:
         raise ValueError("Authoring layout values must be whole numbers.") from exc
     frame, _ = reconcile_event_table(pd.DataFrame(events).reset_index(drop=True))
     return AuthoringDocument(value["text"], frame, normalized_layout)
-
-
-def parse_authoring_json(payload: str) -> tuple[str, pd.DataFrame]:
-    """Backward-compatible two-value wrapper around :func:`parse_authoring_document`."""
-    document = parse_authoring_document(payload)
-    return document.text, document.events

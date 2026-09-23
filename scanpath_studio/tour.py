@@ -44,13 +44,12 @@ Mechanics worth knowing before editing:
   same-origin script (``_tour_optout_script``); ``tour_opted_out()`` reads it.
   The replay button ignores the opt-out entirely, so the tour is never lost.
 - **The FAQ (UX-15)** is the other half of the ❓ Help menu group: a short
-  ``st.dialog`` of recurring questions (``render_faq_button``), deliberately
-  kept to a handful of answers with the complete version on the docs site
-  (``docs/faq.md``). It is armed exactly like the tour — the button's
-  ``on_click`` sets a request flag that ``maybe_show_faq`` serves early in
-  ``main()`` — because the button renders at the *bottom* of ``main()``:
-  opening the dialog from its return value made the modal wait out the whole
-  rerun (~10 s of plot embeds) before appearing.
+  ``st.dialog`` of recurring questions (``_faq_dialog``), deliberately kept to a
+  handful of answers with the complete version on the docs site
+  (``docs/faq.md``). It is armed exactly like the tour — the ❓ Help nav entry
+  (``menu._arm_help_action``) calls ``_arm_faq``, which sets a request flag that
+  ``maybe_show_faq`` serves early in ``main()``, so the modal never waits out the
+  rest of the rerun (~10 s of plot embeds) before appearing.
 """
 
 from __future__ import annotations
@@ -545,19 +544,6 @@ def _dismissed_tutorial_ids() -> set[str]:
             raw = ""
         st.session_state["_tutorial_dismissed_ids"] = {p for p in raw.split(",") if p}
     return st.session_state["_tutorial_dismissed_ids"]
-
-
-def tutorial_opted_out(tutorial_id: str) -> bool:
-    """True when ``tutorial_id`` was marked "don't auto-show" (UX-85).
-
-    Nothing in the 🧭 Tutorials library auto-opens itself today — only the
-    welcome card and the wizard guide do, each with their own mechanism — so
-    this is the opt-out for whichever ones start doing that (the wizard guide
-    included, once it reads this too) rather than something with an effect
-    yet on every tutorial. It never hides a tutorial from the chooser, only
-    stops it greeting you — the same "gone, not away" rule #UX-12 set.
-    """
-    return tutorial_id in _dismissed_tutorial_ids()
 
 
 def _tutorial_optout_script(dismissed: set[str]) -> str:
@@ -1327,22 +1313,6 @@ def maybe_show_welcome_tour() -> None:
     _start_tour()
 
 
-def render_tour_replay_button(host=None) -> None:
-    """Compatibility button that replays the welcome tour from step one.
-
-    Deliberately ignores the UX-12 opt-out — "don't show this again" means "stop
-    greeting me", not "take the tutorial away". The card's checkbox renders
-    pre-ticked on a replay so the choice can be reversed from the same place.
-    """
-    (host if host is not None else st).button(
-        "🎓 Welcome tour",
-        key="tour_replay",
-        width="stretch",
-        help="Replay the quick intro tour.",
-        on_click=_arm_tour,
-    )
-
-
 # -----------------------------------------------------------------------------
 # Use-case tutorials (UX-40)
 # -----------------------------------------------------------------------------
@@ -1536,7 +1506,8 @@ def _tutorial_surface_is_open(step: TutorialStep) -> bool:
 
 
 def _arm_tutorial_library() -> None:
-    """``on_click`` callback for the Tutorials button: request the dialog."""
+    """Request the tutorial chooser. Called by the ❓ Help nav entry
+    (``menu._arm_help_action``)."""
     st.session_state["_tutorial_library_requested"] = True
 
 
@@ -1558,24 +1529,6 @@ def stash_tutorial_context(context: dict[str, object]) -> None:
     and it can be opened from any view, so the stash has to happen every run.
     """
     st.session_state["_tutorial_context"] = dict(context)
-
-
-def render_tutorial_library(context: dict[str, object], *, host=None) -> None:
-    """Button in the ❓ Help menu popover that opens the tutorial chooser.
-
-    A dialog rather than the nested ``🧭 Tutorials`` popover it used to be: the
-    Help group is itself a popover now, and Streamlit nests no popover in a
-    popover. The chooser is a modal-shaped thing anyway — pick an outcome, start,
-    and the tutorial takes over the page.
-    """
-    stash_tutorial_context(context)
-    (host if host is not None else st).button(
-        "🧭 Tutorials",
-        key="tutorial_library_open",
-        width="stretch",
-        help="Welcome and task-oriented walkthroughs.",
-        on_click=_arm_tutorial_library,
-    )
 
 
 @st.dialog("🧭 Tutorials", width="large")
@@ -1936,19 +1889,19 @@ def _faq_dialog() -> None:
         "🎓 Tutorials ↗",
         DOCS_TUTORIALS_URL,
         width="stretch",
-        help="Task-by-task walkthroughs: load your own data, compare two "
-        "readers, make a paper figure, run it headless. Opens in a new tab.",
+        help="Task-by-task walkthroughs: data collection, data filtering, "
+        "exporting figures, corpus analysis. Opens in a new tab.",
     )
     if close_col.button("✓ Close", key="faq_close", width="stretch", type="primary"):
         _close_dialog_clientside()
 
 
 def _arm_faq() -> None:
-    """``on_click`` callback for the FAQ button: request the dialog.
+    """Request the FAQ dialog. Called by the ❓ Help nav entry
+    (``menu._arm_help_action``).
 
-    Dialogs can't be opened from a callback, so this only sets a flag that
-    :func:`maybe_show_faq` — called early in ``main()`` — serves. Callbacks run
-    *before* the rerun, so the request is picked up within the same run.
+    Dialogs can't be opened from there, so this only sets a flag that
+    :func:`maybe_show_faq` — called early in ``main()`` — serves.
     """
     st.session_state["_faq_dialog_requested"] = True
 
@@ -1965,23 +1918,6 @@ def maybe_show_faq() -> None:
     """
     if st.session_state.pop("_faq_dialog_requested", False):
         _faq_dialog()
-
-
-def render_faq_button(host=None) -> None:
-    """Button in the ❓ Help menu popover that opens the in-app FAQ dialog.
-
-    Sits next to :func:`render_tour_replay_button` and is armed the same way: an
-    ``on_click`` callback sets a request flag that the early
-    :func:`maybe_show_faq` call serves, so the modal doesn't wait on the heavy
-    data / plot work this button renders after.
-    """
-    (host if host is not None else st).button(
-        "❓ FAQ",
-        key="faq_open",
-        width="stretch",
-        help="Short answers to common questions, plus a link to the full docs.",
-        on_click=_arm_faq,
-    )
 
 
 # -----------------------------------------------------------------------------

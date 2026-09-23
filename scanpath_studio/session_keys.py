@@ -37,7 +37,7 @@ from types import MappingProxyType
 # ---------------------------------------------------------------------------
 # Visualization settings — the `global_*` keys the plot rail's widgets own.
 # Every one of these round-trips through BOTH the share link and the saved
-# config (or, below the divider, through the saved config only).
+# config (the recording setup below the divider only since EXP-19).
 # ---------------------------------------------------------------------------
 GLOBAL_SHOW_WORDS = "global_show_words"
 GLOBAL_SHOW_LABELS = "global_show_labels"
@@ -152,7 +152,10 @@ GLOBAL_FIXCLASS_BLINK_SYMBOL = "global_fixclass_blink_symbol"
 GLOBAL_FIXCLASS_BLINK_COLOR = "global_fixclass_blink_color"
 GLOBAL_SHOW_COMPARE_LEGEND = "global_show_compare_legend"
 
-# --- Saved-config-only settings (no share-link param) ----------------------
+# --- The recording setup ----------------------------------------------------
+# Saved-config-only until EXP-19 put every one of them on the link too — each
+# emitted only when it differs from what the recipient's own session would
+# resolve for the same source (see `URL_OPTIONAL_PARAMS`).
 GLOBAL_BASE_FONT_SIZE = "global_base_font_size"
 GLOBAL_CANVAS_WIDTH = "global_canvas_width"
 GLOBAL_CANVAS_HEIGHT = "global_canvas_height"
@@ -219,6 +222,30 @@ CMP_HOLLOW = "cmp{idx}_hollow"
 CMP_OPACITY = "cmp{idx}_opacity"
 # UX-31: the A/B legend label override ("" = the auto "participant · trial").
 CMP_LABEL_PATTERN = "cmp{idx}_label_pattern"
+
+#: EXP-19 — the link's spelling of the same styles: ``cmp_a_<field>`` for the
+#: first scanpath (``cmp0_*``) and ``cmp_b_<field>`` for the second (``cmp1_*``),
+#: ``<field>`` being the saved config's own name for it. The letters rather than
+#: the index because that is what every other surface calls the two scanpaths —
+#: ``style_a`` / ``style_b``, ``--label-a`` / ``--label-b``, ``cmp_stimulus=A|B``.
+COMPARE_STYLE_SIDES = (("a", 0), ("b", 1))
+
+
+def _compare_style_params(*fields: str) -> dict[str, str]:
+    """``{"cmp_a_<field>": "cmp0_<field>", "cmp_b_<field>": "cmp1_<field>"}``."""
+    return {
+        f"cmp_{side}_{name}": f"cmp{idx}_{name}"
+        for side, idx in COMPARE_STYLE_SIDES
+        for name in fields
+    }
+
+
+#: EXP-19 — where a deep link parks the recording-setup keys it seeded, and the
+#: source it resolved to (`url_state.scope_link_setup`), so that source's own
+#: monitor / typeface snap (`app.seed_canvas_state`) leaves them alone on the
+#: recipient's first run instead of overwriting the sender's values with the
+#: corpus defaults. A one-shot handoff, not a setting.
+LINK_SETUP_STATE_KEY = "_link_setup_keys"
 
 # ---------------------------------------------------------------------------
 # URL query-parameter names that are NOT viz settings — the selection half of a
@@ -340,6 +367,9 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         "show_stimulus_image": GLOBAL_SHOW_STIMULUS_IMAGE,
         "fit_to_monitor": GLOBAL_FIT_TO_MONITOR,
         "show_compare_legend": GLOBAL_SHOW_COMPARE_LEGEND,
+        # EXP-19.
+        "use_stimulus_font_pt": GLOBAL_USE_STIMULUS_FONT_PT,
+        **_compare_style_params("hollow"),
     }
 )
 
@@ -404,6 +434,10 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
         "fixclass_blink_mode": GLOBAL_FIXCLASS_BLINK_MODE,
         "fixclass_blink_symbol": GLOBAL_FIXCLASS_BLINK_SYMBOL,
         "fixclass_blink_color": GLOBAL_FIXCLASS_BLINK_COLOR,
+        # EXP-19.
+        **_compare_style_params(
+            "fix_color", "saccade_color", "saccade_style", "label_pattern"
+        ),
     }
 )
 
@@ -418,6 +452,10 @@ SHARE_INT_PARAMS: Mapping[str, str] = MappingProxyType(
         "colorbar_tickfont_size": GLOBAL_COLORBAR_TICKFONT_SIZE,
         "fixclass_short_threshold_ms": GLOBAL_FIXCLASS_SHORT_THRESHOLD_MS,
         "fixclass_long_threshold_ms": GLOBAL_FIXCLASS_LONG_THRESHOLD_MS,
+        # EXP-19.
+        "canvas_width": GLOBAL_CANVAS_WIDTH,
+        "canvas_height": GLOBAL_CANVAS_HEIGHT,
+        "base_font_size": GLOBAL_BASE_FONT_SIZE,
     }
 )
 
@@ -439,6 +477,12 @@ SHARE_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
         "raw_gaze_opacity": GLOBAL_RAW_GAZE_OPACITY,
         # EXP-18.
         "playback_speed": SINGLE_PLAYBACK_SPEED,
+        # EXP-19.
+        "monitor_width_mm": GLOBAL_MONITOR_WIDTH_MM,
+        "viewing_distance_mm": GLOBAL_VIEWING_DISTANCE_MM,
+        "display_dpi": GLOBAL_DISPLAY_DPI,
+        "stimulus_font_pt": GLOBAL_STIMULUS_FONT_PT,
+        **_compare_style_params("saccade_width", "opacity"),
     }
 )
 
@@ -451,6 +495,8 @@ SHARE_INT_RANGE_PARAMS: Mapping[str, str] = MappingProxyType(
         # range, so an untouched one is not a setting and must not be stamped
         # onto every link.
         FIX_RANGE_PARAM: SINGLE_FIX_RANGE,
+        # EXP-19.
+        **_compare_style_params("marker_size_range"),
     }
 )
 
@@ -511,6 +557,37 @@ URL_SELECTION_PARAMS = frozenset(
     }
 )
 
+# EXP-19 — the settings that used to travel in the saved config only, by what
+# they describe. Both groups ride the link only when they differ from what the
+# recipient's own session would resolve for the same source and trial (so a link
+# does not stamp the demo's 2560x1440 onto itself, and does not override a
+# corpus' declared monitor with a copy of that same monitor), and the compare
+# styles only alongside a `compare=` — they restore nothing without one.
+SETUP_PARAMS: Mapping[str, str] = MappingProxyType(
+    {
+        "canvas_width": GLOBAL_CANVAS_WIDTH,
+        "canvas_height": GLOBAL_CANVAS_HEIGHT,
+        "base_font_size": GLOBAL_BASE_FONT_SIZE,
+        "monitor_width_mm": GLOBAL_MONITOR_WIDTH_MM,
+        "viewing_distance_mm": GLOBAL_VIEWING_DISTANCE_MM,
+        "display_dpi": GLOBAL_DISPLAY_DPI,
+        "stimulus_font_pt": GLOBAL_STIMULUS_FONT_PT,
+        "use_stimulus_font_pt": GLOBAL_USE_STIMULUS_FONT_PT,
+    }
+)
+COMPARE_STYLE_PARAMS: Mapping[str, str] = MappingProxyType(
+    _compare_style_params(
+        "fix_color",
+        "saccade_color",
+        "saccade_style",
+        "saccade_width",
+        "marker_size_range",
+        "hollow",
+        "opacity",
+        "label_pattern",
+    )
+)
+
 # Session keys `app.main`'s `?source=` dispatch writes when a link names a data
 # source. Separate from `URL_SEEDED_STATE_KEYS` because they are seeded there,
 # after `_apply_url_preset` has returned the token — see PARAM_CORPUS above.
@@ -522,7 +599,9 @@ URL_SOURCE_STATE_KEYS = frozenset({DATA_SOURCE_CHOICE, PUBLIC_DATASET_CHOICE})
 # setup, and an absent badge is the honest outcome there: emitting
 # "assumed,assumed,assumed" would manufacture a claim the sender never made.
 # `corpus` is absent for every source that is not a public corpus, and for the
-# one public corpus that still travels under its own older token.
+# one public corpus that still travels under its own older token. EXP-19's two
+# groups are here because they are emitted only when they differ from the
+# recipient's own defaults — see `SETUP_PARAMS` above.
 URL_OPTIONAL_PARAMS = frozenset(
     {
         SETUP_PROVENANCE_PARAM,
@@ -530,6 +609,8 @@ URL_OPTIONAL_PARAMS = frozenset(
         COMPARE_SOURCE_PARAM,
         PARAM_CORPUS,
         FIX_RANGE_PARAM,
+        *SETUP_PARAMS,
+        *COMPARE_STYLE_PARAMS,
     }
 )
 
@@ -569,6 +650,19 @@ URL_BOUNDED_STATE_KEYS = frozenset(
         GLOBAL_COLORBAR_TICKFONT_SIZE,
         GLOBAL_FIXCLASS_SHORT_THRESHOLD_MS,
         GLOBAL_FIXCLASS_LONG_THRESHOLD_MS,
+        # EXP-19 — every numeric one of the two new groups.
+        GLOBAL_CANVAS_WIDTH,
+        GLOBAL_CANVAS_HEIGHT,
+        GLOBAL_BASE_FONT_SIZE,
+        GLOBAL_MONITOR_WIDTH_MM,
+        GLOBAL_VIEWING_DISTANCE_MM,
+        GLOBAL_DISPLAY_DPI,
+        GLOBAL_STIMULUS_FONT_PT,
+        *(
+            template.format(idx=idx)
+            for template in (CMP_SACCADE_WIDTH, CMP_MARKER_SIZE_RANGE, CMP_OPACITY)
+            for _side, idx in COMPARE_STYLE_SIDES
+        ),
     }
 )
 
@@ -593,6 +687,8 @@ URL_SEEDED_STATE_KEYS = frozenset(
         ONESTOP_PARTS,
         DEEPLINK_PARTICIPANT,
         GLOBAL_ADVANCED,
+        # EXP-19 — the one-shot "leave these alone" handoff to the source snap.
+        LINK_SETUP_STATE_KEY,
     }
 )
 

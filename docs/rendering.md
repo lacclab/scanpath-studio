@@ -72,24 +72,22 @@ labels match the stimulus precisely rather than relying on inference.
 
 ## Pixels, not points
 
-!!! warning "Font-size controls are in pixels (px), not points (pt)"
-    Every font-size control in the app — the base label size, order-number size,
-    colour-bar tick size — is in **pixels**. Stimulus typography, however, is
-    usually specified in **points**. The two are not interchangeable: a point is a
-    physical unit (1 pt = 1/72 inch), a pixel is a screen unit, and the conversion
-    depends on the display's DPI:
+!!! warning "Font-size controls are in pixels (px) unless you choose points"
+    The base label size, order-number size and colour-bar tick size are in
+    **pixels**. Stimulus typography, however, is usually specified in **points**.
+    The two are not interchangeable: a point is a physical unit (1 pt = 1/72 inch),
+    a pixel is a screen unit, and the conversion depends on the display's DPI:
 
     ```
     px = pt × DPI / 72          pt = px × 72 / DPI
     ```
 
     So "18 pt" is only "18 px" on a 72-DPI display; on a 96-DPI monitor it is
-    24 px. If you're trying to reproduce an original stimulus font exactly, convert
-    through the experiment's DPI — or, better, use a dataset that stamps its real
-    `stimulus_font_px` (see above) and let the app snap to it. Folding the
-    experimental-setup values (screen resolution, viewing distance, DPI, stimulus
-    font pt) into the display settings so this conversion is automatic is tracked
-    as a roadmap item.
+    24 px. To give the reading text's size in points, open **📄 Stimulus → Text**,
+    untick **Scale text to boxes** and set **Font unit** to **Points (pt)**: the
+    app converts it with the **Display DPI** from the dataset's recording setup
+    (🗂️ Data → ✏️ Edit dataset → Recording setup). A dataset that stamps its real
+    `stimulus_font_px` (see above) still snaps to that directly.
 
 ## Why the spatial plot needs a special render path
 
@@ -101,6 +99,11 @@ single-trial, animation, and comparison plots all go through
 `tabs._render_true_scale_chart`, which embeds the figure's own HTML at its exact
 size and CSS-scales the whole block uniformly to the column width. Static image
 export bumps the raster `scale` to stay crisp; SVG/PDF are vector and need no bump.
+
+The embed loads plotly.js from the app's own server, never a CDN:
+`html_embed.plotlyjs_script()` goes ahead of `fig.to_html(include_plotlyjs=False)`
+and loads the `plotly.min.js` that ships with the installed plotly package, so the
+figure draws offline and in the desktop app (ENG-64).
 
 If you add a new spatial figure, keep it on `_render_true_scale_chart` — never
 `st.plotly_chart` — or the reading text will drift from the boxes.

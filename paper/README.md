@@ -51,7 +51,8 @@ It needs Playwright's Chromium (`playwright install chromium`, or point
 
 ## Notes
 
-- `paper_stats.py` runs the measure validation twice, under both word-boundary
-  conventions — see its module docstring, and `measures.word_box_bounds`.
+- `paper_stats.py` validates the recomputed measures against the corpus' own
+  EyeLink IA values; both read the experiment's rectangles unchanged — see its
+  module docstring, and `measures.word_box_bounds`.
 - Figures are rendered through Kaleido, which needs a Chrome/Chromium binary
   (`plotly_get_chrome -y` once, locally).

@@ -93,7 +93,7 @@ def build_authored_scanpath(
     """Build normalized word/fixation frames from hand-authored reading events.
 
     When ``events`` is omitted, one centered fixation per laid-out word is used.
-    ``layout_options`` are forwarded to :func:`authoring.layout_text`.
+    ``layout_options`` are forwarded to `authoring.layout_text`.
     """
     from .authoring import authored_fixations, default_events, layout_text
 
@@ -498,9 +498,9 @@ def propose_schema(table: TablesLike, kind: str = "words") -> dict:
 
     ``kind`` is ``"words"``, ``"fixations"`` or ``"raw_gaze"``. Returns
     ``{canonical field: source column or None}`` — the same mapping
-    :func:`load_scanpath_data` infers internally, so it's the place to start when
-    detection got a field wrong or couldn't find one: edit the dict and pass it
-    back as ``word_schema=`` / ``fix_schema=``::
+    [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data] infers internally,
+    so it's the place to start when detection got a field wrong or couldn't find one:
+    edit the dict and pass it back as ``word_schema=`` / ``fix_schema=``::
 
         from scanpath_studio import api
 
@@ -558,14 +558,15 @@ def load_scanpath_data(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load and normalize a words/IA table and/or a fixations table.
 
-    ``words`` / ``fixations`` may be DataFrames, paths to ``.csv`` / ``.tsv``
-    / ``.parquet`` / ``.feather`` files, glob patterns, or lists of paths —
-    multi-file datasets (one file per participant and/or text) are
-    concatenated, with each file's stem kept in a ``source_file`` column.
-    Column schemas are auto-detected (EyeLink, Gazepoint, and snake_case
-    names); pass ``word_schema`` / ``fix_schema`` mappings (field → column
-    name, see ``controls.WORD_FIELD_SPECS``) to override detection. For
-    per-word reading measures, pass the result to :func:`compute_word_metrics`.
+    ``words`` / ``fixations`` may be DataFrames, paths to ``.csv`` / ``.tsv`` /
+    ``.txt`` / ``.tab`` / ``.parquet`` / ``.feather`` / ``.xlsx`` / ``.xls`` files (or
+    a ``.zip`` of them), glob patterns, or lists of paths — multi-file datasets (one
+    file per participant and/or text) are concatenated, with each file's stem kept in
+    a ``source_file`` column. Column schemas are auto-detected (EyeLink, Gazepoint,
+    Tobii, SMI, Pupil Labs, and snake_case names); pass ``word_schema`` /
+    ``fix_schema`` mappings (field → column name, see ``controls.WORD_FIELD_SPECS``)
+    to override detection. For per-word reading measures, pass the result to
+    [`compute_word_metrics`][scanpath_studio.api.compute_word_metrics].
 
     ``trial_parts_manifest`` accepts a nested parent-trial/parts definition for
     datasets whose source tables identify screens through arbitrary selector
@@ -658,10 +659,10 @@ def load_participant_metadata(
     ``.report`` then names the readers missing from either side.
 
     Returns a
-    :class:`~scanpath_studio.metadata.ParticipantMetadata`: the cleaned frame,
+    `ParticipantMetadata`: the cleaned frame,
     a field registry (name, label, grain, dtype, missingness), and the join
     report. Nothing is broadcast onto the words/fixations frames — use
-    :func:`scanpath_studio.metadata.project` to attach chosen columns to a
+    `scanpath_studio.metadata.project` to attach chosen columns to a
     per-trial frame, or ``.values_for(pid)`` for one reader.
 
     >>> words, fixations = load_sample_data()
@@ -699,9 +700,11 @@ def load_trial_metadata(
 ):
     """Load a trial-level metadata table (DATA-29 — milestone 2).
 
-    The sibling of :func:`load_participant_metadata`, one grain down: ``table``
-    has **one row per reading** — a trial-id column plus anything known about
-    that reading (a list name, a condition, a per-trial comprehension score).
+    The sibling of
+    [`load_participant_metadata`][scanpath_studio.api.load_participant_metadata], one
+    grain down: ``table`` has **one row per reading** — a trial-id column plus anything
+    known about that reading (a list name, a condition, a per-trial comprehension
+    score).
 
     **The key is yours to state, and it changes what the table means.** Keyed by
     trial id alone, a row describes a *text*, and every reader's reading of it
@@ -716,7 +719,7 @@ def load_trial_metadata(
     data you actually loaded; the returned ``.report`` then names the trials
     missing from either side.
 
-    Returns a :class:`~scanpath_studio.metadata.TrialMetadata`: the cleaned
+    Returns a `TrialMetadata`: the cleaned
     frame, a field registry, and the join report. As with the participant
     table, nothing is broadcast onto the words/fixations frames.
 
@@ -759,20 +762,20 @@ def load_text_metadata(
 ):
     """Load a text-level metadata table — the third grain.
 
-    ``table`` has **one row per text** — a text-id column plus anything known
-    about that text (genre, difficulty, a stimulus-level comprehension score).
-    Flat grain, like :func:`load_participant_metadata`: never keyed by reader,
-    since a text is a stimulus rather than something one reader owns.
+    ``table`` has **one row per text** — a text-id column plus anything known about that
+    text (genre, difficulty, a stimulus-level comprehension score). Flat grain, like
+    [`load_participant_metadata`][scanpath_studio.api.load_participant_metadata]: never
+    keyed by reader, since a text is a stimulus rather than something one reader owns.
     ``id_column`` defaults to the first recognised spelling (``text_id``,
-    ``paragraph_id``, ``stimulus_id``, …) and may be several columns to build
-    a composite id, the same way the uploaded data's own Text ID mapping does.
+    ``paragraph_id``, ``stimulus_id``, …) and may be several columns to build a
+    composite id, the same way the uploaded data's own Text ID mapping does.
 
     Pass ``texts`` — a normalized fixations/words frame, or any iterable of
     text ids — to have the join validated against the data you actually
     loaded; the returned ``.report`` then names the texts missing from either
     side.
 
-    Returns a :class:`~scanpath_studio.metadata.TextMetadata`: the cleaned
+    Returns a `TextMetadata`: the cleaned
     frame, a field registry, and the join report. As with the other two
     grains, nothing is broadcast onto the words/fixations frames.
 
@@ -808,16 +811,53 @@ def load_sample_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     """Return the bundled OneStop demo, normalized and ready to plot.
 
     Three readers' word boxes ship with the package but only two of them have
-    fixations, so :func:`list_trials` reports the two plottable readers."""
+    fixations, so [`list_trials`][scanpath_studio.api.list_trials] reports the two
+    plottable readers."""
     return load_scanpath_data(*_data.load_sample_data())
+
+
+def load_raw_gaze(
+    table: TablesLike, *, raw_gaze_schema: dict | None = None
+) -> pd.DataFrame:
+    """Load and normalize a raw (sample-level) gaze table for ``raw_gaze=`` (EXP-20).
+
+    The third table [`plot_scanpath`][scanpath_studio.api.plot_scanpath] can draw, under
+    the fixations: one row per eye-tracker sample, with a participant, a trial, ``x`` /
+    ``y`` and usually a timestamp. ``table`` is a DataFrame, path, glob or list of
+    paths, like [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data]'s, and
+    the columns are auto-detected the same way; pass ``raw_gaze_schema`` (field →
+    column, see ``api.propose_schema(table, "raw_gaze")``) to override the detection.
+    ``plot_scanpath`` keeps only the plotted trial's (and screen's) samples, so one
+    table can serve a whole corpus::
+
+        raw_gaze = sps.load_raw_gaze("gaze_samples.csv")
+        fig = sps.plot_scanpath(words, fixations, "p1", "t3", raw_gaze=raw_gaze)
+    """
+    frame = _as_dataframe(table, "raw gaze")
+    explicit = raw_gaze_schema is not None
+    schema = raw_gaze_schema or _data.propose_raw_gaze_schema(frame)
+    _check_mapped_columns("raw_gaze", frame, schema)
+    problems = _data.validate_raw_gaze_schema(schema)
+    if problems:
+        raise _schema_error("raw_gaze", frame, schema, problems, explicit)
+    return _data.normalize_raw_gaze(frame, schema)
+
+
+def load_sample_raw_gaze() -> pd.DataFrame:
+    """The bundled demo's raw gaze, normalized — what the app overlays on it.
+
+    OneStop ships no sample-level gaze, so this is **synthesized** from one of
+    the demo's real trials (see ``update_sample_data.synthesize_raw_gaze``) and
+    covers that trial alone."""
+    return load_raw_gaze(_data.load_sample_raw_gaze())
 
 
 def compute_word_metrics(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
     """Per-word reading measures (FFD/FPRT/RPD/TFD, skips, regressions, …).
 
-    Pre-aggregated columns in ``words`` (EyeLink IA exports) are preserved;
-    anything missing is computed from fixations + word bounding boxes. Takes
-    the normalized frames from :func:`load_scanpath_data`."""
+    Pre-aggregated columns in ``words`` (EyeLink IA exports) are preserved; anything
+    missing is computed from fixations + word bounding boxes. Takes the normalized
+    frames from [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data]."""
     _require_normalized(words, "words")
     _require_normalized(fixations, "fixations")
     return _data.compute_word_metrics(words, fixations)
@@ -1362,12 +1402,13 @@ def _check_column_options(
 def figure_options(kind: str = "static") -> dict:
     """Every figure keyword a builder accepts → the default it renders with.
 
-    ``kind="static"`` covers :func:`plot_scanpath`, ``kind="animation"``
-    :func:`animate_scanpath` (whose builder supports a subset), and
-    ``kind="comparison"`` :func:`compare_scanpaths`. The values are
-    the *effective* defaults — :data:`CANONICAL_FIGURE_DEFAULTS` where it sets
-    one, the builder's own signature default otherwise — so a scripted caller
-    can diff its intended settings against what it would get::
+    ``kind="static"`` covers [`plot_scanpath`][scanpath_studio.api.plot_scanpath],
+    ``kind="animation"`` [`animate_scanpath`][scanpath_studio.api.animate_scanpath]
+    (whose builder supports a subset), and ``kind="comparison"``
+    [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths]. The values are the
+    *effective* defaults — `CANONICAL_FIGURE_DEFAULTS` where it sets one, the builder's
+    own signature default otherwise — so a scripted caller can diff its intended
+    settings against what it would get::
 
         {k: v for k, v in sps.figure_options().items() if k.startswith("show_")}
     """
@@ -1483,21 +1524,23 @@ def plot_scanpath(
     """Build the canonical scanpath figure for one trial.
 
     ``words`` / ``fixations`` are normalized frames from
-    :func:`load_scanpath_data`. ``participant`` / ``trial`` may be omitted when
-    the frames contain exactly one combo. ``canvas_size`` is the monitor size
-    in px; by default it is estimated from the data extents — pass the real
-    monitor resolution (e.g. ``(2560, 1440)`` for OneStop) to keep coordinates
-    true to scale. For a multipart trial, ``screen`` selects one child screen;
-    omitting it selects the first recorded screen and never concatenates
-    coordinate spaces. ``raw_gaze`` is a normalized frame (see
-    :func:`data.normalize_raw_gaze`) and is filtered to the selected trial.
+    [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data]. ``participant`` /
+    ``trial`` may be omitted when the frames contain exactly one combo. ``canvas_size``
+    is the monitor size in px; by default it is estimated from the data extents — pass
+    the real monitor resolution (e.g. ``(2560, 1440)`` for OneStop) to keep coordinates
+    true to scale. For a multipart trial, ``screen`` selects one child screen; omitting
+    it selects the first recorded screen and never concatenates coordinate spaces.
+    ``raw_gaze`` is a normalized frame (see `data.normalize_raw_gaze`) and is filtered
+    to the selected trial.
 
     ``drift_correction`` (PRE-3/PRE-17) names a method from
     ``alignment.ALGORITHMS``: the ten Carr et al. (2021) algorithms plus
     run-based ``"slice"`` and ``"consensus"``. Each fixation is snapped to its
     assigned text line and coloured by line, exactly as the app's *Drift
     correction* control does. ``drift_connectors=True`` also draws a faint line
-    from each fixation's original y to its corrected one.
+    from each fixation's original y to its corrected one. Drift correction is held
+    back behind ``SCANPATH_EXPERIMENTAL=1`` (PRE-21): without it, any
+    ``drift_correction`` other than ``None`` / ``"off"`` raises ``ValueError``.
 
     ``fix_index_range=(start, end)`` (VIZ-7) draws only fixations ``start``
     through ``end`` (1-based, both inclusive) of the trial — the headless form of
@@ -1510,12 +1553,13 @@ def plot_scanpath(
     pattern, since the caller already knows which trial this is.
 
     Remaining keywords override the app's defaults and are forwarded to
-    :func:`plots.make_scanpath_figure` (e.g. ``show_heatmap=False``,
-    ``color_by="pass_index"``, ``x_field="order_in_trial"``); an unknown keyword
-    raises a ``TypeError`` naming the closest valid options, and
-    :func:`figure_options` lists them all with their defaults. A ``color_by`` /
-    ``highlight_column`` naming a column the trial's table doesn't have raises a
-    ``ValueError`` naming the closest ones, rather than drawing without it.
+    `plots.make_scanpath_figure` (e.g. ``show_heatmap=False``,
+    ``color_by="pass_index"``, ``x_field="order_in_trial"``); an unknown keyword raises
+    a ``TypeError`` naming the closest valid options, and
+    [`figure_options`][scanpath_studio.api.figure_options] lists them all with their
+    defaults. A ``color_by`` / ``highlight_column`` naming a column the trial's table
+    doesn't have raises a ``ValueError`` naming the closest ones, rather than drawing
+    without it.
     """
     if illustration:
         figure_overrides = {
@@ -1630,36 +1674,38 @@ def animate_scanpath(
 ) -> go.Figure:
     """Build the animated scanpath replay for one trial.
 
-    Same trial selection and canvas semantics as :func:`plot_scanpath`, including
-    ``screen`` selection for multipart trials. The
-    returned Plotly figure plays in real reading time scaled by
-    ``playback_speed``; save it as interactive HTML with :func:`save_figure`,
-    or rasterize to GIF/MP4 with :func:`animation_export.export_animation`.
-    ``fix_index_range=(start, end)`` replays only that window of the trial's
-    fixations (1-based, inclusive), like :func:`plot_scanpath`.
+    Same trial selection and canvas semantics as
+    [`plot_scanpath`][scanpath_studio.api.plot_scanpath], including ``screen`` selection
+    for multipart trials. The returned Plotly figure plays in real reading time scaled
+    by ``playback_speed``; save it as interactive HTML with
+    [`save_figure`][scanpath_studio.api.save_figure], or rasterize to GIF/MP4 with
+    `animation_export.export_animation`. ``fix_index_range=(start, end)`` replays only
+    that window of the trial's fixations (1-based, inclusive), like
+    [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
 
-    With ``autoplay`` (default ``True``, VIZ-10) the saved interactive HTML
-    auto-starts the replay on load *at ``playback_speed``* — :func:`save_figure`
-    honors the marker the builder stamps on the figure. Pass ``autoplay=False``
-    to save a figure that opens paused (press ▶ Play to run it). Autoplay only
-    affects the interactive HTML; GIF/MP4 rasterization renders every frame
-    regardless.
+    With ``autoplay`` (default ``True``, VIZ-10) the saved interactive HTML auto-starts
+    the replay on load *at ``playback_speed``* —
+    [`save_figure`][scanpath_studio.api.save_figure] honors the marker the builder
+    stamps on the figure. Pass ``autoplay=False`` to save a figure that opens paused
+    (press ▶ Play to run it). Autoplay only affects the interactive HTML; GIF/MP4
+    rasterization renders every frame regardless.
 
     When ``playback_speed`` is not ``1``, the automatic Illustration label says
     the replay timing was changed. ``illustration_label`` accepts ``"auto"``,
-    ``"show"``, or ``"hide"`` like :func:`plot_scanpath`.
+    ``"show"``, or ``"hide"`` like [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
 
     The animation builder accepts a subset of the static figure's options
-    (``show_words``, ``show_word_labels``, ``show_saccades``, ``show_order``,
-    styling, and second-scanpath overlays) — see ``figure_options("animation")``;
-    an unsupported key raises a ``ValueError`` naming the valid ones rather than
-    an opaque ``TypeError``. The shared options default to the same values as
-    :func:`plot_scanpath` (:data:`CANONICAL_FIGURE_DEFAULTS`), so the replay
-    matches the static figure. ``palette=`` (VIZ-18) works here too; the colours
-    it implies that the animation doesn't support are dropped rather than
+    (``show_words``, ``show_word_labels``, ``show_saccades``, ``show_order``, styling,
+    and second-scanpath overlays) — see ``figure_options("animation")``; an unsupported
+    key raises a ``ValueError`` naming the valid ones rather than an opaque
+    ``TypeError``. The shared options default to the same values as
+    [`plot_scanpath`][scanpath_studio.api.plot_scanpath] (`CANONICAL_FIGURE_DEFAULTS`),
+    so the replay matches the static figure. ``palette=`` (VIZ-18) works here too; the
+    colours it implies that the animation doesn't support are dropped rather than
     raising, since the caller named a look, not those individual keys.
 
-    ``title`` / ``caption`` (EXP-5) — same as :func:`plot_scanpath`.
+    ``title`` / ``caption`` (EXP-5) — same as
+    [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
     """
     valid = set(_ANIMATION_FIGURE_PARAMS)
     explicit = set(animation_overrides) - {"palette"}
@@ -1749,12 +1795,13 @@ def render_parent_trial(
     """Render every screen of one logical trial without stitching coordinates.
 
     The ordered mapping is keyed by ``screen_id``. Each value is the same figure
-    returned by :func:`plot_scanpath` or :func:`animate_scanpath`; callers can
-    save them into deterministic per-screen files. ``transition_mode`` is
-    ``"instant"`` or ``"recorded"``. For animated output, each figure's
-    ``layout.meta['transition_after_ms']`` records the delay before the next
-    screen (zero for instant mode, or the observed parent-clock gap). No visual
-    saccade is ever drawn across the boundary.
+    returned by [`plot_scanpath`][scanpath_studio.api.plot_scanpath] or
+    [`animate_scanpath`][scanpath_studio.api.animate_scanpath]; callers can save them
+    into deterministic per-screen files. ``transition_mode`` is ``"instant"`` or
+    ``"recorded"``. For animated output, each figure's
+    ``layout.meta['transition_after_ms']`` records the delay before the next screen
+    (zero for instant mode, or the observed parent-clock gap). No visual saccade is ever
+    drawn across the boundary.
     """
     if transition_mode not in {"instant", "recorded"}:
         raise ValueError("transition_mode must be 'instant' or 'recorded'.")
@@ -1893,7 +1940,7 @@ def compare_scanpaths(
     failure mode headlessly. Ask for ``layout="side_by_side"`` to get the app's
     fallback. Nothing is ever rescaled or reprojected.
 
-    ``setup`` / ``setup_b`` are :class:`experimental_setup.SetupSnapshot`
+    ``setup`` / ``setup_b`` are `experimental_setup.SetupSnapshot`
     values — what the gate reads. ``canvas_size`` covers A when you only have a
     resolution; omit both and the canvas is read off the data.
 
@@ -1902,7 +1949,7 @@ def compare_scanpaths(
     when the text is identical. Split layouts ignore it; each panel owns its own
     stimulus.
 
-    Remaining keywords are forwarded to :func:`plots.make_comparison_figure`
+    Remaining keywords are forwarded to `plots.make_comparison_figure`
     (e.g. ``show_words=False``, ``color_by="duration_ms"``); an unknown one
     raises ``TypeError`` naming the closest valid options. Which settings a
     comparison figure actually honours is the table in
@@ -2086,12 +2133,13 @@ def save_figure_layers(
 
     Writes ``<directory>/<layer>.<fmt>`` for each *visible* layer (word boxes /
     fixations / saccades / heatmap / labels / stimulus image / frame) and returns
-    ``{layer: Path}``. Each layer is the full figure with only that layer's
-    elements and a transparent background, at the same size and axis ranges — so
-    the files register perfectly when stacked in Illustrator / Inkscape. ``fmt``
-    is any :func:`save_figure` extension without the dot (``svg`` / ``pdf`` are
-    vector and best for editing; ``png`` / ``html`` also work). ``scale`` /
-    ``width`` / ``height`` are forwarded to :func:`save_figure`."""
+    ``{layer: Path}``. Each layer is the full figure with only that layer's elements
+    and a transparent background, at the same size and axis ranges — so the files
+    register perfectly when stacked in Illustrator / Inkscape. ``fmt`` is any
+    [`save_figure`][scanpath_studio.api.save_figure] extension without the dot
+    (``svg`` / ``pdf`` are vector and best for editing; ``png`` / ``html`` also
+    work). ``scale`` / ``width`` / ``height`` are forwarded to
+    [`save_figure`][scanpath_studio.api.save_figure]."""
     directory = Path(directory)
     # ENG-54: a failed render (most often Kaleido with no Chrome) used to leave
     # an empty `<output>_layers/` behind, which reads as "exported, but lost".
@@ -2144,30 +2192,35 @@ def figure_code(
 ) -> str:
     """The API or CLI code that reproduces a figure (EXP-7).
 
-    The headless twin of the app's 🔗 Share → *Reproduce this figure in code*
-    block: give it the same arguments you would give :func:`plot_scanpath`
-    (``kind="static"``), :func:`animate_scanpath` (``"animation"``) or
-    :func:`compare_scanpaths` (``"comparison"``) and it returns the snippet that
-    rebuilds that figure, rather than the figure::
+    The headless twin of the app's 🔗 Share → *Reproduce this figure in code* block: give
+    it the same arguments you would give
+    [`plot_scanpath`][scanpath_studio.api.plot_scanpath] (``kind="static"``),
+    [`animate_scanpath`][scanpath_studio.api.animate_scanpath] (``"animation"``) or
+    [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths] (``"comparison"``) and
+    it returns the snippet that rebuilds that figure, rather than the figure::
 
         print(sps.figure_code(participant="l7_1090", trial="l7_1090_2_1_1_Ele_r0",
                               show_heatmap=False, flavor="cli"))
 
-    ``source`` names how the data is loaded — ``"demo"``, ``"synthetic"``,
-    ``"files"``, ``"potec"``, ``"onestop"``, ``"multipleye"``, ``"benchmark"``,
-    ``"author"``, or ``"unknown"`` for data a snippet can't name — with
-    ``source_options`` carrying that loader's arguments (``{"root": …}``,
-    ``{"words": [...], "fixations": [...]}``, and so on).
+    ``source`` names how the data is loaded — ``"demo"``, ``"synthetic"``, ``"files"``,
+    ``"potec"``, ``"onestop"``, ``"multipleye"``, ``"benchmark"``, ``"author"``, or
+    ``"unknown"`` for data a snippet can't name — with ``source_options`` carrying that
+    loader's arguments (``{"root": …}``, ``{"words": [...], "fixations": [...]}``, and
+    so on). With ``show_raw_gaze=True`` the raw-gaze table is read too: the demo's own,
+    or the path(s) given as ``source_options["raw_gaze"]`` (plus an optional
+    ``"raw_gaze_schema"``) — [`load_raw_gaze`][scanpath_studio.api.load_raw_gaze] in the
+    Python form, ``--raw-gaze`` in the CLI one.
 
     ``compare_dataset`` names the corpus scanpath B was loaded from when it is a
     *second* one (CMP-8). B's participant id belongs to that corpus rather than
     the one the snippet loads, so naming it turns a snippet that would quietly
     reference a missing reader into one that says where B comes from.
 
-    ``compare_labels`` is the pair you would pass :func:`compare_scanpaths` as
-    ``labels=`` — the two trace labels, when they are not the composed defaults
-    (EXP-8 §1). Both forms carry them: ``labels=`` in the Python snippet,
-    ``--label-a`` / ``--label-b`` in the CLI one.
+    ``compare_labels`` is the pair you would pass
+    [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths] as ``labels=`` — the
+    two trace labels, when they are not the composed defaults (EXP-8 §1). Both forms
+    carry them: ``labels=`` in the Python snippet, ``--label-a`` / ``--label-b`` in the
+    CLI one.
 
     With ``participant`` / ``trial`` left empty the snippet renders the first
     available trial, as ``render`` does. ``canvas_size`` defaults to the screen
@@ -2176,16 +2229,17 @@ def figure_code(
     ``scanpath.html`` for an animation — ``render --animate`` writes only HTML —
     and to a PNG otherwise.
 
-    Only the options that differ from :func:`figure_options` are written, so the
-    snippet stays readable; ``explicit=True`` emits every option at its current
-    value. ``flavor`` is ``"python"``, ``"cli"``, or ``"both"`` (the two
-    separated by a blank line). Settings the CLI has no flag for are named in a
-    trailing comment rather than dropped, and anything *neither* form can
-    promise — a layer that needs a third frame, an uploaded stimulus image, B's
-    rows when they come from a second corpus — follows as ``# Note:`` comments
-    (EXP-8 §2), matching the ⚠️ captions the app shows and the ``Note:`` lines
-    `render --print-code` writes to stderr. See
-    :class:`code_snippet.ReproductionCode` for the structured form.
+    Only the options that differ from
+    [`figure_options`][scanpath_studio.api.figure_options] are written, so the snippet
+    stays readable; ``explicit=True`` emits every option at its current value.
+    ``flavor`` is ``"python"``, ``"cli"``, or ``"both"`` (the two separated by a blank
+    line). Every figure option has a ``render`` flag (EXP-20); one that ever did not
+    would be named in a trailing comment rather than dropped, and anything *neither*
+    form can promise — a raw-gaze table with no path to name, an uploaded stimulus
+    image, B's rows when they come from a second corpus — follows as ``# Note:``
+    comments (EXP-8 §2), matching the ⚠️ captions the app shows and the ``Note:`` lines
+    `render --print-code` writes to stderr. See `code_snippet.ReproductionCode` for the
+    structured form.
     """
     from . import code_snippet as _snippet
 
@@ -2260,15 +2314,15 @@ def figure_code(
 def cache_status() -> dict:
     """Describe the on-device recovery cache a local app run keeps (ENG-30).
 
-    The app stores completed uploaded datasets, column mappings, view settings
-    and annotations under the user's cache directory so a refresh or restart
-    resumes where it left off — on localhost/desktop only, never on a hosted
-    deployment. This reports that store without launching the app: ``enabled``,
-    ``directory``, ``datasets`` (name + per-frame row counts), ``rows``,
-    ``annotations``, ``settings``, ``bytes``, ``saved_at``, plus ``exists`` /
-    ``readable`` for a missing or unreadable manifest. Delete it with
-    :func:`clear_cache`; the same information is in the app's 💾 Session → 🗄️ Recovery cache
-    panel and in ``scanpath-studio cache``."""
+    The app stores completed uploaded datasets, column mappings, view settings and
+    annotations under the user's cache directory so a refresh or restart resumes
+    where it left off — on localhost/desktop only, never on a hosted deployment. This
+    reports that store without launching the app: ``enabled``, ``directory``,
+    ``datasets`` (name + per-frame row counts), ``rows``, ``annotations``,
+    ``settings``, ``bytes``, ``saved_at``, plus ``exists`` / ``readable`` for a
+    missing or unreadable manifest. Delete it with
+    [`clear_cache`][scanpath_studio.api.clear_cache]; the same information is in the
+    app's 💾 Session → 🗄️ Automatic recovery panel and in ``scanpath-studio cache``."""
     from .persistence import cache_status as _cache_status
 
     return _cache_status(url="http://localhost")
@@ -2279,9 +2333,10 @@ def clear_cache() -> dict:
 
     Removes only the files this app wrote (``manifest.json`` and the dataset
     Parquet files); anything else in the folder is left alone. A *running* local
-    app writes its session back out at the end of its next run — use the app's
-    **Forget saved session** button, or ``SCANPATH_STUDIO_PERSIST=0``, to stop
-    that."""
+    app writes its session back out at the end of its next run — turn off **Save
+    changes automatically** in its 💾 Session → 🗄️ Automatic recovery panel (the
+    panel's **Clear recovery cache** button, like this function, leaves saving on),
+    or set ``SCANPATH_STUDIO_PERSIST=0``, to stop that."""
     from .persistence import clear_local_state
 
     clear_local_state()

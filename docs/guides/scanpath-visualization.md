@@ -20,9 +20,10 @@ choose parent-trial or current-screen scope.
 
 ## Control the layers
 
-The **Plot controls** rail beside the plot starts with four **Design presets**
-(👁️ Scanpath, 🔥 Heatmap, ✏️ Illustration, 🛠️ Custom) and a **Palette** — often
-all you need — followed by seven sections:
+The **🎛️ Plot controls** rail beside the plot opens with the **🎬 Animate** and
+**⚖️ Compare** mode rows, then four **Design presets** (👁️ Scanpath, 🔥 Heatmap,
+✏️ Illustration, 🛠️ Custom) and a **Palette** — often all you need — followed by
+seven sections:
 
 Scanpath, Heatmap, and Illustration are deterministic presets: selecting one
 starts from the app defaults before applying that view. **Custom** remembers the
@@ -32,25 +33,38 @@ last settings you changed by hand and restores them after you visit a preset.
 | --- | --- | --- |
 | 👁️ Fixations | Fixations | location, order, duration and colour field |
 | ↗️ Saccades | Saccades | movement direction, reading type, regressions and return sweeps |
-| 📄 Stimulus | Text, Bounding boxes, Stimulus image | verify stimulus geometry and fixation-to-word alignment; compare against the original display |
+| 📄 Stimulus | Text, Bounding boxes, Stimulus image | verify stimulus geometry and fixation-to-word alignment; compare against the original display; text font, text colour and plot background |
 | 🔥 Heatmap | Heatmap | spatial concentration by fixation count or duration |
 | 🔵 Raw gaze | Raw gaze | millisecond-level gaze samples |
 | 🧹 Filter | — | thin what is drawn inside this one reading (fixations and saccades together) |
-| 📐 Figure & canvas | — | monitor framing, plot background, colour bars, axes, title and labels |
+| 📐 Figure & canvas | — | monitor framing, colour bars, axes, title and labels |
 
-Every section is **one line**: its on/off switch, where it has a single thing to
-switch, and a **▾** holding everything else in a popover that opens over the page
-instead of being cropped by the narrow rail. 📄 Stimulus carries three layers and
-so takes its name instead, with each layer's toggle leading its own group inside;
-🧹 Filter and 📐 Figure & canvas have no layer to switch at all. A layer's
-settings stay readable while the layer is off, so you can set a layer up before
-turning it on. Marker size already encodes duration by default, so uniform
-fixation color is usually the clearest starting point.
+Every section is **one line**: its on/off switch and a **▾** holding everything
+else in a popover that opens over the page instead of being cropped by the narrow
+rail. 📄 Stimulus's switch covers all three of its layers, and each layer's own
+toggle leads its group inside; 🧹 Filter and 📐 Figure & canvas have no layer to
+switch at all. While a layer is off its settings stay on screen but greyed — turn
+the layer on to change them; whatever you set is kept either way. The exception is
+📄 Stimulus: with the section switched off, its three layer toggles and their
+settings stay live, so you can choose what will show when you switch it back on.
+Marker size already encodes duration by default, so uniform fixation color is
+usually the clearest starting point.
 
 **Stimulus → Text** keeps typography beside the layer it controls. Text can
 scale from word boxes, or use one fixed size entered in pixels or points; point
-sizes use the dataset DPI. **📐 Figure & canvas** contains **🖥️ Screen &
+sizes use the dataset DPI. The text font, text colour and **Plot background**
+live there too, so they are only on screen while the Text layer is on (your
+choices are kept while it is off). **📐 Figure & canvas** contains **🖥️ Screen &
 framing**, **📊 Axes & grid**, and **🏷️ Title & labels**.
+
+**Colour ranges** — the fixation colour range (👁️ Fixations **▾**, once
+fixations are coloured by a column) and the heatmap's (🔥 Heatmap **▾**) start
+on **Auto range**: each trial is scaled to its own values, exactly as the API and
+`render` draw it, and a comparison shares one scale across both readings. Drag
+the range, type a bound, or untick *Auto range* to pin one. A pinned range stays
+as you step through trials, which is what makes them comparable, and travels on
+a Share link, until you tick *Auto range* again. Choosing another *Color
+fixations by* column puts the fixation range back to auto.
 
 ### Show screen coordinates
 
@@ -87,7 +101,8 @@ computation.
 
 - **Animate** replays the selected trial. The **▾** beside it controls speed,
   autoplay, and frame quality.
-- **Compare** adds a second reading beside the selected one.
+- **Compare** adds a second reading to the selected one — overlaid on the same
+  stimulus by default, or side by side / top & bottom from the **▾** beside it.
 - **Comparisons** shows trials whose chosen field matches the selected trial.
   Choosing text id finds other readings of the text; choosing participant id
   finds that reader's other trials.
@@ -102,8 +117,9 @@ dataset instead.
 
 B's line is the same shape as the trial line above it — dataset, trial, scrub
 slider, then ◀ ▶ ⇅ and the funnel — so the two read down the page as one pair of
-controls. B's funnel appears only when B has a dataset of its own to narrow;
-under *This dataset* the candidates come out of the pool your own funnel defines.
+controls. B's funnel is always its own: under *This dataset* it starts from the
+whole dataset, unfiltered, so your own funnel narrows scanpath A's pool and never
+B's, and narrowing B never changes A.
 
 Any loaded upload, the bundled demo and the synthetic trial are always
 available. A public corpus is offered too, but only loads when its files are
@@ -160,7 +176,9 @@ figure plus both scanpaths' tables and a manifest naming each side's dataset,
 trial and recording setup. The image alone can't be reproduced; the bundle can.
 
 A share link carries the comparison as `?compare=<participant>:<trial>` plus
-`&cmp_source=<dataset>`, `&cmp_layout=` and `&cmp_stimulus=`. An uploaded dataset
+`&cmp_source=<dataset>`, `&cmp_layout=` and `&cmp_stimulus=`, and each
+scanpath's own styling as `cmp_a_*` / `cmp_b_*` wherever you changed it (see
+[Outputs and sharing](outputs-sharing.md#share-a-view)). An uploaded dataset
 lives only in your session, so a link can't rebuild it — the Share panel says so
 rather than sending half a comparison.
 

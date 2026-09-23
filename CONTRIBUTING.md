@@ -10,7 +10,7 @@ requests.
 ```bash
 git clone https://github.com/lacclab/scanpath-studio.git
 cd scanpath-studio
-pip install -e ".[test]"          # or: uv sync
+pip install -e ".[test,lint]"     # or: uv sync --extra test --extra lint
 streamlit run streamlit_app.py --server.address 127.0.0.1   # run the app locally
 ```
 
@@ -54,23 +54,29 @@ so grep `scanpath_studio`, not just `streamlit`).
 ## Before you open a PR
 
 ```bash
-uv run pytest -n auto             # run the test suite (parallel — the AppTest
-                                  # boots dominate runtime; CI runs it this way)
-ruff check --exclude other_vis .  # lint
-ruff format --exclude other_vis . # auto-format
+uv run --extra test pytest -n auto   # run the test suite (parallel — the AppTest
+                                     # boots dominate runtime; CI runs it this way)
+uv run --extra lint ruff check .     # lint
+uv run --extra lint ruff format .    # auto-format
 ```
 
-Use **this project's ruff**, not whatever is on `PATH`: `pip install -e ".[lint]"`
-(or `uv run ruff …`) installs the exact version CI runs, pinned in one place —
-the `lint` extra in `pyproject.toml`, mirrored by `.github/workflows/ci.yml`. A
+Use **this project's ruff**, not whatever is on `PATH`: the `lint` extra
+(`pip install -e ".[lint]"`, or `uv sync --extra lint` / `uv run --extra lint …`
+— a plain `uv sync` installs no extras) holds the exact version CI runs, pinned
+in one place — the `lint` extra in `pyproject.toml`, mirrored by
+`.github/workflows/ci.yml`. A
 newer ruff on your machine will pass a file CI then rejects, and a newer one in
 CI will red a branch that changed nothing. To take a new ruff, bump both
 together and fix what its new rules find in the same commit.
 
-Prefer `uv run pytest` over a bare `pytest` or `python -m pytest`: it resolves
-the versions in `uv.lock`, which is what CI installs. There are two ways to get
-a false green. A `.venv` that has drifted to an older pandas is the obvious one;
-the easier one is a bare `python` that is not this project's at all — with conda
+Prefer `uv run --extra test pytest` over a bare `pytest` or `python -m pytest`:
+it runs this project's own environment. CI does not read a lock file — `uv.lock`
+is gitignored, generated locally — it resolves afresh on every run
+(`uv pip install --system -e ".[test]"`), so it gets the newest releases
+`pyproject.toml` allows; keep your environment there too
+(`uv sync --upgrade --extra test --extra lint`). There are two ways to get a
+false green. A `.venv` (or a local `uv.lock`) that has drifted to an older
+pandas is the obvious one; the easier one is a bare `python` that is not this project's at all — with conda
 or Homebrew earlier in `PATH`, `python -m pytest` silently runs a different
 interpreter against a different pandas. pandas 3.0's string inference in
 particular changes real behaviour (a `None` sentinel in an all-string object
@@ -85,8 +91,8 @@ about the state of `main`:
 uv run python -c "import sys, pandas; print(sys.version.split()[0], pandas.__version__)"
 ```
 
-CI (`.github/workflows/ci.yml`) runs the same checks on every push and PR
-across Python 3.11/3.12/3.13/3.14. See [AGENTS.md](AGENTS.md) and the package
+CI (`.github/workflows/ci.yml`) runs the same checks on every pull request to
+`main`, across Python 3.11/3.12/3.13/3.14. See [AGENTS.md](AGENTS.md) and the package
 [CLAUDE.md](scanpath_studio/CLAUDE.md) for an architectural overview.
 
 Add a concise entry to the `[Unreleased]` section of
@@ -118,8 +124,9 @@ the archive, `--server.port` for Streamlit) rather than killing theirs.
 
 ## Working together
 
-The repo commits **directly to `main`**, so two people (or two AI sessions)
-staying out of each other's way is a matter of habit rather than tooling.
+`main` is protected — work lands as a branch and a pull request, never a direct
+push — but two people (or two AI sessions) staying out of each other's way is
+still a matter of habit rather than tooling.
 
 Two situations, and they need opposite instincts. **Two clones** — the ordinary
 case — is what git is for: you each have your own working tree, conflicts surface
@@ -135,21 +142,27 @@ Common to both:
   and drag it to *In progress* on the
   [board](https://github.com/orgs/lacclab/projects/5) *before* writing code, not
   when you finish. The assignee is the only signal the other person has that it
-  is taken, and it is visible without pulling anything. Same for new work:
-  `gh issue create` first, then work on it.
+  is taken, and it is visible without pulling anything. New work always gets
+  an ID first; it gets an issue when it needs one — when it reaches *Review*,
+  is blocked on the maintainer, or is carried across sessions (`CLAUDE.md` →
+  *Tracking work*).
 - **Commit small, push often.** One commit per feature or fix, with the tracker
   ID in the subject (`fix(viz): … (VIZ-37)`). A large uncommitted working
   tree is the thing that actually hurts — it can't be pulled, reviewed, or built
   on, and merging it later is a marathon. Between clones, always `git pull`
-  before you push.
+  (or rebase your branch on `main`) before you push.
 - **The work queue no longer merges, because it is no longer a file.** Statuses,
   assignees and write-ups live on GitHub now, so two people moving two issues
   cannot conflict at all — which was most of what this section used to be about.
-  What still needs care is the **ID**: a new issue takes the next free number in
-  its `area:*` prefix, and two people opening one at the same moment will reach
-  for the same number. Check
-  `gh issue list --state all --search "[DATA-"` again after creating, and
-  renumber **your own** issue if it collides.
+  What still needs care is the **ID**: a new item takes the next free number in
+  its `area:*` prefix, and most IDs live in only one place. Check all four —
+  `CHANGELOG.md` (where most are allocated), `gh issue list --state all --search
+  "[DATA-"`, the archive's `tracker/data.js`, and the **open PRs**, whose
+  unmerged changelogs the other three cannot see
+  (`gh pr list --state open`, then `gh pr diff <n> -- CHANGELOG.md`) — as
+  `CLAUDE.md` → *Tracking work* spells out. Two people reaching for a number at
+  the same moment will still collide: check again after creating, and renumber
+  **your own** item if it does.
 - **Moving a card needs the `project` scope**, once per machine:
   `gh auth refresh -s project`. Without it the board is read-only from the CLI
   (the web UI still works).
@@ -197,7 +210,7 @@ download-on-demand vs. bundling, and the tests expected — written up in
 [`docs/contributing-a-dataset.md`](docs/contributing-a-dataset.md).
 
 Loading data you already have needs no code at all; that's
-[`docs/bring-your-own-data.md`](docs/bring-your-own-data.md).
+[`docs/guides/loading-data.md`](docs/guides/loading-data.md).
 
 ## Versioning
 
@@ -207,12 +220,14 @@ The version lives in **one** place — `__version__` in
 
 ## Dependencies
 
-- `pyproject.toml` carries the **library** dependency bounds (`>=`) used when
-  installing the package with pip.
-- `requirements.txt` is the **deployment manifest** for the Streamlit Cloud
-  demo, using compatible-release pins (`~=`) so the live app stays on a
-  known-good minor while still getting patch updates. Update both when you add
-  or upgrade a dependency.
+- `pyproject.toml` is the **one** place dependencies are declared (`>=`
+  bounds). Add or bump a dependency there and nowhere else.
+- The Streamlit Community Cloud demo installs from `environment.yml`, which
+  pip-installs this package, so it follows `pyproject.toml` onto the latest
+  releases with nothing to keep in sync. Community Cloud uses the first
+  dependency file it finds — `uv.lock`, `Pipfile`, `environment.yml`,
+  `requirements.txt`, `pyproject.toml` — so committing a `uv.lock` (it is
+  gitignored) would silently switch the demo onto it.
 
 ## Releasing
 
@@ -221,8 +236,11 @@ The version lives in **one** place — `__version__` in
 2. Bump `__version__` in `scanpath_studio/__init__.py`.
 3. Bump `version` + `date-released` in [`CITATION.cff`](CITATION.cff) to match
    (`tests/test_citation.py` enforces version parity, so a mismatch fails CI).
-4. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-   `.github/workflows/publish.yml` builds and publishes to PyPI via trusted
+4. `main` is protected, so commit these on a branch and merge them through a
+   PR. Then tag the merged commit on `main` and push the tag:
+   `git fetch origin && git tag vX.Y.Z origin/main && git push origin vX.Y.Z`.
+   `.github/workflows/publish.yml` refuses a tag that does not match
+   `__version__` (ENG-62), then builds and publishes to PyPI via trusted
    publishing, and `.github/workflows/desktop.yml` builds the per-OS
    standalone desktop bundles and attaches them to the GitHub release for
    the tag — check both workflows succeeded.

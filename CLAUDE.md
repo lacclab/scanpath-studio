@@ -12,8 +12,8 @@ you work under `scanpath_studio/`); contributor setup is in
 
 ## Before every commit / push
 
-- **Run ruff first — always.** `ruff check --exclude other_vis .` and
-  `ruff format --exclude other_vis .`. CI's Lint job gates on **both**, so a
+- **Run ruff first — always.** `ruff check .` and
+  `ruff format .`. CI's Lint job gates on **both**, so a
   missed format fails the build. Don't skip it, even for "docs-only" changes.
 - **Update `CHANGELOG.md` as you go, in the two-tier shape** (ENG-34, `[Unreleased]`
   onwards only — already-released sections keep their old one-paragraph-per-item
@@ -187,8 +187,8 @@ See *Releasing* in `@AGENTS.md`: bump `__version__` in
 ## Repo automation (`.claude/`)
 
 - **Skills** — `/release`, `/track`, `/new-feature`, `/preflight`,
-  `/paper-figs` package the workflows above; invoke them instead of
-  re-deriving the steps.
+  `/paper-figs` and `/gazegenie` package the workflows above; invoke them
+  instead of re-deriving the steps.
 - **Hook** — every edited `.py` file is auto-run through `ruff format` +
   `ruff check` (`.claude/hooks/ruff-on-edit.sh`); fix what it reports
   immediately rather than batching.

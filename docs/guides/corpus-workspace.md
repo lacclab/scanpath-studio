@@ -29,7 +29,7 @@ Select **📊 Corpus Analysis** in the navigation.
 
 | View | Unit of interest | Typical use |
 | --- | --- | --- |
-| **Per text** | one stimulus across readers | word profile, distribution, pooled heatmap |
+| **Per text** | one stimulus across readers | per-reader and cohort word profiles, word × reader heatmap, word difficulty on the stimulus |
 | **Per sentence** | one sentence across readers | one measure combined for each text/sentence pair |
 | **Per reader** | one reader across trials | reader summary and within-reader pattern |
 | **Groups** | one cohort or two cohorts | condition/population summaries, differences, effect sizes |

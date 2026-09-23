@@ -141,7 +141,6 @@ DEFAULT_FIXATION_COLORSCALE = "Viridis"
 DEFAULT_HEATMAP_COLORSCALE = "Viridis"
 
 DEFAULT_MARKER_SIZE_RANGE = (8, 24)
-DEFAULT_PAGE_SIZE = 1000
 DEFAULT_ORDER_FONT_COLOR = "#111111"
 
 WORD_BOX_COLOR = "#6c757d"
@@ -445,6 +444,65 @@ APP_THEME_DARK = {
 #: answers for the memory-capped hosted demo.
 UPLOAD_MAX_SIZE_MB = 5000
 
+#: ENG-68: a deployment's own, lower per-file ceiling, in MB — set on the hosted
+#: demo (its Community Cloud secrets, which Streamlit loads into the environment
+#: at startup) so a visitor cannot send a multi-GB file at a ~1 GB container,
+#: while every other install keeps :data:`UPLOAD_MAX_SIZE_MB`.
+UPLOAD_LIMIT_ENV = "SCANPATH_MAX_UPLOAD_MB"
+
+
+#: The file types every table upload box accepts (``zip`` wraps any of the
+#: others; ``txt`` is a tab-separated report; ``xls`` is a legacy workbook or
+#: EyeLink Data Viewer's text-in-an-``.xls`` export, DATA-53 / BUG-55).
+UPLOAD_FILE_TYPES = ("csv", "tsv", "txt", "parquet", "feather", "zip", "xlsx", "xls")
+
+
+def configured_upload_limit_mb() -> int | None:
+    """``SCANPATH_MAX_UPLOAD_MB`` as a positive whole number of MB, else ``None``.
+
+    The raw deployment setting, before it meets the server's own limit — what
+    ``scanpath-studio run`` hands the server (ENG-68).
+    """
+    raw = os.environ.get(UPLOAD_LIMIT_ENV, "").strip()
+    try:
+        limit = int(raw)
+    except ValueError:
+        return None
+    return limit if limit > 0 else None
+
+
+def upload_limit_mb() -> int | None:
+    """The per-file cap every ``st.file_uploader`` passes as ``max_upload_size``.
+
+    ``None`` — the server's own ``server.maxUploadSize`` — unless
+    ``SCANPATH_MAX_UPLOAD_MB`` sets one, which is held to the server's limit so
+    the browser never accepts a file the server then refuses. Read at call
+    time, like the other deployment switches, so tests can toggle it.
+
+    The per-widget cap is checked **in the browser**: Streamlit's upload route
+    only enforces ``server.maxUploadSize``, which cannot change once the server
+    runs. ``scanpath-studio run`` therefore passes the cap to the server too;
+    on Community Cloud, where secrets load after the server config, a scripted
+    client can still send up to the config file's limit.
+    """
+    limit = configured_upload_limit_mb()
+    if limit is None:
+        return None
+    try:
+        import streamlit as st
+
+        server = int(st.get_option("server.maxUploadSize"))
+    except Exception:
+        server = UPLOAD_MAX_SIZE_MB
+    return min(limit, server)
+
+
+def upload_limit_label() -> str:
+    """The per-file limit in force, as Streamlit writes it (``5GB``, ``200MB``)."""
+    mb = upload_limit_mb() or UPLOAD_MAX_SIZE_MB
+    return f"{mb // 1000}GB" if mb >= 1000 and mb % 1000 == 0 else f"{mb}MB"
+
+
 CITATION = {
     "authors": (
         "Omer Shubi, Keren Gruteke Klein, Maya Grossman, Ella Lion, Deborah N. Jakobi, "
@@ -634,7 +692,7 @@ _VIEW_DATA = "Data"
 # UX-65 turned Help into a nav *section* of dialog-openers, and UX-100 turned
 # Session back into a popover on the title row. The strings survive only as
 # values a pre-UX-100 recovery cache can still hold in `main_nav`, which
-# `url_state._active_view` resolves back to the Scanpath view.
+# `menu.render_nav` ignores (it is not a page) and overwrites with the active view.
 _VIEW_SESSION = "Session"
 _VIEW_HELP = "Help"
 _MAIN_TAB_LABELS = [_VIEW_SCANPATH, _VIEW_CORPUS, _VIEW_DATA]

@@ -25,9 +25,11 @@ one that matches your goal; setup details are linked only when needed.
 
 New here? Complete [Getting started](../getting-started.md) first.
 
-The same workflows are available inside the app under ❓ **Help → 🧭 Tutorials**
-in the navigation. The chooser explains the outcome, prerequisite, and time
-before starting. Each tutorial keeps its own progress, can open the relevant view
+Five shorter workflows are available inside the app under ❓ **Help → 🧭 Tutorials**
+in the navigation — *Load and verify a dataset*, *Filter and mark trials*,
+*Build a publication figure*, *Compare readings of one text*, and *Explore a
+corpus question*, summarised in the sections below. The chooser explains the
+outcome, prerequisite, and time before starting. Each tutorial keeps its own progress, can open the relevant view
 or subtab with
 **Show me / Open this panel**, and never changes data, filters, annotations, or
 scientific settings for you.
@@ -48,12 +50,13 @@ uses it.
    every measure downstream is computed from. Rows marked ✨ were auto-detected;
    override any that guessed wrong; open **⚙️ Multipart screens & canvas —
    advanced** only when one logical trial has several coordinate spaces.
-   **Recording setup**, 🖼️ **Stimulus images** and the **Metadata** rows
-   (Participants, Trials, Texts) are on the same screen.
+   **Recording setup**, **Stimulus images** (only when the app can read local
+   folders) and the **Metadata** rows (Participants, Trials, Texts) are on the
+   same screen.
 3. **🔎 What's in the dataset** — back on the overview, the counts come first, as
-   the quickest check that the mapping worked. The raw and derived tables fold
-   open below them (including, when present, the ordered screen catalogue and
-   per-screen canvas sizes); back in ✏️ Edit dataset, part **3 · Trial identity**
+   the quickest check that the mapping worked, on the **📊 Stats** tab (with,
+   when present, the ordered screen catalogue and per-screen canvas sizes); the
+   raw tables are the tabs beside it. Back in ✏️ Edit dataset, part **3 · Trial identity**
    says whether one trial id really is one reading.
 
 !!! note "Preprocessing is held back in this release (PRE-22)"
@@ -106,7 +109,7 @@ bulk-output details.
 minutes; requires two readings sharing a text.*
 
 1. Select the reference reading and, for multipart data, the reference screen.
-2. Open **🔬 Comparisons** and choose **text id** as the comparison field. The
+2. Open **🔬 Comparisons** and set **Match field** to **text id**. The
    grid shows other filtered trials with the same text value. Other fields can
    intentionally select trials from different texts.
 3. Record the comparison settings with the figure or configuration export.

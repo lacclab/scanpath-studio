@@ -7,7 +7,9 @@ whole-file read handled, and never weaken a guard the whole-file read enforced.
 
 from __future__ import annotations
 
+import io
 import zipfile
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -32,6 +34,10 @@ CORE = {
     "IA_TOP": [100],
     "IA_BOTTOM": [130],
 }
+
+#: A real Excel 97–2003 (OLE2) workbook holding CORE's columns, word "NA" first
+#: (DATA-53). Written once with xlwt, which nothing here depends on.
+LEGACY_XLS = Path(__file__).parent / "fixtures" / "legacy_words.xls"
 
 
 def _plan(header):
@@ -94,6 +100,31 @@ class TestHeterogeneousZipMembers:
         # column one member lacks, and NaN never equals NaN.
         for column in planned.columns:
             pd.testing.assert_series_equal(planned[column], full[column])
+
+
+class TestZippedBinaryMembers:
+    """BUG-84: a zipped workbook or columnar file failed the planned read.
+
+    The member's in-memory copy carried no name, so the header pass read the
+    binary as CSV — every wizard upload of ``words.parquet.zip`` died on it.
+    """
+
+    @pytest.mark.parametrize(
+        ("suffix", "write"),
+        [
+            ("parquet", lambda frame, path: frame.to_parquet(path)),
+            ("feather", lambda frame, path: frame.to_feather(path)),
+            ("xlsx", lambda frame, path: frame.to_excel(path, index=False)),
+        ],
+    )
+    def test_it_reads_with_the_word_text_verbatim(self, tmp_path, suffix, write):
+        member = tmp_path / f"words.{suffix}"
+        write(pd.DataFrame({**CORE, "IA_LABEL": ["NA"]}), member)
+        path = tmp_path / "words.zip"
+        with zipfile.ZipFile(path, "w") as zf:
+            zf.write(member, member.name)
+        frame = read_table(path, plan=_plan(read_table_columns(path)))
+        assert frame["IA_LABEL"].tolist() == ["NA"]
 
 
 class TestEmptyPlan:
@@ -193,11 +224,28 @@ class TestFilesTheReadersUsedToRefuse:
         frame = read_table(path, plan=_plan(read_table_columns(path)))
         assert frame["IA_LABEL"].tolist() == ["Hello"]
 
-    def test_a_legacy_workbook_is_refused_with_the_fix(self, tmp_path):
-        path = tmp_path / "old.xls"
-        path.write_bytes(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\0" * 512)
-        with pytest.raises(ValueError, match=r"save it as \.xlsx or \.csv"):
-            read_table(path)
+    def test_a_legacy_workbook_reads(self):
+        """DATA-53: a genuine Excel 97–2003 workbook opens, word text verbatim."""
+        header = read_table_columns(LEGACY_XLS)
+        assert header == list(CORE)
+        frame = read_table(LEGACY_XLS, plan=_plan(header))
+        assert frame["IA_LABEL"].tolist() == ["NA", "fox"]
+        assert frame["IA_LEFT"].tolist() == [10, 60]
+
+    def test_an_uploaded_legacy_workbook_reads(self):
+        """The upload path hands the reader a named buffer, not a path."""
+        upload = io.BytesIO(LEGACY_XLS.read_bytes())
+        upload.name = "words.xls"
+        header = read_table_columns(upload)
+        frame = read_table(upload, plan=_plan(header))
+        assert frame["IA_LABEL"].tolist() == ["NA", "fox"]
+
+    def test_a_zipped_legacy_workbook_reads(self, tmp_path):
+        path = tmp_path / "words.zip"
+        with zipfile.ZipFile(path, "w") as zf:
+            zf.write(LEGACY_XLS, "words.xls")
+        frame = read_table(path, plan=_plan(read_table_columns(path)))
+        assert frame["IA_LABEL"].tolist() == ["NA", "fox"]
 
     def test_a_windows_encoded_csv_reads(self, tmp_path):
         path = tmp_path / "fix_latin1.csv"

@@ -8,9 +8,9 @@ Open the **Export** subtab in the Scanpath view.
 
 - **Current figure** exports the visible static or animated figure.
 - **Export bundle** packages figures, tables, and configuration metadata for
-  this trial, a filtered subset, or the whole dataset.
-- **Separable layers** writes aligned text, boxes, fixations, saccades, heatmap,
-  and image layers for editing.
+  this trial, a filtered subset, or the whole dataset. Its **Also include →
+  Separable layers** toggle adds aligned text, boxes, fixations, saccades,
+  heatmap, and image layers as separate files for editing.
 
 With a [participant metadata](../data-format.md#participant-metadata) table
 attached, the bundle also carries `metadata/participants.*`, and **Participant
@@ -36,8 +36,33 @@ The **Share** subtab creates a deep link containing the selected data source and
 visualization settings. **Refresh & Copy** rebuilds the URL from the current
 trial and settings and places it on the clipboard in one step.
 
-A link never contains the fixation or word tables. Built-in data can be reopened
-from the URL; a recipient of an uploaded-data link must load the same dataset.
+A link never contains an uploaded or public dataset's fixation or word tables.
+Built-in data can be reopened from the URL; a recipient of an uploaded-data link
+must load the same dataset. The one exception is **✏️ Author a scanpath**: there
+the text and every hand-placed fixation *are* the dataset, so its link carries
+them (`author_text`, `author_events`).
+
+The link carries every figure setting, including the recording setup and
+Compare's per-scanpath styles. Those two groups are written only when they
+differ from what the recipient would get anyway — a link to the demo at its own
+2560×1440 monitor doesn't restate it — so a link stays short until you change
+them:
+
+| Setting | Link parameter |
+| --- | --- |
+| Monitor size in pixels | `canvas_width`, `canvas_height` |
+| Plot font size | `base_font_size` |
+| Physical width, viewing distance, display DPI | `monitor_width_mm`, `viewing_distance_mm`, `display_dpi` |
+| A font given in points | `use_stimulus_font_pt`, `stimulus_font_pt` |
+| Scanpath 1's styles in Compare | `cmp_a_fix_color`, `cmp_a_saccade_color`, `cmp_a_saccade_style`, `cmp_a_saccade_width`, `cmp_a_marker_size_range`, `cmp_a_opacity`, `cmp_a_hollow`, `cmp_a_label_pattern` |
+| Scanpath 2's styles in Compare | the same, as `cmp_b_*` |
+
+The monitor size of a source that declares no screen of its own (the synthetic
+trial, an authored scanpath) is always written, since there is nothing to compare
+it with. The Compare styles travel only with the comparison they describe
+(`?compare=`). A value outside its control's range is clamped to it, and one
+the control can't show at all — an unknown line style, a colour that isn't
+`#rrggbb` — is dropped with a warning.
 
 Public corpora travel too: the link names the corpus (`?source=corpus&corpus=…`)
 rather than its data. For a harmonised benchmark corpus the recipient needs their

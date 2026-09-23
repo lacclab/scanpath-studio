@@ -92,12 +92,14 @@ from scanpath_studio.constants import (
     SELECTOR_ROW_WIDE_GRID,
     TRIAL_IDENTITY_CHECK_KEY,
     TRIAL_IDENTITY_FULL_KEY,
+    UPLOAD_FILE_TYPES,
     WORD_LABEL_COLOR,
     compare_palette_color,
     derived_analysis_tables_enabled,
     drift_correction_enabled,
     preprocessing_enabled,
     similarity_enabled,
+    upload_limit_mb,
 )
 from scanpath_studio.controls import (
     CHIP_FIELD_LABELS,
@@ -167,7 +169,7 @@ from scanpath_studio.export_status import (
     static_export_signature,
 )
 from scanpath_studio.fields import labeled, panel_field
-from scanpath_studio.html_embed import embed_html_iframe
+from scanpath_studio.html_embed import embed_html_iframe, plotlyjs_script
 from scanpath_studio.illustration import illustration_reasons, resolve_label_reasons
 from scanpath_studio.multipart import (
     SCREEN_ID,
@@ -765,8 +767,10 @@ def _render_true_scale_chart(fig, *, key: str, max_height: int | None = None) ->
     config: dict = {"responsive": False, "displaylogo": False}
     if zoomable:
         config["modeBarButtonsToRemove"] = list(_NATIVE_ZOOM_BUTTONS)
-    plot_html = fig.to_html(
-        include_plotlyjs="cdn",
+    # ENG-64: the installed plotly's own plotly.min.js, served by this app's
+    # server — not cdn.plot.ly, so the figure draws offline too.
+    plot_html = plotlyjs_script() + fig.to_html(
+        include_plotlyjs=False,
         full_html=False,
         config=config,
         div_id=f"truescale-{key}",
@@ -1042,7 +1046,11 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
             file_name=f"{file_stem}.html",
             mime="text/html",
             key="anim_export_html",
-            help="Self-contained HTML you can open in any browser; keeps play/slider interactivity.",
+            # ENG-64: not self-contained — a saved file has no app server to
+            # load plotly.js from, so it keeps the CDN (see docs/privacy.md).
+            help="HTML you can open in any browser; keeps play/slider "
+            "interactivity. It loads the Plotly library from cdn.plot.ly, so "
+            "opening it needs an internet connection.",
         )
         return
 
@@ -2683,49 +2691,6 @@ def _span_fixated_note(
     return f' <span style="color:#198754;">— {n} fixations, {dwell:.0f} ms</span>'
 
 
-def _render_trial_header(
-    participant: str,
-    trial_id: str,
-    trial_words: pd.DataFrame,
-    prefix: str = "Trial:",
-) -> None:
-    """Render the trial id header with participant + text id stacked below it.
-
-    The paragraph text / question / spans live in
-    `_render_paragraph_panel` so they can sit under the figure (single tab)
-    while the header stays in the side panel.
-    """
-    lines = [f"**{prefix}** `{trial_id}`", f"Participant: `{participant}`"]
-    # The text/passage id may live under its canonical name or a pre-rename
-    # source name (unique_paragraph_id etc.), which can also double as a composite
-    # component — recognise all of them so the line reads "Text:" either way.
-    text_cols = ("unique_text_id", "text_id", "unique_paragraph_id", "paragraph_id")
-    text_id = None
-    for col in text_cols:
-        if col in trial_words.columns and not trial_words.empty:
-            value = trial_words[col].iloc[0]
-            if pd.notna(value):
-                text_id = value
-                break
-    if text_id is not None:
-        lines.append(f"Text: `{text_id}`")
-    # When the trial id was composed from several columns, surface its remaining
-    # parts on their own labeled lines too — the same way Participant and Text
-    # are shown — so the opaque `a_b_c` id is spelled out. Participant and the
-    # paragraph/text column are already covered above, so they're skipped.
-    composite_cols = st.session_state.get("_composite_trial_columns") or []
-    already_shown = {"participant_id", *text_cols}
-    for col in composite_cols:
-        if col in already_shown or col not in trial_words.columns or trial_words.empty:
-            continue
-        value = trial_words[col].iloc[0]
-        if pd.notna(value):
-            lines.append(f"{col.replace('_', ' ').capitalize()}: `{value}`")
-    # Participant and Text sit on their own lines under the trial id (a markdown
-    # hard line break is two trailing spaces + newline).
-    st.markdown("  \n".join(lines))
-
-
 def _render_paragraph_panel(
     trial_words: pd.DataFrame,
     *,
@@ -3330,6 +3295,7 @@ def _render_save_restore_expander(
             key="plot_config_upload",
             help="Re-apply settings and annotations. Items that do not match "
             "the loaded data are skipped.",
+            max_upload_size=upload_limit_mb(),
         )
         skipped = st.session_state.get("_plot_config_skipped")
         if skipped:
@@ -8901,43 +8867,8 @@ def _render_data_provenance() -> None:
             )
 
 
-def render_raw_data_tab(
-    words_filtered: pd.DataFrame,
-    fixations_filtered: pd.DataFrame,
-    raw_gaze_filtered: pd.DataFrame,
-) -> None:
-    """Render the raw data tab: exactly the six tables a dataset can upload —
-    Fixations, AOIs (Words/IA), Raw gaze, Participants, Trials, Texts (UX-126).
-
-    Always six tabs, in this fixed order, whether or not a given table is
-    actually present — a table with nothing uploaded/attached shows a plain
-    "not uploaded" line instead of the tab disappearing, so the set doesn't
-    reshuffle as you attach things. Every one of the six is shown *as
-    uploaded* — no reconstruction (the former "Stimuli" sub-tab, which joined
-    word rows into passages) and no derived measures (the former
-    "Word-level" sub-tab, `compute_word_metrics`'s full FFD/FPRT/RPD/TFD
-    pass) — both real computation for a section whose whole point is the raw
-    tables. That view still exists — it's the 🧮 Derived analysis tables
-    section below (currently held back — UX-126) and the Corpus Analysis
-    view.
-
-    UX-52 folded this whole block into a collapsed expander; this round took the
-    expander back off (the tables are what the section is *for*, so paying a
-    click for them was backwards) and put the six tabs on one bar with the
-    dataset's own 📊 Stats tab — see ``render_data_inspection_tab``, which builds
-    that bar itself and calls :func:`_fill_raw_data_tabs`. This entry point is
-    kept for a caller that wants the six alone.
-    """
-    _fill_raw_data_tabs(
-        st.tabs(RAW_DATA_TAB_LABELS),
-        words_filtered,
-        fixations_filtered,
-        raw_gaze_filtered,
-    )
-
-
 #: The six tables a dataset can upload, in the fixed order they are always
-#: shown in — see :func:`render_raw_data_tab`. A module constant because
+#: shown in (:func:`_fill_raw_data_tabs` draws them). A module constant because
 #: :func:`render_data_inspection_tab` prepends its own 📊 Stats tab and builds
 #: the whole bar in one `st.tabs` call.
 RAW_DATA_TAB_LABELS = [
@@ -8958,9 +8889,8 @@ def _fill_raw_data_tabs(
 ) -> None:
     """Draw the six raw-data tables into six already-created tab containers.
 
-    Split out of :func:`render_raw_data_tab` so the Data page can put them on
-    *one* bar with its 📊 Stats tab rather than nesting a second `st.tabs`
-    inside a tab.
+    The Data page puts them on *one* bar with its 📊 Stats tab rather than
+    nesting a second `st.tabs` inside a tab.
     """
     from scanpath_studio import metadata as md
 
@@ -9314,7 +9244,7 @@ def _participant_metadata_body(
         stats_host = st
     upload = stats_host.file_uploader(
         "Participant metadata table (optional)",
-        type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
+        type=list(UPLOAD_FILE_TYPES),
         key="participant_metadata_upload",
         # No `persist_state` — `st.file_uploader` does not take it. It does
         # not need it either: the parsed frame is kept in session state under
@@ -9322,6 +9252,7 @@ def _participant_metadata_body(
         # uploader widget itself is ever reset.
         help=_pm_help,
         label_visibility="collapsed",
+        max_upload_size=upload_limit_mb(),
     )
     if upload is None:
         if active_participant_metadata() is None:
@@ -9517,10 +9448,11 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
         stats_host = st
     upload = stats_host.file_uploader(
         "Trial metadata table (optional)",
-        type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
+        type=list(UPLOAD_FILE_TYPES),
         key="trial_metadata_upload",
         help=_tm_help,
         label_visibility="collapsed",
+        max_upload_size=upload_limit_mb(),
     )
     if upload is None:
         if md.active_trials() is None:
@@ -9719,10 +9651,11 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
         stats_host = st
     upload = stats_host.file_uploader(
         "Text metadata table (optional)",
-        type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
+        type=list(UPLOAD_FILE_TYPES),
         key="text_metadata_upload",
         help=_txm_help,
         label_visibility="collapsed",
+        max_upload_size=upload_limit_mb(),
     )
     if upload is None:
         if md.active_texts() is None:
@@ -10311,9 +10244,10 @@ def _render_missing_table_uploads(name: str, stored: dict, *, host=None) -> dict
         )
         uploads = box.file_uploader(
             prompt,
-            type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
+            type=list(UPLOAD_FILE_TYPES),
             accept_multiple_files=True,
             key=f"remap_add_upload_{name}_{table_key}",
+            max_upload_size=upload_limit_mb(),
         )
         signature_key = f"_remap_add_file_{name}_{table_key}"
         if not uploads:

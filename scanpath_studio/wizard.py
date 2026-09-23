@@ -14,7 +14,6 @@ avoids an app⇄wizard import cycle.
 
 from __future__ import annotations
 
-import html
 import json
 import re
 from typing import NamedTuple
@@ -32,17 +31,18 @@ from .constants import (
     SYNTHETIC_CHOICE,
     TRIAL_IDENTITY_CHECK_KEY,
     UPLOAD_CHOICE,
-    UPLOAD_MAX_SIZE_MB,
     WIZARD_LEAVE_KEY,
     multipleye_upload_enabled,
+    upload_limit_label,
+    upload_limit_mb,
 )
 from .controls import (
     ADD_ATTEMPTED_KEY,
     FIX_FIELD_SPECS,
-    NONE_OPTION,
     RAW_GAZE_FIELD_SPECS,
     TOUCHED_FIELDS_KEY,
     WORD_FIELD_SPECS,
+    claim_mapping,
     column_mapping_ui,
     inline_field_label,
     mark_missing_cells,
@@ -113,9 +113,24 @@ class _UploadResult(NamedTuple):
     problems: list
 
 
+#: BUG-32: the dataset the wizard's `col_map_*` mapping describes. The 🗂️ Data
+#: page maps a built-in source under the same keys, keyed by its source, so
+#: this identity is what tells the two apart when the headers match: a pick
+#: made here never carries back into the demo or a public corpus, and theirs
+#: never into a new upload. One constant serves every add-dataset session,
+#: because entering the wizard resets its mapping anyway.
+WIZARD_MAPPING_DATASET = "add-dataset wizard"
+_WIZARD_MAPPING_PREFIXES = ("col_map_words", "col_map_fix", "col_map_raw_gaze")
+
+
 def _reset_wizard_widgets() -> None:
     """Clear the wizard's per-table mapping + keep-field widgets so 'Add data'
     starts a fresh dataset."""
+    # BUG-32: from here these keys describe the dataset being added. Its first
+    # upload keeps a setup restored before it; ✕ Cancel leaves nothing the demo
+    # would adopt as its own.
+    for prefix in _WIZARD_MAPPING_PREFIXES:
+        claim_mapping(prefix, WIZARD_MAPPING_DATASET)
     for key in [
         k
         for k in list(st.session_state.keys())
@@ -166,7 +181,7 @@ def _reset_wizard_widgets() -> None:
         "_wizard_problems_last",
     ):
         st.session_state.pop(key, None)
-    # Re-seed the accordion on the next entry instead of opening wherever the
+    # Clear the steps' open flags so the next entry does not open wherever the
     # previous dataset was left.
     wizard_shell.reset_accordion()
 
@@ -484,6 +499,7 @@ def _map_section(
         header=False,
         columns_per_row=per_row,
         stack_labels=stacked,
+        dataset=WIZARD_MAPPING_DATASET,
     )
 
 
@@ -1504,8 +1520,9 @@ def _wizard_restore_config(host) -> None:
         "Restore a saved setup (optional)",
         type=["json"],
         key="wizard_config_restore",
-        help="Re-apply a column mapping + field choices you exported earlier "
-        "(from the 💾 Session panel).",
+        help="Re-apply a column mapping + field choices you saved earlier "
+        "(⬇️ Save setup at the foot of this page, or a 💾 Session JSON backup).",
+        max_upload_size=upload_limit_mb(),
     )
     if uploaded is None:
         return
@@ -1523,7 +1540,11 @@ def _wizard_restore_config(host) -> None:
         # render, so their keys exist — setdefault would no-op and the restore
         # would silently fail. This step runs before the widgets re-instantiate
         # this pass, so writing the keys is safe, and it reruns afterwards.
-        _seed_column_mapping(config.get("column_mapping"), overwrite=True)
+        _seed_column_mapping(
+            config.get("column_mapping"),
+            overwrite=True,
+            dataset=WIZARD_MAPPING_DATASET,
+        )
         # Remember the restored config's provenance so the caller can show which
         # dataset (and when) it was exported from, below the upload box (9.1).
         st.session_state["_wizard_restored_meta"] = {
@@ -1731,7 +1752,7 @@ def _render_setup_download(host) -> None:
         key="wizard_setup_download",
         width="stretch",
         help="Save this column mapping to re-use on similar data — restore it "
-        "from *Restore a saved setup* at the top of Column mapping.",
+        "from *↩️ Restore a saved setup* beside *Upload data tables*.",
     )
 
 
@@ -2554,28 +2575,6 @@ _RAW_GAZE_ROW2_W = (0.155, 0.2817, 0.2817, 0.2816)
 _META_ROW_W = (0.155, 0.845)
 
 
-def _hover_note(host, label: str, note: str, *, link: str = "") -> None:
-    """A short label whose explanation is only on hover (UX-53 round 3).
-
-    The wizard's prose was the bulk of its length, and most of it is read once
-    and never again. This keeps a scannable anchor on the page and puts the
-    sentences behind the same `.sps-fhelp` tooltip the rail's labels use — a CSS
-    one (120 ms), not the browser's native `title=`, which waits about a second
-    and so is unusable for text people actually need.
-    """
-    tail = (
-        f' <a href="{html.escape(link, quote=True)}" target="_blank">↗</a>'
-        if link
-        else ""
-    )
-    host.markdown(
-        f'<div class="sps-wiz-note"><span class="sps-fhelp" '
-        f'data-tip="{html.escape(note, quote=True)}">{html.escape(label)}</span>'
-        f"{tail}</div>",
-        unsafe_allow_html=True,
-    )
-
-
 def _mark_add_attempted() -> None:
     """Record that **✅ Add dataset** was pressed on a still-incomplete wizard.
 
@@ -2682,31 +2681,6 @@ def _wizard_statuses() -> dict[str, wizard_shell.StepStatus]:
     return statuses
 
 
-def _mapping_label(mapping) -> str | None:
-    """A human-readable column name for a mapping value (str | list | None)."""
-    if not mapping or mapping == NONE_OPTION:
-        return None
-    if isinstance(mapping, (list, tuple)):
-        return " + ".join(str(c) for c in mapping) or None
-    return str(mapping)
-
-
-def _setup_group_value(snapshot: SetupSnapshot, group: str) -> str:
-    """The value column for one setup group in the review table."""
-    if group == "screen":
-        return f"{snapshot.canvas_width} × {snapshot.canvas_height} px"
-    if group == "geometry":
-        if snapshot.geometry_provenance is Provenance.SKIPPED:
-            return "—"
-        return (
-            f"{snapshot.monitor_width_mm:.0f} mm wide, "
-            f"{snapshot.viewing_distance_mm:.0f} mm away"
-        )
-    if snapshot.scale_text_to_boxes:
-        return "scaled to word boxes"
-    return f"{snapshot.base_font_size} px · {snapshot.font_family}"
-
-
 def _render_data_setup(active: bool) -> _UploadResult:
     """The Add-dataset wizard: seven steps in an accordion (DATA-22).
 
@@ -2765,9 +2739,9 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 # opens — "Data guide" reads like one more wizard step on a row
                 # of wizard controls, which is the one thing it is not.
                 "📖 More documentation ↗",
-                "https://lacclab.github.io/scanpath-studio/bring-your-own-data/",
-                help="What your export needs, worked EyeLink and plain-CSV "
-                "examples, and what each failure symptom means.",
+                "https://lacclab.github.io/scanpath-studio/guides/loading-data/",
+                help="What your export needs, how this wizard maps it, and the "
+                "recording setup it asks for.",
                 width="stretch",
             )
         # The way out, on the row that stays on screen.
@@ -2931,7 +2905,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # tooltip and the uploader's own accessible help.
     _upload_types_note = (
         ", ".join(t.upper() for t in app._UPLOAD_TYPES)
-        + f" — up to {UPLOAD_MAX_SIZE_MB // 1000}GB per file."
+        + f" — up to {upload_limit_label()} per file."
     )
 
     def upload_box(

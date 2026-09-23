@@ -138,29 +138,6 @@ class TestWizardAccordion:
         assert opened[target] is True
         assert not any(v for k, v in opened.items() if k != target)
 
-    def test_seed_opens_first_incomplete_then_never_again(self):
-        import streamlit as st
-
-        only = wizard_shell.STEPS[0].id
-        wizard_shell.reset_accordion()
-        statuses = {s.id: wizard_shell.StepStatus.TODO for s in wizard_shell.STEPS}
-        wizard_shell.seed_open_step(statuses)
-        assert st.session_state[wizard_shell.open_key(only)] is True
-
-        # A second call must NOT move the accordion — re-seeding on every run is
-        # exactly the auto-advance-under-the-cursor behaviour being removed. The
-        # user collapsing the part is what a re-seed would undo, so that is what
-        # is simulated here (UX-53 left one part, so there is no sibling to move
-        # focus to).
-        st.session_state[wizard_shell.open_key(only)] = False
-        wizard_shell.seed_open_step(statuses)
-        assert st.session_state[wizard_shell.open_key(only)] is False
-
-    def test_optional_step_does_not_hold_up_seeding(self):
-        statuses = {s.id: wizard_shell.StepStatus.DONE for s in wizard_shell.STEPS}
-        statuses["fields"] = wizard_shell.StepStatus.OPTIONAL
-        assert wizard_shell.first_incomplete(statuses) is None
-
     def test_open_keys_stay_clear_of_the_column_mapping_sweep(self):
         # tabs._collect_column_mapping sweeps every `col_map_*` key into the
         # saved config; an accordion flag must never land in a user's config.

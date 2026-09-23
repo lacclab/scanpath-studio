@@ -339,11 +339,11 @@ class TestEyeLinkAmplitudesStayInDegrees:
 class TestWithinWordLetterScale:
     """VAL-5: a letter is one *advance* wide, not ``width / len(text)``.
 
-    The audit found the within-word measures and the between-word boundary
-    disagreeing. ``measures.word_box_bounds`` had been corrected for BUG-11's
-    trailing inter-word padding; the letter scale had not, so on a tiling corpus
-    it divided a box of ``n + 1`` advances by ``n`` characters — every letter
-    ~``(n+1)/n`` too wide, and by a factor that *varied with word length*.
+    On a tiling corpus each box carries the trailing inter-word space, so
+    ``width / len(text)`` divided a box of ``n + 1`` advances by ``n``
+    characters — every letter ~``(n+1)/n`` too wide, and by a factor that
+    *varied with word length* (BUG-27). BUG-83 keeps that box whole — the space
+    is the word's last cell — so the letter scale stays ``width / (n + 1)``.
     """
 
     @staticmethod
@@ -451,9 +451,10 @@ class TestWithinWordLetterScale:
         out = compute_per_word_measures(fix, layout)
         row = out[out["word_id"] == word["word_id"]].iloc[0]
         assert row["initial_landing_position"] == pytest.approx(3.5)
-        # …and the fraction agrees, as it does for LTR.
+        # …and the fraction agrees, as it does for LTR: 2.5 advances into a box
+        # of five cells (four glyphs + the trailing space, BUG-83).
         fraction = aggregation.landing_positions(out, fix)
-        assert fraction[0] == pytest.approx(2.5 / 4.0)
+        assert fraction[0] == pytest.approx(2.5 / 5.0)
 
     def test_the_landing_fraction_agrees_with_the_letter_position(self):
         """``aggregation.landing_positions`` and ``initial_landing_position`` are
@@ -468,8 +469,29 @@ class TestWithinWordLetterScale:
         measured = compute_per_word_measures(fix, layout)
         fraction = aggregation.landing_positions(measured, fix)
         assert len(fraction) == 1
-        # 2.5 advances into a 4-glyph run.
-        assert fraction[0] == pytest.approx(2.5 / 4.0)
+        # Letter 3.5 is 2.5 advances in, over the box's five cells — four glyphs
+        # and the trailing space the experiment put in it (BUG-83).
+        row = measured[measured["word_id"] == word["word_id"]].iloc[0]
+        assert row["initial_landing_position"] == pytest.approx(3.5)
+        assert fraction[0] == pytest.approx(2.5 / 5.0)
+        assert fraction[0] == pytest.approx((row["initial_landing_position"] - 1) / 5)
+
+    def test_a_landing_on_the_trailing_space_reads_letter_n_plus_one(self):
+        """BUG-83: the space after a word is the last cell of its box, so a first
+        fixation there belongs to the word and reads between ``n + 1`` and
+        ``n + 2`` — unclipped, not folded onto the last letter. Its centred
+        distance is still from the *glyphs'* centre (BUG-65)."""
+        advance = 20.0
+        layout = self._tiling_layout(advance)
+        word = layout.iloc[1]  # "cats": glyphs x … x + 80, space x + 80 … x + 100
+        # Three quarters of the way across the space — BUG-11's shifted boundary
+        # (half-way) gave this fixation to "sat".
+        fix = _make_fixations([(float(word["x"]) + 4.75 * advance, 70, 200, 0)])
+        out = compute_per_word_measures(fix, layout)
+        row = out[out["word_id"] == word["word_id"]].iloc[0]
+        assert row["n_fixations"] == 1
+        assert row["initial_landing_position"] == pytest.approx(5.75)
+        assert row["initial_landing_distance"] == pytest.approx(5.75 - 3.0)
 
 
 def _read_words(layout: pd.DataFrame, sequence: list, *, step: int = 250):

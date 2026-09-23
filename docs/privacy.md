@@ -24,8 +24,9 @@ which any client on the network could set to `localhost`.
 The cache is visible and removable from inside the app: 💾 **Session →
 🗄️ Automatic recovery** (the dialog the nav's 💾 Session entry opens) names the
 folder, reports what is stored and how large it
-is, pauses saving for the session, and deletes the stored copy (**Forget saved
-session**). The same from a terminal, with the app closed:
+is, pauses saving for the session (**Save changes automatically**), and deletes
+the stored copy (**🗑 Clear recovery cache**, which leaves saving on). The same
+from a terminal, with the app closed:
 
 ```bash
 scanpath-studio cache                       # what is stored, where, how big
@@ -39,11 +40,19 @@ folder like the data files it came from (disk encryption, shared-machine
 accounts). It is single-user and unencrypted: anyone with your account on that
 machine can read it.
 
-The desktop app binds to your machine only. A direct Streamlit launch may listen
-on the local network; on a shared or untrusted network, bind explicitly:
+Exporting an **MP4** replay is the one other time the app writes to disk: the
+encoder needs a real file, so the clip is written to a temporary file in the
+system's temp folder (readable by your account only) and deleted as soon as it
+has been read back. Only a crash or a forced kill mid-encode leaves it behind,
+and it holds the rendered frames, not your tables.
+
+The desktop app and every `scanpath-studio` launch bind to your machine only
+(`127.0.0.1`) unless you pass `--server.address` yourself. A bare
+`streamlit run streamlit_app.py` does not — it listens on every interface — so
+from a source checkout, bind explicitly:
 
 ```bash
-scanpath-studio --server.address=127.0.0.1
+streamlit run streamlit_app.py --server.address 127.0.0.1
 ```
 
 ## The online demo
@@ -55,7 +64,9 @@ provider. Sessions are temporary and server resources are limited.
 ## What's in a link, a config file, and an export
 
 - A **share link** contains the participant and trial IDs plus the visualization
-  settings. It does not contain the data tables.
+  settings. It does not contain the data tables — except for a scanpath made
+  with **✏️ Author a scanpath**, whose link carries the typed text and every
+  hand-placed fixation, because they *are* its data.
 - A **saved configuration** can contain column names and annotation notes.
 - An **exported table** contains the selected research data.
 
@@ -66,10 +77,17 @@ trial identifiers should not be exposed there.
 ## Network activity
 
 Downloading a public corpus contacts its host, and only when you click
-**⬇ Download**. The scanpath, animation and comparison figures load the Plotly
-charting library from **cdn.plot.ly** each time they are drawn, so your browser
-fetches it from that host; your data is not sent with the request, but the
-figure needs an internet connection to appear — including in the desktop app.
+**⬇ Download** — or, headlessly, the first time `scanpath-studio render --potec`
+or `--onestop` (the Public variant) runs against a folder that doesn't have it
+yet. The scanpath, animation and comparison figures load the Plotly
+charting library from the app's own server — the copy installed with the app —
+so drawing a figure contacts no other host and works without an internet
+connection, the desktop app included. A figure you download as **HTML** is
+different: a saved file has no app server behind it, so it loads the library
+from **cdn.plot.ly** when you open it, which needs an internet connection and
+tells that host the file was opened (no data travels with the request). HTML
+written headlessly (`save_figure`, `scanpath-studio render -o figure.html`)
+embeds the library instead and makes no request.
 Streamlit's own usage statistics are switched off on every launch path
 (`scanpath-studio run`, the desktop app and the repository's
 `.streamlit/config.toml`). The application adds no analytics service of its own.

@@ -1,27 +1,29 @@
-"""The Add-dataset wizard's shell: step registry, status, accordion, progress
-and navigation (DATA-22).
+"""The Add-dataset wizard's shell: part registries, status badges, and the few
+navigation helpers that survive (DATA-22 → UX-135).
 
-Knows nothing about columns or dataframes — ``wizard.py`` keeps the step bodies
-and finalize. What lives here is the *chrome*: which steps exist, what each one's
-status badge is, which one is open, and the buttons that move between them.
+Knows nothing about columns or dataframes — ``wizard.py`` keeps the part bodies
+and finalize. What lives here is the *chrome*:
 
-**The one rule that makes the accordion work.** A step's open flag
-(``wiz_open_<id>``) is written *only* by `seed_open_step`, `go_to_step`,
-the guide, and `seed_open_step`. Nothing inside a step body may touch it. The old wizard recomputed ``expanded=`` from whether the step was
-"done", so the first pick in a step flipped ``done`` and the expander collapsed
-under the user's cursor mid-edit (DATA-19 patched that with a one-shot marker
-that survived exactly one rerun; this replaces the mechanism rather than
-patching it again). Here the flag is a keyed-expander widget value: the user's
-own click owns it, and code only moves it on an explicit navigation.
+- `STEPS` — the add screen's three linear parts (name → data → setup), drawn by
+  `part()` as numbered one-line headlines. They are labels, not navigation: there
+  is nothing to map until a file is read, so no chips, no accordion, no open state.
+- `EDITOR_STEPS` + `numbered()` — the ✏️ Edit dataset screen's parts, renumbered
+  over the ones that actually render.
+- `step_panel` — the collapsed *Data & mapping* review panel's per-step block, and
+  the keyed-expander form it had while the wizard was an accordion.
+- `go_to_step` / `reset_accordion` — the accordion-era open-flag helpers,
+  still called by the guide (`tour.py`) and the wizard's reset.
+
+**The rule those helpers keep.** A step's open flag (``wiz_open_<id>``) is
+written *only* by them and the guide. Nothing inside a step body may touch it:
+the old wizard recomputed ``expanded=`` from whether the step was "done", so the
+first pick in a step collapsed the expander under the user's cursor mid-edit
+(DATA-19).
 
 **A keyed expander's label and icon must be CONSTANT.** Changing either remounts
 the widget at its default — i.e. collapsed — on the very next run, no matter what
-its key holds. That is not a theory: an upload flips step 1 from *action* to
-*done*, and while the status badge was passed as ``icon=`` the step slammed shut
-the instant the file finished uploading, which is exactly the DATA-19 symptom
-this design set out to remove, arriving through a different door. The badge
-therefore lives on the progress chips (`render_progress`) and nowhere else; the
-expander header carries only the fixed number + title. Reproduced and pinned by
+its key holds, which is why `step_panel` never renders a status badge into the
+expander header. Reproduced and pinned by
 ``tests/test_wizard_helpers.py::TestWizardAccordion::
 test_a_changing_header_would_collapse_a_keyed_expander``.
 
@@ -36,7 +38,7 @@ at the `step_panel` call sites in ``wizard.py``.
 from __future__ import annotations
 
 import html
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
 
@@ -260,21 +262,6 @@ def badge(status: StepStatus) -> str:
     return _BADGES.get(status, _BADGES[StepStatus.TODO])
 
 
-def first_incomplete(statuses: Mapping[str, StepStatus]) -> str | None:
-    """Id of the first step that still wants attention, or ``None`` when the
-    wizard is fully answered.
-
-    "Wants attention" excludes ``OPTIONAL``: an untouched optional step must not
-    stop the accordion advancing past it, or *Extra fields* would grab focus
-    ahead of *Name & add* on every fresh upload.
-    """
-    for step in STEPS:
-        status = statuses.get(step.id, StepStatus.TODO)
-        if status in (StepStatus.TODO, StepStatus.ACTION):
-            return step.id
-    return None
-
-
 def go_to_step(step_id: str) -> None:
     """Open exactly one step and close the others.
 
@@ -287,27 +274,13 @@ def go_to_step(step_id: str) -> None:
         st.session_state[open_key(step.id)] = step.id == step_id
 
 
-def seed_open_step(statuses: Mapping[str, StepStatus]) -> None:
-    """On first entry to the wizard, open the first step that needs attention.
-
-    Runs once per wizard entry (guarded by ``_wizard_accordion_seeded``) — after
-    that the accordion is the user's to drive, and re-seeding on later runs would
-    be exactly the auto-advance-under-the-cursor behaviour this design removes.
-    """
-    if st.session_state.get("_wizard_accordion_seeded"):
-        return
-    st.session_state["_wizard_accordion_seeded"] = True
-    go_to_step(first_incomplete(statuses) or STEPS[0].id)
-
-
 def reset_accordion() -> None:
-    """Forget the accordion state so the next wizard entry re-seeds.
+    """Forget every step's open flag.
 
     Called by ``wizard._reset_wizard_widgets`` when *Add data* starts a fresh
     dataset; without it the second dataset would open on whichever step the
     first one was left on.
     """
-    st.session_state.pop("_wizard_accordion_seeded", None)
     for step in STEPS:
         st.session_state.pop(open_key(step.id), None)
 
@@ -329,8 +302,7 @@ def step_panel(host, step: WizardStep, status: StepStatus, *, active: bool):
     ``status`` is deliberately **not** rendered into the active header. A keyed
     expander whose label or icon changes remounts collapsed on the next run, so a
     status badge there would slam the step shut the moment an upload or a mapping
-    pick completed it — see the module docstring. The badges live on the progress
-    chips directly above, which are buttons and re-render harmlessly.
+    pick completed it — see the module docstring.
     """
     if not active:
         host.markdown(f"**{badge(status)} {step.number}. {step.title}**")
@@ -340,22 +312,3 @@ def step_panel(host, step: WizardStep, status: StepStatus, *, active: bool):
         key=open_key(step.id),
         on_change="rerun",
     )
-
-
-def blockers(
-    statuses: Mapping[str, StepStatus], reasons: Mapping[str, Iterable[str]]
-) -> list[tuple[WizardStep, list[str]]]:
-    """Steps still blocking *Add dataset*, each with its reasons.
-
-    Feeds the review step's "what's left" list, where every entry gets a
-    *Go to step N* button — a blocker the user cannot navigate to is just a
-    complaint.
-    """
-    out: list[tuple[WizardStep, list[str]]] = []
-    for step in STEPS:
-        if statuses.get(step.id, StepStatus.TODO) in (
-            StepStatus.TODO,
-            StepStatus.ACTION,
-        ):
-            out.append((step, list(reasons.get(step.id, []))))
-    return out

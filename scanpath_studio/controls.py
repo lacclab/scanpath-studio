@@ -44,6 +44,7 @@ from .constants import (
     compare_palette_color,
     drift_correction_enabled,
     palette_settings,
+    upload_limit_mb,
 )
 from .data import frame_fingerprint
 from .export import (
@@ -61,6 +62,7 @@ from .fields import (
     row_label,
 )
 from .session_keys import DESIGN_PRESETS as _DESIGN_PRESETS_WIRE_KEY
+from .session_keys import SHARE_FLOAT_RANGE_PARAMS
 
 NONE_OPTION = "(none)"
 
@@ -1065,6 +1067,22 @@ _VIEW_PRESETS: dict[str, dict[str, object]] = {
 }
 
 
+def _drop_linked_view_params() -> None:
+    """Take a deep link's view params off the URL once a design is chosen.
+
+    ``url_state._apply_url_preset`` re-applies them at the top of every rerun,
+    as ``setdefault`` — so any key the chosen design leaves unset is refilled
+    from the link. Every design leaves some unset; since VIZ-46 an *auto*
+    colour range is one of them (absent means auto), so a design saved on auto
+    came back showing the link's range. Selection/source params are not in
+    ``URL_PRESET_PARAMS`` and stay.
+    """
+    from . import session_keys as _sk
+
+    for param in _sk.URL_PRESET_PARAMS:
+        st.query_params.pop(param, None)
+
+
 def _apply_view_preset(name: str) -> None:
     """Apply one deterministic named view, or restore the Custom snapshot.
 
@@ -1105,6 +1123,7 @@ def _apply_view_preset(name: str) -> None:
         ss.pop("_font_seeded_for", None)
         ss.pop("_palette_picked", None)
         ss.pop(_PRE_ILLUSTRATION_STATE, None)
+        _drop_linked_view_params()
         ss[_QUICK_VIEW_SELECTION_KEY] = _design_selection(name)
         ss.pop(_QUICK_VIEW_APPLIED_STATE, None)
         return
@@ -1118,6 +1137,7 @@ def _apply_view_preset(name: str) -> None:
             for key, value in custom.items():
                 if _is_restorable_global(key):
                     ss[key] = deepcopy(value)
+            _drop_linked_view_params()
         ss[_QUICK_VIEW_SELECTION_KEY] = _CUSTOM_VIEW
         ss.pop(_QUICK_VIEW_APPLIED_STATE, None)
         return
@@ -1139,10 +1159,7 @@ def _apply_view_preset(name: str) -> None:
     # A deep-link preset is applied at the top of every rerun. Once the user has
     # explicitly chosen a design preset it must not immediately put the old visual
     # settings back; selection/source parameters are not part of this list.
-    from . import session_keys as _sk
-
-    for param in _sk.URL_PRESET_PARAMS:
-        st.query_params.pop(param, None)
+    _drop_linked_view_params()
 
     for key, value in _VIEW_PRESETS[name].items():
         ss[key] = deepcopy(value)
@@ -1942,13 +1959,8 @@ def _assemble_mapping(
     The **shape** of a mapping — which keys exist, that a ``kind: "box"`` field
     expands into all eight box keys with the inactive four set to ``None``, that
     a ``multi`` field collapses to a plain string when exactly one column is
-    picked — is defined once, here. :func:`column_mapping_ui` supplies choices by
-    rendering widgets; :func:`resolve_column_mapping` supplies them by reading the
-    session keys those widgets wrote. Sharing the loop is what stops the two
-    answering differently for the same dataset (DATA-26): the resolver runs on
-    every view where the editor is *not* on screen, so a divergence would show up
-    as the app quietly normalizing under a different mapping than the one the
-    user can see.
+    picked — is defined once, here; :func:`column_mapping_ui` supplies the
+    choices by rendering widgets.
     """
     mapping: dict[str, str | None] = {}
     for spec in field_specs:
@@ -1958,9 +1970,7 @@ def _assemble_mapping(
         if only_keys is not None and key not in only_keys:
             continue
         default = proposed.get(key)
-        # Resolved from auto-detection, never offered as a row (UX-53). Both
-        # callers share this loop, so the editor and the resolver stay in
-        # agreement — the whole reason `_assemble_mapping` exists.
+        # Resolved from auto-detection, never offered as a row (UX-53).
         if key in _HIDDEN_MAPPING_KEYS:
             mapping[key] = default
             continue
@@ -2092,8 +2102,22 @@ def _field_state(
 #: restore. It describes this session's widget state, not the mapping, and has
 #: no business in a file that opens on another machine.
 def _mapped_columns_key(state_key_prefix: str) -> str:
-    """Session key holding the column signature ``state_key_prefix`` maps."""
+    """Session key holding the ``(dataset, columns)`` ``state_key_prefix`` maps."""
     return f"_mapped_columns_{state_key_prefix}"
+
+
+def claim_mapping(state_key_prefix: str, dataset: object) -> None:
+    """Record that ``state_key_prefix``'s keys now describe ``dataset`` (BUG-32).
+
+    For a writer that seeds mapping keys for a table nobody has read yet — the
+    wizard starting a fresh dataset, a setup restored into it. The columns are
+    left unknown, so that dataset's first sighting counts as the *same* dataset
+    (DATA-24's stale-only rule keeps every pick its table can honour), while any
+    other dataset that meets the keys first — the demo, after ✕ Cancel — drops
+    them. Without it the marker would still name whatever those keys used to
+    describe, and the new table would clear exactly what was just restored.
+    """
+    st.session_state[_mapped_columns_key(state_key_prefix)] = (dataset, None)
 
 
 def _mapping_state_keys(state_key_prefix: str, field_specs: list[dict]) -> list[str]:
@@ -2109,7 +2133,11 @@ def _mapping_state_keys(state_key_prefix: str, field_specs: list[dict]) -> list[
 
 
 def forget_mapping_for_other_table(
-    df: pd.DataFrame, state_key_prefix: str, field_specs: list[dict]
+    df: pd.DataFrame,
+    state_key_prefix: str,
+    field_specs: list[dict],
+    *,
+    dataset: object = None,
 ) -> None:
     """Drop a stored mapping that was made for a *different* table (DATA-24).
 
@@ -2138,15 +2166,36 @@ def forget_mapping_for_other_table(
     steps the user had already filled in. What gets cleared is a field left at
     ``(none)`` or pointing at a column that is gone — in both cases there is no
     user choice to lose, and auto-detection deserves another go.
+
+    **BUG-32: the column universe alone is not the table.** Two datasets that
+    share an AOI file have identical headers by construction, so under a
+    columns-only signature the second silently inherited every pick made for
+    the first — and nothing was cleared or said, because every pick still named
+    a real column. ``dataset`` is the caller's identity for the data the
+    mapping describes (the source key on the 🗂️ Data page, the add-dataset
+    wizard's own), and a change of dataset drops **every** pick, however valid
+    it still looks: a choice made for one dataset is not a choice for another.
+    The same-dataset rules above are unchanged, so the wizard growing its own
+    frame keeps what was filled in. A caller seeding keys *for* a dataset whose
+    table has not been read yet stamps it first with :func:`claim_mapping`.
     """
-    signature = tuple(str(column) for column in df.columns)
+    columns_seen = tuple(str(column) for column in df.columns)
+    signature = (dataset, columns_seen)
     marker = _mapped_columns_key(state_key_prefix)
     previous = st.session_state.get(marker)
     st.session_state[marker] = signature
-    if previous is None or previous == signature:
+    if not (isinstance(previous, tuple) and len(previous) == 2):
+        return  # first sighting: record only
+    if previous == signature:
         return
-    columns = set(signature)
-    for key in _mapping_state_keys(state_key_prefix, field_specs):
+    keys = _mapping_state_keys(state_key_prefix, field_specs)
+    if previous[0] != dataset:
+        for key in keys:
+            st.session_state.pop(key, None)
+            st.session_state.get(TOUCHED_FIELDS_KEY, set()).discard(key)
+        return
+    columns = set(columns_seen)
+    for key in keys:
         stored = st.session_state.get(key)
         if isinstance(stored, str) and stored != NONE_OPTION and stored in columns:
             continue
@@ -2166,72 +2215,6 @@ def forget_mapping_for_other_table(
         st.session_state.get(TOUCHED_FIELDS_KEY, set()).discard(key)
 
 
-def resolve_column_mapping(
-    df: pd.DataFrame,
-    state_key_prefix: str,
-    field_specs: list[dict],
-    proposed: dict[str, str | None],
-    only_keys: list[str] | None = None,
-) -> dict[str, str | None]:
-    """The mapping :func:`column_mapping_ui` *would* return, without rendering it.
-
-    **DATA-26.** The column-mapping editor used to live in a menu popover, which
-    executes on every rerun, so the load path could simply render it and use what
-    came back. On the **Data** page it executes only while that page is the
-    active view — and the mapping still has to drive ``prepare_data`` on the
-    Scanpath and Corpus views, which is precisely the trap that item flags.
-
-    Both halves of the answer are needed. The widgets carry
-    ``persist_state="session"`` so Streamlit keeps their values through the runs
-    in which they don't render (ENG-36; without it the keys are dropped at the
-    end of any such run and the mapping silently reverts to auto-detection).
-    This function then reads those values instead of re-rendering, so no view has
-    to draw the editor just to know the answer.
-
-    A stored column that no longer exists in ``df`` — a new upload with different
-    headers — falls back to the auto-detected proposal rather than to ``None``,
-    matching the rendering editor, whose selectbox ``index`` lookup self-heals the
-    same way.
-    """
-    forget_mapping_for_other_table(df, state_key_prefix, field_specs)
-    columns = set(df.columns)
-
-    def _stored(field_key: str) -> str | None:
-        value = st.session_state.get(f"{state_key_prefix}_{field_key}")
-        if value == NONE_OPTION:
-            return None
-        if isinstance(value, str) and value in columns:
-            return value
-        # Nothing usable stored: fall back to what auto-detection proposed.
-        fallback = proposed.get(field_key)
-        return fallback if fallback in columns else None
-
-    def _pick(field_key: str, _label, _help=None) -> str | None:
-        return _stored(field_key)
-
-    def _pick_box_format(_spec) -> str:
-        fmt = st.session_state.get(f"{state_key_prefix}_box_format")
-        return fmt if fmt in _BOX_SUBFIELDS else _default_box_format(proposed)
-
-    def _pick_multi(spec, default, _label) -> list[str]:
-        stored = st.session_state.get(f"{state_key_prefix}_{spec['key']}")
-        if isinstance(stored, (list, tuple)):
-            valid = [c for c in stored if c in columns]
-            if valid:
-                return valid
-        return [default] if default in columns else []
-
-    return _assemble_mapping(
-        df,
-        field_specs,
-        proposed,
-        only_keys,
-        pick=_pick,
-        pick_box_format=_pick_box_format,
-        pick_multi=_pick_multi,
-    )
-
-
 def column_mapping_ui(
     df: pd.DataFrame,
     table_label: str,
@@ -2247,6 +2230,7 @@ def column_mapping_ui(
     detected_label: str = "auto-detected",
     columns_per_row: int = 1,
     stack_labels: bool | None = None,
+    dataset: object = None,
 ) -> dict[str, str | None]:
     """Render a column-mapping expander letting users override the inferred mapping.
 
@@ -2275,8 +2259,12 @@ def column_mapping_ui(
     the stacked shape, and inferring it from the field count got that wrong
     (UX-53 r17: the screen fields landed on the identity rows with their titles
     beside them while every neighbour had its title above).
+
+    ``dataset`` names the data this mapping is for, so picks made for one
+    dataset never carry into another with the same headers (BUG-32) — see
+    :func:`forget_mapping_for_other_table`.
     """
-    forget_mapping_for_other_table(df, state_key_prefix, field_specs)
+    forget_mapping_for_other_table(df, state_key_prefix, field_specs, dataset=dataset)
     # UX-108 — PERF-6 narrows `df` to only the columns a plan decided to
     # actually *parse* (auto-detect + the optional-field registry + whatever a
     # `col_map_*` key already names, session-wide); a column nobody has named
@@ -2488,8 +2476,7 @@ def column_mapping_ui(
                 unsafe_allow_html=True,
             )
         # `NONE_OPTION` is still tolerated on the way out: a config restored
-        # before this run could have seeded it, and `resolve_column_mapping`
-        # reads the same keys.
+        # before this run could have seeded it.
         return None if chosen in (None, NONE_OPTION) else chosen
 
     host = container if container is not None else st.container()
@@ -2838,30 +2825,13 @@ def _drop_stale_multi(state_key: str, options: list) -> None:
         st.session_state.pop(state_key, None)
 
 
-def _clamp_range(state_key: str, lo: float, hi: float) -> None:
-    """Clamp a persisted ``(min, max)`` range-slider value into ``[lo, hi]`` so a
-    restored value built on different data can't fall outside the slider bounds
-    and raise. Drops anything that isn't a 2-tuple."""
-    val = st.session_state.get(state_key)
-    if not (isinstance(val, (list, tuple)) and len(val) == 2):
-        st.session_state.pop(state_key, None)
-        return
-    try:
-        a, b = float(val[0]), float(val[1])
-    except (TypeError, ValueError):
-        del st.session_state[state_key]
-        return
-    a, b = max(lo, min(a, hi)), max(lo, min(b, hi))
-    st.session_state[state_key] = (min(a, b), max(a, b))
-
-
 def _clamped_pair(val, lo: float, hi: float) -> tuple | None:
-    """Pure twin of ``_clamp_range``: clamp a stored ``(min, max)`` into ``[lo,
-    hi]`` and return it, or ``None`` for a malformed/missing value — WITHOUT
-    touching session_state. Used by ``_collect_viz_settings`` (the non-rendering
-    reader) so a colour range stored on differently-scaled data is clamped the
-    same way the rendered slider clamps it, instead of leaking out-of-bounds into
-    the Corpus / Save-&-restore figures."""
+    """Clamp a stored ``(min, max)`` into ``[lo, hi]`` and return it, or ``None``
+    for a malformed/missing value — WITHOUT touching session_state. Shared by
+    the rail's colour-range slider (``_render_color_range``, for display) and
+    ``_collect_viz_settings`` (for the figure), so a range stored on
+    differently-scaled data is clamped the same way on screen and in the Corpus
+    / Save-&-restore figures, and never rewritten (VIZ-46)."""
     if not (isinstance(val, (list, tuple)) and len(val) == 2):
         return None
     try:
@@ -2870,6 +2840,128 @@ def _clamped_pair(val, lo: float, hi: float) -> tuple | None:
         return None
     a, b = max(lo, min(a, hi)), max(lo, min(b, hi))
     return (min(a, b), max(a, b))
+
+
+# --- VIZ-46: a colour range is *auto* until the user sets one -----------------
+# `api.plot_scanpath` leaves `fixation_color_range` / `heatmap_range` at `None`,
+# and every builder then scales the figure to its own trial (a comparison, to A
+# and B together). The rail used to `setdefault` its slider key to the whole
+# dataset's span the moment the slider rendered, so the app never drew that
+# default: its heatmap sat on the dataset's longest single fixation while the
+# headless one used the trial's own per-word values.
+#
+# So the canonical `global_*` key now means **explicit**: it is present only
+# when a range was chosen — dragged or typed here, un-ticking *Auto*, or
+# arriving on a Share link / saved config / saved design — and `None` reaches
+# the builders otherwise, i.e. the API's rule, not a copy of it. The slider
+# draws a private *view* key instead, seeded from the canonical value or (auto)
+# the dataset span it is bounded by, so rendering it can no longer pin a number
+# into every link, config and bulk export. Nothing else changes shape: the
+# link's generic range sweep already emits only a key that is present, and the
+# config writer already writes the figure's `None`.
+_COLOR_RANGE_URL_PARAMS = {
+    state_key: param for param, state_key in SHARE_FLOAT_RANGE_PARAMS.items()
+}
+
+
+def _color_range_view_key(state_key: str) -> str:
+    """The private key the rail's slider draws for ``state_key`` (VIZ-46)."""
+    return f"_{state_key.removeprefix('global_')}_view"
+
+
+def _color_range_auto_key(state_key: str) -> str:
+    """The private key of ``state_key``'s *Auto* checkbox (VIZ-46)."""
+    return f"_{state_key.removeprefix('global_')}_auto"
+
+
+def forget_color_range(state_key: str) -> None:
+    """Put one colour range back to auto — per trial, like the API (VIZ-46).
+
+    Also drops the link param that may have set it: `url_state._apply_url_preset`
+    re-seeds from `st.query_params` at the top of every rerun, so on a page
+    opened from a Share link the range would otherwise come straight back.
+    """
+    st.session_state.pop(state_key, None)
+    param = _COLOR_RANGE_URL_PARAMS.get(state_key)
+    if param is not None:
+        st.query_params.pop(param, None)
+
+
+def _render_color_range(
+    label: str,
+    state_key: str,
+    lo: float,
+    hi: float,
+    *,
+    disabled: bool,
+    reason: str,
+    help: str | None = None,
+) -> None:
+    """*Auto* checkbox + the ``[lo, hi]``-bounded range slider (VIZ-46).
+
+    While the range is auto the slider sits at its full bounds and *Auto* is
+    ticked; the figure is scaled to the trial, not to those bounds. Dragging the
+    slider or typing a bound makes the range explicit (and un-ticks *Auto*), as
+    does un-ticking *Auto* itself, which pins the bounds on screen — the
+    dataset-wide scale the app used to default to, now one click away. An
+    explicit range is sticky across trials until *Auto* is ticked again.
+
+    The stored value is clamped for display only and never rewritten, so a
+    range that arrived on a link built on other data is not eroded by a
+    narrower pool here; `_collect_viz_settings` clamps it the same way for the
+    figure.
+    """
+    ss = st.session_state
+    view_key = _color_range_view_key(state_key)
+    auto_key = _color_range_auto_key(state_key)
+    explicit = _clamped_pair(ss.get(state_key), lo, hi)
+    if explicit is None:
+        ss.pop(state_key, None)  # a malformed value is not a range
+    shown = explicit if explicit is not None else (lo, hi)
+    if ss.get(view_key) != shown:
+        ss[view_key] = shown
+    ss[auto_key] = explicit is None
+
+    def _commit_view() -> None:
+        view = ss.get(view_key)
+        if isinstance(view, (tuple, list)) and len(view) == 2:
+            ss[state_key] = (float(min(view)), float(max(view)))
+
+    def _toggle_auto() -> None:
+        if ss.get(auto_key):
+            forget_color_range(state_key)
+        else:
+            _commit_view()
+
+    _labeled(
+        st,
+        "checkbox",
+        "Auto range",
+        key=auto_key,
+        on_change=_toggle_auto,
+        disabled=disabled,
+        help=_gated_help(
+            "**On** (default) — every trial is scaled to its own values, exactly "
+            "as the headless API and `render` draw it; a comparison shares one "
+            "scale across A and B. **Off** — the range below is pinned and "
+            "applies to every trial you look at, which is what makes trials "
+            "comparable. Dragging the range turns this off.",
+            reason,
+        ),
+    )
+    _range_slider(
+        st,
+        label,
+        label_left=True,
+        key=view_key,
+        min_value=lo,
+        max_value=hi,
+        step=1.0,
+        slider_format="%d",
+        disabled=disabled,
+        on_change=_commit_view,
+        help=_gated_help(help, reason),
+    )
 
 
 _COMPARE_SCANPATHS = ((0, "Scanpath 1"), (1, "Scanpath 2"))
@@ -3019,6 +3111,36 @@ def _pin(key: str, default) -> None:
         pass
 
 
+def compare_style_defaults() -> dict:
+    """Every per-scanpath comparison styling key → the value a session seeds.
+
+    One table for the seeding below and for EXP-19's share link, which leaves a
+    style off the link while it still equals this (`url_state._link_defaults`).
+    ``cmp{idx}_label_pattern`` is not seeded — its absence *is* the auto label —
+    so it is listed here as the empty string it reads as.
+    """
+    defaults: dict = {}
+    for idx, _ in _COMPARE_SCANPATHS:
+        defaults.update(
+            {
+                f"cmp{idx}_fix_color": compare_palette_color(idx),
+                f"cmp{idx}_saccade_color": compare_palette_color(idx),
+                f"cmp{idx}_saccade_style": "Solid",
+                f"cmp{idx}_saccade_width": DEFAULT_SACCADE_WIDTH,
+                f"cmp{idx}_marker_size_range": DEFAULT_MARKER_SIZE_RANGE,
+                # VIZ-6: per-scanpath marker alpha (replaces the per-scanpath
+                # hollow checkbox). Default 0.7 matches the single-trial default
+                # so overlapping fixations show through. `cmp{idx}_hollow` kept
+                # seeded for saved-config / deep-link backward compatibility (no
+                # widget renders it anymore).
+                f"cmp{idx}_opacity": COMPARE_FIXATION_OPACITY,
+                f"cmp{idx}_hollow": False,
+                f"cmp{idx}_label_pattern": "",
+            }
+        )
+    return defaults
+
+
 def _seed_compare_styles() -> None:
     """Seed the per-scanpath comparison styling keys (so the collected dicts have
     values even when the relevant layer popover isn't open this run).
@@ -3026,18 +3148,9 @@ def _seed_compare_styles() -> None:
     Seeding is all that is needed: the widgets themselves carry
     ``persist_state="session"``, which keeps the value alive through the runs
     where the popover isn't open (ENG-36)."""
-    for idx, _ in _COMPARE_SCANPATHS:
-        _pin(f"cmp{idx}_fix_color", compare_palette_color(idx))
-        _pin(f"cmp{idx}_saccade_color", compare_palette_color(idx))
-        _pin(f"cmp{idx}_saccade_style", "Solid")
-        _pin(f"cmp{idx}_saccade_width", DEFAULT_SACCADE_WIDTH)
-        _pin(f"cmp{idx}_marker_size_range", DEFAULT_MARKER_SIZE_RANGE)
-        # VIZ-6: per-scanpath marker alpha (replaces the per-scanpath hollow
-        # checkbox). Default 0.7 matches the single-trial default so overlapping
-        # fixations show through. `cmp{idx}_hollow` kept seeded for saved-config /
-        # deep-link backward compatibility (no widget renders it anymore).
-        _pin(f"cmp{idx}_opacity", COMPARE_FIXATION_OPACITY)
-        _pin(f"cmp{idx}_hollow", False)
+    for key, default in compare_style_defaults().items():
+        if not key.endswith("_label_pattern"):
+            _pin(key, default)
 
 
 def _render_compare_fix_styles() -> None:
@@ -3455,7 +3568,9 @@ def _collect_viz_settings(
     color_by = ss.get("global_color_by")
 
     # Fixation colour range only applies when fixations are shown AND coloured by
-    # a numeric column with a valid spread — mirror the widget's gate.
+    # a numeric column with a valid spread — mirror the widget's gate. A range
+    # the user never set is ABSENT, not seeded (VIZ-46), so `None` reaches the
+    # builders and each trial is scaled to its own values — the API's own rule.
     fixation_color_range = None
     if (
         show_fix
@@ -3769,9 +3884,9 @@ def _rail_section(host, label: str, *, slug: str, **toggle):
 
     Passing ``toggle`` kwargs (``key=``, ``disabled=``) draws the switch and
     returns its value. Omitting them leaves the section's **name** on its own,
-    for the sections that have no single thing to switch: 📄 Stimulus
-    and 🔥 Overlays hold several layers, 📐 Figure & canvas holds none, and 🧹
-    Filter is not a layer at all. ``note=`` is a line written into the top of
+    for the sections that have no layer to switch: 📐 Figure & canvas holds
+    none, and 🧹 Filter is not a layer at all. (📄 Stimulus has a master switch
+    over its three layers since UX-128.) ``note=`` is a line written into the top of
     the popover — used for the ⚠️ that says why a switch is greyed.
 
     Returns ``(value, body)`` — ``value`` is ``None`` for a name-only section.
@@ -4277,6 +4392,11 @@ def render_plot_controls(
             options=color_fields,
             key="global_color_by",
             persist_state="session",
+            # VIZ-46: a chosen colour range is in the units of the column it was
+            # chosen for, so picking another column puts it back to auto rather
+            # than clamping ms into, say, surprisal's (often one-value) span.
+            on_change=forget_color_range,
+            args=("global_fixation_color_range",),
             disabled=metric_disabled,
             help=_gated_help(
                 f"The metric mapped to fixation marker hue. **{UNIFORM_COLOR_FIELD}** "
@@ -4442,23 +4562,20 @@ def render_plot_controls(
             # Integer bounds + step so the range reads as whole numbers
             # (durations, surprisal, … all read cleaner as ints); values
             # stay floats so a restored config on different data clamps in.
+            # The bounds span the loaded pool; the *default* is auto — each
+            # trial on its own scale, like the API (VIZ-46).
             cmin = float(math.floor(raw_cmin))
             cmax = float(math.ceil(raw_cmax))
             cmax_eff = cmax if cmax > cmin else cmin + 1.0
-            _clamp_range("global_fixation_color_range", cmin, cmax_eff)
-            st.session_state.setdefault("global_fixation_color_range", (cmin, cmax_eff))
-            _range_slider(
-                st,
+            _render_color_range(
                 "Fixation color range",
-                label_left=True,
-                key="global_fixation_color_range",
-                persist_state="session",
-                min_value=cmin,
-                max_value=cmax_eff,
-                step=1.0,
-                slider_format="%d",
+                "global_fixation_color_range",
+                cmin,
+                cmax_eff,
                 disabled=metric_disabled,
-                help=_gated_help(None, metric_reason),
+                reason=metric_reason,
+                help="Values of the colour-by column mapped to the two ends of "
+                "the colorscale.",
             )
         show_order = _labeled(
             st,
@@ -4958,26 +5075,18 @@ def render_plot_controls(
             hmin = float(math.floor(heat_data.min()))
             hmax = float(math.ceil(heat_data.max()))
             hmax_eff = hmax if hmax > hmin else hmin + 1.0
-            _clamp_range("global_heatmap_color_range", hmin, hmax_eff)
-            st.session_state.setdefault("global_heatmap_color_range", (hmin, hmax_eff))
-            _range_slider(
-                st,
+            # VIZ-46: auto (per trial, like the API) until a range is chosen.
+            _render_color_range(
                 "Color range",
-                label_left=True,
-                key="global_heatmap_color_range",
-                persist_state="session",
-                min_value=hmin,
-                max_value=hmax_eff,
-                step=1.0,
-                slider_format="%d",
+                "global_heatmap_color_range",
+                hmin,
+                hmax_eff,
                 disabled=heat_disabled,
-                help=_gated_help(
-                    "Min/max heatmap value mapped to the two ends of the "
-                    "colorscale (the metric above — fixation duration or count; "
-                    "for Interpolated, the smoothed density of those values). "
-                    "Lower the max for more contrast; raise it to compress.",
-                    heat_reason,
-                ),
+                reason=heat_reason,
+                help="Min/max heatmap value mapped to the two ends of the "
+                "colorscale (the metric above — fixation duration or count; "
+                "for Interpolated, the smoothed density of those values). "
+                "Lower the max for more contrast; raise it to compress.",
             )
 
     # --- Bounding boxes / Stimulus image / Raw gaze -----------------------
@@ -5026,6 +5135,7 @@ def render_plot_controls(
                 "is stretched to fill the monitor; use the **Align to text** controls "
                 "below to position/scale it. Not carried by Share links (upload it on "
                 "the other end).",
+                max_upload_size=upload_limit_mb(),
             )
             _numeric_slider(
                 st,

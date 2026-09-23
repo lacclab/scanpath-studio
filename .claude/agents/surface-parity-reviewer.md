@@ -47,8 +47,10 @@ gating (`controls._mode_gate`) covers builders that ignore the setting.
 - New top-level traces in `make_scanpath_figure` with a non-fixation name are
   added to `plots._trace_layer` (VIZ-5 separable layers).
 - No `st.select_slider` that can receive a single option (browser throws).
-- Anything testing/drawing/measuring against word boxes goes through
-  `measures.word_box_bounds`, never raw `x/width` arithmetic.
+- Word-box geometry goes through the `measures` accessors, never ad-hoc
+  `x/width` arithmetic: `word_box_bounds` for the edges (the experiment's own
+  boxes, BUG-83), `word_box_contains` for "is this point in the box",
+  `word_char_advance` / `word_glyph_span` for positions inside a word.
 
 ## Report
 

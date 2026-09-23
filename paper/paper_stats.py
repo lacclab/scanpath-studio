@@ -18,21 +18,17 @@ scanpath-studio:
    geometric fixation->word assignment is exercised end to end) vs. the
    EyeLink Data Viewer interest-area values shipped with the corpus.
 
-   The validation runs under BOTH word-boundary conventions, because the two
-   pipelines do not share one. Interest areas are defined by the *experiment*,
-   not by the tracker, and this corpus defines them so that the rectangles tile
-   the line: each box is one character cell wider than its word and starts at
-   the word's first glyph, so it carries the following inter-word space as
-   trailing padding and a fixation in the blank space *before* a word is
-   credited to the *preceding* word. (Verified against the corpus's own
+   Both pipelines read the same rectangles. Interest areas are defined by the
+   *experiment*, not by the tracker, and this corpus defines them so that the
+   rectangles tile the line: each box is one character cell wider than its
+   word and starts at the word's first glyph, so it carries the following
+   inter-word space as trailing padding. (Verified against the corpus's own
    stimulus images: per line, the ink starts within 3 px of the first box's
-   left edge and stops ~1 cell short of the last box's right edge.) A word
-   boundary should instead sit in the middle of that space, which is what
-   Scanpath Studio draws (BUG-11, `measures.word_box_bounds`). Shifting the
-   word boxes right by half a space before handing them to the tool cancels
-   that correction exactly, so the tool re-reads the corpus's own rectangles
-   and the comparison isolates the measure definitions from the boundary
-   choice.
+   left edge and stops ~1 cell short of the last box's right edge.) Scanpath
+   Studio uses those boxes exactly as given (BUG-83, `measures.word_box_bounds`)
+   — it used to pull every boundary back half a space (BUG-11), which is why an
+   earlier version of this script ran the validation twice — so the comparison
+   isolates the measure definitions from any boundary choice.
 
 Run from the app repo so the package + its environment resolve:
 
@@ -195,30 +191,10 @@ def main() -> None:
             print(f"{feat:20s} vs {meas:28s} rho={rho:+.3f}  p={p:.2g}  n={len(sub)}")
 
     print("\n== Measure validation: recomputed-from-raw vs EyeLink IA ==")
-    # The two pipelines draw the word boundary in different places (see the
-    # module docstring). Shifting x right by half an inter-word space cancels
-    # the tool's mid-space correction, so it reads EyeLink's own rectangles.
+    # Both read the corpus' own IA rectangles (see the module docstring).
     space = _measures.word_box_space_px(words)
     print(f"inter-word padding baked into the IA boxes: {space:.1f} px")
-    eyelink_boxes = words.copy()
-    eyelink_boxes["x"] = (
-        pd.to_numeric(eyelink_boxes["x"], errors="coerce") + space / 2.0
-    )
-
-    validate(
-        eyelink_boxes,
-        fixations,
-        eyelink,
-        raw,
-        "boundaries on EyeLink's own IA rectangles (isolates the measure definitions)",
-    )
-    validate(
-        words,
-        fixations,
-        eyelink,
-        raw,
-        "boundaries mid-space, the tool's default convention (BUG-11)",
-    )
+    validate(words, fixations, eyelink, raw, "the experiment's own IA rectangles")
 
 
 if __name__ == "__main__":

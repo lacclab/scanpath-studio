@@ -32,6 +32,20 @@ def _experimental_features_on():
         yield
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _local_filesystem_on():
+    """Run the suite as a local install sees it: the path box, picker and ⬇ on.
+
+    ENG-66 made the default follow the server's bind address, and an AppTest's
+    ``server.address`` is unset — every interface, which reads as a shared
+    deployment — so without this every Data-page test would see the hosted
+    build. The gate's own tests (``tests/test_deployment_gate.py``) unset it.
+    """
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("SCANPATH_LOCAL_FS", "1")
+        yield
+
+
 @pytest.fixture
 def experimental_off(monkeypatch):
     """Force PRE-21's gated features **hidden**, as a default build sees them."""
@@ -124,22 +138,6 @@ def sample_words_df():
 
 
 @pytest.fixture
-def sample_fixations_df():
-    """Create a sample fixations dataframe for testing."""
-    return pd.DataFrame(
-        {
-            "participant_id": ["p1", "p1", "p1", "p2", "p2"],
-            "trial_id": ["t1", "t1", "t1", "t1", "t1"],
-            "CURRENT_FIX_X": [125, 225, 325, 125, 225],
-            "CURRENT_FIX_Y": [75, 75, 75, 75, 75],
-            "CURRENT_FIX_DURATION": [200, 250, 180, 220, 190],
-            "CURRENT_FIX_START": [0, 200, 450, 0, 220],
-            "CURRENT_FIX_INTEREST_AREA_ID": [1, 2, 3, 1, 2],
-        }
-    )
-
-
-@pytest.fixture
 def sample_raw_gaze_df():
     """Create a sample raw gaze dataframe for testing."""
     return pd.DataFrame(
@@ -211,12 +209,6 @@ SUBTAB_EXPORT = tabs.SUBTAB_EXPORT
 NAV_KEY = "main_nav"
 NAV_MIRROR_KEY = "_nav_mirrored"
 VIEW_DATA = _VIEW_DATA
-
-
-def open_subtab(at, label: str):
-    """Select a per-trial subtab and rerun, so its body renders (PERF-3)."""
-    at.session_state[SUBTAB_KEY] = label
-    return at.run()
 
 
 def pin_view(at, view: str) -> None:

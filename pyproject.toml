@@ -35,15 +35,15 @@ classifiers = [
 ]
 dependencies = [
     "streamlit>=1.64.0",
-    "pandas>=2.3.3",
-    "plotly>=6.5.2",
-    "numpy>=2.4.1",
+    "pandas>=3.0",
+    "plotly>=7.1",
+    "numpy>=2.4",
     # Effect-size + significance tests for the group-comparison analysis views
     # (AN-21: Welch t-test, Mann–Whitney U). BSD-3, MIT-compatible — see the
     # PRE-0 ADR, which also earmarks scipy for the PRE-3 drift-correction port.
-    "scipy>=1.13",
-    "pyarrow>=23.0.0",
-    "kaleido>=1.2.0",
+    "scipy>=1.17",
+    "pyarrow>=25.0",
+    "kaleido>=1.4",
     # Optional Streamlit runtime dep: enables fast event-based file-watching
     # (hot reload) for `streamlit run`. Not imported by app code — Streamlit
     # auto-detects it and falls back to polling (+ an "install Watchdog" log) if
@@ -53,13 +53,15 @@ dependencies = [
     "streamlit-sortables>=0.3.1",
     # Rasterized animation export (GIF/MP4): Pillow encodes GIF; imageio's ffmpeg
     # extra bundles an ffmpeg binary for MP4 (no system package needed).
-    "pillow>=10.0",
-    "imageio[ffmpeg]>=2.34",
+    "pillow>=12.3",
+    "imageio[ffmpeg]>=2.37",
     # pandas' .xlsx engine. Not optional in practice: the upload path reads
     # spreadsheets (`data._read_one`) and MultiplEYE's comprehension-questions
     # workbook is a shipped enrichment, so without it an upload raises and the
     # questions column silently never appears (#BUG-41).
     "openpyxl>=3.1.5",
+    # The legacy Excel 97–2003 (.xls) engine, for the same readers (#DATA-53).
+    "xlrd>=2.0.2",
 ]
 
 [project.optional-dependencies]
@@ -76,7 +78,7 @@ test = [
 # unpinned ruff means a local run and CI can disagree — a new release lands new
 # rules and reds a branch that changed nothing. Bump both together.
 lint = [
-    "ruff==0.16.3",
+    "ruff==0.16.8",
 ]
 # Build the documentation site (MkDocs Material + API autodoc from docstrings).
 docs = [
@@ -120,24 +122,20 @@ include = ["scanpath_studio", "scanpath_studio.*"]
     "sample_data/images/*.csv",
 ]
 
-[tool.ruff]
-# Vendored third-party visualisations; not ours to restyle.
-extend-exclude = ["other_vis"]
-
 [tool.ruff.lint]
 # WHY THIS SECTION EXISTS. The repo had no ruff config at all, so `ruff check`
 # ran on whatever that release happened to enable by default. Ruff 0.16 expanded
-# that default from a handful of rules to 413, and CI — which installs ruff
-# unpinned — went from green to 1,678 errors overnight without a line of our
+# that default from a handful of rules to 413, and CI — which then installed
+# ruff unpinned — went from green to 1,678 errors overnight without a line of our
 # code changing. Those rules are adopted rather than reverted; what follows is
 # the short list we decline, each with its reason.
 #
 # Deliberately no `select`: ruff's default set is what we run, and naming whole
 # families instead would enable far more than the default (selecting `S` alone
 # turns on S101 and flags all 4,734 asserts in the test suite). The residual
-# risk is that a future ruff moves the default again — the cheap guard against
-# that is pinning ruff's version in `.github/workflows/ci.yml`, which currently
-# installs it unpinned.
+# risk is that a future ruff moves the default again — the guard against that
+# is the pinned version (`ruff==0.16.8` in `.github/workflows/ci.yml` and in the
+# `lint` extra above), so a new default arrives only with a deliberate bump.
 #
 # These three are named explicitly because the codebase carries `# noqa`
 # directives for them and 0.16 does NOT enable them by default. Leaving them to

@@ -40,6 +40,7 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+from streamlit import runtime
 from streamlit.errors import StreamlitAPIException
 
 # Allow running via `streamlit run scanpath_studio/app.py` by adding the
@@ -97,11 +98,13 @@ from scanpath_studio.constants import (
     TRIAL_IDENTITY_CHECK_KEY,
     TRIAL_IDENTITY_FULL_KEY,
     UPLOAD_CHOICE,
+    UPLOAD_FILE_TYPES,
     WIZARD_LEAVE_KEY,
     WIZARD_STAY_KEY,
     WORD_LABEL_COLOR,
     language_display,
     preprocessing_enabled,
+    upload_limit_mb,
 )
 from scanpath_studio.controls import (
     FIX_FIELD_SPECS,
@@ -206,6 +209,7 @@ from scanpath_studio.persistence import (
     restored_from_cache,
     restored_summary,
     save_local_state,
+    server_bound_to_loopback,
     set_persistence_paused,
     skip_next_local_save,
 )
@@ -244,6 +248,8 @@ from scanpath_studio.url_state import (
     _go_data,
     _render_share_body,
     corpus_choice_for_slug,
+    link_setup_keys_for,
+    scope_link_setup,
 )
 
 # NOTE: ``scanpath_studio.wizard`` is imported lazily inside the two functions
@@ -255,13 +261,10 @@ from scanpath_studio.url_state import (
 # Deferring it lets app finish loading before wizard is ever imported.
 from scanpath_studio.utils import build_combo_options, extract_trial
 
-# Re-exported under a private alias so tests can import them from `app`; keep the
-# F401 silence (they're not used by app.py itself).
+# Re-exported under a private alias so tests can import it from `app`; keep the
+# F401 silence (it's not used by app.py itself).
 from scanpath_studio.utils import (  # noqa: F401
     build_comparison_options as _build_comparison_options,
-)
-from scanpath_studio.utils import (  # noqa: F401
-    friendly_trial_label as _friendly_trial_label,
 )
 
 
@@ -1070,24 +1073,6 @@ def maybe_show_about() -> None:
         _about_dialog()
 
 
-def render_about_button(host=None) -> None:
-    """Render the **ℹ️ About** button in the top menu's ❓ Help popover.
-
-    A dialog rather than the popover it used to be: a popover nests no popover,
-    and About is long (authors, links, BibTeX, the AI-assistance note) — inline
-    in Help it would bury the tour and tutorial buttons above it. It is also
-    pure display, so unlike ⚙️ Configure it loses nothing by only rendering while
-    open (see :mod:`scanpath_studio.menu`).
-    """
-    (host if host is not None else st).button(
-        "ℹ️ About",
-        key="about_open",
-        width="stretch",
-        help="Version, authors, licence, and how to cite Scanpath Studio.",
-        on_click=_arm_about,
-    )
-
-
 @st.dialog("ℹ️ About Scanpath Studio", width="large")
 def _about_dialog() -> None:
     """The About modal: version, authors, links, citation, AI-assistance note."""
@@ -1295,23 +1280,35 @@ def _user_data_home() -> Path:
 # an arbitrary-directory write, and the app has no authentication on any
 # deployment.
 #
-# Default is LOCAL, because that's how this is overwhelmingly run and flipping it
-# would break every existing install on upgrade. A shared deployment sets
-# `SCANPATH_LOCAL_FS=0`, which hides the path box, the folder picker and the
-# download button; `SCANPATH_DATA_ROOT` then supplies the corpus location
+# ENG-66: unset, it follows the server's bind address — on for a server that
+# listens on loopback only (`scanpath-studio run`, the desktop app), off for one
+# other machines can reach (a bare `streamlit run`, a hosted demo), the same rule
+# as the recovery cache. `SCANPATH_LOCAL_FS=1` turns it on for a trusted lab
+# server and `=0` forces it off. Off hides the path box, the folder picker and
+# the download button; `SCANPATH_DATA_ROOT` then supplies the corpus location
 # server-side. Setting `SCANPATH_DATA_ROOT` alone is also useful locally: it
 # confines every entered path to that subtree.
 LOCAL_FS_ENV = "SCANPATH_LOCAL_FS"
+_LOCAL_FS_ON = frozenset({"1", "true", "yes", "on"})
+_LOCAL_FS_OFF = frozenset({"0", "false", "no", "off"})
 DATA_ROOT_ENV = "SCANPATH_DATA_ROOT"
 
 
 def local_filesystem_enabled() -> bool:
     """Whether the user may point the app at an arbitrary local directory.
 
-    True unless ``SCANPATH_LOCAL_FS`` is ``0`` / ``false`` / ``no``. Read at call
-    time so tests can toggle it."""
+    ``SCANPATH_LOCAL_FS`` set to ``1``/``true``/``yes``/``on`` or
+    ``0``/``false``/``no``/``off`` decides. Otherwise, inside a Streamlit server,
+    it is on only when that server listens on loopback alone
+    (:func:`persistence.server_bound_to_loopback`, ENG-66) — so a hosted
+    deployment is safe without remembering to set anything — and outside one
+    (the API, the CLI) it is on. Read at call time so tests can toggle it."""
     raw = os.environ.get(LOCAL_FS_ENV, "").strip().lower()
-    return raw not in ("0", "false", "no")
+    if raw in _LOCAL_FS_ON:
+        return True
+    if raw in _LOCAL_FS_OFF:
+        return False
+    return server_bound_to_loopback() if runtime.exists() else True
 
 
 def data_root() -> Path | None:
@@ -1558,7 +1555,8 @@ def _dataset_access_status(
     if not local_filesystem_enabled():
         cfg.caption(
             "Downloading is disabled on this deployment — ask whoever runs it to "
-            "place the corpus in the configured data location."
+            "place the corpus in the configured data location, or, on a trusted "
+            "network, to start it with `SCANPATH_LOCAL_FS=1`."
         )
         _note_dataset_unavailable(
             label=label,
@@ -2579,6 +2577,20 @@ def _eyegenbench_root_from_state() -> str:
     )
 
 
+#: The recording-setup values a fresh session pins before anything declares
+#: otherwise (`seed_canvas_state`'s `defaults`). The canvas is absent because it
+#: is the source's own (`resolve_source_monitor`), and the DPI because it is
+#: derived from the canvas and the physical width. EXP-19's share link reads the
+#: same table to leave a setting off while it still equals it
+#: (`url_state._link_defaults`).
+SETUP_DEFAULTS = {
+    "global_monitor_width_mm": 597.0,
+    "global_viewing_distance_mm": 800.0,
+    "global_base_font_size": 16,
+    "global_stimulus_font_pt": 12.0,
+    "global_use_stimulus_font_pt": False,
+}
+
 #: BUG-50 — the font controls a declared stimulus typeface overwrites, and where
 #: `seed_canvas_state` parks their pre-snap values so leaving that corpus can put
 #: them back. All three are wire format (share link + saved config), which is why
@@ -2832,9 +2844,10 @@ def _normalize_pair(
     the trial id is built from several columns) so the trial picker can offer one
     cascading selector per component. Shared by the upload and non-upload paths.
 
-    The heavy normalization is delegated to the cached ``_normalize_pair_cached``
-    so it doesn't re-run on every rerun (e.g. selecting a different trial); only
-    the lightweight session-state bookkeeping below runs each time.
+    The heavy normalization is ``_normalize_pair_uncached``, cached through
+    ``frame_cache`` on a fingerprint key (PERF-6) so it doesn't re-run on every
+    rerun (e.g. selecting a different trial); only the lightweight session-state
+    bookkeeping below runs each time.
     """
     trial_mapping = (word_schema or fix_schema)["trial"]
     trial_cols = trial_mapping_columns(trial_mapping)
@@ -3045,6 +3058,7 @@ def prepare_data(
     mapping_host=None,
     declared_word_schema: dict | None = None,
     declared_fix_schema: dict | None = None,
+    mapping_dataset: object = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, list]:
     """Infer schemas and normalize incoming dataframes to canonical column names.
 
@@ -3064,6 +3078,11 @@ def prepare_data(
     frame and its mapping UI is skipped. Cross-frame fixups (stimulus-level
     words broadcast across participants, AOI-only fixations placed at word-box
     centers) run at the end via ``harmonize_frames``.
+
+    ``mapping_dataset`` identifies the source these tables came from, so a
+    column pick made for another dataset — the add-dataset wizard shares these
+    ``col_map_*`` keys — is dropped rather than inherited because the headers
+    happen to match (BUG-32; ``controls.forget_mapping_for_other_table``).
     """
     has_words = not words_df.empty
     has_fixations = not fixations_df.empty
@@ -3091,6 +3110,7 @@ def prepare_data(
                 # stretching every mapping across a full row.
                 columns_per_row=4,
                 stack_labels=True,
+                dataset=mapping_dataset,
             )
         else:
             word_schema = word_proposed
@@ -3114,6 +3134,7 @@ def prepare_data(
                 use_expander=False,
                 columns_per_row=4,
                 stack_labels=True,
+                dataset=mapping_dataset,
             )
         else:
             fix_schema = fix_proposed
@@ -3289,7 +3310,7 @@ def _render_offpage_setup_notice(data_view: bool) -> None:
 # tab-separated report many exporters write (DATA-41); a text file's delimiter
 # is read off its header line, and an ``.xls`` that is really text (EyeLink
 # Data Viewer's "Excel" export) is read as text (BUG-55).
-_UPLOAD_TYPES = ["csv", "tsv", "txt", "parquet", "feather", "zip", "xlsx", "xls"]
+_UPLOAD_TYPES = list(UPLOAD_FILE_TYPES)
 
 
 def _uploaded_file_key(uploaded) -> tuple:
@@ -3412,8 +3433,22 @@ def _upload_header(uploaded, *, multi: bool) -> list:
     sources = list(uploaded) if multi else [uploaded]
     header: list = []
     for source in sources:
-        header.extend(c for c in read_table_columns(source) if c not in header)
+        columns = _upload_columns_cached(source, _uploaded_file_key(source))
+        header.extend(c for c in columns if c not in header)
     return header
+
+
+@st.cache_data(show_spinner=False, max_entries=64)
+def _upload_columns_cached(_uploaded, file_key) -> list:
+    """One uploaded file's column names, read once per file (PERF-6's header pass).
+
+    Keyed like the planned read. A delimited file's header is cheap, but a
+    workbook or a zipped Parquet / Feather / Excel member has no header-only
+    read — :func:`data.read_table_columns` parses it whole — so an uncached pass
+    re-parsed the file on every rerun of the wizard: 1.4 s a click on a full
+    ``.xls`` sheet, and a second decompressed copy of a large zip held at once.
+    """
+    return read_table_columns(_uploaded)
 
 
 def _uploaded_header(state_prefix: str) -> list:
@@ -3461,6 +3496,7 @@ def _read_uploaded_frame(
         key=f"{state_prefix}_upload",
         help=upload_help,
         label_visibility=label_visibility,
+        max_upload_size=upload_limit_mb(),
     )
     if not uploaded:
         return pd.DataFrame()
@@ -3493,8 +3529,8 @@ def _read_uploaded_frame(
     # the wizard's column pickers are built from, so it happens first and is
     # stashed for `_uploaded_header`. `chosen` is sorted into a tuple because it
     # rides in the cache key.
-    # BUG-55: a file the readers refuse — a legacy .xls workbook, an empty
-    # file, a corrupt archive — is the user's to fix, so it is said in the box
+    # BUG-55: a file the readers refuse — an empty file, a corrupt archive or
+    # workbook — is the user's to fix, so it is said in the box
     # that took it, the way the metadata uploaders already do, instead of a
     # traceback over the whole page.
     try:
@@ -3623,6 +3659,7 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
             "Raw gaze table (optional)",
             type=["csv", "parquet", "feather", "zip"],
             help="Optional: millisecond-level gaze with participant_id, trial_id, x, y.",
+            max_upload_size=upload_limit_mb(),
         )
         if uploaded_raw_gaze:
             upload_key = (uploaded_raw_gaze.file_id, uploaded_raw_gaze.size)
@@ -3645,6 +3682,11 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
                     field_specs=RAW_GAZE_FIELD_SPECS,
                     proposed=proposed,
                     problems=initial_problems,
+                    # BUG-32: the same source key `main` scopes the tables by.
+                    dataset=(
+                        data_choice,
+                        st.session_state.get("public_dataset_choice"),
+                    ),
                 )
             problems = validate_raw_gaze_schema(raw_gaze_schema)
             if problems:
@@ -5412,12 +5454,26 @@ def seed_canvas_state(
     # entry — the extra `eyegenbench_dataset` component R30 needed (when one
     # source fronted many corpora and this key never changed between them) is
     # gone with the source that made it necessary.
+    #
+    # EXP-19 — except where a share link has just said otherwise. A link seeds
+    # these keys before this first run gets here, and carries the canvas / font
+    # only when the sender's differs from the corpus', so snapping over them
+    # would undo exactly the part of the link that was worth sending. The link
+    # names what it seeded *and for which source*; the first seeding consumes
+    # that, and honours it only for the linked source — a link that fell back to
+    # another corpus, or a first run that never got this far, must not leave the
+    # next source opened without its own monitor.
     source_key = (data_choice, st.session_state.get("public_dataset_choice"))
+    from_link = link_setup_keys_for(source_key)
     if monitor_is_authoritative and st.session_state.get("_canvas_seeded_for") != (
         source_key
     ):
-        st.session_state["global_canvas_width"] = canvas_width
-        st.session_state["global_canvas_height"] = canvas_height
+        for key, value in (
+            ("global_canvas_width", canvas_width),
+            ("global_canvas_height", canvas_height),
+        ):
+            if key not in from_link:
+                st.session_state[key] = value
         st.session_state["_canvas_seeded_for"] = source_key
     # The canvas pair itself is pinned with the rest of the defaults below.
 
@@ -5451,19 +5507,30 @@ def seed_canvas_state(
     # come back, and your own size is still there. Stashed only on the **first**
     # snap of a run of them, so MultiplEYE → another font-declaring corpus →
     # Demo restores the pre-MultiplEYE state and not MultiplEYE's.
-    font_px, font_css = _dataset_font(words_filtered)
     if st.session_state.get("_font_seeded_for") != source_key:
+        # Read only when the snap can fire: on a font-declaring corpus it is a
+        # numeric parse over every word row, and every other run discards it.
+        font_px, font_css = _dataset_font(words_filtered)
         if font_px is not None:
+            # A value a link seeded is this source's own, not something to put
+            # back on the way out — so it is stashed as absent, and leaving the
+            # corpus restores the factory value rather than the corpus' font.
             st.session_state.setdefault(
                 _FONT_SNAP_RESTORE_KEY,
-                {key: st.session_state.get(key) for key in _FONT_SNAP_KEYS},
+                {
+                    key: None if key in from_link else st.session_state.get(key)
+                    for key in _FONT_SNAP_KEYS
+                },
             )
-            st.session_state["global_base_font_size"] = int(
-                min(max(round(font_px), 6), 72)
-            )
+            snapped = {
+                "global_base_font_size": int(min(max(round(font_px), 6), 72)),
+                "global_scale_text_to_boxes": False,
+            }
             if font_css:
-                st.session_state["global_font_family"] = font_css
-            st.session_state["global_scale_text_to_boxes"] = False
+                snapped["global_font_family"] = font_css
+            for key, value in snapped.items():
+                if key not in from_link:
+                    st.session_state[key] = value
         elif (
             stashed := st.session_state.pop(_FONT_SNAP_RESTORE_KEY, None)
         ) is not None:
@@ -5506,13 +5573,9 @@ def seed_canvas_state(
     defaults = {
         "global_canvas_width": canvas_width,
         "global_canvas_height": canvas_height,
-        "global_monitor_width_mm": 597.0,
-        "global_viewing_distance_mm": 800.0,
+        **SETUP_DEFAULTS,
         "global_scale_text_to_boxes": True,
         "global_line_spacing": float(DEFAULT_LINE_SPACING),
-        "global_base_font_size": 16,
-        "global_stimulus_font_pt": 12.0,
-        "global_use_stimulus_font_pt": False,
         "global_font_family": FONT_FAMILY,
         "global_text_color": WORD_LABEL_COLOR,
         "global_bg_choice": bg_options[0],
@@ -5945,6 +6008,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         type=["json"],
         key="author_restore_upload",
         help="Load a JSON file previously saved from this editor.",
+        max_upload_size=upload_limit_mb(),
     )
     if restored is not None:
         identity = (restored.name, restored.size)
@@ -6339,20 +6403,29 @@ def main() -> None:
             icon="⚠️",
             duration="long",
         )
+    linked_choice = None
     if url_source == "onestop" and onestop_data_dir() is not None:
-        st.session_state.setdefault("data_source_choice", ONESTOP_CHOICE)
+        linked_choice = st.session_state.setdefault(
+            "data_source_choice", ONESTOP_CHOICE
+        )
     elif url_source == "multipleye" and multipleye_bundle_dir() is not None:
-        st.session_state.setdefault("data_source_choice", MULTIPLEYE_BUNDLE_CHOICE)
+        linked_choice = st.session_state.setdefault(
+            "data_source_choice", MULTIPLEYE_BUNDLE_CHOICE
+        )
     elif url_source == "demo":
-        st.session_state.setdefault("data_source_choice", DEMO_CHOICE)
+        linked_choice = st.session_state.setdefault("data_source_choice", DEMO_CHOICE)
     elif url_source == "synthetic":
-        st.session_state.setdefault("data_source_choice", SYNTHETIC_CHOICE)
+        linked_choice = st.session_state.setdefault(
+            "data_source_choice", SYNTHETIC_CHOICE
+        )
     elif url_source == "author":
-        st.session_state.setdefault("data_source_choice", AUTHOR_CHOICE)
+        linked_choice = st.session_state.setdefault("data_source_choice", AUTHOR_CHOICE)
     elif url_source == "onestop_public" and public_datasets_enabled():
         # DATA-3: the public OneStop corpus is shareable. Land on it in the flat
         # picker; _apply_url_preset already seeded onestop_variant/regime/parts.
-        st.session_state.setdefault("data_source_choice", ONESTOP_PUBLIC_CHOICE)
+        linked_choice = st.session_state.setdefault(
+            "data_source_choice", ONESTOP_PUBLIC_CHOICE
+        )
     elif url_source == CORPUS_SOURCE_TOKEN:
         # DATA-27 (Task 12): `?source=corpus&corpus=<slug>` names ONE entry of
         # `public_dataset_registry()` — a built-in public corpus or a locally
@@ -6373,7 +6446,9 @@ def main() -> None:
             corpus_choice_for_slug(slug) if public_datasets_enabled() else None
         )
         if corpus_choice:
-            st.session_state.setdefault("data_source_choice", corpus_choice)
+            linked_choice = st.session_state.setdefault(
+                "data_source_choice", corpus_choice
+            )
         elif slug:
             # The common case, not an edge case: the recipient has no prepared
             # bundle, or a different subset of one. Say which corpus was named
@@ -6394,6 +6469,11 @@ def main() -> None:
             )
     elif url_source == "upload":
         st.session_state.setdefault("_show_upload_wizard", True)
+    # EXP-19: the canvas / font a link seeded belong to the source it names.
+    # Scope their protection from the source snap to that source — or drop it
+    # when the link named none this app can open, so the fallback source still
+    # snaps to its own monitor rather than wearing another corpus' canvas.
+    scope_link_setup(linked_choice)
 
     # Chrome first, page heading second: Streamlit's native top nav, then the
     # settings menu bar, then the title.
@@ -6935,6 +7015,10 @@ def main() -> None:
             # panels stay editable — this only changes what they start at.
             declared_word_schema=declared_word_schema,
             declared_fix_schema=declared_fix_schema,
+            # BUG-32: the add-dataset wizard writes these same `col_map_*` keys
+            # and its field widgets persist, so coming back here from it would
+            # otherwise inherit its picks whenever the headers match.
+            mapping_dataset=source_key,
         )
         mapping_editor_rendered = data_choice in (PUBLIC_DATASETS_CHOICE, DEMO_CHOICE)
     if mapping_problems:

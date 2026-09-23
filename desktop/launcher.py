@@ -9,9 +9,10 @@ Environment overrides (used by the smoke test, handy for debugging):
     SCANPATH_DESKTOP_PORT        fixed port instead of a free one
     SCANPATH_DESKTOP_NO_BROWSER  set to 1/true/yes to skip opening the browser
 
-``--selfcheck`` runs a headless sanity pass inside the frozen process (load
-the bundled sample, build a figure, render HTML) and exits — it catches
-missing hidden imports or data files without needing a browser.
+``--selfcheck`` runs a headless sanity pass inside the frozen process (find
+the plotly.min.js the app serves, load the bundled sample, build a figure,
+render HTML) and exits — it catches missing hidden imports or data files
+without needing a browser.
 """
 
 from __future__ import annotations
@@ -85,6 +86,14 @@ def selfcheck() -> int:
     # only surface on the first real page load.
     import scanpath_studio.app  # noqa: F401
     from scanpath_studio import api
+    from scanpath_studio.html_embed import PLOTLYJS_FILENAME, plotlyjs_dir
+
+    # ENG-64: the app serves the frozen plotly package's own plotly.min.js to
+    # every figure — without it the figure draws blank, whatever the network.
+    plotlyjs = plotlyjs_dir() / PLOTLYJS_FILENAME
+    if not plotlyjs.is_file():
+        print(f"selfcheck FAILED: {plotlyjs} is missing from the bundle")
+        return 1
 
     words, fixations = api.load_sample_data()
     combos = api.list_trials(words, fixations)
@@ -99,7 +108,7 @@ def selfcheck() -> int:
         str(first["trial_id"]),
         canvas_size=(2560, 1440),
     )
-    html = fig.to_html(include_plotlyjs="cdn")
+    html = fig.to_html(include_plotlyjs=False)
     if "plotly" not in html.lower():
         print("selfcheck FAILED: figure HTML looks wrong")
         return 1

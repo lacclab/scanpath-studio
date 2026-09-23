@@ -30,7 +30,7 @@ too. Nothing here is inferred from documentation alone.
     `persistence.persistence_enabled` returns False) or with
     `SCANPATH_STUDIO_PERSIST=0`. The store is single-user, unencrypted and
     account-readable; it is disclosed and deletable in-app (💾 **Session** →
-    **🗄️ Recovery cache**) and from `scanpath-studio cache --clear`, and it is
+    **🗄️ Automatic recovery**) and from `scanpath-studio cache --clear`, and it is
     described for researchers in [privacy.md](privacy.md#what-happens-to-a-file-you-upload).
     **ENG-56:** until the pre-beta audit the gate asked whether `st.context.url`
     was a loopback URL — a value Streamlit copies from the browser's own message
@@ -97,20 +97,23 @@ too. Nothing here is inferred from documentation alone.
 
 ## What was checked
 
+Verdicts as found at 0.25.0, with each finding's current status beside it
+(updated 2026-09-23; the `Status:` line on each finding is the full record).
+
 | Dimension | Verdict |
 | --- | --- |
 | On-disk residue from loaded data | Clean, with one narrow exception (S8), **and the recovery cache added after this audit** — see the note below |
 | `@st.cache_data` persistence to disk | **Clean** — no `persist="disk"` anywhere |
-| Share links / saved configs carrying identifiers | Participant + trial ids ride in the URL, and the saved config also carries your notes (S3 — the link's ids are now opt-out-able; the saved config is not) |
+| Share links / saved configs carrying identifiers | Participant + trial ids ride in the URL, and the saved config also carries your notes (S3 — disclosed, not removed: an identity opt-out was added to the Share panel and taken out again on 2026-08-20, so a link always names both; the JSON backup carries a disclosure caption and has no opt-out) |
 | Share links / saved configs carrying local file paths | **Clean** — no path in either |
 | Exported figures carrying local file paths | **Clean** — images are inlined as `data:` URIs |
-| Exported *tables* carrying local file paths | **Leaks an absolute path** (S4) |
+| Exported *tables* carrying local file paths | **Leaked an absolute path** (S4) — fixed 2026-07-28: `image_path` is reduced to its basename |
 | Zip-slip / path traversal on ingest | **Clean** — uploads never hit disk; corpus extraction is traversal-safe |
 | Path traversal on export | Data values are sanitized; the user's own pattern is not (S9) |
-| Desktop bundle bind address | **Binds all interfaces** (S1) |
-| Server-side path handling from the browser | Path oracle + arbitrary-directory write (S2) |
+| Desktop bundle bind address | **Bound all interfaces** (S1) — fixed 2026-07-28; every `scanpath-studio` launch binds loopback since 2026-09-23 (ENG-55) |
+| Server-side path handling from the browser | Path oracle + arbitrary-directory write (S2) — fixed 2026-07-28, and gated on the bind address since 2026-09-23 (ENG-66) |
 | Cross-session bleed via the upload cache | **Clean** — keyed on a server-generated UUID |
-| Cross-session bleed / staleness via the analysis caches | Real collision, by construction (S5) |
+| Cross-session bleed / staleness via the analysis caches | Real collision, by construction (S5) — fixed 2026-07-28 |
 | Cross-session sharing via the corpus-directory caches | Shared, but keyed on the path — same key means same files (see *What is clean*) |
 | Code-execution surface (`eval` / `exec` / `pickle` / `subprocess` / `df.query`) | **Clean** — none in the shipped package |
 | Data interpolated into raw HTML | One unescaped site (S7 — now escaped) |
@@ -163,10 +166,11 @@ seconds.
     `streamlit run` is untouched and still binds `0.0.0.0`.
 
 **Status:** **fixed** 2026-07-28 — `desktop/launcher.py` now passes
-`--server.address=127.0.0.1`. [privacy.md](privacy.md) states the same thing in user-facing
-terms ("it does not restrict the bind address, so the same LAN exposure
-applies") and tells readers how to set `server.address` themselves in the
-meantime. When this fix lands, that page needs updating too.
+`--server.address=127.0.0.1`. At the time of the audit [privacy.md](privacy.md)
+said the same thing in user-facing terms and told readers how to set
+`server.address` themselves; it was updated with the fix, and since 2026-09-23
+(ENG-55) it says every `scanpath-studio` launch binds loopback and only a bare
+`streamlit run` does not.
 
 ---
 
@@ -226,10 +230,12 @@ its own docstring says "Enabled by default".)
   `_resolve_data_dir` untouched.
 
 **Status:** **fixed** 2026-07-28 — `app.local_filesystem_enabled()`
-(`SCANPATH_LOCAL_FS`, default *local*, so an existing install is unaffected on
-upgrade) gates the path box, the 📁 picker and the ⬇ Download button; a shared
-deployment sets it to `0` and supplies the corpus location through
-`SCANPATH_DATA_ROOT`. That variable also acts as an allow-root wherever it is
+(`SCANPATH_LOCAL_FS`) gates the path box, the 📁 picker and the ⬇ Download
+button, and a shared deployment supplies the corpus location through
+`SCANPATH_DATA_ROOT`. The default was *local* until 2026-09-23 (ENG-66), which
+left any deployment that forgot the variable open; unset, it now follows the
+server's bind address, like the recovery cache — on for loopback only, off for
+a server other machines can reach — and `1` or `0` overrides it. That variable also acts as an allow-root wherever it is
 set: `app._resolve_data_dir` compares the *resolved* path against it, so `..`
 and symlinks collapse to the root rather than being stat'd or written into.
 Covered by `tests/test_deployment_gate.py`.
@@ -241,6 +247,11 @@ Covered by `tests/test_deployment_gate.py`.
     dismisses it. The function is written for the local case and degrades to
     `None` on a headless host, but it is not gated on being local. The same
     deployment flag proposed above should hide this button.
+
+    **Status:** **fixed** 2026-07-28, with S2 — on a shared deployment
+    `app._dataset_dir_input` draws no 📁 button at all (only the configured
+    location), and `app._pick_directory_dialog` itself returns `None` without
+    opening anything unless `local_filesystem_enabled()`.
 
 ---
 
@@ -271,6 +282,17 @@ all and the panel emits a caveat instead. On the read side, `_URL_PRESETS` is
 built entirely from the same toggle / value / number maps, so no URL parameter
 can point the app at a server-side path (contrast S2, which is a *widget*, not a
 link).
+
+**Amended 2026-09-23.** Two sources have become shareable since, neither by
+path. Every public corpus — the built-ins and each prepared benchmark corpus —
+travels as one generic token, `?source=corpus&corpus=<slug>`, the slug derived
+from the corpus's stable identifier; the bundle *directory* is deliberately
+never on the wire, and a recipient without that corpus keeps their own data
+source. And ✏️ **Author a scanpath** (`source=author`) carries its typed text and
+hand-placed events (`author_text`, `author_events`), which are that source's
+data rather than a pointer to any. `_SHAREABLE_SOURCES` now holds six tokens
+(`author`, `demo`, `onestop`, `multipleye`, `synthetic`, `onestop_public`)
+beside `corpus`.
 
 **The saved plot-config JSON carries more than the link does.**
 `tabs._build_studio_config` writes no filesystem path — its `data_source` is a
@@ -310,7 +332,7 @@ annotation notes.
 participant, trial, and visualization settings. The former identity-mode picker
 and warning were removed to keep sharing predictable; the panel instead notes
 that recipients may need to replace the URL's address or port. The lower-level
-query builder retains its optional identity flags for programmatic callers. The
+query builder retains its optional identity flags for programmatic callers.
 The **JSON backup** (`tabs._render_save_restore_expander`) now
 carries a matching caption naming what the file holds — the selected
 participant/trial *and* the text of every annotation note. **Not addressed:**
@@ -407,7 +429,8 @@ built-in download is a feature, not a leak.
 function that takes an un-hashed frame — 32 call sites across `app.py`,
 `data.py`, `controls.py`, `tabs.py` and `utils.py`. Most consequential first:
 
-- **`app._normalize_pair_cached`**, whose `cache_key` is assembled by
+- **`app._normalize_pair_cached`** (since PERF-6, `app._normalize_pair_uncached`
+  behind `data.frame_cache`, on the same key), whose `cache_key` is assembled by
   `app._normalize_pair` from `frame_fingerprint(words_df)` and
   `frame_fingerprint(fixations_df)` — the whole normalize + harmonize step. A
   collision here serves the *entire normalized corpus* of the other frame, not
@@ -528,6 +551,15 @@ scanpath-studio run` from any other directory, and the desktop bundle, fall back
 to Streamlit's own default of 200 MB (`config.py`, `server.maxUploadSize`,
 `default_val=200`). Every one of those ceilings is far above the 25 MB warn
 threshold, and none of them bounds the *decompressed* size.
+
+*Amended 2026-09-23:* the 200 MB fallback is gone. `cli.launch_app` — which the
+desktop bundle launches through too — passes
+`--server.maxUploadSize` set to `constants.UPLOAD_MAX_SIZE_MB` (5,000 MB) unless the
+caller sets it (`cli._max_upload_cli_flags`), so a pip install and the desktop
+bundle accept 5 GB per file too (only a bare `streamlit run` outside the repo
+still gets 200 MB), and `SCANPATH_MAX_UPLOAD_MB` (ENG-68) lowers it for one
+deployment.
+Still none of them bounds the decompressed size; the fix below does.
 
 A 25 MB zip of highly compressible CSV expands to many gigabytes. On the hosted
 demo (~1 GB container) that is an OOM kill of the process — which takes every
@@ -880,8 +912,13 @@ and `read_hdf` are not reachable. MultiplEYE's stimulus config is read by regex
 types (`app._UPLOAD_TYPES`) exclude macro-enabled workbook formats.
 
 **No telemetry of ours.** There is no analytics call anywhere in the package, and
-the single cookie the app sets (`tour.TOUR_OPTOUT_COOKIE` = `sps_tour_optout`,
-`SameSite=Lax`, `path=/`, one year) holds the literal `"1"` and no identifier.
+the single cookie the app set at the audit (`tour.TOUR_OPTOUT_COOKIE` =
+`sps_tour_optout`, `SameSite=Lax`, `path=/`, one year) holds the literal `"1"` and
+no identifier. *Amended 2026-09-23:* there are three now, all the same shape —
+`sps_tour_optout`, `sps_tutorial_optout` (`TUTORIAL_OPTOUT_COOKIE`, a
+comma-joined list of the tutorial ids you dismissed) and
+`sps_wizard_guide_optout` (`WIZARD_GUIDE_OPTOUT_COOKIE`, `"1"`) — and none holds
+an identifier.
 
 Streamlit's *own* telemetry, `browser.gatherUsageStats`, defaults to `True`
 (`config.py`, `default_val=True`). It is off on every launch path now: the repo's
@@ -892,13 +929,19 @@ scanpath-studio run` from an arbitrary directory, which gets no config file, is
 covered too. A bare `streamlit run streamlit_app.py` outside the repository is
 the one path that still inherits Streamlit's default.
 
-**One third-party request is made on every figure render.** The true-scale
-figure embed (`tabs._render_true_scale_chart`, `fig.to_html(include_plotlyjs="cdn")`)
-loads plotly.js from `cdn.plot.ly` rather than from the installed package. No
-data travels with it, but it is a per-render request to a third party, the
-script carries no integrity pin, and it means the main figure stays blank
-without network access — the desktop app included. [privacy.md](privacy.md)
-discloses it; serving the bundled plotly.js locally is an open decision.
+**The figure makes no third-party request (ENG-64).** The true-scale figure
+embed (`tabs._render_true_scale_chart`) used to be
+`fig.to_html(include_plotlyjs="cdn")`: a request to `cdn.plot.ly` on every
+render, and a blank figure without network access, the desktop app included. It
+now loads the installed plotly package's own `plotly.min.js` from the app's own
+server. `html_embed.plotlyjs_src` registers that package folder as a Streamlit
+custom-component directory, served at `component/<name>/plotly.min.js`; the
+route rejects paths that leave the folder (`build_safe_abspath`), and the folder
+holds only plotly's public package data. The page keeps a Blob URL copy of the
+script for later redraws (`html_embed.plotlyjs_script`), because the component
+route sends no max-age. Figures *downloaded* as HTML, from the Export subtab or in
+a bulk-export bundle, still reference `cdn.plot.ly`, since a saved file has no
+server to load from. [privacy.md](privacy.md) says so.
 
 **Streamlit's own request-level protections are on.** `server.enableXsrfProtection`
 and `server.enableCORS` both default to `True` (`config.py`) and nothing in the
@@ -913,7 +956,10 @@ for log messages) or interpolate only tool-controlled constants (`app.py` emits
 the stylesheet and a spacer `<div>`; `tour.py` emits `<style>` blocks built from
 module constants and a theme-derived colour pair). The share widget's client-side
 script embeds its payload via `json.dumps` of an already `urlencode`d string, so
-no `<` can reach it.
+no `<` can reach it. *Amended 2026-09-23:* the package now has 43 such sites
+(`tabs.py` 14, `wizard.py` 9, `controls.py` 7, `app.py` 4, `tour.py` 4,
+`fields.py` 2, `wizard_shell.py` 2, `debug_log.py` 1); the thirty added since
+0.25.0 were not part of this read.
 
 ## Deployment guidance that follows from this
 
@@ -922,9 +968,24 @@ no `<` can reach it.
   loopback (S1), but a bare `streamlit run` still binds `0.0.0.0` — pass
   `--server.address=127.0.0.1` there, and for remote access keep loopback and
   use an SSH tunnel rather than `--server.address 0.0.0.0`.
-- **A shared/hosted deployment should set `SCANPATH_LOCAL_FS=0`** and supply the
-  corpus location through `SCANPATH_DATA_ROOT` (S2), which removes the directory
-  input, the folder picker and the download-to-arbitrary-path button.
+- **A shared/hosted deployment has local file access off by default** (ENG-66):
+  unless `SCANPATH_LOCAL_FS` says otherwise, the directory input, the folder
+  picker and the download-to-arbitrary-path button appear only when the server
+  listens on loopback alone. Supply the corpus location through
+  `SCANPATH_DATA_ROOT` (S2). Setting `SCANPATH_LOCAL_FS=0` as well costs nothing
+  and survives a config change; `SCANPATH_LOCAL_FS=1` turns access back on for a
+  lab server on a network you trust.
+- **A memory-capped deployment should cap uploads for itself** (ENG-68):
+  `SCANPATH_MAX_UPLOAD_MB=200` lowers every upload box's per-file limit on that
+  deployment alone, below the 5,000 MB the app otherwise allows. On Streamlit
+  Community Cloud, put it in the app's secrets as a root-level key; Streamlit
+  loads those into the environment when the server starts. **Know what it
+  enforces:** the per-box limit is checked by the browser, and Streamlit's
+  upload route enforces only `server.maxUploadSize`, which is read before the
+  secrets and cannot change while the server runs. `scanpath-studio run` passes
+  the cap to the server too, so there it is a hard limit; on Community Cloud it
+  stops anyone using the page, but a scripted client posting straight to the
+  upload endpoint can still send up to `.streamlit/config.toml`'s 5,000 MB.
 - **A share link is identifying.** It names a participant and a trial alongside
   the visualization settings (S3). A saved plot config likewise carries the
   selection *and* every annotation note you have typed, for every trial — read it
@@ -938,19 +999,25 @@ no `<` can reach it.
   and all), but Streamlit's own toolbar still offers one. The option is
   app-wide, so it belongs in a deployment's config, not in this repo: set it
   where you set `SCANPATH_LOCAL_FS=0`.
-- **Re-upload with a changed row count, or clear the cache, after correcting a
-  corpus.** A same-shape edit in the middle of a table does not bust the cache
-  (S5).
+- **Clear the cache after correcting a very large corpus.** Since the S5 fix
+  any edit to a table of up to 200,000 rows changes its cache key; above that
+  the key is a sample (both ends plus a stride), so a same-shape edit in the
+  middle can still be served from the cache.
 - **Restart the server after working with a sensitive corpus.** No
-  `@st.cache_data` entry in the package sets `ttl` or `max_entries`, so parsed
+  `@st.cache_data` entry sets `ttl`, and only three set `max_entries` (the
+  per-trial preprocessing and reading-measure caches,
+  `data.PER_TRIAL_CACHE_ENTRIES` = 128, and the replay builder, 8), so parsed
   tables stay in the process's memory for its whole lifetime — well past the
-  browser tab that produced them. **Clear cache** in the ☰ menu does the same
-  thing without a restart.
+  browser tab that produced them. Streamlit's own **Clear cache** (its ⋮ menu,
+  where the deployment shows it) does the same thing without a restart, and
+  deleting a dataset in the app clears the computation caches with it
+  (`app.clear_computation_cache`).
 
 ## Limits of this audit
 
 - It covers `scanpath_studio/` and `desktop/` at version 0.25.0. It does not cover
-  forks, `other_vis/`, or any modified deployment.
+  forks, `other_vis/` (a scratch folder since removed from the repository,
+  ENG-67), or any modified deployment.
 - Dependencies were checked only where a claim depended on them: Streamlit's bind
   default, upload storage, cache storage, config defaults and markdown
   sanitization; CPython's `zipfile` extraction and `tempfile` permissions.

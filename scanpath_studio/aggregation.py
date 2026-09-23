@@ -2,9 +2,8 @@
 
 Headless (no Streamlit), so they're unit-testable. They turn the filtered
 words / fixations frames into the small summary tables the plot builders draw:
-per-trial-index trends, per-fixation-index trends, grouped metric distributions,
-and per-text word-level aggregates for heatmaps. The heavy work is plain pandas
-groupby; the tabs cache the results with ``@st.cache_data``.
+the per-trial-index trend and per-text read counts first. The heavy work is
+plain pandas groupby; the tabs cache the results with ``@st.cache_data``.
 
 The lower block (from :data:`MEASURES` onward) backs the question-oriented
 analysis sections — *per text* (one text, many readers), *per reader* (one
@@ -59,113 +58,6 @@ def metric_by_trial_index(
     out.columns = ["trial_index", "value", "sem", "n_trials"]
     out["sem"] = out["sem"].fillna(0.0)
     return out.sort_values("trial_index").reset_index(drop=True)
-
-
-def metric_by_fixation_index(
-    fixations: pd.DataFrame, metric: str, *, max_index: int | None = None
-) -> pd.DataFrame:
-    """Average of ``metric`` per within-trial fixation index (``order_in_trial``).
-
-    Returns ``DataFrame[fixation_index, value, sem, n]`` sorted by index. Only
-    meaningful for per-fixation metrics (duration, saccade amplitude, …).
-    """
-    if (
-        fixations.empty
-        or metric not in fixations.columns
-        or "order_in_trial" not in fixations.columns
-    ):
-        return pd.DataFrame(columns=["fixation_index", "value", "sem", "n"])
-    df = pd.DataFrame(
-        {
-            "fixation_index": pd.to_numeric(
-                fixations["order_in_trial"], errors="coerce"
-            ),
-            "_m": pd.to_numeric(fixations[metric], errors="coerce"),
-        }
-    ).dropna()
-    if df.empty:
-        return pd.DataFrame(columns=["fixation_index", "value", "sem", "n"])
-    out = df.groupby("fixation_index")["_m"].agg(["mean", "sem", "count"]).reset_index()
-    out.columns = ["fixation_index", "value", "sem", "n"]
-    out["sem"] = out["sem"].fillna(0.0)
-    if max_index is not None:
-        out = out[out["fixation_index"] <= max_index]
-    return out.sort_values("fixation_index").reset_index(drop=True)
-
-
-def grouped_metric_values(
-    frame: pd.DataFrame,
-    metric: str,
-    group_col: str | None = None,
-    *,
-    max_groups: int = 12,
-) -> tuple[dict[str, np.ndarray], int]:
-    """Return ``({group_label: values_array}, n_dropped)`` for histograms.
-
-    ``group_col=None`` yields a single ``"All"`` group. Otherwise one entry per
-    distinct value of ``group_col``, keeping the ``max_groups`` largest by row
-    count; ``n_dropped`` reports how many groups were left out (so the caller can
-    note the cap rather than silently truncating).
-    """
-    if frame.empty or metric not in frame.columns:
-        return {}, 0
-    vals = pd.to_numeric(frame[metric], errors="coerce")
-    if group_col is None or group_col not in frame.columns:
-        arr = vals.dropna().to_numpy()
-        return ({"All": arr} if arr.size else {}), 0
-    counts = frame[group_col].value_counts()
-    kept = list(counts.index[:max_groups])
-    dropped = max(0, len(counts) - len(kept))
-    groups: dict[str, np.ndarray] = {}
-    for g in kept:
-        arr = vals[frame[group_col] == g].dropna().to_numpy()
-        if arr.size:
-            groups[str(g)] = arr
-    return groups, dropped
-
-
-def aggregate_word_measures_by_text(
-    words: pd.DataFrame, text_col: str, text_id, *, agg: str = "mean", screen_id=None
-) -> pd.DataFrame:
-    """One-row-per-word frame for a text: word boxes + reading measures averaged
-    across every participant who read it.
-
-    The returned frame keeps the canonical measure column names
-    (``total_fixation_duration_ms`` / ``n_fixations``) and the word-box geometry,
-    so it can be fed straight to ``plots.make_scanpath_figure`` (words-only
-    heatmap branch) for a per-text aggregated heatmap. Returns an empty frame
-    when the text or geometry is missing.
-    """
-    if words.empty or "word_id" not in words.columns:
-        return pd.DataFrame()
-    # One screen only, like every other per-text helper (BUG-26) — grouping on
-    # `word_id` across screens pools two coordinate spaces.
-    sub = _text_subset(words, text_col, text_id, screen_id)
-    if sub.empty:
-        return pd.DataFrame()
-    measure_cols = [
-        c
-        for c in ("total_fixation_duration_ms", "n_fixations", "first_fixation_ms")
-        if c in sub.columns
-    ]
-    geom_cols = [
-        c for c in ("x", "y", "width", "height", "text", "line_idx") if c in sub.columns
-    ]
-    if not geom_cols:
-        return pd.DataFrame()
-    grouped = sub.groupby("word_id")
-    out = grouped[geom_cols].first()
-    for col in measure_cols:
-        out[col] = grouped[col].agg(
-            lambda s: pd.to_numeric(s, errors="coerce").agg(agg)
-        )
-    out = out.reset_index()
-    # The heatmap path keys off participant/trial existence only for filtering;
-    # tag a synthetic single "trial" so downstream code that expects the columns
-    # doesn't choke.
-    out["participant_id"] = "aggregate"
-    out["trial_id"] = str(text_id)
-    return out
 
 
 def text_read_counts(words: pd.DataFrame, text_col: str) -> pd.DataFrame:
@@ -1309,38 +1201,6 @@ def ensure_fixation_enrichment(
         return fixations
 
 
-def _glyph_span(
-    words: pd.DataFrame, *, layout: pd.DataFrame | None = None
-) -> tuple[np.ndarray, np.ndarray]:
-    """``(start, run)`` — where the word's glyphs begin and how wide they are.
-
-    The frame a *within-word* position is measured in, and the fix for VAL-5's
-    letter-position finding. This used to take the BUG-11-corrected AOI left edge
-    as "0% into the word", which is half an inter-word space too far left: the
-    corrected edge is where the word's *interest area* starts, not where its
-    first glyph does. The rest of the box was wrong in the same direction — the
-    padded ``width`` is one advance wider than the glyph run — so a landing at
-    the last letter read as ~90% rather than 100%.
-
-    ``x`` is the glyph start by definition (see ``measures.word_box_bounds``) and
-    ``measures.word_char_advance`` is the shared letter scale, so the fraction is
-    now 0 at the first glyph's left edge and 1 at the last glyph's right edge, as
-    :func:`landing_positions` has always claimed. Falls back to the raw box for a
-    frame with no ``text`` column, where there are no letters to scale by.
-    """
-    from .measures import word_char_advance, word_char_counts
-
-    start = pd.to_numeric(words["x"], errors="coerce").to_numpy(dtype=float)
-    width = pd.to_numeric(words["width"], errors="coerce").to_numpy(dtype=float)
-    if "text" not in words.columns:
-        return start, width
-    # Counted once and handed on: `.astype(str).str.len()` is a Python-level
-    # pass over the frame, and `word_char_advance` needs the same numbers.
-    chars = word_char_counts(words)
-    run = word_char_advance(words, layout=layout, chars=chars) * chars
-    return start, np.where(np.isfinite(run) & (run > 0), run, width)
-
-
 def landing_positions(
     words: pd.DataFrame,
     fixations: pd.DataFrame | None = None,
@@ -1350,24 +1210,43 @@ def landing_positions(
 ) -> np.ndarray:
     """Within-word landing positions of the first fixation on each word (AN-12).
 
-    Prefers the pre-computed ``first_fix_x`` on ``words`` (relative to the word
-    box ``x``/``width``). When that's absent — the pre-aggregated OneStop path —
-    it derives the landing from ``fixations``: the earliest fixation on each
-    ``(participant, trial, word)``, joined to the word box. Returns the landing
-    *fraction* (0 = word start, 1 = word end) by default, else the px distance.
+    Prefers the pre-computed ``first_fix_x`` on ``words``. When that's absent —
+    the pre-aggregated OneStop path — it derives the landing from ``fixations``:
+    the earliest fixation on each ``(participant, trial, word)``, joined to the
+    word box. Returns the landing as a *fraction of the word's interest area* by
+    default, else the px distance from where the word starts.
+
+    The fraction is ``(x_fix − x) / width`` — 0 at the box's leading edge, 1 at
+    its trailing edge — over the experiment's own box (BUG-83). It is the same
+    quantity as ``initial_landing_position``, in different units: that letter
+    position minus one, over the box's ``width / advance`` character cells. On a
+    glyph-tight corpus the box *is* the glyph run, so 0 is the first letter's
+    edge and 1 the last's. On a tiling corpus the box's last cell is the space
+    after the word, so the glyphs fill ``[0, n / (n + 1))`` and a first fixation
+    on that space — which belongs to this word, as in EyeLink's report — reads
+    between ``n / (n + 1)`` and 1, where it used to be clipped onto 1.0 (15% of
+    the demo's landings piled up there). Right-to-left words are mirrored the
+    way the letter position is: counted from where the glyphs end.
+
+    Not clipped: a first fixation the word got although it lies outside the box
+    horizontally (the 50 px nearest-word fallback, or an imported ``word_id``)
+    reads below 0 or above 1, rather than piling onto an edge it did not land on.
     """
+    from .measures import word_glyph_span
+
     if words is not None and not words.empty and "first_fix_x" in words.columns:
         wd = words
         if participant_id is not None and "participant_id" in wd.columns:
             wd = wd[wd["participant_id"].astype(str) == str(participant_id)]
         ffx = pd.to_numeric(wd.get("first_fix_x"), errors="coerce")
-        starts, runs = _glyph_span(wd, layout=words)
+        starts, runs = word_glyph_span(wd, layout=words)
         left = pd.Series(starts, index=wd.index)
-        width = pd.Series(runs, index=wd.index)
+        run = pd.Series(runs, index=wd.index)
+        width = pd.to_numeric(wd["width"], errors="coerce")
         dist = ffx - left
         if "right_to_left" in wd.columns:
             rtl = wd["right_to_left"].fillna(False).astype(bool)
-            dist = dist.where(~rtl, width - dist)
+            dist = dist.where(~rtl, run - dist)
         mask = ffx.notna() & left.notna() & width.notna() & (width > 0)
         if "skip_flag" in wd.columns:
             mask &= ~pd.to_numeric(wd["skip_flag"], errors="coerce").fillna(0).astype(
@@ -1400,31 +1279,32 @@ def landing_positions(
         box_keys = [k for k in keys if k in words.columns]
         extra = ["right_to_left"] if "right_to_left" in words else []
         # Dedup to one row per word *first*, then measure. `words` here is the
-        # whole filtered corpus — one row per word per reader — so the glyph span
+        # whole filtered corpus — one row per word per reader — so the glyph run
         # was being computed for every repetition of every box. `layout=` is what
         # makes that safe: tiling detection still sees the full frame, which it
         # has to, since a deduped subset's holes read as glyph-tight gaps.
         # `text` rides along because the glyph run is counted from it — without
-        # it `_glyph_span` silently falls back to the padded box width.
+        # it an RTL landing would be mirrored across the padded box instead.
         text_col = ["text"] if "text" in words.columns else []
         box = words[box_keys + ["x", "width", *text_col, *extra]].drop_duplicates(
             box_keys
         )
-        starts, runs = _glyph_span(box, layout=words)
+        starts, runs = word_glyph_span(box, layout=words)
         box = box.assign(_left=starts, _run=runs)
         merged = first.merge(box, on=box_keys, how="inner")
         left = pd.to_numeric(merged["_left"], errors="coerce")
-        width = pd.to_numeric(merged["_run"], errors="coerce")
+        run = pd.to_numeric(merged["_run"], errors="coerce")
+        width = pd.to_numeric(merged["width"], errors="coerce")
         dist = pd.to_numeric(merged["_fx"], errors="coerce") - left
         if "right_to_left" in merged:
             rtl = merged["right_to_left"].fillna(False).astype(bool)
-            dist = dist.where(~rtl, width - dist)
+            dist = dist.where(~rtl, run - dist)
         ok = dist.notna() & width.notna() & (width > 0)
         dist, width = dist[ok], width[ok]
     else:
         return np.array([], dtype="float64")
     if as_fraction:
-        return (dist / width).clip(lower=0.0, upper=1.0).dropna().to_numpy()
+        return (dist / width).dropna().to_numpy()
     return dist.dropna().to_numpy()
 
 

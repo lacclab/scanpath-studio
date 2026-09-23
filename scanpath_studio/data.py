@@ -1313,19 +1313,12 @@ def _peek(file_like_or_path, size: int = 8) -> bytes:
 def _is_workbook(buf, name: str) -> bool:
     """Whether an Excel-named file is a real workbook pandas can open.
 
-    A zip container is an .xlsx; anything else that is not a legacy OLE2
-    workbook is delimited text wearing an Excel extension. A legacy workbook is
-    refused with the fix, rather than failing on a reader (``xlrd``) this
-    package does not install for a format Excel itself stopped writing in 2007.
+    A zip container is an .xlsx (openpyxl) and an OLE2 container is a legacy
+    Excel 97–2003 workbook (xlrd, DATA-53); anything else is delimited text
+    wearing an Excel extension (BUG-55).
     """
     head = _peek(buf)
-    if head.startswith(_OLE2_MAGIC):
-        raise ValueError(
-            f"'{Path(name).name}' is a legacy Excel 97–2003 (.xls) workbook, which "
-            "can't be read here. Open it in Excel and save it as .xlsx or .csv, "
-            "then upload that."
-        )
-    return head.startswith(_ZIP_MAGIC)
+    return head.startswith((_ZIP_MAGIC, _OLE2_MAGIC))
 
 
 def _can_reread(buf) -> bool:
@@ -2212,6 +2205,9 @@ def _read_zipped_table(
                     # Columnar/workbook readers seek, so these still land in
                     # memory whole — bounded by the same budget.
                     buf = io.BytesIO(stream.read())
+                    # BUG-84: the header pass dispatches on the name, and an
+                    # unnamed buffer read its binary member as CSV.
+                    buf.name = member
                     member_plan = plan
                     if plan is not None and plan.columns:
                         member_plan = plan.narrowed_to(read_table_columns(buf))
@@ -2697,7 +2693,8 @@ def fill_fixation_xy_from_words(
         return fixations
     from .measures import word_box_bounds
 
-    # BUG-11: place them at the *corrected* box centre, i.e. the glyph centre.
+    # The interest area's own centre (BUG-83), which is inside the box the
+    # assignment will then test it against.
     x0, y0, x1, y1 = word_box_bounds(words)
     keys = grouping_columns(words, include_word=True)
     centers = words[keys].copy()

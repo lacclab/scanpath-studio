@@ -301,6 +301,10 @@ def test_deep_link_seeds_frozen_state_keys():
     for category in ("short", "long", "oob", "blink"):
         validated[f"fixclass_{category}_mode"] = "Discard"
         validated[f"fixclass_{category}_symbol"] = "x"
+    # EXP-19: a per-scanpath line style is the selectbox's own label.
+    validated.update(
+        {p: "Dash-dot" for p in sk.COMPARE_STYLE_PARAMS if p.endswith("_style")}
+    )
     for param in sk.SHARE_TOGGLE_PARAMS:
         query[param] = "1"
     for param in sk.SHARE_VALUE_PARAMS:

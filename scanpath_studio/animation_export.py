@@ -29,7 +29,7 @@ browser renders each frame in a fraction of a second.
 from __future__ import annotations
 
 import io
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from time import perf_counter
 
 import numpy as np
@@ -39,6 +39,21 @@ from .export_status import ExportStage, StatusCallback, emit_status
 
 # The interactive formats live elsewhere; these are the rasterized clip formats.
 VIDEO_FORMATS: tuple[str, ...] = ("gif", "mp4")
+
+# SEC1 (BUG-74): a GIF's cost grows with its raster pixels — every frame is
+# decoded, palette-quantized and written whole (``disposal=2`` stores full frames,
+# not deltas), and the finished file is held in memory for the download. The
+# encoder streams since BUG-74, so a frame no longer costs its decoded size for the
+# whole encode, but the rendered PNGs and the output still scale with
+# frames × width × height × scale². So a GIF over this budget is refused before
+# Kaleido starts. A server other machines can reach gets the lower figure: it is
+# shared, and one visitor's 2000-frame, 2× clip is everyone's outage. Locally the
+# budget only catches the absurd — the rail's own ceiling (2000 frames at 2× of a
+# display-capped figure, ~6 Gpx) fits under it. MP4 is not budgeted: its frames go
+# straight through ffmpeg and H.264 keeps the file small, which is also why the
+# refusal points at it.
+GIF_PIXEL_BUDGET_LOCAL = 8_000_000_000
+GIF_PIXEL_BUDGET_HOSTED = 800_000_000
 
 _MIME = {"gif": "image/gif", "mp4": "video/mp4"}
 
@@ -67,6 +82,16 @@ class AnimationExportError(RuntimeError):
 
     The most common cause is a missing Chrome/Chromium for Kaleido; the message
     is surfaced to the user with a hint to fall back to the HTML export.
+    """
+
+
+class AnimationBudgetError(AnimationExportError):
+    """The requested GIF is over this server's pixel budget (SEC1 / BUG-74).
+
+    Raised before anything is rendered. A subclass so a caller that already
+    handles :class:`AnimationExportError` keeps working, and one that wants to can
+    tell "too big" apart from "Chrome is missing" — the message says what to change,
+    and the browser-install hint would be the wrong advice.
     """
 
 
@@ -146,15 +171,73 @@ def _static_base(fig: go.Figure) -> go.Figure:
     base.frames = ()
     base.layout.updatemenus = []
     base.layout.sliders = []
-    height = int(fig.layout.height or 600)
     base.update_layout(
         margin=dict(l=0, r=0, t=_STATIC_TOP_MARGIN_PX, b=0),
-        height=max(
-            height - (_CONTROL_BAND_PX - _STATIC_TOP_MARGIN_PX),
-            _STATIC_TOP_MARGIN_PX + 1,
-        ),
+        height=_static_height(fig),
     )
     return base
+
+
+def _static_height(fig: go.Figure) -> int:
+    """The rasterized clip's height: the figure's, less the reclaimed control band.
+
+    Its own function so the pixel budget can size a clip without deep-copying
+    the figure (and every one of its frames) the way :func:`_static_base` must.
+    """
+    height = int(fig.layout.height or 600)
+    return max(
+        height - (_CONTROL_BAND_PX - _STATIC_TOP_MARGIN_PX), _STATIC_TOP_MARGIN_PX + 1
+    )
+
+
+def _served_to_other_machines() -> bool:
+    """Whether this export runs inside a Streamlit server others can reach.
+
+    Outside a Streamlit runtime (a script, the CLI) the caller is on their own
+    machine. Inside one, the answer is the server's own bind address — never the
+    URL the browser reports, which the browser controls (see
+    ``persistence.server_bound_to_loopback``).
+    """
+    try:
+        from streamlit import runtime
+    except Exception:  # pragma: no cover - streamlit is a hard dependency
+        return False
+    if not runtime.exists():
+        return False
+    from .persistence import server_bound_to_loopback
+
+    return not server_bound_to_loopback()
+
+
+def check_gif_budget(
+    n_frames: int, width: int, height: int, scale: float, *, budget: int | None = None
+) -> None:
+    """Refuse a GIF whose frames would exceed the pixel budget (SEC1 / BUG-74).
+
+    ``width``/``height`` are the clip's pixels at 1×; Kaleido multiplies both by
+    ``scale``. ``budget`` defaults to :data:`GIF_PIXEL_BUDGET_HOSTED` inside a
+    server other machines can reach and :data:`GIF_PIXEL_BUDGET_LOCAL` anywhere
+    else. Raises :class:`AnimationBudgetError` naming the ways back under — MP4,
+    fewer frames, a lower resolution — with the frame count that would fit at
+    this scale, so the message is something to act on.
+    """
+    shared = budget is None and _served_to_other_machines()
+    if budget is None:
+        budget = GIF_PIXEL_BUDGET_HOSTED if shared else GIF_PIXEL_BUDGET_LOCAL
+    per_frame = max(round(width * scale), 1) * max(round(height * scale), 1)
+    total = int(n_frames) * per_frame
+    if total <= budget:
+        return
+    fits = int(budget) // per_frame
+    shorter = f"cap it at {fits} frames or fewer, " if fits >= 1 else ""
+    raise AnimationBudgetError(
+        f"a {n_frames}-frame GIF at {width}×{height} px and {scale:g}× comes to "
+        f"{total / 1e6:,.0f} megapixels of frames, over the "
+        f"{budget / 1e6:,.0f}-megapixel limit for one GIF"
+        f"{' on this shared server' if shared else ''}. Export **MP4** instead — "
+        f"its frames stream straight to the encoder and the file stays small — or "
+        f"{shorter}or lower the resolution."
+    )
 
 
 def _select_frames(n: int, max_frames: int | None) -> list[int]:
@@ -280,25 +363,60 @@ def _load_rgb_frames(pngs: list[bytes]) -> list[np.ndarray]:
     return [np.asarray(Image.open(io.BytesIO(b)).convert("RGB")) for b in pngs]
 
 
-def encode_gif(pngs: list[bytes], frame_duration_ms: float, *, loop: int = 0) -> bytes:
-    """Encode PNG frames into an animated GIF with a uniform per-frame delay."""
-    from PIL import Image
+def encode_gif(
+    pngs: Iterable[bytes], frame_duration_ms: float, *, loop: int = 0
+) -> bytes:
+    """Encode PNG frames into an animated GIF with a uniform per-frame delay.
 
-    if not pngs:
-        raise AnimationExportError("No frames to encode.")
-    imgs = [Image.open(io.BytesIO(b)).convert("RGB") for b in pngs]
+    **Streams** (SEC1 / BUG-74): each PNG is decoded, quantized to a 256-colour
+    palette and written before the next is read, so memory holds one decoded frame
+    and one palette frame, not the whole clip. Pillow's ``save(save_all=True)``
+    cannot do that — it keeps every normalized frame until the end to diff them —
+    and handing it the decoded list on top cost ~10 MB per frame at 2× (measured
+    ~4.6 GB for the default 250-frame cap at a large figure). The bytes written
+    are Pillow's own multi-frame layout for this input: the global header comes
+    from frame one, every later frame carries its own palette, each is stored
+    whole (``disposal=2`` with no transparency never crops to a delta), and a frame
+    identical to the one before it is folded into it with the durations summed —
+    which is why this holds one frame back before writing it.
+    """
+    from PIL import GifImagePlugin, Image, ImageChops
+
     duration = max(round(frame_duration_ms), _GIF_MIN_FRAME_MS)
     buf = io.BytesIO()
-    imgs[0].save(
-        buf,
-        format="GIF",
-        save_all=True,
-        append_images=imgs[1:],
-        duration=duration,
-        loop=loop,
-        disposal=2,
-        optimize=True,
-    )
+    pending: Image.Image | None = None
+    pending_ms = 0
+    wrote_header = False
+
+    def _flush() -> None:
+        nonlocal wrote_header
+        info = {"duration": pending_ms, "disposal": 2, "loop": loop, "optimize": True}
+        if not wrote_header:
+            # `getheader` also normalizes the palette in place, so the frame and
+            # the global colour table it writes agree.
+            header, _used = GifImagePlugin.getheader(pending, info=dict(info))
+            buf.write(b"".join(header))
+            wrote_header = True
+        else:
+            info["include_color_table"] = True
+        buf.write(b"".join(GifImagePlugin.getdata(pending, (0, 0), **info)))
+
+    for png in pngs:
+        with Image.open(io.BytesIO(png)) as decoded:
+            frame = decoded.convert("RGB").convert("P", palette=Image.Palette.ADAPTIVE)
+        if pending is not None:
+            same = pending.getpalette() == frame.getpalette() and (
+                ImageChops.subtract_modulo(frame, pending).getbbox() is None
+            )
+            if same:
+                pending_ms += duration
+                continue
+            _flush()
+        pending, pending_ms = frame, duration
+    if pending is None:
+        raise AnimationExportError("No frames to encode.")
+    _flush()
+    buf.write(b";")
     return buf.getvalue()
 
 
@@ -404,6 +522,8 @@ def export_animation(
 
     Raises:
         ValueError: unknown ``fmt``.
+        AnimationBudgetError: a GIF over :func:`check_gif_budget`'s pixel budget,
+            raised before any frame is rendered.
         AnimationExportError: rendering or encoding failed.
     """
     started = perf_counter()
@@ -427,6 +547,11 @@ def export_animation(
         started_at=started,
     )
     try:
+        if fmt == "gif" and indices:
+            # SEC1: refuse before Chrome starts, not after the frames are made.
+            check_gif_budget(
+                len(indices), int(fig.layout.width or 900), _static_height(fig), scale
+            )
         emit_status(
             status_callback,
             ExportStage.STARTING_RENDERER,

@@ -49,6 +49,7 @@ from scanpath_studio.aggregation import (
 )
 from scanpath_studio.animation_export import (
     CHROME_INSTALL_HINT,
+    AnimationBudgetError,
     AnimationExportError,
     chrome_available,
     export_animation,
@@ -1155,8 +1156,12 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
             )
         except AnimationExportError as exc:
             progress_slot.empty()
+            # SEC1: an over-budget GIF is refused before Chrome starts, and its
+            # message already says what to change — the browser advice would not.
             st.warning(
-                f"Could not render {fmt}: {exc}\n\n"
+                f"Could not render {fmt}: {exc}"
+                if isinstance(exc, AnimationBudgetError)
+                else f"Could not render {fmt}: {exc}\n\n"
                 "GIF/MP4 export rasterizes each frame with a Chrome/Chromium browser "
                 "(Kaleido). On Streamlit Cloud this is installed via `packages.txt`; "
                 "if it still fails, use the **HTML** format above — it needs no browser."

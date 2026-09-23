@@ -19,6 +19,7 @@ recreate the files without changing the user's saving preference.
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import logging
 import os
@@ -81,6 +82,35 @@ def is_loopback_url(url: str = "") -> bool:
     """Return whether ``url`` is addressed to this machine's loopback interface."""
     host = (urlparse(str(url or "")).hostname or "").lower()
     return host in {"localhost", "127.0.0.1", "::1"}
+
+
+def _is_loopback_host(host: str) -> bool:
+    name = str(host or "").strip().strip("[]").lower()
+    if name == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(name).is_loopback
+    except ValueError:
+        return False
+
+
+def server_bound_to_loopback() -> bool:
+    """Whether the running Streamlit server listens on a loopback address only.
+
+    This is the server's *own* configuration (``server.address``), which is what a
+    locality decision has to rest on. The page URL is not: Streamlit copies
+    ``st.context.url`` from the browser's own message, so any client can claim to
+    be at ``http://localhost/``. Unset — Streamlit's default, which listens on
+    every interface — is not loopback. Imports Streamlit lazily so the cache CLI
+    and API stay Streamlit-free.
+    """
+    try:
+        import streamlit as st
+
+        address = st.get_option("server.address")
+    except Exception:
+        return False
+    return _is_loopback_host(address or "")
 
 
 def persistence_enabled(url: str = "", environ: dict | None = None) -> bool:

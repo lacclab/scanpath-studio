@@ -292,6 +292,10 @@ def test_deep_link_seeds_frozen_state_keys():
         sk.COMPARE_LAYOUT_PARAM: "side-by-side",
         sk.COMPARE_STIMULUS_PARAM: "B",
     }
+    # BUG-69: colours are read as `#rrggbb` only, so a placeholder is rejected.
+    from scanpath_studio.url_state import _SHARE_COLOR_PARAMS
+
+    validated.update({param: "#123456" for param in _SHARE_COLOR_PARAMS})
     for param in sk.SHARE_TOGGLE_PARAMS:
         query[param] = "1"
     for param in sk.SHARE_VALUE_PARAMS:

@@ -164,6 +164,26 @@ def _parse_compare_stimulus(v) -> str:
     return _parse_choice(v, _COMPARE_STIMULUS_OPTIONS, "compare stimulus source")
 
 
+#: The one colour spelling every `st.color_picker` holds and every figure
+#: builder accepts. The saved-config reader has always checked colours against
+#: it; the deep link now does too (BUG-69).
+_HEX_COLOR = re.compile(r"#[0-9A-Fa-f]{6}")
+
+
+def _parse_hex_color(v) -> str:
+    """A colour param → ``#rrggbb``, raising on anything else (BUG-69).
+
+    A colour reaches Plotly straight from session state on the render path, so
+    ``?order_font_color=zzz`` used to raise inside the figure builder — before
+    the picker that would have coerced it ever rendered. Raising here instead
+    turns a mangled link into the reader's "Ignored bad URL param" warning.
+    """
+    text = str(v).strip()
+    if not _HEX_COLOR.fullmatch(text):
+        raise ValueError(f"not a #rrggbb colour: {text!r}")
+    return text
+
+
 def _parse_align_algorithm(v) -> str:
     """PRE-3 drift-correction algorithm name → the picker's exact spelling.
 
@@ -281,6 +301,22 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     "cmp_layout": "single_compare_layout",
     "cmp_stimulus": "single_compare_stimulus",
 }
+#: The `_SHARE_VALUE_PARAMS` that carry a colour — read through
+#: `_parse_hex_color` rather than `str` (BUG-69).
+_SHARE_COLOR_PARAMS = (
+    "fixation_color",
+    "saccade_color",
+    "raw_gaze_color",
+    "saccade_color_forward",
+    "saccade_color_skip",
+    "saccade_color_refixation",
+    "saccade_color_return_sweep",
+    "saccade_color_regression",
+    "order_font_color",
+    "text_color",
+    "highlight_text_color",
+    "bg_custom",
+)
 _SHARE_INT_PARAMS = {
     "order_font_size": "global_order_font_size",
     # VIZ-11 follow-up: the animation frame grid. Worth sharing — a link that
@@ -357,6 +393,8 @@ _URL_PRESETS = {
     # CMP-11 — same rule again: both are `st.segmented_control` options.
     "cmp_layout": ("single_compare_layout", _parse_compare_layout),
     "cmp_stimulus": ("single_compare_stimulus", _parse_compare_stimulus),
+    # BUG-69 — and for every colour, which Plotly rejects outright.
+    **{k: (_SHARE_VALUE_PARAMS[k], _parse_hex_color) for k in _SHARE_COLOR_PARAMS},
 }
 
 # Widget bounds for the URL-restorable params that feed a min/max-bounded widget
@@ -382,6 +420,10 @@ _URL_BOUNDED = {
     "global_stimulus_image_offset_y": (-5000.0, 5000.0),
     "global_stimulus_image_scale": (0.25, 3.0),
     "global_coordinate_grid_spacing": (10.0, 5000.0),
+    # UX-86 put raw gaze's style on the link without its bounds (BUG-69), so
+    # `?raw_gaze_opacity=5` crashed the slider. Mirrors controls.py's widgets.
+    "global_raw_gaze_marker_size": (1.0, 12.0),
+    "global_raw_gaze_opacity": (0.1, 1.0),
 }
 
 

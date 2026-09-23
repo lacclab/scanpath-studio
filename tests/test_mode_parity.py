@@ -596,14 +596,6 @@ streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 AppTest = streamlit_testing.AppTest
 
 
-def _fixation_ys(frame: pd.DataFrame, participant: str) -> np.ndarray:
-    return (
-        _trial(frame, participant)
-        .sort_values("order_in_trial")["y"]
-        .to_numpy(dtype=float)
-    )
-
-
 class TestDriftCorrectionReachesEveryPath:
     """The hoist: ``alignment.correct`` runs once, above the render-mode split.
 

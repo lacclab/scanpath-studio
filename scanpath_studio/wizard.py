@@ -14,7 +14,6 @@ avoids an app⇄wizard import cycle.
 
 from __future__ import annotations
 
-import html
 import json
 import re
 from typing import NamedTuple
@@ -40,7 +39,6 @@ from .constants import (
 from .controls import (
     ADD_ATTEMPTED_KEY,
     FIX_FIELD_SPECS,
-    NONE_OPTION,
     RAW_GAZE_FIELD_SPECS,
     TOUCHED_FIELDS_KEY,
     WORD_FIELD_SPECS,
@@ -2577,28 +2575,6 @@ _RAW_GAZE_ROW2_W = (0.155, 0.2817, 0.2817, 0.2816)
 _META_ROW_W = (0.155, 0.845)
 
 
-def _hover_note(host, label: str, note: str, *, link: str = "") -> None:
-    """A short label whose explanation is only on hover (UX-53 round 3).
-
-    The wizard's prose was the bulk of its length, and most of it is read once
-    and never again. This keeps a scannable anchor on the page and puts the
-    sentences behind the same `.sps-fhelp` tooltip the rail's labels use — a CSS
-    one (120 ms), not the browser's native `title=`, which waits about a second
-    and so is unusable for text people actually need.
-    """
-    tail = (
-        f' <a href="{html.escape(link, quote=True)}" target="_blank">↗</a>'
-        if link
-        else ""
-    )
-    host.markdown(
-        f'<div class="sps-wiz-note"><span class="sps-fhelp" '
-        f'data-tip="{html.escape(note, quote=True)}">{html.escape(label)}</span>'
-        f"{tail}</div>",
-        unsafe_allow_html=True,
-    )
-
-
 def _mark_add_attempted() -> None:
     """Record that **✅ Add dataset** was pressed on a still-incomplete wizard.
 
@@ -2703,31 +2679,6 @@ def _wizard_statuses() -> dict[str, wizard_shell.StepStatus]:
         else required(False)
     )
     return statuses
-
-
-def _mapping_label(mapping) -> str | None:
-    """A human-readable column name for a mapping value (str | list | None)."""
-    if not mapping or mapping == NONE_OPTION:
-        return None
-    if isinstance(mapping, (list, tuple)):
-        return " + ".join(str(c) for c in mapping) or None
-    return str(mapping)
-
-
-def _setup_group_value(snapshot: SetupSnapshot, group: str) -> str:
-    """The value column for one setup group in the review table."""
-    if group == "screen":
-        return f"{snapshot.canvas_width} × {snapshot.canvas_height} px"
-    if group == "geometry":
-        if snapshot.geometry_provenance is Provenance.SKIPPED:
-            return "—"
-        return (
-            f"{snapshot.monitor_width_mm:.0f} mm wide, "
-            f"{snapshot.viewing_distance_mm:.0f} mm away"
-        )
-    if snapshot.scale_text_to_boxes:
-        return "scaled to word boxes"
-    return f"{snapshot.base_font_size} px · {snapshot.font_family}"
 
 
 def _render_data_setup(active: bool) -> _UploadResult:

@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
@@ -98,20 +98,6 @@ SETUP_GROUP_LABELS: dict[str, str] = {
     "geometry": "Physical size & viewing distance",
     "text": "Reading text size",
 }
-
-
-@dataclass(frozen=True)
-class SetupAnswer:
-    """One group's answer in the wizard's Recording-setup step.
-
-    ``choice`` is the radio label the user picked, kept verbatim so the review
-    table can echo the wording they chose rather than a reconstruction of it.
-    """
-
-    group: str
-    choice: str
-    provenance: Provenance
-    values: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -194,12 +180,6 @@ class SetupSnapshot:
     def is_answered(self) -> bool:
         """Every group carries a real provenance (the wizard's Add-dataset gate)."""
         return all(isinstance(p, Provenance) for p in self.provenance.values())
-
-    def with_provenance(self, **groups: Provenance) -> SetupSnapshot:
-        """Copy with one or more groups' provenance replaced."""
-        return replace(
-            self, **{f"{group}_provenance": p for group, p in groups.items()}
-        )
 
     # -- serialization ---------------------------------------------------------
 

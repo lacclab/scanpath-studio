@@ -141,7 +141,6 @@ DEFAULT_FIXATION_COLORSCALE = "Viridis"
 DEFAULT_HEATMAP_COLORSCALE = "Viridis"
 
 DEFAULT_MARKER_SIZE_RANGE = (8, 24)
-DEFAULT_PAGE_SIZE = 1000
 DEFAULT_ORDER_FONT_COLOR = "#111111"
 
 WORD_BOX_COLOR = "#6c757d"
@@ -656,7 +655,7 @@ _VIEW_DATA = "Data"
 # UX-65 turned Help into a nav *section* of dialog-openers, and UX-100 turned
 # Session back into a popover on the title row. The strings survive only as
 # values a pre-UX-100 recovery cache can still hold in `main_nav`, which
-# `url_state._active_view` resolves back to the Scanpath view.
+# `menu.render_nav` ignores (it is not a page) and overwrites with the active view.
 _VIEW_SESSION = "Session"
 _VIEW_HELP = "Help"
 _MAIN_TAB_LABELS = [_VIEW_SCANPATH, _VIEW_CORPUS, _VIEW_DATA]

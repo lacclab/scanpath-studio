@@ -340,22 +340,3 @@ def step_panel(host, step: WizardStep, status: StepStatus, *, active: bool):
         key=open_key(step.id),
         on_change="rerun",
     )
-
-
-def blockers(
-    statuses: Mapping[str, StepStatus], reasons: Mapping[str, Iterable[str]]
-) -> list[tuple[WizardStep, list[str]]]:
-    """Steps still blocking *Add dataset*, each with its reasons.
-
-    Feeds the review step's "what's left" list, where every entry gets a
-    *Go to step N* button — a blocker the user cannot navigate to is just a
-    complaint.
-    """
-    out: list[tuple[WizardStep, list[str]]] = []
-    for step in STEPS:
-        if statuses.get(step.id, StepStatus.TODO) in (
-            StepStatus.TODO,
-            StepStatus.ACTION,
-        ):
-            out.append((step, list(reasons.get(step.id, []))))
-    return out

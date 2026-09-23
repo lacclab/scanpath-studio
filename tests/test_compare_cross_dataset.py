@@ -708,10 +708,6 @@ class TestResolveCompareSource:
     them (which now render inside the row's own 🔎 popover).
     """
 
-    @staticmethod
-    def _resolve(app_test_state, *, ready=True):
-        return tabs._resolve_compare_source({"PoTeC": ready}, {"PoTeC": "needs setup"})
-
     def test_this_dataset_resolves_to_no_source(self, monkeypatch):
         import streamlit as st
 

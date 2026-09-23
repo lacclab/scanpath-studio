@@ -661,7 +661,7 @@ class TestDataInspectionTab:
         # Top-level navigation is Streamlit's own top nav — `st.navigation(
         # position="top")` — not a sidebar radio, and not the single toggling
         # header button it replaced. `main_nav` survives as the mirror every
-        # other reader (the tour, persistence, `_active_view`) still consults.
+        # other reader (the tour, persistence) still consults.
         # Data Inspection and Share are subtabs of the Scanpath view.
         from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_SCANPATH
 
@@ -675,7 +675,7 @@ class TestDataInspectionTab:
         # The router lands on the default page, and `main_nav` mirrors it.
         assert at.session_state["main_nav"] == _VIEW_SCANPATH
 
-        # A view *requested* by writing `main_nav` (what `_go_corpus` and the
+        # A view *requested* by writing `main_nav` (what `url_state._go_scanpath` and the
         # tour do from `on_click` callbacks, where `st.switch_page` is illegal)
         # is honoured: `render_nav` reconciles the router to it.
         at.session_state["main_nav"] = _VIEW_CORPUS

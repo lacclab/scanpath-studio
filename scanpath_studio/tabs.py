@@ -8909,43 +8909,8 @@ def _render_data_provenance() -> None:
             )
 
 
-def render_raw_data_tab(
-    words_filtered: pd.DataFrame,
-    fixations_filtered: pd.DataFrame,
-    raw_gaze_filtered: pd.DataFrame,
-) -> None:
-    """Render the raw data tab: exactly the six tables a dataset can upload —
-    Fixations, AOIs (Words/IA), Raw gaze, Participants, Trials, Texts (UX-126).
-
-    Always six tabs, in this fixed order, whether or not a given table is
-    actually present — a table with nothing uploaded/attached shows a plain
-    "not uploaded" line instead of the tab disappearing, so the set doesn't
-    reshuffle as you attach things. Every one of the six is shown *as
-    uploaded* — no reconstruction (the former "Stimuli" sub-tab, which joined
-    word rows into passages) and no derived measures (the former
-    "Word-level" sub-tab, `compute_word_metrics`'s full FFD/FPRT/RPD/TFD
-    pass) — both real computation for a section whose whole point is the raw
-    tables. That view still exists — it's the 🧮 Derived analysis tables
-    section below (currently held back — UX-126) and the Corpus Analysis
-    view.
-
-    UX-52 folded this whole block into a collapsed expander; this round took the
-    expander back off (the tables are what the section is *for*, so paying a
-    click for them was backwards) and put the six tabs on one bar with the
-    dataset's own 📊 Stats tab — see ``render_data_inspection_tab``, which builds
-    that bar itself and calls :func:`_fill_raw_data_tabs`. This entry point is
-    kept for a caller that wants the six alone.
-    """
-    _fill_raw_data_tabs(
-        st.tabs(RAW_DATA_TAB_LABELS),
-        words_filtered,
-        fixations_filtered,
-        raw_gaze_filtered,
-    )
-
-
 #: The six tables a dataset can upload, in the fixed order they are always
-#: shown in — see :func:`render_raw_data_tab`. A module constant because
+#: shown in (:func:`_fill_raw_data_tabs` draws them). A module constant because
 #: :func:`render_data_inspection_tab` prepends its own 📊 Stats tab and builds
 #: the whole bar in one `st.tabs` call.
 RAW_DATA_TAB_LABELS = [
@@ -8966,9 +8931,8 @@ def _fill_raw_data_tabs(
 ) -> None:
     """Draw the six raw-data tables into six already-created tab containers.
 
-    Split out of :func:`render_raw_data_tab` so the Data page can put them on
-    *one* bar with its 📊 Stats tab rather than nesting a second `st.tabs`
-    inside a tab.
+    The Data page puts them on *one* bar with its 📊 Stats tab rather than
+    nesting a second `st.tabs` inside a tab.
     """
     from scanpath_studio import metadata as md
 

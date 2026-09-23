@@ -22,7 +22,6 @@ SCREEN_TIMESTAMP = "screen_timestamp_ms"
 SCREEN_FIXATION_ID = "screen_fixation_id"
 CANVAS_WIDTH = "canvas_width"
 CANVAS_HEIGHT = "canvas_height"
-PART_METADATA = (SCREEN_ID, SCREEN_INDEX, CANVAS_WIDTH, CANVAS_HEIGHT)
 
 
 def has_screen_identity(frame: pd.DataFrame | None) -> bool:

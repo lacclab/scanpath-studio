@@ -547,19 +547,6 @@ def _dismissed_tutorial_ids() -> set[str]:
     return st.session_state["_tutorial_dismissed_ids"]
 
 
-def tutorial_opted_out(tutorial_id: str) -> bool:
-    """True when ``tutorial_id`` was marked "don't auto-show" (UX-85).
-
-    Nothing in the 🧭 Tutorials library auto-opens itself today — only the
-    welcome card and the wizard guide do, each with their own mechanism — so
-    this is the opt-out for whichever ones start doing that (the wizard guide
-    included, once it reads this too) rather than something with an effect
-    yet on every tutorial. It never hides a tutorial from the chooser, only
-    stops it greeting you — the same "gone, not away" rule #UX-12 set.
-    """
-    return tutorial_id in _dismissed_tutorial_ids()
-
-
 def _tutorial_optout_script(dismissed: set[str]) -> str:
     """A same-origin script writing (or clearing) the dismissed-id cookie."""
     if dismissed:
@@ -1327,22 +1314,6 @@ def maybe_show_welcome_tour() -> None:
     _start_tour()
 
 
-def render_tour_replay_button(host=None) -> None:
-    """Compatibility button that replays the welcome tour from step one.
-
-    Deliberately ignores the UX-12 opt-out — "don't show this again" means "stop
-    greeting me", not "take the tutorial away". The card's checkbox renders
-    pre-ticked on a replay so the choice can be reversed from the same place.
-    """
-    (host if host is not None else st).button(
-        "🎓 Welcome tour",
-        key="tour_replay",
-        width="stretch",
-        help="Replay the quick intro tour.",
-        on_click=_arm_tour,
-    )
-
-
 # -----------------------------------------------------------------------------
 # Use-case tutorials (UX-40)
 # -----------------------------------------------------------------------------
@@ -1970,7 +1941,7 @@ def maybe_show_faq() -> None:
 def render_faq_button(host=None) -> None:
     """Button in the ❓ Help menu popover that opens the in-app FAQ dialog.
 
-    Sits next to :func:`render_tour_replay_button` and is armed the same way: an
+    Armed the way the other Help entries are: an
     ``on_click`` callback sets a request flag that the early
     :func:`maybe_show_faq` call serves, so the modal doesn't wait on the heavy
     data / plot work this button renders after.

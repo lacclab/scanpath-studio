@@ -836,8 +836,6 @@ def load_onestop(
 
 MULTIPLEYE_FIXATION_SOURCES = ("scanpaths", "fixations")
 
-# The screen kinds a MultiplEYE trial is modelled from, in presentation order.
-MULTIPLEYE_SCREEN_KINDS = ("reading", "question")
 
 # Presentation monitor (px) for the ZH-CH-Zurich sample, from its lab config
 # (``Monitor_resolution_in_px`` / ``RESOLUTION``) — the physical screen the data

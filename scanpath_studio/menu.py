@@ -254,12 +254,12 @@ def render_nav() -> str:
 
     **``main_nav`` is kept as a mirror, not the source of truth.** The router
     owns the selection, but several places still *write* ``main_nav`` to request
-    a view (``_go_corpus`` / ``_go_scanpath``, ``tour`` when a step drives the
+    a view (``url_state._go_scanpath`` / ``_go_data``, ``tour`` when a step drives the
     app to another view, and ``persistence`` restoring the view you were last
     on) — including from ``on_click`` callbacks, where ``st.switch_page`` is not
     allowed. So each run reconciles, then writes the resolved view back, and
-    every existing reader of ``main_nav`` — the tour, ``persistence``,
-    ``_active_view`` — keeps working unchanged.
+    every existing reader of ``main_nav`` — the tour, ``persistence`` — keeps
+    working unchanged.
 
     The reconciliation turns on ``_nav_mirrored``: the value this function wrote
     last run. Without it the two directions are indistinguishable and the nav

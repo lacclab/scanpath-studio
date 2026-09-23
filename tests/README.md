@@ -54,8 +54,8 @@ pytest tests/test_data.py::TestNormalizeWords::test_normalize_words_with_box_coo
 Roughly one `test_<module>.py` per `scanpath_studio/` module, plus
 cross-cutting files. The load-bearing ones:
 
-- `conftest.py` — shared fixtures: `sample_words_df`, `sample_fixations_df`,
-  `sample_raw_gaze_df`, `normalized_words_df`, `normalized_fixations_df`,
+- `conftest.py` — shared fixtures: `sample_words_df`, `sample_raw_gaze_df`,
+  `normalized_words_df`, `normalized_fixations_df`,
   `synthetic_words_df`, `synthetic_fixations_df`.
 - `synthetic_data.py` — the hand-traced 6-word / 2-line ground-truth trial
   with exact `EXPECTED` values (shared with `scanpath_studio/synthetic.py`);

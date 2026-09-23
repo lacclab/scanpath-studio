@@ -260,13 +260,10 @@ from scanpath_studio.url_state import (
 # Deferring it lets app finish loading before wizard is ever imported.
 from scanpath_studio.utils import build_combo_options, extract_trial
 
-# Re-exported under a private alias so tests can import them from `app`; keep the
-# F401 silence (they're not used by app.py itself).
+# Re-exported under a private alias so tests can import it from `app`; keep the
+# F401 silence (it's not used by app.py itself).
 from scanpath_studio.utils import (  # noqa: F401
     build_comparison_options as _build_comparison_options,
-)
-from scanpath_studio.utils import (  # noqa: F401
-    friendly_trial_label as _friendly_trial_label,
 )
 
 
@@ -1073,24 +1070,6 @@ def maybe_show_about() -> None:
     """
     if st.session_state.pop("_about_dialog_requested", False):
         _about_dialog()
-
-
-def render_about_button(host=None) -> None:
-    """Render the **ℹ️ About** button in the top menu's ❓ Help popover.
-
-    A dialog rather than the popover it used to be: a popover nests no popover,
-    and About is long (authors, links, BibTeX, the AI-assistance note) — inline
-    in Help it would bury the tour and tutorial buttons above it. It is also
-    pure display, so unlike ⚙️ Configure it loses nothing by only rendering while
-    open (see :mod:`scanpath_studio.menu`).
-    """
-    (host if host is not None else st).button(
-        "ℹ️ About",
-        key="about_open",
-        width="stretch",
-        help="Version, authors, licence, and how to cite Scanpath Studio.",
-        on_click=_arm_about,
-    )
 
 
 @st.dialog("ℹ️ About Scanpath Studio", width="large")

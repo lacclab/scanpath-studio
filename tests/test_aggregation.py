@@ -44,6 +44,7 @@ from scanpath_studio.aggregation import (
     per_participant_trend,
     per_reader_word_measure,
     progressive_regressive_counts,
+    reader_means,
     reader_summary,
     reader_summary_table,
     reader_vs_cohort_values,
@@ -813,6 +814,23 @@ class TestMeasureValues:
         assert measure_values(_tidy_words(), MEASURES["sacc_amp"]).size == 0
         assert measure_values(pd.DataFrame(), MEASURES["tfd"]).size == 0
         assert measure_values(None, MEASURES["tfd"]).size == 0
+
+
+class TestGroupTestUnit:
+    """BUG-82: a group test on pooled words counted one reader's words as that
+    many subjects — two readers gave n = 1 307 each and p ≈ 0."""
+
+    def test_one_value_per_reader(self):
+        vals = reader_means(_tidy_fixations(), MEASURES["fix_dur"])
+        # p1: mean(100, 150, 130); p2: mean(200, 180).
+        assert sorted(vals) == pytest.approx(sorted([380 / 3, 190.0]))
+
+    def test_no_reader_column_says_so(self):
+        frame = _tidy_fixations().drop(columns=["participant_id"])
+        assert reader_means(frame, MEASURES["fix_dur"]) is None
+
+    def test_a_missing_measure_is_empty(self):
+        assert reader_means(_tidy_fixations(), MEASURES["tfd"]).size == 0
 
 
 class TestReaderViews:

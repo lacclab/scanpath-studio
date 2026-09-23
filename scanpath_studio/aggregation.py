@@ -795,6 +795,24 @@ def measure_values(
     return work["_m"].dropna().to_numpy()
 
 
+def reader_means(frame: pd.DataFrame, measure: Measure) -> np.ndarray | None:
+    """One value per reader — the mean of their observations (AN-21, BUG-82).
+
+    The unit a group test may treat as independent. Every word or fixation of
+    one reader is correlated with that reader's others, so testing the pooled
+    observations (``measure_values``) counts one reader's 1 307 words as 1 307
+    subjects and returns p ≈ 0 for two readers. ``None`` when the frame names
+    no readers, so the caller can say it is falling back to observations.
+    """
+    if frame is None or frame.empty or measure.column not in frame.columns:
+        return np.array([], dtype="float64")
+    if "participant_id" not in frame.columns:
+        return None
+    values = pd.Series(_measure_series(frame, measure).to_numpy(), index=frame.index)
+    means = values.groupby(frame["participant_id"].astype(str)).mean()
+    return means.dropna().to_numpy(dtype="float64")
+
+
 def reader_vs_cohort_values(
     frame: pd.DataFrame,
     participant_id,

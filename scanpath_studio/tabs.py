@@ -34,6 +34,7 @@ from scanpath_studio.aggregation import (
     per_participant_trend,
     per_reader_word_measure,
     progressive_regressive_counts,
+    reader_means,
     reader_summary,
     reader_summary_table,
     reader_vs_cohort_values,
@@ -7881,8 +7882,14 @@ def render_group_comparison_tab(
             return
         test = c[1].selectbox("Test", ["Mann–Whitney", "t-test"], key="cmp21_test")
         frame = fixations_filtered if measure.frame == "fixations" else words_filtered
-        a = measure_values(apply_group(frame, spec_a), measure)
-        b = measure_values(apply_group(frame, spec_b), measure)
+        group_a, group_b = apply_group(frame, spec_a), apply_group(frame, spec_b)
+        # BUG-82: test readers, not pooled words/fixations — one reader's
+        # observations are not independent of each other.
+        a, b = reader_means(group_a, measure), reader_means(group_b, measure)
+        unit = "readers"
+        if a is None or b is None:
+            a, b = measure_values(group_a, measure), measure_values(group_b, measure)
+            unit = "observations"
         res = group_effect_size(a, b, test=test)
         cols = st.columns(4)
         cols[0].metric(
@@ -7908,6 +7915,16 @@ def render_group_comparison_tab(
         st.markdown(
             f"**{test}** — statistic = {res['statistic']:.3g}, p = {p_txt}. "
             f"_Exploratory, not pre-registered._"
+        )
+        st.caption(
+            "n = readers: each reader contributes the mean of their values, so "
+            "the test compares readers rather than pooled words or fixations, "
+            "which are not independent of each other. Readers in both groups "
+            "(e.g. a within-reader condition) count once in each."
+            if unit == "readers"
+            else "n = observations — this dataset names no readers, so the test "
+            "pools every value; observations from one reader are not "
+            "independent, so read the p-value as descriptive only."
         )
     elif view == "Two-group word heatmap":  # AN-22
         c = st.columns([3, 1, 1])

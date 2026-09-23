@@ -588,3 +588,71 @@ def test_the_co_animation_round_trips(monkeypatch, capsys):
     assert f"--compare-with {OTHER[0]}:{OTHER[1]}" in printed
     assert "--label-a 'Reader A'" in printed
     assert first.to_json() == second.to_json()
+
+
+def test_a_palette_with_one_class_colour_changed_round_trips(monkeypatch):
+    """A named `--palette` plus the one class colour the user changed: the
+    printed command restates only that class, so `render` has to keep the
+    palette's colours for the other four — it used to start the class dict from
+    the stock set, which then won over the palette wholesale."""
+    from scanpath_studio.constants import palette_settings
+
+    palette = palette_settings("High contrast")
+    classes = {**palette["saccade_class_colors"], "regression": "#abcdef"}
+    settings = {
+        **api.figure_options("static"),
+        **{k: v for k, v in palette.items() if k != "word_label_color"},
+        "text_color": palette["word_label_color"],
+        "saccade_color_mode": "By type",
+        "saccade_class_colors": classes,
+    }
+    state = cs.FigureState(
+        kind="static",
+        settings=settings,
+        participant=TRIAL[0],
+        trial=TRIAL[1],
+        canvas=(2560, 1440),
+    )
+    command, unsupported = cs.cli_snippet(DEMO, state, output="x.html")
+    assert "--palette 'High contrast'" in command and not unsupported
+    assert command.count("--saccade-type-color") == 1
+    (from_cli,) = _figures(
+        monkeypatch, [shlex.split(command.replace(" \\\n", " "))[1:]]
+    )
+    words, fixations = api.load_sample_data()
+    expected = api.plot_scanpath(
+        words,
+        fixations,
+        *TRIAL,
+        canvas_size=(2560, 1440),
+        **cs.figure_kwargs(settings, "static"),
+    )
+    assert from_cli.to_json() == expected.to_json()
+
+
+def test_an_integer_flag_is_printed_as_an_integer():
+    """`--order-font-size` and the two colour-bar tick flags are `type=int`, so
+    a settings dict holding `12.0` printed a command `render` refused."""
+    command = api.figure_code(
+        flavor="cli",
+        order_font_size=12.0,
+        colorbar_tickangle=30.0,
+        colorbar_tickfont_size=14.0,
+    )
+    argv = shlex.split(command.replace(" \\\n", " "))
+    args = cli._render_parser().parse_args(argv[2:])
+    assert (args.order_font_size, args.colorbar_tickangle) == (12, 30)
+    assert args.colorbar_tickfont_size == 14
+    replay = api.figure_code(kind="animation", flavor="cli", anim_max_frames=200.0)
+    argv = shlex.split(replay.replace(" \\\n", " "))
+    assert cli._render_parser().parse_args(argv[2:]).anim_max_frames == 200
+
+
+def test_no_hover_measure_is_an_empty_flag_not_a_missing_one(monkeypatch):
+    """`word_hover_measure=None` (no measure on hover) is off its default, and
+    `_valued` dropped `None` — so the command showed the default measure."""
+    command = api.figure_code(flavor="cli", word_hover_measure=None)
+    assert "--word-hover-measure ''" in command
+    seen = _spy(monkeypatch, "plot_scanpath")
+    cli.main([*_BASE, "--word-hover-measure", ""])
+    assert seen["word_hover_measure"] is None

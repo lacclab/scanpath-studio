@@ -49,6 +49,7 @@ from .constants import (
     SACCADE_WIDTH_BOUNDS,
     UNIFORM_COLOR_FIELD,
     drift_correction_enabled,
+    palette_settings,
 )
 
 
@@ -963,7 +964,7 @@ def _render_parser() -> argparse.ArgumentParser:
         "--word-hover-measure",
         metavar="FIELD",
         help="The reading measure a word's hover shows (default: "
-        "total_fixation_duration_ms).",
+        "total_fixation_duration_ms; '' for none).",
     )
     viz.add_argument(
         "--word-heatmap-col",
@@ -1331,6 +1332,12 @@ _DIRECT_OPTION_FLAGS = (
     "raw_gaze_opacity",
     "word_heatmap_col",
     "word_heatmap_title",
+)
+
+#: The direct options whose ``None`` is a choice, written ``''`` on the command
+#: line (`code_snippet._optional_valued`).
+_NONE_WHEN_EMPTY = frozenset(
+    {"word_hover_measure", "word_heatmap_col", "word_heatmap_title"}
 )
 
 #: …and the switches, as ``option → the value the flag sets``. Passed only when
@@ -2441,7 +2448,15 @@ def render(argv: list[str]) -> None:
     if not args.saccade_type_legend:
         overrides["saccade_type_legend"] = False
     if args.saccade_type_colors:
-        class_colors = dict(SACCADE_CLASS_COLORS)
+        # Over the palette's class colours when one is named: the explicit dict
+        # wins over `--palette` wholesale in `api._expand_palette`, so starting
+        # from the stock set would put back every class the flags left alone —
+        # and a printed recipe restates only the classes the palette got wrong.
+        class_colors = dict(
+            palette_settings(args.palette)["saccade_class_colors"]
+            if args.palette
+            else SACCADE_CLASS_COLORS
+        )
         for pair in args.saccade_type_colors:
             cls_name, _, color = pair.partition("=")
             cls_name = cls_name.strip()
@@ -2521,7 +2536,9 @@ def render(argv: list[str]) -> None:
     for key in _DIRECT_OPTION_FLAGS:
         value = getattr(args, key)
         if value is not None:
-            overrides[key] = value
+            # `--word-hover-measure ''` is the real request "no measure on
+            # hover", the option's own `None` — the `--highlight-column ''` rule.
+            overrides[key] = None if value == "" and key in _NONE_WHEN_EMPTY else value
     for key, flipped in _SWITCH_OPTION_FLAGS.items():
         if getattr(args, key) == flipped:
             overrides[key] = flipped

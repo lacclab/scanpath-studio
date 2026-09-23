@@ -492,6 +492,25 @@ def _valued(flag: str) -> Any:
     return emit
 
 
+def _int_valued(flag: str) -> Any:
+    """A ``type=int`` flag: ``12.0`` from a settings dict would be refused."""
+
+    def emit(value):
+        return [] if value is None else [flag, str(int(value))]
+
+    return emit
+
+
+def _optional_valued(flag: str) -> Any:
+    """A flag whose ``None`` is a real choice, spelled as an empty value — the
+    ``--highlight-column ''`` rule, not the absence of the flag."""
+
+    def emit(value):
+        return [flag, "" if value is None else str(value)]
+
+    return emit
+
+
 def _mapped(flag: str, table: dict) -> Any:
     """A flag whose CLI vocabulary differs from the settings vocabulary."""
 
@@ -822,7 +841,7 @@ _CLI_EMITTERS: dict[str, Any] = {
     "background_image_origin": _pair("--stimulus-image-origin", ","),
     "background_image_opacity": _valued("--stimulus-image-opacity"),
     "anim_grid_step_ms": _valued("--anim-grid-step-ms"),
-    "anim_max_frames": _valued("--anim-max-frames"),
+    "anim_max_frames": _int_valued("--anim-max-frames"),
     # EXP-20 — every figure option `render` could not say before. Each flag is
     # spelled after its option; `tests/test_code_snippet.py` fails on an option
     # with no row here, so a new one cannot quietly fall back to being "named".
@@ -831,7 +850,7 @@ _CLI_EMITTERS: dict[str, Any] = {
     "color_by_line": _flag_when("--color-by-line", True),
     "fixation_color_range": _two_numbers("--fixation-color-range"),
     "heatmap_range": _two_numbers("--heatmap-range"),
-    "order_font_size": _valued("--order-font-size"),
+    "order_font_size": _int_valued("--order-font-size"),
     "order_font_color": _valued("--order-font-color"),
     "text_color": _valued("--text-color"),
     "highlight_text_color": _valued("--highlight-text-color"),
@@ -839,7 +858,7 @@ _CLI_EMITTERS: dict[str, Any] = {
     "background_color": _valued("--background-color"),
     "line_spacing": _valued("--line-spacing"),
     "scale_text_to_boxes": _flag_when("--no-scale-text-to-boxes", False),
-    "word_hover_measure": _valued("--word-hover-measure"),
+    "word_hover_measure": _optional_valued("--word-hover-measure"),
     "x_field": _valued("--x-field"),
     "y_field": _valued("--y-field"),
     # Was `_CLI_IMPLICIT` ("fitting to the canvas is what `--canvas` means") —
@@ -850,8 +869,8 @@ _CLI_EMITTERS: dict[str, Any] = {
     "colorbar_orientation": _mapped(
         "--colorbar-orientation", {"Vertical": "vertical", "Horizontal": "horizontal"}
     ),
-    "colorbar_tickangle": _valued("--colorbar-tickangle"),
-    "colorbar_tickfont_size": _valued("--colorbar-tickfont-size"),
+    "colorbar_tickangle": _int_valued("--colorbar-tickangle"),
+    "colorbar_tickfont_size": _int_valued("--colorbar-tickfont-size"),
     "raw_gaze_color": _valued("--raw-gaze-color"),
     "raw_gaze_marker_size": _valued("--raw-gaze-marker-size"),
     "raw_gaze_opacity": _valued("--raw-gaze-opacity"),

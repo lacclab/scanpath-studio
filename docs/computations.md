@@ -2,7 +2,7 @@
 
 # Computations & methodology
 
-Register version **1** · 65 entries across 9 categories.
+Register version **2** · 66 entries across 9 categories.
 
 Every operation that derives or semantically changes a value you can see, export, or fetch through the API is listed here with its formula, its units, and how far it has actually been verified. Pure layout and byte-preserving file I/O are out of scope; filtering, precedence and assignment are in, because they change *which observations* a result stands for.
 
@@ -75,16 +75,17 @@ Verification tiers: **A** hand-calculated synthetic oracle · **B** independent 
 | `agg.reader_summary` | Per-reader summary | Statistical aggregation / test | ms, px, counts, proportions | Partially verified |
 | `agg.trial_summary` | Per-trial summary | Statistical aggregation / test | ms, counts | Partially verified |
 | `agg.normalize` | Normalized measure column | Statistical aggregation / test | — | Partially verified |
-| `agg.landing_curve` | Landing-position curve | Statistical aggregation / test | fraction of the word (0–1), or px with `as_fraction=False` | Partially verified |
+| `agg.landing_curve` | Landing-position curve | Statistical aggregation / test | fraction of the interest area (0–1 for a landing inside the box), or px with `as_fraction=False` | Partially verified |
 | `agg.over_time` | Trend over time | Statistical aggregation / test | — | Partially verified |
 | `sim.nld` | Normalized Levenshtein distance | Similarity | dimensionless (0–1) | Verified |
 | `sim.aoi_sequence` | AoI sequence | Similarity | — | Verified |
 | `sim.windowed` | NLD by fixation index / time | Similarity | — | Partially verified |
 | `geom.pixels_per_degree` | Pixels per degree of visual angle | Unit / coordinate conversion | px / degree | Verified |
 | `geom.font_pt_to_px` | Font point size to pixels | Unit / coordinate conversion | px | Verified |
-| `geom.word_box_bounds` | Corrected word-box edges | Unit / coordinate conversion | px | Partially verified |
+| `geom.word_box_bounds` | Word interest-area edges | Unit / coordinate conversion | px | Partially verified |
 | `geom.word_box_space_px` | Inter-word padding baked into each box | Unit / coordinate conversion | px | Verified |
 | `geom.word_char_advance` | Character advance within a word | Unit / coordinate conversion | px / character | Verified |
+| `geom.word_glyph_span` | Where a word's glyphs are | Unit / coordinate conversion | px | Verified |
 | `disp.marker_sizes` | Fixation marker sizing | Display / export transformation | px (marker diameter) | Intentional convention |
 | `disp.axis_ranges` | Axis ranges and inversion | Display / export transformation | px | Intentional convention |
 | `disp.true_scale` | True-scale text rendering | Display / export transformation | — | Intentional convention |
@@ -223,14 +224,14 @@ Attach a participant-level table without broadcasting it (DATA-20).
 
 The single highest-risk step: which word a fixation counts for.
 
-**Formula.** 1. Bounding-box containment against the trial's word boxes, using the BUG-11 corrected edges (`word_box_bounds`), so a fixation in the whitespace *before* a word is credited to that word. 2. Otherwise the nearest word **center** within `LINE_MISREGISTRATION_PX` = 50 px. 3. Otherwise `word_id = NaN` (out of text).
+**Formula.** 1. Bounding-box containment against the trial's word boxes — the experiment's own rectangles (`geom.word_box_bounds`), so on a tiling corpus a fixation on the space *after* a word is credited to that word, as EyeLink's interest-area report credits it. 2. Otherwise the nearest word **center** within `LINE_MISREGISTRATION_PX` = 50 px. 3. Otherwise `word_id = NaN` (out of text).
 
 | | |
 | --- | --- |
 | **Output** | word_id |
 | **Grouping / ordering** | (participant_id, trial_id[, screen_id]) — never across screens |
 | **Missing & edge cases** | Unassignable fixations keep NaN and are excluded from word measures. |
-| **Precedence & caveats** | An imported `word_id` is kept unless `overwrite=True`. |
+| **Precedence & caveats** | An imported `word_id` is kept unless `overwrite=True` — so on the bundled demo, whose fixation report carries EyeLink's `CURRENT_FIX_INTEREST_AREA_ID`, the reading measures follow EyeLink's assignment and geometry only fills the fixations it left blank. #BUG-83: geometry now agrees with that column on 99.1% of the demo's fixations (BUG-11's half-space shift: 92.6%). |
 | **Reference** | The nearest-center fallback is common practice for line misregistration; the 50 px radius is this app's choice, not a standard. |
 | **Code** | `scanpath_studio/measures.py:assign_fixations_to_words` |
 | **Consumers** | UI, API, CLI, Export, Corpus Analysis |
@@ -592,7 +593,7 @@ Whether a word was returned to, or left backwards.
 
 Where in the word the first fixation landed, in letters.
 
-**Formula.** `char_width = geom.word_char_advance`; `offset = first_fix_x − word.x` (LTR) or `word.x + n·advance − first_fix_x` (RTL, BUG-27); `landing_position = offset / char_width + 1` — so the first letter starts at 1 and its centre is 1.5.
+**Formula.** `char_width = geom.word_char_advance`; `offset = first_fix_x − word.x` (LTR) or `word.x + n·advance − first_fix_x` (RTL, BUG-27); `landing_position = offset / char_width + 1` — so the first letter starts at 1 and its centre is 1.5. Unclipped: on a tiling corpus the box's last cell is the space after the word, which belongs to it (#BUG-83), so a first fixation there reads `n + 1` to `n + 2`.
 
 | | |
 | --- | --- |
@@ -610,7 +611,7 @@ Where in the word the first fixation landed, in letters.
 
 Landing position relative to the word's centre.
 
-**Formula.** `landing_position − (1 + len(text) / 2)` — the glyphs span `[1, n + 1)`, so that is the word's centre (BUG-65).
+**Formula.** `landing_position − (1 + len(text) / 2)` — the glyphs span `[1, n + 1)`, so that is the word's centre (BUG-65). The centre of the *letters*, not of the box: a tiling box's trailing space (#BUG-83) would move it half a letter right.
 
 | | |
 | --- | --- |
@@ -889,12 +890,12 @@ Rescale a measure for cross-reader comparison.
 
 Distribution of initial landing positions by word length.
 
-**Formula.** Histogram of the landing position as a *fraction* of the word's glyph run — `(first_fix_x − word.x) / (len(text) × geom.word_char_advance)`, so 0 is the first glyph's left edge and 1 the last glyph's right edge — binned per word length.
+**Formula.** Histogram of the landing position as a *fraction of the word's interest area* — `(first_fix_x − word.x) / width` over the experiment's own box, i.e. `(measure.landing_position − 1)` over the box's `width / geom.word_char_advance` character cells (RTL counted from where the glyphs end, as the letter position is). Unclipped — binned per word length.
 
 | | |
 | --- | --- |
-| **Unit** | fraction of the word (0–1), or px with `as_fraction=False` |
-| **Precedence & caveats** | #BUG-27: measured from the word's `x` and its glyph run, not from the `geom.word_box_bounds` AOI edge and the padded `width` — those put 0 half an inter-word space before the word and 1 half a space after it, so this disagreed with `measure.landing_position` on the same landing. |
+| **Unit** | fraction of the interest area (0–1 for a landing inside the box), or px with `as_fraction=False` |
+| **Precedence & caveats** | #BUG-83: on a glyph-tight corpus the box is the glyph run, so 0 is the first letter's edge and 1 the last's. On a tiling corpus the box's last cell is the space after the word, so the glyphs fill `[0, n / (n + 1))` and a landing on that space reads just below 1 — it used to be clipped onto exactly 1.0, where 15% of the demo's landings piled up. A first fixation assigned from outside the box (the nearest-word fallback) reads below 0 or above 1 rather than being clipped onto an edge. #BUG-27 put the origin at the word's `x` and the scale on `geom.word_char_advance`. |
 | **Code** | `scanpath_studio/aggregation.py:landing_positions` |
 | **Consumers** | Corpus Analysis |
 | **Tests** | `tests/test_aggregation.py` |
@@ -991,16 +992,16 @@ Typography conversion for true-scale text rendering.
 | **Tests** | `tests/test_experimental_setup.py` |
 | **Verification** | tier A, C — **Verified** |
 
-### `geom.word_box_bounds` — Corrected word-box edges
+### `geom.word_box_bounds` — Word interest-area edges
 
-Where one word's box ends and the next begins (BUG-11).
+Where one word's interest area ends and the next begins.
 
-**Formula.** The inter-word gap is split so the whitespace before a word belongs to that word, rather than extending the previous box across it.
+**Formula.** `x .. x + width` by `y .. y + height` — the experiment's own rectangles, unmodified. On a tiling corpus each box includes the space after its word.
 
 | | |
 | --- | --- |
 | **Unit** | px |
-| **Precedence & caveats** | Used by `assign.fixation_to_word` and by `agg.word_rates`' left edge — the boundary *between* words. A position *inside* a word goes through `geom.word_char_advance` instead, whose origin is the word's `x` (its first glyph); the two are half an advance apart by construction, which is what #BUG-27 settled. |
+| **Precedence & caveats** | The boundary *between* words, for everything that tests a point against a box or draws one: `assign.fixation_to_word`, `assign.in_text`, the drawn outlines, the word heatmaps, the critical-span frame, drift correction and the model scanpaths. A position *inside* a word goes through `geom.word_char_advance` instead, and the drawn label through `geom.word_glyph_span`. #BUG-83 reverted BUG-11, which pulled every tiling boundary back half a space to mid-whitespace and so disagreed with EyeLink's own interest-area assignment on 7.4% of the demo's fixations. |
 | **Code** | `scanpath_studio/measures.py:word_box_bounds` |
 | **Consumers** | UI, API, Corpus Analysis |
 | **Tests** | `tests/test_word_box_geometry.py`, `tests/test_word_id_offset.py` |
@@ -1010,12 +1011,13 @@ Where one word's box ends and the next begins (BUG-11).
 
 Detects a tiling layout that carries one trailing space per box.
 
-**Formula.** Median of `width / (len(text) + 1)` across one trial's words — the advance — reported only when the boxes are consistently that wide **and** actually tile (no gaps). Anything else ⇒ `0.0`, i.e. 'these AOIs are glyph-tight, don't touch them'.
+**Formula.** Median of `width / (len(text) + 1)` across one trial's words — the advance — reported only when the boxes are consistently that wide **and** actually tile (no gaps). Anything else ⇒ `0.0`, i.e. 'these AOIs are glyph-tight — each box is its glyph run'.
 
 | | |
 | --- | --- |
 | **Unit** | px |
-| **Missing & edge cases** | No usable words ⇒ 0.0 (no correction), never a guess. |
+| **Missing & edge cases** | No usable words ⇒ 0.0 (glyph-tight), never a guess. |
+| **Precedence & caveats** | Never moves a box edge (#BUG-83); it only tells `geom.word_char_advance` and `geom.word_glyph_span` how many character cells a box holds. |
 | **Code** | `scanpath_studio/measures.py:word_box_space_px` |
 | **Consumers** | UI, API, Export |
 | **Tests** | `tests/test_measures.py` |
@@ -1036,6 +1038,21 @@ How wide one letter is — the scale for every within-word position.
 | **Consumers** | UI, API, Export, Corpus Analysis |
 | **Tests** | `tests/test_measures.py` |
 | **Verification** | tier A, C — **Verified** |
+
+### `geom.word_glyph_span` — Where a word's glyphs are
+
+The glyph run inside a word's box — where its label is drawn.
+
+**Formula.** Starts at `x` and runs `len(text) × geom.word_char_advance`: the whole box on a glyph-tight corpus, one advance short of it on a tiling one. No `text` ⇒ the box width.
+
+| | |
+| --- | --- |
+| **Unit** | px |
+| **Precedence & caveats** | Rendering, not an interest area: the word label is centred on it (BUG-30), the linear-reading schematic snaps a fixation above its centre, and `agg.landing_curve` mirrors an RTL landing across it. #BUG-83 keeps the label here while the drawn box grew to the experiment's — centring in a tiling box would draw the text half a space right of the stimulus image and the fixations. |
+| **Code** | `scanpath_studio/measures.py:word_glyph_span` |
+| **Consumers** | UI, API, CLI, Export, Corpus Analysis |
+| **Tests** | `tests/test_word_box_geometry.py` |
+| **Verification** | tier A — **Verified** |
 
 ## Display / export transformation
 

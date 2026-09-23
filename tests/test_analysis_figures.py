@@ -40,6 +40,7 @@ from scanpath_studio.aggregation import (
 )
 from scanpath_studio.constants import DEFAULT_MARKER_SIZE_RANGE
 from scanpath_studio.data import (
+    correct_word_id_offset,
     derive_trial_index,
     infer_fix_schema,
     infer_word_schema,
@@ -392,10 +393,15 @@ class TestPerReaderFigures:
         assert fig.layout.yaxis2.tickformat == ".0%"
 
     def test_landing_curve(self, demo):
-        vals = landing_positions(
-            demo.words, demo.fixations, participant_id=demo.participant
-        )
-        assert vals.size and ((vals >= 0) & (vals <= 1)).all()
+        # `demo` skips `harmonize_frames`, so its fixation ids are still the raw
+        # 1-based ones (BUG-8) and point at the *next* word — which the old clip
+        # onto [0, 1] hid. Correct them the way every real load does.
+        fixations = correct_word_id_offset(demo.words, demo.fixations)
+        vals = landing_positions(demo.words, fixations, participant_id=demo.participant)
+        # Unclipped (BUG-83): the fractions are over the experiment's box, so
+        # nearly all sit inside [0, 1] on their own, and none is folded onto 1.0.
+        assert vals.size and ((vals >= 0) & (vals <= 1)).mean() > 0.99
+        assert (vals == 1.0).mean() < 0.01
         fig = plots.make_landing_curve_figure(vals, **_FW)
         assert [t.type for t in fig.data] == ["histogram"]
         assert len(fig.data[0].x) == vals.size

@@ -1309,38 +1309,6 @@ def ensure_fixation_enrichment(
         return fixations
 
 
-def _glyph_span(
-    words: pd.DataFrame, *, layout: pd.DataFrame | None = None
-) -> tuple[np.ndarray, np.ndarray]:
-    """``(start, run)`` — where the word's glyphs begin and how wide they are.
-
-    The frame a *within-word* position is measured in, and the fix for VAL-5's
-    letter-position finding. This used to take the BUG-11-corrected AOI left edge
-    as "0% into the word", which is half an inter-word space too far left: the
-    corrected edge is where the word's *interest area* starts, not where its
-    first glyph does. The rest of the box was wrong in the same direction — the
-    padded ``width`` is one advance wider than the glyph run — so a landing at
-    the last letter read as ~90% rather than 100%.
-
-    ``x`` is the glyph start by definition (see ``measures.word_box_bounds``) and
-    ``measures.word_char_advance`` is the shared letter scale, so the fraction is
-    now 0 at the first glyph's left edge and 1 at the last glyph's right edge, as
-    :func:`landing_positions` has always claimed. Falls back to the raw box for a
-    frame with no ``text`` column, where there are no letters to scale by.
-    """
-    from .measures import word_char_advance, word_char_counts
-
-    start = pd.to_numeric(words["x"], errors="coerce").to_numpy(dtype=float)
-    width = pd.to_numeric(words["width"], errors="coerce").to_numpy(dtype=float)
-    if "text" not in words.columns:
-        return start, width
-    # Counted once and handed on: `.astype(str).str.len()` is a Python-level
-    # pass over the frame, and `word_char_advance` needs the same numbers.
-    chars = word_char_counts(words)
-    run = word_char_advance(words, layout=layout, chars=chars) * chars
-    return start, np.where(np.isfinite(run) & (run > 0), run, width)
-
-
 def landing_positions(
     words: pd.DataFrame,
     fixations: pd.DataFrame | None = None,
@@ -1350,24 +1318,43 @@ def landing_positions(
 ) -> np.ndarray:
     """Within-word landing positions of the first fixation on each word (AN-12).
 
-    Prefers the pre-computed ``first_fix_x`` on ``words`` (relative to the word
-    box ``x``/``width``). When that's absent — the pre-aggregated OneStop path —
-    it derives the landing from ``fixations``: the earliest fixation on each
-    ``(participant, trial, word)``, joined to the word box. Returns the landing
-    *fraction* (0 = word start, 1 = word end) by default, else the px distance.
+    Prefers the pre-computed ``first_fix_x`` on ``words``. When that's absent —
+    the pre-aggregated OneStop path — it derives the landing from ``fixations``:
+    the earliest fixation on each ``(participant, trial, word)``, joined to the
+    word box. Returns the landing as a *fraction of the word's interest area* by
+    default, else the px distance from where the word starts.
+
+    The fraction is ``(x_fix − x) / width`` — 0 at the box's leading edge, 1 at
+    its trailing edge — over the experiment's own box (BUG-83). It is the same
+    quantity as ``initial_landing_position``, in different units: that letter
+    position minus one, over the box's ``width / advance`` character cells. On a
+    glyph-tight corpus the box *is* the glyph run, so 0 is the first letter's
+    edge and 1 the last's. On a tiling corpus the box's last cell is the space
+    after the word, so the glyphs fill ``[0, n / (n + 1))`` and a first fixation
+    on that space — which belongs to this word, as in EyeLink's report — reads
+    between ``n / (n + 1)`` and 1, where it used to be clipped onto 1.0 (15% of
+    the demo's landings piled up there). Right-to-left words are mirrored the
+    way the letter position is: counted from where the glyphs end.
+
+    Not clipped: a first fixation the word got although it lies outside the box
+    horizontally (the 50 px nearest-word fallback, or an imported ``word_id``)
+    reads below 0 or above 1, rather than piling onto an edge it did not land on.
     """
+    from .measures import word_glyph_span
+
     if words is not None and not words.empty and "first_fix_x" in words.columns:
         wd = words
         if participant_id is not None and "participant_id" in wd.columns:
             wd = wd[wd["participant_id"].astype(str) == str(participant_id)]
         ffx = pd.to_numeric(wd.get("first_fix_x"), errors="coerce")
-        starts, runs = _glyph_span(wd, layout=words)
+        starts, runs = word_glyph_span(wd, layout=words)
         left = pd.Series(starts, index=wd.index)
-        width = pd.Series(runs, index=wd.index)
+        run = pd.Series(runs, index=wd.index)
+        width = pd.to_numeric(wd["width"], errors="coerce")
         dist = ffx - left
         if "right_to_left" in wd.columns:
             rtl = wd["right_to_left"].fillna(False).astype(bool)
-            dist = dist.where(~rtl, width - dist)
+            dist = dist.where(~rtl, run - dist)
         mask = ffx.notna() & left.notna() & width.notna() & (width > 0)
         if "skip_flag" in wd.columns:
             mask &= ~pd.to_numeric(wd["skip_flag"], errors="coerce").fillna(0).astype(
@@ -1400,31 +1387,32 @@ def landing_positions(
         box_keys = [k for k in keys if k in words.columns]
         extra = ["right_to_left"] if "right_to_left" in words else []
         # Dedup to one row per word *first*, then measure. `words` here is the
-        # whole filtered corpus — one row per word per reader — so the glyph span
+        # whole filtered corpus — one row per word per reader — so the glyph run
         # was being computed for every repetition of every box. `layout=` is what
         # makes that safe: tiling detection still sees the full frame, which it
         # has to, since a deduped subset's holes read as glyph-tight gaps.
         # `text` rides along because the glyph run is counted from it — without
-        # it `_glyph_span` silently falls back to the padded box width.
+        # it an RTL landing would be mirrored across the padded box instead.
         text_col = ["text"] if "text" in words.columns else []
         box = words[box_keys + ["x", "width", *text_col, *extra]].drop_duplicates(
             box_keys
         )
-        starts, runs = _glyph_span(box, layout=words)
+        starts, runs = word_glyph_span(box, layout=words)
         box = box.assign(_left=starts, _run=runs)
         merged = first.merge(box, on=box_keys, how="inner")
         left = pd.to_numeric(merged["_left"], errors="coerce")
-        width = pd.to_numeric(merged["_run"], errors="coerce")
+        run = pd.to_numeric(merged["_run"], errors="coerce")
+        width = pd.to_numeric(merged["width"], errors="coerce")
         dist = pd.to_numeric(merged["_fx"], errors="coerce") - left
         if "right_to_left" in merged:
             rtl = merged["right_to_left"].fillna(False).astype(bool)
-            dist = dist.where(~rtl, width - dist)
+            dist = dist.where(~rtl, run - dist)
         ok = dist.notna() & width.notna() & (width > 0)
         dist, width = dist[ok], width[ok]
     else:
         return np.array([], dtype="float64")
     if as_fraction:
-        return (dist / width).clip(lower=0.0, upper=1.0).dropna().to_numpy()
+        return (dist / width).dropna().to_numpy()
     return dist.dropna().to_numpy()
 
 

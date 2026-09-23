@@ -1014,14 +1014,16 @@ def _snap_fixations_to_words(
         wid = pd.to_numeric(
             assign_fixations_to_words(out, words)["word_id"], errors="coerce"
         )
-    # BUG-11: the *corrected* box centre is the glyph centre. The raw box carries
-    # the inter-word space as trailing padding, so its centre sits half a
-    # character to the right — visibly off-centre once a fixation snaps to it.
-    from .measures import word_box_bounds
+    # Snap above the word's *glyphs*, where its label is drawn — not the middle
+    # of its interest area. A tiling box carries the following space as its last
+    # cell, so the box centre sits half a character right of the text, visibly
+    # off-centre once a fixation snaps to it. Render-only: which word a fixation
+    # belongs to is still `assign_fixations_to_words`, against the raw boxes.
+    from .measures import word_glyph_span
 
-    wx0, wy0, wx1, _ = word_box_bounds(words)
-    cx_by_id = dict(zip(words["word_id"], (wx0 + wx1) / 2.0))
-    top_by_id = dict(zip(words["word_id"], wy0))
+    start, run = word_glyph_span(words)
+    cx_by_id = dict(zip(words["word_id"], start + run / 2.0))
+    top_by_id = dict(zip(words["word_id"], pd.to_numeric(words["y"], errors="coerce")))
     snap_x = wid.map(cx_by_id)
     snap_y = wid.map(top_by_id)
     out[x_field] = snap_x.where(snap_x.notna(), out[x_field])
@@ -1143,11 +1145,12 @@ def _saccade_arrow_markers(
 def build_word_boxes(words: pd.DataFrame, color: str = WORD_BOX_COLOR) -> list:
     """Rectangles for the word interest areas.
 
-    BUG-11: drawn from ``measures.word_box_bounds``, so what's on screen is
-    exactly what ``assign_fixations_to_words`` assigns against. The word *labels*
-    keep the original frame — ``x`` still means "where the glyphs start", which is
-    what keeps the true-to-scale text on top of the stimulus image. For a
-    glyph-tight corpus the correction is zero.
+    Drawn from ``measures.word_box_bounds`` — the experiment's own rectangles
+    (BUG-83) — so what's on screen is exactly what ``assign_fixations_to_words``
+    assigns against. On a tiling corpus each outline therefore runs on across
+    the space after its word, while the word *label* sits on the glyphs
+    (``measures.word_glyph_span``), which is what keeps the true-to-scale text on
+    top of the stimulus image.
     """
     from .measures import word_box_bounds
 
@@ -1208,10 +1211,9 @@ def build_critical_span_overlay(
     line_ids = (y_sorted.diff().fillna(0) > typical_h * 0.5).cumsum()
     span["_line_id"] = line_ids.reindex(span.index)
 
-    # BUG-11: `span` is a subset, so detection runs on the full `words` frame.
     from .measures import word_box_bounds
 
-    span_x0, _, span_x1, _ = word_box_bounds(span, layout=words)
+    span_x0, _, span_x1, _ = word_box_bounds(span)
     span["_box_x0"], span["_box_x1"] = span_x0, span_x1
 
     shapes = []
@@ -1436,7 +1438,7 @@ def _add_word_label_trace(
         ]
     else:
         label_color = text_color
-    # BUG-30 — the label is **centred in the box as drawn**, so whatever room the
+    # BUG-30 — the label is **centred on its word's glyphs**, so whatever room the
     # text does not fill splits evenly instead of piling up on one side.
     #
     # It used to anchor at the box's leading edge (raw `x` for LTR, `x + width`
@@ -1445,18 +1447,18 @@ def _add_word_label_trace(
     # back on a short word, all showed up as a gap on the *trailing* side and none
     # on the leading one — "no space from the left side of the AOI".
     #
-    # The box is `measures.word_box_bounds`, not the raw frame, which is what
-    # makes this a no-op where it should be one: a tiling corpus' box carries the
-    # following space as trailing padding and BUG-11 pulls every edge back half a
-    # space, so its centre already *is* the glyph run's centre (checked on the
-    # bundled demo: 415.0 against a glyph centre of 416.3 for the first word).
-    # Where the boxes hug the glyphs the centre is the box's own, and the padding
-    # lands half on each side — which is the reported ask, as a rendering.
+    # Centred on the word's *glyph run* (`measures.word_glyph_span`), not on its
+    # interest area. Where the boxes hug the glyphs the two are the same, and the
+    # padding lands half on each side — which is the reported ask, as a
+    # rendering. A tiling corpus' box carries the following space as its last
+    # cell (BUG-83 keeps it there, as the experiment defined it), so its centre
+    # sits half a space right of the text; centring the label there would draw
+    # every word off the stimulus image and off the fixations that read it.
     #
     # Centring also retires the LTR/RTL anchor split: centred text is centred in
     # either direction. The Unicode direction isolates stay — they are about
     # *shaping* mixed Hebrew/Arabic + punctuation, not about placement.
-    from .measures import word_box_bounds
+    from .measures import word_glyph_span
     from .preprocessing import detect_right_to_left
 
     rtl = words.get("right_to_left")
@@ -1464,8 +1466,8 @@ def _add_word_label_trace(
         rtl = words["text"].astype(str).map(detect_right_to_left)
     else:
         rtl = rtl.fillna(False).astype(bool)
-    box_x0, _box_y0, box_x1, _box_y1 = word_box_bounds(words)
-    label_x = (box_x0 + box_x1) / 2.0
+    glyph_start, glyph_run = word_glyph_span(words)
+    label_x = glyph_start + glyph_run / 2.0
     label_text = [
         f"\u2067{value}\u2069" if is_rtl else value
         for value, is_rtl in zip(words["text"].astype(str), rtl)
@@ -2716,8 +2718,8 @@ def _add_word_level_heatmap(
         if weights is not None
         else None
     )
-    # BUG-11: bin against the corrected boxes, so a fixation in the space before a
-    # word counts towards that word — the same boundary the heatmap then draws.
+    # Bin against the experiment's boxes (BUG-83) — the same boundary the
+    # assignment uses and the heatmap then draws.
     from .measures import word_box_bounds
 
     word_values = []
@@ -2794,8 +2796,8 @@ def _draw_word_value_heatmap(
 
     # Nonzero test on the RAW values (a word with no dwell stays uncoloured); the
     # colour position then maps through the chosen normalization (VIZ-3). Boxes
-    # come from word_box_bounds (BUG-11) so the tinted rects sit exactly on the
-    # outlines build_word_boxes draws.
+    # come from word_box_bounds so the tinted rects sit exactly on the outlines
+    # build_word_boxes draws.
     boxes = zip(*word_box_bounds(words))
     nonzero_rows = [(box, v) for box, v in zip(boxes, word_values) if v > 0]
     if not nonzero_rows:
@@ -6411,7 +6413,12 @@ def make_landing_curve_figure(
     as_fraction: bool = True,
     height: int = 360,
 ) -> go.Figure:
-    """Preferred-viewing-location curve — landing-position histogram (AN-12)."""
+    """Preferred-viewing-location curve — landing-position histogram (AN-12).
+
+    ``values`` come from ``aggregation.landing_positions``: fractions of the
+    experiment's word box, unclipped (BUG-83), so a landing assigned from beside
+    the box shows as a bar outside 0–1 instead of a spike on the edge.
+    """
     arr = np.asarray(values, dtype="float64")
     arr = arr[~np.isnan(arr)]
     if arr.size == 0:
@@ -6432,7 +6439,7 @@ def make_landing_curve_figure(
         )
     )
     x_title = (
-        "Landing position within word (0 = start, 1 = end)"
+        "Landing position within the word's interest area (0 = start, 1 = end)"
         if as_fraction
         else "Landing distance from word start (px)"
     )

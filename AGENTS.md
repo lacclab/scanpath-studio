@@ -48,7 +48,7 @@ scanpath_studio/
 ├─ alignment.py      vertical drift-correction: native port of the ten Carr et al. (2021) line-assignment algorithms (PRE-3). Not exposed by default — PRE-21 gates it (and similarity.py) behind SCANPATH_EXPERIMENTAL=1
 ├─ similarity.py     scanpath similarity metrics (NLD etc.) scoring the Comparisons subtab
 ├─ metadata.py       DATA-20 §1: keyed, entity-level metadata tables — `ParticipantMetadata` (validated frame + `MetadataField` registry + `JoinReport`), built by `build_participant_metadata`. Three narrow consumers, and the table is **never** broadcast onto words/fixations: `participants_matching` turns a participant-grain constraint into reader ids for the existing participant filter, `project` left-joins chosen columns onto a *small* frame (the per-trial `combos`), `to_payload`/`from_payload` round-trip it through save & restore
-├─ computations.py   VAL-5: the computation register — 64 `Computation` entries (formula, units, grouping keys, missing behaviour, precedence, code link, tests, consumers, verification tier + status) covering everything that derives or semantically changes a user-visible value. Generates `docs/computations.md` (`python -m scanpath_studio.computations`); `tests/test_computations.py` pins it against `aggregation.MEASURES`, `alignment.ALGORITHMS` and the similarity metric so the catalogue cannot drift from the code
+├─ computations.py   VAL-5: the computation register — 66 `Computation` entries (formula, units, grouping keys, missing behaviour, precedence, code link, tests, consumers, verification tier + status) covering everything that derives or semantically changes a user-visible value. Generates `docs/computations.md` (`python -m scanpath_studio.computations`); `tests/test_computations.py` pins it against `aggregation.MEASURES`, `alignment.ALGORITHMS` and the similarity metric so the catalogue cannot drift from the code
 ├─ model_scanpaths.py synthetic "model-generated" scanpaths over a real text's word boxes (Comparisons placeholder data)
 ├─ plots.py          `FigureSettings` is the shared render contract used by UI, API, export, scanpath, animation, and comparison builders; also owns the Plotly builders, render helpers, and separable-layer export
 ├─ code_snippet.py   EXP-7: the API / CLI code that reproduces the figure on screen — a pure serializer over the same settings dict the builders consume (published as a `FigureState` by `tabs._publish_snippet_state`), diffed against `api.figure_options(kind)` so only the non-defaults are written. `_CLI_EMITTERS` is the `render` flag subset; anything outside it is *named* in `ReproductionCode.cli_unsupported`, never dropped
@@ -117,7 +117,11 @@ the words table take precedence over computed ones.
 AOIs (word interest areas) are **not computed** by the app — they come directly
 from the data's word bounding boxes, supplied either as `(x, y, width, height)`
 or as EyeLink's `(IA_LEFT, IA_RIGHT, IA_TOP, IA_BOTTOM)` (which `normalize_words`
-converts to `x/y/width/height`). The only thing derived from geometry is the
+converts to `x/y/width/height`), and they are used **exactly as given**:
+`measures.word_box_bounds` is the one accessor and returns `x .. x + width`
+unmodified (BUG-83 — on a tiling corpus such as the OneStop demo each box carries
+the space after its word, and a fixation there belongs to that word, as in
+EyeLink's report). The only thing derived from geometry is the
 **fixation→word assignment** in `measures.assign_fixations_to_words`: bounding-box
 containment, then nearest word-center within 50 px
 (`measures.LINE_MISREGISTRATION_PX`), else `word_id = NaN`. That

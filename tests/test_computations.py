@@ -126,10 +126,11 @@ class TestKnownInconsistenciesAreRecorded:
 
     def test_the_two_within_word_scales_point_at_one_accessor(self):
         """#BUG-27. The audit found the letter measures deriving their own
-        `width / len(text)` while the word *boundary* was BUG-11-corrected. Both
-        now resolve through `word_char_advance`, and the two geometry entries
-        have to say how they relate — a reader landing on either one must not
-        conclude that the corrected AOI edge is where a word's letters start."""
+        `width / len(text)`. Both now resolve through `word_char_advance`, and
+        the geometry entries have to say how they relate — a reader landing on
+        either one must not conclude that a tiling box's right edge (#BUG-83:
+        the experiment's, including the trailing space) is where its letters
+        end."""
         advance = reg.BY_ID["geom.word_char_advance"]
         assert "BUG-27" in advance.precedence
         for consumer in (
@@ -141,3 +142,5 @@ class TestKnownInconsistenciesAreRecorded:
         bounds = reg.BY_ID["geom.word_box_bounds"]
         assert "between" in bounds.precedence
         assert "word_char_advance" in bounds.precedence
+        assert "word_glyph_span" in bounds.precedence
+        assert "BUG-83" in bounds.precedence

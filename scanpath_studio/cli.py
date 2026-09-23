@@ -477,7 +477,8 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar="START:END",
         help="VIZ-7: draw only fixations START through END of the trial "
         "(1-based, both inclusive), e.g. --fix-index-range 1:40. Honoured by "
-        "--animate too, which then replays only that window.",
+        "--animate too, which then replays only that window, and by "
+        "--compare-with, which windows both scanpaths.",
     )
     viz.add_argument(
         "--highlight-column",
@@ -2052,6 +2053,11 @@ def render(argv: list[str]) -> None:
                     args.compare_viewing_distance,
                 ),
                 drift_correction=args.drift_correction,
+                # EXP-11: a builder parameter, like the drift correction beside
+                # it, so it has to be named here — it is not in `overrides`.
+                # Left out, a windowed comparison drew both whole trials while
+                # the `--print-code` recipe for it said otherwise.
+                fix_index_range=_parse_fix_index_range(args.fix_index_range),
                 **overrides,
                 **common,  # carries canvas_size / fonts / title / caption
             )

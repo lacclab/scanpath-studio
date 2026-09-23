@@ -155,7 +155,7 @@ the recorded setup.
 | set display geometry | `--canvas WIDTHxHEIGHT` |
 | show monitor-pixel axes | `--coordinate-grid` and optionally `--coordinate-grid-spacing PX` |
 | color fixations | `--color-by FIELD` |
-| draw only part of a trial | `--fix-index-range START:END` (1-based, both inclusive; honoured by `--animate` too) |
+| draw only part of a trial | `--fix-index-range START:END` (1-based, both inclusive; honoured by `--animate` and `--compare-with` too) |
 | mark the critical span | `--highlight-column COLUMN` (`''` for none) with `--critical-span-style mark-text\|mark-border\|none` |
 | flag short / long / off-text / blink fixations | `--fixation-flag CATEGORY=MODE[,threshold_ms=N][,symbol=S][,color=#RRGGBB]`, repeatable |
 | classify saccades | `--saccade-color-by-type` |

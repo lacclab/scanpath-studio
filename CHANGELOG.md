@@ -63,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **An untouched fixation-index slider no longer copies the trial's fixations** (PERF-8)
 - **The selected trial's `combos` row is masked once per rerun, and only when something asks** (PERF-7)
 - **`render --animate` honours every styling flag the replay can draw** (EXP-10)
+- **`render --compare-with` honours `--fix-index-range`** (EXP-11)
 
 ### Details
 
@@ -134,6 +135,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **An untouched fixation-index slider no longer copies the trial's fixations** (PERF-8) — VIZ-7's window defaults to the trial's own full range, so `_slice_fix_range` was building a boolean mask that selected everything and returning a copy, on every rerun. The call site already computes that full range one step later for VIZ-40's Share writer; it is now computed *before* the slice instead, and a window equal to it skips the mask entirely, returning the same frame object the way `_drift_corrected`'s no-op path does. The comparison is against the trial's real first/last index, never its length: on a multipart trial `order_in_trial` is parent-global, so a later screen runs 509-578 and a length-based shortcut would re-introduce BUG-47.
 
 - **`render --animate` honours every styling flag the replay can draw** (EXP-10) — `render --animate` chose what to forward to `animate_scanpath` from a hand-kept list that had drifted from the builder: `--fixation-symbol`, `--fixation-color` and `--palette` were dropped without a word, while `--color-by`, `--marker-size-range` and `--fixation-colorscale` were refused as "not supported with --animate" though the replay draws all three. An animation snippet copied from the app therefore replayed a different figure. The forwarded set is now `api.figure_options("animation")` — the same list the builder validates and the snippet serializer diffs against — and the warning names only options moved off their default that the replay genuinely cannot draw (the heatmap, arcs, reading-class saccades). A test had pinned `color_by` as unsupported; it now pins the opposite.
+
+- **`render --compare-with` honours `--fix-index-range`** (EXP-11) — `compare_scanpaths` has always taken `fix_index_range`, but `render`'s compare branch never passed it, so `--compare-with … --fix-index-range 1:10` drew both whole trials — while the `--print-code` recipe for the same command wrote the window into the Python form. It is now forwarded, windowing both scanpaths as the app's slider does.
 
 ## [0.30.1] - 2026-08-28
 

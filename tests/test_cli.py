@@ -1149,6 +1149,41 @@ def test_the_replay_takes_the_fixation_index_window_too(tmp_path, monkeypatch):
     assert captured["fix_index_range"] == (2, 5)
 
 
+def test_a_comparison_takes_the_fixation_index_window_too(tmp_path, monkeypatch):
+    """EXP-11: `compare_scanpaths` has always taken `fix_index_range`, but the
+    compare branch never passed it, so `--compare-with --fix-index-range 1:10`
+    drew both whole trials."""
+    from scanpath_studio import api
+
+    captured = {}
+    real = api.compare_scanpaths
+
+    def spy(*args, **kwargs):
+        captured.update(kwargs)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(api, "compare_scanpaths", spy)
+    out = tmp_path / "cmp.html"
+    cli.main(
+        [
+            "render",
+            "--sample",
+            "-p",
+            _SAMPLE_PARTICIPANT,
+            "-t",
+            _SAMPLE_TRIAL_A,
+            "--compare-with",
+            f"{_SAMPLE_PARTICIPANT}:{_SAMPLE_TRIAL_B}",
+            "--fix-index-range",
+            "1:10",
+            "-o",
+            str(out),
+        ]
+    )
+    assert captured["fix_index_range"] == (1, 10)
+    assert out.exists()
+
+
 @pytest.mark.parametrize("bad", ["3", "0:9", "9:3", "a:b"])
 def test_a_malformed_fixation_index_window_is_refused(tmp_path, monkeypatch, bad):
     with pytest.raises(SystemExit):

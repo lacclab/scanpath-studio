@@ -2965,6 +2965,18 @@ class TestCorpusAnalysisTab:
         # what pins that every single-screen dataset is untouched by the fix.
         assert "ptext_screen" not in keys
 
+    def test_data_without_ia_columns_still_gets_measures(self):
+        """BUG-78: only an IA export ships per-word measures, and the subtabs
+        read them off the words frame — so boxes + fixations alone (the synthetic
+        trial, a Tobii/SMI upload) got "No aggregatable measures"."""
+        at = _make_apptest(synthetic=True)
+        at.session_state["main_nav"] = "Corpus Analysis"
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert not [i for i in at.info if "No aggregatable measures" in i.value]
+        picker = next(s for s in at.selectbox if s.key == "ptext_measure")
+        assert len(picker.options) >= 10, picker.options
+
     def test_only_the_open_subtab_runs(self, monkeypatch):
         """PERF-9: the hidden Per sentence table ran on every Corpus rerun."""
         from scanpath_studio import tabs

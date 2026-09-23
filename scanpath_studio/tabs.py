@@ -129,6 +129,7 @@ from scanpath_studio.data import (
     empty_words_frame,
     filter_to_keys,
     filter_trials,
+    frame_cache,
     frame_fingerprint,
     harmonize_frames,
     has_explicit_trial_index,
@@ -6718,6 +6719,23 @@ def render_corpus_analysis_tab(
     # Keyed → the `.st-key-…` selector the "Explore a corpus question" tutorial
     # spotlights when it names the subtab to open (UX-40). The tab bar carries no
     # widget key, so a tutorial can only *point* at it, never switch it.
+    from scanpath_studio.measures import compute_per_word_measures
+
+    # BUG-78: every subtab reads its measures off the words frame, and only an
+    # IA export ships them — so a Tobii/SMI upload, the synthetic trial or an
+    # authored scanpath (boxes + fixations, nothing pre-aggregated) got "No
+    # aggregatable measures" on Per text and one or two fixation-level measures
+    # elsewhere. Computed once per filtered pool, imported IA values still
+    # winning column by column, and handed back as the same object (no copy).
+    words_filtered = frame_cache(
+        "corpus_measures",
+        (frame_fingerprint(words_filtered), frame_fingerprint(fixations_filtered)),
+        lambda: (
+            compute_per_word_measures(fixations_filtered, words_filtered)
+            if not words_filtered.empty and not fixations_filtered.empty
+            else words_filtered
+        ),
+    )
     with st.container(key="tutorial_corpus_subtabs"):
         text_tab, sentence_tab, reader_tab, groups_tab = st.tabs(
             list(CORPUS_SUBTABS),
@@ -6759,7 +6777,8 @@ def render_corpus_analysis_tab(
 def _c_sentence_measures(_words, _fix, fwkey, ffkey):
     from scanpath_studio.preprocessing import sentence_measures
 
-    return sentence_measures(compute_word_metrics(_words, _fix), _fix)
+    # `_words` already carries the per-word measures (BUG-78).
+    return sentence_measures(_words, _fix)
 
 
 def _render_per_sentence_tab(

@@ -1118,14 +1118,40 @@ def _migrate_config_1_to_2(config: dict) -> dict:
     return config
 
 
+#: The sections that make a saved config a *plot* config, as opposed to a file
+#: that carries only annotations (or only a design library). Their presence is
+#: what licenses the reader — and the 2→3 migration — to fill in defaults for
+#: sections an older build did not write.
+_PLOT_SECTIONS = (
+    "layers",
+    "coloring",
+    "sizing",
+    "canvas_px",
+    "axes",
+    "text",
+    "highlighting",
+)
+
+
+def _has_plot_section(config: dict) -> bool:
+    return any(isinstance(config.get(name), dict) for name in _PLOT_SECTIONS)
+
+
 def _migrate_config_2_to_3(config: dict) -> dict:
     """Upgrade to the optional VIZ-34 coordinate-grid axes fields.
 
     Stamp explicit defaults so a v1/v2 file restores the complete current
-    settings contract without changing its rendered result.
+    settings contract without changing its rendered result — but only a file
+    that *has* plot settings. BUG-73: an annotations-only backup
+    (``{"schema": 2, "annotations": [...]}``) came out of this with an ``axes``
+    section, which made the reader take it for a full plot config and pin the
+    defaults of every section it lacked: restoring your notes reset your grid,
+    illustration label, preprocessing and title to factory settings.
     """
     migrated = dict(config)
     if "axes" in config and not isinstance(config.get("axes"), dict):
+        return migrated
+    if not _has_plot_section(config):
         return migrated
     axes = dict(config.get("axes") or {})
     axes.setdefault("coordinate_grid", False)
@@ -1407,18 +1433,7 @@ def _restore_plot_config(
     # Older valid configs predate the illustration/preprocessing sections. They
     # still need deterministic defaults for the newly frozen state keys, while
     # a document made entirely of wrong-typed sections must remain a true no-op.
-    has_valid_plot_section = any(
-        isinstance(config.get(name), dict)
-        for name in (
-            "layers",
-            "coloring",
-            "sizing",
-            "canvas_px",
-            "axes",
-            "text",
-            "highlighting",
-        )
-    )
+    has_valid_plot_section = _has_plot_section(config)
 
     # Re-apply the saved column mapping + kept-field choices (so restoring a
     # config skips re-mapping). Seeded before the mapping widgets render.

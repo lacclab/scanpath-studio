@@ -845,3 +845,37 @@ def test_the_recovery_cache_keeps_compare_mode_and_the_replay_speed(tmp_path):
     restored: dict = {}
     assert persistence.restore_state(restored, tmp_path)
     assert {key: restored.get(key) for key in expected} == expected
+
+
+# --- BUG-73: an annotations-only backup restores annotations, nothing else ---
+
+
+def test_migrating_an_annotations_only_file_adds_no_plot_section():
+    from scanpath_studio.url_state import _migrate_plot_config
+
+    migrated, note = _migrate_plot_config({"schema": 2, "annotations": []})
+    assert note is None
+    assert "axes" not in migrated
+
+
+@pytest.mark.timeout(60)
+def test_restoring_annotations_leaves_the_view_settings_alone():
+    """The 2→3 migration stamped `axes` onto every v2 file, which made the
+    reader treat notes-only JSON as a full plot config and reset the grid,
+    illustration label, preprocessing and title to their defaults."""
+    seeded = {
+        "global_show_coordinate_grid": True,
+        "global_coordinate_grid_auto": False,
+        "global_coordinate_grid_spacing": 250.0,
+        "global_illustration_label": "Hide",
+        "global_show_title_caption": True,
+        "global_title_pattern": "Mine",
+    }
+    config = {
+        "schema": 2,
+        "annotations": [{"participant_id": "p1", "trial_id": "t1", "star": True}],
+    }
+    ss = _run(_restore_app, _config=config, **seeded).session_state
+    assert {key: ss[key] for key in seeded} == seeded
+    assert ss["_applied"] == 1  # the annotations, and only them
+    assert len(ss["trial_annotations"]) == 1

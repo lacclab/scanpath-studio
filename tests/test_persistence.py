@@ -4,6 +4,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 
 import pandas as pd
+import pytest
 
 from scanpath_studio import persistence
 from scanpath_studio.annotations import ANNOTATIONS_STATE_KEY
@@ -49,6 +50,61 @@ def test_enabled_only_for_loopback_without_override():
     assert not persistence_enabled(
         "http://localhost:8501", {"SCANPATH_STUDIO_PERSIST": "0"}
     )
+
+
+class TestTheGateTrustsTheServerNotTheBrowser:
+    """ENG-56 — inside a Streamlit server the gate reads ``server.address``.
+
+    It used to read ``st.context.url``, which Streamlit copies from the browser's
+    own message, so a peer on the network could connect to an all-interfaces
+    server claiming ``http://localhost/`` and get the owner's cached datasets.
+    """
+
+    @pytest.fixture
+    def serving(self, monkeypatch):
+        from streamlit import config, runtime
+
+        monkeypatch.setattr(runtime, "exists", lambda: True)
+        before = config.get_option("server.address")
+        yield lambda address: config.set_option("server.address", address)
+        config.set_option("server.address", before)
+
+    def test_a_claimed_localhost_url_is_not_enough(self, serving):
+        serving(None)  # Streamlit's default: every interface
+        assert not persistence_enabled("http://localhost:8501", {})
+        serving("0.0.0.0")
+        assert not persistence_enabled("http://127.0.0.1:8501", {})
+
+    @pytest.mark.parametrize("address", ["127.0.0.1", "::1", "[::1]", "localhost"])
+    def test_a_loopback_bound_server_persists(self, serving, address):
+        serving(address)
+        assert persistence_enabled("https://any.example", {})
+        assert persistence.server_bound_to_loopback()
+
+    def test_the_environment_still_wins_both_ways(self, serving):
+        serving(None)
+        assert persistence_enabled("", {"SCANPATH_STUDIO_PERSIST": "1"})
+        serving("127.0.0.1")
+        assert not persistence_enabled("", {"SCANPATH_STUDIO_PERSIST": "0"})
+
+    def test_cache_status_reports_the_same_gate(self, serving, tmp_path):
+        serving(None)
+        assert not cache_status(tmp_path, url="http://localhost", environ={})["enabled"]
+        serving("127.0.0.1")
+        assert cache_status(tmp_path, url="", environ={})["enabled"]
+
+
+def test_the_desktop_app_binds_loopback_so_it_keeps_its_cache():
+    """ENG-56 made the cache follow the bind address, so the launcher's is load-bearing."""
+    import re
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parents[1] / "desktop" / "launcher.py"
+    ).read_text(encoding="utf-8")
+    bound = re.findall(r'"--server\.address=([^"]+)"', source)
+    assert bound, "desktop/launcher.py no longer passes --server.address"
+    assert all(persistence._is_loopback_host(address) for address in bound), bound
 
 
 def test_is_loopback_url_is_independent_of_persistence_overrides():
@@ -662,3 +718,199 @@ class TestTheRecoveryToastPhrase:
 
     def test_nothing_to_report_still_reads_as_a_sentence(self):
         assert self._recap() == "your last session"
+
+
+class TestAMalformedCacheNeverStopsTheApp:
+    """BUG-71 — the manifest is a file on disk, so any JSON can be in it.
+
+    Wrong shapes used to escape as an ``AttributeError`` the restore did not
+    catch, and restored values were seeded unchecked into widgets that refuse
+    them — both before the 💾 Session dialog that could reset them, on every
+    launch. Each case below crashed the app in the pre-beta audit.
+    """
+
+    @staticmethod
+    def _write(root, manifest) -> None:
+        (root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    @staticmethod
+    def _manifest(**sections):
+        return {
+            "schema": 1,
+            "datasets": {},
+            "session": {},
+            "annotations": [],
+            **sections,
+        }
+
+    def test_a_manifest_that_is_not_an_object_is_ignored(self, tmp_path):
+        for manifest in ([], None, "x", 3):
+            self._write(tmp_path, manifest)
+            session = {}
+            assert not restore_state(session, tmp_path)
+            assert "_datasets" not in session
+
+    def test_a_malformed_dataset_entry_abandons_the_restore_untouched(self, tmp_path):
+        self._write(
+            tmp_path,
+            self._manifest(
+                datasets={"x": "str"}, session={"global_show_heatmap": True}
+            ),
+        )
+        session = {}
+        assert not restore_state(session, tmp_path)
+        # Checked before anything is applied, so nothing is half-restored.
+        assert session == {persistence._RESTORED_KEY: True}
+
+    def test_malformed_annotation_records_are_skipped(self, tmp_path):
+        good = {"participant_id": "p1", "trial_id": "t1", "star": True}
+        self._write(tmp_path, self._manifest(annotations=["x", 5, good]))
+        session = {}
+        assert restore_state(session, tmp_path)
+        assert list(session[ANNOTATIONS_STATE_KEY]) == [("p1", "t1")]
+
+        self._write(tmp_path, self._manifest(annotations={"a": 1}))
+        session = {}
+        assert restore_state(session, tmp_path)
+        assert session[ANNOTATIONS_STATE_KEY] == {}
+
+    def test_values_a_widget_refuses_are_clamped_or_dropped(self, tmp_path):
+        self._write(
+            tmp_path,
+            self._manifest(
+                session={
+                    "global_fixation_opacity": 7,
+                    "global_stimulus_image_opacity": -1,
+                    "global_marker_size_range": "abc",
+                    "global_order_font_color": "zzz",
+                    "global_canvas_width": "wide",
+                    "global_show_heatmap": "yes",
+                    "global_heatmap_style": "Bogus",
+                    "global_line_spacing": float("nan"),
+                    "global_text_color": "#123456",
+                    "col_map_fix_x": "gaze_x",
+                    # Not a key this module writes — a foreign manifest must not
+                    # be able to seed arbitrary session state.
+                    "_show_upload_wizard": True,
+                }
+            ),
+        )
+        session = {}
+        assert restore_state(session, tmp_path)
+        assert session["global_fixation_opacity"] == 1.0
+        assert session["global_stimulus_image_opacity"] == 0.1
+        for dropped in (
+            "global_marker_size_range",
+            "global_order_font_color",
+            "global_canvas_width",
+            "global_show_heatmap",
+            "global_heatmap_style",
+            "global_line_spacing",
+            "_show_upload_wizard",
+        ):
+            assert dropped not in session, dropped
+        assert session["global_text_color"] == "#123456"
+        assert session["col_map_fix_x"] == "gaze_x"
+
+    def test_a_range_comes_back_as_the_tuple_the_widget_writes(self, tmp_path):
+        save_state({"global_marker_size_range": (30, 8)}, tmp_path)
+        session = {}
+        assert restore_state(session, tmp_path)
+        assert session["global_marker_size_range"] == (8, 30)
+
+    def test_a_malformed_design_library_keeps_its_good_designs(self, tmp_path):
+        self._write(
+            tmp_path,
+            self._manifest(session={DESIGN_PRESETS: {"ok": {"a": 1}, "bad": "x"}}),
+        )
+        session = {}
+        assert restore_state(session, tmp_path)
+        assert session[DESIGN_PRESETS] == {"ok": {"a": 1}}
+
+
+class TestTheRestoreCrashLoopBreaker:
+    """BUG-71 — a restore that breaks the app must not break every launch.
+
+    Its marker is written before the cache is applied and cleared when a run
+    that applied it reaches the epilogue (`save_local_state`). A session that
+    finds it opens without the cache, keeps the files, pauses saving so they
+    stay, and clears the marker so the next reload tries again.
+    """
+
+    @pytest.fixture
+    def cache(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
+        monkeypatch.setattr(persistence, "state_directory", lambda *a, **k: tmp_path)
+        save_state({"_datasets": {"Corpus": _dataset()}}, tmp_path)
+        return tmp_path
+
+    def test_a_run_that_finishes_clears_the_marker(self, cache):
+        marker = cache / persistence.RESTORE_MARKER_NAME
+        session = {}
+        assert restore_local_state(session, "http://localhost:8501")
+        assert marker.is_file()  # applied, not yet known to render
+        save_local_state(session, "http://localhost:8501")
+        assert not marker.exists()
+
+    def test_nothing_to_restore_leaves_no_marker(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
+        monkeypatch.setattr(persistence, "state_directory", lambda *a, **k: tmp_path)
+        assert not restore_local_state({}, "http://localhost:8501")
+        assert not (tmp_path / persistence.RESTORE_MARKER_NAME).exists()
+
+    def test_a_launch_after_one_that_never_finished_skips_the_restore(self, cache):
+        manifest = (cache / "manifest.json").read_text(encoding="utf-8")
+        crashed = {}
+        restore_local_state(crashed, "http://localhost:8501")  # …and never saved
+
+        session = {}
+        assert not restore_local_state(session, "http://localhost:8501")
+        assert "_datasets" not in session
+        assert persistence_paused(session)
+        assert persistence.consume_restore_skipped(session)
+        assert not persistence.consume_restore_skipped(session)  # said once
+        # The stored copy is untouched, and this session cannot overwrite it.
+        session["global_show_heatmap"] = True
+        assert not save_local_state(session, "http://localhost:8501")
+        assert (cache / "manifest.json").read_text(encoding="utf-8") == manifest
+
+        # One strike: the marker went with the skip, so a reload tries again.
+        again = {}
+        assert restore_local_state(again, "http://localhost:8501")
+        assert again["_datasets"]
+
+    def test_clearing_the_cache_takes_the_marker_with_it(self, cache):
+        restore_local_state({}, "http://localhost:8501")
+        clear_local_state({}, cache)
+        assert not (cache / persistence.RESTORE_MARKER_NAME).exists()
+
+
+def test_a_restore_that_crashes_the_app_does_not_crash_the_next_launch(
+    tmp_path, monkeypatch
+):
+    """End to end (BUG-71): launch one dies after restoring; launch two opens."""
+    streamlit_testing = pytest.importorskip("streamlit.testing.v1")
+    from scanpath_studio import app
+    from tests.conftest import APP_SCRIPT
+
+    monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
+    monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
+    save_state({"global_show_heatmap": True}, tmp_path)
+    manifest = (tmp_path / "manifest.json").read_text(encoding="utf-8")
+
+    real = app.render_top_menu
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("a restored value this build cannot draw")
+
+    monkeypatch.setattr(app, "render_top_menu", broken)
+    first = streamlit_testing.AppTest.from_file(APP_SCRIPT, default_timeout=180)
+    first.run()
+    assert first.exception  # the crash the breaker exists for
+
+    monkeypatch.setattr(app, "render_top_menu", real)
+    second = streamlit_testing.AppTest.from_file(APP_SCRIPT, default_timeout=180)
+    second.run()
+    assert not second.exception, [e.message for e in second.exception]
+    assert any("didn't finish opening" in t.value for t in second.toast)
+    assert (tmp_path / "manifest.json").read_text(encoding="utf-8") == manifest

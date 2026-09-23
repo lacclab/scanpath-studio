@@ -50,6 +50,7 @@ from scanpath_studio.aggregation import (
 )
 from scanpath_studio.animation_export import (
     CHROME_INSTALL_HINT,
+    AnimationBudgetError,
     AnimationExportError,
     chrome_available,
     export_animation,
@@ -208,6 +209,7 @@ from scanpath_studio.session_keys import (
     SINGLE_COMPARE_LAYOUT,
     SINGLE_COMPARE_STIMULUS,
     SINGLE_COMPARE_TOGGLE,
+    SINGLE_PLAYBACK_SPEED,
 )
 from scanpath_studio.similarity import (
     METRICS,
@@ -1161,8 +1163,12 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
             )
         except AnimationExportError as exc:
             progress_slot.empty()
+            # SEC1: an over-budget GIF is refused before Chrome starts, and its
+            # message already says what to change — the browser advice would not.
             st.warning(
-                f"Could not render {fmt}: {exc}\n\n"
+                f"Could not render {fmt}: {exc}"
+                if isinstance(exc, AnimationBudgetError)
+                else f"Could not render {fmt}: {exc}\n\n"
                 "GIF/MP4 export rasterizes each frame with a Chrome/Chromium browser "
                 "(Kaleido). On Streamlit Cloud this is installed via `packages.txt`; "
                 "if it still fails, use the **HTML** format above — it needs no browser."
@@ -1282,6 +1288,11 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         show_coordinate_grid=viz_settings.get("show_coordinate_grid", False),
         coordinate_grid_spacing=viz_settings.get("coordinate_grid_spacing"),
         show_raw_gaze=effective_show_raw_gaze,
+        # VIZ-43: raw gaze's own style (UX-86). The rail wrote these keys and
+        # nothing handed them on, so every figure drew the builder's defaults.
+        raw_gaze_color=viz_settings.get("raw_gaze_color", "#888888"),
+        raw_gaze_marker_size=viz_settings.get("raw_gaze_marker_size", 4.0),
+        raw_gaze_opacity=viz_settings.get("raw_gaze_opacity", 0.6),
         color_by=viz_settings["color_by"],
         heatmap_metric=(
             viz_settings["heatmap_metric"]
@@ -2977,7 +2988,10 @@ def _build_studio_config(
             "saccades": figure_settings["show_saccades"],
             "saccade_arrows": figure_settings.get("show_saccade_arrows", False),
             "heatmap": figure_settings["show_heatmap"],
-            "raw_gaze": figure_settings["show_raw_gaze"],
+            # BUG-72: the switch, not the figure's *effective* raw gaze (switch
+            # AND this trial has samples) — saving on a trial without raw gaze
+            # used to record the layer as off.
+            "raw_gaze": bool(viz_settings.get("show_raw_gaze", False)),
             "stimulus_image": viz_settings.get("show_stimulus_image", False),
             "full_monitor": figure_settings.get("fit_to_monitor", True),
             # VIZ-10: autoplay the animated replay on load.
@@ -3005,6 +3019,10 @@ def _build_studio_config(
         "animation": {
             "grid_step_ms": int(viz_settings.get("anim_grid_step_ms", 100) or 100),
             "max_frames": int(viz_settings.get("anim_max_frames", 360) or 360),
+            # BUG-72: the replay speed — a non-1× speed is an Illustration.
+            "playback_speed": float(
+                st.session_state.get(SINGLE_PLAYBACK_SPEED, 1.0) or 1.0
+            ),
         },
         "coloring": {
             "color_by": figure_settings["color_by"],
@@ -3129,6 +3147,11 @@ def _build_studio_config(
         "raw_gaze": {
             "available": not trial_raw_gaze.empty,
             "points": len(trial_raw_gaze) if not trial_raw_gaze.empty else 0,
+            # VIZ-43: the layer's own style — the two keys above describe the
+            # trial the config was saved on and are not read back.
+            "color": viz_settings.get("raw_gaze_color", "#888888"),
+            "marker_size": float(viz_settings.get("raw_gaze_marker_size", 4.0)),
+            "opacity": float(viz_settings.get("raw_gaze_opacity", 0.6)),
         },
         # Per-scanpath styling for the two-trial comparison (None when the caller
         # didn't collect it). Each entry holds raw widget values so it restores 1:1.
@@ -3139,6 +3162,8 @@ def _build_studio_config(
         "compare_view": {
             "layout": st.session_state.get(SINGLE_COMPARE_LAYOUT, "Overlay"),
             "stimulus": st.session_state.get(SINGLE_COMPARE_STIMULUS, "Both"),
+            # BUG-72: the A/B legend, the one compare setting that is a switch.
+            "legend": bool(viz_settings.get("show_compare_legend", False)),
         },
         "annotations": annotation_records,
         # DATA-20: the participant table travels with the saved session, so a

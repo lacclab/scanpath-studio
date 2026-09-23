@@ -20,8 +20,9 @@ too. Nothing here is inferred from documentation alone.
   Dependency claims were checked against the installed source, never the docs.
 
 !!! note "Amended after the audit — the on-device recovery cache (ENG-26)"
-    Version 0.27.0 added `persistence.py`: on a **localhost or desktop** run, the
-    app writes completed uploaded datasets to
+    Version 0.27.0 added `persistence.py`: on a run whose server listens on
+    **loopback only** (the desktop app; any launch with
+    `server.address=127.0.0.1`), the app writes completed uploaded datasets to
     `~/.cache/scanpath-studio/session-v1` as Parquet, plus a JSON manifest with
     mappings, view settings and annotations, and restores them on the next
     session. That post-dates the audit below, so every "no on-disk residue of
@@ -31,6 +32,13 @@ too. Nothing here is inferred from documentation alone.
     account-readable; it is disclosed and deletable in-app (💾 **Session** →
     **🗄️ Recovery cache**) and from `scanpath-studio cache --clear`, and it is
     described for researchers in [privacy.md](privacy.md#what-happens-to-a-file-you-upload).
+    **ENG-56:** until the pre-beta audit the gate asked whether `st.context.url`
+    was a loopback URL — a value Streamlit copies from the browser's own message
+    — so a machine on the network could connect to a server listening on every
+    interface, claim to be at `http://localhost/`, and have the owner's cached
+    datasets restored into its session. The gate now reads the server's own
+    `server.address` (`persistence.server_bound_to_loopback`); the URL is
+    consulted only outside a Streamlit server (the `cache` CLI, the API).
 
 !!! note "After the audit — Streamlit 1.61–1.64 (ENG-31, ENG-43, ENG-49, ENG-52)"
     The runtime moved from 1.58.0 to 1.61.1, then 1.62.0, 1.63.0 and 1.64.0. Two of the
@@ -796,9 +804,11 @@ created. Uploads go to Streamlit's `MemoryUploadedFileManager` (RAM, dropped by
 annotations in session state.
 
 Since 0.27.0 that is the whole story only where `persistence.persistence_enabled`
-returns False — a hosted deployment, or any run with
-`SCANPATH_STUDIO_PERSIST=0`. On **localhost or the desktop app** the opposite is
-true by design: `persistence.save_state` writes those same session datasets to
+returns False — a server other machines can reach (a hosted deployment, a bare
+`streamlit run` on every interface), or any run with
+`SCANPATH_STUDIO_PERSIST=0`. On a server bound to **loopback only** (the
+desktop app; `server.address=127.0.0.1`), or with `SCANPATH_STUDIO_PERSIST=1`,
+the opposite is true by design: `persistence.save_state` writes those same session datasets to
 `~/.cache/scanpath-studio/session-v1` (Parquet frames + `manifest.json`) at the
 end of every run whose state changed, and `restore_state` reads them back on the
 next session. So the disk writes in the package are the corpus downloads in

@@ -197,6 +197,7 @@ from scanpath_studio.persistence import (
     STATE_DIR_ENV_VAR,
     cache_status,
     clear_local_state,
+    consume_restore_skipped,
     human_size,
     is_loopback_url,
     persistence_paused,
@@ -6235,6 +6236,17 @@ def main() -> None:
             f"Recovered {_restored_recap()} from this computer — see 💾 Session "
             "→ Automatic recovery.",
             icon="↩️",
+        )
+    elif consume_restore_skipped(st.session_state):
+        # BUG-71: the last launch that restored the cache never finished, so this
+        # one opened without it rather than failing the same way again.
+        st.toast(
+            "Your last session didn't finish opening, so it wasn't restored this "
+            "time. It is still saved on this computer and saving is paused, so it "
+            "stays that way: reload to try again, or clear it in 💾 Session → "
+            "Automatic recovery.",
+            icon="⚠️",
+            duration="long",
         )
     if url_source == "onestop" and onestop_data_dir() is not None:
         st.session_state.setdefault("data_source_choice", ONESTOP_CHOICE)

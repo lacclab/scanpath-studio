@@ -296,6 +296,11 @@ def test_deep_link_seeds_frozen_state_keys():
     from scanpath_studio.url_state import _SHARE_COLOR_PARAMS
 
     validated.update({param: "#123456" for param in _SHARE_COLOR_PARAMS})
+    # EXP-18: the settings that joined the link are closed vocabularies too.
+    validated["colorbar_orientation"] = "Horizontal"
+    for category in ("short", "long", "oob", "blink"):
+        validated[f"fixclass_{category}_mode"] = "Discard"
+        validated[f"fixclass_{category}_symbol"] = "x"
     for param in sk.SHARE_TOGGLE_PARAMS:
         query[param] = "1"
     for param in sk.SHARE_VALUE_PARAMS:

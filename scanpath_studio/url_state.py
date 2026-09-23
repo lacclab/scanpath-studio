@@ -186,6 +186,38 @@ def _parse_hex_color(v) -> str:
     return text
 
 
+def _parse_playback_speed(v) -> float:
+    """A replay speed → the ⚙ Playback slider's own option (EXP-18).
+
+    It is an `st.select_slider`, which raises on a value outside its options,
+    so ``?playback_speed=3.3`` is rejected here (the "Ignored bad URL param"
+    warning) rather than wedging the popover. The options belong to `tabs`,
+    which imports this module — hence the import at call time.
+    """
+    from scanpath_studio.tabs import _ANIM_SPEED_OPTIONS
+
+    speed = float(v)
+    for option in _ANIM_SPEED_OPTIONS:
+        if math.isclose(speed, option):
+            return option
+    raise ValueError(f"not a playback speed the slider offers: {v!r}")
+
+
+def _parse_fixclass_mode(v) -> str:
+    return _parse_choice(v, tuple(_FIXCLASS_MODES), "fixation-flag mode")
+
+
+def _parse_fixclass_symbol(v) -> str:
+    name = str(v).strip()
+    if name not in _OUT_OF_TEXT_MARKERS:
+        raise ValueError(f"unknown fixation-flag marker {name!r}")
+    return name
+
+
+def _parse_colorbar_orientation(v) -> str:
+    return _parse_choice(v, ("Vertical", "Horizontal"), "colour-bar orientation")
+
+
 def _parse_align_algorithm(v) -> str:
     """PRE-3 drift-correction algorithm name → the picker's exact spelling.
 
@@ -203,9 +235,14 @@ def _parse_align_algorithm(v) -> str:
 
 
 # --- Share-link parameter groups -------------------------------------------
-# The Share link round-trips the *entire* Visualization-controls panel (plus the
-# text/background settings from Experimental Setup), not just a handful of
-# toggles. Each group maps a short URL key → the session_state key it reads/writes.
+# The Share link round-trips the rail's figure settings — the layers, colours,
+# sizes, fixation flags, colour bars and labels, plus the font family, line
+# spacing and background — and the replay speed. It does **not** carry the
+# recording setup (canvas size, base font size, monitor mm, viewing distance,
+# DPI) or Compare's per-scanpath `cmp{idx}_*` styles: those travel in the 💾
+# saved config, and the Share panel says so (EXP-18 — whether they should ride
+# the link too is a maintainer decision still open). Each group maps a short
+# URL key → the session_state key it reads/writes.
 # `_build_share_query` (write) and `_apply_url_preset` (read) both iterate these,
 # so the two sides can't drift. Data-dependent fields (color ranges, highlight
 # column, axis/color-by fields) self-heal on load via the rail's _drop_stale /
@@ -240,6 +277,11 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "scale_text_to_boxes": "global_scale_text_to_boxes",
     # EXP-5: title/caption on the figure — off by default.
     "show_title_caption": "global_show_title_caption",
+    # EXP-18: three switches that change the figure and never rode the link —
+    # the stimulus-image layer, Show full monitor, and Compare's A/B legend.
+    "show_stimulus_image": "global_show_stimulus_image",
+    "fit_to_monitor": "global_fit_to_monitor",
+    "show_compare_legend": "global_show_compare_legend",
 }
 _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when set)
     "preproc_short_policy": "global_preproc_short_policy",
@@ -302,6 +344,17 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     # parsers, since each is a closed vocabulary.
     "cmp_layout": "single_compare_layout",
     "cmp_stimulus": "single_compare_stimulus",
+    # EXP-18: colour-bar orientation, the span's border colour, and the PRE-2
+    # fixation flags. *Discard* changes which fixations are drawn at all, so a
+    # link without it showed the recipient a different scanpath — and without
+    # the Illustration label the sender's figure carried.
+    "colorbar_orientation": "global_colorbar_orientation",
+    "span_border_color": "global_span_border_color",
+    **{
+        f"fixclass_{cat}_{part}": f"global_fixclass_{cat}_{part}"
+        for cat in ("short", "long", "oob", "blink")
+        for part in ("mode", "symbol", "color")
+    },
 }
 #: The `_SHARE_VALUE_PARAMS` that carry a colour — read through
 #: `_parse_hex_color` rather than `str` (BUG-69).
@@ -318,6 +371,11 @@ _SHARE_COLOR_PARAMS = (
     "text_color",
     "highlight_text_color",
     "bg_custom",
+    "span_border_color",
+    "fixclass_short_color",
+    "fixclass_long_color",
+    "fixclass_oob_color",
+    "fixclass_blink_color",
 )
 _SHARE_INT_PARAMS = {
     "order_font_size": "global_order_font_size",
@@ -325,6 +383,11 @@ _SHARE_INT_PARAMS = {
     # says "look at this replay" should reproduce the same smoothness.
     "anim_grid_step_ms": "global_anim_grid_step_ms",
     "anim_max_frames": "global_anim_max_frames",
+    # EXP-18: colour-bar tick styling and the two fixation-flag thresholds.
+    "colorbar_tickangle": "global_colorbar_tickangle",
+    "colorbar_tickfont_size": "global_colorbar_tickfont_size",
+    "fixclass_short_threshold_ms": "global_fixclass_short_threshold_ms",
+    "fixclass_long_threshold_ms": "global_fixclass_long_threshold_ms",
 }
 _SHARE_FLOAT_PARAMS = {
     "preproc_short_threshold_ms": "global_preproc_short_threshold_ms",
@@ -345,6 +408,9 @@ _SHARE_FLOAT_PARAMS = {
     # UX-86: raw gaze's own style.
     "raw_gaze_marker_size": "global_raw_gaze_marker_size",
     "raw_gaze_opacity": "global_raw_gaze_opacity",
+    # EXP-18: the replay speed. A non-1× speed stamps an Illustration label, so
+    # a link without it reopened a figure that disclosed something else.
+    "playback_speed": "single_playback_speed",
 }
 _SHARE_INT_RANGE_PARAMS = {
     "marker_size_range": "global_marker_size_range",
@@ -397,6 +463,20 @@ _URL_PRESETS = {
     "cmp_stimulus": ("single_compare_stimulus", _parse_compare_stimulus),
     # BUG-69 — and for every colour, which Plotly rejects outright.
     **{k: (_SHARE_VALUE_PARAMS[k], _parse_hex_color) for k in _SHARE_COLOR_PARAMS},
+    # EXP-18 — the settings that joined the link, each a closed vocabulary.
+    "playback_speed": ("single_playback_speed", _parse_playback_speed),
+    "colorbar_orientation": (
+        "global_colorbar_orientation",
+        _parse_colorbar_orientation,
+    ),
+    **{
+        f"fixclass_{cat}_{part}": (f"global_fixclass_{cat}_{part}", parse)
+        for cat in ("short", "long", "oob", "blink")
+        for part, parse in (
+            ("mode", _parse_fixclass_mode),
+            ("symbol", _parse_fixclass_symbol),
+        )
+    },
 }
 
 # Widget bounds for the URL-restorable params that feed a min/max-bounded widget
@@ -426,6 +506,13 @@ _URL_BOUNDED = {
     # `?raw_gaze_opacity=5` crashed the slider. Mirrors controls.py's widgets.
     "global_raw_gaze_marker_size": (1.0, 12.0),
     "global_raw_gaze_opacity": (0.1, 1.0),
+    # EXP-18: the colour-bar tick sliders, and the fixation-flag thresholds —
+    # a `number_input` with only a minimum, capped at a minute here so a link
+    # cannot carry a number no fixation reaches.
+    "global_colorbar_tickangle": (-90, 90),
+    "global_colorbar_tickfont_size": (6, 20),
+    "global_fixclass_short_threshold_ms": (1, 60_000),
+    "global_fixclass_long_threshold_ms": (1, 60_000),
 }
 
 
@@ -831,8 +918,7 @@ _MARKER_BOUNDS = (4, 40)
 # colour check, and the closed vocabularies whose widgets raise on anything else.
 
 #: Bounds of the numeric widgets a saved config writes but a link does not carry
-#: — the same limits `_restore_plot_config` clamps to inline. `None` is an open
-#: side (the fixation-flag thresholds are a `number_input` with only a minimum).
+#: — the same limits `_restore_plot_config` clamps to inline.
 _CONFIG_BOUNDED = {
     "global_canvas_width": _CANVAS_BOUNDS,
     "global_canvas_height": _CANVAS_BOUNDS,
@@ -841,10 +927,6 @@ _CONFIG_BOUNDED = {
     "global_viewing_distance_mm": (100.0, 3000.0),
     "global_display_dpi": (20.0, 1000.0),
     "global_stimulus_font_pt": (4.0, 144.0),
-    "global_colorbar_tickangle": (-90, 90),
-    "global_colorbar_tickfont_size": (6, 20),
-    "global_fixclass_short_threshold_ms": (1, None),
-    "global_fixclass_long_threshold_ms": (1, None),
     **{f"cmp{i}_opacity": (0.1, 1.0) for i in (0, 1)},
     **{f"cmp{i}_saccade_width": SACCADE_WIDTH_BOUNDS for i in (0, 1)},
     **{f"cmp{i}_marker_size_range": _MARKER_BOUNDS for i in (0, 1)},
@@ -855,8 +937,6 @@ _FIXCLASS_CATEGORIES = ("short", "long", "oob", "blink")
 _COLOR_STATE_KEYS = frozenset(
     {
         *(_SHARE_VALUE_PARAMS[p] for p in _SHARE_COLOR_PARAMS),
-        "global_span_border_color",
-        *(f"global_fixclass_{c}_color" for c in _FIXCLASS_CATEGORIES),
         *(f"cmp{i}_{part}" for i in (0, 1) for part in ("fix_color", "saccade_color")),
     }
 )
@@ -899,6 +979,7 @@ _CHOICE_STATE_PARSERS = {
     ),
     "single_compare_layout": _parse_compare_layout,
     "single_compare_stimulus": _parse_compare_stimulus,
+    "single_playback_speed": _parse_playback_speed,
     "global_illustration_label": _closed_choice(("Auto", "Show", "Hide")),
     "global_preproc_short_policy": _closed_choice(
         ("Off", "Merge", "Merge then discard", "Discard")
@@ -2305,9 +2386,12 @@ def _build_share_query(
         params["tab"] = "animation"
 
     # DATA-22 §7 surface 2: a compact provenance badge for the recording setup.
-    # A link carries the *values* (canvas, mm, font) already; without this the
-    # recipient cannot tell a monitor the sender measured from one the app
-    # assumed on their behalf. Metadata about settings, not a setting — it takes
+    # The link carries none of the setup's *values* — canvas, monitor mm and base
+    # font travel only in the 💾 saved config (EXP-18), so the recipient draws
+    # with the corpus' own declared setup — but it does carry how the sender's
+    # setup was known: without this the recipient cannot tell a monitor the
+    # sender measured from one the app assumed on their behalf. Metadata about
+    # settings, not a setting — it takes
     # no input and changes no figure, which is why it stops here and never
     # becomes a `render` flag or a builder argument.
     from scanpath_studio.app import active_setup_snapshot
@@ -2627,6 +2711,13 @@ def _render_share_body(data_choice: str) -> None:
     for note in caveats:
         st.caption("⚠️ " + note)
     _render_share_link_widget(query)
+    # EXP-18: say what the link leaves out, rather than let a figure reopen at
+    # the recipient's own canvas and font without a word.
+    st.caption(
+        "The recording setup (canvas, base font size, monitor) and Compare's "
+        "per-scanpath styles aren't in the link — they travel in a 💾 Session → "
+        "JSON backup."
+    )
     st.caption(
         "If the recipient runs Scanpath Studio at a different address or port, "
         "replace the start of the URL before opening it."

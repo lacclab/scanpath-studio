@@ -2354,6 +2354,10 @@ def infer_fix_schema(fixations: pd.DataFrame) -> dict[str, str] | None:
 # column flags the frame so broadcast_stimulus_words() knows to expand it.
 STIMULUS_PARTICIPANT = ""
 STIMULUS_WORDS_FLAG = "_stimulus_words"
+#: The suffix `_disambiguate_repeated_readings` appends to a later reading's id,
+#: and the scratch column the stimulus broadcast joins through (BUG-57).
+_REPEATED_READING_SUFFIX = re.compile(r"_r\d+$")
+_WORD_TRIAL = "_word_trial_id"
 
 # Synthetic participant id used when a dataset has no participant column at all
 # (a single anonymous reader). Distinct from STIMULUS_PARTICIPANT ("") so it
@@ -2392,8 +2396,22 @@ def broadcast_stimulus_words(
     pairs = fixations[join_columns].drop_duplicates()
     pairs["participant_id"] = pairs["participant_id"].astype(str)
     pairs["trial_id"] = pairs["trial_id"].astype(str)
-    merge_on = [column for column in ("trial_id", SCREEN_ID) if column in join_columns]
-    return words.drop(columns=["participant_id"]).merge(pairs, on=merge_on, how="inner")
+    # BUG-57: a second reading of a text carries the `_r2` suffix
+    # `_disambiguate_repeated_readings` gave it, which a table keyed by the
+    # text alone never has — so it got no boxes. A reading whose own id has no
+    # words looks them up under the id it was suffixed from; an exact match
+    # always wins, so a trial genuinely named `…_r2` keeps its own boxes.
+    pairs[_WORD_TRIAL] = pairs["trial_id"]
+    unmatched = ~pairs["trial_id"].isin(set(words["trial_id"].astype(str)))
+    if unmatched.any():
+        pairs.loc[unmatched, _WORD_TRIAL] = pairs.loc[
+            unmatched, "trial_id"
+        ].str.replace(_REPEATED_READING_SUFFIX, "", regex=True)
+    merge_on = [_WORD_TRIAL] + [SCREEN_ID] * (SCREEN_ID in join_columns)
+    stimulus = words.drop(columns=["participant_id"]).rename(
+        columns={"trial_id": _WORD_TRIAL}
+    )
+    return stimulus.merge(pairs, on=merge_on, how="inner").drop(columns=[_WORD_TRIAL])
 
 
 def fill_fixation_xy_from_words(

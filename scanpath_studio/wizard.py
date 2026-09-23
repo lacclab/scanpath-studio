@@ -35,6 +35,7 @@ from .constants import (
     UPLOAD_MAX_SIZE_MB,
     WIZARD_LEAVE_KEY,
     multipleye_upload_enabled,
+    upload_limit_mb,
 )
 from .controls import (
     ADD_ATTEMPTED_KEY,
@@ -1506,6 +1507,7 @@ def _wizard_restore_config(host) -> None:
         key="wizard_config_restore",
         help="Re-apply a column mapping + field choices you exported earlier "
         "(from the 💾 Session panel).",
+        max_upload_size=upload_limit_mb(),
     )
     if uploaded is None:
         return

@@ -98,6 +98,7 @@ from scanpath_studio.constants import (
     drift_correction_enabled,
     preprocessing_enabled,
     similarity_enabled,
+    upload_limit_mb,
 )
 from scanpath_studio.controls import (
     CHIP_FIELD_LABELS,
@@ -3330,6 +3331,7 @@ def _render_save_restore_expander(
             key="plot_config_upload",
             help="Re-apply settings and annotations. Items that do not match "
             "the loaded data are skipped.",
+            max_upload_size=upload_limit_mb(),
         )
         skipped = st.session_state.get("_plot_config_skipped")
         if skipped:
@@ -9322,6 +9324,7 @@ def _participant_metadata_body(
         # uploader widget itself is ever reset.
         help=_pm_help,
         label_visibility="collapsed",
+        max_upload_size=upload_limit_mb(),
     )
     if upload is None:
         if active_participant_metadata() is None:
@@ -9521,6 +9524,7 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
         key="trial_metadata_upload",
         help=_tm_help,
         label_visibility="collapsed",
+        max_upload_size=upload_limit_mb(),
     )
     if upload is None:
         if md.active_trials() is None:
@@ -9723,6 +9727,7 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
         key="text_metadata_upload",
         help=_txm_help,
         label_visibility="collapsed",
+        max_upload_size=upload_limit_mb(),
     )
     if upload is None:
         if md.active_texts() is None:
@@ -10314,6 +10319,7 @@ def _render_missing_table_uploads(name: str, stored: dict, *, host=None) -> dict
             type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
             accept_multiple_files=True,
             key=f"remap_add_upload_{name}_{table_key}",
+            max_upload_size=upload_limit_mb(),
         )
         signature_key = f"_remap_add_file_{name}_{table_key}"
         if not uploads:

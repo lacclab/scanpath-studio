@@ -103,6 +103,7 @@ from scanpath_studio.constants import (
     WORD_LABEL_COLOR,
     language_display,
     preprocessing_enabled,
+    upload_limit_mb,
 )
 from scanpath_studio.controls import (
     FIX_FIELD_SPECS,
@@ -3476,6 +3477,7 @@ def _read_uploaded_frame(
         key=f"{state_prefix}_upload",
         help=upload_help,
         label_visibility=label_visibility,
+        max_upload_size=upload_limit_mb(),
     )
     if not uploaded:
         return pd.DataFrame()
@@ -3638,6 +3640,7 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
             "Raw gaze table (optional)",
             type=["csv", "parquet", "feather", "zip"],
             help="Optional: millisecond-level gaze with participant_id, trial_id, x, y.",
+            max_upload_size=upload_limit_mb(),
         )
         if uploaded_raw_gaze:
             upload_key = (uploaded_raw_gaze.file_id, uploaded_raw_gaze.size)
@@ -5960,6 +5963,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         type=["json"],
         key="author_restore_upload",
         help="Load a JSON file previously saved from this editor.",
+        max_upload_size=upload_limit_mb(),
     )
     if restored is not None:
         identity = (restored.name, restored.size)

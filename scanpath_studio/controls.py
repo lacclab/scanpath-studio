@@ -44,6 +44,7 @@ from .constants import (
     compare_palette_color,
     drift_correction_enabled,
     palette_settings,
+    upload_limit_mb,
 )
 from .data import frame_fingerprint
 from .export import (
@@ -5026,6 +5027,7 @@ def render_plot_controls(
                 "is stretched to fill the monitor; use the **Align to text** controls "
                 "below to position/scale it. Not carried by Share links (upload it on "
                 "the other end).",
+                max_upload_size=upload_limit_mb(),
             )
             _numeric_slider(
                 st,

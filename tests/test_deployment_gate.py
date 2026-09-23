@@ -14,6 +14,9 @@ way. ``SCANPATH_DATA_ROOT`` confines paths to a subtree and is useful either way
 
 from __future__ import annotations
 
+import ast
+from pathlib import Path
+
 import pytest
 
 from scanpath_studio import app as app_module
@@ -25,6 +28,7 @@ from scanpath_studio.app import (
     data_root,
     local_filesystem_enabled,
 )
+from scanpath_studio.constants import UPLOAD_LIMIT_ENV, upload_limit_mb
 
 
 @pytest.fixture(autouse=True)
@@ -202,3 +206,40 @@ class TestUploadedImagePaths:
     def test_a_local_run_keeps_an_uploads_images(self, monkeypatch):
         monkeypatch.setenv(LOCAL_FS_ENV, "1")
         assert self._answer("my upload") == "/srv/secret.png"
+
+
+class TestTheUploadCap:
+    """ENG-68: a deployment's own per-file cap, set on the hosted demo only."""
+
+    @pytest.fixture(autouse=True)
+    def _unset(self, monkeypatch):
+        monkeypatch.delenv(UPLOAD_LIMIT_ENV, raising=False)
+
+    def test_unset_leaves_the_servers_limit(self):
+        assert upload_limit_mb() is None
+
+    def test_a_deployment_sets_it_in_mb(self, monkeypatch):
+        monkeypatch.setenv(UPLOAD_LIMIT_ENV, " 200 ")
+        assert upload_limit_mb() == 200
+
+    @pytest.mark.parametrize("value", ["", "0", "-5", "200MB", "1.5", "lots"])
+    def test_anything_but_a_positive_whole_number_is_ignored(self, monkeypatch, value):
+        monkeypatch.setenv(UPLOAD_LIMIT_ENV, value)
+        assert upload_limit_mb() is None
+
+    def test_every_upload_box_passes_it(self):
+        """One uncapped box is the whole server limit again — so every
+        ``file_uploader`` call in the package has to pass the cap."""
+        package = Path(app_module.__file__).parent
+        missing = []
+        for path in sorted(package.glob("*.py")):
+            for node in ast.walk(ast.parse(path.read_text())):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "file_uploader"
+                    and not any(k.arg == "max_upload_size" for k in node.keywords)
+                ):
+                    missing.append(f"{path.name}:{node.lineno}")
+        assert not missing, f"file_uploader without max_upload_size: {missing}"
+        assert package.joinpath("app.py").read_text().count("file_uploader(") >= 3

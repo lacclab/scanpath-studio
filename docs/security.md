@@ -931,6 +931,11 @@ no `<` can reach it.
   `SCANPATH_DATA_ROOT` (S2). Setting `SCANPATH_LOCAL_FS=0` as well costs nothing
   and survives a config change; `SCANPATH_LOCAL_FS=1` turns access back on for a
   lab server on a network you trust.
+- **A memory-capped deployment should cap uploads for itself** (ENG-68):
+  `SCANPATH_MAX_UPLOAD_MB=200` lowers every upload box's per-file limit on that
+  deployment alone, below the 5,000 MB the app otherwise allows. On Streamlit
+  Community Cloud, put it in the app's secrets as a root-level key; Streamlit
+  loads those into the environment when the server starts.
 - **A share link is identifying.** It names a participant and a trial alongside
   the visualization settings (S3). A saved plot config likewise carries the
   selection *and* every annotation note you have typed, for every trial — read it

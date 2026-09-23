@@ -445,6 +445,28 @@ APP_THEME_DARK = {
 #: answers for the memory-capped hosted demo.
 UPLOAD_MAX_SIZE_MB = 5000
 
+#: ENG-68: a deployment's own, lower per-file ceiling, in MB — set on the hosted
+#: demo (its Community Cloud secrets, which Streamlit loads into the environment
+#: at startup) so a visitor cannot send a multi-GB file at a ~1 GB container,
+#: while every other install keeps :data:`UPLOAD_MAX_SIZE_MB`.
+UPLOAD_LIMIT_ENV = "SCANPATH_MAX_UPLOAD_MB"
+
+
+def upload_limit_mb() -> int | None:
+    """The per-file cap every ``st.file_uploader`` passes as ``max_upload_size``.
+
+    ``None`` — the server's own ``server.maxUploadSize`` — unless
+    ``SCANPATH_MAX_UPLOAD_MB`` is a positive whole number of MB. Read at call
+    time, like the other deployment switches, so tests can toggle it.
+    """
+    raw = os.environ.get(UPLOAD_LIMIT_ENV, "").strip()
+    try:
+        limit = int(raw)
+    except ValueError:
+        return None
+    return limit if limit > 0 else None
+
+
 CITATION = {
     "authors": (
         "Omer Shubi, Keren Gruteke Klein, Maya Grossman, Ella Lion, Deborah N. Jakobi, "

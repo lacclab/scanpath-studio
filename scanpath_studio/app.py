@@ -118,6 +118,7 @@ from scanpath_studio.controls import (
 )
 from scanpath_studio.data import (
     FIX_OPTIONAL_FIELDS,
+    IDENTITY_SCHEMA_FIELDS,
     TRIAL_IDENTITY_SAMPLE,
     WORD_OPTIONAL_FIELDS,
     ReadPlan,
@@ -3256,7 +3257,7 @@ def _uploaded_file_key(uploaded) -> tuple:
 
 @st.cache_data(show_spinner="Reading uploaded data…")
 def _read_uploaded_table_cached(
-    _uploaded, file_key, kind=None, chosen=(), text_column=None
+    _uploaded, file_key, kind=None, chosen=(), text_column=None, identity=()
 ) -> pd.DataFrame:
     try:
         _uploaded.seek(0)
@@ -3268,13 +3269,15 @@ def _read_uploaded_table_cached(
     # own picks need. `kind` and `chosen` are part of the cache key, so naming
     # a new column simply re-reads the file under the new plan.
     header = read_table_columns(_uploaded)
-    plan = upload_read_plan(header, kind, chosen=chosen, text_column=text_column)
+    plan = upload_read_plan(
+        header, kind, chosen=chosen, text_column=text_column, identity=identity
+    )
     return read_table(_uploaded, plan=plan)
 
 
 @st.cache_data(show_spinner="Reading uploaded data…")
 def _read_uploaded_tables_cached(
-    _uploaded_list, file_keys, kind=None, chosen=(), text_column=None
+    _uploaded_list, file_keys, kind=None, chosen=(), text_column=None, identity=()
 ) -> pd.DataFrame:
     for f in _uploaded_list:
         try:
@@ -3286,7 +3289,7 @@ def _read_uploaded_tables_cached(
 
         def plan_for(header):
             return upload_read_plan(
-                header, kind, chosen=chosen, text_column=text_column
+                header, kind, chosen=chosen, text_column=text_column, identity=identity
             )
 
     return read_tables(list(_uploaded_list), plan_for=plan_for)
@@ -3321,7 +3324,7 @@ def _columns_chosen_in_state(state, header) -> set:
 
 
 def upload_read_plan(
-    header, kind: str, *, chosen=(), text_column: str | None = None
+    header, kind: str, *, chosen=(), text_column: str | None = None, identity=()
 ) -> ReadPlan:
     """Plan an uploaded table's read from its header (PERF-6, decision 2a).
 
@@ -3330,7 +3333,8 @@ def upload_read_plan(
     they *have* named, which is what keeps a hand-picked mapping or a kept extra
     from being dropped. A column named later simply changes the plan, and the
     read runs again against the new one. ``text_column`` is the user's own
-    word-text pick, read verbatim in place of the proposed one (BUG-53).
+    word-text pick, read verbatim in place of the proposed one (BUG-53), and
+    ``identity`` their own id-column picks, read as text (BUG-59).
     """
     propose = propose_word_schema if kind == "words" else propose_fix_schema
     registry = WORD_OPTIONAL_FIELDS if kind == "words" else FIX_OPTIONAL_FIELDS
@@ -3341,6 +3345,7 @@ def upload_read_plan(
         registry,
         keep_columns=set(chosen),
         text_column=text_column,
+        identity_columns=identity,
     )
 
 
@@ -3460,6 +3465,7 @@ def _read_upload(uploaded, state_prefix: str, *, multi: bool, kind) -> pd.DataFr
     header: list = []
     chosen: tuple = ()
     text_column = None
+    identity: tuple = ()
     if kind is not None:
         header = _upload_header(uploaded, multi=multi)
         chosen = tuple(sorted(_columns_chosen_in_state(st.session_state, header)))
@@ -3468,6 +3474,9 @@ def _read_upload(uploaded, state_prefix: str, *, multi: bool, kind) -> pd.DataFr
         picked = st.session_state.get(f"{state_prefix}_text")
         if kind == "words" and isinstance(picked, str) and picked in header:
             text_column = picked
+        # BUG-59: likewise the id columns picked by hand, read as text so a
+        # zero-padded id keeps its zeros.
+        identity = _picked_columns(state_prefix, IDENTITY_SCHEMA_FIELDS, header)
     st.session_state[f"{state_prefix}_header"] = header
     if multi:
         return _read_uploaded_tables_cached(
@@ -3476,6 +3485,7 @@ def _read_upload(uploaded, state_prefix: str, *, multi: bool, kind) -> pd.DataFr
             kind=kind,
             chosen=chosen,
             text_column=text_column,
+            identity=identity,
         )
     return _read_uploaded_table_cached(
         uploaded,
@@ -3483,7 +3493,19 @@ def _read_upload(uploaded, state_prefix: str, *, multi: bool, kind) -> pd.DataFr
         kind=kind,
         chosen=chosen,
         text_column=text_column,
+        identity=identity,
     )
+
+
+def _picked_columns(state_prefix: str, fields, header) -> tuple:
+    """The header columns the mapping widgets for ``fields`` currently name."""
+    columns = set(header)
+    picked: list = []
+    for name in fields:
+        value = st.session_state.get(f"{state_prefix}_{name}")
+        values = value if isinstance(value, (list, tuple)) else [value]
+        picked += [v for v in values if isinstance(v, str) and v in columns]
+    return tuple(sorted(set(picked)))
 
 
 def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataFrame:

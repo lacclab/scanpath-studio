@@ -572,6 +572,69 @@ class TestRowsWithoutIdentity:
         assert fixations["trial_id"].tolist() == ["t1_1"]
 
 
+class TestZeroPaddedIds:
+    """BUG-59: `007` in one table and 7 in the other joined on nothing."""
+
+    def test_the_map_names_each_id_by_its_padded_twin(self):
+        assert data_module.zero_padding_map(["7", "12"], ["007", "012"]) == {
+            "7": "007",
+            "12": "012",
+        }
+
+    @pytest.mark.parametrize(
+        "ids, reference",
+        [
+            (["7", "12"], ["7", "012"]),  # something already matches as it is
+            (["1", "01"], ["001"]),  # two readers that differ only by padding
+            (["007"], ["7"]),  # the padded spelling is not on the other side
+            (["p7"], ["p007"]),  # not a number at all
+        ],
+    )
+    def test_the_map_refuses_anything_but_the_one_clear_case(self, ids, reference):
+        assert data_module.zero_padding_map(ids, reference) == {}
+
+    def test_a_planned_csv_read_keeps_the_zeros(self, tmp_path):
+        path = tmp_path / "fix.csv"
+        path.write_text(
+            "RECORDING_SESSION_LABEL,TRIAL_INDEX,x,y,duration\n007,1,1,1,1\n"
+        )
+        header = data_module.read_table_columns(path)
+        plan = data_module.plan_table_read(
+            header,
+            propose_fix_schema(pd.DataFrame(columns=header)),
+            data_module.FIX_OPTIONAL_FIELDS,
+        )
+        frame = data_module.read_table(path, plan=plan)
+        assert frame["RECORDING_SESSION_LABEL"].tolist() == ["007"]
+        assert frame["TRIAL_INDEX"].tolist() == [1]  # an ordinal stays a number
+
+    def test_a_csv_and_a_parquet_table_line_up_headlessly(self, tmp_path):
+        import scanpath_studio as sps
+
+        words = pd.DataFrame(
+            {
+                "participant_id": [7, 7],
+                "trial_id": [1, 1],
+                "word_id": [1, 2],
+                "text": ["a", "b"],
+                "x": [0, 10],
+                "y": [0, 0],
+                "width": [9, 9],
+                "height": [9, 9],
+            }
+        )
+        words.to_csv(tmp_path / "words.csv", index=False)
+        fixations = pd.DataFrame(
+            {"participant_id": ["007"], "trial_id": ["1"], "x": [2.0], "y": [2.0]}
+        ).assign(duration_ms=200.0)
+        fixations.to_parquet(tmp_path / "fix.parquet")
+        w, f = sps.load_scanpath_data(
+            str(tmp_path / "words.csv"), str(tmp_path / "fix.parquet")
+        )
+        assert set(w["participant_id"]) == {"007"}
+        assert data_module.trial_keys(w) == data_module.trial_keys(f)
+
+
 class TestNormalizeRawGaze:
     """Tests for normalize_raw_gaze function."""
 

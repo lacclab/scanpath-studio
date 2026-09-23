@@ -69,6 +69,23 @@ class TestIngestion:
         assert "participant_id" not in meta.names
 
 
+class TestZeroPaddedReaderIds:
+    """BUG-59: a CSV reads reader `007` as 7; the data kept "007"."""
+
+    def test_the_table_joins_to_the_zero_padded_readers(self):
+        table = pd.DataFrame({"participant_id": [7, 12], "age": [24, 31]})
+        built = md.build_participant_metadata(
+            table, "participant_id", participants=["007", "012"]
+        )
+        assert built.report.matched == ("007", "012")
+        assert built.values_for("007") == {"age": 24}
+
+    def test_a_rejoin_after_the_data_changed_matches_them_too(self):
+        table = pd.DataFrame({"participant_id": [7, 12], "age": [24, 31]})
+        built = md.build_participant_metadata(table, "participant_id")
+        assert md.rejoin(built, ["007", "012"]).report.matched == ("007", "012")
+
+
 class TestValidationNeverGuesses:
     def test_unmatched_ids_are_reported_on_both_sides(self, meta):
         assert meta.report.matched == ("p1", "p2")

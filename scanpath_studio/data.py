@@ -499,6 +499,46 @@ def stable_id(series: pd.Series) -> pd.Series:
     return text.str.replace(_WHOLE_FLOAT_ID, r"\1", regex=True)
 
 
+_DIGITS_ONLY = re.compile(r"^\d+$")
+
+
+def zero_padding_map(ids: Iterable, reference: Iterable) -> dict[str, str]:
+    """How ``ids`` would be spelled in ``reference``, when the only thing
+    keeping the two apart is zero-padding (BUG-59).
+
+    One table read ``007`` as text and another read it as the number 7, and
+    every join between them then matched nothing — words to fixations, a
+    participant table to the data. Returns ``{"7": "007", …}`` for each id in
+    ``ids`` whose zero-padded twin is in ``reference``, and ``{}`` whenever that
+    is not the *only* story: if any id already matches as it is, if either side
+    has two ids that differ only by padding (``1`` and ``01`` — genuinely
+    different ids), or if the padded spelling is not all on one side. Nothing is
+    renamed on a guess.
+    """
+    own = {str(v) for v in ids if pd.notna(v)}
+    other = {str(v) for v in reference if pd.notna(v)}
+    if not own or not other or own & other:
+        return {}
+
+    def by_value(values: set) -> dict | None:
+        keyed: dict = {}
+        for value in values:
+            if _DIGITS_ONLY.match(value):
+                key = value.lstrip("0") or "0"
+                if key in keyed:
+                    return None
+                keyed[key] = value
+        return keyed
+
+    mine, theirs = by_value(own), by_value(other)
+    if mine is None or theirs is None:
+        return {}
+    shared = mine.keys() & theirs.keys()
+    if not shared or any(len(mine[k]) >= len(theirs[k]) for k in shared):
+        return {}
+    return {mine[k]: theirs[k] for k in shared}
+
+
 def trial_id_series(source: pd.DataFrame, trial_mapping) -> pd.Series:
     """Trial-id values for a single-column or composite (multi-column) mapping.
 
@@ -1423,6 +1463,11 @@ class ReadPlan:
     #: words a stimulus can contain, and pandas' default NA spellings turned
     #: every one of them into NaN before normalization saw it.
     verbatim: tuple[str, ...] = ()
+    #: Identity columns (participant, trial, text, screen) read as text, so a
+    #: zero-padded id survives: CSV inference read `007` as the number 7, while
+    #: the same id in a Parquet table stayed "007", and the two tables then
+    #: shared no participant at all (BUG-59). Missing cells stay missing.
+    identity: tuple[str, ...] = ()
 
     def narrowed_to(self, available: Iterable[str]) -> ReadPlan:
         """This plan restricted to the columns one file actually has.
@@ -1440,12 +1485,15 @@ class ReadPlan:
             return self
         present = set(available)
         columns = tuple(name for name in self.columns if name in present)
+        verbatim = tuple(c for c in self.verbatim if c in present)
+        identity = tuple(c for c in self.identity if c in present)
         if not columns:
-            return ReadPlan(verbatim=tuple(c for c in self.verbatim if c in present))
+            return ReadPlan(verbatim=verbatim, identity=identity)
         return ReadPlan(
             columns=columns,
             na_values={k: v for k, v in self.na_values.items() if k in present},
-            verbatim=tuple(c for c in self.verbatim if c in present),
+            verbatim=verbatim,
+            identity=identity,
         )
 
 
@@ -1467,6 +1515,8 @@ def _read_kwargs(plan: ReadPlan | None) -> dict:
         # A converter receives the cell's raw text before NA detection runs, and
         # leaves every other column's NA handling exactly as it was (BUG-53).
         kwargs["converters"] = {column: str for column in plan.verbatim}
+    if plan.identity:
+        kwargs["dtype"] = {column: str for column in plan.identity}
     return kwargs
 
 
@@ -1506,8 +1556,13 @@ def _excel_na_kwargs(buf, plan: ReadPlan | None) -> dict:
     off and given back to every other column by name, which needs the header
     first. Excel is never the large-file format, so the second pass is cheap.
     """
-    if plan is None or not plan.verbatim:
+    if plan is None:
         return {}
+    kwargs: dict = {}
+    if plan.identity:
+        kwargs["dtype"] = {column: str for column in plan.identity}
+    if not plan.verbatim:
+        return kwargs
     header = list(pd.read_excel(buf, nrows=0).columns)
     _rewind(buf)
     na_values = {
@@ -1515,7 +1570,7 @@ def _excel_na_kwargs(buf, plan: ReadPlan | None) -> dict:
         for column in header
         if column not in plan.verbatim
     }
-    return {"keep_default_na": False, "na_values": na_values}
+    return {**kwargs, "keep_default_na": False, "na_values": na_values}
 
 
 def verbatim_text_plan(header: Sequence[str], schema: dict | None = None) -> ReadPlan:
@@ -1540,6 +1595,7 @@ def plan_table_read(
     filter_fields: Iterable[str] | None = None,
     keep_columns: Iterable[str] | None = None,
     text_column: str | None = None,
+    identity_columns: Iterable[str] = (),
 ) -> ReadPlan:
     """Narrow a read to the columns ``normalize_*`` keeps (PERF-6).
 
@@ -1555,16 +1611,25 @@ def plan_table_read(
     mapping, exactly as :func:`compute_keep_columns` takes them.
 
     The word-text column — ``text_column`` when the user has mapped one by
-    hand, else the schema's own ``text`` — is read verbatim (BUG-53).
+    hand, else the schema's own ``text`` — is read verbatim (BUG-53), and the
+    identity columns — the schema's, plus any ``identity_columns`` the user
+    picked by hand — as text (BUG-59).
     """
     names = list(header)
     present = set(names)
     text = text_column or schema.get("text")
     verbatim = (text,) if isinstance(text, str) and text in present else ()
+    identity = tuple(
+        column
+        for column in dict.fromkeys(
+            [*_schema_identity_columns(schema), *identity_columns, *_IDENTITY_SOURCES]
+        )
+        if column in present and column not in verbatim and column not in _ORDINALS
+    )
     if not (set(_schema_source_columns(schema)) & present):
         # Nothing is mapped yet — an unmapped upload, or a table this schema
         # does not describe. Dropping columns here would be guessing.
-        return ReadPlan(verbatim=verbatim)
+        return ReadPlan(verbatim=verbatim, identity=identity)
     keep = compute_keep_columns(
         schema,
         optional_sources=[row[0] for row in registry if row[0] in present],
@@ -1582,7 +1647,28 @@ def plan_table_read(
         columns=columns,
         na_values={name: [MISSING_MARKER] for name in columns if name in numeric},
         verbatim=verbatim,
+        identity=tuple(c for c in identity if c in keep),
     )
+
+
+#: Schema fields that name *which* participant / trial / text / screen a row
+#: belongs to — read as text, never as numbers (BUG-59).
+IDENTITY_SCHEMA_FIELDS = ("participant", "trial", "text_id", "screen_id")
+#: The id columns `normalize_*` consults by name rather than through the schema.
+_IDENTITY_SOURCES = ("unique_trial_id", "unique_paragraph_id")
+#: ...except an index that is also carried as a number: the trial picker sorts
+#: on `TRIAL_INDEX`, and as text 10 would sort before 2.
+_ORDINALS = frozenset({"TRIAL_INDEX", "trial_index"})
+
+
+def _schema_identity_columns(schema: dict) -> list[str]:
+    """The source columns a schema's identity fields name (lists expanded)."""
+    columns: list = []
+    for key in IDENTITY_SCHEMA_FIELDS:
+        value = schema.get(key)
+        if value:
+            columns += trial_mapping_columns(value)
+    return columns
 
 
 def read_table_columns(file_like_or_path) -> list[str]:
@@ -2577,18 +2663,64 @@ def correct_word_id_offset(
     return fixations
 
 
+def _restore_zero_padding(
+    words: pd.DataFrame, fixations: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Spell a zero-padded id the same way in both frames (BUG-59).
+
+    A CSV read ``007`` as 7 while a Parquet table kept "007", and the two
+    tables then shared no participant — every fixation drew over no text. When
+    padding is the only difference (:func:`zero_padding_map`), the side that
+    lost its zeros is given them back, and the rename is logged.
+    """
+    if words.empty or fixations.empty:
+        return words, fixations
+    columns = ["trial_id"]
+    if STIMULUS_WORDS_FLAG not in words.columns:
+        columns.insert(0, "participant_id")
+    for column in columns:
+        if column not in words.columns or column not in fixations.columns:
+            continue
+        w_ids, f_ids = words[column].unique(), fixations[column].unique()
+        for frame_name, ids, reference in (
+            ("words", w_ids, f_ids),
+            ("fixations", f_ids, w_ids),
+        ):
+            mapping = zero_padding_map(ids, reference)
+            if not mapping:
+                continue
+            if frame_name == "words":
+                words = words.copy()
+                words[column] = words[column].replace(mapping)
+            else:
+                fixations = fixations.copy()
+                fixations[column] = fixations[column].replace(mapping)
+            _LOGGER.info(
+                "The %s table spelled %d %s value(s) without the zero-padding the "
+                "other table uses (e.g. %r for %r); matched them up.",
+                frame_name,
+                len(mapping),
+                column,
+                *next(iter(mapping.items()))[::-1],
+            )
+            break
+    return words, fixations
+
+
 def harmonize_frames(
     words: pd.DataFrame, fixations: pd.DataFrame
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Cross-frame fixups applied right after normalization.
 
-    Broadcast stimulus-level words across participants, reconcile a
-    participant-less fixations table with participant-bearing words, correct a
-    1-based fixation ``word_id`` (BUG-8), then fill missing fixation coordinates
-    from word-box centers. Call whenever both frames are available (the API and
-    the app both route through this)."""
+    Match zero-padded ids the two tables spell differently (BUG-59), broadcast
+    stimulus-level words across participants, reconcile a participant-less
+    fixations table with participant-bearing words, correct a 1-based fixation
+    ``word_id`` (BUG-8), then fill missing fixation coordinates from word-box
+    centers. Call whenever both frames are available (the API and the app both
+    route through this)."""
     from .preprocessing import add_text_direction
 
+    words, fixations = _restore_zero_padding(words, fixations)
     words = add_text_direction(broadcast_stimulus_words(words, fixations))
     words = _reconcile_participant_asymmetry(words, fixations)
     words = normalize_screen_identity(words)

@@ -282,3 +282,22 @@ def test_the_wizard_names_a_numeric_column_that_did_not_parse(monkeypatch):
     said = [w.value for w in at.warning if "aren't numbers" in w.value]
     assert said, "an unreadable X column loaded without a word"
     assert "`x`" in said[0] and "'15px'" in said[0]
+
+
+def test_the_wizard_says_when_the_readers_do_not_line_up(monkeypatch):
+    """BUG-59: the trial-id overlap check passed — both tables have `t0` — while
+    no (participant, trial) pair was in both, so nothing had word boxes."""
+    from scanpath_studio import app
+
+    words = _WIZARD_WORDS.drop(columns=["page"]).assign(participant_id="r9")
+    monkeypatch.setattr(
+        app,
+        "_read_uploaded_frame",
+        lambda **kw: {"col_map_words": words, "col_map_fix": _WIZARD_FIXATIONS}.get(
+            kw["state_prefix"], pd.DataFrame()
+        ),
+    )
+    at = _upload_apptest(wizard_active=True)
+
+    assert not at.exception
+    assert any("share trial ids but no reader" in w.value for w in at.warning)

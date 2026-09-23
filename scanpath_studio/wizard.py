@@ -60,6 +60,7 @@ from .data import (
     empty_fixations_frame,
     empty_words_frame,
     extract_columns_from_source_file,
+    frame_cache,
     frame_fingerprint,
     normalization_issues,
     normalize_raw_gaze,
@@ -70,6 +71,7 @@ from .data import (
     source_file_regex_collisions,
     split_source_file,
     trial_id_series,
+    trial_keys,
     trial_mapping_columns,
     validate_fix_schema,
     validate_raw_gaze_schema,
@@ -598,6 +600,21 @@ def _c_categorize_columns(_raw, _schema, _registry, fingerprint: tuple, key: tup
 @st.cache_data(show_spinner="Aggregating character boxes…")
 def _c_aggregate_char_boxes(_raw, _schema, fingerprint: tuple, key: tuple):
     return aggregate_char_boxes(_raw, _schema)
+
+
+def _readers_do_not_line_up(words: pd.DataFrame, fixations: pd.DataFrame) -> bool:
+    """Whether the normalized tables share trial ids but no (participant, trial)
+    pair — the reader half of the join is what failed (BUG-59)."""
+    if words.empty or fixations.empty:
+        return False
+
+    def check() -> bool:
+        if not set(words["trial_id"]) & set(fixations["trial_id"]):
+            return False  # the trial-id warning already says so
+        return not trial_keys(words) & trial_keys(fixations)
+
+    key = (frame_fingerprint(words), frame_fingerprint(fixations))
+    return frame_cache("wizard_readers_line_up", key, check)
 
 
 @st.cache_data(show_spinner=False)
@@ -3738,6 +3755,22 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 raw, schema, frame_fingerprint(raw), _schema_key(schema), table
             ):
                 s6.warning(f"⚠️ {line}")
+
+    if (
+        active
+        and has_words
+        and has_fix
+        and _readers_do_not_line_up(words_norm, fixations_norm)
+    ):
+        # BUG-59: the trial-id check above compares trial ids alone, so a pair
+        # of tables that share every trial but spell the readers differently
+        # passed it — and every scanpath then drew over no text.
+        s6.warning(
+            "⚠️ The two tables share trial ids but no reader: no fixation's "
+            "participant + trial has word boxes, so every scanpath would be "
+            "drawn without its text. Check that **Participant ID** names the "
+            "same readers, spelled the same way, in both tables."
+        )
 
     raw_gaze_norm = pd.DataFrame()
     if not raw_gaze.empty:

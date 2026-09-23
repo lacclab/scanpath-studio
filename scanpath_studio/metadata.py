@@ -48,12 +48,17 @@ Later grains (stimulus, screen, word, fixation) add rows to the same registry;
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 import pandas as pd
 
-from .data import stable_id, trial_id_series, trial_mapping_columns
+from .data import (
+    stable_id,
+    trial_id_series,
+    trial_mapping_columns,
+    zero_padding_map,
+)
 
 # Source columns that plausibly hold the reader id, most explicit first. Shares
 # the spirit of `data.pick_column`'s candidate lists: first hit wins, and the
@@ -1112,6 +1117,8 @@ def build_participant_metadata(
     # cell spells the id two ways" hazard applies to a reader id.
     work["participant_id"] = stable_id(work[id_column])
     work = work[work["participant_id"] != ""]
+    if participants is not None:
+        work["participant_id"] = _match_padding(work["participant_id"], participants)
     value_columns = [
         str(column)
         for column in frame.columns
@@ -1173,11 +1180,28 @@ def build_participant_metadata(
     )
 
 
+def _match_padding(ids: pd.Series, participants: Iterable) -> pd.Series:
+    """``ids`` spelled the data's way when only zero-padding differs (BUG-59).
+
+    A metadata CSV reads a reader ``007`` as the number 7 while the data kept
+    "007", and the table then joined to no one; ``data.zero_padding_map``
+    decides, and refuses whenever the match is not unambiguous.
+    """
+    mapping = zero_padding_map(ids.unique(), {str(pid) for pid in participants})
+    return ids.replace(mapping) if mapping else ids
+
+
 def rejoin(
     metadata: ParticipantMetadata, participants: Iterable
 ) -> ParticipantMetadata:
     """Recompute the join report against a (possibly new) participant list."""
     data_ids = {str(pid) for pid in participants}
+    if not metadata.frame.empty:
+        renamed = _match_padding(metadata.frame["participant_id"], data_ids)
+        if not renamed.equals(metadata.frame["participant_id"]):
+            metadata = replace(
+                metadata, frame=metadata.frame.assign(participant_id=renamed)
+            )
     usable_ids = (
         set(metadata.frame["participant_id"]) if not metadata.frame.empty else set()
     )

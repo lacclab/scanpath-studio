@@ -1593,3 +1593,40 @@ def test_render_refuses_a_column_the_data_does_not_have(tmp_path, flag, value):
     with pytest.raises(SystemExit, match=f"{flag} on the CLI"):
         cli.main(["render", "--sample", flag, value, "-o", str(out)])
     assert not out.exists()
+
+
+# ---------------------------------------------------------------------------
+# ENG-54 — the package root and the command line say what they mean
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("word", ["rendr", "analyse", "foo"])
+def test_a_mistyped_command_is_refused_not_forwarded(monkeypatch, word):
+    """A bare word reached `streamlit run` as a script argument — dying on
+    "No such option" when flags followed, launching the app when none did."""
+    calls = []
+    monkeypatch.setattr(cli, "launch_app", lambda args: calls.append(args))
+    with pytest.raises(SystemExit, match=f"unknown command {word!r}"):
+        cli.main([word, "--sample"])
+    assert calls == []
+
+
+def test_a_near_miss_command_is_named(monkeypatch):
+    monkeypatch.setattr(cli, "launch_app", lambda args: None)
+    with pytest.raises(SystemExit, match="did you mean 'render'"):
+        cli.main(["rendr", "--sample"])
+
+
+def test_streamlit_flags_and_script_paths_still_launch_the_app(monkeypatch):
+    calls = []
+    monkeypatch.setattr(cli, "launch_app", lambda args: calls.append(args))
+    cli.main(["--server.headless", "true"])
+    cli.main(["streamlit_app.py"])
+    assert calls == [["--server.headless", "true"], ["streamlit_app.py"]]
+
+
+def test_the_sample_help_does_not_promise_three_renderable_readers(capsys):
+    """Three readers' word boxes ship, but only two have fixations."""
+    with pytest.raises(SystemExit):
+        cli.main(["render", "--help"])
+    out = " ".join(capsys.readouterr().out.split())
+    assert "3-participant" not in out
+    assert "fixations — so trials to render — for 2 of them" in out

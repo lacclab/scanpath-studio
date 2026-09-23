@@ -11,7 +11,9 @@ scanpath-studio --server.port 8600
 scanpath-studio --no-persist          # don't cache the session on this computer
 ```
 
-Additional launch flags are forwarded to Streamlit.
+Additional launch flags are forwarded to Streamlit. A word that is not one of
+the commands (`run`, `render`, `analyze`, `corpus`, `cache`) is an error that
+names the closest one, rather than an argument handed to Streamlit.
 
 ## Render
 

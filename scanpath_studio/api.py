@@ -2089,13 +2089,23 @@ def save_figure_layers(
     vector and best for editing; ``png`` / ``html`` also work). ``scale`` /
     ``width`` / ``height`` are forwarded to :func:`save_figure`."""
     directory = Path(directory)
+    # ENG-54: a failed render (most often Kaleido with no Chrome) used to leave
+    # an empty `<output>_layers/` behind, which reads as "exported, but lost".
+    # Whatever this call created is removed again if nothing was written to it.
+    created = [path for path in (directory, *directory.parents) if not path.exists()]
     directory.mkdir(parents=True, exist_ok=True)
     written: dict = {}
-    for layer, layer_fig in split_scanpath_layers(fig).items():
-        path = directory / f"{layer}.{fmt.lstrip('.')}"
-        written[layer] = save_figure(
-            layer_fig, path, scale=scale, width=width, height=height
-        )
+    try:
+        for layer, layer_fig in split_scanpath_layers(fig).items():
+            path = directory / f"{layer}.{fmt.lstrip('.')}"
+            written[layer] = save_figure(
+                layer_fig, path, scale=scale, width=width, height=height
+            )
+    except Exception:
+        for path in created:  # deepest first
+            if path.is_dir() and not any(path.iterdir()):
+                path.rmdir()
+        raise
     return written
 
 

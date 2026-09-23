@@ -277,7 +277,9 @@ def _render_parser() -> argparse.ArgumentParser:
     src.add_argument(
         "--sample",
         action="store_true",
-        help="Use the bundled 3-participant OneStop demo data.",
+        help="Use the bundled OneStop demo: word boxes for 3 readers, "
+        "fixations — so trials to render — for 2 of them (--list-trials shows "
+        "which).",
     )
     src.add_argument(
         "--authoring",
@@ -2528,8 +2530,32 @@ usage:
   scanpath-studio cache …          show / clear the on-device recovery cache
   scanpath-studio --version        print the version
 
-Unrecognized arguments are forwarded to `streamlit run` (e.g.
-`scanpath-studio --server.port 8502`)."""
+Unrecognized flags are forwarded to `streamlit run` (e.g.
+`scanpath-studio --server.port 8502`); an unknown command word is an error."""
+
+
+#: The subcommands `main` dispatches, for the did-you-mean below.
+_COMMANDS = ("run", "render", "analyze", "corpus", "cache")
+
+
+def _refuse_unknown_command(word: str) -> None:
+    """ENG-54: a mistyped subcommand is an error, not a Streamlit argument.
+
+    Everything unrecognised is forwarded to ``streamlit run`` so bare Streamlit
+    flags keep working — but a bare *word* was forwarded too, so
+    ``scanpath-studio rendr --sample`` reached Streamlit as a script argument
+    and died on "No such option: --sample" (or, with no flags, quietly launched
+    the app). Only a word is refused: a leading ``-`` is a Streamlit flag, and a
+    ``.py`` path is left to Streamlit as before."""
+    import difflib
+
+    close = difflib.get_close_matches(word, _COMMANDS, n=1, cutoff=0.6)
+    hint = f" — did you mean {close[0]!r}?" if close else "."
+    raise SystemExit(
+        f"scanpath-studio: unknown command {word!r}{hint} Commands: "
+        f"{', '.join(_COMMANDS)}; `scanpath-studio --help` lists them. "
+        "Streamlit flags (starting with --) still launch the app."
+    )
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -2550,6 +2576,8 @@ def main(argv: list[str] | None = None) -> None:
         print(_HELP)
     elif argv[0] in ("-V", "--version"):
         print(__version__)
+    elif not argv[0].startswith("-") and not argv[0].endswith(".py"):
+        _refuse_unknown_command(argv[0])
     else:
         # Backward compatibility: bare streamlit flags launch the app.
         launch_app(argv)

@@ -992,3 +992,52 @@ def test_the_synthetic_color_by_values_and_the_default_span_are_accepted():
         api.plot_scanpath(words, fixations, *_EXP17_TRIAL, color_by=value)
     api.plot_scanpath(words.drop(columns=["is_in_aspan"]), fixations, *_EXP17_TRIAL)
     api.plot_scanpath(words, fixations, *_EXP17_TRIAL, highlight_column=None)
+
+
+# ---------------------------------------------------------------------------
+# ENG-54 — what the docs say is importable from the package root is
+# ---------------------------------------------------------------------------
+def test_every_documented_api_function_is_importable_from_the_root():
+    """docs/api.md: "All functions below are importable from `scanpath_studio`"
+    — `eyegenbench_datasets` was listed there and was not."""
+    import re
+    from pathlib import Path
+
+    import scanpath_studio as sps
+
+    page = Path(__file__).resolve().parents[1] / "docs" / "api.md"
+    documented = re.findall(
+        r"^::: scanpath_studio\.\w+\.(\w+)$",
+        page.read_text(encoding="utf-8"),
+        re.MULTILINE,
+    )
+    assert documented
+    missing = [name for name in documented if not hasattr(sps, name)]
+    assert missing == []
+
+
+@pytest.mark.parametrize(
+    "name", ["eyegenbench_datasets", "load_text_metadata", "propose_schema"]
+)
+def test_the_headless_helpers_are_root_exports(name):
+    import scanpath_studio as sps
+
+    assert name in sps.__all__
+    assert callable(getattr(sps, name))
+
+
+def test_a_failed_layer_export_leaves_no_empty_folder(tmp_path, monkeypatch):
+    """With no Chrome, Kaleido fails on the first layer — and the folder the
+    call had just created stayed behind, empty."""
+    words, fixations = api.load_sample_data()
+    fig = api.plot_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele_r0")
+
+    def no_chrome(*_args, **_kwargs):
+        raise RuntimeError("Static .png export failed: no Chrome")
+
+    monkeypatch.setattr(api, "save_figure", no_chrome)
+    target = tmp_path / "nested" / "out_layers"
+    with pytest.raises(RuntimeError, match="no Chrome"):
+        api.save_figure_layers(fig, target, fmt="png")
+    assert not target.exists()
+    assert not (tmp_path / "nested").exists()

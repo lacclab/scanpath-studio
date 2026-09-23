@@ -4,7 +4,8 @@
 360-participant English eye-tracking-while-reading corpus (Berzak, Malmaud,
 Shubi, Meiri, Lion, Levy, *Scientific Data* 2025,
 [doi:10.1038/s41597-025-06272-2](https://doi.org/10.1038/s41597-025-06272-2)).
-The app's bundled demo is a 3-participant subset of it; this page covers loading
+The app's bundled demo is a small subset of it (word boxes for 3 readers,
+fixations for 2 of them); this page covers loading
 the **full public corpus** from [OSF](https://osf.io/2prdq/) as a public dataset.
 
 !!! note "Two ways to load OneStop"

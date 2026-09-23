@@ -38,7 +38,7 @@ from dataclasses import dataclass, field
 #: Bumped when an entry's *meaning* changes (a formula, a unit, a default), not
 #: when prose is edited. Exported alongside results so a bundle can name the
 #: methodology it was produced under.
-REGISTER_VERSION = "1"
+REGISTER_VERSION = "2"
 
 CATEGORY_IMPORTED = "Imported / precomputed"
 CATEGORY_NORMALIZATION = "Normalization / inference"
@@ -269,9 +269,14 @@ REGISTER: tuple[Computation, ...] = (
         category=CATEGORY_ASSIGNMENT,
         summary="The single highest-risk step: which word a fixation counts for.",
         formula=(
-            "1. Bounding-box containment against the trial's word boxes, using "
-            "the BUG-11 corrected edges (`word_box_bounds`), so a fixation in the "
-            "whitespace *before* a word is credited to that word. "
+            "1. Bounding-box containment against the trial's word boxes — the "
+            "experiment's own rectangles (`geom.word_box_bounds`), so on a "
+            "tiling corpus a fixation on the space *after* a word is credited to "
+            "that word, as EyeLink's interest-area report credits it. Boxes are "
+            "half-open, `x0 ≤ x < x1` and `y0 ≤ y < y1` "
+            "(`measures.word_box_contains`), so a point on an edge two boxes "
+            "share goes to the one that starts there — the next word, the line "
+            "below — as EyeLink assigns it. "
             "2. Otherwise the nearest word **center** within "
             "`LINE_MISREGISTRATION_PX` = 50 px. "
             "3. Otherwise `word_id = NaN` (out of text)."
@@ -280,7 +285,15 @@ REGISTER: tuple[Computation, ...] = (
         output="word_id",
         grouping="(participant_id, trial_id[, screen_id]) — never across screens",
         missing="Unassignable fixations keep NaN and are excluded from word measures.",
-        precedence="An imported `word_id` is kept unless `overwrite=True`.",
+        precedence=(
+            "An imported `word_id` is kept unless `overwrite=True` — so on the "
+            "bundled demo, whose fixation report carries EyeLink's "
+            "`CURRENT_FIX_INTEREST_AREA_ID`, the reading measures follow "
+            "EyeLink's assignment and geometry only fills the fixations it left "
+            "blank. #BUG-83: geometry now agrees with that column on all 3,208 "
+            "of the demo's EyeLink-assigned fixations (BUG-11's half-space "
+            "shift: 92.6%; closed containment on the shared edges: 99.1%)."
+        ),
         tiers="A, C",
         status=STATUS_PARTIAL,
         reference=(
@@ -297,9 +310,11 @@ REGISTER: tuple[Computation, ...] = (
         category=CATEGORY_ASSIGNMENT,
         summary="Whether a fixation landed on any word of the stimulus.",
         formula=(
-            "The fixation falls inside some word box (`word_box_bounds`). Box "
-            "containment only — a fixation the 50 px nearest-centre fallback of "
-            "`assign.fixation_to_word` gives a word still counts as out-of-text."
+            "The fixation falls inside some word box (`word_box_bounds`, tested "
+            "half-open by `word_box_contains`, as `assign.fixation_to_word` "
+            "tests it). Box containment only — a fixation the 50 px "
+            "nearest-centre fallback of `assign.fixation_to_word` gives a word "
+            "still counts as out-of-text."
         ),
         code="scanpath_studio/measures.py:fixation_in_text_mask",
         output="bool mask",
@@ -539,7 +554,9 @@ REGISTER: tuple[Computation, ...] = (
             "`offset = first_fix_x − word.x` (LTR) or "
             "`word.x + n·advance − first_fix_x` (RTL, BUG-27); "
             "`landing_position = offset / char_width + 1` — so the first letter "
-            "starts at 1 and its centre is 1.5."
+            "starts at 1 and its centre is 1.5. Unclipped: on a tiling corpus "
+            "the box's last cell is the space after the word, which belongs to "
+            "it (#BUG-83), so a first fixation there reads `n + 1` to `n + 2`."
         ),
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="initial_landing_position",
@@ -570,7 +587,9 @@ REGISTER: tuple[Computation, ...] = (
         summary="Landing position relative to the word's centre.",
         formula=(
             "`landing_position − (1 + len(text) / 2)` — the glyphs span "
-            "`[1, n + 1)`, so that is the word's centre (BUG-65)."
+            "`[1, n + 1)`, so that is the word's centre (BUG-65). The centre of "
+            "the *letters*, not of the box: a tiling box's trailing space "
+            "(#BUG-83) would move it half a letter right."
         ),
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="initial_landing_distance",
@@ -1074,19 +1093,28 @@ REGISTER: tuple[Computation, ...] = (
         category=CATEGORY_AGGREGATION,
         summary="Distribution of initial landing positions by word length.",
         formula=(
-            "Histogram of the landing position as a *fraction* of the word's "
-            "glyph run — `(first_fix_x − word.x) / (len(text) × "
-            "geom.word_char_advance)`, so 0 is the first glyph's left edge and 1 "
-            "the last glyph's right edge — binned per word length."
+            "Histogram of the landing position as a *fraction of the word's "
+            "interest area* — `(first_fix_x − word.x) / width` over the "
+            "experiment's own box, i.e. `(measure.landing_position − 1)` over "
+            "the box's `width / geom.word_char_advance` character cells (RTL "
+            "counted from where the glyphs end, as the letter position is). "
+            "Unclipped — binned per word length."
         ),
         code="scanpath_studio/aggregation.py:landing_positions",
-        unit="fraction of the word (0–1), or px with `as_fraction=False`",
+        unit=(
+            "fraction of the interest area (0–1 for a landing inside the box), "
+            "or px with `as_fraction=False`"
+        ),
         precedence=(
-            "#BUG-27: measured from the word's `x` and its glyph run, not from "
-            "the `geom.word_box_bounds` AOI edge and the padded `width` — those "
-            "put 0 half an inter-word space before the word and 1 half a space "
-            "after it, so this disagreed with `measure.landing_position` on the "
-            "same landing."
+            "#BUG-83: on a glyph-tight corpus the box is the glyph run, so 0 is "
+            "the first letter's edge and 1 the last's. On a tiling corpus the "
+            "box's last cell is the space after the word, so the glyphs fill "
+            "`[0, n / (n + 1))` and a landing on that space reads just below 1 "
+            "— it used to be clipped onto exactly 1.0, where 15% of the demo's "
+            "landings piled up. A first fixation assigned from outside the box "
+            "(the nearest-word fallback) reads below 0 or above 1 rather than "
+            "being clipped onto an edge. #BUG-27 put the origin at the word's "
+            "`x` and the scale on `geom.word_char_advance`."
         ),
         tiers="C",
         status=STATUS_PARTIAL,
@@ -1196,21 +1224,26 @@ REGISTER: tuple[Computation, ...] = (
     ),
     Computation(
         id="geom.word_box_bounds",
-        name="Corrected word-box edges",
+        name="Word interest-area edges",
         category=CATEGORY_GEOMETRY,
-        summary="Where one word's box ends and the next begins (BUG-11).",
+        summary="Where one word's interest area ends and the next begins.",
         formula=(
-            "The inter-word gap is split so the whitespace before a word belongs "
-            "to that word, rather than extending the previous box across it."
+            "`x .. x + width` by `y .. y + height` — the experiment's own "
+            "rectangles, unmodified. On a tiling corpus each box includes the "
+            "space after its word."
         ),
         code="scanpath_studio/measures.py:word_box_bounds",
         unit="px",
         precedence=(
-            "Used by `assign.fixation_to_word` and by `agg.word_rates`' left "
-            "edge — the boundary *between* words. A position *inside* a word "
-            "goes through `geom.word_char_advance` instead, whose origin is the "
-            "word's `x` (its first glyph); the two are half an advance apart by "
-            "construction, which is what #BUG-27 settled."
+            "The boundary *between* words, for everything that tests a point "
+            "against a box or draws one: `assign.fixation_to_word`, "
+            "`assign.in_text`, the drawn outlines, the word heatmaps, the "
+            "critical-span frame, drift correction and the model scanpaths. A "
+            "position *inside* a word goes through `geom.word_char_advance` "
+            "instead, and the drawn label through `geom.word_glyph_span`. "
+            "#BUG-83 reverted BUG-11, which pulled every tiling boundary back "
+            "half a space to mid-whitespace and so disagreed with EyeLink's own "
+            "interest-area assignment on 7.4% of the demo's fixations."
         ),
         tiers="A, C",
         status=STATUS_PARTIAL,
@@ -1226,11 +1259,16 @@ REGISTER: tuple[Computation, ...] = (
             "Median of `width / (len(text) + 1)` across one trial's words — the "
             "advance — reported only when the boxes are consistently that wide "
             "**and** actually tile (no gaps). Anything else ⇒ `0.0`, i.e. "
-            "'these AOIs are glyph-tight, don't touch them'."
+            "'these AOIs are glyph-tight — each box is its glyph run'."
         ),
         code="scanpath_studio/measures.py:word_box_space_px",
         unit="px",
-        missing="No usable words ⇒ 0.0 (no correction), never a guess.",
+        missing="No usable words ⇒ 0.0 (glyph-tight), never a guess.",
+        precedence=(
+            "Never moves a box edge (#BUG-83); it only tells "
+            "`geom.word_char_advance` and `geom.word_glyph_span` how many "
+            "character cells a box holds."
+        ),
         tiers="A, C",
         status=STATUS_VERIFIED,
         consumers=(_UI, _API, _EXPORT),
@@ -1260,6 +1298,31 @@ REGISTER: tuple[Computation, ...] = (
         status=STATUS_VERIFIED,
         consumers=(_UI, _API, _EXPORT, _CORPUS),
         tests=("tests/test_measures.py",),
+    ),
+    Computation(
+        id="geom.word_glyph_span",
+        name="Where a word's glyphs are",
+        category=CATEGORY_GEOMETRY,
+        summary="The glyph run inside a word's box — where its label is drawn.",
+        formula=(
+            "Starts at `x` and runs `len(text) × geom.word_char_advance`: the "
+            "whole box on a glyph-tight corpus, one advance short of it on a "
+            "tiling one. No `text` ⇒ the box width."
+        ),
+        code="scanpath_studio/measures.py:word_glyph_span",
+        unit="px",
+        precedence=(
+            "Rendering, not an interest area: the word label is centred on it "
+            "(BUG-30), the linear-reading schematic snaps a fixation above its "
+            "centre, and `agg.landing_curve` mirrors an RTL landing across it. "
+            "#BUG-83 keeps the label here while the drawn box grew to the "
+            "experiment's — centring in a tiling box would draw the text half a "
+            "space right of the stimulus image and the fixations."
+        ),
+        tiers="A",
+        status=STATUS_VERIFIED,
+        consumers=(_UI, _API, _CLI, _EXPORT, _CORPUS),
+        tests=("tests/test_word_box_geometry.py",),
     ),
     # ------------------------------------------------------------------
     # Display / export transformations

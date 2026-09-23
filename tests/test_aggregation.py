@@ -153,7 +153,8 @@ def _trend_frame() -> pd.DataFrame:
 
 
 def test_layout_is_glyph_tight():
-    """The fixture's boxes leave real gaps, so box left == raw ``x`` (BUG-11)."""
+    """The fixture's boxes leave real gaps, so each box is its glyph run and a
+    landing fraction is over the letters as well as the box (BUG-83)."""
     assert word_box_space_px(_tidy_words()) == 0.0
 
 
@@ -1115,10 +1116,14 @@ class TestLandingPositions:
             [0.4, 0.3]
         )
 
-    def test_clipped_to_the_box(self):
+    def test_a_landing_outside_the_box_is_not_clipped_onto_its_edge(self):
+        """BUG-83: a first fixation the word got although it lies beside the box
+        (the nearest-word fallback, or an imported ``word_id``) keeps its
+        position. Clipping piled every such landing onto 0 or 1, where it read
+        as a fixation on the first or last letter."""
         w = _tidy_words().head(2).copy()
-        w["first_fix_x"] = [-5.0, 400.0]
-        assert list(landing_positions(w)) == [0.0, 1.0]
+        w["first_fix_x"] = [-5.0, 33.0]  # boxes 0 → 10 and 20 → 30
+        assert list(landing_positions(w)) == pytest.approx([-0.5, 1.3])
 
     def test_no_usable_source(self):
         w = _tidy_words().drop(columns=["first_fix_x"])

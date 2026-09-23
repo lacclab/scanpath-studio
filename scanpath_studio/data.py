@@ -2693,7 +2693,8 @@ def fill_fixation_xy_from_words(
         return fixations
     from .measures import word_box_bounds
 
-    # BUG-11: place them at the *corrected* box centre, i.e. the glyph centre.
+    # The interest area's own centre (BUG-83), which is inside the box the
+    # assignment will then test it against.
     x0, y0, x1, y1 = word_box_bounds(words)
     keys = grouping_columns(words, include_word=True)
     centers = words[keys].copy()

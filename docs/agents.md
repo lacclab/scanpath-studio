@@ -374,6 +374,12 @@ the linear-reading schematic.
 `heatmap_norm="Log"` compresses heavy-tailed dwell times. Duration mass spreads
 dwell over nearby characters; `duration_mass_sigma_chars` controls its Gaussian.
 
+`fixation_color_range` and `heatmap_range` are `(min, max)` pairs in the
+metric's own units. Left at `None` each trial is scaled to its own values, and
+a comparison shares one scale across A and B — which is also the app's default,
+with its *Auto range* box ticked. Pass a range to put every trial on the same
+scale.
+
 ### Raw gaze
 
 | Option | Default | Anim |

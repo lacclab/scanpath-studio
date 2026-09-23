@@ -69,6 +69,7 @@ from .controls import (
     _FIXCLASS_MODES,
     _OUT_OF_TEXT_MARKERS,
     color_field_options,
+    forget_color_range,
     numeric_field_options,
     palette_state,
 )
@@ -271,7 +272,7 @@ def _parse_align_algorithm(v) -> str:
 # `_build_share_query` (write) and `_apply_url_preset` (read) both iterate these,
 # so the two sides can't drift. Data-dependent fields (color ranges, highlight
 # column, axis/color-by fields) self-heal on load via the rail's _drop_stale /
-# _clamp_range, so a link opened on a different trial degrades gracefully.
+# _clamped_pair, so a link opened on a different trial degrades gracefully.
 _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "preproc_enabled": "global_preproc_enabled",
     "preproc_blink_adjacent": "global_preproc_blink_adjacent",
@@ -511,7 +512,7 @@ _URL_PRESETS = {
 # (slider / number_input). A hand-crafted link with an out-of-range value would
 # otherwise crash the widget on render — Streamlit raises when a Session-State
 # value falls outside the widget's range. Clamp on the way in. (Data-dependent
-# colour ranges aren't here — the rail's `_clamp_range` handles those against
+# colour ranges aren't here — the rail's `_clamped_pair` handles those against
 # the live data.)
 _URL_BOUNDED = {
     "global_preproc_short_threshold_ms": (1.0, 500.0),
@@ -1736,8 +1737,10 @@ def _restore_plot_config(
             20,
             "color bar tick size",
         )
-    # Range sliders only render when colour bars are on; store them anyway —
-    # the widgets clamp to the current data via `controls._clamp_range`.
+    # Store them even when their layer is off — the rail clamps them to the
+    # current data via `controls._clamped_pair`. VIZ-46: a stored range means
+    # *explicit*, so a config saved while the range was auto (`null`) restores
+    # as auto rather than keeping whatever range this session happened to hold.
     for cfg_key, state_key, label in (
         ("fixation_range", "global_fixation_color_range", "fixation color range"),
         ("heatmap_range", "global_heatmap_color_range", "heatmap color range"),
@@ -1746,6 +1749,8 @@ def _restore_plot_config(
         if isinstance(rng, (list, tuple)) and len(rng) == 2:
             lo, hi = number(rng[0]), number(rng[1])
             put_valid(lo is not None and hi is not None, state_key, (lo, hi), label)
+        elif cfg_key in coloring and rng is None:
+            forget_color_range(state_key)
 
     sizing = section("sizing")
     marker = sizing.get("marker_size_range")

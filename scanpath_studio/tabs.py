@@ -5578,10 +5578,17 @@ def render_single_trial_tab(
                     )
                 )
             if comparing and cross_dataset and not compare_comparable:
+                # UX-144: the note's own ending ("so they are shown side by
+                # side instead") is the *static* figure's fallback; the replay
+                # has no split layout and shows A alone, so say only that.
+                reason = compare_setup_note.removesuffix(
+                    ", so they are shown side by side instead."
+                )
+                reason += "" if reason.endswith(".") else "."
                 st.warning(
                     "An animated comparison replays both scanpaths on one clock "
-                    f"in one coordinate space. {compare_setup_note} Showing "
-                    "only the first scanpath.",
+                    f"in one coordinate space. {reason} Showing only the first "
+                    "scanpath.",
                     icon="⚠️",
                 )
             elif comparing and compare_fix.empty:

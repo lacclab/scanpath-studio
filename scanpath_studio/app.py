@@ -6543,7 +6543,10 @@ def main() -> None:
     # belong to. Reserved here (so it keeps its place at the top of the page)
     # and filled after the load, which is the first point this run's counts for
     # the open dataset exist.
-    dataset_table_slot = setup_source_slot.container()
+    # Keyed: the "Load and verify a dataset" tutorial spotlights it — the data
+    # source picker it used to aim at is not on this page (only Scanpath and
+    # Corpus Analysis draw one), so the step outlined nothing.
+    dataset_table_slot = setup_source_slot.container(key="tutorial_available_datasets")
     # DATA-35: under the table, not on the heading's line. Left-aligned in a
     # narrow column so a stretched button doesn't run the width of the page.
     add_dataset_slot = None

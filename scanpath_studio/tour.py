@@ -107,6 +107,10 @@ class TutorialStep:
     selector: str
     view: str = _VIEW_SCANPATH
     subtab: str | None = None
+    #: PERF-9 made the Corpus Analysis subtabs lazy (only the open one renders),
+    #: so a step aimed at a control inside one has to open it, as ``subtab``
+    #: does for the Scanpath view. A label from ``tabs.CORPUS_SUBTABS``.
+    corpus_subtab: str | None = None
     #: DATA-35 — the step's target lives on the 🗂️ Data page's **✏️ Edit dataset**
     #: screen rather than its overview, so opening the view is not enough: the
     #: editor has to be raised too, or the spotlight aims at a hidden container.
@@ -167,7 +171,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "Everything about the dataset lives on the 🗂️ **Data** page, in the "
                 "order the pipeline uses it. Start at **📂 Available datasets** — "
                 "click a name to open it, or ➕ **Add dataset** for your own tables.",
-                ".st-key-tour_grp_data_source",
+                ".st-key-tutorial_available_datasets",
                 view=_VIEW_DATA,
             ),
             TutorialStep(
@@ -236,7 +240,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Review one trial at a time",
-                "One picker for every dataset: the **Trial id** dropdown, a scrubbing "
+                "One picker for every dataset: the **Select Trial** dropdown, a scrubbing "
                 "slider showing *index / total*, and ◀ ▶ to step through the pool "
                 "you just narrowed.",
                 ".st-key-tour_grp_trial_picker",
@@ -261,7 +265,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "Open **Export** and choose the filtered scope and tabular files. "
                 "Screen identity is retained in multipart exports.",
                 ".st-key-tutorial_export",
-                subtab="Export",
+                subtab="📤 Export",
             ),
         ),
     ),
@@ -292,7 +296,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "Open **Export** for PNG/SVG/HTML or bulk output. Include the plot config "
                 "when the figure must be reproducible later.",
                 ".st-key-tutorial_export",
-                subtab="Export",
+                subtab="📤 Export",
             ),
             TutorialStep(
                 "Keep the figure reproducible",
@@ -325,10 +329,10 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Compare like with like",
-                "Open **🔬 Comparisons** and pick the column that separates the "
-                "readings — participant, session, condition. You get the other "
-                "readings of *this* text at the same scale, so the grid compares "
-                "like with like." + _SIMILARITY_SENTENCE,
+                "Open **🔬 Comparisons** and set **Match field** to the text id: "
+                "the grid shows the other trials that share this trial's value in "
+                "that field — here, the other readings of *this* text — at the same "
+                "scale, so it compares like with like." + _SIMILARITY_SENTENCE,
                 ".st-key-tutorial_comparisons",
                 subtab="🔬 Comparisons",
             ),
@@ -360,10 +364,10 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Pick the question, not the chart",
-                "Three subtabs, three shapes of question. **Per text** — one text, many "
-                "readers. **Per reader** — one reader, all their trials. **Groups** — a "
-                "cohort, or two compared. Our worked question is *did this reader speed "
-                "up over the experiment?*, so open **Per reader**.",
+                "Four subtabs, four shapes of question: **Per text** (one text, many "
+                "readers), **Per sentence**, **Per reader** (one reader, all their "
+                "trials) and **Groups** (a cohort, or two compared). Our question — "
+                "*did this reader speed up over the experiment?* — is **Per reader**.",
                 ".st-key-tutorial_corpus_subtabs",
                 view=_VIEW_CORPUS,
             ),
@@ -374,6 +378,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "experiment on one axis, rather than a single trial's dynamics.",
                 ".st-key-tutorial_per_reader_view",
                 view=_VIEW_CORPUS,
+                corpus_subtab="Per reader",
             ),
             TutorialStep(
                 "Read average fixation duration across the experiment",
@@ -390,6 +395,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "reader unusual, or is the whole cohort like this? Read the sample size "
                 "with the effect, never the plotted mean on its own.",
                 ".st-key-tutorial_per_reader_view",
+                corpus_subtab="Per reader",
                 view=_VIEW_CORPUS,
                 optional=True,
             ),
@@ -1480,6 +1486,8 @@ def _open_tutorial_surface(step: TutorialStep) -> None:
     st.session_state["main_nav"] = step.view
     if step.subtab is not None:
         st.session_state["single_subtab"] = step.subtab
+    if step.corpus_subtab is not None:
+        st.session_state["corpus_subtab"] = step.corpus_subtab
     # DATA-35: the Data page's two screens. A step that points into the editor
     # opens it; one that points at the overview closes it, so walking back up a
     # tutorial does not leave the editor covering the table the previous step
@@ -1515,6 +1523,11 @@ def _tutorial_surface_is_open(step: TutorialStep) -> bool:
     if step.view == _VIEW_DATA and bool(
         st.session_state.get(DATASET_EDITOR_OPEN_KEY)
     ) != bool(step.dataset_editor):
+        return False
+    if (
+        step.corpus_subtab is not None
+        and st.session_state.get("corpus_subtab", "Per text") != step.corpus_subtab
+    ):
         return False
     return (
         step.subtab is None
@@ -1856,7 +1869,7 @@ _FAQ_ITEMS = [
         "Streamlit doesn't reload already-imported modules on a rerun, and "
         "`st.cache_data` doesn't hash the helpers a cached loader calls — a "
         "rerun or **Clear cache** isn't enough after editing code. Restart the "
-        "server process. This is a different cache from the menu bar's "
+        "server process. This is a different cache from the top bar's "
         "**💾 Session → Automatic recovery** panel, which stores your data and settings, "
         "not code.",
     ),
@@ -2058,9 +2071,9 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": "📂 Set up your dataset",
         "body": (
-            "Turn your eye-tracking tables into an interactive dataset in four "
-            "steps: name it, upload the files, say which columns mean what "
-            "(and which extras to keep), and describe the recording setup. "
+            "Turn your eye-tracking tables into an interactive dataset in three "
+            "parts: name it, upload and map each table (and pick which extras "
+            "to keep), and describe the recording setup. "
             "Follow along with **Next**, or **Skip** to dive in."
         ),
         "selector": "",
@@ -2069,8 +2082,8 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": "1 · Dataset name",
         "body": (
-            "Name it — this is what shows up in the Data source list, so you "
-            "can switch back to it later."
+            "Name it — this is what shows up in **📂 Available datasets** and "
+            "the dataset picker, so you can switch back to it later."
         ),
         "selector": ".st-key-wiz_part_name",
         "step_id": "name",

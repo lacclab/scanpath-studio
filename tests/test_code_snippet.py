@@ -615,6 +615,87 @@ def test_a_palette_is_expanded_not_named():
     assert "saccade_color=" in code
 
 
+def _rendered_figures(monkeypatch, argv_list) -> list:
+    """Run each ``render`` argv with `save_figure` capturing the figure."""
+    figures: list = []
+
+    def capture(fig, path, **_kwargs):
+        figures.append(fig)
+        return path
+
+    monkeypatch.setattr(api, "save_figure", capture)
+    for argv in argv_list:
+        cli.main(argv)
+    return figures
+
+
+@pytest.mark.parametrize("palette", ["Print / greyscale", "High contrast"])
+def test_a_palette_choice_reproduces_through_the_cli(
+    tmp_path, monkeypatch, capsys, palette
+):
+    """EXP-12: a palette rewrites the five class colours, and the CLI form
+    spelled them as `--saccade-type-color` flags — which imply *By type*, so
+    every palette choice printed a command that recoloured saccades by type
+    (and named `text_color` / `highlight_text_color` unsupported). The CLI form
+    names the palette instead, and executed it draws the same figure."""
+    original = [
+        "render",
+        "--sample",
+        "--palette",
+        palette,
+        "--print-code",
+        "cli",
+        "-o",
+        str(tmp_path / "a.html"),
+    ]
+    _rendered_figures(monkeypatch, [original])
+    printed = capsys.readouterr().out
+    assert "--saccade-type-color" not in printed
+    assert "No `render` flag" not in printed
+    assert shlex.quote(palette) in printed
+    replay = shlex.split(printed.strip().replace(" \\\n", " "))[1:]
+    first, second = _rendered_figures(
+        monkeypatch, [original[:-4] + original[-2:], replay]
+    )
+    assert _figure_fingerprint(first) == _figure_fingerprint(second)
+
+
+def test_class_colours_a_uniform_figure_does_not_draw_are_not_emitted():
+    """`--saccade-type-color` switches the mode, so it must never carry colours
+    the figure is not drawing."""
+    from scanpath_studio.constants import palette_settings
+
+    colors = palette_settings("High contrast")["saccade_class_colors"]
+    colors["regression"] = "#abcdef"  # no palette matches this set
+    state = _state(figure={"saccade_class_colors": colors})
+    command, unsupported = cs.cli_snippet(DEMO, state)
+    assert "--saccade-type-color" not in command
+    assert "saccade_class_colors" not in unsupported
+
+
+def test_two_way_class_colours_no_flag_can_restate_are_named_unsupported():
+    """The two-way fold draws the class colours, but `--saccade-type-color`
+    would turn it into the five-way split — so unless a palette supplies them,
+    they are named rather than emitted."""
+    state = _state(
+        figure={
+            "saccade_color_mode": "Forward / regression",
+            "saccade_class_colors": {"regression": "#abcdef", "forward": "#123456"},
+        }
+    )
+    command, unsupported = cs.cli_snippet(DEMO, state)
+    assert "--saccade-color-by-direction" in command
+    assert "--saccade-type-color" not in command
+    assert "saccade_class_colors" in unsupported
+
+
+def test_a_stock_figure_names_no_palette():
+    command, _ = cs.cli_snippet(DEMO, _state())
+    assert "--palette" not in command
+    by_type = _state(figure={"saccade_color_mode": "By type"})
+    assert "--palette" not in cs.cli_snippet(DEMO, by_type)[0]
+
+
 # ---------------------------------------------------------------------------
 # The Share subtab's block
 # ---------------------------------------------------------------------------

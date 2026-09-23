@@ -64,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The selected trial's `combos` row is masked once per rerun, and only when something asks** (PERF-7)
 - **`render --animate` honours every styling flag the replay can draw** (EXP-10)
 - **`render --compare-with` honours `--fix-index-range`** (EXP-11)
+- **A palette choice no longer reproduces as a command that colours saccades by type** (EXP-12)
 
 ### Details
 
@@ -137,6 +138,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`render --animate` honours every styling flag the replay can draw** (EXP-10) — `render --animate` chose what to forward to `animate_scanpath` from a hand-kept list that had drifted from the builder: `--fixation-symbol`, `--fixation-color` and `--palette` were dropped without a word, while `--color-by`, `--marker-size-range` and `--fixation-colorscale` were refused as "not supported with --animate" though the replay draws all three. An animation snippet copied from the app therefore replayed a different figure. The forwarded set is now `api.figure_options("animation")` — the same list the builder validates and the snippet serializer diffs against — and the warning names only options moved off their default that the replay genuinely cannot draw (the heatmap, arcs, reading-class saccades). A test had pinned `color_by` as unsupported; it now pins the opposite.
 
 - **`render --compare-with` honours `--fix-index-range`** (EXP-11) — `compare_scanpaths` has always taken `fix_index_range`, but `render`'s compare branch never passed it, so `--compare-with … --fix-index-range 1:10` drew both whole trials — while the `--print-code` recipe for the same command wrote the window into the Python form. It is now forwarded, windowing both scanpaths as the app's slider does.
+
+- **A palette choice no longer reproduces as a command that colours saccades by type** (EXP-12) — a palette rewrites the five reading-class saccade colours, and the CLI half of the reproduction snippet spelled them out as `--saccade-type-color` flags — which *imply* `--saccade-color-by-type`. So choosing any palette, in the app or with `render --palette … --print-code cli`, printed a command that recoloured every saccade by type, and named `text_color` / `highlight_text_color` "unsupported" besides. The CLI form now names the palette itself (`--palette 'Print / greyscale'`) whenever one explains the figure's colours, restating only the colours changed on top of it; class colours are never emitted into a figure that is not drawing them, and in the two-way *Forward / regression* fold, where `--saccade-type-color` would switch the mode, they are named unsupported unless a palette supplies them. The Python form still expands the palette, as before.
 
 ## [0.30.1] - 2026-08-28
 

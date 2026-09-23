@@ -579,12 +579,10 @@ ONESTOP_CHOICE = "OneStop server bundle"
 ONESTOP_PUBLIC_CHOICE = "OneStop — 360-participant English corpus"
 ONESTOP_PUBLIC_DEFAULT_DIR = "data/OneStop"
 # Default folder for the lacclab OneStop variant (a lab-processed local export;
-# superset schema, no download). Path-editable on the 🗂️ Data page and overridable via
-# the `ONESTOP_LACCLAB_DIR` env var — never the *only* option, just the default.
-ONESTOP_LACCLAB_DEFAULT_DIR = (
-    "/Users/shubi/Library/CloudStorage/OneDrive-Technion/In-lab Experiments/"
-    "OneStopGaze L1 English/Reports/lacclab"
-)
+# superset schema, no download). Blank: ENG-60 — it was one maintainer's own
+# OneDrive path, prefilled into the Data directory box for every user who picked
+# the option. Set `ONESTOP_LACCLAB_DIR`, or type the path on the 🗂️ Data page.
+ONESTOP_LACCLAB_DEFAULT_DIR = ""
 ONESTOP_REGIME_LABELS = {
     "ordinary": "Ordinary reading",
     "information_seeking": "Information seeking",

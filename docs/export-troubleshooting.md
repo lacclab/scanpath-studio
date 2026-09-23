@@ -58,6 +58,8 @@ In **Export → Export bundle**, select **Full measure family** to add saccades,
 sentence measures, trial and reader summaries, character grids, cleaning QA,
 and `run_config.json` alongside the existing fixation and word-measure files.
 The zip contains both per-trial files and concatenated `aggregate/all_*` files.
+With **Mega-table** ticked as well, `aggregate/all_fixations` is the family's
+word-enriched table — one file under that name, never two.
 The run configuration records preprocessing and visualization settings so the
 numbers can be reproduced later.
 

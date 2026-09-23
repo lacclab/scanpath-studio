@@ -61,8 +61,8 @@ from .data import (
     empty_words_frame,
     extract_columns_from_source_file,
     frame_fingerprint,
+    normalization_issues,
     normalize_raw_gaze,
-    numeric_parse_issues,
     pick_column,
     propose_fix_schema,
     propose_raw_gaze_schema,
@@ -601,10 +601,10 @@ def _c_aggregate_char_boxes(_raw, _schema, fingerprint: tuple, key: tuple):
 
 
 @st.cache_data(show_spinner=False)
-def _c_numeric_parse_issues(
+def _c_normalization_issues(
     _raw, _schema, fingerprint: tuple, key: tuple, table: str
 ) -> list:
-    return numeric_parse_issues(_raw, _schema, table=table)
+    return normalization_issues(_raw, _schema, table=table)
 
 
 def _schema_key(schema: dict | None) -> tuple:
@@ -3722,11 +3722,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
         )
 
     if active:
-        # BUG-54: a complete mapping can still name a numeric column that did
-        # not parse — a decimal-comma export pandas could not read, a text
-        # column picked as a coordinate. The load carries on with a fallback
-        # for those rows, so say which column and what the fallback was, where
-        # the other blockers are: directly above ✅ Add dataset.
+        # BUG-54 / BUG-56: a complete mapping can still meet rows it cannot
+        # use — a numeric column that did not parse (a decimal-comma export, a
+        # text column picked as a coordinate), a row with no trial id. The load
+        # carries on without them, so say which and what was done, where the
+        # other blockers are: directly above ✅ Add dataset.
         tables = (
             ("Words/IA", raw_words, word_schema, has_words),
             ("Fixations", raw_fix, fix_schema, has_fix),
@@ -3734,7 +3734,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         for table, raw, schema, present in tables:
             if not present:
                 continue
-            for line in _c_numeric_parse_issues(
+            for line in _c_normalization_issues(
                 raw, schema, frame_fingerprint(raw), _schema_key(schema), table
             ):
                 s6.warning(f"⚠️ {line}")

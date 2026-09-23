@@ -516,6 +516,62 @@ class TestUnreadableNumbers:
         assert data_module.numeric_parse_issues(raw, self.SCHEMA, table="F") == []
 
 
+class TestRowsWithoutIdentity:
+    """BUG-56: one blank row made a dataset impossible to add.
+
+    Excel leaves a `,,,,` line at the end of a saved sheet; its NaN trial id
+    crashed `_disambiguate_repeated_readings`' integer cast.
+    """
+
+    SCHEMA = {
+        "participant": "RECORDING_SESSION_LABEL",
+        "trial": "unique_paragraph_id",
+        "x": "CURRENT_FIX_X",
+        "y": "CURRENT_FIX_Y",
+        "duration": "CURRENT_FIX_DURATION",
+    }
+
+    def _csv(self, tmp_path, lines):
+        path = tmp_path / "fix.csv"
+        header = (
+            "RECORDING_SESSION_LABEL,unique_paragraph_id,TRIAL_INDEX,"
+            "CURRENT_FIX_X,CURRENT_FIX_Y,CURRENT_FIX_DURATION"
+        )
+        path.write_text("\n".join([header, *lines]) + "\n")
+        return data_module.read_table(path)
+
+    def test_a_trailing_blank_row_is_dropped_quietly(self, tmp_path):
+        raw = self._csv(tmp_path, ["p1,t1,1,10,20,200", "p1,t1,1,30,20,180", ",,,,,"])
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")  # a blank row is not data
+            fixations = normalize_fixations(raw, self.SCHEMA)
+        assert len(fixations) == 2
+        assert fixations["trial_id"].tolist() == ["t1", "t1"]
+
+    def test_a_row_with_data_but_no_trial_is_left_out_and_said(self, tmp_path):
+        raw = self._csv(tmp_path, ["p1,t1,1,10,20,200", "p1,,1,30,20,180"])
+        issues = data_module.identity_issues(raw, self.SCHEMA, table="Fixations")
+        assert issues == [
+            "Fixations: 1 row has no value in `unique_paragraph_id`, so it "
+            "belongs to no trial and was left out."
+        ]
+        with pytest.warns(UserWarning, match="unique_paragraph_id"):
+            fixations = normalize_fixations(raw, self.SCHEMA)
+        assert len(fixations) == 1
+
+    def test_a_reading_with_no_trial_index_keeps_its_id(self, tmp_path):
+        raw = self._csv(tmp_path, ["p1,t1,1,10,20,200", "p1,t1,,30,20,180"])
+        fixations = normalize_fixations(raw, self.SCHEMA)
+        assert set(fixations["trial_id"]) == {"t1"}
+
+    def test_a_composite_trial_id_with_a_missing_part_is_left_out(self, tmp_path):
+        raw = self._csv(tmp_path, ["p1,t1,1,10,20,200", "p1,t1,,30,20,180"])
+        schema = {**self.SCHEMA, "trial": ["unique_paragraph_id", "TRIAL_INDEX"]}
+        with pytest.warns(UserWarning, match="TRIAL_INDEX"):
+            fixations = normalize_fixations(raw, schema)
+        assert fixations["trial_id"].tolist() == ["t1_1"]
+
+
 class TestNormalizeRawGaze:
     """Tests for normalize_raw_gaze function."""
 

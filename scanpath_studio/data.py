@@ -1329,14 +1329,90 @@ def numeric_parse_issues(raw: pd.DataFrame, schema: dict, *, table: str) -> list
     return issues
 
 
-def _warn_numeric_issues(raw: pd.DataFrame, schema: dict, *, table: str) -> None:
-    """Raise each :func:`numeric_parse_issues` line as a ``UserWarning``.
+def _single_trial_column(source: pd.DataFrame, trial_col: str) -> str:
+    """The source column a single-column trial mapping is read from."""
+    return "unique_trial_id" if "unique_trial_id" in source.columns else trial_col
+
+
+def _identity_columns(source: pd.DataFrame, schema: dict) -> list[str]:
+    """The source columns a row's (participant, trial) identity is built from."""
+    columns: list = []
+    if schema.get("participant"):
+        columns += trial_mapping_columns(schema["participant"])
+    trial_cols = trial_mapping_columns(schema["trial"])
+    if len(trial_cols) > 1:
+        columns += trial_cols
+    else:
+        columns.append(_single_trial_column(source, trial_cols[0]))
+    return [c for c in dict.fromkeys(columns) if c in source.columns]
+
+
+def _rows_missing_identity(
+    source: pd.DataFrame, schema: dict
+) -> tuple[pd.Series, pd.Series]:
+    """``(blank, unkeyed)`` row masks: rows with no participant or trial id.
+
+    A row missing either cannot belong to any trial, and its NaN crashed the
+    load outright — one ``,,,,`` line, the blank row Excel leaves at the end of
+    a sheet, made the whole dataset impossible to add (BUG-56). ``blank`` is the
+    rows that hold nothing at all, which are not data and go quietly;
+    ``unkeyed`` is the rest, which hold data and are reported. Only the missing
+    rows are inspected cell by cell, so a clean table costs one ``isna`` per id
+    column.
+    """
+    columns = _identity_columns(source, schema)
+    missing = source[columns].isna().any(axis=1) if columns else None
+    none = pd.Series(False, index=source.index)
+    if missing is None or not missing.any():
+        return none, none
+    rows = source.loc[missing].drop(columns=[SOURCE_FILE_COLUMN], errors="ignore")
+    empty = rows.apply(lambda c: c.isna() | (c.astype(str).str.strip() == ""))
+    blank = none.copy()
+    blank.loc[rows.index] = empty.all(axis=1)
+    return blank, missing & ~blank
+
+
+def _drop_rows_missing_identity(source: pd.DataFrame, schema: dict) -> pd.DataFrame:
+    """``source`` without the rows :func:`_rows_missing_identity` flags."""
+    blank, unkeyed = _rows_missing_identity(source, schema)
+    keep = ~(blank | unkeyed)
+    return source if keep.all() else source.loc[keep]
+
+
+def identity_issues(raw: pd.DataFrame, schema: dict, *, table: str) -> list[str]:
+    """A warning for rows that hold data but no participant or trial id."""
+    _, unkeyed = _rows_missing_identity(raw, schema)
+    count = int(unkeyed.sum())
+    if not count:
+        return []
+    columns = [
+        c for c in _identity_columns(raw, schema) if raw.loc[unkeyed, c].isna().any()
+    ]
+    named = ", ".join(f"`{c}`" for c in columns)
+    if count == 1:
+        said = "1 row has no value in {}, so it belongs to no trial and was left out"
+    else:
+        said = f"{count:,} rows have no value in {{}}, so they belong to no trial and were left out"
+    return [f"{table}: {said.format(named)}."]
+
+
+def normalization_issues(raw: pd.DataFrame, schema: dict, *, table: str) -> list[str]:
+    """Everything the load will do to ``raw`` under ``schema`` that the user
+    should hear about: rows left out for want of an id (BUG-56), and mapped
+    numeric columns that did not parse (BUG-54)."""
+    return identity_issues(raw, schema, table=table) + numeric_parse_issues(
+        raw, schema, table=table
+    )
+
+
+def _warn_normalization_issues(raw: pd.DataFrame, schema: dict, *, table: str) -> None:
+    """Raise each :func:`normalization_issues` line as a ``UserWarning``.
 
     The headless API and ``render`` have no page to put a warning on, so the
     normalizers say it themselves; the wizard shows the same lines above
     ✅ Add dataset.
     """
-    for issue in numeric_parse_issues(raw, schema, table=table):
+    for issue in normalization_issues(raw, schema, table=table):
         warnings.warn(issue.replace("`", "'"), UserWarning, stacklevel=3)
 
 
@@ -2220,11 +2296,7 @@ def normalize_raw_gaze(
         df["trial_id"] = trial_id_series(raw_gaze, trial_cols)
         df["unique_trial_id"] = df["trial_id"]
     else:
-        trial_col = (
-            "unique_trial_id"
-            if "unique_trial_id" in raw_gaze.columns
-            else trial_cols[0]
-        )
+        trial_col = _single_trial_column(raw_gaze, trial_cols[0])
         df["trial_id"] = stable_id(raw_gaze[trial_col])
         if "unique_trial_id" in raw_gaze.columns:
             df["unique_trial_id"] = stable_id(raw_gaze["unique_trial_id"])
@@ -2549,9 +2621,12 @@ def _disambiguate_repeated_readings(
             "_idx": source[idx_col].to_numpy(),
         }
     )
+    # A reading with no index of its own keeps its id unsuffixed rather than
+    # crashing the cast (BUG-56).
     rank = (
         grouper.groupby(["_pk", "_tc"])["_idx"]
         .rank(method="dense")
+        .fillna(1)
         .astype(int)
         .to_numpy()
     )
@@ -2985,7 +3060,8 @@ def _copy_screen_fields(
 def normalize_words(
     words: pd.DataFrame, schema: dict[str, str], *, keep_columns: set | None = None
 ) -> pd.DataFrame:
-    _warn_numeric_issues(words, schema, table="Words/IA")
+    _warn_normalization_issues(words, schema, table="Words/IA")
+    words = _drop_rows_missing_identity(words, schema)
     # The explicit index makes scalar assignments (e.g. the stimulus-level
     # participant placeholder) fill every row even when assigned first.
     df = pd.DataFrame(index=words.index)
@@ -3005,9 +3081,7 @@ def normalize_words(
         df["trial_id"] = trial_id_series(words, trial_cols)
         df["unique_trial_id"] = df["trial_id"]
     else:
-        trial_col = (
-            "unique_trial_id" if "unique_trial_id" in words.columns else trial_cols[0]
-        )
+        trial_col = _single_trial_column(words, trial_cols[0])
         df["trial_id"] = stable_id(words[trial_col])
         if schema.get("participant"):
             df = _disambiguate_repeated_readings(df, words, trial_col)
@@ -3068,7 +3142,8 @@ def normalize_fixations(
     *,
     keep_columns: set | None = None,
 ) -> pd.DataFrame:
-    _warn_numeric_issues(fixations, schema, table="Fixations")
+    _warn_normalization_issues(fixations, schema, table="Fixations")
+    fixations = _drop_rows_missing_identity(fixations, schema)
     # Explicit index so a constant participant placeholder fills every row.
     df = pd.DataFrame(index=fixations.index)
     if schema.get("participant"):
@@ -3083,11 +3158,7 @@ def normalize_fixations(
         df["trial_id"] = trial_id_series(fixations, trial_cols)
         df["unique_trial_id"] = df["trial_id"]
     else:
-        trial_col = (
-            "unique_trial_id"
-            if "unique_trial_id" in fixations.columns
-            else trial_cols[0]
-        )
+        trial_col = _single_trial_column(fixations, trial_cols[0])
         df["trial_id"] = stable_id(fixations[trial_col])
         if schema.get("participant"):
             df = _disambiguate_repeated_readings(df, fixations, trial_col)

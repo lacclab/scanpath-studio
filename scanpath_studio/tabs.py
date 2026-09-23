@@ -1571,6 +1571,38 @@ def _cached_scanpath_figure(
         )
 
 
+@st.cache_data(show_spinner="Building the replay…", max_entries=8)
+def _cached_scanpath_animation(
+    _words: pd.DataFrame,
+    _fixations: pd.DataFrame,
+    _settings: FigureSettings,
+    _fixations_b: pd.DataFrame | None,
+    _words_b: pd.DataFrame | None,
+    anim_key,
+):
+    """Build + cache the animated scanpath, as ``_cached_scanpath_figure`` does
+    for the static one (PERF-13).
+
+    Uncached, every click anywhere while 🎬 Animate was on — opening a subtab,
+    ticking a checkbox back to what it was — rebuilt every frame: ~3 s on the
+    demo at the default smoothness, 22 s at the finest. ``anim_key`` is every
+    ``FigureSettings`` field plus both scanpaths' fingerprints, so any change that
+    reaches the builder still rebuilds. Few entries: a replay is megabytes.
+    """
+    with timed(
+        "build scanpath animation (cache miss)",
+        words=len(_words),
+        fixations=len(_fixations),
+    ):
+        return make_scanpath_animation(
+            _words,
+            _fixations,
+            settings=_settings,
+            fixations_b=_fixations_b,
+            words_b=_words_b,
+        )
+
+
 _CMP_SORT_DEFAULT = "Same text, then same participant"
 
 
@@ -3824,12 +3856,19 @@ def _build_and_render_animation(
         anim_max_frames=max_frames,
     )
     _amend_snippet_settings(animation_settings, "animation")
-    fig = make_scanpath_animation(
+    anim_inputs = {
+        field.name: getattr(animation_settings, field.name)
+        for field in dataclass_fields(animation_settings)
+    }
+    anim_inputs["fixations_b"] = fixations_b if dual else None
+    anim_inputs["words_b"] = words_b if dual else None
+    fig = _cached_scanpath_animation(
         trial_words,
         trial_fixations,
-        settings=animation_settings,
-        fixations_b=fixations_b if dual else None,
-        words_b=words_b if dual else None,
+        animation_settings,
+        anim_inputs["fixations_b"],
+        anim_inputs["words_b"],
+        anim_key=_figure_input_key(trial_words, trial_fixations, anim_inputs),
     )
     add_illustration_label(fig, viz_settings.get("illustration_reasons"))
     _apply_preprocessing_caption(fig, selected_participant, selected_trial)

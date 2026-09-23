@@ -314,3 +314,25 @@ def test_the_selected_trial_survives_a_trip_to_another_view():
         at.run()
         assert not at.exception, at.exception
     assert at.session_state["single_trial_id"] == chosen
+
+
+def test_a_rerun_with_animate_on_does_not_rebuild_the_replay(monkeypatch):
+    """PERF-13: every click while 🎬 Animate was on rebuilt every frame of the
+    replay (~3 s on the demo, 22 s at the finest smoothness)."""
+    from scanpath_studio import tabs
+
+    calls = []
+    real = tabs.make_scanpath_animation
+    monkeypatch.setattr(
+        tabs,
+        "make_scanpath_animation",
+        lambda *a, **k: calls.append(1) or real(*a, **k),
+    )
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=180)
+    at.session_state["data_source_choice"] = "Synthetic test trial"
+    at.session_state["single_animate"] = True
+    at.run()
+    at.run()
+    at.run()
+    assert not at.exception, at.exception
+    assert len(calls) <= 1, f"the replay was rebuilt {len(calls)} times"

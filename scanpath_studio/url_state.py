@@ -186,6 +186,31 @@ def _parse_hex_color(v) -> str:
     return text
 
 
+#: A markup tag: `<` + a letter (or `/` + a letter) up to the next `>`. Plotly
+#: draws a small HTML subset in a figure's title and caption, and `<a href>` in
+#: it is a working link. Requiring a letter after `<` keeps a literal `<->` or
+#: `a < b` in a title intact.
+_MARKUP_TAG = re.compile(r"</?[A-Za-z][^<>]*>")
+
+
+def _strip_markup(v) -> str:
+    """``v`` with every markup tag removed (SEC6 / BUG-75).
+
+    For figure text that arrives from someone else — a share link, a saved
+    config — which must not be able to put a clickable link to anywhere in the
+    recipient's figure (``?title_pattern=<a href="…">Session expired</a>``).
+    What a user types into the box themselves is theirs and is left alone. It
+    repeats until nothing changes, so a tag split around another
+    (``<<b>a href=…>``) cannot reassemble itself.
+    """
+    text = str(v)
+    while True:
+        stripped = _MARKUP_TAG.sub("", text)
+        if stripped == text:
+            return text
+        text = stripped
+
+
 def _parse_playback_speed(v) -> float:
     """A replay speed → the ⚙ Playback slider's own option (EXP-18).
 
@@ -463,6 +488,9 @@ _URL_PRESETS = {
     "cmp_stimulus": ("single_compare_stimulus", _parse_compare_stimulus),
     # BUG-69 — and for every colour, which Plotly rejects outright.
     **{k: (_SHARE_VALUE_PARAMS[k], _parse_hex_color) for k in _SHARE_COLOR_PARAMS},
+    # BUG-75 — figure text from a link is text, never markup.
+    "title_pattern": ("global_title_pattern", _strip_markup),
+    "caption_pattern": ("global_caption_pattern", _strip_markup),
     # EXP-18 — the settings that joined the link, each a closed vocabulary.
     "playback_speed": ("single_playback_speed", _parse_playback_speed),
     "colorbar_orientation": (
@@ -1908,10 +1936,11 @@ def _restore_plot_config(
     labels = section("labels")
     if "show_title_caption" in labels:
         put("global_show_title_caption", bool(labels["show_title_caption"]))
+    # BUG-75: a config can come from someone else, like a link — no markup.
     if isinstance(labels.get("title_pattern"), str):
-        put("global_title_pattern", labels["title_pattern"])
+        put("global_title_pattern", _strip_markup(labels["title_pattern"]))
     if isinstance(labels.get("caption_pattern"), str):
-        put("global_caption_pattern", labels["caption_pattern"])
+        put("global_caption_pattern", _strip_markup(labels["caption_pattern"]))
     elif "labels" not in config and has_valid_plot_section:
         # Pre-EXP-5 configs have no labels block; pin the off defaults so the
         # frozen state-key set is still fully written.
@@ -2066,7 +2095,8 @@ def _restore_plot_config(
                 )
             # UX-31: the A/B legend label override.
             if isinstance(entry.get("label_pattern"), str):
-                put(f"cmp{idx}_label_pattern", entry["label_pattern"])
+                # BUG-75: legend text is figure text too.
+                put(f"cmp{idx}_label_pattern", _strip_markup(entry["label_pattern"]))
 
     selection = section("selection")
     if selection:

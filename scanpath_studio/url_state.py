@@ -69,9 +69,9 @@ from .controls import (
     _ALIGN_OPTIONS,
     _FIXCLASS_MODES,
     _OUT_OF_TEXT_MARKERS,
+    claim_mapping,
     color_field_options,
     forget_color_range,
-    forget_mapped_table,
     numeric_field_options,
     palette_state,
 )
@@ -1357,7 +1357,9 @@ def _apply_pending_trial_selection(combos: pd.DataFrame) -> None:
     st.session_state.pop(PENDING_TRIAL_KEY, None)
 
 
-def _seed_column_mapping(mapping, *, overwrite: bool = False) -> None:
+def _seed_column_mapping(
+    mapping, *, overwrite: bool = False, dataset: object = None
+) -> None:
     """Seed the ``col_map_*`` session keys from a saved config's ``column_mapping``
     so a restored config pre-fills the wizard mapping + kept-field choices (and
     the user skips re-mapping). Stale values that don't match the current data are
@@ -1374,10 +1376,13 @@ def _seed_column_mapping(mapping, *, overwrite: bool = False) -> None:
     an explicit restore wins (the step reruns afterwards, and it runs before the
     mapping widgets re-instantiate, so writing the keys is safe).
 
-    BUG-32: a table whose keys this writes has them *restored for it*, so its
-    "which dataset was this mapped for" marker is dropped — else, since the
-    mapping is scoped to a dataset now, the next table to meet the keys could
-    count as a different dataset and clear exactly what was just restored."""
+    BUG-32: the mapping is scoped to a dataset, so a caller restoring keys *for*
+    a dataset whose table has not been read yet names it as ``dataset`` — the
+    wizard's *Restore a saved setup* — and the keys are claimed for it
+    (``controls.claim_mapping``): its first table keeps them, another dataset
+    meeting them first drops them. Without ``dataset`` (the 💾 plot-config
+    restore) the keys describe whatever those prefixes already map, and the
+    marker is left alone."""
     if not isinstance(mapping, dict):
         return
     written: set[str] = set()
@@ -1394,9 +1399,11 @@ def _seed_column_mapping(mapping, *, overwrite: bool = False) -> None:
         if overwrite or key not in st.session_state:
             st.session_state[key] = value
             written.add(key)
+    if dataset is None:
+        return
     for prefix in ("col_map_words", "col_map_fix", "col_map_raw_gaze"):
         if any(key.startswith(f"{prefix}_") for key in written):
-            forget_mapped_table(prefix)
+            claim_mapping(prefix, dataset)
 
 
 @dataclass

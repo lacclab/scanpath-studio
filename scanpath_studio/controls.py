@@ -2112,17 +2112,18 @@ def _mapped_columns_key(state_key_prefix: str) -> str:
     return f"_mapped_columns_{state_key_prefix}"
 
 
-def forget_mapped_table(state_key_prefix: str) -> None:
-    """Let the next table ``state_key_prefix``'s mapping meets adopt it (BUG-32).
+def claim_mapping(state_key_prefix: str, dataset: object) -> None:
+    """Record that ``state_key_prefix``'s keys now describe ``dataset`` (BUG-32).
 
-    Called where mapping keys are *seeded for* a table that has not been read
-    yet — a restored config, a wizard entering a fresh dataset. Without it the
-    marker still names the table those keys used to describe, so the first
-    sighting of the new one would count as a dataset change and clear exactly
-    the picks that were just restored. With it, that sighting is a first one,
-    which only records.
+    For a writer that seeds mapping keys for a table nobody has read yet — the
+    wizard starting a fresh dataset, a setup restored into it. The columns are
+    left unknown, so that dataset's first sighting counts as the *same* dataset
+    (DATA-24's stale-only rule keeps every pick its table can honour), while any
+    other dataset that meets the keys first — the demo, after ✕ Cancel — drops
+    them. Without it the marker would still name whatever those keys used to
+    describe, and the new table would clear exactly what was just restored.
     """
-    st.session_state.pop(_mapped_columns_key(state_key_prefix), None)
+    st.session_state[_mapped_columns_key(state_key_prefix)] = (dataset, None)
 
 
 def _mapping_state_keys(state_key_prefix: str, field_specs: list[dict]) -> list[str]:
@@ -2181,9 +2182,8 @@ def forget_mapping_for_other_table(
     wizard's own), and a change of dataset drops **every** pick, however valid
     it still looks: a choice made for one dataset is not a choice for another.
     The same-dataset rules above are unchanged, so the wizard growing its own
-    frame keeps what was filled in. A caller seeding keys *for* the next table
-    (a restored config) calls :func:`forget_mapped_table` first, so that table's
-    first sighting only records.
+    frame keeps what was filled in. A caller seeding keys *for* a dataset whose
+    table has not been read yet stamps it first with :func:`claim_mapping`.
     """
     columns_seen = tuple(str(column) for column in df.columns)
     signature = (dataset, columns_seen)

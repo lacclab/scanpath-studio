@@ -105,7 +105,9 @@ def _mapping_app():
     df = pd.DataFrame(columns)
     restore = st.session_state.pop("_restore", None)
     if restore is not None:
-        _seed_column_mapping(restore, overwrite=True)
+        _seed_column_mapping(
+            restore, overwrite=True, dataset=st.session_state.pop("_restore_for")
+        )
     st.session_state["_mapping"] = column_mapping_ui(
         df,
         table_label="Fixations",
@@ -152,19 +154,32 @@ def test_the_same_dataset_growing_a_column_keeps_the_pick():
     assert _rerun(at)["duration"] == "CURRENT_FIX_END"
 
 
-def test_a_restored_mapping_is_adopted_by_the_next_table_it_meets():
+def test_a_mapping_restored_for_a_dataset_is_kept_by_it():
     """The cost the user accepted — restored configs breaking — is not paid:
-    the restore releases the marker, so the new dataset's first sighting only
-    records instead of clearing what was just restored."""
+    the restore claims the keys for the dataset it is restoring into, so that
+    dataset's first table keeps them instead of clearing them as another's."""
     at = _mapped("dataset A")
     at.session_state["_dataset"] = "dataset B"
     at.session_state["_restore"] = {"col_map_fix_duration": "CURRENT_FIX_END"}
+    at.session_state["_restore_for"] = "dataset B"
     assert _rerun(at)["duration"] == "CURRENT_FIX_END"
 
 
-def test_entering_the_wizard_releases_the_marker():
+def test_a_mapping_restored_for_one_dataset_is_dropped_by_another():
+    """➕ Add dataset → *Restore a saved setup* → ✕ Cancel before any upload:
+    the restored keys were claimed for the dataset being added, so the demo,
+    meeting them first, does not adopt them."""
+    at = _mapped("demo")
+    at.session_state["_restore"] = {"col_map_fix_duration": "CURRENT_FIX_END"}
+    at.session_state["_restore_for"] = "add-dataset wizard"
+    # The wizard's table never arrives; the demo re-renders instead.
+    assert _rerun(at)["duration"] == "CURRENT_FIX_DURATION"
+
+
+def test_entering_the_wizard_claims_the_mapping_for_the_new_dataset():
     """A setup restored in the wizard before its first upload must survive that
-    upload, so the reset that starts a new dataset forgets the old marker."""
+    upload, and nothing the wizard seeds may reach the demo after ✕ Cancel —
+    so the reset that starts a new dataset claims the keys for it."""
 
     def _enter():
         import streamlit as st
@@ -173,9 +188,11 @@ def test_entering_the_wizard_releases_the_marker():
 
         st.session_state["_mapped_columns_col_map_fix"] = ("demo", ("a",))
         _reset_wizard_widgets()
-        st.session_state["_left"] = "_mapped_columns_col_map_fix" in st.session_state
+        st.session_state["_marker"] = st.session_state["_mapped_columns_col_map_fix"]
+
+    from scanpath_studio.wizard import WIZARD_MAPPING_DATASET
 
     at = AppTest.from_function(_enter)
     at.run(timeout=30)
     assert not at.exception, at.exception
-    assert at.session_state["_left"] is False
+    assert at.session_state["_marker"] == (WIZARD_MAPPING_DATASET, None)

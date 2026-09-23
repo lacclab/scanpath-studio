@@ -43,8 +43,8 @@ from .controls import (
     RAW_GAZE_FIELD_SPECS,
     TOUCHED_FIELDS_KEY,
     WORD_FIELD_SPECS,
+    claim_mapping,
     column_mapping_ui,
-    forget_mapped_table,
     inline_field_label,
     mark_missing_cells,
 )
@@ -127,11 +127,11 @@ _WIZARD_MAPPING_PREFIXES = ("col_map_words", "col_map_fix", "col_map_raw_gaze")
 def _reset_wizard_widgets() -> None:
     """Clear the wizard's per-table mapping + keep-field widgets so 'Add data'
     starts a fresh dataset."""
-    # BUG-32: the tables these keys meet next are this new dataset's, so their
-    # first sighting only records — a setup restored before the first upload
-    # would otherwise be cleared as "another dataset's" mapping.
+    # BUG-32: from here these keys describe the dataset being added. Its first
+    # upload keeps a setup restored before it; ✕ Cancel leaves nothing the demo
+    # would adopt as its own.
     for prefix in _WIZARD_MAPPING_PREFIXES:
-        forget_mapped_table(prefix)
+        claim_mapping(prefix, WIZARD_MAPPING_DATASET)
     for key in [
         k
         for k in list(st.session_state.keys())
@@ -1540,7 +1540,11 @@ def _wizard_restore_config(host) -> None:
         # render, so their keys exist — setdefault would no-op and the restore
         # would silently fail. This step runs before the widgets re-instantiate
         # this pass, so writing the keys is safe, and it reruns afterwards.
-        _seed_column_mapping(config.get("column_mapping"), overwrite=True)
+        _seed_column_mapping(
+            config.get("column_mapping"),
+            overwrite=True,
+            dataset=WIZARD_MAPPING_DATASET,
+        )
         # Remember the restored config's provenance so the caller can show which
         # dataset (and when) it was exported from, below the upload box (9.1).
         st.session_state["_wizard_restored_meta"] = {

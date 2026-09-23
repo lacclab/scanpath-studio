@@ -142,6 +142,9 @@ scanpath-studio render --potec ./potec -p 12 -t b0 \
 | arrange the panels | `--compare-layout {overlay,side-by-side,stacked}` (default `overlay`) |
 | whose stimulus an overlay draws | `--compare-stimulus {both,a,b}` (default `both`) |
 | name the two traces | `--label-a TEXT --label-b TEXT` (both or neither) |
+| style each scanpath | `--style-a SPEC`, `--style-b SPEC` (below) |
+| the A/B legend | `--compare-legend` |
+| B's own stimulus page (split layouts) | `--stimulus-image-b PATH`, with `--stimulus-image-size-b WxH` / `--stimulus-image-origin-b X,Y` |
 | B from another dataset | `--compare-words PATH… --compare-fixations PATH…` |
 | name that dataset | `--compare-dataset-name NAME` |
 | declare the screens | `--canvas WxH`, `--compare-canvas WxH` |
@@ -151,6 +154,24 @@ scanpath-studio render --potec ./potec -p 12 -t b0 \
 app's per-scanpath label pattern. They go together, because `compare_scanpaths`
 takes the pair or neither, and they apply to the co-animation below just as they
 do to the static comparison.
+
+`--style-a` / `--style-b` are the app's per-scanpath styling (the Compare rows
+under 👁️ Fixations and ↗️ Saccades), `compare_scanpaths`'s `style_a` / `style_b`:
+a comma-separated `KEY=VALUE` list, repeatable, with `fix_color` and
+`saccade_color` (`#RRGGBB`), `saccade_style` (`solid`, `dash`, `dot`,
+`dashdot`), `saccade_width` (px), `marker_size_range` (`MIN:MAX`), `opacity`
+(0.1–1) and `hollow` (`true` / `false`). A key left out keeps that scanpath's
+default.
+
+```bash
+scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 --compare-legend \
+  --style-a fix_color=#D55E00,opacity=0.5 --style-b saccade_style=dash \
+  -o compare_styled.html
+```
+
+These, `--compare-legend` and the `--stimulus-image-b` trio describe the second
+scanpath, so they are refused without `--compare-with`.
 
 `--animate --compare-with` replays **both** readings on one clock, the same dual
 co-animation the app renders with Animate and Compare both on. That is an
@@ -213,13 +234,36 @@ the recorded setup.
 | attach participant metadata | `--participant-metadata readers.csv` |
 | attach trial metadata | `--trial-metadata readings.csv`, `--trial-metadata-reader-column` to key it by reader **and** trial |
 | export editable layers | `--separable-layers` |
-| style the fixations | `--fixation-color`, `--fixation-symbol`, `--fixation-colorscale`, `--marker-size-range` |
-| style the saccades | `--saccade-style`, `--saccade-width`, `--saccade-arcs`, `--saccade-arrows`, `--saccade-classes` |
+| style the fixations | `--fixation-color`, `--fixation-symbol`, `--fixation-colorscale`, `--fixation-color-range LO HI`, `--fixation-opacity`, `--hollow-fixations`, `--marker-size-range`, `--color-by-line` |
+| style the index labels | `--order-font-size`, `--order-font-color` |
+| style the saccades | `--saccade-style`, `--saccade-width`, `--saccade-arcs`, `--saccade-arrows`, `--saccade-classes`, `--saccade-type-color` (also beside `--saccade-color-by-direction`, where it recolours that two-way split) |
+| style the text and the page | `--text-color`, `--highlight-text-color`, `--span-border-color`, `--background-color`, `--line-spacing`, `--no-scale-text-to-boxes`, `--word-hover-measure` |
+| draw the raw gaze | `--raw-gaze PATH…` (or `--sample-raw-gaze` with `--sample`), `--raw-gaze-schema JSON`, `--raw-gaze-color`, `--raw-gaze-marker-size`, `--raw-gaze-opacity` |
+| frame on the data, not the monitor | `--no-full-monitor` |
+| plot other fixation columns | `--x-field FIELD`, `--y-field FIELD` |
+| show and style the colour bars | `--colorbars`, `--colorbar-orientation`, `--colorbar-tickangle`, `--colorbar-tickfont-size` |
+| tint a words-only dataset by a column | `--word-heatmap-col COLUMN`, `--word-heatmap-title TEXT` |
 | pick a palette | `--palette` |
 | size the figure | `--width`, `--height`, `--scale` |
 | title and caption it | `--title`, `--caption` |
-| tune the heatmap | `--heatmap-metric`, `--heatmap-colorscale`, `--heatmap-norm` |
+| tune the heatmap | `--heatmap-metric`, `--heatmap-colorscale`, `--heatmap-norm`, `--heatmap-range LO HI` |
 | print the equivalent Python | `--print-code python` (or `cli` / `both`, plus `--print-code-explicit`) |
+
+Every figure option `api.figure_options()` lists has a flag, spelled after the
+option (`fixation_opacity` → `--fixation-opacity`; a switch that defaults on is
+turned off with `--no-…`). That is what lets the 🔗 Share subtab's *Reproduce this
+figure* block and `--print-code cli` print a command drawing exactly the figure
+on screen, rather than a list of settings the CLI could not say.
+
+Raw gaze is a third table rather than an option: `--raw-gaze` reads it (columns
+auto-detected like `--fixations`) and draws the plotted trial's samples under the
+fixations. It is a single-trial layer, so `--animate` and `--compare-with`
+ignore it with a warning.
+
+```bash
+scanpath-studio render --sample -p l37_1129 -t l37_1129_2_2_2_Adv_r0 \
+  --sample-raw-gaze --raw-gaze-opacity 0.4 -o raw_gaze.html
+```
 
 Use the installed command as the authoritative full reference:
 

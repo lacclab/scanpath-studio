@@ -8,8 +8,8 @@ Illustration label), the replay speed (a non-1× speed stamps one), the colour-b
 styling, the span border colour and Compare's A/B legend. These drive the writer
 into the reader, then the whole app from a sender to a recipient.
 
-Canvas size, base font size and Compare's per-scanpath styles are deliberately
-still off the link — pending a maintainer decision — and the Share panel says so.
+Canvas size, base font size and Compare's per-scanpath styles joined the link in
+EXP-19 — see ``tests/test_share_recording_setup.py``.
 """
 
 from __future__ import annotations
@@ -158,10 +158,3 @@ def test_the_whole_app_reopens_the_senders_figure():
     # *Discard* changes which fixations are drawn — the reason this mattered.
     flags = recipient.session_state["_snippet_state"].settings["fixation_flags"]
     assert flags["short"]["mode"] == "Discard"
-
-
-def test_the_share_panel_says_what_the_link_leaves_out():
-    at = AppTest.from_file(APP_SCRIPT, default_timeout=180)
-    at.run()
-    captions = " ".join(c.value for c in at.caption)
-    assert "aren't in the link" in captions

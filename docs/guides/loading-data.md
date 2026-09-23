@@ -128,7 +128,8 @@ a default.
 
 The answer travels with the dataset. It appears beside each value in the
 wizard and under 🗂️ **Data → ✏️ Edit dataset → Recording setup**,
-rides a share link as `setup_prov`, and is written into the saved-setup JSON and
+rides a share link as `setup_prov` (beside the values themselves, wherever they
+differ from the source's own), and is written into the saved-setup JSON and
 into `plot_config.json` in a bulk export — so a figure set records that its
 monitor size was assumed, and whoever opens your link can tell your measurements
 from the app's guesses.

@@ -812,6 +812,42 @@ def load_sample_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     return load_scanpath_data(*_data.load_sample_data())
 
 
+def load_raw_gaze(
+    table: TablesLike, *, raw_gaze_schema: dict | None = None
+) -> pd.DataFrame:
+    """Load and normalize a raw (sample-level) gaze table for ``raw_gaze=`` (EXP-20).
+
+    The third table :func:`plot_scanpath` can draw, under the fixations: one row
+    per eye-tracker sample, with a participant, a trial, ``x`` / ``y`` and
+    usually a timestamp. ``table`` is a DataFrame, path, glob or list of paths,
+    like :func:`load_scanpath_data`'s, and the columns are auto-detected the same
+    way; pass ``raw_gaze_schema`` (field → column, see
+    ``api.propose_schema(table, "raw_gaze")``) to override the detection.
+    ``plot_scanpath`` keeps only the plotted trial's (and screen's) samples, so
+    one table can serve a whole corpus::
+
+        raw_gaze = sps.load_raw_gaze("gaze_samples.csv")
+        fig = sps.plot_scanpath(words, fixations, "p1", "t3", raw_gaze=raw_gaze)
+    """
+    frame = _as_dataframe(table, "raw gaze")
+    explicit = raw_gaze_schema is not None
+    schema = raw_gaze_schema or _data.propose_raw_gaze_schema(frame)
+    _check_mapped_columns("raw_gaze", frame, schema)
+    problems = _data.validate_raw_gaze_schema(schema)
+    if problems:
+        raise _schema_error("raw_gaze", frame, schema, problems, explicit)
+    return _data.normalize_raw_gaze(frame, schema)
+
+
+def load_sample_raw_gaze() -> pd.DataFrame:
+    """The bundled demo's raw gaze, normalized — what the app overlays on it.
+
+    OneStop ships no sample-level gaze, so this is **synthesized** from one of
+    the demo's real trials (see ``update_sample_data.synthesize_raw_gaze``) and
+    covers that trial alone."""
+    return load_raw_gaze(_data.load_sample_raw_gaze())
+
+
 def compute_word_metrics(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
     """Per-word reading measures (FFD/FPRT/RPD/TFD, skips, regressions, …).
 
@@ -2157,7 +2193,11 @@ def figure_code(
     ``"files"``, ``"potec"``, ``"onestop"``, ``"multipleye"``, ``"benchmark"``,
     ``"author"``, or ``"unknown"`` for data a snippet can't name — with
     ``source_options`` carrying that loader's arguments (``{"root": …}``,
-    ``{"words": [...], "fixations": [...]}``, and so on).
+    ``{"words": [...], "fixations": [...]}``, and so on). With
+    ``show_raw_gaze=True`` the raw-gaze table is read too: the demo's own, or
+    the path(s) given as ``source_options["raw_gaze"]`` (plus an optional
+    ``"raw_gaze_schema"``) — :func:`load_raw_gaze` in the Python form,
+    ``--raw-gaze`` in the CLI one.
 
     ``compare_dataset`` names the corpus scanpath B was loaded from when it is a
     *second* one (CMP-8). B's participant id belongs to that corpus rather than
@@ -2179,10 +2219,11 @@ def figure_code(
     Only the options that differ from :func:`figure_options` are written, so the
     snippet stays readable; ``explicit=True`` emits every option at its current
     value. ``flavor`` is ``"python"``, ``"cli"``, or ``"both"`` (the two
-    separated by a blank line). Settings the CLI has no flag for are named in a
-    trailing comment rather than dropped, and anything *neither* form can
-    promise — a layer that needs a third frame, an uploaded stimulus image, B's
-    rows when they come from a second corpus — follows as ``# Note:`` comments
+    separated by a blank line). Every figure option has a ``render`` flag
+    (EXP-20); one that ever did not would be named in a trailing comment rather
+    than dropped, and anything *neither* form can promise — a raw-gaze table
+    with no path to name, an uploaded stimulus image, B's rows when they come
+    from a second corpus — follows as ``# Note:`` comments
     (EXP-8 §2), matching the ⚠️ captions the app shows and the ``Note:`` lines
     `render --print-code` writes to stderr. See
     :class:`code_snippet.ReproductionCode` for the structured form.

@@ -39,6 +39,28 @@ trial and settings and places it on the clipboard in one step.
 A link never contains the fixation or word tables. Built-in data can be reopened
 from the URL; a recipient of an uploaded-data link must load the same dataset.
 
+The link carries every figure setting, including the recording setup and
+Compare's per-scanpath styles. Those two groups are written only when they
+differ from what the recipient would get anyway — a link to the demo at its own
+2560×1440 monitor doesn't restate it — so a link stays short until you change
+them:
+
+| Setting | Link parameter |
+| --- | --- |
+| Monitor size in pixels | `canvas_width`, `canvas_height` |
+| Plot font size | `base_font_size` |
+| Physical width, viewing distance, display DPI | `monitor_width_mm`, `viewing_distance_mm`, `display_dpi` |
+| A font given in points | `use_stimulus_font_pt`, `stimulus_font_pt` |
+| Scanpath 1's styles in Compare | `cmp_a_fix_color`, `cmp_a_saccade_color`, `cmp_a_saccade_style`, `cmp_a_saccade_width`, `cmp_a_marker_size_range`, `cmp_a_opacity`, `cmp_a_hollow`, `cmp_a_label_pattern` |
+| Scanpath 2's styles in Compare | the same, as `cmp_b_*` |
+
+The monitor size of a source that declares no screen of its own (the synthetic
+trial, an authored scanpath) is always written, since there is nothing to compare
+it with. The Compare styles travel only with the comparison they describe
+(`?compare=`). A value outside its control's range is clamped to it, and one
+the control can't show at all — an unknown line style, a colour that isn't
+`#rrggbb` — is dropped with a warning.
+
 Public corpora travel too: the link names the corpus (`?source=corpus&corpus=…`)
 rather than its data. For a harmonised benchmark corpus the recipient needs their
 own prepared bundle containing it — the Share panel says which corpus the link

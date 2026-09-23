@@ -23,6 +23,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from .measures import classify_saccades
 from .multipart import SCREEN_ID, SCREEN_INDEX, grouping_columns, has_screen_identity
 
 
@@ -992,7 +993,27 @@ def trial_summary_table(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Data
                     .fillna(0)
                     .astype(bool)
                 )
-                forward = amplitude[~regression]
+                # BUG-68: "forward" is not simply "not a regression" — the sweep
+                # back to the start of the next line advances in reading order
+                # but is a line-length leftward jump, and counting it put the
+                # demo's mean forward saccade at 270 px instead of 172.
+                # `saccade_amplitude` is the saccade *into* each fixation, while
+                # `classify_saccades` labels the one *out of* it, hence the shift.
+                progressive = ~regression
+                # A sweep is a line change, so it needs the boxes' geometry; a
+                # words table without it keeps the plain progressive split.
+                if not wd.empty and {"y", "height"} <= set(wd.columns):
+                    order = (
+                        fx.sort_values("timestamp_ms").index
+                        if "timestamp_ms" in fx.columns
+                        else fx.index
+                    )
+                    outgoing = classify_saccades(fx, wd).reindex(order)
+                    incoming = pd.Series(
+                        outgoing.shift(1).to_numpy(), index=order
+                    ).reindex(fx.index)
+                    progressive &= incoming.ne("return_sweep")
+                forward = amplitude[progressive]
                 if forward.notna().any():
                     row["mean_forward_saccade_px"] = float(forward.mean())
             if "is_regression" in fx.columns:
@@ -1083,8 +1104,11 @@ def _summary_row(words, fixations, pid) -> dict[str, float]:
             )
         rt = _trial_reading_time_ms(fx)
         total_ms = float(pd.to_numeric(rt["reading_time_ms"], errors="coerce").sum())
+        # BUG-67: a word is identified by its screen too — MultiplEYE restarts
+        # `word_id` on every page, so (trial, word) folded a trial's pages
+        # onto each other and under-counted the words read per minute.
         n_words = (
-            int(wd.groupby(["trial_id", "word_id"]).ngroups)
+            int(wd.groupby(grouping_columns(wd, include_word=True)).ngroups)
             if not wd.empty and {"trial_id", "word_id"} <= set(wd.columns)
             else 0
         )

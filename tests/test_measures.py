@@ -399,8 +399,22 @@ class TestWithinWordLetterScale:
         out = compute_per_word_measures(fix, layout)
         row = out[out["word_id"] == word["word_id"]].iloc[0]
         assert row["initial_landing_position"] == pytest.approx(3.5)
-        # …and the centred distance is measured against the same scale.
-        assert row["initial_landing_distance"] == pytest.approx(3.5 - 2.5)
+        # …and the centred distance is measured against the same scale: the
+        # glyphs span [1, 5), so the centre is 3.0 and letter 3's middle is
+        # half a letter right of it (BUG-65 — this asserted 3.5 − 2.5).
+        assert row["initial_landing_distance"] == pytest.approx(0.5)
+
+    def test_the_exact_centre_of_a_word_is_zero(self):
+        """BUG-65: "0 = word centre" is the register's promise — the old
+        ``(n + 1) / 2`` read the exact middle of every word as +0.5."""
+        advance = 20.0
+        layout = self._tiling_layout(advance)
+        word = layout.iloc[1]  # "cats": 4 glyphs from x
+        centre = float(word["x"]) + 2.0 * advance
+        fix = _make_fixations([(centre, 70, 200, 0)])
+        out = compute_per_word_measures(fix, layout)
+        row = out[out["word_id"] == word["word_id"]].iloc[0]
+        assert row["initial_landing_distance"] == pytest.approx(0.0)
 
     def test_the_last_letter_stays_inside_the_word(self):
         """The old ``width / n`` scale put the end of a 4-letter word at 5.0 even
@@ -456,3 +470,110 @@ class TestWithinWordLetterScale:
         assert len(fraction) == 1
         # 2.5 advances into a 4-glyph run.
         assert fraction[0] == pytest.approx(2.5 / 4.0)
+
+
+def _read_words(layout: pd.DataFrame, sequence: list, *, step: int = 250):
+    """Fixations landing on the centre of each word id in ``sequence`` in turn
+    (``None`` = a fixation outside every box), durations from the tuple."""
+    centres = {
+        int(r.word_id): (float(r.x) + float(r.width) / 2, float(r.y) + 20)
+        for r in layout.itertuples()
+    }
+    rows = []
+    for i, (word, duration) in enumerate(sequence):
+        x, y = centres[word] if word is not None else (2000.0, 2000.0)
+        rows.append((x, y, duration, i * step))
+    return _make_fixations(rows)
+
+
+def _row(out: pd.DataFrame, word_id: int) -> pd.Series:
+    return out[out["word_id"] == word_id].iloc[0]
+
+
+class TestEyeLinkDefinitions:
+    """BUG-61/62/64/66: the computed measures mean what EyeLink's IA_* columns
+    mean, because an imported value takes precedence over a computed one and the
+    two must not disagree about what a column *is*. Validated on the bundled
+    OneStop demo (its IA report came from these fixations): FFD, first run,
+    total time, skip and regression-in agree on all 1780 fixated words, RPD on
+    1779 and regression-out on 1774."""
+
+    def test_go_past_counts_a_first_visit_made_during_the_regression(
+        self, four_word_layout
+    ):
+        # 1 → 3 → 2 → 3 → 4: word 2 is first seen *during* the regression
+        # from 3, and that fixation belongs to 3's go-past time.
+        fix = _read_words(
+            four_word_layout, [(1, 200), (3, 210), (2, 220), (3, 230), (4, 240)]
+        )
+        out = compute_per_word_measures(fix, four_word_layout)
+        assert _row(out, 3)["regression_path_duration_ms"] == pytest.approx(660)
+        assert _row(out, 1)["regression_path_duration_ms"] == pytest.approx(200)
+        assert _row(out, 2)["regression_path_duration_ms"] == pytest.approx(220)
+
+    def test_a_word_first_reached_by_a_regression_was_skipped(self, four_word_layout):
+        fix = _read_words(
+            four_word_layout, [(1, 200), (3, 210), (2, 220), (3, 230), (4, 240)]
+        )
+        out = compute_per_word_measures(fix, four_word_layout)
+        assert bool(_row(out, 2)["skip_flag"]) is True
+        assert [bool(_row(out, w)["skip_flag"]) for w in (1, 3, 4)] == [False] * 3
+        # First fixation / first run stay defined, as EyeLink reports them.
+        assert _row(out, 2)["first_fixation_ms"] == pytest.approx(220)
+
+    def test_regression_out_is_a_first_pass_event(self, four_word_layout):
+        # 1 2 3 4 → 2 → 1: the regression from 4 happens in first pass; the one
+        # from 2 comes after 2 was left forwards, so it does not count.
+        fix = _read_words(
+            four_word_layout,
+            [(1, 200), (2, 200), (3, 200), (4, 200), (2, 200), (1, 200)],
+        )
+        out = compute_per_word_measures(fix, four_word_layout)
+        assert bool(_row(out, 4)["regression_out_flag"]) is True
+        assert bool(_row(out, 2)["regression_out_flag"]) is False
+        assert bool(_row(out, 1)["regression_in_flag"]) is True
+
+    def test_an_off_text_fixation_ends_the_first_run(self, four_word_layout):
+        fix = _read_words(four_word_layout, [(2, 100), (None, 50), (2, 120), (3, 200)])
+        out = compute_per_word_measures(fix, four_word_layout)
+        row = _row(out, 2)
+        assert row["first_pass_gaze_duration_ms"] == pytest.approx(100)
+        assert row["second_pass_duration_ms"] == pytest.approx(120)
+        assert row["total_fixation_duration_ms"] == pytest.approx(220)
+        assert row["single_fixation_duration_ms"] == pytest.approx(100)
+
+
+class TestImportedMeasuresOnUnfixatedWords:
+    """BUG-63: an IA report may store 0 rather than a blank for a word nobody
+    fixated — the bundled OneStop one does, for all 1191 such words — and a 0
+    wins the imported-over-computed precedence, so every mean counted skipped
+    words as 0-ms fixations."""
+
+    def test_an_imported_zero_on_an_unfixated_word_becomes_nan(self, four_word_layout):
+        words = four_word_layout.assign(
+            n_fixations=[1, 0, 0, 0],
+            first_fixation_ms=[200.0, 0.0, 0.0, 0.0],
+            first_pass_gaze_duration_ms=[200.0, 0.0, 0.0, 0.0],
+            regression_path_duration_ms=[200.0, 0.0, 0.0, 0.0],
+            total_fixation_duration_ms=[200.0, 0.0, 0.0, 0.0],
+        )
+        fix = _read_words(four_word_layout, [(1, 200)])
+        out = compute_per_word_measures(fix, words)
+        for column in (
+            "first_fixation_ms",
+            "first_pass_gaze_duration_ms",
+            "regression_path_duration_ms",
+        ):
+            assert out[column].iloc[1:].isna().all(), column
+            assert out[column].iloc[0] == pytest.approx(200)
+        # Total time stays 0: the word was read past and got no time.
+        assert (out["total_fixation_duration_ms"].iloc[1:] == 0).all()
+
+    def test_an_imported_blank_second_pass_reads_as_zero(self, four_word_layout):
+        words = four_word_layout.assign(
+            n_fixations=[1, 1, 0, 0],
+            second_pass_duration_ms=[np.nan, 150.0, np.nan, np.nan],
+        )
+        fix = _read_words(four_word_layout, [(1, 200), (2, 150)])
+        out = compute_per_word_measures(fix, words)
+        assert list(out["second_pass_duration_ms"]) == [0.0, 150.0, 0.0, 0.0]

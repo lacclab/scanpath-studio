@@ -831,6 +831,72 @@ class TestReaderViews:
         assert p1["regression_in_rate"] == pytest.approx(1 / 3)
         assert p1["question_correct"] == 1.0
 
+    def test_mean_forward_saccade_leaves_out_the_return_sweep(self):
+        """BUG-68: the sweep to the next line advances in reading order but is a
+        line-length leftward jump — "not a regression" is not "forward"."""
+        words = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 4,
+                "trial_id": ["t1"] * 4,
+                "word_id": [0, 1, 2, 3],
+                "text": ["aa", "bb", "cc", "dd"],
+                "x": [0.0, 100.0, 0.0, 100.0],
+                "y": [0.0, 0.0, 100.0, 100.0],
+                "width": [50.0] * 4,
+                "height": [40.0] * 4,
+            }
+        )
+        fixations = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 4,
+                "trial_id": ["t1"] * 4,
+                "timestamp_ms": [0.0, 200.0, 400.0, 600.0],
+                "duration_ms": [150.0] * 4,
+                "word_id": [0.0, 1.0, 2.0, 3.0],
+                "x": [25.0, 125.0, 25.0, 125.0],
+                "y": [20.0, 20.0, 120.0, 120.0],
+                # Into word 1: 100 px · the return sweep: ~141 px · into 3: 100.
+                "saccade_amplitude": [np.nan, 100.0, 141.4, 100.0],
+                "is_regression": [False] * 4,
+            }
+        )
+        row = trial_summary_table(words, fixations).iloc[0]
+        assert row["mean_forward_saccade_px"] == pytest.approx(100.0)
+        assert row["mean_saccade_px"] == pytest.approx((100 + 141.4 + 100) / 3)
+
+    def test_words_per_minute_counts_every_screens_words(self):
+        """BUG-67: MultiplEYE restarts ``word_id`` on each page, so counting
+        (trial, word) folded two 3-word pages into 3 words."""
+        words = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 6,
+                "trial_id": ["t1"] * 6,
+                "screen_id": ["page_1"] * 3 + ["page_2"] * 3,
+                "screen_index": [1] * 3 + [2] * 3,
+                "word_id": [0, 1, 2, 0, 1, 2],
+                "text": ["a", "b", "c", "d", "e", "f"],
+                "x": [0.0, 20.0, 40.0] * 2,
+                "y": [0.0] * 6,
+                "width": [10.0] * 6,
+                "height": [10.0] * 6,
+            }
+        )
+        fixations = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 2,
+                "trial_id": ["t1"] * 2,
+                "screen_id": ["page_1", "page_2"],
+                "screen_index": [1, 2],
+                "timestamp_ms": [0.0, 300.0],
+                "duration_ms": [300.0, 300.0],
+                "word_id": [0.0, 0.0],
+                "x": [2.0, 2.0],
+                "y": [0.0, 0.0],
+            }
+        )
+        s = reader_summary(words, fixations, "p1")
+        assert s["wpm"] == pytest.approx(6 / (600 / 60000.0))
+
     def test_reader_summary_table_aggregates_trial_table_fields(self):
         words = _tidy_words().copy()
         words["is_correct"] = [True, True, True, False, False, False, True]

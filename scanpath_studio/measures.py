@@ -732,12 +732,20 @@ def compute_per_word_measures(
         per_word_rows = []
         # Group fixations by trial to walk them in temporal order.
         trial_keys = grouping_columns(analysis_fixations)
-        for group_key, fix_chunk in analysis_fixations.dropna(
-            subset=["word_id"]
-        ).groupby(trial_keys, sort=False):
+        for group_key, trial_chunk in analysis_fixations.groupby(
+            trial_keys, sort=False
+        ):
             values = group_key if isinstance(group_key, tuple) else (group_key,)
             identity = dict(zip(trial_keys, values))
-            fix_chunk = fix_chunk.sort_values("timestamp_ms")
+            # BUG-66: the walk below sees the off-text fixations too — one lands
+            # between two runs, so it must end the first of them, exactly as
+            # `materialize_runs` numbers `word_run` (and so second-pass). Walking
+            # only the in-text rows glued the two runs into one first pass, and a
+            # word's first + second pass then added up to more than its total.
+            trial_chunk = trial_chunk.sort_values("timestamp_ms")
+            fix_chunk = trial_chunk.dropna(subset=["word_id"])
+            if fix_chunk.empty:
+                continue
             # Total / n / first-fixation are per-word aggregations
             grp = fix_chunk.groupby("word_id")
             tot = grp["duration_ms"].sum()
@@ -760,82 +768,87 @@ def compute_per_word_measures(
                 .size()
             )
 
-            # First-pass gaze: walk the trial in order, accumulate runs.
-            first_pass_gaze: dict[float, float] = {}
+            # One walk of the trial in time order. The definitions are EyeLink's
+            # IA_* ones, so a computed measure means the same as an imported one
+            # (imported values take precedence, and the two must not disagree
+            # about what a column is): validated against the bundled OneStop IA
+            # report, which EyeLink Data Viewer produced from these fixations.
+            first_run: dict[float, float] = {}  # IA_FIRST_RUN_DWELL_TIME
+            first_pass: set = set()  # not IA_SKIP
             regression_path: dict[float, float] = {}
             regression_in: set = set()
             regression_out: set = set()
             regression_in_count: dict[float, int] = {}
 
             running_max = -np.inf
-            current_run_word: float | None = None
-            current_run_duration: float = 0.0
-            # For regression-path: from first entry into a word until first
-            # fixation past it, sum all durations.
-            first_entry_seen: set = set()
-            rp_open_for: dict[float, float] = {}
+            run_word: float | None = None
+            run_duration = 0.0
+            seen: set = set()
+            go_past_open: dict[float, float] = {}
+            left_forward: set = set()
 
             prev_word: float | None = None
-            for row in fix_chunk.itertuples():
-                w = float(row.word_id)
+            for row in trial_chunk.itertuples():
                 dur = float(row.duration_ms)
+                if pd.isna(row.word_id):
+                    # Outside every box: ends the current run (BUG-66), but
+                    # opens, extends and closes no go-past window.
+                    if run_word is not None:
+                        first_run.setdefault(run_word, run_duration)
+                    run_word = None
+                    continue
+                w = float(row.word_id)
 
-                # First-pass gaze duration: continuous run on this word
-                # starting from first entry, ending the first time we leave.
-                if w not in first_pass_gaze:
-                    if current_run_word == w:
-                        current_run_duration += dur
+                # First run: the word's first unbroken stretch of fixations,
+                # whenever it begins (as IA_FIRST_RUN_DWELL_TIME).
+                if run_word == w:
+                    run_duration += dur
+                else:
+                    if run_word is not None:
+                        first_run.setdefault(run_word, run_duration)
+                    run_word = w if w not in first_run else None
+                    run_duration = dur
+
+                # BUG-62: first pass means entered *before any later word was
+                # fixated*. A word first reached by a regression was skipped,
+                # which is what IA_SKIP says and what `skip_flag` must say.
+                if w not in seen and w > running_max:
+                    first_pass.add(w)
+
+                # BUG-61: go-past (regression-path) time runs from the word's
+                # first fixation until the first fixation on a later word, and
+                # EVERY fixation in between counts — a first visit to a skipped
+                # earlier word during the regression included. Adding only
+                # revisits dropped those, so RPD always came out short.
+                for k in go_past_open:
+                    if w <= k:
+                        go_past_open[k] += dur
+                if w not in seen:
+                    go_past_open[w] = dur
+                for k in [k for k in go_past_open if w > k]:
+                    regression_path[k] = go_past_open.pop(k)
+                seen.add(w)
+
+                if prev_word is not None and w != prev_word:
+                    if w < prev_word:
+                        regression_in.add(w)
+                        regression_in_count[w] = regression_in_count.get(w, 0) + 1
+                        # BUG-64: a regression *out* is a first-pass event
+                        # (IA_REGRESSION_OUT) — made from a word read in first
+                        # pass, before the eyes first left it forwards — not a
+                        # regression from it at any later time.
+                        if prev_word in first_pass and prev_word not in left_forward:
+                            regression_out.add(prev_word)
                     else:
-                        if current_run_word is not None:
-                            first_pass_gaze.setdefault(
-                                current_run_word, current_run_duration
-                            )
-                        current_run_word = w
-                        current_run_duration = dur
-                else:
-                    # Already past first pass; reset run tracker.
-                    if (
-                        current_run_word is not None
-                        and current_run_word not in first_pass_gaze
-                    ):
-                        first_pass_gaze.setdefault(
-                            current_run_word, current_run_duration
-                        )
-                    current_run_word = None
-                    current_run_duration = 0.0
-
-                # Regression-path: from the first entry into a word, sum
-                # durations until the next fixation lands on a strictly later
-                # word.
-                if w not in first_entry_seen:
-                    first_entry_seen.add(w)
-                    rp_open_for[w] = dur
-                else:
-                    for k in list(rp_open_for.keys()):
-                        if w <= k:
-                            # Still within or back-tracking; keep accumulating.
-                            rp_open_for[k] += dur
-                # Close any open RP windows for words we've now moved past.
-                for k in list(rp_open_for.keys()):
-                    if w > k and k != w:
-                        regression_path.setdefault(k, rp_open_for.pop(k))
-
-                # Regression-in: stepping back to an earlier word counts the
-                # destination as receiving an in-regression.
-                if prev_word is not None and w < prev_word:
-                    regression_in.add(w)
-                    regression_out.add(prev_word)
-                    regression_in_count[w] = regression_in_count.get(w, 0) + 1
+                        left_forward.add(prev_word)
 
                 running_max = max(running_max, w)
                 prev_word = w
 
-            # Flush remaining first-pass run
-            if current_run_word is not None and current_run_word not in first_pass_gaze:
-                first_pass_gaze[current_run_word] = current_run_duration
-            # Flush remaining regression-path windows (reader never moved past)
-            for k, v in rp_open_for.items():
-                regression_path.setdefault(k, v)
+            if run_word is not None:
+                first_run.setdefault(run_word, run_duration)
+            # Windows still open at the end: the reader never moved past them.
+            regression_path.update(go_past_open)
 
             for w in tot.index:
                 word_mask = pd.to_numeric(words["word_id"], errors="coerce") == w
@@ -864,21 +877,20 @@ def compute_per_word_measures(
                             else float(ffx.loc[w]) - float(target.get("x"))
                         )
                         landing_position = offset / char_width + 1.0
-                        landing_distance = landing_position - (text_len + 1) / 2.0
+                        # BUG-65: the glyphs span [1, n + 1), so the word's
+                        # centre is 1 + n / 2 — not (n + 1) / 2, which read
+                        # every landing half a letter right of centre.
+                        landing_distance = landing_position - (1.0 + text_len / 2.0)
                 per_word_rows.append(
                     dict(
                         **identity,
                         word_id=w,
                         _first_fixation_ms=float(ffd.loc[w]),
-                        _first_pass_gaze_ms=float(first_pass_gaze.get(w, np.nan)),
-                        _regression_path_ms=float(
-                            regression_path.get(w, np.nan)
-                            if w in first_entry_seen
-                            else np.nan
-                        ),
+                        _first_pass_gaze_ms=float(first_run.get(w, np.nan)),
+                        _regression_path_ms=float(regression_path.get(w, np.nan)),
                         _total_fixation_ms=float(tot.loc[w]),
                         _n_fixations=int(n.loc[w]),
-                        _skip_flag=bool(np.isnan(first_pass_gaze.get(w, np.nan))),
+                        _skip_flag=w not in first_pass,
                         _regression_in_flag=w in regression_in,
                         _regression_out_flag=w in regression_out,
                         _first_fix_x=float(ffx.loc[w]),
@@ -939,6 +951,30 @@ def compute_per_word_measures(
         else:
             out[dst] = out[src]
         out = out.drop(columns=src)
+
+    # BUG-63: a word nobody fixated has no first fixation, first pass or go-past
+    # time — but an imported IA report may say `0` rather than leave the cell
+    # empty (the bundled OneStop one does, for every such word), and a 0 wins the
+    # precedence above. Every mean then counted skipped words as 0-ms fixations.
+    # Total time stays 0 on purpose: the word was read past and got no time.
+    if "n_fixations" in out.columns:
+        unfixated = pd.to_numeric(out["n_fixations"], errors="coerce").eq(0)
+        for col in (
+            "first_fixation_ms",
+            "first_pass_gaze_duration_ms",
+            "regression_path_duration_ms",
+            "single_fixation_duration_ms",
+        ):
+            if col in out.columns and unfixated.any():
+                out[col] = pd.to_numeric(out[col], errors="coerce").mask(unfixated)
+        # The mirror image for second pass, whose rule is "fewer than two runs
+        # ⇒ 0": an imported IA_SECOND_RUN_DWELL_TIME leaves those cells empty,
+        # so its mean covered only re-read words while the computed one covered
+        # every word — one measure, two meanings, depending on the upload.
+        if "second_pass_duration_ms" in out.columns:
+            known = pd.to_numeric(out["n_fixations"], errors="coerce").notna()
+            second = pd.to_numeric(out["second_pass_duration_ms"], errors="coerce")
+            out["second_pass_duration_ms"] = second.mask(known & second.isna(), 0.0)
 
     # Canonical aliases used elsewhere in the app
     if (

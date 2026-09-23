@@ -289,3 +289,27 @@ class TestDualCoAnimationAcceptsCompareStimulus:
             compare_stimulus="b",
         )
         assert fig.frames
+
+
+@pytest.mark.parametrize("layout", ["overlay", "side_by_side", "stacked"])
+def test_the_default_comparison_draws_the_apps_marker_opacity(monkeypatch, layout):
+    """CMP-20: the app seeds each scanpath's `cmp{idx}_opacity` at 0.7, while
+    the builder's own fallback — all a headless caller ever got — was 1.0. Both
+    now read one constant, so the default figures agree."""
+    from scanpath_studio import controls
+
+    seeded: dict = {}
+    monkeypatch.setattr(
+        controls, "_pin", lambda key, default: seeded.setdefault(key, default)
+    )
+    controls._seed_compare_styles()
+
+    words = pd.concat([_words("p1", "t1"), _words("p2", "t1")], ignore_index=True)
+    fixations = pd.concat(
+        [_fixations("p1", "t1"), _fixations("p2", "t1")], ignore_index=True
+    )
+    fig = api.compare_scanpaths(
+        words, fixations, ("p1", "t1"), ("p2", "t1"), layout=layout
+    )
+    opacities = [t.marker.opacity for t in fig.data if t.mode and "markers" in t.mode]
+    assert opacities == [seeded["cmp0_opacity"], seeded["cmp1_opacity"]]

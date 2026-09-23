@@ -69,6 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The documented examples run as written** (ENG-53)
 - **`api.figure_code()`'s defaults write a recipe that runs, with both flavours drawing the same figure** (EXP-14)
 - **An export bundle no longer holds two `aggregate/all_fixations` files** (EXP-15)
+- **A headless comparison draws the app's default marker opacity** (CMP-20)
 
 ### Details
 
@@ -152,6 +153,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`api.figure_code()`'s defaults write a recipe that runs, with both flavours drawing the same figure** (EXP-14) — called with its defaults, `api.figure_code` wrote a recipe whose two halves disagreed or failed. With no trial named, the Python half quoted `participant=''` — which matches no trial, so it raised — while the CLI half omitted `-p`/`-t` and rendered the first trial. With no canvas, Python estimated 960×480 from the demo's data extents while `render --sample` drew the demo's real 2560×1440 monitor. And `kind="animation"` kept `output="scanpath.png"`, so its CLI half exited on "--animate writes interactive HTML". Now an unnamed trial becomes the same first-available pick in both halves (narrowed by whichever id *was* given), the canvas defaults to the screen `render` assumes for the source — one `code_snippet.source_canvas` table that `render` itself now reads — and the output defaults to `scanpath.html` for an animation.
 
 - **An export bundle no longer holds two `aggregate/all_fixations` files** (EXP-15) — with both **Mega-table** and **Full measure family** ticked, `aggregate/all_fixations.csv` (and `.parquet`) was written twice — once as the raw concatenation, once as the family's word-enriched table. A zip keeps both entries under one name, Python's `zipfile` warns, and an unzip tool or `pd.read_csv(zf.open(...))` silently takes one of them. The mega-table now leaves that file to the family, the rule the per-trial `fixations` file already followed. `all_measures` stays beside `all_word_measures`: the two carry the same rows, but under different names, and scripts read the former.
+
+- **A headless comparison draws the app's default marker opacity** (CMP-20) — the app seeds each comparison scanpath's marker alpha at 0.7 (`controls._seed_compare_styles`, VIZ-6), but the comparison builder's own fallback — the only value `compare_scanpaths` and `render --compare-with` ever passed — was 1.0, so the default headless comparison was drawn opaque where the app's showed overlaps through. Both now read `constants.COMPARE_FIXATION_OPACITY`, beside the `compare_palette_color` pair the two already shared for the same reason (CMP-3).
 
 ## [0.30.1] - 2026-08-28
 

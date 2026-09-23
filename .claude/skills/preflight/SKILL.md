@@ -12,8 +12,8 @@ output). Fix trivial failures (formatting) directly; report anything else.
 
 ## Checks
 
-1. **Lint** — `ruff check --exclude other_vis .`
-2. **Format** — `ruff format --exclude other_vis .` (CI gates on both; this
+1. **Lint** — `ruff check .`
+2. **Format** — `ruff format .` (CI gates on both; this
    one rewrites files — if it changed anything, say which files). Run these
    even for "docs-only" changes — repo rule.
 3. **Tests** — `pytest -n auto`. If the diff is small and clearly scoped,

@@ -57,7 +57,7 @@ Optional passthrough columns go through the `WORD_OPTIONAL_FIELDS` /
 
 - [ ] All four surfaces wired (or explicitly agreed out of scope with the user)
 - [ ] Tests added (`tests/`), suite passes: `pytest -n auto`
-- [ ] `ruff check --exclude other_vis .` + `ruff format --exclude other_vis .`
+- [ ] `ruff check .` + `ruff format .`
 - [ ] One-line entry under `[Unreleased]` in `CHANGELOG.md`
 - [ ] Docs page updated if user-visible behavior changed (`docs/`)
 - [ ] Tracker item updated → `Review` (use the `track` skill)

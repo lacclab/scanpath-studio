@@ -18,7 +18,7 @@ Work from the repository root (the directory containing `pyproject.toml`).
 
 1. `git status` — the working tree must be clean and on the release branch
    (normally `main`). Stop and report if not.
-2. `ruff check --exclude other_vis .` and `ruff format --check --exclude other_vis .`
+2. `ruff check .` and `ruff format --check .`
    must pass (CI's Lint job gates on both).
 3. `CHANGELOG.md` must have content under `[Unreleased]` — a release with an
    empty changelog is almost always a mistake; confirm with the user if empty.

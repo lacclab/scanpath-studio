@@ -122,10 +122,6 @@ include = ["scanpath_studio", "scanpath_studio.*"]
     "sample_data/images/*.csv",
 ]
 
-[tool.ruff]
-# Vendored third-party visualisations; not ours to restyle.
-extend-exclude = ["other_vis"]
-
 [tool.ruff.lint]
 # WHY THIS SECTION EXISTS. The repo had no ruff config at all, so `ruff check`
 # ran on whatever that release happened to enable by default. Ruff 0.16 expanded

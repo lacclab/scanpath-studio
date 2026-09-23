@@ -202,9 +202,9 @@ pytest tests/test_measures.py       # one file
 pytest --cov                        # coverage; config + floor in pyproject.toml
 
 # Lint
-ruff check --exclude other_vis .
-ruff check --select I --fix --exclude other_vis .
-ruff format --exclude other_vis .
+ruff check .
+ruff check --select I --fix .
+ruff format .
 
 # Regenerate bundled sample data (needs the full OneStop CSVs under sample_data/OneStop/)
 python -m scanpath_studio.update_sample_data

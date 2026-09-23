@@ -55,8 +55,8 @@ uploaded / sample table(s)
 ```bash
 pip install -e ".[test]"     # add ,docs for the docs site
 pytest
-ruff check --exclude other_vis .
-ruff format --exclude other_vis .
+ruff check .
+ruff format .
 
 # Serve these docs locally
 pip install -e ".[docs]"

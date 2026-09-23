@@ -7,7 +7,6 @@ input=$(cat)
 f=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty' 2>/dev/null)
 
 case "$f" in
-  */other_vis/*) exit 0 ;;
   *.py) ;;
   *) exit 0 ;;
 esac

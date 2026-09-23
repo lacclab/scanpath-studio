@@ -16,6 +16,6 @@ See CONTRIBUTING.md for the full pre-PR checklist.
 
 - [ ] `pytest` passes
 - [ ] Added/updated tests for any new behavior
-- [ ] `ruff check --exclude other_vis .` and `ruff format --check --exclude other_vis .` are clean
+- [ ] `ruff check .` and `ruff format --check .` are clean
 - [ ] Added a `[Unreleased]` entry to [`CHANGELOG.md`](https://github.com/lacclab/scanpath-studio/blob/main/CHANGELOG.md) (every feature/bugfix/notable change)
 - [ ] Dependency change? Declared in `pyproject.toml` (the only dependency manifest)

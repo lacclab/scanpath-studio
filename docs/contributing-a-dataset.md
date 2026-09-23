@@ -282,8 +282,8 @@ Before you open it:
 ```bash
 pip install -e ".[test,docs]"
 pytest
-ruff check --exclude other_vis .
-ruff format --exclude other_vis .
+ruff check .
+ruff format .
 mkdocs build --strict          # if you added or edited a docs page
 ```
 

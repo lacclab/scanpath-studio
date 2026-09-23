@@ -1,7 +1,7 @@
 # Copilot Instructions — Scanpath Studio
 
 ## Big Picture
-This repo’s primary product is a Streamlit workbench packaged as `scanpath_studio/`. It visualizes eye-tracking scanpaths over text (word boxes + fixations + saccades + heatmaps + comparisons). Legacy/experiments live under `other_vis/`.
+This repo’s primary product is a Streamlit workbench packaged as `scanpath_studio/`. It visualizes eye-tracking scanpaths over text (word boxes + fixations + saccades + heatmaps + comparisons).
 
 ## Architecture & Data Flow (core path)
 - Entry/UI: `scanpath_studio/app.py` (tabs, uploads, trial selection, filtering, calls plotting)
@@ -31,7 +31,7 @@ Schema inference uses `pick_column(df, candidates)` with **priority-ordered cand
 - Run app (packaged): `python -m scanpath_studio` (see `scanpath_studio/__main__.py`) or the console script `scanpath-studio`.
 - Fast dev setup (if you have uv): `uv sync` then `uv run streamlit run scanpath_studio/app.py`.
 - Tests: `conda run -n scanpath-studio pytest` (see `tests/README.md`). Streamlit calls are mocked in tests, so test utilities rather than full UI runtime.
-- Lint/format: use the same conda env and keep legacy `other_vis/` excluded: `conda run -n scanpath-studio ruff check --fix --exclude other_vis .`, then `conda run -n scanpath-studio ruff check --select I --fix --exclude other_vis .`, then `conda run -n scanpath-studio ruff format --exclude other_vis .`.
+- Lint/format: use the same conda env: `conda run -n scanpath-studio ruff check --fix .`, then `conda run -n scanpath-studio ruff check --select I --fix .`, then `conda run -n scanpath-studio ruff format .`.
 
 ## Import Mode Gotcha
 `app.py` supports both package imports (`from .data import ...`) and a fallback “direct run” path tweak for `streamlit run .../app.py`. Keep this pattern intact when refactoring imports.

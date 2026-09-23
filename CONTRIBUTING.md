@@ -56,8 +56,8 @@ so grep `scanpath_studio`, not just `streamlit`).
 ```bash
 uv run pytest -n auto             # run the test suite (parallel — the AppTest
                                   # boots dominate runtime; CI runs it this way)
-ruff check --exclude other_vis .  # lint
-ruff format --exclude other_vis . # auto-format
+ruff check .  # lint
+ruff format . # auto-format
 ```
 
 Use **this project's ruff**, not whatever is on `PATH`: `pip install -e ".[lint]"`

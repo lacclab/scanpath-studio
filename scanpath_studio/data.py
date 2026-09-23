@@ -2212,6 +2212,9 @@ def _read_zipped_table(
                     # Columnar/workbook readers seek, so these still land in
                     # memory whole — bounded by the same budget.
                     buf = io.BytesIO(stream.read())
+                    # BUG-84: the header pass dispatches on the name, and an
+                    # unnamed buffer read its binary member as CSV.
+                    buf.name = member
                     member_plan = plan
                     if plan is not None and plan.columns:
                         member_plan = plan.narrowed_to(read_table_columns(buf))

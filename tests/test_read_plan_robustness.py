@@ -96,6 +96,31 @@ class TestHeterogeneousZipMembers:
             pd.testing.assert_series_equal(planned[column], full[column])
 
 
+class TestZippedBinaryMembers:
+    """BUG-84: a zipped workbook or columnar file failed the planned read.
+
+    The member's in-memory copy carried no name, so the header pass read the
+    binary as CSV — every wizard upload of ``words.parquet.zip`` died on it.
+    """
+
+    @pytest.mark.parametrize(
+        ("suffix", "write"),
+        [
+            ("parquet", lambda frame, path: frame.to_parquet(path)),
+            ("feather", lambda frame, path: frame.to_feather(path)),
+            ("xlsx", lambda frame, path: frame.to_excel(path, index=False)),
+        ],
+    )
+    def test_it_reads_with_the_word_text_verbatim(self, tmp_path, suffix, write):
+        member = tmp_path / f"words.{suffix}"
+        write(pd.DataFrame({**CORE, "IA_LABEL": ["NA"]}), member)
+        path = tmp_path / "words.zip"
+        with zipfile.ZipFile(path, "w") as zf:
+            zf.write(member, member.name)
+        frame = read_table(path, plan=_plan(read_table_columns(path)))
+        assert frame["IA_LABEL"].tolist() == ["NA"]
+
+
 class TestEmptyPlan:
     """An empty column tuple has to mean the same thing on every reader."""
 

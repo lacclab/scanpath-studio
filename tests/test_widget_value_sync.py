@@ -328,6 +328,8 @@ def test_a_rerun_with_animate_on_does_not_rebuild_the_replay(monkeypatch):
         "make_scanpath_animation",
         lambda *a, **k: calls.append(1) or real(*a, **k),
     )
+    # Start cold, so the one expected build is this test's own.
+    tabs._cached_scanpath_animation.clear()
     at = AppTest.from_file(APP_SCRIPT, default_timeout=180)
     at.session_state["data_source_choice"] = "Synthetic test trial"
     at.session_state["single_animate"] = True

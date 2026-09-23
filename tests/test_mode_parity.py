@@ -238,13 +238,16 @@ def _animate(viz: dict, monkeypatch, *, drift_corrected: bool = False, dual=Fals
     # on the first spy and both dicts fill up.
     real = plots.make_scanpath_animation
 
-    def spy(words, fixations, **kwargs):
-        seen.update(vars(kwargs["settings"]))
+    def spy(words, fixations, settings, fixations_b, words_b, anim_key):
+        kwargs = {"settings": settings, "fixations_b": fixations_b, "words_b": words_b}
+        seen.update(vars(settings))
         seen.update(kwargs)
         seen["_fixations"] = fixations
         return real(words, fixations, **kwargs)
 
-    monkeypatch.setattr(tabs, "make_scanpath_animation", spy)
+    # PERF-13 caches the build, so spy on the cached wrapper (bypassing the
+    # cache): a builder spy would see nothing on a hit from an earlier test.
+    monkeypatch.setattr(tabs, "_cached_scanpath_animation", spy)
     fig, *_ = tabs._build_and_render_animation(
         _trial(_words(), "A"),
         _trial(_fixations(), "A"),
@@ -621,8 +624,13 @@ class TestDriftCorrectionReachesEveryPath:
             seen["static"].append((words, fixations))
             return real_static(words, fixations, settings, raw_gaze, fig_key)
 
-        def anim(words, fixations, **kwargs):
-            flattened = {**vars(kwargs["settings"]), **kwargs}
+        def anim(words, fixations, settings, fixations_b, words_b, anim_key):
+            kwargs = {
+                "settings": settings,
+                "fixations_b": fixations_b,
+                "words_b": words_b,
+            }
+            flattened = {**vars(settings), **kwargs}
             seen["anim"].append((words, fixations, flattened))
             return real_anim(words, fixations, **kwargs)
 
@@ -631,7 +639,7 @@ class TestDriftCorrectionReachesEveryPath:
             return real_compare(words, fixations, trial_a, trial_b, **kwargs)
 
         monkeypatch.setattr(tabs, "_cached_scanpath_figure", static)
-        monkeypatch.setattr(tabs, "make_scanpath_animation", anim)
+        monkeypatch.setattr(tabs, "_cached_scanpath_animation", anim)
         monkeypatch.setattr(tabs, "make_comparison_figure", compare)
         return seen
 

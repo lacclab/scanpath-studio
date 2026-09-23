@@ -260,3 +260,81 @@ def test_the_multipleye_preset_reports_a_rejected_load_instead_of_dying(monkeypa
     assert not at.exception
     assert any("orphan screens" in e.value for e in at.error)
     assert "_wizard_finalize_payload" not in at.session_state
+
+
+# --- a complete mapping whose numbers don't parse (BUG-54) --------------------
+
+
+def test_the_wizard_names_a_numeric_column_that_did_not_parse(monkeypatch):
+    """The mapping is complete and the load carries on — which is exactly why
+    an unreadable coordinate column has to be said, above ✅ Add dataset."""
+    from scanpath_studio import app
+
+    fixations = _WIZARD_FIXATIONS.assign(x=["15px", "65px", "115px"])
+    monkeypatch.setattr(
+        app,
+        "_read_uploaded_frame",
+        lambda **kw: {"col_map_fix": fixations}.get(kw["state_prefix"], pd.DataFrame()),
+    )
+    at = _upload_apptest(wizard_active=True)
+
+    assert not at.exception
+    said = [w.value for w in at.warning if "aren't numbers" in w.value]
+    assert said, "an unreadable X column loaded without a word"
+    assert "`x`" in said[0] and "'15px'" in said[0]
+
+
+def test_the_wizard_says_when_the_readers_do_not_line_up(monkeypatch):
+    """BUG-59: the trial-id overlap check passed — both tables have `t0` — while
+    no (participant, trial) pair was in both, so nothing had word boxes."""
+    from scanpath_studio import app
+
+    words = _WIZARD_WORDS.drop(columns=["page"]).assign(participant_id="r9")
+    monkeypatch.setattr(
+        app,
+        "_read_uploaded_frame",
+        lambda **kw: {"col_map_words": words, "col_map_fix": _WIZARD_FIXATIONS}.get(
+            kw["state_prefix"], pd.DataFrame()
+        ),
+    )
+    at = _upload_apptest(wizard_active=True)
+
+    assert not at.exception
+    assert any("share trial ids but no reader" in w.value for w in at.warning)
+
+
+def test_a_words_table_that_joins_nothing_is_said_on_every_page(monkeypatch):
+    """BUG-32: the words loaded, joined to none of the fixations, and the app
+    drew every trial without its text — silently, because only the empty-*pool*
+    case (all three frames empty) had a message."""
+    from scanpath_studio import app
+
+    words = _WIZARD_WORDS.drop(columns=["page"]).assign(trial_id="another_trial")
+    monkeypatch.setattr(
+        app,
+        "_read_uploaded_frame",
+        lambda **kw: {"col_map_words": words, "col_map_fix": _WIZARD_FIXATIONS}.get(
+            kw["state_prefix"], pd.DataFrame()
+        ),
+    )
+    at = _upload_apptest(wizard_active=False)
+
+    assert not at.exception
+    assert any("No fixation has word boxes" in w.value for w in at.warning)
+
+
+def test_a_fixations_only_dataset_is_not_warned_about(monkeypatch):
+    """No words table was loaded at all — a legitimate dataset, not a failed join."""
+    from scanpath_studio import app
+
+    monkeypatch.setattr(
+        app,
+        "_read_uploaded_frame",
+        lambda **kw: {"col_map_fix": _WIZARD_FIXATIONS}.get(
+            kw["state_prefix"], pd.DataFrame()
+        ),
+    )
+    at = _upload_apptest(wizard_active=False)
+
+    assert not at.exception
+    assert not any("No fixation has word boxes" in w.value for w in at.warning)

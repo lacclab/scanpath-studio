@@ -48,12 +48,17 @@ Later grains (stimulus, screen, word, fixation) add rows to the same registry;
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 import pandas as pd
 
-from .data import stable_id, trial_id_series, trial_mapping_columns
+from .data import (
+    stable_id,
+    trial_id_series,
+    trial_mapping_columns,
+    zero_padding_map,
+)
 
 # Source columns that plausibly hold the reader id, most explicit first. Shares
 # the spirit of `data.pick_column`'s candidate lists: first hit wins, and the
@@ -379,6 +384,20 @@ class TextMetadata:
         return self.frame.set_index("text_id")[name]
 
 
+def _rows_with_ids(frame: pd.DataFrame, columns) -> pd.DataFrame:
+    """A copy of ``frame`` without the rows that have no value in an id column.
+
+    A blank row — the one Excel leaves at the end of a sheet — became a phantom
+    reader named "nan": under pandas 3 a missing id stays NaN through
+    ``stable_id``, and the ``!= ""`` test that used to drop it let NaN
+    through (BUG-60). A composite id with a missing part raised in the join
+    instead. Such a row describes no one, so it goes.
+    """
+    ids = frame[list(columns)]
+    missing = ids.isna() | ids.apply(lambda c: c.astype(str).str.strip() == "")
+    return frame.loc[~missing.any(axis=1)].copy()
+
+
 def active_trials() -> TrialMetadata | None:
     """The trial table attached to this session, or ``None`` (DATA-29)."""
     try:
@@ -461,7 +480,9 @@ def build_trial_metadata(
     if participant_column and participant_column not in frame.columns:
         participant_column = None
 
-    work = frame.copy()
+    work = _rows_with_ids(
+        frame, [*trial_cols, *([participant_column] if participant_column else [])]
+    )
     # `trial_id_series` — not a plain `.astype(str)` — so this table's own
     # trial id is spelled the same way `data.normalize_*` spells the app's: a
     # blank cell anywhere else in *this* file's trial-id column is enough to
@@ -470,10 +491,8 @@ def build_trial_metadata(
     # this) — and a composite id is built the identical way (joined with "_",
     # each part through `stable_id` first).
     work["trial_id"] = trial_id_series(work, trial_column)
-    work = work[work["trial_id"] != ""]
     if participant_column:
         work["participant_id"] = stable_id(work[participant_column])
-        work = work[work["participant_id"] != ""]
     reserved = {
         *trial_cols,
         str(participant_column) if participant_column else "",
@@ -798,11 +817,10 @@ def build_text_metadata(
     ):
         return empty
 
-    work = frame.copy()
+    work = _rows_with_ids(frame, text_cols)
     # See the matching comment in `build_trial_metadata` — the same "one
     # blank cell spells the id two ways" hazard applies to a text id.
     work["text_id"] = trial_id_series(work, text_column)
-    work = work[work["text_id"] != ""]
     reserved = {*text_cols, "text_id", *_BOOKKEEPING_COLUMNS}
     value_columns = [
         str(column) for column in frame.columns if str(column) not in reserved
@@ -1107,11 +1125,12 @@ def build_participant_metadata(
             pd.DataFrame(columns=["participant_id"]), (), source_name, str(id_column)
         )
 
-    work = frame.copy()
+    work = _rows_with_ids(frame, [id_column])
     # See the matching comment in `build_trial_metadata` — the same "one blank
     # cell spells the id two ways" hazard applies to a reader id.
     work["participant_id"] = stable_id(work[id_column])
-    work = work[work["participant_id"] != ""]
+    if participants is not None:
+        work["participant_id"] = _match_padding(work["participant_id"], participants)
     value_columns = [
         str(column)
         for column in frame.columns
@@ -1173,11 +1192,28 @@ def build_participant_metadata(
     )
 
 
+def _match_padding(ids: pd.Series, participants: Iterable) -> pd.Series:
+    """``ids`` spelled the data's way when only zero-padding differs (BUG-59).
+
+    A metadata CSV reads a reader ``007`` as the number 7 while the data kept
+    "007", and the table then joined to no one; ``data.zero_padding_map``
+    decides, and refuses whenever the match is not unambiguous.
+    """
+    mapping = zero_padding_map(ids.unique(), {str(pid) for pid in participants})
+    return ids.replace(mapping) if mapping else ids
+
+
 def rejoin(
     metadata: ParticipantMetadata, participants: Iterable
 ) -> ParticipantMetadata:
     """Recompute the join report against a (possibly new) participant list."""
     data_ids = {str(pid) for pid in participants}
+    if not metadata.frame.empty:
+        renamed = _match_padding(metadata.frame["participant_id"], data_ids)
+        if not renamed.equals(metadata.frame["participant_id"]):
+            metadata = replace(
+                metadata, frame=metadata.frame.assign(participant_id=renamed)
+            )
     usable_ids = (
         set(metadata.frame["participant_id"]) if not metadata.frame.empty else set()
     )

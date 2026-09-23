@@ -118,6 +118,7 @@ from scanpath_studio.controls import (
 )
 from scanpath_studio.data import (
     FIX_OPTIONAL_FIELDS,
+    IDENTITY_SCHEMA_FIELDS,
     TRIAL_IDENTITY_SAMPLE,
     WORD_OPTIONAL_FIELDS,
     ReadPlan,
@@ -2636,6 +2637,29 @@ def _stimulus_font_install_hint(css_family: str | None) -> tuple[str, str] | Non
 
 
 @st.cache_data(show_spinner=False)
+def _cached_words_join_nothing(
+    _words: pd.DataFrame, _fixations: pd.DataFrame, cache_key
+) -> bool:
+    """Whether a loaded words table shares no (participant, trial) with the
+    fixations (BUG-32) — memoized, since it dedups both whole frames."""
+    if _fixations.empty:
+        return False
+    return not trial_keys(_words) & trial_keys(_fixations)
+
+
+#: BUG-32 — said once per page, in the notices strip, while it holds.
+WORDS_JOIN_NOTHING_WARNING = (
+    "⚠️ **No fixation has word boxes.** A words / AOI table was loaded, but none "
+    "of its participant + trial pairs is in the fixations, so every trial draws "
+    "without its text or its word-level measures. The usual cause is a **Trial "
+    "ID** or **Participant ID** mapping that names different trials in the two "
+    "tables — for instance one carried over from another dataset with the same "
+    "columns. Check it on 🗂️ **Data → Column mapping**, or start again from "
+    "**↩️ Reset to the auto-detected mapping**."
+)
+
+
+@st.cache_data(show_spinner=False)
 def _cached_trial_identity_report(
     _words: pd.DataFrame, _fixations: pd.DataFrame, cache_key, sample_trials=None
 ) -> dict:
@@ -3261,8 +3285,11 @@ def _render_offpage_setup_notice(data_view: bool) -> None:
 
 
 # File types accepted by every upload box. ``zip`` covers single-member
-# archives wrapping any of the others (e.g. ``data.csv.zip``).
-_UPLOAD_TYPES = ["csv", "tsv", "parquet", "feather", "zip", "xlsx", "xls"]
+# archives wrapping any of the others (e.g. ``data.csv.zip``). ``txt`` is the
+# tab-separated report many exporters write (DATA-41); a text file's delimiter
+# is read off its header line, and an ``.xls`` that is really text (EyeLink
+# Data Viewer's "Excel" export) is read as text (BUG-55).
+_UPLOAD_TYPES = ["csv", "tsv", "txt", "parquet", "feather", "zip", "xlsx", "xls"]
 
 
 def _uploaded_file_key(uploaded) -> tuple:
@@ -3280,7 +3307,7 @@ def _uploaded_file_key(uploaded) -> tuple:
 
 @st.cache_data(show_spinner="Reading uploaded data…")
 def _read_uploaded_table_cached(
-    _uploaded, file_key, kind=None, chosen=()
+    _uploaded, file_key, kind=None, chosen=(), text_column=None, identity=()
 ) -> pd.DataFrame:
     try:
         _uploaded.seek(0)
@@ -3292,12 +3319,15 @@ def _read_uploaded_table_cached(
     # own picks need. `kind` and `chosen` are part of the cache key, so naming
     # a new column simply re-reads the file under the new plan.
     header = read_table_columns(_uploaded)
-    return read_table(_uploaded, plan=upload_read_plan(header, kind, chosen=chosen))
+    plan = upload_read_plan(
+        header, kind, chosen=chosen, text_column=text_column, identity=identity
+    )
+    return read_table(_uploaded, plan=plan)
 
 
 @st.cache_data(show_spinner="Reading uploaded data…")
 def _read_uploaded_tables_cached(
-    _uploaded_list, file_keys, kind=None, chosen=()
+    _uploaded_list, file_keys, kind=None, chosen=(), text_column=None, identity=()
 ) -> pd.DataFrame:
     for f in _uploaded_list:
         try:
@@ -3308,7 +3338,9 @@ def _read_uploaded_tables_cached(
     if kind is not None:
 
         def plan_for(header):
-            return upload_read_plan(header, kind, chosen=chosen)
+            return upload_read_plan(
+                header, kind, chosen=chosen, text_column=text_column, identity=identity
+            )
 
     return read_tables(list(_uploaded_list), plan_for=plan_for)
 
@@ -3341,14 +3373,18 @@ def _columns_chosen_in_state(state, header) -> set:
     return chosen
 
 
-def upload_read_plan(header, kind: str, *, chosen=()) -> ReadPlan:
+def upload_read_plan(
+    header, kind: str, *, chosen=(), text_column: str | None = None, identity=()
+) -> ReadPlan:
     """Plan an uploaded table's read from its header (PERF-6, decision 2a).
 
     The mapping is auto-proposed from the column names, so the plan exists
     before the user has touched anything; ``chosen`` folds back in the columns
     they *have* named, which is what keeps a hand-picked mapping or a kept extra
     from being dropped. A column named later simply changes the plan, and the
-    read runs again against the new one.
+    read runs again against the new one. ``text_column`` is the user's own
+    word-text pick, read verbatim in place of the proposed one (BUG-53), and
+    ``identity`` their own id-column picks, read as text (BUG-59).
     """
     propose = propose_word_schema if kind == "words" else propose_fix_schema
     registry = WORD_OPTIONAL_FIELDS if kind == "words" else FIX_OPTIONAL_FIELDS
@@ -3358,6 +3394,8 @@ def upload_read_plan(header, kind: str, *, chosen=()) -> ReadPlan:
         propose(pd.DataFrame(columns=names)),
         registry,
         keep_columns=set(chosen),
+        text_column=text_column,
+        identity_columns=identity,
     )
 
 
@@ -3455,11 +3493,40 @@ def _read_uploaded_frame(
     # the wizard's column pickers are built from, so it happens first and is
     # stashed for `_uploaded_header`. `chosen` is sorted into a tuple because it
     # rides in the cache key.
+    # BUG-55: a file the readers refuse — a legacy .xls workbook, an empty
+    # file, a corrupt archive — is the user's to fix, so it is said in the box
+    # that took it, the way the metadata uploaders already do, instead of a
+    # traceback over the whole page.
+    try:
+        return _read_upload(uploaded, state_prefix, multi=multi, kind=kind)
+    except Exception as exc:  # unreadable file — say so, keep the page
+        logging.getLogger(__name__).warning(
+            "Could not read upload %s", state_prefix, exc_info=True
+        )
+        st.session_state.pop(f"{state_prefix}_header", None)
+        files = uploaded if multi else [uploaded]
+        names = ", ".join(str(getattr(f, "name", "the file")) for f in files)
+        host.error(f"Couldn't read **{names}**: {exc}")
+        return pd.DataFrame()
+
+
+def _read_upload(uploaded, state_prefix: str, *, multi: bool, kind) -> pd.DataFrame:
+    """The header pass and the (cached) planned read behind one upload box."""
     header: list = []
     chosen: tuple = ()
+    text_column = None
+    identity: tuple = ()
     if kind is not None:
         header = _upload_header(uploaded, multi=multi)
         chosen = tuple(sorted(_columns_chosen_in_state(st.session_state, header)))
+        # BUG-53: the word-text column the user mapped by hand (the mapping
+        # widget's own key) is the one to read verbatim, not the proposed one.
+        picked = st.session_state.get(f"{state_prefix}_text")
+        if kind == "words" and isinstance(picked, str) and picked in header:
+            text_column = picked
+        # BUG-59: likewise the id columns picked by hand, read as text so a
+        # zero-padded id keeps its zeros.
+        identity = _picked_columns(state_prefix, IDENTITY_SCHEMA_FIELDS, header)
     st.session_state[f"{state_prefix}_header"] = header
     if multi:
         return _read_uploaded_tables_cached(
@@ -3467,10 +3534,28 @@ def _read_uploaded_frame(
             tuple(_uploaded_file_key(f) for f in uploaded),
             kind=kind,
             chosen=chosen,
+            text_column=text_column,
+            identity=identity,
         )
     return _read_uploaded_table_cached(
-        uploaded, _uploaded_file_key(uploaded), kind=kind, chosen=chosen
+        uploaded,
+        _uploaded_file_key(uploaded),
+        kind=kind,
+        chosen=chosen,
+        text_column=text_column,
+        identity=identity,
     )
+
+
+def _picked_columns(state_prefix: str, fields, header) -> tuple:
+    """The header columns the mapping widgets for ``fields`` currently name."""
+    columns = set(header)
+    picked: list = []
+    for name in fields:
+        value = st.session_state.get(f"{state_prefix}_{name}")
+        values = value if isinstance(value, (list, tuple)) else [value]
+        picked += [v for v in values if isinstance(v, str) and v in columns]
+    return tuple(sorted(set(picked)))
 
 
 def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataFrame:
@@ -3541,9 +3626,15 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
         )
         if uploaded_raw_gaze:
             upload_key = (uploaded_raw_gaze.file_id, uploaded_raw_gaze.size)
-            raw_gaze_df = frame_cache(
-                "raw_gaze_upload", upload_key, lambda: read_table(uploaded_raw_gaze)
-            )
+            try:
+                raw_gaze_df = frame_cache(
+                    "raw_gaze_upload",
+                    upload_key,
+                    lambda: read_table(uploaded_raw_gaze),
+                )
+            except Exception as exc:  # unreadable file — say so, keep the page
+                cfg.error(f"Couldn't read **{uploaded_raw_gaze.name}**: {exc}")
+                return pd.DataFrame()
             proposed = propose_raw_gaze_schema(raw_gaze_df)
             initial_problems = validate_raw_gaze_schema(proposed)
             with cfg:
@@ -6985,6 +7076,19 @@ def main() -> None:
     )
     st.session_state["_trial_identity_report"] = identity_report
     identity_warning = trial_identity_warning(identity_report)
+    # BUG-32: an empty (or unjoinable) words frame beside healthy fixations is
+    # a legitimate *fixations-only* dataset only when no words table was loaded
+    # at all — otherwise it is a mapping that joins on nothing, and the figure
+    # just draws without text. A warning, not an error: the fixations are still
+    # worth drawing, but the silence has to go.
+    if (st.session_state.get("_active_column_mapping") or {}).get(
+        "words"
+    ) and _cached_words_join_nothing(
+        words_all,
+        fixations_all,
+        cache_key=(frame_fingerprint(words_all), frame_fingerprint(fixations_all)),
+    ):
+        menu.notices.warning(WORDS_JOIN_NOTHING_WARNING)
     # The verdict is raised **once, where the mapping was chosen** — right after
     # ✅ Add dataset or ✅ Save changes — rather than as a page-wide banner that
     # stood above every view for as long as the dataset was loaded. Both flows

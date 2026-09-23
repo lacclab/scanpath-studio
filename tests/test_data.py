@@ -1,5 +1,6 @@
 """Tests for data.py module."""
 
+import warnings
 from unittest.mock import patch
 
 import numpy as np
@@ -450,6 +451,190 @@ class TestNormalizeFixations:
         assert result["is_blink"].tolist() == [False, True]
 
 
+class TestUnreadableNumbers:
+    """BUG-54: a mapped numeric column that does not parse is never silent.
+
+    A decimal-comma export (`117,7`) read as all-NaN, and the fallbacks then
+    snapped every fixation to its word's centre and made every duration 0 — a
+    plausible figure, nothing said.
+    """
+
+    SCHEMA = {
+        "participant": "RECORDING_SESSION_LABEL",
+        "trial": "TRIAL_INDEX",
+        "x": "CURRENT_FIX_X",
+        "y": "CURRENT_FIX_Y",
+        "duration": "CURRENT_FIX_DURATION",
+        "word_id": "CURRENT_FIX_INTEREST_AREA_ID",
+    }
+
+    def _fixations(self, x, duration):
+        return pd.DataFrame(
+            {
+                "RECORDING_SESSION_LABEL": ["p1"] * len(x),
+                "TRIAL_INDEX": [1] * len(x),
+                "CURRENT_FIX_X": x,
+                "CURRENT_FIX_Y": ["221,7"] * len(x),
+                "CURRENT_FIX_DURATION": duration,
+                "CURRENT_FIX_INTEREST_AREA_ID": ["1", "."] + ["2"] * (len(x) - 2),
+            }
+        )
+
+    def test_a_decimal_comma_export_reads_as_numbers(self, tmp_path):
+        path = tmp_path / "fix.tsv"
+        self._fixations(["117,7", "171,7", "180"], ["187,5", "194", "201,5"]).to_csv(
+            path, sep="\t", index=False
+        )
+        raw = data_module.read_table(path)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")  # converted, so nothing to report
+            fixations = normalize_fixations(raw, self.SCHEMA)
+        assert fixations["x"].tolist() == [117.7, 171.7, 180.0]
+        assert fixations["duration_ms"].tolist() == [187.5, 194.0, 201.5]
+
+    def test_a_thousands_shaped_column_is_reported_not_guessed(self):
+        raw = self._fixations(["1,204", "1,512", "2,105"], [200, 200, 200])
+        issues = data_module.numeric_parse_issues(raw, self.SCHEMA, table="Fixations")
+        assert len(issues) == 1
+        assert "`CURRENT_FIX_X`" in issues[0]
+        assert "thousands separator" in issues[0]
+        with pytest.warns(UserWarning, match="CURRENT_FIX_X"):
+            fixations = normalize_fixations(raw, self.SCHEMA)
+        assert fixations["x"].isna().all()
+
+    def test_an_unreadable_duration_is_named_with_what_was_done(self):
+        raw = self._fixations(["10", "20", "30"], ["200", "2OO", "n/a?"])
+        issues = data_module.numeric_parse_issues(raw, self.SCHEMA, table="Fixations")
+        assert issues == [
+            "Fixations: 2 of 3 values in `CURRENT_FIX_DURATION` aren't numbers "
+            "(e.g. '2OO', 'n/a?'); those fixations are read as 0 ms long."
+        ]
+
+    def test_the_eyelink_missing_marker_is_not_an_issue(self):
+        """`.` is EyeLink's "no value" — the word-id column above carries one."""
+        raw = self._fixations(["10", "20", "30"], [200, 200, 200])
+        assert data_module.numeric_parse_issues(raw, self.SCHEMA, table="F") == []
+
+
+class TestRowsWithoutIdentity:
+    """BUG-56: one blank row made a dataset impossible to add.
+
+    Excel leaves a `,,,,` line at the end of a saved sheet; its NaN trial id
+    crashed `_disambiguate_repeated_readings`' integer cast.
+    """
+
+    SCHEMA = {
+        "participant": "RECORDING_SESSION_LABEL",
+        "trial": "unique_paragraph_id",
+        "x": "CURRENT_FIX_X",
+        "y": "CURRENT_FIX_Y",
+        "duration": "CURRENT_FIX_DURATION",
+    }
+
+    def _csv(self, tmp_path, lines):
+        path = tmp_path / "fix.csv"
+        header = (
+            "RECORDING_SESSION_LABEL,unique_paragraph_id,TRIAL_INDEX,"
+            "CURRENT_FIX_X,CURRENT_FIX_Y,CURRENT_FIX_DURATION"
+        )
+        path.write_text("\n".join([header, *lines]) + "\n")
+        return data_module.read_table(path)
+
+    def test_a_trailing_blank_row_is_dropped_quietly(self, tmp_path):
+        raw = self._csv(tmp_path, ["p1,t1,1,10,20,200", "p1,t1,1,30,20,180", ",,,,,"])
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")  # a blank row is not data
+            fixations = normalize_fixations(raw, self.SCHEMA)
+        assert len(fixations) == 2
+        assert fixations["trial_id"].tolist() == ["t1", "t1"]
+
+    def test_a_row_with_data_but_no_trial_is_left_out_and_said(self, tmp_path):
+        raw = self._csv(tmp_path, ["p1,t1,1,10,20,200", "p1,,1,30,20,180"])
+        issues = data_module.identity_issues(raw, self.SCHEMA, table="Fixations")
+        assert issues == [
+            "Fixations: 1 row has no value in `unique_paragraph_id`, so it "
+            "belongs to no trial and was left out."
+        ]
+        with pytest.warns(UserWarning, match="unique_paragraph_id"):
+            fixations = normalize_fixations(raw, self.SCHEMA)
+        assert len(fixations) == 1
+
+    def test_a_reading_with_no_trial_index_keeps_its_id(self, tmp_path):
+        raw = self._csv(tmp_path, ["p1,t1,1,10,20,200", "p1,t1,,30,20,180"])
+        fixations = normalize_fixations(raw, self.SCHEMA)
+        assert set(fixations["trial_id"]) == {"t1"}
+
+    def test_a_composite_trial_id_with_a_missing_part_is_left_out(self, tmp_path):
+        raw = self._csv(tmp_path, ["p1,t1,1,10,20,200", "p1,t1,,30,20,180"])
+        schema = {**self.SCHEMA, "trial": ["unique_paragraph_id", "TRIAL_INDEX"]}
+        with pytest.warns(UserWarning, match="TRIAL_INDEX"):
+            fixations = normalize_fixations(raw, schema)
+        assert fixations["trial_id"].tolist() == ["t1_1"]
+
+
+class TestZeroPaddedIds:
+    """BUG-59: `007` in one table and 7 in the other joined on nothing."""
+
+    def test_the_map_names_each_id_by_its_padded_twin(self):
+        assert data_module.zero_padding_map(["7", "12"], ["007", "012"]) == {
+            "7": "007",
+            "12": "012",
+        }
+
+    @pytest.mark.parametrize(
+        "ids, reference",
+        [
+            (["7", "12"], ["7", "012"]),  # something already matches as it is
+            (["1", "01"], ["001"]),  # two readers that differ only by padding
+            (["007"], ["7"]),  # the padded spelling is not on the other side
+            (["p7"], ["p007"]),  # not a number at all
+        ],
+    )
+    def test_the_map_refuses_anything_but_the_one_clear_case(self, ids, reference):
+        assert data_module.zero_padding_map(ids, reference) == {}
+
+    def test_a_planned_csv_read_keeps_the_zeros(self, tmp_path):
+        path = tmp_path / "fix.csv"
+        path.write_text(
+            "RECORDING_SESSION_LABEL,TRIAL_INDEX,x,y,duration\n007,1,1,1,1\n"
+        )
+        header = data_module.read_table_columns(path)
+        plan = data_module.plan_table_read(
+            header,
+            propose_fix_schema(pd.DataFrame(columns=header)),
+            data_module.FIX_OPTIONAL_FIELDS,
+        )
+        frame = data_module.read_table(path, plan=plan)
+        assert frame["RECORDING_SESSION_LABEL"].tolist() == ["007"]
+        assert frame["TRIAL_INDEX"].tolist() == [1]  # an ordinal stays a number
+
+    def test_a_csv_and_a_parquet_table_line_up_headlessly(self, tmp_path):
+        import scanpath_studio as sps
+
+        words = pd.DataFrame(
+            {
+                "participant_id": [7, 7],
+                "trial_id": [1, 1],
+                "word_id": [1, 2],
+                "text": ["a", "b"],
+                "x": [0, 10],
+                "y": [0, 0],
+                "width": [9, 9],
+                "height": [9, 9],
+            }
+        )
+        words.to_csv(tmp_path / "words.csv", index=False)
+        fixations = pd.DataFrame(
+            {"participant_id": ["007"], "trial_id": ["1"], "x": [2.0], "y": [2.0]}
+        ).assign(duration_ms=200.0)
+        fixations.to_parquet(tmp_path / "fix.parquet")
+        w, f = sps.load_scanpath_data(
+            str(tmp_path / "words.csv"), str(tmp_path / "fix.parquet")
+        )
+        assert set(w["participant_id"]) == {"007"}
+        assert data_module.trial_keys(w) == data_module.trial_keys(f)
+
+
 class TestNormalizeRawGaze:
     """Tests for normalize_raw_gaze function."""
 
@@ -562,6 +747,26 @@ class TestCompositeTrialId:
             "p2_A_False",
             "p2_B_False",
         ]
+
+    def test_a_single_column_pick_wins_over_a_raw_unique_trial_id(self):
+        """BUG-58: a hand-picked single column used to be replaced by any
+        literal `unique_trial_id` column, silently — here only the fixations
+        carry one, so the two tables joined on nothing."""
+        words = self._words()
+        fixations = self._words(unique_trial_id=["u1", "u1", "u2", "u3"])[
+            ["participant_id", "para", "unique_trial_id", "x", "y"]
+        ].assign(duration=200)
+        schema = {"participant": "participant_id", "trial": "para"}
+        w = normalize_words(words, {**self.WORD_SCHEMA, "trial": "para"})
+        f = normalize_fixations(
+            fixations, {**schema, "x": "x", "y": "y", "duration": "duration"}
+        )
+        assert f["trial_id"].tolist() == ["A", "A", "A", "B"]
+        # …and the picker's key column agrees with it, not with the raw column.
+        assert (f["unique_trial_id"] == f["trial_id"]).all()
+        assert set(zip(f.participant_id, f.trial_id)) == set(
+            zip(w.participant_id, w.trial_id)
+        )
 
     def test_single_element_list_matches_plain_string_mapping(self):
         words = self._words()
@@ -1313,3 +1518,47 @@ class TestVendorExportsAreAutoDetected:
         schema = propose_fix_schema(df)
         assert schema["x"] == "CURRENT_FIX_X"
         assert schema["duration"] == "CURRENT_FIX_DURATION"
+
+
+class TestVendorUnitsAreRead:
+    """DATA-40: auto-detection found each vendor's time and position columns
+    (DATA-25) but read their numbers as if they were milliseconds and pixels."""
+
+    @pytest.mark.parametrize(
+        "column, factor",
+        [
+            ("Recording timestamp [μs]", 1e-3),  # Tobii Pro Lab
+            ("Recording timestamp [µs]", 1e-3),  # the micro sign, not mu
+            ("start timestamp [ns]", 1e-6),  # Pupil Labs Neon
+            ("Fixation Duration [ms]", 1.0),
+            ("duration (s)", 1000.0),
+            ("FPOGD", 1000.0),  # Gazepoint: seconds, by the manual
+            ("start_timestamp", 1000.0),  # Pupil Labs Core: seconds
+            ("CURRENT_FIX_DURATION", 1.0),
+            ("Fixation point X [DACS px]", 1.0),  # a unit, just not a time
+        ],
+    )
+    def test_the_header_names_the_unit(self, column, factor):
+        assert data_module.time_unit_ms(column) == factor
+
+    def test_a_gazepoint_export_reads_in_milliseconds(self):
+        raw = pd.DataFrame(
+            {
+                "USER": ["P1", "P1"],
+                "MEDIA_NAME": ["page1.png"] * 2,
+                "FPOGX": [0.21, 0.33],
+                "FPOGY": [0.30, 0.31],
+                "FPOGS": [1.204, 1.512],
+                "FPOGD": [0.248, 0.221],
+            }
+        )
+        schema = propose_fix_schema(raw)
+        with pytest.warns(UserWarning, match="fractions of the screen"):
+            fixations = normalize_fixations(raw, schema)
+        assert fixations["duration_ms"].tolist() == pytest.approx([248.0, 221.0])
+        assert fixations["timestamp_ms"].tolist() == pytest.approx([1204.0, 1512.0])
+
+    def test_pixel_positions_raise_no_fraction_warning(self):
+        raw = pd.DataFrame({"x": [120.5, 300.0], "y": [80.0, 80.0]})
+        schema = {"x": "x", "y": "y"}
+        assert data_module.screen_fraction_issues(raw, schema, table="F") == []

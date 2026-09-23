@@ -2565,11 +2565,11 @@ def _render_paragraph_with_spans(
         span_bg = {c: _span_bg_for(c, i) for i, c in enumerate(cols)}
     active = [c for c in span_bg if c in ordered.columns]
     if not active:
-        st.write(" ".join(ordered["text"].astype(str).tolist()))
+        st.write(" ".join(ordered["text"].fillna("").astype(str).tolist()))
         return
     import html as _html
 
-    texts = ordered["text"].astype(str).tolist()
+    texts = ordered["text"].fillna("").astype(str).tolist()
     masks = {c: ordered[c].fillna(False).astype(bool).tolist() for c in active}
     parts: list[str] = []
     for i, raw_word in enumerate(texts):
@@ -2599,7 +2599,7 @@ def _span_text(trial_words: pd.DataFrame, mask_col: str) -> str:
         return ""
     ordered = _ordered_words(trial_words)
     mask = ordered[mask_col].fillna(False).astype(bool)
-    return " ".join(ordered.loc[mask, "text"].astype(str).tolist())
+    return " ".join(ordered.loc[mask, "text"].fillna("").astype(str).tolist())
 
 
 def _first_str(df: pd.DataFrame, col: str) -> str | None:

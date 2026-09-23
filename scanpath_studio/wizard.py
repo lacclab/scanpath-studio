@@ -60,7 +60,9 @@ from .data import (
     empty_fixations_frame,
     empty_words_frame,
     extract_columns_from_source_file,
+    frame_cache,
     frame_fingerprint,
+    normalization_issues,
     normalize_raw_gaze,
     pick_column,
     propose_fix_schema,
@@ -69,6 +71,7 @@ from .data import (
     source_file_regex_collisions,
     split_source_file,
     trial_id_series,
+    trial_keys,
     trial_mapping_columns,
     validate_fix_schema,
     validate_raw_gaze_schema,
@@ -597,6 +600,30 @@ def _c_categorize_columns(_raw, _schema, _registry, fingerprint: tuple, key: tup
 @st.cache_data(show_spinner="Aggregating character boxes…")
 def _c_aggregate_char_boxes(_raw, _schema, fingerprint: tuple, key: tuple):
     return aggregate_char_boxes(_raw, _schema)
+
+
+def _readers_do_not_line_up(words: pd.DataFrame, fixations: pd.DataFrame) -> bool:
+    """Whether the normalized tables share trial ids but no (participant, trial)
+    pair — the reader half of the join is what failed (BUG-59)."""
+    if words.empty or fixations.empty:
+        return False
+
+    def check() -> bool:
+        if not set(words["trial_id"]) & set(fixations["trial_id"]):
+            return False  # the trial-id warning already says so
+        return not trial_keys(words) & trial_keys(fixations)
+
+    key = (frame_fingerprint(words), frame_fingerprint(fixations))
+    return frame_cache("wizard_readers_line_up", key, check)
+
+
+@st.cache_data(show_spinner=False)
+def _c_normalization_issues(
+    _raw, _schema, fingerprint: tuple, key: tuple, table: str
+) -> list:
+    return normalization_issues(
+        _raw, _schema, table=table, fixations=table == "Fixations"
+    )
 
 
 def _schema_key(schema: dict | None) -> tuple:
@@ -3711,6 +3738,40 @@ def _render_data_setup(active: bool) -> _UploadResult:
         )
         st.session_state["_composite_trial_columns"] = (
             rg_trial_cols if len(rg_trial_cols) > 1 else None
+        )
+
+    if active:
+        # BUG-54 / BUG-56: a complete mapping can still meet rows it cannot
+        # use — a numeric column that did not parse (a decimal-comma export, a
+        # text column picked as a coordinate), a row with no trial id. The load
+        # carries on without them, so say which and what was done, where the
+        # other blockers are: directly above ✅ Add dataset.
+        tables = (
+            ("Words/IA", raw_words, word_schema, has_words),
+            ("Fixations", raw_fix, fix_schema, has_fix),
+        )
+        for table, raw, schema, present in tables:
+            if not present:
+                continue
+            for line in _c_normalization_issues(
+                raw, schema, frame_fingerprint(raw), _schema_key(schema), table
+            ):
+                s6.warning(f"⚠️ {line}")
+
+    if (
+        active
+        and has_words
+        and has_fix
+        and _readers_do_not_line_up(words_norm, fixations_norm)
+    ):
+        # BUG-59: the trial-id check above compares trial ids alone, so a pair
+        # of tables that share every trial but spell the readers differently
+        # passed it — and every scanpath then drew over no text.
+        s6.warning(
+            "⚠️ The two tables share trial ids but no reader: no fixation's "
+            "participant + trial has word boxes, so every scanpath would be "
+            "drawn without its text. Check that **Participant ID** names the "
+            "same readers, spelled the same way, in both tables."
         )
 
     raw_gaze_norm = pd.DataFrame()

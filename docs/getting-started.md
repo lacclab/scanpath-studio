@@ -45,15 +45,19 @@ That is the default workflow. You can now follow a tutorial for
 
 ## 3. Load your data
 
-Open 🗂️ **Data**, select **➕ Add dataset**, and work down the two-part wizard:
+Open 🗂️ **Data**, select **➕ Add dataset**, and work down the three-part
+wizard:
 
-1. name the dataset;
-2. **Upload data files** — a words/IA table and a fixations table, plus, if you
-   have them, raw gaze and a one-row-per-reader participant table;
-3. **Map data fields** — check the proposed trial and reader identity, the
-   fixation features, the recording setup (monitor size and viewing distance),
-   and any extra fields;
-4. select **✅ Add dataset**.
+1. **Dataset name** — what to call it;
+2. **Upload data tables** — a fixations table and a words/IA table, each in its
+   own row with its column mapping beside it: check the proposed trial and
+   reader identity and the table's own fields, and keep any extra fields you
+   will need. Raw gaze and the optional participant, trial and text tables
+   upload here too;
+3. **Recording setup** — the monitor size and viewing distance the data was
+   recorded with;
+
+then select **✅ Add dataset**.
 
 The dataset then appears under 📂 **Available datasets**, and ✏️ **Edit dataset**
 reopens everything above at any time.

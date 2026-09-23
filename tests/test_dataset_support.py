@@ -331,6 +331,47 @@ def test_stimulus_words_without_fixations_get_synthetic_participant(stimulus_wor
     assert data_module.STIMULUS_WORDS_FLAG not in words.columns
 
 
+def test_a_repeated_reading_gets_the_stimulus_words_too(stimulus_words_df):
+    """BUG-57: the second reading's id is `t1_r2`, which a table keyed by the
+    text alone never has — the broadcast found no boxes for it."""
+    fixations = pd.DataFrame(
+        {
+            "reader_id": [7, 7, 7, 7],
+            "text_id": ["t1", "t1", "t1", "t1"],
+            "TRIAL_INDEX": [1, 1, 3, 3],
+            "fixation_duration": [180, 220, 150, 200],
+            "x": [140.0, 240.0, 140.0, 240.0],
+            "y": [75.0] * 4,
+        }
+    )
+    words, fixations = sps.load_scanpath_data(
+        words=stimulus_words_df, fixations=fixations
+    )
+    assert set(fixations["trial_id"]) == {"t1", "t1_r2"}
+    for trial in ("t1", "t1_r2"):
+        boxes = words[(words["participant_id"] == "7") & (words["trial_id"] == trial)]
+        assert boxes["text"].tolist() == ["Hello", "world"], trial
+
+
+def test_a_trial_named_like_a_repeat_keeps_its_own_words(stimulus_words_df):
+    """The fallback only applies when the exact id has no boxes."""
+    words_df = pd.concat(
+        [stimulus_words_df, stimulus_words_df.assign(text_id="t1_r2", word="Other")]
+    )
+    fixations = pd.DataFrame(
+        {
+            "reader_id": [7, 7],
+            "text_id": ["t1", "t1_r2"],
+            "fixation_duration": [180, 220],
+            "x": [140.0, 140.0],
+            "y": [75.0, 75.0],
+        }
+    )
+    words, _ = sps.load_scanpath_data(words=words_df, fixations=fixations)
+    own = words[words["trial_id"] == "t1_r2"]
+    assert set(own["text"]) == {"Other"}
+
+
 def test_aoi_fixations_without_words_raise_on_plot(aoi_fixations_df):
     words, fixations = sps.load_scanpath_data(fixations=aoi_fixations_df)
     assert fixations["x"].isna().all()

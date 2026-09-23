@@ -9,6 +9,7 @@ import re
 import string
 import threading
 import uuid
+import warnings
 import weakref
 import zipfile
 from collections import OrderedDict
@@ -498,6 +499,51 @@ def pick_column(df: pd.DataFrame, candidates: Iterable[str]) -> str | None:
     return None
 
 
+#: Milliseconds per unit, for a time column whose header names its unit —
+#: Tobii Pro Lab's `Recording timestamp [μs]`, Pupil Labs Neon's
+#: `start timestamp [ns]` (DATA-40). DATA-25 taught auto-detection to look past
+#: that block; this is what reads it.
+_TIME_UNIT_MS = {
+    "s": 1000.0,
+    "sec": 1000.0,
+    "secs": 1000.0,
+    "seconds": 1000.0,
+    "ms": 1.0,
+    "msec": 1.0,
+    "milliseconds": 1.0,
+    "us": 1e-3,
+    "µs": 1e-3,  # MICRO SIGN
+    "μs": 1e-3,  # GREEK SMALL LETTER MU — what Tobii writes
+    "microseconds": 1e-3,
+    "ns": 1e-6,
+    "nanoseconds": 1e-6,
+}
+#: Vendor time columns whose unit is in the manual, not the header: Gazepoint's
+#: fixation start/duration and Pupil Labs Core's fixation onset are seconds.
+_SECONDS_WITHOUT_A_SUFFIX = frozenset({"fpogd", "fpogs", "starttimestamp"})
+
+
+def time_unit_ms(column) -> float:
+    """Milliseconds per unit of the time column named ``column`` (DATA-40).
+
+    Read from the header's trailing unit block (``[s]``, ``(ns)``, ``[μs]``) or,
+    for a vendor column that carries none, from its documented unit. Anything
+    else — no block, ``[ms]``, a block that names no time unit — is 1: the app's
+    unit, and the only safe guess.
+    """
+    match = _TRAILING_UNIT.search(str(column))
+    if match:
+        unit = match.group(0).strip().strip("[]()").strip().lower()
+        return _TIME_UNIT_MS.get(unit, 1.0)
+    return 1000.0 if _norm_col(column) in _SECONDS_WITHOUT_A_SUFFIX else 1.0
+
+
+def _as_ms(values: pd.Series, column) -> pd.Series:
+    """``values`` of the time column ``column`` converted to milliseconds."""
+    factor = time_unit_ms(column)
+    return values if factor == 1.0 else values * factor
+
+
 def trial_mapping_columns(trial_mapping) -> list:
     """Column list behind a trial mapping — a plain column name or a list of
     names (the column-mapping UI returns a list when the user composes a
@@ -535,6 +581,46 @@ def stable_id(series: pd.Series) -> pd.Series:
     """
     text = series.astype(str).str.strip()
     return text.str.replace(_WHOLE_FLOAT_ID, r"\1", regex=True)
+
+
+_DIGITS_ONLY = re.compile(r"^\d+$")
+
+
+def zero_padding_map(ids: Iterable, reference: Iterable) -> dict[str, str]:
+    """How ``ids`` would be spelled in ``reference``, when the only thing
+    keeping the two apart is zero-padding (BUG-59).
+
+    One table read ``007`` as text and another read it as the number 7, and
+    every join between them then matched nothing — words to fixations, a
+    participant table to the data. Returns ``{"7": "007", …}`` for each id in
+    ``ids`` whose zero-padded twin is in ``reference``, and ``{}`` whenever that
+    is not the *only* story: if any id already matches as it is, if either side
+    has two ids that differ only by padding (``1`` and ``01`` — genuinely
+    different ids), or if the padded spelling is not all on one side. Nothing is
+    renamed on a guess.
+    """
+    own = {str(v) for v in ids if pd.notna(v)}
+    other = {str(v) for v in reference if pd.notna(v)}
+    if not own or not other or own & other:
+        return {}
+
+    def by_value(values: set) -> dict | None:
+        keyed: dict = {}
+        for value in values:
+            if _DIGITS_ONLY.match(value):
+                key = value.lstrip("0") or "0"
+                if key in keyed:
+                    return None
+                keyed[key] = value
+        return keyed
+
+    mine, theirs = by_value(own), by_value(other)
+    if mine is None or theirs is None:
+        return {}
+    shared = mine.keys() & theirs.keys()
+    if not shared or any(len(mine[k]) >= len(theirs[k]) for k in shared):
+        return {}
+    return {mine[k]: theirs[k] for k in shared}
 
 
 def trial_id_series(source: pd.DataFrame, trial_mapping) -> pd.Series:
@@ -676,7 +762,8 @@ WORD_BOTTOM_CANDIDATES = ["IA_BOTTOM", "bottom", "end_y"]
 # (MCSpx)`; SMI BeGaze: `Position X [px]` / `Fixation Position X`; Pupil Labs
 # Neon: `fixation x [px]`. Gazepoint's FPOGX and Pupil Core's `norm_pos_x` are
 # screen *fractions* (0–1), not pixels — matched here so the column is found,
-# and left to the canvas / unit handling downstream, as FPOGX already was.
+# and reported as fractions by `screen_fraction_issues` (DATA-40), which is as
+# far as the load can go without knowing the screen size.
 FIX_X_CANDIDATES = [
     "x",
     "CURRENT_FIX_X",
@@ -708,7 +795,7 @@ FIX_DURATION_CANDIDATES = [
     "fix_duration",  # EyeGenBench's own harmonized column name (DATA-27)
     "eye_movement_event_duration",  # Tobii Pro Lab (current name)
     "gaze_event_duration",  # Tobii Pro Lab (older) / Tobii Studio `GazeEventDuration`
-    "FPOGD",  # Gazepoint — seconds, not ms
+    "FPOGD",  # Gazepoint — seconds, not ms (`time_unit_ms` converts, DATA-40)
 ]
 FIX_TIMESTAMP_CANDIDATES = [
     "timestamp_ms",
@@ -1073,16 +1160,16 @@ def aggregate_char_boxes(
 
     df = df.copy()
     if has_xywh:
-        left = pd.to_numeric(df[schema["x"]], errors="coerce")
-        top = pd.to_numeric(df[schema["y"]], errors="coerce")
+        left = _to_number(df[schema["x"]])
+        top = _to_number(df[schema["y"]])
         df["_box_l"], df["_box_t"] = left, top
-        df["_box_r"] = left + pd.to_numeric(df[schema["width"]], errors="coerce")
-        df["_box_b"] = top + pd.to_numeric(df[schema["height"]], errors="coerce")
+        df["_box_r"] = left + _to_number(df[schema["width"]])
+        df["_box_b"] = top + _to_number(df[schema["height"]])
     else:
-        df["_box_l"] = pd.to_numeric(df[schema["left"]], errors="coerce")
-        df["_box_r"] = pd.to_numeric(df[schema["right"]], errors="coerce")
-        df["_box_t"] = pd.to_numeric(df[schema["top"]], errors="coerce")
-        df["_box_b"] = pd.to_numeric(df[schema["bottom"]], errors="coerce")
+        df["_box_l"] = _to_number(df[schema["left"]])
+        df["_box_r"] = _to_number(df[schema["right"]])
+        df["_box_t"] = _to_number(df[schema["top"]])
+        df["_box_b"] = _to_number(df[schema["bottom"]])
 
     temp = {"_box_l", "_box_r", "_box_t", "_box_b"}
     agg = {c: "first" for c in df.columns if c not in group_cols and c not in temp}
@@ -1112,8 +1199,14 @@ def aggregate_char_boxes(
     return out.drop(columns=list(temp))
 
 
-def _read_by_extension(buf, name: str, plan: ReadPlan | None = None) -> pd.DataFrame:
+def _read_by_extension(
+    buf, name: str, plan: ReadPlan | None = None, *, sep: str | None = None
+) -> pd.DataFrame:
     """Dispatch a buffer/path to a pandas reader by its (lowercased) name.
+
+    ``sep`` is the delimiter of a text table when the caller already knows it
+    (a zip member, which cannot be peeked at); otherwise it is read off the
+    header line (DATA-41).
 
     ``plan`` (PERF-6) narrows the read to the columns normalization keeps and
     declares EyeLink's ``.`` missing in the numeric ones. Delimited text and
@@ -1136,12 +1229,144 @@ def _read_by_extension(buf, name: str, plan: ReadPlan | None = None) -> pd.DataF
     if name.endswith(".feather"):
         return pd.read_feather(buf, columns=columns)
     if name.endswith((".xlsx", ".xls")):
+        if not _is_workbook(buf, name):
+            # BUG-55: EyeLink Data Viewer's "Excel" export is tab-separated text
+            # with an .xls name — read it as what it is.
+            return _read_delimited(buf, sep or _sniff_delimiter(buf, name), plan)
         # First sheet (e.g. MultiplEYE questions workbook).
-        frame = pd.read_excel(buf)
+        frame = pd.read_excel(buf, **_excel_na_kwargs(buf, plan))
         return frame[[c for c in columns if c in frame.columns]] if columns else frame
-    if name.endswith((".tsv", ".tab")):
-        return pd.read_csv(buf, sep="\t", low_memory=False, **_read_kwargs(plan))
-    return pd.read_csv(buf, low_memory=False, **_read_kwargs(plan))
+    return _read_delimited(buf, sep or _sniff_delimiter(buf, name), plan)
+
+
+#: The delimiters a text table is looked for with, and the one assumed when its
+#: header line settles nothing (DATA-41).
+_DELIMITERS = ("\t", ",", ";", "|")
+_QUOTED = re.compile(r'"[^"]*"')
+
+
+def _default_delimiter(name: str) -> str:
+    """The delimiter a text file's extension implies: tab for ``.tsv`` /
+    ``.tab`` and for the tab-separated exports named ``.txt`` or ``.xls``,
+    comma for everything else."""
+    return "\t" if name.lower().endswith((".tsv", ".tab", ".txt", ".xls")) else ","
+
+
+def _delimiter_of(header_line: bytes, name: str) -> str:
+    """The delimiter a table's header line uses (DATA-41).
+
+    A ``;``-separated CSV (Excel's export wherever the decimal separator is a
+    comma) and a tab-separated ``.txt`` both used to load as a single column
+    holding the whole line. Counting each candidate in the header, outside
+    quotes, is enough: a column name never contains the delimiter, while a
+    sniffer that also reads the rows is misled by the decimal commas in them.
+    A ``.tsv`` is always tab-separated; a header with no candidate in it (a
+    one-column table) keeps the extension's default.
+    """
+    default = _default_delimiter(name)
+    if name.lower().endswith((".tsv", ".tab")):
+        return default
+    text = _QUOTED.sub("", header_line.decode("latin-1"))
+    counts = {sep: text.count(sep) for sep in _DELIMITERS}
+    best = max(counts, key=lambda sep: counts[sep])
+    return best if counts[best] > counts[default] else default
+
+
+def _first_line(head: bytes) -> bytes:
+    """The header line of a text table's opening bytes."""
+    return head.split(b"\n", 1)[0].rstrip(b"\r")
+
+
+def _sniff_delimiter(buf, name: str) -> str:
+    """:func:`_delimiter_of` for an upload or a path, read without consuming
+    it; a stream that cannot be rewound keeps the extension's default."""
+    if not _can_reread(buf):
+        return _default_delimiter(name)
+    return _delimiter_of(_first_line(_peek(buf, _HEADER_MAX_BYTES)), name)
+
+
+#: The first bytes of a legacy (OLE2) Excel workbook, and of a zip container —
+#: which is what an .xlsx is (BUG-55).
+_OLE2_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+_ZIP_MAGIC = b"PK\x03\x04"
+
+#: Tried in order when a delimited file is not UTF-8 (BUG-55): Windows' default
+#: for Western European text first, since that is what Excel writes there, then
+#: Latin-1, which decodes any byte and so always ends the search.
+_TEXT_ENCODINGS = ("utf-8", "cp1252", "latin-1")
+
+
+def _peek(file_like_or_path, size: int = 8) -> bytes:
+    """The first ``size`` bytes of an upload or a path, leaving it rewound."""
+    if hasattr(file_like_or_path, "read"):
+        _rewind(file_like_or_path)
+        head = file_like_or_path.read(size)
+        _rewind(file_like_or_path)
+        return head if isinstance(head, bytes) else str(head).encode()
+    try:
+        with open(file_like_or_path, "rb") as handle:
+            return handle.read(size)
+    except OSError:
+        return b""
+
+
+def _is_workbook(buf, name: str) -> bool:
+    """Whether an Excel-named file is a real workbook pandas can open.
+
+    A zip container is an .xlsx; anything else that is not a legacy OLE2
+    workbook is delimited text wearing an Excel extension. A legacy workbook is
+    refused with the fix, rather than failing on a reader (``xlrd``) this
+    package does not install for a format Excel itself stopped writing in 2007.
+    """
+    head = _peek(buf)
+    if head.startswith(_OLE2_MAGIC):
+        raise ValueError(
+            f"'{Path(name).name}' is a legacy Excel 97–2003 (.xls) workbook, which "
+            "can't be read here. Open it in Excel and save it as .xlsx or .csv, "
+            "then upload that."
+        )
+    return head.startswith(_ZIP_MAGIC)
+
+
+def _can_reread(buf) -> bool:
+    """Whether ``buf`` can be read a second time from the start."""
+    if isinstance(buf, (str, os.PathLike)):
+        return True
+    seekable = getattr(buf, "seekable", None)
+    try:
+        return bool(seekable()) if callable(seekable) else False
+    except (OSError, ValueError):
+        return False
+
+
+def _read_delimited(buf, sep: str, plan: ReadPlan | None, **extra) -> pd.DataFrame:
+    """``read_csv`` with the encoding fallback a non-UTF-8 export needs (BUG-55).
+
+    A CSV saved by Excel on Windows is cp1252, and one umlaut in it made the
+    whole upload fail with a raw ``UnicodeDecodeError``. Each encoding in
+    ``_TEXT_ENCODINGS`` is tried in turn; a stream that cannot be rewound (a zip
+    member) re-raises, and :func:`_read_zipped_table` retries it from memory.
+    """
+    for encoding in _TEXT_ENCODINGS:
+        try:
+            return pd.read_csv(
+                buf,
+                sep=sep,
+                low_memory=False,
+                encoding=encoding,
+                **_read_kwargs(plan),
+                **extra,
+            )
+        except UnicodeDecodeError:
+            if encoding == _TEXT_ENCODINGS[-1] or not _can_reread(buf):
+                raise
+            _rewind(buf)
+            _LOGGER.info(
+                "%s is not %s; reading it again as the next encoding",
+                getattr(buf, "name", buf),
+                encoding,
+            )
+    raise AssertionError("unreachable: latin-1 decodes every byte")
 
 
 #: EyeLink writes a value it could not measure as a bare period. Declared
@@ -1174,6 +1399,235 @@ NUMERIC_SCHEMA_FIELDS = frozenset(
     }
 )
 
+#: One number written with a decimal comma (``117,7``) — how a German- or
+#: French-locale export writes every fractional value (BUG-54).
+_DECIMAL_COMMA = re.compile(r"^[+-]?\d+,\d+$")
+#: ...and the shape a *thousands* separator gives the same characters
+#: (``1,204``). A column whose every comma looks like this could be either, so it
+#: is reported rather than guessed at.
+_THOUSANDS_GROUPED = re.compile(r"^[+-]?[1-9]\d{0,2}(,\d{3})+$")
+
+
+def _filled_cells(values: pd.Series) -> pd.Series:
+    """The cells of ``values`` that hold something, as stripped text.
+
+    EyeLink's ``.`` marker and a blank cell are *missing*, not unreadable, so
+    they are left out — a planned read already turned them into NaN, and an
+    unplanned one must not report them as garbage either.
+    """
+    text = values[values.notna()].astype(str).str.strip()
+    return text[(text != "") & (text != MISSING_MARKER)]
+
+
+def _unparsed_cells(values: pd.Series, parsed: pd.Series) -> pd.Series:
+    """The filled cells of ``values`` that ``parsed`` could not read, as text."""
+    failed = parsed.isna() & values.notna()
+    if not failed.any():
+        return pd.Series([], dtype=str)
+    return _filled_cells(values[failed])
+
+
+def _to_number(values: pd.Series) -> pd.Series:
+    """``pd.to_numeric(errors="coerce")``, reading a decimal-comma column too.
+
+    A decimal-comma export (``117,7``) made every fractional cell unparseable,
+    and NaN then fell through to the silent fallbacks downstream — each fixation
+    snapped to its word's centre, each duration read as 0 (BUG-54). The commas
+    are converted only when **every** cell that failed is a decimal-comma number
+    and not all of them could be a thousands separator instead; anything else
+    stays NaN, for :func:`numeric_parse_issues` to report.
+    """
+    parsed = pd.to_numeric(values, errors="coerce")
+    if pd.api.types.is_numeric_dtype(values):
+        return parsed
+    failed = _unparsed_cells(values, parsed)
+    if failed.empty or not failed.str.fullmatch(_DECIMAL_COMMA).all():
+        return parsed
+    if failed.str.fullmatch(_THOUSANDS_GROUPED).all():
+        return parsed
+    converted = pd.to_numeric(failed.str.replace(",", ".", regex=False))
+    parsed = parsed.copy()
+    parsed.loc[converted.index] = converted
+    return parsed
+
+
+#: What becomes of a fixation or word whose mapped numeric cell is unreadable —
+#: said in the warning, because "left empty" means something different per field.
+_UNPARSED_CONSEQUENCE = {
+    "duration": "those fixations are read as 0 ms long",
+    "timestamp": "those fixations are read as starting at 0",
+    "x": "those fixations are placed at their word's centre when they have a word id, "
+    "and left off the plot otherwise",
+    "y": "those fixations are placed at their word's centre when they have a word id, "
+    "and left off the plot otherwise",
+    "word_id": "those rows have no word id",
+}
+
+
+def numeric_parse_issues(raw: pd.DataFrame, schema: dict, *, table: str) -> list[str]:
+    """Plain-language warnings for mapped numeric columns that did not parse.
+
+    One line per column, naming the table, the column, how many of its cells
+    were unreadable, a few examples, and what the load did with those rows —
+    because the load carries on either way, and a column read as all-NaN used to
+    produce a plausible-looking figure with nothing said (BUG-54). A
+    decimal-comma column that :func:`_to_number` converts is not an issue; one
+    whose commas could equally be thousands separators is, with that named.
+    """
+    issues: list[str] = []
+    seen: set = set()
+    for key, column in schema.items():
+        if key not in NUMERIC_SCHEMA_FIELDS or not isinstance(column, str):
+            continue
+        if column in seen or column not in raw.columns:
+            continue
+        seen.add(column)
+        values = raw[column]
+        if pd.api.types.is_numeric_dtype(values) or pd.api.types.is_bool_dtype(values):
+            continue
+        failed = _unparsed_cells(values, _to_number(values))
+        if failed.empty:
+            continue
+        examples = ", ".join(f"'{v}'" for v in failed.drop_duplicates().head(3))
+        line = (
+            f"{table}: {len(failed):,} of {len(_filled_cells(values)):,} values in "
+            f"`{column}` aren't numbers (e.g. {examples})"
+        )
+        if failed.str.fullmatch(_THOUSANDS_GROUPED).all():
+            line += (
+                ". They could be a decimal comma or a thousands separator, so they "
+                "were not guessed at — re-export the table with a '.' decimal point "
+                "and no thousands separator"
+            )
+        consequence = _UNPARSED_CONSEQUENCE.get(key, "those cells are left empty")
+        issues.append(f"{line}; {consequence}.")
+    return issues
+
+
+def _identity_columns(source: pd.DataFrame, schema: dict) -> list[str]:
+    """The source columns a row's (participant, trial) identity is built from."""
+    columns: list = []
+    if schema.get("participant"):
+        columns += trial_mapping_columns(schema["participant"])
+    columns += trial_mapping_columns(schema["trial"])
+    return [c for c in dict.fromkeys(columns) if c in source.columns]
+
+
+def _rows_missing_identity(
+    source: pd.DataFrame, schema: dict
+) -> tuple[pd.Series, pd.Series]:
+    """``(blank, unkeyed)`` row masks: rows with no participant or trial id.
+
+    A row missing either cannot belong to any trial, and its NaN crashed the
+    load outright — one ``,,,,`` line, the blank row Excel leaves at the end of
+    a sheet, made the whole dataset impossible to add (BUG-56). ``blank`` is the
+    rows that hold nothing at all, which are not data and go quietly;
+    ``unkeyed`` is the rest, which hold data and are reported. Only the missing
+    rows are inspected cell by cell, so a clean table costs one ``isna`` per id
+    column.
+    """
+    columns = _identity_columns(source, schema)
+    missing = source[columns].isna().any(axis=1) if columns else None
+    none = pd.Series(False, index=source.index)
+    if missing is None or not missing.any():
+        return none, none
+    rows = source.loc[missing].drop(columns=[SOURCE_FILE_COLUMN], errors="ignore")
+    empty = rows.apply(lambda c: c.isna() | (c.astype(str).str.strip() == ""))
+    blank = none.copy()
+    blank.loc[rows.index] = empty.all(axis=1)
+    return blank, missing & ~blank
+
+
+def _drop_rows_missing_identity(source: pd.DataFrame, schema: dict) -> pd.DataFrame:
+    """``source`` without the rows :func:`_rows_missing_identity` flags."""
+    blank, unkeyed = _rows_missing_identity(source, schema)
+    keep = ~(blank | unkeyed)
+    return source if keep.all() else source.loc[keep]
+
+
+def identity_issues(raw: pd.DataFrame, schema: dict, *, table: str) -> list[str]:
+    """A warning for rows that hold data but no participant or trial id."""
+    _, unkeyed = _rows_missing_identity(raw, schema)
+    count = int(unkeyed.sum())
+    if not count:
+        return []
+    columns = [
+        c for c in _identity_columns(raw, schema) if raw.loc[unkeyed, c].isna().any()
+    ]
+    named = ", ".join(f"`{c}`" for c in columns)
+    if count == 1:
+        said = "1 row has no value in {}, so it belongs to no trial and was left out"
+    else:
+        said = f"{count:,} rows have no value in {{}}, so they belong to no trial and were left out"
+    return [f"{table}: {said.format(named)}."]
+
+
+#: Positions that never leave this band are fractions of the screen, not
+#: pixels: Gazepoint's FPOGX/FPOGY and Pupil Labs Core's norm_pos_x/y. Wider
+#: than 0–1, because a fraction strays a little off-screen.
+_FRACTION_BAND = (-0.5, 1.5)
+
+
+def screen_fraction_issues(raw: pd.DataFrame, schema: dict, *, table: str) -> list:
+    """A warning when the mapped X/Y are screen fractions rather than pixels.
+
+    Not converted (DATA-40): the load knows no screen size to scale by, and a
+    guessed one would put every fixation in the wrong place while looking
+    plausible — the one outcome worse than a figure that is obviously wrong.
+    """
+    x, y = schema.get("x"), schema.get("y")
+    if not (isinstance(x, str) and isinstance(y, str)):
+        return []
+    if x not in raw.columns or y not in raw.columns:
+        return []
+    xs, ys = _to_number(raw[x]), _to_number(raw[y])
+    both = xs.notna() & ys.notna()
+    if not both.any():
+        return []
+    low, high = _FRACTION_BAND
+    xs, ys = xs[both], ys[both]
+    if not (xs.between(low, high).all() and ys.between(low, high).all()):
+        return []
+    if not (xs.between(0, 1, inclusive="neither").any()):
+        return []  # all 0 / all 1 is degenerate data, not a fraction
+    return [
+        f"{table}: every position in `{x}` / `{y}` lies between 0 and 1 — these "
+        "look like fractions of the screen (Gazepoint's FPOGX/FPOGY, Pupil Labs "
+        "Core's norm_pos), not pixels, so the scanpath is drawn in a 1-pixel "
+        "corner of the canvas. They are not converted, because the screen size "
+        "is not known here: multiply them by the screen width and height in "
+        "pixels before uploading (for Pupil Core, whose y points up, use "
+        "(1 − y) × height)."
+    ]
+
+
+def normalization_issues(
+    raw: pd.DataFrame, schema: dict, *, table: str, fixations: bool = False
+) -> list[str]:
+    """Everything the load will do to ``raw`` under ``schema`` that the user
+    should hear about: rows left out for want of an id (BUG-56), mapped numeric
+    columns that did not parse (BUG-54), and — for ``fixations``, whose X/Y
+    are gaze positions rather than box origins — positions that are screen
+    fractions rather than pixels (DATA-40)."""
+    issues = identity_issues(raw, schema, table=table)
+    issues += numeric_parse_issues(raw, schema, table=table)
+    if fixations:
+        issues += screen_fraction_issues(raw, schema, table=table)
+    return issues
+
+
+def _warn_normalization_issues(
+    raw: pd.DataFrame, schema: dict, *, table: str, fixations: bool = False
+) -> None:
+    """Raise each :func:`normalization_issues` line as a ``UserWarning``.
+
+    The headless API and ``render`` have no page to put a warning on, so the
+    normalizers say it themselves; the wizard shows the same lines above
+    ✅ Add dataset.
+    """
+    for issue in normalization_issues(raw, schema, table=table, fixations=fixations):
+        warnings.warn(issue.replace("`", "'"), UserWarning, stacklevel=3)
+
 
 @dataclass(frozen=True)
 class ReadPlan:
@@ -1186,6 +1640,16 @@ class ReadPlan:
 
     columns: tuple[str, ...] | None = None
     na_values: dict[str, list[str]] = field(default_factory=dict)
+    #: Columns read as the literal text of each cell, with no cell taken as
+    #: missing (BUG-53). The word-text column: "None", "NA" and "null" are
+    #: words a stimulus can contain, and pandas' default NA spellings turned
+    #: every one of them into NaN before normalization saw it.
+    verbatim: tuple[str, ...] = ()
+    #: Identity columns (participant, trial, text, screen) read as text, so a
+    #: zero-padded id survives: CSV inference read `007` as the number 7, while
+    #: the same id in a Parquet table stayed "007", and the two tables then
+    #: shared no participant at all (BUG-59). Missing cells stay missing.
+    identity: tuple[str, ...] = ()
 
     def narrowed_to(self, available: Iterable[str]) -> ReadPlan:
         """This plan restricted to the columns one file actually has.
@@ -1203,11 +1667,15 @@ class ReadPlan:
             return self
         present = set(available)
         columns = tuple(name for name in self.columns if name in present)
+        verbatim = tuple(c for c in self.verbatim if c in present)
+        identity = tuple(c for c in self.identity if c in present)
         if not columns:
-            return ReadPlan()
+            return ReadPlan(verbatim=verbatim, identity=identity)
         return ReadPlan(
             columns=columns,
             na_values={k: v for k, v in self.na_values.items() if k in present},
+            verbatim=verbatim,
+            identity=identity,
         )
 
 
@@ -1225,7 +1693,80 @@ def _read_kwargs(plan: ReadPlan | None) -> dict:
         kwargs["usecols"] = list(plan.columns)
     if plan.na_values:
         kwargs["na_values"] = plan.na_values
+    if plan.verbatim:
+        # A converter receives the cell's raw text before NA detection runs, and
+        # leaves every other column's NA handling exactly as it was (BUG-53).
+        kwargs["converters"] = {column: str for column in plan.verbatim}
+    if plan.identity:
+        kwargs["dtype"] = {column: str for column in plan.identity}
     return kwargs
+
+
+#: pandas' own default missing-value spellings (``read_csv``'s ``na_values``
+#: docs). Spelled out because an Excel read with a verbatim column has to switch
+#: the defaults off and hand them back to every *other* column by name.
+PANDAS_DEFAULT_NA = frozenset(
+    {
+        "",
+        "#N/A",
+        "#N/A N/A",
+        "#NA",
+        "-1.#IND",
+        "-1.#QNAN",
+        "-NaN",
+        "-nan",
+        "1.#IND",
+        "1.#QNAN",
+        "<NA>",
+        "N/A",
+        "NA",
+        "NULL",
+        "NaN",
+        "None",
+        "n/a",
+        "nan",
+        "null",
+    }
+)
+
+
+def _excel_na_kwargs(buf, plan: ReadPlan | None) -> dict:
+    """``read_excel`` keywords that keep a plan's verbatim columns literal.
+
+    ``read_excel`` applies its NA spellings before a converter sees the cell,
+    so the CSV path's converter trick does not reach it: the defaults are turned
+    off and given back to every other column by name, which needs the header
+    first. Excel is never the large-file format, so the second pass is cheap.
+    """
+    if plan is None:
+        return {}
+    kwargs: dict = {}
+    if plan.identity:
+        kwargs["dtype"] = {column: str for column in plan.identity}
+    if not plan.verbatim:
+        return kwargs
+    header = list(pd.read_excel(buf, nrows=0).columns)
+    _rewind(buf)
+    na_values = {
+        column: sorted(PANDAS_DEFAULT_NA | set(plan.na_values.get(column, ())))
+        for column in header
+        if column not in plan.verbatim
+    }
+    return {**kwargs, "keep_default_na": False, "na_values": na_values}
+
+
+def verbatim_text_plan(header: Sequence[str], schema: dict | None = None) -> ReadPlan:
+    """A whole-table plan that only keeps the word-text column verbatim (BUG-53).
+
+    For readers that parse every column (the headless API) but still must not
+    lose a word spelled "None" or "NA". ``schema`` is the caller's own word
+    mapping; without one the text column is auto-detected from the header, the
+    way the mapping itself will be.
+    """
+    names = list(header)
+    schema = schema or propose_word_schema(pd.DataFrame(columns=names))
+    text = schema.get("text")
+    return ReadPlan(verbatim=(text,) if isinstance(text, str) and text in names else ())
 
 
 def plan_table_read(
@@ -1235,6 +1776,8 @@ def plan_table_read(
     *,
     filter_fields: Iterable[str] | None = None,
     keep_columns: Iterable[str] | None = None,
+    text_column: str | None = None,
+    identity_columns: Iterable[str] = (),
 ) -> ReadPlan:
     """Narrow a read to the columns ``normalize_*`` keeps (PERF-6).
 
@@ -1248,18 +1791,32 @@ def plan_table_read(
     the plan is made before a single row is parsed. ``filter_fields`` and
     ``keep_columns`` carry the columns the user chose to keep beyond the
     mapping, exactly as :func:`compute_keep_columns` takes them.
+
+    The word-text column — ``text_column`` when the user has mapped one by
+    hand, else the schema's own ``text`` — is read verbatim (BUG-53), and the
+    identity columns — the schema's, plus any ``identity_columns`` the user
+    picked by hand — as text (BUG-59).
     """
     names = list(header)
     present = set(names)
+    text = text_column or schema.get("text")
+    verbatim = (text,) if isinstance(text, str) and text in present else ()
+    identity = tuple(
+        column
+        for column in dict.fromkeys(
+            [*_schema_identity_columns(schema), *identity_columns, *_IDENTITY_SOURCES]
+        )
+        if column in present and column not in verbatim and column not in _ORDINALS
+    )
     if not (set(_schema_source_columns(schema)) & present):
         # Nothing is mapped yet — an unmapped upload, or a table this schema
         # does not describe. Dropping columns here would be guessing.
-        return ReadPlan()
+        return ReadPlan(verbatim=verbatim, identity=identity)
     keep = compute_keep_columns(
         schema,
         optional_sources=[row[0] for row in registry if row[0] in present],
         filter_fields=filter_fields,
-        keep_columns=keep_columns,
+        keep_columns=set(keep_columns or ()) | set(verbatim),
     )
     numeric = {row[0] for row in registry if row[2] == "numeric"}
     numeric |= {
@@ -1271,7 +1828,29 @@ def plan_table_read(
     return ReadPlan(
         columns=columns,
         na_values={name: [MISSING_MARKER] for name in columns if name in numeric},
+        verbatim=verbatim,
+        identity=tuple(c for c in identity if c in keep),
     )
+
+
+#: Schema fields that name *which* participant / trial / text / screen a row
+#: belongs to — read as text, never as numbers (BUG-59).
+IDENTITY_SCHEMA_FIELDS = ("participant", "trial", "text_id", "screen_id")
+#: The id columns `normalize_*` consults by name rather than through the schema.
+_IDENTITY_SOURCES = ("unique_trial_id", "unique_paragraph_id")
+#: ...except an index that is also carried as a number: the trial picker sorts
+#: on `TRIAL_INDEX`, and as text 10 would sort before 2.
+_ORDINALS = frozenset({"TRIAL_INDEX", "trial_index"})
+
+
+def _schema_identity_columns(schema: dict) -> list[str]:
+    """The source columns a schema's identity fields name (lists expanded)."""
+    columns: list = []
+    for key in IDENTITY_SCHEMA_FIELDS:
+        value = schema.get(key)
+        if value:
+            columns += trial_mapping_columns(value)
+    return columns
 
 
 def read_table_columns(file_like_or_path) -> list[str]:
@@ -1296,13 +1875,50 @@ def read_table_columns(file_like_or_path) -> list[str]:
             from pyarrow import feather
 
             return list(feather.read_table(file_like_or_path, columns=[]).schema.names)
-        if name.endswith((".tsv", ".tab")):
-            return list(pd.read_csv(file_like_or_path, sep="\t", nrows=0).columns)
-        if name.endswith(".csv"):
-            return list(pd.read_csv(file_like_or_path, nrows=0).columns)
+        if name.endswith((".tsv", ".tab", ".csv", ".txt")):
+            return _header(file_like_or_path, _sniff_delimiter(file_like_or_path, name))
+        # Rewound afterwards too (the `finally`): the caller reads the table
+        # again, and a buffer left at its end reads as an empty file.
+        return list(read_table(file_like_or_path).columns)
+    except pd.errors.EmptyDataError as exc:
+        raise _empty_file_error(name) from exc
     finally:
         _rewind(file_like_or_path)
-    return list(read_table(file_like_or_path).columns)
+
+
+def _header(buf, sep: str) -> list[str]:
+    """A delimited table's column names, read under the encoding fallback."""
+    return list(_read_delimited(buf, sep, None, nrows=0).columns)
+
+
+def _empty_file_error(name: str) -> ValueError:
+    """The error an empty upload raises, in place of pandas' "No columns to
+    parse from file" (BUG-55)."""
+    return ValueError(
+        f"'{Path(name).name}' is empty — it has no header row. Check the export "
+        "finished writing, then upload it again."
+    )
+
+
+#: How far into a zip member the header line is looked for.
+_HEADER_MAX_BYTES = 1024 * 1024
+
+
+def _member_layout(zf: zipfile.ZipFile, info: zipfile.ZipInfo) -> tuple[list, str]:
+    """Column names and delimiter of one delimited zip member, from its first
+    line alone.
+
+    A member stream cannot be rewound, so the encoding fallback runs over just
+    the header line held in memory — cut at the newline, never mid-character —
+    and the delimiter (DATA-41) is read off the same line.
+    """
+    with zf.open(info) as inner:
+        head = inner.read(_HEADER_MAX_BYTES)
+    line = _first_line(head)
+    if not line.strip():
+        raise _empty_file_error(info.filename)
+    sep = _delimiter_of(line, info.filename)
+    return _header(io.BytesIO(line + b"\n"), sep), sep
 
 
 def _zipped_table_columns(file_like_or_path) -> list[str]:
@@ -1328,15 +1944,13 @@ def _zipped_table_columns(file_like_or_path) -> list[str]:
         _check_zip_limits(infos)
         for info in infos:
             name = info.filename.lower()
-            if not name.endswith((".tsv", ".tab", ".csv")):
+            if not name.endswith((".tsv", ".tab", ".csv", ".txt")):
                 # Columnar/workbook members seek, so there is no header-only
                 # read: defer to `_read_zipped_table`, which reads every member
                 # under a running byte budget (declared sizes are forgeable, so
                 # the check above is not sufficient on its own).
                 return list(_read_zipped_table(file_like_or_path).columns)
-            sep = "\t" if name.endswith((".tsv", ".tab")) else ","
-            with zf.open(info) as inner:
-                names = pd.read_csv(inner, sep=sep, nrows=0).columns
+            names, _sep = _member_layout(zf, info)
             columns.extend(c for c in names if c not in columns)
     return columns
 
@@ -1607,16 +2221,28 @@ def _read_zipped_table(
                     # PERF-6: one archive can hold members with different
                     # columns, and the plan is built from their union — narrow
                     # it to this member's own header or `usecols` rejects it.
+                    header, sep = _member_layout(zf, info)
                     member_plan = plan
                     if plan is not None and plan.columns:
-                        with zf.open(info) as head:
-                            sep = "\t" if name.endswith((".tsv", ".tab")) else ","
-                            member_plan = plan.narrowed_to(
-                                pd.read_csv(head, sep=sep, nrows=0).columns
+                        member_plan = plan.narrowed_to(header)
+                    try:
+                        frames.append(
+                            _read_by_extension(
+                                io.BufferedReader(stream), name, member_plan, sep=sep
                             )
-                    frames.append(
-                        _read_by_extension(io.BufferedReader(stream), name, member_plan)
-                    )
+                        )
+                    except UnicodeDecodeError:
+                        # BUG-55: not UTF-8, and a member stream cannot be
+                        # rewound for the encoding fallback — read it again
+                        # into memory, under the same budget, where it can.
+                        with zf.open(info) as again:
+                            stream = _BudgetedZipMember(
+                                again, member_budget, member, limit_label=limit_label
+                            )
+                            buf = io.BytesIO(stream.read())
+                        frames.append(
+                            _read_by_extension(buf, name, member_plan, sep=sep)
+                        )
             remaining -= stream.consumed
             labels.append(Path(member).stem)
     return _tag_and_concat(frames, labels, SOURCE_FILE_COLUMN)
@@ -1659,9 +2285,12 @@ def read_table(file_like_or_path, *, plan: ReadPlan | None = None) -> pd.DataFra
     ``plan`` (PERF-6) is a :class:`ReadPlan` from :func:`plan_table_read`,
     narrowing the read to the columns normalization keeps."""
     name = getattr(file_like_or_path, "name", str(file_like_or_path)).lower()
-    if name.endswith(".zip"):
-        return _read_zipped_table(file_like_or_path, plan=plan)
-    return _read_by_extension(file_like_or_path, name, plan)
+    try:
+        if name.endswith(".zip"):
+            return _read_zipped_table(file_like_or_path, plan=plan)
+        return _read_by_extension(file_like_or_path, name, plan)
+    except pd.errors.EmptyDataError as exc:
+        raise _empty_file_error(name) from exc
 
 
 def expand_table_inputs(inputs: TablesInput) -> list:
@@ -1928,14 +2557,13 @@ def normalize_raw_gaze(
         df["trial_id"] = trial_id_series(raw_gaze, trial_cols)
         df["unique_trial_id"] = df["trial_id"]
     else:
-        trial_col = (
-            "unique_trial_id"
-            if "unique_trial_id" in raw_gaze.columns
-            else trial_cols[0]
-        )
+        trial_col = trial_cols[0]  # the mapped column (BUG-58)
         df["trial_id"] = stable_id(raw_gaze[trial_col])
         if "unique_trial_id" in raw_gaze.columns:
-            df["unique_trial_id"] = stable_id(raw_gaze["unique_trial_id"])
+            # The mapped id *is* the unique trial id (BUG-58) — never the raw
+            # column's own values, which the trial picker would otherwise key
+            # on (`utils.build_combo_options` prefers `unique_trial_id`).
+            df["unique_trial_id"] = df["trial_id"]
     # UX-113: mapped when the export carries its own text/passage column;
     # otherwise raw gaze has no text/passage concept of its own, so mirror
     # trial_id — a raw-gaze-only dataset still needs *a* text_id column for
@@ -1954,12 +2582,11 @@ def normalize_raw_gaze(
     # through only when the export already names one, not computed.
     if schema.get("word_id"):
         df["word_id"] = raw_gaze[schema["word_id"]]
-    df["x"] = pd.to_numeric(raw_gaze[schema["x"]], errors="coerce")
-    df["y"] = pd.to_numeric(raw_gaze[schema["y"]], errors="coerce")
+    df["x"] = _to_number(raw_gaze[schema["x"]])
+    df["y"] = _to_number(raw_gaze[schema["y"]])
     if schema.get("timestamp"):
-        df["timestamp_ms"] = pd.to_numeric(
-            raw_gaze[schema["timestamp"]], errors="coerce"
-        )
+        onset = schema["timestamp"]
+        df["timestamp_ms"] = _as_ms(_to_number(raw_gaze[onset]), onset)  # DATA-40
     else:
         # Each row represents one millisecond, so use row index within trial as timestamp
         df["timestamp_ms"] = df.groupby(list(PARENT_KEY), sort=False).cumcount()
@@ -1992,6 +2619,10 @@ def infer_fix_schema(fixations: pd.DataFrame) -> dict[str, str] | None:
 # column flags the frame so broadcast_stimulus_words() knows to expand it.
 STIMULUS_PARTICIPANT = ""
 STIMULUS_WORDS_FLAG = "_stimulus_words"
+#: The suffix `_disambiguate_repeated_readings` appends to a later reading's id,
+#: and the scratch column the stimulus broadcast joins through (BUG-57).
+_REPEATED_READING_SUFFIX = re.compile(r"_r\d+$")
+_WORD_TRIAL = "_word_trial_id"
 
 # Synthetic participant id used when a dataset has no participant column at all
 # (a single anonymous reader). Distinct from STIMULUS_PARTICIPANT ("") so it
@@ -2030,8 +2661,22 @@ def broadcast_stimulus_words(
     pairs = fixations[join_columns].drop_duplicates()
     pairs["participant_id"] = pairs["participant_id"].astype(str)
     pairs["trial_id"] = pairs["trial_id"].astype(str)
-    merge_on = [column for column in ("trial_id", SCREEN_ID) if column in join_columns]
-    return words.drop(columns=["participant_id"]).merge(pairs, on=merge_on, how="inner")
+    # BUG-57: a second reading of a text carries the `_r2` suffix
+    # `_disambiguate_repeated_readings` gave it, which a table keyed by the
+    # text alone never has — so it got no boxes. A reading whose own id has no
+    # words looks them up under the id it was suffixed from; an exact match
+    # always wins, so a trial genuinely named `…_r2` keeps its own boxes.
+    pairs[_WORD_TRIAL] = pairs["trial_id"]
+    unmatched = ~pairs["trial_id"].isin(set(words["trial_id"].astype(str)))
+    if unmatched.any():
+        pairs.loc[unmatched, _WORD_TRIAL] = pairs.loc[
+            unmatched, "trial_id"
+        ].str.replace(_REPEATED_READING_SUFFIX, "", regex=True)
+    merge_on = [_WORD_TRIAL] + [SCREEN_ID] * (SCREEN_ID in join_columns)
+    stimulus = words.drop(columns=["participant_id"]).rename(
+        columns={"trial_id": _WORD_TRIAL}
+    )
+    return stimulus.merge(pairs, on=merge_on, how="inner").drop(columns=[_WORD_TRIAL])
 
 
 def fill_fixation_xy_from_words(
@@ -2183,19 +2828,21 @@ def correct_word_id_offset(
     """Shift fixation ``word_id`` back onto the words table when it's 1-based.
 
     No-op unless :func:`detect_word_id_offset` finds an unambiguous shift.
-    Renumbering someone's ids is never silent — it's logged at WARNING, which
-    `debug_log.install_log_capture` surfaces in the in-app 🐛 Debug panel as
-    well as the server terminal. A `st.warning` would be wrong here: the bundled
-    demo corpus trips this on *every* load, so the banner would be permanent
-    furniture on the default landing view rather than a signal.
+    Renumbering someone's ids is never silent — it's logged at INFO, which
+    `debug_log.install_log_capture` surfaces in the in-app 🐛 Debug panel. Not a
+    `st.warning`, and not a WARNING either (BUG-76): the bundled demo corpus
+    trips this on *every* load, so a banner would be permanent furniture on the
+    landing view, and a WARNING was the first line `render --sample`,
+    `load_sample_data()` and the README quickstart printed to a new user's
+    terminal — about a correction that needs nothing from them.
     """
     offset = detect_word_id_offset(words, fixations)
     if not offset:
         return fixations
     fixations = fixations.copy()
     fixations["word_id"] = pd.to_numeric(fixations["word_id"], errors="coerce") - offset
-    _LOGGER.warning(
-        "BUG-8: the fixation report's word ids are numbered from 1 while the word "
+    _LOGGER.info(
+        "The fixation report's word ids are numbered from 1 while the word "
         "boxes are numbered from 0, so every fixation pointed at the next word. "
         "Shifted the fixation word ids down by %d to line the two tables up.",
         offset,
@@ -2203,18 +2850,64 @@ def correct_word_id_offset(
     return fixations
 
 
+def _restore_zero_padding(
+    words: pd.DataFrame, fixations: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Spell a zero-padded id the same way in both frames (BUG-59).
+
+    A CSV read ``007`` as 7 while a Parquet table kept "007", and the two
+    tables then shared no participant — every fixation drew over no text. When
+    padding is the only difference (:func:`zero_padding_map`), the side that
+    lost its zeros is given them back, and the rename is logged.
+    """
+    if words.empty or fixations.empty:
+        return words, fixations
+    columns = ["trial_id"]
+    if STIMULUS_WORDS_FLAG not in words.columns:
+        columns.insert(0, "participant_id")
+    for column in columns:
+        if column not in words.columns or column not in fixations.columns:
+            continue
+        w_ids, f_ids = words[column].unique(), fixations[column].unique()
+        for frame_name, ids, reference in (
+            ("words", w_ids, f_ids),
+            ("fixations", f_ids, w_ids),
+        ):
+            mapping = zero_padding_map(ids, reference)
+            if not mapping:
+                continue
+            if frame_name == "words":
+                words = words.copy()
+                words[column] = words[column].replace(mapping)
+            else:
+                fixations = fixations.copy()
+                fixations[column] = fixations[column].replace(mapping)
+            _LOGGER.info(
+                "The %s table spelled %d %s value(s) without the zero-padding the "
+                "other table uses (e.g. %r for %r); matched them up.",
+                frame_name,
+                len(mapping),
+                column,
+                *next(iter(mapping.items()))[::-1],
+            )
+            break
+    return words, fixations
+
+
 def harmonize_frames(
     words: pd.DataFrame, fixations: pd.DataFrame
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Cross-frame fixups applied right after normalization.
 
-    Broadcast stimulus-level words across participants, reconcile a
-    participant-less fixations table with participant-bearing words, correct a
-    1-based fixation ``word_id`` (BUG-8), then fill missing fixation coordinates
-    from word-box centers. Call whenever both frames are available (the API and
-    the app both route through this)."""
+    Match zero-padded ids the two tables spell differently (BUG-59), broadcast
+    stimulus-level words across participants, reconcile a participant-less
+    fixations table with participant-bearing words, correct a 1-based fixation
+    ``word_id`` (BUG-8), then fill missing fixation coordinates from word-box
+    centers. Call whenever both frames are available (the API and the app both
+    route through this)."""
     from .preprocessing import add_text_direction
 
+    words, fixations = _restore_zero_padding(words, fixations)
     words = add_text_direction(broadcast_stimulus_words(words, fixations))
     words = _reconcile_participant_asymmetry(words, fixations)
     words = normalize_screen_identity(words)
@@ -2245,7 +2938,7 @@ def _disambiguate_repeated_readings(
     Groups on the already-computed ``df["participant_id"]`` (1:1 with ``source``),
     so a composite participant id is handled without recomputing the join.
     """
-    if "unique_trial_id" in source.columns:
+    if trial_col == "unique_trial_id":
         return df
     idx_col = next(
         (c for c in ("TRIAL_INDEX", "trial_index") if c in source.columns), None
@@ -2259,9 +2952,12 @@ def _disambiguate_repeated_readings(
             "_idx": source[idx_col].to_numpy(),
         }
     )
+    # A reading with no index of its own keeps its id unsuffixed rather than
+    # crashing the cast (BUG-56).
     rank = (
         grouper.groupby(["_pk", "_tc"])["_idx"]
         .rank(method="dense")
+        .fillna(1)
         .astype(int)
         .to_numpy()
     )
@@ -2505,9 +3201,9 @@ FIX_OPTIONAL_FIELDS = [
     # placed this fixation at its word box's centre.
     ("fixation_y_source", "fixation_y_source", "passthrough", "meta"),
     # DATA-27: EyeGenBench's own composite trial id, kept for traceability back to the
-    # benchmark. Deliberately NOT named `unique_trial_id` — normalize_fixations hardcodes
-    # trial_id from any column with that literal name, which breaks the stimulus-word
-    # broadcast join and yields zero word boxes.
+    # benchmark. Deliberately NOT named `unique_trial_id` — normalize_fixations used to
+    # key trial_id on any column with that literal name (BUG-58), and the normalized
+    # frame's own `unique_trial_id` is the mapped trial id, so these would not survive.
     ("eyegenbench_trial_id", "eyegenbench_trial_id", "passthrough", "meta"),
 ]
 
@@ -2604,7 +3300,7 @@ def _apply_optional_fields(
         emitted.add(src)
         col = source[src]
         if kind == "numeric":
-            df[dest] = pd.to_numeric(col, errors="coerce")
+            df[dest] = _to_number(col)
         elif kind == "string":
             df[dest] = col.astype(str)
         elif kind == "boolean":
@@ -2688,7 +3384,7 @@ def _copy_screen_fields(
         if not column:
             continue
         values = source[column]
-        df[destination] = pd.to_numeric(values, errors="coerce") if numeric else values
+        df[destination] = _to_number(values) if numeric else values
     # BUG-79: UX-88 took `screen_index` out of the mapping on the premise that
     # the public corpora stamp it onto their frames — but this function rebuilds
     # the frame from the mapping, so the stamp was dropped and screen order
@@ -2696,13 +3392,15 @@ def _copy_screen_fields(
     # onset order on the fixations. MultiplEYE's per-reader question order then
     # conflicted and the 🗂️ Data page crashed. A canonical column rides through.
     if SCREEN_INDEX not in df.columns and SCREEN_INDEX in source.columns:
-        df[SCREEN_INDEX] = pd.to_numeric(source[SCREEN_INDEX], errors="coerce")
+        df[SCREEN_INDEX] = _to_number(source[SCREEN_INDEX])
     return normalize_screen_identity(df)
 
 
 def normalize_words(
     words: pd.DataFrame, schema: dict[str, str], *, keep_columns: set | None = None
 ) -> pd.DataFrame:
+    _warn_normalization_issues(words, schema, table="Words/IA")
+    words = _drop_rows_missing_identity(words, schema)
     # The explicit index makes scalar assignments (e.g. the stimulus-level
     # participant placeholder) fill every row even when assigned first.
     df = pd.DataFrame(index=words.index)
@@ -2722,14 +3420,20 @@ def normalize_words(
         df["trial_id"] = trial_id_series(words, trial_cols)
         df["unique_trial_id"] = df["trial_id"]
     else:
-        trial_col = (
-            "unique_trial_id" if "unique_trial_id" in words.columns else trial_cols[0]
-        )
+        # The mapped column, always (BUG-58). A literal `unique_trial_id`
+        # column used to win over whatever the mapping named, so a Trial ID
+        # picked by hand was silently replaced on any table that carried one —
+        # and a pair where only one side did joined on nothing. Auto-detection
+        # proposes `unique_trial_id` first, so it is still used by default.
+        trial_col = trial_cols[0]
         df["trial_id"] = stable_id(words[trial_col])
         if schema.get("participant"):
             df = _disambiguate_repeated_readings(df, words, trial_col)
         if "unique_trial_id" in words.columns:
-            df["unique_trial_id"] = stable_id(words["unique_trial_id"])
+            # The mapped id *is* the unique trial id (BUG-58) — never the raw
+            # column's own values, which the trial picker would otherwise key
+            # on (`utils.build_combo_options` prefers `unique_trial_id`).
+            df["unique_trial_id"] = df["trial_id"]
     if "unique_paragraph_id" in words.columns:
         df["unique_text_id"] = stable_id(words["unique_paragraph_id"])
         df["text_id"] = df["unique_text_id"]
@@ -2739,27 +3443,31 @@ def normalize_words(
     else:
         df["text_id"] = df["trial_id"]
     df = _copy_screen_fields(df, words, schema)
-    df["word_id"] = pd.to_numeric(words[schema["word_id"]], errors="coerce")
+    df["word_id"] = _to_number(words[schema["word_id"]])
     if schema.get("text"):
-        df["text"] = words[schema["text"]].astype(str)
+        # BUG-53: a missing cell is an empty word, never NaN — pandas 3's
+        # `astype(str)` keeps NaN as NaN, and every " ".join over a trial's text
+        # downstream then raises on the float.
+        text = words[schema["text"]]
+        df["text"] = text.where(text.notna(), "").astype(str)
     else:
         df["text"] = df["word_id"].apply(lambda v: f"w{int(v)}" if pd.notna(v) else "")
     df["text"] = df["text"].str.replace(r"\s+", " ", regex=True).str.strip()
     if schema.get("line"):
-        df["line_idx"] = pd.to_numeric(words[schema["line"]], errors="coerce")
+        df["line_idx"] = _to_number(words[schema["line"]])
     else:
         df["line_idx"] = 1
 
     if all(schema.get(k) for k in ["x", "y", "width", "height"]):
-        df["x"] = pd.to_numeric(words[schema["x"]], errors="coerce")
-        df["y"] = pd.to_numeric(words[schema["y"]], errors="coerce")
-        df["width"] = pd.to_numeric(words[schema["width"]], errors="coerce")
-        df["height"] = pd.to_numeric(words[schema["height"]], errors="coerce")
+        df["x"] = _to_number(words[schema["x"]])
+        df["y"] = _to_number(words[schema["y"]])
+        df["width"] = _to_number(words[schema["width"]])
+        df["height"] = _to_number(words[schema["height"]])
     else:
-        left = pd.to_numeric(words[schema["left"]], errors="coerce")
-        right = pd.to_numeric(words[schema["right"]], errors="coerce")
-        top = pd.to_numeric(words[schema["top"]], errors="coerce")
-        bottom = pd.to_numeric(words[schema["bottom"]], errors="coerce")
+        left = _to_number(words[schema["left"]])
+        right = _to_number(words[schema["right"]])
+        top = _to_number(words[schema["top"]])
+        bottom = _to_number(words[schema["bottom"]])
         df["x"] = left
         df["y"] = top
         df["width"] = right - left
@@ -2781,6 +3489,8 @@ def normalize_fixations(
     *,
     keep_columns: set | None = None,
 ) -> pd.DataFrame:
+    _warn_normalization_issues(fixations, schema, table="Fixations", fixations=True)
+    fixations = _drop_rows_missing_identity(fixations, schema)
     # Explicit index so a constant participant placeholder fills every row.
     df = pd.DataFrame(index=fixations.index)
     if schema.get("participant"):
@@ -2795,16 +3505,15 @@ def normalize_fixations(
         df["trial_id"] = trial_id_series(fixations, trial_cols)
         df["unique_trial_id"] = df["trial_id"]
     else:
-        trial_col = (
-            "unique_trial_id"
-            if "unique_trial_id" in fixations.columns
-            else trial_cols[0]
-        )
+        trial_col = trial_cols[0]  # the mapped column (BUG-58)
         df["trial_id"] = stable_id(fixations[trial_col])
         if schema.get("participant"):
             df = _disambiguate_repeated_readings(df, fixations, trial_col)
         if "unique_trial_id" in fixations.columns:
-            df["unique_trial_id"] = stable_id(fixations["unique_trial_id"])
+            # The mapped id *is* the unique trial id (BUG-58) — never the raw
+            # column's own values, which the trial picker would otherwise key
+            # on (`utils.build_combo_options` prefers `unique_trial_id`).
+            df["unique_trial_id"] = df["trial_id"]
     if "unique_paragraph_id" in fixations.columns:
         df["text_id"] = stable_id(fixations["unique_paragraph_id"])
     elif schema.get("text_id"):
@@ -2819,17 +3528,19 @@ def normalize_fixations(
     # left NaN here and filled from word-box centers by harmonize_frames().
     for coord in ("x", "y"):
         if schema.get(coord):
-            df[coord] = pd.to_numeric(fixations[schema[coord]], errors="coerce")
+            df[coord] = _to_number(fixations[schema[coord]])
         else:
             df[coord] = np.nan
-    df["duration_ms"] = pd.to_numeric(
-        fixations[schema["duration"]], errors="coerce"
-    ).fillna(0)
+    # An unreadable duration / onset still falls back to 0, but no longer
+    # silently: `_warn_numeric_issues` below names the column (BUG-54).
+    # DATA-40: a duration / onset in seconds (Gazepoint), microseconds (Tobii)
+    # or nanoseconds (Pupil Labs Neon) is read in milliseconds.
+    duration = schema["duration"]
+    df["duration_ms"] = _as_ms(_to_number(fixations[duration]), duration).fillna(0)
 
     if schema.get("timestamp"):
-        df["timestamp_ms"] = pd.to_numeric(
-            fixations[schema["timestamp"]], errors="coerce"
-        ).fillna(0)
+        onset = schema["timestamp"]
+        df["timestamp_ms"] = _as_ms(_to_number(fixations[onset]), onset).fillna(0)
     else:
         df["timestamp_ms"] = df.groupby(list(PARENT_KEY), sort=False).cumcount()
 
@@ -2846,7 +3557,7 @@ def normalize_fixations(
             df[SCREEN_FIXATION_ID] = df.groupby(part_keys, sort=False).cumcount().add(1)
 
     if schema.get("word_id"):
-        df["word_id"] = pd.to_numeric(fixations[schema["word_id"]], errors="coerce")
+        df["word_id"] = _to_number(fixations[schema["word_id"]])
     else:
         df["word_id"] = np.nan
 
@@ -3492,12 +4203,24 @@ def compute_canvas_size(
     default_w, default_h = DEFAULT_FIGURE_SIZE
     x_candidates: list[float] = []
     y_candidates: list[float] = []
+
+    def extent(frame: pd.DataFrame, position: str, size: str | None = None) -> float:
+        # Coerced (BUG-54): the wizard estimates from the *raw* upload, where a
+        # column that merely happens to be named `x` can be text — a
+        # decimal-comma export, a unit suffix — and `float(max())` raised.
+        if position not in frame.columns:
+            return np.nan
+        value = _to_number(frame[position])
+        if size is not None and size in frame.columns:
+            value = value + _to_number(frame[size])
+        return float(value.max())
+
     if words is not None and not words.empty and "x" in words.columns:
-        x_candidates.append(float((words["x"] + words.get("width", 0)).max()))
-        y_candidates.append(float((words["y"] + words.get("height", 0)).max()))
+        x_candidates.append(extent(words, "x", "width"))
+        y_candidates.append(extent(words, "y", "height"))
     if fixations is not None and not fixations.empty and "x" in fixations.columns:
-        x_candidates.append(float(fixations["x"].max()))
-        y_candidates.append(float(fixations["y"].max()))
+        x_candidates.append(extent(fixations, "x"))
+        y_candidates.append(extent(fixations, "y"))
     # NaN maxima happen when fixations ship without coordinates (AOI-sequence
     # data) and no word boxes were available to fill them in.
     x_candidates = [v for v in x_candidates if np.isfinite(v)]

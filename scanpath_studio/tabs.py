@@ -2566,6 +2566,31 @@ def _first_str(df: pd.DataFrame, col: str) -> str | None:
     return None
 
 
+def _servable_image_path(path: str | None) -> str | None:
+    """``path`` if the server may read it into a figure, else ``None`` (ENG-57).
+
+    The stimulus layer reads the file off the *server's* disk and sends it to the
+    browser as a data URI. On a local run that is the user's own disk, so any
+    path goes. With local file access off (``SCANPATH_LOCAL_FS=0``, a shared
+    deployment) an **uploaded** dataset's ``image_path`` is only a column someone
+    typed — the image-folder step that fills it legitimately needs local access —
+    so honouring it let an upload read any PNG on the server. Paths the app
+    resolved itself (the bundled demo, a server-side corpus) are unaffected.
+    """
+    if not path:
+        return None
+    from scanpath_studio.app import local_filesystem_enabled
+
+    if local_filesystem_enabled():
+        return path
+    from scanpath_studio.constants import UPLOAD_CHOICE
+
+    source = st.session_state.get("data_source_choice")
+    if source == UPLOAD_CHOICE or source in (st.session_state.get("_datasets") or {}):
+        return None
+    return path
+
+
 def _first_num(df: pd.DataFrame, col: str) -> float | None:
     """First non-null value of ``col`` as a float, or None when absent/empty."""
     if col in df.columns:
@@ -4452,12 +4477,13 @@ def render_single_trial_tab(
     has_raw_gaze = raw_gaze is not None and not raw_gaze.empty
 
     # Stimulus-page background image (MultiplEYE): the per-trial image path lives
-    # on the trial's rows (directory load only — uploads carry no path). The image
-    # is offered only when it exists and its pixel size is readable. Its origin
-    # (image_x/image_y, where the centered stimulus sits on the monitor) places it
-    # to align with the fixations, which carry the same offset.
-    trial_image_path = _first_str(trial_words, "image_path") or _first_str(
-        trial_fixations, "image_path"
+    # on the trial's rows. The image is offered only when it exists and its pixel
+    # size is readable. Its origin (image_x/image_y, where the centered stimulus
+    # sits on the monitor) places it to align with the fixations, which carry the
+    # same offset.
+    trial_image_path = _servable_image_path(
+        _first_str(trial_words, "image_path")
+        or _first_str(trial_fixations, "image_path")
     )
     trial_image_size = (
         _png_pixel_size(trial_image_path)

@@ -13,8 +13,7 @@
 **Scanpath Studio shows you how people read.** Load eye-tracking-while-reading
 data and watch each reading unfold over the text, exactly where it sat on the
 screen — then compare readers, analyse a corpus, and export figures ready for a
-paper. Try it in your browser on the bundled [OneStop][onestop-paper] demo, with
-nothing to install.
+paper.
 
 ![A reading scanpath replayed fixation by fixation](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/scanpath_animation.gif)
 
@@ -167,7 +166,6 @@ cite:
 }
 ```
 
-[onestop-paper]: https://www.nature.com/articles/s41597-025-06272-2
 [onestop-corpus]: https://github.com/lacclab/OneStop-Eye-Movements
 
 ## AI-assisted software

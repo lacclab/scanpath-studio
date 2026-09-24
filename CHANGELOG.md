@@ -10,10 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Scanpath Studio has a Zenodo DOI, and every release archives itself there** (ENG-75)
 
+### Changed
+- **The README is a landing page: three ways to run it, a docs map, and the detail left to the docs** (ENG-76)
+
 ### Details
 
 #### Added
 - **Scanpath Studio has a Zenodo DOI, and every release archives itself there** (ENG-75) — the repository is switched on in Zenodo's GitHub integration, so each published GitHub release is archived with a version DOI of its own, all under one concept DOI, [10.5281/zenodo.22933884](https://doi.org/10.5281/zenodo.22933884), which always resolves to the latest. Zenodo takes the record's title, authors — now with their ORCIDs — affiliations, abstract, keywords and licence from `CITATION.cff` — deliberately no `.zenodo.json`, which would silence the CFF and make a third copy of the author list. The integration only archives releases published after it is switched on, so v0.31.0 was archived by turning its release into a draft and publishing it again, which leaves the tag, the desktop bundles and PyPI untouched. The concept DOI is now in `CITATION.cff`'s `doi` field (so GitHub's "Cite this repository" carries it; Zenodo's reader ignores the field), a README badge and the Citation section, the docs' index and FAQ, the About dialog's BibTeX plus a 🔖 DOI link, and the bulk-export README; `tests/test_citation.py` keeps the CFF and in-app copies equal.
+
+#### Changed
+- **The README is a landing page: three ways to run it, a docs map, and the detail left to the docs** (ENG-76) — it was accurate after ENG-70 but read like a manual, and it is also the PyPI page. *Get started* now offers all three ways to run the app — the live demo, `pip`, and the desktop bundles from the latest release, which it had never mentioned — with a line on where each one processes your data. The dense views table became one sentence, the feature list one line per item (with corpus analysis and share links, which it had left out), and *Your data* two short paragraphs linking *Bring your own data* and *Data format*. A *Where next* list maps the docs site. *Roadmap*, which was mostly instructions for running the frozen tracker archive, is gone; CONTRIBUTING.md already covers the archive. *Run from source* is now *Contributing*, and the author list moved from above the hero GIF to *Citation*. The disclosure wording `tests/test_disclosure.py` pins is unchanged, and every link is still absolute so it works on PyPI.
 
 ## [0.31.0] - 2026-09-24
 

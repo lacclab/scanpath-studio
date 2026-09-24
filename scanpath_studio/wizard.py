@@ -303,6 +303,12 @@ def _finalize_wizard_dataset() -> None:
     ds_name = _safe_dataset_name(st.session_state.get("wizard_dataset_name"))
     store = st.session_state.setdefault("_datasets", {})
     store[ds_name] = payload
+    # DATA-47: the tables just attached are this dataset's, not a session-wide
+    # slot — hand them over before the switch, so the next run has nothing to
+    # swap (and so the dataset this wizard was opened over keeps its own).
+    from scanpath_studio import metadata as _metadata
+
+    _metadata.adopt_pending_dataset(st.session_state, ds_name)
     # Apply the source switch through the plain pending key that
     # resolve_data_source consumes before the radio instantiates, and
     # leave the wizard.
@@ -340,6 +346,10 @@ def _remove_dataset(name: str) -> None:
     """
     store = st.session_state.get("_datasets", {})
     store.pop(name, None)
+    # DATA-47 — its metadata tables go with it.
+    from scanpath_studio import metadata as _metadata
+
+    _metadata.forget_dataset(st.session_state, name)
     if st.session_state.get("data_source_choice") == name:
         st.session_state["_pending_source_choice"] = DEMO_CHOICE
     app.clear_computation_cache()
@@ -376,6 +386,10 @@ def rename_dataset(old: str, new: str) -> str | None:
         st.session_state["_prev_source"] = name
     if st.session_state.get(COMPARE_SOURCE_STATE_KEY) == old:
         st.session_state[COMPARE_SOURCE_STATE_KEY] = name
+    # DATA-47 — and its metadata tables, which are keyed by the name too.
+    from scanpath_studio import metadata as _metadata
+
+    _metadata.rename_dataset(st.session_state, old, name)
     rename_cached_dataset(st.session_state, old, name)
     return name
 
@@ -463,6 +477,11 @@ def _enter_add_data_wizard() -> None:
     )
     st.session_state["_show_upload_wizard"] = True
     st.session_state["setup_complete"] = False
+    # DATA-47: a new dataset starts with no metadata tables — not the ones of
+    # the dataset the wizard was opened over, and not a previous attempt's.
+    from scanpath_studio import metadata as _metadata
+
+    _metadata.begin_pending_dataset(st.session_state)
     # DATA-26: the wizard is the 🗂️ Data page's add-a-dataset mode, so take the
     # user there. Written as a *request* (`menu.render_nav` reconciles it on the
     # next run) rather than a `switch_to_view` — this is an `on_click` callback,

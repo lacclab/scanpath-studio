@@ -916,7 +916,6 @@ def test_a_restore_that_crashes_the_app_does_not_crash_the_next_launch(
     assert any("didn't finish opening" in t.value for t in second.toast)
     assert (tmp_path / "manifest.json").read_text(encoding="utf-8") == manifest
 
-
     def test_metadata_tables_are_named_in_the_toast(self):
         """DATA-38 — a restored participant table is something a user would
         recognise coming back, so the toast says so."""
@@ -929,13 +928,19 @@ class TestMetadataTablesInTheRecoveryCache:
     They were in neither list the cache writes, so a refresh brought the
     dataset back and silently dropped every table attached to it — and with
     them every metadata field in the filter funnel, the chip picker and the
-    trial-sort popover."""
+    trial-sort popover.
+
+    DATA-47: the tables belong to a dataset — the session keys hold the
+    selected one's (``OWNER_KEY``), the cache files them under its name, and a
+    restore returns them to that dataset, reaching the session keys once it is
+    selected (``activate_dataset``, which ``app.main`` runs every run)."""
 
     @staticmethod
     def _attached():
         from scanpath_studio import metadata as md
 
         return {
+            md.OWNER_KEY: "study",
             md.SESSION_KEY: md.build_participant_metadata(
                 pd.DataFrame(
                     {
@@ -966,6 +971,7 @@ class TestMetadataTablesInTheRecoveryCache:
         assert save_state(session, tmp_path)
         restored = {}
         assert restore_state(restored, tmp_path)
+        md.activate_dataset(restored, "study")
 
         for key, source in (
             (md.SESSION_KEY, "readers.csv"),
@@ -992,6 +998,7 @@ class TestMetadataTablesInTheRecoveryCache:
         save_state(self._attached(), tmp_path)
         restored = {}
         restore_state(restored, tmp_path)
+        md.activate_dataset(restored, "study")
         for grain in ("participant", "trial", "text"):
             assert md.is_restored(restored, grain)
         assert restored[md.RAW_SESSION_KEY] is restored[md.SESSION_KEY].frame
@@ -1005,7 +1012,7 @@ class TestMetadataTablesInTheRecoveryCache:
             "participant_id",
             source_name="mine.csv",
         )
-        restored = {md.SESSION_KEY: own}
+        restored = {md.OWNER_KEY: "study", md.SESSION_KEY: own}
         restore_state(restored, tmp_path)
         assert restored[md.SESSION_KEY] is own
         assert not md.is_restored(restored, "participant")
@@ -1014,7 +1021,7 @@ class TestMetadataTablesInTheRecoveryCache:
     def test_attaching_or_changing_a_table_is_a_change_worth_saving(self, tmp_path):
         from scanpath_studio import metadata as md
 
-        session = {"global_show_heatmap": True}
+        session = {"global_show_heatmap": True, md.OWNER_KEY: "study"}
         assert save_state(session, tmp_path)
         assert not save_state(session, tmp_path)
         session.update(self._attached())
@@ -1034,6 +1041,7 @@ class TestMetadataTablesInTheRecoveryCache:
         assert save_state(session, tmp_path)
         restored = {}
         restore_state(restored, tmp_path)
+        md.activate_dataset(restored, "study")
         assert list(restored[md.TEXT_SESSION_KEY].frame["genre"]) == ["fiction"]
 
     def test_a_manifest_without_metadata_still_restores(self, tmp_path):
@@ -1054,10 +1062,11 @@ class TestMetadataTablesInTheRecoveryCache:
         save_state(self._attached(), tmp_path)
         path = tmp_path / persistence.METADATA_FILE
         payloads = json.loads(path.read_text("utf-8"))
-        payloads["participant"]["records"] = [{"no_id": 1}]
+        payloads["datasets"]["study"]["participant"]["records"] = [{"no_id": 1}]
         path.write_text(json.dumps(payloads), "utf-8")
         restored = {}
         assert restore_state(restored, tmp_path)
+        md.activate_dataset(restored, "study")
         assert md.SESSION_KEY not in restored
         assert md.TRIAL_SESSION_KEY in restored
 
@@ -1071,7 +1080,7 @@ class TestMetadataTablesInTheRecoveryCache:
         manifest = json.loads((tmp_path / "manifest.json").read_text("utf-8"))
         assert manifest["metadata"] == {
             "file": persistence.METADATA_FILE,
-            "tables": ["participant", "trial", "text"],
+            "tables": ["study:participant", "study:trial", "study:text"],
         }
         # Mark the file (trailing whitespace is still valid JSON): a rewrite
         # would drop the mark.

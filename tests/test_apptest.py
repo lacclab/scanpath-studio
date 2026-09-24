@@ -4102,3 +4102,58 @@ class TestRecordingSetupGate(TestSetupWizard):
         setup = at.session_state["_datasets"][name]["setup"]
         assert (setup["canvas_width"], setup["canvas_height"]) == (3000, 2000)
         assert setup["provenance"]["screen"] == "estimated"
+
+
+class TestMetadataBelongsToItsDataset:
+    """DATA-47 through ``app.main`` — a table attached to one dataset stays
+    with it: the add wizard starts without it, another dataset does not see it,
+    and it is back when its own dataset is selected again."""
+
+    @staticmethod
+    def _attached(at):
+        from scanpath_studio import metadata as md
+
+        try:
+            return at.session_state[md.SESSION_KEY]
+        except (KeyError, AttributeError):
+            return None
+
+    def test_a_table_stays_with_the_dataset_it_was_attached_to(self):
+        import pandas as pd
+
+        from scanpath_studio import app
+        from scanpath_studio import metadata as md
+
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=60)
+        at.session_state[md.SESSION_KEY] = md.build_participant_metadata(
+            pd.DataFrame({"participant_id": ["p1"], "age": [30]}),
+            "participant_id",
+            source_name="synthetic-readers.csv",
+        )
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state[md.OWNER_KEY] == SYNTHETIC_SOURCE
+
+        # ➕ Add dataset: the new dataset has no tables of its own yet.
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert self._attached(at) is None
+
+        # Another dataset does not see it …
+        at.session_state["_show_upload_wizard"] = False
+        at.session_state["setup_complete"] = True
+        at.session_state["_pending_source_choice"] = app.DEMO_CHOICE
+        at.run(timeout=120)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state[md.OWNER_KEY] == app.DEMO_CHOICE
+        assert self._attached(at) is None
+
+        # … and its own dataset has it back.
+        at.session_state["_pending_source_choice"] = SYNTHETIC_SOURCE
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        attached = self._attached(at)
+        assert attached is not None
+        assert attached.source_name == "synthetic-readers.csv"

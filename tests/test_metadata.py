@@ -932,3 +932,154 @@ class TestTheWizardStep:
         assert not at.exception, at.exception
         keys = [u.key for u in at.file_uploader if u.key]
         assert keys.count("participant_metadata_upload") == 1, keys
+
+
+class TestTablesBelongToADataset:
+    """DATA-47 — metadata tables are per dataset, like every other table.
+
+    They were one slot per grain for the whole session: a new dataset opened
+    with the last one's tables, attaching a table to dataset B replaced dataset
+    A's, and detaching it anywhere removed it everywhere."""
+
+    @staticmethod
+    def _readers(source: str, field: str = "age"):
+        return md.build_participant_metadata(
+            pd.DataFrame({"participant_id": ["p1", "p2"], field: [1, 2]}),
+            "participant_id",
+            source_name=source,
+        )
+
+    def test_switching_datasets_swaps_their_tables(self):
+        session = {}
+        md.activate_dataset(session, "A")
+        session[md.SESSION_KEY] = self._readers("a.csv")
+        md.activate_dataset(session, "B")
+        assert md.SESSION_KEY not in session  # B has none of its own
+        session[md.SESSION_KEY] = self._readers("b.csv", "site")
+        md.activate_dataset(session, "A")
+        assert session[md.SESSION_KEY].source_name == "a.csv"
+        assert md.is_restored(session, "participant")
+        md.activate_dataset(session, "B")
+        assert session[md.SESSION_KEY].source_name == "b.csv"
+        assert list(session[md.SESSION_KEY].names) == ["site"]
+
+    def test_a_swap_clears_the_uploader_so_its_file_does_not_reattach(self):
+        session = {md.OWNER_KEY: "A", md.SESSION_KEY: self._readers("a.csv")}
+        session["participant_metadata_upload"] = object()
+        session["participant_metadata_id_column"] = "participant_id"
+        session["participant_metadata_keep_fields"] = ["age"]
+        session["_participant_metadata_name"] = "a.csv"
+        md.activate_dataset(session, "B")
+        for key in (
+            "participant_metadata_upload",
+            "participant_metadata_id_column",
+            "participant_metadata_keep_fields",
+            "_participant_metadata_name",
+        ):
+            assert key not in session
+
+    def test_the_first_run_adopts_what_is_attached(self):
+        """A session whose tables have no owner yet (its first run) keeps them."""
+        session = {md.SESSION_KEY: self._readers("a.csv")}
+        md.activate_dataset(session, "A")
+        assert session[md.SESSION_KEY].source_name == "a.csv"
+        assert session[md.OWNER_KEY] == "A"
+
+    def test_a_new_dataset_starts_empty_and_keeps_what_it_attached(self):
+        session = {}
+        md.activate_dataset(session, "A")
+        session[md.SESSION_KEY] = self._readers("a.csv")
+        md.begin_pending_dataset(session)
+        md.activate_dataset(session, md.PENDING_DATASET)
+        assert md.SESSION_KEY not in session
+        session[md.SESSION_KEY] = self._readers("new.csv")
+        md.adopt_pending_dataset(session, "New")
+        assert not md.activate_dataset(session, "New")  # nothing to swap
+        assert session[md.SESSION_KEY].source_name == "new.csv"
+        md.activate_dataset(session, "A")
+        assert session[md.SESSION_KEY].source_name == "a.csv"
+        assert md.PENDING_DATASET not in md.dataset_payloads(session)
+
+    def test_a_cancelled_wizard_leaves_nothing_behind(self):
+        session = {}
+        md.activate_dataset(session, "A")
+        session[md.SESSION_KEY] = self._readers("a.csv")
+        md.begin_pending_dataset(session)
+        md.activate_dataset(session, md.PENDING_DATASET)
+        session[md.SESSION_KEY] = self._readers("abandoned.csv")
+        md.activate_dataset(session, "A")  # ✕ Cancel returns to A
+        assert session[md.SESSION_KEY].source_name == "a.csv"
+        md.begin_pending_dataset(session)  # the next ➕ Add dataset
+        md.activate_dataset(session, md.PENDING_DATASET)
+        assert md.SESSION_KEY not in session
+
+    def test_detaching_on_one_dataset_leaves_the_other(self):
+        session = {}
+        md.activate_dataset(session, "A")
+        session[md.SESSION_KEY] = self._readers("a.csv")
+        md.activate_dataset(session, "B")
+        session[md.SESSION_KEY] = self._readers("b.csv")
+        session.pop(md.SESSION_KEY)  # detach B's
+        md.activate_dataset(session, "A")
+        assert session[md.SESSION_KEY].source_name == "a.csv"
+        md.activate_dataset(session, "B")
+        assert md.SESSION_KEY not in session
+
+    def test_remove_and_rename_follow_the_dataset(self):
+        session = {}
+        md.activate_dataset(session, "A")
+        session[md.SESSION_KEY] = self._readers("a.csv")
+        md.activate_dataset(session, "B")
+        md.rename_dataset(session, "A", "A2")
+        md.activate_dataset(session, "A2")
+        assert session[md.SESSION_KEY].source_name == "a.csv"
+        md.forget_dataset(session, "A2")
+        assert md.SESSION_KEY not in session
+        assert "A2" not in md.dataset_payloads(session)
+
+    def test_the_cache_payloads_round_trip_per_dataset(self):
+        session = {}
+        md.activate_dataset(session, "A")
+        session[md.SESSION_KEY] = self._readers("a.csv")
+        md.activate_dataset(session, "B")
+        session[md.SESSION_KEY] = self._readers("b.csv")
+        written = {"datasets": md.dataset_payloads(session)}
+        assert set(written["datasets"]) == {"A", "B"}
+
+        restored = {}
+        assert md.restore_dataset_payloads(restored, written) == 2
+        md.activate_dataset(restored, "B")
+        assert restored[md.SESSION_KEY].source_name == "b.csv"
+        md.activate_dataset(restored, "A")
+        assert restored[md.SESSION_KEY].source_name == "a.csv"
+
+    def test_the_signature_moves_when_a_stored_table_does(self):
+        session = {}
+        assert md.store_signature(session) == []
+        md.activate_dataset(session, "A")
+        session[md.SESSION_KEY] = self._readers("a.csv")
+        before = md.store_signature(session)
+        md.activate_dataset(session, "B")  # A's table moves into the store
+        assert md.store_signature(session) != before
+        assert md.store_signature(session)  # still something to write
+
+    def test_compare_b_filters_by_its_own_datasets_table(self, monkeypatch):
+        """CMP-8's scanpath B can come from another dataset — its filters must
+        then narrow by *that* dataset's table, not the selected one's."""
+        import streamlit as st
+
+        session = {}
+        md.activate_dataset(session, "B")
+        session[md.SESSION_KEY] = self._readers("b.csv", "site")
+        md.activate_dataset(session, "A")
+        session[md.SESSION_KEY] = self._readers("a.csv")
+        monkeypatch.setattr(st, "session_state", session)
+
+        assert md.attached_for("participant").source_name == "a.csv"
+        assert md.attached_for("participant", "cmp").source_name == "a.csv"
+        session["cmp_dataset"] = "B"
+        assert md.attached_for("participant").source_name == "a.csv"
+        assert md.attached_for("participant", "cmp").source_name == "b.csv"
+        assert md.attached_for("trial", "cmp") is None
+        session["cmp_dataset"] = "This dataset"
+        assert md.attached_for("participant", "cmp").source_name == "a.csv"

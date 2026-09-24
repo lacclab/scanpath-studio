@@ -6786,6 +6786,20 @@ def main() -> None:
     from scanpath_studio.wizard import _enter_add_data_wizard
 
     data_choice = resolve_data_source(host=setup_source_slot)
+    # DATA-47 — the metadata tables belong to a dataset. Swap the selected one's
+    # onto the session keys every consumer reads (`metadata.active()` & co.),
+    # filing the previous dataset's away. Keyed by the concrete canonical choice
+    # the dataset table uses, not `data_choice` — every public corpus loads
+    # through one category token, and they must not share a table. The add
+    # wizard's dataset has no name yet, so it gets the pending slot.
+    from scanpath_studio import metadata as _metadata
+
+    _metadata.activate_dataset(
+        st.session_state,
+        _metadata.PENDING_DATASET
+        if data_choice == UPLOAD_CHOICE
+        else str(st.session_state.get("data_source_choice") or data_choice),
+    )
     # UX-54: the page lists every dataset as a *table* — one row each, sortable,
     # with the counts beside the name and the per-row actions in the row they
     # belong to. Reserved here (so it keeps its place at the top of the page)

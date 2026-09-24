@@ -81,6 +81,9 @@ _FRAME_KEYS = ("words", "fixations", "raw_gaze")
 #: trial table can run to tens of thousands of rows.
 METADATA_FILE = "metadata.json"
 _LAST_METADATA_SIGNATURE_KEY = "_local_persistence_metadata_signature"
+#: DATA-47 — the manifest pointer written with that file, reused while nothing
+#: changed (it lists every dataset's tables, which the signature does not).
+_LAST_METADATA_POINTER_KEY = "_local_persistence_metadata_pointer"
 _STATE_LOCK = threading.RLock()
 _LOGGER = logging.getLogger(__name__)
 _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
@@ -209,7 +212,7 @@ def _metadata_signature(session: MutableMapping[str, Any]) -> list:
     """
     from . import metadata as metadata_mod
 
-    return metadata_mod.session_signature(session)
+    return metadata_mod.store_signature(session)
 
 
 def _dataset_slug(name: str) -> str:
@@ -381,19 +384,40 @@ def _save_metadata(
     writes; the pointer is optional, so a manifest without it (every one written
     before this) still restores, and the schema version does not move.
     """
+    from . import metadata as metadata_mod
+
     path = root / METADATA_FILE
     if not signature:
         path.unlink(missing_ok=True)
         session.pop(_LAST_METADATA_SIGNATURE_KEY, None)
         return None
-    if session.get(_LAST_METADATA_SIGNATURE_KEY) != signature or not path.is_file():
-        from . import metadata as metadata_mod
-
-        payloads = _json_safe(metadata_mod.session_payloads(session))
+    pointer = session.get(_LAST_METADATA_POINTER_KEY)
+    if (
+        session.get(_LAST_METADATA_SIGNATURE_KEY) != signature
+        or not path.is_file()
+        or not isinstance(pointer, dict)
+    ):
+        # DATA-47: one entry per dataset, `{"datasets": {name: {grain: …}}}`.
+        datasets = metadata_mod.dataset_payloads(session)
+        if not datasets:
+            path.unlink(missing_ok=True)
+            session.pop(_LAST_METADATA_SIGNATURE_KEY, None)
+            session.pop(_LAST_METADATA_POINTER_KEY, None)
+            return None
         # No `sort_keys`: each row keeps its columns in the table's own order.
-        _atomic_text(json.dumps(payloads, ensure_ascii=False), path)
+        encoded = json.dumps(_json_safe({"datasets": datasets}), ensure_ascii=False)
+        _atomic_text(encoded, path)
+        pointer = {
+            "file": METADATA_FILE,
+            "tables": [
+                f"{name}:{grain}"
+                for name, tables in datasets.items()
+                for grain in tables
+            ],
+        }
         session[_LAST_METADATA_SIGNATURE_KEY] = signature
-    return {"file": METADATA_FILE, "tables": [entry[0] for entry in signature]}
+        session[_LAST_METADATA_POINTER_KEY] = pointer
+    return pointer
 
 
 def save_state(session: MutableMapping[str, Any], root: Path) -> bool:
@@ -587,7 +611,8 @@ def _restorable_session(stored: Any) -> dict:
 def _restore_metadata(session: MutableMapping[str, Any], root: Path, pointer) -> int:
     """DATA-38 — re-attach the tables :func:`_save_metadata` wrote; how many.
 
-    Its own error boundary: a missing or unreadable sidecar costs the tables,
+    DATA-47: they come back into the per-dataset store, each dataset's own, and
+    reach the session keys when that dataset is selected. Its own error boundary: a missing or unreadable sidecar costs the tables,
     never the datasets and settings the rest of the manifest restores.
     """
     if not isinstance(pointer, dict) or not pointer.get("file"):
@@ -598,7 +623,7 @@ def _restore_metadata(session: MutableMapping[str, Any], root: Path, pointer) ->
         return 0
     from . import metadata as metadata_mod
 
-    return metadata_mod.restore_payloads(session, payloads)
+    return metadata_mod.restore_dataset_payloads(session, payloads)
 
 
 def forget_state(root: Path) -> None:
@@ -854,6 +879,7 @@ def clear_local_state(session=None, root: Path | None = None) -> bool:
             _LAST_DATASET_ENTRIES_KEY,
             _RESTORED_PAYLOAD_KEY,
             _LAST_METADATA_SIGNATURE_KEY,
+            _LAST_METADATA_POINTER_KEY,
             # DATA-32: the remembered counts are part of what "forget this
             # session" means — the ask named clearing the cache explicitly.
             DATASET_COUNTS_STORE_KEY,

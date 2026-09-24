@@ -6294,9 +6294,8 @@ def _render_participant_metadata_filters(host, *, prefix: str, on_change) -> Non
     filter. That is the whole reason the table never has to be broadcast.
     """
     from scanpath_studio import metadata as md
-    from scanpath_studio.tabs import active_participant_metadata
 
-    attached = active_participant_metadata()
+    attached = md.attached_for("participant", prefix)
     if attached is None or not attached.fields:
         return
     host.markdown("**By reader**")
@@ -6343,7 +6342,7 @@ def _render_trial_metadata_filters(host, *, prefix: str, on_change) -> None:
     """
     from scanpath_studio import metadata as md
 
-    attached = md.active_trials()
+    attached = md.attached_for("trial", prefix)
     if attached is None or not attached.fields:
         return
     host.markdown("**By trial**")
@@ -6390,7 +6389,7 @@ def _render_text_metadata_filters(host, *, prefix: str, on_change) -> None:
     """
     from scanpath_studio import metadata as md
 
-    attached = md.active_texts()
+    attached = md.attached_for("text", prefix)
     if attached is None or not attached.fields:
         return
     host.markdown("**By text**")
@@ -6435,7 +6434,7 @@ def _text_metadata_narrowing(prefix: str) -> tuple:
     """
     from scanpath_studio import metadata as md
 
-    attached = md.active_texts()
+    attached = md.attached_for("text", prefix)
     if attached is None or not attached.fields:
         return None, ()
     selections: dict[str, list] = {}
@@ -6471,7 +6470,7 @@ def _trial_metadata_narrowing(prefix: str, keys) -> tuple:
     """
     from scanpath_studio import metadata as md
 
-    attached = md.active_trials()
+    attached = md.attached_for("trial", prefix)
     if attached is None or not attached.fields:
         return None, ()
     selections: dict[str, list] = {}
@@ -6528,9 +6527,8 @@ def _participant_metadata_narrowing(prefix: str) -> tuple:
     clear can reset the right controls.
     """
     from scanpath_studio import metadata as md
-    from scanpath_studio.tabs import active_participant_metadata
 
-    attached = active_participant_metadata()
+    attached = md.attached_for("participant", prefix)
     if attached is None or not attached.fields:
         return None, ()
     selections: dict[str, list] = {}

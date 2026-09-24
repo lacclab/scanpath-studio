@@ -60,6 +60,7 @@ from .data import (
     trial_mapping_columns,
     zero_padding_map,
 )
+from .session_keys import COMPARE_SOURCE_STATE_KEY
 
 # Source columns that plausibly hold the reader id, most explicit first. Shares
 # the spirit of `data.pick_column`'s candidate lists: first hit wins, and the
@@ -1360,15 +1361,17 @@ def from_payload(payload: dict | None) -> ParticipantMetadata | None:
 
 
 # -----------------------------------------------------------------------------
-# DATA-38 — attached tables in the ENG-26 on-device recovery cache.
+# DATA-38 — attached tables in the ENG-26 on-device recovery cache, and DATA-47 —
+# the tables belong to a dataset.
 #
-# The three tables are session state, like the annotations (they outlive a
-# data-source switch — see `app._refresh_participant_metadata`), so they are
-# stored beside the annotations in the cache's manifest rather than beside any
-# one dataset. Before this they were in neither of the lists `persistence.py`
-# writes, so a refresh brought the dataset back and silently dropped every
-# table attached to it — and with them every metadata field in the filter
-# funnel, the chip picker and the trial-sort popover.
+# The session keys above hold the tables of the *selected* dataset only — the
+# one every consumer (filters, chips, sort, inspection, export) reads through
+# `active()` / `active_trials()` / `active_texts()`. Every other dataset's
+# tables wait in a per-dataset store, and `activate_dataset` swaps them in and
+# out when the selection changes. They used to be one slot per grain for the
+# whole session, so a new dataset opened with the last one's tables, attaching a
+# table to dataset B replaced dataset A's, and detaching it anywhere removed it
+# everywhere. The cache writes the store, keyed by dataset.
 # -----------------------------------------------------------------------------
 
 #: What a grain's ``*_FILE_SESSION_KEY`` holds when its table came back from the
@@ -1522,4 +1525,259 @@ def restore_payloads(session, payloads) -> int:
             continue
         mark_restored(session, grain, attached)
         restored += 1
+    return restored
+
+
+#: DATA-47 — every dataset's tables but the selected one's, as the payloads
+#: :func:`session_payloads` builds: ``{dataset: {grain: payload}}``. Payloads
+#: rather than table objects so the cache can write them as they are.
+DATASET_STORE_KEY = "_metadata_by_dataset"
+#: Which dataset the session keys' tables belong to right now.
+OWNER_KEY = "_metadata_owner"
+#: Bumped on every change to the store — the cache's cheap "did it change" test,
+#: since hashing every stored table on every rerun would not be cheap.
+STORE_REVISION_KEY = "_metadata_store_revision"
+#: The add-dataset wizard's dataset, before it has a name. Never cached.
+PENDING_DATASET = "\x00pending"
+
+
+def _widget_keys(grain: str) -> tuple[str, ...]:
+    """The UI state of ``grain``'s section that describes one dataset's table.
+
+    The uploader above all: a swap that left it holding the last dataset's file
+    would read that file as a new upload and attach it to the dataset just
+    opened. The display name, the id-column and keep-fields picks go with it,
+    so the next dataset's table starts from its own auto-detect.
+    """
+    return (
+        f"_{grain}_metadata_name",
+        f"{grain}_metadata_upload",
+        f"{grain}_metadata_id_column",
+        f"{grain}_metadata_keep_fields",
+    )
+
+
+def clear_active(session) -> None:
+    """Detach the selected dataset's tables from the session keys — all grains."""
+    for grain, key, raw, file, *_ in _GRAINS:
+        for name in (key, raw, file, *_widget_keys(grain)):
+            session.pop(name, None)
+
+
+def _store(session) -> dict:
+    store = session.get(DATASET_STORE_KEY)
+    return dict(store) if isinstance(store, dict) else {}
+
+
+def _set_store(session, store: dict) -> None:
+    session[DATASET_STORE_KEY] = store
+    session[STORE_REVISION_KEY] = int(session.get(STORE_REVISION_KEY) or 0) + 1
+
+
+def stash_active(session) -> None:
+    """File the session keys' tables under the dataset they belong to."""
+    owner = session.get(OWNER_KEY)
+    if owner is None:
+        return
+    store = _store(session)
+    payloads = session_payloads(session)
+    if payloads:
+        if store.get(owner) == payloads:
+            return  # unchanged since it was restored — nothing for the cache to do
+        store[owner] = payloads
+    elif owner not in store:
+        return
+    else:
+        store.pop(owner)
+    _set_store(session, store)
+
+
+def activate_dataset(session, dataset: str) -> bool:
+    """Make ``dataset``'s tables the attached ones; whether anything moved.
+
+    Called by ``app.main`` on every run with the selected dataset. When the
+    selection changed, the outgoing dataset's tables are filed away, the session
+    keys are cleared — widgets included, see :func:`_widget_keys` — and the
+    incoming dataset's are restored (marked restored, since no uploader holds
+    their file). A session whose tables have no owner yet (its first run) adopts
+    whatever is attached for ``dataset`` rather than clearing it.
+    """
+    dataset = str(dataset)
+    owner = session.get(OWNER_KEY)
+    if owner == dataset:
+        return False
+    if owner is not None:
+        stash_active(session)
+        clear_active(session)
+    session[OWNER_KEY] = dataset
+    restore_payloads(session, _store(session).get(dataset))
+    return True
+
+
+#: CMP-8's key prefix for scanpath B's filters, and the picker's "same dataset"
+#: answer (``compare_source.THIS_DATASET`` — not imported: `compare_source`
+#: imports `app`, which imports this).
+_COMPARE_PREFIX = "cmp"
+_COMPARE_SAME_DATASET = "This dataset"
+_BUILT_KEY = "_metadata_built_for_compare"
+
+
+def attached_for(grain: str, prefix: str = ""):
+    """The table ``grain``'s filters under key ``prefix`` narrow by (DATA-47).
+
+    The main pool's filters read the selected dataset's table. Compare mode's
+    scanpath B (the ``cmp`` prefix) can come from another dataset, and then its
+    filters must read *that* dataset's own table — which waits in the store —
+    not A's. Built from the stored payload once per store revision.
+    """
+    try:
+        import streamlit as st
+
+        session = st.session_state
+        live = session.get(_GRAIN_KEYS[grain][0])
+    except Exception:  # no script run context (API, CLI, plain import)
+        return None
+    if prefix != _COMPARE_PREFIX:
+        return live
+    other = session.get(COMPARE_SOURCE_STATE_KEY)
+    if (
+        not other
+        or other == _COMPARE_SAME_DATASET
+        or str(other) == session.get(OWNER_KEY)
+    ):
+        return live
+    payload = (_store(session).get(str(other)) or {}).get(grain)
+    if not isinstance(payload, dict):
+        return None
+    revision = session.get(STORE_REVISION_KEY)
+    built = session.get(_BUILT_KEY)
+    cache_key = (str(other), grain, revision)
+    if not isinstance(built, dict) or cache_key not in built:
+        load = next(entry[-1] for entry in _GRAINS if entry[0] == grain)
+        try:
+            table = load(_in_column_order(payload))
+        except (ValueError, TypeError, KeyError):
+            table = None
+        kept = {
+            k: v
+            for k, v in (built or {}).items()
+            if isinstance(k, tuple) and k[-1] == revision
+        }
+        session[_BUILT_KEY] = built = {**kept, cache_key: table}
+    return built[cache_key]
+
+
+def begin_pending_dataset(session) -> None:
+    """Start the add-dataset wizard's dataset with no tables of its own."""
+    store = _store(session)
+    if PENDING_DATASET in store:
+        store.pop(PENDING_DATASET)
+        _set_store(session, store)
+
+
+def adopt_pending_dataset(session, dataset: str) -> None:
+    """✅ Add dataset: the wizard's tables become ``dataset``'s.
+
+    The session keys already hold them (the deferred join has just attached
+    them), so this only renames who owns them — the next run's
+    :func:`activate_dataset` then sees nothing to swap.
+    """
+    begin_pending_dataset(session)
+    session[OWNER_KEY] = str(dataset)
+
+
+def forget_dataset(session, dataset: str) -> None:
+    """A removed dataset's tables go with it."""
+    dataset = str(dataset)
+    store = _store(session)
+    if dataset in store:
+        store.pop(dataset)
+        _set_store(session, store)
+    if session.get(OWNER_KEY) == dataset:
+        clear_active(session)
+        session.pop(OWNER_KEY, None)
+
+
+def rename_dataset(session, old: str, new: str) -> None:
+    """A renamed dataset keeps its tables."""
+    old, new = str(old), str(new)
+    store = _store(session)
+    if old in store:
+        _set_store(session, {(new if k == old else k): v for k, v in store.items()})
+    if session.get(OWNER_KEY) == old:
+        session[OWNER_KEY] = new
+
+
+def dataset_payloads(session) -> dict[str, dict]:
+    """Every dataset's tables, the selected one's live: ``{dataset: {grain: …}}``.
+
+    What the recovery cache writes. The add-dataset wizard's unnamed dataset is
+    left out — it is not a dataset yet, and a restart discards the wizard.
+    """
+    store = _store(session)
+    owner = session.get(OWNER_KEY)
+    if owner is not None:
+        live = session_payloads(session)
+        if live:
+            store[owner] = live
+        else:
+            store.pop(owner, None)
+    store.pop(PENDING_DATASET, None)
+    return {name: payloads for name, payloads in store.items() if payloads}
+
+
+def store_signature(session) -> list:
+    """A cheap fingerprint of every dataset's tables, for the cache (DATA-47).
+
+    The live tables by content (:func:`session_signature` — they are rebuilt on
+    every render), the rest by the store's revision counter. Empty when nothing
+    is attached anywhere, which is what tells the cache to delete its file.
+    """
+    live = session_signature(session)
+    # Deliberately not `dataset_payloads`, which serializes the live tables: this
+    # runs on every rerun, and the live half is already covered by `live`.
+    owner = session.get(OWNER_KEY)
+    stored = any(
+        tables
+        for name, tables in _store(session).items()
+        if name not in (owner, PENDING_DATASET)
+    )
+    if not live and not stored:
+        return []
+    return [
+        ["store", int(session.get(STORE_REVISION_KEY) or 0)],
+        ["owner", str(session.get(OWNER_KEY))],
+        *live,
+    ]
+
+
+def restore_dataset_payloads(session, payloads) -> int:
+    """Put the tables :func:`dataset_payloads` wrote back in the store; how many.
+
+    A dataset this session already holds tables for keeps its own. The selected
+    dataset's go straight onto the session keys, grain by grain — one already
+    attached is kept, like the rest of the restore's ``setdefault`` — and the
+    others wait in the store for :func:`activate_dataset`.
+    """
+    datasets = payloads.get("datasets") if isinstance(payloads, dict) else None
+    if not isinstance(datasets, dict):
+        return 0
+    store = _store(session)
+    owner = session.get(OWNER_KEY)
+    restored = 0
+    changed = False
+    for name, tables in datasets.items():
+        name = str(name)
+        if not isinstance(tables, dict) or name == PENDING_DATASET or name in store:
+            continue
+        store[name] = tables
+        changed = True
+        if name == owner:
+            restored += restore_payloads(session, tables)
+        else:
+            restored += sum(
+                1 for grain, *_ in _GRAINS if isinstance(tables.get(grain), dict)
+            )
+    if changed:
+        _set_store(session, store)
     return restored

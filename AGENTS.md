@@ -146,6 +146,10 @@ reader ids → the existing `participants` filter slot), and the only join is
 reader rows that *disagree* are dropped and reported, never resolved by taking
 the first.
 
+**The tables belong to a dataset (DATA-47)**, like every other table: the
+session keys hold the selected dataset's, `metadata.activate_dataset` swaps
+them when the selection changes, and the recovery cache stores them per dataset.
+
 ### Trial annotations & filtering
 
 `annotations.py` keeps parent-trial and optional screen-scoped favorites / tags /

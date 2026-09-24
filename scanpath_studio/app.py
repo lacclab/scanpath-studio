@@ -4816,6 +4816,9 @@ def _close_dataset_editor() -> None:
     # until ✅ Save changes runs.
     for key in [k for k in st.session_state if str(k).startswith("_remap_")]:
         st.session_state.pop(key, None)
+    # DATA-46: "use the current estimate" is a choice for one editing session.
+    for key in [k for k in st.session_state if str(k).endswith("_setup_reestimate")]:
+        st.session_state.pop(key, None)
 
 
 def _ask_leave_dataset_editor() -> None:

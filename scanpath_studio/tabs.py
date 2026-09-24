@@ -10216,6 +10216,9 @@ def _apply_remap() -> None:
     for key in [k for k in st.session_state if str(k).startswith("_remap_")]:
         if key != "_remap_applied":
             st.session_state.pop(key, None)
+    # DATA-46 — and the "use the current estimate" choice, which belongs to it.
+    for key in [k for k in st.session_state if str(k).endswith("_setup_reestimate")]:
+        st.session_state.pop(key, None)
     st.session_state.pop(DATASET_EDITOR_OPEN_KEY, None)
     st.session_state.pop(FOCUS_MAPPING_KEY, None)
 

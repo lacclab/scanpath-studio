@@ -53,6 +53,7 @@ from .data import (
     SOURCE_FILE_COLUMN,
     WORD_OPTIONAL_FIELDS,
     aggregate_char_boxes,
+    canvas_geometry_frames,
     categorize_columns,
     compute_canvas_size,
     compute_keep_columns,
@@ -651,6 +652,31 @@ def _schema_key(schema: dict | None) -> tuple:
             (k, tuple(v) if isinstance(v, (list, tuple)) else v)
             for k, v in schema.items()
         )
+    )
+
+
+#: The mapping fields the screen estimate reads — its cache keys on these alone,
+#: so an unrelated pick (the trial id, a kept field) does not re-estimate.
+_WORD_GEOMETRY_FIELDS = ("left", "right", "top", "bottom", "x", "y", "width", "height")
+_FIX_GEOMETRY_FIELDS = ("x", "y")
+
+
+def _geometry_key(schema: dict | None, fields: tuple) -> tuple:
+    return _schema_key({k: (schema or {}).get(k) for k in fields} if schema else None)
+
+
+@st.cache_data(show_spinner=False)
+def _c_estimate_canvas(
+    _words, _word_schema, _fix, _fix_schema, fingerprints: tuple, keys: tuple
+) -> tuple[int, int]:
+    """DATA-46 — the screen estimate from the mapped geometry of a raw upload.
+
+    Cached like the other `_c_*` helpers: the wizard reruns on every keystroke,
+    and a text-typed coordinate column makes the conversion slow. Returns the
+    size alone — returning the projected frames would copy them on every hit.
+    """
+    return compute_canvas_size(
+        *canvas_geometry_frames(_words, _word_schema, _fix, _fix_schema)
     )
 
 
@@ -1913,8 +1939,14 @@ def _wizard_setup_step(
     key_prefix: str = "wizard",
     initial: SetupSnapshot | None = None,
     publish: bool = True,
+    estimate=None,
 ) -> SetupSnapshot:
     """Render the three Recording-setup groups and resolve them to a snapshot.
+
+    ``estimate`` (DATA-46) is a zero-argument callable giving the *Estimate from
+    my data* size; when it is ``None``, ``words_raw`` / ``fix_raw`` must already
+    carry canonical coordinates (the editor's stored frames) and are measured
+    directly. Either way it is called only when that answer is chosen.
 
     Writes the resolved values into the existing ``global_*`` wire-format keys
     (unchanged — the *values* were always wire format; only the provenance is
@@ -1970,7 +2002,6 @@ def _wizard_setup_step(
         label="Screen",
         key_prefix=key_prefix,
     )
-    est_w, est_h = compute_canvas_size(words_raw, fix_raw)
     canvas_w = (
         initial.canvas_width if initial is not None else _recalled("canvas_width", 2560)
     )
@@ -1996,12 +2027,44 @@ def _wizard_setup_step(
             key=f"{key_prefix}_setup_screen_h",
         )
     elif screen_mode == _SCREEN_ESTIMATE:
-        canvas_w, canvas_h = est_w, est_h
-        screen_host.info(
-            f"Estimated **{est_w} × {est_h} px** from the extent of your word "
-            "boxes and fixations. This is a **lower bound** — text rarely fills "
-            "the whole screen, so the real monitor was probably larger."
+        est_w, est_h = (
+            estimate()
+            if estimate is not None
+            else compute_canvas_size(words_raw, fix_raw)
         )
+        # DATA-46: on ✏️ Edit dataset, a screen that was *saved* as an estimate
+        # keeps the size it was saved with. Re-estimating on every open meant a
+        # ✅ Save changes with nothing touched rewrote the canvas of every figure
+        # from this dataset — the editor must not change what the user did not.
+        # A fresh estimate is still one click away, and says what it would be.
+        reestimate_key = f"{key_prefix}_setup_reestimate"
+        keep_saved = (
+            initial is not None
+            and initial.screen_provenance is Provenance.ESTIMATED
+            and not st.session_state.get(reestimate_key)
+        )
+        if keep_saved:
+            canvas_w, canvas_h = int(initial.canvas_width), int(initial.canvas_height)
+            screen_host.info(
+                f"Estimated **{canvas_w} × {canvas_h} px** when this dataset was "
+                "added — a **lower bound** from the extent of its word boxes and "
+                "fixations."
+            )
+            if (est_w, est_h) != (canvas_w, canvas_h):
+                screen_host.button(
+                    f"↻ Use the current estimate ({est_w} × {est_h} px)",
+                    key=f"{key_prefix}_setup_reestimate_btn",
+                    on_click=lambda: st.session_state.__setitem__(reestimate_key, True),
+                    help="Re-estimate the screen from this dataset's data as it "
+                    "is stored now. Nothing changes until you save.",
+                )
+        else:
+            canvas_w, canvas_h = est_w, est_h
+            screen_host.info(
+                f"Estimated **{est_w} × {est_h} px** from the extent of your word "
+                "boxes and fixations. This is a **lower bound** — text rarely fills "
+                "the whole screen, so the real monitor was probably larger."
+            )
     elif screen_mode == _SCREEN_DEFAULT:
         canvas_w, canvas_h = 2560, 1440
         screen_host.caption("Recorded as **assumed** — a common 1440p monitor.")
@@ -3566,8 +3629,29 @@ def _render_data_setup(active: bool) -> _UploadResult:
         s_setup.caption(
             "✓ Pre-answered from the restored setup file — review it below."
         )
+
+    # DATA-46: the estimate needs canonical coordinates, and nothing is
+    # normalized yet — project the mapped geometry columns rather than hand over
+    # the raw upload, whose `IA_LEFT` / `CURRENT_FIX_X` it cannot read.
+    def _estimate() -> tuple[int, int]:
+        words = raw_words if has_words else None
+        fixations = raw_fix if has_fix else None
+        return _c_estimate_canvas(
+            words,
+            word_schema if has_words else None,
+            fixations,
+            fix_schema if has_fix else None,
+            (frame_fingerprint(words), frame_fingerprint(fixations)),
+            (
+                _geometry_key(
+                    word_schema if has_words else None, _WORD_GEOMETRY_FIELDS
+                ),
+                _geometry_key(fix_schema if has_fix else None, _FIX_GEOMETRY_FIELDS),
+            ),
+        )
+
     setup_snapshot = _wizard_setup_step(
-        s_setup, raw_words, raw_fix, has_boxes=has_words
+        s_setup, raw_words, raw_fix, has_boxes=has_words, estimate=_estimate
     )
 
     # The foot of the wizard: what is still missing, then the button. UX-53 put

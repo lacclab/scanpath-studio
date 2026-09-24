@@ -4055,3 +4055,50 @@ class TestRecordingSetupGate(TestSetupWizard):
         from scanpath_studio.experimental_setup import SetupSnapshot
 
         assert SetupSnapshot.from_dict(entry["setup"]).px_per_degree is None
+
+    def test_the_estimate_survives_an_untouched_save_changes(self, monkeypatch):
+        """DATA-46 — the wizard estimated from the raw upload, whose `IA_LEFT` /
+        `CURRENT_FIX_X` it cannot read, so an EyeLink export's "estimate" was the
+        2560 × 1440 default; ✏️ Edit dataset then estimated for real from the
+        stored frames, and ✅ Save changes with nothing touched wrote that over
+        the saved screen."""
+        from scanpath_studio.constants import DATASET_EDITOR_OPEN_KEY
+        from scanpath_studio.data import compute_canvas_size
+
+        app = self._inject(monkeypatch)
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.session_state[_SETUP_MODE_KEYS["screen"]] = "Estimate from my data"
+        at.session_state[_SETUP_MODE_KEYS["geometry"]] = (
+            "Skip — I don't need visual-angle units"
+        )
+        at.session_state[_SETUP_MODE_KEYS["text"]] = "Use a default (16 px)"
+        at.run(timeout=60)
+        next(b for b in at.button if b.key == "wizard_finalize").click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        name = at.session_state["data_source_choice"]
+        entry = at.session_state["_datasets"][name]
+        # The estimate is the data's own extent, not the default screen.
+        saved = (entry["setup"]["canvas_width"], entry["setup"]["canvas_height"])
+        assert saved == compute_canvas_size(entry["words"], entry["fixations"])
+        assert saved != (2560, 1440)
+
+        # Make the stored data disagree with the saved estimate, as data edited
+        # since the dataset was added would: the editor must still keep it.
+        stored = dict(entry["setup"])
+        stored["canvas_width"], stored["canvas_height"] = 3000, 2000
+        at.session_state["_datasets"][name] = {**entry, "setup": stored}
+
+        at.session_state[DATASET_EDITOR_OPEN_KEY] = name
+        pin_data_view(at)
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # The fresh estimate is offered, not applied.
+        assert any(b.key == f"edit_{name}_setup_reestimate_btn" for b in at.button)
+        next(b for b in at.button if b.key == f"remap_apply_{name}").click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        setup = at.session_state["_datasets"][name]["setup"]
+        assert (setup["canvas_width"], setup["canvas_height"]) == (3000, 2000)
+        assert setup["provenance"]["screen"] == "estimated"

@@ -4322,6 +4322,65 @@ def compute_canvas_size(
     return max(width, 100), max(height, 100)
 
 
+def canvas_geometry_frames(
+    words: pd.DataFrame | None,
+    word_schema: dict | None,
+    fixations: pd.DataFrame | None,
+    fixation_schema: dict | None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """The mapped geometry of *raw* tables, in the canonical columns
+    :func:`compute_canvas_size` reads (DATA-46).
+
+    The add-dataset wizard asks for the screen before anything is normalized, so
+    it only has the upload as read — ``IA_LEFT`` and ``CURRENT_FIX_X``, not
+    ``x``. Handed straight to :func:`compute_canvas_size`, an EyeLink export has
+    no column called ``x``, and the "estimate" was the default screen under
+    another name. This projects just the mapped coordinate columns (word boxes
+    as edges *or* origin + size, fixation x/y) onto ``x``/``y``/``width``/
+    ``height`` — cheap, and correct for any mapping the user has picked so far.
+    A field that is not mapped yet is simply absent.
+    """
+
+    def column(frame: pd.DataFrame, schema: dict, key: str):
+        name = schema.get(key)
+        if not isinstance(name, str) or name not in frame.columns:
+            return None
+        return _to_number(frame[name])
+
+    word_geometry = pd.DataFrame()
+    if words is not None and not words.empty and word_schema:
+        left, right = (
+            column(words, word_schema, "left"),
+            column(words, word_schema, "right"),
+        )
+        top, bottom = (
+            column(words, word_schema, "top"),
+            column(words, word_schema, "bottom"),
+        )
+        if left is not None and right is not None:
+            word_geometry["x"], word_geometry["width"] = left, right - left
+        elif (x := column(words, word_schema, "x")) is not None:
+            word_geometry["x"] = x
+            if (width := column(words, word_schema, "width")) is not None:
+                word_geometry["width"] = width
+        if top is not None and bottom is not None:
+            word_geometry["y"], word_geometry["height"] = top, bottom - top
+        elif (y := column(words, word_schema, "y")) is not None:
+            word_geometry["y"] = y
+            if (height := column(words, word_schema, "height")) is not None:
+                word_geometry["height"] = height
+
+    fixation_geometry = pd.DataFrame()
+    if fixations is not None and not fixations.empty and fixation_schema:
+        x, y = (
+            column(fixations, fixation_schema, "x"),
+            column(fixations, fixation_schema, "y"),
+        )
+        if x is not None and y is not None:
+            fixation_geometry["x"], fixation_geometry["y"] = x, y
+    return word_geometry, fixation_geometry
+
+
 # Primary EyeLink IA measures. When a words frame already carries all of these
 # (a pre-aggregated export, e.g. OneStop), the fixation-based recompute is a
 # fallback whose output is discarded by the "existing values win" merge — so we

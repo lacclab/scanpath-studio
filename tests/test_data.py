@@ -1667,3 +1667,54 @@ class TestVendorUnitsAreRead:
         raw = pd.DataFrame({"x": [120.5, 300.0], "y": [80.0, 80.0]})
         schema = {"x": "x", "y": "y"}
         assert data_module.screen_fraction_issues(raw, schema, table="F") == []
+
+
+class TestCanvasGeometryFrames:
+    """DATA-46 — the wizard estimates the screen before anything is normalized,
+    so it has to read the *mapped* geometry, not columns called ``x``."""
+
+    def test_eyelink_edges_estimate_from_the_boxes_and_fixations(self):
+        words = pd.DataFrame(
+            {
+                "IA_LEFT": [100, 900],
+                "IA_RIGHT": [180, 2150],
+                "IA_TOP": [200, 1150],
+                "IA_BOTTOM": [240, 1190],
+            }
+        )
+        fixations = pd.DataFrame({"CURRENT_FIX_X": [120.0], "CURRENT_FIX_Y": [210.0]})
+        geometry = data_module.canvas_geometry_frames(
+            words,
+            {
+                "left": "IA_LEFT",
+                "right": "IA_RIGHT",
+                "top": "IA_TOP",
+                "bottom": "IA_BOTTOM",
+            },
+            fixations,
+            {"x": "CURRENT_FIX_X", "y": "CURRENT_FIX_Y"},
+        )
+        assert data_module.compute_canvas_size(*geometry) == (2200, 1200)
+        # The raw tables alone were read as "nothing to estimate from".
+        raw = data_module.compute_canvas_size(words, fixations)
+        assert raw == tuple(int(v) for v in data_module.DEFAULT_FIGURE_SIZE)
+
+    def test_origin_and_size_boxes(self):
+        words = pd.DataFrame(
+            {"left_px": [10], "top_px": [20], "w": [1990], "h": [1380]}
+        )
+        geometry = data_module.canvas_geometry_frames(
+            words,
+            {"x": "left_px", "y": "top_px", "width": "w", "height": "h"},
+            None,
+            None,
+        )
+        assert data_module.compute_canvas_size(*geometry) == (2000, 1400)
+
+    def test_an_unmapped_field_is_simply_absent(self):
+        words = pd.DataFrame({"IA_LEFT": [0], "IA_RIGHT": [10]})
+        word_geometry, fixation_geometry = data_module.canvas_geometry_frames(
+            words, {"left": "IA_LEFT", "right": "IA_RIGHT"}, None, {"x": None}
+        )
+        assert "y" not in word_geometry.columns
+        assert fixation_geometry.empty

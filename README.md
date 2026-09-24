@@ -8,6 +8,7 @@
 [![CI](https://github.com/lacclab/scanpath-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/lacclab/scanpath-studio/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Flacclab.github.io%2Fscanpath-studio%2Fcoverage%2Fbadge.json)](https://lacclab.github.io/scanpath-studio/coverage/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/lacclab/scanpath-studio/blob/main/LICENSE)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22933884.svg)](https://doi.org/10.5281/zenodo.22933884)
 
 An interactive workbench for visualizing **eye-tracking-while-reading** data.
 Drop in a trial and see the scanpath the way the reader saw it — words at their
@@ -172,7 +173,11 @@ mkdocs serve
 ## Citation
 
 A system-demo paper is in preparation — **citation TBD**. Until then, cite the
-software via GitHub's **"Cite this repository"** button (generated from
+software by its Zenodo DOI,
+[10.5281/zenodo.22933884](https://doi.org/10.5281/zenodo.22933884). That DOI always
+resolves to the latest release; the Zenodo record also lists a DOI per version,
+for pinning the exact release you used. GitHub's **"Cite this repository"**
+button gives the same metadata as APA or BibTeX (generated from
 [`CITATION.cff`](https://github.com/lacclab/scanpath-studio/blob/main/CITATION.cff)).
 
 If you use the bundled demo data, please cite the OneStop corpus:

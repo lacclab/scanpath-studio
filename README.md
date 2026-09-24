@@ -21,7 +21,7 @@ paper.
 
 ## Get started
 
-- **In the browser, nothing to install:** the live demo at
+- **In the browser:** the live demo at
   <https://scanpath-studio.streamlit.app>.
 - **With pip** (Python 3.11–3.14):
 

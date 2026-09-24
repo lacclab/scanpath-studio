@@ -10,177 +10,143 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/lacclab/scanpath-studio/blob/main/LICENSE)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22933884.svg)](https://doi.org/10.5281/zenodo.22933884)
 
-An interactive workbench for visualizing **eye-tracking-while-reading** data.
-Drop in a trial and see the scanpath the way the reader saw it — words at their
-true on-screen positions, with fixations, saccades, a density heatmap, and
-animated replay layered on top, all exportable as publication-ready figures.
-
-It is **dataset-agnostic** (auto-detects EyeLink / Gazepoint / Tobii / SMI /
-Pupil Labs / snake-case columns) and ships with a small [OneStop][onestop-paper] demo, so you can try it
-with zero setup.
-
-> **Authors:** Omer Shubi, Keren Gruteke Klein, Maya Grossman, Ella Lion, Deborah N. Jakobi,
-> David R. Reich, Lena Jäger, and Yevgeni Berzak — Data and Decision Sciences
-> (Technion) and Department of Computational Linguistics (University of Zurich).
+**Scanpath Studio shows you how people read.** Load eye-tracking-while-reading
+data and watch each reading unfold over the text, exactly where it sat on the
+screen — then compare readers, analyse a corpus, and export figures ready for a
+paper.
 
 ![A reading scanpath replayed fixation by fixation](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/scanpath_animation.gif)
 
 *A scanpath replayed fixation by fixation over the text the reader saw.*
 
-## Try it
+## Get started
 
-**Live demo (zero install):** <https://scanpath-studio.streamlit.app>
+- **In the browser:** the live demo at
+  <https://scanpath-studio.streamlit.app>.
+- **With pip** (Python 3.11–3.14):
 
-```bash
-pip install scanpath-studio
-scanpath-studio      # launches the app in your browser
-```
+  ```bash
+  pip install scanpath-studio
+  scanpath-studio      # opens the app in your browser
+  ```
 
-## What it does
+- **As a desktop app:** [Windows](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip) ·
+  [macOS (Apple silicon)](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-macos-arm64.tar.gz) ·
+  [Linux](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-linux-x86_64.tar.gz).
 
-The scanpath plot is built from layers you toggle independently:
+The pip and desktop installs keep your data on your own machine; the hosted demo
+runs on Streamlit Community Cloud.
 
-- **Text** drawn at the exact pixel coordinates the participant saw.
-- **Fixations** sized and **colored by any column** in your data (duration, GPT-2 surprisal, word frequency, …).
-- **Saccades**, with backward jumps (regressions) standing out.
-- **Areas of interest** (word boxes from your data) and a word-level **heatmap** (total fixation duration, count, …).
+## What you can do
 
-On top of that:
+- **See the reading:** fixations, saccades, heatmaps and raw gaze over the text
+  at its true on-screen position, with fixations colored by any column.
+- **Replay it** in real time or faster, and export it as HTML, GIF or MP4.
+- **Compare readers:** overlay two trials or place them side by side — even
+  from two different datasets.
+- **Analyse a corpus** per text, sentence, reader or group, with every measure
+  documented in the
+  [computation register](https://lacclab.github.io/scanpath-studio/computations/).
+- **Triage, export and share:** tag and filter trials, export one figure or a
+  zip for every trial, and share a link that reopens the exact view.
 
-- **Animated replay** — watch the scanpath unfold at real or scaled speed; export as interactive HTML, GIF, or MP4.
-- **Compare readings** — overlay two trials on one canvas or place them side by side (e.g. ordinary vs. information-seeking, first vs. repeated, L1 vs. L2), including two trials from *different* datasets.
-- **Critical-span, out-of-text & by-line** highlights — mark an answer span, flag fixations outside every word box, or color fixations by text line.
-- **Triage** — star, tag, and annotate trials; save and restore everything as a JSON sidecar.
-- **Bulk export** — one zip of per-trial PNG + SVG figures, plot settings, and tabular data across every filtered trial.
-- **Author a scanpath** — draw fixations straight onto the stimulus canvas for a teaching figure or a schematic.
-- **A computation register** — every derived value's formula, units and precedence, published as a [methodology page](https://lacclab.github.io/scanpath-studio/computations/).
+| | |
+|:---:|:---:|
+| ![Two readers of the same paragraph, overlaid on one canvas](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/demo_dual_scanpath.png) | ![The Scanpath view of the app](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/docs/assets/app_screenshot.png) |
+| Two readers of one paragraph, overlaid ([animated](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/docs/assets/demo_dual_scanpath.gif)) | The 🗺️ Scanpath view, with its control rail |
 
-![Two readers of the same paragraph, overlaid on one canvas](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/demo_dual_scanpath.png)
-
-*Two readers of the same bundled-demo paragraph, overlaid on one canvas — 305
-fixations between them
-([watch it animated](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/docs/assets/demo_dual_scanpath.gif)).*
-
-The app is organized into three views, chosen from the navigation in the header
-(💾 **Session** and ❓ **Help** sit beside them and open over whatever you are
-looking at, rather than taking you away from it):
-
-| View | What's there |
-|------|--------------|
-| 🗺️ **Scanpath** | The layered scanpath: a control line above the plot — dataset, trial picker, ◀ ▶ step, ⇅ sort and a filter funnel holding every way to narrow the pool (text, participant, conditions, annotations) — and, beside the figure, a right-hand **control rail** with **Animate** and **Compare** toggles plus the per-layer visualization controls (style each scanpath independently). The trial's key info shows as configurable chips above the plot. Below, subtabs: **Annotations**, **Stimulus & Context**, **Comparisons** (trials matching the selected trial on a field you choose), **Export** (single-trial *and* bulk — HTML / GIF / MP4 and figures / settings / tabular data), and **Share**. |
-| 📊 **Corpus Analysis** | Four subtabs — **Per text**, **Per sentence**, **Per reader**, and **Groups** (profile one cohort, or compare two) — the question-oriented analysis views: metric distributions and word profiles, per-text heatmaps pooled over readers, reader summaries, and group differences with effect sizes. |
-| 🗂️ **Data** | Two screens: 📂 **Available datasets** (the datasets this session holds, plus what's in the open one — data tables and summary statistics) and ✏️ **Edit dataset** (source and location, column mapping, recording setup, trial identity, stimulus images, and the participant/trial metadata tables). |
-
-![The Scanpath Studio app](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/docs/assets/app_screenshot.png)
-
-## Roadmap
-
-Planned and in-flight work is tracked in
-[GitHub Issues](https://github.com/lacclab/scanpath-studio/issues). The archive
-of everything closed before 2026-08-20 is browsable offline: double-click
-`tracker/start.command` (macOS) or `tracker/start.bat` (Windows) — or run
-`python3 tracker/server.py` (`python tracker\server.py` on Windows).
+The app has three views: 🗺️ **Scanpath** for one trial at a time, 📊 **Corpus
+Analysis** for the whole dataset, and 🗂️ **Data** for loading and configuring
+datasets. The [feature guides](https://lacclab.github.io/scanpath-studio/guides/)
+walk through each one.
 
 ## Your data
 
-Upload **CSV, TSV, TXT, Parquet, Feather, or Excel (.xlsx / .xls)** tables — or a
-**.zip** of them — for words/AoIs, fixations, and (optionally) raw gaze. Columns
-are auto-detected from common EyeLink, Gazepoint, Tobii, SMI, Pupil Labs, and
-snake-case conventions; the **Column mapping** on 🗂️ Data → ✏️ **Edit
-dataset** overrides any guess. The loader bends to fit real corpora — many files
-per table (concatenated with a `source_file` tag), a single report (words- or
-fixations-only), stimulus-level word boxes broadcast across readers, AoI-sequence
-fixations placed at word/character-box centers, and trials recorded over several
-screens. A separate one-row-per-reader table of **participant metadata** (and one
-of trial metadata) attaches alongside, and its columns then behave like fields in
-the data — filters, chips, trial sorting, and the export bundle.
+Upload word/AoI, fixation and (optionally) raw-gaze tables as **CSV, TSV, TXT,
+Parquet, Feather or Excel**, or as a **.zip** of them. Columns are auto-detected
+from EyeLink, Gazepoint, Tobii, SMI, Pupil Labs and snake-case conventions, and
+you can override any guess. If your data has only fixations, the app computes
+the standard per-word measures itself — **FFD**, **FPRT** (gaze duration),
+**RPD** (go-past), **TFD** (dwell), skips and regressions — following Rayner
+(1998) and Inhoff & Radach (1998). Precomputed EyeLink measures take precedence.
+See [Bring your own data](https://lacclab.github.io/scanpath-studio/bring-your-own-data/)
+and the [data format](https://lacclab.github.io/scanpath-studio/data-format/).
 
-If your data carries only raw fixations, the app computes the canonical per-word
-measures itself — **FFD**, **FPRT** (gaze duration), **RPD** (go-past), **TFD**
-(dwell), plus skips and regressions, following Rayner (1998) and Inhoff & Radach
-(1998). Pre-aggregated EyeLink columns, when present, take precedence.
-
-Several public corpora need no upload at all: **OneStop**,
-[**PoTeC**](https://github.com/DiLi-Lab/PoTeC) (Potsdam Textbook Corpus) and
-**MultiplEYE** have ready-made loaders, and thirty-one
+Several public corpora load without an upload: **OneStop**,
+[**PoTeC**](https://github.com/DiLi-Lab/PoTeC) and **MultiplEYE** have
+ready-made loaders, and thirty-one
 [harmonised benchmark corpora](https://lacclab.github.io/scanpath-studio/benchmark-corpora/)
 — German, Chinese, Persian, Danish, Spanish, Dutch, Russian, English, and the
-multilingual MECO waves — load from one locally prepared bundle in a
-single common schema, which is what makes cross-corpus comparison practical. The
-PoTeC loader exercises that flexible pipeline end to end:
-
-```python
-import scanpath_studio as sps
-
-words, fixations = sps.load_potec("data/PoTeC", download=True)  # ~45 MB on first call
-fig = sps.plot_scanpath(words, fixations, "0", "b0", canvas_size=(1680, 1050))
-```
+multilingual MECO waves — load from one locally prepared bundle in a single
+common schema, which makes cross-corpus comparison practical.
 
 ## Command line & Python API
 
-Everything the app draws is also available headless — same pipeline, same figure.
+Everything the app draws is also available headless — same pipeline, same
+figure. These run as-is on the bundled demo:
 
 ```bash
-scanpath-studio render --sample --list-trials              # what's available
-scanpath-studio render --sample -o scanpath.html           # interactive HTML
-scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t3 -o figure.png
-scanpath-studio render --sample --animate -o replay.html   # animated replay
+scanpath-studio render --sample --list-trials          # the demo's trials
+scanpath-studio render --sample -o scanpath.html       # one trial, interactive HTML
+scanpath-studio render --sample --animate -o replay.html
+scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 -o compare.html
 ```
 
 ```python
 import scanpath_studio as sps
 
-words, fixations = sps.load_scanpath_data(
-    "ia.csv", "fixations.csv"
-)  # paths, globs, or lists; either table optional
-sps.list_trials(words, fixations)
-fig = sps.plot_scanpath(words, fixations, "p1", "t3")  # every layer toggle is a kwarg
-sps.save_figure(fig, "scanpath.png")  # .html / .png / .svg / .pdf
-measures = sps.compute_word_metrics(words, fixations)  # FFD / FPRT / RPD / TFD …
+words, fixations = sps.load_sample_data()
+print(sps.list_trials(words, fixations).head())
+fig = sps.plot_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele_r0")
+sps.save_figure(fig, "scanpath.html")
+measures = sps.compute_word_metrics(words, fixations)  # FFD, FPRT, RPD, TFD, …
 ```
 
-HTML export is browser-free; PNG/SVG/PDF/GIF/MP4 go through Kaleido (run
-`plotly_get_chrome -y` once). See `scanpath-studio render --help` for all flags.
+For your own files, pass `--words ia.csv --fixations fix.csv` to `render`, or
+use `sps.load_scanpath_data("ia.csv", "fix.csv")`. HTML output needs nothing
+else; PNG, SVG, PDF, GIF and MP4 go through Kaleido, which needs Chrome once:
+`plotly_get_chrome -y`. The
+[CLI reference](https://lacclab.github.io/scanpath-studio/cli/) and the
+[Python API reference](https://lacclab.github.io/scanpath-studio/api/) list
+every flag and parameter.
 
-## Run from source
+## Where next
+
+The full documentation is at **<https://lacclab.github.io/scanpath-studio/>**:
+
+- [Getting started](https://lacclab.github.io/scanpath-studio/getting-started/): install, launch and a first trial
+- [Tutorials](https://lacclab.github.io/scanpath-studio/tutorials/): task walk-throughs, from checking a pilot to a figure for a paper
+- [Feature guides](https://lacclab.github.io/scanpath-studio/guides/): every view and control
+- [Bring your own data](https://lacclab.github.io/scanpath-studio/bring-your-own-data/): what the loader accepts and how to map it
+- [CLI](https://lacclab.github.io/scanpath-studio/cli/) and [Python API](https://lacclab.github.io/scanpath-studio/api/): scripting and batch rendering
+- [Computation register](https://lacclab.github.io/scanpath-studio/computations/): how each measure is derived
+- [FAQ](https://lacclab.github.io/scanpath-studio/faq/)
+
+## Contributing
 
 ```bash
 git clone https://github.com/lacclab/scanpath-studio.git
 cd scanpath-studio
 pip install -e ".[test]"          # or: uv sync --extra test --extra lint
 streamlit run streamlit_app.py --server.address 127.0.0.1
+pytest -n auto
 ```
 
-Tested on Python 3.11–3.14. Run the tests with `pytest` (or
-`uv run --extra test pytest`); see [AGENTS.md](https://github.com/lacclab/scanpath-studio/blob/main/AGENTS.md) for an architectural overview.
-
-Joining the project? [CONTRIBUTING.md](https://github.com/lacclab/scanpath-studio/blob/main/CONTRIBUTING.md) is the whole of it —
-setup, where the work is tracked
-([GitHub Issues](https://github.com/lacclab/scanpath-studio/issues)), the checks
-that gate CI, and how two people stay out of each other's way.
-
-## Documentation
-
-Full docs — getting started, the Python API, the CLI reference, data format, and
-export/troubleshooting — are at **<https://lacclab.github.io/scanpath-studio/>**
-(built from `docs/` with MkDocs Material). Build them locally with:
-
-```bash
-pip install -e ".[docs]"
-mkdocs serve
-```
+[CONTRIBUTING.md](https://github.com/lacclab/scanpath-studio/blob/main/CONTRIBUTING.md)
+covers setup, the checks that gate CI, and how work is tracked in
+[GitHub Issues](https://github.com/lacclab/scanpath-studio/issues);
+[AGENTS.md](https://github.com/lacclab/scanpath-studio/blob/main/AGENTS.md) is
+the architectural map. To preview the docs site locally, run
+`pip install -e ".[docs]"` and then `mkdocs serve`.
 
 ## Citation
 
-A system-demo paper is in preparation — **citation TBD**. Until then, cite the
-software by its Zenodo DOI,
-[10.5281/zenodo.22933884](https://doi.org/10.5281/zenodo.22933884). That DOI always
-resolves to the latest release; the Zenodo record also lists a DOI per version,
-for pinning the exact release you used. GitHub's **"Cite this repository"**
-button gives the same metadata as APA or BibTeX (generated from
-[`CITATION.cff`](https://github.com/lacclab/scanpath-studio/blob/main/CITATION.cff)).
-
-If you use the bundled demo data, please cite the OneStop corpus:
+A paper is in preparation. Until then, cite the software by its DOI,
+[10.5281/zenodo.22933884](https://doi.org/10.5281/zenodo.22933884) (GitHub's
+**Cite this repository** button formats it as APA or BibTeX). If you use the
+bundled demo, a subset of [OneStop Eye Movements][onestop-corpus], please also
+cite:
 
 ```bibtex
 @article{berzak2025onestop,
@@ -196,20 +162,10 @@ If you use the bundled demo data, please cite the OneStop corpus:
 }
 ```
 
-The bundled demo is a subset of [OneStop Eye Movements][onestop-corpus], used
-under its original license ([docs][onestop-docs]).
-
-[onestop-paper]: https://www.nature.com/articles/s41597-025-06272-2
 [onestop-corpus]: https://github.com/lacclab/OneStop-Eye-Movements
-[onestop-docs]: https://lacclab.github.io/OneStop-Eye-Movements/
 
-## Built with AI assistance
+## AI-assisted software
 
-Much of this code was written with AI assistance. That is not the same as
-bug-free. **Cross-check anything you publish against your own pipeline.** If
-something looks wrong — or if you have a feature request or suggestion —
-[open an issue](https://github.com/lacclab/scanpath-studio/issues).
-
-## License
-
-MIT — see [LICENSE](https://github.com/lacclab/scanpath-studio/blob/main/LICENSE); the bundled demo data carries its own licenses (see [NOTICE](https://github.com/lacclab/scanpath-studio/blob/main/NOTICE)).
+Scanpath Studio was built with AI assistance. Cross-check results before
+publishing. If something looks wrong — or if you have a feature request or
+suggestion — [report it](https://github.com/lacclab/scanpath-studio/issues).

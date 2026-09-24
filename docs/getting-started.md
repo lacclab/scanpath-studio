@@ -22,8 +22,10 @@ bundled sample, so no data preparation is required.
 
 === "Desktop app"
 
-    Download the archive for your operating system from the
-    [latest release](https://github.com/lacclab/scanpath-studio/releases/latest),
+    Download the archive for your operating system —
+    [Windows](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip) ·
+    [macOS (Apple silicon)](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-macos-arm64.tar.gz) ·
+    [Linux](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-linux-x86_64.tar.gz) —
     unpack it, and launch Scanpath Studio. See the [desktop notes](desktop.md)
     if your OS blocks the unsigned build.
 

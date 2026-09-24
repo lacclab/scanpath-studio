@@ -70,5 +70,7 @@ See the [feature guides](guides/index.md) for the controls, or
     publishing. If something looks wrong — or if you have a feature request or
     suggestion — [report it](https://github.com/lacclab/scanpath-studio/issues).
 
-Citation metadata is available in
+Cite the software by its Zenodo DOI,
+[10.5281/zenodo.22933884](https://doi.org/10.5281/zenodo.22933884); the full
+citation metadata is in
 [`CITATION.cff`](https://github.com/lacclab/scanpath-studio/blob/main/CITATION.cff).

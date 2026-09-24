@@ -108,6 +108,11 @@ tab loses the session. See [Privacy](privacy.md).
 
 ## How do I cite the app?
 
-Use the repository's
+Cite its Zenodo DOI,
+[10.5281/zenodo.22933884](https://doi.org/10.5281/zenodo.22933884), which always
+resolves to the latest release — the Zenodo record lists a DOI per version if
+you need to pin the one you used. The About dialog (❓ Help → About) has a
+ready-made BibTeX entry, and the repository's
 [`CITATION.cff`](https://github.com/lacclab/scanpath-studio/blob/main/CITATION.cff)
-and cite any public corpus or drift-correction method used.
+holds the same metadata. Also cite any public corpus or drift-correction method
+used.

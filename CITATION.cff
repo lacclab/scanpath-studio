@@ -33,6 +33,10 @@ authors:
     family-names: Berzak
     affiliation: "Data and Decision Sciences, Technion – Israel Institute of Technology"
 # NOTE: a paper is in preparation.
+# Zenodo *concept* DOI (ENG-75): it resolves to the latest archived release;
+# each release also gets its own version DOI on that record. Zenodo's
+# CITATION.cff reader ignores this field, so it cannot upset the archiving.
+doi: "10.5281/zenodo.22933884"
 repository-code: "https://github.com/lacclab/scanpath-studio"
 url: "https://scanpath-studio.streamlit.app"
 license: MIT

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Scanpath Studio has a Zenodo DOI, and every release archives itself there** (ENG-75)
+
+### Details
+
+#### Added
+- **Scanpath Studio has a Zenodo DOI, and every release archives itself there** (ENG-75) — the repository is switched on in Zenodo's GitHub integration, so each published GitHub release is archived with a version DOI of its own, all under one concept DOI, [10.5281/zenodo.22933884](https://doi.org/10.5281/zenodo.22933884), which always resolves to the latest. Zenodo takes the record's title, authors, affiliations, abstract, keywords and licence from `CITATION.cff` — deliberately no `.zenodo.json`, which would silence the CFF and make a third copy of the author list. The integration only archives releases published after it is switched on, so v0.31.0 was archived by turning its release into a draft and publishing it again, which leaves the tag, the desktop bundles and PyPI untouched. The concept DOI is now in `CITATION.cff`'s `doi` field (so GitHub's "Cite this repository" carries it; Zenodo's reader ignores the field), a README badge and the Citation section, the docs' index and FAQ, the About dialog's BibTeX plus a 🔖 DOI link, and the bulk-export README; `tests/test_citation.py` keeps the CFF and in-app copies equal.
+
 ## [0.31.0] - 2026-09-24
 
 ### Added

@@ -509,6 +509,9 @@ CITATION = {
         "David R. Reich, Lena Jäger, Yevgeni Berzak"
     ),
     "title": "Scanpath Studio",
+    # ENG-75: the Zenodo *concept* DOI — resolves to the latest archived
+    # release. Kept equal to CITATION.cff's `doi` by tests/test_citation.py.
+    "doi": "10.5281/zenodo.22933884",
     "url": "https://github.com/lacclab/scanpath-studio",
     "docs_url": "https://lacclab.github.io/scanpath-studio/",
     "lab_url": "https://lacclab.github.io/",

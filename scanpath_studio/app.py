@@ -1088,6 +1088,7 @@ def _about_dialog() -> None:
         "Lion, Ella and "
         'Jakobi, Deborah N. and Reich, David R. and J{\\"a}ger, Lena and '
         "Berzak, Yevgeni},\n"
+        f"doi = {{{CITATION['doi']}}},\n"
         "license = {MIT},\n"
         "month = jun,\n"
         "title = {{Scanpath Studio}},\n"
@@ -1111,7 +1112,8 @@ Developed by [Omer Shubi](https://omershubi.github.io/),
 [Yevgeni Berzak](https://dds.technion.ac.il/people/academic-staff/yevgeni-berzak/).
 
 📚 [Documentation]({CITATION["docs_url"]}) ↗ ·
-💻 [Code]({CITATION["url"]}) ↗
+💻 [Code]({CITATION["url"]}) ↗ ·
+🔖 [DOI](https://doi.org/{CITATION["doi"]}) ↗
 """
     )
     # UX-16: the BibTeX block is tall enough to push everything above it out

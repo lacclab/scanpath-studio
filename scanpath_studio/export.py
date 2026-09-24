@@ -1629,6 +1629,7 @@ def bulk_export(
         "",
         f"Authors: {CITATION['authors']}",
         f"Tool: {CITATION['title']}",
+        f"DOI: https://doi.org/{CITATION['doi']}",
         "",
         "## Layout",
         "- `per_trial/<participant>__<trial>/` holds artifacts for each trial.",

@@ -11,27 +11,34 @@ authors:
   - given-names: Omer
     family-names: Shubi
     affiliation: "Data and Decision Sciences, Technion – Israel Institute of Technology"
+    orcid: "https://orcid.org/0000-0002-2961-5012"
   - given-names: Keren
     family-names: "Gruteke Klein"
     affiliation: "Data and Decision Sciences, Technion – Israel Institute of Technology"
+    orcid: "https://orcid.org/0009-0004-7942-4611"
   - given-names: Maya
     family-names: Grossman
     affiliation: "Data and Decision Sciences, Technion – Israel Institute of Technology"
   - given-names: Ella
     family-names: Lion
     affiliation: "Data and Decision Sciences, Technion – Israel Institute of Technology"
+    orcid: "https://orcid.org/0009-0006-7362-8255"
   - given-names: "Deborah N."
     family-names: Jakobi
     affiliation: "Department of Computational Linguistics, University of Zurich"
+    orcid: "https://orcid.org/0000-0002-9719-6673"
   - given-names: "David R."
     family-names: Reich
     affiliation: "Department of Computational Linguistics, University of Zurich"
+    orcid: "https://orcid.org/0000-0002-3524-3788"
   - given-names: Lena
     family-names: Jäger
     affiliation: "Department of Computational Linguistics, University of Zurich"
+    orcid: "https://orcid.org/0000-0001-9018-9713"
   - given-names: Yevgeni
     family-names: Berzak
     affiliation: "Data and Decision Sciences, Technion – Israel Institute of Technology"
+    orcid: "https://orcid.org/0000-0003-4474-1727"
 # NOTE: a paper is in preparation.
 # Zenodo *concept* DOI (ENG-75): it resolves to the latest archived release;
 # each release also gets its own version DOI on that record. Zenodo's

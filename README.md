@@ -15,9 +15,7 @@ data and watch each reading unfold over the text, exactly where it sat on the
 screen — then compare readers, analyse a corpus, and export figures ready for a
 paper.
 
-![A reading scanpath replayed fixation by fixation](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/scanpath_animation.gif)
-
-*A scanpath replayed fixation by fixation over the text the reader saw.*
+![Using Scanpath Studio: stepping through trials, a heatmap, a replay, a two-reader comparison and Corpus Analysis](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/docs/assets/app_demo.gif)
 
 ## Get started
 
@@ -52,8 +50,8 @@ runs on Streamlit Community Cloud.
 
 | | |
 |:---:|:---:|
-| ![Two readers of the same paragraph, overlaid on one canvas](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/demo_dual_scanpath.png) | ![The Scanpath view of the app](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/docs/assets/app_screenshot.png) |
-| Two readers of one paragraph, overlaid ([animated](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/docs/assets/demo_dual_scanpath.gif)) | The 🗺️ Scanpath view, with its control rail |
+| ![A reading scanpath replayed fixation by fixation](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/scanpath_animation.gif) | ![Two readers of the same paragraph, overlaid on one canvas](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/demo_dual_scanpath.png) |
+| A reading, replayed fixation by fixation | Two readers of one paragraph, overlaid ([animated](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/docs/assets/demo_dual_scanpath.gif)) |
 
 The app has three views: 🗺️ **Scanpath** for one trial at a time, 📊 **Corpus
 Analysis** for the whole dataset, and 🗂️ **Data** for loading and configuring
@@ -62,23 +60,10 @@ walk through each one.
 
 ## Your data
 
-Upload word/AoI, fixation and (optionally) raw-gaze tables as **CSV, TSV, TXT,
-Parquet, Feather or Excel**, or as a **.zip** of them. Columns are auto-detected
-from EyeLink, Gazepoint, Tobii, SMI, Pupil Labs and snake-case conventions, and
-you can override any guess. If your data has only fixations, the app computes
-the standard per-word measures itself — **FFD**, **FPRT** (gaze duration),
-**RPD** (go-past), **TFD** (dwell), skips and regressions — following Rayner
-(1998) and Inhoff & Radach (1998). Precomputed EyeLink measures take precedence.
-See [Bring your own data](https://lacclab.github.io/scanpath-studio/bring-your-own-data/)
-and the [data format](https://lacclab.github.io/scanpath-studio/data-format/).
-
-Several public corpora load without an upload: **OneStop**,
-[**PoTeC**](https://github.com/DiLi-Lab/PoTeC) and **MultiplEYE** have
-ready-made loaders, and thirty-one
-[harmonised benchmark corpora](https://lacclab.github.io/scanpath-studio/benchmark-corpora/)
-— German, Chinese, Persian, Danish, Spanish, Dutch, Russian, English, and the
-multilingual MECO waves — load from one locally prepared bundle in a single
-common schema, which makes cross-corpus comparison practical.
+Load word, fixation and raw-gaze tables in CSV, Parquet, Excel or another
+common format. Scanpath Studio adapts to how your study was recorded, so there
+is rarely anything to reformat first — see
+[Bring your own data](https://lacclab.github.io/scanpath-studio/bring-your-own-data/).
 
 ## Command line & Python API
 

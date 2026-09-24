@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-09-24
+
 ### Added
 - **A ⛶ Fullscreen control on the scanpath, animation, comparison and stimulus figures** (VIZ-37)
 - **`render` can name the two traces of a comparison — `--label-a` / `--label-b`** (EXP-8)

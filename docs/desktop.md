@@ -20,8 +20,8 @@ the desktop build).
 
 === "Windows"
 
-    1. Download `ScanpathStudio-windows-x86_64.zip` from the
-       [latest release](https://github.com/lacclab/scanpath-studio/releases/latest).
+    1. Download [`ScanpathStudio-windows-x86_64.zip`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip)
+       from the [latest release](https://github.com/lacclab/scanpath-studio/releases/latest).
     2. Right-click → **Extract All**, open the extracted `ScanpathStudio` folder.
     3. Double-click **`ScanpathStudio.exe`**. On first launch SmartScreen will
        warn — click **More info → Run anyway**.
@@ -29,8 +29,8 @@ the desktop build).
 
 === "macOS (Apple silicon)"
 
-    1. Download `ScanpathStudio-macos-arm64.tar.gz` from the
-       [latest release](https://github.com/lacclab/scanpath-studio/releases/latest)
+    1. Download [`ScanpathStudio-macos-arm64.tar.gz`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-macos-arm64.tar.gz)
+       from the [latest release](https://github.com/lacclab/scanpath-studio/releases/latest)
        (Safari usually unpacks it; otherwise double-click the archive).
     2. In the `ScanpathStudio` folder, **right-click `ScanpathStudio` → Open →
        Open** the first time. If macOS offers **Open Anyway**, it is also under
@@ -57,8 +57,8 @@ the desktop build).
 
 === "Linux"
 
-    1. Download `ScanpathStudio-linux-x86_64.tar.gz` from the
-       [latest release](https://github.com/lacclab/scanpath-studio/releases/latest).
+    1. Download [`ScanpathStudio-linux-x86_64.tar.gz`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-linux-x86_64.tar.gz)
+       from the [latest release](https://github.com/lacclab/scanpath-studio/releases/latest).
     2. `tar -xzf ScanpathStudio-linux-x86_64.tar.gz` (the tarball preserves the
        executable bit — that's why it isn't a zip).
     3. Run `./ScanpathStudio/ScanpathStudio` — from a terminal, or double-click

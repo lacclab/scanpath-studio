@@ -30,13 +30,9 @@ paper.
   scanpath-studio      # opens the app in your browser
   ```
 
-- **As a desktop app**, no Python needed — download, unpack, and launch:
-  **[Windows](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip)** ·
-  **[macOS (Apple silicon)](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-macos-arm64.tar.gz)** ·
-  **[Linux](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-linux-x86_64.tar.gz)**.
-  The builds are not code-signed yet, and the
-  [desktop notes](https://lacclab.github.io/scanpath-studio/desktop/) cover the
-  extra click at first launch.
+- **As a desktop app:** [Windows](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip) ·
+  [macOS (Apple silicon)](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-macos-arm64.tar.gz) ·
+  [Linux](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-linux-x86_64.tar.gz).
 
 The pip and desktop installs keep your data on your own machine; the hosted demo
 runs on Streamlit Community Cloud.

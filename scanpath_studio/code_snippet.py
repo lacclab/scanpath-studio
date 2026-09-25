@@ -1075,6 +1075,17 @@ def python_snippet(
     else:
         args.append(f"participant={participant}")
         args.append(f"trial={trial}")
+        # BUG-85: a co-animation names B the way `compare_scanpaths` does. Not
+        # for a second dataset's reader, though — `trial_b=` alone would look
+        # that id up in this corpus; the caveat below says to load B's first.
+        compare = state.compare
+        if (
+            state.kind == "animation"
+            and compare is not None
+            and compare.trial
+            and not compare.dataset
+        ):
+            args.append(f"trial_b=({_py(compare.participant)}, {_py(compare.trial)})")
     if draws_raw_gaze(state):
         args.append("raw_gaze=raw_gaze")
 
@@ -1347,29 +1358,28 @@ def state_caveats(source: SnippetSource, state: FigureState) -> list[str]:
             "its screen first (`multipart.extract_part`) and pass those frames."
         )
     # CMP-11: Animate + Compare is *one* figure with two readings on one clock,
-    # so `kind` is "animation" and B rides along in `compare`. B's frames are
-    # frames, not keywords — `animate_scanpath` takes them as `words_b=` /
-    # `fixations_b=` — so, like the raw-gaze layer, they are a caveat rather
-    # than something the snippet can quote.
+    # so `kind` is "animation" and B rides along in `compare`. Since BUG-85 the
+    # Python form names B with `trial_b=`, as `compare_scanpaths` does — all but
+    # a second dataset's reader, whose frames the snippet cannot load (below).
     compare = state.compare
-    if state.kind == "animation" and compare is not None:
-        notes.append(
-            "This is a two-reading animation. B's frames are frames rather than "
-            f"options, so pass `{compare.participant}` / `{compare.trial}`'s "
-            "rows as `words_b=` / `fixations_b=` — the Python snippet replays A "
-            "alone. The CLI form names B with `--compare-with`."
-        )
     # CMP-8: scanpath B can come from a *second* dataset, and its participant id
     # is that corpus's own — writing it against the loaded corpus would name a
     # reader who isn't in it. Both surfaces have the seam (`words_b=` /
     # `--compare-words`); the snippet can't fill it in, so it says whose it is.
     if compare is not None and compare.dataset:
-        notes.append(
+        note = (
             f"Scanpath B comes from a second dataset (`{compare.dataset}`), so "
             f"`{compare.participant}` is that corpus's reader, not this one's. "
             "Load it too and pass it as `words_b=` / `fixations_b=` "
             "(`--compare-words` / `--compare-fixations` on the CLI)."
         )
+        if state.kind == "animation":
+            note += (
+                " In Python, name the reading with "
+                f"`trial_b=({_py(compare.participant)}, {_py(compare.trial)})` — "
+                "until then the snippet replays A alone."
+            )
+        notes.append(note)
     if state.kind == "comparison" and str(state.illustration_label).lower() != "auto":
         notes.append(
             "`compare_scanpaths` has no `illustration_label` parameter, so the "

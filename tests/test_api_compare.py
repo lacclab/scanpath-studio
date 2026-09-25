@@ -301,6 +301,83 @@ class TestDualCoAnimationAcceptsCompareStimulus:
         assert fig.frames
 
 
+class TestCoAnimationDrawsOneSecondReading:
+    """BUG-85: `animate_scanpath` drew whatever B frames it was handed.
+
+    `compare_scanpaths` takes B's *corpus* plus a `trial_b` pair, so frames
+    passed the same way to the co-animation drew every fixation in them — 3,209
+    on the demo, where B's trial has 89. `trial_b` now picks the reading, as it
+    does there, and B frames holding several trials refuse rather than guess.
+    """
+
+    _A = ("l37_1129", "l37_1129_2_1_1_Ele_r0")
+    _B = ("l37_1129", "l37_1129_2_1_2_Ele_r0")
+
+    @staticmethod
+    def _trace_b(fig):
+        (trace,) = [trace for trace in fig.data if trace.name == "Scanpath B"]
+        return trace
+
+    def test_trial_b_picks_one_reading_out_of_the_corpus(self):
+        from scanpath_studio.utils import extract_trial
+
+        words, fixations = api.load_sample_data()
+        expected = len(extract_trial(fixations, *self._B))
+        fig = api.animate_scanpath(words, fixations, *self._A, trial_b=self._B)
+        assert len(self._trace_b(fig).x) == expected
+
+    def test_trial_b_is_looked_up_in_bs_own_frames(self):
+        """A second dataset's reader is found in *its* frames, never in A's."""
+        words, fixations = _pair()
+        fig = api.animate_scanpath(
+            words,
+            fixations,
+            "p1",
+            "t1",
+            canvas_size=(1920, 1080),
+            words_b=pd.concat(
+                [_words("p9", "t9"), _words("p8", "t8")], ignore_index=True
+            ),
+            fixations_b=pd.concat(
+                [_fixations("p9", "t9", y=300.0), _fixations("p8", "t8", y=500.0)],
+                ignore_index=True,
+            ),
+            trial_b=("p9", "t9"),
+        )
+        trace = self._trace_b(fig)
+        assert len(trace.y) == 3
+        # The replay's first frame holds each not-yet-reached fixation as None.
+        assert {round(float(y)) for y in trace.y if y is not None} == {300}
+
+    def test_b_frames_holding_several_trials_ask_for_trial_b(self):
+        words, fixations = api.load_sample_data()
+        with pytest.raises(ValueError, match=r"trial_b="):
+            api.animate_scanpath(
+                words, fixations, *self._A, words_b=words, fixations_b=fixations
+            )
+
+    def test_a_trial_b_with_no_fixations_raises(self):
+        words, fixations = api.load_sample_data()
+        with pytest.raises(ValueError, match="No fixations for the second scanpath"):
+            api.animate_scanpath(
+                words, fixations, *self._A, trial_b=("nobody", "nothing")
+            )
+
+    def test_one_trials_frames_still_need_no_trial_b(self):
+        """The shape every existing caller passes — `render` slices B first."""
+        words, fixations = _pair()
+        fig = api.animate_scanpath(
+            words,
+            fixations,
+            "p1",
+            "t1",
+            canvas_size=(1920, 1080),
+            words_b=_words("p2", "t2", x0=400.0),
+            fixations_b=_fixations("p2", "t2", y=300.0),
+        )
+        assert len(self._trace_b(fig).x) == 3
+
+
 @pytest.mark.parametrize("layout", ["overlay", "side_by_side", "stacked"])
 def test_the_default_comparison_draws_the_apps_marker_opacity(monkeypatch, layout):
     """CMP-20: the app seeds each scanpath's `cmp{idx}_opacity` at 0.7, while

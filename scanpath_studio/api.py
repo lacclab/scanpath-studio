@@ -106,7 +106,7 @@ def build_authored_scanpath(
 def load_authored_scanpath(
     source: str | Path,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Load an authoring JSON path (or payload), including schema-1 migration."""
+    """Load a scanpath-author JSON file (or its text) as normalized word/fixation frames."""
     from .authoring import parse_authoring_document
 
     raw = str(source)
@@ -564,7 +564,8 @@ def load_scanpath_data(
     file per participant and/or text) are concatenated, with each file's stem kept in
     a ``source_file`` column. Column schemas are auto-detected (EyeLink, Gazepoint,
     Tobii, SMI, Pupil Labs, and snake_case names); pass ``word_schema`` /
-    ``fix_schema`` mappings (field → column name, see ``controls.WORD_FIELD_SPECS``)
+    ``fix_schema`` mappings (field → column name; see
+    [`propose_schema`][scanpath_studio.api.propose_schema])
     to override detection. For per-word reading measures, pass the result to
     [`compute_word_metrics`][scanpath_studio.api.compute_word_metrics].
 
@@ -646,7 +647,7 @@ def load_participant_metadata(
     id_column: str | None = None,
     participants: pd.DataFrame | list | None = None,
 ):
-    """Load a participant-level metadata table (DATA-20 milestone 1).
+    """Load a participant-level metadata table.
 
     ``table`` is a DataFrame or a path/glob to a CSV/TSV/Parquet/Excel file with
     **one row per reader**: an id column plus anything known about them
@@ -698,7 +699,7 @@ def load_trial_metadata(
     participant_column: str | None = None,
     trials: pd.DataFrame | None = None,
 ):
-    """Load a trial-level metadata table (DATA-29 — milestone 2).
+    """Load a trial-level metadata table.
 
     The sibling of
     [`load_participant_metadata`][scanpath_studio.api.load_participant_metadata], one
@@ -819,7 +820,7 @@ def load_sample_data() -> tuple[pd.DataFrame, pd.DataFrame]:
 def load_raw_gaze(
     table: TablesLike, *, raw_gaze_schema: dict | None = None
 ) -> pd.DataFrame:
-    """Load and normalize a raw (sample-level) gaze table for ``raw_gaze=`` (EXP-20).
+    """Load and normalize a raw (sample-level) gaze table for ``raw_gaze=``.
 
     The third table [`plot_scanpath`][scanpath_studio.api.plot_scanpath] can draw, under
     the fixations: one row per eye-tracker sample, with a participant, a trial, ``x`` /
@@ -847,8 +848,7 @@ def load_sample_raw_gaze() -> pd.DataFrame:
     """The bundled demo's raw gaze, normalized — what the app overlays on it.
 
     OneStop ships no sample-level gaze, so this is **synthesized** from one of
-    the demo's real trials (see ``update_sample_data.synthesize_raw_gaze``) and
-    covers that trial alone."""
+    the demo's real trials and covers that trial alone."""
     return load_raw_gaze(_data.load_sample_raw_gaze())
 
 
@@ -864,14 +864,14 @@ def compute_word_metrics(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Dat
 
 
 def trial_summary(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
-    """Exportable one-row-per-trial reading summary (AN-30)."""
+    """Exportable one-row-per-trial reading summary."""
     from .aggregation import trial_summary_table
 
     return trial_summary_table(words, fixations)
 
 
 def reader_summary(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
-    """Exportable one-row-per-reader reading summary (AN-30)."""
+    """Exportable one-row-per-reader reading summary."""
     from .aggregation import reader_summary_table
 
     return reader_summary_table(words, fixations)
@@ -920,7 +920,11 @@ def analysis_tables(
     pixels_per_degree: float | None = None,
     raw_gaze: pd.DataFrame | None = None,
 ) -> dict[str, pd.DataFrame]:
-    """Full measure family used by EXP-3 bulk/headless exports."""
+    """The tables ``scanpath-studio analyze`` writes, as a dict of frames.
+
+    ``fixations``, ``saccades``, ``word_measures``, ``sentence_measures``,
+    ``trial_summary``, ``reader_summary``, ``characters`` and ``cleaning_qa``.
+    """
     from .measures import assign_fixations_to_words, enrich_fixations
     from .preprocessing import (
         character_grid,
@@ -1024,9 +1028,8 @@ def plot_corpus_figure(
     ``profile`` expects ``word_id`` plus ``value_col`` (and optional ``lo`` /
     ``hi``); ``distribution`` expects ``value_col``; ``difference`` expects
     ``word_id`` and ``diff``. When ``series_col`` is present, it defines the
-    overlaid profile/distribution series. This is the API counterpart of the
-    Corpus Analysis in-view styling controls (AN-29). A table missing a column
-    its ``kind`` reads raises ``ValueError`` naming it and the columns present.
+    overlaid profile/distribution series. A table missing a column its ``kind``
+    reads raises ``ValueError`` naming it and the columns present.
     """
     kind = str(kind).lower()
     _require_corpus_columns(data, kind, value_col)
@@ -1101,9 +1104,7 @@ def list_parts(
 ) -> pd.DataFrame:
     """Ordered screens in multipart data, optionally narrowed to one parent.
 
-    Legacy single-screen data returns an empty table: it has no synthetic
-    exported screen row, so existing callers can distinguish recorded part
-    identity from the compatibility default.
+    Single-screen data returns an empty table.
     """
     _require_normalized(words, "words")
     _require_normalized(fixations, "fixations")
@@ -1407,7 +1408,7 @@ def figure_options(kind: str = "static") -> dict:
     (whose builder supports a subset), and ``kind="comparison"``
     [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths]. The values are the
     *effective* defaults — `CANONICAL_FIGURE_DEFAULTS` where it sets one, the builder's
-    own signature default otherwise — so a scripted caller can diff its intended
+    default otherwise — so a scripted caller can diff its intended
     settings against what it would get::
 
         {k: v for k, v in sps.figure_options().items() if k.startswith("show_")}
@@ -1530,24 +1531,18 @@ def plot_scanpath(
     the real monitor resolution (e.g. ``(2560, 1440)`` for OneStop) to keep coordinates
     true to scale. For a multipart trial, ``screen`` selects one child screen; omitting
     it selects the first recorded screen and never concatenates coordinate spaces.
-    ``raw_gaze`` is a normalized frame (see `data.normalize_raw_gaze`) and is filtered
-    to the selected trial.
+    ``raw_gaze`` is a frame from [`load_raw_gaze`][scanpath_studio.api.load_raw_gaze],
+    filtered to the selected trial.
 
-    ``drift_correction`` (PRE-3/PRE-17) names a method from
-    ``alignment.ALGORITHMS``: the ten Carr et al. (2021) algorithms plus
-    run-based ``"slice"`` and ``"consensus"``. Each fixation is snapped to its
-    assigned text line and coloured by line, exactly as the app's *Drift
-    correction* control does. ``drift_connectors=True`` also draws a faint line
-    from each fixation's original y to its corrected one. Drift correction is held
-    back behind ``SCANPATH_EXPERIMENTAL=1`` (PRE-21): without it, any
-    ``drift_correction`` other than ``None`` / ``"off"`` raises ``ValueError``.
+    ``drift_correction`` / ``drift_connectors`` are experimental: without
+    ``SCANPATH_EXPERIMENTAL=1`` any ``drift_correction`` other than ``None`` /
+    ``"off"`` raises ``ValueError``.
 
-    ``fix_index_range=(start, end)`` (VIZ-7) draws only fixations ``start``
+    ``fix_index_range=(start, end)`` draws only fixations ``start``
     through ``end`` (1-based, both inclusive) of the trial — the headless form of
-    the app's fixation-index window. It is applied before the drift correction,
-    like the app.
+    the app's fixation-index window.
 
-    ``title`` / ``caption`` (EXP-5) stamp a title/caption band onto the figure
+    ``title`` / ``caption`` stamp a title/caption band onto the figure
     without shrinking the plot area, exactly like the rail's *Title & caption on
     the figure* control — literal text here, not the rail's ``{trial_id}``-style
     pattern, since the caller already knows which trial this is.
@@ -1684,7 +1679,7 @@ def animate_scanpath(
     that window of the trial's fixations (1-based, inclusive), like
     [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
 
-    With ``autoplay`` (default ``True``, VIZ-10) the saved interactive HTML auto-starts
+    With ``autoplay`` (default ``True``) the saved interactive HTML auto-starts
     the replay on load *at ``playback_speed``* —
     [`save_figure`][scanpath_studio.api.save_figure] honors the marker the builder
     stamps on the figure. Pass ``autoplay=False`` to save a figure that opens paused
@@ -1706,14 +1701,13 @@ def animate_scanpath(
     The animation builder accepts a subset of the static figure's options
     (``show_words``, ``show_word_labels``, ``show_saccades``, ``show_order``, styling,
     and second-scanpath overlays) — see ``figure_options("animation")``; an unsupported
-    key raises a ``ValueError`` naming the valid ones rather than an opaque
-    ``TypeError``. The shared options default to the same values as
+    key raises a ``ValueError`` naming the valid ones. The shared options default to the same values as
     [`plot_scanpath`][scanpath_studio.api.plot_scanpath] (`CANONICAL_FIGURE_DEFAULTS`),
-    so the replay matches the static figure. ``palette=`` (VIZ-18) works here too; the
+    so the replay matches the static figure. ``palette=`` works here too; the
     colours it implies that the animation doesn't support are dropped rather than
     raising, since the caller named a look, not those individual keys.
 
-    ``title`` / ``caption`` (EXP-5) — same as
+    ``title`` / ``caption`` — same as
     [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
     """
     valid = set(_ANIMATION_FIGURE_PARAMS)
@@ -1986,7 +1980,7 @@ def compare_scanpaths(
     caption: str = "",
     **figure_overrides,
 ) -> go.Figure:
-    """Build a two-scanpath comparison figure (CMP-9).
+    """Build a two-scanpath comparison figure.
 
     The headless form of the app's **Compare** mode. ``trial_a`` / ``trial_b``
     are ``(participant, trial)`` pairs; ``layout`` is ``"overlay"``,
@@ -2000,14 +1994,10 @@ def compare_scanpaths(
     are never modified, and nothing in the returned figure's data depends on the
     namespace beyond the trace labels.
 
-    **The overlay gate.** Overlaying pools both readings into one axis range, so
-    across datasets it is allowed only when both were recorded on the same known
-    screen (`experimental_setup.setups_comparable`). Unlike the app — which
-    resolves an incomparable overlay to side-by-side, because a user can see
-    what they got — this **raises** ``ValueError``: silently returning a
-    differently-shaped figure than the one a script asked for is the wrong
-    failure mode headlessly. Ask for ``layout="side_by_side"`` to get the app's
-    fallback. Nothing is ever rescaled or reprojected.
+    **The overlay gate.** Across datasets an overlay needs both canvases to be
+    the same size; otherwise this raises ``ValueError`` (the app falls back to
+    side by side). Pass ``layout="side_by_side"`` or ``"stacked"`` to compare
+    readings from different screens. Nothing is rescaled.
 
     ``setup`` / ``setup_b`` are `experimental_setup.SetupSnapshot`
     values — what the gate reads. ``canvas_size`` covers A when you only have a
@@ -2020,10 +2010,8 @@ def compare_scanpaths(
 
     Remaining keywords are forwarded to `plots.make_comparison_figure`
     (e.g. ``show_words=False``, ``color_by="duration_ms"``); an unknown one
-    raises ``TypeError`` naming the closest valid options. Which settings a
-    comparison figure actually honours is the table in
-    ``scanpath_studio/CLAUDE.md`` → *Which viz settings apply in which render
-    path*.
+    raises ``TypeError`` naming the closest valid options;
+    ``figure_options("comparison")`` lists the accepted keywords.
     """
     from .experimental_setup import IncomparableScreensError, setups_comparable
     from .utils import align_compare_columns, extract_trial, qualify_for_compare
@@ -2202,7 +2190,7 @@ def save_figure_layers(
     width: int | None = None,
     height: int | None = None,
 ) -> dict:
-    """Split a scanpath figure into its layers and save one file per layer (VIZ-5).
+    """Split a scanpath figure into its layers and save one file per layer.
 
     Writes ``<directory>/<layer>.<fmt>`` for each *visible* layer (word boxes /
     fixations / saccades / heatmap / labels / stimulus image / frame) and returns
@@ -2263,7 +2251,7 @@ def figure_code(
     output: str | None = None,
     **figure_overrides,
 ) -> str:
-    """The API or CLI code that reproduces a figure (EXP-7).
+    """The API or CLI code that reproduces a figure.
 
     The headless twin of the app's 🔗 Share → *Reproduce this figure in code* block: give
     it the same arguments you would give
@@ -2285,13 +2273,13 @@ def figure_code(
     Python form, ``--raw-gaze`` in the CLI one.
 
     ``compare_dataset`` names the corpus scanpath B was loaded from when it is a
-    *second* one (CMP-8). B's participant id belongs to that corpus rather than
+    *second* one. B's participant id belongs to that corpus rather than
     the one the snippet loads, so naming it turns a snippet that would quietly
     reference a missing reader into one that says where B comes from.
 
     ``compare_labels`` is the pair you would pass
     [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths] as ``labels=`` — the
-    two trace labels, when they are not the composed defaults (EXP-8 §1). Both forms
+    two trace labels, when they are not the composed defaults. Both forms
     carry them: ``labels=`` in the Python snippet, ``--label-a`` / ``--label-b`` in the
     CLI one.
 
@@ -2306,11 +2294,9 @@ def figure_code(
     [`figure_options`][scanpath_studio.api.figure_options] are written, so the snippet
     stays readable; ``explicit=True`` emits every option at its current value.
     ``flavor`` is ``"python"``, ``"cli"``, or ``"both"`` (the two separated by a blank
-    line). Every figure option has a ``render`` flag (EXP-20); one that ever did not
-    would be named in a trailing comment rather than dropped, and anything *neither*
-    form can promise — a raw-gaze table with no path to name, an uploaded stimulus
-    image, B's rows when they come from a second corpus — follows as ``# Note:``
-    comments (EXP-8 §2), matching the ⚠️ captions the app shows and the ``Note:`` lines
+    line). Anything neither form can reproduce — a raw-gaze table with no path to
+    name, an uploaded stimulus image, B's rows from a second corpus — follows as
+    ``# Note:`` comments, matching the ⚠️ captions the app shows and the ``Note:`` lines
     `render --print-code` writes to stderr. See `code_snippet.ReproductionCode` for the
     structured form.
     """
@@ -2385,7 +2371,7 @@ def figure_code(
 
 
 def cache_status() -> dict:
-    """Describe the on-device recovery cache a local app run keeps (ENG-30).
+    """Describe the on-device recovery cache a local app run keeps.
 
     The app stores completed uploaded datasets, column mappings, view settings and
     annotations under the user's cache directory so a refresh or restart resumes

@@ -3,7 +3,8 @@
 This page is written for a coding agent — or any script — that has to **use**
 Scanpath Studio without a browser: load an eye-tracking-while-reading dataset,
 render a figure, pull per-word reading measures. (`AGENTS.md` in the repository
-root is the opposite document: how to *develop* this codebase.)
+root is the opposite document: how to *develop* this codebase.) A plain-text map
+of the whole site is at [`/llms.txt`](https://lacclab.github.io/scanpath-studio/llms.txt).
 
 Everything the app draws is reachable from two places:
 
@@ -13,12 +14,9 @@ Everything the app draws is reachable from two places:
 | Shell | `scanpath-studio render` | [CLI reference](cli.md) |
 
 Both go through the same `data → measures → plots` pipeline as the Streamlit
-app, so a figure rendered here is the figure the app shows.
-
-Headless use never writes an on-device cache. A *local app* run does — the
-session's datasets and settings, restored on the next launch — and
-`sps.cache_status()` / `sps.clear_cache()` (or `scanpath-studio cache`) inspect
-and remove it; see [Privacy](privacy.md#what-happens-to-a-file-you-upload).
+app, so with the same settings a figure rendered here matches the app's.
+Headless use (the API or `render`) never writes the app's on-device recovery
+cache.
 
 ## The 30-second version
 
@@ -47,7 +45,7 @@ names; everything downstream assumes them.
 | Column | Meaning |
 |--------|---------|
 | `participant_id` | Reader id (string). Optional in the source: a stimulus-level word table with no reader column is broadcast across the readers found in the fixations. |
-| `trial_id` | One reading of one text by one reader. **Required.** (`unique_trial_id` rides along when the source ships one.) |
+| `trial_id` | Trial id; with `participant_id` it names one reading. **Required.** |
 | `screen_id`, `screen_index` | Optional child screen and 1-based order inside a multipart logical trial. Map in both reports. |
 | `text_id` | Which text/passage the row belongs to (plus `unique_text_id` when the source has a corpus-wide id). |
 | `word_id` | Word index within the trial. **Required** — it is the join key to fixations. |
@@ -71,14 +69,13 @@ are carried through under their canonical / original names when present.
 | `duration_ms` | Fixation duration. **Required.** |
 | `timestamp_ms` | Fixation onset. Falls back to the row's position within the trial (0, 1, 2, …) when the source has no timestamp — it drives the ordering, so rows must already be in reading order in that case. |
 | `screen_timestamp_ms`, `screen_fixation_id` | Optional local clock/id that resets per screen; retained alongside the parent-global columns. |
-| `word_id` | Source word/AOI assignment, carried through when the export has one — otherwise `NaN`. Nothing recomputes it at load time; the assignment (box containment, then nearest word center within 50 px) happens inside `compute_word_metrics` and the plots that need it. |
+| `word_id` | Source word/AOI assignment, carried through when the export has one — otherwise `NaN`. The loader only shifts ids numbered from 1 onto 0-based word boxes; the assignment (box containment, then nearest word center within 50 px) happens inside `compute_word_metrics` and the plots that need it. |
 | `order_in_trial` | 1-based fixation index, added during normalization. |
 | `fixation_id` | Always present — mapped from the source when it has one, otherwise synthesized as a per-trial running index (1, 2, 3, …). |
 | `saccade_type`, `saccade_amplitude`, `eye`, `pass_index` | Passed through when the source has them. |
 
 Column matching is case- and separator-insensitive: `IA_LEFT`, `ia_left` and
-`Ia Left` are the same name. See [Data format](data-format.md) for the full
-candidate lists per convention (EyeLink, Gazepoint, MultiplEYE, snake_case).
+`Ia Left` are the same name.
 
 ## The minimum a figure needs
 
@@ -129,17 +126,14 @@ words, fixations = sps.load_scanpath_data(words=ia_df, fixations=fix_df)
 words, fixations = sps.load_scanpath_data(fixations="fix.parquet")  # one table
 ```
 
-- Accepts DataFrames, paths, glob patterns, or lists of paths
-  (`.csv` / `.tsv` / `.txt` / `.tab` / `.parquet` / `.feather` / `.xlsx` /
-  `.xls`, or a `.zip` of any of them). Multi-file datasets are
-  concatenated and each row keeps its file stem in `source_file` — useful when
-  the participant or text id only exists in the filename.
-- Either table may be omitted. The missing side comes back as an empty canonical
-  frame and the corresponding layer is simply not drawn.
-- Ready-made public corpora have their own loaders:
-  `sps.load_potec(dir)`, `sps.load_onestop(dir)`, `sps.load_multipleye(dir)` —
-  they return the same normalized pair. See [OneStop](onestop.md) and
-  [MultiplEYE](multipleye.md).
+Ready-made public corpora have their own loaders — `sps.load_potec(dir)` and
+`sps.load_onestop(dir)` — which return the same normalized pair. See
+[OneStop](onestop.md).
+
+A raw-gaze table is loaded with `load_raw_gaze(path_or_frame)` (columns
+auto-detected; `raw_gaze_schema=` overrides), or `load_sample_raw_gaze()` for
+the demo's. Passing it as `plot_scanpath(raw_gaze=…)` filters it to the trial
+and switches the layer on.
 
 For a multipart parent, inspect `sps.list_parts(words, fixations, pid, tid)`,
 pass `screen="…"` to `plot_scanpath` / `animate_scanpath`, or call
@@ -166,146 +160,39 @@ Matching ignores case and separators (IA_LEFT == ia_left == 'Ia Left') and takes
 To override auto-detection pass the full mapping, e.g. word_schema={'trial': '<column>', 'word_id': '<column>', 'left': 'start_x', 'right': '<column>', 'top': '<column>', 'bottom': '<column>'} — api.propose_schema(df, 'words') returns what was detected.
 ```
 
-Repair it by starting from what *was* detected and filling the gaps — an
-explicit schema replaces auto-detection wholesale, so it has to be complete:
-
-```python
-from scanpath_studio import api
-
-schema = api.propose_schema("ia.csv", "words")  # {field: column or None}
-schema["trial"] = "para"
-schema["word_id"] = "aoi_number"
-words, fixations = sps.load_scanpath_data("ia.csv", "fix.csv", word_schema=schema)
-```
-
-`propose_schema(table, kind)` takes `kind="words"`, `"fixations"` or
-`"raw_gaze"`.
-
-## Choosing a trial
-
-```python
-combos = sps.list_trials(words, fixations)  # DataFrame[participant_id, trial_id]
-```
-
-`plot_scanpath` / `animate_scanpath` take `participant` and `trial` positionally
-after the frames. Both are optional **only** when the frames hold exactly one
-combo; an ambiguous selection raises instead of silently picking one. Filter the
-frames yourself for anything else — they are plain DataFrames:
-
-```python
-one_reader = combos[combos["participant_id"] == "l37_1129"]
-```
+Pass the complete mapping the message's last line suggests — an explicit schema
+replaces auto-detection wholesale — or start from
+`api.propose_schema(table, "words")` and fill the gaps.
 
 ## Rendering
 
 ```python
 fig = sps.plot_scanpath(words, fixations, pid, tid, canvas_size=(2560, 1440))
 anim = sps.animate_scanpath(words, fixations, pid, tid, playback_speed=4.0)
+pair = sps.compare_scanpaths(words, fixations, (pid, tid), (pid_b, tid_b))
 
 sps.save_figure(fig, "out.html")  # interactive, no browser needed
 sps.save_figure(fig, "out.png")  # .png/.svg/.pdf via Kaleido → needs Chrome
 sps.save_figure_layers(fig, "layers/", fmt="svg")  # one file per layer
 ```
 
-- **HTML never needs Chrome.** PNG/SVG/PDF go through Kaleido, which drives a
-  Chrome/Chromium binary: run `plotly_get_chrome -y` once, or fall back to HTML.
-  Details in [Export & troubleshooting](export-troubleshooting.md).
-- `save_figure_layers` writes one registered file per visible layer (word boxes /
-  fixations / saccades / heatmap / labels / stimulus image / frame) at identical
-  size and axis ranges — for assembling a figure in Illustrator / Inkscape.
-- A saved animation autoplays at `playback_speed`; pass `autoplay=False` for one
-  that opens paused. GIF/MP4 need
-  `scanpath_studio.animation_export.export_animation` (Kaleido + Chrome).
+**HTML never needs Chrome.** PNG/SVG/PDF go through Kaleido, which drives a
+Chrome/Chromium binary: run `plotly_get_chrome -y` once, or fall back to HTML.
+Details in [Export troubleshooting](export-troubleshooting.md).
 
-Two per-trial transforms are keywords rather than figure options, because they
-change *which fixations are drawn* rather than how:
+## Figure options
 
-```python
-fig = sps.plot_scanpath(
-    words,
-    fixations,
-    pid,
-    tid,
-    fix_index_range=(1, 40),  # only fixations 1–40 (1-based, both inclusive)
-    drift_correction="warp",  # any of alignment.ALGORITHMS
-    drift_connectors=True,  # faint original → corrected line per fixation
-)
-```
-
-- `fix_index_range` is the app's fixation-index window; `animate_scanpath`
-  accepts it too, and replays only that stretch. A window that lands outside the
-  trial raises rather than drawing an empty scanpath. It is on all four
-  surfaces: the rail's *Fixation index range* slider, `--fix-index-range
-  START:END`, this argument, and a share link's `?fix_range=lo,hi` — the link
-  carries it only when the window was actually narrowed, since the slider's
-  default is the trial's own full range.
-- `drift_correction` needs `SCANPATH_EXPERIMENTAL=1` (PRE-21) and raises without
-  it. It snaps each fixation to its assigned text line and colours by
-  line, exactly like the app's *Drift correction* control. Windowing is applied
-  first, then the correction — the app's order.
-
-## Every figure option
-
-`plot_scanpath` validates its figure keywords against the shared
-`plots.FigureSettings` contract; an unknown one raises a `TypeError` naming the
-closest valid options. The UI, headless API, bulk export, static scanpath,
-animation, and comparison renderers all consume that same settings object. The
-authoritative public list remains `api.figure_options()` (`"animation"` for the
-replay's subset):
-
-```python
-from scanpath_studio import api
-
-api.figure_options()  # {option: default} for plot_scanpath
-api.figure_options("animation")  # …for animate_scanpath
-```
-
-The defaults below are what a bare `plot_scanpath(words, fixations, pid, tid)`
-renders. **Anim** marks the options `animate_scanpath` also accepts (the
-animation has no heatmap and no arced/typed saccades; it adds `words_b`,
-`fixations_b`, `label_a`, `label_b`, `show_legend` for a two-scanpath overlay,
-plus replay-only knobs — `figure_options("animation")` is the full list).
-
-### Layers
-
-| Option | Default | Anim |
-|--------|---------|------|
-| `show_words` | `True` | yes |
-| `show_word_labels` | `True` | yes |
-| `show_fixations` | `True` | no |
-| `show_order` | `True` | yes |
-| `show_saccades` | `True` | yes |
-| `show_heatmap` | `True` | no |
-| `show_raw_gaze` | `False` | no |
-| `show_connectors` | `False` | no |
-| `connector_y` | `None` | no |
-| `illustration_reasons` | `None` | no |
-
-### Fixations
-
-| Option | Default | Anim |
-|--------|---------|------|
-| `color_by` | `'(uniform)'` | yes |
-| `color_by_line` | `False` | yes |
-| `fixation_color` | `'#0072B2'` | yes |
-| `fixation_colorscale` | `'Viridis'` | yes |
-| `fixation_color_range` | `None` | yes |
-| `fixation_symbol` | `'circle'` | yes |
-| `fixation_opacity` | `0.7` | yes |
-| `hollow_fixations` | `False` | yes |
-| `marker_size_range` | `(8, 24)` | yes |
-| `fixation_snap_to_word` | `False` | no |
-| `fixation_flags` | `None` | yes |
-| `fixation_hover_fields` | `['order_in_trial', 'duration_ms', 'word_id']` | yes |
-| `order_font_size` | `10` | yes |
-| `order_font_color` | `'#111111'` | yes |
+Every figure keyword, its default, its `render` flag and the builders that
+accept it: the [figure options table](api.md#figure-options), or
+`api.figure_options(kind)` at runtime. The option *values* below are the ones
+neither reference spells out.
 
 `color_by` is a *fixation column name* (`"duration_ms"`, `"pass_index"`, …) or
 the sentinel `"(uniform)"` for one flat colour; a name the frame doesn't have
 raises a `ValueError` naming the closest columns (see
-[Errors](#errors-and-what-they-mean)). Colouring by text line is the separate `color_by_line=True`
-flag (the lines are inferred from word-box geometry), which overrides `color_by`.
-Marker size already encodes duration, which is why hue is unmapped by default.
+[Errors](#errors-and-what-they-mean)). Colouring by text line is the separate
+`color_by_line=True` (the lines are inferred from word-box geometry), which
+overrides `color_by`.
 
 `fixation_flags` marks or drops suspicious fixations (display only — reading
 measures and exports are untouched). One entry per category, each with a mode of
@@ -330,24 +217,6 @@ flags = {
 fig = sps.plot_scanpath(words, fixations, pid, tid, fixation_flags=flags)
 ```
 
-`show_connectors` / `connector_y` are the raw form of the drift connectors; use
-`drift_correction=` + `drift_connectors=True` instead unless you are snapping the
-fixations yourself.
-
-### Saccades
-
-| Option | Default | Anim |
-|--------|---------|------|
-| `saccade_color` | `'#CC79A7'` | yes |
-| `saccade_style` | `'solid'` | yes |
-| `saccade_width` | `2.0` | yes |
-| `saccade_color_mode` | `'Uniform'` | no |
-| `saccade_class_colors` | `None` | no |
-| `saccade_type_legend` | `True` | no |
-| `saccade_classes` | `['forward', 'skip', 'refixation', 'return_sweep', 'regression', 'other']` | no |
-| `saccade_render_mode` | `'Straight'` | no |
-| `show_saccade_arrows` | `False` | yes |
-
 `saccade_color_mode` is `"Uniform"`, `"Forward / regression"` (the two-way fold)
 or `"By type"` (forward / skip / refixation / return sweep / regression, each a
 legended sub-trace, classified at render time);
@@ -358,19 +227,6 @@ hidden classes lose their direction arrows too), and it composes with any
 colour mode; naming every class is a no-op. `saccade_render_mode="Arc"` draws
 the linear-reading schematic.
 
-### Heatmap
-
-| Option | Default | Anim |
-|--------|---------|------|
-| `heatmap_style` | `'Word boxes'` | no |
-| `heatmap_metric` | `'duration_ms'` | no |
-| `heatmap_norm` | `'Linear'` | no |
-| `duration_mass_sigma_chars` | `1.0` | no |
-| `heatmap_colorscale` | `'Viridis'` | no |
-| `heatmap_range` | `None` | no |
-| `word_heatmap_col` | `None` | no |
-| `word_heatmap_title` | `None` | no |
-
 `heatmap_style` is `"Word boxes"`, `"Interpolated"` or `"Duration mass"`;
 `heatmap_metric="counts"` weights by fixation count instead of dwell time;
 `heatmap_norm="Log"` compresses heavy-tailed dwell times. Duration mass spreads
@@ -378,82 +234,27 @@ dwell over nearby characters; `duration_mass_sigma_chars` controls its Gaussian.
 
 `fixation_color_range` and `heatmap_range` are `(min, max)` pairs in the
 metric's own units. Left at `None` each trial is scaled to its own values, and
-a comparison shares one scale across A and B — which is also the app's default,
-with its *Auto range* box ticked. Pass a range to put every trial on the same
-scale.
-
-### Raw gaze
-
-| Option | Default | Anim |
-|--------|---------|------|
-| `raw_gaze_color` | `'#888888'` | yes |
-| `raw_gaze_opacity` | `0.6` | yes |
-| `raw_gaze_marker_size` | `4.0` | yes |
-
-The raw sample cloud drawn under the scanpath when `show_raw_gaze=True` and a
-normalized raw-gaze frame is passed as `raw_gaze=…`. Its own colour, opacity
-and marker size (UX-86) — separate from the fixation styling, since the point
-of the layer is to sit behind the fixations without competing with them.
-
-### Text & words
-
-| Option | Default | Anim |
-|--------|---------|------|
-| `text_color` | `'#000000'` | yes |
-| `highlight_column` | `'is_in_aspan'` | yes |
-| `highlight_text_color` | `'#D55E00'` | yes |
-| `critical_span_style` | `'Mark text'` | no |
-| `span_border_color` | `'#000000'` | no |
-| `line_spacing` | `3.0` | yes |
-| `scale_text_to_boxes` | `True` | yes |
-| `word_hover_measure` | `'total_fixation_duration_ms'` | yes |
-| `word_hover_fields` | `['text', 'word_id', 'line_idx', 'total_fixation_duration_ms']` | yes |
+a comparison shares one scale across A and B. Pass a range to put every trial on
+the same scale.
 
 `highlight_column` is a boolean words column (OneStop's critical span by
-default); it is ignored when the column isn't there.
-
-### Canvas & background
-
-| Option | Default | Anim |
-|--------|---------|------|
-| `background_color` | `'#ffffff'` | yes |
-| `fit_to_monitor` | `True` | yes |
-| `show_coordinate_grid` | `False` | yes |
-| `coordinate_grid_spacing` | `None` | yes |
-| `x_field` | `'x'` | no |
-| `y_field` | `'y'` | no |
-| `background_image` | `None` | yes |
-| `background_image_size` | `None` | yes |
-| `background_image_origin` | `None` | yes |
-| `background_image_opacity` | `1.0` | yes |
+default); the default is skipped when absent, a column you name must exist.
 
 `fit_to_monitor=True` frames the whole `canvas_size`; `False` crops to the data.
 `show_coordinate_grid=True` overlays zero-anchored monitor-pixel coordinates;
 `coordinate_grid_spacing=None` selects a readable 1/2/5×10ⁿ interval, while a
-positive number pins the major interval in pixels.
-`background_image` places a stimulus screenshot under the scanpath at data
-coordinates — see [Rendering](rendering.md).
+positive number pins the major interval in pixels. `background_image` places a
+stimulus screenshot under the scanpath at data coordinates.
 
-### Colorbars
-
-| Option | Default | Anim |
-|--------|---------|------|
-| `show_colorbars` | `False` | yes |
-| `colorbar_orientation` | `'Vertical'` | yes |
-| `colorbar_tickangle` | `0` | yes |
-| `colorbar_tickfont_size` | `12` | yes |
-
-`palette=` is a shorthand that sets a whole group of the colours above at once —
+`palette=` is a shorthand that sets a whole group of colours at once —
 `"Default (colourblind-safe)"`, `"Print / greyscale"` or `"High contrast"`
 (`constants.PALETTES`). Anything you pass explicitly still wins over it, and an
 unknown name raises rather than silently falling back.
 
 !!! note "Headless defaults vs. the app's first screen"
-    `CANONICAL_FIGURE_DEFAULTS` turns **every layer on** — word boxes, heatmap
-    and fixation indices included — while the app opens on the core scanpath
-    only, so a new user sees a legible picture. That is the only intended
-    difference: every other default (marker opacity, index-label size, monitor
-    framing, colours) is the app's.
+    `plot_scanpath` draws word boxes, the heatmap and fixation indices by
+    default, while the app opens on the core scanpath only. Every other default
+    (marker opacity, index-label size, monitor framing, colours) is the app's.
 
 ## Reading measures
 
@@ -466,7 +267,8 @@ One row per `(participant_id, trial_id, word_id)` with `first_fixation_ms`
 (RPD / go-past), `total_fixation_duration_ms` (TFD), `n_fixations`, `skip_flag`,
 `regression_in_flag`, `regression_out_flag`. Pre-aggregated columns already in
 the words table (EyeLink IA exports) win; the rest are computed from the
-fixations and word boxes.
+fixations and word boxes. Every definition is in
+[Computations & methodology](computations.md).
 
 ## The same thing from the shell
 
@@ -478,25 +280,8 @@ scanpath-studio render --words 'ia/*.csv' --fixations 'fix/*.csv' \
 scanpath-studio render --sample --animate --playback-speed 4 -o replay.html
 ```
 
-Flags carry the API's option names: layers are `--no-words` / `--no-labels` /
-`--no-fixations` / `--no-order` / `--no-saccades` / `--no-heatmap`, plus
-`--color-by`, `--heatmap-metric`, `--heatmap-norm`, `--palette`, `--canvas WxH`,
-`--separable-layers`. Drift correction is on the CLI too, but only with
-`SCANPATH_EXPERIMENTAL=1` set (PRE-21) — without it the flags don't exist and
-argparse rejects them: `--drift-correction ALGORITHM` (any of the twelve names
-in `alignment.ALGORITHMS`) and `--drift-connectors`. So are the public
-corpora — `--potec DIR`, `--onestop DIR` (+ `--onestop-regime` / `--onestop-part` /
-`--onestop-variant`), `--source multipleye --export DIR`
-(+ `--no-question-screens`; a MultiplEYE trial is a whole stimulus, so pick a
-page or question screen inside it with `--screen` / `--all-screens` /
-`--list-parts`) — plus styling and
-output controls (`--fixation-symbol`, `--saccade-arcs`, `--snap-fixations`,
-`--saccade-color-by-type` / `-by-direction`, the `--stimulus-image*` family,
-`--width` / `--height` / `--scale`, `--anim-grid-step-ms` /
-`--anim-max-frames`, `--no-autoplay`). Without `-p` / `-t` it renders the
-first available trial instead of raising. Every `plot_scanpath` figure
-option has a flag (EXP-20) — see `scanpath-studio render --help` or the
-[CLI reference](cli.md) for its spelling.
+Without `-p` / `-t`, `render` draws the first available trial instead of
+raising. Every flag is in the [CLI reference](cli.md).
 
 ## Errors and what they mean
 
@@ -510,93 +295,17 @@ option has a flag (EXP-20) — see `scanpath-studio render --help` or the
 | `Ambiguous selection: N trials match` | `participant` / `trial` left out with several combos loaded. | Pass both; `list_trials` shows what exists. |
 | `No trial matches participant=…` | Unknown id. | The message lists available ids and the closest spellings. |
 | `plot_scanpath() got an unexpected keyword argument` | Misspelled or unsupported option. | The message suggests the nearest names; `api.figure_options()` is the full list. |
-| `color_by='…' names no column of the fixations table` (or `highlight_column=`, words) | The option's *value* is a column the data doesn't have. | The message names the closest columns and lists them all; `color_by` also takes `'(uniform)'` and `'line'`. |
+| `color_by='…' (--color-by on the CLI) names no column` (or `highlight_column=`, words) | The option's *value* is a column the data doesn't have. | The message names the closest columns and lists them all; `color_by` also takes `'(uniform)'`; colour by line with `color_by_line=True`. |
 | `Options not supported by the animation:` | A static-only option (heatmap, arcs, saccade types) passed to `animate_scanpath`. | Drop it, or render the static figure. |
 | `Static .png export failed:` | Kaleido has no Chrome. | `plotly_get_chrome -y`, or save `.html`. |
 | `Fixations … have no usable coordinates` | AOI-sequence fixations with no matching word boxes. | Supply the words table whose `word_id`s match. |
 
-## Recipes
+## GIF / MP4 of a replay
 
-**Render every trial of a corpus**
-
-```python
-import scanpath_studio as sps
-
-words, fixations = sps.load_sample_data()
-for pid, tid in sps.list_trials(words, fixations).itertuples(index=False):
-    fig = sps.plot_scanpath(words, fixations, pid, tid, canvas_size=(2560, 1440))
-    sps.save_figure(fig, f"{pid}__{tid}.html")
-```
-
-For a zip of figures **and** tables across many trials, use the bulk exporter
-(`scanpath_studio.export.bulk_export` with an `ExportOptions`) instead of
-looping by hand.
-
-**A print-ready, layer-separated figure**
-
-```python
-fig = sps.plot_scanpath(
-    words,
-    fixations,
-    pid,
-    tid,
-    canvas_size=(2560, 1440),
-    palette="Print / greyscale",
-    show_heatmap=False,
-    show_order=False,
-)
-paths = sps.save_figure_layers(fig, "fig1_layers", fmt="pdf")  # {layer: Path}
-```
-
-**Compare drift-correction algorithms**
-
-Drift correction is held back behind `SCANPATH_EXPERIMENTAL=1` (PRE-21); without
-it, `drift_correction=` raises `ValueError` rather than returning uncorrected
-fixations.
-
-```python
-from scanpath_studio.alignment import ALGORITHMS
-
-for method in ALGORITHMS:
-    fig = sps.plot_scanpath(
-        words, fixations, pid, tid, show_heatmap=False, drift_correction=method
-    )
-    sps.save_figure(fig, f"aligned_{method}.html")
-```
-
-## What the API doesn't cover
-
-Several things the app can do have no `api.py` entry point. They are still
-reachable through the internal modules — on the same normalized frames, but
-without the API layer's conveniences: no trial resolution, no
-`CANONICAL_FIGURE_DEFAULTS`, and canvas/font settings you must pass yourself.
-Besides the two shown below, two more are worth knowing about:
-
-- **Scanpath similarity** (`scanpath_studio.similarity`) — the scoring behind
-  the Comparisons subtab's NLD column, which the app itself shows only with
-  `SCANPATH_EXPERIMENTAL=1` (PRE-21): `compute_similarity_table`,
-  `normalized_levenshtein`, `aoi_sequence`, `nld_by_fixation_index`,
-  `nld_by_time`.
-- **Corpus-level aggregation** (`scanpath_studio.aggregation`) — the
-  `MEASURES` registry and the per-reader/cohort profile, rate, and
-  group-comparison helpers behind the Corpus Analysis view; see
-  [Corpus analysis](corpus-analysis.md).
-
-A raw-gaze table is loaded with `load_raw_gaze(path_or_frame)` (columns
-auto-detected; `raw_gaze_schema=` overrides, starting from
-`propose_schema(df, "raw_gaze")`), or `load_sample_raw_gaze()` for the demo's.
-Pass the result to `plot_scanpath(raw_gaze=…)`, which filters it to the trial
-and switches the layer on — `render --raw-gaze PATH` on the command line.
-
-Two-scanpath comparison (the app's Compare mode) *is* covered:
-`sps.compare_scanpaths(words, fixations, trial_a, trial_b, layout=…)` takes two
-`(participant_id, trial_id)` pairs — and `words_b=` / `fixations_b=` to draw B
-from another corpus — and `animate_scanpath` overlays a second reading itself via
-`words_b=` / `fixations_b=` / `label_a=` / `label_b=` / `show_legend=`. See the
-[API reference](api.md).
-
-**GIF / MP4 of a replay** — returns bytes, keyword-only, and needs an explicit
-per-frame duration (Kaleido + Chrome; ffmpeg rides along with `imageio-ffmpeg`):
+There is no `api.py` entry point for animated GIF or MP4. Use
+`animation_export.export_animation`, which returns bytes, is keyword-only, and
+needs an explicit per-frame duration (Kaleido + Chrome; ffmpeg rides along with
+`imageio-ffmpeg`):
 
 ```python
 from pathlib import Path
@@ -613,20 +322,11 @@ clip = export_animation(
 Path("replay.mp4").write_bytes(clip)
 ```
 
-**Bulk export** (many trials → one zip of figures and tables):
-`export.bulk_export(combos, words, fixations, …)` with an `export.ExportOptions`.
-
 ## Ground rules
 
-- **Normalized frames only.** Every function past `load_scanpath_data` expects
-  its output; raw tables are rejected with a message saying so.
-- **Nothing is inferred silently.** An unknown trial, an ambiguous selection or
-  a misspelled option raises with the available alternatives listed. Read the
-  message rather than guessing a second time.
+- **Errors name the alternatives.** An unknown trial, an ambiguous selection or
+  a misspelled option raises with the valid values listed; read the message
+  rather than guessing again.
 - **AOIs come from the data.** Word boxes are never computed — only the
   fixation → word assignment is (box containment, then nearest word center
   within 50 px, else unassigned).
-- **`import scanpath_studio` is cheap**; pandas/plotly/streamlit load on the
-  first API call. Budget a few seconds for it.
-- **Kaleido/Chrome is the only external requirement**, and only for static image
-  output. HTML always works.

@@ -1121,7 +1121,7 @@ class TestFrameFingerprint:
         assert frame_fingerprint(a) != frame_fingerprint(b)
 
     def test_the_audit_repro_no_longer_collides(self):
-        """Verbatim from docs/security.md."""
+        """Verbatim from the 0.25.0 security audit (git history; ENG-80)."""
         a = pd.DataFrame(
             {
                 "participant_id": [f"p{i}" for i in range(300)],

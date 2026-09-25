@@ -136,12 +136,7 @@ class TestTheCliDoesNotOfferTheFlags:
         """Downstream branches read ``args.drift_correction`` unconditionally."""
         from scanpath_studio import cli
 
-        parser = (
-            cli._build_render_parser() if hasattr(cli, "_build_render_parser") else None
-        )
-        if parser is None:
-            pytest.skip("render parser is built inline")
-        args = parser.parse_args(["--sample", "-o", "x.html"])
+        args = cli._render_parser().parse_args(["--sample", "-o", "x.html"])
         assert isinstance(args, argparse.Namespace)
         assert args.drift_correction is None
         assert args.drift_connectors is False
@@ -476,3 +471,83 @@ class TestMultiplEYEUploadGate:
 
         assert callable(datasets.multipleye_frames_from_uploads)
         assert callable(datasets.load_multipleye_uploads)
+
+
+class TestTheBetaHidesMultiplEYEAndTheBenchmarkPlaceholder:
+    """DATA-54: two entries the beta does not offer. MultiplEYE's data is not
+    openly available yet, and the benchmark placeholder points at a pipeline
+    only the lab can run. Gated in `app.public_dataset_registry`, the one place
+    the picker, the 🗂️ Data page, Compare and share links all read."""
+
+    @pytest.fixture(autouse=True)
+    def _no_benchmark_bundle(self, tmp_path, monkeypatch):
+        """Nothing discovered — the only state the placeholder exists in, so a
+        developer's own bundle at the default location can't decide these."""
+        from scanpath_studio import app, compare_source
+
+        for module in (app, compare_source):
+            monkeypatch.setattr(
+                module, "EYEGENBENCH_DEFAULT_DIR", str(tmp_path / "absent")
+            )
+        app._cached_eyegenbench_datasets.clear()
+
+    def test_neither_entry_is_offered(self):
+        from scanpath_studio import app
+
+        registry = app.public_dataset_registry()
+        assert app.MULTIPLEYE_PUBLIC_CHOICE not in registry
+        assert constants.BENCHMARK_SETUP_CHOICE not in registry
+        # The other built-ins are unaffected.
+        assert app.ONESTOP_PUBLIC_CHOICE in registry
+        assert any("PoTeC" in label for label in registry)
+
+    def test_the_flag_brings_both_back(self, monkeypatch):
+        from scanpath_studio import app
+
+        monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
+        registry = app.public_dataset_registry()
+        assert app.MULTIPLEYE_PUBLIC_CHOICE in registry
+        assert constants.BENCHMARK_SETUP_CHOICE in registry
+
+    def test_compare_does_not_offer_multipleye_as_scanpath_b(self, monkeypatch):
+        from scanpath_studio import app, compare_source
+
+        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+        names = [name for name, _ok, _why in compare_source.secondary_dataset_options()]
+        assert app.MULTIPLEYE_PUBLIC_CHOICE not in names
+        assert app.ONESTOP_PUBLIC_CHOICE in names  # not passing by offering nothing
+
+    def test_a_multipleye_share_link_no_longer_resolves(self, monkeypatch):
+        """A link naming the corpus falls back like any corpus the recipient
+        lacks, rather than opening a source the build does not offer."""
+        from scanpath_studio import app, url_state
+
+        assert url_state.corpus_choice_for_slug("multipleye") is None
+        monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
+        assert (
+            url_state.corpus_choice_for_slug("multipleye")
+            == app.MULTIPLEYE_PUBLIC_CHOICE
+        )
+
+    def test_the_render_flags_are_hidden_but_still_work(self):
+        """Hidden from `--help` (and so from the generated CLI reference); a
+        script that already passes them keeps working."""
+        from scanpath_studio import cli
+
+        parser = cli._render_parser()
+        help_text = parser.format_help()
+        for flag in ("--source", "--export", "--no-question-screens"):
+            assert flag not in help_text, flag
+        args = parser.parse_args(
+            ["--source", "multipleye", "--export", "x", "--no-question-screens"]
+        )
+        assert (args.source, args.export, args.no_question_screens) == (
+            "multipleye",
+            "x",
+            True,
+        )
+
+    def test_the_multipleye_loader_is_untouched(self):
+        from scanpath_studio import datasets
+
+        assert callable(datasets.load_multipleye)

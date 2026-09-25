@@ -28,6 +28,13 @@ permissions:
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
+    env:
+      # Link-preview cards (the Material social plugin, ENG-79) — rendered for
+      # the published site only.
+      SOCIAL_CARDS: "true"
+      # Material and a plugin both print a banner about MkDocs 2.0; the site
+      # stays on MkDocs 1.x (Material caps it), so the notice is noise here.
+      DISABLE_MKDOCS_2_WARNING: "true"
     steps:
       - uses: actions/checkout@v7
         with:
@@ -35,6 +42,8 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+      - name: Install Cairo (social cards)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libcairo2
       - name: Install (package + docs + test extras)
         # The test extras are here for the coverage report published alongside
         # the site (ENG-37) — see "Coverage report" below.

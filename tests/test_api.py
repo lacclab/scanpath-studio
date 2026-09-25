@@ -2,8 +2,6 @@
 
 import dataclasses
 import inspect
-import re
-from pathlib import Path
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -610,31 +608,14 @@ def test_figure_settings_validate_and_override_without_mutating():
         settings.with_overrides(show_saccade=True)
 
 
-def test_agent_guide_option_tables_match_the_code():
-    """docs/agents.md documents every option and default — keep it honest."""
-    guide = (Path(__file__).resolve().parents[1] / "docs" / "agents.md").read_text(
-        encoding="utf-8"
-    )
-    section = guide.split("## Every figure option", 1)[1].split(
-        "## Reading measures", 1
-    )[0]
-    rows = re.findall(r"^\| `(\w+)` \| `(.+?)` \| (yes|no) \|$", section, re.MULTILINE)
-    assert rows, "no option table found in docs/agents.md"
-
-    static = api.figure_options()
+def test_the_animation_builder_takes_the_two_scanpath_options():
+    """The co-animation's overlay extras are animation-only options. (The docs'
+    option table is generated from `figure_options()` since ENG-79, so it needs
+    no test of its own; see tests/test_docs_support.py.)"""
+    static = set(api.figure_options())
     animation = set(api.figure_options("animation"))
-    documented = {name: (default, anim) for name, default, anim in rows}
-    assert len(documented) == len(rows)  # no duplicated row
-    assert set(documented) == set(static)
-    for name, (default, anim) in documented.items():
-        assert default == repr(static[name]), name
-        assert anim == ("yes" if name in animation else "no"), name
-    # The two-scanpath overlay extras named in the prose are animation-only.
-    # (A subset check, not equality: the animation builder also carries
-    # replay-only knobs the tables deliberately don't document — the prose sends
-    # the reader to figure_options("animation") for those.)
     assert {"words_b", "fixations_b", "label_a", "label_b", "show_legend"} <= (
-        animation - set(static)
+        animation - static
     )
 
 

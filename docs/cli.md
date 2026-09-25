@@ -86,26 +86,15 @@ in between:
 
 ```bash
 # PoTeC, downloaded on first use
-scanpath-studio render --potec ./potec -p 12 -t b0 -o potec.html
+scanpath-studio render --potec ./potec --list-trials
 
 # OneStop, choosing the variant, regime and part
 scanpath-studio render --onestop ./onestop --onestop-variant public \
   --onestop-regime ordinary --onestop-part Paragraph --list-trials
-
-# One corpus out of a prepared harmonised bundle
-scanpath-studio render --eyegenbench ./data/EyeGenBench \
-  --eyegenbench-dataset Provo -p Provo_Sub01 -t Provo_1 -o provo.svg
-
-# MultiplEYE, from its raw export
-scanpath-studio render --source multipleye --export ./multipleye_session \
-  --list-trials
 ```
 
-`--eyegenbench-dataset` names one of the thirty-one
-[harmonised benchmark corpora](benchmark-corpora.md) in a bundle you prepared
-locally; `--no-question-screens` drops MultiplEYE's comprehension screens. The
-Python API takes the same corpora through the loaders re-exported at the package
-root (`load_potec`, `load_onestop`, `load_multipleye`, `load_eyegenbench`).
+The Python API takes the same corpora through `load_potec` and
+`load_onestop`.
 
 ## Compare two scanpaths
 
@@ -128,7 +117,7 @@ scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
   --compare-layout side-by-side -o compare.svg
 
 # B from a second dataset
-scanpath-studio render --potec ./potec -p 12 -t b0 \
+scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
   --compare-with p1:t1 \
   --compare-words other/ia.csv --compare-fixations other/fix.csv \
   --compare-dataset-name "Our lab" \
@@ -150,10 +139,7 @@ scanpath-studio render --potec ./potec -p 12 -t b0 \
 | declare the screens | `--canvas WxH`, `--compare-canvas WxH` |
 | co-animate both readings | add `--animate` (HTML output) |
 
-`--label-a` / `--label-b` replace the composed trace labels — the CLI form of the
-app's per-scanpath label pattern. They go together, because `compare_scanpaths`
-takes the pair or neither, and they apply to the co-animation below just as they
-do to the static comparison.
+`--label-a` / `--label-b` also label the `--animate` co-animation.
 
 `--style-a` / `--style-b` are the app's per-scanpath styling (the Compare rows
 under 👁️ Fixations and ↗️ Saccades), `compare_scanpaths`'s `style_a` / `style_b`:
@@ -170,13 +156,9 @@ scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
   -o compare_styled.html
 ```
 
-These, `--compare-legend` and the `--stimulus-image-b` trio describe the second
-scanpath, so they are refused without `--compare-with`.
-
 `--animate --compare-with` replays **both** readings on one clock, the same dual
-co-animation the app renders with Animate and Compare both on. That is an
-overlay, so it needs one shared screen on the same terms as `--compare-layout
-overlay`. `--compare-with` cannot be combined with `--all-screens`: a comparison
+co-animation the app renders with Animate and Compare both on.
+`--compare-with` cannot be combined with `--all-screens`: a comparison
 is a single figure of two readings, so render one screen at a time with
 `--screen`.
 
@@ -193,47 +175,23 @@ B's frames directly.
 
 | Goal | Option |
 | --- | --- |
-| hide a layer | `--no-words`, `--no-labels`, `--no-fixations`, `--no-saccades`, `--no-heatmap` |
+| hide a layer | `--no-words`, `--no-labels`, `--no-fixations`, `--no-order`, `--no-saccades`, `--no-heatmap` |
 | animate | `--animate` and optionally `--playback-speed X`; every styling flag the replay can draw (`api.figure_options("animation")`) is honoured, and the rest are named in a warning |
 | set display geometry | `--canvas WIDTHxHEIGHT` |
-| show monitor-pixel axes | `--coordinate-grid` and optionally `--coordinate-grid-spacing PX` |
 | color fixations | `--color-by FIELD` |
 | draw only part of a trial | `--fix-index-range START:END` (1-based, both inclusive; honoured by `--animate` and `--compare-with` too) |
-| mark the critical span | `--highlight-column COLUMN` (`''` for none) with `--critical-span-style mark-text|mark-border|none` |
-| flag short / long / off-text / blink fixations | `--fixation-flag CATEGORY=MODE[,threshold_ms=N][,symbol=S][,color=#RRGGBB]`, repeatable |
-| classify saccades | `--saccade-color-by-type` |
-| correct vertical drift (needs `SCANPATH_EXPERIMENTAL=1`) | `--drift-correction ALGORITHM` |
 | add the stimulus image | `--stimulus-image PATH` |
 | resolve per-trial images | `--image-root DIR --image-pattern '{text_id}.png'` |
 | use Gaussian duration mass | `--heatmap-style duration-mass --duration-mass-sigma 1.0` |
-| mark a schematic | `--illustration` or `--illustration-label MODE` |
-| render an authored trial | `--authoring PATH` |
-| select or inspect a child screen | `--screen ID`, `--list-parts` |
-| render every ordered screen | `--all-screens`, optionally `--screen-transition instant|recorded` |
 | map arbitrary source rows to screens | `--trial-parts-manifest manifest.json` |
-| attach participant metadata | `--participant-metadata readers.csv` |
-| attach trial metadata | `--trial-metadata readings.csv`, `--trial-metadata-reader-column` to key it by reader **and** trial |
 | export editable layers | `--separable-layers` |
-| style the fixations | `--fixation-color`, `--fixation-symbol`, `--fixation-colorscale`, `--fixation-color-range LO HI`, `--fixation-opacity`, `--hollow-fixations`, `--marker-size-range`, `--color-by-line` |
-| style the index labels | `--order-font-size`, `--order-font-color` |
-| style the saccades | `--saccade-style`, `--saccade-width`, `--saccade-arcs`, `--saccade-arrows`, `--saccade-classes`, `--saccade-type-color` (also beside `--saccade-color-by-direction`, where it recolours that two-way split) |
-| style the text and the page | `--text-color`, `--highlight-text-color`, `--span-border-color`, `--background-color`, `--line-spacing`, `--no-scale-text-to-boxes`, `--word-hover-measure` |
 | draw the raw gaze | `--raw-gaze PATH…` (or `--sample-raw-gaze` with `--sample`), `--raw-gaze-schema JSON`, `--raw-gaze-color`, `--raw-gaze-marker-size`, `--raw-gaze-opacity` |
-| frame on the data, not the monitor | `--no-full-monitor` |
-| plot other fixation columns | `--x-field FIELD`, `--y-field FIELD` |
-| show and style the colour bars | `--colorbars`, `--colorbar-orientation`, `--colorbar-tickangle`, `--colorbar-tickfont-size` |
-| tint a words-only dataset by a column | `--word-heatmap-col COLUMN`, `--word-heatmap-title TEXT` |
-| pick a palette | `--palette` |
 | size the figure | `--width`, `--height`, `--scale` |
 | title and caption it | `--title`, `--caption` |
-| tune the heatmap | `--heatmap-metric`, `--heatmap-colorscale`, `--heatmap-norm`, `--heatmap-range LO HI` |
 | print the equivalent Python | `--print-code python` (or `cli` / `both`, plus `--print-code-explicit`) |
 
-Every figure option `api.figure_options()` lists has a flag, spelled after the
-option (`fixation_opacity` → `--fixation-opacity`; a switch that defaults on is
-turned off with `--no-…`). That is what lets the 🔗 Share subtab's *Reproduce this
-figure* block and `--print-code cli` print a command drawing exactly the figure
-on screen, rather than a list of settings the CLI could not say.
+The [figure options table](api.md#figure-options) gives every figure option's
+flag.
 
 Raw gaze is a third table rather than an option: `--raw-gaze` reads it (columns
 auto-detected like `--fixations`) and draws the plotted trial's samples under the
@@ -245,12 +203,7 @@ scanpath-studio render --sample -p l37_1129 -t l37_1129_2_2_2_Adv_r0 \
   --sample-raw-gaze --raw-gaze-opacity 0.4 -o raw_gaze.html
 ```
 
-Use the installed command as the authoritative full reference:
-
-```bash
-scanpath-studio --help
-scanpath-studio render --help
-```
+## Analyze
 
 The `analyze` command writes the full tabular family without opening the app:
 
@@ -258,23 +211,24 @@ The `analyze` command writes the full tabular family without opening the app:
 scanpath-studio analyze --words ia.csv --fixations fixations.csv --output-dir analysis
 ```
 
-This creates word, sentence, saccade, trial, reader, character, cleaning-QA,
-and run-configuration files. It takes the same `--words` / `--fixations`
+This writes fixation, saccade, word, sentence, trial, reader, character and
+cleaning-QA tables as CSV, plus `run_config.json`. It takes the same `--words` / `--fixations`
 (several paths each), `--trial-parts-manifest`, `--word-schema` and
 `--fix-schema` as `render`, plus the optional preprocessing stage
 ([`api.preprocess_data`](api.md#scanpath_studio.api.preprocess_data)), which is
 off unless a flag below turns it on and never deletes a row — excluded fixations
 keep `excluded` / `excluded_reason`:
 
-| Option | Default | Effect |
-| --- | --- | --- |
-| `--short-policy {off,merge,merge-then-discard,discard}` | `off` | What to do with fixations shorter than the threshold: `merge` folds each into its nearer neighbour within the merge distance (a short last fixation that cannot merge is excluded), `merge-then-discard` also excludes every other one that cannot merge, and `discard` excludes them all. |
-| `--short-threshold-ms MS` | `80` | What counts as short. |
-| `--merge-distance-chars N` | `1.0` | How close, in character widths, a neighbour must be to merge into. |
-| `--discard-blink-adjacent` | off | Exclude blinks and the fixations either side of one. |
-| `--pixels-per-degree PX` | none | Adds degree-valued saccade amplitudes to the saccade table. |
+```python exec="true"
+from docs_support import cli_reference
 
-Every value lands in `run_config.json` beside the tables.
+print(cli_reference("analyze"))
+```
+
+The preprocessing settings and `--pixels-per-degree` are recorded in
+`run_config.json`.
+
+## Corpus figures
 
 `scanpath-studio corpus` goes the other way: it reads a tidy CSV you already
 have and renders a styled corpus figure
@@ -284,25 +238,19 @@ have and renders a styled corpus figure
 scanpath-studio corpus --input profile.csv --kind profile --output profile.svg
 ```
 
-| Option | Default | Effect |
-| --- | --- | --- |
-| `--input CSV` | required | The table. `profile` reads `word_id` plus the value column (and optional `lo` / `hi`), `distribution` the value column, `difference` `word_id` and `diff`. |
-| `--kind {profile,distribution,difference}` | required | A per-word profile, a distribution, or a difference profile. |
-| `--output PATH` | required | Any extension `save_figure` writes (`.html`, `.png`, `.svg`, `.pdf`). |
-| `--value-col NAME` | `value` | The value column. |
-| `--series-col NAME` | `series` | When present, one overlaid series per value. |
-| `--measure-label TEXT` | `Value` | Axis / legend label. |
-| `--primary-color`, `--secondary-color` | `#1f77b4`, `#e45756` | The series colours. |
+```python exec="true"
+from docs_support import cli_reference
 
-The `render` command still renders one
-trial per invocation; use the [Python batch pattern](automation.md#batch-pattern)
+print(cli_reference("corpus"))
+```
+
+## Many trials
+
+The `render` command renders one trial per invocation; use the [Python batch pattern](automation.md#batch-pattern)
 or **Export → Export bundle** for many figures.
 
 `--all-screens` is the multipart exception: it writes one deterministic
-`__screen-001-<id>` file per screen of the selected parent trial. The recorded
-transition option stores the observed parent-clock gap in animation metadata;
-it does not invent a visual saccade between screens. The same manifest flag is
-accepted by `analyze`.
+`__screen-001-<id>` file per screen of the selected parent trial.
 
 ## Recovery cache
 
@@ -323,3 +271,32 @@ app. `SCANPATH_STUDIO_PERSIST=0` turns caching
 off permanently, `--no-persist` for one launch, and `SCANPATH_STUDIO_STATE_DIR`
 moves the folder. Hosted deployments never cache. See
 [Privacy](privacy.md#what-happens-to-a-file-you-upload).
+
+## Full reference
+
+Generated from the parsers the commands themselves use, so every flag is here
+with the default and help `--help` prints.
+
+```python exec="true"
+from docs_support import cli_help
+
+print(cli_help())
+```
+
+??? note "`render` — every flag"
+
+    ```python exec="true"
+    from docs_support import cli_reference
+
+    print(cli_reference("render"))
+    ```
+
+??? note "`cache` — every flag"
+
+    ```python exec="true"
+    from docs_support import cli_reference
+
+    print(cli_reference("cache"))
+    ```
+
+`analyze` and `corpus` are listed in full in their own sections above.

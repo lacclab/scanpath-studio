@@ -22,7 +22,7 @@ existing ones are for:
 | --- | --- |
 | **OneStop** | Picking the right regime × part files out of the OSF release, and keeping the parts of one trial from colliding. The columns themselves are already fine. |
 | **PoTeC** | 900 per-trial files to concatenate; word AOIs with no participant column; and fixations with **no coordinates at all** — x/y has to be reconstructed from which character was fixated. |
-| **MultiplEYE** | Participant, session, trial and stimulus exist only in folder and file names; AOIs are per-character and must be combined into words; each page of a stimulus reuses the same screen coordinates, so one reading of a stimulus becomes one trial whose ordered **screens** are its pages and comprehension-question screens (DATA-24). |
+| **MultiplEYE** | Participant, session, trial and stimulus exist only in folder and file names; AOIs are per-character and must be combined into words; each page of a stimulus reuses the same screen coordinates, so one reading of a stimulus becomes one trial whose ordered **screens** are its pages and comprehension-question screens. |
 
 If none of that sounds like your corpus, open an
 [issue](https://github.com/lacclab/scanpath-studio/issues) describing its shape
@@ -31,8 +31,7 @@ this".
 
 ## Where the data lives
 
-Nothing corpus-scale goes into the installed package: it's ~3.3 MB of Python plus
-~4.5 MB of demo data, and that's the whole budget. So in practice a new corpus is
+Nothing corpus-scale goes into the installed package. So in practice a new corpus is
 either **downloaded on demand** into a folder the user picks (PoTeC, OneStop) or
 **read from a directory the user already has** (MultiplEYE). Both look identical
 from the user's side — one picker entry, one `load_*` function.
@@ -144,7 +143,7 @@ import time:
     description="German reading of biology & physics textbook passages "
     "(expert/novice readers).",
     link="https://github.com/DiLi-Lab/PoTeC",
-    published_counts={             # the row before anyone opens it (DATA-36)
+    published_counts={             # the row before anyone opens it
         "Participants": 75,
         "Texts": 12,
         "Trials": 900,
@@ -164,8 +163,7 @@ import time:
 why `published_counts_source` sits beside it: say which published document each
 figure came from, and say so when you measured one yourself instead. The table
 shows them until the dataset is opened, then shows what actually loaded and
-flags any field where the load exceeds the published figure — a discrepancy that
-can only mean the published number is wrong. `geometry` is the matching honesty
+flags any field where the load exceeds the published figure. `geometry` is the matching honesty
 line for coordinates: whether the boxes and fixation positions are the corpus'
 own, reconstructed, or synthesized.
 
@@ -280,7 +278,7 @@ its **on-disk size**.
 Before you open it:
 
 ```bash
-pip install -e ".[test,docs]"
+pip install -e ".[test,lint,docs]"
 pytest
 ruff check .
 ruff format .

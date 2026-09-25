@@ -1,4 +1,4 @@
-# Export & troubleshooting
+# Export troubleshooting
 
 ## Figure formats
 
@@ -18,10 +18,9 @@ Chrome. `pip install` does **not** install Chrome — run this once:
 kaleido_get_chrome        # or: plotly_get_chrome -y
 ```
 
-(From Python: `import kaleido; kaleido.get_chrome_sync()`.) On **Streamlit
-Community Cloud** the repo-root `packages.txt` installs `chromium` automatically.
-If Chrome is unavailable, fall back to **HTML** export (it's browser-free) — the
-in-app export buttons pre-flight for Chrome and point you here when it's missing.
+(From Python: `import kaleido; kaleido.get_chrome_sync()`.) If Chrome is
+unavailable, use **HTML** export; the export panel shows the install command
+when Chrome is missing.
 
 ## MP4 / GIF
 
@@ -47,21 +46,9 @@ Path("replay.mp4").write_bytes(clip)
 
 - **GIF** is encoded by Pillow; **MP4** uses the ffmpeg binary bundled by the
   `imageio[ffmpeg]` dependency — no system ffmpeg needed.
-- If `export_animation` raises, you most likely installed `imageio` without the
-  `[ffmpeg]` extra, or Chrome is missing for the per-frame render.
+- If `export_animation` raises, Chrome is usually missing (see above).
 - The CLI's `--animate` writes **interactive HTML** only; use the Python API for
   GIF/MP4.
-
-## Complete tabular export
-
-In **Export → Export bundle**, select **Full measure family** to add saccades,
-sentence measures, trial and reader summaries, character grids, cleaning QA,
-and `run_config.json` alongside the existing fixation and word-measure files.
-The zip contains both per-trial files and concatenated `aggregate/all_*` files.
-With **Mega-table** ticked as well, `aggregate/all_fixations` is the family's
-word-enriched table — one file under that name, never two.
-The run configuration records preprocessing and visualization settings so the
-numbers can be reproduced later.
 
 ## Common issues
 
@@ -84,9 +71,3 @@ numbers can be reproduced later.
     visualization rail, or `canvas_size=(W, H)` in the API) — e.g.
     `(2560, 1440)` for OneStop.
 
-??? question "OneStop server data"
-    Pointing the app at a full OneStop export uses `$ONESTOP_DATA_DIR`; shard it
-    once with `python -m scanpath_studio.onestop_shard --data-dir …` so a
-    deep-linked participant loads in under a second. The loader details are in
-    [`scanpath_studio/CLAUDE.md`](https://github.com/lacclab/scanpath-studio/blob/main/scanpath_studio/CLAUDE.md)
-    (`onestop_shard.py`, `data.load_onestop_server_bundle`).

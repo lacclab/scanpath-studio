@@ -25,7 +25,6 @@ matches the question:
 
 Start with one familiar measure: total fixation duration for overall attention,
 first-pass gaze duration for initial processing, or regression rate for rereading.
-Keep the default aggregation and spread display until the result is understood.
 
 For a word profile, set a minimum number of readers per word so isolated
 observations do not appear as stable estimates.
@@ -36,9 +35,7 @@ Check how many readers, trials, or observations contribute to the chart. In
 **Groups**, turn on comparison only after one cohort looks correct; then define
 the second cohort and inspect the difference/effect-size output.
 
-Use a scanpath view to investigate surprising cases. A corpus summary describes
-a pattern; it does not show whether that pattern came from drift, outliers, or a
-particular trial.
+Use a scanpath view to investigate surprising cases.
 
 ## 5. Download the table
 

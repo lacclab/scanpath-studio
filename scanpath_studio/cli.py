@@ -49,6 +49,7 @@ from .constants import (
     SACCADE_WIDTH_BOUNDS,
     UNIFORM_COLOR_FIELD,
     drift_correction_enabled,
+    multipleye_enabled,
     palette_settings,
 )
 
@@ -444,28 +445,41 @@ def _render_parser() -> argparse.ArgumentParser:
         help="OneStop source variant for --onestop: 'public' (OSF download) or "
         "'lacclab' (a local lab-processed export; no download).",
     )
+
+    # DATA-54: MultiplEYE is held back from the beta. Its flags still parse and
+    # work, so a script that already uses them keeps running (PRE-22's rule), but
+    # `--help` — and the docs' reference, generated from it — don't list them.
+    def mpe_help(text: str) -> str:
+        return text if multipleye_enabled() else argparse.SUPPRESS
+
     src.add_argument(
         "--source",
         metavar="NAME",
         choices=["multipleye"],
-        help="Load a native server-bundle corpus from its RAW export instead of "
-        "raw words/fixations tables. Currently only 'multipleye' — pair with "
-        "--export DIR. Renders through the same native loader (correct word "
-        "boxes/text/page layout, 1920x1080 monitor) as the interactive viewer.",
+        help=mpe_help(
+            "Load a native server-bundle corpus from its RAW export instead of "
+            "raw words/fixations tables. Currently only 'multipleye' — pair with "
+            "--export DIR. Renders through the same native loader (correct word "
+            "boxes/text/page layout, 1920x1080 monitor) as the interactive viewer."
+        ),
     )
     src.add_argument(
         "--export",
         metavar="DIR",
-        help="Raw export root for --source (e.g. a MultiplEYE_*_* export dir with "
-        "per-session scanpaths/ subfolders). Defaults to $MULTIPLEYE_DATA_DIR "
-        "for --source multipleye.",
+        help=mpe_help(
+            "Raw export root for --source (e.g. a MultiplEYE_*_* export dir with "
+            "per-session scanpaths/ subfolders). Defaults to $MULTIPLEYE_DATA_DIR "
+            "for --source multipleye."
+        ),
     )
     src.add_argument(
         "--no-question-screens",
         action="store_true",
-        help="--source multipleye: load the reading pages only, leaving out the "
-        "comprehension-question screens (they are included by default, as "
-        "screens of the same trial).",
+        help=mpe_help(
+            "--source multipleye: load the reading pages only, leaving out the "
+            "comprehension-question screens (they are included by default, as "
+            "screens of the same trial)."
+        ),
     )
 
     src.add_argument(
@@ -2773,8 +2787,9 @@ def render(argv: list[str]) -> None:
         )
 
 
-def analyze(argv: list[str]) -> None:
-    """Preprocess data and export the complete EXP-3 analysis family."""
+def _analyze_parser() -> argparse.ArgumentParser:
+    """The `analyze` parser — its own function so the docs' CLI reference is
+    generated from it rather than restated (ENG-79)."""
     parser = argparse.ArgumentParser(
         prog="scanpath-studio analyze",
         description="Write fixation, saccade, word, sentence, trial, reader, "
@@ -2833,7 +2848,12 @@ def analyze(argv: list[str]) -> None:
         "amplitudes to the saccade table.",
     )
     _add_schema_flags(parser)
-    args = parser.parse_args(argv)
+    return parser
+
+
+def analyze(argv: list[str]) -> None:
+    """Preprocess data and export the complete EXP-3 analysis family."""
+    args = _analyze_parser().parse_args(argv)
     word_schema = _parse_schema_arg(args.word_schema, "--word-schema")
     fix_schema = _parse_schema_arg(args.fix_schema, "--fix-schema")
 
@@ -2899,8 +2919,8 @@ def analyze(argv: list[str]) -> None:
     print(f"Wrote {len(tables)} tables + run_config.json to {destination}")
 
 
-def corpus(argv: list[str]) -> None:
-    """Render a styled corpus figure from a tidy CSV (AN-29)."""
+def _corpus_parser() -> argparse.ArgumentParser:
+    """The `corpus` parser (see `_analyze_parser`)."""
     parser = argparse.ArgumentParser(
         prog="scanpath-studio corpus",
         description="Render a styled corpus figure from a tidy CSV you already "
@@ -2949,7 +2969,12 @@ def corpus(argv: list[str]) -> None:
         default="#e45756",
         help="Second series colour (default: #e45756).",
     )
-    args = parser.parse_args(argv)
+    return parser
+
+
+def corpus(argv: list[str]) -> None:
+    """Render a styled corpus figure from a tidy CSV (AN-29)."""
+    args = _corpus_parser().parse_args(argv)
     from . import api
 
     # EXP-13: each of these ended in a traceback — a missing or unparseable
@@ -2974,14 +2999,8 @@ def corpus(argv: list[str]) -> None:
     print(f"Wrote {out}")
 
 
-def cache(argv: list[str]) -> None:
-    """Inspect or clear the on-device recovery cache (ENG-30).
-
-    The terminal counterpart of the app's 💾 Session → 🗄️ Automatic recovery
-    block, so the
-    storage a local run creates can be found, measured and deleted without
-    launching the app (or after closing it).
-    """
+def _cache_parser() -> argparse.ArgumentParser:
+    """The `cache` parser (see `_analyze_parser`)."""
     parser = argparse.ArgumentParser(
         prog="scanpath-studio cache",
         description="Show what a local run has stored on this computer "
@@ -2996,7 +3015,18 @@ def cache(argv: list[str]) -> None:
     parser.add_argument(
         "--clear", action="store_true", help="delete the stored session"
     )
-    args = parser.parse_args(argv)
+    return parser
+
+
+def cache(argv: list[str]) -> None:
+    """Inspect or clear the on-device recovery cache (ENG-30).
+
+    The terminal counterpart of the app's 💾 Session → 🗄️ Automatic recovery
+    block, so the
+    storage a local run creates can be found, measured and deleted without
+    launching the app (or after closing it).
+    """
+    args = _cache_parser().parse_args(argv)
     from .persistence import PERSIST_ENV_VAR, cache_status, clear_local_state
     from .persistence import human_size as _human_size
 

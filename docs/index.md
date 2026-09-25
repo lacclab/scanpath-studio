@@ -23,7 +23,11 @@ Inspect, compare, analyse, and export eye-tracking-while-reading scanpaths.
 </div>
 </div>
 
-![A scanpath over its stimulus text, with visualization controls alongside it](assets/app_screenshot.png){ .sps-shot }
+<video class="sps-shot" controls muted loop playsinline preload="metadata"
+       poster="assets/app_demo_poster.webp" data-autoplay
+       aria-label="Using Scanpath Studio: stepping through trials, a heatmap, a replay, a two-reader comparison and Corpus Analysis">
+  <source src="assets/app_demo.mp4" type="video/mp4">
+</video>
 
 ## Start with your task
 
@@ -51,19 +55,19 @@ Inspect, compare, analyse, and export eye-tracking-while-reading scanpaths.
 
 - **Scanpath visualization:** true-position text, fixations, saccades, raw gaze,
   heatmaps, replay, and comparison — including two trials from different
-  datasets. Vertical-drift correction is available behind an experimental flag.
+  datasets.
 - **Flexible loading:** your own word, fixation, and raw-gaze tables with
-  automatic or manual column mapping, a table of participant metadata, or one of
-  the ready-made public corpora — OneStop, PoTeC, MultiplEYE, and thirty-one
-  [harmonised benchmark corpora](benchmark-corpora.md).
+  automatic or manual column mapping, a table of participant metadata, or the
+  OneStop and PoTeC public corpora.
 - **Corpus analysis:** per-text, per-sentence, per-reader, and group summaries
   using standard reading measures, each one documented in the
   [computation register](computations.md).
 - **Reproducible output:** static and animated figures, bulk exports, share
   links, and restorable configurations.
 
-See the [feature guides](guides/index.md) for the controls, or
-[Automation & reference](automation.md) for Python, CLI, and file formats.
+See the [Gallery](gallery.md) for what it draws, the
+[feature guides](guides/index.md) for the controls, or
+[Automation](automation.md) for Python and the CLI.
 
 !!! note "AI-assisted software"
     Scanpath Studio was built with AI assistance. Cross-check results before
@@ -71,6 +75,5 @@ See the [feature guides](guides/index.md) for the controls, or
     suggestion — [report it](https://github.com/lacclab/scanpath-studio/issues).
 
 Cite the software by its Zenodo DOI,
-[10.5281/zenodo.22933884](https://doi.org/10.5281/zenodo.22933884); the full
-citation metadata is in
-[`CITATION.cff`](https://github.com/lacclab/scanpath-studio/blob/main/CITATION.cff).
+[10.5281/zenodo.22933884](https://doi.org/10.5281/zenodo.22933884) —
+[Cite](cite.md) has ready-made BibTeX and APA entries.

@@ -97,11 +97,13 @@ class AnimationBudgetError(AnimationExportError):
 
 # Actionable remediation when Kaleido can't find a Chrome/Chromium binary — the
 # usual cause of a failed GIF/MP4 (or static PNG/SVG/PDF) export (ENG-10).
+# BUG-85: worded for both installs. The frozen desktop bundle has no
+# `kaleido_get_chrome` / `plotly_get_chrome` and no Python prompt, but
+# `chromium_browser_path` finds an installed Chrome, Chromium or Edge there too.
 CHROME_INSTALL_HINT = (
-    "No Chrome/Chromium was found for image export. Install one with "
-    "`kaleido_get_chrome` (or `plotly_get_chrome -y`) in this environment, or from "
-    "Python run `import kaleido; kaleido.get_chrome_sync()`. The **HTML** export "
-    "needs no browser."
+    "Image export needs Chrome, Chromium or Edge, and none was found. Install one "
+    "of them and try again — a pip install can instead run `plotly_get_chrome -y`. "
+    "The **HTML** export needs no browser."
 )
 
 

@@ -130,11 +130,9 @@ def test_animation_missing_browser_fails_before_starting_kaleido(monkeypatch):
 
     monkeypatch.setattr(kaleido, "start_sync_server", unexpected_start)
 
-    with pytest.raises(
-        animation_export.AnimationExportError,
-        match="No Chrome/Chromium",
-    ):
+    with pytest.raises(animation_export.AnimationExportError) as excinfo:
         animation_export.render_png_frames(fig, frame_indices=[0])
+    assert str(excinfo.value) == animation_export.CHROME_INSTALL_HINT
 
 
 def test_static_render_emits_stage_sequence(monkeypatch):

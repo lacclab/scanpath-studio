@@ -280,6 +280,19 @@ class TestExportAnimationValidation:
             export_animation(go.Figure(), fmt="mp4", frame_duration_ms=50.0)
 
 
+def test_the_missing_browser_hint_works_in_the_desktop_app_too():
+    """BUG-85: the hint's fixes were `kaleido_get_chrome`, `plotly_get_chrome`
+    and a Python one-liner — none of which exists in the frozen desktop bundle.
+    What both installs can do is install a browser `chromium_browser_path`
+    finds; the one command it keeps is labelled as the pip install's."""
+    hint = ae.CHROME_INSTALL_HINT
+    for browser in ("Chrome", "Chromium", "Edge"):
+        assert browser in hint
+    assert "kaleido_get_chrome" not in hint
+    assert "get_chrome_sync" not in hint
+    assert "pip install" in hint
+
+
 class TestDownsampleDurationPreserved:
     """Downsampling renders fewer frames but holds each longer, so total runtime
     is unchanged. This tests the orchestration math with the renderer stubbed."""

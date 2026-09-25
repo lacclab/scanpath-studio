@@ -1,0 +1,18 @@
+# Scanpath Studio
+
+> Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data.
+
+Scanpath Studio is an interactive Streamlit workbench, a Python API (`import scanpath_studio as sps`) and a CLI (`scanpath-studio`) for eye-tracking-while-reading data: it draws fixations, saccades and heatmaps over the text at its true on-screen position, computes per-word reading measures (FFD, FPRT, RPD, TFD, skips, regressions), compares readers, and exports figures and tables. The bundled demo is a subset of the OneStop Eye Movements corpus.
+
+## Use the app
+
+
+## Automate
+
+
+## Reference
+
+
+## Project
+
+

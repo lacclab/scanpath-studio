@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://lacclab.github.io/scanpath-studio/data-format/">
       
       
-        <link rel="prev" href="../cli/">
+        <link rel="prev" href="../agents/">
       
       
         <link rel="next" href="../computations/">
@@ -47,11 +47,13 @@
       
         
         
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        
+        <link rel="stylesheet" href="../assets/external/fonts.googleapis.com/css.49ea35f2.css">
         <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
       
     
+    
+      <link rel="stylesheet" href="../assets/_markdown_exec_pyodide.css">
     
       <link rel="stylesheet" href="../assets/_mkdocstrings.css">
     
@@ -63,7 +65,20 @@
 
     
     
-  </head>
+  
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Data format - Scanpath Studio" />
+<meta property="og:description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data." />
+<meta property="og:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/data-format.png" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:url" content="https://lacclab.github.io/scanpath-studio/data-format/" />
+<meta property="twitter:card" content="summary_large_image" />
+<meta property="twitter:title" content="Data format - Scanpath Studio" />
+<meta property="twitter:description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data." />
+<meta property="twitter:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/data-format.png" />
+</head>
   
   
     
@@ -174,6 +189,11 @@
       </label>
       <nav class="md-search__options" aria-label="Search">
         
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
         <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
           
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
@@ -242,14 +262,36 @@
   
   
   
+    
+    
+      <li class="md-tabs__item">
+        <a href="../getting-started/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Use the app
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
     <li class="md-tabs__item">
-      <a href="../getting-started/" class="md-tabs__link">
+      <a href="../gallery/" class="md-tabs__link">
         
   
   
     
   
-  Get started
+  Gallery
 
       </a>
     </li>
@@ -264,35 +306,13 @@
     
     
       <li class="md-tabs__item">
-        <a href="../tutorials/" class="md-tabs__link">
+        <a href="../automation/" class="md-tabs__link">
           
   
   
     
   
-  Tutorials
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-  
-  
-    
-    
-      <li class="md-tabs__item">
-        <a href="../guides/" class="md-tabs__link">
-          
-  
-  
-    
-  
-  Feature guides
+  Automate
 
         </a>
       </li>
@@ -310,13 +330,35 @@
     
     
       <li class="md-tabs__item md-tabs__item--active">
-        <a href="../automation/" class="md-tabs__link">
+        <a href="./" class="md-tabs__link">
           
   
   
     
   
-  Automation & reference
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../cite/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Project
 
         </a>
       </li>
@@ -407,6 +449,72 @@
   
   
   
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use the app
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Use the app
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
     <li class="md-nav__item">
       <a href="../getting-started/" class="md-nav__link">
         
@@ -427,9 +535,10 @@
     </li>
   
 
-    
-      
-      
+              
+            
+              
+                
   
   
   
@@ -462,7 +571,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_2" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -484,14 +593,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_2_2" id="__nav_2_2_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_2">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -621,9 +730,10 @@
     </li>
   
 
-    
-      
-      
+              
+            
+              
+                
   
   
   
@@ -656,7 +766,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_3" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -678,14 +788,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_2_3" id="__nav_2_3_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -815,31 +925,134 @@
     </li>
   
 
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../desktop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Desktop app
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../export-troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Export troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
     
       
       
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../gallery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
     
+  
+    Gallery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
   
   
   
+  
     
     
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
       
         
       
@@ -853,29 +1066,26 @@
     
     
       
-        
-        
-      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
             
   
   
   <span class="md-ellipsis">
     
   
-    Automation & reference
+    Automate
   
 
     
@@ -886,12 +1096,12 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
   
-    Automation & reference
+    Automate
   
 
           </label>
@@ -980,6 +1190,108 @@
   
 
               
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For coding agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
             
               
                 
@@ -1124,28 +1436,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#optional-preprocessing-and-derived-tables" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Optional preprocessing and derived tables
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#setup-wizard-saved-setups" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Setup wizard &amp; saved setups
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -1190,14 +1480,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../desktop/" class="md-nav__link">
+      <a href="../glossary/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Desktop app
+    Glossary
   
 
     
@@ -1218,14 +1508,109 @@
   
   
     <li class="md-nav__item">
-      <a href="../export-troubleshooting/" class="md-nav__link">
+      <a href="../onestop/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Export troubleshooting
+    OneStop corpus
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cite/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cite
   
 
     
@@ -1246,14 +1631,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../faq/" class="md-nav__link">
+      <a href="../changelog/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    FAQ
+    Changelog
   
 
     
@@ -1290,376 +1675,6 @@
   
 
       </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    
-    
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-      
-        
-          
-          
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_10" >
-        
-          
-          <label class="md-nav__link" for="__nav_5_10" id="__nav_5_10_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Public corpora
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_10_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_10">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Public corpora
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../onestop/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    OneStop
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../multipleye/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    MultiplEYE
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../benchmark-corpora/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Harmonised benchmark corpora
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    
-    
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-      
-        
-          
-          
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_11" >
-        
-          
-          <label class="md-nav__link" for="__nav_5_11" id="__nav_5_11_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Development
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_11_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_11">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Development
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../contributing-a-dataset/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Contributing a dataset
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../architecture/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Architecture
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../agents/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    For coding agents
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../rendering/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    True-to-scale rendering
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../security/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Security audit
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
     </li>
   
 
@@ -1775,28 +1790,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#optional-preprocessing-and-derived-tables" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Optional preprocessing and derived tables
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#setup-wizard-saved-setups" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Setup wizard &amp; saved setups
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -1808,12 +1801,73 @@
           
             <div class="md-content" data-md-component="content">
               
+                
+
+
+
+  
+
+
+  <nav class="md-path" aria-label="Navigation" >
+    <ol class="md-path__list">
+      
+        
+  
+  
+    <li class="md-path__item">
+      <a href=".." class="md-path__link">
+        
+  <span class="md-ellipsis">
+    Home
+  </span>
+
+      </a>
+    </li>
+  
+
+      
+      
+        
+  
+  
+    
+    
+      <li class="md-path__item">
+        <a href="./" class="md-path__link">
+          
+  <span class="md-ellipsis">
+    Reference
+  </span>
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ol>
+  </nav>
+
+              
               <article class="md-content__inner md-typeset">
                 
                   
 
 
   
+    <a href="https://github.com/lacclab/scanpath-studio/edit/main/docs/data-format.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z"/></svg>
+    </a>
+  
+  
+    
+      
+    
+    <a href="https://github.com/lacclab/scanpath-studio/raw/main/docs/data-format.md" title="View source of this page" class="md-content__button md-icon">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 18c.56 0 1 .44 1 1s-.44 1-1 1-1-.44-1-1 .44-1 1-1m0-3c-2.73 0-5.06 1.66-6 4 .94 2.34 3.27 4 6 4s5.06-1.66 6-4c-.94-2.34-3.27-4-6-4m0 6.5a2.5 2.5 0 0 1-2.5-2.5 2.5 2.5 0 0 1 2.5-2.5 2.5 2.5 0 0 1 2.5 2.5 2.5 2.5 0 0 1-2.5 2.5M9.27 20H6V4h7v5h5v4.07c.7.08 1.36.25 2 .49V8l-6-6H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h4.5a8.2 8.2 0 0 1-1.23-2"/></svg>
+    </a>
   
 
 
@@ -1825,7 +1879,7 @@ common EyeLink, Gazepoint, Tobii, SMI, Pupil Labs, and snake-case conventions;
 the app's <strong>Column
 mapping</strong> panel (and the
 <code>word_schema</code> / <code>fix_schema</code> arguments of
-<a class="autorefs autorefs-internal" title="scanpath_studio.api.load_scanpath_data" href="../api/#scanpath_studio.api.load_scanpath_data"><code>load_scanpath_data</code></a>) override
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.load_scanpath_data&lt;/span&gt;" href="../api/#scanpath_studio.api.load_scanpath_data"><code>load_scanpath_data</code></a>) override
 any guess.</p>
 <h2 id="tables">Tables<a class="headerlink" href="#tables" title="Permanent link">&para;</a></h2>
 <table>
@@ -1838,14 +1892,14 @@ any guess.</p>
 </thead>
 <tbody>
 <tr>
-<td><strong>Words / IA</strong></td>
+<td><strong>Words / <abbr title="Interest area: EyeLink's name for an AOI">IA</abbr></strong></td>
 <td>one row per word / interest area, with its on-screen box</td>
-<td>participant id, trial id, word id, word text, and the box as <strong>edges</strong> (<code>IA_LEFT/RIGHT/TOP/BOTTOM</code>) <strong>or</strong> origin+size (<code>x/y/width/height</code>)</td>
+<td>trial id, word id, and the box as <strong>edges</strong> (<code>IA_LEFT/RIGHT/TOP/BOTTOM</code>) <strong>or</strong> origin+size (<code>x/y/width/height</code>); optionally participant id and word text</td>
 </tr>
 <tr>
 <td><strong>Fixations</strong></td>
 <td>one row per fixation</td>
-<td>participant id, trial id, duration (ms); optionally x/y, timestamp, fixation id, word/IA id</td>
+<td>trial id, duration (ms), and x/y or a word/<abbr title="Interest area: EyeLink's name for an AOI">IA</abbr> id; optionally participant id, timestamp, fixation id</td>
 </tr>
 <tr>
 <td><strong>Raw gaze</strong> <em>(optional)</em></td>
@@ -1859,8 +1913,8 @@ any guess.</p>
 </tr>
 <tr>
 <td><strong>Trial metadata</strong> <em>(optional)</em></td>
-<td>one row per reading</td>
-<td>trial id (optionally participant id too), plus anything you know about that reading</td>
+<td>one row per trial</td>
+<td>trial id, plus anything you know about that trial</td>
 </tr>
 <tr>
 <td><strong>Text metadata</strong> <em>(optional)</em></td>
@@ -1877,10 +1931,8 @@ be <strong>pixels</strong>: screen fractions (Gazepoint <code>FPOGX</code> / <co
 <code>norm_pos_x</code> / <code>norm_pos_y</code>) are flagged with a warning but not converted, since
 the load does not know the screen size — multiply them by the screen width and
 height in pixels first.</p>
-<p>Either main table may be omitted for single-report datasets — the missing layer
-is simply skipped. A words-only table still draws a heatmap from its
-pre-aggregated reading measures, and a dataset added with only one of the two can
-gain the other later on 🗂️ <strong>Data → ✏️ Edit dataset</strong>, without being added again.</p>
+<p>Either main table may be omitted — the missing layer is skipped, and a
+words-only table still draws a heatmap from its pre-aggregated reading measures.</p>
 <h2 id="participant-metadata">Participant metadata<a class="headerlink" href="#participant-metadata" title="Permanent link">&para;</a></h2>
 <p>Attach a table of <strong>one row per reader</strong> — native language, age, a
 comprehension score, a group label. When you upload your own data it is one of
@@ -1897,10 +1949,8 @@ sessions.</p>
 </code></pre></div>
 <p>Three rules are worth knowing:</p>
 <ul>
-<li><strong>The table is never copied onto your fixations.</strong> It stays its own table, and
-  a reader attribute stays distinguishable from a per-fixation measurement — on
-  the way in, in the exported bundle (<code>metadata/participants.csv</code>), and
-  everywhere in between.</li>
+<li><strong>The table is never copied onto your fixations.</strong> It stays its own table and
+  is exported separately (<code>metadata/participants.csv</code>).</li>
 <li><strong>Nothing is guessed.</strong> The join is reported before anything uses it: readers
   in your data with no row, rows describing readers you did not load, and
   duplicate rows. Duplicates that <em>disagree</em> are dropped and named rather than
@@ -1911,7 +1961,7 @@ sessions.</p>
 <p>Headless, it is a <code>--participant-metadata FILE</code> flag on <code>scanpath-studio render</code>
 and <a href="../api/"><code>load_participant_metadata()</code></a> in the Python API.</p>
 <h2 id="trial-metadata">Trial metadata<a class="headerlink" href="#trial-metadata" title="Permanent link">&para;</a></h2>
-<p>The same idea one grain down: a table of <strong>one row per reading</strong> — a list
+<p>The same idea one grain down: a table of <strong>one row per trial</strong> — a list
 name, a presentation order, a per-trial comprehension score, whatever your
 design recorded about the trial rather than about the reader. It attaches
 beside the participant table — under <strong>Metadata</strong> in part 2 of the add-dataset
@@ -1932,11 +1982,8 @@ way the data's own Trial ID mapping does. Keyed by reader <strong>and</strong> t
 describes <strong>one reading</strong>, which is what you need as soon as the same reader
 reads the same text twice — and that table attaches headlessly only, with
 <code>--trial-metadata-reader-column</code> on the CLI or <code>participant_column=</code> in the
-Python API. Nothing in a file says which of the two you meant, so this is never
-guessed.</p>
-<p>Everything else matches the participant table — the join is reported before it
-is used, duplicate rows that disagree are dropped and named rather than
-resolved, and the table is never copied onto your fixations.</p>
+Python API.</p>
+<p>Join reporting and duplicate handling are as for the participant table.</p>
 <p>Headless, it is <code>--trial-metadata FILE</code> on <code>scanpath-studio render</code> and
 <a href="../api/"><code>load_trial_metadata()</code></a> in the Python API.</p>
 <h2 id="text-metadata">Text metadata<a class="headerlink" href="#text-metadata" title="Permanent link">&para;</a></h2>
@@ -1951,21 +1998,21 @@ rules.</p>
 <p>Headless, it is <code>--text-metadata FILE</code> on <code>scanpath-studio render</code> and
 <a href="../api/"><code>load_text_metadata()</code></a> in the Python API.</p>
 <h2 id="flexible-loading">Flexible loading<a class="headerlink" href="#flexible-loading" title="Permanent link">&para;</a></h2>
-<p>The loader bends to fit real corpora:</p>
 <ul>
 <li><strong>Many files per table</strong> — pass several paths or a glob; they're concatenated,
   each row tagged with its <code>source_file</code> (e.g. one file per participant or text).</li>
 <li><strong>Stimulus-level word boxes</strong> — a words table with no participant column is
   broadcast across every participant found in the fixations.</li>
-<li><strong>AoI-only fixations</strong> — fixations with a word/IA id but no x/y are placed at
+<li><strong>AoI-only fixations</strong> — fixations with a word/<abbr title="Interest area: EyeLink's name for an AOI">IA</abbr> id but no x/y are placed at
   the matching word-box centers.</li>
 <li><strong>Composite trial ids</strong> — when no single column identifies a trial, map <em>Trial
   ID</em> to several columns (e.g. participant + paragraph + repeated-reading) and a
   combined unique id is built on the fly.</li>
 </ul>
 <h2 id="multipart-logical-trials">Multipart logical trials<a class="headerlink" href="#multipart-logical-trials" title="Permanent link">&para;</a></h2>
-<p>A logical <code>(participant_id, trial_id)</code> may contain several ordered screens. Map
-these optional fields in both words and fixations:</p>
+<p>A logical <code>(participant_id, trial_id)</code> may contain several ordered screens.
+These optional columns are auto-detected by name in both tables (headlessly they
+are also <code>word_schema</code> / <code>fix_schema</code> keys):</p>
 <table>
 <thead>
 <tr>
@@ -2007,8 +2054,9 @@ The main view shows one screen with previous/next navigation; annotations can be
 stored on the parent trial or the current screen. Bulk output uses deterministic
 <code>screens/screen-001-&lt;id&gt;/</code> folders.</p>
 <p>If source reports have arbitrary page markers instead of mappable screen
-columns, pass a nested manifest to the Python API or CLI. Selectors are exact and
-must cover every row in the declared parent:</p>
+columns, pass a nested manifest (<code>trial_parts_manifest=</code> in
+<code>load_scanpath_data</code>, <code>--trial-parts-manifest</code> on the CLI). Selectors are exact
+and must cover every row in the declared parent:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="p">{</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">"trials"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="nt">"participant_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"p1"</span><span class="p">,</span>
@@ -2026,45 +2074,10 @@ must cover every row in the declared parent:</p>
 <a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">  </span><span class="p">}]</span>
 <a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="p">}</span>
 </code></pre></div>
-<p>Legacy data without screen identity keeps its original two-column trial key and
-behavior.</p>
 <h2 id="reading-measures">Reading measures<a class="headerlink" href="#reading-measures" title="Permanent link">&para;</a></h2>
-<p>If your data carries only raw fixations, the app computes the canonical per-word
-measures itself — <strong>FFD</strong>, <strong>FPRT</strong> (gaze duration), <strong>RPD</strong> (go-past),
-<strong>TFD</strong> (dwell), initial landing position/distance, second-pass and
-single-fixation duration, plus skips and regression counts, following Rayner (1998) and
-Inhoff &amp; Radach (1998). Pre-aggregated EyeLink <code>IA_*</code> columns, when present, take
-precedence. Areas of interest come <strong>directly from your word boxes</strong> — they are
-not computed; only the fixation→word assignment is derived (bounding-box
-containment with a small nearest-word fallback).</p>
-<h2 id="optional-preprocessing-and-derived-tables">Optional preprocessing and derived tables<a class="headerlink" href="#optional-preprocessing-and-derived-tables" title="Permanent link">&para;</a></h2>
-<div class="admonition note">
-<p class="admonition-title">Not in the app in this release (PRE-22)</p>
-<p>The <strong>Preprocessing</strong> panel is held back from the app's 🗂️ Data page for
-this release and returns in the next one. Nothing about the pipeline
-changed: <code>api.preprocess_data</code>, <code>scanpath-studio analyze</code> and the tables
-below are shipped and supported as before, and setting
-<code>SCANPATH_EXPERIMENTAL=1</code> brings the panel back for a local session.</p>
-</div>
-<p>The <strong>Preprocessing</strong> panel is off by default. When disabled, it returns the
-normalized fixation table unchanged. When enabled, it can soft-mark
-blink-adjacent or short fixations as <code>excluded</code>, merge short-and-close
-fixations while retaining <code>original_duration_ms</code>, and materialize run/pass
-columns. Rows are never silently deleted; <code>excluded_reason</code> and the per-trial
-Cleaning QA table preserve the provenance.</p>
-<p>Sentence IDs are accepted from the dataset or inferred at sentence-final
-punctuation. The derived family includes sentence measures, first-class
-saccades (pixels and optional degrees of visual angle), trial/reader summaries,
-and a character grid with letter-based landing/launch positions. Trial text is
-also auto-tagged <code>right_to_left</code> for Hebrew/Arabic-majority content; an explicit
-column takes precedence.</p>
-<h2 id="setup-wizard-saved-setups">Setup wizard &amp; saved setups<a class="headerlink" href="#setup-wizard-saved-setups" title="Permanent link">&para;</a></h2>
-<p>Uploading through the 🗂️ Data page's <strong>➕ Add dataset</strong> wizard walks you through
-three parts: naming the dataset, uploading the tables and mapping their columns,
-and the recording setup (monitor resolution keeps everything true-to-scale). You
-can <strong>⬇️ Save setup</strong> (the column mapping and recording setup as JSON) and
-<strong>↩️ Restore a saved setup</strong> later on similar data to skip the manual mapping.
-Finished uploads become first-class, switchable data sources.</p>
+<p>Per-word measures missing from your data are computed from the fixations;
+imported EyeLink <code>IA_*</code> columns take precedence. Definitions are in
+<a href="../computations/">Computations &amp; methodology</a>.</p>
 
 
 
@@ -2072,6 +2085,27 @@ Finished uploads become first-class, switchable data sources.</p>
 
 
 
+  
+    
+  
+  
+
+
+  <aside class="md-source-file">
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Last update">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 25, 2026 10:03:20 UTC">September 25, 2026</span>
+  </span>
+
+    
+    
+    
+    
+  </aside>
 
 
 
@@ -2102,7 +2136,7 @@ Finished uploads become first-class, switchable data sources.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../cli/" class="md-footer__link md-footer__link--prev" aria-label="Previous: CLI reference">
+          <a href="../agents/" class="md-footer__link md-footer__link--prev" aria-label="Previous: For coding agents">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -2112,7 +2146,7 @@ Finished uploads become first-class, switchable data sources.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                CLI reference
+                For coding agents
               </div>
             </div>
           </a>
@@ -2140,6 +2174,10 @@ Finished uploads become first-class, switchable data sources.</p>
   <div class="md-footer-meta md-typeset">
     <div class="md-footer-meta__inner md-grid">
       <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      MIT licensed · cite it by its DOI, <a href="https://doi.org/10.5281/zenodo.22933884">10.5281/zenodo.22933884</a>
+    </div>
   
   
     Made with
@@ -2193,14 +2231,22 @@ Finished uploads become first-class, switchable data sources.</p>
       <div class="md-dialog__inner md-typeset"></div>
     </div>
     
+      <div class="md-progress" data-md-component="progress" role="progressbar"></div>
+    
     
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.top", "navigation.footer", "navigation.indexes", "content.code.copy", "content.tabs.link", "toc.follow", "search.suggest", "search.highlight"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["content.action.edit", "content.action.view", "content.code.annotate", "content.code.copy", "content.tabs.link", "content.tooltips", "navigation.footer", "navigation.indexes", "navigation.instant", "navigation.instant.progress", "navigation.path", "navigation.sections", "navigation.tabs", "navigation.tabs.sticky", "navigation.top", "search.highlight", "search.share", "search.suggest", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
       <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../assets/_markdown_exec_pyodide.js"></script>
+      
+        <script src="../javascripts/figures.js"></script>
+      
+        <script src="../javascripts/video.js"></script>
       
     
   </body>

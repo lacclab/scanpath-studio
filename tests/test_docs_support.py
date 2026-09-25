@@ -76,6 +76,9 @@ def test_the_changelog_page_is_headlines_from_the_two_tier_release_on():
 
 
 def test_the_citation_is_the_cff():
+    # PyYAML is a docs-extra dependency; CI's test legs install only the test
+    # extra, and its Docs build job builds this page anyway.
+    pytest.importorskip("yaml")
     text = (ROOT / "CITATION.cff").read_text(encoding="utf-8")
     doi = re.search(r"^doi:\s*\"?([^\s\"]+)", text, re.MULTILINE).group(1)
     version = re.search(r"^version:\s*([^\s]+)", text, re.MULTILINE).group(1)

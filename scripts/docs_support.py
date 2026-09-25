@@ -18,8 +18,6 @@ import re
 import unicodedata
 from pathlib import Path
 
-import yaml
-
 ROOT = Path(__file__).resolve().parent.parent
 REPO_URL = "https://github.com/lacclab/scanpath-studio"
 BLOB_URL = f"{REPO_URL}/blob/main/"
@@ -69,6 +67,10 @@ def _initials(given: str) -> str:
 
 
 def _cff() -> dict:
+    # PyYAML comes with the docs extra (MkDocs needs it), not the package or its
+    # test extra, so it is imported only where the citation is built.
+    import yaml
+
     return yaml.safe_load((ROOT / "CITATION.cff").read_text(encoding="utf-8"))
 
 

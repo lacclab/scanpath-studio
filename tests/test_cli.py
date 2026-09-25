@@ -1026,6 +1026,37 @@ def test_compare_setup_snapshot_without_a_canvas_is_not_a_known_screen():
     assert setups_comparable(stated, stated) == (True, "")
 
 
+def _render_flag_help(flag: str) -> str:
+    parser = cli._render_parser()
+    (action,) = [action for action in parser._actions if flag in action.option_strings]
+    return action.help
+
+
+def test_color_by_help_offers_line():
+    """BUG-85: `--color-by line` is the line option, as in the app's select."""
+    assert "line" in _render_flag_help("--color-by")
+
+
+def test_render_color_by_line_colours_each_fixation_by_its_line(tmp_path):
+    """BUG-85: `--color-by line` passed validation and drew one flat colour."""
+    out = tmp_path / "lines.html"
+    cli.main(
+        [
+            "render",
+            "--sample",
+            "-p",
+            _SAMPLE_PARTICIPANT,
+            "-t",
+            _SAMPLE_TRIAL_A,
+            "--color-by",
+            "line",
+            "-o",
+            str(out),
+        ]
+    )
+    assert "line: Line 1" in out.read_text(encoding="utf-8")
+
+
 def test_render_compare_with_rejects_all_screens(tmp_path):
     """Regression: this combination used to die on an UnboundLocalError."""
     with pytest.raises(SystemExit) as excinfo:

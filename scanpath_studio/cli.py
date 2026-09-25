@@ -774,9 +774,10 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--color-by",
         metavar="FIELD",
-        help=f"Fixation color field, e.g. duration_ms or gpt2_surprisal "
-        f"(default: {UNIFORM_COLOR_FIELD} — one flat colour, since marker size "
-        f"already shows duration).",
+        help=f"Fixation color field, e.g. duration_ms or gpt2_surprisal, or "
+        f"'line' to colour each fixation by its text line (same as "
+        f"--color-by-line; default: {UNIFORM_COLOR_FIELD} — one flat colour, "
+        f"since marker size already shows duration).",
     )
     viz.add_argument(
         "--fixation-color",
@@ -903,7 +904,7 @@ def _render_parser() -> argparse.ArgumentParser:
         "--color-by-line",
         action="store_true",
         help="Colour each fixation by the text line it lands on (lines inferred "
-        "from the word boxes); overrides --color-by.",
+        "from the word boxes); overrides --color-by. Same as --color-by line.",
     )
     viz.add_argument(
         "--fixation-color-range",

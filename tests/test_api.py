@@ -994,6 +994,22 @@ def test_the_synthetic_color_by_values_and_the_default_span_are_accepted():
     api.plot_scanpath(words, fixations, *_EXP17_TRIAL, highlight_column=None)
 
 
+@pytest.mark.parametrize("builder", ["plot_scanpath", "animate_scanpath"])
+def test_color_by_line_draws_what_color_by_line_true_draws(builder):
+    """BUG-85: `"line"` is the app's own spelling of colouring by text line —
+    the *Color fixations by* select offers it and a share link carries
+    `color_by=line` — and the API accepted it (the EXP-17 message even
+    recommended it), but only `color_by_line=True` reached the builders' line
+    branch, so `color_by="line"` drew one flat colour."""
+    words, fixations = api.load_sample_data()
+    build = getattr(api, builder)
+    by_value = build(words, fixations, *_EXP17_TRIAL, color_by="line")
+    by_flag = build(words, fixations, *_EXP17_TRIAL, color_by_line=True)
+    names = [trace.name for trace in by_value.data]
+    assert names == [trace.name for trace in by_flag.data]
+    assert "line: Line 1" in names
+
+
 # ---------------------------------------------------------------------------
 # ENG-54 — what the docs say is importable from the package root is
 # ---------------------------------------------------------------------------

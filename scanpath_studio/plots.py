@@ -1966,7 +1966,10 @@ def _render_scanpath_figure(
     text_color = settings.text_color
     highlight_text_color = settings.highlight_text_color
     background_color = settings.background_color
-    color_by_line = settings.color_by_line
+    # BUG-85: `color_by="line"` is the rail's own spelling of this (its "line"
+    # option, a share link's `color_by=line`), so it colours by line from the
+    # API and CLI too rather than falling through to a missing column.
+    color_by_line = settings.color_by_line or settings.color_by == "line"
     fixation_flags = settings.fixation_flags
     span_border_color = settings.span_border_color
     colorbar_orientation = settings.colorbar_orientation
@@ -3519,7 +3522,8 @@ def _render_scanpath_animation(
     order_font_size = settings.order_font_size
     order_font_color = settings.order_font_color
     color_by = settings.color_by
-    color_by_line = settings.color_by_line
+    # BUG-85: as in `make_scanpath_figure` — "line" is colour-by-line.
+    color_by_line = settings.color_by_line or color_by == "line"
     fixation_colorscale = settings.fixation_colorscale
     fixation_color_range = settings.fixation_color_range
     fixation_flags = settings.fixation_flags

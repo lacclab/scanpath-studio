@@ -126,9 +126,9 @@ words, fixations = sps.load_scanpath_data(words=ia_df, fixations=fix_df)
 words, fixations = sps.load_scanpath_data(fixations="fix.parquet")  # one table
 ```
 
-Ready-made public corpora have their own loaders — `sps.load_potec(dir)`,
-`sps.load_onestop(dir)`, `sps.load_multipleye(dir)` — which return the same
-normalized pair. See [OneStop](onestop.md) and [MultiplEYE](multipleye.md).
+Ready-made public corpora have their own loaders — `sps.load_potec(dir)` and
+`sps.load_onestop(dir)` — which return the same normalized pair. See
+[OneStop](onestop.md).
 
 A raw-gaze table is loaded with `load_raw_gaze(path_or_frame)` (columns
 auto-detected; `raw_gaze_schema=` overrides), or `load_sample_raw_gaze()` for

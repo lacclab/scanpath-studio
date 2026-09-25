@@ -56,8 +56,6 @@ print(measures[columns].head(3))
 
 ::: scanpath_studio.datasets.load_onestop
 
-::: scanpath_studio.datasets.load_multipleye
-
 ## Inspect and measure
 
 ::: scanpath_studio.api.list_trials

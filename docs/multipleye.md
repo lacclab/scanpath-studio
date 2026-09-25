@@ -1,5 +1,11 @@
 # MultiplEYE dataset
 
+> **Not on the docs site (DATA-54).** MultiplEYE is held back from the
+> beta: its data is not openly available yet, and the loader was built
+> and tested on one sample. The app offers it only with
+> `SCANPATH_EXPERIMENTAL=1`; `load_multipleye` and `render --source
+> multipleye` still work. This page is kept for the people using it.
+
 [MultiplEYE](https://multipleye.eu/) is a multilingual eye-tracking-while-reading
 corpus. Scanpath Studio loads a MultiplEYE session set from a local directory;
 the loader was built and tested on the Zurich Chinese (ZH-CH) sample. This page

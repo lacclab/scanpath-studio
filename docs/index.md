@@ -58,7 +58,7 @@ Inspect, compare, analyse, and export eye-tracking-while-reading scanpaths.
   datasets.
 - **Flexible loading:** your own word, fixation, and raw-gaze tables with
   automatic or manual column mapping, a table of participant metadata, or the
-  OneStop, PoTeC and MultiplEYE public corpora.
+  OneStop and PoTeC public corpora.
 - **Corpus analysis:** per-text, per-sentence, per-reader, and group summaries
   using standard reading measures, each one documented in the
   [computation register](computations.md).

@@ -49,6 +49,7 @@ from .constants import (
     SACCADE_WIDTH_BOUNDS,
     UNIFORM_COLOR_FIELD,
     drift_correction_enabled,
+    multipleye_enabled,
     palette_settings,
 )
 
@@ -444,28 +445,41 @@ def _render_parser() -> argparse.ArgumentParser:
         help="OneStop source variant for --onestop: 'public' (OSF download) or "
         "'lacclab' (a local lab-processed export; no download).",
     )
+
+    # DATA-54: MultiplEYE is held back from the beta. Its flags still parse and
+    # work, so a script that already uses them keeps running (PRE-22's rule), but
+    # `--help` — and the docs' reference, generated from it — don't list them.
+    def mpe_help(text: str) -> str:
+        return text if multipleye_enabled() else argparse.SUPPRESS
+
     src.add_argument(
         "--source",
         metavar="NAME",
         choices=["multipleye"],
-        help="Load a native server-bundle corpus from its RAW export instead of "
-        "raw words/fixations tables. Currently only 'multipleye' — pair with "
-        "--export DIR. Renders through the same native loader (correct word "
-        "boxes/text/page layout, 1920x1080 monitor) as the interactive viewer.",
+        help=mpe_help(
+            "Load a native server-bundle corpus from its RAW export instead of "
+            "raw words/fixations tables. Currently only 'multipleye' — pair with "
+            "--export DIR. Renders through the same native loader (correct word "
+            "boxes/text/page layout, 1920x1080 monitor) as the interactive viewer."
+        ),
     )
     src.add_argument(
         "--export",
         metavar="DIR",
-        help="Raw export root for --source (e.g. a MultiplEYE_*_* export dir with "
-        "per-session scanpaths/ subfolders). Defaults to $MULTIPLEYE_DATA_DIR "
-        "for --source multipleye.",
+        help=mpe_help(
+            "Raw export root for --source (e.g. a MultiplEYE_*_* export dir with "
+            "per-session scanpaths/ subfolders). Defaults to $MULTIPLEYE_DATA_DIR "
+            "for --source multipleye."
+        ),
     )
     src.add_argument(
         "--no-question-screens",
         action="store_true",
-        help="--source multipleye: load the reading pages only, leaving out the "
-        "comprehension-question screens (they are included by default, as "
-        "screens of the same trial).",
+        help=mpe_help(
+            "--source multipleye: load the reading pages only, leaving out the "
+            "comprehension-question screens (they are included by default, as "
+            "screens of the same trial)."
+        ),
     )
 
     src.add_argument(

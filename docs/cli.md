@@ -91,15 +91,10 @@ scanpath-studio render --potec ./potec --list-trials
 # OneStop, choosing the variant, regime and part
 scanpath-studio render --onestop ./onestop --onestop-variant public \
   --onestop-regime ordinary --onestop-part Paragraph --list-trials
-
-# MultiplEYE, from its raw export
-scanpath-studio render --source multipleye --export ./multipleye_session \
-  --list-trials
 ```
 
-`--no-question-screens` drops MultiplEYE's comprehension screens. The Python
-API takes the same corpora through `load_potec`, `load_onestop` and
-`load_multipleye`.
+The Python API takes the same corpora through `load_potec` and
+`load_onestop`.
 
 ## Compare two scanpaths
 

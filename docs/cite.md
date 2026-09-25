@@ -40,5 +40,4 @@ well:
 }
 ```
 
-Any other corpus you load is cited in its own right — see its page under
-*Public corpora*.
+Any other corpus you load is cited in its own right.

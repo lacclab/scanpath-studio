@@ -104,9 +104,7 @@ nav:
       - Data format: data-format.md
       - Computations & methodology: computations.md
       - Glossary: glossary.md
-      - Public corpora:
-          - OneStop: onestop.md
-          - MultiplEYE: multipleye.md
+      - OneStop corpus: onestop.md
   - Project:
       - Cite: cite.md
       - Changelog: changelog.md
@@ -124,10 +122,12 @@ validation:
 # not a page of its own. The dataset-adapter contract is developer material,
 # read on GitHub from CONTRIBUTING.md, and the harmonised benchmark corpora
 # need a bundle only the private EyeGenBench pipeline can build (ENG-80).
+# MultiplEYE is held back from the beta, in the app as well (DATA-54).
 exclude_docs: |
   includes/
   contributing-a-dataset.md
   benchmark-corpora.md
+  multipleye.md
 
 hooks:
   - scripts/mkdocs_hooks.py
@@ -160,6 +160,8 @@ plugins:
         architecture.md: https://github.com/lacclab/scanpath-studio/blob/main/AGENTS.md
         security.md: https://github.com/lacclab/scanpath-studio/blob/main/SECURITY.md
         benchmark-corpora.md: guides/loading-data.md
+        # DATA-54: MultiplEYE is held back from the beta.
+        multipleye.md: guides/loading-data.md
         rendering.md: guides/scanpath-visualization.md
         contributing-a-dataset.md: https://github.com/lacclab/scanpath-studio/blob/main/docs/contributing-a-dataset.md
   # Runs the pages' `exec="true"` fences: the gallery, printed example output,
@@ -216,7 +218,6 @@ plugins:
           - computations.md: How every measure and derived value is computed
           - glossary.md
           - onestop.md
-          - multipleye.md
         Project:
           - cite.md
           - privacy.md

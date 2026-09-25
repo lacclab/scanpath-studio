@@ -11,9 +11,8 @@ filters. Start with broad dataset fields such as participant, condition,
 correctness, or repeated-reading status. Use the ⇅ trial-ordering popover to
 surface unusually short or long trials.
 
-Avoid applying many filters at once: add one, check the remaining count, then
-continue. If the pool becomes empty, use the adjacent clear action to identify
-which filter removed it.
+If the pool becomes empty, the app names the filter that emptied it and offers
+to clear just that one.
 
 ## 2. Review candidate trials
 
@@ -22,11 +21,9 @@ when timing helps. Open **🧹 Filter → 👁️ Fixations** in the plot rail a
 **Highlight** for:
 
 - out-of-bounds points;
-- fixations below or above your duration thresholds;
-- a specific fixation-index range when only part of the trial matters.
+- fixations below or above your duration thresholds.
 
-These controls change the visualization. They do not rewrite the uploaded table
-or silently change the reading measures.
+Use **Fixation index range** in the same place to show only part of the trial.
 
 ## 3. Annotate the decision
 
@@ -49,5 +46,6 @@ Use **Export → Export bundle** for the active filtered pool. Include the tidy
 tables and `plot_config.json`; export figures only if they are part of the
 analysis record. Download a **Session → JSON backup** as the human review record.
 
-**Done:** the original data remains intact, the retained pool is reproducible,
-and each manual decision has a reason.
+**Done:** the original data remains intact, the retained trials are in the
+export bundle, and each manual decision has a tag and a reason in the JSON
+backup.

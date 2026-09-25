@@ -15,17 +15,15 @@ dataset is already loaded, open it from 📂 **Available datasets**.
 Keep the default visualization first. Confirm that:
 
 - word boxes match the displayed text;
-- fixations fall near words rather than between screens or off-canvas;
-- the first and last fixations look plausible;
-- fixation sizes and saccades do not show obvious recording gaps.
+- fixations fall on or near words rather than off-canvas;
+- the first and last fixations look plausible.
 
 If every trial is shifted in the same way, check the monitor size and coordinate
 system before judging participants.
 
 ## 3. Replay the recording
 
-Turn on **Animate**. Watch once at the default speed, then slow playback only if
-an event is unclear. Look for long missing periods, repeated off-text points,
+Turn on **Animate**. Look for long missing periods, repeated off-text points,
 frequent interruptions, or a vertical shift that grows during the trial.
 
 Use **🧹 Filter → 👁️ Fixations** in the plot rail to **Highlight** short, long,
@@ -40,15 +38,12 @@ Open **Annotations** for the selected trial:
 - add a tag such as `calibration`, `blink`, `setup`, or `review`;
 - write one sentence describing the evidence and action.
 
-Move through the participant's trials with the trial picker. If many trials show
-the same problem, inspect another participant before deciding whether the cause
-is the participant, experimenter, or setup.
+Move through the participant's trials with the trial picker.
 
 ## 5. Save the review
 
 Open **Session → JSON backup** and download the file. It preserves the view settings
-and annotations for later review. Do not rely on a screenshot as the only record
-of an exclusion decision.
+and annotations for later review.
 
 **Done:** you have checked geometry and timing, marked suspicious trials, and
 saved the review. For a formal retained/excluded pool, continue with

@@ -1,17 +1,16 @@
 # Feature guides
 
-Guides explain where a feature lives and what its controls change. For a full
-workflow, use a [tutorial](../tutorials/index.md).
+For end-to-end workflows, see the [tutorials](../tutorials/index.md).
 
 <div class="grid cards" markdown>
 
 - :material-eye:{ .lg .middle } **[Scanpath visualization](scanpath-visualization.md)**
 
-    Layers, filtering, replay, cross-dataset comparison, and drift correction.
+    Layers, filtering, replay, and comparison — including across datasets.
 
 - :material-database-import:{ .lg .middle } **[Loading public and own data](loading-data.md)**
 
-    Sources, upload, column mapping, the recording setup, and derived fields.
+    Sources, upload, column mapping, and the recording setup.
 
 - :material-chart-box:{ .lg .middle } **[Corpus workspace](corpus-workspace.md)**
 

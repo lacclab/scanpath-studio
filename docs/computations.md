@@ -19,82 +19,82 @@ Verification tiers: **A** hand-calculated synthetic oracle · **B** independent 
 
 !!! note "Tier B is largely absent, on purpose"
 
-    Comparing against an independent implementation is [VAL-4](https://github.com/lacclab/scanpath-studio), which is on hold. Scientific measures therefore read *Partially verified* even where their hand oracle is exact. The one real exception is the drift-correction port, which was written against a published reference.
+    Comparing against an independent implementation is [VAL-4](https://github.com/lacclab/scanpath-studio/issues/130), which is on hold. Scientific measures therefore read *Partially verified* even where their hand oracle is exact. The one real exception is the drift-correction port, which was written against a published reference.
 
 ## Summary
 
 | ID | Name | Category | Unit | Status |
 | --- | --- | --- | --- | --- |
-| `norm.words` | Word table normalization | Normalization / inference | — | Partially verified |
-| `norm.fixations` | Fixation table normalization | Normalization / inference | — | Partially verified |
-| `norm.box_edges` | Word box from edges | Normalization / inference | px (screen coordinates, y increasing downwards) | Verified |
-| `norm.trial_id_composite` | Composite trial identity | Normalization / inference | — | Partially verified |
-| `norm.flags` | Flag coercion | Normalization / inference | — | Verified |
-| `norm.stimulus_broadcast` | Stimulus-level word broadcast | Normalization / inference | — | Partially verified |
-| `norm.aoi_center_placement` | AoI-only fixation placement | Normalization / inference | px | Verified |
-| `norm.participant_metadata` | Participant metadata join | Normalization / inference | — | Verified |
-| `assign.fixation_to_word` | Fixation → word assignment | Assignment / classification | — | Partially verified |
-| `assign.in_text` | Out-of-text flag | Assignment / classification | — | Verified |
-| `assign.line_cluster` | Visual line clustering | Assignment / classification | — | Partially verified |
-| `assign.runs` | Runs and passes | Assignment / classification | — | Partially verified |
-| `assign.progression` | Progression and regression flags | Assignment / classification | — | Verified |
-| `assign.saccade_class` | Saccade reading class | Assignment / classification | — | Partially verified |
-| `measure.ffd` | First fixation duration (FFD) | Scientific measure | ms | Partially verified |
-| `measure.fprt` | First-pass gaze duration (FPRT) | Scientific measure | ms | Partially verified |
-| `measure.rpd` | Regression-path duration (RPD / go-past) | Scientific measure | ms | Partially verified |
-| `measure.tfd` | Total fixation duration (TFD) | Scientific measure | ms | Partially verified |
-| `measure.nfix` | Fixations per word | Scientific measure | — | Verified |
-| `measure.skip` | Skip flag / skip rate | Scientific measure | rate when aggregated (0–1) | Verified |
-| `measure.regressions` | Regression in/out flags | Scientific measure | rate when aggregated (0–1) | Partially verified |
-| `measure.landing_position` | Initial landing position | Scientific measure | letters | Partially verified |
-| `measure.landing_distance` | Centred landing distance | Scientific measure | letters (0 = word centre, negative = left of centre) | Partially verified |
-| `measure.second_pass` | Second-pass duration | Scientific measure | ms | Partially verified |
-| `measure.single_fix` | Single-fixation duration | Scientific measure | ms | Partially verified |
-| `measure.reg_in_count` | Regressions into word | Scientific measure | — | Partially verified |
-| `fix.saccade_amplitude` | Saccade amplitude | Scientific measure | px | Verified |
-| `fix.angles` | Saccade angles | Scientific measure | degrees (−180, 180] | Verified |
-| `fix.rebased_onsets` | Rebased fixation onsets | Scientific measure | ms | Partially verified |
-| `pre.merge_short` | Short-fixation merging | Preprocessing | ms threshold, characters distance | Partially verified |
-| `pre.exclude_short` | Short/long fixation exclusion | Preprocessing | ms | Partially verified |
-| `pre.blink_adjacent` | Blink-adjacent exclusion | Preprocessing | — | Partially verified |
-| `pre.cleaning_report` | Cleaning QA report | Preprocessing | — | Partially verified |
-| `pre.sentence_measures` | Sentence-level measures | Preprocessing | ms, counts | Partially verified |
-| `pre.saccade_table` | Saccade table | Preprocessing | px, deg (when geometry is known), ms | Partially verified |
-| `pre.character_grid` | Character grid | Preprocessing | px | Intentional convention |
-| `pre.rtl` | Right-to-left detection | Preprocessing | — | Verified |
-| `pre.sensitivity` | Measure sensitivity | Preprocessing | — | Partially verified |
-| `align.algorithms` | Vertical drift correction | Preprocessing | — | Partially verified |
-| `agg.measure_values` | Measure value extraction | Statistical aggregation / test | — | Partially verified |
-| `agg.aggregate_value` | Central tendency | Statistical aggregation / test | — | Verified |
-| `agg.spread` | Spread band | Statistical aggregation / test | — | Verified |
-| `agg.bootstrap_ci` | Bootstrap confidence interval | Statistical aggregation / test | same as the measure | Verified |
-| `agg.effect_size` | Group comparison and effect size | Statistical aggregation / test | — | Partially verified |
-| `agg.group_mask` | Group definition | Statistical aggregation / test | — | Verified |
-| `agg.word_profile` | Per-word cohort profile | Statistical aggregation / test | — | Partially verified |
-| `agg.word_rates` | Skip / regression rate profile | Statistical aggregation / test | proportion | Partially verified |
-| `agg.reader_summary` | Per-reader summary | Statistical aggregation / test | ms, px, counts, proportions | Partially verified |
-| `agg.trial_summary` | Per-trial summary | Statistical aggregation / test | ms, counts | Partially verified |
-| `agg.normalize` | Normalized measure column | Statistical aggregation / test | — | Partially verified |
-| `agg.landing_curve` | Landing-position curve | Statistical aggregation / test | fraction of the interest area (0–1 for a landing inside the box), or px with `as_fraction=False` | Partially verified |
-| `agg.over_time` | Trend over time | Statistical aggregation / test | — | Partially verified |
-| `sim.nld` | Normalized Levenshtein distance | Similarity | dimensionless (0–1) | Verified |
-| `sim.aoi_sequence` | AoI sequence | Similarity | — | Verified |
-| `sim.windowed` | NLD by fixation index / time | Similarity | — | Partially verified |
-| `geom.pixels_per_degree` | Pixels per degree of visual angle | Unit / coordinate conversion | px / degree | Verified |
-| `geom.font_pt_to_px` | Font point size to pixels | Unit / coordinate conversion | px | Verified |
-| `geom.word_box_bounds` | Word interest-area edges | Unit / coordinate conversion | px | Partially verified |
-| `geom.word_box_space_px` | Inter-word padding baked into each box | Unit / coordinate conversion | px | Verified |
-| `geom.word_char_advance` | Character advance within a word | Unit / coordinate conversion | px / character | Verified |
-| `geom.word_glyph_span` | Where a word's glyphs are | Unit / coordinate conversion | px | Verified |
-| `disp.marker_sizes` | Fixation marker sizing | Display / export transformation | px (marker diameter) | Intentional convention |
-| `disp.axis_ranges` | Axis ranges and inversion | Display / export transformation | px | Intentional convention |
-| `disp.true_scale` | True-scale text rendering | Display / export transformation | — | Intentional convention |
-| `disp.animation_timing` | Animation timing | Display / export transformation | ms (recorded) → ms (playback) | Intentional convention |
-| `disp.illustration` | Illustration disclosure | Display / export transformation | — | Verified |
+| [`norm.words`](#norm-words) | Word table normalization | Normalization / inference | — | Partially verified |
+| [`norm.fixations`](#norm-fixations) | Fixation table normalization | Normalization / inference | — | Partially verified |
+| [`norm.box_edges`](#norm-box-edges) | Word box from edges | Normalization / inference | px (screen coordinates, y increasing downwards) | Verified |
+| [`norm.trial_id_composite`](#norm-trial-id-composite) | Composite trial identity | Normalization / inference | — | Partially verified |
+| [`norm.flags`](#norm-flags) | Flag coercion | Normalization / inference | — | Verified |
+| [`norm.stimulus_broadcast`](#norm-stimulus-broadcast) | Stimulus-level word broadcast | Normalization / inference | — | Partially verified |
+| [`norm.aoi_center_placement`](#norm-aoi-center-placement) | AoI-only fixation placement | Normalization / inference | px | Verified |
+| [`norm.participant_metadata`](#norm-participant-metadata) | Participant metadata join | Normalization / inference | — | Verified |
+| [`assign.fixation_to_word`](#assign-fixation-to-word) | Fixation → word assignment | Assignment / classification | — | Partially verified |
+| [`assign.in_text`](#assign-in-text) | Out-of-text flag | Assignment / classification | — | Verified |
+| [`assign.line_cluster`](#assign-line-cluster) | Visual line clustering | Assignment / classification | — | Partially verified |
+| [`assign.runs`](#assign-runs) | Runs and passes | Assignment / classification | — | Partially verified |
+| [`assign.progression`](#assign-progression) | Progression and regression flags | Assignment / classification | — | Verified |
+| [`assign.saccade_class`](#assign-saccade-class) | Saccade reading class | Assignment / classification | — | Partially verified |
+| [`measure.ffd`](#measure-ffd) | First fixation duration (FFD) | Scientific measure | ms | Partially verified |
+| [`measure.fprt`](#measure-fprt) | First-pass gaze duration (FPRT) | Scientific measure | ms | Partially verified |
+| [`measure.rpd`](#measure-rpd) | Regression-path duration (RPD / go-past) | Scientific measure | ms | Partially verified |
+| [`measure.tfd`](#measure-tfd) | Total fixation duration (TFD) | Scientific measure | ms | Partially verified |
+| [`measure.nfix`](#measure-nfix) | Fixations per word | Scientific measure | — | Verified |
+| [`measure.skip`](#measure-skip) | Skip flag / skip rate | Scientific measure | rate when aggregated (0–1) | Verified |
+| [`measure.regressions`](#measure-regressions) | Regression in/out flags | Scientific measure | rate when aggregated (0–1) | Partially verified |
+| [`measure.landing_position`](#measure-landing-position) | Initial landing position | Scientific measure | letters | Partially verified |
+| [`measure.landing_distance`](#measure-landing-distance) | Centred landing distance | Scientific measure | letters (0 = word centre, negative = left of centre) | Partially verified |
+| [`measure.second_pass`](#measure-second-pass) | Second-pass duration | Scientific measure | ms | Partially verified |
+| [`measure.single_fix`](#measure-single-fix) | Single-fixation duration | Scientific measure | ms | Partially verified |
+| [`measure.reg_in_count`](#measure-reg-in-count) | Regressions into word | Scientific measure | — | Partially verified |
+| [`fix.saccade_amplitude`](#fix-saccade-amplitude) | Saccade amplitude | Scientific measure | px | Verified |
+| [`fix.angles`](#fix-angles) | Saccade angles | Scientific measure | degrees (−180, 180] | Verified |
+| [`fix.rebased_onsets`](#fix-rebased-onsets) | Rebased fixation onsets | Scientific measure | ms | Partially verified |
+| [`pre.merge_short`](#pre-merge-short) | Short-fixation merging | Preprocessing | ms threshold, characters distance | Partially verified |
+| [`pre.exclude_short`](#pre-exclude-short) | Short/long fixation exclusion | Preprocessing | ms | Partially verified |
+| [`pre.blink_adjacent`](#pre-blink-adjacent) | Blink-adjacent exclusion | Preprocessing | — | Partially verified |
+| [`pre.cleaning_report`](#pre-cleaning-report) | Cleaning QA report | Preprocessing | — | Partially verified |
+| [`pre.sentence_measures`](#pre-sentence-measures) | Sentence-level measures | Preprocessing | ms, counts | Partially verified |
+| [`pre.saccade_table`](#pre-saccade-table) | Saccade table | Preprocessing | px, deg (when geometry is known), ms | Partially verified |
+| [`pre.character_grid`](#pre-character-grid) | Character grid | Preprocessing | px | Intentional convention |
+| [`pre.rtl`](#pre-rtl) | Right-to-left detection | Preprocessing | — | Verified |
+| [`pre.sensitivity`](#pre-sensitivity) | Measure sensitivity | Preprocessing | — | Partially verified |
+| [`align.algorithms`](#align-algorithms) | Vertical drift correction | Preprocessing | — | Partially verified |
+| [`agg.measure_values`](#agg-measure-values) | Measure value extraction | Statistical aggregation / test | — | Partially verified |
+| [`agg.aggregate_value`](#agg-aggregate-value) | Central tendency | Statistical aggregation / test | — | Verified |
+| [`agg.spread`](#agg-spread) | Spread band | Statistical aggregation / test | — | Verified |
+| [`agg.bootstrap_ci`](#agg-bootstrap-ci) | Bootstrap confidence interval | Statistical aggregation / test | same as the measure | Verified |
+| [`agg.effect_size`](#agg-effect-size) | Group comparison and effect size | Statistical aggregation / test | — | Partially verified |
+| [`agg.group_mask`](#agg-group-mask) | Group definition | Statistical aggregation / test | — | Verified |
+| [`agg.word_profile`](#agg-word-profile) | Per-word cohort profile | Statistical aggregation / test | — | Partially verified |
+| [`agg.word_rates`](#agg-word-rates) | Skip / regression rate profile | Statistical aggregation / test | proportion | Partially verified |
+| [`agg.reader_summary`](#agg-reader-summary) | Per-reader summary | Statistical aggregation / test | ms, px, counts, proportions | Partially verified |
+| [`agg.trial_summary`](#agg-trial-summary) | Per-trial summary | Statistical aggregation / test | ms, counts | Partially verified |
+| [`agg.normalize`](#agg-normalize) | Normalized measure column | Statistical aggregation / test | — | Partially verified |
+| [`agg.landing_curve`](#agg-landing-curve) | Landing-position curve | Statistical aggregation / test | fraction of the interest area (0–1 for a landing inside the box), or px with `as_fraction=False` | Partially verified |
+| [`agg.over_time`](#agg-over-time) | Trend over time | Statistical aggregation / test | — | Partially verified |
+| [`sim.nld`](#sim-nld) | Normalized Levenshtein distance | Similarity | dimensionless (0–1) | Verified |
+| [`sim.aoi_sequence`](#sim-aoi-sequence) | AoI sequence | Similarity | — | Verified |
+| [`sim.windowed`](#sim-windowed) | NLD by fixation index / time | Similarity | — | Partially verified |
+| [`geom.pixels_per_degree`](#geom-pixels-per-degree) | Pixels per degree of visual angle | Unit / coordinate conversion | px / degree | Verified |
+| [`geom.font_pt_to_px`](#geom-font-pt-to-px) | Font point size to pixels | Unit / coordinate conversion | px | Verified |
+| [`geom.word_box_bounds`](#geom-word-box-bounds) | Word interest-area edges | Unit / coordinate conversion | px | Partially verified |
+| [`geom.word_box_space_px`](#geom-word-box-space-px) | Inter-word padding baked into each box | Unit / coordinate conversion | px | Verified |
+| [`geom.word_char_advance`](#geom-word-char-advance) | Character advance within a word | Unit / coordinate conversion | px / character | Verified |
+| [`geom.word_glyph_span`](#geom-word-glyph-span) | Where a word's glyphs are | Unit / coordinate conversion | px | Verified |
+| [`disp.marker_sizes`](#disp-marker-sizes) | Fixation marker sizing | Display / export transformation | px (marker diameter) | Intentional convention |
+| [`disp.axis_ranges`](#disp-axis-ranges) | Axis ranges and inversion | Display / export transformation | px | Intentional convention |
+| [`disp.true_scale`](#disp-true-scale) | True-scale text rendering | Display / export transformation | — | Intentional convention |
+| [`disp.animation_timing`](#disp-animation-timing) | Animation timing | Display / export transformation | ms (recorded) → ms (playback) | Intentional convention |
+| [`disp.illustration`](#disp-illustration) | Illustration disclosure | Display / export transformation | — | Verified |
 
 ## Normalization / inference
 
-### `norm.words` — Word table normalization
+### `norm.words` — Word table normalization { #norm-words }
 
 Map an arbitrary word/IA export onto the canonical word columns.
 
@@ -110,7 +110,7 @@ Map an arbitrary word/IA export onto the canonical word columns.
 | **Tests** | `tests/test_data.py`, `tests/test_column_mapping.py` |
 | **Verification** | tier C, D — **Partially verified** |
 
-### `norm.fixations` — Fixation table normalization
+### `norm.fixations` — Fixation table normalization { #norm-fixations }
 
 Map an arbitrary fixation report onto the canonical columns.
 
@@ -126,7 +126,7 @@ Map an arbitrary fixation report onto the canonical columns.
 | **Tests** | `tests/test_data.py` |
 | **Verification** | tier C, D — **Partially verified** |
 
-### `norm.box_edges` — Word box from edges
+### `norm.box_edges` — Word box from edges { #norm-box-edges }
 
 Convert EyeLink IA edges to origin+size.
 
@@ -141,7 +141,7 @@ Convert EyeLink IA edges to origin+size.
 | **Tests** | `tests/test_word_box_geometry.py` |
 | **Verification** | tier A, C — **Verified** |
 
-### `norm.trial_id_composite` — Composite trial identity
+### `norm.trial_id_composite` — Composite trial identity { #norm-trial-id-composite }
 
 Build one unique trial id from several columns.
 
@@ -156,7 +156,7 @@ Build one unique trial id from several columns.
 | **Tests** | `tests/test_trial_identity.py` |
 | **Verification** | tier C, D — **Partially verified** |
 
-### `norm.flags` — Flag coercion
+### `norm.flags` — Flag coercion { #norm-flags }
 
 Read EyeLink's string booleans as booleans (BUG-7).
 
@@ -172,7 +172,7 @@ Read EyeLink's string booleans as booleans (BUG-7).
 | **Tests** | `tests/test_data.py` |
 | **Verification** | tier A, C — **Verified** |
 
-### `norm.stimulus_broadcast` — Stimulus-level word broadcast
+### `norm.stimulus_broadcast` — Stimulus-level word broadcast { #norm-stimulus-broadcast }
 
 Share one stimulus' word boxes across every reader of it.
 
@@ -186,7 +186,7 @@ Share one stimulus' word boxes across every reader of it.
 | **Tests** | `tests/test_data.py` |
 | **Verification** | tier C — **Partially verified** |
 
-### `norm.aoi_center_placement` — AoI-only fixation placement
+### `norm.aoi_center_placement` — AoI-only fixation placement { #norm-aoi-center-placement }
 
 Place a fixation with no x/y at its word box's center.
 
@@ -202,7 +202,7 @@ Place a fixation with no x/y at its word box's center.
 | **Tests** | `tests/test_data.py` |
 | **Verification** | tier A, C — **Verified** |
 
-### `norm.participant_metadata` — Participant metadata join
+### `norm.participant_metadata` — Participant metadata join { #norm-participant-metadata }
 
 Attach a participant-level table without broadcasting it (DATA-20).
 
@@ -220,7 +220,7 @@ Attach a participant-level table without broadcasting it (DATA-20).
 
 ## Assignment / classification
 
-### `assign.fixation_to_word` — Fixation → word assignment
+### `assign.fixation_to_word` — Fixation → word assignment { #assign-fixation-to-word }
 
 The single highest-risk step: which word a fixation counts for.
 
@@ -238,7 +238,7 @@ The single highest-risk step: which word a fixation counts for.
 | **Tests** | `tests/test_measures.py`, `tests/test_synthetic.py` |
 | **Verification** | tier A, C — **Partially verified** |
 
-### `assign.in_text` — Out-of-text flag
+### `assign.in_text` — Out-of-text flag { #assign-in-text }
 
 Whether a fixation landed on any word of the stimulus.
 
@@ -252,7 +252,7 @@ Whether a fixation landed on any word of the stimulus.
 | **Tests** | `tests/test_synthetic.py` |
 | **Verification** | tier A, C — **Verified** |
 
-### `assign.line_cluster` — Visual line clustering
+### `assign.line_cluster` — Visual line clustering { #assign-line-cluster }
 
 Derive text lines from word-box geometry, not from `line_idx`.
 
@@ -266,7 +266,7 @@ Derive text lines from word-box geometry, not from `line_idx`.
 | **Tests** | `tests/test_measures.py`, `tests/test_synthetic.py` |
 | **Verification** | tier A, C — **Partially verified** |
 
-### `assign.runs` — Runs and passes
+### `assign.runs` — Runs and passes { #assign-runs }
 
 Trial run, line run, and per-word visit/pass indices (PRE-16).
 
@@ -282,7 +282,7 @@ Trial run, line run, and per-word visit/pass indices (PRE-16).
 | **Tests** | `tests/test_measures.py` |
 | **Verification** | tier A, C — **Partially verified** |
 
-### `assign.progression` — Progression and regression flags
+### `assign.progression` — Progression and regression flags { #assign-progression }
 
 Whether the *outgoing* saccade moves forward in the text.
 
@@ -298,11 +298,11 @@ Whether the *outgoing* saccade moves forward in the text.
 | **Tests** | `tests/test_measures.py`, `tests/test_synthetic.py` |
 | **Verification** | tier A, C — **Verified** |
 
-### `assign.saccade_class` — Saccade reading class
+### `assign.saccade_class` — Saccade reading class { #assign-saccade-class }
 
 Label each outgoing saccade by its reading role (VIZ-8).
 
-**Formula.** Forward within a line, return sweep (large leftward drop to the next line), within-line regression, or between-line regression, from the assigned line and word order.
+**Formula.** From the word and text line of the two fixations, in this order: refixation (same word), regression (up to an earlier line, or back within a line), return sweep (down to a later line), forward (the next word on the line), skip (two or more words ahead on the line); `other` when either fixation has no assigned word.
 
 | | |
 | --- | --- |
@@ -315,7 +315,7 @@ Label each outgoing saccade by its reading role (VIZ-8).
 
 ## Preprocessing
 
-### `pre.merge_short` — Short-fixation merging
+### `pre.merge_short` — Short-fixation merging { #pre-merge-short }
 
 Fold a short fixation into a neighbour within a character distance.
 
@@ -333,7 +333,7 @@ Fold a short fixation into a neighbour within a character distance.
 | **Tests** | `tests/test_preprocessing.py` |
 | **Verification** | tier A, C — **Partially verified** |
 
-### `pre.exclude_short` — Short/long fixation exclusion
+### `pre.exclude_short` — Short/long fixation exclusion { #pre-exclude-short }
 
 Soft-exclude fixations outside a duration window.
 
@@ -348,7 +348,7 @@ Soft-exclude fixations outside a duration window.
 | **Tests** | `tests/test_preprocessing.py` |
 | **Verification** | tier C — **Partially verified** |
 
-### `pre.blink_adjacent` — Blink-adjacent exclusion
+### `pre.blink_adjacent` — Blink-adjacent exclusion { #pre-blink-adjacent }
 
 Drop fixations immediately before/after a blink.
 
@@ -362,7 +362,7 @@ Drop fixations immediately before/after a blink.
 | **Tests** | `tests/test_preprocessing.py` |
 | **Verification** | tier C — **Partially verified** |
 
-### `pre.cleaning_report` — Cleaning QA report
+### `pre.cleaning_report` — Cleaning QA report { #pre-cleaning-report }
 
 What the preprocessing pass would remove, and why.
 
@@ -376,7 +376,7 @@ What the preprocessing pass would remove, and why.
 | **Tests** | `tests/test_preprocessing.py` |
 | **Verification** | tier C — **Partially verified** |
 
-### `pre.sentence_measures` — Sentence-level measures
+### `pre.sentence_measures` — Sentence-level measures { #pre-sentence-measures }
 
 Per-sentence reading time and counts.
 
@@ -392,7 +392,7 @@ Per-sentence reading time and counts.
 | **Tests** | `tests/test_preprocessing.py` |
 | **Verification** | tier C — **Partially verified** |
 
-### `pre.saccade_table` — Saccade table
+### `pre.saccade_table` — Saccade table { #pre-saccade-table }
 
 One row per saccade, with amplitude, angle and class.
 
@@ -408,7 +408,7 @@ One row per saccade, with amplitude, angle and class.
 | **Tests** | `tests/test_preprocessing.py` |
 | **Verification** | tier C — **Partially verified** |
 
-### `pre.character_grid` — Character grid
+### `pre.character_grid` — Character grid { #pre-character-grid }
 
 Per-character boxes derived from word boxes.
 
@@ -424,7 +424,7 @@ Per-character boxes derived from word boxes.
 | **Tests** | `tests/test_preprocessing.py` |
 | **Verification** | tier A, C — **Intentional convention** |
 
-### `pre.rtl` — Right-to-left detection
+### `pre.rtl` — Right-to-left detection { #pre-rtl }
 
 Whether a word's script runs right to left.
 
@@ -438,7 +438,7 @@ Whether a word's script runs right to left.
 | **Tests** | `tests/test_preprocessing.py` |
 | **Verification** | tier A, C — **Verified** |
 
-### `pre.sensitivity` — Measure sensitivity
+### `pre.sensitivity` — Measure sensitivity { #pre-sensitivity }
 
 How much the word measures move under different line assignments.
 
@@ -451,7 +451,7 @@ How much the word measures move under different line assignments.
 | **Tests** | `tests/test_preprocessing.py` |
 | **Verification** | tier C — **Partially verified** |
 
-### `align.algorithms` — Vertical drift correction
+### `align.algorithms` — Vertical drift correction { #align-algorithms }
 
 Line-assignment algorithms, ported natively (PRE-3).
 
@@ -469,7 +469,7 @@ Line-assignment algorithms, ported natively (PRE-3).
 
 ## Scientific measure
 
-### `measure.ffd` — First fixation duration (FFD)
+### `measure.ffd` — First fixation duration (FFD) { #measure-ffd }
 
 Duration of the first fixation on a word.
 
@@ -488,7 +488,7 @@ Duration of the first fixation on a word.
 | **Tests** | `tests/test_measures.py`, `tests/test_synthetic.py` |
 | **Verification** | tier A, D — **Partially verified** |
 
-### `measure.fprt` — First-pass gaze duration (FPRT)
+### `measure.fprt` — First-pass gaze duration (FPRT) { #measure-fprt }
 
 Sum of first-pass fixations on a word.
 
@@ -507,7 +507,7 @@ Sum of first-pass fixations on a word.
 | **Tests** | `tests/test_measures.py`, `tests/test_synthetic.py` |
 | **Verification** | tier A, D — **Partially verified** |
 
-### `measure.rpd` — Regression-path duration (RPD / go-past)
+### `measure.rpd` — Regression-path duration (RPD / go-past) { #measure-rpd }
 
 First entry to the word until the gaze passes it to the right.
 
@@ -525,7 +525,7 @@ First entry to the word until the gaze passes it to the right.
 | **Tests** | `tests/test_measures.py`, `tests/test_synthetic.py` |
 | **Verification** | tier A — **Partially verified** |
 
-### `measure.tfd` — Total fixation duration (TFD)
+### `measure.tfd` — Total fixation duration (TFD) { #measure-tfd }
 
 All time spent on a word across the whole trial.
 
@@ -542,7 +542,7 @@ All time spent on a word across the whole trial.
 | **Tests** | `tests/test_measures.py`, `tests/test_synthetic.py` |
 | **Verification** | tier A, D — **Partially verified** |
 
-### `measure.nfix` — Fixations per word
+### `measure.nfix` — Fixations per word { #measure-nfix }
 
 Count of fixations assigned to a word.
 
@@ -557,7 +557,7 @@ Count of fixations assigned to a word.
 | **Tests** | `tests/test_synthetic.py` |
 | **Verification** | tier A — **Verified** |
 
-### `measure.skip` — Skip flag / skip rate
+### `measure.skip` — Skip flag / skip rate { #measure-skip }
 
 Whether a word received no first-pass fixation.
 
@@ -573,7 +573,7 @@ Whether a word received no first-pass fixation.
 | **Tests** | `tests/test_measures.py`, `tests/test_synthetic.py` |
 | **Verification** | tier A — **Verified** |
 
-### `measure.regressions` — Regression in/out flags
+### `measure.regressions` — Regression in/out flags { #measure-regressions }
 
 Whether a word was returned to, or left backwards.
 
@@ -589,7 +589,7 @@ Whether a word was returned to, or left backwards.
 | **Tests** | `tests/test_measures.py`, `tests/test_synthetic.py` |
 | **Verification** | tier A — **Partially verified** |
 
-### `measure.landing_position` — Initial landing position
+### `measure.landing_position` — Initial landing position { #measure-landing-position }
 
 Where in the word the first fixation landed, in letters.
 
@@ -607,7 +607,7 @@ Where in the word the first fixation landed, in letters.
 | **Tests** | `tests/test_measures.py` |
 | **Verification** | tier A — **Partially verified** |
 
-### `measure.landing_distance` — Centred landing distance
+### `measure.landing_distance` — Centred landing distance { #measure-landing-distance }
 
 Landing position relative to the word's centre.
 
@@ -623,7 +623,7 @@ Landing position relative to the word's centre.
 | **Tests** | `tests/test_measures.py` |
 | **Verification** | tier A — **Partially verified** |
 
-### `measure.second_pass` — Second-pass duration
+### `measure.second_pass` — Second-pass duration { #measure-second-pass }
 
 Time spent on the word during its second visit.
 
@@ -639,7 +639,7 @@ Time spent on the word during its second visit.
 | **Tests** | `tests/test_measures.py` |
 | **Verification** | tier A — **Partially verified** |
 
-### `measure.single_fix` — Single-fixation duration
+### `measure.single_fix` — Single-fixation duration { #measure-single-fix }
 
 First-pass duration when the first pass was exactly one fixation.
 
@@ -656,7 +656,7 @@ First-pass duration when the first pass was exactly one fixation.
 | **Tests** | `tests/test_measures.py` |
 | **Verification** | tier A — **Partially verified** |
 
-### `measure.reg_in_count` — Regressions into word
+### `measure.reg_in_count` — Regressions into word { #measure-reg-in-count }
 
 How many times the gaze came back to this word.
 
@@ -671,7 +671,7 @@ How many times the gaze came back to this word.
 | **Tests** | `tests/test_measures.py` |
 | **Verification** | tier A — **Partially verified** |
 
-### `fix.saccade_amplitude` — Saccade amplitude
+### `fix.saccade_amplitude` — Saccade amplitude { #fix-saccade-amplitude }
 
 Distance between consecutive fixations — always pixels (BUG-25).
 
@@ -690,7 +690,7 @@ Distance between consecutive fixations — always pixels (BUG-25).
 | **Tests** | `tests/test_measures.py` |
 | **Verification** | tier A, C — **Verified** |
 
-### `fix.angles` — Saccade angles
+### `fix.angles` — Saccade angles { #fix-angles }
 
 Incoming and outgoing saccade direction.
 
@@ -706,7 +706,7 @@ Incoming and outgoing saccade direction.
 | **Tests** | `tests/test_measures.py` |
 | **Verification** | tier A, C — **Verified** |
 
-### `fix.rebased_onsets` — Rebased fixation onsets
+### `fix.rebased_onsets` — Rebased fixation onsets { #fix-rebased-onsets }
 
 Trial-relative onset times for animation and time series.
 
@@ -724,7 +724,7 @@ Trial-relative onset times for animation and time series.
 
 ## Statistical aggregation / test
 
-### `agg.measure_values` — Measure value extraction
+### `agg.measure_values` — Measure value extraction { #agg-measure-values }
 
 Pull one registered measure's values out of a frame.
 
@@ -738,7 +738,7 @@ Pull one registered measure's values out of a frame.
 | **Tests** | `tests/test_aggregation.py` |
 | **Verification** | tier C, D — **Partially verified** |
 
-### `agg.aggregate_value` — Central tendency
+### `agg.aggregate_value` — Central tendency { #agg-aggregate-value }
 
 The Aggregate selector: mean / median / sum.
 
@@ -752,7 +752,7 @@ The Aggregate selector: mean / median / sum.
 | **Tests** | `tests/test_aggregation.py` |
 | **Verification** | tier A, C — **Verified** |
 
-### `agg.spread` — Spread band
+### `agg.spread` — Spread band { #agg-spread }
 
 The error band drawn around an aggregate.
 
@@ -766,7 +766,7 @@ The error band drawn around an aggregate.
 | **Tests** | `tests/test_aggregation.py` |
 | **Verification** | tier A, C — **Verified** |
 
-### `agg.bootstrap_ci` — Bootstrap confidence interval
+### `agg.bootstrap_ci` — Bootstrap confidence interval { #agg-bootstrap-ci }
 
 Percentile bootstrap CI of the chosen aggregate.
 
@@ -783,7 +783,7 @@ Percentile bootstrap CI of the chosen aggregate.
 | **Tests** | `tests/test_aggregation.py` |
 | **Verification** | tier A, C — **Verified** |
 
-### `agg.effect_size` — Group comparison and effect size
+### `agg.effect_size` — Group comparison and effect size { #agg-effect-size }
 
 Mean difference, Cohen's d, and a significance test (AN-21).
 
@@ -799,7 +799,7 @@ Mean difference, Cohen's d, and a significance test (AN-21).
 | **Tests** | `tests/test_aggregation.py` |
 | **Verification** | tier A, C — **Partially verified** |
 
-### `agg.group_mask` — Group definition
+### `agg.group_mask` — Group definition { #agg-group-mask }
 
 Which rows belong to a cohort.
 
@@ -813,7 +813,7 @@ Which rows belong to a cohort.
 | **Tests** | `tests/test_aggregation.py` |
 | **Verification** | tier A, C — **Verified** |
 
-### `agg.word_profile` — Per-word cohort profile
+### `agg.word_profile` — Per-word cohort profile { #agg-word-profile }
 
 A measure per word position, aggregated across readers.
 
@@ -827,7 +827,7 @@ A measure per word position, aggregated across readers.
 | **Tests** | `tests/test_aggregation.py` |
 | **Verification** | tier C — **Partially verified** |
 
-### `agg.word_rates` — Skip / regression rate profile
+### `agg.word_rates` — Skip / regression rate profile { #agg-word-rates }
 
 Rate measures per word.
 
@@ -842,7 +842,7 @@ Rate measures per word.
 | **Tests** | `tests/test_aggregation.py` |
 | **Verification** | tier A, C — **Partially verified** |
 
-### `agg.reader_summary` — Per-reader summary
+### `agg.reader_summary` — Per-reader summary { #agg-reader-summary }
 
 One row per reader: totals, means and rates.
 
@@ -857,7 +857,7 @@ One row per reader: totals, means and rates.
 | **Tests** | `tests/test_aggregation.py` |
 | **Verification** | tier C, D — **Partially verified** |
 
-### `agg.trial_summary` — Per-trial summary
+### `agg.trial_summary` — Per-trial summary { #agg-trial-summary }
 
 One row per trial: reading time, counts, rates.
 
@@ -872,7 +872,7 @@ One row per trial: reading time, counts, rates.
 | **Tests** | `tests/test_aggregation.py` |
 | **Verification** | tier C, D — **Partially verified** |
 
-### `agg.normalize` — Normalized measure column
+### `agg.normalize` — Normalized measure column { #agg-normalize }
 
 Rescale a measure for cross-reader comparison.
 
@@ -886,7 +886,7 @@ Rescale a measure for cross-reader comparison.
 | **Tests** | `tests/test_aggregation.py` |
 | **Verification** | tier A, C — **Partially verified** |
 
-### `agg.landing_curve` — Landing-position curve
+### `agg.landing_curve` — Landing-position curve { #agg-landing-curve }
 
 Distribution of initial landing positions by word length.
 
@@ -901,7 +901,7 @@ Distribution of initial landing positions by word length.
 | **Tests** | `tests/test_aggregation.py` |
 | **Verification** | tier C — **Partially verified** |
 
-### `agg.over_time` — Trend over time
+### `agg.over_time` — Trend over time { #agg-over-time }
 
 A measure by trial index or fixation index.
 
@@ -917,7 +917,7 @@ A measure by trial index or fixation index.
 
 ## Similarity
 
-### `sim.nld` — Normalized Levenshtein distance
+### `sim.nld` — Normalized Levenshtein distance { #sim-nld }
 
 Scanpath similarity over AoI sequences (gated by PRE-21).
 
@@ -933,7 +933,7 @@ Scanpath similarity over AoI sequences (gated by PRE-21).
 | **Tests** | `tests/test_similarity.py` |
 | **Verification** | tier A, C — **Verified** |
 
-### `sim.aoi_sequence` — AoI sequence
+### `sim.aoi_sequence` — AoI sequence { #sim-aoi-sequence }
 
 The symbol string an NLD comparison runs on.
 
@@ -947,7 +947,7 @@ The symbol string an NLD comparison runs on.
 | **Tests** | `tests/test_similarity.py` |
 | **Verification** | tier A, C — **Verified** |
 
-### `sim.windowed` — NLD by fixation index / time
+### `sim.windowed` — NLD by fixation index / time { #sim-windowed }
 
 Similarity restricted to a window of the scanpath.
 
@@ -962,7 +962,7 @@ Similarity restricted to a window of the scanpath.
 
 ## Unit / coordinate conversion
 
-### `geom.pixels_per_degree` — Pixels per degree of visual angle
+### `geom.pixels_per_degree` — Pixels per degree of visual angle { #geom-pixels-per-degree }
 
 The screen-geometry conversion every angular unit depends on.
 
@@ -978,7 +978,7 @@ The screen-geometry conversion every angular unit depends on.
 | **Tests** | `tests/test_experimental_setup.py` |
 | **Verification** | tier A, C — **Verified** |
 
-### `geom.font_pt_to_px` — Font point size to pixels
+### `geom.font_pt_to_px` — Font point size to pixels { #geom-font-pt-to-px }
 
 Typography conversion for true-scale text rendering.
 
@@ -992,7 +992,7 @@ Typography conversion for true-scale text rendering.
 | **Tests** | `tests/test_experimental_setup.py` |
 | **Verification** | tier A, C — **Verified** |
 
-### `geom.word_box_bounds` — Word interest-area edges
+### `geom.word_box_bounds` — Word interest-area edges { #geom-word-box-bounds }
 
 Where one word's interest area ends and the next begins.
 
@@ -1007,7 +1007,7 @@ Where one word's interest area ends and the next begins.
 | **Tests** | `tests/test_word_box_geometry.py`, `tests/test_word_id_offset.py` |
 | **Verification** | tier A, C — **Partially verified** |
 
-### `geom.word_box_space_px` — Inter-word padding baked into each box
+### `geom.word_box_space_px` — Inter-word padding baked into each box { #geom-word-box-space-px }
 
 Detects a tiling layout that carries one trailing space per box.
 
@@ -1023,7 +1023,7 @@ Detects a tiling layout that carries one trailing space per box.
 | **Tests** | `tests/test_measures.py` |
 | **Verification** | tier A, C — **Verified** |
 
-### `geom.word_char_advance` — Character advance within a word
+### `geom.word_char_advance` — Character advance within a word { #geom-word-char-advance }
 
 How wide one letter is — the scale for every within-word position.
 
@@ -1039,7 +1039,7 @@ How wide one letter is — the scale for every within-word position.
 | **Tests** | `tests/test_measures.py` |
 | **Verification** | tier A, C — **Verified** |
 
-### `geom.word_glyph_span` — Where a word's glyphs are
+### `geom.word_glyph_span` — Where a word's glyphs are { #geom-word-glyph-span }
 
 The glyph run inside a word's box — where its label is drawn.
 
@@ -1056,7 +1056,7 @@ The glyph run inside a word's box — where its label is drawn.
 
 ## Display / export transformation
 
-### `disp.marker_sizes` — Fixation marker sizing
+### `disp.marker_sizes` — Fixation marker sizing { #disp-marker-sizes }
 
 Dot area encodes fixation duration.
 
@@ -1071,7 +1071,7 @@ Dot area encodes fixation duration.
 | **Tests** | `tests/test_plots.py`, `tests/test_builder_parity.py` |
 | **Verification** | tier C, D — **Intentional convention** |
 
-### `disp.axis_ranges` — Axis ranges and inversion
+### `disp.axis_ranges` — Axis ranges and inversion { #disp-axis-ranges }
 
 Screen coordinates, drawn the way the screen is.
 
@@ -1085,11 +1085,11 @@ Screen coordinates, drawn the way the screen is.
 | **Tests** | `tests/test_plots.py` |
 | **Verification** | tier C, D — **Intentional convention** |
 
-### `disp.true_scale` — True-scale text rendering
+### `disp.true_scale` — True-scale text rendering { #disp-true-scale }
 
 One line of text fills its share of the recorded line pitch.
 
-**Formula.** Text is drawn at `1/line_spacing` of the word-box height the data already encodes, so the stimulus keeps the geometry it was read at.
+**Formula.** A word label's font is `1/line_spacing` of the line pitch (the median line-to-line distance of the word boxes), capped so the words fit their box widths (`plots._width_fit_font`; the smaller wins), in data pixels converted at the figure's display scale. The figure is drawn at its exact pixel size and scaled as one block.
 
 | | |
 | --- | --- |
@@ -1099,7 +1099,7 @@ One line of text fills its share of the recorded line pitch.
 | **Tests** | `tests/test_plots.py` |
 | **Verification** | tier D — **Intentional convention** |
 
-### `disp.animation_timing` — Animation timing
+### `disp.animation_timing` — Animation timing { #disp-animation-timing }
 
 How recorded time maps to playback time.
 
@@ -1113,7 +1113,7 @@ How recorded time maps to playback time.
 | **Tests** | `tests/test_animation_export.py` |
 | **Verification** | tier C, D — **Intentional convention** |
 
-### `disp.illustration` — Illustration disclosure
+### `disp.illustration` — Illustration disclosure { #disp-illustration }
 
 When a figure stops being a faithful record.
 

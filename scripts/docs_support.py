@@ -243,7 +243,10 @@ def _without_ids(text: str) -> str:
 def _cell(text: str) -> str:
     """One table cell: HTML-safe, single-line, pipes escaped, flags as code."""
     text = html.escape(_without_ids(" ".join(text.split())), quote=False)
-    text = text.replace("|", "\\|").replace("*", "\\*")
+    # `[,symbol=S]` would otherwise read as a reference-style link, which
+    # mkdocs-autorefs then fails to resolve.
+    for char in "|*[]":
+        text = text.replace(char, "\\" + char)
     return re.sub(r"(?<![`\w-])(--[a-z][a-z0-9-]*)", r"`\1`", text)
 
 

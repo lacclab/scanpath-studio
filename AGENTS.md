@@ -226,12 +226,16 @@ python desktop/smoke_test.py     # selfcheck + server-boot smoke test
 # Docs site (MkDocs Material; API autodoc via mkdocstrings from docstrings)
 pip install -e ".[docs]"
 mkdocs serve                 # local preview
-mkdocs build --strict        # CI gate (.github/workflows/docs.yml → GitHub Pages)
+mkdocs build --strict        # CI gate: every PR (ci.yml) and the deploy (docs.yml)
+uv run --with playwright python scripts/capture_docs_screenshots.py  # re-capture app screenshots
 ```
 
 User-facing docs live in `docs/` and publish to
 <https://lacclab.github.io/scanpath-studio/>. The Python API reference is
-generated from the `api.py` docstrings, so keep those current.
+generated from the `api.py` docstrings, so keep those current. The gallery,
+printed example output, CLI and figure-option references, in-app tutorial steps,
+and the Cite / Changelog pages are generated at build time by `exec="true"`
+fences calling `scripts/docs_support.py` — see CONTRIBUTING.md → *Docs site*.
 
 CI on GitHub Actions runs pytest on Python 3.11/3.12/3.13/3.14 plus ruff
 lint+format checks on every pull request, and one `pytest --cov` leg that fails

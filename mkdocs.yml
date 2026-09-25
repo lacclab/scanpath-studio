@@ -6,6 +6,9 @@ site_url: https://lacclab.github.io/scanpath-studio/
 repo_url: https://github.com/lacclab/scanpath-studio
 repo_name: lacclab/scanpath-studio
 edit_uri: edit/main/docs/
+copyright: >-
+  MIT licensed · cite it by its DOI,
+  <a href="https://doi.org/10.5281/zenodo.22933884">10.5281/zenodo.22933884</a>
 
 theme:
   name: material
@@ -13,6 +16,8 @@ theme:
   favicon: assets/icon.png
   icon:
     repo: fontawesome/brands/github
+    edit: material/pencil
+    view: material/file-eye-outline
   palette:
     # Brand palette (APP_THEME / APP_THEME_DARK in scanpath_studio/constants.py)
     # via the `custom` scheme colors in stylesheets/extra.css.
@@ -31,20 +36,32 @@ theme:
         icon: material/weather-sunny
         name: Switch to light mode
   features:
-    - navigation.tabs
-    - navigation.tabs.sticky
-    - navigation.sections
-    - navigation.top
-    - navigation.footer
-    - navigation.indexes
+    - content.action.edit
+    - content.action.view
+    - content.code.annotate
     - content.code.copy
     - content.tabs.link
-    - toc.follow
-    - search.suggest
+    - content.tooltips
+    - navigation.footer
+    - navigation.indexes
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.path
+    - navigation.sections
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.top
     - search.highlight
+    - search.share
+    - search.suggest
+    - toc.follow
 
 extra_css:
   - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/figures.js
+  - javascripts/video.js
 
 extra:
   social:
@@ -56,61 +73,159 @@ extra:
       link: https://scanpath-studio.streamlit.app
       name: Live demo
 
+# Four tabs, one per reader (ENG-77): someone using the app, someone scripting
+# it, someone looking a definition up, and someone citing or contributing.
 nav:
   - Home: index.md
-  - Get started: getting-started.md
-  - Tutorials:
-      - Choose a tutorial: tutorials/index.md
-      - Data collection: tutorials/data-collection.md
-      - Data filtering: tutorials/data-filtering.md
-      - Exporting figures: tutorials/exporting-figures.md
-      - Corpus analysis: tutorials/corpus-analysis.md
-  - Feature guides:
-      - Choose a guide: guides/index.md
-      - Scanpath visualization: guides/scanpath-visualization.md
-      - Loading public and own data: guides/loading-data.md
-      - Corpus workspace: guides/corpus-workspace.md
-      - Outputs and sharing: guides/outputs-sharing.md
-  - Automation & reference:
+  - Use the app:
+      - Get started: getting-started.md
+      - Tutorials:
+          - tutorials/index.md
+          - Data collection: tutorials/data-collection.md
+          - Data filtering: tutorials/data-filtering.md
+          - Exporting figures: tutorials/exporting-figures.md
+          - Corpus analysis: tutorials/corpus-analysis.md
+      - Feature guides:
+          - guides/index.md
+          - Scanpath visualization: guides/scanpath-visualization.md
+          - Loading public and own data: guides/loading-data.md
+          - Corpus workspace: guides/corpus-workspace.md
+          - Outputs and sharing: guides/outputs-sharing.md
+      - Desktop app: desktop.md
+      - FAQ: faq.md
+      - Export troubleshooting: export-troubleshooting.md
+  - Gallery: gallery.md
+  - Automate:
       - Overview: automation.md
       - Python API: api.md
       - CLI reference: cli.md
+      - For coding agents: agents.md
+  - Reference:
       - Data format: data-format.md
       - Computations & methodology: computations.md
-      - Desktop app: desktop.md
-      - Export troubleshooting: export-troubleshooting.md
-      - FAQ: faq.md
-      - Privacy: privacy.md
+      - Glossary: glossary.md
       - Public corpora:
           - OneStop: onestop.md
           - MultiplEYE: multipleye.md
-          - Harmonised benchmark corpora: benchmark-corpora.md
-      - Development:
-          - Contributing a dataset: contributing-a-dataset.md
-          - Architecture: architecture.md
-          - For coding agents: agents.md
-          - True-to-scale rendering: rendering.md
-          - Security audit: security.md
+  - Project:
+      - Cite: cite.md
+      - Changelog: changelog.md
+      - Privacy: privacy.md
+
+# Fail the strict build on a link to a heading that does not exist, not only on
+# one to a missing page (ENG-79).
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
+# The abbreviation list is appended to every page by pymdownx.snippets; it is
+# not a page of its own. The dataset-adapter contract is developer material,
+# read on GitHub from CONTRIBUTING.md, and the harmonised benchmark corpora
+# need a bundle only the private EyeGenBench pipeline can build (ENG-80).
+exclude_docs: |
+  includes/
+  contributing-a-dataset.md
+  benchmark-corpora.md
 
 hooks:
   - scripts/mkdocs_hooks.py
 
 plugins:
   - search
+  # Google Fonts and every other external asset are downloaded at build time
+  # and served from the site itself (ENG-79).
+  - privacy
+  # Link-preview cards. Needs Cairo, so only the deploy renders them
+  # (docs.yml sets SOCIAL_CARDS); a local or pull-request build skips them.
+  - social:
+      enabled: !ENV [SOCIAL_CARDS, false]
+      cards_layout_options:
+        background_color: "#1f77b4"
+        color: "#ffffff"
+  # The pages UX-23 retired and ENG-77 deleted: their old URLs keep working.
+  - redirects:
+      redirect_maps:
+        bring-your-own-data.md: guides/loading-data.md
+        corpus-analysis.md: guides/corpus-workspace.md
+        tutorials/batch-export.md: tutorials/exporting-figures.md#3-export-a-batch-when-needed
+        tutorials/compare-two-readers.md: guides/scanpath-visualization.md#replay-and-compare
+        tutorials/figure-for-a-paper.md: tutorials/exporting-figures.md
+        tutorials/line-assignment.md: guides/scanpath-visualization.md
+        tutorials/load-your-own-data.md: guides/loading-data.md
+        tutorials/run-it-headless.md: automation.md
+        # ENG-80 took these off the site for the beta; old links land on the
+        # repository file that now carries the subject.
+        architecture.md: https://github.com/lacclab/scanpath-studio/blob/main/AGENTS.md
+        security.md: https://github.com/lacclab/scanpath-studio/blob/main/SECURITY.md
+        benchmark-corpora.md: guides/loading-data.md
+        rendering.md: guides/scanpath-visualization.md
+        contributing-a-dataset.md: https://github.com/lacclab/scanpath-studio/blob/main/docs/contributing-a-dataset.md
+  # Runs the pages' `exec="true"` fences: the gallery, printed example output,
+  # and the generated references (scripts/docs_support.py).
+  - markdown-exec
   - mkdocstrings:
       handlers:
         python:
+          inventories:
+            - https://docs.python.org/3/objects.inv
+            - https://pandas.pydata.org/docs/objects.inv
+            - https://numpy.org/doc/stable/objects.inv
+            - https://plotly.com/python-api-reference/objects.inv
           options:
             show_source: false
             show_root_heading: true
             heading_level: 3
             separate_signature: true
             show_signature_annotations: true
+            signature_crossrefs: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
             docstring_style: google
+  - git-revision-date-localized:
+      type: date
+      fallback_to_build_date: true
+      exclude:
+        - changelog.md
+        - cite.md
+        - gallery.md
+  - llmstxt:
+      markdown_description: >-
+        Scanpath Studio is an interactive Streamlit workbench, a Python API
+        (`import scanpath_studio as sps`) and a CLI (`scanpath-studio`) for
+        eye-tracking-while-reading data: it draws fixations, saccades and
+        heatmaps over the text at its true on-screen position, computes
+        per-word reading measures (FFD, FPRT, RPD, TFD, skips, regressions),
+        compares readers, and exports figures and tables. The bundled demo is
+        a subset of the OneStop Eye Movements corpus.
+      full_output: llms-full.txt
+      sections:
+        Use the app:
+          - getting-started.md: Install, launch, and a first plot
+          - tutorials/*.md
+          - guides/*.md
+          - faq.md
+        Automate:
+          - automation.md: Choosing between the app, the CLI and the Python API
+          - api.md: The Python API reference
+          - cli.md: The CLI reference, every flag included
+          - agents.md: Headless use by a coding agent or script
+        Reference:
+          - data-format.md: Accepted tables, units and metadata
+          - computations.md: How every measure and derived value is computed
+          - glossary.md
+          - onestop.md
+          - multipleye.md
+        Project:
+          - cite.md
+          - privacy.md
 
 markdown_extensions:
+  - abbr
   - admonition
   - attr_list
+  - def_list
   - md_in_html
   - toc:
       permalink: true
@@ -120,6 +235,10 @@ markdown_extensions:
       anchor_linenums: true
   - pymdownx.superfences
   - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      auto_append:
+        - docs/includes/abbreviations.md
+      check_paths: true
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.emoji:

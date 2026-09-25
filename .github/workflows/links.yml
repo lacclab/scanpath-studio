@@ -1,0 +1,30 @@
+name: Links
+
+# The docs' *external* links, checked once a week (ENG-79). Internal links and
+# anchors already fail `mkdocs build --strict` in docs.yml. This is deliberately
+# not a pull-request gate: a link rots on someone else's server, not in a pull
+# request, and one flaky remote host must not red a branch that changed nothing.
+# A failing run shows red on the Actions tab; the log lists each broken URL.
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lychee:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Pinned like the other CI tools (CLAUDE.md): the action and the lychee
+      # binary it runs. Bump both deliberately.
+      - name: Check links
+        uses: lycheeverse/lychee-action@v2.9.0
+        with:
+          lycheeVersion: v0.24.2
+          args: >-
+            --config lychee.toml --no-progress
+            'docs/**/*.md' README.md CONTRIBUTING.md
+          fail: true

@@ -2826,8 +2826,9 @@ def render(argv: list[str]) -> None:
         )
 
 
-def analyze(argv: list[str]) -> None:
-    """Preprocess data and export the complete EXP-3 analysis family."""
+def _analyze_parser() -> argparse.ArgumentParser:
+    """The `analyze` parser — its own function so the docs' CLI reference is
+    generated from it rather than restated (ENG-79)."""
     parser = argparse.ArgumentParser(
         prog="scanpath-studio analyze",
         description="Write fixation, saccade, word, sentence, trial, reader, "
@@ -2886,7 +2887,12 @@ def analyze(argv: list[str]) -> None:
         "amplitudes to the saccade table.",
     )
     _add_schema_flags(parser)
-    args = parser.parse_args(argv)
+    return parser
+
+
+def analyze(argv: list[str]) -> None:
+    """Preprocess data and export the complete EXP-3 analysis family."""
+    args = _analyze_parser().parse_args(argv)
     word_schema = _parse_schema_arg(args.word_schema, "--word-schema")
     fix_schema = _parse_schema_arg(args.fix_schema, "--fix-schema")
 
@@ -2952,8 +2958,8 @@ def analyze(argv: list[str]) -> None:
     print(f"Wrote {len(tables)} tables + run_config.json to {destination}")
 
 
-def corpus(argv: list[str]) -> None:
-    """Render a styled corpus figure from a tidy CSV (AN-29)."""
+def _corpus_parser() -> argparse.ArgumentParser:
+    """The `corpus` parser (see `_analyze_parser`)."""
     parser = argparse.ArgumentParser(
         prog="scanpath-studio corpus",
         description="Render a styled corpus figure from a tidy CSV you already "
@@ -3002,7 +3008,12 @@ def corpus(argv: list[str]) -> None:
         default="#e45756",
         help="Second series colour (default: #e45756).",
     )
-    args = parser.parse_args(argv)
+    return parser
+
+
+def corpus(argv: list[str]) -> None:
+    """Render a styled corpus figure from a tidy CSV (AN-29)."""
+    args = _corpus_parser().parse_args(argv)
     from . import api
 
     # EXP-13: each of these ended in a traceback — a missing or unparseable
@@ -3027,14 +3038,8 @@ def corpus(argv: list[str]) -> None:
     print(f"Wrote {out}")
 
 
-def cache(argv: list[str]) -> None:
-    """Inspect or clear the on-device recovery cache (ENG-30).
-
-    The terminal counterpart of the app's 💾 Session → 🗄️ Automatic recovery
-    block, so the
-    storage a local run creates can be found, measured and deleted without
-    launching the app (or after closing it).
-    """
+def _cache_parser() -> argparse.ArgumentParser:
+    """The `cache` parser (see `_analyze_parser`)."""
     parser = argparse.ArgumentParser(
         prog="scanpath-studio cache",
         description="Show what a local run has stored on this computer "
@@ -3049,7 +3054,18 @@ def cache(argv: list[str]) -> None:
     parser.add_argument(
         "--clear", action="store_true", help="delete the stored session"
     )
-    args = parser.parse_args(argv)
+    return parser
+
+
+def cache(argv: list[str]) -> None:
+    """Inspect or clear the on-device recovery cache (ENG-30).
+
+    The terminal counterpart of the app's 💾 Session → 🗄️ Automatic recovery
+    block, so the
+    storage a local run creates can be found, measured and deleted without
+    launching the app (or after closing it).
+    """
+    args = _cache_parser().parse_args(argv)
     from .persistence import PERSIST_ENV_VAR, cache_status, clear_local_state
     from .persistence import human_size as _human_size
 

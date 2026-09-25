@@ -81,9 +81,18 @@ lint = [
     "ruff==0.16.8",
 ]
 # Build the documentation site (MkDocs Material + API autodoc from docstrings).
+# Material caps MkDocs below 2.0, which has no plugin system; every plugin here
+# except git-revision-date and llmstxt is one Zensical also runs (ENG-79).
 docs = [
-    "mkdocs-material>=9.5",
-    "mkdocstrings[python]>=0.26",
+    # `imaging` is the social-card renderer, switched on in CI only (mkdocs.yml).
+    "mkdocs-material[imaging]>=9.7.7",
+    "mkdocstrings[python]>=1.0.6",
+    # Executes the pages' `exec="true"` fences: the gallery, the printed
+    # outputs, the generated references (ENG-78, ENG-79).
+    "markdown-exec>=1.12.3",
+    "mkdocs-redirects>=1.2.3",
+    "mkdocs-git-revision-date-localized-plugin>=1.6.0",
+    "mkdocs-llmstxt>=0.5.0",
 ]
 
 [project.urls]

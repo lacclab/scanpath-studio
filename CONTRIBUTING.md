@@ -188,16 +188,34 @@ Only when several sessions share one checkout:
 ### Docs site
 
 User-facing docs live in `docs/` (MkDocs Material, published to GitHub Pages
-on push to `main` by `.github/workflows/docs.yml`):
+on push to `main` by `.github/workflows/docs.yml`; every pull request runs the
+same strict build in `ci.yml`):
 
 ```bash
 pip install -e ".[docs]"
 mkdocs serve                 # local preview
-mkdocs build --strict        # the CI gate — fails on warnings and bad refs
+mkdocs build --strict        # the CI gate — fails on warnings, bad links and bad anchors
 ```
 
-A new page also needs a nav entry in [`mkdocs.yml`](mkdocs.yml). The API
-reference is generated from `api.py` docstrings, so keep those current.
+A new page also needs a nav entry in [`mkdocs.yml`](mkdocs.yml). Keep to what
+the release does and we stand behind — not how it came to be, and not
+anything a reader cannot use (ENG-80).
+
+Parts of the site are generated when it builds, so they cannot drift:
+
+- `` ```python exec="true" `` fences run during the build (markdown-exec): the
+  Gallery's figures, printed example output, the CLI and figure-option
+  references, the in-app tutorial steps, and the Cite and Changelog pages, all
+  through [`scripts/docs_support.py`](scripts/docs_support.py). A fence that
+  raises fails the build.
+- The API reference is generated from the `api.py` docstrings, so keep those
+  current.
+- The app screenshots in `docs/assets/screenshots/` are re-captured with
+  `uv run --with playwright python scripts/capture_docs_screenshots.py`, which
+  starts its own app with the recovery cache off; the home page's recording
+  comes from `scripts/record_app_demo.py`.
+- Link-preview images render only with `SOCIAL_CARDS=true`, which needs Cairo;
+  the deploy sets it.
 
 ## Adding a public dataset
 

@@ -5,7 +5,9 @@
 itself — stepping through trials, switching on the heatmap, replaying a reading,
 comparing two readers, and opening Corpus Analysis — so the first thing a README
 reader sees is what using the tool looks like. Writes
-``docs/assets/app_demo.gif``.
+``docs/assets/app_demo.gif`` for the README and, from the same recording, the
+docs home page's ``app_demo.mp4`` (a tenth of the GIF's size) and its
+``app_demo_poster.webp`` (ENG-78).
 
 Run the app first, on the bundled demo, with the recovery cache off so the
 recording starts from the defaults rather than from whatever ran last::
@@ -19,7 +21,7 @@ then::
 
 Playwright is not a package dependency; it is pulled in for the run above. Its
 Chromium comes from ``playwright install chromium``; set ``DEMO_CHROME`` to use
-another Chrome/Chromium binary. The GIF is encoded with ``ffmpeg`` (on PATH).
+another Chrome/Chromium binary. Everything is encoded with ``ffmpeg`` (on PATH).
 """
 
 from __future__ import annotations
@@ -203,6 +205,45 @@ def encode_gif(video: Path, start: float, out: Path) -> None:
     print(f"wrote {out} ({out.stat().st_size / 1e6:.1f} MB)", flush=True)
 
 
+def encode_mp4(video: Path, start: float, out: Path) -> None:
+    """The same cut as `encode_gif`, as H.264 — what the docs page plays."""
+    scale = f"setpts=PTS/{GIF_SPEEDUP},fps={GIF_FPS * 2},scale={GIF_WIDTH}:-2"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-loglevel",
+            "error",
+            "-ss",
+            f"{start:.2f}",
+            "-i",
+            str(video),
+            "-vf",
+            scale,
+            "-c:v",
+            "libx264",
+            "-crf",
+            "26",
+            "-preset",
+            "slow",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
+            "-an",
+            str(out),
+        ],
+        check=True,
+    )
+    poster = out.with_name(f"{out.stem}_poster.webp")
+    subprocess.run(
+        ["ffmpeg", "-y", "-loglevel", "error", "-i", str(out), "-vframes", "1"]
+        + ["-c:v", "libwebp", "-quality", "85", str(poster)],
+        check=True,
+    )
+    print(f"wrote {out} ({out.stat().st_size / 1e6:.1f} MB) and {poster.name}")
+
+
 def main() -> None:
     if not shutil.which("ffmpeg"):
         raise SystemExit("ffmpeg is not on PATH")
@@ -236,6 +277,7 @@ def main() -> None:
         context.close()  # finalises the recording
         browser.close()
         encode_gif(video, start, OUT)
+        encode_mp4(video, start, OUT.with_suffix(".mp4"))
 
 
 if __name__ == "__main__":

@@ -1811,8 +1811,6 @@ def _second_reading(
     otherwise, as `compare_scanpaths` does; without it B's frames must hold one
     trial, since guessing among several would draw somebody else's reading.
     """
-    from .utils import extract_trial
-
     if trial_b is None:
         source = fixations_b if fixations_b is not None else words_b
         if source is None or source.empty:
@@ -1836,7 +1834,12 @@ def _second_reading(
     def one_reading(frame: pd.DataFrame | None, label: str) -> pd.DataFrame | None:
         if frame is None or frame.empty:
             return frame
-        return extract_trial(_require_normalized(frame, label), pid_b, tid_b)
+        frame = _require_normalized(frame, label)
+        # Fresh masks, as `_select_trial` slices A: `utils.extract_trial`'s
+        # position cache is keyed by the frame's identity, so a caller's in-place
+        # edit between two calls would hand back somebody else's rows.
+        keep = frame["participant_id"].isin([pid_b]) & frame["trial_id"].isin([tid_b])
+        return frame[keep]
 
     trial_words_b = one_reading(words_b, "words_b")
     trial_fix_b = one_reading(fixations_b, "fixations_b")

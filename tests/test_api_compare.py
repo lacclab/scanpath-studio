@@ -349,6 +349,20 @@ class TestCoAnimationDrawsOneSecondReading:
         # The replay's first frame holds each not-yet-reached fixation as None.
         assert {round(float(y)) for y in trace.y if y is not None} == {300}
 
+    def test_an_in_place_edit_between_calls_still_finds_bs_reading(self):
+        """B must be sliced fresh, as A is. Through `utils.extract_trial`'s
+        position cache — keyed by the frame's identity, which an in-place edit
+        keeps — a second call after `sort_values(inplace=True)` returned the
+        same *positions*: as many rows, from somebody else's trials."""
+        words, fixations = api.load_sample_data()
+        fixations = fixations.copy()
+        api._second_reading(words, fixations, None, None, self._B)
+        fixations.sort_values(
+            ["participant_id", "trial_id"], ascending=False, inplace=True
+        )
+        _, fix_b = api._second_reading(words, fixations, None, None, self._B)
+        assert set(zip(fix_b["participant_id"], fix_b["trial_id"])) == {self._B}
+
     def test_b_frames_holding_several_trials_ask_for_trial_b(self):
         words, fixations = api.load_sample_data()
         with pytest.raises(ValueError, match=r"trial_b="):

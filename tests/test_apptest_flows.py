@@ -834,6 +834,11 @@ class TestCrossDatasetCompareFlow:
         ]
         assert warning.endswith("Showing only the first scanpath.")
         assert "side by side" not in warning
+        # And 🔗 Share's snippet reproduces what is drawn — A alone — rather than
+        # a co-animation (`trial_b=` / `--compare-with`) the app just refused.
+        state = at.session_state["_snippet_state"]
+        assert state.kind == "animation"
+        assert state.compare is None
 
     def test_bs_filters_do_not_disturb_the_main_pool(self):
         from scanpath_studio.compare_source import COMPARE_SOURCE_KEY

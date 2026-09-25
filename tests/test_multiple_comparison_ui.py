@@ -247,3 +247,23 @@ def test_comparison_panels_use_the_candidate_words_and_keep_text_visible():
     assert settings["show_word_labels"] is True
     assert settings["color_by"] is None
     assert settings["fixation_color"] == "#123456"
+
+
+def test_the_grid_keeps_by_line_colouring_off_when_the_rail_says_line(
+    normalized_words_df, normalized_fixations_df
+):
+    """The grid switches by-line colouring off (`color_by_line: False`), but
+    BUG-85 taught the builders to read the rail's own `color_by="line"` as
+    colour-by-line too — so with the rail on "line", every panel grew per-line
+    legend entries unless the grid neutralises the value as well."""
+    from scanpath_studio.plots import FigureSettings, make_scanpath_figure
+
+    settings = _comparison_panel_settings({"color_by": "line", "color_by_line": True})
+    fig = make_scanpath_figure(
+        normalized_words_df,
+        normalized_fixations_df,
+        settings=FigureSettings.from_mapping(
+            settings, canvas_width=1920, canvas_height=1080, base_font_size=16
+        ),
+    )
+    assert not [t.name for t in fig.data if str(t.name).startswith("line: ")]

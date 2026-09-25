@@ -92,6 +92,7 @@ from scanpath_studio.constants import (
     SELECTOR_ROW_WIDE_GRID,
     TRIAL_IDENTITY_CHECK_KEY,
     TRIAL_IDENTITY_FULL_KEY,
+    UNIFORM_COLOR_FIELD,
     UPLOAD_FILE_TYPES,
     WORD_LABEL_COLOR,
     compare_palette_color,
@@ -5474,12 +5475,15 @@ def render_single_trial_tab(
             else None
         ),
     )
-    _publish_snippet_state(
+    snippet_kind = (
         "animation"
         if animate and not trial_fixations.empty
         else "comparison"
         if comparing
-        else "static",
+        else "static"
+    )
+    _publish_snippet_state(
+        snippet_kind,
         figure_settings,
         viz_settings,
         participant=selected_participant,
@@ -5503,7 +5507,12 @@ def render_single_trial_tab(
                 compare_stimulus=str(compare_stimulus),
                 dataset=str(compare_meta.get("dataset") or ""),
             )
-            if comparing and compare_meta is not None
+            # BUG-85: an animation names B only when it co-animates B. Where it
+            # fell back to A alone (B empty, or two screens), a snippet naming B
+            # — `trial_b=` / `--compare-with` — would draw what the app didn't.
+            if comparing
+            and compare_meta is not None
+            and (snippet_kind != "animation" or dual_anim)
             else None
         ),
     )
@@ -8413,7 +8422,7 @@ def _comparison_trial_words(
 
 def _comparison_panel_settings(base_settings: dict) -> dict:
     """Comparable grid settings without hiding the main plot's stimulus text."""
-    return {
+    settings = {
         **base_settings,
         "show_heatmap": False,
         "show_raw_gaze": False,
@@ -8421,6 +8430,11 @@ def _comparison_panel_settings(base_settings: dict) -> dict:
         "fixation_flags": None,
         "show_order": False,
     }
+    # BUG-85: the builders read `color_by="line"` as colour-by-line too, so the
+    # rail's "line" has to be neutralised here or the switch-off above is moot.
+    if settings.get("color_by") == "line":
+        settings["color_by"] = UNIFORM_COLOR_FIELD
+    return settings
 
 
 def render_multiple_comparison_tab(

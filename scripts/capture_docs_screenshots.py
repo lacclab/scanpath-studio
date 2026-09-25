@@ -77,7 +77,7 @@ CALLOUT_JS = """(callouts) => {
 }"""
 
 
-def _chrome() -> str | None:
+def find_chrome() -> str | None:
     if os.environ.get("DOCS_CHROME"):
         return os.environ["DOCS_CHROME"]
     try:
@@ -89,13 +89,13 @@ def _chrome() -> str | None:
         return None
 
 
-def _free_port() -> int:
+def free_port() -> int:
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         return sock.getsockname()[1]
 
 
-def _start_app(port: int) -> subprocess.Popen:
+def start_app(port: int) -> subprocess.Popen:
     env = {**os.environ, "SCANPATH_STUDIO_PERSIST": "0"}
     proc = subprocess.Popen(
         [
@@ -176,13 +176,13 @@ def capture(page: Page) -> None:
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    port = _free_port()
+    port = free_port()
     ui.URL = f"http://127.0.0.1:{port}"
     ui.OUT = OUT
-    app = _start_app(port)
+    app = start_app(port)
     try:
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(executable_path=_chrome())
+            browser = pw.chromium.launch(executable_path=find_chrome())
             ctx = browser.new_context(
                 viewport=VIEWPORT, device_scale_factor=2, color_scheme="light"
             )

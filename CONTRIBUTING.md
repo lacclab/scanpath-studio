@@ -212,8 +212,8 @@ Parts of the site are generated when it builds, so they cannot drift:
   current.
 - The app screenshots in `docs/assets/screenshots/` are re-captured with
   `uv run --with playwright python scripts/capture_docs_screenshots.py`, which
-  starts its own app with the recovery cache off; the home page's recording
-  comes from `scripts/record_app_demo.py`.
+  starts its own app with the recovery cache off; `scripts/record_app_demo.py`
+  re-records the README's GIF and the home page's video the same way.
 - Link-preview images render only with `SOCIAL_CARDS=true`, which needs Cairo;
   the deploy sets it.
 

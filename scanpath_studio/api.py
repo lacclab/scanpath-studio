@@ -1956,7 +1956,7 @@ def compare_scanpaths(
     ``scanpath_studio/CLAUDE.md`` → *Which viz settings apply in which render
     path*.
     """
-    from .experimental_setup import setups_comparable
+    from .experimental_setup import IncomparableScreensError, setups_comparable
     from .utils import align_compare_columns, extract_trial, qualify_for_compare
 
     resolved_layout = _COMPARE_LAYOUTS.get(str(layout).strip().lower())
@@ -2004,9 +2004,13 @@ def compare_scanpaths(
     if resolved_layout == "overlay" and cross_dataset:
         comparable, note = setups_comparable(setup_a, resolved_setup_b)
         if not comparable:
-            raise ValueError(
-                f"{note} Pass layout='side_by_side' (or 'stacked') to compare "
-                f"them anyway, each panel drawn to its own screen."
+            # BUG-85: the reason says why; this says what happened here and how
+            # to ask for the split in Python. `render` rewords it in its flags.
+            raise IncomparableScreensError(
+                f"{note} So no overlay was drawn; pass layout='side_by_side' (or "
+                f"'stacked') to compare them in separate panels, each drawn to "
+                f"its own screen.",
+                reason=note,
             )
         if note:
             # The canvases match but at least one corpus never recorded a screen,

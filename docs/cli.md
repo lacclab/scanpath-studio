@@ -180,34 +180,14 @@ overlay`. `--compare-with` cannot be combined with `--all-screens`: a comparison
 is a single figure of two readings, so render one screen at a time with
 `--screen`.
 
-**Overlay across two datasets requires matching canvases.** Overlaying pools both
-readings into one set of pixel coordinates, so `--compare-layout overlay` on two
-different screens **fails** rather than quietly falling back:
-
-```console
-$ scanpath-studio render … --canvas 2560x1440 --compare-canvas 1680x1050
-These readings were recorded on different screens — 2560x1440 and 1680x1050. …
-Pass layout='side_by_side' (or 'stacked') to compare them anyway, each panel
-drawn to its own screen.
-```
-
-The app resolves that case to Side by side because a user can see what they got;
-a script cannot, so the CLI refuses instead of returning a differently-shaped
-figure. Nothing is ever rescaled to force an overlay.
-
-Matching canvases that neither dataset actually *recorded* (most public corpora
-report a default) still overlay — you get a warning on stderr rather than an
-error, since the app can't prove the two displays matched but you usually can.
+**Overlay across two datasets requires matching canvases.** On two different
+canvases `--compare-layout overlay` fails rather than falling back; pass
+`--compare-layout side-by-side` or `stacked`. Nothing is rescaled.
 
 A second dataset is loaded from **files only**. Any corpus reachable from Python
 can still be scanpath B via
 [`compare_scanpaths`](api.md#scanpath_studio.api.compare_scanpaths), which takes
 B's frames directly.
-
-`--monitor-mm` / `--viewing-distance` (and their `--compare-*` twins) record
-physical display geometry on each side's setup. Nothing in the comparison reads
-them today — the overlay rule is about pixels, not degrees — but they complete
-the recorded setup.
 
 ## Common options
 

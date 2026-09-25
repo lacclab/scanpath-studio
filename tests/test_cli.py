@@ -991,45 +991,63 @@ def test_render_compare_overlay_refuses_two_different_screens(tmp_path):
             ]
         )
     message = str(excinfo.value)
-    assert "1680" in message and "side_by_side" in message
+    assert "1680" in message
+    # BUG-85: a CLI user is told the CLI's flag, not the API's keyword — and
+    # not that the app's side-by-side fallback happened, since nothing was drawn.
+    assert "--compare-layout side-by-side" in message
+    assert "layout='side_by_side'" not in message
+    assert "side by side instead" not in message
 
 
-def test_compare_setup_snapshot_without_a_canvas_is_not_a_known_screen():
-    """`--monitor-mm` alone must not report a *known* screen.
+def test_compare_setup_snapshot_comes_from_a_stated_canvas_only():
+    """A stated canvas is a known screen, and says nothing; no canvas leaves the
+    screen to `api.compare_scanpaths`, which reads it off the data.
 
-    `_compare_setup_snapshot` returns a snapshot as soon as *any* geometry flag
-    is set, and `api._compare_setup` then trusts it without consulting the data —
-    so the canvas it carries is the bare default. Marking that ESTIMATED claimed
-    a screen the caller never stated. It is ASSUMED, which since 2026-08-12 means
-    the overlay is drawn *with a caution* rather than refused.
-    """
-    from scanpath_studio.experimental_setup import (
-        Provenance,
-        SetupSnapshot,
-        setups_comparable,
-    )
+    BUG-85 removed the other way in: `--monitor-mm` alone used to build a
+    snapshot around the *default* canvas (ASSUMED), replacing the data's own
+    screen in the gate with one nobody stated — for a value nothing reads."""
+    from scanpath_studio.experimental_setup import Provenance, setups_comparable
 
-    snapshot = cli._compare_setup_snapshot(None, 520.0, None)
-    assert snapshot.screen_provenance is Provenance.ASSUMED
-    real = SetupSnapshot(
-        canvas_width=snapshot.canvas_width,
-        canvas_height=snapshot.canvas_height,
-        screen_provenance=Provenance.MEASURED,
-    )
-    allowed, note = setups_comparable(snapshot, real)
-    assert allowed is True
-    assert note, "a default canvas passed the gate with nothing said about it"
-
-    # A stated canvas is a known screen, and says nothing.
-    stated = cli._compare_setup_snapshot((1680, 1050), None, None)
+    assert cli._compare_setup_snapshot(None) is None
+    stated = cli._compare_setup_snapshot((1680, 1050))
+    assert stated.canvas == (1680, 1050)
     assert stated.screen_provenance is Provenance.MEASURED
     assert setups_comparable(stated, stated) == (True, "")
+
+
+@pytest.mark.parametrize(
+    "flag",
+    [
+        "--monitor-mm",
+        "--viewing-distance",
+        "--compare-monitor-mm",
+        "--compare-viewing-distance",
+    ],
+)
+def test_render_takes_no_physical_display_geometry(flag, tmp_path, capsys):
+    """BUG-85: these four were accepted and recorded on a `SetupSnapshot` that
+    nothing reads — the overlay rule is about pixels (CMP-11 is a gate, not a
+    rescaling), so no figure ever depended on them."""
+    out = tmp_path / "unused.html"
+    with pytest.raises(SystemExit):
+        cli.main(["render", "--sample", flag, "520", "-o", str(out)])
+    assert f"unrecognized arguments: {flag}" in capsys.readouterr().err
+    assert not out.exists()
 
 
 def _render_flag_help(flag: str) -> str:
     parser = cli._render_parser()
     (action,) = [action for action in parser._actions if flag in action.option_strings]
     return action.help
+
+
+def test_compare_layout_help_states_the_equal_canvas_rule():
+    """BUG-85: since CMP-11 an overlay across two datasets needs equal canvases
+    and nothing more — an unrecorded screen overlays with a warning — but the
+    help still asked for "the same known screen"."""
+    help_text = _render_flag_help("--compare-layout")
+    assert "known screen" not in help_text
+    assert "canvas" in help_text and "warning" in help_text
 
 
 def test_color_by_help_offers_line():
@@ -1145,7 +1163,12 @@ def test_render_animate_compare_rejects_two_screens(tmp_path):
                 str(tmp_path / "dual.html"),
             ]
         )
-    assert "1680" in str(excinfo.value)
+    message = str(excinfo.value)
+    assert "1680" in message
+    assert "side by side instead" not in message
+    # Dropping --animate alone lands on the default overlay, refused just the
+    # same — so the way out names the layout flag too.
+    assert "--compare-layout side-by-side" in message
 
 
 # ---------------------------------------------------------------------------

@@ -176,7 +176,17 @@ class TestCrossDataset:
                 setup=_measured(1920, 1080),
                 setup_b=_measured(1680, 1050),
             )
-        assert "1680" in str(excinfo.value)
+        message = str(excinfo.value)
+        assert "1680" in message
+        # BUG-85: it says what this surface does — nothing was drawn — and how
+        # to ask for the split here, not the app's "shown side by side instead".
+        assert "side by side instead" not in message
+        assert "layout='side_by_side'" in message
+        # The surface-neutral reason rides along, so `render` can word the same
+        # refusal in its own flags rather than echo Python syntax.
+        reason = excinfo.value.reason
+        assert "1680" in reason and reason in message
+        assert "layout=" not in reason
 
     def test_a_split_layout_is_allowed_on_two_screens(self):
         fig = api.compare_scanpaths(

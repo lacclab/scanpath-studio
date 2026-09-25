@@ -12,9 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **The README is a landing page: three ways to run it, a docs map, and the detail left to the docs** (ENG-76)
+- **`render` no longer takes `--monitor-mm`, `--viewing-distance` or their `--compare-*` twins, which nothing read** (BUG-85)
 
 ### Fixed
 - **`color_by="line"` and `render --color-by line` colour each fixation by its text line, as the app's "line" option does** (BUG-85)
+- **A refused cross-screen overlay says what actually happened on each surface, and `render` names its own flags** (BUG-85)
 
 ### Details
 
@@ -23,9 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Changed
 - **The README is a landing page: three ways to run it, a docs map, and the detail left to the docs** (ENG-76) — it was accurate after ENG-70 but read like a manual, and it is also the PyPI page. It opens with a two-sentence pitch; *Get started* offers the live demo, `pip`, and the desktop app, which it had never mentioned. Each desktop bundle is a direct download (`releases/latest/download/<archive>`, which always serves the newest build), here and on the docs' *Getting started* and *Desktop app* pages, and `tests/test_desktop_download_links.py` fails if those links and the archive names in `.github/workflows/desktop.yml` part ways. The feature list is five lines above a two-image gallery; the views table, the long *Your data* paragraph and the PoTeC snippet gave way to links into the docs, and a *Where next* list maps the site. The CLI and Python examples now run as-is on the bundled demo instead of on an `ia.csv` nobody has, and `tests/test_doc_examples.py` runs them. *Roadmap* (mostly the frozen tracker archive, which CONTRIBUTING.md covers), *License* (the badge and `LICENSE` carry it), the author list and the Zenodo explanation are gone; *Citation* is the DOI and the OneStop BibTeX, and the AI-assistance note matches the docs home's wording. The opening image is now a recording of the app in use — stepping through trials, a heatmap, a replay, a two-reader comparison and Corpus Analysis (`docs/assets/app_demo.gif`, 4 MB, re-recorded by `scripts/record_app_demo.py` against a running app) — and the single-figure replay moved into the gallery. *Your data* is two sentences and a link.
+- **`render` no longer takes `--monitor-mm`, `--viewing-distance` or their `--compare-*` twins, which nothing read** (BUG-85) — they were recorded on each side's setup snapshot and never consulted: CMP-11's overlay rule compares canvases in pixels, and nothing converts to degrees. Their one effect was a bad one: `--monitor-mm` without `--canvas` built a snapshot around the default canvas, which then stood in for the screen the data would have reported. A command that passes them now stops with argparse's "unrecognized arguments"; the docs' CLI page drops their paragraph.
 
 #### Fixed
 - **`color_by="line"` and `render --color-by line` colour each fixation by its text line, as the app's "line" option does** (BUG-85) — "line" is the value the app's *Color fixations by* select writes and a share link carries, and `plot_scanpath` accepted it (its EXP-17 error even recommended it), but only `color_by_line=True` reached the builders' line branch, so the API and CLI drew one flat colour. The static and animated builders now read `color_by="line"` as colour-by-line themselves, so every caller gets it; comparison figures still colour each scanpath flat, as in the app. `--color-by`'s help offers the value.
+- **A refused cross-screen overlay says what actually happened on each surface, and `render` names its own flags** (BUG-85) — the gate's refusal ended "so they are shown side by side instead", the app's fallback, while `compare_scanpaths` and `render` raise instead; and `render` printed the API's `layout='side_by_side'` hint verbatim to a shell. The reason now says only why. The app adds "They are shown side by side instead." where it resolves Overlay away, so the co-replay's warning no longer trims it off (UX-144) — and the no-screen refusal, which carried its own copy the trim missed, is neutral too. `compare_scanpaths` raises `IncomparableScreensError`, a `ValueError` carrying `.reason`, which `render` rewords as `--compare-layout side-by-side`; `--animate`'s refusal now says to pick a split layout as well as drop the flag, since dropping it alone lands on a refused overlay. `--compare-layout`'s help states the equal-canvas rule — it still asked for "the same known screen".
 
 ## [0.31.0] - 2026-09-24
 

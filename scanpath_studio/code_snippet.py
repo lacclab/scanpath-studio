@@ -1357,6 +1357,16 @@ def state_caveats(source: SnippetSource, state: FigureState) -> list[str]:
             "`compare_scanpaths` compares whole trials, so slice each side to "
             "its screen first (`multipart.extract_part`) and pass those frames."
         )
+    # BUG-85: B has its own screen navigator in the app, which a `FigureState`
+    # does not carry, and `animate_scanpath` draws B at its first screen.
+    if state.kind == "animation" and state.compare is not None and state.screen:
+        notes.append(
+            f"This is screen `{state.screen}` of a multipart trial, and "
+            "`animate_scanpath` draws B at its first screen — as `render` does, "
+            "which has no flag for B's. To replay the screen shown for B, cut "
+            "its frames with `multipart.extract_part` and pass them as "
+            "`words_b=` / `fixations_b=`."
+        )
     # CMP-11: Animate + Compare is *one* figure with two readings on one clock,
     # so `kind` is "animation" and B rides along in `compare`. Since BUG-85 the
     # Python form names B with `trial_b=`, as `compare_scanpaths` does — all but

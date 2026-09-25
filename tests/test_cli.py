@@ -1055,6 +1055,41 @@ def test_color_by_help_offers_line():
     assert "line" in _render_flag_help("--color-by")
 
 
+def test_an_explicit_flag_wins_over_the_illustration_preset(tmp_path, monkeypatch):
+    """`--illustration` was applied after `--color-by`, the layer switches and
+    the saccade colouring, so it overrode them: `--color-by line` drew flat
+    where `--color-by-line` (applied later) coloured by line. The comment on
+    the flags after the preset, and `plot_scanpath(illustration=True, …)`, both
+    let an explicit option win; now every flag does (BUG-85 review)."""
+    captured = _captured_static(
+        tmp_path,
+        monkeypatch,
+        [
+            "--illustration",
+            "--color-by",
+            "line",
+            "--no-labels",
+            "--saccade-color-by-type",
+        ],
+    )
+    assert captured["color_by"] == "line"
+    assert captured["show_word_labels"] is False
+    assert captured["saccade_color_mode"] == "By type"
+    # What the command didn't state still comes from the preset.
+    assert captured["show_words"] is False
+    assert captured["saccade_render_mode"] == "Arc"
+
+
+def test_the_illustration_preset_alone_is_unchanged(tmp_path, monkeypatch):
+    from scanpath_studio.constants import UNIFORM_COLOR_FIELD
+
+    captured = _captured_static(tmp_path, monkeypatch, ["--illustration"])
+    assert captured["color_by"] == UNIFORM_COLOR_FIELD
+    assert captured["show_word_labels"] is True
+    assert captured["show_words"] is False
+    assert captured["saccade_color_mode"] == "Uniform"
+
+
 def test_render_color_by_line_colours_each_fixation_by_its_line(tmp_path):
     """BUG-85: `--color-by line` passed validation and drew one flat colour."""
     out = tmp_path / "lines.html"

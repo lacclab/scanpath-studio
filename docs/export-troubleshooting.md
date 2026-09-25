@@ -8,19 +8,20 @@
 | **PNG / SVG / PDF** | `save_figure(fig, "x.png")` / `render -o x.png` | **Yes** — via Kaleido |
 | **GIF / MP4** | `animation_export.export_animation(anim, fmt="mp4", frame_duration_ms=…)` → bytes (see [below](#mp4-gif)) | **Yes** (Kaleido) — ffmpeg is bundled |
 
-## Kaleido needs a Chrome/Chromium binary
+## Kaleido needs Chrome, Chromium or Edge
 
 Static image export (PNG/SVG/PDF) and rasterized animation (GIF/MP4) render
 through [Kaleido](https://github.com/plotly/Kaleido) v1, which drives a headless
-Chrome. `pip install` does **not** install Chrome — run this once:
+browser. It finds an installed Google Chrome, Chromium or Microsoft Edge by
+itself, in the desktop app and in a `pip` install alike, so installing one of
+them is enough. A `pip` install can instead download a copy for Kaleido, once:
 
 ```bash
-kaleido_get_chrome        # or: plotly_get_chrome -y
+plotly_get_chrome -y
 ```
 
-(From Python: `import kaleido; kaleido.get_chrome_sync()`.) If Chrome is
-unavailable, use **HTML** export; the export panel shows the install command
-when Chrome is missing.
+(From Python: `import kaleido; kaleido.get_chrome_sync()`.) Without a browser,
+use **HTML** export; the export panel says so when it finds none.
 
 ## MP4 / GIF
 

@@ -2462,7 +2462,7 @@ def render(argv: list[str]) -> None:
     if args.snap_fixations:
         overrides["fixation_snap_to_word"] = True
     if args.illustration:
-        overrides.update(
+        preset = dict(
             show_words=False,
             show_word_labels=True,
             show_fixations=True,
@@ -2476,6 +2476,19 @@ def render(argv: list[str]) -> None:
             fixation_snap_to_word=True,
             fixation_opacity=1.0,
         )
+        # BUG-85 review: an explicit flag wins over the preset, as it does over
+        # `plot_scanpath(illustration=True, …)` — the preset used to overwrite
+        # `--color-by`, `--no-labels` and the rest set above. The layer switches
+        # always sit in `overrides`, so they count only when moved off default.
+        stated = {
+            key
+            for key in preset
+            if key in overrides
+            and (
+                not key.startswith("show_") or overrides[key] != parser.get_default(key)
+            )
+        }
+        overrides.update({k: v for k, v in preset.items() if k not in stated})
     # VIZ-4: image stimulus background. make_scanpath_figure only draws the image
     # when a size is known, so default to the PNG's own pixel size, then the
     # canvas.

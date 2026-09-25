@@ -1214,6 +1214,19 @@ def test_a_cross_dataset_dual_animation_leaves_bs_frames_to_the_caller():
     assert "words_b=" in notes and "trial_b=('p2', 't2')" in notes
 
 
+def test_a_multipart_dual_animation_says_which_screen_b_is_drawn_at():
+    """`animate_scanpath` draws B at its first recorded screen, and the snippet
+    cannot know which one the app's own B navigator shows — so it says how to
+    pick another rather than quietly drawing a different page."""
+    state = _state(
+        kind="animation",
+        screen="question",
+        compare=cs.CompareTarget(participant="p2", trial="t2"),
+    )
+    notes = " ".join(cs.reproduction_code(DEMO, state).caveats)
+    assert "first screen" in notes and "extract_part" in notes
+
+
 def test_a_dual_animation_snippet_rebuilds_the_two_reading_replay(demo_trial):
     """Run the printed recipe: the `trial_b=` it names draws exactly the second
     reading `animate_scanpath` draws for that pair."""

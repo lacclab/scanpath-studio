@@ -1696,7 +1696,11 @@ def animate_scanpath(
     ``fixations`` — the way
     [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths] takes it.
     Without ``trial_b``, ``words_b`` / ``fixations_b`` must hold one trial; B
-    frames holding several raise ``ValueError`` rather than drawing them all.
+    frames holding several raise ``ValueError`` rather than drawing them all. A
+    multipart B is drawn at its first recorded screen; cut B's frames to
+    another with `multipart.extract_part` to draw that one. Both readings are
+    drawn in A's coordinates, and nothing here checks that they were recorded
+    on one screen, as the overlay in `compare_scanpaths` does.
 
     The animation builder accepts a subset of the static figure's options
     (``show_words``, ``show_word_labels``, ``show_saccades``, ``show_order``, styling,
@@ -1804,6 +1808,9 @@ def _second_reading(
     in it. ``trial_b`` picks the reading, in B's own frames when given and A's
     otherwise, as `compare_scanpaths` does; without it B's frames must hold one
     trial, since guessing among several would draw somebody else's reading.
+    A multipart B keeps one screen, never all of them — each is its own
+    coordinate space: its first, as A without ``screen=`` and the app's B
+    navigator start, unless the caller cut B to another with `extract_part`.
     """
     if trial_b is None:
         source = fixations_b if fixations_b is not None else words_b
@@ -1826,14 +1833,13 @@ def _second_reading(
         fixations_b = fixations if fixations_b is None else fixations_b
 
     def one_reading(frame: pd.DataFrame | None, label: str) -> pd.DataFrame | None:
+        # `extract_part` masks afresh, as `_select_trial` slices A. Not
+        # `utils.extract_trial`: its position cache is keyed by the frame's
+        # identity, so an in-place edit between two calls handed back somebody
+        # else's rows.
         if frame is None or frame.empty:
             return frame
-        frame = _require_normalized(frame, label)
-        # Fresh masks, as `_select_trial` slices A: `utils.extract_trial`'s
-        # position cache is keyed by the frame's identity, so a caller's in-place
-        # edit between two calls would hand back somebody else's rows.
-        keep = frame["participant_id"].isin([pid_b]) & frame["trial_id"].isin([tid_b])
-        return frame[keep]
+        return extract_part(_require_normalized(frame, label), pid_b, tid_b)
 
     trial_words_b = one_reading(words_b, "words_b")
     trial_fix_b = one_reading(fixations_b, "fixations_b")
@@ -1841,6 +1847,15 @@ def _second_reading(
         raise ValueError(
             f"No fixations for the second scanpath participant={pid_b!r}, "
             f"trial={tid_b!r}. list_trials() shows what the frames contain."
+        )
+    catalog = part_catalog(trial_words_b, trial_fix_b)
+    if not catalog.empty:
+        screen_b = str(catalog[SCREEN_ID].iloc[0])
+        trial_words_b, trial_fix_b = (
+            extract_part(frame, pid_b, tid_b, screen_b)
+            if frame is not None and SCREEN_ID in frame.columns
+            else frame
+            for frame in (trial_words_b, trial_fix_b)
         )
     return trial_words_b, trial_fix_b
 

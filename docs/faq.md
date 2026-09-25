@@ -36,7 +36,7 @@ by default). The error names the setting to raise, e.g.
 
 ## Why does HTML export work but PNG/SVG/PDF fail?
 
-Static formats use Kaleido and need Chrome/Chromium. See
+Static formats use Kaleido, which needs Chrome, Chromium or Edge. See
 [Export troubleshooting](export-troubleshooting.md).
 
 ## Can another person open my share link?

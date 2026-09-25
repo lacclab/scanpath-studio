@@ -11,15 +11,13 @@ your own machine. Do not upload identifiable recordings to the hosted demo.
 
 ## What happens to a file you upload
 
-Uploaded tables are parsed locally. Completed datasets, mappings, view settings,
+Completed datasets, mappings, view settings,
 and annotations are stored in an on-device recovery cache so a refresh does not
 erase the session. This happens only when the app listens on this machine
 alone — the desktop app, or a launch with `server.address` set to `127.0.0.1`,
 `::1` or `localhost` — or when you opt in with `SCANPATH_STUDIO_PERSIST=1`. A
 server other machines can reach stores nothing: a hosted deployment, and a bare
-`streamlit run`, which listens on every interface. The app decides this from the
-address its own server is bound to, never from the address a browser reports,
-which any client on the network could set to `localhost`.
+`streamlit run`, which listens on every interface.
 
 The cache is visible and removable from inside the app: 💾 **Session →
 🗄️ Automatic recovery** (the dialog the nav's 💾 Session entry opens) names the
@@ -40,25 +38,16 @@ folder like the data files it came from (disk encryption, shared-machine
 accounts). It is single-user and unencrypted: anyone with your account on that
 machine can read it.
 
-Exporting an **MP4** replay is the one other time the app writes to disk: the
+Exporting an **MP4** replay also writes to disk: the
 encoder needs a real file, so the clip is written to a temporary file in the
 system's temp folder (readable by your account only) and deleted as soon as it
 has been read back. Only a crash or a forced kill mid-encode leaves it behind,
 and it holds the rendered frames, not your tables.
 
-The desktop app and every `scanpath-studio` launch bind to your machine only
-(`127.0.0.1`) unless you pass `--server.address` yourself. A bare
-`streamlit run streamlit_app.py` does not — it listens on every interface — so
-from a source checkout, bind explicitly:
-
-```bash
-streamlit run streamlit_app.py --server.address 127.0.0.1
-```
-
 ## The online demo
 
 The public demo has no account or data-use agreement. Use it with the bundled
-sample, public corpora, or data you are comfortable sending to the hosting
+sample or data you are comfortable sending to the hosting
 provider. Sessions are temporary and server resources are limited.
 
 ## What's in a link, a config file, and an export
@@ -67,7 +56,9 @@ provider. Sessions are temporary and server resources are limited.
   settings. It does not contain the data tables — except for a scanpath made
   with **✏️ Author a scanpath**, whose link carries the typed text and every
   hand-placed fixation, because they *are* its data.
-- A **saved configuration** can contain column names and annotation notes.
+- A **saved configuration** (JSON backup) can contain column names, annotation
+  notes, and every row of any attached participant, trial or text metadata
+  table.
 - An **exported table** contains the selected research data.
 
 Review these artifacts before sharing them. Share links can enter browser
@@ -91,6 +82,3 @@ embeds the library instead and makes no request.
 Streamlit's own usage statistics are switched off on every launch path
 (`scanpath-studio run`, the desktop app and the repository's
 `.streamlit/config.toml`). The application adds no analytics service of its own.
-
-The code-level audit and accepted limitations are in the
-[security audit](security.md).

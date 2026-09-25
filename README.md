@@ -63,7 +63,7 @@ walk through each one.
 Load word, fixation and raw-gaze tables in CSV, Parquet, Excel or another
 common format. Scanpath Studio adapts to how your study was recorded, so there
 is rarely anything to reformat first — see
-[Bring your own data](https://lacclab.github.io/scanpath-studio/bring-your-own-data/).
+[Loading public and own data](https://lacclab.github.io/scanpath-studio/guides/loading-data/).
 
 ## Command line & Python API
 
@@ -103,10 +103,11 @@ The full documentation is at **<https://lacclab.github.io/scanpath-studio/>**:
 - [Getting started](https://lacclab.github.io/scanpath-studio/getting-started/): install, launch and a first trial
 - [Tutorials](https://lacclab.github.io/scanpath-studio/tutorials/): task walk-throughs, from checking a pilot to a figure for a paper
 - [Feature guides](https://lacclab.github.io/scanpath-studio/guides/): every view and control
-- [Bring your own data](https://lacclab.github.io/scanpath-studio/bring-your-own-data/): what the loader accepts and how to map it
+- [Loading public and own data](https://lacclab.github.io/scanpath-studio/guides/loading-data/): what the loader accepts and how to map it
 - [CLI](https://lacclab.github.io/scanpath-studio/cli/) and [Python API](https://lacclab.github.io/scanpath-studio/api/): scripting and batch rendering
+- [Gallery](https://lacclab.github.io/scanpath-studio/gallery/): the figures it draws, each with the code that makes it
 - [Computation register](https://lacclab.github.io/scanpath-studio/computations/): how each measure is derived
-- [FAQ](https://lacclab.github.io/scanpath-studio/faq/)
+- [FAQ](https://lacclab.github.io/scanpath-studio/faq/) · [Cite](https://lacclab.github.io/scanpath-studio/cite/)
 
 ## Contributing
 

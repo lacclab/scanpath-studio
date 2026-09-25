@@ -1,7 +1,19 @@
 # Scanpath visualization
 
 The Scanpath view shows one selected reading on the stimulus coordinate system.
-Start with the default view, then change only controls needed for the question.
+
+<figure class="sps-screenshot" markdown>
+![The Scanpath view, its regions numbered](../assets/screenshots/scanpath-view.webp)
+</figure>
+
+1. The views — 🗺️ Scanpath, 📊 Corpus Analysis, 🗂️ Data — and the 💾 Session
+   and ❓ Help dialogs.
+2. The dataset and trial pickers, the ⇅ sort and the filter funnel.
+3. The trial's summary chips.
+4. The figure.
+5. The 🎛️ Plot controls.
+6. The subtabs: 📝 Annotations, 📄 Stimulus & Context, 🔬 Comparisons,
+   📤 Export and 🔗 Share.
 
 ## Choose a trial
 
@@ -20,14 +32,11 @@ choose parent-trial or current-screen scope.
 
 ## Control the layers
 
-The **🎛️ Plot controls** rail beside the plot opens with the **🎬 Animate** and
-**⚖️ Compare** mode rows, then four **Design presets** (👁️ Scanpath, 🔥 Heatmap,
-✏️ Illustration, 🛠️ Custom) and a **Palette** — often all you need — followed by
-seven sections:
-
-Scanpath, Heatmap, and Illustration are deterministic presets: selecting one
-starts from the app defaults before applying that view. **Custom** remembers the
-last settings you changed by hand and restores them after you visit a preset.
+The **🎛️ Plot controls** rail beside the plot starts with the **🎬 Animate** and
+**⚖️ Compare** rows, four **Design presets** (👁️ Scanpath, 🔥 Heatmap,
+✏️ Illustration, 🛠️ Custom) and a **Palette**. Scanpath, Heatmap and
+Illustration reset to the app defaults before applying their view; **Custom**
+restores your last hand-made settings. Seven sections follow:
 
 | Section | Layers | Use it for |
 | --- | --- | --- |
@@ -39,16 +48,8 @@ last settings you changed by hand and restores them after you visit a preset.
 | 🧹 Filter | — | thin what is drawn inside this one reading (fixations and saccades together) |
 | 📐 Figure & canvas | — | monitor framing, colour bars, axes, title and labels |
 
-Every section is **one line**: its on/off switch and a **▾** holding everything
-else in a popover that opens over the page instead of being cropped by the narrow
-rail. 📄 Stimulus's switch covers all three of its layers, and each layer's own
-toggle leads its group inside; 🧹 Filter and 📐 Figure & canvas have no layer to
-switch at all. While a layer is off its settings stay on screen but greyed — turn
-the layer on to change them; whatever you set is kept either way. The exception is
-📄 Stimulus: with the section switched off, its three layer toggles and their
-settings stay live, so you can choose what will show when you switch it back on.
-Marker size already encodes duration by default, so uniform fixation color is
-usually the clearest starting point.
+Each section is one line: its switch and a **▾** with the rest of its settings.
+Switching a layer off keeps its settings.
 
 **Stimulus → Text** keeps typography beside the layer it controls. Text can
 scale from word boxes, or use one fixed size entered in pixels or points; point
@@ -59,12 +60,12 @@ framing**, **📊 Axes & grid**, and **🏷️ Title & labels**.
 
 **Colour ranges** — the fixation colour range (👁️ Fixations **▾**, once
 fixations are coloured by a column) and the heatmap's (🔥 Heatmap **▾**) start
-on **Auto range**: each trial is scaled to its own values, exactly as the API and
-`render` draw it, and a comparison shares one scale across both readings. Drag
-the range, type a bound, or untick *Auto range* to pin one. A pinned range stays
-as you step through trials, which is what makes them comparable, and travels on
-a Share link, until you tick *Auto range* again. Choosing another *Color
-fixations by* column puts the fixation range back to auto.
+on **Auto range**: each trial is scaled to its own values, and a comparison
+shares one scale across both readings. Drag the range, type a bound, or untick
+*Auto range* to pin one. A pinned range stays as you step through trials, which
+is what makes them comparable, and travels on a Share link, until you tick
+*Auto range* again. Choosing another *Color fixations by* column puts the
+fixation range back to auto.
 
 ### Show screen coordinates
 
@@ -89,18 +90,16 @@ the rendered scanpath.
 **↗️ Saccades** picks which reading classes are drawn at all — forward,
 skip, refixation, return sweep, regression. Hidden classes lose their line
 *and* their direction arrow, which is how you get a regressions-only figure.
-Classes come from the same split as the **By type** colouring in the ↗️ Saccades **▾** menu, so the two
-always agree on what a regression is; clearing the list means *no filter*, not
-an empty plot. The section shows a badge while either half is narrowing, so a
-thinned figure never looks like missing data.
+Clearing the list means no filter. A • on the section title shows that
+something is hidden.
 
 These are visualization choices, not edits to the source data or reading-measure
 computation.
 
 ## Replay and compare
 
-- **Animate** replays the selected trial. The **▾** beside it controls speed,
-  autoplay, and frame quality.
+- **Animate** replays the selected trial. The **▾** beside it controls playback
+  speed, autoplay, and smoothness.
 - **Compare** adds a second reading to the selected one — overlaid on the same
   stimulus by default, or side by side / top & bottom from the **▾** beside it.
 - **Comparisons** shows trials whose chosen field matches the selected trial.
@@ -109,26 +108,19 @@ computation.
 
 ### Comparing across datasets
 
-**Compare with** (the first control on scanpath B's line, directly under the
-dataset picker on your own) chooses which dataset scanpath B comes from. It
-defaults to *This dataset*; pick another and the candidate list, the filter funnel
-at the end of B's line, and the trial's screen geometry all come from that
-dataset instead.
+**Compare with** (the first control on scanpath B's line, under the main dataset
+picker) chooses which dataset scanpath B comes from. It defaults to *This
+dataset*; pick another and the candidate list, the filter funnel at the end of
+B's line, and the trial's screen geometry all come from that dataset instead.
 
-B's line is the same shape as the trial line above it — dataset, trial, scrub
-slider, then ◀ ▶ ⇅ and the funnel — so the two read down the page as one pair of
-controls. B's funnel is always its own: under *This dataset* it starts from the
-whole dataset, unfiltered, so your own funnel narrows scanpath A's pool and never
-B's, and narrowing B never changes A.
+B's line has its own filter funnel: it starts from the whole dataset, and your
+main funnel never narrows B.
 
-Any loaded upload, the bundled demo and the synthetic trial are always
-available. A public corpus is offered too, but only loads when its files are
-already where you last pointed the app — otherwise it shows *(needs setup)* and
-tells you to open that corpus as the main dataset once, because the compare
-picker deliberately cannot draw the download and folder controls that would
-normally set that up.
+Uploads, the bundled demo and the synthetic trial are always available. A public
+corpus loads only if its files are already set up; otherwise it shows *(needs
+setup)* — open it once as the main dataset.
 
-Three things behave differently across datasets, each on purpose:
+Three things behave differently across datasets:
 
 | | Why |
 | --- | --- |
@@ -136,27 +128,15 @@ Three things behave differently across datasets, each on purpose:
 | **Each panel is drawn to its own screen** | In a split layout a caption under the figure names both monitors. Box and text sizes are true-to-scale *within* a panel and **not** comparable across panels. |
 | **Only shared metrics can colour it** | A measure one corpus ships and the other doesn't would colour one panel and blank the other, so it falls back with a note. |
 
-B carries its own filters (they never touch the main pool) and never shows 👤
-markers — two corpora don't share readers. 📄 still appears when a text id
-matches across them.
+Across datasets 👤 (same reader) never appears; 📄 still marks a matching text
+id.
 
 #### When can two datasets be overlaid?
 
-When the two **canvas sizes match**. That is the only hard requirement: the
-overlay draws raw pixel positions, so equal canvases are what make them mean the
-same thing. Different screens still fall back to Side by side.
-
-If either dataset never *recorded* its screen — most public corpora don't, so
-their canvas is a shared default rather than a measurement — the overlay is
-still drawn, with a warning beside it. The app can't prove the two displays
-matched; you usually can. A matching canvas is real evidence, just not proof.
-
-Nothing is ever rescaled or reprojected to make an overlay possible. When the
-screens match, the pixels already mean the same thing on both sides; when they
-don't, the honest answer is two panels. (An earlier design converted each
-reading through its own monitor geometry into degrees of visual angle. That was
-dropped: no bundled corpus records the physical measurements it would need, so
-it would have been a claim the data can't support.)
+Only when the two canvas sizes match; otherwise Side by side is used. If either
+dataset did not record its screen (most public corpora), the overlay is drawn
+with a warning, because the app cannot confirm the displays matched. Nothing is
+rescaled to make an overlay possible.
 
 An animated comparison follows the same rule — a co-animation replays both
 readings on one clock, which is an overlay, so it needs the same shared screen.
@@ -168,36 +148,18 @@ supplies the word boxes and text: **Both**, **A**, or **B**. Two datasets' word
 boxes line up only when the text, font and wrapping are identical, so across
 corpora *Both* often draws two offset sets of rectangles under the two traces.
 Pick one side to read the overlay as a comparison of the *fixation traces*
-against a single stimulus. It defaults to *Both*, which leaves same-dataset
-overlays exactly as they were.
+against a single stimulus. It defaults to *Both*.
 
 **⚖️ Download this comparison as a bundle** (Export → *Current figure*) writes the
 figure plus both scanpaths' tables and a manifest naming each side's dataset,
 trial and recording setup. The image alone can't be reproduced; the bundle can.
 
-A share link carries the comparison as `?compare=<participant>:<trial>` plus
-`&cmp_source=<dataset>`, `&cmp_layout=` and `&cmp_stimulus=`, and each
-scanpath's own styling as `cmp_a_*` / `cmp_b_*` wherever you changed it (see
-[Outputs and sharing](outputs-sharing.md#share-a-view)). An uploaded dataset
-lives only in your session, so a link can't rebuild it — the Share panel says so
-rather than sending half a comparison.
+A Share link carries the comparison and each scanpath's styling; a comparison
+with an uploaded dataset can't be rebuilt from a link, and the Share panel says
+so.
 
 Compare mode is also available headlessly — see
 [`compare_scanpaths`](../api.md#scanpath_studio.api.compare_scanpaths) and
 `render --compare-with` in the [CLI reference](../cli.md#compare-two-scanpaths).
-
-## Correct vertical drift
-
-!!! note "Not available by default"
-    Vertical drift correction and NLD scanpath similarity are gated off in
-    the released app (PRE-21) — they work, but are not fully integrated yet.
-    Set `SCANPATH_EXPERIMENTAL=1` to expose them in the app, the CLI and the
-    Python API.
-
-Fixations that follow the text horizontally but sit above or below their line
-may need line assignment. Choose a drift-correction algorithm in the fixation
-controls, or use **Line assignment** to compare algorithms before applying one.
-The correction changes the rendered fixation y-position; it does not overwrite
-the uploaded table.
 
 Use [Outputs and sharing](outputs-sharing.md) when the view is ready.

@@ -63,6 +63,34 @@ def multipleye_upload_enabled() -> bool:
     return experimental_features_enabled()
 
 
+def multipleye_enabled() -> bool:
+    """Whether the MultiplEYE corpus is offered, this release (DATA-54).
+
+    Held back for the beta: its data is not openly available yet, and the loader
+    was built and tested on one sample (Zurich Chinese). Off, the entry leaves
+    the public-dataset registry — so the data picker, the 🗂️ Data page, Compare's
+    second dataset and share links all stop offering it — and `render`'s
+    ``--source multipleye`` / ``--export`` / ``--no-question-screens`` flags are
+    hidden from ``--help``. Like PRE-22's gate, this hides rather than breaks:
+    those flags still parse, and `datasets.load_multipleye` is untouched, so a
+    script that already uses them keeps working.
+    """
+    return experimental_features_enabled()
+
+
+def benchmark_setup_enabled() -> bool:
+    """Whether the *set up a local bundle* placeholder for the harmonised
+    benchmark corpora is offered in the app, this release (DATA-54).
+
+    With no bundle found, `app.public_dataset_registry` would offer one
+    placeholder entry carrying the bundle's directory box. A bundle can only be
+    built with the EyeGenBench pipeline, which is not public yet, so for the beta
+    the placeholder is hidden. Corpora *discovered* in a bundle at the default
+    location are still offered: only someone who can build one has one.
+    """
+    return experimental_features_enabled()
+
+
 def preprocessing_enabled() -> bool:
     """Whether the soft-exclusion / merge pipeline is exposed **in the app** (PRE-22).
 

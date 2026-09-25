@@ -110,3 +110,35 @@ jobs:
 
       - name: ruff format check
         run: ruff format --check .
+
+  docs:
+    # The docs build runs code — the gallery's figures, the printed examples,
+    # the CLI and figure-option references are generated from the package at
+    # build time (ENG-78, ENG-79) — so a change that breaks them has to fail
+    # here, not after the merge in docs.yml's deploy.
+    name: Docs build
+    runs-on: ubuntu-latest
+    env:
+      DISABLE_MKDOCS_2_WARNING: "true"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The revision-date plugin reads each page's history.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+
+      - name: Install package + docs deps
+        run: uv pip install --system -e ".[docs]"
+
+      - name: Build (strict)
+        run: mkdocs build --strict

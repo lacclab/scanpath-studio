@@ -1,8 +1,5 @@
 # Getting started
 
-This page gets you from installation to one exported scanpath. It uses the
-bundled sample, so no data preparation is required.
-
 ## 1. Choose how to run it { #install }
 
 === "Try online"
@@ -34,41 +31,20 @@ bundled sample, so no data preparation is required.
 1. Keep **Bundled Demo** as the data source.
 2. Keep the default participant and trial.
 3. Use the layer controls beside the plot to show or hide text, fixations,
-   saccades, word boxes, and the heatmap.
+   saccades, bounding boxes, and the heatmap.
 4. Turn on **Animate** to replay the trial.
-5. Open **Export → Current figure** and download HTML. HTML works without
-   extra software; PNG, SVG, PDF, GIF, and MP4 require Chrome/Chromium.
+5. Open **Export → Current figure** and download HTML. HTML needs no Chrome;
+   PNG, SVG, PDF, GIF and MP4 do.
 
-That is the default workflow. You can now follow a tutorial for
-[data collection](tutorials/data-collection.md),
-[data filtering](tutorials/data-filtering.md),
-[figure export](tutorials/exporting-figures.md), or
-[corpus analysis](tutorials/corpus-analysis.md).
+Next, pick a [tutorial](tutorials/index.md).
 
 ## 3. Load your data
 
-Open 🗂️ **Data**, select **➕ Add dataset**, and work down the three-part
-wizard:
-
-1. **Dataset name** — what to call it;
-2. **Upload data tables** — a fixations table and a words/IA table, each in its
-   own row with its column mapping beside it: check the proposed trial and
-   reader identity and the table's own fields, and keep any extra fields you
-   will need. Raw gaze and the optional participant, trial and text tables
-   upload here too;
-3. **Recording setup** — the monitor size and viewing distance the data was
-   recorded with;
-
-then select **✅ Add dataset**.
-
-The dataset then appears under 📂 **Available datasets**, and ✏️ **Edit dataset**
-reopens its tables, mapping and recording setup at any time (rename it from its
-row in the table).
-
-See [Loading public and own data](guides/loading-data.md) for accepted formats,
-manual mapping, and common checks, and
-[Harmonised benchmark corpora](benchmark-corpora.md) for the thirty-one public
-corpora that need no upload.
+Open 🗂️ **Data**, select **➕ Add dataset**, upload your fixation and words/IA
+tables, check the proposed column mapping, answer **Recording setup**, then
+select **✅ Add dataset**. See
+[Loading public and own data](guides/loading-data.md) for accepted formats,
+manual mapping, and common checks.
 
 ## Author a scanpath without files
 
@@ -83,31 +59,11 @@ generated word boxes, then edit the scanpath in either place:
 
 The editor starts with one centred fixation per word. X/Y is the authoritative
 location; **Target word** is optional metadata for reading measures, so a
-fixation may sit between or outside words. Download the authoring JSON to reopen
-the same layout later, render it with `scanpath-studio render --authoring`, or
+fixation may sit between or outside words. **💾 Save authoring file** saves the
+layout as JSON to reopen later, render it with `scanpath-studio render --authoring`, or
 load it with `scanpath_studio.load_authored_scanpath`.
-
-## Static export setup
-
-If HTML exports but static images do not, install the browser used by Plotly:
-
-```bash
-plotly_get_chrome -y
-```
-
-More fixes are in [Export troubleshooting](export-troubleshooting.md).
 
 ## Run from source
 
-Contributors can install the repository directly:
-
-```bash
-git clone https://github.com/lacclab/scanpath-studio.git
-cd scanpath-studio
-pip install -e ".[test,docs]"
-streamlit run streamlit_app.py --server.address 127.0.0.1
-```
-
-Development commands belong in the
-[contributor guide](https://github.com/lacclab/scanpath-studio/blob/main/CONTRIBUTING.md),
-not in the user workflow.
+To run from a source checkout, see the
+[contributor guide](https://github.com/lacclab/scanpath-studio/blob/main/CONTRIBUTING.md).

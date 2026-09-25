@@ -102,7 +102,9 @@ from scanpath_studio.constants import (
     WIZARD_LEAVE_KEY,
     WIZARD_STAY_KEY,
     WORD_LABEL_COLOR,
+    benchmark_setup_enabled,
     language_display,
+    multipleye_enabled,
     preprocessing_enabled,
     upload_limit_mb,
 )
@@ -2221,6 +2223,10 @@ def _load_benchmark_source(
 # caption). To add a corpus: write a loader in datasets.py, wrap it in a
 # `_load_*_source` function above, and add one entry here — the
 # searchable picker scales as the catalogue grows.
+#: The MultiplEYE entry's registry label, named because DATA-54's beta gate
+#: (`constants.multipleye_enabled`) has to find it.
+MULTIPLEYE_PUBLIC_CHOICE = "MultiplEYE — multilingual reading (ZH-CH sample)"
+
 PUBLIC_DATASET_REGISTRY: dict = {
     "PoTeC — Potsdam Textbook Corpus": dict(
         loader=_load_potec_source,
@@ -2251,7 +2257,7 @@ PUBLIC_DATASET_REGISTRY: dict = {
         "no recorded (x, y), so each fixation sits at the centre of the "
         "character it names. The word boxes are the corpus' own `.ias` files.",
     ),
-    "MultiplEYE — multilingual reading (ZH-CH sample)": dict(
+    MULTIPLEYE_PUBLIC_CHOICE: dict(
         loader=_load_multipleye_source,
         monitor=(1920, 1080),  # MultiplEYE physical screen (coords offset to it)
         short="MultiplEYE",
@@ -2497,11 +2503,18 @@ def public_dataset_registry() -> dict:
     are composed in here and every consumer calls this instead of reading the
     dict. Discovery is cached (`_cached_eyegenbench_datasets`), so calling it
     several times a run costs one manifest read.
+
+    DATA-54 holds two entries back for the beta — MultiplEYE and the benchmark
+    set-up placeholder — unless ``SCANPATH_EXPERIMENTAL`` is on. Gating here,
+    the one place every consumer reads, is what hides them from the picker, the
+    🗂️ Data page, Compare's second dataset and share links at once.
     """
     registry = dict(PUBLIC_DATASET_REGISTRY)
+    if not multipleye_enabled():
+        registry.pop(MULTIPLEYE_PUBLIC_CHOICE, None)
     discovered = _benchmark_registry_entries()
     registry.update(discovered)
-    if not discovered:
+    if not discovered and benchmark_setup_enabled():
         # R39: with nothing discovered there is no entry, so there would be
         # nowhere to type the bundle's path. Exactly one placeholder carries the
         # directory input until a corpus exists.

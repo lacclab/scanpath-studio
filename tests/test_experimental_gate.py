@@ -136,12 +136,7 @@ class TestTheCliDoesNotOfferTheFlags:
         """Downstream branches read ``args.drift_correction`` unconditionally."""
         from scanpath_studio import cli
 
-        parser = (
-            cli._build_render_parser() if hasattr(cli, "_build_render_parser") else None
-        )
-        if parser is None:
-            pytest.skip("render parser is built inline")
-        args = parser.parse_args(["--sample", "-o", "x.html"])
+        args = cli._render_parser().parse_args(["--sample", "-o", "x.html"])
         assert isinstance(args, argparse.Namespace)
         assert args.drift_correction is None
         assert args.drift_connectors is False

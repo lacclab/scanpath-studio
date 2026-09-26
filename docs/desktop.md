@@ -60,8 +60,9 @@ Builds are attached to every
 
 ## Good to know
 
-- **Static image / video export needs Chrome, Chromium or Edge installed on the
-  machine**; interactive HTML export always works.
+- **PDF, video and the bundles' images (the export bundle's and the Compare
+  pair bundle's) need Chrome, Chromium or Edge installed on the machine**; the
+  current figure's PNG, SVG and HTML always work.
 - **Advanced:** two environment variables tweak the launch —
   `SCANPATH_DESKTOP_PORT` pins the server port (default: a free one), and
   `SCANPATH_DESKTOP_NO_BROWSER=1` skips opening the browser.

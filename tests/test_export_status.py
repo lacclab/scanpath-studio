@@ -356,9 +356,64 @@ def _download_buttons(at):
     return [element.proto for element in at.get("download_button")]
 
 
-def test_static_figure_downloads_in_one_click(monkeypatch):
-    """UX-150: one download button, no Render step, and nothing renders per rerun."""
+def _record_image_downloads(monkeypatch) -> list[dict]:
+    """Stand in for the browser-side image button, keeping what it was given."""
+    from scanpath_studio import tabs
+
+    calls: list[dict] = []
+
+    def factory():
+        return lambda **kwargs: calls.append(kwargs)
+
+    monkeypatch.setattr(tabs, "_image_download_component", factory)
+    return calls
+
+
+def _static_export_run(fmt: str):
     AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
+    at = AppTest.from_function(_static_export_app)
+    at.session_state["test_static_save_format"] = fmt
+    return at.run(timeout=30)
+
+
+@pytest.mark.parametrize(("fmt", "scale"), [("PNG", 3), ("SVG", 1)])
+def test_png_and_svg_are_saved_by_the_browser(monkeypatch, fmt, scale):
+    """UX-152: drawn from the plot on screen — no server render, no Chrome needed."""
+    from scanpath_studio import tabs
+
+    def must_not_render(*args, **kwargs):
+        raise AssertionError("the figure rendered on the server")
+
+    monkeypatch.setattr(tabs, "render_static_figure_bytes", must_not_render)
+    monkeypatch.setattr(tabs, "chrome_available", lambda: False)
+    calls = _record_image_downloads(monkeypatch)
+    at = _static_export_run(fmt)
+
+    assert not at.exception, at.exception
+    assert not _download_buttons(at), "PNG/SVG went back to the server"
+    assert not [warning.value for warning in at.warning], "PNG/SVG need no Chrome"
+    (call,) = calls
+    assert call["key"] == "test_static_save_image"
+    assert call["data"] == {
+        "plot_id": tabs._true_scale_plot_id("single"),
+        "format": fmt.lower(),
+        "filename": f"scanpath_p1-t1.{fmt.lower()}",
+        "width": 640,
+        "height": 480,
+        "scale": scale,
+        "label": f"⬇ Download {fmt}",
+    }
+
+
+def test_the_browser_image_button_mounts():
+    """The real v2 component registers and mounts in a script run."""
+    at = _static_export_run("PNG")
+    assert not at.exception, at.exception
+    assert not _download_buttons(at)
+
+
+def test_pdf_downloads_in_one_click(monkeypatch):
+    """UX-150: one download button, no Render step, and nothing renders per rerun."""
     from scanpath_studio import tabs
 
     def must_not_render(*args, **kwargs):
@@ -366,17 +421,90 @@ def test_static_figure_downloads_in_one_click(monkeypatch):
 
     monkeypatch.setattr(tabs, "render_static_figure_bytes", must_not_render)
     monkeypatch.setattr(tabs, "chrome_available", lambda: True)
-    at = AppTest.from_function(_static_export_app).run(timeout=30)
+    at = _static_export_run("PDF")
 
     assert not at.exception, at.exception
     assert not [button.label for button in at.button], "a Render step is back"
     (button,) = _download_buttons(at)
-    assert button.label == "⬇ Download PNG"
+    assert button.label == "⬇ Download PDF"
     assert not button.disabled
 
     at = at.run(timeout=30)
     assert not at.exception, at.exception
     assert len(_download_buttons(at)) == 1
+
+
+def _true_scale_chart_app():
+    import plotly.graph_objects as go
+
+    from scanpath_studio import tabs
+
+    fig = go.Figure(go.Scatter(x=[0, 1], y=[0, 1]))
+    fig.update_layout(width=640, height=480)
+    tabs._render_true_scale_chart(fig, key="single", download_name="scanpath_p1__t1")
+
+
+def test_the_plot_camera_saves_the_export_png(monkeypatch):
+    """UX-152: the modebar's camera gives the Export PNG, not a 1× newplot.png."""
+    import json
+    import re
+
+    AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
+    from scanpath_studio import tabs
+
+    embedded: list[str] = []
+    monkeypatch.setattr(
+        tabs, "_embed_html_iframe", lambda html, height: embedded.append(html)
+    )
+    at = AppTest.from_function(_true_scale_chart_app).run(timeout=30)
+
+    assert not at.exception, at.exception
+    (html,) = embedded
+    assert f'id="{tabs._true_scale_plot_id("single")}"' in html
+    options = re.search(r'"toImageButtonOptions":\s*(\{[^}]*\})', html)
+    assert options, "the camera is unconfigured"
+    assert json.loads(options.group(1)) == {
+        "format": "png",
+        "filename": "scanpath_p1__t1",
+        "width": 640,
+        "height": 480,
+        "scale": 3,
+    }
+
+
+def _unnamed_true_scale_chart_app():
+    import plotly.graph_objects as go
+
+    from scanpath_studio import tabs
+
+    fig = go.Figure(go.Scatter(x=[0, 1], y=[0, 1]))
+    fig.update_layout(width=640, height=480)
+    tabs._render_true_scale_chart(fig, key="ptext_stimulus")
+
+
+def test_an_unnamed_chart_keeps_plotlys_file_name(monkeypatch):
+    """Only the Scanpath view's figures are scanpaths; the rest stay newplot.png."""
+    import json
+    import re
+
+    AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
+    from scanpath_studio import tabs
+
+    embedded: list[str] = []
+    monkeypatch.setattr(
+        tabs, "_embed_html_iframe", lambda html, height: embedded.append(html)
+    )
+    at = AppTest.from_function(_unnamed_true_scale_chart_app).run(timeout=30)
+
+    assert not at.exception, at.exception
+    (html,) = embedded
+    options = re.search(r'"toImageButtonOptions":\s*(\{[^}]*\})', html)
+    assert json.loads(options.group(1)) == {
+        "format": "png",
+        "width": 640,
+        "height": 480,
+        "scale": 3,
+    }
 
 
 @pytest.mark.parametrize(
@@ -411,12 +539,11 @@ def test_html_download_data_is_a_standalone_page():
     assert "cdn.plot.ly" in html
 
 
-def test_static_missing_browser_warns_once_and_disables_download(monkeypatch):
-    AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
+def test_pdf_without_a_browser_warns_once_and_disables_download(monkeypatch):
     from scanpath_studio import tabs
 
     monkeypatch.setattr(tabs, "chrome_available", lambda: False)
-    at = AppTest.from_function(_static_export_app).run(timeout=30)
+    at = _static_export_run("PDF")
 
     assert not at.exception, at.exception
     warnings = "\n".join(warning.value for warning in at.warning)

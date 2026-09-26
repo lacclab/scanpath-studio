@@ -725,7 +725,20 @@ def _true_scale_html(
     return html, iframe_height
 
 
-def _render_true_scale_chart(fig, *, key: str, max_height: int | None = None) -> None:
+#: The current figure's PNG — the Export subtab's and the plot camera's — is
+#: raster, so it renders at 3× to stay crisp; SVG and PDF are vector and stay at
+#: 1×. The bundles keep their own PNG-scale control.
+_PNG_EXPORT_SCALE = 3
+
+
+def _true_scale_plot_id(key: str) -> str:
+    """The Plotly graph div's id inside a `_render_true_scale_chart` iframe."""
+    return f"truescale-{key}"
+
+
+def _render_true_scale_chart(
+    fig, *, key: str, max_height: int | None = None, download_name: str | None = None
+) -> None:
     """Display a spatial figure true-to-scale, fitted to the column width.
 
     ``st.plotly_chart`` pins the chart width to the column but keeps the layout
@@ -752,6 +765,11 @@ def _render_true_scale_chart(fig, *, key: str, max_height: int | None = None) ->
     shrink to fit a fixed cell height (whichever of width/height binds), and the
     iframe is sized to that cap so panels don't leave a tall band of whitespace.
     Those panels stay zoom-free.
+
+    UX-152: the modebar's camera saves at the figure's own size and
+    `_PNG_EXPORT_SCALE` instead of Plotly's 1×, and as ``download_name``.png
+    when given — the Scanpath view's figures pass the Export subtab's file name,
+    so the camera saves the same PNG. The others keep Plotly's ``newplot.png``.
     """
     width = int(fig.layout.width or 900)
     height = int(fig.layout.height or 600)
@@ -764,7 +782,18 @@ def _render_true_scale_chart(fig, *, key: str, max_height: int | None = None) ->
     autoplay_script = (
         animation_autoplay_post_script(autoplay_ms) if autoplay_ms is not None else None
     )
-    config: dict = {"responsive": False, "displaylogo": False}
+    config: dict = {
+        "responsive": False,
+        "displaylogo": False,
+        "toImageButtonOptions": {
+            "format": "png",
+            "width": width,
+            "height": height,
+            "scale": _PNG_EXPORT_SCALE,
+        },
+    }
+    if download_name:
+        config["toImageButtonOptions"]["filename"] = download_name
     if zoomable:
         config["modeBarButtonsToRemove"] = list(_NATIVE_ZOOM_BUTTONS)
     # ENG-64: the installed plotly's own plotly.min.js, served by this app's
@@ -773,7 +802,7 @@ def _render_true_scale_chart(fig, *, key: str, max_height: int | None = None) ->
         include_plotlyjs=False,
         full_html=False,
         config=config,
-        div_id=f"truescale-{key}",
+        div_id=_true_scale_plot_id(key),
         # to_html defaults to auto_play=True, which auto-runs an animated figure on
         # load at Plotly's default frame duration (ignoring the configured playback
         # speed). Start paused so the animation only plays — at the right speed —
@@ -849,6 +878,113 @@ _MIME_FOR_FORMAT = {
 }
 
 
+#: UX-152: the formats Plotly.js can save from the figure the browser has already
+#: drawn (`Plotly.toImage`, what the modebar's camera does). PDF is not one of
+#: them, so it stays on Kaleido.
+_BROWSER_IMAGE_FORMATS = ("PNG", "SVG")
+
+_IMAGE_DOWNLOAD_HTML = """
+<button type="button" class="sps-image-download"></button>
+<div class="sps-image-download-note" role="status"></div>
+"""
+
+# Streamlit's secondary button, redrawn from the `--st-*` theme variables so it
+# sits beside the st.download_button it replaces for PDF/HTML without a seam.
+_IMAGE_DOWNLOAD_CSS = """
+:host { display: block; font-family: var(--st-font); }
+.sps-image-download {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 2.5rem; margin: 0; padding: 0.25rem 0.75rem;
+  font-family: inherit; font-size: 0.875rem;
+  font-weight: var(--st-base-font-weight); line-height: 1.6;
+  color: var(--st-text-color); background: var(--st-background-color);
+  /* Streamlit lifts a secondary button 2.5 points of lightness off the page,
+     which only shows in a dark theme; white stays white. */
+  background: hsl(from var(--st-background-color) h s min(l + 2.5, 100));
+  border: 1px solid var(--st-border-color); border-radius: var(--st-button-radius);
+  cursor: pointer; user-select: none;
+}
+.sps-image-download:hover { border-color: var(--st-primary-color);
+  color: var(--st-primary-color); }
+.sps-image-download:active { border-color: var(--st-primary-color);
+  background: var(--st-primary-color); color: #fff; }
+.sps-image-download:focus-visible { outline: none; border-color: var(--st-primary-color);
+  box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--st-primary-color) 50%, transparent); }
+.sps-image-download:disabled { cursor: progress; opacity: 0.6; }
+.sps-image-download-note { margin-top: 0.35rem; font-size: 0.875rem;
+  color: var(--st-red-text-color); }
+.sps-image-download-note:empty { display: none; }
+"""
+
+_IMAGE_DOWNLOAD_JS = r"""
+export default function (component) {
+  const { data, parentElement } = component;
+  const button = parentElement.querySelector('.sps-image-download');
+  const note = parentElement.querySelector('.sps-image-download-note');
+  button.textContent = data.label;
+  note.textContent = '';
+
+  // `_render_true_scale_chart` draws the figure in a same-origin srcdoc
+  // iframe whose graph div has a known id, next to that iframe's own Plotly.
+  const findPlot = () => {
+    for (const frame of document.querySelectorAll('iframe')) {
+      try {  // a cross-origin frame (an extension's, a host's) throws here
+        const gd = frame.contentDocument && frame.contentDocument.getElementById(data.plot_id);
+        const Plotly = gd && frame.contentWindow.Plotly;
+        if (Plotly) return { Plotly, gd };
+      } catch (err) { /* not ours */ }
+    }
+    return null;
+  };
+
+  // Reassigned, not added: Streamlit reuses the component across reruns.
+  button.onclick = async () => {
+    const plot = findPlot();
+    if (!plot) {
+      note.textContent = 'The figure is still being drawn. Try again in a moment.';
+      return;
+    }
+    button.disabled = true;
+    note.textContent = '';
+    try {
+      // `imageDataOnly` hands back the SVG markup or the PNG's base64 rather
+      // than a data URL, so neither is percent-encoded only to be decoded again.
+      const image = await plot.Plotly.toImage(plot.gd, {
+        format: data.format, width: data.width, height: data.height, scale: data.scale,
+        imageDataOnly: true,
+      });
+      const blob = data.format === 'svg'
+        ? new Blob([image], { type: 'image/svg+xml;charset=utf-8' })
+        : new Blob([Uint8Array.from(atob(image), (c) => c.charCodeAt(0))],
+                   { type: 'image/png' });
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = href;
+      link.download = data.filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(href), 60000);
+    } catch (err) {
+      note.textContent = `Couldn't save the ${data.format.toUpperCase()}: ${(err && err.message) || err}`;
+    } finally {
+      button.disabled = false;
+    }
+  };
+}
+"""
+
+
+def _image_download_component() -> Any:
+    """Register once per script run (the v2 registry is run-scoped in AppTest)."""
+    return st.components.v2.component(
+        "scanpath_image_download",
+        html=_IMAGE_DOWNLOAD_HTML,
+        css=_IMAGE_DOWNLOAD_CSS,
+        js=_IMAGE_DOWNLOAD_JS,
+    )
+
+
 def _render_save_plot_button(
     fig,
     *,
@@ -856,17 +992,23 @@ def _render_save_plot_button(
     canvas_height: int,
     slug: str,
     key_prefix: str,
+    plot_key: str = "single",
 ) -> None:
     """Download the currently displayed figure in one click.
 
-    UX-150: the button's ``data`` is a callable (`_figure_download_data`), so
-    Streamlit builds the file only when the button is pressed — on a worker
-    thread, with a spinner on the button — rather than on every rerun. That
-    retired EXP-6's *Render → status → Download* sequence here: PNG/SVG/PDF go
-    through Kaleido's headless Chrome, which is far too slow to run per rerun, and
-    deferring it is what the Render step was for. Width/height come from the
-    figure's own layout so stacked / multi-panel figures save at their on-screen
-    size.
+    UX-152: PNG and SVG are saved by the browser from the plot already on screen
+    (``plot_key`` names its `_render_true_scale_chart`), the way the modebar's
+    camera saves one — instantly, and with no Chrome needed on the server. The
+    image is the reader's browser's own drawing of the figure, so it is what they
+    see; it can differ from Kaleido's (the API, the CLI and the bundles) wherever
+    the fonts differ, or the browser is not Chromium-based.
+
+    UX-150: PDF and HTML stay a `st.download_button` whose ``data`` is a callable
+    (`_figure_download_data`), which Streamlit runs only when the button is
+    pressed — on a worker thread, with a spinner on the button — rather than on
+    every rerun; that retired EXP-6's *Render → status → Download* sequence.
+    Width/height come from the figure's own layout so stacked / multi-panel
+    figures save at their on-screen size.
     """
     if fig is None:
         return
@@ -879,21 +1021,36 @@ def _render_save_plot_button(
         st,
         "radio",
         "Download format",
-        # HTML is a browser-free fallback (no Kaleido/Chrome) — useful on
-        # Streamlit Cloud where static image export needs a Chromium binary.
         options=["PNG", "SVG", "PDF", "HTML"],
         index=0,
         horizontal=True,
         key=f"{key_prefix}_save_format",
-        help="PNG/SVG/PDF need a Chrome/Chromium browser (Kaleido). HTML "
-        "is interactive and needs no browser.",
+        help="PNG and SVG are saved by your browser from the figure on screen. "
+        "PDF is rendered by a Chrome/Chromium browser (Kaleido). HTML is "
+        "interactive and needs no browser.",
     )
+
+    if fmt in _BROWSER_IMAGE_FORMATS:
+        _image_download_component()(
+            key=f"{key_prefix}_save_image",
+            data={
+                "plot_id": _true_scale_plot_id(plot_key),
+                "format": fmt.lower(),
+                "filename": f"{file_stem}.{fmt.lower()}",
+                "width": int(fig.layout.width or canvas_width),
+                "height": int(fig.layout.height or canvas_height),
+                "scale": _PNG_EXPORT_SCALE if fmt == "PNG" else 1,
+                "label": f"⬇ Download {fmt}",
+            },
+            height="content",
+        )
+        return
 
     # Pre-flight (ENG-10): a render that fails on the worker thread can only
     # surface as Streamlit's generic "Failed to generate file for download" —
     # nothing it raises reaches the page — so the one failure we can predict is
     # said up front, with the fix and the browser-free HTML fallback.
-    no_browser = fmt != "HTML" and not chrome_available()
+    no_browser = fmt == "PDF" and not chrome_available()
     if no_browser:
         st.warning(
             f"{fmt} export can't run here. {CHROME_INSTALL_HINT}", icon=ICONS["warning"]
@@ -911,7 +1068,7 @@ def _render_save_plot_button(
         disabled=no_browser,
         help=None
         if fmt == "HTML"
-        else f"Renders the {fmt} when you click (Chrome/Kaleido; the first export "
+        else "Renders the PDF when you click (Chrome/Kaleido; the first export "
         "can take a few seconds). If it fails, choose **HTML** — it needs no "
         "browser.",
     )
@@ -929,8 +1086,7 @@ def _figure_download_data(
         fmt=fmt.lower(),
         width=int(fig.layout.width or canvas_width),
         height=int(fig.layout.height or canvas_height),
-        # PNG is raster, so it renders at 3× to stay crisp; SVG/PDF are vector.
-        scale=3 if fmt == "PNG" else 1,
+        scale=_PNG_EXPORT_SCALE if fmt == "PNG" else 1,
     )
 
 
@@ -3844,7 +4000,6 @@ def _build_and_render_animation(
             else None
         ),
     )
-    _render_true_scale_chart(fig, key="single_anim")
     if dual:
         save_slug = (
             f"{selected_participant}__{selected_trial}__vs__"
@@ -3862,6 +4017,8 @@ def _build_and_render_animation(
             f"animation_{_safe_filename(selected_participant)}__"
             f"{_safe_filename(selected_trial)}"
         )
+    # The camera saves whichever frame is on screen, hence the `_frame` suffix.
+    _render_true_scale_chart(fig, key="single_anim", download_name=f"{file_stem}_frame")
     return fig, playback_ms, save_slug, file_stem
 
 
@@ -3977,6 +4134,7 @@ def _render_export_panel(
     selected_participant: str,
     selected_trial: str,
     compare_export: tuple | None = None,
+    plot_key: str = "single",
 ) -> None:
     """Consolidated Export subtab: the currently-viewed figure on top, then a
     bulk multi-trial export below.
@@ -4002,6 +4160,7 @@ def _render_export_panel(
             canvas_height=int(canvas_height),
             slug=save_slug,
             key_prefix="single",
+            plot_key=plot_key,
         )
         if compare_export is not None:
             _render_pair_export(
@@ -5394,6 +5553,9 @@ def render_single_trial_tab(
         )
 
     displayed_fig = None
+    # UX-152: which `_render_true_scale_chart` drew it — the Export subtab's PNG
+    # and SVG are saved from that plot in the browser.
+    displayed_plot_key = "single"
     save_slug = f"{selected_participant}__{selected_trial}"
     anim_playback_ms = None
     anim_file_stem = None
@@ -5585,6 +5747,11 @@ def render_single_trial_tab(
                 if text_note:
                     st.warning(text_note, icon=ICONS["warning"])
         elif comparing:
+            save_slug = (
+                f"{selected_participant}__{selected_trial}__vs__"
+                f"{compare_participant}__{compare_trial}"
+            )
+            displayed_plot_key = "compare"
             displayed_fig = _render_comparison_figure(
                 combos,
                 cmp_words,
@@ -5608,10 +5775,7 @@ def render_single_trial_tab(
                     else compare_setup_note
                 ),
                 primary_combo_row=primary_combo_row,
-            )
-            save_slug = (
-                f"{selected_participant}__{selected_trial}__vs__"
-                f"{compare_participant}__{compare_trial}"
+                download_name=f"scanpath_{_safe_filename(save_slug)}",
             )
         else:
             # PRE-3: the corrected frame (`plot_fixations`) was built above and is
@@ -5651,7 +5815,11 @@ def render_single_trial_tab(
                 selected_trial,
                 combo_row=primary_combo_row,
             )
-            _render_true_scale_chart(displayed_fig, key="single")
+            _render_true_scale_chart(
+                displayed_fig,
+                key="single",
+                download_name=f"scanpath_{_safe_filename(save_slug)}",
+            )
 
     # Per-trial panels sit directly BELOW the plot, in the next row's left column. Trial
     # Info is gone — the chip strip above the plot now carries the trial's identity,
@@ -5774,6 +5942,7 @@ def render_single_trial_tab(
                     selected_participant=selected_participant,
                     selected_trial=selected_trial,
                     compare_export=compare_export_sides,
+                    plot_key=displayed_plot_key,
                 )
 
     # The former header Share popover, now a subtab. app.main passes the
@@ -5949,6 +6118,7 @@ def _render_comparison_figure(
     shared_numeric: frozenset[str] | None = None,
     setup_note: str = "",
     primary_combo_row: Callable[[], dict | None] | None = None,
+    download_name: str = "scanpath",
 ):
     """Render comparison figure for two trials.
 
@@ -6110,7 +6280,7 @@ def _render_comparison_figure(
             "text_id": compare_text_id,
         },
     )
-    _render_true_scale_chart(fig_compare, key="compare")
+    _render_true_scale_chart(fig_compare, key="compare", download_name=download_name)
     overlaid = layout == "overlay"
     text_note = _different_texts_note(
         primary_text_id, compare_text_id, overlaid=overlaid

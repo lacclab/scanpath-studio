@@ -8,6 +8,11 @@
 | **PNG / SVG / PDF** | `save_figure(fig, "x.png")` / `render -o x.png` | **Yes** — via Kaleido |
 | **GIF / MP4** | `animation_export.export_animation(anim, fmt="mp4", frame_duration_ms=…)` → bytes (see [below](#mp4-gif)) | **Yes** (Kaleido) — ffmpeg is bundled |
 
+In the app, **Export → Current figure** saves PNG and SVG in your browser from
+the figure on screen, as the plot's camera button does, so those two need no
+Chrome there. Its PDF, the GIF/MP4 replay, and the images in the export bundle
+and the Compare pair bundle still go through Kaleido.
+
 ## Kaleido needs Chrome, Chromium or Edge
 
 Static image export (PNG/SVG/PDF) and rasterized animation (GIF/MP4) render

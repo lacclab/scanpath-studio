@@ -192,9 +192,11 @@ the sentinel `"(uniform)"` for one flat colour, or `"line"` to colour each
 fixation by the text line it lands on (the lines are inferred from word-box
 geometry); a name the frame doesn't have raises a `ValueError` naming the
 closest columns (see [Errors](#errors-and-what-they-mean)). `color_by_line=True`
-is the same as `color_by="line"`, and overrides any other `color_by`. A
-comparison figure ignores both and keeps each scanpath's own colour, as the
-app's Compare mode does.
+is the same as `color_by="line"`, and on a single-trial figure it overrides any
+other `color_by`. A comparison figure never colours by line, as in the app's
+Compare mode: each scanpath keeps its own colour, and a numeric `color_by`
+fills both readings' markers on one shared scale while their outlines keep
+that colour.
 
 `fixation_flags` marks or drops suspicious fixations (display only — reading
 measures and exports are untouched). One entry per category, each with a mode of

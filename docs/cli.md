@@ -163,8 +163,13 @@ is a single figure of two readings, so render one screen at a time with
 `--screen`.
 
 **Overlay across two datasets requires matching canvases.** On two different
-canvases `--compare-layout overlay` fails rather than falling back; pass
-`--compare-layout side-by-side` or `stacked`. Nothing is rescaled.
+canvases `--compare-layout overlay` fails rather than falling back, and so does
+`--animate`, which replays both readings in one coordinate space; pass
+`--compare-layout side-by-side` or `stacked`, without `--animate`. Without
+`--compare-canvas` the second dataset's screen is read off its data, as A's is
+when neither `--canvas` nor a built-in source gives one. That extent rarely
+spans the whole screen, so state both screens when you know them. Nothing is
+rescaled.
 
 A second dataset is loaded from **files only**. Any corpus reachable from Python
 can still be scanpath B via

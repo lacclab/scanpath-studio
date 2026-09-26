@@ -1280,6 +1280,21 @@ def test_a_cross_dataset_comparison_says_whose_reader_b_is():
     )
 
 
+def test_a_second_datasets_co_animation_note_names_its_screen_too():
+    """CMP-21: with `dataset_b=` the co-animation checks the two screens, and a
+    screen nobody states is read off that trial's data — so the note on how to
+    finish the snippet names B's screen too, or following it gets the figure
+    refused."""
+    state = _state(
+        kind="animation",
+        canvas=(2560, 1440),
+        compare=cs.CompareTarget(participant="reader_07", trial="t9", dataset="PoTeC"),
+    )
+    notes = " ".join(cs.reproduction_code(DEMO, state).caveats)
+    assert "dataset_b='PoTeC'" in notes
+    assert "setup_b=" in notes and "--compare-canvas" in notes
+
+
 # ---------------------------------------------------------------------------
 # EXP-8 §3 — a stock figure must emit nothing it was not asked for
 # ---------------------------------------------------------------------------

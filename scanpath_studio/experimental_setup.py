@@ -273,9 +273,11 @@ class IncomparableScreensError(ValueError):
     """An overlay was asked of two readings recorded on different screens.
 
     Raised by `api.compare_scanpaths`, which draws nothing rather than switch
-    layout behind a script's back. ``reason`` is `setups_comparable`'s
-    surface-neutral sentence, so a caller can word the way out in its own terms
-    — `render` names ``--compare-layout`` rather than echo the Python keyword.
+    layout behind a script's back, and by `api.animate_scanpath` for a
+    co-animation of two datasets, which is an overlay on one clock (CMP-21).
+    ``reason`` is `setups_comparable`'s surface-neutral sentence, so a caller
+    can word the way out in its own terms — `render` names ``--compare-layout``
+    rather than echo the Python keyword.
     """
 
     def __init__(self, message: str, *, reason: str) -> None:
@@ -309,12 +311,13 @@ def setups_comparable(a: SetupSnapshot, b: SetupSnapshot) -> tuple[bool, str]:
     * ``(True, "")`` — the canvases match and both sides know their screen.
 
     ``note`` is a complete user-facing sentence in both non-empty cases, and the
-    app, the CLI and :func:`api.compare_scanpaths` all quote it whole, so the
-    explanation cannot drift across surfaces. A refusal says only *why*: what
-    happens next differs by surface — the app falls back to side by side, the
-    API raises :class:`IncomparableScreensError`, ``render`` exits naming its own
-    flag — so each caller appends that itself (BUG-85; the reason used to end
-    "so they are shown side by side instead", which was false on two of three).
+    app, the CLI, :func:`api.compare_scanpaths` and :func:`api.animate_scanpath`
+    all quote it whole, so the explanation cannot drift across surfaces. A
+    refusal says only *why*: what happens next differs by surface — the app
+    falls back to side by side, the API raises :class:`IncomparableScreensError`,
+    ``render`` exits naming its own flag — so each caller appends that itself
+    (BUG-85; the reason used to end "so they are shown side by side instead",
+    which was false on two of three).
 
     **Only the canvas is a hard gate.** An unrecorded screen warns rather than
     refuses — settled 2026-08-12 on the case that motivated it: two OneStop

@@ -88,6 +88,35 @@ class TestSameDataset:
         )
         assert fig.data
 
+    @pytest.mark.parametrize("layout", ["overlay", "side_by_side"])
+    def test_a_trial_compared_with_itself_draws_each_side_once(self, layout):
+        """CMP-22: the figure slices by (participant, trial), so two copies of one
+        trial must be renamed apart or each side draws both copies. Same fixation
+        count as p1-vs-p2 (three each) means one copy per side."""
+        words, fixations = _pair()
+
+        def points(trial_b):
+            fig = api.compare_scanpaths(
+                words,
+                fixations,
+                ("p1", "t1"),
+                trial_b,
+                layout=layout,
+                canvas_size=(1920, 1080),
+            )
+            return sum(0 if t.x is None else len(t.x) for t in fig.data)
+
+        assert points(("p1", "t1")) == points(("p2", "t2"))
+
+    def test_the_renamed_copy_never_reaches_a_label(self):
+        """The rename is for slicing the figure; the legend names the real id."""
+        words, fixations = _pair()
+        fig = api.compare_scanpaths(
+            words, fixations, ("p1", "t1"), ("p1", "t1"), canvas_size=(1920, 1080)
+        )
+        names = {t.name for t in fig.data if t.name}
+        assert names and not any("· B" in name for name in names), names
+
     def test_hyphenated_layout_is_accepted(self):
         """`--compare-layout side-by-side` and the API must agree on one name."""
         words, fixations = _pair()

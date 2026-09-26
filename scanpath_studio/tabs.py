@@ -247,6 +247,8 @@ from scanpath_studio.utils import (
     qualify_for_compare,
     safe_summary,
     select_trial,
+    self_compare_participant,
+    separate_self_compare,
     sort_trial_options,
     step_within,
     trial_options_snapshot_key,
@@ -2126,7 +2128,7 @@ def _render_compare_selector(
         elif source is not None:
             st.info(f"No trials in **{source.name}** match its filters.")
         else:
-            st.info("No other trials match B's filters.")
+            st.info("No trials match B's filters.")
         return None, None, None, None
 
     sort_keys = trial_sort_keys(
@@ -2220,26 +2222,37 @@ def _render_compare_selector(
     # previous one on the very next run.
     current = st.session_state.get(sel_key)
     lost_identity = None
+    # CMP-22: A's own trial is in B's list, so the two readouts count the same
+    # trials — but it is never the *default*: a fresh B is the first candidate
+    # that is not A. Only a user's pick (or a link) lands B on A itself.
+    primary_identity = (str(selected_participant), str(selected_trial))
+    default_label = next(
+        (
+            opt[2]
+            for opt in options
+            if source is not None or (str(opt[0]), str(opt[1])) != primary_identity
+        ),
+        labels[0],
+    )
     if current not in labels:
         remembered = st.session_state.get(_COMPARE_IDENTITY_KEY)
         if isinstance(remembered, tuple) and remembered in identity_to_label:
             current = identity_to_label[remembered]
         elif remembered is not None and current is not None:
-            # Genuinely gone from the pool — most often because A just moved
-            # *onto* it, and a trial is never a candidate to compare with
-            # itself. Say so rather than swapping the panel silently.
+            # Genuinely gone from the pool — B's filters or dataset no longer
+            # admit it. Say so rather than swapping the panel silently.
             lost_identity = remembered
-            current = labels[0]
+            current = default_label
         else:
-            current = labels[0]
+            current = default_label
         st.session_state[sel_key] = current
     st.session_state[_COMPARE_IDENTITY_KEY] = tuple(
         str(v) for v in label_to_trial[current]
     )
     if lost_identity is not None:
         st.caption(
-            f"`{lost_identity[1]}` is no longer available to compare with — "
-            "it is the selected trial now. Showing the first candidate instead."
+            f"`{lost_identity[1]}` is no longer among B's trials. "
+            "Showing the first candidate instead."
         )
 
     # CMP-13: publish the candidates as rendered — label plus identity, because
@@ -4949,8 +4962,8 @@ def render_single_trial_tab(
                     ),
                 ):
                     # CMP-13. Deliberately "step" and not "keep them in sync":
-                    # the two pools have different sizes (B excludes A, and a
-                    # cross-dataset B is another corpus), so their positions
+                    # the two pools have different sizes (B has its own filters,
+                    # and a cross-dataset B is another corpus), so their positions
                     # carry no shared meaning — the control advances each by the
                     # same ±1, nothing more. UX-99 cut the label to "Step A + B":
                     # the rail's fixed label column truncated the old sentence to
@@ -5117,6 +5130,9 @@ def render_single_trial_tab(
                     selected_participant,
                     selected_trial,
                     selected_text,
+                    # B's picker lists A too (CMP-22), but a trial compared with
+                    # only itself is not a comparison.
+                    include_primary=False,
                 )
             )
             st.session_state["_resolved_animating"] = bool(animate)
@@ -5435,11 +5451,21 @@ def render_single_trial_tab(
     # disjoint frames warns and churns dtypes — align onto the union first. The
     # shared numeric set feeds the §5.4 metric gate below.
     shared_numeric: frozenset[str] | None = None
+    self_compare_figure_id: str | None = None
     if comparing and compare_meta is not None:
         words_a, words_b, _ = _align_compare_columns(trial_words, compare_meta["words"])
         fix_a, fix_b, shared_fix = _align_compare_columns(
             plot_fixations, plot_compare_fix
         )
+        if not cross_dataset and (
+            str(figure_compare_participant),
+            str(compare_trial),
+        ) == (str(selected_participant), str(selected_trial)):
+            # CMP-22: B is A's own trial. Rename B's copy apart for the figure
+            # only — `make_comparison_figure` slices by (participant, trial).
+            words_b = separate_self_compare(words_b, selected_participant)
+            fix_b = separate_self_compare(fix_b, selected_participant)
+            self_compare_figure_id = self_compare_participant(selected_participant)
         cmp_words = pd.concat([words_a, words_b])
         cmp_fixations = pd.concat([fix_a, fix_b])
         if cross_dataset:
@@ -5783,6 +5809,7 @@ def render_single_trial_tab(
                 ),
                 primary_combo_row=primary_combo_row,
                 download_name=f"scanpath_{_safe_filename(save_slug)}",
+                figure_participant_b=self_compare_figure_id,
             )
         else:
             # PRE-3: the corrected frame (`plot_fixations`) was built above and is
@@ -6126,8 +6153,14 @@ def _render_comparison_figure(
     setup_note: str = "",
     primary_combo_row: Callable[[], dict | None] | None = None,
     download_name: str = "scanpath",
+    figure_participant_b: str | None = None,
 ):
     """Render comparison figure for two trials.
+
+    ``figure_participant_b`` (CMP-22) is the id B's rows carry in the merged
+    frames when it differs from ``compare_participant`` — a trial compared with
+    itself, renamed apart by `separate_self_compare`. It is used only to slice
+    the figure; labels and lookups keep the real id.
 
     ``fixations_filtered`` carries both scanpaths, already resolved by the
     caller: A's VIZ-7 fixation-index window (a single-scanpath control with no
@@ -6265,7 +6298,7 @@ def _render_comparison_figure(
         words_filtered,
         fixations_filtered,
         (selected_participant, selected_trial),
-        (compare_participant, compare_trial),
+        (figure_participant_b or compare_participant, compare_trial),
         settings=comparison_settings,
     )
     add_illustration_label(fig_compare, viz_settings.get("illustration_reasons"))

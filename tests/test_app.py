@@ -136,7 +136,9 @@ class TestBuildComparisonOptions:
                 "text_id": ["para1", "para1", "para1"],
             }
         )
-        options = _build_comparison_options(combos, "Text", "p1", "t1", "para1")
+        options = _build_comparison_options(
+            combos, "Text", "p1", "t1", "para1", include_primary=False
+        )
         # (participant, trial, label, markers). p1/t2 is same participant AND same
         # text → both markers, sorts first; p2/t1 is same text only → 📄.
         assert [(o[0], o[1]) for o in options] == [("p1", "t2"), ("p2", "t1")]
@@ -152,7 +154,9 @@ class TestBuildComparisonOptions:
                 "text_id": ["para1", "para1", "para2"],
             }
         )
-        options = _build_comparison_options(combos, "Participant", "p1", "t1", "para1")
+        options = _build_comparison_options(
+            combos, "Participant", "p1", "t1", "para1", include_primary=False
+        )
         # Same-text (📄) trial leads, then the different-text one (no marker).
         assert [(o[0], o[1]) for o in options] == [("p2", "t1"), ("p3", "t1")]
         assert options[0][3] == "📄"
@@ -166,9 +170,11 @@ class TestBuildComparisonOptions:
                 "text_id": ["para1", "para2"],
             }
         )
-        options = _build_comparison_options(combos, "None", "p1", "t1", None)
+        options = _build_comparison_options(
+            combos, "None", "p1", "t1", None, include_primary=False
+        )
         assert len(options) > 0
-        # Should not include the primary trial
+        # Asked for "anything else", the primary trial is left out
         assert not any(opt[0] == "p1" and opt[1] == "t1" for opt in options)
 
     def test_build_comparison_options_with_unique_text_id(self):

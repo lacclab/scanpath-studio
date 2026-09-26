@@ -705,8 +705,8 @@ def step_within(options: list[str], state_key: str, delta: int) -> int | None:
 
     Clamped to the ends, and clamped *independently* of any other picker — the
     linked step is "advance both", not "keep them aligned": the two pools have
-    different sizes (B excludes A, and a cross-dataset B is another corpus
-    entirely), so their indices carry no shared meaning.
+    different sizes (B has its own filters, and a cross-dataset B is another
+    corpus entirely), so their indices carry no shared meaning.
 
     Returns the new index, or ``None`` when there was nothing to step.
     """
@@ -744,9 +744,9 @@ def step_linked_compare(delta: int) -> None:
 
     Written as an *identity* rather than an index or a label, because both are
     unstable across this step: ``build_comparison_options`` builds B's pool
-    relative to A (📄 same-text first, then 👤 same-participant, A itself
-    excluded), so once A moves, B's list is re-ordered *and* re-labelled — the
-    same trial can gain or lose its 📄 marker. Parking the identity in the same
+    relative to A (📄 same-text first, then 👤 same-participant), so once A
+    moves, B's list is re-ordered *and* re-labelled — the same trial can gain or
+    lose its 📄 marker. Parking the identity in the same
     pending slot the ``?compare=`` deep link uses lets the rebuilt picker re-find
     the trial the user was actually looking at.
     """
@@ -1199,6 +1199,7 @@ def build_comparison_options(
     primary_text: str | None,
     *,
     cross_dataset: bool = False,
+    include_primary: bool = True,
 ) -> list[tuple[str, str, str, str]]:
     """Build a prioritized list of comparison-trial options.
 
@@ -1218,15 +1219,23 @@ def build_comparison_options(
     coincidentally identical ``(participant, trial)`` is a real candidate rather
     than the trial being compared. 📄 survives — a text id that matches across
     corpora is exactly the pairing this feature exists for.
+
+    ``include_primary`` (CMP-22) keeps the selected trial itself in the pool, so
+    B's picker lists every trial A's does and the two position readouts agree.
+    It is only a *candidate*: the picker defaults B to the first trial that is
+    not A. Pass ``False`` to ask "is there anything else to compare with?" —
+    the question the Compare gate asks.
     """
     text_field = "unique_text_id" if "unique_text_id" in combos.columns else "text_id"
     uniq = combos.drop_duplicates(subset=["participant_id", "trial_id"])
 
     rows: list[dict] = []
     for row in uniq.itertuples():
-        if not cross_dataset and (row.participant_id, row.trial_id) == (
-            primary_participant,
-            primary_trial,
+        if (
+            not include_primary
+            and not cross_dataset
+            and (row.participant_id, row.trial_id)
+            == (primary_participant, primary_trial)
         ):
             continue
         text_id = getattr(row, text_field, "")
@@ -1303,6 +1312,26 @@ def qualify_for_compare(frame: pd.DataFrame, dataset: str) -> pd.DataFrame:
         dataset + COMPARE_DATASET_SEP + out["participant_id"].astype(str)
     )
     return out
+
+
+def separate_self_compare(frame: pd.DataFrame, participant: str) -> pd.DataFrame:
+    """A copy of B's single-trial ``frame`` renamed apart from A's (CMP-22).
+
+    B may now be A's own trial. `plots.make_comparison_figure` slices its merged
+    frame by ``(participant_id, trial_id)``, so two copies of one trial would hand
+    *each* side both copies (and a duplicated index the word-line clustering
+    rejects). Giving B's copy `self_compare_participant`'s id keeps the halves
+    apart — the same trick `qualify_for_compare` plays across corpora, and just
+    as figure-only: labels, lookups, exports and links keep the real id.
+    """
+    if frame.empty:
+        return frame
+    return frame.assign(participant_id=self_compare_participant(participant))
+
+
+def self_compare_participant(participant: str) -> str:
+    """The id `separate_self_compare` gives B's copy of ``participant``."""
+    return f"{participant}{COMPARE_DATASET_SEP}B"
 
 
 def qualified_participant(dataset: str, participant: str) -> str:

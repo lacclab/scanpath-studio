@@ -422,11 +422,22 @@ def embed(fig, *, caption: str | None = None, legend=None) -> str:
     were fitted to. Plotly itself is loaded only on a page that has a figure,
     from the site's own copy (``mkdocs_hooks.on_post_build``), never a CDN.
     ``legend`` is ``[(label, colour), …]``, drawn as swatches under the figure.
+    A replay also carries the app's player, so its ▶ Play keeps real time.
     """
+    from scanpath_studio.plots import animation_player_post_script
+
     width = int(fig.layout.width or 900)
     height = int(fig.layout.height or 600)
     spec = json.loads(fig.to_json())
     spec["config"] = _PLOT_CONFIG
+    # BUG-93: a replay keeps time on the app's own wall-clock player, not on
+    # Plotly's frame queue; figures.js runs it once the plot is drawn. It waits
+    # for ▶ rather than autoplaying: a page draws its figures before they scroll
+    # into view.
+    player = animation_player_post_script(fig)
+    if player:
+        spec["player"] = player
+        spec["layout"]["meta"]["scanpath_autoplay"] = False
     payload = json.dumps(spec, separators=(",", ":")).replace("</", "<\\/")
     # A <div>, not a <figure>: Material sizes figures to fit their content, and
     # the plot's content is positioned absolutely, so a figure collapses to 0.

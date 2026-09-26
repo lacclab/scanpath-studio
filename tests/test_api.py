@@ -800,24 +800,31 @@ def test_animate_scanpath_returns_frames(sample):
     assert list(trail.y) == list(trial_fixations["y"])
 
 
-def test_animate_scanpath_autoplay_saves_kickoff(sample, tmp_path):
-    # VIZ-10: autoplay on (default) → the saved HTML auto-starts the replay.
+def test_animate_scanpath_autoplay_saves_the_player(sample, tmp_path):
+    # BUG-93: the saved HTML replays on the wall-clock player, and VIZ-10's
+    # autoplay (on by default) is the flag that player reads on load.
     words, fixations = sample
     pid, tid = sps.list_trials(words, fixations).iloc[0]
     fig = sps.animate_scanpath(words, fixations, pid, tid, canvas_size=(2560, 1440))
-    out = sps.save_figure(fig, tmp_path / "auto.html")
-    assert "Plotly.animate" in out.read_text(encoding="utf-8")
+    html = sps.save_figure(fig, tmp_path / "auto.html").read_text(encoding="utf-8")
+    assert "plotly_buttonclicked" in html  # the player, taking over ▶ Play
+    assert '"scanpath_autoplay":true' in html
+    # Plotly's own auto_play stays off: it would run at its default frame time.
+    assert "Plotly.animate('" not in html
 
 
 def test_animate_scanpath_no_autoplay_saves_paused(sample, tmp_path):
-    # VIZ-10: autoplay=False → no kickoff, and the HTML is written paused.
+    # VIZ-10: autoplay=False → the HTML opens paused; the player is still there,
+    # because ▶ Play needs its clock either way (BUG-93).
     words, fixations = sample
     pid, tid = sps.list_trials(words, fixations).iloc[0]
     fig = sps.animate_scanpath(
         words, fixations, pid, tid, canvas_size=(2560, 1440), autoplay=False
     )
     html = sps.save_figure(fig, tmp_path / "paused.html").read_text(encoding="utf-8")
-    assert "Plotly.animate" not in html
+    assert "plotly_buttonclicked" in html
+    assert '"scanpath_autoplay":false' in html
+    assert "Plotly.animate('" not in html
 
 
 def test_compute_word_metrics_matches_the_hand_traced_trial():

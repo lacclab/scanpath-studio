@@ -3057,10 +3057,10 @@ def _add_interpolated_heatmap(
 # Scanpath animation — one or two scanpaths on a shared real reading-time clock
 # =============================================================================
 
-# Floor on per-frame duration: ~one 60 fps display frame. Browsers can't redraw
-# faster than this, so it's the lowest value at which the quoted playback time
-# (n_frames * avg) still matches the observed runtime — going lower would just
-# make the quote understate reality. Also keeps the briefest gaps perceptible.
+# Floor on the ▶ Play button's own per-frame duration: ~one 60 fps display frame.
+# That duration only drives Plotly's frame queue, which is what a figure plays on
+# where the wall-clock player isn't embedded (`fig.show()`); every HTML surface
+# replays on `animation_player_post_script` instead (BUG-93).
 _ANIM_MIN_FRAME_MS = 16
 # VIZ-11: animation frames sit on a UNIFORM time grid (one every
 # _ANIM_GRID_STEP_MS of reading) rather than one per fixation onset, so the
@@ -3135,9 +3135,11 @@ def _anim_timeline(specs, playback_speed, *, grid_step_ms=None, max_frames=None)
     ``grid_step_ms`` unless that would exceed ``max_frames`` frames (then it
     coarsens) — so the slider scrubs linearly through reading time no matter how
     fixations cluster or how many scanpaths overlay (the union of onset sets is
-    meaningless for >1 reader). Each frame lasts a uniform
-    ``step / playback_speed`` (floored at ``_ANIM_MIN_FRAME_MS``), so the Play
-    button's runtime is ``≈ reading_span_ms / playback_speed``. Frame *content* is
+    meaningless for >1 reader). ``frame_duration_ms`` is ``step / playback_speed``
+    (floored at ``_ANIM_MIN_FRAME_MS``) — the ▶ Play button's own per-frame
+    duration, used only where the wall-clock player isn't embedded; the player
+    shows frame k once ``frame_times[k] / playback_speed`` has elapsed, so a replay
+    takes ``reading_span_ms / playback_speed`` (BUG-93). Frame *content* is
     unchanged — every fixation whose onset ≤ t shows at time t. All readings are
     rebased to t=0; ``reading_span_ms`` is the longest reading's span. Returns an
     empty grid when there is nothing to animate.
@@ -3216,11 +3218,11 @@ def animation_playback_ms(
 ):
     """Reading span and *actual* animation runtime for the given scanpath(s).
 
-    Returns ``(reading_span_ms, playback_ms)``. ``playback_ms`` is the real
-    runtime the Play button produces: Play advances every frame at the average
-    frame duration, so the total is ``n_frames * avg`` — quoting that in the side
-    panel makes the stated playback time match what the user actually observes.
-    Both 0 when there are no fixations.
+    Returns ``(reading_span_ms, playback_ms)``. ``playback_ms`` is what the replay
+    takes: the wall-clock player (:func:`animation_player_post_script`) reaches the
+    last frame once ``reading_span_ms / playback_speed`` has elapsed, so that is
+    the time the side panel quotes and a GIF/MP4 lasts (BUG-93). Both 0 when there
+    are no fixations.
     """
     summary = animation_timeline_summary(
         fixations_list, playback_speed, grid_step_ms=grid_step_ms, max_frames=max_frames
@@ -3257,97 +3259,189 @@ def animation_timeline_summary(
         "coarsened": bool(n_frames > 1 and step > requested + 1e-6),
         "frame_duration_ms": int(frame_duration_ms),
         "reading_span_ms": float(reading_span_ms),
-        "playback_ms": float(n_frames * frame_duration_ms),
+        "playback_ms": float(reading_span_ms) / max(playback_speed, 1e-6),
     }
 
 
-# VIZ-10 — autoplay. The animation is built with the Play button paused (so it can
-# start at the *configured* speed rather than Plotly's default frame duration). To
-# autoplay on load we emit a tiny client-side kick-off that calls `Plotly.animate`
-# with the SAME per-frame duration as the Play button. The autoplay intent + that
-# duration ride on `fig.layout.meta` so every HTML-embedding surface
-# (`tabs._render_true_scale_chart`, `api.save_figure`) can honor it uniformly.
+# BUG-93 — the replay's clock. Plotly's own ▶ Play steps a frame on the first
+# display tick *after* its duration and restarts the next frame's clock from
+# there, so every hold rounds up to whole ticks and the rounding accumulates: on
+# a 60 Hz screen a 40 ms frame lasts 50 ms, and a 20.8 s reading replayed in 26 s.
+# No duration can fix that from here — the tick is the viewer's. So every HTML
+# surface (`tabs._render_true_scale_chart`, `tabs._animation_html`,
+# `api.save_figure`) embeds a small player that shows whichever frame the wall
+# clock has reached, reading the frame times, the speed and VIZ-10's autoplay
+# intent off `fig.layout.meta`, where `make_scanpath_animation` stamps them.
 _AUTOPLAY_META_FLAG = "scanpath_autoplay"
-_AUTOPLAY_META_DURATION = "scanpath_frame_duration_ms"
+_REPLAY_META_TIMES = "scanpath_frame_times_ms"
+_REPLAY_META_SPEED = "scanpath_playback_speed"
+
+# `{plot_id}` stays literal: plotly.py substitutes it (a plain `str.replace`, so
+# the braces need no escaping) and runs the script in a `.then()` after `newPlot`.
+_REPLAY_PLAYER_JS = """(function () {
+  var gd = document.getElementById('{plot_id}');
+  if (!gd) { return; }
+  var tries = 0;
+  // Frames live on gd._transitionData._frames (gd.frames is undefined) and are
+  // attached after newPlot resolves, so wait for them rather than a fixed delay.
+  (function init() {
+    var meta = gd.layout && gd.layout.meta;
+    var td = gd._transitionData;
+    if (typeof Plotly === 'undefined' || !gd.on || !meta ||
+        !(td && td._frames && td._frames.length)) {
+      if (++tries < 200) { setTimeout(init, 50); }
+      return;
+    }
+    run(meta);
+  })();
+
+  function run(meta) {
+    var times = meta.scanpath_frame_times_ms;
+    var speed = meta.scanpath_playback_speed;
+    if (!times || !times.length || !(speed > 0)) { return; }
+    var last = times.length - 1;
+    var jump = {mode: 'immediate', frame: {duration: 0, redraw: false},
+                transition: {duration: 0}};
+    var shown = 0, raf = null, t0 = 0, resume = false;
+
+    function frameAt(ms) {  // the last frame whose reading time has been reached
+      var lo = 0, hi = last;
+      while (lo < hi) {
+        var mid = (lo + hi + 1) >> 1;
+        if (times[mid] <= ms) { lo = mid; } else { hi = mid - 1; }
+      }
+      return lo;
+    }
+    function show(k) {
+      shown = k;
+      Plotly.animate(gd, [String(k)], jump);
+    }
+    // A late tick skips frames rather than falling behind the clock.
+    function tick() {
+      if (!gd.isConnected) { raf = null; leave(); return; }
+      var k = frameAt((performance.now() - t0) * speed);
+      if (k !== shown) { show(k); }
+      raf = k < last ? requestAnimationFrame(tick) : null;
+    }
+    function stop() {
+      if (raf !== null) { cancelAnimationFrame(raf); raf = null; }
+    }
+    function play() {
+      if (raf !== null) { return; }  // already playing: keep the clock
+      show(shown < last ? shown : 0);  // at the end, Play starts over
+      t0 = performance.now() - times[shown] / speed;
+      raf = requestAnimationFrame(tick);
+    }
+
+    // Whatever put a frame on screen — this clock, the slider, Restart — Play
+    // resumes from it.
+    gd.on('plotly_animatingframe', function (e) {
+      var k = parseInt(e && e.name, 10);
+      if (k >= 0 && k <= last) { shown = k; }
+    });
+    gd.on('plotly_buttonclicked', function (e) {
+      if (e && e.button && e.button.name === 'play') { play(); } else { stop(); }
+    });
+    gd.on('plotly_sliderstart', stop);
+    gd.on('plotly_sliderchange', function (e) { if (e && e.interaction) { stop(); } });
+    // A background tab gets no ticks; carry on from the same frame on return.
+    function onVisibility() {
+      if (!gd.isConnected) { stop(); leave(); return; }
+      if (document.hidden) { resume = raf !== null; stop(); }
+      else if (resume) { resume = false; play(); }
+    }
+    // A page that swaps content without reloading (the docs site) can drop the
+    // plot; let go of the document then, so the plot can be collected.
+    function leave() {
+      document.removeEventListener('visibilitychange', onVisibility);
+    }
+    document.addEventListener('visibilitychange', onVisibility);
+
+    // Plotly still draws the ▶ Play button; this clock takes over what it does.
+    var edit = {};
+    (gd.layout.updatemenus || []).forEach(function (menu, i) {
+      (menu.buttons || []).forEach(function (button, j) {
+        if (button.name === 'play') {
+          edit['updatemenus[' + i + '].buttons[' + j + '].execute'] = false;
+        }
+      });
+    });
+    Promise.resolve(Plotly.relayout(gd, edit)).then(function () {
+      if (meta.scanpath_autoplay) { play(); }
+    });
+  }
+})();"""
 
 
-def animation_autoplay_frame_duration(fig) -> int | None:
-    """The per-frame duration (ms) for an autoplay kickoff, or ``None``.
+def animation_player_post_script(fig) -> str | None:
+    """The replay player for an animated scanpath, or ``None`` if there is none.
 
-    Returns ``None`` for a static figure, an animation built with
-    ``autoplay=False``, or one with no frames — i.e. whenever nothing should
-    auto-start. Reads the marker :func:`make_scanpath_animation` stamps on
-    ``fig.layout.meta``."""
+    Pass it to ``fig.to_html(post_script=…)`` / ``write_html(post_script=…)``
+    (with ``auto_play=False``) for any figure :func:`make_scanpath_animation`
+    built; ``None`` — for a static figure, or a replay with no frames — is what
+    those calls take for "no script" (BUG-93).
+
+    The player keeps the replay on the wall clock: at every display tick it
+    shows the last frame whose reading time ``elapsed × playback_speed`` has
+    reached, so a replay takes ``reading span / playback_speed`` exactly — a slow
+    tick skips frames instead of pushing every later one back — and a background
+    tab pauses it. It takes the ▶ Play button over (the button's own command is
+    switched off with ``execute: false``, Plotly's hook for exactly this, and the
+    click still arrives as ``plotly_buttonclicked``); Pause, Restart and the time
+    slider keep their own commands, and any of them stops the clock. VIZ-10's
+    autoplay starts it on load, from the first frame.
+
+    It **polls** for Plotly and the figure's frames before starting. Two things
+    made a one-shot kick-off silently never fire (VIZ-10), both confirmed
+    against a live Plotly build: frames live on ``gd._transitionData._frames``,
+    **not** ``gd.frames`` (``undefined``), and the library can arrive late (CDN
+    latency, the true-scale iframe mount) and attaches its frames only after
+    ``newPlot`` resolves. Polling every 50 ms (capped at ~10 s) covers all of it,
+    on the live embed and saved HTML alike.
+
+    Without the script — ``fig.show()``, or a plain ``write_html`` — the figure
+    still plays on Plotly's own queue, at the frame duration the ▶ Play button
+    carries.
+    """
     meta = getattr(fig.layout, "meta", None)
-    if not isinstance(meta, dict) or not meta.get(_AUTOPLAY_META_FLAG):
+    if not isinstance(meta, dict) or not meta.get(_REPLAY_META_TIMES):
         return None
-    try:
-        return int(meta.get(_AUTOPLAY_META_DURATION))
-    except (TypeError, ValueError):
+    return _REPLAY_PLAYER_JS
+
+
+def animation_clip_frame_ms(fig) -> float | None:
+    """How long a GIF/MP4 of ``fig`` holds each frame to last as long as its replay.
+
+    The replay takes ``reading span / playback_speed`` — its last frame's
+    reading time over the speed stamped on ``layout.meta`` — and a clip spreads
+    that evenly over the frames (BUG-93). ``None`` for a figure
+    :func:`make_scanpath_animation` didn't build."""
+    meta = getattr(fig.layout, "meta", None)
+    if not isinstance(meta, dict):
         return None
-
-
-def animation_autoplay_post_script(frame_duration_ms: int) -> str:
-    """A Plotly ``post_script`` snippet that auto-starts the replay on load.
-
-    Passed to ``fig.to_html(post_script=…)`` / ``write_html(post_script=…)``,
-    which substitutes ``{plot_id}`` with the real graph-div id. Uses the same
-    ``redraw=False`` + zero-transition options as the Play button
-    (:func:`_animation_play_buttons`) so the auto-started replay runs at the
-    configured playback speed, not Plotly's default.
-
-    The kickoff **polls** until the plot is genuinely ready, then plays from the
-    first frame. Two things made the old one-shot version silently never start
-    (VIZ-10), both confirmed against a live Plotly build:
-
-    * Frames live on ``gd._transitionData._frames``, **not** ``gd.frames`` (which
-      is ``undefined``). The old guard tested ``gd.frames.length`` and so always
-      bailed before it ever called ``animate``.
-    * The Plotly library loads from the CDN and attaches its frames
-      asynchronously (an ``addFrames`` in a ``.then()`` after ``newPlot``
-      resolves), so any fixed delay races the mount.
-
-    Polling every 50 ms (capped ~10 s) for ``Plotly`` **and** the real frame list
-    handles CDN latency, the async attach, and the true-scale iframe/transform
-    mount, on the live embed and saved HTML alike. ``fromcurrent:false`` starts a
-    clean 0→end run — a freshly loaded ``auto_play=False`` plot has no "current"
-    frame, so a ``fromcurrent:true`` kick can no-op — at the same ``redraw:false``
-    / zero-transition speed as the ▶ Play button."""
-    dur = int(max(frame_duration_ms, _ANIM_MIN_FRAME_MS))
-    # `{plot_id}` is left literal for Plotly to replace; the duration is spliced
-    # in via concatenation so the surrounding JS braces need no escaping.
-    return (
-        "(function(){"
-        "var gd=document.getElementById('{plot_id}');"
-        "if(!gd){return;}"
-        "var n=0;"
-        "(function kick(){"
-        "var td=gd._transitionData;"
-        "var frames=(td&&td._frames)||gd.frames;"
-        "if(typeof Plotly!=='undefined'&&frames&&frames.length){"
-        "Plotly.animate(gd,null,{frame:{duration:"
-        + str(dur)
-        + ",redraw:false},fromcurrent:false,transition:{duration:0}});"
-        "return;}"
-        "if(++n<200){setTimeout(kick,50);}"
-        "})();"
-        "})();"
-    )
+    times = meta.get(_REPLAY_META_TIMES)
+    speed = meta.get(_REPLAY_META_SPEED)
+    if not times or not speed or speed <= 0:
+        return None
+    return float(times[-1]) / float(speed) / len(times)
 
 
 def _animation_play_buttons(frame_duration):
     """Play / Pause / Restart buttons.
 
-    Play uses ``redraw=False``: every animated trace is full length with
+    Each carries a ``name`` the replay player looks for: on every HTML surface
+    :func:`animation_player_post_script` takes ▶ Play over and runs the frames on
+    the wall clock (BUG-93), so Play's own ``frame_duration`` drives only a
+    figure shown without it (``fig.show()``).
+
+    Frames step with ``redraw=False``: every animated trace is full length with
     not-yet-reached fixations masked to ``None`` (see :func:`_revealed_xy`), so
     advancing a frame only changes point positions — Plotly updates just those
     few traces instead of redrawing the whole figure (the static word boxes +
     labels) every frame. A full redraw of the scanpath figure costs ~50 ms, which
-    on a long trial dwarfed the per-frame budget and made the replay run far
-    slower than its quoted time; skipping it lets the replay actually hit
-    ``n_frames * frame_duration``. Transitions are 0 so frames snap into place
-    (no tweening), and the constant array length means a new fixation/number
-    appears on its mark instead of gliding in from the corner.
+    on a long trial dwarfed the per-frame budget. Transitions are 0 so frames snap
+    into place (no tweening), and the constant array length means a new
+    fixation/number appears on its mark instead of gliding in from the corner.
     """
     return [
         dict(
@@ -3364,6 +3458,7 @@ def _animation_play_buttons(frame_duration):
             buttons=[
                 dict(
                     label="▶ Play",
+                    name="play",
                     method="animate",
                     args=[
                         None,
@@ -3376,6 +3471,7 @@ def _animation_play_buttons(frame_duration):
                 ),
                 dict(
                     label="⏸ Pause",
+                    name="pause",
                     method="animate",
                     args=[
                         [None],
@@ -3388,6 +3484,7 @@ def _animation_play_buttons(frame_duration):
                 ),
                 dict(
                     label="⟲ Restart",
+                    name="restart",
                     method="animate",
                     args=[
                         ["0"],
@@ -3470,10 +3567,11 @@ def _render_scanpath_animation(
     fixation's ``timestamp_ms``, so they share *real reading time* including the
     saccade/blink gaps between fixations; a frame is emitted at every fixation
     onset across all scanpaths, and the shorter reading finishes first and holds
-    while the longer keeps going. The Play button advances frames at the average
-    frame duration, so the whole replay takes ``reading_span / playback_speed``
-    — exactly what :func:`animation_playback_ms` reports (and the side panel
-    quotes), so the stated time matches the observed runtime.
+    while the longer keeps going. The wall-clock player every HTML surface embeds
+    (:func:`animation_player_post_script`) shows each frame once its reading time
+    over ``playback_speed`` has elapsed, so the whole replay takes
+    ``reading_span / playback_speed`` — exactly what
+    :func:`animation_playback_ms` reports (and the side panel quotes).
 
     With two scanpaths the trails take the two comparison colours, order numbers
     are tinted per-scanpath, and an optional A/B legend (``show_legend``) names
@@ -3502,11 +3600,10 @@ def _render_scanpath_animation(
       classification: *Discard* drops those fixations from the replay entirely,
       *Highlight* overlays them in their flag marker as the replay reaches them.
 
-    With ``autoplay`` (default on, VIZ-10) the returned figure is stamped so any
-    HTML-embedding surface auto-starts the replay on load *at the configured
-    playback speed* — see :func:`animation_autoplay_frame_duration` /
-    :func:`animation_autoplay_post_script`. The figure itself is always built
-    paused; autoplay is a kick-off layered on top by the embedder.
+    ``layout.meta`` carries the replay's clock (each frame's reading time and the
+    speed) and, with ``autoplay`` (default on, VIZ-10), the intent to start on
+    load *at the configured playback speed*; the player reads both. The figure
+    itself is always built paused — autoplay is the embedder's to start.
     """
     canvas_width = settings.canvas_width
     canvas_height = settings.canvas_height
@@ -4200,13 +4297,14 @@ def _render_scanpath_animation(
             borderwidth=1,
         )
     fig.update_layout(**layout)
-    # VIZ-10: carry the autoplay intent + the resolved per-frame duration so any
-    # HTML-embedding surface can kick off `Plotly.animate` at the CONFIGURED speed
-    # on load (Plotly's own `auto_play` ignores frame_duration). No frames → the
-    # marker stays off, so `animation_autoplay_frame_duration` returns None.
+    # BUG-93: the replay's clock — each frame's reading time and the speed — for
+    # the wall-clock player every HTML surface embeds, plus VIZ-10's autoplay
+    # intent, which that player reads on load (Plotly's own `auto_play` ignores
+    # the frame duration). No frames → no times, so no player and no autoplay.
     fig.layout.meta = {
         _AUTOPLAY_META_FLAG: bool(autoplay and frame_times),
-        _AUTOPLAY_META_DURATION: int(frame_duration),
+        _REPLAY_META_TIMES: [round(float(t), 3) for t in frame_times],
+        _REPLAY_META_SPEED: float(playback_speed),
     }
     return fig
 

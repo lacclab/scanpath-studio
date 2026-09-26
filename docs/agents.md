@@ -307,22 +307,18 @@ raising. Every flag is in the [CLI reference](cli.md).
 ## GIF / MP4 of a replay
 
 There is no `api.py` entry point for animated GIF or MP4. Use
-`animation_export.export_animation`, which returns bytes, is keyword-only, and
-needs an explicit per-frame duration (Kaleido + Chrome; ffmpeg rides along with
-`imageio-ffmpeg`):
+`animation_export.export_animation`, which returns bytes and is keyword-only
+(Kaleido + Chrome; ffmpeg rides along with `imageio-ffmpeg`). The clip lasts
+what the replay does — the reading time over `playback_speed` — unless you pass
+`frame_duration_ms`:
 
 ```python
 from pathlib import Path
 
 from scanpath_studio.animation_export import export_animation
-from scanpath_studio.plots import animation_autoplay_frame_duration
 
 anim = sps.animate_scanpath(words, fixations, pid, tid, playback_speed=4.0)
-clip = export_animation(
-    anim,
-    fmt="mp4",  # or "gif"
-    frame_duration_ms=animation_autoplay_frame_duration(anim),  # keeps the speed
-)
+clip = export_animation(anim, fmt="mp4")  # or "gif"; lasts reading time / 4
 Path("replay.mp4").write_bytes(clip)
 ```
 

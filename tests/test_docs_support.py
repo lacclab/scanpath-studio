@@ -97,3 +97,28 @@ def test_an_embedded_figure_cannot_close_its_script_tag():
     html = docs_support.embed(fig)
     assert html.count("</script>") == 1
     assert 'data-width="400" data-height="300"' in html
+
+
+def test_an_embedded_replay_carries_the_replay_player():
+    # BUG-93: the Gallery's ▶ Play keeps real time on the app's own player —
+    # figures.js runs it against the drawn plot — and a static figure has none.
+    import json
+
+    from scanpath_studio import api
+    from scanpath_studio.plots import animation_player_post_script
+
+    words, fixations = api.load_sample_data()
+    pid, tid = api.list_trials(words, fixations).iloc[0]
+    replay = api.animate_scanpath(words, fixations, pid, tid, fix_index_range=(1, 5))
+    static = api.plot_scanpath(words, fixations, pid, tid, fix_index_range=(1, 5))
+
+    def payload(fig) -> dict:
+        page = docs_support.embed(fig)
+        found = re.search(r'<script type="application/json">(.*?)</script>', page)
+        return json.loads(found.group(1))
+
+    assert payload(replay)["player"] == animation_player_post_script(replay)
+    assert "player" not in payload(static)
+    # The page draws a figure before it is on screen, so a replay waits for ▶.
+    assert replay.layout.meta["scanpath_autoplay"] is True
+    assert payload(replay)["layout"]["meta"]["scanpath_autoplay"] is False

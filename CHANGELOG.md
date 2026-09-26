@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **`export_animation` needs no frame time, and `plots.animation_autoplay_frame_duration` is gone** (BUG-93)
+
+### Fixed
+- **The replay runs in real time: a 20.8 s reading takes 20.8 s to replay, not 26 s** (BUG-93)
+
+### Details
+
+#### Changed
+- **`export_animation` needs no frame time, and `plots.animation_autoplay_frame_duration` is gone** (BUG-93) — `animation_export.export_animation(fig, fmt=…)` now holds each frame for the replay's own clock (reading time ÷ speed, `plots.animation_clip_frame_ms`) unless `frame_duration_ms` is given, so the docs' GIF/MP4 recipe no longer passes one. A script that followed the 0.31.1 recipe and imported `animation_autoplay_frame_duration` now fails to import it; drop the argument. `animation_autoplay_post_script`, the autoplay kick-off, is replaced by the replay player below, `plots.animation_player_post_script`.
+
+#### Fixed
+- **The replay runs in real time: a 20.8 s reading takes 20.8 s to replay, not 26 s** (BUG-93) — Plotly's own ▶ Play shows a frame on the first display tick *after* its duration and starts the next frame's clock from there, so every hold rounded up to whole ticks and the error added up: on a 60 Hz screen a 40 ms frame (*Fine*, ×1) lasted 50 ms. Every setting drifted — *Coarse* by 8 %, the default grid by 15 %, ×2 by 67 %, ×8 by 5× — and no frame duration set in Python can fix it, because the tick belongs to the viewer's screen. The app, the Export tab's HTML, `save_figure` and the docs Gallery now carry a player (`plots.animation_player_post_script`) that shows, at every tick, the frame the wall clock has reached. It takes over ▶ Play (Pause, Restart and the slider keep their own commands), skips frames a screen is too slow to show, and pauses in a background tab. Measured in Chrome, every setting now ends within one display tick of reading time ÷ speed. The side panel quotes that time and a GIF/MP4 lasts it: the Export tab reads the clock off the figure, so a clip no longer outlasts a replay whose *Discard* flags dropped fixations; a clip drops frames rather than stretching when the replay is faster than the format can show; and GIF delays are rounded against the running total (Pillow truncated each one to whole centiseconds, which ran a ×1.5 GIF 25 % fast). `fig.show()` still plays on Plotly's own queue.
+
 ## [0.31.1] - 2026-09-26
 
 ### Added

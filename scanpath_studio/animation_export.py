@@ -13,9 +13,11 @@ How it stays faithful to what the user sees on screen:
 * **Same frames.** Each ``go.Frame`` is applied onto a frameless copy of the base
   figure and rendered to PNG, so word boxes, true-to-scale labels, saccades,
   order numbers and the orange current-fixation highlight all match the live view.
-* **Same clock.** The on-screen Play button advances every frame at one average
-  duration (``plots._anim_timeline``); we reproduce that exactly, so the clip's
+* **Same clock.** The on-screen replay takes ``reading span / playback speed``
+  (BUG-93's wall-clock player); the clip spreads that over its frames, so its
   runtime equals the playback time quoted on screen (``animation_playback_ms``).
+  A replay faster than the format can show drops frames to stay on time, as the
+  player does between display ticks (:func:`clip_frame_count`).
 * **Same readout.** The slider's "Elapsed: X.Xs" value is re-drawn as a static
   annotation per frame, since the interactive slider can't survive rasterization.
 
@@ -66,13 +68,15 @@ _STATIC_TOP_MARGIN_PX = 28
 
 # Floor on a GIF frame delay: the format stores delays in centiseconds and many
 # viewers silently promote sub-20 ms delays to ~100 ms, so clamp here to keep
-# fast playback honest. MP4 has no such quirk.
+# fast playback honest. MP4 has no such quirk. A replay whose frames are shorter
+# than this renders fewer of them instead (`clip_frame_count`).
 _GIF_MIN_FRAME_MS = 20
-# MP4 plays at one constant rate, but animation frames have durations spanning
-# ~16 ms (fast/×8 playback) to several hundred ms (slow/×0.25, or downsampled long
-# trials). We encode at a fixed, universally-playable rate and hold each animation
-# frame for the right number of video frames (repeats compress to ~nothing in
-# H.264), so the clip's runtime tracks the on-screen Play across that whole range.
+# MP4 plays at one constant rate, but animation frames last anything from a few
+# ms (fast playback on a fine grid) to several hundred (×0.25, or a downsampled
+# long trial). We encode at a fixed, universally-playable rate and hold each
+# animation frame for the right number of video frames (repeats compress to
+# ~nothing in H.264); frames shorter than one video frame are dropped first
+# (`clip_frame_count`), so the clip's runtime tracks the replay across the range.
 _MP4_FPS = 60.0
 
 ProgressCallback = Callable[[int, int], None]
@@ -178,12 +182,15 @@ def _static_base(fig: go.Figure) -> go.Figure:
     clear array layout properties (passing ``None`` is a no-op and ``[]`` doesn't
     truncate the existing entries), so we assign the attributes directly. The
     reserved control band is then reclaimed so the clip isn't topped by an empty
-    strip; a slim margin remains for the "Elapsed" annotation.
+    strip; a slim margin remains for the "Elapsed" annotation. The replay's clock
+    on ``layout.meta`` (BUG-93) goes too — only the live player reads it, and it
+    would otherwise ride into every frame Kaleido renders.
     """
     base = go.Figure(fig)
     base.frames = ()
     base.layout.updatemenus = []
     base.layout.sliders = []
+    base.layout.meta = None
     base.update_layout(
         margin=dict(l=0, r=0, t=_STATIC_TOP_MARGIN_PX, b=0),
         height=_static_height(fig),
@@ -251,6 +258,23 @@ def check_gif_budget(
         f"its frames stream straight to the encoder and the file stays small — or "
         f"{shorter}or lower the resolution."
     )
+
+
+def clip_frame_count(
+    n_frames: int, frame_duration_ms: float, fmt: str, max_frames: int | None = None
+) -> int:
+    """How many of a replay's ``n_frames`` a ``fmt`` clip renders.
+
+    A frame shorter than the format can hold — one video frame at ``_MP4_FPS``,
+    or ``_GIF_MIN_FRAME_MS`` for a GIF — would be held that long anyway and
+    stretch the clip, so a fast replay keeps only as many frames as fit its
+    runtime, each held a little longer (BUG-93). ``max_frames`` caps it further.
+    Never fewer than two, so the clip still ends on the whole scanpath.
+    """
+    shortest = _GIF_MIN_FRAME_MS if fmt.lower() == "gif" else 1000.0 / _MP4_FPS
+    fits = int(n_frames * frame_duration_ms / shortest + 1e-9)
+    count = min(n_frames, max(2, fits))
+    return min(count, max_frames) if max_frames else count
 
 
 def _select_frames(n: int, max_frames: int | None) -> list[int]:
@@ -393,14 +417,19 @@ def encode_gif(
     whole (``disposal=2`` with no transparency never crops to a delta), and a frame
     identical to the one before it is folded into it with the durations summed —
     which is why this holds one frame back before writing it.
+
+    GIF stores delays in whole centiseconds and Pillow truncates the rest, so each
+    frame's delay is rounded against the running total instead: the clip keeps
+    its length rather than losing up to 10 ms a frame (BUG-93).
     """
     from PIL import GifImagePlugin, Image, ImageChops
 
-    duration = max(round(frame_duration_ms), _GIF_MIN_FRAME_MS)
+    duration = max(frame_duration_ms, _GIF_MIN_FRAME_MS)
     buf = io.BytesIO()
     pending: Image.Image | None = None
     pending_ms = 0
     wrote_header = False
+    written_cs = 0
 
     def _flush() -> None:
         nonlocal wrote_header
@@ -415,7 +444,10 @@ def encode_gif(
             info["include_color_table"] = True
         buf.write(b"".join(GifImagePlugin.getdata(pending, (0, 0), **info)))
 
-    for png in pngs:
+    for i, png in enumerate(pngs):
+        total_cs = round((i + 1) * duration / 10)
+        delay_ms = 10 * (total_cs - written_cs)
+        written_cs = total_cs
         with Image.open(io.BytesIO(png)) as decoded:
             frame = decoded.convert("RGB").convert("P", palette=Image.Palette.ADAPTIVE)
         if pending is not None:
@@ -423,10 +455,10 @@ def encode_gif(
                 ImageChops.subtract_modulo(frame, pending).getbbox() is None
             )
             if same:
-                pending_ms += duration
+                pending_ms += delay_ms
                 continue
             _flush()
-        pending, pending_ms = frame, duration
+        pending, pending_ms = frame, delay_ms
     if pending is None:
         raise AnimationExportError("No frames to encode.")
     _flush()
@@ -435,11 +467,12 @@ def encode_gif(
 
 
 def encode_mp4(pngs: list[bytes], frame_duration_ms: float) -> bytes:
-    """Encode PNG frames into an H.264 MP4 whose runtime matches the on-screen Play.
+    """Encode PNG frames into an H.264 MP4 whose runtime matches the on-screen replay.
 
-    The on-screen Play shows every frame for ``frame_duration_ms``. An MP4 plays at
-    one constant rate, so we encode at a fixed 60 fps and hold each animation frame
-    for ``round(frame_duration_ms / (1000/60))`` video frames (at least one). That
+    Every frame is held for ``frame_duration_ms``. An MP4 plays at one constant
+    rate, so we encode at a fixed 60 fps and hold each animation frame for
+    ``round(frame_duration_ms / (1000/60))`` video frames (at least one — a caller
+    with shorter frames renders fewer of them, see :func:`clip_frame_count`). That
     reproduces durations from ~16 ms to several hundred ms accurately — the repeated
     frames are identical, so H.264 compresses them to near-nothing. Frames stream
     through the writer one at a time (repeats reuse the same array), so memory stays
@@ -511,7 +544,7 @@ def export_animation(
     fig: go.Figure,
     *,
     fmt: str,
-    frame_duration_ms: float,
+    frame_duration_ms: float | None = None,
     scale: float = 1.0,
     show_elapsed: bool = True,
     max_frames: int | None = None,
@@ -523,9 +556,10 @@ def export_animation(
     Args:
         fig: the figure from :func:`make_scanpath_animation` (must have ``.frames``).
         fmt: ``"gif"`` or ``"mp4"``.
-        frame_duration_ms: uniform per-frame duration — pass the same average the
-            tab quotes (``animation_playback_ms(...) / n_frames``) so the clip's
-            runtime matches the on-screen Play.
+        frame_duration_ms: uniform per-frame duration. By default the replay's
+            own (:func:`plots.animation_clip_frame_ms`), so the clip lasts what
+            the on-screen replay does — ``reading span / playback speed``.
+            Required for a figure :func:`make_scanpath_animation` didn't build.
         scale: Kaleido render scale (1.0 = on-screen px; <1 is faster/smaller,
             >1 is crisper/larger).
         show_elapsed: draw the "Elapsed: X.Xs" readout in the top margin.
@@ -535,7 +569,8 @@ def export_animation(
         progress_callback: ``(done, total)`` after each rendered frame.
 
     Raises:
-        ValueError: unknown ``fmt``.
+        ValueError: unknown ``fmt``, or no ``frame_duration_ms`` for a figure that
+            carries no replay clock.
         AnimationBudgetError: a GIF over :func:`check_gif_budget`'s pixel budget,
             raised before any frame is rendered.
         AnimationExportError: rendering or encoding failed.
@@ -547,8 +582,20 @@ def export_animation(
             f"Unsupported format {fmt!r}; expected one of {VIDEO_FORMATS}."
         )
 
+    if frame_duration_ms is None:
+        from .plots import animation_clip_frame_ms
+
+        frame_duration_ms = animation_clip_frame_ms(fig)
+        if frame_duration_ms is None:
+            raise ValueError(
+                "This figure carries no replay clock (it wasn't built by "
+                "make_scanpath_animation); pass frame_duration_ms."
+            )
+
     n_total = len(fig.frames or ())
-    indices = _select_frames(n_total, max_frames)
+    indices = _select_frames(
+        n_total, clip_frame_count(n_total, frame_duration_ms, fmt, max_frames)
+    )
     # Preserve total runtime when downsampling: fewer frames, each held longer.
     effective_duration = frame_duration_ms
     if indices and len(indices) < n_total:

@@ -1409,16 +1409,25 @@ REGISTER: tuple[Computation, ...] = (
         category=CATEGORY_DISPLAY,
         summary="How recorded time maps to playback time.",
         formula=(
-            "Frames follow `fix.rebased_onsets`, scaled by the playback speed. "
-            "A multipart replay changes screen at the boundary and draws no "
-            "connector across canvases."
+            "Frames sit on a uniform reading-time grid over `fix.rebased_onsets`; "
+            "the frame at reading time t is on screen once t / playback speed of "
+            "wall time has passed, so a replay lasts reading span / speed. The "
+            "player keeps that clock itself, skipping frames a display is too "
+            "slow to show, and a GIF/MP4 lasts the same. A multipart replay "
+            "changes screen at the boundary and draws no connector across "
+            "canvases."
         ),
         code="scanpath_studio/plots.py:make_scanpath_animation",
         unit="ms (recorded) → ms (playback)",
+        precedence=(
+            "Plotly's own frame queue is never the clock: it rounds every frame "
+            "up to whole display ticks and the error accumulates (BUG-93). "
+            "Without the player (`fig.show()`) the figure falls back to it."
+        ),
         tiers="C, D",
         status=STATUS_CONVENTION,
         consumers=(_UI, _API, _CLI, _EXPORT),
-        tests=("tests/test_animation_export.py",),
+        tests=("tests/test_replay_player.py", "tests/test_animation_export.py"),
     ),
     Computation(
         id="disp.illustration",

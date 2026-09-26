@@ -29,6 +29,7 @@ browser renders each frame in a fraction of a second.
 from __future__ import annotations
 
 import io
+import threading
 from collections.abc import Callable, Iterable
 from time import perf_counter
 
@@ -75,6 +76,16 @@ _GIF_MIN_FRAME_MS = 20
 _MP4_FPS = 60.0
 
 ProgressCallback = Callable[[int, int], None]
+
+# Kaleido's warm server (`start_sync_server` → `calc_fig_sync` → `stop_sync_server`)
+# is one process-wide singleton whose task and result queues are unlocked: two
+# renders overlapping on it can each collect the other's bytes, and one's stop can
+# strand the other. Every warm-server span in the app holds this lock for its whole
+# start → render → stop, so overlapping exports queue instead. Two sessions on one
+# server could always overlap; since UX-150 one session can too, because the
+# current-figure download renders on a worker thread while the script thread is
+# free to start a bundle. Re-entrant in case a span ever opens inside another.
+KALEIDO_LOCK = threading.RLock()
 
 
 class AnimationExportError(RuntimeError):
@@ -298,63 +309,64 @@ def render_png_frames(
     browser_path = chromium_browser_path()
     if browser_path is None:
         raise AnimationExportError(CHROME_INSTALL_HINT)
-    try:
-        kaleido.start_sync_server(path=browser_path, silence_warnings=True)
-    except Exception:
-        cold_fallback = True
+    with KALEIDO_LOCK:
+        try:
+            kaleido.start_sync_server(path=browser_path, silence_warnings=True)
+        except Exception:
+            cold_fallback = True
 
-    pngs: list[bytes] = []
-    try:
-        for done, k in enumerate(indices, start=1):
-            frame = frames[k]
-            for data_obj, trace_idx in zip(frame.data, frame.traces):
-                base.data[trace_idx].update(data_obj)
-            if elapsed is not None:
-                base.update_layout(
-                    annotations=[
-                        dict(
-                            text=f"Elapsed: {elapsed[k]}",
-                            x=0.99,
-                            y=1.0,
-                            xref="paper",
-                            yref="paper",
-                            xanchor="right",
-                            yanchor="bottom",
-                            showarrow=False,
-                            font=dict(size=14, color="#444"),
+        pngs: list[bytes] = []
+        try:
+            for done, k in enumerate(indices, start=1):
+                frame = frames[k]
+                for data_obj, trace_idx in zip(frame.data, frame.traces):
+                    base.data[trace_idx].update(data_obj)
+                if elapsed is not None:
+                    base.update_layout(
+                        annotations=[
+                            dict(
+                                text=f"Elapsed: {elapsed[k]}",
+                                x=0.99,
+                                y=1.0,
+                                xref="paper",
+                                yref="paper",
+                                xanchor="right",
+                                yanchor="bottom",
+                                showarrow=False,
+                                font=dict(size=14, color="#444"),
+                            )
+                        ]
+                    )
+                try:
+                    if cold_fallback:
+                        png = base.to_image(
+                            format="png", width=width, height=height, scale=scale
                         )
-                    ]
-                )
-            try:
-                if cold_fallback:
-                    png = base.to_image(
-                        format="png", width=width, height=height, scale=scale
-                    )
-                else:
-                    png = kaleido.calc_fig_sync(
-                        base,
-                        opts={
-                            "format": "png",
-                            "width": width,
-                            "height": height,
-                            "scale": scale,
-                        },
-                    )
-            except Exception as exc:
-                raise AnimationExportError(
-                    CHROME_INSTALL_HINT
-                    if not chrome_available()
-                    else f"Rendering frame {k + 1}/{len(frames)} failed: {exc}."
-                ) from exc
-            pngs.append(bytes(png))
-            if progress_callback is not None:
-                progress_callback(done, len(indices))
-    finally:
-        if not cold_fallback:
-            try:
-                kaleido.stop_sync_server(silence_warnings=True)
-            except Exception:  # pragma: no cover - best-effort teardown
-                pass
+                    else:
+                        png = kaleido.calc_fig_sync(
+                            base,
+                            opts={
+                                "format": "png",
+                                "width": width,
+                                "height": height,
+                                "scale": scale,
+                            },
+                        )
+                except Exception as exc:
+                    raise AnimationExportError(
+                        CHROME_INSTALL_HINT
+                        if not chrome_available()
+                        else f"Rendering frame {k + 1}/{len(frames)} failed: {exc}."
+                    ) from exc
+                pngs.append(bytes(png))
+                if progress_callback is not None:
+                    progress_callback(done, len(indices))
+        finally:
+            if not cold_fallback:
+                try:
+                    kaleido.stop_sync_server(silence_warnings=True)
+                except Exception:  # pragma: no cover - best-effort teardown
+                    pass
 
     return pngs, (width, height)
 

@@ -31,7 +31,7 @@ import io
 import json
 import re
 import zipfile
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import PurePosixPath
@@ -519,45 +519,51 @@ def _figure_renderer(enabled: bool):
     latency. Falls back to per-call ``to_image`` if the warm server can't start
     (or no figures were requested), so behavior is unchanged when Kaleido/Chrome
     is unavailable — the per-trial failure is still surfaced as an export error.
+
+    ``enabled`` also holds ``animation_export.KALEIDO_LOCK`` until the server has
+    stopped, since that server is one per process (UX-150).
     """
-    server = None
-    if enabled:
-        try:
-            import kaleido
+    from .animation_export import KALEIDO_LOCK
 
-            from .animation_export import chromium_browser_path
-
-            browser_path = chromium_browser_path()
-            if browser_path is not None:
-                kaleido.start_sync_server(path=browser_path, silence_warnings=True)
-                server = kaleido
-        except Exception:
-            server = None
-
-    def render(fig, fmt: str, width: int, height: int, scale: int) -> bytes:
-        if server is not None:
-            data = server.calc_fig_sync(
-                fig,
-                opts={
-                    "format": fmt,
-                    "width": int(width),
-                    "height": int(height),
-                    "scale": scale,
-                },
-            )
-            return bytes(data)
-        return fig.to_image(
-            format=fmt, width=int(width), height=int(height), scale=scale
-        )
-
-    try:
-        yield render
-    finally:
-        if server is not None:
+    with KALEIDO_LOCK if enabled else nullcontext():
+        server = None
+        if enabled:
             try:
-                server.stop_sync_server(silence_warnings=True)
-            except Exception:  # pragma: no cover - best-effort teardown
-                pass
+                import kaleido
+
+                from .animation_export import chromium_browser_path
+
+                browser_path = chromium_browser_path()
+                if browser_path is not None:
+                    kaleido.start_sync_server(path=browser_path, silence_warnings=True)
+                    server = kaleido
+            except Exception:
+                server = None
+
+        def render(fig, fmt: str, width: int, height: int, scale: int) -> bytes:
+            if server is not None:
+                data = server.calc_fig_sync(
+                    fig,
+                    opts={
+                        "format": fmt,
+                        "width": int(width),
+                        "height": int(height),
+                        "scale": scale,
+                    },
+                )
+                return bytes(data)
+            return fig.to_image(
+                format=fmt, width=int(width), height=int(height), scale=scale
+            )
+
+        try:
+            yield render
+        finally:
+            if server is not None:
+                try:
+                    server.stop_sync_server(silence_warnings=True)
+                except Exception:  # pragma: no cover - best-effort teardown
+                    pass
 
 
 def render_static_figure_bytes(

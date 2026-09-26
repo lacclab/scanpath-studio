@@ -454,10 +454,9 @@ class TestBulkExportFlow:
         monkeypatch.setattr(tabs, "bulk_export", capturing)
 
         at = _boot(subtab=SUBTAB_EXPORT)
-        # Nothing to download yet. (This used to also see the Session panel's
-        # "⬇ Download backup"; UX-100 moved that into the 💾 Session dialog, so
-        # it only renders while the modal is open.)
-        assert self._download_labels(at) == [], (
+        # No zip to download yet. The Current figure's "⬇ Download PNG" is always
+        # there since UX-150 (it renders on click), so look for the zip by label.
+        assert "Download zip" not in self._download_labels(at), (
             "the zip download button must only appear after a build"
         )
 

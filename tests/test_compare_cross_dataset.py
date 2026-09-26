@@ -490,6 +490,49 @@ class TestPairExportBundle:
         assert set(fixations["participant_id"]) == {"p1"}
 
 
+class TestSelfComparisonBundle:
+    def test_each_scanpaths_rows_say_which_they_are(self):
+        """CMP-22: B can be A's own trial, whose rows then match A's on every
+        other column — participant, trial and `dataset` alike. The `scanpath`
+        column is what tells the two halves of the pair's tables apart."""
+        import io
+        import zipfile
+
+        from scanpath_studio.export import ComparisonSide, ExportOptions, pair_export
+
+        def side():
+            return ComparisonSide(
+                participant="p1",
+                trial="t1",
+                words=_words("p1", "t1"),
+                fixations=_fixations("p1", "t1"),
+            )
+
+        data = pair_export(
+            None,  # no figure — Kaleido isn't available in CI
+            side(),
+            side(),
+            canvas_width=1000,
+            canvas_height=800,
+            x_field="x",
+            y_field="y",
+            settings={},
+            options=ExportOptions(
+                include_fixations=True, include_measures=True, table_format="csv"
+            ),
+        )
+        folder = "p1__t1__vs__p1__t1"
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            fixations = pd.read_csv(io.BytesIO(zf.read(f"{folder}/fixations.csv")))
+            measures = pd.read_csv(io.BytesIO(zf.read(f"{folder}/measures.csv")))
+
+        assert fixations["scanpath"].value_counts().to_dict() == {
+            "A": len(_fixations("p1", "t1")),
+            "B": len(_fixations("p1", "t1")),
+        }
+        assert set(measures["scanpath"]) == {"A", "B"}
+
+
 class TestRestoredSetupCannotInventAMonitor:
     """DATA-22's whole point, at the restore door.
 

@@ -202,6 +202,7 @@ from scanpath_studio.plots import (
     animation_playback_ms,
     animation_player_post_script,
     animation_timeline_summary,
+    build_scanpath_replay,
     make_comparison_figure,
     make_density_scatter_figure,
     make_difference_profile_figure,
@@ -211,13 +212,13 @@ from scanpath_studio.plots import (
     make_metric_convergence_figure,
     make_paired_bars_figure,
     make_progression_figure,
-    make_scanpath_animation,
     make_scanpath_figure,
     make_small_multiples_figure,
     make_trend_figure,
     make_word_matrix_heatmap,
     make_word_profile_figure,
     make_word_rate_figure,
+    set_replay_clock,
 )
 from scanpath_studio.session_keys import (
     PENDING_COMPARE_STATE_KEY,
@@ -1709,20 +1710,24 @@ def _cached_scanpath_animation(
     anim_key,
 ):
     """Build + cache the animated scanpath, as ``_cached_scanpath_figure`` does
-    for the static one (PERF-13).
+    for the static one (PERF-13). Returns ``(figure, frame_step_ms)``.
 
     Uncached, every click anywhere while 🎬 Animate was on — opening a subtab,
     ticking a checkbox back to what it was — rebuilt every frame: ~3 s on the
     demo at the default smoothness, 22 s at the finest. ``anim_key`` is every
     ``FigureSettings`` field plus both scanpaths' fingerprints, so any change that
-    reaches the builder still rebuilds. Few entries: a replay is megabytes.
+    reaches the builder still rebuilds — except the playback speed, autoplay and
+    the Illustration reasons, which the caller fixes before building (PERF-15):
+    the frames depend on none of them, and `set_replay_clock` stamps the real
+    speed and autoplay onto the copy each hit returns. Few entries: a replay is
+    megabytes.
     """
     with timed(
         "build scanpath animation (cache miss)",
         words=len(_words),
         fixations=len(_fixations),
     ):
-        return make_scanpath_animation(
+        return build_scanpath_replay(
             _words,
             _fixations,
             settings=_settings,
@@ -3966,19 +3971,33 @@ def _build_and_render_animation(
         anim_max_frames=max_frames,
     )
     _amend_snippet_settings(animation_settings, "animation")
+    # PERF-15: the frames depend on neither the speed nor autoplay (BUG-93), nor
+    # on the Illustration reasons (the builder never reads them — but a non-1×
+    # speed is one, so they change with it). Build and key the replay on fixed
+    # values, then stamp the real speed and autoplay onto the copy the cache
+    # hands back: moving the speed slider no longer rebuilds every frame.
+    frame_settings = animation_settings.with_overrides(
+        playback_speed=1.0, autoplay=True, illustration_reasons=None
+    )
     anim_inputs = {
-        field.name: getattr(animation_settings, field.name)
-        for field in dataclass_fields(animation_settings)
+        field.name: getattr(frame_settings, field.name)
+        for field in dataclass_fields(frame_settings)
     }
     anim_inputs["fixations_b"] = fixations_b if dual else None
     anim_inputs["words_b"] = words_b if dual else None
-    fig = _cached_scanpath_animation(
+    fig, frame_step_ms = _cached_scanpath_animation(
         trial_words,
         trial_fixations,
-        animation_settings,
+        frame_settings,
         anim_inputs["fixations_b"],
         anim_inputs["words_b"],
         anim_key=_figure_input_key(trial_words, trial_fixations, anim_inputs),
+    )
+    set_replay_clock(
+        fig,
+        frame_step_ms,
+        playback_speed=animation_settings.playback_speed,
+        autoplay=animation_settings.autoplay,
     )
     add_illustration_label(fig, viz_settings.get("illustration_reasons"))
     _apply_preprocessing_caption(fig, selected_participant, selected_trial)

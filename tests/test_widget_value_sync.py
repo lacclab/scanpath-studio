@@ -318,14 +318,16 @@ def test_the_selected_trial_survives_a_trip_to_another_view():
 
 def test_a_rerun_with_animate_on_does_not_rebuild_the_replay(monkeypatch):
     """PERF-13: every click while 🎬 Animate was on rebuilt every frame of the
-    replay (~3 s on the demo, 22 s at the finest smoothness)."""
+    replay (~3 s on the demo, 22 s at the finest smoothness). PERF-15: so did
+    moving the playback speed or flipping Autoplay, which since BUG-93 only
+    re-time the frames."""
     from scanpath_studio import tabs
 
     calls = []
-    real = tabs.make_scanpath_animation
+    real = tabs.build_scanpath_replay
     monkeypatch.setattr(
         tabs,
-        "make_scanpath_animation",
+        "build_scanpath_replay",
         lambda *a, **k: calls.append(1) or real(*a, **k),
     )
     # Start cold, so the one expected build is this test's own.
@@ -335,6 +337,9 @@ def test_a_rerun_with_animate_on_does_not_rebuild_the_replay(monkeypatch):
     at.session_state["single_animate"] = True
     at.run()
     at.run()
+    at.session_state["single_playback_speed"] = 2.0
+    at.run()
+    at.session_state["global_anim_autoplay"] = False
     at.run()
     assert not at.exception, at.exception
-    assert len(calls) <= 1, f"the replay was rebuilt {len(calls)} times"
+    assert len(calls) == 1, f"the replay was built {len(calls)} times"

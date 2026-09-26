@@ -20,9 +20,9 @@ Yes. A words-only table can visualize precomputed word measures; a fixations-onl
 
 The app caps how far a `.zip` may decompress (32 GB per file and 64 GB in total by default). The error names the setting to raise, e.g. `SCANPATH_ZIP_MAX_MEMBER_GB=64 scanpath-studio`.
 
-## Why does HTML export work but PNG/SVG/PDF fail?
+## Why does HTML export work but PDF fail?
 
-Static formats use Kaleido, which needs Chrome, Chromium or Edge. See [Export troubleshooting](https://lacclab.github.io/scanpath-studio/export-troubleshooting/index.md).
+In the app, **Export → Current figure** saves a still figure's PNG and SVG in your browser from the figure on screen, so they always work. PDF, GIF and MP4, the images in the export bundle and the Compare pair bundle, and `save_figure` / `render` use Kaleido, which needs Chrome, Chromium or Edge. See [Export troubleshooting](https://lacclab.github.io/scanpath-studio/export-troubleshooting/index.md).
 
 ## Can another person open my share link?
 

@@ -19,7 +19,7 @@ Download the archive for your operating system — [Windows](https://github.com/
 1. Keep the default participant and trial.
 1. Use the layer controls beside the plot to show or hide text, fixations, saccades, bounding boxes, and the heatmap.
 1. Turn on **Animate** to replay the trial.
-1. Open **Export → Current figure** and download HTML. HTML needs no Chrome; PNG, SVG, PDF, GIF and MP4 do.
+1. Open **Export → Current figure** and download HTML. HTML needs nothing else, nor do a still figure's PNG and SVG; PDF, GIF and MP4 need Chrome, Chromium or Edge.
 
 Next, pick a [tutorial](https://lacclab.github.io/scanpath-studio/tutorials/index.md).
 

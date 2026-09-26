@@ -336,97 +336,82 @@ _FORCE_LTR_LOCALE_SCRIPT = """
 """
 
 
-#: BUG-48. Streamlit's own `help=` tooltips get **stuck open**: the hover state
-#: lives in a React component, and the pointer can leave a target without that
-#: component ever seeing `mouseleave` — a rerun that re-renders the row under the
-#: cursor is the common way, and the app reruns on every widget touch. The
-#: leftover panel then floats over the page until the same target is hovered and
-#: left again, and (before the `pointer-events` rule in `styles.get_app_css`)
-#: swallowed clicks aimed at whatever it covered, which is the likeliest reason
-#: a rail's ▾ sometimes did nothing on the first press.
+#: BUG-86. Streamlit's `help=` tooltip keeps its panel open for as long as
+#: focus is inside the trigger, and it can leave several panels in the page at
+#: once — some still open, some stuck half-closed (`data-exiting`) with no
+#: owner at all; a clicked ▶ left "Next trial." behind through reruns. CSS alone
+#: can only ask "is *some* trigger hovered?", so hovering any tooltip button
+#: brought every stale panel back. This marks a panel *owned* while its **own**
+#: trigger — the element whose `aria-describedby` names the panel's id — is
+#: `:hover` or holds `:focus-visible`, and `styles.get_app_css` hides every
+#: panel that is not, once this is running (the `data-sps-tooltip-owners` flag
+#: on `<html>`). It reads only the browser's own hover/focus state and never
+#: touches React's, so it cannot fight the component.
 #:
-#: The fix is a *sweeper* installed once on the parent document: on any pointer
-#: move that is not over a tooltip target — and only while a tooltip layer
-#: actually exists, so the common case is one `querySelector` — every hover
-#: target is sent the `mouseout` React synthesizes `onMouseLeave` from. Nothing
-#: is closed while the pointer is genuinely on a target, so a real tooltip is
-#: untouched. Idempotent: a *heartbeat* on the parent document means re-running
-#: this on a later rerun installs nothing twice while the previous installation
-#: is still alive — and does reinstall if it isn't (BUG-51).
-_TOOLTIP_SWEEPER_SCRIPT = """
+#: A panel is judged the moment it appears — synchronously in a
+#: `MutationObserver`, which runs before the browser paints — so a stale one
+#: is never shown for a frame; pointer and focus moves re-judge at most once a
+#: frame. The code runs in the *parent* page's realm (a `<script>` added to its
+#: head, once per page load), not as closures from this iframe's: an iframe's
+#: listeners die with it, which is what BUG-51 had to hand-roll a heartbeat for.
+_TOOLTIP_OWNER_SCRIPT = """
 <script>
 (function () {
-    try {
-        var doc = window.parent.document;
-        /* A *heartbeat*, not a one-shot flag. Everything below is a closure
-           from THIS iframe's realm, registered on the parent — so if Streamlit
-           ever tears the iframe down, the listeners and the timer go with it,
-           and a plain "already installed" flag would then block the next run
-           from ever putting them back. The poll stamps the clock on every tick
-           instead, so a later run can tell a live installation (leave it alone)
-           from a dead one (replace it). A dead realm's listeners are inert, so
-           re-adding over them costs nothing. */
-        var HEARTBEAT_MS = 250;
-        var STALE_MS = 5000;
-        var beat = doc.__spsTooltipSweeperBeat;
-        if (typeof beat === 'number' && Date.now() - beat < STALE_MS) { return; }
-        doc.__spsTooltipSweeperBeat = Date.now();
-        var TARGET = '[data-testid="stTooltipHoverTarget"]';
-        var LAYER = '[data-baseweb="tooltip"]';
+    function install() {
+        var OWNED = "data-sps-tooltip-owned";
+        var PANEL = '[data-testid="stTooltipContent"], '
+            + '[data-testid="stTooltipErrorContent"]';
         var pending = false;
-        /* BUG-48 round 2. The question is not "where did the pointer just
-           move?" but "is any tooltip target actually under the pointer?", and
-           `:hover` answers that directly — it is the browser's own bookkeeping,
-           so it stays right when no event reached us at all. */
-        function anyTargetHovered(targets) {
-            for (var i = 0; i < targets.length; i++) {
-                try {
-                    if (targets[i].matches(':hover')) { return true; }
-                } catch (e) { /* :hover unsupported in matches() */ }
-            }
-            return false;
+        function ownerIsActive(tip) {
+            if (!tip.id) { return false; }
+            var owner = document.querySelector(
+                '[aria-describedby~="' + CSS.escape(tip.id) + '"]'
+            );
+            return !!owner && (
+                owner.matches(":hover")
+                || owner.matches(":focus-visible")
+                || !!owner.querySelector(":focus-visible")
+            );
         }
-        function sweep() {
+        function update() {
+            pending = false;
+            var tips = document.querySelectorAll('[role="tooltip"]');
+            for (var i = 0; i < tips.length; i++) {
+                var tip = tips[i];
+                if (!tip.querySelector(PANEL)) { continue; }
+                var owned = ownerIsActive(tip);
+                if (owned !== tip.hasAttribute(OWNED)) {
+                    tip.toggleAttribute(OWNED, owned);
+                }
+            }
+        }
+        function schedule() {
             if (pending) { return; }
             pending = true;
-            window.parent.requestAnimationFrame(function () {
-                pending = false;
-                /* Nothing open — the whole cost of a quiet pointer move. */
-                if (!doc.querySelector(LAYER)) { return; }
-                var targets = doc.querySelectorAll(TARGET);
-                if (anyTargetHovered(targets)) { return; }
-                targets.forEach(function (el) {
-                    el.dispatchEvent(new window.parent.MouseEvent('mouseout', {
-                        bubbles: true,
-                        cancelable: true,
-                        relatedTarget: doc.body,
-                    }));
-                });
-            });
+            requestAnimationFrame(update);
         }
-        doc.addEventListener('pointermove', sweep, true);
-        /* A pointer that leaves the window entirely fires no move inside it. */
-        doc.addEventListener('pointerleave', sweep, true);
-        /* ...and neither does one that leaves *into* something the parent
-           document cannot see or that never moves again. Both happen here on
-           every session: the plot, the tours and the copy widgets are same-
-           origin iframes, and a pointer that crosses into one stops producing
-           events in the parent entirely; separately, a rerun that re-renders
-           the row a tooltip belongs to re-opens the panel from React state,
-           which on this app can land a second or more after the pointer has
-           already come to rest somewhere else. Neither case produces the
-           pointermove the listeners above wait for, so the panel used to sit
-           there until that same target was hovered and left again. A quarter-
-           second poll closes both, and costs one `querySelector` per tick
-           whenever no tooltip is open — which is almost always. The same tick
-           stamps the heartbeat above, which is what makes this installation
-           visible as *alive* to a later run. */
-        window.parent.setInterval(function () {
-            doc.__spsTooltipSweeperBeat = Date.now();
-            sweep();
-        }, HEARTBEAT_MS);
+        ["pointerover", "pointerout", "focusin", "focusout", "keydown"].forEach(
+            function (type) { document.addEventListener(type, schedule, true); }
+        );
+        new MutationObserver(update).observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ["aria-describedby"],
+        });
+        update();
+        document.documentElement.setAttribute("data-sps-tooltip-owners", "");
+    }
+    try {
+        var host = window.parent;
+        if (host.__spsTooltipOwnerInstalled) { return; }
+        var script = host.document.createElement("script");
+        script.textContent = "(" + install.toString() + ")();";
+        host.document.head.appendChild(script);
+        host.__spsTooltipOwnerInstalled = true;
     } catch (e) {
-        /* Any browser that refuses this is left exactly as it was found. */
+        /* The CSS floor in styles.get_app_css still hides every panel while
+           no trigger is hovered or keyboard-focused. */
     }
 })();
 </script>
@@ -449,7 +434,7 @@ def configure_page() -> None:
     )
     st.markdown(get_app_css(), unsafe_allow_html=True)
     embed_html_iframe(_FORCE_LTR_LOCALE_SCRIPT, height=0)
-    embed_html_iframe(_TOOLTIP_SWEEPER_SCRIPT, height=0)
+    embed_html_iframe(_TOOLTIP_OWNER_SCRIPT, height=0)
 
 
 #: The app's wordmark, shown in Streamlit's own header (UX-62). Inside the

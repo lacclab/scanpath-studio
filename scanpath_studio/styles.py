@@ -1544,19 +1544,49 @@ def get_app_css() -> str:
         font-size: 0.92rem !important;
     }
     /* BUG-48 — a `help=` tooltip must never intercept a click. Streamlit's
-       tooltip is a portalled panel whose open state lives in React, and the
-       pointer can leave its target without that component ever seeing
-       `mouseleave` (a rerun that re-renders the row under the cursor is the
-       usual way, and this app reruns on every widget touch). The panel then
-       floats over the page — and, being an ordinary positioned element, ate the
-       next click that landed on whatever it covered, which is the likeliest
-       reason a rail's ▾ sometimes did nothing on the first press.
-       `app._TOOLTIP_SWEEPER_SCRIPT` is what closes the stuck panel; this is the
-       guard that makes a stuck one harmless in the meantime. Safe because no
-       `help=` in this app contains a link — every tooltip is read, never
-       clicked. */
+       tooltip is a portalled panel whose open state lives in React, so it can
+       outlive the hover that opened it; being an ordinary positioned element it
+       then ate the next click that landed on whatever it covered, which is the
+       likeliest reason a rail's ▾ sometimes did nothing on the first press.
+       Safe because no `help=` in this app contains a link — every tooltip is
+       read, never clicked. */
     div[data-testid="stTooltipContent"] {
         pointer-events: none;
+    }
+    /* BUG-86 — …and it is shown only while *its own* trigger is under the
+       pointer or holds *keyboard* focus. Streamlit 1.64's trigger will not
+       close on pointer-leave while focus is inside it, clicking a button puts
+       focus there, and it can leave several panels in the page at once (some
+       stuck half-closed) — so every button or popover with `help=` that was
+       clicked (the ◀ ▶ ⇅ funnel row, the rail's ▾, the presets) kept its panel
+       floating after the pointer moved on. `:hover` and `:focus-visible` are
+       the browser's own bookkeeping, right even when no event reached React,
+       and `:focus-visible` is what tells a keyboard user's focus, which should
+       keep its tooltip, from the focus a click leaves behind, which should not.
+       Two selectors, because CSS cannot relate a portalled panel to the
+       trigger that owns it:
+       · once `app._TOOLTIP_OWNER_SCRIPT` is running (its flag on `<html>`),
+         a panel shows only while marked `[data-sps-tooltip-owned]` — its own
+         trigger (the element whose `aria-describedby` names it) is hovered or
+         keyboard-focused. That is what stops a hover on one button reviving
+         every other stale panel, and a panel is judged before it is painted;
+       · `body:not(:has(…))` hides every panel while no trigger at all is, the
+         floor if that script cannot run.
+       The hide is immediate: a delayed one (for a fade that Streamlit's own
+       entrance animation, holding opacity at 1, never let run) flashed a stale
+       panel for 100 ms. This replaced BUG-48/51's JavaScript sweeper, which
+       waited for a Base Web `[data-baseweb="tooltip"]` layer that Streamlit no
+       longer renders and so never closed anything;
+       `tests/test_tooltip_visibility.py` fails if the DOM named here leaves
+       Streamlit's bundle. */
+    html[data-sps-tooltip-owners] [role="tooltip"]:not([data-sps-tooltip-owned]) :is([data-testid="stTooltipContent"], [data-testid="stTooltipErrorContent"]),
+    body:not(:has(
+        [data-testid="stTooltipHoverTarget"]:hover,
+        [data-testid="stTooltipHoverTarget"] :focus-visible,
+        [data-testid="stTooltipErrorHoverTarget"]:hover,
+        [data-testid="stTooltipErrorHoverTarget"] :focus-visible
+    )) :is([data-testid="stTooltipContent"], [data-testid="stTooltipErrorContent"]) {
+        visibility: hidden;
     }
 
     /* ── UX-19: width breakpoints ────────────────────────────────────────────

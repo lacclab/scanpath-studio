@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.31.1] - 2026-09-26
+
 ### Added
 - **Scanpath Studio has a Zenodo DOI, and every release archives itself there** (ENG-75)
 - **A docs Gallery: each figure drawn from the demo while the site builds, with the code that makes it** (ENG-78)

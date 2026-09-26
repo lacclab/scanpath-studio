@@ -1384,10 +1384,17 @@ def state_caveats(source: SnippetSource, state: FigureState) -> list[str]:
             "(`--compare-words` / `--compare-fixations` on the CLI)."
         )
         if state.kind == "animation":
+            # CMP-21: with `dataset_b=`, `animate_scanpath` checks the two screens
+            # as the app did before drawing this — and a screen nobody states is
+            # read off that trial's data, which rarely matches, so B's is named.
             note += (
                 " In Python, name the reading with "
-                f"`trial_b=({_py(compare.participant)}, {_py(compare.trial)})` — "
-                "until then the snippet replays A alone."
+                f"`trial_b=({_py(compare.participant)}, {_py(compare.trial)})` and "
+                f"its dataset with `dataset_b={_py(compare.dataset)}`. A "
+                "co-animation needs both readings on one screen, so state B's "
+                "too, as `setup_b=` (`--compare-canvas` on the CLI): one read off "
+                "B's data rarely matches. Until then the Python snippet replays A "
+                "alone."
             )
         notes.append(note)
     if state.kind == "comparison" and str(state.illustration_label).lower() != "auto":

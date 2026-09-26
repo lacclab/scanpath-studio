@@ -1204,6 +1204,73 @@ def test_render_animate_compare_rejects_two_screens(tmp_path):
     # Dropping --animate alone lands on the default overlay, refused just the
     # same — so the way out names the layout flag too.
     assert "--compare-layout side-by-side" in message
+    # Both screens were stated, so there is nothing to say about inferring one.
+    assert "read off" not in message
+
+
+def test_render_animate_compare_reads_an_unstated_screen_off_the_data(tmp_path):
+    """CMP-21: without --compare-canvas the co-animation went ahead unchecked,
+    where the static overlay reads B's screen off its data and refuses. B here
+    is a demo trial, whose data spans more than the 1680x1050 stated for A."""
+    from scanpath_studio import api
+
+    words, fixations = api.load_sample_data()
+    words_path = tmp_path / "words_b.csv"
+    fix_path = tmp_path / "fix_b.csv"
+    words.to_csv(words_path, index=False)
+    fixations.to_csv(fix_path, index=False)
+
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main(
+            [
+                "render",
+                "--sample",
+                "-p",
+                _SAMPLE_PARTICIPANT,
+                "-t",
+                _SAMPLE_TRIAL_A,
+                "--compare-with",
+                f"{_SAMPLE_PARTICIPANT}:{_SAMPLE_TRIAL_B}",
+                "--compare-words",
+                str(words_path),
+                "--compare-fixations",
+                str(fix_path),
+                "--canvas",
+                "1680x1050",
+                "--animate",
+                "-o",
+                str(tmp_path / "dual.html"),
+            ]
+        )
+    message = str(excinfo.value)
+    assert "different screens — 1680x1050 and " in message
+    assert "--compare-layout side-by-side" in message
+    # B's screen was only inferred, so the refusal names the flag that states it.
+    assert "read off its data" in message and "--compare-canvas" in message
+
+
+def test_render_animate_compare_leaves_one_datasets_pair_alone(tmp_path):
+    """--compare-with alone draws B from A's dataset, so a stated --canvas
+    that B's own extents would not infer must not refuse the pair."""
+    out = tmp_path / "dual.html"
+    cli.main(
+        [
+            "render",
+            "--sample",
+            "-p",
+            _SAMPLE_PARTICIPANT,
+            "-t",
+            _SAMPLE_TRIAL_A,
+            "--compare-with",
+            f"{_SAMPLE_PARTICIPANT}:{_SAMPLE_TRIAL_B}",
+            "--canvas",
+            "1680x1050",
+            "--animate",
+            "-o",
+            str(out),
+        ]
+    )
+    assert out.exists()
 
 
 # ---------------------------------------------------------------------------

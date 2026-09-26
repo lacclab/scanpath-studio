@@ -26,6 +26,7 @@ from .constants import (
     _VIEW_DATA,
     DEMO_CHOICE,
     FONT_FAMILY,
+    ICONS,
     ONESTOP_CHOICE,
     PUBLIC_DATASETS_CHOICE,
     SYNTHETIC_CHOICE,
@@ -427,11 +428,11 @@ def _leave_prompt_dialog(destination: str) -> None:
     st.warning(
         f"**Leave setup and go to {destination}?** This dataset isn't added yet "
         "— the files you uploaded won't be kept.",
-        icon="⚠️",
+        icon=ICONS["warning"],
     )
     stay_col, leave_col = st.columns(2)
     if stay_col.button(
-        "↩️ Keep setting up",
+        f"{ICONS['undo']} Keep setting up",
         key="wizard_leave_stay",
         width="stretch",
         type="primary",
@@ -439,7 +440,7 @@ def _leave_prompt_dialog(destination: str) -> None:
         app.stay_in_wizard()
         st.rerun(scope="app")
     if leave_col.button(
-        "🗑️ Discard and leave",
+        f"{ICONS['delete']} Discard and leave",
         key="wizard_leave_discard",
         width="stretch",
     ):
@@ -983,7 +984,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
         )
 
     if another_col.button(
-        "➕ Another",
+        f"{ICONS['add']} Another",
         key="wizard_filename_another",
         width="stretch",
         help="Add another mapping line — for when identity has to be pulled "
@@ -1187,7 +1188,7 @@ def _wizard_trial_step(
         counts_str = ", ".join(f"{k}: **{len(v):,}**" for k, v in present.items())
         if not set.intersection(*values):
             counts_host.warning(
-                f"⚠️ No trial ids are shared across tables — {counts_str}. Check "
+                f"{ICONS['warning']} No trial ids are shared across tables — {counts_str}. Check "
                 "the trial-id mapping lines up (try *Different trial-id columns "
                 "per table*)."
             )
@@ -1609,7 +1610,7 @@ def _wizard_restore_config(host) -> None:
                         restored.setdefault(key, canvas[source])
             st.session_state["_wizard_restored_setup"] = restored
             st.session_state.pop("_wizard_setup_restored_applied", None)
-        st.toast("Restored the saved mapping — review it below.", icon="✅")
+        st.toast("Restored the saved mapping — review it below.", icon=ICONS["success"])
         st.rerun()
 
 
@@ -1745,7 +1746,7 @@ def _render_setup_download(host) -> None:
         # footer now uses — "Download setup (JSON)" wrapped to two, making the
         # pair 55 px and 40 px tall side by side. What it saves and how to load
         # it back is on the tooltip, where the sentence was already.
-        "⬇️ Save setup",
+        f"{ICONS['download']} Save setup",
         data=json.dumps(_wizard_setup_config(), indent=2),
         file_name="scanpath_studio_setup.json",
         mime="application/json",
@@ -1794,7 +1795,7 @@ def _wizard_footer(host, *, disabled: bool, help_text: str, on_click=None) -> No
     )
     _render_setup_download(save_col)
     add_col.button(
-        "✅ Add dataset",
+        f"{ICONS['confirm']} Add dataset",
         type="primary",
         key="wizard_finalize",
         disabled=disabled,
@@ -2373,7 +2374,9 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
 
     if fix_df.empty:
         if active:
-            body.info("⬆️ Upload MultiplEYE scanpath / fixation CSVs to begin.")
+            body.info(
+                f"{ICONS['upload']} Upload MultiplEYE scanpath / fixation CSVs to begin."
+            )
         return _UploadResult(
             empty_words_frame(),
             empty_fixations_frame(),
@@ -2522,7 +2525,7 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
             ).to_dict(),
         }
         body.button(
-            "✅ Add dataset",
+            f"{ICONS['confirm']} Add dataset",
             type="primary",
             key="wizard_finalize",
             on_click=_finalize_wizard_dataset,
@@ -2729,7 +2732,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # here (🧭 guide · 📖 docs) — a popover, not a dialog, since it is a
         # two-item chooser with no modal weight to it (matches #UX-65's nav
         # Help, minus the "arm-then-bounce" dance that menu entries need).
-        with help_col.popover("❓ Help", width="stretch"):
+        with help_col.popover(f"{ICONS['help']} Help", width="stretch"):
             render_wizard_guide_button(st)
             # A real `link_button`, not an in-app navigation: it opens in a new
             # tab and so cannot lose an in-progress upload the way switching
@@ -2738,7 +2741,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 # UX-66 r2: named for what it *is* rather than for the page it
                 # opens — "Data guide" reads like one more wizard step on a row
                 # of wizard controls, which is the one thing it is not.
-                "📖 More documentation ↗",
+                f"{ICONS['docs']} More documentation ↗",
                 "https://lacclab.github.io/scanpath-studio/guides/loading-data/",
                 help="What your export needs, how this wizard maps it, and the "
                 "recording setup it asks for.",
@@ -2777,10 +2780,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # path through it.
         body = st.container()
     else:
-        panel = st.expander("📋 Data & mapping", expanded=False)
+        panel = st.expander(f"{ICONS['data_mapping']} Data & mapping", expanded=False)
         body = panel
         if panel.button(
-            "⚙️ Change dataset / mapping",
+            f"{ICONS['settings']} Change dataset / mapping",
             key="wizard_reconfigure",
             help="Re-open the setup wizard.",
         ):
@@ -2814,7 +2817,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # two stages, since every table now uploads *inside* stage 3 too;
         # what actually matters is that a restored setup is visible before
         # the wizard is filled in, and stage 2 is the first thing on screen.
-        restore_box = host.popover("↩️ Restore a saved setup (optional)")
+        restore_box = host.popover(f"{ICONS['undo']} Restore a saved setup (optional)")
         _wizard_restore_config(restore_box)
         _render_restored_config_caption(restore_box)
 
@@ -2887,13 +2890,13 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # three tables below say the same thing at their own titles' hover, this
         # is just the nudge to open with.
         intro.caption(
-            "⬆️ Upload at least one of **Fixations**, **Words / IA**, or "
+            f"{ICONS['upload']} Upload at least one of **Fixations**, **Words / IA**, or "
             "**Raw gaze** below to get started."
         )
         app_url = str(getattr(st.context, "url", "") or "")
         if not is_loopback_url(app_url):
             intro.markdown(
-                "💡 **Working with a large dataset?** It's faster — and keeps your "
+                f"{ICONS['tip']} **Working with a large dataset?** It's faster — and keeps your "
                 "data on your own machine — to run Scanpath Studio locally:\n\n"
                 "```bash\npip install scanpath-studio\nscanpath-studio\n```"
             )
@@ -2956,7 +2959,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 # UX-119: icon-only trigger (no "Preview" label) — way smaller,
                 # matching the rail's other icon-only popovers (⇅, ✏️).
                 preview = stats.popover(
-                    "👁️", width="content", help="Preview — first rows"
+                    ICONS["preview"], width="content", help="Preview — first rows"
                 )
                 preview.caption("First rows:")
                 preview.dataframe(frame.head(), width="stretch", hide_index=True)
@@ -3190,7 +3193,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # still benefits from the reminder that each is optional on its own
         # but at least one is required.
         derive_host.caption(
-            "⬆️ Upload at least one of **Fixations**, **Words / IA**, or "
+            f"{ICONS['upload']} Upload at least one of **Fixations**, **Words / IA**, or "
             "**Raw gaze** below to get started."
         )
         raw_words, raw_fix, raw_gaze = _wizard_filename_derive(
@@ -3730,7 +3733,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             for line in _c_normalization_issues(
                 raw, schema, frame_fingerprint(raw), _schema_key(schema), table
             ):
-                s6.warning(f"⚠️ {line}")
+                s6.warning(f"{ICONS['warning']} {line}")
 
     if (
         active
@@ -3742,7 +3745,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # of tables that share every trial but spell the readers differently
         # passed it — and every scanpath then drew over no text.
         s6.warning(
-            "⚠️ The two tables share trial ids but no reader: no fixation's "
+            f"{ICONS['warning']} The two tables share trial ids but no reader: no fixation's "
             "participant + trial has word boxes, so every scanpath would be "
             "drawn without its text. Check that **Participant ID** names the "
             "same readers, spelled the same way, in both tables."

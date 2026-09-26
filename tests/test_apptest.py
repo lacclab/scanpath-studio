@@ -16,6 +16,7 @@ import pytest
 
 from scanpath_studio import controls
 from scanpath_studio import menu as menu_mod
+from scanpath_studio.constants import ICONS
 from scanpath_studio.wizard import _SCREEN_KNOW, _SETUP_MODE_KEYS
 from tests.conftest import (
     APP_SCRIPT,
@@ -25,6 +26,7 @@ from tests.conftest import (
     SUBTAB_LINE_ASSIGNMENT,
     _write_benchmark_corpus,
     _write_benchmark_manifest,
+    add_benchmark_corpora,
     answer_setup_step,
     open_data_view,
     pin_data_view,
@@ -175,10 +177,10 @@ class TestAppLaunches:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         body = " ".join(m.value for m in at.markdown)
         for expected in (
-            "#### 🗄️ Automatic recovery",
-            "#### ⬇️ JSON backup",
-            "#### ♻️ Reset",
-            "#### 🐛 Debug tools",
+            f"#### {ICONS['recovery']} Automatic recovery",
+            f"#### {ICONS['download']} JSON backup",
+            f"#### {ICONS['reset']} Reset",
+            f"#### {ICONS['debug']} Debug tools",
         ):
             assert expected in body, f"{expected} missing from the Session dialog"
         # Neither group is a popover any more — not the merged one UX-38 made,
@@ -200,8 +202,8 @@ class TestAppLaunches:
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         body = " ".join(m.value for m in at.markdown)
-        assert "#### 🗄️ Automatic recovery" not in body
-        assert "#### ⬇️ JSON backup" not in body
+        assert f"#### {ICONS['recovery']} Automatic recovery" not in body
+        assert f"#### {ICONS['download']} JSON backup" not in body
 
     def test_debug_mode_survives_the_dialog_closing(self):
         """UX-100: the 🐛 Debug gate is not the toggle's own widget key.
@@ -599,8 +601,8 @@ class TestDataInspectionTab:
         # screen's numbered parts, so its headings are `.sps-wiz-part` markdown.
         subheaders = [s.value for s in at.subheader]
         for section in (
-            "📂 Available datasets",
-            "🔎 What's in the `Synthetic test trial` dataset",
+            f"{ICONS['datasets']} Available datasets",
+            f"{ICONS['search']} What's in the `Synthetic test trial` dataset",
         ):
             assert section in subheaders, f"missing stage {section}: {subheaders}"
         parts = " ".join(
@@ -619,7 +621,7 @@ class TestDataInspectionTab:
         assert not any("Raw data" in label for label in folded), folded
         assert not any("Summary statistics" in label for label in folded), folded
         tab_labels = [t.label for t in at.tabs]
-        for tab in ("📊 Stats", "Fixations", "AOIs", "Raw gaze"):
+        for tab in (f"{ICONS['stats']} Stats", "Fixations", "AOIs", "Raw gaze"):
             assert tab in tab_labels, f"missing tab {tab}: {tab_labels}"
         # The counts are the section's opening answer, so they kept no heading.
         assert "Dataset statistics" not in subheaders
@@ -1341,7 +1343,7 @@ class TestUnmappedRawDataView:
         _write_benchmark_manifest(
             root, [{"name": "Provo", "language": "en", "monitor": [1600, 900]}]
         )
-        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(root))
+        add_benchmark_corpora(monkeypatch, root)
 
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.benchmark_corpus_label("Provo")
@@ -1432,7 +1434,7 @@ class TestUnmappedRawDataView:
                 },
             ],
         )
-        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(root))
+        add_benchmark_corpora(monkeypatch, root)
 
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.benchmark_corpus_label("Provo")
@@ -1533,7 +1535,7 @@ class TestUnmappedRawDataView:
                 },
             ],
         )
-        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(root))
+        add_benchmark_corpora(monkeypatch, root)
 
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.benchmark_corpus_label("PoTeC")
@@ -1592,7 +1594,7 @@ class TestUnmappedRawDataView:
                 {"name": "Provo", "language": "en", "monitor": [1920, 1080]},
             ],
         )
-        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(root))
+        add_benchmark_corpora(monkeypatch, root)
 
         potec = app.benchmark_corpus_label("PoTeC")
         provo = app.benchmark_corpus_label("Provo")
@@ -1652,145 +1654,30 @@ class TestUnmappedRawDataView:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state["filter_text_id"] == ["PoTeC_a"]
 
-    def test_a_bundle_at_a_non_default_path_becomes_reachable_and_stays(
+    def test_a_stale_corpus_label_lands_on_a_corpus_not_on_the_demo(
         self, monkeypatch, tmp_path
     ):
-        """R39 end to end: type a path, pick the corpus, keep it.
+        """N2: healing a stale *corpus* label.
 
-        The bootstrap entry exists for exactly one job — a bundle that is *not*
-        at `EYEGENBENCH_DEFAULT_DIR` must be reachable, since discovery reads a
-        directory the user can change at runtime and an undiscovered bundle
-        yields no entries and so nowhere to type its path. The first cut of the
-        entry shipped non-functional and passed its test anyway, because the
-        test asserted the directory input *existed* and never typed into it
-        (C1): the typed path survived exactly one run. Discovery then succeeded,
-        the placeholder dropped out of the registry, the healing step sent the
-        user to the bundled demo, the demo renders no directory input — so
-        Streamlit dropped the `eyegenbench_dir` key at end of run and the next
-        run rediscovered nothing. The corpora flickered in for one rerun,
-        forever.
-
-        So this drives the whole flow: type → the corpus appears → **select
-        it** → it is still selected, still loaded, and still there after a
-        detour to another source. Everything before the last step passes on the
-        bug in at least one of its halves; the run *after* each selection is
-        what fails on it.
+        The selected corpus can stop existing without anything going wrong — a
+        restored session names a corpus that is no longer added. The generic
+        healing would send it to `entries[0]`, the bundled demo, when an added
+        corpus was right there.
         """
         from scanpath_studio import app
-        from scanpath_studio.constants import AUTHOR_CHOICE
 
         monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
-        # The premise: the app's default location is empty and the bundle is
-        # somewhere else entirely. Nothing is discoverable until it is typed in.
-        default_dir = tmp_path / "default-location"
-        default_dir.mkdir()
-        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(default_dir))
-        root = tmp_path / "elsewhere" / "bundle"
+        root = tmp_path / "bundle"
         _write_benchmark_corpus(root, "Provo", paragraphs=("Provo_a", "Provo_b"))
         _write_benchmark_manifest(
             root, [{"name": "Provo", "language": "en", "monitor": [1600, 900]}]
         )
-        label = app.benchmark_corpus_label("Provo")
+        add_benchmark_corpora(monkeypatch, root)
 
         at = _make_apptest()
-        at.session_state["data_source_choice"] = app.BENCHMARK_SETUP_CHOICE
-        at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
-        picker = next(s for s in at.selectbox if s.key == "data_source_picker")
-        assert "🌐 Harmonised benchmark corpora — set up (WIP)" in picker.options
-        # The *marked* form, deliberately: asserting "🌐 Provo" is absent would
-        # now pass whether or not the corpus is listed, since a listed one reads
-        # "🌐 Provo (WIP)".
-        assert "🌐 Provo (WIP)" not in picker.options
-
-        # 1. The user types the bundle's real path into the placeholder's input.
-        dir_inputs = [t for t in at.text_input if t.key == "eyegenbench_dir"]
-        assert dir_inputs, "expected the bundle directory input"
-        dir_inputs[0].set_value(str(root)).run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        picker = next(s for s in at.selectbox if s.key == "data_source_picker")
-        assert "🌐 Provo (WIP)" in picker.options, "the corpus must appear once found"
-        # The placeholder disappears *because it succeeded*, so healing must not
-        # bounce the user out to the demo — that answers "here is my bundle"
-        # with somewhere else entirely, and (the demo drawing no directory
-        # input) throws the bundle location away on the way out.
-        assert at.session_state["data_source_choice"] == label
-
-        # 2. The user picks the corpus in the picker, through the real widget.
-        picker.set_value(label).run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-
-        # 3. The run after the selection — the one that used to lose the path.
-        at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert at.session_state["eyegenbench_dir"] == str(root)
-        assert at.session_state["data_source_choice"] == label
-        picker = next(s for s in at.selectbox if s.key == "data_source_picker")
-        assert "🌐 Provo (WIP)" in picker.options
-        # The placeholder is offered only while nothing is discovered, and the
-        # options are checked rather than `public_dataset_registry()` because
-        # the bundle's location lives in *this app run's* session state — a
-        # registry built out here, outside the run, cannot see it.
-        assert not any("set up" in option for option in picker.options)
-        # …and the corpus is genuinely loaded, not merely named in the picker.
-        text_ms = next(m for m in at.multiselect if m.key == "filter_text_id")
-        assert set(text_ms.options) == {"Provo_a", "Provo_b"}
-
-        # 4. A detour to another source and back. The directory input renders
-        # only while a benchmark corpus is selected, so this is the run on which
-        # Streamlit drops an ordinary widget key — `persist_state="session"` on
-        # the shared `_dataset_dir_input` is what keeps the bundle findable.
-        picker.set_value(AUTHOR_CHOICE).run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert not [t for t in at.text_input if t.key == "eyegenbench_dir"], (
-            "premise: another source renders no bundle directory input"
-        )
-        picker = next(s for s in at.selectbox if s.key == "data_source_picker")
-        assert "🌐 Provo (WIP)" in picker.options, "the bundle location must survive"
-        picker.set_value(label).run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert at.session_state["data_source_choice"] == label
-        text_ms = next(m for m in at.multiselect if m.key == "filter_text_id")
-        assert set(text_ms.options) == {"Provo_a", "Provo_b"}
-
-    def test_repointing_the_bundle_lands_on_a_corpus_not_on_the_demo(
-        self, monkeypatch, tmp_path
-    ):
-        """N2: healing a stale *corpus* label, not just the placeholder.
-
-        The selected corpus can stop existing without anything going wrong —
-        the user points the directory input at a second bundle, or rebuilds one
-        without that corpus. The selection is then invalid and the generic
-        healing sends it to `entries[0]`, the bundled demo. That is the same
-        non-answer C1's second half exists to prevent: the user asked for a
-        different bundle and got the demo, when a prepared corpus from the
-        bundle they just named was right there.
-        """
-        from scanpath_studio import app
-
-        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
-        first = tmp_path / "first-bundle"
-        _write_benchmark_corpus(first, "PoTeC", paragraphs=("PoTeC_a", "PoTeC_b"))
-        _write_benchmark_manifest(
-            first, [{"name": "PoTeC", "language": "de", "monitor": [1680, 1050]}]
-        )
-        second = tmp_path / "second-bundle"
-        _write_benchmark_corpus(second, "Provo", paragraphs=("Provo_a", "Provo_b"))
-        _write_benchmark_manifest(
-            second, [{"name": "Provo", "language": "en", "monitor": [1600, 900]}]
-        )
-        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(first))
-
-        at = _make_apptest()
+        # "PoTeC — harmonised…" names a corpus that isn't added.
         at.session_state["data_source_choice"] = app.benchmark_corpus_label("PoTeC")
         at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-
-        # Repoint at the other bundle: "PoTeC — harmonised…" is now a label for
-        # a corpus that isn't there.
-        dir_input = next(t for t in at.text_input if t.key == "eyegenbench_dir")
-        dir_input.set_value(str(second)).run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state["data_source_choice"] == app.benchmark_corpus_label(
             "Provo"
@@ -1829,7 +1716,7 @@ class TestUnmappedRawDataView:
         headless_reader_count = headless_fixations["participant_id"].nunique()
         assert headless_reader_count == 3
 
-        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(root))
+        add_benchmark_corpora(monkeypatch, root)
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.benchmark_corpus_label("BSC")
         at.run(timeout=60)
@@ -3589,9 +3476,18 @@ class TestFigureAndCanvasSubGroups:
         control_source = inspect.getsource(controls.render_plot_controls)
         canvas_source = inspect.getsource(app.render_canvas_controls)
 
-        assert '_rail_subsection(figure_grp, "🖥️ Screen & framing")' in control_source
-        assert '_rail_subsection(figure_grp, "📊 Axes & grid")' in control_source
-        assert '_rail_subsection(figure_grp, "🏷️ Title & labels")' in control_source
+        assert (
+            "_rail_subsection(figure_grp, f\"{ICONS['screen']} Screen & framing\")"
+            in control_source
+        )
+        assert (
+            "_rail_subsection(figure_grp, f\"{ICONS['axes']} Axes & grid\")"
+            in control_source
+        )
+        assert (
+            "_rail_subsection(figure_grp, f\"{ICONS['labels']} Title & labels\")"
+            in control_source
+        )
         # The typography half is drawn into the Stimulus section instead.
         assert "text_host" in canvas_source
         assert '_rail_subsection(stim_grp, "🔤 Text")' not in control_source
@@ -3633,7 +3529,7 @@ class TestResetSettings:
         # itself happens on the confirm click, one run later.
         confirm = [b for b in at.button if b.key == "reset_viz_confirm"]
         assert confirm, "Reset confirmation button not rendered"
-        assert confirm[0].label == "♻️ Reset it"
+        assert confirm[0].label == f"{ICONS['reset']} Reset it"
         at = confirm[0].click().run(timeout=30)
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"

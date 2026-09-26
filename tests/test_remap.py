@@ -350,8 +350,8 @@ class TestEditorSetupExport:
         from scanpath_studio.tabs import render_dataset_editor_footer
 
         source = inspect.getsource(render_dataset_editor_footer)
-        assert "⬇️ Save setup" in source
-        assert "✅ Save changes" in source
+        assert "f\"{ICONS['download']} Save setup\"" in source
+        assert "f\"{ICONS['confirm']} Save changes\"" in source
         assert "_editor_setup_config" in source
         # It borrows the wizard's own column widths so the two rows line up.
         assert "_FOOTER_ROW_W" in source

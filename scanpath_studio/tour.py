@@ -66,6 +66,11 @@ from .constants import (
     _VIEW_DATA,
     _VIEW_SCANPATH,
     CITATION,
+    ICONS,
+    SUBTAB_ANNOTATIONS,
+    SUBTAB_COMPARISONS,
+    SUBTAB_EXPORT,
+    SUBTAB_SHARE,
     drift_correction_enabled,
     preprocessing_enabled,
     similarity_enabled,
@@ -257,14 +262,14 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "Star, tag, or note the parent trial. Multipart data can instead attach "
                 "a separate annotation to the active screen.",
                 ".st-key-tutorial_annotations",
-                subtab="📝 Annotations",
+                subtab=SUBTAB_ANNOTATIONS,
             ),
             TutorialStep(
                 "Export the marked result",
                 "Open **Export** and choose the filtered scope and tabular files. "
                 "Screen identity is retained in multipart exports.",
                 ".st-key-tutorial_export",
-                subtab="📤 Export",
+                subtab=SUBTAB_EXPORT,
             ),
         ),
     ),
@@ -295,7 +300,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "Open **Export** for PNG/SVG/HTML or bulk output. Include the plot config "
                 "when the figure must be reproducible later.",
                 ".st-key-tutorial_export",
-                subtab="📤 Export",
+                subtab=SUBTAB_EXPORT,
             ),
             TutorialStep(
                 "Keep the figure reproducible",
@@ -303,7 +308,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "**Session** saves it (with your annotations) as JSON. Either one "
                 "reproduces this figure later — the PNG on its own does not.",
                 ".st-key-tutorial_share",
-                subtab="🔗 Share",
+                subtab=SUBTAB_SHARE,
                 optional=True,
             ),
         ),
@@ -333,7 +338,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "that field — here, the other readings of *this* text — at the same "
                 "scale, so it compares like with like." + _SIMILARITY_SENTENCE,
                 ".st-key-tutorial_comparisons",
-                subtab="🔬 Comparisons",
+                subtab=SUBTAB_COMPARISONS,
             ),
         ),
     ),
@@ -427,33 +432,33 @@ def steps_of(tutorial: TutorialDefinition) -> tuple[TutorialStep, ...]:
 # should take well under a minute.
 _STEPS = [
     (
-        "👀 Welcome to Scanpath Studio",
+        f"{ICONS['app']} Welcome to Scanpath Studio",
         "Visualize **eye movements in reading** — scanpaths drawn true-to-scale "
         "over the text. A demo dataset is loaded; this tour takes under a minute.",
     ),
     (
-        "📂 Data",
+        f"{ICONS['datasets']} Data",
         "Use the demo, or **upload your own** fixations / word tables "
         "(CSV / TSV / Parquet). Columns auto-detect — remap any field in the wizard.",
     ),
     (
-        "🔍 Filter trials",
+        f"{ICONS['trial_filter']} Filter trials",
         "Narrow trials by participant or condition. Each tab has its own trial picker.",
     ),
     (
-        "🎛️ Plot controls",
+        f"{ICONS['plot_controls']} Plot controls",
         "Toggle and style every layer — fixations, saccades, heatmap, word boxes, "
         "text. **📐 Figure & canvas → 🖥️ Screen & geometry** sets your monitor so "
         "it stays true-to-scale.",
     ),
     (
-        "🗂 Three views",
+        f"{ICONS['views']} Three views",
         "**Scanpath** (tick *Animate* to replay) · **Corpus Analysis** · "
         "**Data** (set up and inspect the dataset). Bulk export is the "
         "**Export** subtab in Scanpath.",
     ),
     (
-        "📝 Annotate & save",
+        f"{ICONS['annotations']} Annotate & save",
         "Star, tag, and note trials, then filter to them. **💾 Session** "
         "saves the whole setup + annotations to JSON. Replay this via "
         "**Tutorials → Welcome tour**. 👀",
@@ -603,7 +608,7 @@ def _render_tutorial_optout(tutorial_id: str, host, *, key_suffix: str = "") -> 
     ):
         st.session_state[key] = shared_truth
     checked = host.checkbox(
-        "🔕 Don't auto-show this one",
+        f"{ICONS['mute']} Don't auto-show this one",
         key=key,
         help="Stops this tutorial from offering itself automatically. It "
         "stays listed here, and Start / Resume work exactly the same.",
@@ -720,20 +725,20 @@ def _tour_dialog() -> None:
 _SPOTLIGHT_STEPS = [
     {
         "selector": None,
-        "title": "👀 Welcome to Scanpath Studio",
+        "title": f"{ICONS['app']} Welcome to Scanpath Studio",
         "body": "Visualize **eye movements in reading** — scanpaths drawn "
         "true-to-scale over the text. A demo dataset is loaded; **Next** for a "
         "quick tour.",
     },
     {
         "selector": ".st-key-tour_grp_plot",
-        "title": "🗺️ The scanpath",
+        "title": f"{ICONS['view_scanpath']} The scanpath",
         "body": "This is the main plot. Each circle is a **fixation**, sized by "
         "duration; the lines are **saccades** between them.",
     },
     {
         "selector": ".st-key-tour_grp_data_source",
-        "title": "📂 Available datasets",
+        "title": f"{ICONS['datasets']} Available datasets",
         "body": "Your **data source** (demo or your own upload) sits at the left "
         "of the control line. Every dataset is listed on the 🗂️ **Data** page — "
         "click a name there to open it, ➕ **Add dataset** for your own.",
@@ -746,32 +751,32 @@ _SPOTLIGHT_STEPS = [
     # the whole block.
     {
         "selector": ".st-key-tour_grp_trial_picker",
-        "title": "🎯 Pick a trial",
+        "title": f"{ICONS['pick_trial']} Pick a trial",
         "body": "Step through trials with the selector and ◀ ▶, or scrub the "
         "slider — it shows the trial's position and id.",
     },
     {
         "selector": ".st-key-tour_grp_narrow_by",
         "popover": FUNNEL_TRIGGER,
-        "title": "🔍 Narrow the pool",
+        "title": f"{ICONS['trial_filter']} Narrow the pool",
         # The icon, not the word: the trigger beside the picker is Streamlit's
         # Material funnel (`tabs._FILTER_ICON`), and "the funnel" sent readers
         # hunting for an emoji the app never draws.
-        "body": ":material/filter_alt: beside the trial picker — opened for you "
+        "body": f"{ICONS['trial_filter']} beside the trial picker — opened for you "
         "here — holds every way to narrow the pool: the text and participant "
         "pickers first (*All texts* / *All participants*), then condition and "
         "annotation filters (favorites, tags).",
     },
     {
         "selector": ".st-key-tour_grp_chips",
-        "title": "🏷️ Trial at a glance",
+        "title": f"{ICONS['chips']} Trial at a glance",
         "body": "These chips show the trial's **identity, conditions, and summary "
         "stats**. Choose which fields appear — and drag to reorder — with "
         "**✏️ Edit chips** at the right of the strip.",
     },
     {
         "selector": ".st-key-tour_grp_view_modes",
-        "title": "🎬 Animate & compare",
+        "title": f"{ICONS['animate']} Animate & compare",
         "body": "**Animate** replays the trial fixation by fixation, and "
         "**Compare** adds a second scanpath beside it — from this dataset or, "
         "via **Compare with**, from another one. The ▾ beside each toggle "
@@ -779,7 +784,7 @@ _SPOTLIGHT_STEPS = [
     },
     {
         "selector": ".st-key-tour_grp_viz_controls",
-        "title": "🎛️ Plot controls",
+        "title": f"{ICONS['plot_controls']} Plot controls",
         "body": "Toggle and style every layer — fixations, saccades, heatmap, word "
         "boxes, text. **Design presets** jump between Scanpath, Heatmap, "
         "Illustration and your last custom tuning — and 💾 keeps the ones you "
@@ -787,7 +792,7 @@ _SPOTLIGHT_STEPS = [
     },
     {
         "selector": ".st-key-tour_grp_subtabs",
-        "title": "📑 Per-trial panels",
+        "title": f"{ICONS['panels']} Per-trial panels",
         "body": "Below the plot: **📝 Annotations**, **📄 Stimulus & Context**, "
         "**🔬 Comparisons**, **📤 Export** (this trial or bulk), and "
         "**🔗 Share** a deep link.",
@@ -799,7 +804,7 @@ _SPOTLIGHT_STEPS = [
         # (`tests/test_tour.py` now catches that) — and its two subjects are
         # nav entries themselves, which makes this the same target.
         "selector": NAV_SELECTOR,
-        "title": "🧭 The nav",
+        "title": f"{ICONS['nav']} The nav",
         "body": "**🗺️ Scanpath** is what you see now. "
         "**📊 Corpus Analysis** aggregates across readers and texts; "
         "**🗂️ Data** sets one up. **💾 Session** and **❓ Help** open over your "
@@ -1405,7 +1410,7 @@ def _start_use_case(tutorial_id: str, *, restart: bool = False) -> None:
         return
     st.session_state["tutorial_return"] = {
         "main_nav": st.session_state.get("main_nav", _VIEW_SCANPATH),
-        "single_subtab": st.session_state.get("single_subtab", "📝 Annotations"),
+        "single_subtab": st.session_state.get("single_subtab", SUBTAB_ANNOTATIONS),
     }
     if restart:
         _tutorial_progress()[tutorial_id] = 0
@@ -1501,7 +1506,7 @@ def _tutorial_surface_is_open(step: TutorialStep) -> bool:
         return False
     return (
         step.subtab is None
-        or st.session_state.get("single_subtab", "📝 Annotations") == step.subtab
+        or st.session_state.get("single_subtab", SUBTAB_ANNOTATIONS) == step.subtab
     )
 
 
@@ -1531,7 +1536,7 @@ def stash_tutorial_context(context: dict[str, object]) -> None:
     st.session_state["_tutorial_context"] = dict(context)
 
 
-@st.dialog("🧭 Tutorials", width="large")
+@st.dialog(f"{ICONS['tutorials']} Tutorials", width="large")
 def _tutorial_library_dialog() -> None:
     """The chooser: outcome, prerequisites, time, and progress per tutorial."""
     from scanpath_studio.menu import close_open_popovers
@@ -1605,7 +1610,7 @@ def _tutorial_library_dialog() -> None:
             _start_use_case(tutorial.id, restart=True)
             st.rerun(scope="app")
         if not available:
-            card.caption(f"⚠️ Unavailable — {reason.lower()}")
+            card.caption(f"{ICONS['warning']} Unavailable — {reason.lower()}")
         _render_tutorial_optout(tutorial.id, card)
 
 
@@ -1847,7 +1852,7 @@ def faq_items() -> list:
     return items
 
 
-@st.dialog("❓ Frequently asked questions", width="large")
+@st.dialog(f"{ICONS['faq']} Frequently asked questions", width="large")
 def _faq_dialog() -> None:
     """The in-app FAQ: short answers in expanders + links to the full docs.
 
@@ -1872,13 +1877,13 @@ def _faq_dialog() -> None:
     st.divider()
     docs_col, tutorials_col, close_col = st.columns(3)
     docs_col.link_button(
-        "📚 Full FAQ ↗",
+        f"{ICONS['docs']} Full FAQ ↗",
         DOCS_FAQ_URL,
         width="stretch",
         help="Every question, with the long answers. Opens in a new tab.",
     )
     tutorials_col.link_button(
-        "🎓 Tutorials ↗",
+        f"{ICONS['course']} Tutorials ↗",
         DOCS_TUTORIALS_URL,
         width="stretch",
         help="Task-by-task walkthroughs: data collection, data filtering, "
@@ -1997,7 +2002,7 @@ def _render_wizard_guide_optout() -> None:
 # needed; finer targets reuse existing widget keys.
 _WIZARD_GUIDE_STEPS = [
     {
-        "title": "📂 Set up your dataset",
+        "title": f"{ICONS['datasets']} Set up your dataset",
         "body": (
             "Turn your eye-tracking tables into an interactive dataset in three "
             "parts: name it, upload and map each table (and pick which extras "
@@ -2198,7 +2203,7 @@ def maybe_show_wizard_guide() -> None:
 def render_wizard_guide_button(host) -> None:
     """A button inside the wizard that (re)opens the setup guide from step 1."""
     host.button(
-        "❓ Show setup guide",
+        f"{ICONS['help']} Show setup guide",
         key="wizard_guide_replay",
         help="Walk through the dataset setup, step by step.",
         on_click=_arm_wizard_guide,

@@ -14,7 +14,7 @@ import shlex
 
 import pytest
 
-from scanpath_studio import api, cli
+from scanpath_studio import api, cli, url_state
 from scanpath_studio import code_snippet as cs
 from tests.conftest import APP_SCRIPT
 
@@ -860,7 +860,7 @@ def test_the_panel_switches_flavour():
     at = _panel(
         **{
             cs.SNIPPET_STATE_KEY: state,
-            "snippet_flavor": "⌨️ CLI",
+            "snippet_flavor": url_state._SNIPPET_FLAVORS[1],
         }
     )
     assert at.code[0].language == "bash"
@@ -883,7 +883,9 @@ def test_the_panel_names_what_the_cli_cannot_say(monkeypatch):
         participant="p1",
         trial="t1",
     )
-    at = _panel(**{cs.SNIPPET_STATE_KEY: state, "snippet_flavor": "⌨️ CLI"})
+    at = _panel(
+        **{cs.SNIPPET_STATE_KEY: state, "snippet_flavor": url_state._SNIPPET_FLAVORS[1]}
+    )
     copy = " ".join(element.value for element in at.caption)
     assert "fixation_color_range" in copy
 
@@ -1278,6 +1280,21 @@ def test_a_cross_dataset_comparison_says_whose_reader_b_is():
     assert not any(
         "second dataset" in n for n in cs.reproduction_code(DEMO, same).caveats
     )
+
+
+def test_a_second_datasets_co_animation_note_names_its_screen_too():
+    """CMP-21: with `dataset_b=` the co-animation checks the two screens, and a
+    screen nobody states is read off that trial's data — so the note on how to
+    finish the snippet names B's screen too, or following it gets the figure
+    refused."""
+    state = _state(
+        kind="animation",
+        canvas=(2560, 1440),
+        compare=cs.CompareTarget(participant="reader_07", trial="t9", dataset="PoTeC"),
+    )
+    notes = " ".join(cs.reproduction_code(DEMO, state).caveats)
+    assert "dataset_b='PoTeC'" in notes
+    assert "setup_b=" in notes and "--compare-canvas" in notes
 
 
 # ---------------------------------------------------------------------------

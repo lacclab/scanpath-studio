@@ -1666,6 +1666,9 @@ def animate_scanpath(
     title: str = "",
     caption: str = "",
     trial_b: tuple[str, str] | None = None,
+    dataset_b: str | None = None,
+    setup: SetupSnapshot | None = None,
+    setup_b: SetupSnapshot | None = None,
     **animation_overrides,
 ) -> go.Figure:
     """Build the animated scanpath replay for one trial.
@@ -1692,15 +1695,29 @@ def animate_scanpath(
 
     ``trial_b=(participant, trial)`` co-animates a second reading on the same
     clock, like the app's Animate + Compare. It is looked up in ``words_b`` /
-    ``fixations_b`` when given (a second dataset), else in ``words`` /
-    ``fixations`` — the way
+    ``fixations_b`` when given, else in ``words`` / ``fixations`` — the way
     [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths] takes it.
     Without ``trial_b``, ``words_b`` / ``fixations_b`` must hold one trial; B
     frames holding several raise ``ValueError`` rather than drawing them all. A
     multipart B is drawn at its first recorded screen; cut B's frames to
-    another with `multipart.extract_part` to draw that one. Both readings are
-    drawn in A's coordinates, and nothing here checks that they were recorded
-    on one screen, as the overlay in `compare_scanpaths` does.
+    another with `multipart.extract_part` to draw that one.
+
+    **Two datasets.** Both readings are drawn in A's coordinates, so a
+    co-animation is an overlay, and a reading from another dataset has to share
+    A's screen. Name that dataset with ``dataset_b`` (or give its ``setup_b``)
+    and the pair is checked the way `compare_scanpaths` checks an overlay: two
+    different canvases raise ``IncomparableScreensError``, a ``ValueError``,
+    rather than draw. ``setup`` / ``setup_b`` are
+    `experimental_setup.SetupSnapshot` values; a side without one is read off
+    its data — the extent of that one trial, which rarely spans the whole
+    screen, so state both when you know them — and ``canvas_size`` covers A
+    when you only have a resolution. ``dataset_b`` also prefixes B's
+    participant ids with the dataset's name, as `compare_scanpaths` does, so a
+    hover says whose reader it is. ``words_b`` / ``fixations_b`` passed without
+    either are taken to be from A's dataset, as `render` passes them for
+    ``--compare-with`` alone, and are not checked: two readings of one corpus
+    can span different extents, and inferring a canvas from each would refuse
+    pairs that shared a screen.
 
     The animation builder accepts a subset of the static figure's options
     (``show_words``, ``show_word_labels``, ``show_saccades``, ``show_order``, styling,
@@ -1746,19 +1763,40 @@ def animate_scanpath(
         if not full_order.empty:
             full_fix_range = (int(full_order.min()), int(full_order.max()))
     trial_fixations = _apply_fix_index_range(trial_fixations, fix_index_range, pid, tid)
-    if canvas_size is None:
-        canvas_size = screen_canvas_size(trial_words)
-        if canvas_size is None:
-            canvas_size = screen_canvas_size(trial_fixations)
-        if canvas_size is None:
-            canvas_size = _data.compute_canvas_size(trial_words, trial_fixations)
-    words_b, fixations_b = _second_reading(
-        words,
-        fixations,
+    # A's screen: a stated `setup`, else `canvas_size`, else read off the data —
+    # the order `compare_scanpaths` resolves it in, and what CMP-21's gate reads.
+    setup_a = _compare_setup(
+        setup, canvas_size, trial_words, trial_fixations, side="setup"
+    )
+    passed_b = (
         animation_overrides.pop("words_b", None),
         animation_overrides.pop("fixations_b", None),
-        trial_b,
     )
+    second_dataset = dataset_b is not None or setup_b is not None
+    if second_dataset and all(frame is None for frame in passed_b):
+        raise ValueError(
+            "dataset_b / setup_b describe scanpath B's own dataset, but neither "
+            "words_b nor fixations_b was passed. Pass B's frames too, or leave "
+            "both out to draw trial_b from these frames."
+        )
+    words_b, fixations_b = _second_reading(words, fixations, *passed_b, trial_b)
+    if second_dataset and fixations_b is not None and not fixations_b.empty:
+        _refuse_co_animation_across_screens(
+            setup_a,
+            setup_b,
+            words_b,
+            fixations_b,
+            a_inferred=setup is None and canvas_size is None,
+        )
+    if dataset_b is not None:
+        # As `compare_scanpaths` and the app do: B's readers carry their
+        # dataset's name, so a hover says whose reader it is.
+        from .utils import qualify_for_compare
+
+        words_b, fixations_b = (
+            None if frame is None else qualify_for_compare(frame, dataset_b)
+            for frame in (words_b, fixations_b)
+        )
     label_mode = str(illustration_label).capitalize()
     if label_mode not in {"Auto", "Show", "Hide"}:
         raise ValueError("illustration_label must be 'auto', 'show', or 'hide'.")
@@ -1775,8 +1813,8 @@ def animate_scanpath(
         )
     render_settings = FigureSettings.from_mapping(
         animation_overrides,
-        canvas_width=int(canvas_size[0]),
-        canvas_height=int(canvas_size[1]),
+        canvas_width=int(setup_a.canvas_width),
+        canvas_height=int(setup_a.canvas_height),
         base_font_size=int(base_font_size),
         font_family=font_family,
         playback_speed=playback_speed,
@@ -1858,6 +1896,72 @@ def _second_reading(
             for frame in (trial_words_b, trial_fix_b)
         )
     return trial_words_b, trial_fix_b
+
+
+def _inferred_screen_hint(*, a_inferred: bool, b_inferred: bool) -> str:
+    """How to state a screen that a refusal only read off the data (CMP-21).
+
+    `setups_comparable` says the readings were *recorded* on different screens,
+    but a screen nobody stated is the extent of that trial's data, which rarely
+    spans the whole display — so the refusal names the parameter that states it.
+    """
+    if a_inferred and b_inferred:
+        return (
+            " Neither screen was stated, so both were read off the data, which "
+            "rarely spans the whole screen; if they were shown on one, pass it as "
+            "setup= and setup_b=."
+        )
+    if a_inferred:
+        return (
+            " A's screen was read off its data, which rarely spans the whole "
+            "screen; if both were shown on one, pass A's as setup= or canvas_size=."
+        )
+    if b_inferred:
+        return (
+            " B's screen was read off its data, which rarely spans the whole "
+            "screen; if both were shown on one, pass B's as setup_b=."
+        )
+    return ""
+
+
+def _refuse_co_animation_across_screens(
+    setup_a: SetupSnapshot,
+    setup_b: SetupSnapshot | None,
+    words_b: pd.DataFrame | None,
+    fixations_b: pd.DataFrame,
+    *,
+    a_inferred: bool,
+) -> None:
+    """Refuse a co-animation of two datasets shown on different screens (CMP-21).
+
+    A co-animation draws both readings on one clock in A's coordinates, which
+    makes it an overlay, so it is held to `compare_scanpaths`'s overlay gate: the
+    same `setups_comparable` predicate and the same error, with B's screen read
+    off its data when the caller did not state it.
+    """
+    from .experimental_setup import IncomparableScreensError, setups_comparable
+
+    resolved_b = _compare_setup(
+        setup_b,
+        None,
+        words_b if words_b is not None else pd.DataFrame(),
+        fixations_b,
+        side="setup_b",
+    )
+    comparable, note = setups_comparable(setup_a, resolved_b)
+    if not comparable:
+        hint = _inferred_screen_hint(a_inferred=a_inferred, b_inferred=setup_b is None)
+        raise IncomparableScreensError(
+            f"{note} A co-animation replays both readings on one clock in one "
+            "coordinate space, so none was drawn; compare them with "
+            "compare_scanpaths(layout='side_by_side') (or 'stacked'), each drawn "
+            f"to its own screen.{hint}",
+            reason=note,
+        )
+    if note:
+        # As in `compare_scanpaths`: matching canvases, but at least one screen
+        # was never recorded — drawn, with the caveat where a script can see it.
+        logging.getLogger(__name__).warning("animate_scanpath: %s", note)
 
 
 def render_parent_trial(
@@ -2078,10 +2182,14 @@ def compare_scanpaths(
         if not comparable:
             # BUG-85: the reason says why; this says what happened here and how
             # to ask for the split in Python. `render` rewords it in its flags.
+            hint = _inferred_screen_hint(
+                a_inferred=setup is None and canvas_size is None,
+                b_inferred=setup_b is None,
+            )
             raise IncomparableScreensError(
                 f"{note} So no overlay was drawn; pass layout='side_by_side' (or "
                 f"'stacked') to compare them in separate panels, each drawn to "
-                f"its own screen.",
+                f"its own screen.{hint}",
                 reason=note,
             )
         if note:

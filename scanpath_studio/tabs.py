@@ -83,6 +83,7 @@ from scanpath_studio.constants import (
     DEMO_CHOICE,
     FOCUS_MAPPING_KEY,
     HIGHLIGHTED_TEXT_COLOR,
+    ICONS,
     SACCADE_CLASS_COLORS,
     SACCADE_CLASS_ORDER,
     SACCADE_COLOR,
@@ -90,6 +91,12 @@ from scanpath_studio.constants import (
     SELECTOR_ROW_GRID,
     SELECTOR_ROW_TRIO,
     SELECTOR_ROW_WIDE_GRID,
+    SUBTAB_ANNOTATIONS,
+    SUBTAB_COMPARISONS,
+    SUBTAB_EXPORT,
+    SUBTAB_LINE_ASSIGNMENT,
+    SUBTAB_SHARE,
+    SUBTAB_STIMULUS,
     TRIAL_IDENTITY_CHECK_KEY,
     TRIAL_IDENTITY_FULL_KEY,
     UNIFORM_COLOR_FIELD,
@@ -98,6 +105,7 @@ from scanpath_studio.constants import (
     compare_palette_color,
     derived_analysis_tables_enabled,
     drift_correction_enabled,
+    icon_html,
     preprocessing_enabled,
     similarity_enabled,
     upload_limit_mb,
@@ -249,16 +257,6 @@ from scanpath_studio.utils import (
 # Single Trial Tab
 # -----------------------------------------------------------------------------
 
-#: The Scanpath view's subtab labels. Named because the set is no longer fixed:
-#: PRE-21 offers 📐 Line assignment only while drift correction is exposed, so
-#: the tabs are built as a list and mapped back by label. `tests/conftest.py`
-#: imports these rather than repeating the strings.
-SUBTAB_ANNOTATIONS = "📝 Annotations"
-SUBTAB_STIMULUS = "📄 Stimulus & Context"
-SUBTAB_COMPARISONS = "🔬 Comparisons"
-SUBTAB_LINE_ASSIGNMENT = "📐 Line assignment"
-SUBTAB_EXPORT = "📤 Export"
-SUBTAB_SHARE = "🔗 Share"
 
 #: The Corpus Analysis subtabs, in bar order — also the values the keyed tab bar
 #: (`corpus_subtab`) takes, so a test or a tutorial can open one by name.
@@ -1062,7 +1060,9 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
     # Pre-flight (ENG-10): GIF/MP4 need Chrome — warn before the user waits on a
     # render that can only fail, and point at the fix + the browser-free HTML.
     if not chrome_available():
-        st.warning(f"{fmt} export can't run here. {CHROME_INSTALL_HINT}", icon="⚠️")
+        st.warning(
+            f"{fmt} export can't run here. {CHROME_INSTALL_HINT}", icon=ICONS["warning"]
+        )
 
     frame_ms = playback_ms / n_frames if n_frames else 16.0
     clip_s = playback_ms / 1000.0
@@ -1665,7 +1665,7 @@ _COMPARE_IDENTITY_KEY = "_compare_selected_identity"
 #: The trial-filter popover's trigger, on A's row and on B's. A funnel,
 #: because the control filters the list rather than searching it; Unicode has
 #: no funnel emoji, so this is Streamlit's Material icon.
-_FILTER_ICON = ":material/filter_alt:"
+_FILTER_ICON = ICONS["trial_filter"]
 
 _COMPARE_FILTER_PREFIX = "cmp"
 
@@ -1732,10 +1732,13 @@ def _resolve_compare_source(
     if chosen == THIS_DATASET:
         return None, ""
     if not ready_by_name.get(chosen, False):
-        return None, f"⚠️ {reason_by_name.get(chosen, '')}"
+        return None, f"{ICONS['warning']} {reason_by_name.get(chosen, '')}"
     source = load_secondary_dataset(chosen)
     if source is None:
-        return None, f"⚠️ Couldn't load **{chosen}** as a comparison dataset."
+        return (
+            None,
+            f"{ICONS['warning']} Couldn't load **{chosen}** as a comparison dataset.",
+        )
     # The run that *switches* dataset ignores the stored result: it was computed
     # against the corpus just left, and applying one corpus' reader ids to
     # another empties the pool for a run with nothing on screen explaining it.
@@ -2474,7 +2477,7 @@ def _render_stimulus_field_picker(host, span_options, qa_options) -> None:
     """
     if not span_options and not qa_options:
         return
-    with host.popover("⚙️ Fields", width="content"):
+    with host.popover(f"{ICONS['settings']} Fields", width="content"):
         st.caption(
             "Which of this dataset's columns the panel highlights and lists. "
             "Detected by name to begin with — change them here when the naming "
@@ -3301,7 +3304,7 @@ def _render_save_restore_expander(
         skipped = st.session_state.get("_plot_config_skipped")
         if skipped:
             st.caption(
-                "⚠️ Not applied (no match in the current data): "
+                f"{ICONS['warning']} Not applied (no match in the current data): "
                 + ", ".join(skipped)
                 + "."
             )
@@ -3549,7 +3552,9 @@ def _render_anim_info_box(
             selected_participant,
             selected_trial,
         ):
-            st.caption("⚠️ The second scanpath is the same trial as the first.")
+            st.caption(
+                f"{ICONS['warning']} The second scanpath is the same trial as the first."
+            )
     # VIZ-11 follow-up: state what the chosen grid actually produced. The cap
     # coarsening the step used to be invisible, which is the whole reason the
     # setting felt arbitrary. UX-30 folded it INTO the box below rather than
@@ -3921,7 +3926,9 @@ def _render_pair_export(
     whose ``datasets`` block records both sources and both recording setups.
     """
     side_a, side_b = sides
-    with st.expander("⚖️ Download this comparison as a bundle", expanded=False):
+    with st.expander(
+        f"{ICONS['compare']} Download this comparison as a bundle", expanded=False
+    ):
         st.caption(
             "The figure plus both scanpaths' data and a manifest naming each "
             "side's dataset, trial and recording setup — so the comparison can "
@@ -4285,7 +4292,9 @@ def _render_trial_condition_chips(
             value = summary_lookup.get(label)
             if value in (None, ""):
                 continue  # e.g. "Fixations in word boxes" unavailable for this trial
-            primary.append((f"{label} = {value}", _chip_color(col, str(value))))
+            primary.append(
+                (html.escape(f"{label} = {value}"), _chip_color(col, str(value)))
+            )
             continue
         value, trial_level = _chip_value_and_uniqueness(
             col, trial_words, trial_fixations, participant
@@ -4298,8 +4307,15 @@ def _render_trial_condition_chips(
         if value_str.strip().lower() in ("", "nan", "none", "<na>"):
             continue
         label = _chip_field_label(col)
-        prefix = "" if trial_level else "⚠️ "
-        primary.append((f"{prefix}{label} = {value_str}", _chip_color(col, value_str)))
+        # Escaped here, not at the join below, so the reader-level mark can be
+        # the icon's own HTML (UX-138 — a shortcode is inert inside raw HTML).
+        prefix = "" if trial_level else f"{icon_html('warning')} "
+        primary.append(
+            (
+                f"{prefix}{html.escape(f'{label} = {value_str}')}",
+                _chip_color(col, value_str),
+            )
+        )
     if primary or leading_chip:
         leading_html = ""
         if leading_chip is not None:
@@ -4312,8 +4328,7 @@ def _render_trial_condition_chips(
             '<div class="sps-trial-chips">'
             + leading_html
             + "".join(
-                f'<span class="sps-chip" style="background:{bg};">'
-                f"{html.escape(lbl)}</span>"
+                f'<span class="sps-chip" style="background:{bg};">{lbl}</span>'
                 for lbl, bg in primary
             )
             + "</div>",
@@ -4547,7 +4562,7 @@ def render_single_trial_tab(
         # the rail is ~150px wide inside, which is not enough for a heading and a
         # trigger side by side at any ordinary window size.
         with st.container(key="plot_controls_header"):
-            st.markdown("## 🎛️ Plot controls")
+            st.markdown(f"## {ICONS['plot_controls']} Plot controls")
         with rail.container(key="tour_grp_view_modes"):
             # UX-68 — the mode and its settings are ONE control, laid out the way a
             # Zoom-style split button is: the toggle switches the mode on and off,
@@ -4583,7 +4598,7 @@ def render_single_trial_tab(
                 # `persist_state="session"`; see BUG-15/ENG-36).
                 st.session_state.setdefault("single_animate", False)
                 animate = st.toggle(
-                    "🎬 **Animate**",
+                    f"{ICONS['animate']} **Animate**",
                     key="single_animate",
                     persist_state="session",
                 )
@@ -4597,9 +4612,9 @@ def render_single_trial_tab(
                 anim_gate = (
                     ""
                     if not anim_disabled
-                    else "⚠️ Turn on **Animate** to change playback."
+                    else f"{ICONS['warning']} Turn on **Animate** to change playback."
                     if not animate
-                    else "⚠️ This trial has no fixations to replay."
+                    else f"{ICONS['warning']} This trial has no fixations to replay."
                 )
                 # UX-80 r2: no `icon=` — Streamlit already draws a chevron on a
                 # popover trigger, so the material arrow beside it was a second
@@ -4776,7 +4791,7 @@ def render_single_trial_tab(
                 # the deep link the same way it would fight a restored config.
                 st.session_state.setdefault(SINGLE_COMPARE_TOGGLE, False)
                 compare_enabled = st.toggle(
-                    "⚖️ **Compare**",
+                    f"{ICONS['compare']} **Compare**",
                     key=SINGLE_COMPARE_TOGGLE,
                     persist_state="session",
                 )
@@ -4784,7 +4799,9 @@ def render_single_trial_tab(
                 # Animate row above for why the menu does not refuse to open.
                 cmp_disabled = not compare_enabled
                 cmp_gate = (
-                    "⚠️ Turn on **Compare** to change these." if cmp_disabled else ""
+                    f"{ICONS['warning']} Turn on **Compare** to change these."
+                    if cmp_disabled
+                    else ""
                 )
                 # UX-80 r2: see the Animate row above — one arrow, and the
                 # toggle's `help` served as a tooltip here instead of a `?`.
@@ -4829,7 +4846,7 @@ def render_single_trial_tab(
                     # offers stays on screen, and only what genuinely does not
                     # apply goes grey, with the reason in its tooltip.
                     layout_gate = cmp_gate or (
-                        "⚠️ An animated comparison replays both readings on one "
+                        f"{ICONS['warning']} An animated comparison replays both readings on one "
                         "clock, in one coordinate space, so it always overlays."
                         if animate
                         else ""
@@ -5339,7 +5356,7 @@ def render_single_trial_tab(
         trail = trail_col.container(key="railbtn_chip_trail")
         edit_box = trail.container(key="railbtn_chip_edit")
         with edit_box.popover(
-            "✏️",
+            ICONS["edit"],
             help="Edit which fields show as chips above the plot, and drag to "
             "reorder them.",
             width="content",
@@ -5551,7 +5568,7 @@ def render_single_trial_tab(
 
     with plot_slot:
         if global_raw_toggle and not trial_has_raw_gaze:
-            st.warning("Raw gaze not available for this trial.", icon="⚠️")
+            st.warning("Raw gaze not available for this trial.", icon=ICONS["warning"])
         if animate and trial_fixations.empty:
             st.info(
                 "Animation needs a **fixations** table — there's nothing to "
@@ -5587,7 +5604,7 @@ def render_single_trial_tab(
                     "An animated comparison replays both scanpaths on one clock "
                     f"in one coordinate space. {compare_setup_note} Showing only "
                     "the first scanpath.",
-                    icon="⚠️",
+                    icon=ICONS["warning"],
                 )
             elif comparing and compare_fix.empty:
                 st.warning(
@@ -5603,7 +5620,7 @@ def render_single_trial_tab(
                     overlaid=True,
                 )
                 if text_note:
-                    st.warning(text_note, icon="⚠️")
+                    st.warning(text_note, icon=ICONS["warning"])
         elif comparing:
             displayed_fig = _render_comparison_figure(
                 combos,
@@ -6140,9 +6157,9 @@ def _render_comparison_figure(
         # docstring); a split layout comparing two texts is a legitimate thing
         # to do, and a yellow box on every one of them would be crying wolf.
         if overlaid:
-            st.warning(text_note, icon="⚠️")
+            st.warning(text_note, icon=ICONS["warning"])
         else:
-            st.caption(f"⚠️ {text_note}")
+            st.caption(f"{ICONS['warning']} {text_note}")
     if cross_dataset:
         # §5.3: the one thing a cross-dataset figure must never be is silent
         # about its own geometry. Each panel is true-to-scale on its *own*
@@ -6167,7 +6184,7 @@ def _render_comparison_figure(
                 "screen pixels; nothing has been rescaled."
             )
             if setup_note:
-                st.warning(setup_note, icon="⚠️")
+                st.warning(setup_note, icon=ICONS["warning"])
         elif tuple(canvas_a) != tuple(canvas_b):
             st.caption(
                 "Panels are drawn to each dataset's own screen — "
@@ -6185,7 +6202,7 @@ def _render_comparison_figure(
             )
     if dropped_metric:
         st.caption(
-            f"⚠️ **{dropped_metric}** isn't in both datasets, so it can't colour "
+            f"{ICONS['warning']} **{dropped_metric}** isn't in both datasets, so it can't colour "
             "this comparison. Your choice is kept for same-dataset comparisons."
         )
     return fig_compare
@@ -6395,7 +6412,7 @@ def _download_tidy(host, df, *, name, key, label="⬇ Download this table (CSV)"
 
 #: Cell text of the "open this trial" button. `st.column_config.ButtonColumn`
 #: takes the button's label from the cell *value*, so this is data, not config.
-_OPEN_TRIAL_LABEL = ":material/open_in_new: Open"
+_OPEN_TRIAL_LABEL = f"{ICONS['open']} Open"
 
 
 def _render_trials_with_open_button(
@@ -6460,7 +6477,9 @@ def _apply_min_readers(host, df, min_readers, *, key):
     dropped = int((~df["enough"]).sum())
     out = df[df["enough"]]
     if dropped:
-        host.caption(f"⚠️ {dropped} word(s) backed by < {min_readers} readers hidden.")
+        host.caption(
+            f"{ICONS['warning']} {dropped} word(s) backed by < {min_readers} readers hidden."
+        )
     return out
 
 
@@ -7324,17 +7343,27 @@ def render_per_reader_tab(
         # without reading every label. Chosen to say what the number *is*, not to
         # decorate — speed, duration, count, direction of travel.
         specs = [
-            ("wpm", "Reading speed", "{:.0f} wpm", ":material/speed:"),
-            ("mean_fixation_ms", "Mean fixation", "{:.0f} ms", ":material/timer:"),
-            ("n_fixations", "Fixations", "{:.0f}", ":material/blur_on:"),
+            ("wpm", "Reading speed", "{:.0f} wpm", ICONS["reading_speed"]),
+            (
+                "mean_fixation_ms",
+                "Mean fixation",
+                "{:.0f} ms",
+                ICONS["fixation_duration"],
+            ),
+            ("n_fixations", "Fixations", "{:.0f}", ICONS["fixations"]),
             (
                 "regression_rate",
                 "Regression rate",
                 "{:.0%}",
-                ":material/keyboard_backspace:",
+                ICONS["regressions"],
             ),
-            ("skip_rate", "Skip rate", "{:.0%}", ":material/fast_forward:"),
-            ("mean_saccade_px", "Mean saccade", "{:.1f} px", ":material/arrow_range:"),
+            ("skip_rate", "Skip rate", "{:.0%}", ICONS["skip_rate"]),
+            (
+                "mean_saccade_px",
+                "Mean saccade",
+                "{:.1f} px",
+                ICONS["saccade_amplitude"],
+            ),
         ]
         present = [s for s in specs if s[0] in summary]
         cols = st.columns(len(present)) if present else []
@@ -7451,7 +7480,7 @@ def render_per_reader_tab(
         frame = fix_e if measure.frame == "fixations" else words_filtered
         sub = frame[frame["participant_id"].astype(str) == str(pid)].copy()
         if not has_explicit_trial_index(sub):
-            st.caption("ℹ️ Trial order derived from fixation timestamps.")
+            st.caption(f"{ICONS['info']} Trial order derived from fixation timestamps.")
         sub["trial_index"] = derive_trial_index(sub)
         df = metric_by_trial_index(sub, measure.column, agg=agg)
         _chart(
@@ -8760,7 +8789,7 @@ def render_raw_gaze_tab(raw_gaze_filtered: pd.DataFrame) -> None:
     # report — a table that looks like recorded samples must say it isn't.
     if st.session_state.get("data_source_choice") == DEMO_CHOICE:
         st.caption(
-            "⚠️ The demo's raw gaze is **synthesized** from its fixations for "
+            f"{ICONS['warning']} The demo's raw gaze is **synthesized** from its fixations for "
             "illustration — it is not recorded eye-tracker output."
         )
     _render_raw_table(raw_gaze_filtered)
@@ -9317,7 +9346,9 @@ def _participant_metadata_body(
     # Fixations/AOI/Raw gaze's own `upload_box` — not a separate status line
     # further down the mapping side.
     stats = stats_host.container(key="wiz_upload_stats_participant_metadata")
-    preview = stats.popover("👁️", width="content", help="Preview — first rows")
+    preview = stats.popover(
+        ICONS["preview"], width="content", help="Preview — first rows"
+    )
     preview.caption("First rows:")
     preview.dataframe(raw.head(), width="stretch", hide_index=True)
     counts = stats.container(key="wiz_upload_counts_participant_metadata")
@@ -9363,7 +9394,7 @@ def _participant_metadata_body(
         status_host.warning(
             "Nothing kept — pick at least one field above, or remove the "
             "uploaded file to detach this table.",
-            icon="⚠️",
+            icon=ICONS["warning"],
         )
         return
     id_count = _metadata_id_count(raw, id_column)
@@ -9501,7 +9532,9 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
 
     # UX-129 — see the matching block in `_participant_metadata_body`.
     stats = stats_host.container(key="wiz_upload_stats_trial_metadata")
-    preview = stats.popover("👁️", width="content", help="Preview — first rows")
+    preview = stats.popover(
+        ICONS["preview"], width="content", help="Preview — first rows"
+    )
     preview.caption("First rows:")
     preview.dataframe(raw.head(), width="stretch", hide_index=True)
     counts = stats.container(key="wiz_upload_counts_trial_metadata")
@@ -9550,7 +9583,7 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
         status_host.warning(
             "Pick a Trial ID column above — it's required, since it's the "
             "only thing that makes this table joinable.",
-            icon="⚠️",
+            icon=ICONS["warning"],
         )
         return
     # UX-114: which non-id columns actually become fields — right under the id
@@ -9576,7 +9609,7 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
         status_host.warning(
             "Nothing kept — pick at least one field above, or remove the "
             "uploaded file to detach this table.",
-            icon="⚠️",
+            icon=ICONS["warning"],
         )
         return
     grain = "reading" if attached.keyed_by_participant else "trial"
@@ -9703,7 +9736,9 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
 
     # UX-129 — see the matching block in `_participant_metadata_body`.
     stats = stats_host.container(key="wiz_upload_stats_text_metadata")
-    preview = stats.popover("👁️", width="content", help="Preview — first rows")
+    preview = stats.popover(
+        ICONS["preview"], width="content", help="Preview — first rows"
+    )
     preview.caption("First rows:")
     preview.dataframe(raw.head(), width="stretch", hide_index=True)
     counts = stats.container(key="wiz_upload_counts_text_metadata")
@@ -9742,7 +9777,7 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
         status_host.warning(
             "Pick a Text ID column above — it's required, since it's the "
             "only thing that makes this table joinable.",
-            icon="⚠️",
+            icon=ICONS["warning"],
         )
         return
     # UX-114: which non-id columns actually become fields — right under the id
@@ -9767,7 +9802,7 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
         status_host.warning(
             "Nothing kept — pick at least one field above, or remove the "
             "uploaded file to detach this table.",
-            icon="⚠️",
+            icon=ICONS["warning"],
         )
         return
     id_count = _metadata_id_count(raw, text_columns)
@@ -9830,7 +9865,7 @@ def _render_key_mismatch(attached, report, grain: str) -> None:
         "A trailing `.0` on one side is the usual culprit: a column read as "
         "whole numbers in one file and as decimals in the other (one blank "
         "cell is enough) spells the same id two ways.",
-        icon="🚫",
+        icon=ICONS["error"],
     )
 
 
@@ -10567,7 +10602,7 @@ def _render_remap_editor(
     if flat:
         # A popover keeps the (often long) dropped-column list out of the way —
         # zero footprint until opened, then a height-capped, searchable table.
-        with st.popover(f"⚠️ {len(flat)} columns dropped at import"):
+        with st.popover(f"{ICONS['warning']} {len(flat)} columns dropped at import"):
             st.caption(
                 "Dropped during the original import — re-upload the file to remap them."
             )
@@ -10714,13 +10749,13 @@ def render_dataset_editor_footer(host) -> None:
     for table_key, messages in problems.items():
         label = _TABLE_LABELS.get(table_key, table_key)
         for message in messages:
-            box.error(f"**{label}** — {message}", icon="🚫")
+            box.error(f"**{label}** — {message}", icon=ICONS["error"])
     row = box.container(key="wizard_footer_row_edit")
     save_col, apply_col, _rest = row.columns(
         _FOOTER_ROW_W, gap="small", vertical_alignment="center"
     )
     save_col.download_button(
-        "⬇️ Save setup",
+        f"{ICONS['download']} Save setup",
         data=json.dumps(_editor_setup_config(name), indent=2),
         file_name="scanpath_studio_setup.json",
         mime="application/json",
@@ -10733,7 +10768,7 @@ def render_dataset_editor_footer(host) -> None:
     apply_col.button(
         # UX-54 r2: the add-dataset screen's ✅ Add dataset, for the screen that
         # edits one — same shape, same place, same filled blue.
-        "✅ Save changes",
+        f"{ICONS['confirm']} Save changes",
         type="primary",
         key=f"remap_apply_{name}",
         on_click=_apply_remap,
@@ -10778,7 +10813,9 @@ def render_trial_identity_section() -> None:
     scope = f"{total} trials" if not sampled_from else f"{total} sampled trials"
     affected = int(report.get("affected_trials") or 0)
     if not affected:
-        st.success(f"Each of the {scope} looks like a single reading.", icon="✅")
+        st.success(
+            f"Each of the {scope} looks like a single reading.", icon=ICONS["success"]
+        )
     else:
         st.warning(
             f"**{affected} of {scope} look like more than one reading.** "
@@ -10786,7 +10823,7 @@ def render_trial_identity_section() -> None:
             "several into one scanpath — which renders perfectly happily, as an "
             "ordinary scanpath with a lot of regressions. Add the column named "
             "below to the Trial ID mapping to separate them.",
-            icon="⚠️",
+            icon=ICONS["warning"],
         )
     if sampled_from:
         st.caption(
@@ -10796,7 +10833,7 @@ def render_trial_identity_section() -> None:
             "you want the exact count."
         )
         st.button(
-            "🔎 Check every trial",
+            f"{ICONS['search']} Check every trial",
             key="trial_identity_full_scan_btn",
             on_click=_request_full_identity_scan,
             help=f"Run the check across all {int(sampled_from):,} trials. Slower, "
@@ -11169,26 +11206,24 @@ def _render_dataset_stats_tab(
     parts = part_catalog(words_filtered, fixations_filtered)
     top_cols = st.columns(7 if not parts.empty else 6)
     top_cols[0].metric(
-        "Participants", f"{stats['n_participants']:,}", icon=":material/group:"
+        "Participants", f"{stats['n_participants']:,}", icon=ICONS["participants"]
     )
-    top_cols[1].metric("Texts", f"{stats['n_texts']:,}", icon=":material/article:")
-    top_cols[2].metric("Trials", f"{stats['n_trials']:,}", icon=":material/list_alt:")
+    top_cols[1].metric("Texts", f"{stats['n_texts']:,}", icon=ICONS["texts"])
+    top_cols[2].metric("Trials", f"{stats['n_trials']:,}", icon=ICONS["trials"])
     top_cols[3].metric(
-        "Fixations", f"{stats['n_fixations']:,}", icon=":material/blur_on:"
+        "Fixations", f"{stats['n_fixations']:,}", icon=ICONS["fixations"]
     )
-    top_cols[4].metric("Words", f"{stats['n_words']:,}", icon=":material/abc:")
+    top_cols[4].metric("Words", f"{stats['n_words']:,}", icon=ICONS["words"])
     # No `help=` — "Gaze points" says what it counts, and the ❔ beside it was
     # the only one on the row, which read as though that count meant something
     # different from its five neighbours.
     top_cols[5].metric(
         "Gaze points",
         f"{stats['n_gaze']:,}" if stats["n_gaze"] else "0",
-        icon=":material/scatter_plot:",
+        icon=ICONS["gaze_points"],
     )
     if not parts.empty:
-        top_cols[6].metric(
-            "Screens", f"{len(parts):,}", icon=":material/view_carousel:"
-        )
+        top_cols[6].metric("Screens", f"{len(parts):,}", icon=ICONS["screens"])
 
     # The spread behind those totals, right under them.
     _render_spread_cards(stats["stats_df"])
@@ -11246,7 +11281,7 @@ def render_data_inspection_tab(
     # tab bar, so reaching one cost two clicks on the page whose job is to show
     # them; and the per-metric summary table sat behind a third expander of its
     # own, far below the counts it belongs with.
-    stats_tab, *raw_tabs = st.tabs(["📊 Stats", *RAW_DATA_TAB_LABELS])
+    stats_tab, *raw_tabs = st.tabs([f"{ICONS['stats']} Stats", *RAW_DATA_TAB_LABELS])
     with stats_tab:
         _render_dataset_stats_tab(stats, words_filtered, fixations_filtered)
     _fill_raw_data_tabs(raw_tabs, words_filtered, fixations_filtered, raw_gaze_filtered)
@@ -11290,7 +11325,9 @@ def render_data_inspection_tab(
         if not preprocessing_enabled():
             derived = {k: v for k, v in derived.items() if k != "Cleaning QA"}
         with st.expander(
-            "🧮 Derived analysis tables — " + " · ".join(derived), expanded=False
+            f"{ICONS['derived_tables']} Derived analysis tables — "
+            + " · ".join(derived),
+            expanded=False,
         ):
             for tab, (label, table) in zip(st.tabs(list(derived)), derived.items()):
                 with tab:

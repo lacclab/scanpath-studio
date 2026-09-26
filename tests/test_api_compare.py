@@ -187,6 +187,28 @@ class TestCrossDataset:
         reason = excinfo.value.reason
         assert "1680" in reason and reason in message
         assert "layout=" not in reason
+        # Both screens were stated, so there is nothing to say about inferring.
+        assert "read off" not in message
+
+    def test_an_unstated_screen_names_the_parameter_that_states_it(self):
+        """CMP-21: the reason says "recorded on different screens", but B's was
+        only the extent of its data (400x300 here), so the refusal says so and
+        names ``setup_b=``."""
+        with pytest.raises(ValueError) as excinfo:
+            api.compare_scanpaths(
+                _words("p1", "t1"),
+                _fixations("p1", "t1"),
+                ("p1", "t1"),
+                ("p1", "t1"),
+                words_b=_words("p1", "t1"),
+                fixations_b=_fixations("p1", "t1", y=300.0),
+                dataset_b="PoTeC",
+                canvas_size=(1920, 1080),
+            )
+        message = str(excinfo.value)
+        assert "400x300" in message
+        assert "B's screen was read off its data" in message
+        assert "setup_b=" in message
 
     def test_a_split_layout_is_allowed_on_two_screens(self):
         fig = api.compare_scanpaths(
@@ -390,6 +412,117 @@ class TestCoAnimationDrawsOneSecondReading:
             fixations_b=_fixations("p2", "t2", y=300.0),
         )
         assert len(self._trace_b(fig).x) == 3
+
+
+class TestCoAnimationAcrossTwoDatasets:
+    """CMP-21: a co-animation draws both readings in A's coordinates — an
+    overlay on one clock — so a reading from another dataset is held to the
+    overlay's screen gate. The API checked nothing, and `render` checked only
+    when `--compare-canvas` stated B's screen."""
+
+    @staticmethod
+    def _animate(**kwargs):
+        return api.animate_scanpath(
+            _words("p1", "t1"),
+            _fixations("p1", "t1", y=70.0),
+            "p1",
+            "t1",
+            words_b=_words("p9", "t9"),
+            fixations_b=_fixations("p9", "t9", y=300.0),
+            **kwargs,
+        )
+
+    @staticmethod
+    def _points_b(fig) -> int:
+        return len(TestCoAnimationDrawsOneSecondReading._trace_b(fig).x)
+
+    def test_two_different_stated_screens_raise(self):
+        from scanpath_studio.experimental_setup import IncomparableScreensError
+
+        with pytest.raises(IncomparableScreensError) as excinfo:
+            self._animate(
+                dataset_b="PoTeC",
+                setup=_measured(1920, 1080),
+                setup_b=_measured(1680, 1050),
+            )
+        message = str(excinfo.value)
+        assert "1680" in message
+        assert "compare_scanpaths(layout='side_by_side')" in message
+        # The surface-neutral reason rides along, for `render` to reword.
+        assert excinfo.value.reason in message
+        assert "layout=" not in excinfo.value.reason
+
+    def test_a_screen_nobody_stated_is_read_off_the_data(self):
+        """The gap itself: B's screen is inferred, as the static overlay infers
+        it (400x300 for these frames), never assumed to be A's."""
+        from scanpath_studio.experimental_setup import IncomparableScreensError
+
+        with pytest.raises(IncomparableScreensError, match="400x300") as excinfo:
+            self._animate(dataset_b="PoTeC", canvas_size=(1920, 1080))
+        # …and the refusal says the screen was inferred, and how to state it.
+        message = str(excinfo.value)
+        assert "B's screen was read off its data" in message
+        assert "setup_b=" in message
+
+    def test_dataset_b_names_bs_readers(self):
+        """`dataset_b` prefixes B's participant ids, as `compare_scanpaths` and
+        the app's co-animation do, so a hover says whose reader it is."""
+        fig = self._animate(
+            dataset_b="PoTeC",
+            setup=_measured(),
+            setup_b=_measured(),
+            fixation_hover_fields=("participant_id",),
+        )
+        trace = TestCoAnimationDrawsOneSecondReading._trace_b(fig)
+        assert {row[0] for row in trace.customdata} == {"PoTeC · p9"}
+
+    def test_setup_b_alone_declares_a_second_dataset(self):
+        from scanpath_studio.experimental_setup import IncomparableScreensError
+
+        with pytest.raises(IncomparableScreensError):
+            self._animate(setup=_measured(1920, 1080), setup_b=_measured(1680, 1050))
+
+    def test_one_screen_draws_the_co_animation(self):
+        fig = self._animate(dataset_b="PoTeC", setup=_measured(), setup_b=_measured())
+        assert self._points_b(fig) == 3
+
+    def test_a_match_on_an_unrecorded_screen_draws_with_a_warning(self, caplog):
+        assumed = SetupSnapshot(
+            canvas_width=1920,
+            canvas_height=1080,
+            screen_provenance=Provenance.ASSUMED,
+        )
+        with caplog.at_level("WARNING", logger="scanpath_studio.api"):
+            fig = self._animate(dataset_b="PoTeC", setup=_measured(), setup_b=assumed)
+        assert self._points_b(fig) == 3
+        assert any("animate_scanpath" in r.getMessage() for r in caplog.records)
+
+    def test_b_frames_without_either_are_not_checked(self):
+        """How `render --compare-with` alone passes a reading of A's own
+        dataset: two readings of one corpus can span different extents, so
+        inferring a canvas from each would refuse pairs that shared a screen."""
+        fig = self._animate(canvas_size=(1920, 1080))
+        assert self._points_b(fig) == 3
+
+    def test_dataset_b_without_bs_frames_is_an_error(self):
+        words, fixations = _pair()
+        with pytest.raises(ValueError, match="words_b"):
+            api.animate_scanpath(
+                words, fixations, "p1", "t1", trial_b=("p2", "t2"), dataset_b="PoTeC"
+            )
+
+    def test_setup_draws_the_replay_on_as_screen(self):
+        """`setup` covers A's canvas as it does in `compare_scanpaths`, so the
+        replay is drawn on the screen the gate compared."""
+        fig = api.animate_scanpath(
+            _words("p1", "t1"),
+            _fixations("p1", "t1"),
+            "p1",
+            "t1",
+            setup=_measured(1234, 777),
+        )
+        assert tuple(fig.layout.xaxis.range) == (0, 1234)
+        assert tuple(fig.layout.yaxis.range) == (777, 0)
 
 
 @pytest.mark.parametrize("layout", ["overlay", "side_by_side", "stacked"])

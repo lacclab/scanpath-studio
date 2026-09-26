@@ -2009,7 +2009,7 @@ restores your last hand-made settings. Seven sections follow:</p>
 </tr>
 <tr>
 <td>📄 Stimulus</td>
-<td>Text, Bounding boxes, Stimulus image</td>
+<td>Text, Word boxes, Image</td>
 <td>verify stimulus geometry and fixation-to-word alignment; compare against the original display; text font, text colour and plot background</td>
 </tr>
 <tr>
@@ -2036,25 +2036,24 @@ restores your last hand-made settings. Seven sections follow:</p>
 </table>
 <p>Each section is one line: its switch and a <strong>▾</strong> with the rest of its settings.
 Switching a layer off keeps its settings.</p>
-<p><strong>Stimulus → Text</strong> keeps typography beside the layer it controls. Text can
-scale from word boxes, or use one fixed size entered in pixels or points; point
-sizes use the dataset <abbr title="Dots per inch: how many display pixels make an inch">DPI</abbr>. The text font, text colour and <strong>Plot background</strong>
-live there too, so they are only on screen while the Text layer is on (your
-choices are kept while it is off). <strong>📐 Figure &amp; canvas</strong> contains <strong>🖥️ Screen &amp;
-framing</strong>, <strong>📊 Axes &amp; grid</strong>, and <strong>🏷️ Title &amp; labels</strong>.</p>
+<p><strong>Stimulus → Text</strong> keeps typography beside the layer it controls, in the rows
+under its <strong>Show</strong> switch: <strong>Fit</strong> scales the text from the word boxes (with
+their line spacing), <strong>Size</strong> is a fixed size in pixels or points when it does
+not — point sizes use the dataset <abbr title="Dots per inch: how many display pixels make an inch">DPI</abbr> — and <strong>Font</strong> and <strong>Color</strong> hold the text
+font, the text colour and the plot <strong>Background</strong>. They are greyed while the Text
+layer is off, and your choices are kept. <strong>📐 Figure &amp; canvas</strong> contains <strong>🖥️
+Screen &amp; framing</strong>, <strong>📊 Axes &amp; grid</strong>, and <strong>🏷️ Title &amp; labels</strong>.</p>
 <p><strong>Colour ranges</strong> — the fixation colour range (👁️ Fixations <strong>▾</strong>, once
 fixations are coloured by a column) and the heatmap's (🔥 Heatmap <strong>▾</strong>) start
-on <strong>Auto range</strong>: each trial is scaled to its own values, and a comparison
-shares one scale across both readings. Drag the range, type a bound, or untick
-<em>Auto range</em> to pin one. A pinned range stays as you step through trials, which
-is what makes them comparable, and travels on a Share link, until you tick
-<em>Auto range</em> again. Choosing another <em>Color fixations by</em> column puts the
-fixation range back to auto.</p>
+on <strong>Auto</strong>: each trial is scaled to its own values, and a comparison shares
+one scale across both readings. Drag the range, or untick <em>Auto</em>, to pin one. A
+pinned range stays as you step through trials, which is what makes them
+comparable, and travels on a Share link, until you tick <em>Auto</em> again. Choosing
+another <strong>Marker → Color</strong> column puts the fixation range back to auto.</p>
 <h3 id="show-screen-coordinates">Show screen coordinates<a class="headerlink" href="#show-screen-coordinates" title="Permanent link">&para;</a></h3>
-<p>Open <strong>📐 Figure &amp; canvas → 📊 Axes &amp; grid</strong> and turn on <strong>Coordinate grid</strong> to
-read the stimulus in monitor pixels. Automatic spacing chooses a readable
-1/2/5×10ⁿ interval for the current range; turn it off to enter an exact major
-interval. Ticks stay anchored to screen-coordinate zero even when the visible
+<p>Open <strong>📐 Figure &amp; canvas → 📊 Axes &amp; grid</strong> and tick <strong>Grid → Show</strong> to read
+the stimulus in monitor pixels. <strong>Auto</strong> chooses a readable 1/2/5×10ⁿ interval
+for the current range; untick it to enter an exact major interval. Ticks stay anchored to screen-coordinate zero even when the visible
 range is cropped or negative.
 The grid is off by default and does not shrink or rescale the spatial data area.</p>
 <h2 id="filter-fixations-and-saccades">Filter fixations and saccades<a class="headerlink" href="#filter-fixations-and-saccades" title="Permanent link">&para;</a></h2>
@@ -2062,9 +2061,10 @@ The grid is off by default and does not shrink or rescale the spatial data area.
 confused with the filter funnel on the control line above the plot, which narrows the
 <em>trial pool</em> — which readings you can pick; this one thins the reading you are
 looking at.</p>
-<p><strong>👁️ Fixations</strong> contains duration thresholds, out-of-bounds handling, and the
-fixation-index range. <strong>Highlight</strong> keeps flagged fixations in view, marked; <strong>Discard</strong> removes them from
-the rendered scanpath.</p>
+<p><strong>👁️ Fixations</strong> holds the fixation-index range, then one row per class —
+short and long (each with its ms threshold), out of bounds, and blink. A class's
+<strong>Highlight</strong> keeps its fixations in view, marked with the marker and colour on
+its row; <strong>Discard</strong> removes them from the rendered scanpath.</p>
 <p><strong>↗️ Saccades</strong> picks which reading classes are drawn at all — forward,
 skip, refixation, return sweep, regression. Hidden classes lose their line
 <em>and</em> their direction arrow, which is how you get a regressions-only figure.
@@ -2161,7 +2161,7 @@ so.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 25, 2026 10:03:20 UTC">September 25, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 26, 2026 11:59:19 UTC">September 26, 2026</span>
   </span>
 
     

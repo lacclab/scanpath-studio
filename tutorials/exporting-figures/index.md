@@ -15,7 +15,7 @@ Set the experimental monitor size correctly before adjusting marker sizes or fon
 
 ## 2. Make one clean figure
 
-Check the whole canvas for clipped marks, unreadable text, and an unnecessary legend. When several figures must share identical grid marks, set a manual interval under **📐 Figure & canvas → 📊 Axes & grid → Coordinate grid**.
+Check the whole canvas for clipped marks, unreadable text, and an unnecessary legend. When several figures must share identical grid marks, set a manual interval under **📐 Figure & canvas → 📊 Axes & grid → Grid** (untick **Auto**).
 
 Open **Export → Current figure** and choose:
 

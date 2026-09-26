@@ -19,31 +19,31 @@ When a trial contains ordered screens, a second navigator appears below the tria
 
 The **🎛️ Plot controls** rail beside the plot starts with the **🎬 Animate** and **⚖️ Compare** rows, four **Design presets** (👁️ Scanpath, 🔥 Heatmap, ✏️ Illustration, 🛠️ Custom) and a **Palette**. Scanpath, Heatmap and Illustration reset to the app defaults before applying their view; **Custom** restores your last hand-made settings. Seven sections follow:
 
-| Section            | Layers                               | Use it for                                                                                                                                |
-| ------------------ | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| 👁️ Fixations       | Fixations                            | location, order, duration and colour field                                                                                                |
-| ↗️ Saccades        | Saccades                             | movement direction, reading type, regressions and return sweeps                                                                           |
-| 📄 Stimulus        | Text, Bounding boxes, Stimulus image | verify stimulus geometry and fixation-to-word alignment; compare against the original display; text font, text colour and plot background |
-| 🔥 Heatmap         | Heatmap                              | spatial concentration by fixation count or duration                                                                                       |
-| 🔵 Raw gaze        | Raw gaze                             | millisecond-level gaze samples                                                                                                            |
-| 🧹 Filter          | —                                    | thin what is drawn inside this one reading (fixations and saccades together)                                                              |
-| 📐 Figure & canvas | —                                    | monitor framing, colour bars, axes, title and labels                                                                                      |
+| Section            | Layers                  | Use it for                                                                                                                                |
+| ------------------ | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| 👁️ Fixations       | Fixations               | location, order, duration and colour field                                                                                                |
+| ↗️ Saccades        | Saccades                | movement direction, reading type, regressions and return sweeps                                                                           |
+| 📄 Stimulus        | Text, Word boxes, Image | verify stimulus geometry and fixation-to-word alignment; compare against the original display; text font, text colour and plot background |
+| 🔥 Heatmap         | Heatmap                 | spatial concentration by fixation count or duration                                                                                       |
+| 🔵 Raw gaze        | Raw gaze                | millisecond-level gaze samples                                                                                                            |
+| 🧹 Filter          | —                       | thin what is drawn inside this one reading (fixations and saccades together)                                                              |
+| 📐 Figure & canvas | —                       | monitor framing, colour bars, axes, title and labels                                                                                      |
 
 Each section is one line: its switch and a **▾** with the rest of its settings. Switching a layer off keeps its settings.
 
-**Stimulus → Text** keeps typography beside the layer it controls. Text can scale from word boxes, or use one fixed size entered in pixels or points; point sizes use the dataset DPI. The text font, text colour and **Plot background** live there too, so they are only on screen while the Text layer is on (your choices are kept while it is off). **📐 Figure & canvas** contains **🖥️ Screen & framing**, **📊 Axes & grid**, and **🏷️ Title & labels**.
+**Stimulus → Text** keeps typography beside the layer it controls, in the rows under its **Show** switch: **Fit** scales the text from the word boxes (with their line spacing), **Size** is a fixed size in pixels or points when it does not — point sizes use the dataset DPI — and **Font** and **Color** hold the text font, the text colour and the plot **Background**. They are greyed while the Text layer is off, and your choices are kept. **📐 Figure & canvas** contains **🖥️ Screen & framing**, **📊 Axes & grid**, and **🏷️ Title & labels**.
 
-**Colour ranges** — the fixation colour range (👁️ Fixations **▾**, once fixations are coloured by a column) and the heatmap's (🔥 Heatmap **▾**) start on **Auto range**: each trial is scaled to its own values, and a comparison shares one scale across both readings. Drag the range, type a bound, or untick *Auto range* to pin one. A pinned range stays as you step through trials, which is what makes them comparable, and travels on a Share link, until you tick *Auto range* again. Choosing another *Color fixations by* column puts the fixation range back to auto.
+**Colour ranges** — the fixation colour range (👁️ Fixations **▾**, once fixations are coloured by a column) and the heatmap's (🔥 Heatmap **▾**) start on **Auto**: each trial is scaled to its own values, and a comparison shares one scale across both readings. Drag the range, or untick *Auto*, to pin one. A pinned range stays as you step through trials, which is what makes them comparable, and travels on a Share link, until you tick *Auto* again. Choosing another **Marker → Color** column puts the fixation range back to auto.
 
 ### Show screen coordinates
 
-Open **📐 Figure & canvas → 📊 Axes & grid** and turn on **Coordinate grid** to read the stimulus in monitor pixels. Automatic spacing chooses a readable 1/2/5×10ⁿ interval for the current range; turn it off to enter an exact major interval. Ticks stay anchored to screen-coordinate zero even when the visible range is cropped or negative. The grid is off by default and does not shrink or rescale the spatial data area.
+Open **📐 Figure & canvas → 📊 Axes & grid** and tick **Grid → Show** to read the stimulus in monitor pixels. **Auto** chooses a readable 1/2/5×10ⁿ interval for the current range; untick it to enter an exact major interval. Ticks stay anchored to screen-coordinate zero even when the visible range is cropped or negative. The grid is off by default and does not shrink or rescale the spatial data area.
 
 ## Filter fixations and saccades
 
 One **🧹 Filter** section thins the whole figure, in two blocks. Not to be confused with the filter funnel on the control line above the plot, which narrows the *trial pool* — which readings you can pick; this one thins the reading you are looking at.
 
-**👁️ Fixations** contains duration thresholds, out-of-bounds handling, and the fixation-index range. **Highlight** keeps flagged fixations in view, marked; **Discard** removes them from the rendered scanpath.
+**👁️ Fixations** holds the fixation-index range, then one row per class — short and long (each with its ms threshold), out of bounds, and blink. A class's **Highlight** keeps its fixations in view, marked with the marker and colour on its row; **Discard** removes them from the rendered scanpath.
 
 **↗️ Saccades** picks which reading classes are drawn at all — forward, skip, refixation, return sweep, regression. Hidden classes lose their line *and* their direction arrow, which is how you get a regressions-only figure. Clearing the list means no filter. A • on the section title shows that something is hidden.
 

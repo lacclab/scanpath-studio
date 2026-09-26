@@ -5359,81 +5359,121 @@ def render_plot_controls(
     # Animation remains disabled because a time-varying density layer would
     # need a distinct frame contract. The toggle itself is on the section's
     # row now (UX-86); this block only owns the style popover's contents.
-    with heatmap_grp, _layer_off(f"{ICONS['heatmap']} Heatmap", off=not show_heatmap):
-        # A radio (not segmented_control) so the active style is always shown
-        # selected from the seeded default — segmented_control could render
-        # with nothing selected on first open.
-        _labeled(
-            st,
-            "radio",
-            "Style",
-            options=["Word boxes", "Interpolated", "Duration mass"],
-            horizontal=True,
-            key="global_heatmap_style",
-            persist_state="session",
-            disabled=heat_disabled or comparing,
-            help=_gated_help(
-                "Comparison always uses word boxes with one shared scale. "
-                "In overlay mode each box is split into A/B halves. "
+    # UX-160: the Fixations layout (UX-158) — a *Style* row (the style picker,
+    # plus Duration mass's spread, greyed for the other two styles), then one
+    # *Color* group: what is mapped and its colorscale, the scaling, the range.
+    with (
+        heatmap_grp,
+        _layer_off(f"{ICONS['heatmap']} Heatmap", off=not show_heatmap),
+        _popover_rows("heatmap"),
+    ):
+        # A selectbox now rather than a radio: three long options do not fit
+        # one line beside a title, and a wrapped radio reads as two settings.
+        # `persist_state` shows the seeded style on first open — the reason
+        # this was a radio, not a segmented control, before ENG-36.
+        style_disabled, style_help = _layer_gate(
+            heat_disabled or comparing,
+            _gated_help(
                 "Word boxes: tint each word box by fixation count / duration. "
                 "Interpolated: a smooth Gaussian density over the fixations "
                 "themselves. Duration mass spreads dwell time across nearby "
-                "characters with a Gaussian.",
+                "characters with a Gaussian — its spread, in character widths, "
+                "is the box beside it. Comparison always uses word boxes with "
+                "one shared scale; in overlay each box is split into A/B halves.",
                 "Comparison heatmaps use split word boxes."
                 if comparing
                 else heat_reason,
             ),
         )
-        if st.session_state.get("global_heatmap_style") == "Duration mass":
-            _labeled(
-                st,
-                "number_input",
-                "Spread (characters)",
-                min_value=0.25,
-                max_value=10.0,
-                step=0.25,
-                key="global_duration_mass_sigma_chars",
-                persist_state="session",
-                disabled=heat_disabled,
-                help="Gaussian standard deviation measured in character widths.",
-            )
-        _popover_selectbox(
-            "Colors",
-            COLORSCALES,
-            "global_heatmap_colorscale",
-            disabled=heat_disabled,
-            help=_gated_help(
-                "Colour palette for the density heatmap overlay.", heat_reason
+        label_w = _label_w()
+        rest = 1.0 - label_w
+        label_col, style_col, spread_cap_col, spread_col = st.columns(
+            [label_w, rest * 0.52, rest * 0.2, rest * 0.28],
+            gap=_LABEL_GAP,
+            vertical_alignment="center",
+        )
+        _row_label(label_col, "Style", style_help)
+        heat_style = style_col.selectbox(
+            "Style",
+            options=["Word boxes", "Interpolated", "Duration mass"],
+            key="global_heatmap_style",
+            persist_state="session",
+            disabled=style_disabled,
+            help=style_help,
+            label_visibility="collapsed",
+        )
+        spread_disabled, spread_help = _layer_gate(
+            heat_disabled or heat_style != "Duration mass",
+            "Gaussian standard deviation measured in character widths (Duration "
+            "mass only).",
+        )
+        _sub_caption(spread_cap_col, "Spread")
+        spread_col.number_input(
+            "Spread (characters)",
+            min_value=0.25,
+            max_value=10.0,
+            step=0.25,
+            key="global_duration_mass_sigma_chars",
+            persist_state="session",
+            disabled=spread_disabled,
+            help=spread_help,
+            label_visibility="collapsed",
+        )
+        metric_disabled_h, metric_help = _layer_gate(
+            heat_disabled,
+            _gated_help(
+                "What the heatmap maps — fixation duration or raw counts — and, "
+                "beside it, the colour palette it is drawn in.",
+                heat_reason,
             ),
         )
-        _labeled(
-            st,
-            "radio",
-            "Scaling",
-            options=["Linear", "Log"],
-            horizontal=True,
-            key="global_heatmap_norm",
+        field = _sub_row(
+            "By",
+            section="Color",
+            section_help="What the heatmap colours by and how.",
+            caption_help=metric_help,
+        )
+        metric_col, scale_col = field.columns(
+            [0.5, 0.5], gap=_LABEL_GAP, vertical_alignment="center"
+        )
+        heatmap_metric = metric_col.selectbox(
+            "Metric",
+            options=["duration_ms", "counts"],
+            key="global_heatmap_metric",
             persist_state="session",
-            disabled=heat_disabled,
-            help=_gated_help(
+            disabled=metric_disabled_h,
+            help=metric_help,
+            label_visibility="collapsed",
+        )
+        # Keyless on purpose — see `_popover_selectbox`.
+        current_scale = st.session_state.get("global_heatmap_colorscale")
+        st.session_state["global_heatmap_colorscale"] = scale_col.selectbox(
+            "Colors",
+            COLORSCALES,
+            index=COLORSCALES.index(current_scale)
+            if current_scale in COLORSCALES
+            else 0,
+            disabled=metric_disabled_h,
+            help=metric_help,
+            label_visibility="collapsed",
+        )
+        norm_disabled, norm_help = _layer_gate(
+            heat_disabled,
+            _gated_help(
                 "Linear maps colour straight to the value. Log maps to "
                 "log(1+value) — compresses heavy-tailed dwell times so a few very "
                 "hot words don't wash out the rest (VIZ-3).",
                 heat_reason,
             ),
         )
-        heatmap_metric = _labeled(
-            st,
-            "selectbox",
-            "Metric",
-            options=["duration_ms", "counts"],
-            disabled=heat_disabled,
-            help=_gated_help(
-                "Heatmap can be raw counts or weighted by fixation duration.",
-                heat_reason,
-            ),
-            key="global_heatmap_metric",
+        _sub_row("Scale", caption_help=norm_help).segmented_control(
+            "Scaling",
+            options=["Linear", "Log"],
+            key="global_heatmap_norm",
             persist_state="session",
+            disabled=norm_disabled,
+            help=norm_help,
+            label_visibility="collapsed",
         )
         heat_data = (
             trial_fixations["duration_ms"]
@@ -5459,9 +5499,13 @@ def render_plot_controls(
                 disabled=heat_disabled,
                 reason=heat_reason,
                 help="Min/max heatmap value mapped to the two ends of the "
-                "colorscale (the metric above — fixation duration or count; "
-                "for Interpolated, the smoothed density of those values). "
-                "Lower the max for more contrast; raise it to compress.",
+                "colorscale (for Interpolated, the smoothed density). Lower the "
+                "max for more contrast; raise it to compress.",
+                field_host=_sub_row(
+                    "Range",
+                    caption_help="The heatmap values mapped to the two ends of "
+                    "the colorscale.",
+                ),
             )
 
     # --- Bounding boxes / Stimulus image / Raw gaze -----------------------

@@ -7,10 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **A long wait says what the app is doing: a card with the step, a count, the elapsed time and a Cancel** (UX-165)
+- **Cancel a dataset load, an animation build, Compare's second dataset or a download, and go back to where you were** (UX-168)
+
 ### Changed
+- **A dataset that takes a while to open shows a skeleton of the page and its steps, not a lone banner** (UX-166)
+- **Building an animation counts its frames, and the plot shows a placeholder until the browser has drawn it** (UX-169)
 - **`export_animation` needs no frame time, and `plots.animation_autoplay_frame_duration` is gone** (BUG-93)
 
 ### Fixed
+- **The plot-controls rail no longer looks cut off while a figure is being drawn** (UX-167)
 - **The replay runs in real time: a 20.8 s reading takes 20.8 s to replay, not 26 s** (BUG-93)
 - **Changing the replay's speed or Autoplay no longer rebuilds every frame** (PERF-15)
 - **With 🎬 Animate on, a click that doesn't change the replay no longer reloads it: 0.4 s instead of 19 s at 2,000 frames** (PERF-16)

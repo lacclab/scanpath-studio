@@ -312,9 +312,9 @@ animate_scanpath(words: DataFrame, fixations: DataFrame, participant: str | None
 
 Build the animated scanpath replay for one trial.
 
-Same trial selection and canvas semantics as plot_scanpath, including `screen` selection for multipart trials. The returned Plotly figure plays in real reading time scaled by `playback_speed`; save it as interactive HTML with save_figure, or rasterize to GIF/MP4 with `animation_export.export_animation`. `fix_index_range=(start, end)` replays only that window of the trial's fixations (1-based, inclusive), like plot_scanpath.
+Same trial selection and canvas semantics as plot_scanpath, including `screen` selection for multipart trials. The replay takes the reading time divided by `playback_speed`: save it as interactive HTML with save_figure, whose page keeps that clock itself, or rasterize it to GIF/MP4 with `animation_export.export_animation`, which lasts as long. (`fig.show()` plays it on Plotly's own frame queue, which runs slow.) `fix_index_range=(start, end)` replays only that window of the trial's fixations (1-based, inclusive), like plot_scanpath.
 
-With `autoplay` (default `True`) the saved interactive HTML auto-starts the replay on load *at `playback_speed`* — save_figure honors the marker the builder stamps on the figure. Pass `autoplay=False` to save a figure that opens paused (press ▶ Play to run it). Autoplay only affects the interactive HTML; GIF/MP4 rasterization renders every frame regardless.
+With `autoplay` (default `True`) the saved interactive HTML auto-starts the replay on load *at `playback_speed`* — save_figure honors the marker the builder stamps on the figure. Pass `autoplay=False` to save a figure that opens paused (press ▶ Play to run it). Autoplay only affects the interactive HTML; a GIF/MP4 always plays from its first frame.
 
 When `playback_speed` is not `1`, the automatic Illustration label says the replay timing was changed. `illustration_label` accepts `"auto"`, `"show"`, or `"hide"` like plot_scanpath.
 

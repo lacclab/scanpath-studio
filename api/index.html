@@ -3260,18 +3260,20 @@ without it.</p>
         <p>Build the animated scanpath replay for one trial.</p>
 <p>Same trial selection and canvas semantics as
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.plot_scanpath&lt;/span&gt;" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a>, including <code>screen</code> selection
-for multipart trials. The returned Plotly figure plays in real reading time scaled
-by <code>playback_speed</code>; save it as interactive HTML with
-<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.save_figure&lt;/span&gt;" href="#scanpath_studio.api.save_figure"><code>save_figure</code></a>, or rasterize to GIF/MP4 with
-<code>animation_export.export_animation</code>. <code>fix_index_range=(start, end)</code> replays only
-that window of the trial's fixations (1-based, inclusive), like
+for multipart trials. The replay takes the reading time divided by
+<code>playback_speed</code>: save it as interactive HTML with
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.save_figure&lt;/span&gt;" href="#scanpath_studio.api.save_figure"><code>save_figure</code></a>, whose page keeps that clock
+itself, or rasterize it to GIF/MP4 with <code>animation_export.export_animation</code>, which
+lasts as long. (<code>fig.show()</code> plays it on Plotly's own frame queue, which runs
+slow.) <code>fix_index_range=(start, end)</code> replays only that window of the trial's
+fixations (1-based, inclusive), like
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.plot_scanpath&lt;/span&gt;" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a>.</p>
 <p>With <code>autoplay</code> (default <code>True</code>) the saved interactive HTML auto-starts
 the replay on load <em>at <code>playback_speed</code></em> —
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.save_figure&lt;/span&gt;" href="#scanpath_studio.api.save_figure"><code>save_figure</code></a> honors the marker the builder
 stamps on the figure. Pass <code>autoplay=False</code> to save a figure that opens paused
-(press ▶ Play to run it). Autoplay only affects the interactive HTML; GIF/MP4
-rasterization renders every frame regardless.</p>
+(press ▶ Play to run it). Autoplay only affects the interactive HTML; a GIF/MP4
+always plays from its first frame.</p>
 <p>When <code>playback_speed</code> is not <code>1</code>, the automatic Illustration label says
 the replay timing was changed. <code>illustration_label</code> accepts <code>"auto"</code>,
 <code>"show"</code>, or <code>"hide"</code> like <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.plot_scanpath&lt;/span&gt;" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a>.</p>

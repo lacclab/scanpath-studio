@@ -4550,23 +4550,93 @@ def render_plot_controls(
                 help="Values of the colour-by column mapped to the two ends of "
                 "the colorscale.",
             )
-        # VIZ-15: marker shape — a channel that survives greyscale printing,
-        # so a figure stays readable where hue doesn't (see the Palette
-        # picker's **Print / greyscale** option). VIZ-23 gave the comparison
-        # builder `fixation_symbol` too, so shape is now a true global: it is
-        # the one marker property Compare does NOT override per scanpath
-        # (colour / size / opacity / hollow still come from `cmp{idx}_*`).
-        _labeled(
-            st,
-            "selectbox",
+        # UX-156: shape, size and opacity are one "Marker" row. VIZ-15: shape
+        # survives greyscale printing where hue doesn't, and VIZ-23 made it a
+        # true global — the one marker property Compare does NOT override per
+        # scanpath. Size and opacity are per-scanpath in Compare
+        # (`cmp*_marker_size_range` / `cmp*_opacity` override these there), so
+        # they carry its gate. Four controls leave no room for UX-9's sliders,
+        # so size and opacity are number boxes on shadow keys that write the
+        # canonical keys — which is what deep links, Share and restore read.
+        ss = st.session_state
+        _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
+        marker_help = (
+            "Shape, then the size range in px (the shortest and longest "
+            "fixation's marker), then opacity (1.0 = fully opaque; lower it so "
+            "overlapping fixations show through). Unlike colour, shape still "
+            "reads in black & white."
+        )
+        shape_dis, marker_help = _layer_gate(False, marker_help)
+        size_dis, size_tip = _layer_gate(
+            _dis, _gated_help("Fixation marker size (px): smallest, largest.", _reason)
+        )
+        opac_dis, opac_tip = _layer_gate(
+            _dis,
+            _gated_help(
+                "Fixation marker opacity (0.1–1.0; 1.0 = fully opaque).", _reason
+            ),
+        )
+        size_key, opac_key = "global_marker_size_range", "global_fixation_opacity"
+        lo_key, hi_key = f"{size_key}__num_lo", f"{size_key}__num_hi"
+        opac_num_key = f"{opac_key}__num"
+        size_now = ss.get(size_key)
+        if isinstance(size_now, (tuple, list)) and len(size_now) == 2:
+            ss[lo_key], ss[hi_key] = (int(v) for v in size_now)
+        if opac_key in ss:
+            ss[opac_num_key] = float(ss[opac_key])
+
+        def _apply_size() -> None:
+            if _shadow_key_missing(lo_key, hi_key):  # BUG-18
+                return
+            lo, hi = ss[lo_key], ss[hi_key]
+            ss[size_key] = (min(lo, hi), max(lo, hi))
+
+        def _apply_opacity() -> None:
+            if _shadow_key_missing(opac_num_key):  # BUG-18
+                return
+            ss[opac_key] = ss[opac_num_key]
+
+        rest = 1.0 - _LABEL_W
+        label_col, shape_col, lo_col, hi_col, opac_col = st.columns(
+            [_LABEL_W, rest * 0.4, rest * 0.2, rest * 0.2, rest * 0.2],
+            gap=_LABEL_GAP,
+            vertical_alignment="center",
+        )
+        _row_label(label_col, "Marker", marker_help)
+        shape_col.selectbox(
             "Marker shape",
             options=list(FIXATION_SYMBOLS),
             format_func=lambda s: FIXATION_SYMBOLS[s],
             key="global_fixation_symbol",
             persist_state="session",
-            help="Shape of the fixation markers. Unlike colour, shape "
-            "still reads in black & white. Applies on all three render "
+            disabled=shape_dis,
+            help="Shape of the fixation markers. Applies on all three render "
             "paths, including both compared scanpaths.",
+            label_visibility="collapsed",
+        )
+        for col, num_key, side in ((lo_col, lo_key, "min"), (hi_col, hi_key, "max")):
+            col.number_input(
+                f"Size ({side})",
+                min_value=4,
+                max_value=40,
+                step=1,
+                key=num_key,
+                on_change=_apply_size,
+                disabled=size_dis,
+                help=size_tip,
+                label_visibility="collapsed",
+            )
+        opac_col.number_input(
+            "Opacity",
+            min_value=0.1,
+            max_value=1.0,
+            step=0.05,
+            format="%.2f",
+            key=opac_num_key,
+            on_change=_apply_opacity,
+            disabled=opac_dis,
+            help=opac_tip,
+            label_visibility="collapsed",
         )
         # PRE-3: vertical drift correction. Snap each fixation to its assigned
         # text line using one of the Carr et al. (2021) algorithms; "Off"
@@ -4608,60 +4678,6 @@ def render_plot_controls(
                         static_reason,
                     ),
                 )
-        # "Snap fixations above words" is the fixation half of VIZ-9 (its
-        # partner is Saccades → Style → Line shape → Arc). Keep the control
-        # for saved-view compatibility, but do not give it a separate
-        # "Linear-reading schematic" heading in this already compact panel.
-        # Still `make_scanpath_figure`-only (VIZ-9's `fixation_snap_to_word`),
-        # unlike the drift correction above it — hence its own gate.
-        _labeled(
-            st,
-            "checkbox",
-            "Snap fixations above words",
-            key="global_fixation_snap_to_word",
-            persist_state="session",
-            disabled=static_disabled,
-            help=_gated_help(
-                "Schematic layout, **not** drift correction: every "
-                "fixation is redrawn at the top-centre of the word it landed "
-                "on, so the scanpath reads as a diagram rather than as "
-                "recorded gaze. Drift correction (above) instead nudges the "
-                "raw coordinates onto their true text line. Pairs with "
-                "↗️ Saccades ▾ → Line shape → **Arc**.",
-                static_reason,
-            ),
-        )
-        # Size / opacity are per-scanpath in Compare (`cmp*_marker_size_range`
-        # / `cmp*_opacity` always override the global values there).
-        _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
-        _range_slider(
-            st,
-            "Size",
-            label_left=True,
-            key="global_marker_size_range",
-            persist_state="session",
-            min_value=4,
-            max_value=40,
-            disabled=_dis,
-            help=_gated_help("Fixation marker size (px).", _reason),
-        )
-        _numeric_slider(
-            st,
-            "Opacity",
-            label_left=True,
-            key="global_fixation_opacity",
-            persist_state="session",
-            min_value=0.1,
-            max_value=1.0,
-            step=0.05,
-            slider_format="%.2f",
-            disabled=_dis,
-            help=_gated_help(
-                "Fixation marker opacity. Lower it so overlapping "
-                "fixations show through (1.0 = fully opaque).",
-                _reason,
-            ),
-        )
         # UX-155: the switch, the label colour and the label size share one
         # row, the last two greyed while the switch is off (never hidden, and
         # never rewritten — a disabled widget keeps its key). The size is a
@@ -4742,6 +4758,30 @@ def render_plot_controls(
             persist_state="session",
             help="Fields shown when hovering a fixation. Choose any retained "
             "fixation column; order here is tooltip order.",
+        )
+        # "Snap fixations above words" is the fixation half of VIZ-9 (its
+        # partner is Saccades → Style → Line shape → Arc). Keep the control
+        # for saved-view compatibility, but do not give it a separate
+        # "Linear-reading schematic" heading in this already compact panel.
+        # Still `make_scanpath_figure`-only (VIZ-9's `fixation_snap_to_word`),
+        # unlike the drift correction — hence its own gate. UX-156 moved it to the
+        # bottom of the panel: it is a schematic mode, not marker styling.
+        _labeled(
+            st,
+            "checkbox",
+            "Snap fixations above words",
+            key="global_fixation_snap_to_word",
+            persist_state="session",
+            disabled=static_disabled,
+            help=_gated_help(
+                "Schematic layout, **not** drift correction: every "
+                "fixation is redrawn at the top-centre of the word it landed "
+                "on, so the scanpath reads as a diagram rather than as "
+                "recorded gaze. Drift correction (above) instead nudges the "
+                "raw coordinates onto their true text line. Pairs with "
+                "↗️ Saccades ▾ → Line shape → **Arc**.",
+                static_reason,
+            ),
         )
         # When comparing two trials, the per-scanpath fixation styling lives
         # here (under the Fixation settings), not in a separate panel.

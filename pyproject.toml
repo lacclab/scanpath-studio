@@ -238,6 +238,14 @@ omit = [
     "scanpath_studio/onestop_shard.py",
     "scanpath_studio/update_sample_data.py",
 ]
+# Measure with `sys.monitoring` (PEP 669) rather than `sys.settrace`. Coverage.py
+# only makes it the default from Python 3.14, and on the 3.12 the Coverage job
+# and the docs deploy run, the settrace core made the suite 2.7x slower than the
+# plain test legs: 25 min against 9 (ENG-81). Line coverage is identical. Needs
+# coverage ≥ 7.9 for the setting. On 3.11, which has no `sys.monitoring`, it
+# warns once and falls back to the old core. Branch coverage under sysmon needs
+# 3.14, so switching `branch` on means moving the Coverage job to 3.14 too.
+core = "sysmon"
 
 [tool.coverage.report]
 # A floor, not a target: it fails the build when a change drops coverage

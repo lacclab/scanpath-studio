@@ -472,8 +472,9 @@ class TestBulkExportFlow:
         at.pills(key="bulk_export_figfmts").set_value([])
         at.pills(key="bulk_export_tabular").set_value(["Fixations"])
         # Word boxes on, so the figure settings threaded into the export are
-        # demonstrably the live ones rather than a default snapshot.
-        at.toggle(key="global_show_words").set_value(True)
+        # demonstrably the live ones rather than a default snapshot. (UX-163: a
+        # `Word boxes | ☑ Show` checkbox row, no longer a toggle.)
+        at.checkbox(key="global_show_words").set_value(True)
         at.run(timeout=60)
         _clean(at, "after choosing export artifacts:")
 

@@ -1021,7 +1021,8 @@ class TestSpotlightSelectorsResolve:
         canvas_source = inspect.getsource(app.render_canvas_controls)
 
         assert "f\"{ICONS['figure']} **Figure & canvas**\"" in control_source
-        assert "render_text=show_labels" in control_source
+        # UX-163: the typography draws always, greyed while Text is off.
+        assert "text_disabled=not show_labels" in control_source
         assert "display = host if bare else host.expander" in canvas_source
         assert 'viz.expander("🖥️ Canvas & text"' not in control_source
         assert 'viz.expander("📐 Figure & axes"' not in control_source

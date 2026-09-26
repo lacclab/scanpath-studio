@@ -3114,7 +3114,7 @@ def _check_row(
     check_share: float = 0.26,
     disabled: bool = False,
     on_change=None,
-    persist: bool = True,
+    persist_state: str | None = None,
 ):
     """A ``label | ☑ Show | …`` row; return ``(value, rest)`` (UX-159).
 
@@ -3122,8 +3122,9 @@ def _check_row(
     checkbox that says what it does, and the rest of the row (``rest``) for the
     controls it governs — which the caller greys while it is off rather than
     hiding them. The help goes on the title's tooltip, not the checkbox, so the
-    row carries no ``?`` icon. ``persist=False`` is for a checkbox on a key
-    another widget or callback owns the persistence of.
+    row carries no ``?`` icon. ``persist_state`` is forwarded to the checkbox,
+    and every caller on a wire-format key spells out ``"session"`` —
+    `test_widget_value_sync` checks for it at the call site.
     """
     disabled, help = _layer_gate(disabled, help)
     label_w = _label_w()
@@ -3134,10 +3135,16 @@ def _check_row(
         vertical_alignment="center",
     )
     _row_label(label_col, label, help)
-    kwargs = {"key": key, "disabled": disabled, "on_change": on_change}
-    if persist:
-        kwargs["persist_state"] = "session"
-    return check_col.checkbox(check_label, **kwargs), rest_col
+    return (
+        check_col.checkbox(
+            check_label,
+            key=key,
+            disabled=disabled,
+            on_change=on_change,
+            persist_state=persist_state,
+        ),
+        rest_col,
+    )
 
 
 def _sub_caption(host, text: str, help: str | None = None) -> None:
@@ -5154,6 +5161,7 @@ def render_plot_controls(
         _check_row(
             "Direction arrows",
             key="global_show_saccade_arrows",
+            persist_state="session",
             help="Draw an arrowhead on each saccade pointing in the gaze "
             "direction. In **Animate** each arrow appears with its own saccade "
             "rather than all at once.",
@@ -5200,155 +5208,268 @@ def render_plot_controls(
             ),
         )
 
-    # UX-128: the layer toggles below (Text / Bounding boxes / Stimulus image)
-    # and their own style controls stay live even while the section's master
-    # switch is off, so a user can still set up what they want shown once
-    # they turn it back on — nothing here mutates them, `_collect_viz_
-    # settings` only ANDs the master into what actually reaches the figure.
-    if not show_stimulus:
-        stim_grp.caption(
-            f"{ICONS['warning']} **{ICONS['stimulus']} Stimulus** is off — nothing below shows in the plot. "
-            "Your settings are kept either way."
+    # --- Stimulus ---------------------------------------------------------
+    # UX-163: the Fixations layout (UX-158). Each of the section's three layers
+    # is a `label | ☑ Show` row — *Text*, *Word boxes*, *Image* — with what it
+    # governs as captioned rows under it, greyed while it is off (UX-97) rather
+    # than hidden; the span highlight is a *Highlight* row of its own, and the
+    # word hover fields close the popover as 👁️ Fixations' do.
+    #
+    # UX-128: the layer switches and their settings stay live while the
+    # section's master switch is off, so a user can set up what they want shown
+    # before turning it back on — nothing here mutates them; `_collect_viz_
+    # settings` only ANDs the master into what reaches the figure.
+    with stim_grp, _popover_rows("stim"):
+        if not show_stimulus:
+            st.caption(
+                f"{ICONS['warning']} **{ICONS['stimulus']} Stimulus** is off — "
+                "nothing below shows in the plot. Your settings are kept either way."
+            )
+        show_labels, _ = _check_row(
+            "Text",
+            key="global_show_labels",
+            persist_state="session",
+            help="Draw the reading text over the stimulus. Its typography is in "
+            "the rows below, greyed while this is off.",
+        )
+        # UX-81: the typography that draws this text lives beside the layer
+        # that draws it. Reserved here and filled by the single
+        # `canvas_renderer` call in the 📐 Figure & canvas block below — one
+        # call draws both halves, since a widget drawn twice is a duplicate-key
+        # error. Keyed so `styles.py` spaces its rows like the popover's own.
+        stim_text_slot = st.container(key="rail_rows_stim_text")
+
+        # "Highlight a span": the canonical value stays in
+        # `global_critical_span_style` ("Mark text" | "Mark border" | "None"),
+        # so deep links / Share / restore are unchanged — the on/off and the
+        # mode widgets are derived from it each run, and their callbacks write
+        # it back on interaction.
+        canonical = st.session_state.get("global_critical_span_style", "Mark text")
+
+        def _on_span_toggle():
+            st.session_state["global_critical_span_style"] = (
+                st.session_state.get("global_highlight_span_mode", "Mark text")
+                if st.session_state["global_highlight_span_on"]
+                else "None"
+            )
+
+        def _on_span_mode():
+            st.session_state["global_critical_span_style"] = st.session_state[
+                "global_highlight_span_mode"
+            ]
+
+        st.session_state["global_highlight_span_on"] = canonical != "None"
+        if canonical in ("Mark text", "Mark border"):
+            st.session_state["global_highlight_span_mode"] = canonical
+        else:
+            st.session_state.setdefault("global_highlight_span_mode", "Mark text")
+
+        # VIZ-23: the span's *text*-marking channel reaches all three builders —
+        # the animation and the comparison figure take `highlight_column` +
+        # `highlight_text_color` and recolour the word labels. Neither has a
+        # border-overlay layer, so **Mark border** stays a `make_scanpath_figure`
+        # feature and only its colour picker is gated (`tabs._marked_text_column`
+        # hands the other two builders `None` under that style, so nothing is
+        # marked there rather than silently falling back to text marking).
+        border_disabled, border_reason = _mode_gate(
+            animating, comparing, **_static_only
+        )
+        span_on, span_rest = _check_row(
+            "Highlight",
+            key="global_highlight_span_on",
+            persist_state="session",
+            on_change=_on_span_toggle,
+            help="Highlight a per-word span on the text — the words where the "
+            "column beside the switch is true (by default the OneStop answer "
+            "span). How it is marked is the row below.",
+        )
+        span_off_disabled, _ = _layer_gate(not span_on, None)
+        if highlight_options:
+            span_rest.selectbox(
+                "Highlight words by",
+                options=highlight_options,
+                key="global_highlight_column",
+                persist_state="session",
+                disabled=span_off_disabled,
+                label_visibility="collapsed",
+            )
+        style_help = (
+            "**Mark text** colours the span's words; **Mark border** draws a thin "
+            "outline around the span. The box beside it is that colour."
+            + (
+                "\n\n⚠️ **Mark border** draws on the static plot only — the replay "
+                "and the comparison figure have no border layer, so the span shows "
+                "unmarked there. Use **Mark text** in those modes."
+                if border_disabled
+                else ""
+            )
+        )
+        style_field = _sub_row("Style", caption_help=style_help)
+        mode_col, span_color_col = style_field.columns(
+            [0.75, 0.25], gap=_LABEL_GAP, vertical_alignment="center"
+        )
+        span_mode = mode_col.radio(
+            "Style",
+            options=["Mark text", "Mark border"],
+            horizontal=True,
+            key="global_highlight_span_mode",
+            persist_state="session",
+            on_change=_on_span_mode,
+            disabled=span_off_disabled,
+            label_visibility="collapsed",
+        )
+        critical_span_style = span_mode if span_on else "None"
+        st.session_state["global_critical_span_style"] = critical_span_style
+        if span_mode == "Mark border":
+            span_color_col.color_picker(
+                "Border color",
+                key="global_span_border_color",
+                persist_state="session",
+                disabled=span_off_disabled or border_disabled,
+                help=_gated_help(
+                    "Colour of the span outline (used with 'Mark border').",
+                    border_reason,
+                ),
+                label_visibility="collapsed",
+            )
+        else:
+            span_color_col.color_picker(
+                "Highlighted text color",
+                key="global_highlight_text_color",
+                persist_state="session",
+                disabled=span_off_disabled,
+                label_visibility="collapsed",
+            )
+
+        _check_row(
+            "Word boxes",
+            key="global_show_words",
+            persist_state="session",
+            help="Outline each word's interest area — its bounding box, exactly "
+            "as the data gives it.",
         )
 
-    # --- Text -------------------------------------------------------------
-    show_labels = stim_grp.toggle(
-        "**Text**", key="global_show_labels", persist_state="session"
-    )
-    stim_text_slot = None
-    if show_labels:
-        # The outer toggle already names this block Text; repeating a second
-        # "🔤 Text" heading inside spent space without adding hierarchy.
-        with stim_grp:
-            # UX-81: the typography that draws this text — line spacing, the
-            # font and its size, scale-to-boxes — used to sit two sections away
-            # in 📐 Figure & canvas → 🔤 Text & fonts. It describes the stimulus,
-            # so it lives beside the layer that draws it. Same widgets, same
-            # `global_*` keys: a re-home, not a rewrite, so every share link and
-            # saved config restores exactly as before.
-            #
-            # Reserved here, filled by the single `canvas_renderer` call in the
-            # 📐 Figure & canvas block below — one call draws both halves, since
-            # a widget drawn twice is a duplicate-key error.
-            stim_text_slot = st.container()
-            # "Highlight a span" is an on/off toggle; the Mark-text / Mark-border
-            # choice appears only when it's on (no "None" option). The canonical
-            # value stays in `global_critical_span_style` ("Mark text" |
-            # "Mark border" | "None") so deep-links / Share / restore are
-            # unchanged — the toggle + mode widgets are derived from it each run,
-            # and their callbacks write it back on interaction.
-            canonical = st.session_state.get("global_critical_span_style", "Mark text")
-
-            def _on_span_toggle():
-                st.session_state["global_critical_span_style"] = (
-                    st.session_state.get("global_highlight_span_mode", "Mark text")
-                    if st.session_state["global_highlight_span_on"]
-                    else "None"
-                )
-
-            def _on_span_mode():
-                st.session_state["global_critical_span_style"] = st.session_state[
-                    "global_highlight_span_mode"
-                ]
-
-            st.session_state["global_highlight_span_on"] = canonical != "None"
-            if canonical in ("Mark text", "Mark border"):
-                st.session_state["global_highlight_span_mode"] = canonical
-            else:
-                st.session_state.setdefault("global_highlight_span_mode", "Mark text")
-
-            # VIZ-23: the span's *text*-marking channel now reaches all three
-            # builders — the animation and the comparison figure take
-            # `highlight_column` + `highlight_text_color` and recolour the word
-            # labels. Neither has a border-overlay layer, though, so **Mark
-            # border** stays a `make_scanpath_figure` feature and only its colour
-            # picker is gated (`tabs._marked_text_column` hands the other two
-            # builders `None` under that style, so nothing is marked there rather
-            # than silently falling back to text marking).
-            border_disabled, border_reason = _mode_gate(
-                animating, comparing, **_static_only
+        # VIZ-4: a stimulus image can come from the dataset (MultiplEYE stamps a
+        # per-trial `image_path`) OR be uploaded here for any dataset (a
+        # full-monitor screenshot of the reading screen). The upload's `data:`
+        # URI is stashed in session for the tab to place + the (pure) collector
+        # to read; the switch is enabled whenever either source exists.
+        uploaded_img = st.session_state.get("global_stimulus_image_upload")
+        upload_uri = _uploaded_image_data_uri(uploaded_img)
+        st.session_state["_stimulus_image_upload_uri"] = upload_uri
+        can_show_image = has_stimulus_image or upload_uri is not None
+        # VIZ-23: `background_image*` are parameters of all three builders — the
+        # comparison figure places one `layout.image` per panel in the split
+        # layouts — so the whole image group is live in every mode.
+        show_stim_image, _ = _check_row(
+            "Image",
+            key="global_show_stimulus_image",
+            persist_state="session",
+            disabled=not can_show_image,
+            help="Show a stimulus page behind the scanpath — the dataset's "
+            "rendered page (exact coordinates; sidesteps CJK / RTL font issues) "
+            "or an image you upload below (stretched to fill the monitor)."
+            + ("" if can_show_image else " Upload one below to switch it on."),
+        )
+        # The uploader is never greyed: it is the only way to get an image in
+        # and enable the switch in the first place.
+        _sub_row(
+            "File",
+            caption_help="A screenshot of the reading screen, as the background "
+            "for any dataset. An upload **overrides** a dataset's built-in image "
+            "and is stretched to fill the monitor; the offset and scale below "
+            "line it up. Not carried by Share links (upload it on the other end).",
+        ).file_uploader(
+            "Upload a stimulus image",
+            type=["png", "jpg", "jpeg", "gif", "webp"],
+            # No persist_state: st.file_uploader does not take it, and an
+            # UploadedFile is already stashed by _uploaded_image_data_uri.
+            key="global_stimulus_image_upload",
+            max_upload_size=upload_limit_mb(),
+            label_visibility="collapsed",
+        )
+        # The placement rows need an image to place: with none loaded they
+        # could never come alive, so they wait for one rather than sit greyed.
+        # Loaded but switched off, they grey (UX-97).
+        if can_show_image:
+            image_idle = not show_stim_image
+            opacity_help = (
+                "Dim the stimulus image so the fixations, saccades and word boxes "
+                "stand out over it (1.0 = fully opaque)."
             )
-            span_on = st.toggle(
-                "Highlight a span",
-                key="global_highlight_span_on",
-                persist_state="session",
-                on_change=_on_span_toggle,
-                help="Highlight a per-word span (e.g. the answer span) on the text.",
-            )
-            if span_on:
-                # Which column defines the span first, then how to mark it.
-                if highlight_options:
-                    _labeled(
-                        st,
-                        "selectbox",
-                        "Highlight words by",
-                        options=highlight_options,
-                        key="global_highlight_column",
-                        persist_state="session",
-                        help="Which per-word column to highlight on the text (words "
-                        "where it is true). Defaults to the OneStop answer span.",
-                    )
-                critical_span_style = _labeled(
-                    st,
-                    "radio",
-                    "Style",
-                    options=["Mark text", "Mark border"],
-                    horizontal=True,
-                    key="global_highlight_span_mode",
-                    persist_state="session",
-                    on_change=_on_span_mode,
-                    help="Mark text: colour the span's words. Mark border: draw a "
-                    "thin outline around the span."
-                    + (
-                        "\n\n⚠️ **Mark border** draws on the static plot only — "
-                        "the replay and the comparison figure have no border "
-                        "layer, so the span shows unmarked there. Use **Mark "
-                        "text** in those modes."
-                        if border_disabled
-                        else ""
-                    ),
-                )
-            else:
-                critical_span_style = "None"
-            st.session_state["global_critical_span_style"] = critical_span_style
-            if critical_span_style == "Mark text":
-                _labeled(
-                    st,
-                    "color_picker",
-                    "Highlighted text color",
-                    key="global_highlight_text_color",
-                    persist_state="session",
-                    help="Colour of the highlighted reading text (used with "
-                    "'Mark text').",
-                )
-            elif critical_span_style == "Mark border":
-                _labeled(
-                    st,
-                    "color_picker",
-                    "Border color",
-                    key="global_span_border_color",
-                    persist_state="session",
-                    disabled=border_disabled,
-                    help=_gated_help(
-                        "Colour of the span outline (used with 'Mark border').",
-                        border_reason,
-                    ),
-                )
-
-            st.divider()
-            # Honoured by all three render paths (static, animation, and — since
-            # the comparison builders now take `word_hover_fields` too —
-            # Compare), so this one carries no `_mode_gate`.
-            _labeled(
+            _numeric_slider(
                 st,
-                "multiselect",
-                "Hover fields",
-                options=hover_field_options(words, words=True),
-                key="global_word_hover_fields",
+                "Image opacity",
+                key="global_stimulus_image_opacity",
                 persist_state="session",
-                help="Fields shown when hovering a word: identity, any reading "
-                "measure, linguistic feature, or retained metadata column.",
+                min_value=0.1,
+                max_value=1.0,
+                step=0.05,
+                number_format="%.2f",
+                disabled=image_idle,
+                help=opacity_help,
+                field_host=_sub_row("Opacity", caption_help=opacity_help),
             )
+            # VIZ-4: manual alignment. When the data's coordinates don't match the
+            # image exactly, nudge it (X/Y px) and scale it to line it up with the
+            # word boxes and fixations. Dataset and uploaded images alike.
+            offset = _sub_row(
+                "Offset",
+                caption_help="Shift the image right (X) and down (Y), in pixels, to "
+                "line it up with the text.",
+            )
+            x_cap, x_col, y_cap, y_col = offset.columns(
+                [0.1, 0.4, 0.1, 0.4], gap=_LABEL_GAP, vertical_alignment="center"
+            )
+            _sub_caption(x_cap, "X")
+            x_col.number_input(
+                "Image X offset (px)",
+                step=5.0,
+                key="global_stimulus_image_offset_x",
+                persist_state="session",
+                disabled=image_idle,
+                label_visibility="collapsed",
+            )
+            _sub_caption(y_cap, "Y")
+            y_col.number_input(
+                "Image Y offset (px)",
+                step=5.0,
+                key="global_stimulus_image_offset_y",
+                persist_state="session",
+                disabled=image_idle,
+                label_visibility="collapsed",
+            )
+            scale_help = (
+                "Scale the image so its text matches the word boxes (1.0 = the "
+                "image's native / dataset size)."
+            )
+            _numeric_slider(
+                st,
+                "Image scale",
+                key="global_stimulus_image_scale",
+                persist_state="session",
+                min_value=0.25,
+                max_value=3.0,
+                step=0.05,
+                number_format="%.2f",
+                disabled=image_idle,
+                help=scale_help,
+                field_host=_sub_row("Scale", caption_help=scale_help),
+            )
+
+        # Honoured by all three render paths (static, animation, and — since
+        # the comparison builders take `word_hover_fields` too — Compare), so
+        # this one carries no `_mode_gate`.
+        _labeled(
+            st,
+            "multiselect",
+            "Hover fields",
+            options=hover_field_options(words, words=True),
+            key="global_word_hover_fields",
+            persist_state="session",
+            help="Fields shown when hovering a word: identity, any reading "
+            "measure, linguistic feature, or retained metadata column.",
+        )
 
     # --- Heatmap ----------------------------------------------------------
     # Compare supports a shared word-box scale: overlay splits each box into
@@ -5505,107 +5626,6 @@ def render_plot_controls(
                 ),
             )
 
-    # --- Bounding boxes / Stimulus image / Raw gaze -----------------------
-    stim_grp.toggle(
-        "**Bounding boxes**", key="global_show_words", persist_state="session"
-    )
-    # VIZ-4: a stimulus image can come from the dataset (MultiplEYE stamps a
-    # per-trial `image_path`) OR be uploaded here for any dataset (a full-monitor
-    # screenshot of the reading screen). The upload's `data:` URI is stashed in
-    # session for the tab to place + the (pure) collector to read; the toggle is
-    # enabled whenever either source exists.
-    uploaded_img = st.session_state.get("global_stimulus_image_upload")
-    upload_uri = _uploaded_image_data_uri(uploaded_img)
-    st.session_state["_stimulus_image_upload_uri"] = upload_uri
-    can_show_image = has_stimulus_image or upload_uri is not None
-    # VIZ-23: `background_image*` are now parameters of all three builders — the
-    # comparison figure places one `layout.image` per panel in the split layouts —
-    # so the whole stimulus-image group is live in every mode.
-    show_stim_image = stim_grp.toggle(
-        "**Stimulus image**",
-        help="Show a stimulus page behind the scanpath — the dataset's rendered "
-        "page (exact coordinates; sidesteps CJK / RTL font issues) or an image "
-        "you upload below (stretched to fill the monitor). "
-        + (
-            ""
-            if can_show_image
-            else "(Upload one below, or load a dataset with images)"
-        ),
-        disabled=not can_show_image,
-        key="global_show_stimulus_image",
-        persist_state="session",
-    )
-    # Keep the popover reachable even while the toggle is off-and-disabled (no
-    # image loaded yet) — its uploader is the only way to get an image in and
-    # enable the toggle in the first place.
-    if show_stim_image or not can_show_image:
-        with _rail_subsection(stim_grp, f"{ICONS['settings']} Image placement"):
-            st.file_uploader(
-                "Upload a stimulus image",
-                type=["png", "jpg", "jpeg", "gif", "webp"],
-                # No persist_state: st.file_uploader does not take it, and an
-                # UploadedFile is already stashed by _uploaded_image_data_uri.
-                key="global_stimulus_image_upload",
-                help="Use a screenshot of the reading screen as the background for "
-                "any dataset. An upload **overrides** a dataset's built-in image and "
-                "is stretched to fill the monitor; use the **Align to text** controls "
-                "below to position/scale it. Not carried by Share links (upload it on "
-                "the other end).",
-                max_upload_size=upload_limit_mb(),
-            )
-            _numeric_slider(
-                st,
-                "Image opacity",
-                label_left=True,
-                key="global_stimulus_image_opacity",
-                persist_state="session",
-                min_value=0.1,
-                max_value=1.0,
-                step=0.05,
-                number_format="%.2f",
-                help="Dim the stimulus image so the fixations, saccades and word "
-                "boxes stand out over it (1.0 = fully opaque).",
-            )
-            # VIZ-4: manual alignment. The text was shown at some position on the
-            # screen; when the data's coordinates don't match the image exactly, nudge
-            # the image (X/Y px) and scale it to line it up with the word boxes and
-            # fixations. Applies to dataset and uploaded images alike.
-            st.caption("**Align to text** — nudge/scale the image to fit the boxes.")
-            # UX-51: the two offsets used to share a `st.columns(2)` row purely to
-            # save a line. They are ordinary `label | field` rows now, which costs
-            # the same height (one line each instead of one two-line row) and lets
-            # them line up with the opacity and scale sliders around them.
-            _labeled(
-                st,
-                "number_input",
-                "Image X offset (px)",
-                step=5.0,
-                key="global_stimulus_image_offset_x",
-                persist_state="session",
-                help="Shift the image horizontally to line it up with the text.",
-            )
-            _labeled(
-                st,
-                "number_input",
-                "Image Y offset (px)",
-                step=5.0,
-                key="global_stimulus_image_offset_y",
-                persist_state="session",
-                help="Shift the image vertically to line it up with the text.",
-            )
-            _numeric_slider(
-                st,
-                "Image scale",
-                label_left=True,
-                key="global_stimulus_image_scale",
-                persist_state="session",
-                min_value=0.25,
-                max_value=3.0,
-                step=0.05,
-                number_format="%.2f",
-                help="Scale the image up/down so its text matches the word boxes "
-                "(1.0 = the image's native / dataset size).",
-            )
     # Raw gaze is a `make_scanpath_figure`-only overlay. The toggle is on the
     # section's row (UX-86); this owns the style popover — previously nothing,
     # since raw gaze had no styling of its own before it got a section.
@@ -5687,128 +5707,160 @@ def render_plot_controls(
     screen_group = _rail_subsection(figure_grp, f"{ICONS['screen']} Screen & framing")
     axes = _rail_subsection(figure_grp, f"{ICONS['axes']} Axes & grid")
     labels = _rail_subsection(figure_grp, f"{ICONS['labels']} Title & labels")
-    screen_group.toggle(
-        "**Show full monitor**",
-        key="global_fit_to_monitor",
-        persist_state="session",
-        help="Frame the whole presentation monitor so the scanpath sits where it "
-        "appeared on screen. Turn off to crop the view tightly to the data.",
-    )
-    if canvas_renderer is not None:
-        canvas_renderer(
-            screen_group,
-            text_host=stim_text_slot,
-            render_text=show_labels,
+    # UX-164: each block's rows take the popover layout (`_popover_rows`) — the
+    # framing switch, the grid and the colour bar become `label | ☑ Show | …`
+    # rows carrying what they govern (greyed while off), the monitor size and
+    # the two axis fields one row each.
+    with screen_group, _popover_rows("fig_screen"):
+        _check_row(
+            "Frame",
+            key="global_fit_to_monitor",
+            persist_state="session",
+            check_label="Whole monitor",
+            check_share=0.6,
+            help="Frame the whole presentation monitor so the scanpath sits where "
+            "it appeared on screen. Off crops the view tightly to the data.",
         )
+        screen_rows = st.container(key="rail_rows_fig_screen_canvas")
+    if canvas_renderer is not None:
+        # UX-163: the typography rows always draw, greyed while *Text* is off
+        # (`text_disabled`), at the popovers' label width. BUG-38 still holds:
+        # they belong to 📄 Stimulus → Text and never fall back into this one.
+        with _rail_label_width(_POPOVER_LABEL_W):
+            canvas_renderer(
+                screen_rows,
+                text_host=stim_text_slot,
+                text_disabled=not show_labels,
+            )
 
-    show_coordinate_grid = axes.toggle(
-        "Coordinate grid",
-        key="global_show_coordinate_grid",
-        persist_state="session",
-        help="Overlay screen X/Y coordinates in monitor pixels. The grid uses "
-        "the same inverted-Y coordinate frame as word boxes and fixations.",
-    )
-    if show_coordinate_grid:
-        automatic_grid = axes.toggle(
-            "Automatic grid spacing",
+    with axes, _popover_rows("fig_axes"):
+        show_coordinate_grid, grid_rest = _check_row(
+            "Grid",
+            key="global_show_coordinate_grid",
+            persist_state="session",
+            help="Overlay screen X/Y coordinates in monitor pixels, in the same "
+            "inverted-Y frame as word boxes and fixations. **Auto** picks a "
+            "readable 1/2/5×10ⁿ interval from the visible range; untick it to pin "
+            "a reproducible major interval (px) — minor lines divide it in fifths.",
+        )
+        grid_off_disabled, _ = _layer_gate(not show_coordinate_grid, None)
+        auto_col, spacing_col, px_col = grid_rest.columns(
+            [0.4, 0.42, 0.18], gap=_LABEL_GAP, vertical_alignment="center"
+        )
+        automatic_grid = auto_col.checkbox(
+            "Auto",
             key="global_coordinate_grid_auto",
             persist_state="session",
-            help="Choose a readable 1/2/5×10ⁿ interval from the visible range. "
-            "Turn off to pin a reproducible pixel interval.",
+            disabled=grid_off_disabled,
         )
-        if not automatic_grid:
-            _labeled(
-                axes,
-                "number_input",
-                "Major grid interval (px)",
-                min_value=10.0,
-                max_value=5000.0,
-                step=10.0,
-                key="global_coordinate_grid_spacing",
-                persist_state="session",
-                help="Major labels and lines repeat at this pixel interval; "
-                "minor lines divide it into fifths.",
-            )
-    show_colorbars = _labeled(
-        axes,
-        "checkbox",
-        "Show color bars",
-        key="global_show_colorbars",
-        persist_state="session",
-    )
-    if show_colorbars:
-        # VIZ-23: all three builders now route their colour bar through
-        # `_colorbar_dict`, so the styling below applies wherever a colour bar is
-        # actually drawn. The one mode without one is the DUAL animation (Animate
-        # + Compare) — there the flat A/B colours replace metric colouring
-        # entirely, so there is no bar to style. Same gate as "Color fixations by".
+        spacing_col.number_input(
+            "Major grid interval (px)",
+            min_value=10.0,
+            max_value=5000.0,
+            step=10.0,
+            key="global_coordinate_grid_spacing",
+            persist_state="session",
+            disabled=grid_off_disabled or automatic_grid,
+            label_visibility="collapsed",
+        )
+        _sub_caption(px_col, "px")
+
+        # VIZ-23: all three builders route their colour bar through
+        # `_colorbar_dict`, so the styling applies wherever a colour bar is
+        # drawn. The one mode without one is the DUAL animation (Animate +
+        # Compare) — there the flat A/B colours replace metric colouring
+        # entirely, so there is no bar to style. Same gate as "Color by".
         cb_disabled, cb_reason = _mode_gate(
             animating, comparing, in_animation=not comparing
         )
-        _labeled(
-            axes,
-            "radio",
+        show_colorbars, cb_rest = _check_row(
+            "Color bar",
+            key="global_show_colorbars",
+            persist_state="session",
+            help=_gated_help(
+                "Draw the colour bar of a mapped colour (fixation colour, "
+                "heatmap): on the right (Vertical) or below the plot "
+                "(Horizontal), with its tick labels' angle and size below.",
+                cb_reason,
+            ),
+        )
+        cb_idle = cb_disabled or not show_colorbars
+        cb_rest.radio(
             "Color bar orientation",
             options=["Vertical", "Horizontal"],
             horizontal=True,
             key="global_colorbar_orientation",
             persist_state="session",
-            disabled=cb_disabled,
-            help=_gated_help(
-                "Vertical bar on the right, or a horizontal bar below the plot.",
-                cb_reason,
-            ),
+            disabled=_layer_gate(cb_idle, None)[0],
+            label_visibility="collapsed",
+        )
+        angle_help = _gated_help(
+            "Rotate the color-bar tick labels (degrees).", cb_reason
         )
         _numeric_slider(
-            axes,
+            st,
             "Tick label angle",
-            label_left=True,
             key="global_colorbar_tickangle",
             persist_state="session",
             min_value=-90,
             max_value=90,
             step=15,
-            disabled=cb_disabled,
-            help=_gated_help("Rotate the color-bar tick labels (degrees).", cb_reason),
+            disabled=cb_idle,
+            help=angle_help,
+            field_host=_sub_row(
+                "Angle", caption_help=_layer_gate(False, angle_help)[1]
+            ),
         )
+        size_help = _gated_help("Color-bar tick-label font size (px).", cb_reason)
         _numeric_slider(
-            axes,
+            st,
             "Tick label size",
-            label_left=True,
             key="global_colorbar_tickfont_size",
             persist_state="session",
             min_value=6,
             max_value=20,
-            disabled=cb_disabled,
-            help=_gated_help("Color-bar tick-label font size (px).", cb_reason),
+            disabled=cb_idle,
+            help=size_help,
+            field_host=_sub_row("Size", caption_help=_layer_gate(False, size_help)[1]),
         )
-    # The animation and the comparison figures always plot spatial x/y — only
-    # `make_scanpath_figure` takes `x_field`/`y_field`.
-    axis_disabled, axis_reason = _mode_gate(animating, comparing, **_static_only)
-    _labeled(
-        axes,
-        "selectbox",
-        "X axis field",
-        options=numeric_fields,
-        key="global_x_field",
-        persist_state="session",
-        disabled=axis_disabled,
-        help=_gated_help(
-            "Fixation column plotted on the X axis (default `x`).", axis_reason
-        ),
-    )
-    _labeled(
-        axes,
-        "selectbox",
-        "Y axis field",
-        options=numeric_fields,
-        key="global_y_field",
-        persist_state="session",
-        disabled=axis_disabled,
-        help=_gated_help(
-            "Fixation column plotted on the Y axis (default `y`).", axis_reason
-        ),
-    )
+
+        # The animation and the comparison figures always plot spatial x/y —
+        # only `make_scanpath_figure` takes `x_field`/`y_field`.
+        axis_disabled, axis_reason = _mode_gate(animating, comparing, **_static_only)
+        axis_disabled, axis_help = _layer_gate(
+            axis_disabled,
+            _gated_help(
+                "The fixation columns plotted on the X and Y axes (default `x` "
+                "and `y`).",
+                axis_reason,
+            ),
+        )
+        label_w = _label_w()
+        rest = 1.0 - label_w
+        axes_cols = st.columns(
+            [label_w, rest * 0.1, rest * 0.4, rest * 0.1, rest * 0.4],
+            gap=_LABEL_GAP,
+            vertical_alignment="center",
+        )
+        _row_label(axes_cols[0], "Axes", axis_help)
+        _sub_caption(axes_cols[1], "X")
+        axes_cols[2].selectbox(
+            "X axis field",
+            options=numeric_fields,
+            key="global_x_field",
+            persist_state="session",
+            disabled=axis_disabled,
+            label_visibility="collapsed",
+        )
+        _sub_caption(axes_cols[3], "Y")
+        axes_cols[4].selectbox(
+            "Y axis field",
+            options=numeric_fields,
+            key="global_y_field",
+            persist_state="session",
+            disabled=axis_disabled,
+            label_visibility="collapsed",
+        )
 
     # EXP-5: title/caption on the figure — moved here from being Export-only
     # (EXP-2), so it's visible live rather than a setting a user has to remember
@@ -5829,63 +5881,62 @@ def render_plot_controls(
             if not st.session_state.get("global_caption_pattern"):
                 st.session_state["global_caption_pattern"] = DEFAULT_CAPTION_PATTERN
 
-    _labeled(
-        labels,
-        "selectbox",
-        "Illustration label",
-        options=["Auto", "Show", "Hide"],
-        key="global_illustration_label",
-        persist_state="session",
-        help="Auto labels figures when geometry or data is transformed. Show "
-        "forces the label; Hide is an explicit publication override.",
-    )
-    show_title_caption = labels.toggle(
-        "Title & caption on the figure",
-        key="global_show_title_caption",
-        persist_state="session",
-        on_change=_on_toggle_title_caption,
-        help="Render a title and/or caption into the figure — on screen, in "
-        "**This trial** export, and in a bulk export — so a figure dropped "
-        "into a paper or a slide carries its own provenance. The plot itself "
-        "is not scaled down; the figure grows to make room.",
-    )
-    if show_title_caption:
-        _title_caption_fields = pattern_fields(
-            "p01",
-            "t01",
-            words if words is not None else pd.DataFrame(),
-            trial_fixations if trial_fixations is not None else pd.DataFrame(),
-            {},
-            dataset_name=current_dataset_name(),
+    with labels, _popover_rows("fig_labels"):
+        _labeled(
+            st,
+            "selectbox",
+            "Illustration label",
+            display="Illustration",
+            options=["Auto", "Show", "Hide"],
+            key="global_illustration_label",
+            persist_state="session",
+            help="Auto labels figures when geometry or data is transformed. Show "
+            "forces the label; Hide is an explicit publication override.",
         )
-        # EXP-5: two text boxes, two previews and a field list is far too tall
-        # for the rail — inline it ran "very long and narrow", so it opened in a
-        # nested ⚙️ popover. UX-48 made the *group* a popover instead, and
-        # Streamlit won't nest popover-in-popover — the pattern boxes are simply
-        # inline here now, where the overlay's width is the point.
-        box = labels.container()
-        render_pattern_input(
-            box,
-            "Title",
-            "global_title_pattern",
-            _title_caption_fields,
-            # No placeholder here, unlike the Compare A/B labels: a
-            # placeholder promises "this is what an empty box gives you",
-            # and an empty box here gives *no title at all*. Both boxes are
-            # pre-filled with the defaults on the run the toggle is switched
-            # on, so there is nothing an empty one needs to explain (UX-31).
-            help="Leave empty for no title.",
-            label_left=True,
+        show_title_caption, _ = _check_row(
+            "Title & caption",
+            key="global_show_title_caption",
+            persist_state="session",
+            on_change=_on_toggle_title_caption,
+            help="Render a title and/or caption into the figure — on screen, in "
+            "**This trial** export, and in a bulk export — so a figure dropped "
+            "into a paper or a slide carries its own provenance. The plot itself "
+            "is not scaled down; the figure grows to make room.",
         )
-        render_pattern_input(
-            box,
-            "Caption",
-            "global_caption_pattern",
-            _title_caption_fields,
-            help="Leave empty for no caption.",
-            label_left=True,
-        )
-        render_pattern_help(box, _title_caption_fields)
+        if show_title_caption:
+            _title_caption_fields = pattern_fields(
+                "p01",
+                "t01",
+                words if words is not None else pd.DataFrame(),
+                trial_fixations if trial_fixations is not None else pd.DataFrame(),
+                {},
+                dataset_name=current_dataset_name(),
+            )
+            # EXP-5: two text boxes, two previews and a field list, inline — the
+            # overlay's width is the point, and Streamlit won't nest a popover.
+            box = st.container()
+            render_pattern_input(
+                box,
+                "Title",
+                "global_title_pattern",
+                _title_caption_fields,
+                # No placeholder here, unlike the Compare A/B labels: a
+                # placeholder promises "this is what an empty box gives you",
+                # and an empty box here gives *no title at all*. Both boxes are
+                # pre-filled with the defaults on the run the toggle is switched
+                # on, so there is nothing an empty one needs to explain (UX-31).
+                help="Leave empty for no title.",
+                label_left=True,
+            )
+            render_pattern_input(
+                box,
+                "Caption",
+                "global_caption_pattern",
+                _title_caption_fields,
+                help="Leave empty for no caption.",
+                label_left=True,
+            )
+            render_pattern_help(box, _title_caption_fields)
 
     # Build the dict from session_state so it matches viz_settings_from_state
     # exactly; then fill in the per-scanpath comparison styling, shown only when

@@ -3492,8 +3492,10 @@ class TestFigureAndCanvasSubGroups:
         # The typography half is drawn into the Stimulus section instead.
         assert "text_host" in canvas_source
         assert '_rail_subsection(stim_grp, "🔤 Text")' not in control_source
-        # The framing toggle leads the screen block.
-        assert 'screen_group.toggle(\n        "**Show full monitor**"' in control_source
+        # The framing switch leads the screen block (UX-164: a `Frame | ☑
+        # Whole monitor` row).
+        assert 'key="global_fit_to_monitor"' in control_source
+        assert "with screen_group, _popover_rows(" in control_source
         # …and the old flat captions are gone.
         assert 'figure_grp.caption("**Canvas & text**")' not in control_source
         assert 'figure_grp.caption("**Axes & labels**")' not in control_source

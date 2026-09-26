@@ -42,7 +42,7 @@ restores your last hand-made settings. Seven sections follow:
 | --- | --- | --- |
 | 👁️ Fixations | Fixations | location, order, duration and colour field |
 | ↗️ Saccades | Saccades | movement direction, reading type, regressions and return sweeps |
-| 📄 Stimulus | Text, Bounding boxes, Stimulus image | verify stimulus geometry and fixation-to-word alignment; compare against the original display; text font, text colour and plot background |
+| 📄 Stimulus | Text, Word boxes, Image | verify stimulus geometry and fixation-to-word alignment; compare against the original display; text font, text colour and plot background |
 | 🔥 Heatmap | Heatmap | spatial concentration by fixation count or duration |
 | 🔵 Raw gaze | Raw gaze | millisecond-level gaze samples |
 | 🧹 Filter | — | thin what is drawn inside this one reading (fixations and saccades together) |
@@ -51,12 +51,13 @@ restores your last hand-made settings. Seven sections follow:
 Each section is one line: its switch and a **▾** with the rest of its settings.
 Switching a layer off keeps its settings.
 
-**Stimulus → Text** keeps typography beside the layer it controls. Text can
-scale from word boxes, or use one fixed size entered in pixels or points; point
-sizes use the dataset DPI. The text font, text colour and **Plot background**
-live there too, so they are only on screen while the Text layer is on (your
-choices are kept while it is off). **📐 Figure & canvas** contains **🖥️ Screen &
-framing**, **📊 Axes & grid**, and **🏷️ Title & labels**.
+**Stimulus → Text** keeps typography beside the layer it controls, in the rows
+under its **Show** switch: **Fit** scales the text from the word boxes (with
+their line spacing), **Size** is a fixed size in pixels or points when it does
+not — point sizes use the dataset DPI — and **Font** and **Color** hold the text
+font, the text colour and the plot **Background**. They are greyed while the Text
+layer is off, and your choices are kept. **📐 Figure & canvas** contains **🖥️
+Screen & framing**, **📊 Axes & grid**, and **🏷️ Title & labels**.
 
 **Colour ranges** — the fixation colour range (👁️ Fixations **▾**, once
 fixations are coloured by a column) and the heatmap's (🔥 Heatmap **▾**) start
@@ -68,10 +69,9 @@ another **Marker → Color** column puts the fixation range back to auto.
 
 ### Show screen coordinates
 
-Open **📐 Figure & canvas → 📊 Axes & grid** and turn on **Coordinate grid** to
-read the stimulus in monitor pixels. Automatic spacing chooses a readable
-1/2/5×10ⁿ interval for the current range; turn it off to enter an exact major
-interval. Ticks stay anchored to screen-coordinate zero even when the visible
+Open **📐 Figure & canvas → 📊 Axes & grid** and tick **Grid → Show** to read
+the stimulus in monitor pixels. **Auto** chooses a readable 1/2/5×10ⁿ interval
+for the current range; untick it to enter an exact major interval. Ticks stay anchored to screen-coordinate zero even when the visible
 range is cropped or negative.
 The grid is off by default and does not shrink or rescale the spatial data area.
 

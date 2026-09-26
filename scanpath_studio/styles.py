@@ -178,6 +178,22 @@ def get_app_css() -> str:
 
     div[data-testid="stPopover"] button { border-radius: 999px; }
     div[data-testid="stPopover"] button p { white-space: nowrap; }
+    /* BUG-89 — a click on a popover's ▾ must land on the button, not the
+       chevron glyph. Opening swaps that glyph (expand_more → expand_less), so
+       the span the pointer hit is detached by the time the click bubbles to
+       `document`. There Streamlit's own outside-click handler ignores the
+       opening click only within 50 ms of it; if the popover takes longer to
+       render (the rail's big ones often do), the detached target fails its
+       "inside the trigger?" test and the popover closes itself 2 ms after
+       opening. The next click then closes an already-closed popover, which is
+       why it took 2–3 clicks. With the glyph transparent to the pointer the
+       target is always an element that survives the re-render. The chevron is
+       the one `aria-hidden` child of the trigger; its label and icon keep
+       their nodes. */
+    [data-testid="stPopoverButton"] [aria-hidden="true"],
+    [data-testid="stPopoverButton"] [aria-hidden="true"] * {
+        pointer-events: none;
+    }
     div[data-testid="stPopoverBody"] {
         min-width: min(28rem, 90vw);
     }

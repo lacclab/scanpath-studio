@@ -22,7 +22,7 @@ The app caps how far a `.zip` may decompress (32 GB per file and 64 GB in total 
 
 ## Why does HTML export work but PNG/SVG/PDF fail?
 
-Static formats use Kaleido and need Chrome/Chromium. See [Export troubleshooting](https://lacclab.github.io/scanpath-studio/export-troubleshooting/index.md).
+Static formats use Kaleido, which needs Chrome, Chromium or Edge. See [Export troubleshooting](https://lacclab.github.io/scanpath-studio/export-troubleshooting/index.md).
 
 ## Can another person open my share link?
 

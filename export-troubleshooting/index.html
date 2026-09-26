@@ -1072,10 +1072,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#kaleido-needs-a-chromechromium-binary" class="md-nav__link">
+  <a href="#kaleido-needs-chrome-chromium-or-edge" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Kaleido needs a Chrome/Chromium binary
+        Kaleido needs Chrome, Chromium or Edge
       
     </span>
   </a>
@@ -1698,10 +1698,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#kaleido-needs-a-chromechromium-binary" class="md-nav__link">
+  <a href="#kaleido-needs-chrome-chromium-or-edge" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Kaleido needs a Chrome/Chromium binary
+        Kaleido needs Chrome, Chromium or Edge
       
     </span>
   </a>
@@ -1839,15 +1839,16 @@
 </tr>
 </tbody>
 </table>
-<h2 id="kaleido-needs-a-chromechromium-binary">Kaleido needs a Chrome/Chromium binary<a class="headerlink" href="#kaleido-needs-a-chromechromium-binary" title="Permanent link">&para;</a></h2>
+<h2 id="kaleido-needs-chrome-chromium-or-edge">Kaleido needs Chrome, Chromium or Edge<a class="headerlink" href="#kaleido-needs-chrome-chromium-or-edge" title="Permanent link">&para;</a></h2>
 <p>Static image export (PNG/SVG/PDF) and rasterized animation (GIF/MP4) render
 through <a href="https://github.com/plotly/Kaleido">Kaleido</a> v1, which drives a headless
-Chrome. <code>pip install</code> does <strong>not</strong> install Chrome — run this once:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>kaleido_get_chrome<span class="w">        </span><span class="c1"># or: plotly_get_chrome -y</span>
+browser. It finds an installed Google Chrome, Chromium or Microsoft Edge by
+itself, in the desktop app and in a <code>pip</code> install alike, so installing one of
+them is enough. A <code>pip</code> install can instead download a copy for Kaleido, once:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>plotly_get_chrome<span class="w"> </span>-y
 </code></pre></div>
-<p>(From Python: <code>import kaleido; kaleido.get_chrome_sync()</code>.) If Chrome is
-unavailable, use <strong>HTML</strong> export; the export panel shows the install command
-when Chrome is missing.</p>
+<p>(From Python: <code>import kaleido; kaleido.get_chrome_sync()</code>.) Without a browser,
+use <strong>HTML</strong> export; the export panel says so when it finds none.</p>
 <h2 id="mp4-gif">MP4 / GIF<a class="headerlink" href="#mp4-gif" title="Permanent link">&para;</a></h2>
 <p><code>export_animation</code> takes the replay figure and returns the encoded bytes; the
 format and the per-frame duration are keyword-only:</p>
@@ -1916,7 +1917,7 @@ visualization rail, or <code>canvas_size=(W, H)</code> in the API) — e.g.
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 25, 2026 10:03:20 UTC">September 25, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 25, 2026 11:44:48 UTC">September 25, 2026</span>
   </span>
 
     

@@ -2801,7 +2801,7 @@ with the default and help <code>--help</code> prints.</p>
 <td><code>--color-by</code></td>
 <td><code>FIELD</code></td>
 <td>—</td>
-<td>Fixation color field, e.g. duration_ms or gpt2_surprisal (default: (uniform) — one flat colour, since marker size already shows duration).</td>
+<td>Fixation color field, e.g. duration_ms or gpt2_surprisal, or 'line' to colour each fixation by its text line (same as <code>--color-by-line</code>; default: (uniform) — one flat colour, since marker size already shows duration).</td>
 </tr>
 <tr>
 <td><code>--fixation-color</code></td>
@@ -2915,7 +2915,7 @@ with the default and help <code>--help</code> prints.</p>
 <td><code>--color-by-line</code></td>
 <td>switch</td>
 <td>—</td>
-<td>Colour each fixation by the text line it lands on (lines inferred from the word boxes); overrides <code>--color-by</code>.</td>
+<td>Colour each fixation by the text line it lands on (lines inferred from the word boxes); overrides <code>--color-by</code>. Same as <code>--color-by</code> line.</td>
 </tr>
 <tr>
 <td><code>--fixation-color-range</code></td>
@@ -3180,7 +3180,7 @@ with the default and help <code>--help</code> prints.</p>
 <td><code>--compare-layout</code></td>
 <td><code>{overlay,side-by-side,stacked}</code></td>
 <td><code>overlay</code></td>
-<td>How the two scanpaths are arranged (default: overlay). Across two datasets, overlay needs both to have been recorded on the same known screen — otherwise it is refused rather than silently split, so pass side-by-side or stacked for a mismatched pair.</td>
+<td>How the two scanpaths are arranged (default: overlay). Across two datasets, overlay needs both canvases to be the same size — two different canvases are refused rather than silently split, so pass side-by-side or stacked for them. Matching canvases that a dataset never recorded still overlay, with a warning.</td>
 </tr>
 <tr>
 <td><code>--compare-stimulus</code></td>
@@ -3260,30 +3260,6 @@ with the default and help <code>--help</code> prints.</p>
 <td>—</td>
 <td>Second dataset's monitor size in px, e.g. 1680x1050. Read off its data when omitted. Overlay compares this against <code>--canvas</code>.</td>
 </tr>
-<tr>
-<td><code>--monitor-mm</code></td>
-<td><code>MM</code></td>
-<td>—</td>
-<td>Physical width of the FIRST dataset's monitor, in millimetres.</td>
-</tr>
-<tr>
-<td><code>--viewing-distance</code></td>
-<td><code>MM</code></td>
-<td>—</td>
-<td>Eye-to-screen distance for the FIRST dataset, in millimetres.</td>
-</tr>
-<tr>
-<td><code>--compare-monitor-mm</code></td>
-<td><code>MM</code></td>
-<td>—</td>
-<td>Physical width of the SECOND dataset's monitor, in millimetres.</td>
-</tr>
-<tr>
-<td><code>--compare-viewing-distance</code></td>
-<td><code>MM</code></td>
-<td>—</td>
-<td>Eye-to-screen distance for the SECOND dataset, in millimetres.</td>
-</tr>
 </tbody>
 </table>
 </details>
@@ -3342,7 +3318,7 @@ with the default and help <code>--help</code> prints.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 25, 2026 10:54:49 UTC">September 25, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 25, 2026 11:05:19 UTC">September 25, 2026</span>
   </span>
 
     

@@ -307,7 +307,7 @@ Remaining keywords override the app's defaults and are forwarded to `plots.make_
 ### scanpath_studio.api.animate_scanpath
 
 ```
-animate_scanpath(words: DataFrame, fixations: DataFrame, participant: str | None = None, trial: str | None = None, *, screen: str | None = None, canvas_size: tuple[int, int] | None = None, base_font_size: int = 16, font_family: str = FONT_FAMILY, playback_speed: float = 1.0, autoplay: bool = True, fix_index_range: tuple[int, int] | None = None, illustration_label: str = 'auto', title: str = '', caption: str = '', **animation_overrides) -> Figure
+animate_scanpath(words: DataFrame, fixations: DataFrame, participant: str | None = None, trial: str | None = None, *, screen: str | None = None, canvas_size: tuple[int, int] | None = None, base_font_size: int = 16, font_family: str = FONT_FAMILY, playback_speed: float = 1.0, autoplay: bool = True, fix_index_range: tuple[int, int] | None = None, illustration_label: str = 'auto', title: str = '', caption: str = '', trial_b: tuple[str, str] | None = None, **animation_overrides) -> Figure
 ```
 
 Build the animated scanpath replay for one trial.
@@ -317,6 +317,8 @@ Same trial selection and canvas semantics as plot_scanpath, including `screen` s
 With `autoplay` (default `True`) the saved interactive HTML auto-starts the replay on load *at `playback_speed`* — save_figure honors the marker the builder stamps on the figure. Pass `autoplay=False` to save a figure that opens paused (press ▶ Play to run it). Autoplay only affects the interactive HTML; GIF/MP4 rasterization renders every frame regardless.
 
 When `playback_speed` is not `1`, the automatic Illustration label says the replay timing was changed. `illustration_label` accepts `"auto"`, `"show"`, or `"hide"` like plot_scanpath.
+
+`trial_b=(participant, trial)` co-animates a second reading on the same clock, like the app's Animate + Compare. It is looked up in `words_b` / `fixations_b` when given (a second dataset), else in `words` / `fixations` — the way compare_scanpaths takes it. Without `trial_b`, `words_b` / `fixations_b` must hold one trial; B frames holding several raise `ValueError` rather than drawing them all. A multipart B is drawn at its first recorded screen; cut B's frames to another with `multipart.extract_part` to draw that one. Both readings are drawn in A's coordinates, and nothing here checks that they were recorded on one screen, as the overlay in `compare_scanpaths` does.
 
 The animation builder accepts a subset of the static figure's options (`show_words`, `show_word_labels`, `show_saccades`, `show_order`, styling, and second-scanpath overlays) — see `figure_options("animation")`; an unsupported key raises a `ValueError` naming the valid ones. The shared options default to the same values as plot_scanpath (`CANONICAL_FIGURE_DEFAULTS`), so the replay matches the static figure. `palette=` works here too; the colours it implies that the animation doesn't support are dropped rather than raising, since the caller named a look, not those individual keys.
 

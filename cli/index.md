@@ -131,7 +131,7 @@ scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
 
 `--animate --compare-with` replays **both** readings on one clock, the same dual co-animation the app renders with Animate and Compare both on. `--compare-with` cannot be combined with `--all-screens`: a comparison is a single figure of two readings, so render one screen at a time with `--screen`.
 
-**Overlay across two datasets requires matching canvases.** On two different canvases `--compare-layout overlay` fails rather than falling back; pass `--compare-layout side-by-side` or `stacked`. Nothing is rescaled.
+**Overlay across two datasets requires matching canvases.** On two different canvases `--compare-layout overlay` fails rather than falling back, and so does `--animate`, which replays both readings in one coordinate space; pass `--compare-layout side-by-side` or `stacked`, without `--animate`. Without `--compare-canvas` the second dataset's screen is read off its data, as A's is when neither `--canvas` nor a built-in source gives one. That extent rarely spans the whole screen, so state both screens when you know them. Nothing is rescaled.
 
 A second dataset is loaded from **files only**. Any corpus reachable from Python can still be scanpath B via [`compare_scanpaths`](https://lacclab.github.io/scanpath-studio/api/#scanpath_studio.api.compare_scanpaths), which takes B's frames directly.
 
@@ -408,7 +408,7 @@ SCANPATH_LOCAL_FS=1.
 | `--compare-words`           | `PATH [PATH ...]`                | —           | Words/IA table(s) for the SECOND dataset. Same formats and globbing as `--words`.                                                                                                                                                                                                                                     |
 | `--compare-fixations`       | `PATH [PATH ...]`                | —           | Fixations table(s) for the SECOND dataset. Same formats and globbing as `--fixations`.                                                                                                                                                                                                                                |
 | `--compare-dataset-name`    | `NAME`                           | `Dataset B` | Label for the second dataset, used in the trace names (default: 'Dataset B').                                                                                                                                                                                                                                         |
-| `--compare-canvas`          | `WxH`                            | —           | Second dataset's monitor size in px, e.g. 1680x1050. Read off its data when omitted. Overlay compares this against `--canvas`.                                                                                                                                                                                        |
+| `--compare-canvas`          | `WxH`                            | —           | Second dataset's monitor size in px, e.g. 1680x1050. Read off its data when omitted. An overlay, or an `--animate` co-animation, compares this against `--canvas`.                                                                                                                                                    |
 
 `cache` — every flag
 

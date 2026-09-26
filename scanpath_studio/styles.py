@@ -1255,16 +1255,23 @@ def get_app_css() -> str:
         opacity: 0.72;
     }
 
-    /* Control rail: a subtle card so it reads as a panel, with a hair more
-       breathing room between the stacked toggles than the app-wide gap:0 rule.
-       UX-43 gives it its own scroll area exactly as tall as the plot row: the
-       subtabs live in the next row and can grow without stretching the rail. */
+    /* Control rail: set off from the plot by one hairline on its left edge, on
+       the page's own background — UX-151 retired the tinted, bordered card,
+       whose fill put a second surface behind rows that already carry their own
+       outline. A hair more breathing room between the stacked toggles than the
+       app-wide gap:0 rule. UX-43 gives it its own scroll area exactly as tall
+       as the plot row: the subtabs live in the next row and can grow without
+       stretching the rail. */
     .st-key-scanpath_rail {
-        border: 1px solid var(--sps-border);
-        border-radius: 12px;
-        padding: 0.55rem 0.85rem 0.35rem;
-        background: var(--sps-accent-soft);
+        border-left: 1px solid var(--sps-border);
+        padding: 0.1rem 0.35rem 1.5rem 1rem;
         box-sizing: border-box;
+        /* The card's bottom edge was what made the row cut off at the plot's
+           foot read as "scrolls" rather than "cropped"; without it, the last
+           1.5rem fades out instead. The mask is fixed to the box, not to the
+           scrolled content, so the matching bottom padding is what lets the
+           last control clear it once the rail is scrolled to the end. */
+        mask-image: linear-gradient(to bottom, #000 calc(100% - 1.5rem), transparent);
         height: 100%;
         max-height: 100%;
         overflow-y: auto;

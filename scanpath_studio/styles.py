@@ -1282,16 +1282,23 @@ def get_app_css() -> str:
         opacity: 0.72;
     }
 
-    /* Control rail: a subtle card so it reads as a panel, with a hair more
-       breathing room between the stacked toggles than the app-wide gap:0 rule.
-       UX-43 gives it its own scroll area exactly as tall as the plot row: the
-       subtabs live in the next row and can grow without stretching the rail. */
+    /* Control rail: set off from the plot by one hairline on its left edge, on
+       the page's own background — UX-151 retired the tinted, bordered card,
+       whose fill put a second surface behind rows that already carry their own
+       outline. A hair more breathing room between the stacked toggles than the
+       app-wide gap:0 rule. UX-43 gives it its own scroll area exactly as tall
+       as the plot row: the subtabs live in the next row and can grow without
+       stretching the rail. */
     .st-key-scanpath_rail {
-        border: 1px solid var(--sps-border);
-        border-radius: 12px;
-        padding: 0.55rem 0.85rem 0.35rem;
-        background: var(--sps-accent-soft);
+        border-left: 1px solid var(--sps-border);
+        padding: 0.1rem 0.35rem 1.5rem 1rem;
         box-sizing: border-box;
+        /* The card's bottom edge was what made the row cut off at the plot's
+           foot read as "scrolls" rather than "cropped"; without it, the last
+           1.5rem fades out instead. The mask is fixed to the box, not to the
+           scrolled content, so the matching bottom padding is what lets the
+           last control clear it once the rail is scrolled to the end. */
+        mask-image: linear-gradient(to bottom, #000 calc(100% - 1.5rem), transparent);
         height: 100%;
         max-height: 100%;
         overflow-y: auto;
@@ -1533,15 +1540,21 @@ def get_app_css() -> str:
     /* Section headers now use proper heading levels so screen-reader users get
        a valid outline (no h1→h5 jump): the rail/export sections are <h2>, their
        sub-sections <h3>. Pin the visual size back to the original compact look
-       (by Streamlit's stable text-derived ids) so the layout is unchanged. */
-    #plot-controls, #scope, #figures, #also-include {
+       (by Streamlit's stable text-derived ids) so the layout is unchanged.
+       BUG-88: the rail's heading is pinned by its container key instead. The
+       text-derived id folds an icon's name into it, so UX-138's Material icon
+       turned the id `plot-controls` into `tune-plot-controls` — the pin stopped
+       matching and the heading fell back to Streamlit's 36px h2, which the
+       narrow rail wraps onto two lines. A heading that carries an icon has to
+       be pinned by a key. */
+    .st-key-plot_controls_header h2, #scope, #figures, #also-include {
         font-size: 20px !important; line-height: 24px !important;
         font-weight: 600 !important; padding: 6px 0 16px !important;
         /* In the narrow plot-side rail these can wrap; only ever break at a
            space, never mid-word ("Visualizatio↵n"). */
         word-break: normal !important; overflow-wrap: normal !important;
     }
-    #plot-controls {
+    .st-key-plot_controls_header h2 {
         margin: 2.4px 0 1.6px !important;
         white-space: nowrap;
     }
@@ -1640,7 +1653,7 @@ def get_app_css() -> str:
         }
         /* The pinned section-header sizes (see the heading-level rules above)
            are what push the narrow rail's headers to two lines first. */
-        #plot-controls, #scope, #figures, #also-include {
+        .st-key-plot_controls_header h2, #scope, #figures, #also-include {
             font-size: 18px !important; line-height: 22px !important;
         }
     }

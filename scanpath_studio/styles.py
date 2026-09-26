@@ -443,18 +443,40 @@ def get_app_css() -> str:
         flex: 1 1 auto;
         padding-right: 0.45rem;
     }
-    /* UX-103 — on the RAIL's rows the switch and the name are now two separate
-       children (the switch is drawn with its label collapsed, to be rid of the
-       native `title=` tooltip Streamlit stamps on a truncating label). Without
-       this the rule above would hand the switch half the row, because both
-       halves match it. Only the name is flexible; the switch is its own width.
-       Scoped to `split_mode_rail_` on purpose: 🎬 Animate and ⚖️ Compare above
-       the plot still carry their label inside the toggle, where the slot has to
-       stay the flexible one. */
-    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_rail_"]
-        > div:has([data-testid="stCheckbox"]) {
-        flex: 0 0 auto;
-        padding-right: 0.4rem;
+    /* UX-153 — a rail row with no switch (🧹 Filter, 📐 Figure & canvas) is
+       one control, so its name opens the popover. The ▾ trigger's click target
+       is stretched over the whole row by an `::after` overlay, which keeps the
+       row's look, and the popover still anchors on the ▾ itself. The row is
+       the overlay's containing block, so nothing between it and the button
+       may be positioned. `transform: none` matters for the same reason:
+       the app-wide hover lift (`translateY(-1px)`) would make the button
+       the containing block mid-hover, shrinking the overlay out from under
+       the pointer. The rows with a switch don't get this: their name is the
+       switch's label and flips it, as on Animate and Compare. */
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_rail_"]:not(
+            :has([data-testid="stCheckbox"])
+        ) {
+        position: relative;
+    }
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_rail_"]:not(
+            :has([data-testid="stCheckbox"])
+        ) [data-testid="stPopover"] button {
+        position: static !important;
+        transform: none !important;
+    }
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_rail_"]:not(
+            :has([data-testid="stCheckbox"])
+        ) [data-testid="stPopover"] button::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+    }
+    /* ...and the whole row lights up on hover, not only the ▾ half, since
+       the whole row is what a click opens. */
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_rail_"]:not(
+            :has([data-testid="stCheckbox"])
+        ):has([data-testid="stPopover"] button:hover:enabled) {
+        background: var(--sps-accent-soft);
     }
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
         [data-testid="stWidgetLabel"] p,
@@ -463,6 +485,28 @@ def get_app_css() -> str:
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+    }
+    /* UX-153 — every toggle in these rows takes `wrap=True`, which switches
+       off Streamlit's truncate mode (and the native `title=` tooltip it
+       stamps), and with it the `min-width: 0` chain that let the label
+       shrink to an ellipsis. Both are put back here. The `p *` arm is for a
+       bold label's <strong>: the ≤1200px rule further down lets rail labels
+       wrap, which would break "Raw gaze" onto two lines in a row that is one
+       line by contract; this selector outranks it. */
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stWidgetLabel"] p * {
+        white-space: nowrap;
+    }
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stCheckbox"],
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stCheckbox"] label,
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stWidgetLabel"],
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stWidgetLabel"] [data-testid="stMarkdownContainer"] {
+        min-width: 0;
+        max-width: 100%;
     }
     /* UX-102 — and the same `p` must give up its bottom margin, or the row
        grows a scrollbar. Streamlit 1.62 gives every `wrap=False` horizontal

@@ -799,94 +799,86 @@ _OUT_OF_TEXT_MARKERS = {
 _FIXCLASS_MODES = ("Off", "Highlight", "Discard")
 
 
-def _render_fixclass_category(
-    key_prefix: str,
-    label: str,
-    *,
-    threshold_label: str | None = None,
-    disabled: bool = False,
-    reason: str = "",
-) -> None:
-    """Render one fixation-classification category (PRE-2) inside the Fixation popover.
-
-    A mode radio (Off / Highlight / Discard); when not Off and ``threshold_label``
-    is given, a ms threshold number input; when Highlight, a marker + colour picker.
-    All values ride ``global_fixclass_{key_prefix}_*`` keys (seeded in
-    ``_VIZ_WIDGET_DEFAULTS``). ``disabled``/``reason`` come from
-    :func:`_mode_gate` — since VIZ-23 the flags reach the static figure *and* the
-    animated replay, but no comparison builder takes them."""
-    mode = _labeled(
-        st,
-        "radio",
-        label,
-        options=_FIXCLASS_MODES,
-        horizontal=True,
-        key=f"global_fixclass_{key_prefix}_mode",
-        persist_state="session",
-        help=_gated_help(
-            "Highlight marks these fixations with an overlay marker; Discard hides "
-            "them from the plot only (reading measures and exported tables are "
-            "unchanged).",
-            reason,
-        ),
-        disabled=disabled,
-    )
-    if threshold_label is not None and mode != "Off":
-        _labeled(
-            st,
-            "number_input",
-            threshold_label,
-            min_value=1,
-            step=10,
-            key=f"global_fixclass_{key_prefix}_threshold_ms",
-            persist_state="session",
-            disabled=disabled,
-        )
-    if mode == "Highlight":
-        _labeled(
-            st,
-            "selectbox",
-            "Marker",
-            options=list(_OUT_OF_TEXT_MARKERS),
-            format_func=lambda s: _OUT_OF_TEXT_MARKERS[s],
-            key=f"global_fixclass_{key_prefix}_symbol",
-            persist_state="session",
-            disabled=disabled,
-        )
-        _labeled(
-            st,
-            "color_picker",
-            "Color",
-            key=f"global_fixclass_{key_prefix}_color",
-            disabled=disabled,
-        )
+#: PRE-2's four fixation classes: ``(key prefix, row title, help, has a ms
+#: threshold)``. UX-162 shortened the titles to fit one table row each.
+_FIXCLASS_CATEGORIES = (
+    ("short", "Short", "Fixations shorter than the ms threshold.", True),
+    ("long", "Long", "Fixations longer than the ms threshold.", True),
+    ("oob", "Out of bounds", "Fixations that land outside the text area.", False),
+    ("blink", "Blink", "Blink and blink-adjacent fixations.", False),
+)
 
 
 def _render_fixation_cleaning(*, disabled: bool = False, reason: str = "") -> None:
-    """PRE-2 short / long / out-of-bounds visual filtering controls.
+    """PRE-2 short / long / out-of-bounds / blink visual filtering controls.
 
     VIZ-27 gives this its own popover instead of burying data inclusion under
-    marker styling. Viz-only: highlight or discard, with
-    customizable short/long thresholds, all on the spot.
+    marker styling. Viz-only: highlight or discard, with customizable short/long
+    thresholds, all on the spot.
+
+    UX-162: one table row per class — its mode, then the ms threshold (short and
+    long only), then the marker and colour a *Highlight* draws with — under a
+    captioned header, instead of up to four rows each that came and went with the
+    mode. What a mode leaves idle is greyed, not hidden. Every value rides a
+    ``global_fixclass_{prefix}_*`` key (seeded in ``_VIZ_WIDGET_DEFAULTS``).
 
     ``make_scanpath_figure`` and ``make_scanpath_animation`` both consume
     ``fixation_flags`` (VIZ-23 — *Discard* drops the rows before the replay's
     frames are built, *Highlight* overlays them as the trail reaches them); the
     comparison builders take no flags argument, so the whole block renders
     disabled (with the reason) in Compare only."""
-    st.caption("Highlight or hide classes on the plot only")
-    for prefix, label, threshold in (
-        ("short", "Short fixations", "Short threshold (ms)"),
-        ("long", "Long fixations", "Long threshold (ms)"),
-        ("oob", "Out-of-bounds fixations", None),
-        ("blink", "Blink / blink-adjacent fixations", None),
-    ):
-        _render_fixclass_category(
-            prefix,
-            label,
-            threshold_label=threshold,
-            disabled=disabled,
-            reason=reason,
+    label_w = _label_w()
+    rest = 1.0 - label_w
+    weights = [label_w, rest * 0.3, rest * 0.22, rest * 0.32, rest * 0.16]
+    mode_help = _gated_help(
+        "**Highlight** marks these fixations with an overlay marker; **Discard** "
+        "hides them from the plot only (reading measures and exported tables are "
+        "unchanged).",
+        reason,
+    )
+    head = st.columns(weights, gap=_LABEL_GAP, vertical_alignment="center")
+    _sub_caption(head[1], "Mode", mode_help)
+    _sub_caption(head[2], "ms", "Short: below this many ms. Long: above it.")
+    _sub_caption(head[3], "Marker", "The marker a Highlight draws.")
+    _sub_caption(head[4], "Color")
+    for prefix, label, row_help, has_threshold in _FIXCLASS_CATEGORIES:
+        row_disabled, help_text = _layer_gate(disabled, _gated_help(row_help, reason))
+        cols = st.columns(weights, gap=_LABEL_GAP, vertical_alignment="center")
+        _row_label(cols[0], label, help_text)
+        mode = cols[1].selectbox(
+            f"{label} fixations",
+            options=_FIXCLASS_MODES,
+            key=f"global_fixclass_{prefix}_mode",
+            persist_state="session",
+            disabled=row_disabled,
+            help=mode_help,
+            label_visibility="collapsed",
+        )
+        if has_threshold:
+            cols[2].number_input(
+                f"{label} threshold (ms)",
+                min_value=1,
+                step=10,
+                key=f"global_fixclass_{prefix}_threshold_ms",
+                persist_state="session",
+                disabled=row_disabled or mode == "Off",
+                label_visibility="collapsed",
+            )
+        highlight_idle = row_disabled or mode != "Highlight"
+        cols[3].selectbox(
+            f"{label} marker",
+            options=list(_OUT_OF_TEXT_MARKERS),
+            format_func=lambda s: _OUT_OF_TEXT_MARKERS[s],
+            key=f"global_fixclass_{prefix}_symbol",
+            persist_state="session",
+            disabled=highlight_idle,
+            label_visibility="collapsed",
+        )
+        cols[4].color_picker(
+            f"{label} color",
+            key=f"global_fixclass_{prefix}_color",
+            disabled=highlight_idle,
+            label_visibility="collapsed",
         )
 
 
@@ -3636,9 +3628,23 @@ def _render_fix_range_slider(fixations: pd.DataFrame | None) -> None:
     def _mark_fix_range_user_set() -> None:
         st.session_state["single_fix_range_user_set"] = True
 
+    all_trials_disabled, _ = _layer_gate(False, None)
+
+    # UX-162: *All trials* sits on the range's own line, ahead of its slider,
+    # the way a colour range's *Auto* does (UX-157); its explanation joins the
+    # row title's tooltip. Seeded via `_VIZ_WIDGET_DEFAULTS`, so no `value=`.
+    def _all_trials(col) -> None:
+        col.checkbox(
+            "All trials",
+            key="single_fix_range_all_trials",
+            persist_state="session",
+            disabled=all_trials_disabled,
+        )
+
     _range_slider(
         st,
         "Fixation index range",
+        display="Index range",
         label_left=True,
         key="single_fix_range",
         persist_state="session",
@@ -3647,21 +3653,12 @@ def _render_fix_range_slider(fixations: pd.DataFrame | None) -> None:
         on_change=_mark_fix_range_user_set,
         help="Draw only fixations whose index falls in this range (their "
         "saccades follow). The chips and panels still describe the full trial; "
-        "the bulk (multiple-trial) export is unaffected.",
-    )
-    # Seeded via `_VIZ_WIDGET_DEFAULTS`, so no `value=` here (see `_pin`).
-    _labeled(
-        st,
-        "checkbox",
-        "Apply to all trials",
-        key="single_fix_range_all_trials",
-        persist_state="session",
-        help="**Off** (default) — the window belongs to this trial; picking "
-        "another trial shows all of its fixations again. **On** — keep the same "
-        "index window as you move through trials, clamped to each trial's "
-        "length (a shorter trial narrows it). Either way **Compare** windows "
-        "both scanpaths by the same range, since the two readings share one "
-        "index axis there.",
+        "the bulk (multiple-trial) export is unaffected. **All trials** off "
+        "(default) — the window belongs to this trial; picking another shows "
+        "all of its fixations again. On — keep the same window as you move "
+        "through trials, clamped to each one's length. Either way **Compare** "
+        "windows both scanpaths by the same range.",
+        lead=_all_trials,
     )
 
 
@@ -4968,20 +4965,18 @@ def render_plot_controls(
     # show a local badge so an active Discard cannot be forgotten. A chip in the
     # trial-fact strip was rejected because this is a view setting, not trial data.
     _flag_dis, _flag_reason = _mode_gate(animating, comparing, **_no_compare)
+    # UX-162: the subsection says only why it is greyed, when it is; what it does
+    # is in the rows' tooltips now, beside the controls it describes.
     with (
         _rail_subsection(
             filter_fix_slot,
             f"{ICONS['fixations']} Fixations{_fixation_filter_badge()}",
-            # The sentence the popover trigger carried as its tooltip, plus the
-            # gate reason when this is inert in the current mode.
-            note=_gated_help(
-                "Highlight or hide short, long, and out-of-bounds fixations.",
-                _flag_reason,
-            ),
+            note=_flag_reason,
         ),
         _layer_off(
             f"{ICONS['fixations']} Fixations", off=not (show_fix or fix_off_disabled)
         ),
+        _popover_rows("filter_fix"),
     ):
         # VIZ-27 follow-up: the index window removes fixations just like the
         # short/long/OOB rules, so it belongs here rather than under marker style.
@@ -5173,34 +5168,29 @@ def render_plot_controls(
         _rail_subsection(
             filter_sac_slot,
             f"{ICONS['saccades']} Saccades{_saccade_filter_badge()}",
-            note=_gated_help(
-                "Draw only some reading classes — forward, skip, refixation, "
-                "return sweep, regression.",
-                _cls_reason,
-            ),
+            note=_cls_reason,
         ),
         _layer_off(f"{ICONS['saccades']} Saccades", off=not show_saccades),
+        _popover_rows("filter_sac"),
     ):
         _labeled(
             st,
             "multiselect",
             "Show saccade types",
+            display="Types",
             options=SACCADE_CLASS_ORDER,
             format_func=lambda cls: SACCADE_CLASS_LABELS[cls],
             key="global_saccade_classes",
             persist_state="session",
             disabled=_cls_dis,
             help=_gated_help(
-                "Hidden classes are dropped from the figure entirely — line "
-                "**and** direction arrow. Clearing the list means *no "
-                "filter*, not an empty plot; to hide the whole layer use the "
-                "↗️ Saccades **Visible** toggle above.",
+                "Draw only these reading classes. Hidden classes are dropped "
+                "from the figure entirely — line **and** direction arrow. "
+                "Clearing the list means *no filter*, not an empty plot. The "
+                "classes are the ones ↗️ Saccades ▾ → **By type** colours, so the "
+                "two agree on what a regression is.",
                 _cls_reason,
             ),
-        )
-        st.caption(
-            "Classes come from the same reading-class split as ⚙️ Saccade "
-            "style → **By type**, so the two agree on what a regression is."
         )
 
     # UX-128: the layer toggles below (Text / Bounding boxes / Stimulus image)

@@ -342,8 +342,9 @@ class TestAppLaunches:
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
-        radios = {r.key: r.value for r in at.radio if r.key}
-        assert radios.get("global_fixclass_oob_mode") == "Highlight", (
+        # UX-162: the class modes are selectboxes in the 🧹 Filter table now.
+        modes = {w.key: w.value for w in at.selectbox if w.key}
+        assert modes.get("global_fixclass_oob_mode") == "Highlight", (
             "restored fixation-classification value was overridden by an inline default"
         )
 

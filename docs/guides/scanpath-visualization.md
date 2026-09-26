@@ -82,9 +82,10 @@ confused with the filter funnel on the control line above the plot, which narrow
 *trial pool* — which readings you can pick; this one thins the reading you are
 looking at.
 
-**👁️ Fixations** contains duration thresholds, out-of-bounds handling, and the
-fixation-index range. **Highlight** keeps flagged fixations in view, marked; **Discard** removes them from
-the rendered scanpath.
+**👁️ Fixations** holds the fixation-index range, then one row per class —
+short and long (each with its ms threshold), out of bounds, and blink. A class's
+**Highlight** keeps its fixations in view, marked with the marker and colour on
+its row; **Discard** removes them from the rendered scanpath.
 
 **↗️ Saccades** picks which reading classes are drawn at all — forward,
 skip, refixation, return sweep, regression. Hidden classes lose their line

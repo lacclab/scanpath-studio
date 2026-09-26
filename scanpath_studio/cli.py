@@ -48,6 +48,7 @@ from .constants import (
     SACCADE_DASH_OPTIONS,
     SACCADE_WIDTH_BOUNDS,
     UNIFORM_COLOR_FIELD,
+    benchmark_corpora_enabled,
     drift_correction_enabled,
     multipleye_enabled,
     palette_settings,
@@ -389,17 +390,26 @@ def _render_parser() -> argparse.ArgumentParser:
         "75 reader ids (sparse within 0–105; --list-trials shows them), trials "
         "are text ids (b0–b5, p0–p5).",
     )
+
+    # DATA-55: the harmonised benchmark corpora are held back from the beta, the
+    # same way DATA-54 holds back MultiplEYE's flags below: they still parse and
+    # work, but `--help` (and the generated CLI reference) doesn't list them.
+    def benchmark_help(text: str) -> str:
+        return text if benchmark_corpora_enabled() else argparse.SUPPRESS
+
     src.add_argument(
         "--eyegenbench",
         metavar="DIR",
-        help="EyeGenBench bundle directory (built by "
-        "scripts/prepare_eyegenbench.py). Pick the corpus with "
-        "--eyegenbench-dataset.",
+        help=benchmark_help(
+            "EyeGenBench bundle directory (built by "
+            "scripts/prepare_eyegenbench.py). Pick the corpus with "
+            "--eyegenbench-dataset."
+        ),
     )
     src.add_argument(
         "--eyegenbench-dataset",
         metavar="NAME",
-        help="Which EyeGenBench corpus to render, e.g. PoTeC.",
+        help=benchmark_help("Which EyeGenBench corpus to render, e.g. PoTeC."),
     )
     src.add_argument(
         "--onestop",
@@ -1977,11 +1987,18 @@ def render(argv: list[str]) -> None:
         )
         != 1
     ):
+        # Only the inputs `--help` lists: the DATA-54/55 held-back sources still
+        # count towards the guard, but the message doesn't advertise them.
+        inputs = ["--sample", "--authoring PATH", "--potec DIR"]
+        if benchmark_corpora_enabled():
+            inputs.append("--eyegenbench DIR --eyegenbench-dataset NAME")
+        inputs.append("--onestop DIR")
+        if multipleye_enabled():
+            inputs.append("--source NAME [--export DIR]")
         raise SystemExit(
-            "Provide exactly one input: --sample, --authoring PATH, --potec DIR, "
-            "--eyegenbench DIR --eyegenbench-dataset NAME, --onestop DIR, "
-            "--source NAME [--export DIR], or your own tables (--words and/or "
-            "--fixations; one of them is enough for single-report datasets)."
+            f"Provide exactly one input: {', '.join(inputs)}, or your own tables "
+            "(--words and/or --fixations; one of them is enough for "
+            "single-report datasets)."
         )
     if not (args.list_trials or args.list_parts) and not args.output:
         raise SystemExit("Missing -o/--output (or use --list-trials/--list-parts).")

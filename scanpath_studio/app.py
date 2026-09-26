@@ -64,7 +64,6 @@ from scanpath_studio.constants import (
     AUTHOR_CHOICE,
     BACKGROUND_PRESETS,
     BENCHMARK_LABEL_SUFFIX,
-    BENCHMARK_SETUP_CHOICE,
     BENCHMARK_SHORT_SUFFIX,
     BENCHMARK_WIP_SUFFIX,
     CITATION,
@@ -103,7 +102,7 @@ from scanpath_studio.constants import (
     WIZARD_LEAVE_KEY,
     WIZARD_STAY_KEY,
     WORD_LABEL_COLOR,
-    benchmark_setup_enabled,
+    benchmark_corpora_enabled,
     icon_html,
     language_display,
     multipleye_enabled,
@@ -1427,10 +1426,7 @@ def _dataset_dir_input(
         # A typed path must survive a run in which this input doesn't render —
         # Streamlit drops an unrendered widget's key at end of run (BUG-15 /
         # ENG-36), and *every* one of these inputs renders only while its own
-        # corpus is the selected source. The benchmark bootstrap entry made that
-        # fatal (it vanishes the moment the path it was given succeeds, so the
-        # path was lost and the corpora disappeared again on the next run — R39
-        # shipped non-functional); for the other corpora it silently forgot a
+        # corpus is the selected source, so without this it silently forgot a
         # hand-typed location as soon as the user looked at another source. One
         # rule here rather than one call site remembering and three forgetting.
         persist_state="session",
@@ -1874,43 +1870,25 @@ def _cached_eyegenbench_raw_frames(
 
 
 # A malformed manifest (an entry with no `name`, a `datasets` value that isn't a
-# list of objects) must degrade to "no corpora discovered", not crash the app:
-# `KeyError` is in here because it escapes the usual IO triple and every
-# discovery site reads entry keys (M7).
+# list of objects) must degrade to a load error, not crash the app: `KeyError`
+# is in here because it escapes the usual IO triple and every reader of a
+# manifest reads entry keys (M7).
 _MANIFEST_ERRORS = (FileNotFoundError, ValueError, OSError, KeyError)
 
 
-@st.cache_data(show_spinner=False)
-def _cached_eyegenbench_datasets(root: str) -> tuple:
-    """Cached manifest entries for a bundle directory (M8).
+def added_benchmark_datasets() -> tuple:
+    """Manifest entries for the benchmark corpora the user added — none yet.
 
-    Discovery now runs on **every** picker build and every `compare_source`
-    enumeration, once per corpus in the bundle — where the old single-source
-    shape read the manifest only while that one source was selected. Same
-    convention as `_cached_multipleye_inventory`: keyed on the resolved root, so
-    pointing the directory input somewhere else busts it.
+    DATA-55 retired automatic discovery. The app used to list every corpus in a
+    bundle it found on disk (``data/EyeGenBench``, or a folder typed into a
+    "set up" entry), which put data in the picker that nobody had chosen, so a
+    corpus is now listed only because someone added it. The flow that adds one —
+    choose a folder, scan it, pick the corpora — is DATA-56. Until it lands this
+    is empty, and the per-corpus machinery it feeds (the registry entry, the
+    loader, the geometry badge, the share-link slug, Compare and the code
+    snippet) is reached only by tests, which replace this function.
     """
-    from scanpath_studio.eyegenbench import eyegenbench_datasets
-
-    return tuple(eyegenbench_datasets(root))
-
-
-def discovered_benchmark_datasets() -> tuple:
-    """Manifest entries for the prepared bundle, or ``()`` when there is none.
-
-    Never raises: the picker calls this while building its option list, long
-    before anything is in a position to report a load failure to the user (the
-    corpus' own loader does that, with the directory input right beside it).
-    """
-    from scanpath_studio.eyegenbench import entry_name
-
-    try:
-        entries = _cached_eyegenbench_datasets(_eyegenbench_root_from_state())
-    except _MANIFEST_ERRORS:
-        return ()
-    # `entry_name` owns the "a row with no usable name is skipped" rule (N5);
-    # spelling it again here is how the two would drift.
-    return tuple(entry for entry in entries if entry_name(entry))
+    return ()
 
 
 # geometry_source values are eyegenbench_geometry.py's GEOMETRY_REAL /
@@ -1941,7 +1919,7 @@ def _geometry_coverage_note(entry) -> str:
 
     The counts are read through `eyegenbench.entry_count`, which is also what
     keeps a hand-mangled manifest from raising out of the *picker build* — this
-    runs for every discovered corpus via `_benchmark_description` (N1). An
+    runs for every added corpus via `_benchmark_description` (N1). An
     unreadable count lands in the same vaguer wording as an absent one: it is
     the R34-honest answer either way, and it is never worth taking the source
     list down over a typo in a number.
@@ -2011,15 +1989,14 @@ def picker_name_for(choice: str, registry: dict | None = None) -> str:
     """Exactly the name the **Data source** picker renders for ``choice``.
 
     Anything that tells a user to "select X" must quote this, not the registry
-    key. The two differ: the picker shows the entry's `short`, and now a (WIP)
-    marker on top of it, so the bootstrap entry's key reads *"Harmonised
-    benchmark corpora — set up a local bundle"* while the list actually offers
-    *"Harmonised benchmark corpora — set up (WIP)"*. A remedy naming a string
-    that appears nowhere in the list is worse than no remedy — the reader hunts
-    for it and concludes the app is broken.
+    key. The two differ: the picker shows the entry's `short`, with a (WIP)
+    marker on top of it for a benchmark corpus, so *"Provo — harmonised benchmark
+    corpus"* is offered as *"Provo (WIP)"*. A remedy naming a string that appears
+    nowhere in the list is worse than no remedy — the reader hunts for it and
+    concludes the app is broken.
 
-    Pass ``registry`` when formatting a list of options: discovery depends on a
-    directory the user can change, so one run must format every option against
+    Pass ``registry`` when formatting a list of options: the added corpora can
+    change at runtime, so one run must format every option against
     **one** snapshot (M6). Re-resolving per option lets an option's rendered text
     change underneath a widget mid-run, and Streamlit finds the selected value's
     formatted form no longer among its own options.
@@ -2045,18 +2022,17 @@ def mark_wip_if_benchmark(choice: str) -> str:
 
 
 def spec_is_benchmark(spec) -> bool:
-    """True for a registry entry this feature owns: a prepared corpus or the
-    bootstrap placeholder.
+    """True for a registry entry this feature owns: a prepared benchmark corpus.
 
-    Dispatches on the entry's own fields — `benchmark_dataset` (set by
-    `_benchmark_registry_entries`) and `setup_only` — the same discriminator
-    `compare_source.secondary_dataset_options` uses, and deliberately **not** on
-    the label's text: PoTeC and OneStop each ship natively *and* harmonised, so a
-    substring test on the label would sweep the native entries in too.
+    Dispatches on the entry's own `benchmark_dataset` field (set by
+    `_benchmark_registry_entries`) — the same discriminator `compare_source`
+    uses, and deliberately **not** on the label's text: PoTeC and OneStop each
+    ship natively *and* harmonised, so a substring test on the label would sweep
+    the native entries in too.
     """
     if not isinstance(spec, dict):
         return False
-    return bool(spec.get("benchmark_dataset") or spec.get("setup_only"))
+    return bool(spec.get("benchmark_dataset"))
 
 
 def _benchmark_short_name(name: str) -> str:
@@ -2139,9 +2115,7 @@ def _benchmark_dir_input(loc) -> str:
     """The shared bundle-directory input, rendered by every benchmark entry.
 
     One session key (`eyegenbench_dir`) across all of them: the corpora live in
-    one prepared bundle, so pointing any entry somewhere else moves them all —
-    and it is what keeps the location changeable once the bootstrap entry has
-    disappeared.
+    one prepared bundle, so pointing any entry somewhere else moves them all.
     """
     return _dataset_dir_input(
         loc,
@@ -2152,35 +2126,6 @@ def _benchmark_dir_input(loc) -> str:
         structure_md=_EYEGENBENCH_STRUCTURE_MD,
         key_prefix="eyegenbench",
     )
-
-
-def _load_benchmark_setup_source(
-    options_host=None, location_host=None
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """The bootstrap entry, offered only while **zero** corpora are discovered.
-
-    Without it the setup is unreachable: discovery reads a directory the user can
-    change at runtime, so a bundle at a non-default path yields no corpora, no
-    entries — and therefore nowhere to type the path. This one placeholder
-    renders the same directory input and *Expected files* note every corpus entry
-    does, and disappears as soon as the manifest resolves.
-    """
-    opt = options_host if options_host is not None else st.container()
-    loc = location_host if location_host is not None else st.container()
-    root = _benchmark_dir_input(loc)
-    _dataset_access_status(
-        loc,
-        root=root,
-        present=False,
-        key_prefix="eyegenbench",
-        label="Harmonised benchmark corpora",
-    )
-    opt.info(
-        "No prepared corpora found here yet. Build a bundle with "
-        "`python scripts/prepare_eyegenbench.py --all`, then point the folder "
-        "below at it — each prepared corpus then appears as its own data source."
-    )
-    return load_sample_data()
 
 
 def _load_benchmark_source(
@@ -2216,7 +2161,7 @@ def _load_benchmark_source(
     if not ready:
         return load_sample_data()
     entry = next(
-        (e for e in discovered_benchmark_datasets() if entry_name(e) == dataset),
+        (e for e in added_benchmark_datasets() if entry_name(e) == dataset),
         None,
     )
     if entry and (badge := geometry_badge(entry)):
@@ -2450,11 +2395,11 @@ def dataset_about(token: str, registry: dict | None = None) -> dict:
 
 
 def _benchmark_registry_entries() -> dict:
-    """One registry entry per prepared benchmark corpus (R36).
+    """One registry entry per benchmark corpus the user added (R36, DATA-55).
 
-    Built from the local bundle's manifest, so it varies with the directory the
-    user points at — which is why the registry as a whole had to become a
-    function. Each entry has the same shape as the static built-ins above
+    Built from those corpora's manifest entries (`added_benchmark_datasets`),
+    so it varies at runtime — which is why the registry as a whole had to become
+    a function. Each entry has the same shape as the static built-ins above
     (`short` / `language` / `size` / `description` / `link` / `monitor`) and is
     presented identically: one 🌐 entry in the flat picker, nothing nested.
 
@@ -2469,8 +2414,10 @@ def _benchmark_registry_entries() -> dict:
     from scanpath_studio.eyegenbench import declared_monitor, entry_name
 
     entries: dict = {}
-    for entry in discovered_benchmark_datasets():
-        name = entry_name(entry)
+    for entry in added_benchmark_datasets():
+        # `entry_name` owns the "a row with no usable name is skipped" rule (N5).
+        if not (name := entry_name(entry)):
+            continue
         short = _benchmark_short_name(name)
         spec = dict(
             loader=partial(_load_benchmark_source, dataset=name),
@@ -2508,40 +2455,24 @@ def _benchmark_registry_entries() -> dict:
 
 
 def public_dataset_registry() -> dict:
-    """Every public corpus on offer: the static built-ins ∪ discovered corpora.
+    """Every public corpus on offer: the static built-ins ∪ the added corpora.
 
     `PUBLIC_DATASET_REGISTRY` stays the literal home of the three built-ins, whose
-    entries are fixed at import time. The prepared benchmark corpora can't be:
-    they depend on a bundle directory the user can change mid-session, so they
-    are composed in here and every consumer calls this instead of reading the
-    dict. Discovery is cached (`_cached_eyegenbench_datasets`), so calling it
-    several times a run costs one manifest read.
+    entries are fixed at import time. The benchmark corpora a user adds can't be,
+    so they are composed in here and every consumer calls this instead of reading
+    the dict. Nothing is discovered: a corpus is here only because someone added
+    it (DATA-55; the flow that adds one is DATA-56).
 
-    DATA-54 holds two entries back for the beta — MultiplEYE and the benchmark
-    set-up placeholder — unless ``SCANPATH_EXPERIMENTAL`` is on. Gating here,
-    the one place every consumer reads, is what hides them from the picker, the
-    🗂️ Data page, Compare's second dataset and share links at once.
+    DATA-54 and DATA-55 hold MultiplEYE and the harmonised benchmark corpora back
+    for the beta unless ``SCANPATH_EXPERIMENTAL`` is on. Gating here, the one
+    place every consumer reads, is what hides them from the picker, the 🗂️ Data
+    page, Compare's second dataset and share links at once.
     """
     registry = dict(PUBLIC_DATASET_REGISTRY)
     if not multipleye_enabled():
         registry.pop(MULTIPLEYE_PUBLIC_CHOICE, None)
-    discovered = _benchmark_registry_entries()
-    registry.update(discovered)
-    if not discovered and benchmark_setup_enabled():
-        # R39: with nothing discovered there is no entry, so there would be
-        # nowhere to type the bundle's path. Exactly one placeholder carries the
-        # directory input until a corpus exists.
-        registry[BENCHMARK_SETUP_CHOICE] = dict(
-            loader=_load_benchmark_setup_source,
-            short="Harmonised benchmark corpora — set up",
-            language="Multilingual",
-            size="not set up yet",
-            description="Public reading corpora harmonised to one schema by the "
-            "EyeGenBench pipeline. Build a bundle locally and point this at it; "
-            "each prepared corpus then appears as its own data source.",
-            link="https://github.com/EyeBench/EyeGenBench",
-            setup_only=True,
-        )
+    if benchmark_corpora_enabled():
+        registry.update(_benchmark_registry_entries())
     return registry
 
 
@@ -2585,24 +2516,6 @@ def _public_dataset_monitor(data_choice: str) -> tuple[int, int] | None:
         st.session_state.get("public_dataset_choice", "")
     )
     return spec.get("monitor") if spec else None
-
-
-def _eyegenbench_root_from_state() -> str:
-    """The prepared-bundle directory the picker is currently pointed at.
-
-    Mirrors `_dataset_dir_input`'s own resolution (the S2 branch included) so
-    discovery agrees with what a corpus' loader reads later in the same run,
-    without threading the resolved root through session state as a second copy
-    of the truth."""
-    if not local_filesystem_enabled():
-        return (
-            str(data_root())
-            if data_root()
-            else _resolve_data_dir(EYEGENBENCH_DEFAULT_DIR)
-        )
-    return _resolve_data_dir(
-        st.session_state.get("eyegenbench_dir", EYEGENBENCH_DEFAULT_DIR)
-    )
 
 
 #: The recording-setup values a fresh session pins before anything declares
@@ -3870,22 +3783,14 @@ def resolve_data_source(host=None) -> str:
         st.session_state["data_source_choice"] = corpus or entries[0]
 
     # Heal a stale/invalid selection (e.g. a removed dataset) so the picker never
-    # errors on an option that is no longer in the list. Anything that *was* a
-    # benchmark entry gets its own landing, in preference to `entries[0]` (the
-    # demo): the bootstrap placeholder disappears precisely *because* it
-    # succeeded, so sending the user who just supplied a bundle path somewhere
-    # else entirely answers them with a non-answer — and, the demo rendering no
-    # directory input, drops them straight back out of the corpora they found.
-    # The same reasoning covers a stale *corpus* label (the bundle directory was
-    # repointed, or that corpus was removed from it): another prepared corpus is
-    # a better answer than the demo whenever one is reachable (N2).
+    # errors on an option that is no longer in the list. A stale benchmark
+    # *corpus* label (the bundle directory was repointed, or that corpus was
+    # removed from it) lands on another added corpus in preference to
+    # `entries[0]` (the demo) whenever one is reachable (N2).
     stale = str(st.session_state.get("data_source_choice") or "")
     if stale not in entries:
-        was_benchmark = stale == BENCHMARK_SETUP_CHOICE or stale.endswith(
-            BENCHMARK_LABEL_SUFFIX
-        )
         healed = ""
-        if was_benchmark:
+        if stale.endswith(BENCHMARK_LABEL_SUFFIX):
             healed = next(
                 (
                     label
@@ -4003,8 +3908,8 @@ def render_data_source_picker(host=None) -> None:
 
     def _entry_label(token: str) -> str:
         # Reads the `registry` snapshot resolved just above rather than calling
-        # `public_dataset_registry()` per token: discovery depends on a directory
-        # the user can change, so one run must format its options against one
+        # `public_dataset_registry()` per token: the added corpora can change at
+        # runtime, so one run must format its options against one
         # snapshot (which is also why the old `_public_dataset_label` helper,
         # which built its own, had no business being called from here — M6).
         tag = kinds.get(token, "")
@@ -6481,19 +6386,12 @@ def main() -> None:
             # The common case, not an edge case: the recipient has no prepared
             # bundle, or a different subset of one. Say which corpus was named
             # and leave the picker exactly where it was — never wedge it, and
-            # never silently open a different corpus. The remedy names what is
-            # actually clickable: the bundle directory input renders *inside* a
-            # benchmark corpus entry, so it can only be reached by selecting one
-            # of those entries first (with no bundle at all, that is the single
-            # "set up a local bundle" entry the registry offers in their place).
+            # never silently open a different corpus. There is no remedy to name
+            # (DATA-55): the app no longer discovers corpora, and until DATA-56's
+            # add-from-a-folder flow nothing in it adds one.
             st.warning(
                 f"This link opens the corpus `{slug}`, which isn't available "
-                "here. To get it, open **Data source** and select a harmonised "
-                f"benchmark corpus — or **{picker_name_for(BENCHMARK_SETUP_CHOICE)}** "
-                "if you have "
-                "none yet — then point its *Data directory* at a prepared bundle "
-                "containing this corpus. The link's view settings still apply to "
-                "whatever you open."
+                "here. The link's view settings still apply to whatever you open."
             )
     elif url_source == "upload":
         st.session_state.setdefault("_show_upload_wizard", True)

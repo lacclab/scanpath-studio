@@ -73,7 +73,9 @@ jobs:
       # One leg only: the number does not vary by interpreter, and --cov costs
       # tracing overhead on top of the matrix above. The floor lives in
       # pyproject.toml ([tool.coverage.report] fail_under), so this step and a
-      # local `pytest --cov` gate on the same value.
+      # local `pytest --cov` gate on the same value. So does the measurement
+      # core: `[tool.coverage.run] core = "sysmon"` is what keeps this leg near
+      # the plain ones on 3.12 instead of 2.7x slower (ENG-81).
       - name: Run pytest with coverage
         run: pytest -q -n auto --cov
 

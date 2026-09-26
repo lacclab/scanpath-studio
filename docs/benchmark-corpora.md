@@ -1,8 +1,14 @@
 # Harmonised benchmark corpora
 
-> **Not on the docs site (ENG-80).** A bundle can only be built with the
-> EyeGenBench pipeline, which is not public yet, so this page is kept in the
-> repository for the people who can build one rather than published.
+> **Not on the docs site (ENG-80), and not in the app for now (DATA-55).** A
+> bundle can only be built with the EyeGenBench pipeline, which is not public
+> yet, so this page is kept in the repository for the people who can build one
+> rather than published. The app no longer discovers these corpora — it used to
+> list every one in a bundle it found on disk, which put data in the picker that
+> nobody had chosen — and the flow that will add them (choose a folder, scan it,
+> pick the corpora) is DATA-56. Until then, load them with `load_eyegenbench` or
+> `render --eyegenbench` (the CLI section below); the in-app sections describe
+> the per-corpus integration that flow will feed, which the app keeps for it.
 
 Thirty-one public eye-tracking-while-reading corpora, re-derived into one common
 schema by the [EyeGenBench](https://github.com/EyeBench/EyeGenBench) pipeline,
@@ -56,10 +62,8 @@ A caption under the picker states the corpus's geometry provenance, and the
 description carries its licence and citation. If the bundle isn't where you
 pointed, the app says so and keeps the bundled demo loaded rather than failing.
 
-With **no** corpora discovered the picker offers a single entry,
-*🌐 Harmonised benchmark corpora — set up (WIP)*, which exists only to carry the
-directory input; it disappears as soon as a bundle is found. As with every
-public corpus, `SCANPATH_PUBLIC_DATASETS=0` hides them all.
+As with every public corpus, `SCANPATH_PUBLIC_DATASETS=0` hides them all, and
+while the corpora are unfinished `SCANPATH_EXPERIMENTAL=1` is needed as well.
 
 Two corpora ship **both** natively and harmonised — PoTeC and OneStop — and both
 entries are kept on purpose. The harmonised copy is labelled
@@ -278,8 +282,8 @@ OneStops apart. If two entries would ever claim one slug, the link scheme
 **refuses** it on both sides rather than guessing which corpus you meant.
 
 A recipient without that corpus prepared is the common case, not an edge case:
-the link says which corpus it names, tells them how to point at a bundle, and
-leaves their data source exactly where it was. The bundle *directory* never
+the link says which corpus it names and leaves their data source exactly where
+it was. The bundle *directory* never
 travels on the link — it is a local path, and it is the sender's.
 
 **CLI.**

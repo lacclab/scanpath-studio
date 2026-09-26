@@ -695,7 +695,7 @@ def _source_choice_for_param(value) -> str | None:
 #
 # `_SHAREABLE_SOURCES` above works for sources whose *identity is the token*.
 # The public corpora can't: `app.public_dataset_registry()` is the built-in
-# corpora **∪ one entry per prepared corpus discovered in the local bundle**, a
+# corpora **∪ one entry per harmonised benchmark corpus the user added**, a
 # catalogue that varies per machine, so there is no fixed token per corpus to
 # freeze. One generic token names the kind and a second param names the corpus.
 #
@@ -729,21 +729,13 @@ def _slugify_corpus(value: str) -> str:
 def corpus_slug(label: str, spec) -> str:
     """The ``?corpus=`` slug for one `public_dataset_registry()` entry, or ``""``.
 
-    Empty for an entry a link cannot name:
-
-    * the bootstrap placeholder the registry offers while **zero** corpora are
-      discovered — it exists to carry a directory input, so there is nothing to
-      reopen;
-    * an identifier with nothing sluggable in it. A manifest ``name`` written in
-      a non-Latin script slugifies to ``""``, and returning the bare namespace
-      prefix for it would give *every* such corpus the same slug **and** one the
-      reader can never match (it re-slugifies its input, which strips the
-      trailing hyphen). Not shareable is honest, and is already a supported
-      state; a slug naming several corpora is the failure this scheme exists to
-      prevent.
+    Empty for an identifier with nothing sluggable in it. A manifest ``name``
+    written in a non-Latin script slugifies to ``""``, and returning the bare
+    namespace prefix for it would give *every* such corpus the same slug **and**
+    one the reader can never match (it re-slugifies its input, which strips the
+    trailing hyphen). Not shareable is honest, and is already a supported state;
+    a slug naming several corpora is the failure this scheme exists to prevent.
     """
-    if spec.get("setup_only"):
-        return ""
     # `benchmark_dataset` is the manifest `name`, put on the spec by Task 11R
     # precisely as the stable identifier for this wire format.
     if dataset := str(spec.get("benchmark_dataset") or "").strip():

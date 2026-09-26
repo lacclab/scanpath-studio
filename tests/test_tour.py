@@ -603,6 +603,26 @@ class TestFaq:
             assert question.endswith(("?", ".")), f"not a question: {question!r}"
             assert len(answer) <= 480, f"FAQ answer too long: {question!r}"
 
+    def test_no_entry_is_for_someone_editing_the_code(self):
+        """BUG-85: docs/faq.md dropped "I edited the code and nothing changed?"
+        for the beta — it is contributor material, and CONTRIBUTING.md keeps
+        it — and this dialog follows that page."""
+        from scanpath_studio.tour import faq_items
+
+        text = " ".join(f"{question} {answer}" for question, answer in faq_items())
+        assert "edited the code" not in text.lower()
+        assert "Restart the server" not in text
+
+    def test_the_export_answer_works_in_the_desktop_app_too(self):
+        """BUG-85: the desktop bundle has no `plotly_get_chrome`, and no Python to
+        run it from; what it can use is an installed Chrome, Chromium or Edge."""
+        from scanpath_studio.tour import faq_items
+
+        (answer,) = [answer for question, answer in faq_items() if "HTML" in question]
+        for browser in ("Chrome", "Chromium", "Edge"):
+            assert browser in answer
+        assert "pip install" in answer
+
 
 def _keys_built_inside_a_popover() -> set[str]:
     """Container keys created off a ``st.popover(...)`` handle.

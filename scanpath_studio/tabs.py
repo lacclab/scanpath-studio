@@ -92,6 +92,7 @@ from scanpath_studio.constants import (
     SELECTOR_ROW_WIDE_GRID,
     TRIAL_IDENTITY_CHECK_KEY,
     TRIAL_IDENTITY_FULL_KEY,
+    UNIFORM_COLOR_FIELD,
     UPLOAD_FILE_TYPES,
     WORD_LABEL_COLOR,
     compare_palette_color,
@@ -3350,10 +3351,10 @@ def _compare_setups(
         return True, ""
     setup_b = compare_meta.get("setup")
     if setup_b is None:
+        # BUG-85: why, not what happens next — like `setups_comparable`'s reason.
         return False, (
             "The comparison dataset does not report a screen, so there is no way "
-            "to tell whether these readings share one coordinate space. They are "
-            "shown side by side instead."
+            "to tell whether these readings share one coordinate space."
         )
     active = str(st.session_state.get("data_source_choice") or "")
     setup_a = replace(
@@ -5474,12 +5475,15 @@ def render_single_trial_tab(
             else None
         ),
     )
-    _publish_snippet_state(
+    snippet_kind = (
         "animation"
         if animate and not trial_fixations.empty
         else "comparison"
         if comparing
-        else "static",
+        else "static"
+    )
+    _publish_snippet_state(
+        snippet_kind,
         figure_settings,
         viz_settings,
         participant=selected_participant,
@@ -5503,7 +5507,12 @@ def render_single_trial_tab(
                 compare_stimulus=str(compare_stimulus),
                 dataset=str(compare_meta.get("dataset") or ""),
             )
-            if comparing and compare_meta is not None
+            # BUG-85: an animation names B only when it co-animates B. Where it
+            # fell back to A alone (B empty, or two screens), a snippet naming B
+            # — `trial_b=` / `--compare-with` — would draw what the app didn't.
+            if comparing
+            and compare_meta is not None
+            and (snippet_kind != "animation" or dual_anim)
             else None
         ),
     )
@@ -5570,17 +5579,14 @@ def render_single_trial_tab(
                     )
                 )
             if comparing and cross_dataset and not compare_comparable:
-                # UX-144: the note's own ending ("so they are shown side by
-                # side instead") is the *static* figure's fallback; the replay
-                # has no split layout and shows A alone, so say only that.
-                reason = compare_setup_note.removesuffix(
-                    ", so they are shown side by side instead."
-                )
-                reason += "" if reason.endswith(".") else "."
+                # UX-144: the replay has no split layout and shows A alone, so
+                # that is what it says. BUG-85 took the static figure's "shown
+                # side by side instead" out of the gate's reason, which is what
+                # used to be trimmed off here (and missed on the no-screen one).
                 st.warning(
                     "An animated comparison replays both scanpaths on one clock "
-                    f"in one coordinate space. {reason} Showing only the first "
-                    "scanpath.",
+                    f"in one coordinate space. {compare_setup_note} Showing only "
+                    "the first scanpath.",
                     icon="⚠️",
                 )
             elif comparing and compare_fix.empty:
@@ -5614,7 +5620,13 @@ def render_single_trial_tab(
                 compare_stimulus=compare_stimulus,
                 compare_meta=compare_meta,
                 shared_numeric=shared_numeric,
-                setup_note=compare_setup_note,
+                # BUG-85: the gate says why the pair cannot overlay; that it is
+                # drawn side by side instead is this surface's own resolve.
+                setup_note=(
+                    f"{compare_setup_note} They are shown side by side instead."
+                    if compare_layout != requested_layout
+                    else compare_setup_note
+                ),
                 primary_combo_row=primary_combo_row,
             )
             save_slug = (
@@ -5979,9 +5991,11 @@ def _render_comparison_figure(
     colour one panel and blank the other, so it is dropped with a note.
 
     **CMP-11**: ``setup_note`` is `experimental_setup.setups_comparable`'s
-    sentence about the two screens — either why the pair could not be overlaid,
-    or, on an overlay that *was* allowed, the caveat that the matching canvas is
-    a shared default rather than a recorded screen. Empty when neither applies.
+    sentence about the two screens — either why the pair could not be overlaid
+    (plus, when an Overlay was asked for, that it is shown side by side instead
+    — the caller's sentence, BUG-85), or, on an overlay that *was* allowed, the
+    caveat that the matching canvas is a shared default rather than a recorded
+    screen. Empty when neither applies.
     It surfaces where the user is looking (a warning under an overlay, appended
     to the caption under a split layout) rather than only in the rail's
     popover.
@@ -8408,7 +8422,7 @@ def _comparison_trial_words(
 
 def _comparison_panel_settings(base_settings: dict) -> dict:
     """Comparable grid settings without hiding the main plot's stimulus text."""
-    return {
+    settings = {
         **base_settings,
         "show_heatmap": False,
         "show_raw_gaze": False,
@@ -8416,6 +8430,11 @@ def _comparison_panel_settings(base_settings: dict) -> dict:
         "fixation_flags": None,
         "show_order": False,
     }
+    # BUG-85: the builders read `color_by="line"` as colour-by-line too, so the
+    # rail's "line" has to be neutralised here or the switch-off above is moot.
+    if settings.get("color_by") == "line":
+        settings["color_by"] = UNIFORM_COLOR_FIELD
+    return settings
 
 
 def render_multiple_comparison_tab(

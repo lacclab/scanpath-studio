@@ -132,10 +132,21 @@ def test_skipped_geometry_does_not_block_a_shared_screen():
 
 
 def test_reason_is_a_complete_sentence():
-    """The UI caption, the CLI error and the API exception all print it verbatim."""
+    """The UI caption, the CLI error and the API exception all quote it whole,
+    each adding only what that surface does next."""
     _, reason = setups_comparable(_snapshot(2560, 1440), _snapshot(1680, 1050))
     assert reason[:1].isupper()
     assert reason.endswith(".")
+
+
+def test_a_refusal_leaves_what_happens_next_to_the_surface():
+    """BUG-85: the reason ended "so they are shown side by side instead" — the
+    app's fallback — while `compare_scanpaths` and `render` raise, so two of
+    the three surfaces quoting it stated something that had not happened. The
+    predicate says why the pair cannot overlay; each caller says what it does."""
+    _, reason = setups_comparable(_snapshot(2560, 1440), _snapshot(1680, 1050))
+    assert "side by side" not in reason
+    assert "instead" not in reason
 
 
 def test_a_public_corpus_reports_its_declared_monitor_not_its_data_extents(

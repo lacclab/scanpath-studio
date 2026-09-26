@@ -418,3 +418,33 @@ def test_a_stamped_screen_order_survives_a_mapping_that_does_not_name_it():
     out = normalize_words(stamped, schema)
     order = out.drop_duplicates(SCREEN_ID).set_index(SCREEN_ID)["screen_index"]
     assert order.to_dict() == {"intro": 1, "question": 2}
+
+
+def test_a_co_animation_draws_one_screen_of_a_multipart_second_reading():
+    """BUG-85: `trial_b=` cut B to one trial but kept every screen of it, so a
+    multipart B drew all its screens as one trail in A's coordinates — each
+    screen is its own coordinate space. B keeps its first recorded screen, as A
+    does without `screen=` and as the app's B navigator starts; B frames cut to
+    another screen with `extract_part` pick that one instead."""
+    words, fixations = make_multipart_synthetic_data()
+    pid, tid = "synthetic", "multipart_demo"
+
+    def trace_b(fig):
+        (trace,) = [trace for trace in fig.data if trace.name == "Scanpath B"]
+        return trace
+
+    first = api.animate_scanpath(
+        words, fixations, pid, tid, screen="question", trial_b=(pid, tid)
+    )
+    assert len(trace_b(first).x) == MULTIPART_EXPECTED["fixations_per_screen"][0]
+
+    chosen = api.animate_scanpath(
+        words,
+        fixations,
+        pid,
+        tid,
+        screen="question",
+        words_b=extract_part(words, pid, tid, "question"),
+        fixations_b=extract_part(fixations, pid, tid, "question"),
+    )
+    assert len(trace_b(chosen).x) == MULTIPART_EXPECTED["fixations_per_screen"][1]

@@ -1814,17 +1814,9 @@ _FAQ_ITEMS = [
     (
         "PNG / SVG / PDF export fails but HTML works.",
         "Static image export goes through Kaleido, which drives a headless "
-        "Chrome that `pip install` doesn't provide. Run `plotly_get_chrome -y` "
-        "once. **HTML** export is browser-free and always available.",
-    ),
-    (
-        "I edited the code (or a setting looks stale) and nothing changed.",
-        "Streamlit doesn't reload already-imported modules on a rerun, and "
-        "`st.cache_data` doesn't hash the helpers a cached loader calls — a "
-        "rerun or **Clear cache** isn't enough after editing code. Restart the "
-        "server process. This is a different cache from the top bar's "
-        "**💾 Session → Automatic recovery** panel, which stores your data and settings, "
-        "not code.",
+        "Chrome, Chromium or Edge — install one of them (in a pip install, "
+        "`plotly_get_chrome -y` also works). **HTML** export is browser-free and "
+        "always available.",
     ),
     (
         "How do I cite Scanpath Studio?",

@@ -1665,6 +1665,7 @@ def animate_scanpath(
     illustration_label: str = "auto",
     title: str = "",
     caption: str = "",
+    trial_b: tuple[str, str] | None = None,
     **animation_overrides,
 ) -> go.Figure:
     """Build the animated scanpath replay for one trial.
@@ -1688,6 +1689,18 @@ def animate_scanpath(
     When ``playback_speed`` is not ``1``, the automatic Illustration label says
     the replay timing was changed. ``illustration_label`` accepts ``"auto"``,
     ``"show"``, or ``"hide"`` like [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
+
+    ``trial_b=(participant, trial)`` co-animates a second reading on the same
+    clock, like the app's Animate + Compare. It is looked up in ``words_b`` /
+    ``fixations_b`` when given (a second dataset), else in ``words`` /
+    ``fixations`` — the way
+    [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths] takes it.
+    Without ``trial_b``, ``words_b`` / ``fixations_b`` must hold one trial; B
+    frames holding several raise ``ValueError`` rather than drawing them all. A
+    multipart B is drawn at its first recorded screen; cut B's frames to
+    another with `multipart.extract_part` to draw that one. Both readings are
+    drawn in A's coordinates, and nothing here checks that they were recorded
+    on one screen, as the overlay in `compare_scanpaths` does.
 
     The animation builder accepts a subset of the static figure's options
     (``show_words``, ``show_word_labels``, ``show_saccades``, ``show_order``, styling,
@@ -1739,8 +1752,13 @@ def animate_scanpath(
             canvas_size = screen_canvas_size(trial_fixations)
         if canvas_size is None:
             canvas_size = _data.compute_canvas_size(trial_words, trial_fixations)
-    fixations_b = animation_overrides.pop("fixations_b", None)
-    words_b = animation_overrides.pop("words_b", None)
+    words_b, fixations_b = _second_reading(
+        words,
+        fixations,
+        animation_overrides.pop("words_b", None),
+        animation_overrides.pop("fixations_b", None),
+        trial_b,
+    )
     label_mode = str(illustration_label).capitalize()
     if label_mode not in {"Auto", "Show", "Hide"}:
         raise ValueError("illustration_label must be 'auto', 'show', or 'hide'.")
@@ -1774,6 +1792,72 @@ def animate_scanpath(
     add_illustration_label(fig, animation_overrides.get("illustration_reasons"))
     annotate_figure(fig, title=title, caption=caption)
     return fig
+
+
+def _second_reading(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    words_b: pd.DataFrame | None,
+    fixations_b: pd.DataFrame | None,
+    trial_b: tuple[str, str] | None,
+) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
+    """Scanpath B's frames for a co-animation, cut to one reading (BUG-85).
+
+    The animation builder draws every row it is handed, so frames passed the
+    way `compare_scanpaths` takes them — B's whole corpus — drew every fixation
+    in it. ``trial_b`` picks the reading, in B's own frames when given and A's
+    otherwise, as `compare_scanpaths` does; without it B's frames must hold one
+    trial, since guessing among several would draw somebody else's reading.
+    A multipart B keeps one screen, never all of them — each is its own
+    coordinate space: its first, as A without ``screen=`` and the app's B
+    navigator start, unless the caller cut B to another with `extract_part`.
+    """
+    if trial_b is None:
+        source = fixations_b if fixations_b is not None else words_b
+        if source is None or source.empty:
+            return words_b, fixations_b
+        label = "fixations_b" if fixations_b is not None else "words_b"
+        pairs = _require_normalized(source, label)[
+            ["participant_id", "trial_id"]
+        ].drop_duplicates()
+        if len(pairs) > 1:
+            raise ValueError(
+                f"{label} holds {len(pairs)} trials, so the second scanpath is "
+                "ambiguous. Pass trial_b=(participant, trial) to pick one — "
+                "compare_scanpaths takes it the same way."
+            )
+        pid_b, tid_b = (str(value) for value in pairs.iloc[0])
+    else:
+        pid_b, tid_b = str(trial_b[0]), str(trial_b[1])
+        words_b = words if words_b is None else words_b
+        fixations_b = fixations if fixations_b is None else fixations_b
+
+    def one_reading(frame: pd.DataFrame | None, label: str) -> pd.DataFrame | None:
+        # `extract_part` masks afresh, as `_select_trial` slices A. Not
+        # `utils.extract_trial`: its position cache is keyed by the frame's
+        # identity, so an in-place edit between two calls handed back somebody
+        # else's rows.
+        if frame is None or frame.empty:
+            return frame
+        return extract_part(_require_normalized(frame, label), pid_b, tid_b)
+
+    trial_words_b = one_reading(words_b, "words_b")
+    trial_fix_b = one_reading(fixations_b, "fixations_b")
+    if trial_b is not None and (trial_fix_b is None or trial_fix_b.empty):
+        raise ValueError(
+            f"No fixations for the second scanpath participant={pid_b!r}, "
+            f"trial={tid_b!r}. list_trials() shows what the frames contain."
+        )
+    catalog = part_catalog(trial_words_b, trial_fix_b)
+    if not catalog.empty:
+        screen_b = str(catalog[SCREEN_ID].iloc[0])
+        trial_words_b, trial_fix_b = (
+            extract_part(frame, pid_b, tid_b, screen_b)
+            if frame is not None and SCREEN_ID in frame.columns
+            else frame
+            for frame in (trial_words_b, trial_fix_b)
+        )
+    return trial_words_b, trial_fix_b
 
 
 def render_parent_trial(
@@ -1944,7 +2028,7 @@ def compare_scanpaths(
     raises ``TypeError`` naming the closest valid options;
     ``figure_options("comparison")`` lists the accepted keywords.
     """
-    from .experimental_setup import setups_comparable
+    from .experimental_setup import IncomparableScreensError, setups_comparable
     from .utils import align_compare_columns, extract_trial, qualify_for_compare
 
     resolved_layout = _COMPARE_LAYOUTS.get(str(layout).strip().lower())
@@ -1992,9 +2076,13 @@ def compare_scanpaths(
     if resolved_layout == "overlay" and cross_dataset:
         comparable, note = setups_comparable(setup_a, resolved_setup_b)
         if not comparable:
-            raise ValueError(
-                f"{note} Pass layout='side_by_side' (or 'stacked') to compare "
-                f"them anyway, each panel drawn to its own screen."
+            # BUG-85: the reason says why; this says what happened here and how
+            # to ask for the split in Python. `render` rewords it in its flags.
+            raise IncomparableScreensError(
+                f"{note} So no overlay was drawn; pass layout='side_by_side' (or "
+                f"'stacked') to compare them in separate panels, each drawn to "
+                f"its own screen.",
+                reason=note,
             )
         if note:
             # The canvases match but at least one corpus never recorded a screen,

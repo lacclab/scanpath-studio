@@ -3389,6 +3389,52 @@ class TestGenericFilenamePowers:
         # …and the character-AOI aggregation toggle renders for the words table.
         assert "wizard_aggregate_char_boxes" in {t.key for t in at.toggle}
 
+    def test_the_filename_derive_control_sits_above_the_table_rows(self, monkeypatch):
+        """UX-123 keeps "Derive columns from the filename" the first control of
+        the upload part — reserved before the Fixations/AOI rows, filled in once
+        their uploads have run. `scanpath_studio/CLAUDE.md` had drifted to say
+        it sat *below* them (BUG-85); this pins what the note now says."""
+        import pandas as pd
+
+        from scanpath_studio import app
+
+        fix = pd.DataFrame(
+            {
+                "onset": [1, 2],
+                "duration": [10, 10],
+                "location_x": [1.0, 2.0],
+                "location_y": [1.0, 1.0],
+                "source_file": ["p1_t1_scan", "p1_t1_scan"],
+            }
+        )
+        monkeypatch.setattr(
+            app,
+            "_read_uploaded_frame",
+            lambda **kw: fix if kw["state_prefix"] == "col_map_fix" else pd.DataFrame(),
+        )
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.session_state["_show_upload_wizard"] = True
+        at.session_state["setup_complete"] = False
+        at.session_state["wizard_dataset_format"] = "Generic"
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+        def keys_in_screen_order(node):
+            key = getattr(node, "key", None)
+            if key:
+                yield key
+            children = getattr(node, "children", None) or {}
+            for index in sorted(children):
+                yield from keys_in_screen_order(children[index])
+
+        keys = list(keys_in_screen_order(at.main))
+        fixation_rows = [
+            i for i, key in enumerate(keys) if key.startswith("col_map_fix_")
+        ]
+        assert fixation_rows, "the Fixations row rendered no field pickers"
+        assert keys.index("wizard_filename_split") < fixation_rows[0]
+
     def test_aggregate_toggle_finalizes_word_boxes(self, monkeypatch):
         # End-to-end: a char-level words upload + the aggregate toggle → the
         # stored dataset holds one box per word (4 char rows → 2 word boxes).

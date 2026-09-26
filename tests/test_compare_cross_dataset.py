@@ -277,6 +277,14 @@ def _overlay_gate_app():
         comparable, reason = _compare_setups(meta, words, fixations, 1920, 1080)
         layout = "overlay" if comparable else "side_by_side"
         st.session_state[f"_gate_{name}"] = (comparable, reason, layout)
+    # B from another dataset that reports no screen at all (BUG-85).
+    st.session_state["_gate_no_screen"] = _compare_setups(
+        {"dataset": "PoTeC", "setup": None, "words": words},
+        words,
+        fixations,
+        1920,
+        1080,
+    )
 
 
 class TestOverlayGate:
@@ -326,6 +334,15 @@ class TestOverlayGate:
         assert comparable is True
         assert layout == "overlay"
         assert note, "an unrecorded screen must still be disclosed"
+
+    def test_a_dataset_that_reports_no_screen_is_refused_with_the_reason_only(self):
+        """BUG-85: this reason ended "They are shown side by side instead." — the
+        static figure's fallback — so the animated warning, which shows only A,
+        quoted a layout it never drew. The fallback is the caller's to say."""
+        comparable, reason = self._run().session_state["_gate_no_screen"]
+        assert comparable is False
+        assert "does not report a screen" in reason
+        assert "side by side" not in reason
 
 
 class TestCompareStimulusSource:

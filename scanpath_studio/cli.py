@@ -788,9 +788,10 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--color-by",
         metavar="FIELD",
-        help=f"Fixation color field, e.g. duration_ms or gpt2_surprisal "
-        f"(default: {UNIFORM_COLOR_FIELD} — one flat colour, since marker size "
-        f"already shows duration).",
+        help=f"Fixation color field, e.g. duration_ms or gpt2_surprisal, or "
+        f"'line' to colour each fixation by its text line (same as "
+        f"--color-by-line; default: {UNIFORM_COLOR_FIELD} — one flat colour, "
+        f"since marker size already shows duration).",
     )
     viz.add_argument(
         "--fixation-color",
@@ -917,7 +918,7 @@ def _render_parser() -> argparse.ArgumentParser:
         "--color-by-line",
         action="store_true",
         help="Colour each fixation by the text line it lands on (lines inferred "
-        "from the word boxes); overrides --color-by.",
+        "from the word boxes); overrides --color-by. Same as --color-by line.",
     )
     viz.add_argument(
         "--fixation-color-range",
@@ -1203,9 +1204,10 @@ def _render_parser() -> argparse.ArgumentParser:
         choices=["overlay", "side-by-side", "stacked"],
         default="overlay",
         help="How the two scanpaths are arranged (default: overlay). Across two "
-        "datasets, overlay needs both to have been recorded on the same known "
-        "screen — otherwise it is refused rather than silently split, so pass "
-        "side-by-side or stacked for a mismatched pair.",
+        "datasets, overlay needs both canvases to be the same size — two "
+        "different canvases are refused rather than silently split, so pass "
+        "side-by-side or stacked for them. Matching canvases that a dataset "
+        "never recorded still overlay, with a warning.",
     )
     cmp_group.add_argument(
         "--compare-stimulus",
@@ -1296,38 +1298,9 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Second dataset's monitor size in px, e.g. 1680x1050. Read off its "
         "data when omitted. Overlay compares this against --canvas.",
     )
-    # These two are accepted and recorded on the setup snapshots but are not read
-    # by the current render path: CMP-11 shipped as a gate, not a rescaling, so
-    # nothing converts to degrees. They exist because SetupSnapshot is on the CLI
-    # surface now and a half-populated one is worse than a complete one.
-    cmp_group.add_argument(
-        "--monitor-mm",
-        type=float,
-        default=None,
-        metavar="MM",
-        help="Physical width of the FIRST dataset's monitor, in millimetres.",
-    )
-    cmp_group.add_argument(
-        "--viewing-distance",
-        type=float,
-        default=None,
-        metavar="MM",
-        help="Eye-to-screen distance for the FIRST dataset, in millimetres.",
-    )
-    cmp_group.add_argument(
-        "--compare-monitor-mm",
-        type=float,
-        default=None,
-        metavar="MM",
-        help="Physical width of the SECOND dataset's monitor, in millimetres.",
-    )
-    cmp_group.add_argument(
-        "--compare-viewing-distance",
-        type=float,
-        default=None,
-        metavar="MM",
-        help="Eye-to-screen distance for the SECOND dataset, in millimetres.",
-    )
+    # BUG-85 removed --monitor-mm / --viewing-distance and their --compare-*
+    # twins: they were recorded on the setup snapshots and read by nothing —
+    # CMP-11 is a gate on pixels, not a rescaling, so no figure used them.
     return parser
 
 
@@ -1500,21 +1473,18 @@ def _compare_animation_frames(api, args, words, fixations, canvas) -> dict:
             f"trial={trial_b!r}. Use --list-trials to see the available pairs."
         )
     if cross_dataset:
-        setup_a = _compare_setup_snapshot(
-            canvas, args.monitor_mm, args.viewing_distance
-        )
-        setup_b = _compare_setup_snapshot(
-            _parse_canvas(args.compare_canvas),
-            args.compare_monitor_mm,
-            args.compare_viewing_distance,
-        )
+        setup_a = _compare_setup_snapshot(canvas)
+        setup_b = _compare_setup_snapshot(_parse_canvas(args.compare_canvas))
         if setup_a is not None and setup_b is not None:
             comparable, note = setups_comparable(setup_a, setup_b)
             if not comparable:
+                # BUG-85: dropping --animate alone lands on the default overlay,
+                # which is refused on the same terms — so name the layout too.
                 raise SystemExit(
                     f"{note} An animated comparison replays both readings on one "
-                    f"clock in one coordinate space, so it needs the same screen. "
-                    f"Drop --animate to compare them as separate panels."
+                    f"clock in one coordinate space, so it needs one screen too. "
+                    f"Drop --animate and pass --compare-layout side-by-side (or "
+                    f"stacked) to compare them in separate panels."
                 )
             if note:
                 # Allowed, but the matching canvas is a shared default rather than
@@ -1525,43 +1495,21 @@ def _compare_animation_frames(api, args, words, fixations, canvas) -> dict:
     return {"words_b": trial_words_b, "fixations_b": trial_fix_b}
 
 
-def _compare_setup_snapshot(
-    canvas: tuple | None,
-    monitor_mm: float | None,
-    viewing_distance: float | None,
-):
-    """A `SetupSnapshot` from the CLI's geometry flags, or ``None`` if silent.
+def _compare_setup_snapshot(canvas: tuple | None):
+    """A `SetupSnapshot` for a canvas the caller stated, or ``None`` if silent.
 
     ``None`` lets `api.compare_scanpaths` infer the screen from the data, which
     is the right default — inventing a canvas here would be a claim the caller
-    never made.
+    never made. A stated canvas is a known screen: ``MEASURED``.
     """
     from .experimental_setup import Provenance, SetupSnapshot
 
-    if canvas is None and monitor_mm is None and viewing_distance is None:
+    if canvas is None:
         return None
-    fields: dict = {}
-    if canvas is not None:
-        fields.update(canvas_width=int(canvas[0]), canvas_height=int(canvas[1]))
-    if monitor_mm is not None:
-        fields["monitor_width_mm"] = float(monitor_mm)
-    if viewing_distance is not None:
-        fields["viewing_distance_mm"] = float(viewing_distance)
     return SetupSnapshot(
-        **fields,
-        # No canvas given means the snapshot carries the *default* one, so it must
-        # say ASSUMED — `setups_comparable` treats that as "screen unknown" and
-        # refuses the overlay. Reporting ESTIMATED here let `--monitor-mm 520`
-        # alone launder a default 2560x1440 into a screen the caller never stated,
-        # and it would then compare equal to a real 2560x1440.
-        screen_provenance=(
-            Provenance.MEASURED if canvas is not None else Provenance.ASSUMED
-        ),
-        geometry_provenance=(
-            Provenance.MEASURED
-            if (monitor_mm is not None and viewing_distance is not None)
-            else Provenance.ASSUMED
-        ),
+        canvas_width=int(canvas[0]),
+        canvas_height=int(canvas[1]),
+        screen_provenance=Provenance.MEASURED,
     )
 
 
@@ -1826,12 +1774,6 @@ def _print_reproduction_code(
     # named, never dropped — the same rule `cli_unsupported` applies in the other
     # direction. Translating a command into a notebook cell has to be honest
     # about the parts of the command that didn't come along.
-    if args.monitor_mm is not None or args.viewing_distance is not None:
-        caveats.append(
-            "--monitor-mm / --viewing-distance describe the recording setup; "
-            "the snippet has no field for them. Build an "
-            "experimental_setup.SetupSnapshot and pass it as `setup=`."
-        )
     if args.image_root:
         caveats.append(
             "--image-root / --image-pattern resolve one stimulus image per row; "
@@ -2520,7 +2462,7 @@ def render(argv: list[str]) -> None:
     if args.snap_fixations:
         overrides["fixation_snap_to_word"] = True
     if args.illustration:
-        overrides.update(
+        preset = dict(
             show_words=False,
             show_word_labels=True,
             show_fixations=True,
@@ -2534,6 +2476,19 @@ def render(argv: list[str]) -> None:
             fixation_snap_to_word=True,
             fixation_opacity=1.0,
         )
+        # BUG-85 review: an explicit flag wins over the preset, as it does over
+        # `plot_scanpath(illustration=True, …)` — the preset used to overwrite
+        # `--color-by`, `--no-labels` and the rest set above. The layer switches
+        # always sit in `overrides`, so they count only when moved off default.
+        stated = {
+            key
+            for key in preset
+            if key in overrides
+            and (
+                not key.startswith("show_") or overrides[key] != parser.get_default(key)
+            )
+        }
+        overrides.update({k: v for k, v in preset.items() if k not in stated})
     # VIZ-4: image stimulus background. make_scanpath_figure only draws the image
     # when a size is known, so default to the PNG's own pixel size, then the
     # canvas.
@@ -2705,6 +2660,8 @@ def render(argv: list[str]) -> None:
             # animate/static branches rather than an option on one of them: the
             # comparison builder takes neither `--animate`'s playback settings
             # nor the static path's per-layer extras.
+            from .experimental_setup import IncomparableScreensError
+
             compare_participant, compare_trial = _parse_compare_with(args.compare_with)
             loaded_b, loaded_fix_b, cross_dataset = _compare_second_dataset(
                 api, args, words, fixations
@@ -2719,34 +2676,37 @@ def render(argv: list[str]) -> None:
             # what skips the namespacing.
             words_b = loaded_b if cross_dataset else None
             fixations_b = loaded_fix_b if cross_dataset else None
-            fig = api.compare_scanpaths(
-                words,
-                fixations,
-                (participant, trial),
-                (compare_participant, compare_trial),
-                words_b=words_b,
-                fixations_b=fixations_b,
-                dataset_b=args.compare_dataset_name,
-                layout=args.compare_layout,
-                compare_stimulus=args.compare_stimulus,
-                labels=_compare_labels(args),
-                setup=_compare_setup_snapshot(
-                    canvas, args.monitor_mm, args.viewing_distance
-                ),
-                setup_b=_compare_setup_snapshot(
-                    _parse_canvas(args.compare_canvas),
-                    args.compare_monitor_mm,
-                    args.compare_viewing_distance,
-                ),
-                drift_correction=args.drift_correction,
-                # EXP-11: a builder parameter, like the drift correction beside
-                # it, so it has to be named here — it is not in `overrides`.
-                # Left out, a windowed comparison drew both whole trials while
-                # the `--print-code` recipe for it said otherwise.
-                fix_index_range=_parse_fix_index_range(args.fix_index_range),
-                **overrides,
-                **common,  # carries canvas_size / fonts / title / caption
-            )
+            try:
+                fig = api.compare_scanpaths(
+                    words,
+                    fixations,
+                    (participant, trial),
+                    (compare_participant, compare_trial),
+                    words_b=words_b,
+                    fixations_b=fixations_b,
+                    dataset_b=args.compare_dataset_name,
+                    layout=args.compare_layout,
+                    compare_stimulus=args.compare_stimulus,
+                    labels=_compare_labels(args),
+                    setup=_compare_setup_snapshot(canvas),
+                    setup_b=_compare_setup_snapshot(_parse_canvas(args.compare_canvas)),
+                    drift_correction=args.drift_correction,
+                    # EXP-11: a builder parameter, like the drift correction
+                    # beside it, so it has to be named here — it is not in
+                    # `overrides`. Left out, a windowed comparison drew both
+                    # whole trials while the `--print-code` recipe said otherwise.
+                    fix_index_range=_parse_fix_index_range(args.fix_index_range),
+                    **overrides,
+                    **common,  # carries canvas_size / fonts / title / caption
+                )
+            except IncomparableScreensError as exc:
+                # BUG-85: the API's way out is Python (`layout='side_by_side'`),
+                # which this used to print verbatim to someone at a shell.
+                raise SystemExit(
+                    f"{exc.reason} So no overlay was drawn; pass --compare-layout "
+                    "side-by-side (or stacked) to compare them in separate panels, "
+                    "each drawn to its own screen."
+                ) from None
         else:
             static_options = dict(
                 raw_gaze=raw_gaze,

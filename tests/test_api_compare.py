@@ -176,7 +176,17 @@ class TestCrossDataset:
                 setup=_measured(1920, 1080),
                 setup_b=_measured(1680, 1050),
             )
-        assert "1680" in str(excinfo.value)
+        message = str(excinfo.value)
+        assert "1680" in message
+        # BUG-85: it says what this surface does — nothing was drawn — and how
+        # to ask for the split here, not the app's "shown side by side instead".
+        assert "side by side instead" not in message
+        assert "layout='side_by_side'" in message
+        # The surface-neutral reason rides along, so `render` can word the same
+        # refusal in its own flags rather than echo Python syntax.
+        reason = excinfo.value.reason
+        assert "1680" in reason and reason in message
+        assert "layout=" not in reason
 
     def test_a_split_layout_is_allowed_on_two_screens(self):
         fig = api.compare_scanpaths(
@@ -289,6 +299,97 @@ class TestDualCoAnimationAcceptsCompareStimulus:
             compare_stimulus="b",
         )
         assert fig.frames
+
+
+class TestCoAnimationDrawsOneSecondReading:
+    """BUG-85: `animate_scanpath` drew whatever B frames it was handed.
+
+    `compare_scanpaths` takes B's *corpus* plus a `trial_b` pair, so frames
+    passed the same way to the co-animation drew every fixation in them — 3,209
+    on the demo, where B's trial has 89. `trial_b` now picks the reading, as it
+    does there, and B frames holding several trials refuse rather than guess.
+    """
+
+    _A = ("l37_1129", "l37_1129_2_1_1_Ele_r0")
+    _B = ("l37_1129", "l37_1129_2_1_2_Ele_r0")
+
+    @staticmethod
+    def _trace_b(fig):
+        (trace,) = [trace for trace in fig.data if trace.name == "Scanpath B"]
+        return trace
+
+    def test_trial_b_picks_one_reading_out_of_the_corpus(self):
+        from scanpath_studio.utils import extract_trial
+
+        words, fixations = api.load_sample_data()
+        expected = len(extract_trial(fixations, *self._B))
+        fig = api.animate_scanpath(words, fixations, *self._A, trial_b=self._B)
+        assert len(self._trace_b(fig).x) == expected
+
+    def test_trial_b_is_looked_up_in_bs_own_frames(self):
+        """A second dataset's reader is found in *its* frames, never in A's."""
+        words, fixations = _pair()
+        fig = api.animate_scanpath(
+            words,
+            fixations,
+            "p1",
+            "t1",
+            canvas_size=(1920, 1080),
+            words_b=pd.concat(
+                [_words("p9", "t9"), _words("p8", "t8")], ignore_index=True
+            ),
+            fixations_b=pd.concat(
+                [_fixations("p9", "t9", y=300.0), _fixations("p8", "t8", y=500.0)],
+                ignore_index=True,
+            ),
+            trial_b=("p9", "t9"),
+        )
+        trace = self._trace_b(fig)
+        assert len(trace.y) == 3
+        # The replay's first frame holds each not-yet-reached fixation as None.
+        assert {round(float(y)) for y in trace.y if y is not None} == {300}
+
+    def test_an_in_place_edit_between_calls_still_finds_bs_reading(self):
+        """B must be sliced fresh, as A is. Through `utils.extract_trial`'s
+        position cache — keyed by the frame's identity, which an in-place edit
+        keeps — a second call after `sort_values(inplace=True)` returned the
+        same *positions*: as many rows, from somebody else's trials."""
+        words, fixations = api.load_sample_data()
+        fixations = fixations.copy()
+        api._second_reading(words, fixations, None, None, self._B)
+        fixations.sort_values(
+            ["participant_id", "trial_id"], ascending=False, inplace=True
+        )
+        _, fix_b = api._second_reading(words, fixations, None, None, self._B)
+        assert set(zip(fix_b["participant_id"], fix_b["trial_id"])) == {self._B}
+
+    def test_b_frames_holding_several_trials_ask_for_trial_b(self):
+        words, fixations = api.load_sample_data()
+        with pytest.raises(ValueError, match=r"trial_b="):
+            api.animate_scanpath(
+                words, fixations, *self._A, words_b=words, fixations_b=fixations
+            )
+
+    def test_a_trial_b_with_no_fixations_raises(self):
+        words, fixations = api.load_sample_data()
+        with pytest.raises(ValueError, match="No fixations for the second scanpath"):
+            api.animate_scanpath(
+                words, fixations, *self._A, trial_b=("nobody", "nothing")
+            )
+
+    def test_one_trials_frames_still_need_no_trial_b(self):
+        """The shape every existing caller passes — `render` slices B first."""
+        words, fixations = _pair()
+        fig = api.animate_scanpath(
+            words,
+            fixations,
+            "p1",
+            "t1",
+            canvas_size=(1920, 1080),
+            words_b=_words("p2", "t2", x0=400.0),
+            fixations_b=_fixations("p2", "t2", y=300.0),
+        )
+        assert len(self._trace_b(fig).x) == 3
 
 
 @pytest.mark.parametrize("layout", ["overlay", "side_by_side", "stacked"])

@@ -811,6 +811,34 @@ class TestCrossDatasetCompareFlow:
         # §5.3: resolved for this render, but the user's stored choice stands so
         # a same-dataset pair gets Overlay straight back.
         assert at.session_state["single_compare_layout"] == "Overlay"
+        # BUG-85: the gate's reason no longer carries the app's fallback, so the
+        # app says it where it resolves Overlay away — once.
+        captions = " ".join(str(caption.value) for caption in at.caption)
+        assert captions.count("They are shown side by side instead.") == 1
+
+    def test_an_animated_pair_on_two_screens_says_it_shows_one_scanpath(self):
+        """UX-144: the co-replay has no split layout and shows A alone, so its
+        warning must not borrow the static figure's "shown side by side
+        instead". It used to trim that off the gate's reason; BUG-85 took it out
+        of the reason, so nothing is left here to trim — or to forget to."""
+        from scanpath_studio.compare_source import COMPARE_SOURCE_KEY
+
+        at = _boot()
+        at.session_state["single_compare_toggle"] = True
+        at.session_state["single_animate"] = True
+        at.session_state[COMPARE_SOURCE_KEY] = SYNTHETIC_SOURCE
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        (warning,) = [
+            str(w.value) for w in at.warning if "animated comparison" in str(w.value)
+        ]
+        assert warning.endswith("Showing only the first scanpath.")
+        assert "side by side" not in warning
+        # And 🔗 Share's snippet reproduces what is drawn — A alone — rather than
+        # a co-animation (`trial_b=` / `--compare-with`) the app just refused.
+        state = at.session_state["_snippet_state"]
+        assert state.kind == "animation"
+        assert state.compare is None
 
     def test_bs_filters_do_not_disturb_the_main_pool(self):
         from scanpath_studio.compare_source import COMPARE_SOURCE_KEY

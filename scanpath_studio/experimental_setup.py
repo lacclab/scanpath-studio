@@ -269,6 +269,20 @@ def _coerce_provenance(value: Any) -> Provenance | None:
         return None
 
 
+class IncomparableScreensError(ValueError):
+    """An overlay was asked of two readings recorded on different screens.
+
+    Raised by `api.compare_scanpaths`, which draws nothing rather than switch
+    layout behind a script's back. ``reason`` is `setups_comparable`'s
+    surface-neutral sentence, so a caller can word the way out in its own terms
+    — `render` names ``--compare-layout`` rather than echo the Python keyword.
+    """
+
+    def __init__(self, message: str, *, reason: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
 #: Provenance values that mean "we know what screen this was" — the corpus said
 #: so, or it was inferred from the data. `ASSUMED` is excluded on purpose: it
 #: means a named default was taken, and two datasets that both defaulted are two
@@ -294,9 +308,13 @@ def setups_comparable(a: SetupSnapshot, b: SetupSnapshot) -> tuple[bool, str]:
       defaults. The overlay is drawn and ``caution`` is surfaced beside it.
     * ``(True, "")`` — the canvases match and both sides know their screen.
 
-    ``note`` is a complete user-facing sentence in both non-empty cases. The app,
-    the CLI and :func:`api.compare_scanpaths` print it verbatim rather than
-    composing their own wording, so the explanation cannot drift across surfaces.
+    ``note`` is a complete user-facing sentence in both non-empty cases, and the
+    app, the CLI and :func:`api.compare_scanpaths` all quote it whole, so the
+    explanation cannot drift across surfaces. A refusal says only *why*: what
+    happens next differs by surface — the app falls back to side by side, the
+    API raises :class:`IncomparableScreensError`, ``render`` exits naming its own
+    flag — so each caller appends that itself (BUG-85; the reason used to end
+    "so they are shown side by side instead", which was false on two of three).
 
     **Only the canvas is a hard gate.** An unrecorded screen warns rather than
     refuses — settled 2026-08-12 on the case that motivated it: two OneStop
@@ -324,7 +342,7 @@ def setups_comparable(a: SetupSnapshot, b: SetupSnapshot) -> tuple[bool, str]:
             f"These readings were recorded on different screens — "
             f"{a.canvas_width}x{a.canvas_height} and "
             f"{b.canvas_width}x{b.canvas_height}. Overlaying them would pool two "
-            f"unrelated pixel spaces, so they are shown side by side instead."
+            f"unrelated pixel spaces."
         )
     unknown = [
         name

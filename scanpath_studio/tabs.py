@@ -3,17 +3,21 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import html
 import json
 import os
+import pickle
+import zlib
 from collections.abc import Callable
+from dataclasses import dataclass, replace
 from dataclasses import fields as dataclass_fields
-from dataclasses import replace
 from functools import partial
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
+import plotly.io as pio
 import streamlit as st
 
 from scanpath_studio import alignment
@@ -179,8 +183,8 @@ from scanpath_studio.export_status import (
     EXPORTER_VERSION,
     ExportStage,
     ExportStatus,
+    export_signature,
     progress_caption,
-    static_export_signature,
 )
 from scanpath_studio.fields import labeled, panel_field
 from scanpath_studio.html_embed import embed_html_iframe, plotlyjs_script
@@ -260,6 +264,9 @@ from scanpath_studio.utils import (
     trial_sort_keys,
     unqualify_for_export,
 )
+
+if TYPE_CHECKING:
+    import plotly.graph_objects as go
 
 # -----------------------------------------------------------------------------
 # Single Trial Tab
@@ -719,15 +726,18 @@ def _true_scale_html(
         if zoomable
         else ""
     )
+    # The plot goes in last, so the other substitutions scan the template, not a
+    # replay's megabytes of JSON (PERF-16) — and cannot rewrite a placeholder-
+    # like string inside the figure.
     html = (
         _TRUE_SCALE_TEMPLATE.replace("__TOOLBAR__", toolbar)
-        .replace("__PLOT__", plot_html)
         .replace("__SCALE_JS__", scale_js)
         .replace("__ZOOMABLE__", "true" if zoomable else "false")
         .replace("__ZMAX__", str(_ZOOM_MAX))
         .replace("__W__", str(int(width)))
         .replace("__H__", str(int(height)))
         .replace("__KEY__", key)
+        .replace("__PLOT__", plot_html)
     )
     return html, iframe_height
 
@@ -778,9 +788,37 @@ def _render_true_scale_chart(
     when given — the Scanpath view's figures pass the Export subtab's file name,
     so the camera saves the same PNG. The others keep Plotly's ``newplot.png``.
     """
+    zoomable = max_height is None
+    _render_true_scale_plot(
+        _true_scale_plot_html(
+            fig, key=key, download_name=download_name, zoomable=zoomable
+        ),
+        key=key,
+        width=int(fig.layout.width or 900),
+        height=int(fig.layout.height or 600),
+        max_height=max_height,
+        zoomable=zoomable,
+    )
+
+
+def _true_scale_plot_html(
+    fig,
+    *,
+    key: str,
+    download_name: str | None = None,
+    zoomable: bool = True,
+    figure_dict: dict | None = None,
+) -> str:
+    """The figure's own markup for `_render_true_scale_chart`: div, config, player.
+
+    Everything but plotly.js itself, which `_render_true_scale_plot` loads on
+    every run — so this string is what a replay's cached view keeps (PERF-16).
+    ``figure_dict`` is ``fig.to_dict()`` when the caller already has it; it is
+    serialized as is, skipping the deep copy `to_html` would make of ``fig``
+    (2 s at 2,000 frames). The markup is byte-identical either way.
+    """
     width = int(fig.layout.width or 900)
     height = int(fig.layout.height or 600)
-    zoomable = max_height is None
     # BUG-93: an animated replay plays on the wall-clock player — Plotly's own
     # queue rounded every frame up to whole display ticks, so Fine at ×1 ran 25 %
     # slow — which also starts it on load when autoplay is on (VIZ-10). `None` for
@@ -800,9 +838,9 @@ def _render_true_scale_chart(
         config["toImageButtonOptions"]["filename"] = download_name
     if zoomable:
         config["modeBarButtonsToRemove"] = list(_NATIVE_ZOOM_BUTTONS)
-    # ENG-64: the installed plotly's own plotly.min.js, served by this app's
-    # server — not cdn.plot.ly, so the figure draws offline too.
-    plot_html = plotlyjs_script() + fig.to_html(
+    return pio.to_html(
+        fig if figure_dict is None else figure_dict,
+        validate=figure_dict is None,
         include_plotlyjs=False,
         full_html=False,
         config=config,
@@ -814,8 +852,22 @@ def _render_true_scale_chart(
         auto_play=False,
         post_script=player_script,
     )
+
+
+def _render_true_scale_plot(
+    plot_html: str,
+    *,
+    key: str,
+    width: int,
+    height: int,
+    max_height: int | None = None,
+    zoomable: bool = True,
+) -> None:
+    """Embed `_true_scale_plot_html`'s markup in the true-scale iframe."""
+    # ENG-64: the installed plotly's own plotly.min.js, served by this app's
+    # server — not cdn.plot.ly, so the figure draws offline too.
     html, iframe_height = _true_scale_html(
-        plot_html,
+        plotlyjs_script() + plot_html,
         key=key,
         width=width,
         height=height,
@@ -1100,19 +1152,23 @@ def _animation_html(fig) -> str:
 
     It replays on the same wall-clock player as the live embed (BUG-93), which
     also autoplays it at the configured speed when asked (VIZ-10); Plotly's own
-    ``auto_play`` stays off, since it ignores ``frame_duration``.
+    ``auto_play`` stays off, since it ignores ``frame_duration``. ``fig`` may
+    also be a figure's ``to_dict()`` (a replay's cached view), serialized as is.
     """
-    if fig.frames:
-        return fig.to_html(
-            include_plotlyjs="cdn",
-            full_html=True,
+    as_dict = isinstance(fig, dict)
+    frames = fig.get("frames") if as_dict else fig.frames
+    options = dict(include_plotlyjs="cdn", full_html=True, validate=not as_dict)
+    if frames:
+        return pio.to_html(
+            fig,
             auto_play=False,
             post_script=animation_player_post_script(fig),
+            **options,
         )
-    return fig.to_html(include_plotlyjs="cdn", full_html=True)
+    return pio.to_html(fig, **options)
 
 
-def _render_animation_export(fig, *, file_stem: str) -> None:
+def _render_animation_export(replay: _ReplayView, *, file_stem: str) -> None:
     """Export the animated scanpath as interactive HTML or a rasterized GIF/MP4.
 
     HTML is one click (no browser needed to generate, keeps interactivity). GIF and
@@ -1123,8 +1179,12 @@ def _render_animation_export(fig, *, file_stem: str) -> None:
     changes). The clip lasts what the on-screen replay does — the quoted playback
     time, spread evenly over its frames (fewer of them when the replay is faster
     than the format can show, BUG-93).
+
+    PERF-16: a rerun reads only the cached view's frame count, clip length, size
+    and signature; the figure itself is unpickled — 9 s at 2,000 frames — by the
+    click that exports it.
     """
-    n_frames = len(fig.frames or ())
+    n_frames = replay.n_frames
     fmt = panel_field(
         st,
         "radio",
@@ -1145,7 +1205,7 @@ def _render_animation_export(fig, *, file_stem: str) -> None:
         # megabytes and about a second to serialize.
         st.download_button(
             "⬇ Download HTML",
-            data=partial(_animation_html, fig),
+            data=partial(_replay_page_html, replay),
             file_name=f"{file_stem}.html",
             mime="text/html",
             key="anim_export_html",
@@ -1171,7 +1231,7 @@ def _render_animation_export(fig, *, file_stem: str) -> None:
 
     # BUG-93: the figure's own clock, so the clip lasts exactly what its replay
     # does — also when the Discard flags drop fixations, which the builder does.
-    frame_ms = animation_clip_frame_ms(fig)
+    frame_ms = replay.clip_frame_ms
     clip_s = frame_ms * n_frames / 1000.0
 
     scale = panel_field(
@@ -1216,17 +1276,18 @@ def _render_animation_export(fig, *, file_stem: str) -> None:
         )
 
     # Re-render only when an output-affecting input changes; otherwise reuse the
-    # cached bytes so the download button persists across reruns. The figure's
-    # own JSON fingerprints every visual choice that feeds the clip — trial,
-    # playback speed, saccades/order/marker-size/background, true-to-scale text —
+    # cached bytes so the download button persists across reruns. The replay's
+    # signature covers every visual choice that feeds the clip — trial, playback
+    # speed, saccades/order/marker-size/background, true-to-scale text, labels —
     # so toggling any of them invalidates a stale render instead of serving the
-    # previous bytes. `scale`/`max_frames` are export-only (not in the figure),
-    # so they're keyed separately.
-    sig = static_export_signature(
-        fig,
+    # previous bytes. It is built from those inputs, not from the figure's JSON,
+    # which costs 12 s to write at 2,000 frames (PERF-16). `scale`/`max_frames`
+    # are export-only (not in the figure), so they're keyed separately.
+    sig = export_signature(
+        replay.signature,
         fmt=fmt,
-        width=int(fig.layout.width or 900),
-        height=int(fig.layout.height or 600),
+        width=replay.width,
+        height=replay.height,
         scale=float(scale),
         exporter_version=(
             f"{EXPORTER_VERSION}:animation:{file_stem}:{max_frames}:{frame_ms:.12g}"
@@ -1271,7 +1332,7 @@ def _render_animation_export(fig, *, file_stem: str) -> None:
 
         try:
             data = export_animation(
-                fig,
+                replay.figure(),
                 fmt=fmt.lower(),
                 frame_duration_ms=frame_ms,
                 scale=float(scale),
@@ -1700,7 +1761,7 @@ def _cached_scanpath_figure(
         )
 
 
-@st.cache_data(show_spinner="Building the replay…", max_entries=8)
+@st.cache_data(show_spinner=False, max_entries=8)
 def _cached_scanpath_animation(
     _words: pd.DataFrame,
     _fixations: pd.DataFrame,
@@ -1734,6 +1795,102 @@ def _cached_scanpath_animation(
             fixations_b=_fixations_b,
             words_b=_words_b,
         )
+
+
+@dataclass(frozen=True)
+class _ReplayView:
+    """A replay as a rerun shows it, cheap to take out of the cache (PERF-16).
+
+    PERF-13 cached the replay as a `go.Figure`, so every hit unpickled it —
+    plotly re-validates every frame, 9 s at 2,000 frames — and `to_html` then
+    wrote it into the page again, 12 s more. This keeps the embed's markup and
+    the finished figure as compressed bytes (zlib cuts the markup ~10×): a
+    rerun decompresses the markup, 30 ms at 2,000 frames, and only an export
+    unpickles the figure. It is kept as the ``to_dict()`` the markup was written
+    from: pickling the figure itself would deep-copy it all over again (2 s at
+    2,000 frames), and the HTML download serializes the dict with no figure at
+    all. ``signature`` names the clip that figure exports to.
+    """
+
+    plot_html_z: bytes
+    figure_z: bytes
+    width: int
+    height: int
+    n_frames: int
+    clip_frame_ms: float | None
+    signature: str
+
+    @classmethod
+    def from_figure(
+        cls, fig, *, plot_key: str, download_name: str | None, signature: str
+    ) -> _ReplayView:
+        figure_dict = fig.to_dict()
+        plot_html = _true_scale_plot_html(
+            fig, key=plot_key, download_name=download_name, figure_dict=figure_dict
+        )
+        return cls(
+            plot_html_z=zlib.compress(plot_html.encode("utf-8"), 1),
+            figure_z=zlib.compress(
+                pickle.dumps(figure_dict, pickle.HIGHEST_PROTOCOL), 1
+            ),
+            width=int(fig.layout.width or 900),
+            height=int(fig.layout.height or 600),
+            n_frames=len(fig.frames or ()),
+            clip_frame_ms=animation_clip_frame_ms(fig),
+            signature=signature,
+        )
+
+    @property
+    def plot_html(self) -> str:
+        """The embed's markup, as `_true_scale_plot_html` wrote it."""
+        return zlib.decompress(self.plot_html_z).decode("utf-8")
+
+    def figure_dict(self) -> dict:
+        """The finished replay's ``to_dict()``, unpickled afresh."""
+        return pickle.loads(zlib.decompress(self.figure_z))
+
+    def figure(self) -> go.Figure:
+        """The finished replay as a figure — for an export, never a rerun: plotly
+        re-validates every frame, 9 s at 2,000 frames."""
+        import plotly.graph_objects as go
+
+        return go.Figure(self.figure_dict())
+
+
+@st.cache_data(show_spinner="Building the replay…", max_entries=8)
+def _cached_replay_view(
+    clip_inputs,
+    autoplay: bool,
+    plot_key: str,
+    download_name: str,
+    _finished_figure: Callable[[], Any],
+) -> _ReplayView:
+    """The replay's `_ReplayView`, keyed on everything in the figure (PERF-16).
+
+    ``clip_inputs`` is all that goes into a GIF/MP4 of it — the replay cache's
+    own key (its frames), the playback speed, the Illustration reasons, the
+    preprocessing report, the title and caption — and it names the clip
+    (``signature``). ``autoplay`` reaches only the player, and ``plot_key`` /
+    ``download_name`` only the embed; they are here to key the markup. On a miss
+    ``_finished_figure`` builds the figure, through the replay cache; a hit
+    never touches that cache, whose every hit unpickles the whole figure.
+    Entries are small: the view is compressed. The spinner is this cache's —
+    Streamlit shows only the outermost one of nested caches.
+    """
+    return _ReplayView.from_figure(
+        _finished_figure(),
+        plot_key=plot_key,
+        download_name=download_name,
+        signature=hashlib.sha256(repr(clip_inputs).encode("utf-8")).hexdigest(),
+    )
+
+
+def _replay_page_html(replay: _ReplayView) -> str:
+    """The replay's standalone HTML page: `st.download_button` calls this on click.
+
+    Written from the view's dict, so the click never builds a figure.
+    """
+    return _animation_html(replay.figure_dict())
 
 
 _CMP_SORT_DEFAULT = "Same text, then same participant"
@@ -3702,16 +3859,25 @@ def _render_anim_info_box(
 
 def _apply_preprocessing_caption(fig, participant, trial) -> None:
     """Put PRE-15 cleaning provenance on-screen, in exports, and in metadata."""
+    _annotate_preprocessing(fig, _preprocessing_report_row(participant, trial))
+
+
+def _preprocessing_report_row(participant, trial) -> dict | None:
+    """This trial's PRE-15 cleaning report, or ``None`` when there is none."""
     report = st.session_state.get("_preprocessing_report")
     if not isinstance(report, pd.DataFrame) or report.empty:
-        return
+        return None
     row = report[
         (report["participant_id"].astype(str) == str(participant))
         & (report["trial_id"].astype(str) == str(trial))
     ]
-    if row.empty:
+    return None if row.empty else row.iloc[0].to_dict()
+
+
+def _annotate_preprocessing(fig, item: dict | None) -> None:
+    """Stamp one trial's cleaning report (`_preprocessing_report_row`) on ``fig``."""
+    if item is None:
         return
-    item = row.iloc[0]
     text = (
         f"Preprocessing · {int(item.get('n_excluded', 0))}/"
         f"{int(item.get('n_fixations_before', 0))} excluded "
@@ -3732,7 +3898,7 @@ def _apply_preprocessing_caption(fig, participant, trial) -> None:
         borderpad=3,
     )
     metadata = dict(fig.layout.meta or {})
-    metadata["preprocessing"] = item.to_dict()
+    metadata["preprocessing"] = dict(item)
     fig.update_layout(meta=metadata)
 
 
@@ -3927,7 +4093,8 @@ def _build_and_render_animation(
     dataset_name_b: str = "",
 ):
     """Build + render the animation figure (single or dual co-animation) in the
-    main column. Returns ``(fig, save_slug, file_stem)``.
+    main column. Returns ``(view, save_slug, file_stem)`` — the replay's
+    `_ReplayView`, whose ``figure()`` is the finished figure (PERF-16).
 
     ``trial_fixations`` / ``fixations_b`` arrive already drift-corrected (PRE-3 is
     applied once by the caller for all three render paths); ``drift_corrected``
@@ -3985,24 +4152,14 @@ def _build_and_render_animation(
     }
     anim_inputs["fixations_b"] = fixations_b if dual else None
     anim_inputs["words_b"] = words_b if dual else None
-    fig, frame_step_ms = _cached_scanpath_animation(
-        trial_words,
-        trial_fixations,
-        frame_settings,
-        anim_inputs["fixations_b"],
-        anim_inputs["words_b"],
-        anim_key=_figure_input_key(trial_words, trial_fixations, anim_inputs),
-    )
-    set_replay_clock(
-        fig,
-        frame_step_ms,
-        playback_speed=animation_settings.playback_speed,
-        autoplay=animation_settings.autoplay,
-    )
-    add_illustration_label(fig, viz_settings.get("illustration_reasons"))
-    _apply_preprocessing_caption(fig, selected_participant, selected_trial)
-    _apply_title_caption(
-        fig,
+    anim_key = _figure_input_key(trial_words, trial_fixations, anim_inputs)
+    playback_speed = animation_settings.playback_speed
+    autoplay = animation_settings.autoplay
+    reasons = viz_settings.get("illustration_reasons")
+    preprocessing = _preprocessing_report_row(selected_participant, selected_trial)
+    # EXP-5 / EXP-7: rendered on every run, since the snippet takes this text
+    # even when the figure comes out of the cache.
+    title, caption = _rendered_title_caption(
         viz_settings,
         trial_words,
         trial_fixations,
@@ -4018,6 +4175,7 @@ def _build_and_render_animation(
             else None
         ),
     )
+    _amend_snippet_title_caption(title, caption)
     if dual:
         save_slug = (
             f"{selected_participant}__{selected_trial}__vs__"
@@ -4035,9 +4193,49 @@ def _build_and_render_animation(
             f"animation_{_safe_filename(selected_participant)}__"
             f"{_safe_filename(selected_trial)}"
         )
+    plot_key = "single_anim"
     # The camera saves whichever frame is on screen, hence the `_frame` suffix.
-    _render_true_scale_chart(fig, key="single_anim", download_name=f"{file_stem}_frame")
-    return fig, save_slug, file_stem
+    download_name = f"{file_stem}_frame"
+
+    def finished_figure():
+        fig, frame_step_ms = _cached_scanpath_animation(
+            trial_words,
+            trial_fixations,
+            frame_settings,
+            anim_inputs["fixations_b"],
+            anim_inputs["words_b"],
+            anim_key=anim_key,
+        )
+        set_replay_clock(
+            fig, frame_step_ms, playback_speed=playback_speed, autoplay=autoplay
+        )
+        add_illustration_label(fig, reasons)
+        _annotate_preprocessing(fig, preprocessing)
+        if title or caption:
+            annotate_figure(fig, title=title, caption=caption)
+        return fig
+
+    # PERF-16: what goes into the clip — everything in the figure but autoplay,
+    # which a GIF/MP4 does not carry — keys the view and names the export.
+    clip_inputs = (
+        anim_key,
+        float(playback_speed),
+        tuple(reasons or ()),
+        tuple(sorted((str(k), repr(v)) for k, v in (preprocessing or {}).items())),
+        title,
+        caption,
+    )
+    view = _cached_replay_view(
+        clip_inputs,
+        bool(autoplay),
+        plot_key,
+        download_name,
+        _finished_figure=finished_figure,
+    )
+    _render_true_scale_plot(
+        view.plot_html, key=plot_key, width=view.width, height=view.height
+    )
+    return view, save_slug, file_stem
 
 
 def _render_pair_export(
@@ -4152,6 +4350,7 @@ def _render_export_panel(
     selected_trial: str,
     compare_export: tuple | None = None,
     plot_key: str = "single",
+    replay: _ReplayView | None = None,
 ) -> None:
     """Consolidated Export subtab: the currently-viewed figure on top, then a
     bulk multi-trial export below.
@@ -4162,10 +4361,10 @@ def _render_export_panel(
     a comparison or animation — round-trips exactly; the bulk section rebuilds
     static figures across many trials."""
     st.markdown("## Current figure")
-    if displayed_fig is None:
+    if animate and replay is not None:
+        _render_animation_export(replay, file_stem=file_stem or "animation")
+    elif animate or displayed_fig is None:
         st.caption("Select a trial to export its figure.")
-    elif animate:
-        _render_animation_export(displayed_fig, file_stem=file_stem or "animation")
     else:
         _render_save_plot_button(
             displayed_fig,
@@ -5610,6 +5809,7 @@ def render_single_trial_tab(
     displayed_plot_key = "single"
     save_slug = f"{selected_participant}__{selected_trial}"
     anim_file_stem = None
+    anim_view = None
     # Use the windowed second scanpath: a window that empties B falls back to a
     # single-trial animation (and info box). A co-animation is an overlay on one
     # clock, so it needs one coordinate space — which is the same question the
@@ -5754,7 +5954,7 @@ def render_single_trial_tab(
             # Building the per-fixation animation frames takes a moment — show a
             # loading banner so the screen isn't blank meanwhile.
             with st.spinner("Building animation…"):
-                displayed_fig, save_slug, anim_file_stem = _build_and_render_animation(
+                anim_view, save_slug, anim_file_stem = _build_and_render_animation(
                     trial_words,
                     plot_fixations,
                     compare_meta["words"] if dual_anim else None,
@@ -5971,6 +6171,7 @@ def render_single_trial_tab(
                 _render_export_panel(
                     displayed_fig,
                     animate=animate,
+                    replay=anim_view,
                     save_slug=save_slug,
                     file_stem=anim_file_stem,
                     combos=combos,

@@ -161,6 +161,8 @@ def quiet_chart(monkeypatch):
     """Swallow the true-scale HTML embed, so the two render helpers can be called
     outside a running Streamlit script."""
     monkeypatch.setattr(tabs, "_render_true_scale_chart", lambda *a, **k: None)
+    # The replay embeds its cached markup directly (PERF-16).
+    monkeypatch.setattr(tabs, "_render_true_scale_plot", lambda *a, **k: None)
 
 
 # -----------------------------------------------------------------------------
@@ -247,8 +249,10 @@ def _animate(viz: dict, monkeypatch, *, drift_corrected: bool = False, dual=Fals
 
     # PERF-13 caches the build, so spy on the cached wrapper (bypassing the
     # cache): a builder spy would see nothing on a hit from an earlier test.
+    # PERF-16's view cache sits in front of it, so empty that too.
     monkeypatch.setattr(tabs, "_cached_scanpath_animation", spy)
-    fig, *_ = tabs._build_and_render_animation(
+    tabs._cached_replay_view.clear()
+    view, *_ = tabs._build_and_render_animation(
         _trial(_words(), "A"),
         _trial(_fixations(), "A"),
         _trial(_words(), "B") if dual else None,
@@ -262,7 +266,7 @@ def _animate(viz: dict, monkeypatch, *, drift_corrected: bool = False, dual=Fals
         playback_speed=1.0,
         drift_corrected=drift_corrected,
     )
-    return fig, seen
+    return view.figure(), seen
 
 
 @pytest.mark.usefixtures("quiet_chart")
@@ -632,6 +636,8 @@ class TestDriftCorrectionReachesEveryPath:
 
         monkeypatch.setattr(tabs, "_cached_scanpath_figure", static)
         monkeypatch.setattr(tabs, "_cached_scanpath_animation", anim)
+        # A PERF-16 view hit would never reach the spied replay cache.
+        tabs._cached_replay_view.clear()
         monkeypatch.setattr(tabs, "make_comparison_figure", compare)
         return seen
 

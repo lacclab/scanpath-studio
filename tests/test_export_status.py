@@ -15,7 +15,7 @@ from scanpath_studio.export_status import (
     ExportStage,
     ExportStatus,
     emit_status,
-    static_export_signature,
+    export_signature,
 )
 
 
@@ -25,25 +25,20 @@ def _figure(value: int = 1) -> go.Figure:
     return fig
 
 
-def test_static_signature_covers_figure_format_dimensions_scale_and_version():
-    base = static_export_signature(_figure(), fmt="png", width=640, height=480, scale=3)
-    assert base == static_export_signature(
-        _figure(), fmt="png", width=640, height=480, scale=3
-    )
+def test_signature_covers_content_format_dimensions_scale_and_version():
+    def sign(content="replay-1", **overrides):
+        options = dict(fmt="png", width=640, height=480, scale=3) | overrides
+        return export_signature(content, **options)
+
+    base = sign()
+    assert base == sign()
     variants = {
-        static_export_signature(_figure(2), fmt="png", width=640, height=480, scale=3),
-        static_export_signature(_figure(), fmt="svg", width=640, height=480, scale=3),
-        static_export_signature(_figure(), fmt="png", width=641, height=480, scale=3),
-        static_export_signature(_figure(), fmt="png", width=640, height=481, scale=3),
-        static_export_signature(_figure(), fmt="png", width=640, height=480, scale=2),
-        static_export_signature(
-            _figure(),
-            fmt="png",
-            width=640,
-            height=480,
-            scale=3,
-            exporter_version="next",
-        ),
+        sign("replay-2"),
+        sign(fmt="svg"),
+        sign(width=641),
+        sign(height=481),
+        sign(scale=2),
+        sign(exporter_version="next"),
     }
     assert base not in variants
     assert len(variants) == 6
@@ -615,19 +610,22 @@ def test_pair_bundle_without_a_browser(monkeypatch, fmt, blocked):
 def _animation_export_app():
     import plotly.graph_objects as go
 
-    from scanpath_studio.tabs import _render_animation_export
+    from scanpath_studio.tabs import _render_animation_export, _ReplayView
 
     fig = go.Figure(
         go.Scatter(x=[0, 1], y=[0, 1]),
         frames=[go.Frame(name="0", data=[go.Scatter(x=[0], y=[0])], traces=[0])],
     )
-    _render_animation_export(fig, file_stem="anim")
+    view = _ReplayView.from_figure(
+        fig, plot_key="anim", download_name="anim", signature="sig"
+    )
+    _render_animation_export(view, file_stem="anim")
 
 
 def _animation_clip_app():
     import plotly.graph_objects as go
 
-    from scanpath_studio.tabs import _render_animation_export
+    from scanpath_studio.tabs import _render_animation_export, _ReplayView
 
     # Three frames whose clock says the replay lasts 10 s of reading at ×2 —
     # what `make_scanpath_animation` stamps (BUG-93).
@@ -645,7 +643,63 @@ def _animation_clip_app():
             }
         },
     )
-    _render_animation_export(fig, file_stem="anim")
+    view = _ReplayView.from_figure(
+        fig, plot_key="anim", download_name="anim", signature="sig"
+    )
+    _render_animation_export(view, file_stem="anim")
+
+
+def _unloaded_replay_export_app():
+    import dataclasses
+
+    import plotly.graph_objects as go
+
+    from scanpath_studio.tabs import _render_animation_export, _ReplayView
+
+    fig = go.Figure(
+        go.Scatter(x=[0, 1], y=[0, 1]),
+        frames=[
+            go.Frame(name=str(k), data=[go.Scatter(x=[k], y=[k])], traces=[0])
+            for k in range(3)
+        ],
+        layout={
+            "width": 400,
+            "height": 300,
+            "meta": {
+                "scanpath_autoplay": False,
+                "scanpath_frame_times_ms": [0.0, 5000.0, 10000.0],
+                "scanpath_playback_speed": 2.0,
+            },
+        },
+    )
+    view = _ReplayView.from_figure(
+        fig, plot_key="anim", download_name="anim", signature="sig"
+    )
+
+    class Unloaded(_ReplayView):
+        def figure(self):
+            raise AssertionError("the replay's figure was loaded during a script run")
+
+    fields = {
+        field.name: getattr(view, field.name) for field in dataclasses.fields(view)
+    }
+    _render_animation_export(Unloaded(**fields), file_stem="anim")
+
+
+@pytest.mark.parametrize("fmt", ["HTML", "GIF", "MP4"])
+def test_the_export_panel_does_not_load_the_replay_on_a_rerun(monkeypatch, fmt):
+    # PERF-16: unpickling the replay costs 9 s at 2,000 frames, so the panel
+    # works from the cached view — frame count, clip length, size, signature —
+    # and loads the figure only on a click that exports it.
+    AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
+    from scanpath_studio import tabs
+
+    monkeypatch.setattr(tabs, "chrome_available", lambda: True)
+    at = AppTest.from_function(_unloaded_replay_export_app)
+    at.session_state["anim_export_format"] = fmt
+    at = at.run(timeout=30)
+
+    assert not at.exception, at.exception
 
 
 def test_the_clip_lasts_what_the_figures_own_replay_does(monkeypatch):

@@ -3277,7 +3277,7 @@ def animation_timeline_summary(
 # there, so every hold rounds up to whole ticks and the rounding accumulates: on
 # a 60 Hz screen a 40 ms frame lasts 50 ms, and a 20.8 s reading replayed in 26 s.
 # No duration can fix that from here — the tick is the viewer's. So every HTML
-# surface (`tabs._render_true_scale_chart`, `tabs._animation_html`,
+# surface (`tabs._true_scale_plot_html`, `tabs._animation_html`,
 # `api.save_figure`) embeds a small player that shows whichever frame the wall
 # clock has reached, reading the frame times, the speed and VIZ-10's autoplay
 # intent off `fig.layout.meta`, where `make_scanpath_animation` stamps them.
@@ -3387,8 +3387,8 @@ def animation_player_post_script(fig) -> str | None:
 
     Pass it to ``fig.to_html(post_script=…)`` / ``write_html(post_script=…)``
     (with ``auto_play=False``) for any figure :func:`make_scanpath_animation`
-    built; ``None`` — for a static figure, or a replay with no frames — is what
-    those calls take for "no script" (BUG-93).
+    built — or its ``to_dict()``; ``None`` — for a static figure, or a replay
+    with no frames — is what those calls take for "no script" (BUG-93).
 
     The player keeps the replay on the wall clock: at every display tick it
     shows the last frame whose reading time ``elapsed × playback_speed`` has
@@ -3412,7 +3412,10 @@ def animation_player_post_script(fig) -> str | None:
     still plays on Plotly's own queue, at the frame duration the ▶ Play button
     carries.
     """
-    meta = getattr(fig.layout, "meta", None)
+    if isinstance(fig, dict):  # a figure's `to_dict()`
+        meta = (fig.get("layout") or {}).get("meta")
+    else:
+        meta = getattr(fig.layout, "meta", None)
     if not isinstance(meta, dict) or not meta.get(_REPLAY_META_TIMES):
         return None
     return _REPLAY_PLAYER_JS

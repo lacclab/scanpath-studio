@@ -161,7 +161,7 @@ class TestRetimingIsByteIdentical:
 
 class TestTheAppReusesItsFrames:
     def _render(self, settings, viz, speed):
-        fig, *_ = tabs._build_and_render_animation(
+        view, *_ = tabs._build_and_render_animation(
             _words(),
             _fixations(),
             None,
@@ -174,7 +174,7 @@ class TestTheAppReusesItsFrames:
             viz_settings=viz,
             playback_speed=speed,
         )
-        return fig
+        return view.figure()
 
     def test_a_speed_or_autoplay_change_reuses_the_cached_frames(self, monkeypatch):
         builds: list[plots.FigureSettings] = []
@@ -185,8 +185,9 @@ class TestTheAppReusesItsFrames:
             return real(words, fixations, **kwargs)
 
         monkeypatch.setattr(tabs, "build_scanpath_replay", spy)
-        monkeypatch.setattr(tabs, "_render_true_scale_chart", lambda *a, **k: None)
+        monkeypatch.setattr(tabs, "_embed_html_iframe", lambda *a, **k: None)
         tabs._cached_scanpath_animation.clear()
+        tabs._cached_replay_view.clear()
         base = plots.FigureSettings.from_mapping({}, **_CANVAS)
 
         shown = {}

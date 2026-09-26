@@ -28,11 +28,16 @@ def embed_html_iframe(html: str, *, height: int) -> None:
     # Tiny script-only embeds need an explicit body. Streamlit's srcdoc
     # autosizing observer otherwise races the parser and tries to observe a null
     # body, producing a browser MutationObserver error even with a fixed height.
-    # Full Plotly documents already supply their own body.
+    # A whole document supplies its own. Which one this is shows in its first
+    # bytes — a replay's markup runs to 55 MB, and lower-casing all of it to
+    # look for "<body" cost 0.2 s a rerun (PERF-16).
     source = html
-    if "<body" not in html.lower():
+    if not html[:1024].lstrip().lower().startswith(_DOCUMENT_STARTS):
         source = f"<!doctype html><html><body>{html}</body></html>"
     st.iframe(source, height=max(1, int(height)), tab_index=-1)
+
+
+_DOCUMENT_STARTS = ("<!doctype", "<html", "<head", "<body")
 
 
 def plotlyjs_dir() -> Path:

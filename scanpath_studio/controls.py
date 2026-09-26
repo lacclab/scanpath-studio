@@ -3899,11 +3899,13 @@ def _rail_section(host, label: str, *, slug: str, **toggle):
     and had to be reverted for exactly this.
 
     Passing ``toggle`` kwargs (``key=``, ``disabled=``) draws the switch and
-    returns its value. Omitting them leaves the section's **name** on its own,
+    returns its value; the name is the switch's label, so clicking it flips the
+    switch (UX-153). Omitting them leaves the section's **name** on its own,
     for the sections that have no layer to switch: 📐 Figure & canvas holds
-    none, and 🧹 Filter is not a layer at all. (📄 Stimulus has a master switch
-    over its three layers since UX-128.) ``note=`` is a line written into the top of
-    the popover — used for the ⚠️ that says why a switch is greyed.
+    none, and 🧹 Filter is not a layer at all — there, clicking the name opens
+    the popover. (📄 Stimulus has a master switch over its three layers since
+    UX-128.) ``note=`` is a line written into the top of the popover — used for
+    the ⚠️ that says why a switch is greyed.
 
     Returns ``(value, body)`` — ``value`` is ``None`` for a name-only section.
     The ``split_mode_`` key prefix is what `styles.py` styles the row with; it is
@@ -3949,21 +3951,22 @@ def _rail_section(host, label: str, *, slug: str, **toggle):
         key=f"split_mode_rail_{slug}",
     )
     note = toggle.pop("note", None)
-    # UX-103: the switch is drawn WITHOUT its label and the name is written
-    # beside it as markdown, for every section rather than only the four that
-    # have no switch. It is the one way to be rid of the native tooltip: in a
-    # one-line row Streamlit puts a checkbox label in "truncate" mode, which
-    # stamps a `title=` on it carrying the same words that are already on
-    # screen -- a second-long browser tooltip reading "Fixations" over the word
-    # "Fixations". A `title` cannot be styled or suppressed from CSS, and
-    # `label_visibility="collapsed"` hides the element that carries it while
-    # keeping the string as the switch's accessible name. The cost is that the
-    # name is no longer a click target for the switch, which the rail's eight
-    # rows are the one place worth paying it.
-    value = (
-        row.toggle(label, label_visibility="collapsed", **toggle) if toggle else None
-    )
-    row.markdown(label)
+    # UX-153: the name is the switch's own label again, so clicking the word
+    # flips the switch -- as it always did on Animate and Compare. UX-103 had
+    # split them (a collapsed switch + the name as markdown) to be rid of the
+    # native tooltip: in a one-line row Streamlit puts a checkbox label in
+    # "truncate" mode, which stamps a `title=` repeating the words already on
+    # screen, and a `title` cannot be styled or suppressed from CSS. `wrap=True`
+    # is what turns truncate mode off, and with it the `title`; the one-line
+    # ellipsis it would have drawn comes from `styles.py` instead (the
+    # `split_mode_` label rule), which draws it without a tooltip.
+    if toggle:
+        value = row.toggle(label, wrap=True, **toggle)
+    else:
+        # A name-only section: `styles.py` stretches the ▾ trigger's click
+        # target over the whole row, so the name opens the popover (UX-153).
+        value = None
+        row.markdown(label)
     body = row.popover(
         "",
         width="content",

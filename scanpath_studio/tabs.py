@@ -826,22 +826,18 @@ def _render_true_scale_chart(
     _embed_html_iframe(html, height=iframe_height)
 
 
-def _different_texts_note(
-    text_a: str | None, text_b: str | None, *, overlaid: bool
-) -> str | None:
-    """What to say when the two compared readings are of **different texts**.
+def _different_texts_note(text_a: str | None, text_b: str | None) -> str | None:
+    """The warning for an **overlay** of readings of two **different texts**.
 
     ``None`` when they match, or when either side's text id is unknown — a
     dataset without a text column must not be nagged about something it cannot
     answer.
 
-    The wording *and the register* both split on the consequence. An overlay
-    draws both scanpaths over **one** set of word boxes, so a mismatched pair is
-    actively misleading — it invites you to read one reading's fixations against
-    the other's words — and that earns a ``st.warning``. A split layout gives
-    each panel its own stimulus, where comparing two texts is an ordinary thing
-    to want; the only caveat is that positions don't compare across the panels,
-    so it is a caption. The caller picks the element from ``overlaid``.
+    Only an overlay asks for it: it draws both scanpaths over **one** set of word
+    boxes, so a mismatched pair is actively misleading — it invites you to read
+    one reading's fixations against the other's words. A split layout gives each
+    panel its own stimulus, where comparing two texts is an ordinary thing to
+    want, so it says nothing (CMP-23 dropped the caption it used to carry).
 
     Rendered under the figure (both the static comparison and the animated
     co-replay) rather than inside the rail's popover: a caveat about what the
@@ -849,16 +845,11 @@ def _different_texts_note(
     """
     if not text_a or not text_b or str(text_a) == str(text_b):
         return None
-    heads = f"**A** reads `{text_a}`, **B** reads `{text_b}` — different texts."
-    if overlaid:
-        return (
-            f"{heads} Both scanpaths are drawn over one set of word boxes, so "
-            "the spatial overlay isn't meaningful. Compare two readings of the "
-            "same text, or switch to a side-by-side layout."
-        )
     return (
-        f"{heads} Each panel is drawn over its own stimulus, so positions and "
-        "per-word measures don't compare across the two."
+        f"**A** reads `{text_a}`, **B** reads `{text_b}` — different texts. Both "
+        "scanpaths are drawn over one set of word boxes, so the spatial overlay "
+        "isn't meaningful. Compare two readings of the same text, or switch to a "
+        "side-by-side layout."
     )
 
 
@@ -5775,7 +5766,6 @@ def render_single_trial_tab(
                 text_note = _different_texts_note(
                     _trial_text_id(trial_words),
                     _trial_text_id(compare_meta["words"]),
-                    overlaid=True,
                 )
                 if text_note:
                     st.warning(text_note, icon=ICONS["warning"])
@@ -6322,17 +6312,13 @@ def _render_comparison_figure(
     )
     _render_true_scale_chart(fig_compare, key="compare", download_name=download_name)
     overlaid = layout == "overlay"
-    text_note = _different_texts_note(
-        primary_text_id, compare_text_id, overlaid=overlaid
+    # Only where the figure is misleading (see the note's docstring): a split
+    # layout comparing two texts is a legitimate thing to do (CMP-23).
+    text_note = (
+        _different_texts_note(primary_text_id, compare_text_id) if overlaid else None
     )
     if text_note:
-        # A warning only where the figure is misleading (see the note's
-        # docstring); a split layout comparing two texts is a legitimate thing
-        # to do, and a yellow box on every one of them would be crying wolf.
-        if overlaid:
-            st.warning(text_note, icon=ICONS["warning"])
-        else:
-            st.caption(f"{ICONS['warning']} {text_note}")
+        st.warning(text_note, icon=ICONS["warning"])
     if cross_dataset:
         # §5.3: the one thing a cross-dataset figure must never be is silent
         # about its own geometry. Each panel is true-to-scale on its *own*

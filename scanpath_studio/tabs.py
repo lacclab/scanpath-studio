@@ -945,6 +945,26 @@ _ANIM_RENDER_S_PER_FRAME = 0.18
 _ANIM_RENDER_COLD_START_S = 3.0
 
 
+def _animation_html(fig) -> str:
+    """The animation as a standalone HTML page, as `api.save_figure` writes it.
+
+    VIZ-10: it must autoplay at the configured speed too (Plotly's own
+    ``auto_play`` ignores ``frame_duration``), matching the live embed.
+    Autoplay-off / static figures stay paused.
+    """
+    autoplay_ms = animation_autoplay_frame_duration(fig)
+    if autoplay_ms is not None:
+        return fig.to_html(
+            include_plotlyjs="cdn",
+            full_html=True,
+            auto_play=False,
+            post_script=animation_autoplay_post_script(autoplay_ms),
+        )
+    if fig.frames:
+        return fig.to_html(include_plotlyjs="cdn", full_html=True, auto_play=False)
+    return fig.to_html(include_plotlyjs="cdn", full_html=True)
+
+
 def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None:
     """Export the animated scanpath as interactive HTML or a rasterized GIF/MP4.
 
@@ -973,28 +993,15 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
     )
 
     if fmt == "HTML":
-        # VIZ-10: the downloaded HTML must autoplay at the configured speed too
-        # (Plotly's default auto_play ignores frame_duration), matching the live
-        # embed + api.save_figure. Autoplay-off / static figures stay paused.
-        autoplay_ms = animation_autoplay_frame_duration(fig)
-        if autoplay_ms is not None:
-            html = fig.to_html(
-                include_plotlyjs="cdn",
-                full_html=True,
-                auto_play=False,
-                post_script=animation_autoplay_post_script(autoplay_ms),
-            )
-        elif fig.frames:
-            html = fig.to_html(include_plotlyjs="cdn", full_html=True, auto_play=False)
-        else:
-            html = fig.to_html(include_plotlyjs="cdn", full_html=True)
-        html_bytes = html.encode("utf-8")
+        # UX-150: built on click, not per rerun — a long replay's HTML runs to
+        # megabytes and about a second to serialize.
         st.download_button(
             "⬇ Download HTML",
-            data=html_bytes,
+            data=partial(_animation_html, fig),
             file_name=f"{file_stem}.html",
             mime="text/html",
             key="anim_export_html",
+            on_click="ignore",
             # ENG-64: not self-contained — a saved file has no app server to
             # load plotly.js from, so it keeps the CDN (see docs/privacy.md).
             help="HTML you can open in any browser; keeps play/slider "
@@ -3891,8 +3898,6 @@ def _render_pair_export(
             options=["csv", "parquet"],
             key="cmp_pair_export_table_format",
         )
-        if not st.button("Build bundle", key="cmp_pair_export_build"):
-            return
         options = ExportOptions(
             include_png=fmt == "png",
             include_svg=fmt == "svg",
@@ -3906,28 +3911,35 @@ def _render_pair_export(
         settings["line_spacing"] = line_spacing
         settings["scale_text_to_boxes"] = scale_text_to_boxes
         settings["align_algorithm"] = viz_settings.get("align_algorithm", "Off")
-        try:
-            with st.spinner("Building the comparison bundle…"):
-                data = pair_export(
-                    fig,
-                    side_a,
-                    side_b,
-                    canvas_width=canvas_width,
-                    canvas_height=canvas_height,
-                    x_field=viz_settings.get("x_field", "x"),
-                    y_field=viz_settings.get("y_field", "y"),
-                    settings=settings,
-                    options=options,
-                )
-        except (RuntimeError, ValueError) as exc:
-            st.error(f"Couldn't build the bundle: {exc}")
-            return
+        # UX-150: one click, as for the figure above — the bundle is built when
+        # the button is pressed, and the missing browser is said up front
+        # because a failure on that worker thread can't reach the page.
+        no_browser = fmt != "html" and not chrome_available()
+        if no_browser:
+            st.warning(
+                f"{fmt.upper()} export can't run here. {CHROME_INSTALL_HINT}", icon="⚠️"
+            )
         st.download_button(
             "⬇ Download bundle (zip)",
-            data=data,
+            data=partial(
+                pair_export,
+                fig,
+                side_a,
+                side_b,
+                canvas_width=canvas_width,
+                canvas_height=canvas_height,
+                x_field=viz_settings.get("x_field", "x"),
+                y_field=viz_settings.get("y_field", "y"),
+                settings=settings,
+                options=options,
+            ),
             file_name=f"comparison_{side_a.slug}__vs__{side_b.slug}.zip",
             mime="application/zip",
             key="cmp_pair_export_download",
+            on_click="ignore",
+            disabled=no_browser,
+            help="Builds the bundle when you click; a PNG/SVG/PDF figure takes a "
+            "few seconds. If it fails, choose **html** — it needs no browser.",
         )
 
 

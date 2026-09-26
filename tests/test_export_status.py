@@ -423,3 +423,109 @@ def test_static_missing_browser_warns_once_and_disables_download(monkeypatch):
     assert warnings.count(animation_export.CHROME_INSTALL_HINT) == 1
     (button,) = _download_buttons(at)
     assert button.disabled
+
+
+def _pair_export_app():
+    import plotly.graph_objects as go
+
+    from scanpath_studio.controls import viz_settings_from_state
+    from scanpath_studio.export import ComparisonSide
+    from scanpath_studio.synthetic import load_synthetic_data
+    from scanpath_studio.tabs import _render_pair_export
+
+    words, fixations = load_synthetic_data()
+    fig = go.Figure(go.Scatter(x=[0, 1], y=[0, 1]))
+    fig.update_layout(width=640, height=480)
+    side = ComparisonSide("p1", "t1", words, fixations)
+    _render_pair_export(
+        fig,
+        (side, side),
+        canvas_width=640,
+        canvas_height=480,
+        viz_settings=viz_settings_from_state(fixations, 14, words),
+        line_spacing=3.0,
+        scale_text_to_boxes=True,
+    )
+
+
+def test_pair_bundle_downloads_in_one_click(monkeypatch):
+    """UX-150: the Compare pair bundle lost its Build step too."""
+    AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
+    from scanpath_studio import tabs
+
+    def must_not_build(*args, **kwargs):
+        raise AssertionError("the bundle was built during a script run")
+
+    monkeypatch.setattr(tabs, "pair_export", must_not_build)
+    monkeypatch.setattr(tabs, "chrome_available", lambda: True)
+    at = AppTest.from_function(_pair_export_app).run(timeout=30)
+
+    assert not at.exception, at.exception
+    assert not [button.label for button in at.button], "a Build step is back"
+    (button,) = _download_buttons(at)
+    assert button.label == "⬇ Download bundle (zip)"
+    assert not button.disabled
+
+
+@pytest.mark.parametrize(("fmt", "blocked"), [("png", True), ("html", False)])
+def test_pair_bundle_without_a_browser(monkeypatch, fmt, blocked):
+    """A figure format that needs Chrome is refused up front; HTML still works."""
+    AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
+    from scanpath_studio import tabs
+
+    monkeypatch.setattr(tabs, "chrome_available", lambda: False)
+    at = AppTest.from_function(_pair_export_app)
+    at.session_state["cmp_pair_export_format"] = fmt
+    at = at.run(timeout=30)
+
+    assert not at.exception, at.exception
+    warnings = "\n".join(warning.value for warning in at.warning)
+    assert warnings.count(animation_export.CHROME_INSTALL_HINT) == int(blocked)
+    (button,) = _download_buttons(at)
+    assert button.disabled is blocked
+
+
+def _animation_export_app():
+    import plotly.graph_objects as go
+
+    from scanpath_studio.tabs import _render_animation_export
+
+    fig = go.Figure(
+        go.Scatter(x=[0, 1], y=[0, 1]),
+        frames=[go.Frame(name="0", data=[go.Scatter(x=[0], y=[0])], traces=[0])],
+    )
+    _render_animation_export(fig, file_stem="anim", playback_ms=1000.0)
+
+
+def test_animation_html_is_built_on_click_not_per_rerun(monkeypatch):
+    AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
+    from scanpath_studio import tabs
+
+    def must_not_serialize(fig):
+        raise AssertionError("the animation HTML was built during a script run")
+
+    monkeypatch.setattr(tabs, "_animation_html", must_not_serialize)
+    at = AppTest.from_function(_animation_export_app).run(timeout=30)
+
+    assert not at.exception, at.exception
+    (button,) = _download_buttons(at)
+    assert button.label == "⬇ Download HTML"
+
+
+def test_animation_html_autoplays_at_the_configured_speed():
+    from scanpath_studio import plots, tabs
+
+    fig = go.Figure(
+        go.Scatter(x=[0, 1], y=[0, 1]),
+        frames=[go.Frame(name="0", data=[go.Scatter(x=[0], y=[0])], traces=[0])],
+    )
+    paused = tabs._animation_html(fig)
+    fig.update_layout(
+        meta={plots._AUTOPLAY_META_FLAG: True, plots._AUTOPLAY_META_DURATION: 123}
+    )
+    autoplaying = tabs._animation_html(fig)
+
+    # Plotly fills the kickoff's `{plot_id}` in, so match its frame duration.
+    assert "frame:{duration:123" in plots.animation_autoplay_post_script(123)
+    assert "frame:{duration:123" not in paused
+    assert "frame:{duration:123" in autoplaying

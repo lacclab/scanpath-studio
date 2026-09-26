@@ -4415,9 +4415,31 @@ def render_plot_controls(
         metric_disabled, metric_reason = _mode_gate(
             animating, comparing, in_animation=not comparing
         )
-        color_by = _labeled(
-            st,
-            "selectbox",
+        # VIZ-17 → UX-154: the flat colour and the colorscale are one slot at
+        # the end of this row, with no title of their own — the swatch while
+        # **(uniform)** is picked, the colorscale once a column is — so the pick
+        # and what it is drawn in read as one setting. The flat colour is also
+        # inert in Compare, where each scanpath wears its own colour (see
+        # "Per-scanpath (comparison)" below).
+        by_help = _gated_help(
+            f"The metric mapped to fixation marker hue. **{UNIFORM_COLOR_FIELD}** "
+            "(the default) maps nothing — marker *size* already shows fixation "
+            "duration, so colour is free for a second variable — and the box "
+            "beside it is the one colour every marker wears. Pick a column, or "
+            "'line' to tint each fixation by the text line it lands on (static "
+            "plot + single animation only), and that box becomes its colorscale. "
+            "In compare mode it colours both scanpaths by this metric.",
+            metric_reason,
+        )
+        by_disabled, by_help = _layer_gate(metric_disabled, by_help)
+        rest = 1.0 - _LABEL_W
+        label_col, by_col, style_col = st.columns(
+            [_LABEL_W, rest * 0.6, rest * 0.4],
+            gap=_LABEL_GAP,
+            vertical_alignment="center",
+        )
+        _row_label(label_col, "Color fixations by", by_help)
+        color_by = by_col.selectbox(
             "Color fixations by",
             options=color_fields,
             key="global_color_by",
@@ -4427,32 +4449,82 @@ def render_plot_controls(
             # than clamping ms into, say, surprisal's (often one-value) span.
             on_change=forget_color_range,
             args=("global_fixation_color_range",),
-            disabled=metric_disabled,
-            help=_gated_help(
-                f"The metric mapped to fixation marker hue. **{UNIFORM_COLOR_FIELD}** "
-                "(the default) maps nothing — marker *size* already shows fixation "
-                "duration, so colour is free for a second variable. Pick a column, "
-                "or 'line' to tint each fixation by the text line it lands on "
-                "(static plot + single animation only). In compare mode it "
-                "colours both scanpaths by this metric.",
-                metric_reason,
-            ),
+            disabled=by_disabled,
+            help=by_help,
+            label_visibility="collapsed",
         )
-        # VIZ-17: the flat colour, shown only when nothing is mapped to hue.
-        # The comparison overlay draws each scanpath in its own colour
-        # instead (see "Per-scanpath (comparison)" below), so grey it there.
         if color_by == UNIFORM_COLOR_FIELD:
             _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
-            _labeled(
-                st,
-                "color_picker",
+            _dis, _tip = _layer_gate(
+                _dis,
+                _gated_help("The single colour every fixation marker wears.", _reason),
+            )
+            style_col.color_picker(
                 "Fixation color",
                 key="global_fixation_color",
                 persist_state="session",
                 disabled=_dis,
-                help=_gated_help(
-                    "The single colour every fixation marker wears.", _reason
+                help=_tip,
+                label_visibility="collapsed",
+            )
+        else:
+            # Keyless on purpose, like `_popover_selectbox`: a keyed selectbox
+            # first painted in a closed popover shows its first option instead
+            # of the seeded value, so the index is passed and the pick written
+            # back by hand.
+            # 'line' and a categorical column are drawn from a discrete
+            # palette, so the colorscale is idle for them — greyed, not hidden.
+            discrete = color_by == "line" or (
+                color_by in trial_fixations.columns
+                and not pd.api.types.is_numeric_dtype(trial_fixations[color_by])
+            )
+            _dis, _tip = _layer_gate(
+                metric_disabled or discrete,
+                _gated_help(
+                    "Colour palette for fixation markers when colouring by a "
+                    "numeric column. Idle for 'line' and categorical columns, "
+                    "which take a discrete palette instead.",
+                    metric_reason,
                 ),
+            )
+            current_scale = st.session_state.get("global_fixation_colorscale")
+            st.session_state["global_fixation_colorscale"] = style_col.selectbox(
+                "Colorscale",
+                COLORSCALES,
+                index=(
+                    COLORSCALES.index(current_scale)
+                    if current_scale in COLORSCALES
+                    else 0
+                ),
+                disabled=_dis,
+                help=_tip,
+                label_visibility="collapsed",
+            )
+        raw_cmin = (
+            trial_fixations[color_by].min()
+            if color_by in trial_fixations.columns
+            and pd.api.types.is_numeric_dtype(trial_fixations[color_by])
+            else None
+        )
+        raw_cmax = trial_fixations[color_by].max() if raw_cmin is not None else None
+        if pd.notna(raw_cmin) and pd.notna(raw_cmax):
+            # Integer bounds + step so the range reads as whole numbers
+            # (durations, surprisal, … all read cleaner as ints); values
+            # stay floats so a restored config on different data clamps in.
+            # The bounds span the loaded pool; the *default* is auto — each
+            # trial on its own scale, like the API (VIZ-46).
+            cmin = float(math.floor(raw_cmin))
+            cmax = float(math.ceil(raw_cmax))
+            cmax_eff = cmax if cmax > cmin else cmin + 1.0
+            _render_color_range(
+                "Fixation color range",
+                "global_fixation_color_range",
+                cmin,
+                cmax_eff,
+                disabled=metric_disabled,
+                reason=metric_reason,
+                help="Values of the colour-by column mapped to the two ends of "
+                "the colorscale.",
             )
         # VIZ-15: marker shape — a channel that survives greyscale printing,
         # so a figure stays readable where hue doesn't (see the Palette
@@ -4566,47 +4638,6 @@ def render_plot_controls(
                 _reason,
             ),
         )
-        # Only meaningful once a variable is mapped to hue (VIZ-17): with
-        # "(uniform)" there is nothing for a colorscale to scale. Follows the
-        # same gate as "Color fixations by" (dead in a dual animation).
-        if color_by != UNIFORM_COLOR_FIELD:
-            _popover_selectbox(
-                "Colorscale",
-                COLORSCALES,
-                "global_fixation_colorscale",
-                disabled=metric_disabled,
-                help=_gated_help(
-                    "Colour palette for fixation markers when colouring by "
-                    "numeric values.",
-                    metric_reason,
-                ),
-            )
-        raw_cmin = (
-            trial_fixations[color_by].min()
-            if color_by in trial_fixations.columns
-            and pd.api.types.is_numeric_dtype(trial_fixations[color_by])
-            else None
-        )
-        raw_cmax = trial_fixations[color_by].max() if raw_cmin is not None else None
-        if pd.notna(raw_cmin) and pd.notna(raw_cmax):
-            # Integer bounds + step so the range reads as whole numbers
-            # (durations, surprisal, … all read cleaner as ints); values
-            # stay floats so a restored config on different data clamps in.
-            # The bounds span the loaded pool; the *default* is auto — each
-            # trial on its own scale, like the API (VIZ-46).
-            cmin = float(math.floor(raw_cmin))
-            cmax = float(math.ceil(raw_cmax))
-            cmax_eff = cmax if cmax > cmin else cmin + 1.0
-            _render_color_range(
-                "Fixation color range",
-                "global_fixation_color_range",
-                cmin,
-                cmax_eff,
-                disabled=metric_disabled,
-                reason=metric_reason,
-                help="Values of the colour-by column mapped to the two ends of "
-                "the colorscale.",
-            )
         show_order = _labeled(
             st,
             "checkbox",

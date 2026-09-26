@@ -266,8 +266,8 @@ PARAM_HIDE_FIXATION_NUMBERS = "hide_fixation_numbers"
 #
 # `?source=corpus` says the data source is one entry of
 # `app.public_dataset_registry()` — the built-in public corpora **and** each
-# corpus discovered in the local harmonised bundle, which is a catalogue that
-# varies per machine and so cannot have one `?source=` token each. `?corpus=`
+# harmonised benchmark corpus the user added, which is a catalogue that varies
+# per machine and so cannot have one `?source=` token each. `?corpus=`
 # names which, by a slug of the entry's *stable identifier* (a prepared corpus'
 # manifest name, a built-in's registry `short`) — never of its display label,
 # which is copy and will be reworded.

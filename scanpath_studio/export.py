@@ -46,6 +46,7 @@ from .constants import (
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_LINE_SPACING,
     DEFAULT_PALETTE,
+    ICONS,
     SACCADE_CLASS_ORDER,
     UNIFORM_COLOR_FIELD,
     drift_correction_enabled,
@@ -1174,7 +1175,7 @@ def render_export_options(
         # Kaleido/Chrome, unlike the browser-free HTML the user chose), so warn.
         if separable_layers and not (include_png or include_svg or include_pdf):
             st.caption(
-                "⚠️ Separable layers export as **SVG** (a static vector needing "
+                f"{ICONS['warning']} Separable layers export as **SVG** (a static vector needing "
                 "Chrome/Kaleido) — HTML figures can't be split. Pick SVG/PDF/PNG "
                 "above to choose the layer format."
             )

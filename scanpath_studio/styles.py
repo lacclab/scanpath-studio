@@ -238,6 +238,16 @@ def get_app_css() -> str:
         --sps-border: rgba(128, 128, 128, 0.22);
         --sps-code-fg: #15639c;
         --sps-shadow-hover: 0 6px 18px rgba(31, 119, 180, 0.16);
+        /* UX-145 — the page background, for the few surfaces that must be
+           opaque (a sticky bar content scrolls under). Streamlit exposes no
+           CSS variable for it on the main page, and prefers-color-scheme is
+           the OS preference, not the theme picked in ⋮ → Settings. But
+           Streamlit does set `color-scheme` on `.stApp` to match the active
+           theme, and `light-dark()` resolves against it — so this follows a
+           theme switch instantly, without a rerun. The two colours are
+           `constants.APP_THEME` / `APP_THEME_DARK`'s backgroundColor, pinned
+           by tests/test_theme.py. */
+        --sps-page-bg: light-dark(#ffffff, #0e1117);
     }
     /* In dark mode the brand blue is too dark for badge text; brighten it.
        The app's theme is "Auto" (follows the OS) in the common case, so the OS
@@ -1057,7 +1067,7 @@ def get_app_css() -> str:
         position: sticky;
         top: 3.2rem;
         z-index: 60;
-        background: var(--background-color, #fff);
+        background: var(--sps-page-bg);
         padding: 0.35rem 0 0.4rem;
         margin-bottom: 0.2rem;
         border-bottom: 1px solid rgba(128, 128, 128, 0.25);
@@ -1201,6 +1211,23 @@ def get_app_css() -> str:
     /* UX-71 — see `mapping_menu_css()` below: the option list is widened only
        on the two mapping surfaces, so this global sheet leaves dropdowns alone. */
 
+    /* UX-138 — `constants.icon_html`: a Material Symbols glyph inside raw HTML,
+       where a `:material/…:` shortcode is inert. Same font Streamlit loads for
+       its own icons; the span's text is the ligature (the icon's name). */
+    .sps-icon {
+        font-family: "Material Symbols Rounded";
+        font-weight: normal;
+        font-style: normal;
+        font-size: 1.2em;
+        line-height: 1;
+        letter-spacing: normal;
+        text-transform: none;
+        white-space: nowrap;
+        direction: ltr;
+        font-feature-settings: "liga";
+        vertical-align: -0.2em;
+        user-select: none;
+    }
     /* UX-53 round 4 — the auto-detection flag beside a mapping row is the ✨ and
        nothing else; which column was detected is on its tooltip. The old inline
        sentence ("✨ auto-detected `CURRENT_FIX_INDEX`") ran wider than the
@@ -1450,7 +1477,9 @@ def get_app_css() -> str:
         min-height: 0;
     }
     /* The 2×2 Quick-view grid keeps full labels at ordinary rail widths and
-       falls back to icons only at the narrowest size. */
+       falls back to icons only at the narrowest size. UX-138: the label's own
+       Material icon is what stays — the text collapses around it — so the
+       fallback no longer re-draws each glyph from a `content:` rule. */
     @container sps-rail (max-width: 320px) {
         .st-key-viz_view_scanpath button p,
         .st-key-viz_view_heatmap button p,
@@ -1458,16 +1487,14 @@ def get_app_css() -> str:
         .st-key-viz_view_custom button p {
             font-size: 0;
         }
-        .st-key-viz_view_scanpath button p::before,
-        .st-key-viz_view_heatmap button p::before,
-        .st-key-viz_view_illustration button p::before,
-        .st-key-viz_view_custom button p::before {
-            font-size: 1rem;
+        /* A markdown `:material/…:` renders as `span[role="img"]` — the
+           `stIconMaterial` test id is only on the `icon=` slot. */
+        .st-key-viz_view_scanpath button p span[role="img"],
+        .st-key-viz_view_heatmap button p span[role="img"],
+        .st-key-viz_view_illustration button p span[role="img"],
+        .st-key-viz_view_custom button p span[role="img"] {
+            font-size: 1.1rem;
         }
-        .st-key-viz_view_scanpath button p::before { content: "👁️"; }
-        .st-key-viz_view_heatmap button p::before { content: "🔥"; }
-        .st-key-viz_view_illustration button p::before { content: "✏️"; }
-        .st-key-viz_view_custom button p::before { content: "🛠️"; }
     }
     /* BUG-24: the rail's heading row holds nothing but the heading. UX-44 put a
        compact Reset pill beside it in a second column, which did not fit — the
@@ -1544,19 +1571,49 @@ def get_app_css() -> str:
         font-size: 0.92rem !important;
     }
     /* BUG-48 — a `help=` tooltip must never intercept a click. Streamlit's
-       tooltip is a portalled panel whose open state lives in React, and the
-       pointer can leave its target without that component ever seeing
-       `mouseleave` (a rerun that re-renders the row under the cursor is the
-       usual way, and this app reruns on every widget touch). The panel then
-       floats over the page — and, being an ordinary positioned element, ate the
-       next click that landed on whatever it covered, which is the likeliest
-       reason a rail's ▾ sometimes did nothing on the first press.
-       `app._TOOLTIP_SWEEPER_SCRIPT` is what closes the stuck panel; this is the
-       guard that makes a stuck one harmless in the meantime. Safe because no
-       `help=` in this app contains a link — every tooltip is read, never
-       clicked. */
+       tooltip is a portalled panel whose open state lives in React, so it can
+       outlive the hover that opened it; being an ordinary positioned element it
+       then ate the next click that landed on whatever it covered, which is the
+       likeliest reason a rail's ▾ sometimes did nothing on the first press.
+       Safe because no `help=` in this app contains a link — every tooltip is
+       read, never clicked. */
     div[data-testid="stTooltipContent"] {
         pointer-events: none;
+    }
+    /* BUG-86 — …and it is shown only while *its own* trigger is under the
+       pointer or holds *keyboard* focus. Streamlit 1.64's trigger will not
+       close on pointer-leave while focus is inside it, clicking a button puts
+       focus there, and it can leave several panels in the page at once (some
+       stuck half-closed) — so every button or popover with `help=` that was
+       clicked (the ◀ ▶ ⇅ funnel row, the rail's ▾, the presets) kept its panel
+       floating after the pointer moved on. `:hover` and `:focus-visible` are
+       the browser's own bookkeeping, right even when no event reached React,
+       and `:focus-visible` is what tells a keyboard user's focus, which should
+       keep its tooltip, from the focus a click leaves behind, which should not.
+       Two selectors, because CSS cannot relate a portalled panel to the
+       trigger that owns it:
+       · once `app._TOOLTIP_OWNER_SCRIPT` is running (its flag on `<html>`),
+         a panel shows only while marked `[data-sps-tooltip-owned]` — its own
+         trigger (the element whose `aria-describedby` names it) is hovered or
+         keyboard-focused. That is what stops a hover on one button reviving
+         every other stale panel, and a panel is judged before it is painted;
+       · `body:not(:has(…))` hides every panel while no trigger at all is, the
+         floor if that script cannot run.
+       The hide is immediate: a delayed one (for a fade that Streamlit's own
+       entrance animation, holding opacity at 1, never let run) flashed a stale
+       panel for 100 ms. This replaced BUG-48/51's JavaScript sweeper, which
+       waited for a Base Web `[data-baseweb="tooltip"]` layer that Streamlit no
+       longer renders and so never closed anything;
+       `tests/test_tooltip_visibility.py` fails if the DOM named here leaves
+       Streamlit's bundle. */
+    html[data-sps-tooltip-owners] [role="tooltip"]:not([data-sps-tooltip-owned]) :is([data-testid="stTooltipContent"], [data-testid="stTooltipErrorContent"]),
+    body:not(:has(
+        [data-testid="stTooltipHoverTarget"]:hover,
+        [data-testid="stTooltipHoverTarget"] :focus-visible,
+        [data-testid="stTooltipErrorHoverTarget"]:hover,
+        [data-testid="stTooltipErrorHoverTarget"] :focus-visible
+    )) :is([data-testid="stTooltipContent"], [data-testid="stTooltipErrorContent"]) {
+        visibility: hidden;
     }
 
     /* ── UX-19: width breakpoints ────────────────────────────────────────────

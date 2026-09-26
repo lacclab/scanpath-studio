@@ -65,6 +65,7 @@ from scanpath_studio.constants import (
     _VIEW_CORPUS,
     _VIEW_DATA,
     _VIEW_SCANPATH,
+    ICONS,
 )
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -83,9 +84,9 @@ NAV_SELECTOR = '[data-testid="stTopNavLinkContainer"]'
 #: work happens, and moving them rightwards to make room for a setup page would
 #: cost every existing user their aim.
 _NAV_PAGES = {
-    _VIEW_SCANPATH: ("Scanpath", "🗺️", "scanpath"),
-    _VIEW_CORPUS: ("Corpus Analysis", "📊", "corpus-analysis"),
-    _VIEW_DATA: ("Data", "🗂️", "data"),
+    _VIEW_SCANPATH: ("Scanpath", ICONS["view_scanpath"], "scanpath"),
+    _VIEW_CORPUS: ("Corpus Analysis", ICONS["view_corpus"], "corpus-analysis"),
+    _VIEW_DATA: ("Data", ICONS["view_data"], "data"),
     # 💾 Session is deliberately **not** here (UX-100): it is an *action* entry,
     # not a view — see `_ACTION_PAGES` below. UX-63 had made it a nav page; the
     # four blocks it holds are chrome you dip into and leave, not a destination,
@@ -99,7 +100,7 @@ _NAV_PAGES = {
 #: id → (label, icon, url path). ❓ Help's three entries work the same way (see
 #: `_HELP_PAGES`); the difference is only that these sit at the top level.
 _ACTION_PAGES = {
-    "session": ("Session", "💾", "session"),
+    "session": ("Session", ICONS["session"], "session"),
 }
 
 #: UX-65 — the ❓ Help *section* of the nav: entry id → (label, icon, url path).
@@ -109,13 +110,13 @@ _ACTION_PAGES = {
 #: absent on purpose: ``st.Page`` cannot be a URL, and the UX-62 wordmark beside
 #: this nav already links to the docs site.
 _HELP_PAGES = {
-    "help_tutorials": ("Tutorials", "🧭", "help-tutorials"),
-    "help_faq": ("FAQ", "❔", "help-faq"),
-    "help_about": ("About", "ℹ️", "help-about"),
+    "help_tutorials": ("Tutorials", ICONS["tutorials"], "help-tutorials"),
+    "help_faq": ("FAQ", ICONS["faq"], "help-faq"),
+    "help_about": ("About", ICONS["about"], "help-about"),
 }
 
 #: The nav section heading the four entries above collapse under.
-HELP_SECTION = "❓ Help"
+HELP_SECTION = f"{ICONS['help']} Help"
 
 #: This run's ``st.Page`` objects, view constant → Page. Rebuilt every run (an
 #: ``st.Page`` belongs to the run that made it) and read by

@@ -5563,7 +5563,7 @@ _MULTILINGUAL_FONT_STACK = (
 
 
 def _rail_monitor_row(host) -> tuple[int, int]:
-    """The monitor's pixel size as one ``Monitor | W × H px`` row (UX-164)."""
+    """The monitor's pixel size as one ``Monitor | W × H px`` row (UX-163)."""
     label_w = _label_w()
     rest = 1.0 - label_w
     label_col, width_col, times_col, height_col, unit_col = host.columns(

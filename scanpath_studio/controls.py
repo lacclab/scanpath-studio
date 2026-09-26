@@ -5718,7 +5718,7 @@ def render_plot_controls(
     screen_group = _rail_subsection(figure_grp, f"{ICONS['screen']} Screen & framing")
     axes = _rail_subsection(figure_grp, f"{ICONS['axes']} Axes & grid")
     labels = _rail_subsection(figure_grp, f"{ICONS['labels']} Title & labels")
-    # UX-164: each block's rows take the popover layout (`_popover_rows`) — the
+    # UX-163: each block's rows take the popover layout (`_popover_rows`) — the
     # framing switch, the grid and the colour bar become `label | ☑ Show | …`
     # rows carrying what they govern (greyed while off), the monitor size and
     # the two axis fields one row each.

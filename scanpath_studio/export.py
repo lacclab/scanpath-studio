@@ -1232,8 +1232,7 @@ def render_export_options(
         if title_pattern or caption_pattern:
             st.caption(
                 "Title & caption on the figure — set on the Scanpath rail's "
-                "**📐 Figure & canvas** → *Title & caption on the figure*, and "
-                "applied here too."
+                "**📐 Figure & canvas** → *Title & caption*, and applied here too."
             )
 
     return ExportOptions(

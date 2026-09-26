@@ -2172,8 +2172,8 @@ def _render_compare_selector(
             if compare_step_linked() and sort_choice == _CMP_SORT_DEFAULT:
                 order_choice = TRIAL_SORT_DEFAULT
                 st.caption(
-                    "Sorted by **Trial ID** while *Step A + B* is on, so B keeps "
-                    "its place in the list when A changes text."
+                    "Sorted by **Trial ID** while *Step · A and B together* is on, "
+                    "so B keeps its place in the list when A changes text."
                 )
             else:
                 order_choice = sort_choice
@@ -4766,7 +4766,7 @@ def render_single_trial_tab(
                     key="split_mode_animate_popover",
                     help="Replay settings. Playback controls appear above the plot.",
                 ):
-                    # UX-165: the rail popovers' layout (UX-158) — a *Replay*
+                    # UX-164: the rail popovers' layout (UX-158) — a *Replay*
                     # group (speed, autoplay) and a *Frames* group (the
                     # smoothness preset and, greyed unless it is Custom, the
                     # spacing and the limit), in place of five full-width rows,
@@ -4954,7 +4954,7 @@ def render_single_trial_tab(
                 # toggle's `help` served as a tooltip here instead of a `?`.
                 # BUG-37: see the Animate row above — an explicit key so a
                 # blank-label popover keeps its open state across reruns.
-                # UX-165: the rail popovers' layout (UX-158) — *View*, then
+                # UX-164: the rail popovers' layout (UX-158) — *View*, then
                 # *Stimulus from* (greyed unless the figure is an overlay, rather
                 # than hidden), *Legend* and *Step* as `label | ☑ Show` rows.
                 with (

@@ -45,6 +45,7 @@ from .constants import (
     compare_palette_color,
     drift_correction_enabled,
     icon_html,
+    icons_to_html,
     palette_settings,
     upload_limit_mb,
 )
@@ -3991,8 +3992,11 @@ def _rail_subsection(host, label: str, *, note: str = ""):
     popover carried as a tooltip (what the filter does, and why it is inert in
     Animate or Compare) goes here instead.
     """
+    # A line opening with `<div` is a raw HTML block, where the label's
+    # `ICONS` shortcode would print as text (UX-138).
     host.markdown(
-        f'<div class="sps-rail-subhead">{label}</div>', unsafe_allow_html=True
+        f'<div class="sps-rail-subhead">{icons_to_html(label)}</div>',
+        unsafe_allow_html=True,
     )
     box = host.container()
     if note:

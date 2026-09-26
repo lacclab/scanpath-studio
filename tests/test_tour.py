@@ -381,7 +381,7 @@ def _surface_open_probe_app():
 def _use_case_tutorial_app():
     import streamlit as st
 
-    from scanpath_studio.constants import _VIEW_CORPUS
+    from scanpath_studio.constants import _VIEW_CORPUS, SUBTAB_ANNOTATIONS
     from scanpath_studio.tour import _start_use_case, render_use_case_tutorial
 
     st.session_state.setdefault(
@@ -395,7 +395,7 @@ def _use_case_tutorial_app():
         },
     )
     st.session_state.setdefault("main_nav", _VIEW_CORPUS)
-    st.session_state.setdefault("single_subtab", "📝 Annotations")
+    st.session_state.setdefault("single_subtab", SUBTAB_ANNOTATIONS)
     if not st.session_state.get("_tutorial_armed_once"):
         st.session_state["_tutorial_armed_once"] = True
         _start_use_case("filter_annotate")

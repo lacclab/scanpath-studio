@@ -202,8 +202,8 @@ class TestAppLaunches:
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         body = " ".join(m.value for m in at.markdown)
-        assert "#### 🗄️ Automatic recovery" not in body
-        assert "#### ⬇️ JSON backup" not in body
+        assert f"#### {ICONS['recovery']} Automatic recovery" not in body
+        assert f"#### {ICONS['download']} JSON backup" not in body
 
     def test_debug_mode_survives_the_dialog_closing(self):
         """UX-100: the 🐛 Debug gate is not the toggle's own widget key.

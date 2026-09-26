@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 
 PACKAGE_NAME = "scanpath_studio"
 
@@ -979,8 +980,20 @@ def icon_html(concept: str) -> str:
     ligature — the icon's snake-case name — draws as the same glyph the
     shortcode renders. Styled by ``.sps-icon`` in ``styles.py``.
     """
-    name = ICONS[concept].removeprefix(":material/").removesuffix(":")
-    return f'<span class="sps-icon" aria-hidden="true">{name}</span>'
+    return icons_to_html(ICONS[concept])
+
+
+_SHORTCODE = re.compile(r":material/([a-z0-9_]+):")
+
+
+def icons_to_html(text: str) -> str:
+    """``text`` with every ``:material/…:`` shortcode drawn as :func:`icon_html` does.
+
+    For a label that arrives as markdown (``ICONS[…]`` and all) but is written
+    into a raw HTML block — a line starting ``<div`` — where Streamlit leaves
+    the shortcode as literal text.
+    """
+    return _SHORTCODE.sub(r'<span class="sps-icon" aria-hidden="true">\1</span>', text)
 
 
 #: The Scanpath view's subtab labels. Named because the set is no longer fixed:

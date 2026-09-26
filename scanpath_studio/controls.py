@@ -874,9 +874,12 @@ def _render_fixation_cleaning(*, disabled: bool = False, reason: str = "") -> No
             disabled=highlight_idle,
             label_visibility="collapsed",
         )
+        # `persist_state` keeps a picker first drawn in a popover from mounting
+        # at its proto default (black) — BUG-15 / ENG-36.
         cols[4].color_picker(
             f"{label} color",
             key=f"global_fixclass_{prefix}_color",
+            persist_state="session",
             disabled=highlight_idle,
             label_visibility="collapsed",
         )
@@ -5071,9 +5074,13 @@ def render_plot_controls(
                 for col, cls_name in zip(
                     row.columns(3, gap=_LABEL_GAP), classes[start : start + 3]
                 ):
+                    # `persist_state` is what keeps a picker first drawn in a
+                    # popover from mounting at its proto default (black) while
+                    # the figure draws the stored colour (BUG-15 / ENG-36).
                     col.color_picker(
                         SACCADE_CLASS_LABELS[cls_name],
                         key=f"global_saccade_class_color_{cls_name}",
+                        persist_state="session",
                         disabled=swatch_disabled,
                     )
             _, legend_help = _layer_gate(

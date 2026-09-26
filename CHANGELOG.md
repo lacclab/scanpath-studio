@@ -52,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **One click on a popover's ▾ opens it; it no longer sometimes takes two or three** (BUG-89)
 - **A stacked comparison no longer titles only its lower panel when the A/B legend is off** (BUG-90)
 - **A rail popover no longer scrolls down into empty space below its last row** (BUG-91)
+- **Saccade class colours and the Filter's highlight colours show their real colour in the picker, not black** (BUG-92)
 
 ### Details
 
@@ -100,6 +101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **One click on a popover's ▾ opens it; it no longer sometimes takes two or three** (BUG-89) — opening a popover swaps its chevron glyph (`expand_more` → `expand_less`), which detaches the span that was clicked. Streamlit's own outside-click handler then receives that opening click on `document` and ignores it only within 50 ms of it. When the popover took longer to render (the rail's larger ones often did), the detached target counted as a click outside, and the popover closed itself about 2 ms after opening. The next click then closed a popover that was already shut. The chevron is now transparent to the pointer (`pointer-events: none`), so the click lands on an element that survives the re-render. That covers every popover in the app, not only the rail's; BUG-37's explicit keys addressed a different cause of the same symptom.
 - **A stacked comparison no longer titles only its lower panel when the A/B legend is off** (BUG-90) — the split layouts always passed both readings' names to `make_subplots` as panel titles, but with the legend off the figure's top margin is 0, so the upper title was drawn off the canvas while the lower one, in the gap between the panels, stayed. Side by side lost both the same way. The panel titles now follow the legend toggle (`plots._make_split_comparison_figure`): both with it on, neither with it off, in the app, `compare_scanpaths` and `render --compare-*` alike.
 - **A rail popover no longer scrolls down into empty space below its last row** (BUG-91) — each row title's hover tooltip (`.sps-fhelp::after` in `styles.py`) was an absolutely positioned box that sat there at `opacity: 0` all the time, and such a box still counts towards its scroll container's overflow, so a long tooltip on one of a popover's last rows let the popover scroll into blank space (👁️ Fixations ▾ showed it most). The box now exists only while the title is hovered or focused (`content: none` otherwise), and the 120 ms fade-in is a keyframe animation instead of an opacity transition.
+- **Saccade class colours and the Filter's highlight colours show their real colour in the picker, not black** (BUG-92) — the class swatches under ↗️ Saccades ▾ → *By type* and the 🧹 Filter highlight colours are colour pickers first drawn inside a popover, and without `persist_state="session"` such a picker mounts at its proto default, `#000000`, while the figure draws the stored colour — five black squares next to a correctly coloured plot. Both now declare it, as every other rail picker does (BUG-15 / ENG-36).
 
 ## [0.31.0] - 2026-09-24
 

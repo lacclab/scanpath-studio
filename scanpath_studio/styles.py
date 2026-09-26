@@ -238,6 +238,16 @@ def get_app_css() -> str:
         --sps-border: rgba(128, 128, 128, 0.22);
         --sps-code-fg: #15639c;
         --sps-shadow-hover: 0 6px 18px rgba(31, 119, 180, 0.16);
+        /* UX-145 — the page background, for the few surfaces that must be
+           opaque (a sticky bar content scrolls under). Streamlit exposes no
+           CSS variable for it on the main page, and prefers-color-scheme is
+           the OS preference, not the theme picked in ⋮ → Settings. But
+           Streamlit does set `color-scheme` on `.stApp` to match the active
+           theme, and `light-dark()` resolves against it — so this follows a
+           theme switch instantly, without a rerun. The two colours are
+           `constants.APP_THEME` / `APP_THEME_DARK`'s backgroundColor, pinned
+           by tests/test_theme.py. */
+        --sps-page-bg: light-dark(#ffffff, #0e1117);
     }
     /* In dark mode the brand blue is too dark for badge text; brighten it.
        The app's theme is "Auto" (follows the OS) in the common case, so the OS
@@ -1057,7 +1067,7 @@ def get_app_css() -> str:
         position: sticky;
         top: 3.2rem;
         z-index: 60;
-        background: var(--background-color, #fff);
+        background: var(--sps-page-bg);
         padding: 0.35rem 0 0.4rem;
         margin-bottom: 0.2rem;
         border-bottom: 1px solid rgba(128, 128, 128, 0.25);

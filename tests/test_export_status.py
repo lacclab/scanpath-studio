@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from contextlib import contextmanager
 
 import pandas as pd
@@ -133,6 +134,63 @@ def test_animation_missing_browser_fails_before_starting_kaleido(monkeypatch):
     with pytest.raises(animation_export.AnimationExportError) as excinfo:
         animation_export.render_png_frames(fig, frame_indices=[0])
     assert str(excinfo.value) == animation_export.CHROME_INSTALL_HINT
+
+
+def _kaleido_lock_free_elsewhere() -> bool:
+    """Whether another thread could take the warm-server lock right now."""
+    seen = []
+
+    def probe():
+        got = animation_export.KALEIDO_LOCK.acquire(blocking=False)
+        if got:
+            animation_export.KALEIDO_LOCK.release()
+        seen.append(got)
+
+    thread = threading.Thread(target=probe)
+    thread.start()
+    thread.join()
+    return seen[0]
+
+
+def _fake_warm_kaleido(monkeypatch, on_render=lambda: None):
+    import kaleido
+
+    def calc_fig_sync(*args, **kwargs):
+        on_render()
+        return b"rendered"
+
+    monkeypatch.setattr(animation_export, "chromium_browser_path", lambda: "/chrome")
+    monkeypatch.setattr(kaleido, "start_sync_server", lambda **kwargs: None)
+    monkeypatch.setattr(kaleido, "calc_fig_sync", calc_fig_sync)
+    monkeypatch.setattr(kaleido, "stop_sync_server", lambda **kwargs: None)
+
+
+def test_warm_kaleido_server_is_held_under_the_process_lock(monkeypatch):
+    """UX-150: a download on a worker thread must not share the server mid-export."""
+    _fake_warm_kaleido(monkeypatch)
+
+    with export._figure_renderer(True):
+        assert not _kaleido_lock_free_elsewhere()
+    assert _kaleido_lock_free_elsewhere()
+    with export._figure_renderer(False):
+        assert _kaleido_lock_free_elsewhere(), "a table-only export has no server"
+
+
+def test_animation_frames_render_under_the_process_lock(monkeypatch):
+    held = []
+    _fake_warm_kaleido(
+        monkeypatch, on_render=lambda: held.append(not _kaleido_lock_free_elsewhere())
+    )
+    fig = _figure()
+    fig.frames = [
+        go.Frame(name=str(k), data=[go.Scatter(x=[0, k], y=[0, k])], traces=[0])
+        for k in (1, 2)
+    ]
+
+    animation_export.render_png_frames(fig, show_elapsed=False)
+
+    assert held == [True, True]
+    assert _kaleido_lock_free_elsewhere()
 
 
 def test_static_render_emits_stage_sequence(monkeypatch):
@@ -294,45 +352,74 @@ def _static_export_app():
     )
 
 
-def test_static_result_stays_ready_across_rerun(monkeypatch):
+def _download_buttons(at):
+    return [element.proto for element in at.get("download_button")]
+
+
+def test_static_figure_downloads_in_one_click(monkeypatch):
+    """UX-150: one download button, no Render step, and nothing renders per rerun."""
     AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
     from scanpath_studio import tabs
 
-    def fake_render(*args, status_callback=None, **kwargs):
-        if status_callback:
-            status_callback(
-                ExportStatus(ExportStage.READY, "Ready to download.", elapsed_s=0.1)
-            )
-        return b"png-bytes"
+    def must_not_render(*args, **kwargs):
+        raise AssertionError("the figure rendered during a script run")
 
-    monkeypatch.setattr(tabs, "render_static_figure_bytes", fake_render)
+    monkeypatch.setattr(tabs, "render_static_figure_bytes", must_not_render)
+    monkeypatch.setattr(tabs, "chrome_available", lambda: True)
     at = AppTest.from_function(_static_export_app).run(timeout=30)
-    render = next(button for button in at.button if button.label == "Render PNG")
-    at = render.click().run(timeout=30)
+
     assert not at.exception, at.exception
-    assert at.session_state["_test_static_static_export_cache"]["data"] == b"png-bytes"
-    assert any("PNG ready" in success.value for success in at.success)
-    assert at.get("download_button"), "ready result has no download control"
+    assert not [button.label for button in at.button], "a Render step is back"
+    (button,) = _download_buttons(at)
+    assert button.label == "⬇ Download PNG"
+    assert not button.disabled
 
     at = at.run(timeout=30)
     assert not at.exception, at.exception
-    assert any("PNG ready" in success.value for success in at.success)
-    assert at.get("download_button")
+    assert len(_download_buttons(at)) == 1
 
 
-def test_static_missing_browser_hint_is_not_duplicated(monkeypatch):
+@pytest.mark.parametrize(
+    ("fmt", "scale"), [("PNG", 3), ("SVG", 1), ("PDF", 1)], ids=["png", "svg", "pdf"]
+)
+def test_static_download_data_renders_on_call(monkeypatch, fmt, scale):
+    from scanpath_studio import tabs
+
+    calls = []
+
+    def fake_render(fig, **kwargs):
+        calls.append(kwargs)
+        return b"image-bytes"
+
+    monkeypatch.setattr(tabs, "render_static_figure_bytes", fake_render)
+    fig = _figure()
+    fig.update_layout(width=None)
+    data = tabs._figure_download_data(fig, fmt, canvas_width=900, canvas_height=700)
+
+    assert calls == [], "building the callable must not render"
+    assert data() == b"image-bytes"
+    assert calls == [{"fmt": fmt.lower(), "width": 900, "height": 480, "scale": scale}]
+
+
+def test_html_download_data_is_a_standalone_page():
+    from scanpath_studio import tabs
+
+    html = tabs._figure_download_data(
+        _figure(), "HTML", canvas_width=640, canvas_height=480
+    )()
+    assert html.lstrip().lower().startswith("<!doctype html>")
+    assert "cdn.plot.ly" in html
+
+
+def test_static_missing_browser_warns_once_and_disables_download(monkeypatch):
     AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
     from scanpath_studio import tabs
 
-    def missing_browser(*args, **kwargs):
-        raise RuntimeError(animation_export.CHROME_INSTALL_HINT)
-
-    monkeypatch.setattr(tabs, "render_static_figure_bytes", missing_browser)
     monkeypatch.setattr(tabs, "chrome_available", lambda: False)
     at = AppTest.from_function(_static_export_app).run(timeout=30)
-    render = next(button for button in at.button if button.label == "Render PNG")
-    at = render.click().run(timeout=30)
 
     assert not at.exception, at.exception
     warnings = "\n".join(warning.value for warning in at.warning)
     assert warnings.count(animation_export.CHROME_INSTALL_HINT) == 1
+    (button,) = _download_buttons(at)
+    assert button.disabled

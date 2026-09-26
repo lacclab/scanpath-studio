@@ -9,6 +9,7 @@ import os
 from collections.abc import Callable
 from dataclasses import fields as dataclass_fields
 from dataclasses import replace
+from functools import partial
 from typing import Any
 
 import numpy as np
@@ -858,13 +859,16 @@ def _render_save_plot_button(
     slug: str,
     key_prefix: str,
 ) -> None:
-    """Download the currently displayed figure.
+    """Download the currently displayed figure in one click.
 
-    HTML is cheap (no Kaleido/Chrome) so it downloads in a single click. PNG/SVG/
-    PDF go through Kaleido, which spins up a headless Chrome — far too slow to run
-    on every Streamlit rerun — so those keep a Render step and reveal the download
-    only once the image is ready. Width/height come from the figure's own layout
-    so stacked / multi-panel figures save at their on-screen size.
+    UX-150: the button's ``data`` is a callable (`_figure_download_data`), so
+    Streamlit builds the file only when the button is pressed — on a worker
+    thread, with a spinner on the button — rather than on every rerun. That
+    retired EXP-6's *Render → status → Download* sequence here: PNG/SVG/PDF go
+    through Kaleido's headless Chrome, which is far too slow to run per rerun, and
+    deferring it is what the Render step was for. Width/height come from the
+    figure's own layout so stacked / multi-panel figures save at their on-screen
+    size.
     """
     if fig is None:
         return
@@ -887,103 +891,47 @@ def _render_save_plot_button(
         "is interactive and needs no browser.",
     )
 
-    # HTML: one-click download — no expensive render to defer.
+    # Pre-flight (ENG-10): a render that fails on the worker thread can only
+    # surface as Streamlit's generic "Failed to generate file for download" —
+    # nothing it raises reaches the page — so the one failure we can predict is
+    # said up front, with the fix and the browser-free HTML fallback.
+    no_browser = fmt != "HTML" and not chrome_available()
+    if no_browser:
+        st.warning(f"{fmt} export can't run here. {CHROME_INSTALL_HINT}", icon="⚠️")
+    st.download_button(
+        f"⬇ Download {fmt}",
+        data=_figure_download_data(
+            fig, fmt, canvas_width=canvas_width, canvas_height=canvas_height
+        ),
+        file_name=f"{file_stem}.{fmt.lower()}",
+        mime=_MIME_FOR_FORMAT[fmt],
+        key=f"{key_prefix}_save_button",
+        # Downloading changes nothing on the page, so it needn't rerun the app.
+        on_click="ignore",
+        disabled=no_browser,
+        help=None
+        if fmt == "HTML"
+        else f"Renders the {fmt} when you click (Chrome/Kaleido; the first export "
+        "can take a few seconds). If it fails, choose **HTML** — it needs no "
+        "browser.",
+    )
+
+
+def _figure_download_data(
+    fig, fmt: str, *, canvas_width: int, canvas_height: int
+) -> Callable[[], str | bytes]:
+    """The zero-argument callable `st.download_button` runs on click (UX-150)."""
     if fmt == "HTML":
-        html_bytes = fig.to_html(include_plotlyjs="cdn", full_html=True).encode("utf-8")
-        st.download_button(
-            "⬇ Download HTML",
-            data=html_bytes,
-            file_name=f"{file_stem}.html",
-            mime=_MIME_FOR_FORMAT["HTML"],
-            key=f"{key_prefix}_save_button_html",
-        )
-        return
-
-    # PNG/SVG/PDF: render on click (Kaleido/Chrome), then reveal the download.
-    # The signature includes the complete figure JSON and every exporter option,
-    # so the durable result survives harmless reruns but can never leak across a
-    # trial, format, scale, size, or visual-setting change (EXP-6).
-    fig_width = int(fig.layout.width or canvas_width)
-    fig_height = int(fig.layout.height or canvas_height)
-    scale = 3 if fmt == "PNG" else 1
-    sig = static_export_signature(
+        return partial(fig.to_html, include_plotlyjs="cdn", full_html=True)
+    return partial(
+        render_static_figure_bytes,
         fig,
-        fmt=fmt,
-        width=fig_width,
-        height=fig_height,
-        scale=scale,
+        fmt=fmt.lower(),
+        width=int(fig.layout.width or canvas_width),
+        height=int(fig.layout.height or canvas_height),
+        # PNG is raster, so it renders at 3× to stay crisp; SVG/PDF are vector.
+        scale=3 if fmt == "PNG" else 1,
     )
-    cache_key = f"_{key_prefix}_static_export_cache"
-    inflight_key = f"_{key_prefix}_static_export_inflight"
-    cache = st.session_state.get(cache_key)
-    if cache and cache.get("sig") != sig:
-        st.session_state.pop(cache_key, None)
-        cache = None
-
-    generate = st.button(
-        f"Render {fmt}",
-        key=f"{key_prefix}_save_generate",
-        help="Renders the image (needs Chrome/Kaleido); the download button "
-        "appears once it's ready.",
-        disabled=st.session_state.get(inflight_key) == sig,
-    )
-    if generate:
-        status_box = st.status("Preparing export…", expanded=True)
-
-        def _on_status(status: ExportStatus) -> None:
-            elapsed = f" · {status.elapsed_s:.1f}s" if status.elapsed_s else ""
-            state = (
-                "complete"
-                if status.stage == ExportStage.READY
-                else "error"
-                if status.stage == ExportStage.ERROR
-                else "running"
-            )
-            status_box.update(label=f"{status.message}{elapsed}", state=state)
-
-        st.session_state[inflight_key] = sig
-        try:
-            data = render_static_figure_bytes(
-                fig,
-                fmt=fmt.lower(),
-                width=fig_width,
-                height=fig_height,
-                scale=scale,
-                status_callback=_on_status,
-            )
-        except Exception as exc:
-            st.session_state.pop(cache_key, None)
-            hint = (
-                CHROME_INSTALL_HINT
-                if not chrome_available()
-                else "On Streamlit Cloud Chrome is installed via `packages.txt`; if it "
-                "still fails, choose the **HTML** format above — it needs no browser."
-            )
-            detail = str(exc)
-            message = f"Could not render {fmt}: {detail}"
-            # The renderer's missing-browser exception already contains the
-            # actionable hint. Appending it again produced two identical yellow
-            # paragraphs in the export panel (EXP-6 review feedback).
-            if hint not in detail:
-                message += f"\n\n{hint}"
-            st.warning(message)
-            cache = None
-        else:
-            cache = {"sig": sig, "data": data, "fmt": fmt}
-            st.session_state[cache_key] = cache
-        finally:
-            st.session_state.pop(inflight_key, None)
-
-    if cache and cache.get("sig") == sig:
-        data = cache["data"]
-        st.success(f"{fmt} ready · {len(data) / 1024:.0f} KB")
-        st.download_button(
-            f"⬇ Download {fmt}",
-            data=data,
-            file_name=f"{file_stem}.{fmt.lower()}",
-            mime=_MIME_FOR_FORMAT[fmt],
-            key=f"{key_prefix}_save_button",
-        )
 
 
 # Above this many frames, offer to cap the rendered frame count: each frame is a

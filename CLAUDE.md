@@ -49,7 +49,9 @@ you work under `scanpath_studio/`); contributor setup is in
 - Prefer headless `AppTest.from_file("streamlit_app.py")` for verifying behavior;
   the live preview is slow to spin up.
 - **The spatial plot must stay on `tabs._render_true_scale_chart`** (never
-  `st.plotly_chart`), and deep-link / restore relies on the `global_*` /
+  `st.plotly_chart`; the cached replay uses its two halves,
+  `_true_scale_plot_html` + `_render_true_scale_plot` — PERF-16), and
+  deep-link / restore relies on the `global_*` /
   `single_*` / `filter_*` widget keys — don't rename them. More in
   `scanpath_studio/CLAUDE.md → Gotchas`.
 

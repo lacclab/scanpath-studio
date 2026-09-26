@@ -172,7 +172,7 @@ def _labeled(host, kind: str, label: str, **kwargs):
     return labeled(host, kind, label, **kwargs)
 
 
-def _slider_row(host, n_boxes: int) -> list:
+def _slider_row(host, n_boxes: int, lead: float = 0.0) -> list:
     """Columns for a ``label | slider | box…`` row, label column first (UX-51).
 
     The slider keeps its pre-UX-51 5 : 1.5 proportion against each typed box; the
@@ -181,10 +181,19 @@ def _slider_row(host, n_boxes: int) -> list:
     the label beside the slider's *track*: a slider prints its current value
     above the track, so a top-aligned label would sit against that number instead
     of against the control.
+
+    ``lead`` (UX-157) inserts a column of that relative weight between the label
+    and the slider, for a control that belongs on the slider's line — the colour
+    range's *Auto* checkbox.
     """
     rest = 1.0 - _LABEL_W
-    total = 5.0 + 1.5 * n_boxes
-    weights = [_LABEL_W, rest * 5.0 / total, *([rest * 1.5 / total] * n_boxes)]
+    total = lead + 5.0 + 1.5 * n_boxes
+    weights = [
+        _LABEL_W,
+        *([rest * lead / total] if lead else []),
+        rest * 5.0 / total,
+        *([rest * 1.5 / total] * n_boxes),
+    ]
     return host.columns(weights, gap=_LABEL_GAP, vertical_alignment="center")
 
 
@@ -338,8 +347,12 @@ def _range_slider(
     persist_state: str | None = None,
     label_left: bool = False,
     display: str | None = None,
+    lead=None,
 ) -> None:
     """A two-handle range slider plus min/max number boxes, all on one line.
+
+    ``lead`` (UX-157, ``label_left`` rows only) is a callable given a column
+    between the label and the slider, to draw a control of its own there.
 
     The boxes are deliberately small — they hold a number, not a sentence — so
     the slider still gets most of the row. A min typed above the max is swapped
@@ -363,7 +376,13 @@ def _range_slider(
             on_change()
 
     if label_left:
-        label_col, slider_col, lo_col, hi_col = _slider_row(host, 2)
+        if lead is not None:
+            label_col, lead_col, slider_col, lo_col, hi_col = _slider_row(
+                host, 2, lead=2.2
+            )
+            lead(lead_col)
+        else:
+            label_col, slider_col, lo_col, hi_col = _slider_row(host, 2)
         _row_label(label_col, display if display is not None else label, help)
     else:
         slider_col, lo_col, hi_col = host.columns(
@@ -2947,22 +2966,26 @@ def _render_color_range(
         else:
             _commit_view()
 
-    _labeled(
-        st,
-        "checkbox",
-        "Auto range",
-        key=auto_key,
-        on_change=_toggle_auto,
-        disabled=disabled,
-        help=_gated_help(
-            "**On** (default) — every trial is scaled to its own values, exactly "
-            "as the headless API and `render` draw it; a comparison shares one "
-            "scale across A and B. **Off** — the range below is pinned and "
-            "applies to every trial you look at, which is what makes trials "
-            "comparable. Dragging the range turns this off.",
-            reason,
-        ),
+    auto_text = (
+        "**Auto** on (default) — every trial is scaled to its own values, exactly "
+        "as the headless API and `render` draw it; a comparison shares one scale "
+        "across A and B. Off — the range is pinned and applies to every trial you "
+        "look at, which is what makes trials comparable. Dragging the range turns "
+        "Auto off."
     )
+    auto_disabled, _ = _layer_gate(disabled, None)
+
+    # UX-157: *Auto* sits on the range's own line, between its title and the
+    # slider, instead of a row of its own above it. Its explanation joins the
+    # row title's tooltip: a `?` icon beside it would squeeze "Auto" to "A…".
+    def _auto(col) -> None:
+        col.checkbox(
+            "Auto",
+            key=auto_key,
+            on_change=_toggle_auto,
+            disabled=auto_disabled,
+        )
+
     _range_slider(
         st,
         label,
@@ -2974,7 +2997,8 @@ def _render_color_range(
         slider_format="%d",
         disabled=disabled,
         on_change=_commit_view,
-        help=_gated_help(help, reason),
+        help=_gated_help(f"{help} {auto_text}" if help else auto_text, reason),
+        lead=_auto,
     )
 
 

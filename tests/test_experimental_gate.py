@@ -473,41 +473,26 @@ class TestMultiplEYEUploadGate:
         assert callable(datasets.load_multipleye_uploads)
 
 
-class TestTheBetaHidesMultiplEYEAndTheBenchmarkPlaceholder:
-    """DATA-54: two entries the beta does not offer. MultiplEYE's data is not
-    openly available yet, and the benchmark placeholder points at a pipeline
-    only the lab can run. Gated in `app.public_dataset_registry`, the one place
-    the picker, the 🗂️ Data page, Compare and share links all read."""
+class TestTheBetaHidesMultiplEYE:
+    """DATA-54: MultiplEYE's data is not openly available yet, so the beta does
+    not offer it. Gated in `app.public_dataset_registry`, the one place the
+    picker, the 🗂️ Data page, Compare and share links all read. (DATA-54 also
+    hid the benchmark "set up" entry; DATA-55 removed it.)"""
 
-    @pytest.fixture(autouse=True)
-    def _no_benchmark_bundle(self, tmp_path, monkeypatch):
-        """Nothing discovered — the only state the placeholder exists in, so a
-        developer's own bundle at the default location can't decide these."""
-        from scanpath_studio import app, compare_source
-
-        for module in (app, compare_source):
-            monkeypatch.setattr(
-                module, "EYEGENBENCH_DEFAULT_DIR", str(tmp_path / "absent")
-            )
-        app._cached_eyegenbench_datasets.clear()
-
-    def test_neither_entry_is_offered(self):
+    def test_it_is_not_offered(self):
         from scanpath_studio import app
 
         registry = app.public_dataset_registry()
         assert app.MULTIPLEYE_PUBLIC_CHOICE not in registry
-        assert constants.BENCHMARK_SETUP_CHOICE not in registry
         # The other built-ins are unaffected.
         assert app.ONESTOP_PUBLIC_CHOICE in registry
         assert any("PoTeC" in label for label in registry)
 
-    def test_the_flag_brings_both_back(self, monkeypatch):
+    def test_the_flag_brings_it_back(self, monkeypatch):
         from scanpath_studio import app
 
         monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
-        registry = app.public_dataset_registry()
-        assert app.MULTIPLEYE_PUBLIC_CHOICE in registry
-        assert constants.BENCHMARK_SETUP_CHOICE in registry
+        assert app.MULTIPLEYE_PUBLIC_CHOICE in app.public_dataset_registry()
 
     def test_compare_does_not_offer_multipleye_as_scanpath_b(self, monkeypatch):
         from scanpath_studio import app, compare_source
@@ -554,23 +539,19 @@ class TestTheBetaHidesMultiplEYEAndTheBenchmarkPlaceholder:
 
 
 class TestTheBetaHidesTheHarmonisedBenchmarkCorpora:
-    """DATA-55: a bundle already on disk is no longer offered either. DATA-54 hid
-    only the set-up placeholder, on the grounds that only someone who can build a
-    bundle has one; the corpora themselves are unfinished (the picker marks each
-    one WIP), so the beta offers none of them. Same gate, same place:
-    `app.public_dataset_registry`."""
+    """DATA-55: the corpora are unfinished (the picker marks each one WIP), so
+    the beta offers none of them — even one a user has added. (The app no longer
+    discovers them at all; `tests/test_eyegenbench.py` pins that half, with the
+    flag on.) Same gate, same place: `app.public_dataset_registry`."""
 
     @pytest.fixture(autouse=True)
     def bundle(self, tmp_path, monkeypatch):
-        """One prepared corpus at the default location — the state DATA-54 left
-        visible."""
-        from scanpath_studio import app, compare_source
+        """One prepared corpus, added — so it is the gate alone that hides it."""
+        from tests.conftest import add_benchmark_corpora
         from tests.test_eyegenbench import write_bundle
 
         root = write_bundle(tmp_path)
-        for module in (app, compare_source):
-            monkeypatch.setattr(module, "EYEGENBENCH_DEFAULT_DIR", str(root))
-        app._cached_eyegenbench_datasets.clear()
+        add_benchmark_corpora(monkeypatch, root)
         return root
 
     @staticmethod
@@ -587,15 +568,6 @@ class TestTheBetaHidesTheHarmonisedBenchmarkCorpora:
         # The built-ins are unaffected — the native PoTeC included.
         assert app.ONESTOP_PUBLIC_CHOICE in registry
         assert "PoTeC — Potsdam Textbook Corpus" in registry
-
-    def test_the_bundle_is_not_even_read(self, monkeypatch):
-        from scanpath_studio import app
-
-        def _must_not_run(*_args, **_kwargs):
-            raise AssertionError("the manifest was read with the gate off")
-
-        monkeypatch.setattr(app, "_cached_eyegenbench_datasets", _must_not_run)
-        app.public_dataset_registry()
 
     def test_the_flag_brings_the_corpus_back(self, monkeypatch):
         from scanpath_studio import app

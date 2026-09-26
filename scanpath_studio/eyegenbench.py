@@ -125,7 +125,7 @@ def entry_count(entry, key: str) -> int | None:
     data from a file on disk, and a bare ``int(entry.get(key))`` raises
     `ValueError`/`TypeError` on ``"many"``, ``[1]`` or any other shape a hand
     edit can produce — outside the catch every caller guards with, and now on
-    the path that builds a picker entry for every discovered corpus (N1).
+    the path that builds a picker entry for every added corpus (N1).
 
     ``0`` when the field is absent or blank — *not recorded* is a known
     quantity for a count, and every reader treats it as none. ``None`` when the

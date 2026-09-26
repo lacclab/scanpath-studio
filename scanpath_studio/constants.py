@@ -84,13 +84,12 @@ def benchmark_corpora_enabled() -> bool:
 
     A bundle can only be built with the EyeGenBench pipeline, which is not public
     yet, and the corpora are unfinished work — the picker marks each one (WIP).
-    Off, `app.public_dataset_registry` offers neither the *set up a local bundle*
-    placeholder (DATA-54) nor any corpus discovered in a bundle already on disk
-    (DATA-55), so the data picker, the 🗂️ Data page, Compare's second dataset and
-    share links all stop offering them — and `render`'s ``--eyegenbench`` /
-    ``--eyegenbench-dataset`` flags are hidden from ``--help``. Hidden, not
-    removed: those flags still parse, and `eyegenbench.load_eyegenbench` is
-    untouched.
+    The app no longer discovers them at all (DATA-55: a corpus is listed only
+    once someone adds it, and the flow that adds one is DATA-56). Off, this also
+    keeps an added corpus out of `app.public_dataset_registry`, and hides
+    `render`'s ``--eyegenbench`` / ``--eyegenbench-dataset`` flags from
+    ``--help``. Hidden, not removed: those flags still parse, and
+    `eyegenbench.load_eyegenbench` is untouched.
     """
     return experimental_features_enabled()
 
@@ -569,18 +568,11 @@ POTEC_DEFAULT_DIR = "data/PoTeC"
 EYEGENBENCH_DEFAULT_DIR = "data/EyeGenBench"
 # DATA-27 (Task 11R): every prepared benchmark corpus is its own top-level entry
 # in the flat data-source picker, exactly like PoTeC / MultiplEYE / OneStop —
-# there is no "EyeGenBench" source fronting them. Two consequences live in these
-# constants:
-#
-# 1. **"EyeGenBench" is provenance, not a source.** It names the pipeline that
-#    harmonises the corpora and is being extracted into its own repository, so
-#    it appears in descriptions and help strings only — never in an entry label.
-# 2. A corpus entry's label is built from its manifest name (`app.py`), so the
-#    only fixed label here is the **bootstrap** entry: when zero corpora are
-#    discovered there is nowhere to type the bundle path, so exactly one
-#    placeholder entry renders the directory input + prep instructions. It
-#    disappears as soon as a corpus is discoverable.
-BENCHMARK_SETUP_CHOICE = "Harmonised benchmark corpora — set up a local bundle"
+# there is no "EyeGenBench" source fronting them. **"EyeGenBench" is provenance,
+# not a source**: it names the pipeline that harmonises the corpora and is being
+# extracted into its own repository, so it appears in descriptions and help
+# strings only — never in an entry label, which is built from the corpus'
+# manifest name (`app.py`).
 # The suffix that distinguishes a harmonised corpus from a *native* entry for the
 # same corpus (PoTeC, OneStop ship both ways). Applied by property — the
 # harmonised copy is re-derived and its geometry may be weaker — never by vendor

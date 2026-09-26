@@ -337,6 +337,88 @@ _FORCE_LTR_LOCALE_SCRIPT = """
 """
 
 
+#: BUG-86. Streamlit's `help=` tooltip keeps its panel open for as long as
+#: focus is inside the trigger, and it can leave several panels in the page at
+#: once — some still open, some stuck half-closed (`data-exiting`) with no
+#: owner at all; a clicked ▶ left "Next trial." behind through reruns. CSS alone
+#: can only ask "is *some* trigger hovered?", so hovering any tooltip button
+#: brought every stale panel back. This marks a panel *owned* while its **own**
+#: trigger — the element whose `aria-describedby` names the panel's id — is
+#: `:hover` or holds `:focus-visible`, and `styles.get_app_css` hides every
+#: panel that is not, once this is running (the `data-sps-tooltip-owners` flag
+#: on `<html>`). It reads only the browser's own hover/focus state and never
+#: touches React's, so it cannot fight the component.
+#:
+#: A panel is judged the moment it appears — synchronously in a
+#: `MutationObserver`, which runs before the browser paints — so a stale one
+#: is never shown for a frame; pointer and focus moves re-judge at most once a
+#: frame. The code runs in the *parent* page's realm (a `<script>` added to its
+#: head, once per page load), not as closures from this iframe's: an iframe's
+#: listeners die with it, which is what BUG-51 had to hand-roll a heartbeat for.
+_TOOLTIP_OWNER_SCRIPT = """
+<script>
+(function () {
+    function install() {
+        var OWNED = "data-sps-tooltip-owned";
+        var PANEL = '[data-testid="stTooltipContent"], '
+            + '[data-testid="stTooltipErrorContent"]';
+        var pending = false;
+        function ownerIsActive(tip) {
+            if (!tip.id) { return false; }
+            var owner = document.querySelector(
+                '[aria-describedby~="' + CSS.escape(tip.id) + '"]'
+            );
+            return !!owner && (
+                owner.matches(":hover")
+                || owner.matches(":focus-visible")
+                || !!owner.querySelector(":focus-visible")
+            );
+        }
+        function update() {
+            pending = false;
+            var tips = document.querySelectorAll('[role="tooltip"]');
+            for (var i = 0; i < tips.length; i++) {
+                var tip = tips[i];
+                if (!tip.querySelector(PANEL)) { continue; }
+                var owned = ownerIsActive(tip);
+                if (owned !== tip.hasAttribute(OWNED)) {
+                    tip.toggleAttribute(OWNED, owned);
+                }
+            }
+        }
+        function schedule() {
+            if (pending) { return; }
+            pending = true;
+            requestAnimationFrame(update);
+        }
+        ["pointerover", "pointerout", "focusin", "focusout", "keydown"].forEach(
+            function (type) { document.addEventListener(type, schedule, true); }
+        );
+        new MutationObserver(update).observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ["aria-describedby"],
+        });
+        update();
+        document.documentElement.setAttribute("data-sps-tooltip-owners", "");
+    }
+    try {
+        var host = window.parent;
+        if (host.__spsTooltipOwnerInstalled) { return; }
+        var script = host.document.createElement("script");
+        script.textContent = "(" + install.toString() + ")();";
+        host.document.head.appendChild(script);
+        host.__spsTooltipOwnerInstalled = true;
+    } catch (e) {
+        /* The CSS floor in styles.get_app_css still hides every panel while
+           no trigger is hovered or keyboard-focused. */
+    }
+})();
+</script>
+"""
+
+
 def configure_page() -> None:
     """Streamlit page config + custom CSS.
 
@@ -353,6 +435,7 @@ def configure_page() -> None:
     )
     st.markdown(get_app_css(), unsafe_allow_html=True)
     embed_html_iframe(_FORCE_LTR_LOCALE_SCRIPT, height=0)
+    embed_html_iframe(_TOOLTIP_OWNER_SCRIPT, height=0)
 
 
 #: The app's wordmark, shown in Streamlit's own header (UX-62). Inside the

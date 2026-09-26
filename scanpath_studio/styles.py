@@ -745,9 +745,9 @@ def get_app_css() -> str:
         font-size: 0.85rem;
         opacity: 0.72;
     }
-    /* UX-158 — the 👁️ Fixations popover's rows, a little further apart than the
-       app-wide gap:0 (the class makes this rule outrank that one). */
-    div.st-key-rail_fix_rows { gap: 0.5rem !important; }
+    /* UX-158/159 — a rail popover's rows (`controls._popover_rows`), a little
+       further apart than the app-wide gap:0 (the later rule wins the tie). */
+    div[class*="st-key-rail_rows_"] { gap: 0.5rem !important; }
     .sps-flabel-help {
         text-decoration: underline dotted;
         text-decoration-color: rgba(128, 128, 128, 0.6);

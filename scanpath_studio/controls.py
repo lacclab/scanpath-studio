@@ -40,6 +40,7 @@ from .constants import (
     SACCADE_COLOR,
     SACCADE_COLOR_MODES,
     SACCADE_DASH_OPTIONS,
+    SACCADE_DIRECTION_CLASSES,
     SACCADE_WIDTH_BOUNDS,
     UNIFORM_COLOR_FIELD,
     WORD_LABEL_COLOR,
@@ -126,9 +127,11 @@ def _label_w() -> float:
     return _LABEL_W if override is None else override
 
 
-#: The 👁️ Fixations popover's label column (UX-158): its longest title,
-#: "Snap above words", needs about this much of the ~28rem body.
-_FIXATIONS_LABEL_W = 0.3
+#: The rail popovers' label column (UX-158 for 👁️ Fixations, UX-159 for the
+#: rest): with titles kept short, this much of the ~28rem body holds the
+#: longest of them ("Snap above words", "Direction arrows") and brings every
+#: field closer to its title than the rail's default split does.
+_POPOVER_LABEL_W = 0.3
 
 
 @contextmanager
@@ -139,6 +142,18 @@ def _rail_label_width(width: float):
         yield
     finally:
         _LABEL_W_OVERRIDE.reset(token)
+
+
+@contextmanager
+def _popover_rows(slug: str):
+    """Lay a rail popover's rows out the UX-158 way (UX-159).
+
+    The popover's own label column (`_POPOVER_LABEL_W`) and a keyed container,
+    ``rail_rows_<slug>``, that `styles.py` spaces the rows of apart — the two
+    things that made 👁️ Fixations read as a form, for every popover alike.
+    """
+    with _rail_label_width(_POPOVER_LABEL_W), st.container(key=f"rail_rows_{slug}"):
+        yield
 
 
 #: Tighter than the 1rem default: these rows are dense and the width is scarce.
@@ -3063,11 +3078,12 @@ def _render_color_range(
 
 
 def _sub_row(
-    caption: str,
+    caption: str | None,
     *,
     section: str | None = None,
     section_help: str | None = None,
     caption_help: str | None = None,
+    section_share: float = 0.45,
 ):
     """One row of a titled group of rows; return the column for its field (UX-158).
 
@@ -3075,10 +3091,12 @@ def _sub_row(
     the group's first row only) and this row's short caption, so a run of
     related controls reads as one setting without a full title per row. The
     two together are exactly the label column's width, so the fields line up
-    with the ordinary ``label | field`` rows around them.
+    with the ordinary ``label | field`` rows around them. ``section_share`` is
+    the title's part of that column — wider for a longer title ("Scanpath A").
+    A ``None`` caption leaves its cell empty, for a group's continuation row.
     """
     label_w = _label_w()
-    section_w = label_w * 0.45
+    section_w = label_w * section_share
     section_col, caption_col, field_col = st.columns(
         [section_w, label_w - section_w, 1.0 - label_w],
         gap=_LABEL_GAP,
@@ -3087,8 +3105,44 @@ def _sub_row(
     if section is not None:
         _, section_help = _layer_gate(False, section_help)
         _row_label(section_col, section, section_help)
-    _sub_caption(caption_col, caption, caption_help)
+    if caption:
+        _sub_caption(caption_col, caption, caption_help)
     return field_col
+
+
+def _check_row(
+    label: str,
+    *,
+    key: str,
+    help: str | None = None,
+    check_label: str = "Show",
+    check_share: float = 0.26,
+    disabled: bool = False,
+    on_change=None,
+    persist: bool = True,
+):
+    """A ``label | ☑ Show | …`` row; return ``(value, rest)`` (UX-159).
+
+    The shape UX-155 gave *Fixation index*: the row's title on the left, a
+    checkbox that says what it does, and the rest of the row (``rest``) for the
+    controls it governs — which the caller greys while it is off rather than
+    hiding them. The help goes on the title's tooltip, not the checkbox, so the
+    row carries no ``?`` icon. ``persist=False`` is for a checkbox on a key
+    another widget or callback owns the persistence of.
+    """
+    disabled, help = _layer_gate(disabled, help)
+    label_w = _label_w()
+    rest_w = 1.0 - label_w
+    label_col, check_col, rest_col = st.columns(
+        [label_w, rest_w * check_share, rest_w * (1.0 - check_share)],
+        gap=_LABEL_GAP,
+        vertical_alignment="center",
+    )
+    _row_label(label_col, label, help)
+    kwargs = {"key": key, "disabled": disabled, "on_change": on_change}
+    if persist:
+        kwargs["persist_state"] = "session"
+    return check_col.checkbox(check_label, **kwargs), rest_col
 
 
 def _sub_caption(host, text: str, help: str | None = None) -> None:
@@ -3109,7 +3163,9 @@ def _sub_caption(host, text: str, help: str | None = None) -> None:
     )
 
 
-_COMPARE_SCANPATHS = ((0, "Scanpath 1"), (1, "Scanpath 2"))
+#: UX-159: "A" and "B", as the ⚖️ Compare popover's *Label A* / *Label B* and
+#: the figure's A/B legend name them — they were "Scanpath 1" / "Scanpath 2".
+_COMPARE_SCANPATHS = ((0, "Scanpath A"), (1, "Scanpath B"))
 
 
 def render_pattern_help(host, fields: dict) -> None:
@@ -3303,37 +3359,37 @@ def _render_compare_fix_styles() -> None:
     inside the Fixation-style popover (when comparing), beside the single-trial
     fixation controls.
 
-    UX-51: each scanpath's name is a caption over its own three rows rather than
-    a prefix on every label — "Scanpath 1 — marker size range" is far too long
-    for a label column that has to line up with "Opacity". The widgets keep the
-    prefixed label as their accessible name (it is what tells the six rows
-    apart); only the visible text is shortened."""
-    st.caption("Per-scanpath (comparison)")
+    UX-159: one group per scanpath, its name as the group title and a caption
+    per row (`_sub_row`), matching the popover's *Marker* group. The widgets
+    keep the prefixed label as their accessible name (it is what tells the six
+    rows apart); only the visible text is shortened."""
+    st.caption("Per scanpath (Compare)")
+    swatch_disabled, _ = _layer_gate(False, None)
     for idx, name in _COMPARE_SCANPATHS:
-        st.caption(f"**{name}**")
-        _labeled(
-            st,
-            "color_picker",
+        _sub_row(
+            "Color",
+            section=name,
+            section_help=_COMPARE_SCANPATH_HELP[idx],
+            section_share=_COMPARE_SECTION_SHARE,
+        ).color_picker(
             f"{name} — fixation color",
-            display="Fixation color",
             key=f"cmp{idx}_fix_color",
             persist_state="session",
+            disabled=swatch_disabled,
+            label_visibility="collapsed",
         )
         _range_slider(
             st,
             f"{name} — marker size range",
-            display="Marker size range",
-            label_left=True,
             key=f"cmp{idx}_marker_size_range",
             persist_state="session",
             min_value=4,
             max_value=40,
+            field_host=_sub_row("Size", section_share=_COMPARE_SECTION_SHARE),
         )
         _numeric_slider(
             st,
             f"{name} — opacity",
-            display="Opacity",
-            label_left=True,
             key=f"cmp{idx}_opacity",
             persist_state="session",
             min_value=0.1,
@@ -3341,39 +3397,56 @@ def _render_compare_fix_styles() -> None:
             step=0.05,
             slider_format="%.2f",
             help="Marker opacity for this scanpath (1.0 = fully opaque).",
+            field_host=_sub_row("Opacity", section_share=_COMPARE_SECTION_SHARE),
         )
+
+
+#: UX-159: the per-scanpath groups' titles ("Scanpath A") are longer than a
+#: popover group title usually is, so they take more of the label column.
+_COMPARE_SECTION_SHARE = 0.62
+
+_COMPARE_SCANPATH_HELP = {
+    0: "Scanpath A — the selected trial.",
+    1: "Scanpath B — the trial it is compared with.",
+}
 
 
 def _render_compare_saccade_styles() -> None:
     """Per-scanpath *saccade* styling for the two-trial comparison — rendered
     inside the Saccade-style popover (when comparing). Laid out like
-    :func:`_render_compare_fix_styles` — see its note on the UX-51 captions."""
-    st.caption("Per-scanpath (comparison)")
+    :func:`_render_compare_fix_styles`: the colour and the line style share the
+    *Line* row, the width its own."""
+    st.caption("Per scanpath (Compare)")
     style_labels = list(SACCADE_DASH_OPTIONS.keys())
+    swatch_disabled, _ = _layer_gate(False, None)
     for idx, name in _COMPARE_SCANPATHS:
-        st.caption(f"**{name}**")
-        _labeled(
-            st,
-            "color_picker",
+        line = _sub_row(
+            "Line",
+            section=name,
+            section_help=_COMPARE_SCANPATH_HELP[idx],
+            section_share=_COMPARE_SECTION_SHARE,
+        )
+        color_col, style_col = line.columns(
+            [0.3, 0.7], gap=_LABEL_GAP, vertical_alignment="center"
+        )
+        color_col.color_picker(
             f"{name} — saccade color",
-            display="Saccade color",
             key=f"cmp{idx}_saccade_color",
             persist_state="session",
+            disabled=swatch_disabled,
+            label_visibility="collapsed",
         )
-        _labeled(
-            st,
-            "selectbox",
+        style_col.selectbox(
             f"{name} — line style",
-            display="Line style",
             options=style_labels,
             key=f"cmp{idx}_saccade_style",
             persist_state="session",
+            disabled=swatch_disabled,
+            label_visibility="collapsed",
         )
         _numeric_slider(
             st,
             f"{name} — line width",
-            display="Line width",
-            label_left=True,
             key=f"cmp{idx}_saccade_width",
             persist_state="session",
             min_value=SACCADE_WIDTH_BOUNDS[0],
@@ -3381,6 +3454,7 @@ def _render_compare_saccade_styles() -> None:
             step=0.5,
             slider_format="%.1f px",
             number_format="%.1f",
+            field_host=_sub_row("Width", section_share=_COMPARE_SECTION_SHARE),
         )
 
 
@@ -4539,8 +4613,7 @@ def render_plot_controls(
         _layer_off(
             f"{ICONS['fixations']} Fixations", off=not (show_fix or fix_off_disabled)
         ),
-        _rail_label_width(_FIXATIONS_LABEL_W),
-        st.container(key="rail_fix_rows"),
+        _popover_rows("fix"),
     ):
         # The metric that maps to fixation HUE — applies to the static
         # figure, the single animated replay AND the comparison overlay (in
@@ -4917,106 +4990,130 @@ def render_plot_controls(
         _render_fixation_cleaning(disabled=_flag_dis, reason=_flag_reason)
 
     # --- Saccades ---------------------------------------------------------
-    with sac_grp, _layer_off(f"{ICONS['saccades']} Saccades", off=not show_saccades):
-        # VIZ-23 gave `make_scanpath_animation` an arrow layer of its own
-        # (each arrowhead un-masks with the saccade it belongs to), so
-        # direction arrows now reach all three builders.
-        _labeled(
-            st,
-            "checkbox",
-            "Direction arrows",
-            key="global_show_saccade_arrows",
-            persist_state="session",
-            help="Draw an arrowhead on each saccade pointing in the gaze "
-            "direction. In **Animate** each arrow appears with its own "
-            "saccade rather than all at once.",
-        )
+    # UX-159: laid out like 👁️ Fixations (UX-158) — one *Line* group (colour,
+    # style, width, shape) with a caption per row, then *Direction arrows* as a
+    # `label | ☑ Show` row.
+    with (
+        sac_grp,
+        _layer_off(f"{ICONS['saccades']} Saccades", off=not show_saccades),
+        _popover_rows("sac"),
+    ):
         # VIZ-8 / VIZ-19: uniform colour, the two-way forward-vs-regression
         # split, or the full reading-class breakdown. Reading-class colouring
         # is a `make_scanpath_figure` feature — the animation draws one
         # uniform saccade colour and the comparison overlay one colour per
         # scanpath — so the mode picker greys out in both.
         class_disabled, class_reason = _mode_gate(animating, comparing, **_static_only)
-        color_mode = _labeled(
-            st,
-            "radio",
+        # The single uniform colour, style and width: honoured by the static
+        # figure and the animation; Compare paints each scanpath in its own
+        # colour and style instead (see "Per-scanpath (comparison)" below).
+        _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
+        mode_disabled, mode_help = _layer_gate(
+            class_disabled,
+            _gated_help(
+                "**Uniform** — one colour for every saccade, in the box beside "
+                "it. **Forward / regression** — the two-way split most reading "
+                "figures want. **By type** — the full reading-class breakdown "
+                "(forward, skip, refixation, return sweep, regression).",
+                class_reason,
+            ),
+        )
+        field = _sub_row(
+            "Color",
+            section="Line",
+            section_help="How the saccade lines are drawn: colour, style, width "
+            "and shape.",
+            caption_help=mode_help,
+        )
+        mode_col, swatch_col = field.columns(
+            [0.6, 0.4], gap=_LABEL_GAP, vertical_alignment="center"
+        )
+        color_mode = mode_col.selectbox(
             "Saccade color",
             options=SACCADE_COLOR_MODES,
             key="global_saccade_color_mode",
             persist_state="session",
-            disabled=class_disabled,
-            help=_gated_help(
-                "**Uniform** — one colour for every saccade. **Forward / "
-                "regression** — the two-way split most reading figures want. "
-                "**By type** — the full reading-class breakdown (forward, "
-                "skip, refixation, return sweep, regression).",
-                class_reason,
-            ),
+            disabled=mode_disabled,
+            help=mode_help,
+            label_visibility="collapsed",
         )
-        # In Animate / Compare the class breakdown never draws, so fall back
-        # to the uniform Line-colour control below rather than showing five
-        # dead class swatches.
-        if color_mode != "Uniform" and not class_disabled:
-            # VIZ-19: the two-way mode reuses the same class colours, so
-            # only show the pickers it actually draws with.
-            classes = (
-                ["forward", "regression"]
-                if color_mode == "Forward / regression"
-                else SACCADE_CLASS_EDITABLE
-            )
-            st.caption(
-                "Each saccade is classed by where it lands relative to "
-                "the departing fixation."
-                if color_mode == "By type"
-                else "Every non-backward saccade counts as forward."
-            )
-            swatches = st.columns(len(classes))
-            for col, cls_name in zip(swatches, classes):
-                state_key = f"global_saccade_class_color_{cls_name}"
-                col.color_picker(
-                    SACCADE_CLASS_LABELS[cls_name],
-                    key=state_key,
-                )
-            _labeled(
-                st,
-                "checkbox",
-                "Show legend",
-                key="global_saccade_type_legend",
-                persist_state="session",
-                help="Show the saccade-type colour key on the plot. Turn "
-                "it off for a cleaner figure once the colours are learned.",
-            )
-        else:
-            # The single uniform saccade colour: honoured by the static
-            # figure and the animation; Compare paints each scanpath in its
-            # own colour instead (see "Per-scanpath (comparison)" below).
-            _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
-            _labeled(
-                st,
-                "color_picker",
-                "Line color",
-                key="global_saccade_color",
-                persist_state="session",
-                disabled=_dis,
-                help=_gated_help(
+        # In Animate / Compare the class breakdown never draws, so the slot
+        # keeps the uniform swatch rather than showing five dead class ones.
+        if color_mode == "Uniform" or class_disabled:
+            swatch_disabled, swatch_help = _layer_gate(
+                _dis,
+                _gated_help(
                     "Colour of the saccade lines and direction arrows.", _reason
                 ),
             )
-        _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
-        _labeled(
-            st,
-            "segmented_control",
+            swatch_col.color_picker(
+                "Line color",
+                key="global_saccade_color",
+                persist_state="session",
+                disabled=swatch_disabled,
+                help=swatch_help,
+                label_visibility="collapsed",
+            )
+        else:
+            # VIZ-19: the two-way mode reuses the same class colours, so only
+            # the pickers it actually draws with, three to a row.
+            classes = (
+                list(SACCADE_DIRECTION_CLASSES)
+                if color_mode == "Forward / regression"
+                else list(SACCADE_CLASS_EDITABLE)
+            )
+            classes_help = (
+                "Each saccade is classed by where it lands relative to the "
+                "departing fixation."
+                if color_mode == "By type"
+                else "Every non-backward saccade counts as forward."
+            )
+            swatch_disabled, _ = _layer_gate(False, None)
+            for start in range(0, len(classes), 3):
+                row = _sub_row(
+                    "Classes" if start == 0 else None, caption_help=classes_help
+                )
+                for col, cls_name in zip(
+                    row.columns(3, gap=_LABEL_GAP), classes[start : start + 3]
+                ):
+                    col.color_picker(
+                        SACCADE_CLASS_LABELS[cls_name],
+                        key=f"global_saccade_class_color_{cls_name}",
+                        disabled=swatch_disabled,
+                    )
+            _, legend_help = _layer_gate(
+                False,
+                "Show the saccade-type colour key on the plot. Turn it off for a "
+                "cleaner figure once the colours are learned.",
+            )
+            _sub_row("Legend", caption_help=legend_help).checkbox(
+                "Show",
+                key="global_saccade_type_legend",
+                persist_state="session",
+                disabled=swatch_disabled,
+            )
+        # A selectbox, not UX-80's segmented control: four segments do not fit
+        # beside a caption, and a wrapped control reads as two settings.
+        if st.session_state.get("global_saccade_style") not in SACCADE_DASH_OPTIONS:
+            st.session_state["global_saccade_style"] = "Solid"
+        style_disabled, style_help = _layer_gate(
+            _dis, _gated_help("Line style for the saccade traces.", _reason)
+        )
+        _sub_row("Style", caption_help=style_help).selectbox(
             "Saccade line style",
             options=list(SACCADE_DASH_OPTIONS.keys()),
             key="global_saccade_style",
             persist_state="session",
-            disabled=_dis,
-            help=_gated_help("Line style for the saccade traces.", _reason),
+            disabled=style_disabled,
+            help=style_help,
+            label_visibility="collapsed",
+        )
+        _, width_help = _layer_gate(
+            _dis, _gated_help("Thickness of the saccade lines. Default 2.", _reason)
         )
         _numeric_slider(
             st,
             "Saccade line width",
-            label_left=True,
             key="global_saccade_width",
             persist_state="session",
             min_value=SACCADE_WIDTH_BOUNDS[0],
@@ -5026,25 +5123,38 @@ def render_plot_controls(
             number_format="%.1f",
             disabled=_dis,
             help=_gated_help("Thickness of the saccade lines. Default 2.", _reason),
+            field_host=_sub_row("Width", caption_help=width_help),
         )
         # VIZ-9: "linear reading" schematic — arched saccades. Its paired
-        # control, "Snap above words", remains under Fixations
-        # because it moves fixations. Arcs are a `make_scanpath_figure`
-        # feature.
-        _labeled(
-            st,
-            "segmented_control",
+        # control, "Snap above words", remains under Fixations because it moves
+        # fixations. Arcs are a `make_scanpath_figure` feature.
+        shape_disabled, shape_help = _layer_gate(
+            class_disabled,
+            _gated_help(
+                "Straight connectors, or upward **arcs** over the text (the "
+                "classic linear-reading diagram). Pairs with 👁️ Fixations ▾ → "
+                "**Snap above words**.",
+                class_reason,
+            ),
+        )
+        _sub_row("Shape", caption_help=shape_help).segmented_control(
             "Line shape",
             options=["Straight", "Arc"],
             key="global_saccade_render_mode",
             persist_state="session",
-            disabled=class_disabled,
-            help=_gated_help(
-                "Straight connectors, or upward **arcs** over the text "
-                "(the classic linear-reading diagram). Pairs with 👁️ Fixations ▾ "
-                "→ **Snap above words**.",
-                class_reason,
-            ),
+            disabled=shape_disabled,
+            help=shape_help,
+            label_visibility="collapsed",
+        )
+        # VIZ-23 gave `make_scanpath_animation` an arrow layer of its own (each
+        # arrowhead un-masks with the saccade it belongs to), so direction
+        # arrows reach all three builders.
+        _check_row(
+            "Direction arrows",
+            key="global_show_saccade_arrows",
+            help="Draw an arrowhead on each saccade pointing in the gaze "
+            "direction. In **Animate** each arrow appears with its own saccade "
+            "rather than all at once.",
         )
         # Per-scanpath saccade styling for the two-trial comparison.
         if comparing:

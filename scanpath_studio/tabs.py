@@ -4719,10 +4719,15 @@ def render_single_trial_tab(
                 # way a popover-bound widget can (that case needs
                 # `persist_state="session"`; see BUG-15/ENG-36).
                 st.session_state.setdefault("single_animate", False)
+                # UX-153: `wrap=True` turns off Streamlit's one-line "truncate"
+                # label mode, which stamps a native `title=` tooltip repeating
+                # the label — icon ligature included, so it read "movie
+                # Animate". `styles.py` draws the one-line ellipsis instead.
                 animate = st.toggle(
                     f"{ICONS['animate']} **Animate**",
                     key="single_animate",
                     persist_state="session",
+                    wrap=True,
                 )
                 # The ▾ opens whether or not Animate is on — what a mode *offers* is
                 # part of deciding whether to turn it on, and a menu that refuses to
@@ -4912,10 +4917,12 @@ def render_single_trial_tab(
                 # is seeded rather than given a `value=`: an explicit default fights
                 # the deep link the same way it would fight a restored config.
                 st.session_state.setdefault(SINGLE_COMPARE_TOGGLE, False)
+                # UX-153: `wrap=True` for the same reason as Animate above.
                 compare_enabled = st.toggle(
                     f"{ICONS['compare']} **Compare**",
                     key=SINGLE_COMPARE_TOGGLE,
                     persist_state="session",
+                    wrap=True,
                 )
                 # Opens either way; greyed inside while Compare is off — see the
                 # Animate row above for why the menu does not refuse to open.

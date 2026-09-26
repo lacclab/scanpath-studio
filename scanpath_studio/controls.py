@@ -5520,10 +5520,17 @@ def render_plot_controls(
             help=style_help,
             label_visibility="collapsed",
         )
+        # Only `make_scanpath_figure` reads the spread; Compare always draws
+        # word boxes, which is why the Style picker beside it greys there too.
         spread_disabled, spread_help = _layer_gate(
-            heat_disabled or heat_style != "Duration mass",
-            "Gaussian standard deviation measured in character widths (Duration "
-            "mass only).",
+            heat_disabled or comparing or heat_style != "Duration mass",
+            _gated_help(
+                "Gaussian standard deviation measured in character widths "
+                "(Duration mass only).",
+                "Comparison heatmaps use split word boxes."
+                if comparing
+                else heat_reason,
+            ),
         )
         _sub_caption(spread_cap_col, "Spread")
         spread_col.number_input(
@@ -5584,9 +5591,13 @@ def render_plot_controls(
                 heat_reason,
             ),
         )
+        # `required` — a radio before UX-160, so it could never be deselected;
+        # an empty segmented control would read "nothing" while the figure
+        # draws Linear (the collector's fallback).
         _sub_row("Scale", caption_help=norm_help).segmented_control(
             "Scaling",
             options=["Linear", "Log"],
+            required=True,
             key="global_heatmap_norm",
             persist_state="session",
             disabled=norm_disabled,

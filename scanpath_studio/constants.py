@@ -78,15 +78,19 @@ def multipleye_enabled() -> bool:
     return experimental_features_enabled()
 
 
-def benchmark_setup_enabled() -> bool:
-    """Whether the *set up a local bundle* placeholder for the harmonised
-    benchmark corpora is offered in the app, this release (DATA-54).
+def benchmark_corpora_enabled() -> bool:
+    """Whether the harmonised benchmark corpora are offered, this release
+    (DATA-54, DATA-55).
 
-    With no bundle found, `app.public_dataset_registry` would offer one
-    placeholder entry carrying the bundle's directory box. A bundle can only be
-    built with the EyeGenBench pipeline, which is not public yet, so for the beta
-    the placeholder is hidden. Corpora *discovered* in a bundle at the default
-    location are still offered: only someone who can build one has one.
+    A bundle can only be built with the EyeGenBench pipeline, which is not public
+    yet, and the corpora are unfinished work — the picker marks each one (WIP).
+    Off, `app.public_dataset_registry` offers neither the *set up a local bundle*
+    placeholder (DATA-54) nor any corpus discovered in a bundle already on disk
+    (DATA-55), so the data picker, the 🗂️ Data page, Compare's second dataset and
+    share links all stop offering them — and `render`'s ``--eyegenbench`` /
+    ``--eyegenbench-dataset`` flags are hidden from ``--help``. Hidden, not
+    removed: those flags still parse, and `eyegenbench.load_eyegenbench` is
+    untouched.
     """
     return experimental_features_enabled()
 

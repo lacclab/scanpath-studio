@@ -1,8 +1,11 @@
 # Harmonised benchmark corpora
 
-> **Not on the docs site (ENG-80).** A bundle can only be built with the
-> EyeGenBench pipeline, which is not public yet, so this page is kept in the
-> repository for the people who can build one rather than published.
+> **Not on the docs site (ENG-80), and held back from the beta (DATA-55).** A
+> bundle can only be built with the EyeGenBench pipeline, which is not public
+> yet, so this page is kept in the repository for the people who can build one
+> rather than published. The app offers these corpora — even from a bundle
+> already on disk — only with `SCANPATH_EXPERIMENTAL=1`; `load_eyegenbench` and
+> `render --eyegenbench` still work.
 
 Thirty-one public eye-tracking-while-reading corpora, re-derived into one common
 schema by the [EyeGenBench](https://github.com/EyeBench/EyeGenBench) pipeline,

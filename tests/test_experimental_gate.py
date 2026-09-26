@@ -551,3 +551,134 @@ class TestTheBetaHidesMultiplEYEAndTheBenchmarkPlaceholder:
         from scanpath_studio import datasets
 
         assert callable(datasets.load_multipleye)
+
+
+class TestTheBetaHidesTheHarmonisedBenchmarkCorpora:
+    """DATA-55: a bundle already on disk is no longer offered either. DATA-54 hid
+    only the set-up placeholder, on the grounds that only someone who can build a
+    bundle has one; the corpora themselves are unfinished (the picker marks each
+    one WIP), so the beta offers none of them. Same gate, same place:
+    `app.public_dataset_registry`."""
+
+    @pytest.fixture(autouse=True)
+    def bundle(self, tmp_path, monkeypatch):
+        """One prepared corpus at the default location — the state DATA-54 left
+        visible."""
+        from scanpath_studio import app, compare_source
+        from tests.test_eyegenbench import write_bundle
+
+        root = write_bundle(tmp_path)
+        for module in (app, compare_source):
+            monkeypatch.setattr(module, "EYEGENBENCH_DEFAULT_DIR", str(root))
+        app._cached_eyegenbench_datasets.clear()
+        return root
+
+    @staticmethod
+    def _label() -> str:
+        from scanpath_studio import app
+
+        return app.benchmark_corpus_label("PoTeC")
+
+    def test_no_benchmark_entry_is_offered(self):
+        from scanpath_studio import app
+
+        registry = app.public_dataset_registry()
+        assert not any(app.spec_is_benchmark(spec) for spec in registry.values())
+        # The built-ins are unaffected — the native PoTeC included.
+        assert app.ONESTOP_PUBLIC_CHOICE in registry
+        assert "PoTeC — Potsdam Textbook Corpus" in registry
+
+    def test_the_bundle_is_not_even_read(self, monkeypatch):
+        from scanpath_studio import app
+
+        def _must_not_run(*_args, **_kwargs):
+            raise AssertionError("the manifest was read with the gate off")
+
+        monkeypatch.setattr(app, "_cached_eyegenbench_datasets", _must_not_run)
+        app.public_dataset_registry()
+
+    def test_the_flag_brings_the_corpus_back(self, monkeypatch):
+        from scanpath_studio import app
+
+        monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
+        assert self._label() in app.public_dataset_registry()
+
+    def test_compare_does_not_offer_it_as_scanpath_b(self, monkeypatch):
+        from scanpath_studio import app, compare_source
+
+        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+        names = [name for name, _ok, _why in compare_source.secondary_dataset_options()]
+        assert self._label() not in names
+        assert app.ONESTOP_PUBLIC_CHOICE in names  # not passing by offering nothing
+
+    def test_a_prepared_corpus_share_link_no_longer_resolves(self, monkeypatch):
+        """Falls back like any corpus the recipient lacks."""
+        from scanpath_studio import url_state
+
+        monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
+        slug = url_state.registry_corpus_slugs()[self._label()]
+        assert url_state.corpus_choice_for_slug(slug) == self._label()
+        monkeypatch.delenv(constants.EXPERIMENTAL_ENV_VAR)
+        assert url_state.corpus_choice_for_slug(slug) is None
+
+    def test_a_corpus_link_names_the_corpus_without_offering_a_remedy(self):
+        """The link still says which corpus it named, but not "select a harmonised
+        benchmark corpus" — the picker offers none, set-up entry included."""
+        at = AppTest.from_file(APP_SCRIPT)
+        at.query_params["source"] = "corpus"
+        at.query_params["corpus"] = "harmonised-potec"
+        at.run(timeout=60)
+        assert not at.exception, at.exception
+        named = [w.value for w in at.warning if "harmonised-potec" in w.value]
+        assert named, f"silent no-op: {[w.value for w in at.warning]}"
+        assert "benchmark" not in named[0].lower(), named
+        assert "Data directory" not in named[0], named
+
+    def test_the_render_flags_are_hidden_but_still_parse(self):
+        from scanpath_studio import cli
+
+        parser = cli._render_parser()
+        help_text = parser.format_help()
+        assert "--eyegenbench" not in help_text
+        args = parser.parse_args(
+            ["--eyegenbench", "x", "--eyegenbench-dataset", "PoTeC"]
+        )
+        assert (args.eyegenbench, args.eyegenbench_dataset) == ("x", "PoTeC")
+
+    def test_the_missing_input_message_names_only_offered_inputs(self, monkeypatch):
+        """The guard still counts the held-back inputs; its message stops
+        advertising them — MultiplEYE's ``--source`` included (DATA-54)."""
+        from scanpath_studio import cli
+
+        with pytest.raises(SystemExit, match="exactly one input") as hidden:
+            cli.render([])
+        assert "--eyegenbench" not in str(hidden.value)
+        assert "--source" not in str(hidden.value)
+        assert "--onestop DIR" in str(hidden.value)
+
+        monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
+        with pytest.raises(SystemExit, match="exactly one input") as shown:
+            cli.render([])
+        assert "--eyegenbench DIR --eyegenbench-dataset NAME" in str(shown.value)
+        assert "--source NAME" in str(shown.value)
+
+    def test_a_script_that_already_renders_one_keeps_working(self, bundle, tmp_path):
+        from scanpath_studio import cli
+
+        out = tmp_path / "fig.html"
+        cli.main(
+            [
+                "render",
+                "--eyegenbench",
+                str(bundle),
+                "--eyegenbench-dataset",
+                "PoTeC",
+                "--participant",
+                "r1",
+                "--trial",
+                "p1",
+                "--out",
+                str(out),
+            ]
+        )
+        assert out.is_file()

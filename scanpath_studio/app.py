@@ -102,7 +102,7 @@ from scanpath_studio.constants import (
     WIZARD_LEAVE_KEY,
     WIZARD_STAY_KEY,
     WORD_LABEL_COLOR,
-    benchmark_setup_enabled,
+    benchmark_corpora_enabled,
     language_display,
     multipleye_enabled,
     preprocessing_enabled,
@@ -2504,17 +2504,21 @@ def public_dataset_registry() -> dict:
     dict. Discovery is cached (`_cached_eyegenbench_datasets`), so calling it
     several times a run costs one manifest read.
 
-    DATA-54 holds two entries back for the beta — MultiplEYE and the benchmark
-    set-up placeholder — unless ``SCANPATH_EXPERIMENTAL`` is on. Gating here,
-    the one place every consumer reads, is what hides them from the picker, the
-    🗂️ Data page, Compare's second dataset and share links at once.
+    DATA-54 and DATA-55 hold MultiplEYE and every harmonised benchmark entry —
+    the set-up placeholder and each discovered corpus — back for the beta unless
+    ``SCANPATH_EXPERIMENTAL`` is on. Gating here, the one place every consumer
+    reads, is what hides them from the picker, the 🗂️ Data page, Compare's
+    second dataset and share links at once.
     """
     registry = dict(PUBLIC_DATASET_REGISTRY)
     if not multipleye_enabled():
         registry.pop(MULTIPLEYE_PUBLIC_CHOICE, None)
+    if not benchmark_corpora_enabled():
+        # Returning before discovery also skips the manifest read.
+        return registry
     discovered = _benchmark_registry_entries()
     registry.update(discovered)
-    if not discovered and benchmark_setup_enabled():
+    if not discovered:
         # R39: with nothing discovered there is no entry, so there would be
         # nowhere to type the bundle's path. Exactly one placeholder carries the
         # directory input until a corpus exists.
@@ -6473,14 +6477,20 @@ def main() -> None:
             # benchmark corpus entry, so it can only be reached by selecting one
             # of those entries first (with no bundle at all, that is the single
             # "set up a local bundle" entry the registry offers in their place).
+            # DATA-55: a build that holds the benchmark corpora back offers
+            # neither, so there is no remedy to name — only which corpus it was.
+            remedy = (
+                "To get it, open **Data source** and select a harmonised "
+                f"benchmark corpus — or **{picker_name_for(BENCHMARK_SETUP_CHOICE)}** "
+                "if you have none yet — then point its *Data directory* at a "
+                "prepared bundle containing this corpus. "
+                if benchmark_corpora_enabled()
+                else ""
+            )
             st.warning(
                 f"This link opens the corpus `{slug}`, which isn't available "
-                "here. To get it, open **Data source** and select a harmonised "
-                f"benchmark corpus — or **{picker_name_for(BENCHMARK_SETUP_CHOICE)}** "
-                "if you have "
-                "none yet — then point its *Data directory* at a prepared bundle "
-                "containing this corpus. The link's view settings still apply to "
-                "whatever you open."
+                f"here. {remedy}The link's view settings still apply to whatever "
+                "you open."
             )
     elif url_source == "upload":
         st.session_state.setdefault("_show_upload_wizard", True)

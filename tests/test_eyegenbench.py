@@ -7,9 +7,11 @@ import pytest
 from scanpath_studio import data, eyegenbench
 
 
-@pytest.fixture
-def bundle(tmp_path):
-    """A minimal two-word, two-fixation EyeGenBench bundle."""
+def write_bundle(tmp_path):
+    """Write a minimal two-word, two-fixation EyeGenBench bundle; return its root.
+
+    A plain function beside the fixture so another test module can build the
+    same bundle without importing a fixture (DATA-55's gate tests)."""
     root = tmp_path / "EyeGenBench"
     ds = root / "PoTeC"
     ds.mkdir(parents=True)
@@ -69,6 +71,12 @@ def bundle(tmp_path):
         encoding="utf-8",
     )
     return root
+
+
+@pytest.fixture
+def bundle(tmp_path):
+    """A minimal two-word, two-fixation EyeGenBench bundle."""
+    return write_bundle(tmp_path)
 
 
 def test_present_is_true_for_a_complete_bundle(bundle):

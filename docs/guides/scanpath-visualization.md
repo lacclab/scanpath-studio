@@ -60,12 +60,11 @@ framing**, **📊 Axes & grid**, and **🏷️ Title & labels**.
 
 **Colour ranges** — the fixation colour range (👁️ Fixations **▾**, once
 fixations are coloured by a column) and the heatmap's (🔥 Heatmap **▾**) start
-on **Auto range**: each trial is scaled to its own values, and a comparison
-shares one scale across both readings. Drag the range, type a bound, or untick
-*Auto range* to pin one. A pinned range stays as you step through trials, which
-is what makes them comparable, and travels on a Share link, until you tick
-*Auto range* again. Choosing another *Color fixations by* column puts the
-fixation range back to auto.
+on **Auto**: each trial is scaled to its own values, and a comparison shares
+one scale across both readings. Drag the range, or untick *Auto*, to pin one. A
+pinned range stays as you step through trials, which is what makes them
+comparable, and travels on a Share link, until you tick *Auto* again. Choosing
+another **Marker → Color** column puts the fixation range back to auto.
 
 ### Show screen coordinates
 

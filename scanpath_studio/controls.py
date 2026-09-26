@@ -4,6 +4,7 @@ import html
 import math
 from collections.abc import Callable
 from contextlib import contextmanager
+from contextvars import ContextVar
 from copy import deepcopy
 
 import numpy as np
@@ -110,6 +111,36 @@ NONE_OPTION = "(none)"
 #: heaviest user by far.
 _LABEL_W = NARROW_LABEL_W
 
+#: UX-158: a popover whose titles are all short can narrow its own label column
+#: (`_rail_label_width`), so its fields sit closer to their titles. A ContextVar,
+#: not a module global, because Streamlit runs each session's script on its own
+#: thread and a temporarily-rebound global would leak into another session.
+_LABEL_W_OVERRIDE: ContextVar[float | None] = ContextVar(
+    "rail_label_width", default=None
+)
+
+
+def _label_w() -> float:
+    """The rail's label-column share for the row being drawn now."""
+    override = _LABEL_W_OVERRIDE.get()
+    return _LABEL_W if override is None else override
+
+
+#: The 👁️ Fixations popover's label column (UX-158): its longest title,
+#: "Snap above words", needs about this much of the ~28rem body.
+_FIXATIONS_LABEL_W = 0.3
+
+
+@contextmanager
+def _rail_label_width(width: float):
+    """Draw the rows inside with a label column of ``width`` (UX-158)."""
+    token = _LABEL_W_OVERRIDE.set(width)
+    try:
+        yield
+    finally:
+        _LABEL_W_OVERRIDE.reset(token)
+
+
 #: Tighter than the 1rem default: these rows are dense and the width is scarce.
 _LABEL_GAP = LABEL_GAP
 
@@ -164,7 +195,7 @@ def _labeled(host, kind: str, label: str, **kwargs):
     narrow width is the one they all want; passing `label_width` explicitly
     overrides it.
     """
-    kwargs.setdefault("label_width", _LABEL_W)
+    kwargs.setdefault("label_width", _label_w())
     # UX-97: a layer's controls grey out while its layer toggle is off.
     kwargs["disabled"], kwargs["help"] = _layer_gate(
         bool(kwargs.get("disabled", False)), kwargs.get("help")
@@ -186,10 +217,11 @@ def _slider_row(host, n_boxes: int, lead: float = 0.0) -> list:
     and the slider, for a control that belongs on the slider's line — the colour
     range's *Auto* checkbox.
     """
-    rest = 1.0 - _LABEL_W
+    label_w = _label_w()
+    rest = 1.0 - label_w
     total = lead + 5.0 + 1.5 * n_boxes
     weights = [
-        _LABEL_W,
+        label_w,
         *([rest * lead / total] if lead else []),
         rest * 5.0 / total,
         *([rest * 1.5 / total] * n_boxes),
@@ -263,8 +295,12 @@ def _numeric_slider(
     persist_state: str | None = None,
     label_left: bool = False,
     display: str | None = None,
+    field_host=None,
 ) -> None:
     """A single-value slider plus a number box bound to the same setting.
+
+    ``field_host`` (UX-158) draws the slider and its box into that column, for a
+    `_sub_row` whose title and caption the caller has already drawn.
 
     ``number_format`` defaults to ``slider_format``; pass it separately when the
     slider's format carries a unit suffix (``"%.1f px"``), which ``number_input``
@@ -294,7 +330,11 @@ def _numeric_slider(
     # A narrow box on the same line as the slider: the box is for typing an
     # exact value, so it only needs room for the number itself (the CSS drops its
     # +/- steppers and caps its width), and the slider keeps most of the row.
-    if label_left:
+    if field_host is not None:
+        slider_col, num_col = field_host.columns(
+            [5, 1.5], gap=_LABEL_GAP, vertical_alignment="center"
+        )
+    elif label_left:
         label_col, slider_col, num_col = _slider_row(host, 1)
         _row_label(label_col, display if display is not None else label, help)
     else:
@@ -310,7 +350,9 @@ def _numeric_slider(
         disabled=disabled,
         on_change=on_change,
         persist_state=persist_state,
-        label_visibility="collapsed" if label_left else "visible",
+        label_visibility=(
+            "collapsed" if label_left or field_host is not None else "visible"
+        ),
     )
     num_col.number_input(
         label,
@@ -348,11 +390,14 @@ def _range_slider(
     label_left: bool = False,
     display: str | None = None,
     lead=None,
+    field_host=None,
 ) -> None:
     """A two-handle range slider plus min/max number boxes, all on one line.
 
-    ``lead`` (UX-157, ``label_left`` rows only) is a callable given a column
-    between the label and the slider, to draw a control of its own there.
+    ``lead`` (UX-157) is a callable given a column ahead of the slider, to draw
+    a control of its own there. ``field_host`` (UX-158) draws the whole line
+    into that column, for a `_sub_row` whose title and caption the caller has
+    already drawn.
 
     The boxes are deliberately small — they hold a number, not a sentence — so
     the slider still gets most of the row. A min typed above the max is swapped
@@ -375,7 +420,13 @@ def _range_slider(
         if on_change is not None:
             on_change()
 
-    if label_left:
+    if field_host is not None:
+        weights = [*([2.2] if lead is not None else []), 5, 1.5, 1.5]
+        cols = field_host.columns(weights, gap=_LABEL_GAP, vertical_alignment="center")
+        if lead is not None:
+            lead(cols[0])
+        slider_col, lo_col, hi_col = cols[-3:]
+    elif label_left:
         if lead is not None:
             label_col, lead_col, slider_col, lo_col, hi_col = _slider_row(
                 host, 2, lead=2.2
@@ -399,7 +450,9 @@ def _range_slider(
         disabled=disabled,
         on_change=on_change,
         persist_state=persist_state,
-        label_visibility="collapsed" if label_left else "visible",
+        label_visibility=(
+            "collapsed" if label_left or field_host is not None else "visible"
+        ),
     )
     fmt = number_format if number_format is not None else slider_format
     for col, num_key, side in ((lo_col, lo_key, "min"), (hi_col, hi_key, "max")):
@@ -2929,8 +2982,13 @@ def _render_color_range(
     disabled: bool,
     reason: str,
     help: str | None = None,
+    field_host=None,
 ) -> None:
     """*Auto* checkbox + the ``[lo, hi]``-bounded range slider (VIZ-46).
+
+    ``field_host`` (UX-158) draws *Auto*, the slider and its boxes into that
+    column, for a `_sub_row` whose title and caption the caller has already
+    drawn.
 
     While the range is auto the slider sits at its full bounds and *Auto* is
     ticked; the figure is scaled to the trial, not to those bounds. Dragging the
@@ -2986,6 +3044,7 @@ def _render_color_range(
             disabled=auto_disabled,
         )
 
+    range_help = _gated_help(f"{help} {auto_text}" if help else auto_text, reason)
     _range_slider(
         st,
         label,
@@ -2997,8 +3056,56 @@ def _render_color_range(
         slider_format="%d",
         disabled=disabled,
         on_change=_commit_view,
-        help=_gated_help(f"{help} {auto_text}" if help else auto_text, reason),
+        help=range_help,
         lead=_auto,
+        field_host=field_host,
+    )
+
+
+def _sub_row(
+    caption: str,
+    *,
+    section: str | None = None,
+    section_help: str | None = None,
+    caption_help: str | None = None,
+):
+    """One row of a titled group of rows; return the column for its field (UX-158).
+
+    The label column is split in two: the group's title (``section``, drawn on
+    the group's first row only) and this row's short caption, so a run of
+    related controls reads as one setting without a full title per row. The
+    two together are exactly the label column's width, so the fields line up
+    with the ordinary ``label | field`` rows around them.
+    """
+    label_w = _label_w()
+    section_w = label_w * 0.45
+    section_col, caption_col, field_col = st.columns(
+        [section_w, label_w - section_w, 1.0 - label_w],
+        gap=_LABEL_GAP,
+        vertical_alignment="center",
+    )
+    if section is not None:
+        _, section_help = _layer_gate(False, section_help)
+        _row_label(section_col, section, section_help)
+    _sub_caption(caption_col, caption, caption_help)
+    return field_col
+
+
+def _sub_caption(host, text: str, help: str | None = None) -> None:
+    """A muted field caption — `fields.row_label`'s markup plus ``.sps-fsub``."""
+    text = _plain(text)
+    if not help:
+        host.markdown(
+            f'<span class="sps-flabel sps-fsub">{html.escape(text)}</span>',
+            unsafe_allow_html=True,
+        )
+        return
+    tip = html.escape(f"{text} — {_plain(help)}", quote=True)
+    host.markdown(
+        f'<span class="sps-fhelp" data-tip="{tip}" aria-label="{tip}">'
+        f'<span class="sps-flabel sps-flabel-help sps-fsub">{html.escape(text)}'
+        "</span></span>",
+        unsafe_allow_html=True,
     )
 
 
@@ -4424,11 +4531,16 @@ def render_plot_controls(
     # The toggle is on the section's row (UX-80); the styling below is still
     # (partly) live in Animate / Compare, so the popover stays reachable even
     # when the (inert) layer toggle reads off.
+    # UX-158: every title in this popover is short, so its label column is
+    # narrower than the rail's, bringing the fields closer to their titles; the
+    # keyed container is what `styles.py` spaces the rows apart by.
     with (
         fix_grp,
         _layer_off(
             f"{ICONS['fixations']} Fixations", off=not (show_fix or fix_off_disabled)
         ),
+        _rail_label_width(_FIXATIONS_LABEL_W),
+        st.container(key="rail_fix_rows"),
     ):
         # The metric that maps to fixation HUE — applies to the static
         # figure, the single animated replay AND the comparison overlay (in
@@ -4439,12 +4551,14 @@ def render_plot_controls(
         metric_disabled, metric_reason = _mode_gate(
             animating, comparing, in_animation=not comparing
         )
-        # VIZ-17 → UX-154: the flat colour and the colorscale are one slot at
-        # the end of this row, with no title of their own — the swatch while
-        # **(uniform)** is picked, the colorscale once a column is — so the pick
-        # and what it is drawn in read as one setting. The flat colour is also
-        # inert in Compare, where each scanpath wears its own colour (see
-        # "Per-scanpath (comparison)" below).
+        # UX-158: colour, shape, size and opacity are one "Marker" group — a
+        # title on the first row and a short caption per row, instead of a full
+        # title each (VIZ-17 → UX-154 put the flat colour / colorscale beside
+        # the colour-by pick; UX-156 briefly squeezed shape, size and opacity
+        # into one row of unlabelled boxes). The swatch shows while
+        # **(uniform)** is picked, the colorscale once a column is; the flat
+        # colour is inert in Compare, where each scanpath wears its own colour
+        # (see "Per-scanpath (comparison)" below).
         by_help = _gated_help(
             f"The metric mapped to fixation marker hue. **{UNIFORM_COLOR_FIELD}** "
             "(the default) maps nothing — marker *size* already shows fixation "
@@ -4456,13 +4570,16 @@ def render_plot_controls(
             metric_reason,
         )
         by_disabled, by_help = _layer_gate(metric_disabled, by_help)
-        rest = 1.0 - _LABEL_W
-        label_col, by_col, style_col = st.columns(
-            [_LABEL_W, rest * 0.6, rest * 0.4],
-            gap=_LABEL_GAP,
-            vertical_alignment="center",
+        field = _sub_row(
+            "Color",
+            section="Marker",
+            section_help="How each fixation marker is drawn: its colour, shape, "
+            "size range and opacity.",
+            caption_help=by_help,
         )
-        _row_label(label_col, "Color fixations by", by_help)
+        by_col, style_col = field.columns(
+            [0.6, 0.4], gap=_LABEL_GAP, vertical_alignment="center"
+        )
         color_by = by_col.selectbox(
             "Color fixations by",
             options=color_fields,
@@ -4492,10 +4609,6 @@ def render_plot_controls(
                 label_visibility="collapsed",
             )
         else:
-            # Keyless on purpose, like `_popover_selectbox`: a keyed selectbox
-            # first painted in a closed popover shows its first option instead
-            # of the seeded value, so the index is passed and the pick written
-            # back by hand.
             # 'line' and a categorical column are drawn from a discrete
             # palette, so the colorscale is idle for them — greyed, not hidden.
             discrete = color_by == "line" or (
@@ -4511,6 +4624,10 @@ def render_plot_controls(
                     metric_reason,
                 ),
             )
+            # Keyless on purpose, like `_popover_selectbox`: a keyed selectbox
+            # first painted in a closed popover shows its first option instead
+            # of the seeded value, so the index is passed and the pick written
+            # back by hand.
             current_scale = st.session_state.get("global_fixation_colorscale")
             st.session_state["global_fixation_colorscale"] = style_col.selectbox(
                 "Colorscale",
@@ -4545,98 +4662,85 @@ def render_plot_controls(
                 "global_fixation_color_range",
                 cmin,
                 cmax_eff,
+                field_host=_sub_row(
+                    "Range",
+                    caption_help="The colour-by values mapped to the two ends "
+                    "of the colorscale.",
+                ),
                 disabled=metric_disabled,
                 reason=metric_reason,
                 help="Values of the colour-by column mapped to the two ends of "
                 "the colorscale.",
             )
-        # UX-156: shape, size and opacity are one "Marker" row. VIZ-15: shape
-        # survives greyscale printing where hue doesn't, and VIZ-23 made it a
-        # true global — the one marker property Compare does NOT override per
-        # scanpath. Size and opacity are per-scanpath in Compare
-        # (`cmp*_marker_size_range` / `cmp*_opacity` override these there), so
-        # they carry its gate. Four controls leave no room for UX-9's sliders,
-        # so size and opacity are number boxes on shadow keys that write the
-        # canonical keys — which is what deep links, Share and restore read.
-        ss = st.session_state
-        _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
-        marker_help = (
-            "Shape, then the size range in px (the shortest and longest "
-            "fixation's marker), then opacity (1.0 = fully opaque; lower it so "
-            "overlapping fixations show through). Unlike colour, shape still "
-            "reads in black & white."
+        # VIZ-15: shape survives greyscale printing where hue doesn't, and
+        # VIZ-23 made it a true global — the one marker property Compare does
+        # NOT override per scanpath.
+        shape_help = (
+            "Shape of the fixation markers. Unlike colour, shape still reads in "
+            "black & white. Applies on all three render paths, including both "
+            "compared scanpaths."
         )
-        shape_dis, marker_help = _layer_gate(False, marker_help)
-        size_dis, size_tip = _layer_gate(
-            _dis, _gated_help("Fixation marker size (px): smallest, largest.", _reason)
-        )
-        opac_dis, opac_tip = _layer_gate(
-            _dis,
-            _gated_help(
-                "Fixation marker opacity (0.1–1.0; 1.0 = fully opaque).", _reason
-            ),
-        )
-        size_key, opac_key = "global_marker_size_range", "global_fixation_opacity"
-        lo_key, hi_key = f"{size_key}__num_lo", f"{size_key}__num_hi"
-        opac_num_key = f"{opac_key}__num"
-        size_now = ss.get(size_key)
-        if isinstance(size_now, (tuple, list)) and len(size_now) == 2:
-            ss[lo_key], ss[hi_key] = (int(v) for v in size_now)
-        if opac_key in ss:
-            ss[opac_num_key] = float(ss[opac_key])
-
-        def _apply_size() -> None:
-            if _shadow_key_missing(lo_key, hi_key):  # BUG-18
-                return
-            lo, hi = ss[lo_key], ss[hi_key]
-            ss[size_key] = (min(lo, hi), max(lo, hi))
-
-        def _apply_opacity() -> None:
-            if _shadow_key_missing(opac_num_key):  # BUG-18
-                return
-            ss[opac_key] = ss[opac_num_key]
-
-        rest = 1.0 - _LABEL_W
-        label_col, shape_col, lo_col, hi_col, opac_col = st.columns(
-            [_LABEL_W, rest * 0.4, rest * 0.2, rest * 0.2, rest * 0.2],
-            gap=_LABEL_GAP,
-            vertical_alignment="center",
-        )
-        _row_label(label_col, "Marker", marker_help)
-        shape_col.selectbox(
+        shape_dis, shape_help = _layer_gate(False, shape_help)
+        _sub_row("Shape", caption_help=shape_help).selectbox(
             "Marker shape",
             options=list(FIXATION_SYMBOLS),
             format_func=lambda s: FIXATION_SYMBOLS[s],
             key="global_fixation_symbol",
             persist_state="session",
             disabled=shape_dis,
-            help="Shape of the fixation markers. Applies on all three render "
-            "paths, including both compared scanpaths.",
+            help=shape_help,
             label_visibility="collapsed",
         )
-        for col, num_key, side in ((lo_col, lo_key, "min"), (hi_col, hi_key, "max")):
-            col.number_input(
-                f"Size ({side})",
-                min_value=4,
-                max_value=40,
-                step=1,
-                key=num_key,
-                on_change=_apply_size,
-                disabled=size_dis,
-                help=size_tip,
-                label_visibility="collapsed",
-            )
-        opac_col.number_input(
+        # Size / opacity are per-scanpath in Compare (`cmp*_marker_size_range`
+        # / `cmp*_opacity` override these there), so they carry its gate.
+        _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
+        _, size_help = _layer_gate(
+            _dis,
+            _gated_help(
+                "Marker size range in px: the shortest fixation's marker, then "
+                "the longest's.",
+                _reason,
+            ),
+        )
+        _range_slider(
+            st,
+            "Size",
+            key="global_marker_size_range",
+            persist_state="session",
+            min_value=4,
+            max_value=40,
+            disabled=_dis,
+            help=_gated_help(
+                "Marker size range in px: the shortest fixation's marker, then "
+                "the longest's.",
+                _reason,
+            ),
+            field_host=_sub_row("Size", caption_help=size_help),
+        )
+        _, opac_help = _layer_gate(
+            _dis,
+            _gated_help(
+                "Fixation marker opacity. Lower it so overlapping fixations "
+                "show through (1.0 = fully opaque).",
+                _reason,
+            ),
+        )
+        _numeric_slider(
+            st,
             "Opacity",
+            key="global_fixation_opacity",
+            persist_state="session",
             min_value=0.1,
             max_value=1.0,
             step=0.05,
-            format="%.2f",
-            key=opac_num_key,
-            on_change=_apply_opacity,
-            disabled=opac_dis,
-            help=opac_tip,
-            label_visibility="collapsed",
+            slider_format="%.2f",
+            disabled=_dis,
+            help=_gated_help(
+                "Fixation marker opacity. Lower it so overlapping fixations "
+                "show through (1.0 = fully opaque).",
+                _reason,
+            ),
+            field_host=_sub_row("Opacity", caption_help=opac_help),
         )
         # PRE-3: vertical drift correction. Snap each fixation to its assigned
         # text line using one of the Carr et al. (2021) algorithms; "Off"
@@ -4686,20 +4790,21 @@ def render_plot_controls(
         order_disabled, order_help = _layer_gate(
             False, "Number each fixation by its order in the trial."
         )
-        rest = 1.0 - _LABEL_W
-        label_col, check_col, color_col, size_col = st.columns(
-            [_LABEL_W, rest * 0.18, rest * 0.27, rest * 0.55],
+        label_w = _label_w()
+        rest = 1.0 - label_w
+        # UX-158: the checkbox says what it does ("Show") and the number box is
+        # captioned, so the row reads without hovering.
+        label_col, check_col, color_col, size_cap_col, size_col = st.columns(
+            [label_w, rest * 0.26, rest * 0.2, rest * 0.18, rest * 0.36],
             gap=_LABEL_GAP,
             vertical_alignment="center",
         )
         _row_label(label_col, "Fixation index", order_help)
         show_order = check_col.checkbox(
-            "Fixation index",
+            "Show",
             key="global_show_order",
             persist_state="session",
             disabled=order_disabled,
-            help=order_help,
-            label_visibility="collapsed",
         )
         # In Compare (and in a dual animation) the index labels are tinted to
         # each scanpath's own colour, so the global colour is inert there.
@@ -4735,6 +4840,7 @@ def render_plot_controls(
             "Index label size (figure pixels; the plot is then scaled to fit "
             "the column, so on-screen it is a touch smaller). Default 10.",
         )
+        _sub_caption(size_cap_col, "Size")
         size_col.number_input(
             "Index label size",
             key=size_num_key,
@@ -4759,7 +4865,7 @@ def render_plot_controls(
             help="Fields shown when hovering a fixation. Choose any retained "
             "fixation column; order here is tooltip order.",
         )
-        # "Snap fixations above words" is the fixation half of VIZ-9 (its
+        # "Snap above words" is the fixation half of VIZ-9 (its
         # partner is Saccades → Style → Line shape → Arc). Keep the control
         # for saved-view compatibility, but do not give it a separate
         # "Linear-reading schematic" heading in this already compact panel.
@@ -4769,17 +4875,13 @@ def render_plot_controls(
         _labeled(
             st,
             "checkbox",
-            "Snap fixations above words",
+            "Snap above words",
             key="global_fixation_snap_to_word",
             persist_state="session",
             disabled=static_disabled,
             help=_gated_help(
-                "Schematic layout, **not** drift correction: every "
-                "fixation is redrawn at the top-centre of the word it landed "
-                "on, so the scanpath reads as a diagram rather than as "
-                "recorded gaze. Drift correction (above) instead nudges the "
-                "raw coordinates onto their true text line. Pairs with "
-                "↗️ Saccades ▾ → Line shape → **Arc**.",
+                "Draws each fixation above its word — a schematic, not the "
+                "recorded position. Pairs with saccade **Arc** lines.",
                 static_reason,
             ),
         )
@@ -4926,7 +5028,7 @@ def render_plot_controls(
             help=_gated_help("Thickness of the saccade lines. Default 2.", _reason),
         )
         # VIZ-9: "linear reading" schematic — arched saccades. Its paired
-        # control, "Snap fixations above words", remains under Fixations
+        # control, "Snap above words", remains under Fixations
         # because it moves fixations. Arcs are a `make_scanpath_figure`
         # feature.
         _labeled(
@@ -4940,7 +5042,7 @@ def render_plot_controls(
             help=_gated_help(
                 "Straight connectors, or upward **arcs** over the text "
                 "(the classic linear-reading diagram). Pairs with 👁️ Fixations ▾ "
-                "→ **Snap fixations above words**.",
+                "→ **Snap above words**.",
                 class_reason,
             ),
         )

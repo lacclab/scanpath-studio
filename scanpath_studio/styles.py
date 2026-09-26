@@ -738,6 +738,16 @@ def get_app_css() -> str:
     /* A row whose title carries help. The dotted underline is the only remaining
        hint that there is something to hover, now that the `?` icon is folded
        into the title itself. */
+    /* UX-158 — a row's caption inside a titled group of rows (`controls._sub_row`):
+       the group's title leads the first row, and each row's own caption is
+       quieter so the title still reads as the heading of the run. */
+    .sps-fsub {
+        font-size: 0.85rem;
+        opacity: 0.72;
+    }
+    /* UX-158 — the 👁️ Fixations popover's rows, a little further apart than the
+       app-wide gap:0 (the class makes this rule outrank that one). */
+    div.st-key-rail_fix_rows { gap: 0.5rem !important; }
     .sps-flabel-help {
         text-decoration: underline dotted;
         text-decoration-color: rgba(128, 128, 128, 0.6);

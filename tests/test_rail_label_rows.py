@@ -281,9 +281,8 @@ class TestTheRealRail:
         labels = " ".join(_label_markup(at))
         assert labels, "no UX-51 row labels rendered anywhere in the rail"
         for title in (
-            "Color fixations by",
+            "Marker",
             "Drift correction",
-            "Marker shape",
             "Fixation index",
             "Direction arrows",
             "Show color bars",

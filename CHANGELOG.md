@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **The replay runs in real time: a 20.8 s reading takes 20.8 s to replay, not 26 s** (BUG-93)
+- **Changing the replay's speed or Autoplay no longer rebuilds every frame** (PERF-15)
 
 ### Details
 
@@ -20,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Fixed
 - **The replay runs in real time: a 20.8 s reading takes 20.8 s to replay, not 26 s** (BUG-93) — Plotly's own ▶ Play shows a frame on the first display tick *after* its duration and starts the next frame's clock from there, so every hold rounded up to whole ticks and the error added up: on a 60 Hz screen a 40 ms frame (*Fine*, ×1) lasted 50 ms. Every setting drifted — *Coarse* by 8 %, the default grid by 15 %, ×2 by 67 %, ×8 by 5× — and no frame duration set in Python can fix it, because the tick belongs to the viewer's screen. The app, the Export tab's HTML, `save_figure` and the docs Gallery now carry a player (`plots.animation_player_post_script`) that shows, at every tick, the frame the wall clock has reached. It takes over ▶ Play (Pause, Restart and the slider keep their own commands), skips frames a screen is too slow to show, and pauses in a background tab. Measured in Chrome, every setting now ends within one display tick of reading time ÷ speed. The side panel quotes that time and a GIF/MP4 lasts it: the Export tab reads the clock off the figure, so a clip no longer outlasts a replay whose *Discard* flags dropped fixations; a clip drops frames rather than stretching when the replay is faster than the format can show; and GIF delays are rounded against the running total (Pillow truncated each one to whole centiseconds, which ran a ×1.5 GIF 25 % fast). `fig.show()` still plays on Plotly's own queue.
+- **Changing the replay's speed or Autoplay no longer rebuilds every frame** (PERF-15) — PERF-13's cache was keyed on every `FigureSettings` field, the playback speed and the autoplay switch included — and the Illustration reasons, which a non-1× speed adds to. So moving the speed slider rebuilt the whole replay, though since BUG-93 its frames depend on neither: only ▶ Play's own frame duration and the clock on `layout.meta` do. The app now builds and caches the replay at a fixed speed and autoplay (`plots.build_scanpath_replay`, which returns the grid step with the figure), then stamps the real ones onto the copy each cache hit returns (`plots.set_replay_clock`) — byte-identical to building at that speed, so the export signature still matches. A speed or autoplay change now costs what any rerun costs: on the demo's longest trial at 2,000 frames, 17.9 s instead of 35.1 s; on a 20.8 s trial at *Fine*, 1.8 s instead of 3.3 s. The API and CLI build exactly as before.
 
 ## [0.31.1] - 2026-09-26
 

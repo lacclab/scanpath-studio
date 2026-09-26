@@ -236,7 +236,7 @@ def _animate(viz: dict, monkeypatch, *, drift_corrected: bool = False, dual=Fals
     # Reach for the module the builder lives in, not the (possibly already
     # patched) name in ``tabs`` — otherwise a second call inside one test spies
     # on the first spy and both dicts fill up.
-    real = plots.make_scanpath_animation
+    real = plots.build_scanpath_replay
 
     def spy(words, fixations, settings, fixations_b, words_b, anim_key):
         kwargs = {"settings": settings, "fixations_b": fixations_b, "words_b": words_b}
@@ -609,7 +609,7 @@ class TestDriftCorrectionReachesEveryPath:
     def _spy(monkeypatch) -> dict:
         seen: dict[str, list] = {"static": [], "anim": [], "compare": []}
         real_static = tabs._cached_scanpath_figure
-        real_anim = plots.make_scanpath_animation
+        real_anim = plots.build_scanpath_replay
         real_compare = plots.make_comparison_figure
 
         def static(words, fixations, settings, raw_gaze, fig_key):

@@ -3127,19 +3127,29 @@ def _scanpath_anim_specs(entries, marker_size_range):
     return specs
 
 
-def _anim_timeline(specs, playback_speed, *, grid_step_ms=None, max_frames=None):
+def _anim_frame_duration_ms(frame_step_ms: float, playback_speed: float) -> int:
+    """▶ Play's own per-frame duration: one grid step at the playback speed.
+
+    Floored at ``_ANIM_MIN_FRAME_MS``. The only part of a replay the speed
+    changes besides ``layout.meta`` — which is what lets `set_replay_clock`
+    re-time a built replay (PERF-15)."""
+    return int(max(frame_step_ms / max(playback_speed, 1e-6), _ANIM_MIN_FRAME_MS))
+
+
+def _anim_timeline(specs, *, grid_step_ms=None, max_frames=None):
     """Uniform time-grid frame timeline across all scanpaths (VIZ-11).
 
-    Returns ``(frame_times, frame_duration_ms, reading_span_ms)``. Frames are
+    Returns ``(frame_times, frame_step_ms, reading_span_ms)``. Frames are
     emitted on a **uniform time grid** — one every ``step`` ms, where ``step`` is
     ``grid_step_ms`` unless that would exceed ``max_frames`` frames (then it
     coarsens) — so the slider scrubs linearly through reading time no matter how
     fixations cluster or how many scanpaths overlay (the union of onset sets is
-    meaningless for >1 reader). ``frame_duration_ms`` is ``step / playback_speed``
-    (floored at ``_ANIM_MIN_FRAME_MS``) — the ▶ Play button's own per-frame
-    duration, used only where the wall-clock player isn't embedded; the player
-    shows frame k once ``frame_times[k] / playback_speed`` has elapsed, so a replay
-    takes ``reading_span_ms / playback_speed`` (BUG-93). Frame *content* is
+    meaningless for >1 reader). ``frame_step_ms`` is that exact step (``0.0`` with
+    no frames). None of it depends on the playback speed: ▶ Play's own per-frame
+    duration is :func:`_anim_frame_duration_ms` of the step, used only where the
+    wall-clock player isn't embedded, and the player shows frame k once
+    ``frame_times[k] / playback_speed`` has elapsed, so a replay takes
+    ``reading_span_ms / playback_speed`` (BUG-93). Frame *content* is
     unchanged — every fixation whose onset ≤ t shows at time t. All readings are
     rebased to t=0; ``reading_span_ms`` is the longest reading's span. Returns an
     empty grid when there is nothing to animate.
@@ -3152,7 +3162,7 @@ def _anim_timeline(specs, playback_speed, *, grid_step_ms=None, max_frames=None)
     cap = int(max_frames if max_frames else _ANIM_MAX_FRAMES)
     reading_span_ms = max((s["end"] for s in specs), default=0.0)
     if not specs or reading_span_ms <= 0:
-        return [], _ANIM_MIN_FRAME_MS, reading_span_ms
+        return [], 0.0, reading_span_ms
     step = max(step_pref, reading_span_ms / max(cap, 1))
     frame_times = [
         min(k * step, reading_span_ms) for k in range(int(reading_span_ms // step) + 1)
@@ -3160,8 +3170,7 @@ def _anim_timeline(specs, playback_speed, *, grid_step_ms=None, max_frames=None)
     # Land the final frame exactly on the reading end so it reveals everything.
     if frame_times[-1] < reading_span_ms:
         frame_times.append(reading_span_ms)
-    frame_duration_ms = int(max(step / max(playback_speed, 1e-6), _ANIM_MIN_FRAME_MS))
-    return frame_times, frame_duration_ms, reading_span_ms
+    return frame_times, step, reading_span_ms
 
 
 def _revealed_xy(all_x, all_y, kk):
@@ -3247,8 +3256,8 @@ def animation_timeline_summary(
     specs = _scanpath_anim_specs(
         [(f, None, None) for f in fixations_list], DEFAULT_MARKER_SIZE_RANGE
     )
-    frame_times, frame_duration_ms, reading_span_ms = _anim_timeline(
-        specs, playback_speed, grid_step_ms=grid_step_ms, max_frames=max_frames
+    frame_times, frame_step_ms, reading_span_ms = _anim_timeline(
+        specs, grid_step_ms=grid_step_ms, max_frames=max_frames
     )
     n_frames = len(frame_times)
     step = (frame_times[1] - frame_times[0]) if n_frames > 1 else float(reading_span_ms)
@@ -3257,7 +3266,7 @@ def animation_timeline_summary(
         "step_ms": float(step),
         "requested_step_ms": requested,
         "coarsened": bool(n_frames > 1 and step > requested + 1e-6),
-        "frame_duration_ms": int(frame_duration_ms),
+        "frame_duration_ms": _anim_frame_duration_ms(frame_step_ms, playback_speed),
         "reading_span_ms": float(reading_span_ms),
         "playback_ms": float(reading_span_ms) / max(playback_speed, 1e-6),
     }
@@ -3426,6 +3435,38 @@ def animation_clip_frame_ms(fig) -> float | None:
     return float(times[-1]) / float(speed) / len(times)
 
 
+def _replay_clock_meta(frame_times, playback_speed: float, autoplay: bool) -> dict:
+    """The replay's ``layout.meta``: the clock the player reads, and autoplay."""
+    return {
+        _AUTOPLAY_META_FLAG: bool(autoplay and frame_times),
+        _REPLAY_META_TIMES: frame_times,
+        _REPLAY_META_SPEED: float(playback_speed),
+    }
+
+
+def set_replay_clock(
+    fig: go.Figure, frame_step_ms: float, *, playback_speed: float, autoplay: bool
+) -> None:
+    """Re-time a replay in place: a new playback speed and autoplay, same frames.
+
+    PERF-15: the frames depend on neither (BUG-93), only ▶ Play's own frame
+    duration and the clock on ``layout.meta`` do, so the app builds a replay once
+    and stamps these onto the copy each cache hit returns. ``frame_step_ms`` is
+    the exact grid step :func:`build_scanpath_replay` returned with the figure —
+    the rounded frame times on ``layout.meta`` could truncate Play's duration to
+    a different whole millisecond. The result is byte-identical to building the
+    replay at that speed and autoplay. Only the clock's keys change: anything
+    else on ``layout.meta`` (the Illustration label's) stays where it is.
+    """
+    meta = fig.layout.meta if isinstance(fig.layout.meta, dict) else {}
+    times = list(meta.get(_REPLAY_META_TIMES) or [])
+    if times:
+        fig.layout.updatemenus = _animation_play_buttons(
+            _anim_frame_duration_ms(frame_step_ms, playback_speed)
+        )
+    fig.layout.meta = {**meta, **_replay_clock_meta(times, playback_speed, autoplay)}
+
+
 def _animation_play_buttons(frame_duration):
     """Play / Pause / Restart buttons.
 
@@ -3559,8 +3600,11 @@ def _render_scanpath_animation(
     settings: FigureSettings,
     fixations_b: pd.DataFrame | None = None,
     words_b: pd.DataFrame | None = None,
-) -> go.Figure:
+) -> tuple[go.Figure, float]:
     """Frame-by-frame scanpath replay on a real reading-time clock.
+
+    Returns the figure and the exact grid step its frames sit on, which
+    :func:`set_replay_clock` needs to re-time it (PERF-15).
 
     Pass ``fixations_b`` (and optionally ``words_b``) to overlay a SECOND
     scanpath animated on the same clock. Every scanpath is rebased to its first
@@ -4071,9 +4115,8 @@ def _render_scanpath_animation(
             )
         )
 
-    frame_times, frame_duration, reading_span_ms = _anim_timeline(
+    frame_times, frame_step_ms, reading_span_ms = _anim_timeline(
         specs,
-        playback_speed,
         grid_step_ms=anim_grid_step_ms,
         max_frames=anim_max_frames,
     )
@@ -4194,7 +4237,11 @@ def _render_scanpath_animation(
     sliders = (
         _animation_time_slider(frame_times, reading_span_ms) if frame_times else []
     )
-    updatemenus = _animation_play_buttons(frame_duration) if frame_times else []
+    updatemenus = (
+        _animation_play_buttons(_anim_frame_duration_ms(frame_step_ms, playback_speed))
+        if frame_times
+        else []
+    )
 
     # fitted_w / fitted_h were computed up front (so the label scale matched).
     # ALL transport controls (play/pause/restart buttons + the time slider with
@@ -4301,12 +4348,10 @@ def _render_scanpath_animation(
     # the wall-clock player every HTML surface embeds, plus VIZ-10's autoplay
     # intent, which that player reads on load (Plotly's own `auto_play` ignores
     # the frame duration). No frames → no times, so no player and no autoplay.
-    fig.layout.meta = {
-        _AUTOPLAY_META_FLAG: bool(autoplay and frame_times),
-        _REPLAY_META_TIMES: [round(float(t), 3) for t in frame_times],
-        _REPLAY_META_SPEED: float(playback_speed),
-    }
-    return fig
+    fig.layout.meta = _replay_clock_meta(
+        [round(float(t), 3) for t in frame_times], playback_speed, autoplay
+    )
+    return fig, frame_step_ms
 
 
 def _resolve_trial_display_name(
@@ -6535,6 +6580,31 @@ def make_scanpath_animation(
     **overrides: Any,
 ) -> go.Figure:
     """Build an animated replay from the shared rendering settings."""
+    fig, _frame_step_ms = build_scanpath_replay(
+        words,
+        fixations,
+        settings=settings,
+        fixations_b=fixations_b,
+        words_b=words_b,
+        **overrides,
+    )
+    return fig
+
+
+def build_scanpath_replay(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    *,
+    settings: FigureSettings | Mapping[str, Any] | None = None,
+    fixations_b: pd.DataFrame | None = None,
+    words_b: pd.DataFrame | None = None,
+    **overrides: Any,
+) -> tuple[go.Figure, float]:
+    """:func:`make_scanpath_animation`, returning the grid step with the figure.
+
+    ``(figure, frame_step_ms)``: pass the step to :func:`set_replay_clock` to
+    re-time the replay at another speed or autoplay without rebuilding a frame
+    (PERF-15)."""
     resolved = _resolve_figure_settings(
         settings,
         overrides,

@@ -805,8 +805,14 @@ def get_app_css() -> str:
         display: block;
         max-width: 100%;
     }
+    /* BUG-91: the box exists only while it is shown. It used to sit there at
+       `opacity: 0` all the time, and an absolutely-positioned box still counts
+       towards its scroll container's overflow — so a long tooltip on a popover's
+       last rows let the popover scroll down into empty space. `content: none`
+       removes the box outright; the fade is an animation that starts once it is
+       created, not an opacity transition on a box that is always there. */
     .sps-fhelp::after {
-        content: attr(data-tip);
+        content: none;
         position: absolute;
         top: calc(100% + 0.3rem);
         left: 0;
@@ -824,13 +830,15 @@ def get_app_css() -> str:
         text-align: left;
         box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
         pointer-events: none;
-        opacity: 0;
-        transition: opacity 80ms linear;
     }
     .sps-fhelp:hover::after,
     .sps-fhelp:focus-within::after {
-        opacity: 1;
-        transition-delay: 120ms;
+        content: attr(data-tip);
+        animation: sps-tip-in 80ms linear 120ms both;
+    }
+    @keyframes sps-tip-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
     }
 
     /* UX-53 round 3 — the wizard's descriptive prose is hover-only, so it reuses

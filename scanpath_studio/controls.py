@@ -5612,39 +5612,53 @@ def render_plot_controls(
     # Raw gaze is a `make_scanpath_figure`-only overlay. The toggle is on the
     # section's row (UX-86); this owns the style popover — previously nothing,
     # since raw gaze had no styling of its own before it got a section.
+    # UX-161: one *Marker* group, as in 👁️ Fixations (UX-158).
     with (
         raw_gaze_grp,
         _layer_off(f"{ICONS['raw_gaze']} Raw gaze", off=not show_raw_gaze),
+        _popover_rows("rawgaze"),
     ):
-        _labeled(
-            st,
-            "color_picker",
-            "Color",
-            key="global_raw_gaze_color",
-            persist_state="session",
-            disabled=raw_disabled,
-            help=_gated_help(
-                "Flat marker colour. Ignored when the data carries "
-                "timestamps, which are colour-mapped by time instead.",
+        color_disabled, color_help = _layer_gate(
+            raw_disabled,
+            _gated_help(
+                "Flat marker colour. Ignored when the data carries timestamps, "
+                "which are colour-mapped by time instead.",
                 raw_reason,
             ),
         )
+        _sub_row(
+            "Color",
+            section="Marker",
+            section_help="How each raw-gaze sample is drawn: colour, size and opacity.",
+            caption_help=color_help,
+        ).color_picker(
+            "Color",
+            key="global_raw_gaze_color",
+            persist_state="session",
+            disabled=color_disabled,
+            help=color_help,
+            label_visibility="collapsed",
+        )
+        size_help = "Diameter of each raw-gaze sample dot."
         _numeric_slider(
             st,
             "Marker size",
-            label_left=True,
             key="global_raw_gaze_marker_size",
             persist_state="session",
             min_value=1.0,
             max_value=12.0,
             step=0.5,
             disabled=raw_disabled,
-            help="Diameter of each raw-gaze sample dot.",
+            help=size_help,
+            field_host=_sub_row("Size", caption_help=_layer_gate(False, size_help)[1]),
+        )
+        opacity_help = (
+            "Sample dots overlap heavily at typical sampling rates; lower opacity "
+            "keeps dense clusters legible."
         )
         _numeric_slider(
             st,
             "Opacity",
-            label_left=True,
             key="global_raw_gaze_opacity",
             persist_state="session",
             min_value=0.1,
@@ -5652,8 +5666,10 @@ def render_plot_controls(
             step=0.05,
             number_format="%.2f",
             disabled=raw_disabled,
-            help="Sample dots overlap heavily at typical sampling rates; "
-            "lower opacity keeps dense clusters legible.",
+            help=opacity_help,
+            field_host=_sub_row(
+                "Opacity", caption_help=_layer_gate(False, opacity_help)[1]
+            ),
         )
     # --- Figure & canvas --------------------------------------------------
     # UX-80/81: one popover, three named groups inside it and nothing nested —

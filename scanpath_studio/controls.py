@@ -29,6 +29,7 @@ from .constants import (
     DEFAULT_SACCADE_WIDTH,
     FIXATION_SYMBOLS,
     HIGHLIGHTED_TEXT_COLOR,
+    ICONS,
     OUT_OF_TEXT_COLOR,
     PALETTES,
     SACCADE_CLASS_COLORS,
@@ -43,6 +44,7 @@ from .constants import (
     WORD_LABEL_COLOR,
     compare_palette_color,
     drift_correction_enabled,
+    icon_html,
     palette_settings,
     upload_limit_mb,
 )
@@ -499,7 +501,7 @@ def _layer_off(label: str, *, off: bool):
         yield
         return
     _LAYER_OFF_REASON.append(
-        f"⚠️ **{label}** is off — turn the layer on to change this. "
+        f"{ICONS['warning']} **{label}** is off — turn the layer on to change this. "
         "Your settings are kept either way."
     )
     try:
@@ -1195,7 +1197,11 @@ def _render_saved_designs(host) -> None:
     """
     saved = design_presets()
     active = selected_design_name()
-    label = f"🎨 My designs ({len(saved)})" if saved else "🎨 My designs"
+    label = (
+        f"{ICONS['designs']} My designs ({len(saved)})"
+        if saved
+        else f"{ICONS['designs']} My designs"
+    )
     shell = host.container(key="design_shell")
     with shell.expander(label, expanded=bool(st.session_state.get(_DESIGN_EDIT_KEY))):
         if not saved:
@@ -1226,7 +1232,7 @@ def _render_saved_designs(host) -> None:
             # sit high and unaligned in their buttons.
             cells[1].button(
                 "",
-                icon=":material/edit:",
+                icon=ICONS["edit"],
                 key=f"design_edit_{name}",
                 type="tertiary",
                 width="stretch",
@@ -1236,7 +1242,7 @@ def _render_saved_designs(host) -> None:
             )
             cells[2].button(
                 "",
-                icon=":material/delete:",
+                icon=ICONS["delete"],
                 key=f"design_delete_{name}",
                 type="tertiary",
                 width="stretch",
@@ -1246,7 +1252,7 @@ def _render_saved_designs(host) -> None:
             )
     if shell.button(
         "",
-        icon=":material/save:",
+        icon=ICONS["save"],
         key="design_save",
         help="Save the plot settings on screen now as a named design.",
     ):
@@ -1285,7 +1291,10 @@ def _design_delete_dialog(name: str) -> None:
     )
     yes, no = st.columns(2, gap="small")
     if yes.button(
-        "🗑️ Delete it", key="design_delete_confirm", type="primary", width="stretch"
+        f"{ICONS['delete']} Delete it",
+        key="design_delete_confirm",
+        type="primary",
+        width="stretch",
     ):
         delete_design_preset(name)
         _close_design_delete_dialog()
@@ -1343,7 +1352,7 @@ def _design_save_dialog() -> None:
             st.warning(
                 "The chosen design's stored settings are **overwritten** by "
                 "the ones on screen now. What it held is not recoverable.",
-                icon="⚠️",
+                icon=ICONS["warning"],
             )
         else:
             name = st.text_input(
@@ -1354,7 +1363,9 @@ def _design_save_dialog() -> None:
                 "colours, filter, figure and canvas.",
             )
         row = st.columns(2, gap="small")
-        save = row[0].form_submit_button("💾 Save", type="primary", width="stretch")
+        save = row[0].form_submit_button(
+            f"{ICONS['save']} Save", type="primary", width="stretch"
+        )
         cancel = row[1].form_submit_button("Cancel", width="stretch")
     if cancel:
         _close_design_save_dialog()
@@ -1394,7 +1405,7 @@ def _render_design_rename(row, name: str) -> None:
         # second silently collapsed to a 0-height cell without them.
         cells[1].form_submit_button(
             "",
-            icon=":material/check:",
+            icon=ICONS["confirm"],
             key=f"design_rename_go_{name}",
             type="tertiary",
             width="stretch",
@@ -1404,7 +1415,7 @@ def _render_design_rename(row, name: str) -> None:
         )
         cells[2].form_submit_button(
             "",
-            icon=":material/close:",
+            icon=ICONS["close"],
             key=f"design_rename_cancel_{name}",
             type="tertiary",
             width="stretch",
@@ -2459,7 +2470,7 @@ def column_mapping_ui(
             # A one-click confirm in the space the flag already occupies is the
             # only honest way to say "I chose this" for that case.
             note_col.button(
-                "✨",
+                ICONS["auto_detected"],
                 key=f"{cell_key}_confirm",
                 help=f"{hover} — click to confirm this column and clear the mark.",
                 on_click=_mark_field_touched,
@@ -2472,7 +2483,8 @@ def column_mapping_ui(
             # browser's ~1s native one.
             note_col.markdown(
                 f'<span class="sps-map-flag sps-fhelp" '
-                f'data-tip="{html.escape(hover, quote=True)}">✨</span>',
+                f'data-tip="{html.escape(hover, quote=True)}">'
+                f"{icon_html('auto_detected')}</span>",
                 unsafe_allow_html=True,
             )
         # `NONE_OPTION` is still tolerated on the way out: a config restored
@@ -2522,7 +2534,8 @@ def column_mapping_ui(
 
             in_use = any(_mapped(key) for key in _ADVANCED_MAPPING_KEYS)
             hosts["advanced"] = advanced_slot.expander(
-                "⚙️ Multipart screens & canvas — advanced", expanded=bool(in_use)
+                f"{ICONS['settings']} Multipart screens & canvas — advanced",
+                expanded=bool(in_use),
             )
             hosts["advanced"].caption(
                 "Only for a dataset where one logical trial spans several "
@@ -2629,7 +2642,7 @@ def column_mapping_ui(
                 note_col.markdown(
                     f'<span class="sps-map-flag sps-fhelp" '
                     f'data-tip="{html.escape(f"{detected_label} `{default}`", quote=True)}">'
-                    "✨</span>",
+                    f"{icon_html('auto_detected')}</span>",
                     unsafe_allow_html=True,
                 )
             # UX-90: the same red-when-required-and-empty rule the selectboxes
@@ -3829,7 +3842,9 @@ def corpus_style_controls(
     """
     _seed_viz_state(trial_fixations, base_font_size, words)
     target = host or st
-    with target.expander("🎨 Corpus figure style", expanded=False) as style_panel:
+    with target.expander(
+        f"{ICONS['designs']} Corpus figure style", expanded=False
+    ) as style_panel:
         active = _active_palette()
         options = list(PALETTES) if active else [CUSTOM_PALETTE, *PALETTES]
         st.session_state["global_palette"] = active or CUSTOM_PALETTE
@@ -4009,7 +4024,10 @@ def _reset_viz_confirmation_dialog() -> None:
     )
     yes, no = st.columns(2)
     if yes.button(
-        "♻️ Reset it", key="reset_viz_confirm", type="primary", width="stretch"
+        f"{ICONS['reset']} Reset it",
+        key="reset_viz_confirm",
+        type="primary",
+        width="stretch",
     ):
         reset_viz_settings()
         st.session_state.pop(_RESET_VIZ_PENDING_KEY, None)
@@ -4036,7 +4054,7 @@ def render_viz_reset(host) -> None:
     like.
     """
     if host.button(
-        "♻️ Reset visualization",
+        f"{ICONS['reset']} Reset visualization",
         key="reset_viz_settings_btn",
         width="stretch",
         help="Every layer, colour, size and axis control back to its default — "
@@ -4136,7 +4154,7 @@ def render_plot_controls(
     _qv_grid = viz.container(key="quick_views_grid")
     _qv_top = _qv_grid.columns(2, gap="small")
     _qv_top[0].button(
-        "👁️ Scanpath",
+        f"{ICONS['preset_scanpath']} Scanpath",
         key="viz_view_scanpath",
         type="primary" if _active == "scanpath" else "secondary",
         width="stretch",
@@ -4145,7 +4163,7 @@ def render_plot_controls(
         args=("scanpath",),
     )
     _qv_top[1].button(
-        "🔥 Heatmap",
+        f"{ICONS['heatmap']} Heatmap",
         key="viz_view_heatmap",
         type="primary" if _active == "heatmap" else "secondary",
         width="stretch",
@@ -4155,7 +4173,7 @@ def render_plot_controls(
     )
     _qv_bottom = _qv_grid.columns(2, gap="small")
     _qv_bottom[0].button(
-        "✏️ Illustration",
+        f"{ICONS['illustration']} Illustration",
         key="viz_view_illustration",
         type="primary" if _active == "illustration" else "secondary",
         width="stretch",
@@ -4165,7 +4183,7 @@ def render_plot_controls(
         args=("illustration",),
     )
     _qv_bottom[1].button(
-        "🛠️ Custom",
+        f"{ICONS['preset_custom']} Custom",
         key="viz_view_custom",
         type="primary" if _active == _CUSTOM_VIEW else "secondary",
         width="stretch",
@@ -4273,12 +4291,12 @@ def render_plot_controls(
     )
     show_fix, fix_grp = _rail_section(
         viz,
-        "👁️ **Fixations**",
+        f"{ICONS['fixations']} **Fixations**",
         slug="fix",
         key="global_show_fix",
         persist_state="session",
         disabled=fix_off_disabled,
-        note="⚠️ Fixations always draw in **Animate** mode — the replay is made "
+        note=f"{ICONS['warning']} Fixations always draw in **Animate** mode — the replay is made "
         "of them. Your setting is kept for the static and comparison figures; "
         "the styling below still applies."
         if fix_off_disabled
@@ -4286,7 +4304,7 @@ def render_plot_controls(
     )
     show_saccades, sac_grp = _rail_section(
         viz,
-        "↗️ **Saccades**",
+        f"{ICONS['saccades']} **Saccades**",
         slug="sac",
         key="global_show_saccades",
         persist_state="session",
@@ -4302,7 +4320,7 @@ def render_plot_controls(
     # reveals exactly what was configured before, with nothing to restore.
     show_stimulus, stim_grp = _rail_section(
         viz,
-        "📄 **Stimulus**",
+        f"{ICONS['stimulus']} **Stimulus**",
         slug="stim",
         key="global_show_stimulus",
         persist_state="session",
@@ -4314,7 +4332,7 @@ def render_plot_controls(
     heat_disabled, heat_reason = _mode_gate(animating, comparing, in_animation=False)
     show_heatmap, heatmap_grp = _rail_section(
         viz,
-        "🔥 **Heatmap**",
+        f"{ICONS['heatmap']} **Heatmap**",
         slug="heatmap",
         key="global_show_heatmap",
         persist_state="session",
@@ -4324,7 +4342,7 @@ def render_plot_controls(
     raw_disabled, raw_reason = _mode_gate(animating, comparing, **_static_only)
     show_raw_gaze, raw_gaze_grp = _rail_section(
         viz,
-        "🔵 **Raw gaze**",
+        f"{ICONS['raw_gaze']} **Raw gaze**",
         slug="rawgaze",
         key="global_show_raw_gaze",
         persist_state="session",
@@ -4348,7 +4366,7 @@ def render_plot_controls(
     # its controls open over the page instead of being cropped by the rail.
     _filter_none, filter_grp = _rail_section(
         viz,
-        f"🧹 **Filter**{_plot_filter_badge()}",
+        f"{ICONS['plot_filter']} **Filter**{_plot_filter_badge()}",
         slug="filter",
     )
     # Sub-slots up front so each block below renders into the right half of the
@@ -4362,7 +4380,7 @@ def render_plot_controls(
     # own popover sub-groups — see the "Figure & canvas" block below.
     _figure_none, figure_grp = _rail_section(
         viz,
-        "📐 **Figure & canvas**",
+        f"{ICONS['figure']} **Figure & canvas**",
         slug="figure",
     )
 
@@ -4375,7 +4393,12 @@ def render_plot_controls(
     # The toggle is on the section's row (UX-80); the styling below is still
     # (partly) live in Animate / Compare, so the popover stays reachable even
     # when the (inert) layer toggle reads off.
-    with fix_grp, _layer_off("👁️ Fixations", off=not (show_fix or fix_off_disabled)):
+    with (
+        fix_grp,
+        _layer_off(
+            f"{ICONS['fixations']} Fixations", off=not (show_fix or fix_off_disabled)
+        ),
+    ):
         # The metric that maps to fixation HUE — applies to the static
         # figure, the single animated replay AND the comparison overlay (in
         # compare it colours both scanpaths by the metric; the per-scanpath
@@ -4635,7 +4658,7 @@ def render_plot_controls(
     with (
         _rail_subsection(
             filter_fix_slot,
-            f"👁️ Fixations{_fixation_filter_badge()}",
+            f"{ICONS['fixations']} Fixations{_fixation_filter_badge()}",
             # The sentence the popover trigger carried as its tooltip, plus the
             # gate reason when this is inert in the current mode.
             note=_gated_help(
@@ -4643,7 +4666,9 @@ def render_plot_controls(
                 _flag_reason,
             ),
         ),
-        _layer_off("👁️ Fixations", off=not (show_fix or fix_off_disabled)),
+        _layer_off(
+            f"{ICONS['fixations']} Fixations", off=not (show_fix or fix_off_disabled)
+        ),
     ):
         # VIZ-27 follow-up: the index window removes fixations just like the
         # short/long/OOB rules, so it belongs here rather than under marker style.
@@ -4652,7 +4677,7 @@ def render_plot_controls(
         _render_fixation_cleaning(disabled=_flag_dis, reason=_flag_reason)
 
     # --- Saccades ---------------------------------------------------------
-    with sac_grp, _layer_off("↗️ Saccades", off=not show_saccades):
+    with sac_grp, _layer_off(f"{ICONS['saccades']} Saccades", off=not show_saccades):
         # VIZ-23 gave `make_scanpath_animation` an arrow layer of its own
         # (each arrowhead un-masks with the saccade it belongs to), so
         # direction arrows now reach all three builders.
@@ -4797,14 +4822,14 @@ def render_plot_controls(
     with (
         _rail_subsection(
             filter_sac_slot,
-            f"↗️ Saccades{_saccade_filter_badge()}",
+            f"{ICONS['saccades']} Saccades{_saccade_filter_badge()}",
             note=_gated_help(
                 "Draw only some reading classes — forward, skip, refixation, "
                 "return sweep, regression.",
                 _cls_reason,
             ),
         ),
-        _layer_off("↗️ Saccades", off=not show_saccades),
+        _layer_off(f"{ICONS['saccades']} Saccades", off=not show_saccades),
     ):
         _labeled(
             st,
@@ -4835,7 +4860,7 @@ def render_plot_controls(
     # settings` only ANDs the master into what actually reaches the figure.
     if not show_stimulus:
         stim_grp.caption(
-            "⚠️ **📄 Stimulus** is off — nothing below shows in the plot. "
+            f"{ICONS['warning']} **{ICONS['stimulus']} Stimulus** is off — nothing below shows in the plot. "
             "Your settings are kept either way."
         )
 
@@ -4984,7 +5009,7 @@ def render_plot_controls(
     # Animation remains disabled because a time-varying density layer would
     # need a distinct frame contract. The toggle itself is on the section's
     # row now (UX-86); this block only owns the style popover's contents.
-    with heatmap_grp, _layer_off("🔥 Heatmap", off=not show_heatmap):
+    with heatmap_grp, _layer_off(f"{ICONS['heatmap']} Heatmap", off=not show_heatmap):
         # A radio (not segmented_control) so the active style is always shown
         # selected from the seeded default — segmented_control could render
         # with nothing selected on first open.
@@ -5123,7 +5148,7 @@ def render_plot_controls(
     # image loaded yet) — its uploader is the only way to get an image in and
     # enable the toggle in the first place.
     if show_stim_image or not can_show_image:
-        with _rail_subsection(stim_grp, "⚙️ Image placement"):
+        with _rail_subsection(stim_grp, f"{ICONS['settings']} Image placement"):
             st.file_uploader(
                 "Upload a stimulus image",
                 type=["png", "jpg", "jpeg", "gif", "webp"],
@@ -5193,7 +5218,10 @@ def render_plot_controls(
     # Raw gaze is a `make_scanpath_figure`-only overlay. The toggle is on the
     # section's row (UX-86); this owns the style popover — previously nothing,
     # since raw gaze had no styling of its own before it got a section.
-    with raw_gaze_grp, _layer_off("🔵 Raw gaze", off=not show_raw_gaze):
+    with (
+        raw_gaze_grp,
+        _layer_off(f"{ICONS['raw_gaze']} Raw gaze", off=not show_raw_gaze),
+    ):
         _labeled(
             st,
             "color_picker",
@@ -5249,9 +5277,9 @@ def render_plot_controls(
     #
     # The three containers are created up front so each block keeps its place in
     # this file while landing in the right group.
-    screen_group = _rail_subsection(figure_grp, "🖥️ Screen & framing")
-    axes = _rail_subsection(figure_grp, "📊 Axes & grid")
-    labels = _rail_subsection(figure_grp, "🏷️ Title & labels")
+    screen_group = _rail_subsection(figure_grp, f"{ICONS['screen']} Screen & framing")
+    axes = _rail_subsection(figure_grp, f"{ICONS['axes']} Axes & grid")
+    labels = _rail_subsection(figure_grp, f"{ICONS['labels']} Title & labels")
     screen_group.toggle(
         "**Show full monitor**",
         key="global_fit_to_monitor",
@@ -6057,7 +6085,7 @@ def render_trial_chip_picker(
         label_to_key[lbl] for lbl in shown_labels if lbl in label_to_key
     ]
     host.button(
-        "🔄 Refresh fields",
+        f"{ICONS['refresh']} Refresh fields",
         key="trial_chip_refresh",
         help="Re-scan which fields are trial-level (if the offered list looks off "
         "for the current data).",
@@ -6895,7 +6923,7 @@ def render_trial_filters(
     _labeled(
         host,
         "checkbox",
-        "⭐ Favorites only",
+        f"{ICONS['favorite']} Favorites only",
         key=f"{prefix}filter_favorites",
         on_change=_apply,
     )

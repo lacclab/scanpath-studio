@@ -1201,6 +1201,23 @@ def get_app_css() -> str:
     /* UX-71 — see `mapping_menu_css()` below: the option list is widened only
        on the two mapping surfaces, so this global sheet leaves dropdowns alone. */
 
+    /* UX-138 — `constants.icon_html`: a Material Symbols glyph inside raw HTML,
+       where a `:material/…:` shortcode is inert. Same font Streamlit loads for
+       its own icons; the span's text is the ligature (the icon's name). */
+    .sps-icon {
+        font-family: "Material Symbols Rounded";
+        font-weight: normal;
+        font-style: normal;
+        font-size: 1.2em;
+        line-height: 1;
+        letter-spacing: normal;
+        text-transform: none;
+        white-space: nowrap;
+        direction: ltr;
+        font-feature-settings: "liga";
+        vertical-align: -0.2em;
+        user-select: none;
+    }
     /* UX-53 round 4 — the auto-detection flag beside a mapping row is the ✨ and
        nothing else; which column was detected is on its tooltip. The old inline
        sentence ("✨ auto-detected `CURRENT_FIX_INDEX`") ran wider than the
@@ -1450,7 +1467,9 @@ def get_app_css() -> str:
         min-height: 0;
     }
     /* The 2×2 Quick-view grid keeps full labels at ordinary rail widths and
-       falls back to icons only at the narrowest size. */
+       falls back to icons only at the narrowest size. UX-138: the label's own
+       Material icon is what stays — the text collapses around it — so the
+       fallback no longer re-draws each glyph from a `content:` rule. */
     @container sps-rail (max-width: 320px) {
         .st-key-viz_view_scanpath button p,
         .st-key-viz_view_heatmap button p,
@@ -1458,16 +1477,14 @@ def get_app_css() -> str:
         .st-key-viz_view_custom button p {
             font-size: 0;
         }
-        .st-key-viz_view_scanpath button p::before,
-        .st-key-viz_view_heatmap button p::before,
-        .st-key-viz_view_illustration button p::before,
-        .st-key-viz_view_custom button p::before {
-            font-size: 1rem;
+        /* A markdown `:material/…:` renders as `span[role="img"]` — the
+           `stIconMaterial` test id is only on the `icon=` slot. */
+        .st-key-viz_view_scanpath button p span[role="img"],
+        .st-key-viz_view_heatmap button p span[role="img"],
+        .st-key-viz_view_illustration button p span[role="img"],
+        .st-key-viz_view_custom button p span[role="img"] {
+            font-size: 1.1rem;
         }
-        .st-key-viz_view_scanpath button p::before { content: "👁️"; }
-        .st-key-viz_view_heatmap button p::before { content: "🔥"; }
-        .st-key-viz_view_illustration button p::before { content: "✏️"; }
-        .st-key-viz_view_custom button p::before { content: "🛠️"; }
     }
     /* BUG-24: the rail's heading row holds nothing but the heading. UX-44 put a
        compact Reset pill beside it in a second column, which did not fit — the

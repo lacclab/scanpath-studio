@@ -991,7 +991,9 @@ class TestSpotlightSelectorsResolve:
         tab_source = inspect.getsource(render_single_trial_tab)
         control_source = inspect.getsource(controls.render_plot_controls)
 
-        assert 'st.markdown("## 🎛️ Plot controls")' in tab_source
+        assert (
+            "st.markdown(f\"## {ICONS['plot_controls']} Plot controls\")" in tab_source
+        )
         assert 'st.markdown("## 🎛️ View modes")' not in tab_source
         assert 'st.markdown("## 🎨 Visualization")' not in tab_source
         assert "sps-control-label" in control_source
@@ -1018,7 +1020,7 @@ class TestSpotlightSelectorsResolve:
         control_source = inspect.getsource(controls.render_plot_controls)
         canvas_source = inspect.getsource(app.render_canvas_controls)
 
-        assert '"📐 **Figure & canvas**"' in control_source
+        assert "f\"{ICONS['figure']} **Figure & canvas**\"" in control_source
         assert "render_text=show_labels" in control_source
         assert "display = host if bare else host.expander" in canvas_source
         assert 'viz.expander("🖥️ Canvas & text"' not in control_source
@@ -1050,8 +1052,8 @@ class TestSpotlightSelectorsResolve:
 
         control_source = inspect.getsource(controls.render_plot_controls)
 
-        assert '"👁️ **Fixations**"' in control_source
-        assert 'f"🧹 **Filter**{' in control_source
+        assert "f\"{ICONS['fixations']} **Fixations**\"" in control_source
+        assert "f\"{ICONS['plot_filter']} **Filter**{" in control_source
         assert "Reset settings" not in control_source
 
     def test_reset_closes_the_rail_below_every_control_it_resets(self):
@@ -1077,7 +1079,9 @@ class TestSpotlightSelectorsResolve:
         from scanpath_studio.tabs import render_single_trial_tab
 
         tab_source = inspect.getsource(render_single_trial_tab)
-        assert 'st.markdown("## 🎛️ Plot controls")' in tab_source
+        assert (
+            "st.markdown(f\"## {ICONS['plot_controls']} Plot controls\")" in tab_source
+        )
         assert 'with st.container(key="plot_reset_footer"):' in tab_source
         assert "render_viz_reset(st)" in tab_source
         # No second column in the heading row, and no reset above the controls.

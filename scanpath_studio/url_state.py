@@ -47,6 +47,7 @@ from .constants import (
     CUSTOM_PALETTE,
     DEMO_CHOICE,
     FIXATION_SYMBOLS,
+    ICONS,
     MULTIPLEYE_BUNDLE_CHOICE,
     ONESTOP_CHOICE,
     ONESTOP_PART_LABELS,
@@ -1585,7 +1586,7 @@ def _restore_plot_config(
     # schema before reading its fields, so configs keep loading across versions.
     config, migration_note = _migrate_plot_config(config)
     if migration_note:
-        st.toast(migration_note, icon="⚠️")
+        st.toast(migration_note, icon=ICONS["warning"])
 
     restore = _RestoreContext(config)
     section = restore.section
@@ -2261,7 +2262,9 @@ def _restore_plot_config(
     if "annotations" in config and isinstance(config["annotations"], list):
         n_anno = restore_records(config["annotations"])
         restore.applied += 1
-        st.toast(f"Restored {n_anno} annotation(s) from config.", icon="📝")
+        st.toast(
+            f"Restored {n_anno} annotation(s) from config.", icon=ICONS["annotations"]
+        )
 
     # DATA-20 — the participant table, restored *before* the filter widgets read
     # their keys, so a saved `filter_meta_*` selection lands on fields that
@@ -2278,7 +2281,7 @@ def _restore_plot_config(
             restore.applied += 1
             st.toast(
                 f"Restored participant metadata ({len(attached.fields)} field(s)).",
-                icon="👤",
+                icon=ICONS["participant"],
             )
 
     # DATA-29 — the trial table, same contract and the same ordering reason.
@@ -2293,7 +2296,7 @@ def _restore_plot_config(
             restore.applied += 1
             st.toast(
                 f"Restored trial metadata ({len(attached_trials.fields)} field(s)).",
-                icon="🗂️",
+                icon=ICONS["trial_metadata"],
             )
 
     # The text table, third grain, same contract and ordering reason.
@@ -2308,7 +2311,7 @@ def _restore_plot_config(
             restore.applied += 1
             st.toast(
                 f"Restored text metadata ({len(attached_texts.fields)} field(s)).",
-                icon="📄",
+                icon=ICONS["text_metadata"],
             )
 
     # VIZ-39 — the saved-design library. Restored wholesale rather than merged:
@@ -2327,7 +2330,7 @@ def _restore_plot_config(
         if clean:
             st.session_state[DESIGN_PRESETS_KEY] = clean
             restore.applied += 1
-            st.toast(f"Restored {len(clean)} saved design(s).", icon="🎨")
+            st.toast(f"Restored {len(clean)} saved design(s).", icon=ICONS["designs"])
 
     return restore.applied, skipped
 
@@ -2355,18 +2358,20 @@ def _apply_uploaded_plot_config(combos: pd.DataFrame, fixations: pd.DataFrame) -
         if not isinstance(config, dict):
             raise ValueError("expected a JSON object")
     except (ValueError, UnicodeDecodeError) as exc:
-        st.toast(f"Couldn't read plot config: {exc}", icon="⚠️")
+        st.toast(f"Couldn't read plot config: {exc}", icon=ICONS["warning"])
         return
     try:
         applied, skipped = _restore_plot_config(config, combos, fixations)
     except Exception as exc:  # backstop for an unexpectedly shaped config
-        st.toast(f"Couldn't apply plot config: {exc}", icon="⚠️")
+        st.toast(f"Couldn't apply plot config: {exc}", icon=ICONS["warning"])
         return
     st.session_state["_plot_config_skipped"] = skipped
     if applied:
-        st.toast(f"Restored {applied} setting(s) from plot config.", icon="✅")
+        st.toast(
+            f"Restored {applied} setting(s) from plot config.", icon=ICONS["success"]
+        )
     elif not skipped:
-        st.toast("Plot config had no recognized settings.", icon="⚠️")
+        st.toast("Plot config had no recognized settings.", icon=ICONS["warning"])
 
 
 def _build_share_query(
@@ -2813,7 +2818,7 @@ def _render_share_link_widget(query: str) -> None:
 SNIPPET_FLAVOR_KEY = "snippet_flavor"
 SNIPPET_EXPLICIT_KEY = "snippet_explicit"
 
-_SNIPPET_FLAVORS = ("🐍 Python", "⌨️ CLI")
+_SNIPPET_FLAVORS = (f"{ICONS['python']} Python", f"{ICONS['cli']} CLI")
 
 #: Output filename the snippet saves to, per figure kind. An animation is
 #: interactive HTML; the static and comparison figures raster.
@@ -2989,11 +2994,11 @@ def _render_code_snippet_body(data_choice: str) -> None:
     # `_share_query_current` above).
     st.session_state["_snippet_code_current"] = code
     for note in code.caveats:
-        st.caption("⚠️ " + note)
+        st.caption(f"{ICONS['warning']} " + note)
     if flavor == _SNIPPET_FLAVORS[1]:
         if code.cli_unsupported:
             st.caption(
-                "⚠️ `render` has no flag for "
+                f"{ICONS['warning']} `render` has no flag for "
                 + ", ".join(f"`{name}`" for name in code.cli_unsupported)
                 + " — the 🐍 Python form carries "
                 + ("them." if len(code.cli_unsupported) > 1 else "it.")
@@ -3022,7 +3027,7 @@ def _render_share_body(data_choice: str) -> None:
     # browser-only URL composition logic.
     st.session_state["_share_query_current"] = (query, caveats)
     for note in caveats:
-        st.caption("⚠️ " + note)
+        st.caption(f"{ICONS['warning']} " + note)
     _render_share_link_widget(query)
     st.caption(
         "If the recipient runs Scanpath Studio at a different address or port, "

@@ -83,6 +83,7 @@ from scanpath_studio.constants import (
     EYEGENBENCH_DEFAULT_DIR,
     FOCUS_MAPPING_KEY,
     FONT_FAMILY,
+    ICONS,
     MULTIPLEYE_BUNDLE_CHOICE,
     MULTIPLEYE_DEFAULT_DIR,
     ONESTOP_CHOICE,
@@ -103,6 +104,7 @@ from scanpath_studio.constants import (
     WIZARD_STAY_KEY,
     WORD_LABEL_COLOR,
     benchmark_setup_enabled,
+    icon_html,
     language_display,
     multipleye_enabled,
     preprocessing_enabled,
@@ -445,6 +447,10 @@ def configure_page() -> None:
     """
     st.set_page_config(
         page_title="Scanpath Studio - Visualization of Eye Movements in Reading",
+        # UX-138 left the favicon an emoji on purpose: Streamlit draws an emoji
+        # page icon as an inline SVG, but turns a `:material/…:` one into a
+        # fonts.gstatic.com URL — a request to Google on every page load, and no
+        # icon at all offline or in the desktop bundle.
         page_icon="👀",
         layout="wide",
     )
@@ -728,11 +734,14 @@ def _forget_cache_confirmation(host) -> None:
     host.warning(
         "Delete the recovery copy from this computer? Your open session and "
         "automatic-saving setting stay unchanged.",
-        icon="⚠️",
+        icon=ICONS["warning"],
     )
     yes, no = host.columns(2)
     if yes.button(
-        "🗑 Clear cache", key="forget_cache_confirm", type="primary", width="stretch"
+        f"{ICONS['delete']} Clear cache",
+        key="forget_cache_confirm",
+        type="primary",
+        width="stretch",
     ):
         _forget_recovery_cache()
         st.session_state.pop(_FORGET_CACHE_PENDING_KEY, None)
@@ -824,7 +833,7 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
         )
 
         if restored_from_cache(st.session_state):
-            st.success("Recovered when the app opened.", icon="↩️")
+            st.success("Recovered when the app opened.", icon=ICONS["recovery"])
         if status["exists"] and status["readable"]:
             n_sets = len(status["datasets"])
             # "datasets **you added**", not "datasets": only an upload is copied
@@ -844,7 +853,7 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
                 "The stored session can't be read (written by a different "
                 "version, or incomplete). It is ignored; saving over it is "
                 "safe.",
-                icon="⚠️",
+                icon=ICONS["warning"],
             )
         elif st.session_state.get("_recovery_cache_forgotten"):
             st.caption("Cleared. Nothing is stored on this computer.")
@@ -869,7 +878,7 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
             "**Clear recovery cache** for that.",
         )
         if st.button(
-            "🗑 Clear recovery cache",
+            f"{ICONS['delete']} Clear recovery cache",
             key="forget_recovery_cache_btn",
             width="stretch",
             disabled=not status["exists"],
@@ -898,7 +907,7 @@ def _render_recovery_details(host, status: dict) -> None:
     a popover nests fine inside a dialog (only popover-in-popover and
     dialog-in-dialog are refused).
     """
-    with host.popover("❔ What's saved, and where", width="stretch"):
+    with host.popover(f"{ICONS['help']} What's saved, and where", width="stretch"):
         st.markdown(
             "**Which datasets.** Only the datasets **you added** are copied "
             "here. The bundled demo and the public corpora are reloaded from "
@@ -943,11 +952,11 @@ def _reset_everything_confirmation(host) -> None:
     host.warning(
         "Remove uploaded datasets, annotations, mappings and settings, then "
         "return to the bundled demo?",
-        icon="⚠️",
+        icon=ICONS["warning"],
     )
     yes, no = host.columns(2)
     if yes.button(
-        "♻️ Reset everything",
+        f"{ICONS['reset']} Reset everything",
         key="reset_everything_confirm",
         type="primary",
         width="stretch",
@@ -963,7 +972,7 @@ def _render_reset_everything_panel(*, slot=None) -> None:
     """Render Session's always-reachable full reset action."""
     container = slot if slot is not None else st.container()
     if container.button(
-        "♻️ Reset everything",
+        f"{ICONS['reset']} Reset everything",
         key="session_reset_everything",
         width="stretch",
         help="Remove uploaded datasets and all session settings, then return to "
@@ -985,7 +994,7 @@ def _arm_session() -> None:
     st.session_state[_SESSION_DIALOG_KEY] = True
 
 
-@st.dialog("💾 Session", width="large")
+@st.dialog(f"{ICONS['session']} Session", width="large")
 def _session_dialog(app_url: str, backup_renderer=None) -> None:
     """The 💾 Session modal: what this session is holding, and how to keep it.
 
@@ -1016,11 +1025,11 @@ def _session_dialog(app_url: str, backup_renderer=None) -> None:
     )
 
     recovery = st.container(key="session_auto_recovery")
-    recovery.markdown("#### 🗄️ Automatic recovery")
+    recovery.markdown(f"#### {ICONS['recovery']} Automatic recovery")
     _render_recovery_cache_panel(app_url, slot=recovery.container())
 
     backup = st.container(key="session_json_backup")
-    backup.markdown("#### ⬇️ JSON backup")
+    backup.markdown(f"#### {ICONS['download']} JSON backup")
     if backup_renderer is not None:
         backup_renderer(backup.container())
     else:
@@ -1031,11 +1040,11 @@ def _session_dialog(app_url: str, backup_renderer=None) -> None:
         )
 
     reset = st.container(key="session_reset")
-    reset.markdown("#### ♻️ Reset")
+    reset.markdown(f"#### {ICONS['reset']} Reset")
     _render_reset_everything_panel(slot=reset.container())
 
     debug_tools = st.container(key="session_debug_tools")
-    debug_tools.markdown("#### 🐛 Debug tools")
+    debug_tools.markdown(f"#### {ICONS['debug']} Debug tools")
     render_debug_toggle(debug_tools.container())
     if debug_enabled():
         render_debug_panel(debug_tools.container())
@@ -1075,7 +1084,7 @@ def maybe_show_about() -> None:
         _about_dialog()
 
 
-@st.dialog("ℹ️ About Scanpath Studio", width="large")
+@st.dialog(f"{ICONS['about']} About Scanpath Studio", width="large")
 def _about_dialog() -> None:
     """The About modal: version, authors, links, citation, AI-assistance note."""
     from scanpath_studio import __version__
@@ -1113,9 +1122,9 @@ Developed by [Omer Shubi](https://omershubi.github.io/),
 [Lena Jäger]({_DILI}/group-leader/jaeger.html), and
 [Yevgeni Berzak](https://dds.technion.ac.il/people/academic-staff/yevgeni-berzak/).
 
-📚 [Documentation]({CITATION["docs_url"]}) ↗ ·
-💻 [Code]({CITATION["url"]}) ↗ ·
-🔖 [DOI](https://doi.org/{CITATION["doi"]}) ↗
+{ICONS["docs"]} [Documentation]({CITATION["docs_url"]}) ↗ ·
+{ICONS["code"]} [Code]({CITATION["url"]}) ↗ ·
+{ICONS["doi"]} [DOI](https://doi.org/{CITATION["doi"]}) ↗
 """
     )
     # UX-16: the BibTeX block is tall enough to push everything above it out
@@ -1125,7 +1134,9 @@ Developed by [Omer Shubi](https://omershubi.github.io/),
     # separate the three blocks are gone (the user's call): on a modal this
     # short the bold headings already carry the split, and three rules in half a
     # screen read as clutter.
-    st.markdown("**📖 Citing Scanpath Studio** — a paper is in preparation.")
+    st.markdown(
+        f"**{ICONS['docs']} Citing Scanpath Studio** — a paper is in preparation."
+    )
     with st.expander("Show BibTeX", expanded=False):
         st.code(bibtex, language="bibtex", wrap_lines=True)
         st.markdown(
@@ -1140,7 +1151,7 @@ If you use the bundled demo data, also cite
     # in, which they have no way to check. Deliberately not a liability
     # disclaimer either: MIT already carries that. The heading says the
     # "built with AI assistance" half, so the prose no longer repeats it.
-    st.markdown("**🤖 Built with AI assistance**")
+    st.markdown(f"**{ICONS['ai']} Built with AI assistance**")
     st.markdown(
         f"""
 Cross-check results before publishing.
@@ -1426,7 +1437,9 @@ def _dataset_dir_input(
     )
     # Vertical-align the button with the input (past its label).
     browse_col.markdown("<div style='height:1.7em'></div>", unsafe_allow_html=True)
-    if browse_col.button("📁", key=f"{key_prefix}_browse", help="Browse for a folder"):
+    if browse_col.button(
+        ICONS["folder"], key=f"{key_prefix}_browse", help="Browse for a folder"
+    ):
         chosen = _pick_directory_dialog()
         if chosen:
             st.session_state[f"{dir_key}_picked"] = chosen
@@ -1488,7 +1501,7 @@ def _render_dataset_unavailable() -> None:
     # and three background colours for what is a single message.
     with st.container(border=True, key="dataset_unavailable_panel"):
         st.markdown(
-            f"#### 📦 {note['label']} isn't here yet\n"
+            f"#### {ICONS['missing_bundle']} {note['label']} isn't here yet\n"
             f"{note['reason'].rstrip('.')} — **showing the bundled demo corpus** "
             f"meanwhile."
         )
@@ -1905,10 +1918,10 @@ def discovered_benchmark_datasets() -> tuple:
 # here). Surfaced on each corpus' entry so a user can tell which they're looking
 # at rather than trusting a blanket claim in the description.
 _EYEGENBENCH_GEOMETRY_BADGES = {
-    "real": "✅ **Real** screen geometry — measured word boxes.",
-    "reconstructed": "🛠️ **Reconstructed** geometry — no measured boxes for "
+    "real": f"{ICONS['geometry_real']} **Real** screen geometry — measured word boxes.",
+    "reconstructed": f"{ICONS['geometry_reconstructed']} **Reconstructed** geometry — no measured boxes for "
     "this corpus; derived from its documented display setup.",
-    "synthesized": "🧪 **Synthesized** geometry — no measured boxes or "
+    "synthesized": f"{ICONS['geometry_synthesized']} **Synthesized** geometry — no measured boxes or "
     "documented display setup; a default layout was assumed.",
 }
 
@@ -1972,7 +1985,7 @@ def geometry_badge(entry) -> str:
     if badge is None:
         return f"Screen geometry: {source}"
     if note := _geometry_coverage_note(entry):
-        badge = f"✅ **Real** screen geometry — {note}."
+        badge = f"{ICONS['geometry_real']} **Real** screen geometry — {note}."
     try:
         recorded_y = float(entry.get("recorded_fixation_y_fraction", 0.0))
     except (TypeError, ValueError):
@@ -2253,7 +2266,7 @@ PUBLIC_DATASET_REGISTRY: dict = {
         # Word boxes come from the corpus' own `.ias` character files, but the
         # release discards the recorded screen (x, y) — `datasets._potec_fixations`
         # places each fixation at the centre of the character it names.
-        geometry="🛠️ **Reconstructed** fixation coordinates — the release keeps "
+        geometry=f"{ICONS['geometry_reconstructed']} **Reconstructed** fixation coordinates — the release keeps "
         "no recorded (x, y), so each fixation sits at the centre of the "
         "character it names. The word boxes are the corpus' own `.ias` files.",
     ),
@@ -2270,7 +2283,7 @@ PUBLIC_DATASET_REGISTRY: dict = {
         # session folders are on the machine it runs on, so there is no corpus-
         # wide number that would be true of the next person's copy — the row
         # fills in the moment it is opened, which is the honest answer.
-        geometry="✅ **Real** — recorded fixation coordinates, with word boxes "
+        geometry=f"{ICONS['geometry_real']} **Real** — recorded fixation coordinates, with word boxes "
         "aggregated from the corpus' own character AOI files.",
     ),
     ONESTOP_PUBLIC_CHOICE: dict(
@@ -2314,7 +2327,7 @@ PUBLIC_DATASET_REGISTRY: dict = {
             "practice article (`article_id` 0), which the corpus' published "
             "30 articles / 162 paragraphs does not count."
         ),
-        geometry="✅ **Real** — recorded fixation coordinates and EyeLink's own "
+        geometry=f"{ICONS['geometry_real']} **Real** — recorded fixation coordinates and EyeLink's own "
         "interest-area boxes.",
     ),
 }
@@ -2347,7 +2360,7 @@ _BUILTIN_DATASET_ABOUT: dict[str, dict] = {
         published_counts_source=(
             "Counted from the files bundled with this release of the package."
         ),
-        geometry="✅ **Real** — OneStop's recorded fixations and interest-area "
+        geometry=f"{ICONS['geometry_real']} **Real** — OneStop's recorded fixations and interest-area "
         "boxes. The raw-gaze overlay is **synthesized**, as OneStop publishes "
         "no raw samples.",
     ),
@@ -2386,13 +2399,13 @@ _BUILTIN_DATASET_ABOUT: dict[str, dict] = {
             "The fixture's own specification — six words on two lines, nine "
             "fixations, one of them out of text (`synthetic.py`)."
         ),
-        geometry="🧪 **Synthesized** — the layout and the fixations are both "
+        geometry=f"{ICONS['geometry_synthesized']} **Synthesized** — the layout and the fixations are both "
         "hand-specified, not recorded.",
     ),
     AUTHOR_CHOICE: dict(
         description="Type a text and place fixations on it yourself, for "
         "figures that illustrate a pattern rather than report a recording.",
-        geometry="🧪 **Synthesized** — you draw it; the app lays the text out "
+        geometry=f"{ICONS['geometry_synthesized']} **Synthesized** — you draw it; the app lays the text out "
         "deterministically and marks the figure as an illustration.",
     ),
 }
@@ -2676,7 +2689,7 @@ def _cached_words_join_nothing(
 
 #: BUG-32 — said once per page, in the notices strip, while it holds.
 WORDS_JOIN_NOTHING_WARNING = (
-    "⚠️ **No fixation has word boxes.** A words / AOI table was loaded, but none "
+    f"{ICONS['warning']} **No fixation has word boxes.** A words / AOI table was loaded, but none "
     "of its participant + trial pairs is in the fixations, so every trial draws "
     "without its text or its word-level measures. The usual cause is a **Trial "
     "ID** or **Participant ID** mapping that names different trials in the two "
@@ -2980,7 +2993,7 @@ def reset_column_mapping() -> None:
 
 #: Label + tooltip of the "known-good state" button, shared by the off-page
 #: signpost and the 💾 Session menu so the two read as the same action.
-DEMO_RESET_LABEL = "🧪 Load the bundled demo"
+DEMO_RESET_LABEL = f"{ICONS['demo']} Load the bundled demo"
 DEMO_RESET_HELP = (
     "Switches to the demo corpus and re-detects its column mapping. Your "
     "uploaded datasets stay in the source list."
@@ -3224,13 +3237,13 @@ def _render_unmapped_view(
     rejected = [p for p in problems if p.startswith(MAPPING_FAILURE_LEAD)]
     if rejected:
         for problem in rejected:
-            st.error(problem, icon="🚫")
+            st.error(problem, icon=ICONS["error"])
         st.caption(
             "Change the field it names in **1 · Data tables & column mapping** above, "
             "or start again from what auto-detection proposes."
         )
         st.button(
-            "↩️ Reset to the auto-detected mapping",
+            f"{ICONS['undo']} Reset to the auto-detected mapping",
             key="reset_column_mapping",
             on_click=reset_column_mapping,
         )
@@ -3301,11 +3314,11 @@ def _render_offpage_setup_notice(data_view: bool) -> None:
     st.info(
         "**This dataset isn't set up yet**, so there's nothing to plot. "
         "Finish it on the 🗂️ **Data** page — or start over from the demo.",
-        icon="🗂️",
+        icon=ICONS["view_data"],
     )
     finish, demo = st.columns(2)
     finish.button(
-        "🗂️ Go to Data setup",
+        f"{ICONS['view_data']} Go to Data setup",
         on_click=_go_data,
         type="primary",
         width="stretch",
@@ -4044,10 +4057,10 @@ def render_data_source_picker(host=None) -> None:
 #: that opens it. Icon-only (no trailing word) so the four action columns read as
 #: a compact icon strip rather than four button-sized columns — the label lives
 #: in each column's `help` tooltip instead.
-_DATASET_EDIT_LABEL = ":material/edit:"
-_DATASET_RENAME_LABEL = ":material/drive_file_rename_outline:"
-_DATASET_REMOVE_LABEL = ":material/delete:"
-_DATASET_ABOUT_LABEL = ":material/info:"
+_DATASET_EDIT_LABEL = ICONS["edit"]
+_DATASET_RENAME_LABEL = ICONS["rename"]
+_DATASET_REMOVE_LABEL = ICONS["delete"]
+_DATASET_ABOUT_LABEL = ICONS["info"]
 
 #: Pixel width of an icon-only action column — just enough for one glyph and its
 #: padding, so the four actions don't eat as much of the table's width as the
@@ -4683,7 +4696,7 @@ def _render_dataset_overview(token: str, *, registry: dict) -> None:
     if not has_detail:
         return
     trigger, _ = st.columns([1, 3])
-    with trigger.popover("❔ About this dataset", width="stretch"):
+    with trigger.popover(f"{ICONS['help']} About this dataset", width="stretch"):
         _render_dataset_about_body(token, registry=registry, description=rest)
 
 
@@ -4755,7 +4768,7 @@ def _open_mapping_editor() -> None:
     st.session_state[DATASET_EDITOR_OPEN_KEY] = True
 
 
-@st.dialog("⚠️ Check the Trial ID mapping")
+@st.dialog(f"{ICONS['warning']} Check the Trial ID mapping")
 def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
     """VAL-9 — VAL-7's verdict, raised where the Trial ID was just chosen.
 
@@ -4771,7 +4784,7 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
     Buttons are handled by their return value, never ``on_click`` — a dialog
     body is a fragment (see ``_leave_dataset_editor_dialog``).
     """
-    st.warning(warning, icon="⚠️")
+    st.warning(warning, icon=ICONS["warning"])
     st.caption(
         "A Trial ID that doesn't fully identify one reading concatenates several "
         "into one scanpath — which renders perfectly happily, as an ordinary "
@@ -4780,7 +4793,7 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
     )
     edit_col, keep_col = st.columns(2, gap="small")
     if edit_col.button(
-        "✏️ Edit the mapping",
+        f"{ICONS['edit']} Edit the mapping",
         key="trial_identity_alert_edit",
         type="primary",
         width="stretch",
@@ -4895,7 +4908,7 @@ def _render_dataset_editor_bar(host, data_choice: str) -> None:
     bar = host.container(key="dataset_editor_bar")
     title_col, back_col = bar.columns([8, 2], vertical_alignment="center")
     title_col.markdown(
-        f'<div class="sps-wiz-title">✏️ Edit {html.escape(name)}</div>',
+        f'<div class="sps-wiz-title">{icon_html("edit")} Edit {html.escape(name)}</div>',
         unsafe_allow_html=True,
     )
     back_col.button(
@@ -5928,7 +5941,7 @@ def render_canvas_controls(
     if hint is not None:
         font_name, font_url = hint
         text.caption(
-            f"ℹ️ This corpus was rendered in **{font_name}**. For the overlaid text "
+            f"{ICONS['info']} This corpus was rendered in **{font_name}**. For the overlaid text "
             "to match the stimulus image exactly, install that font on this "
             "computer (it isn't bundled), then reload — otherwise the browser "
             "substitutes a fallback and labels (especially URLs / Latin) can "
@@ -6011,7 +6024,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
     )
     from scanpath_studio.authoring_component import render_authoring_canvas
 
-    st.subheader("✏️ Author a scanpath")
+    st.subheader(f"{ICONS['author']} Author a scanpath")
     st.caption(
         "Write the stimulus, then click or drag directly on the canvas. X/Y are "
         "the primary authored values; the optional target word is useful for "
@@ -6194,7 +6207,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
             st.rerun()
 
     st.download_button(
-        "💾 Save authoring file",
+        f"{ICONS['save']} Save authoring file",
         data=authoring_json(text, effective_events, layout=layout),
         file_name="authored-scanpath.json",
         mime="application/json",
@@ -6405,7 +6418,7 @@ def main() -> None:
         st.toast(
             f"Recovered {_restored_recap()} from this computer — see 💾 Session "
             "→ Automatic recovery.",
-            icon="↩️",
+            icon=ICONS["recovery"],
         )
     elif consume_restore_skipped(st.session_state):
         # BUG-71: the last launch that restored the cache never finished, so this
@@ -6415,7 +6428,7 @@ def main() -> None:
             "time. It is still saved on this computer and saving is paused, so it "
             "stays that way: reload to try again, or clear it in 💾 Session → "
             "Automatic recovery.",
-            icon="⚠️",
+            icon=ICONS["warning"],
             duration="long",
         )
     linked_choice = None
@@ -6625,7 +6638,7 @@ def main() -> None:
     _view_bridge = st.empty()
     if st.session_state.get("_last_rendered_view") not in (None, active_view):
         _bridge_box = _view_bridge.container()
-        _bridge_box.info(f"Loading {view_label(active_view)}…", icon="⏳")
+        _bridge_box.info(f"Loading {view_label(active_view)}…", icon=ICONS["loading"])
         _bridge_box.skeleton(height=420)
     else:
         _view_bridge = None
@@ -6688,7 +6701,7 @@ def main() -> None:
         # reading the list and not finding what you wanted, so it belongs at the
         # end of the list rather than above it. Its slot is reserved beside the
         # table below; the button itself is filled once `data_choice` is known.
-        overview_page.subheader("📂 Available datasets")
+        overview_page.subheader(f"{ICONS['datasets']} Available datasets")
     setup_source_slot = overview_page.container()
     # The editor's own header bar — the ✏️ Edit dataset screen's title and its
     # way back, filled below once the dataset's display name is known.
@@ -6810,7 +6823,7 @@ def main() -> None:
         # instantiate. UX-77 put it on the section heading's line; DATA-35 moved
         # it under the table.
         add_dataset_slot.button(
-            "➕ Add dataset",
+            f"{ICONS['add']} Add dataset",
             key="add_data_btn",
             on_click=_enter_add_data_wizard,
             help="Upload your own eye-tracking tables.",
@@ -6844,7 +6857,10 @@ def main() -> None:
     if st.session_state.pop("_wizard_finalizing", False):
         _finalizing_bridge = st.empty()
         _finalizing_box = _finalizing_bridge.container()
-        _finalizing_box.info("✅ Dataset added — loading your scanpaths…", icon="⏳")
+        _finalizing_box.info(
+            f"{ICONS['success']} Dataset added — loading your scanpaths…",
+            icon=ICONS["loading"],
+        )
         _finalizing_box.skeleton(height=420)
 
     def _clear_loading_bridges() -> None:
@@ -6876,7 +6892,7 @@ def main() -> None:
             dataset_table_slot.success(
                 f"**{_dataset_display_name(str(saved))}** updated — mapping, "
                 "recording setup and any table you added are saved.",
-                icon="✅",
+                icon=ICONS["success"],
             )
         render_dataset_table(
             host=dataset_table_slot,
@@ -7279,7 +7295,7 @@ def main() -> None:
             # don't cover any trial in the current filter (raw gaze typically
             # exists for only a subset of trials). The overlay is optional.
             menu.notices.caption(
-                f"ℹ️ The loaded raw-gaze samples ({len(raw_gaze_df):,} rows) don't "
+                f"{ICONS['info']} The loaded raw-gaze samples ({len(raw_gaze_df):,} rows) don't "
                 "overlap the current trial filter, so the raw-gaze overlay is "
                 "unavailable here."
             )
@@ -7524,7 +7540,7 @@ def main() -> None:
             # and the counts they came for. The row's own ℹ️ About button still
             # opens the whole thing as a dialog, for this dataset and every
             # other — that is the place detail belongs.
-            st.subheader(f"🔎 What's in the `{dataset_label}` dataset")
+            st.subheader(f"{ICONS['search']} What's in the `{dataset_label}` dataset")
             _render_dataset_overview(active_token, registry=public_dataset_registry())
             # Keyed wrapper → the stable `.st-key-…` selector the "Load and
             # verify a dataset" tutorial spotlights (it kept its name across the

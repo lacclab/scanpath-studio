@@ -110,11 +110,16 @@ from scanpath_studio.constants import (
     upload_limit_mb,
 )
 from scanpath_studio.controls import (
+    _LABEL_GAP,
     FIX_FIELD_SPECS,
     RAW_GAZE_FIELD_SPECS,
     WORD_FIELD_SPECS,
+    _label_w,
     _labeled,
     _pin,
+    _row_label,
+    _sub_caption,
+    _sub_row,
     clear_trial_filter,
     clear_trial_filters,
     column_mapping_ui,
@@ -5549,6 +5554,267 @@ def seed_canvas_state(
     )
 
 
+#: The CSS stack UX-163's *Multilingual* button writes into the text font — a
+#: CJK / Hebrew / Arabic-capable fallback (PRE-6).
+_MULTILINGUAL_FONT_STACK = (
+    "'Noto Sans', 'Noto Sans Hebrew', 'Noto Sans Arabic', "
+    "'Noto Sans CJK SC', 'Arial Unicode MS', sans-serif"
+)
+
+
+def _rail_monitor_row(host) -> tuple[int, int]:
+    """The monitor's pixel size as one ``Monitor | W × H px`` row (UX-163)."""
+    label_w = _label_w()
+    rest = 1.0 - label_w
+    label_col, width_col, times_col, height_col, unit_col = host.columns(
+        [label_w, rest * 0.4, rest * 0.08, rest * 0.4, rest * 0.12],
+        gap=_LABEL_GAP,
+        vertical_alignment="center",
+    )
+    _row_label(
+        label_col,
+        "Monitor",
+        "The presentation monitor's width × height in pixels. Keep it true to the "
+        "experiment's screen so coordinates and word boxes stay to scale.",
+    )
+    width = width_col.number_input(
+        "Monitor width (px)",
+        min_value=100,
+        max_value=10000,
+        step=10,
+        key="global_canvas_width",
+        persist_state="session",
+        label_visibility="collapsed",
+    )
+    _sub_caption(times_col, "×")
+    height = height_col.number_input(
+        "Monitor height (px)",
+        min_value=100,
+        max_value=10000,
+        step=10,
+        key="global_canvas_height",
+        persist_state="session",
+        label_visibility="collapsed",
+    )
+    _sub_caption(unit_col, "px")
+    return int(width), int(height)
+
+
+def _rail_text_rows(
+    host,
+    *,
+    seeded: tuple,
+    display_dpi: float,
+    words_filtered: pd.DataFrame,
+    font_css,
+    disabled: bool,
+    section: str | None,
+) -> tuple[int, str, float, bool]:
+    """The rail's typography rows, under 📄 Stimulus → *Text* (UX-163).
+
+    Four captioned rows (`_sub_row`) instead of up to nine that came and went:
+
+    * *Fit* — **Scale to boxes** and the line spacing it divides a box by
+      (greyed while it is off);
+    * *Size* — the unit (px / pt) and the size. While the text is fitted to the
+      boxes the size is the axis, legend and fallback text's, in px, so the unit
+      greys; otherwise it is the reading text's, and a size in points is
+      converted with the dataset DPI (px = pt × DPI ÷ 72);
+    * *Font* — the font family and the *Multilingual* stack;
+    * *Color* — the text colour, then the plot background (and its custom
+      colour, greyed unless *Custom…* is picked).
+
+    ``disabled`` greys every row while the Text layer is off (UX-97's contract:
+    the settings stay readable, and their stored values are untouched).
+    Returns ``(base_font_size, font_family, line_spacing, scale_text_to_boxes)``.
+    """
+    off_reason = (
+        f"{ICONS['warning']} **Text** is off — turn it on to change this. Your "
+        "settings are kept either way."
+        if disabled
+        else ""
+    )
+
+    def tip(text: str) -> str:
+        return f"{off_reason}\n\n{text}" if off_reason else text
+
+    with host:
+        fit = _sub_row(
+            "Fit",
+            section=section,
+            section_help="How the reading text is drawn.",
+            caption_help=tip(
+                "**Scale to boxes** sizes the text from the word-box height "
+                "(text height = box height ÷ line spacing), so it fills the real "
+                "line slot and scales with the figure. The spacing beside it is "
+                "how many line slots one box spans — OneStop uses 3. Untick to "
+                "set a fixed size below."
+            ),
+        )
+        fit_col, spacing_cap_col, spacing_col = fit.columns(
+            [0.55, 0.2, 0.25], gap=_LABEL_GAP, vertical_alignment="center"
+        )
+        scale_text_to_boxes = fit_col.checkbox(
+            "Scale to boxes",
+            key="global_scale_text_to_boxes",
+            persist_state="session",
+            disabled=disabled,
+        )
+        _sub_caption(spacing_cap_col, "Spacing")
+        line_spacing = spacing_col.number_input(
+            "Line spacing",
+            min_value=1.0,
+            max_value=10.0,
+            step=0.5,
+            key="global_line_spacing",
+            persist_state="session",
+            disabled=disabled or not scale_text_to_boxes,
+            label_visibility="collapsed",
+        )
+
+        size = _sub_row(
+            "Size",
+            caption_help=tip(
+                "With **Scale to boxes** on, this is the axis, legend and "
+                "fallback text size in px. Off, it is the reading text's size — "
+                "in px, or in points converted with the dataset DPI "
+                "(px = pt × DPI ÷ 72)."
+            ),
+        )
+        unit_col, size_col = size.columns(
+            [0.5, 0.5], gap=_LABEL_GAP, vertical_alignment="center"
+        )
+        use_pt = unit_col.segmented_control(
+            "Font unit",
+            options=[False, True],
+            format_func=lambda use_pt: "pt" if use_pt else "px",
+            key="global_use_stimulus_font_pt",
+            persist_state="session",
+            disabled=disabled or scale_text_to_boxes,
+            label_visibility="collapsed",
+        )
+        if not scale_text_to_boxes and use_pt:
+            stimulus_font_pt = size_col.number_input(
+                "Font size (pt)",
+                min_value=4.0,
+                max_value=144.0,
+                step=0.5,
+                key="global_stimulus_font_pt",
+                persist_state="session",
+                disabled=disabled,
+                label_visibility="collapsed",
+            )
+            st.session_state["global_base_font_size"] = int(
+                min(max(round(font_pt_to_px(stimulus_font_pt, display_dpi)), 6), 72)
+            )
+            base_font_size = int(st.session_state["global_base_font_size"])
+        else:
+            base_font_size = size_col.number_input(
+                "Plot font size (px)" if scale_text_to_boxes else "Font size (px)",
+                min_value=6,
+                max_value=72,
+                step=1,
+                key="global_base_font_size",
+                persist_state="session",
+                disabled=disabled,
+                label_visibility="collapsed",
+            )
+
+        font = _sub_row(
+            "Font",
+            caption_help=tip(
+                "The font for the word labels — the exact font from your "
+                "experiment (e.g. 'Courier New') or a CSS fallback stack. "
+                "**Multilingual** fills in a CJK / Hebrew / Arabic-capable stack "
+                "(PRE-6)."
+            ),
+        )
+        family_col, stack_col = font.columns(
+            [0.6, 0.4], gap=_LABEL_GAP, vertical_alignment="center"
+        )
+        font_family = family_col.text_input(
+            "Text font",
+            key="global_font_family",
+            persist_state="session",
+            disabled=disabled,
+            label_visibility="collapsed",
+        )
+        stack_col.button(
+            "Multilingual",
+            on_click=lambda: st.session_state.update(
+                global_font_family=_MULTILINGUAL_FONT_STACK
+            ),
+            disabled=disabled,
+            width="stretch",
+        )
+
+        # Seeded rather than given a `value=`: restored pre-widget by a deep
+        # link / saved config (BUG-17). `seed_canvas_state` pins it too, so a
+        # custom background survives the runs this picker is greyed.
+        _pin("global_bg_custom", DEFAULT_BACKGROUND_COLOR)
+        color = _sub_row(
+            "Color",
+            caption_help=tip(
+                "The reading text's colour, then the background of the plotting "
+                "area (and of exported figures) — with its own colour when "
+                "*Custom…* is picked."
+            ),
+        )
+        text_color_col, bg_cap_col, bg_col, bg_custom_col = color.columns(
+            [0.17, 0.33, 0.33, 0.17], gap=_LABEL_GAP, vertical_alignment="center"
+        )
+        text_color_col.color_picker(
+            "Text color",
+            key="global_text_color",
+            persist_state="session",
+            disabled=disabled,
+            label_visibility="collapsed",
+        )
+        _sub_caption(bg_cap_col, "Background")
+        bg_choice = bg_col.selectbox(
+            "Plot background",
+            options=list(BACKGROUND_PRESETS.keys()) + ["Custom…"],
+            key="global_bg_choice",
+            persist_state="session",
+            disabled=disabled,
+            label_visibility="collapsed",
+        )
+        bg_custom_col.color_picker(
+            "Custom background color",
+            key="global_bg_custom",
+            persist_state="session",
+            disabled=disabled or bg_choice != "Custom…",
+            label_visibility="collapsed",
+        )
+
+        if "right_to_left" in words_filtered and words_filtered["right_to_left"].any():
+            st.caption(
+                "↔ RTL script detected. Landing positions are measured from the "
+                "logical word start; browser bidi shaping is used for labels."
+            )
+        hint = _stimulus_font_install_hint(font_css)
+        if hint is not None:
+            font_name, font_url = hint
+            st.caption(
+                f"{ICONS['info']} This corpus was rendered in **{font_name}**. For "
+                "the overlaid text to match the stimulus image exactly, install "
+                "that font (it isn't bundled), then reload — otherwise labels "
+                f"(especially URLs / Latin) can drift. [Download]({font_url}). Or "
+                "turn on the stimulus **Image** to read the original text."
+            )
+    line_spacing_value = (
+        float(line_spacing)
+        if line_spacing is not None
+        else float(st.session_state.get("global_line_spacing", seeded[4]))
+    )
+    return (
+        int(base_font_size),
+        str(font_family),
+        line_spacing_value,
+        bool(scale_text_to_boxes),
+    )
+
+
 def render_canvas_controls(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
@@ -5559,6 +5825,8 @@ def render_canvas_controls(
     bare: bool = False,
     text_host=None,
     render_text: bool = True,
+    text_disabled: bool = False,
+    text_section: str | None = None,
 ) -> tuple[int, int, int, str, float, bool]:
     """Render the canvas-geometry, typography and background panel.
 
@@ -5591,6 +5859,14 @@ def render_canvas_controls(
     stimulus font conversion) reads them from state exactly as before, which is
     also what keeps a share link carrying them working.
 
+    **UX-163/164 — in ``bare`` mode the rows take the rail popovers' shape.**
+    The monitor's width and height share one ``Monitor | W × H px`` row, and the
+    typography is four captioned rows — *Fit*, *Size*, *Font*, *Color* — under
+    the 📄 Stimulus popover's *Text* row (`_rail_text_rows`). ``text_disabled``
+    greys them while the Text layer is off, rather than leaving them undrawn;
+    ``text_section`` titles the group where no *Text* row precedes it (the
+    Corpus figure-style panel). The wizard's standalone form is unchanged.
+
     Returns:
         Tuple of (canvas_width, canvas_height, base_font_size, font_family,
         line_spacing, scale_text_to_boxes).
@@ -5617,28 +5893,33 @@ def render_canvas_controls(
     # section that owns it, and the caller has already opened the one disclosure.
     screen = display
     text = text_host if (bare and text_host is not None) else display
-    canvas_width = field(
-        screen,
-        "number_input",
-        "Monitor width (px)",
-        min_value=100,
-        max_value=10000,
-        step=10,
-        help="Use the real monitor width in pixels to keep coordinates true to scale.",
-        key="global_canvas_width",
-        persist_state="session",
-    )
-    canvas_height = field(
-        screen,
-        "number_input",
-        "Monitor height (px)",
-        min_value=100,
-        max_value=10000,
-        step=10,
-        help="Use the real monitor height in pixels to keep coordinates true to scale.",
-        key="global_canvas_height",
-        persist_state="session",
-    )
+    if bare:
+        canvas_width, canvas_height = _rail_monitor_row(screen)
+    else:
+        canvas_width = field(
+            screen,
+            "number_input",
+            "Monitor width (px)",
+            min_value=100,
+            max_value=10000,
+            step=10,
+            help="Use the real monitor width in pixels to keep coordinates true "
+            "to scale.",
+            key="global_canvas_width",
+            persist_state="session",
+        )
+        canvas_height = field(
+            screen,
+            "number_input",
+            "Monitor height (px)",
+            min_value=100,
+            max_value=10000,
+            step=10,
+            help="Use the real monitor height in pixels to keep coordinates true "
+            "to scale.",
+            key="global_canvas_height",
+            persist_state="session",
+        )
     # DATA-2: physical setup values live beside the pixel canvas they explain.
     # They are persisted with the plot config and immediately yield a px/degree
     # scale for downstream saccade/reporting work.
@@ -5722,7 +6003,28 @@ def render_canvas_controls(
             bool(seeded[5]),
         )
 
-    # --- 🔤 Text & fonts (sub-group in bare mode) -------------------------
+    if bare:
+        base_font_size, font_family, line_spacing, scale_text_to_boxes = (
+            _rail_text_rows(
+                text,
+                seeded=seeded,
+                display_dpi=float(display_dpi),
+                words_filtered=words_filtered,
+                font_css=font_css,
+                disabled=text_disabled,
+                section=text_section,
+            )
+        )
+        return (
+            int(canvas_width),
+            int(canvas_height),
+            int(base_font_size),
+            font_family,
+            float(line_spacing),
+            bool(scale_text_to_boxes),
+        )
+
+    # --- 🔤 Text & fonts (the wizard's flat form) -------------------------
     # Reading text is true-to-scale by default: it auto-sizes to the word boxes
     # (text height = box_height / line_spacing) and scales with the figure, so it
     # always fills the real line slot. Untick to fall back to a fixed font size.
@@ -7258,12 +7560,20 @@ def main() -> None:
         scale_text_to_boxes,
     ) = seed_canvas_state(words_filtered, canvas_geometry_frame, data_choice)
 
-    def canvas_renderer(slot, text_host=None, *, render_text: bool = True) -> None:
+    def canvas_renderer(
+        slot,
+        text_host=None,
+        *,
+        render_text: bool = True,
+        text_disabled: bool = False,
+    ) -> None:
         """Render the canvas/text controls into the rail, in two places.
 
         UX-81 split the panel between two sections: the screen half into
         ``slot`` (📐 Figure & canvas) and the typography half into ``text_host``
         (📄 Stimulus → Text). One call, so each widget is created exactly once.
+        With no ``text_host`` (the Corpus style panel) the typography rows are
+        titled *Text* themselves, since no *Text* row precedes them there.
         """
         render_canvas_controls(
             words_filtered,
@@ -7273,6 +7583,8 @@ def main() -> None:
             bare=True,
             text_host=text_host,
             render_text=render_text,
+            text_disabled=text_disabled,
+            text_section=None if text_host is not None else "Text",
         )
 
     # The visualization controls moved out of the sidebar into the Scanpath

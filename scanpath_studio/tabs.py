@@ -117,11 +117,14 @@ from scanpath_studio.controls import (
     RAW_GAZE_FIELD_SPECS,
     SUMMARY_CHIP_FIELDS,
     WORD_FIELD_SPECS,
+    _check_row,
     _collect_compare_styles,
     _drop_stale,
     _gated_help,
     _labeled,
     _numeric_slider,
+    _popover_rows,
+    _sub_row,
     column_mapping_ui,
     corpus_style_controls,
     current_dataset_name,
@@ -247,6 +250,8 @@ from scanpath_studio.utils import (
     qualify_for_compare,
     safe_summary,
     select_trial,
+    self_compare_participant,
+    separate_self_compare,
     sort_trial_options,
     step_within,
     trial_options_snapshot_key,
@@ -824,22 +829,18 @@ def _render_true_scale_chart(
     _embed_html_iframe(html, height=iframe_height)
 
 
-def _different_texts_note(
-    text_a: str | None, text_b: str | None, *, overlaid: bool
-) -> str | None:
-    """What to say when the two compared readings are of **different texts**.
+def _different_texts_note(text_a: str | None, text_b: str | None) -> str | None:
+    """The warning for an **overlay** of readings of two **different texts**.
 
     ``None`` when they match, or when either side's text id is unknown — a
     dataset without a text column must not be nagged about something it cannot
     answer.
 
-    The wording *and the register* both split on the consequence. An overlay
-    draws both scanpaths over **one** set of word boxes, so a mismatched pair is
-    actively misleading — it invites you to read one reading's fixations against
-    the other's words — and that earns a ``st.warning``. A split layout gives
-    each panel its own stimulus, where comparing two texts is an ordinary thing
-    to want; the only caveat is that positions don't compare across the panels,
-    so it is a caption. The caller picks the element from ``overlaid``.
+    Only an overlay asks for it: it draws both scanpaths over **one** set of word
+    boxes, so a mismatched pair is actively misleading — it invites you to read
+    one reading's fixations against the other's words. A split layout gives each
+    panel its own stimulus, where comparing two texts is an ordinary thing to
+    want, so it says nothing (CMP-23 dropped the caption it used to carry).
 
     Rendered under the figure (both the static comparison and the animated
     co-replay) rather than inside the rail's popover: a caveat about what the
@@ -847,16 +848,11 @@ def _different_texts_note(
     """
     if not text_a or not text_b or str(text_a) == str(text_b):
         return None
-    heads = f"**A** reads `{text_a}`, **B** reads `{text_b}` — different texts."
-    if overlaid:
-        return (
-            f"{heads} Both scanpaths are drawn over one set of word boxes, so "
-            "the spatial overlay isn't meaningful. Compare two readings of the "
-            "same text, or switch to a side-by-side layout."
-        )
     return (
-        f"{heads} Each panel is drawn over its own stimulus, so positions and "
-        "per-word measures don't compare across the two."
+        f"**A** reads `{text_a}`, **B** reads `{text_b}` — different texts. Both "
+        "scanpaths are drawn over one set of word boxes, so the spatial overlay "
+        "isn't meaningful. Compare two readings of the same text, or switch to a "
+        "side-by-side layout."
     )
 
 
@@ -2126,7 +2122,7 @@ def _render_compare_selector(
         elif source is not None:
             st.info(f"No trials in **{source.name}** match its filters.")
         else:
-            st.info("No other trials match B's filters.")
+            st.info("No trials match B's filters.")
         return None, None, None, None
 
     sort_keys = trial_sort_keys(
@@ -2176,8 +2172,8 @@ def _render_compare_selector(
             if compare_step_linked() and sort_choice == _CMP_SORT_DEFAULT:
                 order_choice = TRIAL_SORT_DEFAULT
                 st.caption(
-                    "Sorted by **Trial ID** while *Step A + B* is on, so B keeps "
-                    "its place in the list when A changes text."
+                    "Sorted by **Trial ID** while *Step · A and B together* is on, "
+                    "so B keeps its place in the list when A changes text."
                 )
             else:
                 order_choice = sort_choice
@@ -2220,26 +2216,37 @@ def _render_compare_selector(
     # previous one on the very next run.
     current = st.session_state.get(sel_key)
     lost_identity = None
+    # CMP-22: A's own trial is in B's list, so the two readouts count the same
+    # trials — but it is never the *default*: a fresh B is the first candidate
+    # that is not A. Only a user's pick (or a link) lands B on A itself.
+    primary_identity = (str(selected_participant), str(selected_trial))
+    default_label = next(
+        (
+            opt[2]
+            for opt in options
+            if source is not None or (str(opt[0]), str(opt[1])) != primary_identity
+        ),
+        labels[0],
+    )
     if current not in labels:
         remembered = st.session_state.get(_COMPARE_IDENTITY_KEY)
         if isinstance(remembered, tuple) and remembered in identity_to_label:
             current = identity_to_label[remembered]
         elif remembered is not None and current is not None:
-            # Genuinely gone from the pool — most often because A just moved
-            # *onto* it, and a trial is never a candidate to compare with
-            # itself. Say so rather than swapping the panel silently.
+            # Genuinely gone from the pool — B's filters or dataset no longer
+            # admit it. Say so rather than swapping the panel silently.
             lost_identity = remembered
-            current = labels[0]
+            current = default_label
         else:
-            current = labels[0]
+            current = default_label
         st.session_state[sel_key] = current
     st.session_state[_COMPARE_IDENTITY_KEY] = tuple(
         str(v) for v in label_to_trial[current]
     )
     if lost_identity is not None:
         st.caption(
-            f"`{lost_identity[1]}` is no longer available to compare with — "
-            "it is the selected trial now. Showing the first candidate instead."
+            f"`{lost_identity[1]}` is no longer among B's trials. "
+            "Showing the first candidate instead."
         )
 
     # CMP-13: publish the candidates as rendered — label plus identity, because
@@ -4759,140 +4766,151 @@ def render_single_trial_tab(
                     key="split_mode_animate_popover",
                     help="Replay settings. Playback controls appear above the plot.",
                 ):
-                    st.session_state.setdefault(
-                        "single_playback_speed", _ANIM_DEFAULT_SPEED
-                    )
-                    playback_speed = _labeled(
-                        st,
-                        "select_slider",
-                        "Playback speed",
-                        options=_ANIM_SPEED_OPTIONS,
-                        format_func=lambda x: _ANIM_SPEED_LABELS[
-                            _ANIM_SPEED_OPTIONS.index(x)
-                        ],
-                        help=_gated_help(
-                            "Playback speed relative to the recorded fixation timings.",
-                            anim_gate,
-                        ),
-                        key="single_playback_speed",
-                        persist_state="session",
-                        disabled=anim_disabled,
-                    )
-                    # VIZ-10: start the replay automatically on load (at the speed
-                    # above). Off → the figure waits on the ▶ Play button. UX-30
-                    # moved it up here: Autoplay and speed are both "how does it
-                    # play", where the frame grid below is "how is it sampled".
-                    _labeled(
-                        st,
-                        "checkbox",
-                        "Autoplay on load",
-                        key="global_anim_autoplay",
-                        persist_state="session",
-                        disabled=anim_disabled,
-                        help=_gated_help(
-                            "Start playing when the plot loads.",
-                            anim_gate,
-                        ),
-                    )
-                    st.divider()
-
-                    # VIZ-11 follow-up: the frame grid is a real tradeoff — smoothness
-                    # against frame count, which is what export size and render time
-                    # are made of. It used to be decided for the user in two module
-                    # constants, and the cap coarsened the grid silently.
-                    def _apply_anim_quality() -> None:
-                        preset = _ANIM_QUALITY_PRESETS.get(
-                            st.session_state.get("global_anim_quality")
+                    # UX-164: the rail popovers' layout (UX-158) — a *Replay*
+                    # group (speed, autoplay) and a *Frames* group (the
+                    # smoothness preset and, greyed unless it is Custom, the
+                    # spacing and the limit), in place of five full-width rows,
+                    # a divider, and two that came and went with Custom.
+                    with _popover_rows("animate"):
+                        st.session_state.setdefault(
+                            "single_playback_speed", _ANIM_DEFAULT_SPEED
                         )
-                        if preset is not None:
+                        playback_speed = _sub_row(
+                            "Speed",
+                            section="Replay",
+                            section_help="How the replay plays.",
+                            caption_help=_gated_help(
+                                "Playback speed relative to the recorded fixation "
+                                "timings.",
+                                anim_gate,
+                            ),
+                        ).select_slider(
+                            "Playback speed",
+                            options=_ANIM_SPEED_OPTIONS,
+                            format_func=lambda x: _ANIM_SPEED_LABELS[
+                                _ANIM_SPEED_OPTIONS.index(x)
+                            ],
+                            key="single_playback_speed",
+                            persist_state="session",
+                            disabled=anim_disabled,
+                            label_visibility="collapsed",
+                        )
+                        # VIZ-10: start the replay automatically on load (at the speed
+                        # above). Off → the figure waits on the ▶ Play button.
+                        _sub_row(
+                            "Autoplay",
+                            caption_help=_gated_help(
+                                "Start playing when the plot loads.", anim_gate
+                            ),
+                        ).checkbox(
+                            "On load",
+                            key="global_anim_autoplay",
+                            persist_state="session",
+                            disabled=anim_disabled,
+                        )
+
+                        # VIZ-11 follow-up: the frame grid is a real tradeoff — smoothness
+                        # against frame count, which is what export size and render time
+                        # are made of. It used to be decided for the user in two module
+                        # constants, and the cap coarsened the grid silently.
+                        def _apply_anim_quality() -> None:
+                            preset = _ANIM_QUALITY_PRESETS.get(
+                                st.session_state.get("global_anim_quality")
+                            )
+                            if preset is not None:
+                                (
+                                    st.session_state["global_anim_grid_step_ms"],
+                                    st.session_state["global_anim_max_frames"],
+                                ) = preset
+
+                        current_grid = (
+                            int(st.session_state.get("global_anim_grid_step_ms", 100)),
+                            int(st.session_state.get("global_anim_max_frames", 360)),
+                        )
+                        matched_quality = next(
                             (
-                                st.session_state["global_anim_grid_step_ms"],
-                                st.session_state["global_anim_max_frames"],
-                            ) = preset
+                                name
+                                for name, values in _ANIM_QUALITY_PRESETS.items()
+                                if values == current_grid
+                            ),
+                            None,
+                        )
+                        # UX-30: gating the sliders behind Custom means picking Custom on
+                        # the segmented control has to be "sticky" even while the grid
+                        # still equals a Coarse/Fine preset exactly (the state right after
+                        # switching, before either slider is touched) — otherwise this
+                        # same re-inference would immediately snap it back to that preset's
+                        # name and grey the sliders that were just enabled. Only fall back
+                        # to inferring Coarse/Fine here when the mode isn't already Custom;
+                        # a grid matching no preset at all is unambiguous either way.
+                        previous_quality = st.session_state.get("global_anim_quality")
+                        if matched_quality is None:
+                            st.session_state["global_anim_quality"] = "Custom"
+                        elif previous_quality != "Custom":
+                            st.session_state["global_anim_quality"] = matched_quality
+                        _sub_row(
+                            "Quality",
+                            section="Frames",
+                            section_help="How the replay is sampled — which is what "
+                            "its smoothness, export size and render time are made of.",
+                            caption_help=_gated_help(
+                                "Fine is smoother; Coarse renders faster. Custom sets "
+                                "the spacing and the limit below.",
+                                anim_gate,
+                            ),
+                        ).segmented_control(
+                            "Animation smoothness",
+                            options=["Coarse", "Fine", "Custom"],
+                            key="global_anim_quality",
+                            persist_state="session",
+                            on_change=_apply_anim_quality,
+                            disabled=anim_disabled,
+                            label_visibility="collapsed",
+                        )
 
-                    current_grid = (
-                        int(st.session_state.get("global_anim_grid_step_ms", 100)),
-                        int(st.session_state.get("global_anim_max_frames", 360)),
-                    )
-                    matched_quality = next(
-                        (
-                            name
-                            for name, values in _ANIM_QUALITY_PRESETS.items()
-                            if values == current_grid
-                        ),
-                        None,
-                    )
-                    # UX-30: gating the sliders behind Custom means picking Custom on
-                    # the segmented control has to be "sticky" even while the grid
-                    # still equals a Coarse/Fine preset exactly (the state right after
-                    # switching, before either slider is touched) — otherwise this
-                    # same re-inference would immediately snap it back to that preset's
-                    # name and hide the sliders that were just revealed. Only fall back
-                    # to inferring Coarse/Fine here when the mode isn't already Custom;
-                    # a grid matching no preset at all is unambiguous either way.
-                    previous_quality = st.session_state.get("global_anim_quality")
-                    if matched_quality is None:
-                        st.session_state["global_anim_quality"] = "Custom"
-                    elif previous_quality != "Custom":
-                        st.session_state["global_anim_quality"] = matched_quality
-                    _labeled(
-                        st,
-                        "segmented_control",
-                        "Animation smoothness",
-                        options=["Coarse", "Fine", "Custom"],
-                        key="global_anim_quality",
-                        persist_state="session",
-                        on_change=_apply_anim_quality,
-                        disabled=anim_disabled,
-                        help=_gated_help(
-                            "Fine is smoother; Coarse renders faster. Custom sets "
-                            "the spacing and limit.",
+                        def _mark_anim_quality_custom() -> None:
+                            st.session_state["global_anim_quality"] = "Custom"
+
+                        grid_idle = (
+                            anim_disabled
+                            or st.session_state["global_anim_quality"] != "Custom"
+                        )
+                        step_help = _gated_help(
+                            "Time between frames. Smaller is smoother (Custom only).",
                             anim_gate,
-                        ),
-                    )
-
-                    def _mark_anim_quality_custom() -> None:
-                        st.session_state["global_anim_quality"] = "Custom"
-
-                    if st.session_state["global_anim_quality"] == "Custom":
-                        # UX-30 put these two side by side in half-width columns,
-                        # because label-above made each of them two rows tall and
-                        # stacking cost four. UX-51's `label | slider | box` row is
-                        # one row either way, so they go back to full width: same
-                        # height, and each slider gets a usable track instead of
-                        # half the popover minus its own label.
+                        )
                         _numeric_slider(
                             st,
                             "Frame every (ms)",
                             key="global_anim_grid_step_ms",
                             persist_state="session",
-                            label_left=True,
                             min_value=20,
                             max_value=500,
                             step=10,
+                            slider_format="%d ms",
+                            number_format="%d",
                             on_change=_mark_anim_quality_custom,
-                            disabled=anim_disabled,
-                            help=_gated_help(
-                                "Time between frames. Smaller is smoother.",
-                                anim_gate,
-                            ),
+                            disabled=grid_idle,
+                            help=step_help,
+                            field_host=_sub_row("Every", caption_help=step_help),
+                        )
+                        max_help = _gated_help(
+                            "Maximum replay frames; long trials are spaced "
+                            "automatically (Custom only).",
+                            anim_gate,
                         )
                         _numeric_slider(
                             st,
                             "Max frames",
                             key="global_anim_max_frames",
                             persist_state="session",
-                            label_left=True,
                             min_value=30,
                             max_value=2000,
                             step=10,
                             on_change=_mark_anim_quality_custom,
-                            disabled=anim_disabled,
-                            help=_gated_help(
-                                "Maximum replay frames; long trials are spaced "
-                                "automatically.",
-                                anim_gate,
-                            ),
+                            disabled=grid_idle,
+                            help=max_help,
+                            field_host=_sub_row("Max", caption_help=max_help),
                         )
                     # Filled later, once the selected comparison trial is known.
                     # Creating the slot here keeps the resulting frame count beside
@@ -4936,47 +4954,35 @@ def render_single_trial_tab(
                 # toggle's `help` served as a tooltip here instead of a `?`.
                 # BUG-37: see the Animate row above — an explicit key so a
                 # blank-label popover keeps its open state across reruns.
-                with st.popover(
-                    "",
-                    width="content",
-                    key="split_mode_compare_popover",
-                    help="Compare settings. "
-                    + (
-                        "Co-animate a second reading on one clock."
-                        if animate
-                        else "Overlay another trial's scanpath or view them side "
-                        "by side."
-                    ),
-                ):
-                    # CMP-13. Deliberately "step" and not "keep them in sync":
-                    # the two pools have different sizes (B excludes A, and a
-                    # cross-dataset B is another corpus), so their positions
-                    # carry no shared meaning — the control advances each by the
-                    # same ±1, nothing more. UX-99 cut the label to "Step A + B":
-                    # the rail's fixed label column truncated the old sentence to
-                    # "Step both trials toge…", and the help line under it says
-                    # the rest anyway.
-                    _labeled(
-                        st,
-                        "checkbox",
-                        "Step A + B",
-                        key=COMPARE_STEP_LINK_KEY,
-                        persist_state="session",
-                        disabled=cmp_disabled,
-                        help=_gated_help(
-                            "◀ ▶ moves both trial pickers by one.",
-                            cmp_gate,
+                # UX-164: the rail popovers' layout (UX-158) — *View*, then
+                # *Stimulus from* (greyed unless the figure is an overlay, rather
+                # than hidden), *Legend* and *Step* as `label | ☑ Show` rows.
+                with (
+                    st.popover(
+                        "",
+                        width="content",
+                        key="split_mode_compare_popover",
+                        help="Compare settings. "
+                        + (
+                            "Co-animate a second reading on one clock."
+                            if animate
+                            else "Overlay another trial's scanpath or view them "
+                            "side by side."
                         ),
-                    )
-                    # Animate used to make this whole block *vanish*, which read
-                    # as "Compare has almost no settings" and hid one control
-                    # (Stimulus from) that a co-replay honours perfectly well.
-                    # Same contract as the two ▾ triggers themselves: what a mode
-                    # offers stays on screen, and only what genuinely does not
-                    # apply goes grey, with the reason in its tooltip.
+                    ),
+                    _popover_rows("compare"),
+                ):
+                    # Animate used to make this whole block *vanish*, which
+                    # read as "Compare has almost no settings" and hid one
+                    # control (Stimulus from) that a co-replay honours
+                    # perfectly well. Same contract as the two ▾ triggers
+                    # themselves: what a mode offers stays on screen, and only
+                    # what genuinely does not apply goes grey, with the reason
+                    # in its tooltip.
                     layout_gate = cmp_gate or (
-                        f"{ICONS['warning']} An animated comparison replays both readings on one "
-                        "clock, in one coordinate space, so it always overlays."
+                        f"{ICONS['warning']} An animated comparison replays "
+                        "both readings on one clock, in one coordinate space, "
+                        "so it always overlays."
                         if animate
                         else ""
                     )
@@ -4991,25 +4997,29 @@ def render_single_trial_tab(
                         format_func=lambda value: (
                             "Top & bottom" if value == "Stacked" else value
                         ),
+                        # The three segments need the room a narrower title
+                        # column leaves; at the popovers' width they wrap.
                         label_width=0.2,
                         width="stretch",
                         key=SINGLE_COMPARE_LAYOUT,
                         persist_state="session",
                         disabled=cmp_disabled or animate,
                         help=_gated_help(
-                            "Top & bottom places one plot above the other.",
+                            "Overlay both scanpaths on one canvas, or give "
+                            "each its own panel — side by side, or one above "
+                            "the other.",
                             layout_gate,
                         ),
                     )
                     # "Resolve, don't rewrite": the stored layout is untouched
-                    # while Animate holds the figure on overlay, so say where the
-                    # user's own choice went instead of letting a greyed control
-                    # show a layout the plot isn't in.
+                    # while Animate holds the figure on overlay, so say where
+                    # the user's own choice went instead of letting a greyed
+                    # control show a layout the plot isn't in.
                     stored_layout = st.session_state.get(SINGLE_COMPARE_LAYOUT)
                     if animate and stored_layout != "Overlay":
                         st.caption(
-                            "Overlaid while **Animate** is on; your layout comes "
-                            "back when you turn it off."
+                            "Overlaid while **Animate** is on; your layout "
+                            "comes back when you turn it off."
                         )
                     # CMP-8 §5.3 / CMP-11: overlay pools both trials into one
                     # axis range, so across datasets it is allowed only when
@@ -5031,52 +5041,52 @@ def render_single_trial_tab(
                     # is identical, so an overlay can otherwise stack two
                     # offset sets of rectangles. Overlay-only — each panel of
                     # a split layout owns its own stimulus, and dropping one
-                    # would just blank half the figure. A co-replay *is* an
-                    # overlay, and `make_scanpath_animation` reads
-                    # `compare_stimulus` (it is what stops a cross-dataset
-                    # replay running B's trace over A's text), so this one is
-                    # live under Animate rather than greyed.
-                    if overlaid:
-                        st.session_state.setdefault(SINGLE_COMPARE_STIMULUS, "Both")
-                        _labeled(
-                            st,
-                            "segmented_control",
-                            "Stimulus from",
-                            options=["Both", "A", "B"],
-                            key=SINGLE_COMPARE_STIMULUS,
-                            persist_state="session",
-                            disabled=cmp_disabled,
-                            help=_gated_help(
-                                "Which reading supplies the word boxes and "
-                                "text. Across datasets the two rarely line up."
-                                + (
-                                    " A replay draws one stimulus layer, so "
-                                    "**Both** means A's."
-                                    if animate
-                                    else ""
-                                ),
-                                cmp_gate,
-                            ),
-                        )
-                    show_legend_now = _labeled(
+                    # would just blank half the figure, so there it greys. A
+                    # co-replay *is* an overlay, and `make_scanpath_animation`
+                    # reads `compare_stimulus` (it is what stops a
+                    # cross-dataset replay running B's trace over A's text),
+                    # so this one is live under Animate rather than greyed.
+                    st.session_state.setdefault(SINGLE_COMPARE_STIMULUS, "Both")
+                    _labeled(
                         st,
-                        "checkbox",
-                        "Show A/B legend",
+                        "segmented_control",
+                        "Stimulus from",
+                        options=["Both", "A", "B"],
+                        key=SINGLE_COMPARE_STIMULUS,
+                        persist_state="session",
+                        disabled=cmp_disabled or not overlaid,
+                        help=_gated_help(
+                            "Which reading supplies the word boxes and text "
+                            "of an overlay (each panel of a split layout draws "
+                            "its own). Across datasets the two rarely line up."
+                            + (
+                                " A replay draws one stimulus layer, so "
+                                "**Both** means A's."
+                                if animate
+                                else ""
+                            ),
+                            cmp_gate,
+                        ),
+                    )
+                    show_legend_now, _ = _check_row(
+                        "Legend",
                         key="global_show_compare_legend",
                         persist_state="session",
                         disabled=cmp_disabled,
                         help=_gated_help(
-                            "Name scanpaths A and B on the figure.",
+                            "Name scanpaths A and B on the figure — with the "
+                            "auto label, or your own pattern below.",
                             cmp_gate,
                         ),
                     )
                     if show_legend_now:
-                        # UX-31: override the auto "participant · trial" label,
-                        # EXP-2-style (same pattern language + live preview as
-                        # the rail's title/caption). Empty = the auto label.
-                        # The field vocabulary is spelled out here rather than
-                        # pointed at: "same fields as the title/caption pattern"
-                        # only helps a user who has already found that control.
+                        # UX-31: override the auto "participant · trial"
+                        # label, EXP-2-style (same pattern language + live
+                        # preview as the rail's title/caption). Empty = the
+                        # auto label. The field vocabulary is spelled out
+                        # here rather than pointed at: "same fields as the
+                        # title/caption pattern" only helps a user who has
+                        # already found that control.
                         label_fields = pattern_fields(
                             "p01",
                             "t01",
@@ -5092,9 +5102,9 @@ def render_single_trial_tab(
                                 f"Label {side}",
                                 f"cmp{idx}_label_pattern",
                                 label_fields,
-                                # The auto label shows *in* the box, greyed, so
-                                # what an empty box gives you is readable without
-                                # hovering the tooltip (UX-31).
+                                # The auto label shows *in* the box, greyed,
+                                # so what an empty box gives you is readable
+                                # without hovering the tooltip (UX-31).
                                 placeholder=DEFAULT_COMPARE_LABEL_PATTERN,
                                 help=_gated_help(
                                     "Leave empty for the auto label.", cmp_gate
@@ -5103,6 +5113,22 @@ def render_single_trial_tab(
                                 disabled=cmp_disabled,
                             )
                         render_pattern_help(box, label_fields)
+                    # CMP-13. Deliberately "step" and not "keep them in sync":
+                    # the two pools have different sizes (B has its own
+                    # filters, and a cross-dataset B is another corpus), so
+                    # their positions carry no shared meaning — the control
+                    # advances each by the same ±1, nothing more.
+                    _check_row(
+                        "Step",
+                        key=COMPARE_STEP_LINK_KEY,
+                        persist_state="session",
+                        check_label="A and B together",
+                        check_share=0.7,
+                        disabled=cmp_disabled,
+                        help=_gated_help(
+                            "◀ ▶ moves both trial pickers by one.", cmp_gate
+                        ),
+                    )
             # ENG-24: controls must gate against the mode the renderer can actually
             # enter, not merely the raw toggle. Compare needs at least one candidate;
             # Animate is resolved independently because it remains a distinct empty-
@@ -5117,6 +5143,9 @@ def render_single_trial_tab(
                     selected_participant,
                     selected_trial,
                     selected_text,
+                    # B's picker lists A too (CMP-22), but a trial compared with
+                    # only itself is not a comparison.
+                    include_primary=False,
                 )
             )
             st.session_state["_resolved_animating"] = bool(animate)
@@ -5435,11 +5464,21 @@ def render_single_trial_tab(
     # disjoint frames warns and churns dtypes — align onto the union first. The
     # shared numeric set feeds the §5.4 metric gate below.
     shared_numeric: frozenset[str] | None = None
+    self_compare_figure_id: str | None = None
     if comparing and compare_meta is not None:
         words_a, words_b, _ = _align_compare_columns(trial_words, compare_meta["words"])
         fix_a, fix_b, shared_fix = _align_compare_columns(
             plot_fixations, plot_compare_fix
         )
+        if not cross_dataset and (
+            str(figure_compare_participant),
+            str(compare_trial),
+        ) == (str(selected_participant), str(selected_trial)):
+            # CMP-22: B is A's own trial. Rename B's copy apart for the figure
+            # only — `make_comparison_figure` slices by (participant, trial).
+            words_b = separate_self_compare(words_b, selected_participant)
+            fix_b = separate_self_compare(fix_b, selected_participant)
+            self_compare_figure_id = self_compare_participant(selected_participant)
         cmp_words = pd.concat([words_a, words_b])
         cmp_fixations = pd.concat([fix_a, fix_b])
         if cross_dataset:
@@ -5749,7 +5788,6 @@ def render_single_trial_tab(
                 text_note = _different_texts_note(
                     _trial_text_id(trial_words),
                     _trial_text_id(compare_meta["words"]),
-                    overlaid=True,
                 )
                 if text_note:
                     st.warning(text_note, icon=ICONS["warning"])
@@ -5783,6 +5821,7 @@ def render_single_trial_tab(
                 ),
                 primary_combo_row=primary_combo_row,
                 download_name=f"scanpath_{_safe_filename(save_slug)}",
+                figure_participant_b=self_compare_figure_id,
             )
         else:
             # PRE-3: the corrected frame (`plot_fixations`) was built above and is
@@ -6126,8 +6165,14 @@ def _render_comparison_figure(
     setup_note: str = "",
     primary_combo_row: Callable[[], dict | None] | None = None,
     download_name: str = "scanpath",
+    figure_participant_b: str | None = None,
 ):
     """Render comparison figure for two trials.
+
+    ``figure_participant_b`` (CMP-22) is the id B's rows carry in the merged
+    frames when it differs from ``compare_participant`` — a trial compared with
+    itself, renamed apart by `separate_self_compare`. It is used only to slice
+    the figure; labels and lookups keep the real id.
 
     ``fixations_filtered`` carries both scanpaths, already resolved by the
     caller: A's VIZ-7 fixation-index window (a single-scanpath control with no
@@ -6265,7 +6310,7 @@ def _render_comparison_figure(
         words_filtered,
         fixations_filtered,
         (selected_participant, selected_trial),
-        (compare_participant, compare_trial),
+        (figure_participant_b or compare_participant, compare_trial),
         settings=comparison_settings,
     )
     add_illustration_label(fig_compare, viz_settings.get("illustration_reasons"))
@@ -6289,17 +6334,13 @@ def _render_comparison_figure(
     )
     _render_true_scale_chart(fig_compare, key="compare", download_name=download_name)
     overlaid = layout == "overlay"
-    text_note = _different_texts_note(
-        primary_text_id, compare_text_id, overlaid=overlaid
+    # Only where the figure is misleading (see the note's docstring): a split
+    # layout comparing two texts is a legitimate thing to do (CMP-23).
+    text_note = (
+        _different_texts_note(primary_text_id, compare_text_id) if overlaid else None
     )
     if text_note:
-        # A warning only where the figure is misleading (see the note's
-        # docstring); a split layout comparing two texts is a legitimate thing
-        # to do, and a yellow box on every one of them would be crying wolf.
-        if overlaid:
-            st.warning(text_note, icon=ICONS["warning"])
-        else:
-            st.caption(f"{ICONS['warning']} {text_note}")
+        st.warning(text_note, icon=ICONS["warning"])
     if cross_dataset:
         # §5.3: the one thing a cross-dataset figure must never be is silent
         # about its own geometry. Each panel is true-to-scale on its *own*

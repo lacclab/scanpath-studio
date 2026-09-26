@@ -1232,8 +1232,7 @@ def render_export_options(
         if title_pattern or caption_pattern:
             st.caption(
                 "Title & caption on the figure — set on the Scanpath rail's "
-                "**📐 Figure & canvas** → *Title & caption on the figure*, and "
-                "applied here too."
+                "**📐 Figure & canvas** → *Title & caption*, and applied here too."
             )
 
     return ExportOptions(
@@ -1341,11 +1340,13 @@ class ComparisonSide:
     def slug(self) -> str:
         return f"{_safe_id(self.participant)}__{_safe_id(self.trial)}"
 
-    def stamped(self) -> tuple[pd.DataFrame, pd.DataFrame]:
+    def stamped(self, side: str | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Both frames with a ``dataset`` column, so the pair's tables are readable.
 
         Two corpora can hold the same ``(participant_id, trial_id)``; without
         this column the rows in ``fixations.csv`` would be indistinguishable.
+        ``side`` (CMP-22) also stamps a ``scanpath`` column, ``"A"`` or ``"B"``:
+        B can now be A's own trial, whose rows match A's on every other column.
         """
         label = self.dataset or "(this dataset)"
         out = []
@@ -1355,6 +1356,8 @@ class ComparisonSide:
                 continue
             stamped = frame.copy()
             stamped["dataset"] = label
+            if side is not None:
+                stamped["scanpath"] = side
             out.append(stamped)
         return out[0], out[1]
 
@@ -1430,8 +1433,8 @@ def pair_export(
                 )
             zf.writestr(f"{folder}/figure.{fmt}", data)
 
-        words_a, fix_a = side_a.stamped()
-        words_b, fix_b = side_b.stamped()
+        words_a, fix_a = side_a.stamped("A")
+        words_b, fix_b = side_b.stamped("B")
         for fmt in options.table_formats():
             if options.include_fixations:
                 _write_table(
@@ -1442,8 +1445,11 @@ def pair_export(
                 )
             if options.include_measures:
                 measures = [
-                    compute_word_metrics(words, fixations)
-                    for words, fixations in ((words_a, fix_a), (words_b, fix_b))
+                    compute_word_metrics(words, fixations).assign(scanpath=side)
+                    for side, words, fixations in (
+                        ("A", words_a, fix_a),
+                        ("B", words_b, fix_b),
+                    )
                     if words is not None and not words.empty
                 ]
                 if measures:

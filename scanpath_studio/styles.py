@@ -738,6 +738,16 @@ def get_app_css() -> str:
     /* A row whose title carries help. The dotted underline is the only remaining
        hint that there is something to hover, now that the `?` icon is folded
        into the title itself. */
+    /* UX-158 — a row's caption inside a titled group of rows (`controls._sub_row`):
+       the group's title leads the first row, and each row's own caption is
+       quieter so the title still reads as the heading of the run. */
+    .sps-fsub {
+        font-size: 0.85rem;
+        opacity: 0.72;
+    }
+    /* UX-158/159 — a rail popover's rows (`controls._popover_rows`), a little
+       further apart than the app-wide gap:0 (the later rule wins the tie). */
+    div[class*="st-key-rail_rows_"] { gap: 0.5rem !important; }
     .sps-flabel-help {
         text-decoration: underline dotted;
         text-decoration-color: rgba(128, 128, 128, 0.6);
@@ -795,8 +805,14 @@ def get_app_css() -> str:
         display: block;
         max-width: 100%;
     }
+    /* BUG-91: the box exists only while it is shown. It used to sit there at
+       `opacity: 0` all the time, and an absolutely-positioned box still counts
+       towards its scroll container's overflow — so a long tooltip on a popover's
+       last rows let the popover scroll down into empty space. `content: none`
+       removes the box outright; the fade is an animation that starts once it is
+       created, not an opacity transition on a box that is always there. */
     .sps-fhelp::after {
-        content: attr(data-tip);
+        content: none;
         position: absolute;
         top: calc(100% + 0.3rem);
         left: 0;
@@ -814,13 +830,15 @@ def get_app_css() -> str:
         text-align: left;
         box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
         pointer-events: none;
-        opacity: 0;
-        transition: opacity 80ms linear;
     }
     .sps-fhelp:hover::after,
     .sps-fhelp:focus-within::after {
-        opacity: 1;
-        transition-delay: 120ms;
+        content: attr(data-tip);
+        animation: sps-tip-in 80ms linear 120ms both;
+    }
+    @keyframes sps-tip-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
     }
 
     /* UX-53 round 3 — the wizard's descriptive prose is hover-only, so it reuses

@@ -342,8 +342,9 @@ class TestAppLaunches:
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
-        radios = {r.key: r.value for r in at.radio if r.key}
-        assert radios.get("global_fixclass_oob_mode") == "Highlight", (
+        # UX-162: the class modes are selectboxes in the 🧹 Filter table now.
+        modes = {w.key: w.value for w in at.selectbox if w.key}
+        assert modes.get("global_fixclass_oob_mode") == "Highlight", (
             "restored fixation-classification value was overridden by an inline default"
         )
 
@@ -3491,8 +3492,10 @@ class TestFigureAndCanvasSubGroups:
         # The typography half is drawn into the Stimulus section instead.
         assert "text_host" in canvas_source
         assert '_rail_subsection(stim_grp, "🔤 Text")' not in control_source
-        # The framing toggle leads the screen block.
-        assert 'screen_group.toggle(\n        "**Show full monitor**"' in control_source
+        # The framing switch leads the screen block (UX-164: a `Frame | ☑
+        # Whole monitor` row).
+        assert 'key="global_fit_to_monitor"' in control_source
+        assert "with screen_group, _popover_rows(" in control_source
         # …and the old flat captions are gone.
         assert 'figure_grp.caption("**Canvas & text**")' not in control_source
         assert 'figure_grp.caption("**Axes & labels**")' not in control_source

@@ -74,6 +74,7 @@ from .plots import (  # noqa: E402
     COMPARISON_FIGURE_OPTIONS,
     STATIC_FIGURE_OPTIONS,
     FigureSettings,
+    _resolve_trial_display_name,
     add_illustration_label,
     animation_autoplay_frame_duration,
     animation_autoplay_post_script,
@@ -2133,7 +2134,13 @@ def compare_scanpaths(
     ``figure_options("comparison")`` lists the accepted keywords.
     """
     from .experimental_setup import IncomparableScreensError, setups_comparable
-    from .utils import align_compare_columns, extract_trial, qualify_for_compare
+    from .utils import (
+        align_compare_columns,
+        extract_trial,
+        qualify_for_compare,
+        self_compare_participant,
+        separate_self_compare,
+    )
 
     resolved_layout = _COMPARE_LAYOUTS.get(str(layout).strip().lower())
     if resolved_layout is None:
@@ -2223,6 +2230,19 @@ def compare_scanpaths(
         trial_fix_a, _ = correct(trial_fix_a, trial_words_a, drift_correction)
         trial_fix_b, _ = correct(trial_fix_b, trial_words_b, drift_correction)
 
+    if not cross_dataset and (pid_a, tid_a) == (pid_b, tid_b):
+        # CMP-22: a trial compared with itself — rename B's copy apart, or the
+        # figure's (participant, trial) slice hands each side both copies.
+        # The renamed id is for slicing only, so B's default legend name is
+        # resolved here from the real one.
+        if not labels:
+            labels = tuple(
+                _resolve_trial_display_name(pid_a, tid_a, trial_words_a, None, idx)
+                for idx in (0, 1)
+            )
+        trial_words_b = separate_self_compare(trial_words_b, pid_b)
+        trial_fix_b = separate_self_compare(trial_fix_b, pid_b)
+        figure_pid_b = self_compare_participant(pid_b)
     merged_words, merged_words_b, _ = align_compare_columns(
         trial_words_a, trial_words_b
     )

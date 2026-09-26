@@ -4776,25 +4776,28 @@ def _make_split_comparison_figure(
         else ([], 0.0, 1.0, "")
     )
 
+    # The panel names are the split layouts' A/B legend, so they follow its
+    # toggle (BUG-90): with it off the top margin is 0, which clipped the upper
+    # title off the canvas while the lower one, sitting in the gap between the
+    # panels, still showed.
+    subplot_titles = (
+        [trial_specs[0]["display_name"], trial_specs[1]["display_name"]]
+        if show_legend
+        else None
+    )
     if is_stacked:
         fig = make_subplots(
             rows=2,
             cols=1,
             vertical_spacing=0.08,
-            subplot_titles=[
-                trial_specs[0]["display_name"],
-                trial_specs[1]["display_name"],
-            ],
+            subplot_titles=subplot_titles,
         )
     else:
         fig = make_subplots(
             rows=1,
             cols=2,
             horizontal_spacing=0.04,
-            subplot_titles=[
-                trial_specs[0]["display_name"],
-                trial_specs[1]["display_name"],
-            ],
+            subplot_titles=subplot_titles,
         )
 
     all_shapes: list = []

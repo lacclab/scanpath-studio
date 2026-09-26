@@ -16,6 +16,7 @@ import pytest
 
 from scanpath_studio import controls
 from scanpath_studio import menu as menu_mod
+from scanpath_studio.constants import ICONS
 from scanpath_studio.wizard import _SCREEN_KNOW, _SETUP_MODE_KEYS
 from tests.conftest import (
     APP_SCRIPT,
@@ -176,10 +177,10 @@ class TestAppLaunches:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         body = " ".join(m.value for m in at.markdown)
         for expected in (
-            "#### 🗄️ Automatic recovery",
-            "#### ⬇️ JSON backup",
-            "#### ♻️ Reset",
-            "#### 🐛 Debug tools",
+            f"#### {ICONS['recovery']} Automatic recovery",
+            f"#### {ICONS['download']} JSON backup",
+            f"#### {ICONS['reset']} Reset",
+            f"#### {ICONS['debug']} Debug tools",
         ):
             assert expected in body, f"{expected} missing from the Session dialog"
         # Neither group is a popover any more — not the merged one UX-38 made,
@@ -201,8 +202,8 @@ class TestAppLaunches:
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         body = " ".join(m.value for m in at.markdown)
-        assert "#### 🗄️ Automatic recovery" not in body
-        assert "#### ⬇️ JSON backup" not in body
+        assert f"#### {ICONS['recovery']} Automatic recovery" not in body
+        assert f"#### {ICONS['download']} JSON backup" not in body
 
     def test_debug_mode_survives_the_dialog_closing(self):
         """UX-100: the 🐛 Debug gate is not the toggle's own widget key.
@@ -600,8 +601,8 @@ class TestDataInspectionTab:
         # screen's numbered parts, so its headings are `.sps-wiz-part` markdown.
         subheaders = [s.value for s in at.subheader]
         for section in (
-            "📂 Available datasets",
-            "🔎 What's in the `Synthetic test trial` dataset",
+            f"{ICONS['datasets']} Available datasets",
+            f"{ICONS['search']} What's in the `Synthetic test trial` dataset",
         ):
             assert section in subheaders, f"missing stage {section}: {subheaders}"
         parts = " ".join(
@@ -620,7 +621,7 @@ class TestDataInspectionTab:
         assert not any("Raw data" in label for label in folded), folded
         assert not any("Summary statistics" in label for label in folded), folded
         tab_labels = [t.label for t in at.tabs]
-        for tab in ("📊 Stats", "Fixations", "AOIs", "Raw gaze"):
+        for tab in (f"{ICONS['stats']} Stats", "Fixations", "AOIs", "Raw gaze"):
             assert tab in tab_labels, f"missing tab {tab}: {tab_labels}"
         # The counts are the section's opening answer, so they kept no heading.
         assert "Dataset statistics" not in subheaders
@@ -3475,9 +3476,18 @@ class TestFigureAndCanvasSubGroups:
         control_source = inspect.getsource(controls.render_plot_controls)
         canvas_source = inspect.getsource(app.render_canvas_controls)
 
-        assert '_rail_subsection(figure_grp, "🖥️ Screen & framing")' in control_source
-        assert '_rail_subsection(figure_grp, "📊 Axes & grid")' in control_source
-        assert '_rail_subsection(figure_grp, "🏷️ Title & labels")' in control_source
+        assert (
+            "_rail_subsection(figure_grp, f\"{ICONS['screen']} Screen & framing\")"
+            in control_source
+        )
+        assert (
+            "_rail_subsection(figure_grp, f\"{ICONS['axes']} Axes & grid\")"
+            in control_source
+        )
+        assert (
+            "_rail_subsection(figure_grp, f\"{ICONS['labels']} Title & labels\")"
+            in control_source
+        )
         # The typography half is drawn into the Stimulus section instead.
         assert "text_host" in canvas_source
         assert '_rail_subsection(stim_grp, "🔤 Text")' not in control_source
@@ -3519,7 +3529,7 @@ class TestResetSettings:
         # itself happens on the confirm click, one run later.
         confirm = [b for b in at.button if b.key == "reset_viz_confirm"]
         assert confirm, "Reset confirmation button not rendered"
-        assert confirm[0].label == "♻️ Reset it"
+        assert confirm[0].label == f"{ICONS['reset']} Reset it"
         at = confirm[0].click().run(timeout=30)
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"

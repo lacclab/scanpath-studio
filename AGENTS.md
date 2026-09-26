@@ -262,6 +262,11 @@ omitted from the measurement: they walk corpora that cannot exist in CI.
 - Centralized palette / sizing in `constants.py`. Marker sizes come from
   `plots._compute_marker_sizes` so single-trial and comparison figures render
   identically.
+- Icons drawn as chrome (labels, `icon=`, headings, alerts) come from
+  `constants.ICONS` — Material Symbols, keyed by concept (UX-138); inside raw
+  HTML use `constants.icon_html`. Never a literal emoji or `:material/…:` there
+  (`tests/test_icons.py`). Prose — help text, tour bodies, docstrings, `cli.py`,
+  `docs/` — keeps its emoji ("the 🗂️ **Data** page").
 
 ## Testing patterns
 

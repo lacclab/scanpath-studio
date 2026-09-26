@@ -17,6 +17,8 @@ from __future__ import annotations
 import pytest
 from streamlit.proto.LabelVisibility_pb2 import LabelVisibility
 
+from scanpath_studio.constants import ICONS
+
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 AppTest = streamlit_testing.AppTest
 
@@ -117,11 +119,11 @@ class TestConvertedFields:
 
         at = AppTest.from_function(app).run(timeout=30)
         star = at.checkbox(key="annotrial_star_p1__t1__parent")
-        assert star.label == "⭐ Favorite (star this trial)"
+        assert star.label == f"{ICONS['favorite']} Favorite (star this trial)"
         assert star.proto.label_visibility.value == COLLAPSED
 
         (drawn,) = [label for label in _labels(at) if "Favorite" in label]
-        assert ">⭐ Favorite</span>" in drawn
+        assert f">{ICONS['favorite']} Favorite</span>" in drawn
         assert "data-tip" in drawn, "the shortened title must carry its help"
 
     def test_favorite_marker_updates_in_the_same_rerun(self):

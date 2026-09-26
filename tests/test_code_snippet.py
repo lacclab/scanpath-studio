@@ -14,7 +14,7 @@ import shlex
 
 import pytest
 
-from scanpath_studio import api, cli
+from scanpath_studio import api, cli, url_state
 from scanpath_studio import code_snippet as cs
 from tests.conftest import APP_SCRIPT
 
@@ -860,7 +860,7 @@ def test_the_panel_switches_flavour():
     at = _panel(
         **{
             cs.SNIPPET_STATE_KEY: state,
-            "snippet_flavor": "⌨️ CLI",
+            "snippet_flavor": url_state._SNIPPET_FLAVORS[1],
         }
     )
     assert at.code[0].language == "bash"
@@ -883,7 +883,9 @@ def test_the_panel_names_what_the_cli_cannot_say(monkeypatch):
         participant="p1",
         trial="t1",
     )
-    at = _panel(**{cs.SNIPPET_STATE_KEY: state, "snippet_flavor": "⌨️ CLI"})
+    at = _panel(
+        **{cs.SNIPPET_STATE_KEY: state, "snippet_flavor": url_state._SNIPPET_FLAVORS[1]}
+    )
     copy = " ".join(element.value for element in at.caption)
     assert "fixation_color_range" in copy
 

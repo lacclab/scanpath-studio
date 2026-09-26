@@ -108,6 +108,23 @@ class TestSameDataset:
 
         assert points(("p1", "t1")) == points(("p2", "t2"))
 
+    @pytest.mark.parametrize("layout", ["side_by_side", "stacked"])
+    @pytest.mark.parametrize("show_legend", [True, False])
+    def test_split_panel_titles_follow_the_legend_toggle(self, layout, show_legend):
+        """BUG-90: with the legend off the top margin is 0, which clipped the
+        upper panel's title while the lower one still showed. Both or neither."""
+        words, fixations = _pair()
+        fig = api.compare_scanpaths(
+            words,
+            fixations,
+            ("p1", "t1"),
+            ("p2", "t2"),
+            layout=layout,
+            show_legend=show_legend,
+            canvas_size=(1920, 1080),
+        )
+        assert len(fig.layout.annotations) == (2 if show_legend else 0)
+
     def test_the_renamed_copy_never_reaches_a_label(self):
         """The rename is for slicing the figure; the legend names the real id."""
         words, fixations = _pair()

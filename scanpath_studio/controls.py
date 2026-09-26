@@ -4638,38 +4638,74 @@ def render_plot_controls(
                 _reason,
             ),
         )
-        show_order = _labeled(
-            st,
-            "checkbox",
+        # UX-155: the switch, the label colour and the label size share one
+        # row, the last two greyed while the switch is off (never hidden, and
+        # never rewritten — a disabled widget keeps its key). The size is a
+        # number box rather than UX-9's slider + box: three controls do not
+        # leave a slider enough width to be draggable.
+        order_disabled, order_help = _layer_gate(
+            False, "Number each fixation by its order in the trial."
+        )
+        rest = 1.0 - _LABEL_W
+        label_col, check_col, color_col, size_col = st.columns(
+            [_LABEL_W, rest * 0.18, rest * 0.27, rest * 0.55],
+            gap=_LABEL_GAP,
+            vertical_alignment="center",
+        )
+        _row_label(label_col, "Fixation index", order_help)
+        show_order = check_col.checkbox(
             "Fixation index",
             key="global_show_order",
             persist_state="session",
+            disabled=order_disabled,
+            help=order_help,
+            label_visibility="collapsed",
         )
-        if show_order:
-            # In Compare (and in a dual animation) the index labels are tinted
-            # to each scanpath's own colour, so the global colour is inert.
-            _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
-            _labeled(
-                st,
-                "color_picker",
-                "Index label color",
-                key="global_order_font_color",
-                persist_state="session",
-                disabled=_dis,
-                help=_gated_help("Fixation-index label colour.", _reason),
-            )
-            _numeric_slider(
-                st,
-                "Index label size",
-                label_left=True,
-                key="global_order_font_size",
-                persist_state="session",
-                min_value=6,
-                max_value=72,
-                help="Fixation-index label size (figure pixels; the plot is "
-                "then scaled to fit the column, so on-screen it is a touch "
-                "smaller). Default 10.",
-            )
+        # In Compare (and in a dual animation) the index labels are tinted to
+        # each scanpath's own colour, so the global colour is inert there.
+        _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
+        _dis, _tip = _layer_gate(
+            _dis or not show_order,
+            _gated_help("Fixation-index label colour.", _reason),
+        )
+        color_col.color_picker(
+            "Index label color",
+            key="global_order_font_color",
+            persist_state="session",
+            disabled=_dis,
+            help=_tip,
+            label_visibility="collapsed",
+        )
+        # A shadow box (`__num`) writing the canonical key, as UX-9's boxes do:
+        # the rail's CSS drops a `__num` box's steppers, and the canonical key is
+        # what deep links, Share and restore read. Rounded, since a link or a
+        # restored config can hand back a float and the box has int bounds.
+        size_key = "global_order_font_size"
+        size_num_key = f"{size_key}__num"
+        if size_key in st.session_state:
+            st.session_state[size_num_key] = round(st.session_state[size_key])
+
+        def _apply_index_size() -> None:
+            if _shadow_key_missing(size_num_key):  # BUG-18
+                return
+            st.session_state[size_key] = st.session_state[size_num_key]
+
+        _dis, _tip = _layer_gate(
+            not show_order,
+            "Index label size (figure pixels; the plot is then scaled to fit "
+            "the column, so on-screen it is a touch smaller). Default 10.",
+        )
+        size_col.number_input(
+            "Index label size",
+            key=size_num_key,
+            min_value=6,
+            max_value=72,
+            step=1,
+            on_change=_apply_index_size,
+            disabled=_dis,
+            help=_tip,
+            label_visibility="collapsed",
+        )
         # Honoured by all three render paths (static, animation, and — since the
         # comparison builders now take `fixation_hover_fields` too — Compare),
         # so this one carries no `_mode_gate`.

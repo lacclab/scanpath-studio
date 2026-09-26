@@ -1533,15 +1533,21 @@ def get_app_css() -> str:
     /* Section headers now use proper heading levels so screen-reader users get
        a valid outline (no h1→h5 jump): the rail/export sections are <h2>, their
        sub-sections <h3>. Pin the visual size back to the original compact look
-       (by Streamlit's stable text-derived ids) so the layout is unchanged. */
-    #plot-controls, #scope, #figures, #also-include {
+       (by Streamlit's stable text-derived ids) so the layout is unchanged.
+       BUG-88: the rail's heading is pinned by its container key instead. The
+       text-derived id folds an icon's name into it, so UX-138's Material icon
+       turned the id `plot-controls` into `tune-plot-controls` — the pin stopped
+       matching and the heading fell back to Streamlit's 36px h2, which the
+       narrow rail wraps onto two lines. A heading that carries an icon has to
+       be pinned by a key. */
+    .st-key-plot_controls_header h2, #scope, #figures, #also-include {
         font-size: 20px !important; line-height: 24px !important;
         font-weight: 600 !important; padding: 6px 0 16px !important;
         /* In the narrow plot-side rail these can wrap; only ever break at a
            space, never mid-word ("Visualizatio↵n"). */
         word-break: normal !important; overflow-wrap: normal !important;
     }
-    #plot-controls {
+    .st-key-plot_controls_header h2 {
         margin: 2.4px 0 1.6px !important;
         white-space: nowrap;
     }
@@ -1640,7 +1646,7 @@ def get_app_css() -> str:
         }
         /* The pinned section-header sizes (see the heading-level rules above)
            are what push the narrow rail's headers to two lines first. */
-        #plot-controls, #scope, #figures, #also-include {
+        .st-key-plot_controls_header h2, #scope, #figures, #also-include {
             font-size: 18px !important; line-height: 22px !important;
         }
     }

@@ -30,7 +30,9 @@ Open **Export → Current figure** and choose:
 | interactive inspection | HTML |
 | replay | HTML, GIF, or MP4 |
 
-Static image and video formats require Chrome/Chromium; HTML does not.
+PNG and SVG are saved by your browser from the figure on screen, and HTML
+needs nothing either; PDF, GIF and MP4 need Chrome, Chromium or Edge. For a
+still figure, the plot's own camera button saves the same PNG.
 
 ## 3. Export a batch when needed
 

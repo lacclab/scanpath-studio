@@ -1817,8 +1817,11 @@ _FAQ_ITEMS = [
         "included in that file.",
     ),
     (
-        "PNG / SVG / PDF export fails but HTML works.",
-        "Static image export goes through Kaleido, which drives a headless "
+        "PDF or video export fails but HTML works.",
+        "The current figure's **PNG** and **SVG** are saved by your browser from "
+        "the plot on screen, so they always work. **PDF**, **GIF**/**MP4** and "
+        "the images in the export and Compare bundles go through Kaleido, which "
+        "drives a headless "
         "Chrome, Chromium or Edge — install one of them (in a pip install, "
         "`plotly_get_chrome -y` also works). **HTML** export is browser-free and "
         "always available.",

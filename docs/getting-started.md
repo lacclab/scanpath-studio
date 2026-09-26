@@ -33,8 +33,9 @@
 3. Use the layer controls beside the plot to show or hide text, fixations,
    saccades, bounding boxes, and the heatmap.
 4. Turn on **Animate** to replay the trial.
-5. Open **Export → Current figure** and download HTML. HTML needs no Chrome;
-   PNG, SVG, PDF, GIF and MP4 do.
+5. Open **Export → Current figure** and download HTML. HTML needs nothing
+   else, nor do a still figure's PNG and SVG; PDF, GIF and MP4 need Chrome,
+   Chromium or Edge.
 
 Next, pick a [tutorial](tutorials/index.md).
 

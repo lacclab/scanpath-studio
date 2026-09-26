@@ -1296,7 +1296,8 @@ def _render_parser() -> argparse.ArgumentParser:
         "--compare-canvas",
         metavar="WxH",
         help="Second dataset's monitor size in px, e.g. 1680x1050. Read off its "
-        "data when omitted. Overlay compares this against --canvas.",
+        "data when omitted. An overlay, or an --animate co-animation, compares "
+        "this against --canvas.",
     )
     # BUG-85 removed --monitor-mm / --viewing-distance and their --compare-*
     # twins: they were recorded on the setup snapshots and read by nothing —
@@ -1450,16 +1451,17 @@ def _compare_second_dataset(api, args, words, fixations):
 
 
 def _compare_animation_frames(api, args, words, fixations, canvas) -> dict:
-    """B's single-trial frames for a dual co-animation, gated like the overlay.
+    """`animate_scanpath`'s keywords for scanpath B of a dual co-animation.
 
-    A co-animation draws both readings on one clock in one coordinate space —
-    i.e. an overlay — so it is refused for two different screens on exactly the
-    same terms `compare_scanpaths` refuses `layout="overlay"`, rather than
-    quietly replaying scanpath A alone (which is what happened before CMP-9
-    reached this branch at all).
+    B's single-trial frames and, when they come from a second dataset, that
+    dataset's name and whatever screens the flags state. A co-animation draws
+    both readings on one clock in one coordinate space — an overlay — so the API
+    refuses two different screens on exactly the terms `compare_scanpaths`
+    refuses ``layout="overlay"``, reading a screen the flags don't state off its
+    data (CMP-21). This used to check only when ``--compare-canvas`` was given,
+    and co-animated without looking otherwise.
     """
-    from .experimental_setup import setups_comparable
-    from .utils import extract_trial, qualify_for_compare
+    from .utils import extract_trial
 
     participant_b, trial_b = _parse_compare_with(args.compare_with)
     words_b, fixations_b, cross_dataset = _compare_second_dataset(
@@ -1472,35 +1474,52 @@ def _compare_animation_frames(api, args, words, fixations, canvas) -> dict:
             f"No fixations for the compared scanpath participant={participant_b!r}, "
             f"trial={trial_b!r}. Use --list-trials to see the available pairs."
         )
+    frames = {"words_b": trial_words_b, "fixations_b": trial_fix_b}
     if cross_dataset:
-        setup_a = _compare_setup_snapshot(canvas)
-        setup_b = _compare_setup_snapshot(_parse_canvas(args.compare_canvas))
-        if setup_a is not None and setup_b is not None:
-            comparable, note = setups_comparable(setup_a, setup_b)
-            if not comparable:
-                # BUG-85: dropping --animate alone lands on the default overlay,
-                # which is refused on the same terms — so name the layout too.
-                raise SystemExit(
-                    f"{note} An animated comparison replays both readings on one "
-                    f"clock in one coordinate space, so it needs one screen too. "
-                    f"Drop --animate and pass --compare-layout side-by-side (or "
-                    f"stacked) to compare them in separate panels."
-                )
-            if note:
-                # Allowed, but the matching canvas is a shared default rather than
-                # a recorded screen. Same stream as the other render warnings.
-                print(f"Warning: {note}", file=sys.stderr)
-        trial_words_b = qualify_for_compare(trial_words_b, args.compare_dataset_name)
-        trial_fix_b = qualify_for_compare(trial_fix_b, args.compare_dataset_name)
-    return {"words_b": trial_words_b, "fixations_b": trial_fix_b}
+        frames.update(
+            dataset_b=args.compare_dataset_name,
+            setup=_compare_setup_snapshot(canvas),
+            setup_b=_compare_setup_snapshot(_parse_canvas(args.compare_canvas)),
+        )
+    return frames
+
+
+def _inferred_screen_hint(args, canvas: tuple | None) -> str:
+    """The flag that states a screen a refusal only read off the data (CMP-21).
+
+    `setups_comparable` says the readings were *recorded* on different screens,
+    but a screen no flag gives is the extent of that trial's data — rarely the
+    whole display — so `render` names the flag that states it.
+    """
+    a_inferred, b_inferred = canvas is None, args.compare_canvas is None
+    if a_inferred and b_inferred:
+        return (
+            " Neither screen was stated, so both were read off the data, which "
+            "rarely spans the whole screen; if they were shown on one, state it "
+            "with --canvas and --compare-canvas."
+        )
+    if b_inferred:
+        return (
+            " The second dataset's screen was read off its data, which rarely "
+            "spans the whole screen; if both were shown on one, state it with "
+            "--compare-canvas."
+        )
+    if a_inferred:
+        return (
+            " The first dataset's screen was read off its data, which rarely "
+            "spans the whole screen; if both were shown on one, state it with "
+            "--canvas."
+        )
+    return ""
 
 
 def _compare_setup_snapshot(canvas: tuple | None):
     """A `SetupSnapshot` for a canvas the caller stated, or ``None`` if silent.
 
-    ``None`` lets `api.compare_scanpaths` infer the screen from the data, which
-    is the right default — inventing a canvas here would be a claim the caller
-    never made. A stated canvas is a known screen: ``MEASURED``.
+    ``None`` lets `api.compare_scanpaths` and `api.animate_scanpath` infer the
+    screen from the data, which is the right default — inventing a canvas here
+    would be a claim the caller never made. A stated canvas is a known screen:
+    ``MEASURED``.
     """
     from .experimental_setup import Provenance, SetupSnapshot
 
@@ -2644,14 +2663,28 @@ def render(argv: list[str]) -> None:
                 )
                 fig = next(iter(figures.values()))
             else:
-                fig = api.animate_scanpath(
-                    words,
-                    fixations,
-                    participant,
-                    trial,
-                    screen=args.screen,
-                    **animation_options,
-                )
+                from .experimental_setup import IncomparableScreensError
+
+                try:
+                    fig = api.animate_scanpath(
+                        words,
+                        fixations,
+                        participant,
+                        trial,
+                        screen=args.screen,
+                        **animation_options,
+                    )
+                except IncomparableScreensError as exc:
+                    # CMP-21: the API's way out is Python. BUG-85: dropping
+                    # --animate alone lands on the default overlay, refused on
+                    # the same terms — so this names the layout flag too.
+                    raise SystemExit(
+                        f"{exc.reason} An animated comparison replays both "
+                        "readings on one clock in one coordinate space, so it "
+                        "needs one screen too. Drop --animate and pass "
+                        "--compare-layout side-by-side (or stacked) to compare "
+                        "them in separate panels." + _inferred_screen_hint(args, canvas)
+                    ) from None
         elif args.compare_with is not None:
             # `is not None`, not truthiness: `--compare-with ""` is a malformed
             # request, and falling through here would silently render an ordinary
@@ -2706,6 +2739,7 @@ def render(argv: list[str]) -> None:
                     f"{exc.reason} So no overlay was drawn; pass --compare-layout "
                     "side-by-side (or stacked) to compare them in separate panels, "
                     "each drawn to its own screen."
+                    + _inferred_screen_hint(args, canvas)
                 ) from None
         else:
             static_options = dict(

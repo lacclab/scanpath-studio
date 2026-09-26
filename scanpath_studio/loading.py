@@ -23,11 +23,18 @@ abandoned run's timer sends, and the abandoned run cannot write session state.
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import html
+import threading
+from collections.abc import Callable, Hashable, Iterator, Sequence
+from dataclasses import dataclass, field
 from typing import Any
 
 import streamlit as st
+from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
 
+from scanpath_studio import progress
 from scanpath_studio.constants import SELECTOR_ROW_GRID, icon_html
 from scanpath_studio.progress import Snapshot
 
@@ -254,3 +261,365 @@ def plot_size(
 def recorded_plot_height(key: str, default: int) -> int:
     recorded = (_session().get(PLOT_SIZES_KEY) or {}).get(str(key))
     return int(recorded[1]) if recorded else int(default)
+
+
+@dataclass(frozen=True)
+class Cancel:
+    """A card's Cancel button: its label says where it goes."""
+
+    label: str
+    on_click: Callable[..., None]
+    args: tuple = ()
+
+
+def session_id() -> str:
+    """This run's session id — part of every task key, so one session's cancel
+    can never stop another session's work."""
+    ctx = get_script_run_ctx(suppress_warning=True)
+    return ctx.session_id if ctx is not None else "local"
+
+
+@dataclass
+class _RunState:
+    cards: list = field(default_factory=list)
+    page: Page | None = None
+
+
+_RUN: contextvars.ContextVar[_RunState | None] = contextvars.ContextVar(
+    "scanpath_loading_run", default=None
+)
+
+
+def _run() -> _RunState:
+    state = _RUN.get()
+    if state is None:
+        state = _RunState()
+        _RUN.set(state)
+    return state
+
+
+class _Ticker(threading.Thread):
+    """The timer thread: wait out the delay, reveal, then refresh.
+
+    Its event is ``_halt``, never ``_stop``: `threading.Thread` has an internal
+    ``_stop`` method that ``join`` calls.
+    """
+
+    def __init__(
+        self,
+        *,
+        delay: float,
+        interval: float,
+        on_reveal: Callable[[], None],
+        on_tick: Callable[[], None],
+    ):
+        super().__init__(daemon=True, name="scanpath-loading-ticker")
+        self._delay = delay
+        self._interval = interval
+        self._on_reveal = on_reveal
+        self._on_tick = on_tick
+        self._halt = threading.Event()
+
+    def run(self) -> None:
+        if self._halt.wait(self._delay):
+            return
+        try:
+            self._on_reveal()
+            while not self._halt.wait(self._interval):
+                self._on_tick()
+        except Exception:
+            # A placeholder whose run has ended: nothing left to update.
+            return
+
+    def halt(self) -> None:
+        self._halt.set()
+
+
+class Card:
+    """One loading card in one slot (see the module docstring)."""
+
+    def __init__(
+        self,
+        slot,
+        *,
+        key: str,
+        title: str,
+        steps: Sequence[str] = (),
+        step_list: bool = False,
+        cancel: Cancel | None = None,
+        size: tuple[int, int] | None = None,
+        skeleton: str | None = None,
+        task_key: Hashable | None = None,
+        duration_key: Hashable | None = None,
+        reveal_class: str = "sps-reveal",
+    ):
+        self._slot = slot
+        self.key = key
+        self._title = title
+        self._steps = tuple(steps)
+        self._step_list = step_list
+        self._cancel = cancel
+        self._size = size
+        self._skeleton = skeleton
+        self._task_key = (
+            task_key if task_key is not None else ("card", session_id(), key)
+        )
+        self._duration_key = duration_key
+        self._reveal_class = reveal_class
+        self._task: progress.Task | None = None
+        self._token: contextvars.Token | None = None
+        self._ticker: _Ticker | None = None
+        self._revealed = False
+        self.is_open = False
+        self._skeleton_ph = self._head = self._detail = self._bar = self._reveal = None
+
+    @property
+    def steps(self) -> tuple[str, ...]:
+        return self._steps
+
+    @property
+    def revealed(self) -> bool:
+        return self._revealed
+
+    @property
+    def task(self) -> progress.Task | None:
+        return self._task
+
+    def open(self, *, reveal_now: bool = False) -> Card:
+        """Draw the card hidden — its size box shows at once — and arm the timer."""
+        self._task = progress.begin(
+            self._task_key, title=self._title, steps=self._steps
+        )
+        self._token = progress.activate(self._task)
+        box = self._slot.container(key=f"sps_card_{self.key}")
+        if self._size is not None:
+            box.markdown(size_box_html(*self._size), unsafe_allow_html=True)
+        if self._skeleton is not None:
+            self._skeleton_ph = box.empty()
+        body = box.container(key=f"sps_cardbody_{self.key}")
+        self._head = body.empty()
+        self._detail = body.empty()
+        self._bar = body.empty()
+        if self._cancel is not None:
+            body.button(
+                self._cancel.label,
+                key=f"sps_cancel_{self.key}",
+                on_click=self._cancel.on_click,
+                args=self._cancel.args,
+                width="content",
+            )
+        self._reveal = body.empty()
+        self.is_open = True
+        _run().cards.append(self)
+        if reveal_now or DELAY_S <= 0:
+            self._show()
+            if DELAY_S > 0:
+                self._arm(delay=REFRESH_S, revealed=True)
+        else:
+            self._arm(delay=DELAY_S, revealed=False)
+        return self
+
+    def _paint(self) -> None:
+        snap = self._task.snapshot()
+        last = (
+            progress.last_duration(self._duration_key)
+            if self._duration_key is not None
+            else None
+        )
+        self._head.markdown(head_html(snap, last=last), unsafe_allow_html=True)
+        body = steps_html(snap) if self._step_list and snap.steps else detail_html(snap)
+        if body:
+            self._detail.markdown(body, unsafe_allow_html=True)
+        else:
+            self._detail.empty()
+        self._bar.markdown(bar_html(snap), unsafe_allow_html=True)
+
+    def _show(self) -> None:
+        if self._skeleton_ph is not None:
+            self._skeleton_ph.markdown(self._skeleton, unsafe_allow_html=True)
+        self._paint()
+        self._reveal.markdown(
+            f'<span class="{self._reveal_class}"></span>', unsafe_allow_html=True
+        )
+        self._revealed = True
+
+    def _arm(self, *, delay: float, revealed: bool) -> None:
+        ticker = _Ticker(
+            delay=delay,
+            interval=REFRESH_S,
+            on_reveal=self._paint if revealed else self._show,
+            on_tick=self._paint,
+        )
+        add_script_run_ctx(ticker)
+        ticker.start()
+        self._ticker = ticker
+
+    def _halt(self) -> None:
+        if self._ticker is not None:
+            self._ticker.halt()
+            self._ticker.join(timeout=1.0)
+            self._ticker = None
+
+    def step(self, index: int, label: str | None = None) -> None:
+        if self._task is None:
+            return
+        self._task.step_to(index, label)
+        # With no timer running (DELAY_S == 0, as the headless tests use),
+        # nothing else would repaint a shown card.
+        if self._revealed and self._ticker is None:
+            self._paint()
+
+    def finish(self) -> None:
+        if self._task is not None:
+            self._task.finish(duration_key=self._duration_key)
+
+    def close(self, *, keep: bool = False) -> None:
+        """Stop the timer and take the card down — or, with ``keep``, leave it
+        showing every step done (the page card, until its page is released)."""
+        if not self.is_open:
+            return
+        self._halt()
+        if self._token is not None:
+            progress.deactivate(self._token)
+            self._token = None
+        self.is_open = False
+        if keep:
+            if self._revealed:
+                self._paint()
+        else:
+            self._slot.empty()
+
+
+class Page:
+    """The page skeleton and its dataset card, in the view's first slot."""
+
+    def __init__(self, slot, *, view: str, plot_height: int = 480):
+        self._slot = slot
+        self._view = view
+        self._plot_height = plot_height
+        self.card: Card | None = None
+        self._released = False
+        _run().page = self
+
+    def open_card(
+        self,
+        *,
+        title: str,
+        steps: Sequence[str] = (),
+        cancel: Cancel | None = None,
+        task_key: Hashable | None = None,
+        duration_key: Hashable | None = None,
+        reveal_now: bool = False,
+    ) -> Card:
+        self.card = Card(
+            self._slot,
+            key=PAGE_CARD_KEY,
+            title=title,
+            steps=steps,
+            step_list=bool(steps),
+            cancel=cancel,
+            skeleton=skeleton_html(self._view, plot_height=self._plot_height),
+            task_key=task_key,
+            duration_key=duration_key,
+            reveal_class="sps-reveal sps-reveal-page",
+        )
+        return self.card.open(reveal_now=reveal_now)
+
+    def release(self) -> bool:
+        """Take the skeleton down; say whether it was showing."""
+        if self._released:
+            return False
+        self._released = True
+        revealed = bool(self.card is not None and self.card.revealed)
+        if self.card is not None and self.card.is_open:
+            self.card.close(keep=True)
+        self._slot.empty()
+        state = _RUN.get()
+        if state is not None and state.page is self:
+            state.page = None
+        return revealed
+
+
+def page(slot, *, view: str, plot_height: int = 480) -> Page:
+    """Reserve ``slot`` as this run's page (see :class:`Page`)."""
+    return Page(slot, view=view, plot_height=plot_height)
+
+
+def release_page() -> bool:
+    """Release this run's page, if any; say whether it was showing."""
+    state = _RUN.get()
+    current = state.page if state is not None else None
+    return current.release() if current is not None else False
+
+
+@contextlib.contextmanager
+def card(
+    slot,
+    *,
+    key: str,
+    title: str,
+    steps: Sequence[str] = (),
+    step_list: bool = False,
+    cancel: Cancel | None = None,
+    size: tuple[int, int] | None = None,
+    task_key: Hashable | None = None,
+    duration_key: Hashable | None = None,
+) -> Iterator[Card]:
+    """A region card for one ``with`` block.
+
+    Opening one releases the page skeleton: the view has drawn its controls by
+    the time it reaches its first slow region. When the skeleton was showing,
+    the card shows at once too, so the wait reads as one continuous state.
+    """
+    page_was_showing = release_page()
+    region = Card(
+        slot,
+        key=key,
+        title=title,
+        steps=steps,
+        step_list=step_list,
+        cancel=cancel,
+        size=size,
+        task_key=task_key,
+        duration_key=duration_key,
+    )
+    region.open(reveal_now=page_was_showing)
+    try:
+        yield region
+        region.finish()
+    finally:
+        region.close()
+
+
+@contextlib.contextmanager
+def run_scope() -> Iterator[None]:
+    """Wrap one script run: fresh state in, every timer stopped out.
+
+    It also ends quietly a run whose work was cancelled: only an abandoned run
+    ever computes a cancelled task (`progress.begin` never joins one), so its
+    page is gone and Streamlit drops whatever it sends.
+    """
+    token = _RUN.set(_RunState())
+    try:
+        with progress.scope():
+            yield
+    except progress.Cancelled:
+        pass
+    finally:
+        state = _RUN.get()
+        for opened in list(state.cards if state is not None else ()):
+            opened._halt()
+        _RUN.reset(token)
+
+
+def covered() -> bool:
+    """Is a card open in this run?"""
+    state = _RUN.get()
+    return bool(state is not None and any(c.is_open for c in state.cards))
+
+
+def spinner(text: str):
+    """``st.spinner`` with the elapsed time — silent while a card covers it."""
+    if covered():
+        return contextlib.nullcontext()
+    return st.spinner(text, show_time=True)

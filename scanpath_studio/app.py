@@ -337,103 +337,6 @@ _FORCE_LTR_LOCALE_SCRIPT = """
 """
 
 
-#: BUG-48. Streamlit's own `help=` tooltips get **stuck open**: the hover state
-#: lives in a React component, and the pointer can leave a target without that
-#: component ever seeing `mouseleave` — a rerun that re-renders the row under the
-#: cursor is the common way, and the app reruns on every widget touch. The
-#: leftover panel then floats over the page until the same target is hovered and
-#: left again, and (before the `pointer-events` rule in `styles.get_app_css`)
-#: swallowed clicks aimed at whatever it covered, which is the likeliest reason
-#: a rail's ▾ sometimes did nothing on the first press.
-#:
-#: The fix is a *sweeper* installed once on the parent document: on any pointer
-#: move that is not over a tooltip target — and only while a tooltip layer
-#: actually exists, so the common case is one `querySelector` — every hover
-#: target is sent the `mouseout` React synthesizes `onMouseLeave` from. Nothing
-#: is closed while the pointer is genuinely on a target, so a real tooltip is
-#: untouched. Idempotent: a *heartbeat* on the parent document means re-running
-#: this on a later rerun installs nothing twice while the previous installation
-#: is still alive — and does reinstall if it isn't (BUG-51).
-_TOOLTIP_SWEEPER_SCRIPT = """
-<script>
-(function () {
-    try {
-        var doc = window.parent.document;
-        /* A *heartbeat*, not a one-shot flag. Everything below is a closure
-           from THIS iframe's realm, registered on the parent — so if Streamlit
-           ever tears the iframe down, the listeners and the timer go with it,
-           and a plain "already installed" flag would then block the next run
-           from ever putting them back. The poll stamps the clock on every tick
-           instead, so a later run can tell a live installation (leave it alone)
-           from a dead one (replace it). A dead realm's listeners are inert, so
-           re-adding over them costs nothing. */
-        var HEARTBEAT_MS = 250;
-        var STALE_MS = 5000;
-        var beat = doc.__spsTooltipSweeperBeat;
-        if (typeof beat === 'number' && Date.now() - beat < STALE_MS) { return; }
-        doc.__spsTooltipSweeperBeat = Date.now();
-        var TARGET = '[data-testid="stTooltipHoverTarget"]';
-        var LAYER = '[data-baseweb="tooltip"]';
-        var pending = false;
-        /* BUG-48 round 2. The question is not "where did the pointer just
-           move?" but "is any tooltip target actually under the pointer?", and
-           `:hover` answers that directly — it is the browser's own bookkeeping,
-           so it stays right when no event reached us at all. */
-        function anyTargetHovered(targets) {
-            for (var i = 0; i < targets.length; i++) {
-                try {
-                    if (targets[i].matches(':hover')) { return true; }
-                } catch (e) { /* :hover unsupported in matches() */ }
-            }
-            return false;
-        }
-        function sweep() {
-            if (pending) { return; }
-            pending = true;
-            window.parent.requestAnimationFrame(function () {
-                pending = false;
-                /* Nothing open — the whole cost of a quiet pointer move. */
-                if (!doc.querySelector(LAYER)) { return; }
-                var targets = doc.querySelectorAll(TARGET);
-                if (anyTargetHovered(targets)) { return; }
-                targets.forEach(function (el) {
-                    el.dispatchEvent(new window.parent.MouseEvent('mouseout', {
-                        bubbles: true,
-                        cancelable: true,
-                        relatedTarget: doc.body,
-                    }));
-                });
-            });
-        }
-        doc.addEventListener('pointermove', sweep, true);
-        /* A pointer that leaves the window entirely fires no move inside it. */
-        doc.addEventListener('pointerleave', sweep, true);
-        /* ...and neither does one that leaves *into* something the parent
-           document cannot see or that never moves again. Both happen here on
-           every session: the plot, the tours and the copy widgets are same-
-           origin iframes, and a pointer that crosses into one stops producing
-           events in the parent entirely; separately, a rerun that re-renders
-           the row a tooltip belongs to re-opens the panel from React state,
-           which on this app can land a second or more after the pointer has
-           already come to rest somewhere else. Neither case produces the
-           pointermove the listeners above wait for, so the panel used to sit
-           there until that same target was hovered and left again. A quarter-
-           second poll closes both, and costs one `querySelector` per tick
-           whenever no tooltip is open — which is almost always. The same tick
-           stamps the heartbeat above, which is what makes this installation
-           visible as *alive* to a later run. */
-        window.parent.setInterval(function () {
-            doc.__spsTooltipSweeperBeat = Date.now();
-            sweep();
-        }, HEARTBEAT_MS);
-    } catch (e) {
-        /* Any browser that refuses this is left exactly as it was found. */
-    }
-})();
-</script>
-"""
-
-
 def configure_page() -> None:
     """Streamlit page config + custom CSS.
 
@@ -450,7 +353,6 @@ def configure_page() -> None:
     )
     st.markdown(get_app_css(), unsafe_allow_html=True)
     embed_html_iframe(_FORCE_LTR_LOCALE_SCRIPT, height=0)
-    embed_html_iframe(_TOOLTIP_SWEEPER_SCRIPT, height=0)
 
 
 #: The app's wordmark, shown in Streamlit's own header (UX-62). Inside the

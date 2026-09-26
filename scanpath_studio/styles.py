@@ -1544,19 +1544,40 @@ def get_app_css() -> str:
         font-size: 0.92rem !important;
     }
     /* BUG-48 — a `help=` tooltip must never intercept a click. Streamlit's
-       tooltip is a portalled panel whose open state lives in React, and the
-       pointer can leave its target without that component ever seeing
-       `mouseleave` (a rerun that re-renders the row under the cursor is the
-       usual way, and this app reruns on every widget touch). The panel then
-       floats over the page — and, being an ordinary positioned element, ate the
-       next click that landed on whatever it covered, which is the likeliest
-       reason a rail's ▾ sometimes did nothing on the first press.
-       `app._TOOLTIP_SWEEPER_SCRIPT` is what closes the stuck panel; this is the
-       guard that makes a stuck one harmless in the meantime. Safe because no
-       `help=` in this app contains a link — every tooltip is read, never
-       clicked. */
+       tooltip is a portalled panel whose open state lives in React, so it can
+       outlive the hover that opened it; being an ordinary positioned element it
+       then ate the next click that landed on whatever it covered, which is the
+       likeliest reason a rail's ▾ sometimes did nothing on the first press.
+       Safe because no `help=` in this app contains a link — every tooltip is
+       read, never clicked. */
     div[data-testid="stTooltipContent"] {
         pointer-events: none;
+    }
+    /* BUG-86 — …and it is shown only while a tooltip trigger is under the
+       pointer or holds *keyboard* focus. Streamlit 1.64's trigger will not
+       close on pointer-leave while focus is inside it, and clicking a button
+       puts focus there — so every button or popover with `help=` that was
+       clicked (the ◀ ▶ ⇅ funnel row, the rail's ▾, the presets) kept its panel
+       floating after the pointer moved on, until the next click elsewhere.
+       `:hover` and `:focus-visible` are the browser's own bookkeeping, right
+       even when no event reached React (a rerun re-rendering the row, a pointer
+       that left into a plot iframe), and `:focus-visible` is what tells a
+       keyboard user's focus, which should keep its tooltip, from the focus a
+       click leaves behind, which should not. Only one Streamlit tooltip is
+       open at a time, so "some trigger" is "its trigger". This replaced
+       BUG-48/51's JavaScript sweeper, which waited for a Base Web
+       `[data-baseweb="tooltip"]` layer that Streamlit no longer renders and so
+       never closed anything; `tests/test_tooltip_visibility.py` fails if the
+       test ids named here leave Streamlit's bundle. */
+    body:not(:has(
+        [data-testid="stTooltipHoverTarget"]:hover,
+        [data-testid="stTooltipHoverTarget"] :focus-visible,
+        [data-testid="stTooltipErrorHoverTarget"]:hover,
+        [data-testid="stTooltipErrorHoverTarget"] :focus-visible
+    )) :is([data-testid="stTooltipContent"], [data-testid="stTooltipErrorContent"]) {
+        visibility: hidden;
+        opacity: 0;
+        transition: opacity 0.1s ease-out, visibility 0s linear 0.1s;
     }
 
     /* ── UX-19: width breakpoints ────────────────────────────────────────────

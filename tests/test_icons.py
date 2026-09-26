@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 from streamlit.material_icon_names import ALL_MATERIAL_ICONS
 
-from scanpath_studio import constants, controls, fields
+from scanpath_studio import constants, controls, fields, styles
 from scanpath_studio.constants import ICONS, icon_html, icons_to_html
 
 PACKAGE = Path(__file__).resolve().parents[1] / "scanpath_studio"
@@ -86,6 +86,16 @@ def test_a_row_tooltip_never_spells_out_a_shortcode():
 def test_subtab_labels_are_built_from_the_registry():
     assert constants.SUBTAB_EXPORT == f"{ICONS['export']} Export"
     assert constants.SUBTAB_ANNOTATIONS.startswith(ICONS["annotations"])
+
+
+def test_the_rail_heading_is_sized_by_its_key_not_its_text():
+    # BUG-88: Streamlit derives a heading's id from its text, the icon's name
+    # included, so the icon turned `#plot-controls` into `#tune-plot-controls`
+    # and the size pin silently stopped matching — a 36px heading, two lines.
+    css = styles.get_app_css()
+    assert ".st-key-plot_controls_header h2" in css
+    assert "#plot-controls" not in css
+    assert 'key="plot_controls_header"' in (PACKAGE / "tabs.py").read_text()
 
 
 def _icon_literals(path: Path) -> list[tuple[int, str]]:

@@ -76,8 +76,7 @@ from .plots import (  # noqa: E402
     FigureSettings,
     _resolve_trial_display_name,
     add_illustration_label,
-    animation_autoplay_frame_duration,
-    animation_autoplay_post_script,
+    animation_player_post_script,
     make_comparison_figure,
     make_difference_profile_figure,
     make_distribution_figure,
@@ -1676,19 +1675,21 @@ def animate_scanpath(
 
     Same trial selection and canvas semantics as
     [`plot_scanpath`][scanpath_studio.api.plot_scanpath], including ``screen`` selection
-    for multipart trials. The returned Plotly figure plays in real reading time scaled
-    by ``playback_speed``; save it as interactive HTML with
-    [`save_figure`][scanpath_studio.api.save_figure], or rasterize to GIF/MP4 with
-    `animation_export.export_animation`. ``fix_index_range=(start, end)`` replays only
-    that window of the trial's fixations (1-based, inclusive), like
+    for multipart trials. The replay takes the reading time divided by
+    ``playback_speed``: save it as interactive HTML with
+    [`save_figure`][scanpath_studio.api.save_figure], whose page keeps that clock
+    itself, or rasterize it to GIF/MP4 with `animation_export.export_animation`, which
+    lasts as long. (`fig.show()` plays it on Plotly's own frame queue, which runs
+    slow.) ``fix_index_range=(start, end)`` replays only that window of the trial's
+    fixations (1-based, inclusive), like
     [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
 
     With ``autoplay`` (default ``True``) the saved interactive HTML auto-starts
     the replay on load *at ``playback_speed``* —
     [`save_figure`][scanpath_studio.api.save_figure] honors the marker the builder
     stamps on the figure. Pass ``autoplay=False`` to save a figure that opens paused
-    (press ▶ Play to run it). Autoplay only affects the interactive HTML; GIF/MP4
-    rasterization renders every frame regardless.
+    (press ▶ Play to run it). Autoplay only affects the interactive HTML; a GIF/MP4
+    always plays from its first frame.
 
     When ``playback_speed`` is not ``1``, the automatic Illustration label says
     the replay timing was changed. ``illustration_label`` accepts ``"auto"``,
@@ -2291,19 +2292,16 @@ def save_figure(
     path = Path(path)
     suffix = path.suffix.lower()
     if suffix == ".html":
-        # VIZ-10: an autoplay animation carries its per-frame duration; kick off
-        # `Plotly.animate` at that speed on load (Plotly's own `auto_play` ignores
-        # it). Any animation is otherwise saved paused so it doesn't run at the
-        # wrong default speed; static figures write unchanged.
-        autoplay_ms = animation_autoplay_frame_duration(fig)
-        if autoplay_ms is not None:
+        # BUG-93: an animation replays on the wall-clock player, which also
+        # autoplays it at the configured speed when asked (VIZ-10). Plotly's own
+        # `auto_play` stays off — it ignores the frame duration. Static figures
+        # write unchanged.
+        if fig.frames:
             fig.write_html(
                 str(path),
                 auto_play=False,
-                post_script=animation_autoplay_post_script(autoplay_ms),
+                post_script=animation_player_post_script(fig),
             )
-        elif fig.frames:
-            fig.write_html(str(path), auto_play=False)
         else:
             fig.write_html(str(path))
         return path

@@ -264,17 +264,22 @@ def test_render_animate_html(tmp_path):
 
 
 def test_render_animate_autoplays_by_default(tmp_path):
-    # VIZ-10: the saved interactive HTML auto-starts the replay (kickoff script).
+    # VIZ-10: the saved interactive HTML auto-starts the replay — on the
+    # wall-clock player (BUG-93), which reads the autoplay flag.
     out_file = tmp_path / "anim.html"
     cli.main(["render", "--sample", "--animate", "-o", str(out_file)])
-    assert "Plotly.animate" in out_file.read_text(encoding="utf-8")
+    html = out_file.read_text(encoding="utf-8")
+    assert "plotly_buttonclicked" in html
+    assert '"scanpath_autoplay":true' in html
 
 
 def test_render_animate_no_autoplay_flag(tmp_path):
-    # VIZ-10: --no-autoplay saves a figure that opens paused (no kickoff).
+    # VIZ-10: --no-autoplay saves a figure that opens paused.
     out_file = tmp_path / "anim.html"
     cli.main(["render", "--sample", "--animate", "--no-autoplay", "-o", str(out_file)])
-    assert "Plotly.animate" not in out_file.read_text(encoding="utf-8")
+    html = out_file.read_text(encoding="utf-8")
+    assert '"scanpath_autoplay":false' in html
+    assert "Plotly.animate('" not in html
 
 
 def test_render_animate_rejects_non_html(tmp_path):

@@ -10,10 +10,15 @@
  * site's own copy (`mkdocs_hooks.on_post_build`), never from a CDN. Material's
  * instant navigation swaps pages without reloading this script, so `init` runs
  * on its `document$` stream rather than once on load.
+ *
+ * A replay's JSON also carries `player`, the app's own wall-clock player
+ * (`plots.animation_player_post_script`, BUG-93) — Plotly's frame queue runs a
+ * replay slow — which is run against the drawn plot, as the app runs it.
  */
 (() => {
   const PLOTLY_SRC = new URL("plotly.min.js", document.currentScript.src).href;
   let plotly = null;
+  let plotCount = 0;
 
   const loadPlotly = () => {
     if (window.Plotly) return Promise.resolve(window.Plotly);
@@ -38,14 +43,17 @@
 
   const draw = async (host) => {
     const source = host.querySelector('script[type="application/json"]');
-    const spec = JSON.parse(source.textContent);
+    const { player, ...spec } = JSON.parse(source.textContent);
     const stage = document.createElement("div");
     stage.className = "sps-plot-stage";
+    stage.id = `sps-plot-${++plotCount}`;
     stage.style.width = `${host.dataset.width}px`;
     stage.style.height = `${host.dataset.height}px`;
     host.appendChild(stage);
     const Plotly = await loadPlotly();
     await Plotly.newPlot(stage, spec);
+    // The site's own build wrote this script, exactly as the app embeds it.
+    if (player) new Function(player.split("{plot_id}").join(stage.id))();
     fit(host);
     new ResizeObserver(() => fit(host)).observe(host);
     host.dataset.state = "ready";

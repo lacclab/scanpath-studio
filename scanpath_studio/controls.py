@@ -655,8 +655,8 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_fixation_snap_to_word": False,
     "global_illustration_label": "Auto",
     # VIZ-10: autoplay the animated replay on load (default on). The toggle lives
-    # in the Animate ⚙ Playback popover (tabs.render_single_trial_tab); the kickoff
-    # runs at the configured playback speed (plots.animation_autoplay_post_script).
+    # in the Animate ⚙ Playback popover (tabs.render_single_trial_tab); the replay
+    # player starts it at the configured speed (plots.animation_player_post_script).
     "global_anim_autoplay": True,
     # VIZ-11 follow-up: the animation frame grid, exposed instead of decided for
     # the user. Step = smoothness; max frames = the ceiling that keeps a long

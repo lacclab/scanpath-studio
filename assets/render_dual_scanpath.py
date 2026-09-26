@@ -28,7 +28,6 @@ from scanpath_studio.data import (
     normalize_words,
 )
 from scanpath_studio.plots import (
-    animation_autoplay_frame_duration,
     make_comparison_figure,
     make_scanpath_animation,
 )
@@ -116,7 +115,6 @@ def render_gif(words_pair, fix_pair, canvas) -> None:
     data = export_animation(
         anim,
         fmt="gif",
-        frame_duration_ms=animation_autoplay_frame_duration(anim) or 80,
         scale=0.6,
         max_frames=60,
         progress_callback=lambda done, total: print(

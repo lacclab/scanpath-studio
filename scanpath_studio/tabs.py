@@ -54,6 +54,7 @@ from scanpath_studio.animation_export import (
     AnimationBudgetError,
     AnimationExportError,
     chrome_available,
+    clip_frame_count,
     export_animation,
     mime_for,
 )
@@ -197,9 +198,9 @@ from scanpath_studio.plots import (
     _discard_flagged_fixations,
     _png_pixel_size,
     add_illustration_label,
-    animation_autoplay_frame_duration,
-    animation_autoplay_post_script,
+    animation_clip_frame_ms,
     animation_playback_ms,
+    animation_player_post_script,
     animation_timeline_summary,
     make_comparison_figure,
     make_density_scatter_figure,
@@ -779,14 +780,11 @@ def _render_true_scale_chart(
     width = int(fig.layout.width or 900)
     height = int(fig.layout.height or 600)
     zoomable = max_height is None
-    # VIZ-10: an animation built with autoplay on carries its per-frame duration on
-    # the figure; kick off `Plotly.animate` at that speed after mount (Plotly's own
-    # `auto_play` would ignore the configured speed). `None` for static figures or
-    # autoplay-off animations → the built-in `auto_play=False` keeps them paused.
-    autoplay_ms = animation_autoplay_frame_duration(fig)
-    autoplay_script = (
-        animation_autoplay_post_script(autoplay_ms) if autoplay_ms is not None else None
-    )
+    # BUG-93: an animated replay plays on the wall-clock player — Plotly's own
+    # queue rounded every frame up to whole display ticks, so Fine at ×1 ran 25 %
+    # slow — which also starts it on load when autoplay is on (VIZ-10). `None` for
+    # a static figure.
+    player_script = animation_player_post_script(fig)
     config: dict = {
         "responsive": False,
         "displaylogo": False,
@@ -810,11 +808,10 @@ def _render_true_scale_chart(
         div_id=_true_scale_plot_id(key),
         # to_html defaults to auto_play=True, which auto-runs an animated figure on
         # load at Plotly's default frame duration (ignoring the configured playback
-        # speed). Start paused so the animation only plays — at the right speed —
-        # either via the autoplay kickoff below or when the user presses Play. No
-        # effect on static (frame-less) figures.
+        # speed). Start paused so the replay only plays — at the right speed — on
+        # the player's clock, by autoplay or ▶ Play. No effect on static figures.
         auto_play=False,
-        post_script=autoplay_script,
+        post_script=player_script,
     )
     html, iframe_height = _true_scale_html(
         plot_html,
@@ -1100,24 +1097,21 @@ _ANIM_RENDER_COLD_START_S = 3.0
 def _animation_html(fig) -> str:
     """The animation as a standalone HTML page, as `api.save_figure` writes it.
 
-    VIZ-10: it must autoplay at the configured speed too (Plotly's own
-    ``auto_play`` ignores ``frame_duration``), matching the live embed.
-    Autoplay-off / static figures stay paused.
+    It replays on the same wall-clock player as the live embed (BUG-93), which
+    also autoplays it at the configured speed when asked (VIZ-10); Plotly's own
+    ``auto_play`` stays off, since it ignores ``frame_duration``.
     """
-    autoplay_ms = animation_autoplay_frame_duration(fig)
-    if autoplay_ms is not None:
+    if fig.frames:
         return fig.to_html(
             include_plotlyjs="cdn",
             full_html=True,
             auto_play=False,
-            post_script=animation_autoplay_post_script(autoplay_ms),
+            post_script=animation_player_post_script(fig),
         )
-    if fig.frames:
-        return fig.to_html(include_plotlyjs="cdn", full_html=True, auto_play=False)
     return fig.to_html(include_plotlyjs="cdn", full_html=True)
 
 
-def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None:
+def _render_animation_export(fig, *, file_stem: str) -> None:
     """Export the animated scanpath as interactive HTML or a rasterized GIF/MP4.
 
     HTML is one click (no browser needed to generate, keeps interactivity). GIF and
@@ -1125,8 +1119,9 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
     every rerun — so they follow the same Render-then-download pattern as the static
     image export, with a progress bar and a result cached in session state so the
     download button survives reruns (and a re-render isn't needed unless an option
-    changes). The clip reproduces the on-screen Play: every frame held for the same
-    average duration, so its runtime equals the quoted playback time.
+    changes). The clip lasts what the on-screen replay does — the quoted playback
+    time, spread evenly over its frames (fewer of them when the replay is faster
+    than the format can show, BUG-93).
     """
     n_frames = len(fig.frames or ())
     fmt = panel_field(
@@ -1173,8 +1168,10 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
             f"{fmt} export can't run here. {CHROME_INSTALL_HINT}", icon=ICONS["warning"]
         )
 
-    frame_ms = playback_ms / n_frames if n_frames else 16.0
-    clip_s = playback_ms / 1000.0
+    # BUG-93: the figure's own clock, so the clip lasts exactly what its replay
+    # does — also when the Discard flags drop fixations, which the builder does.
+    frame_ms = animation_clip_frame_ms(fig)
+    clip_s = frame_ms * n_frames / 1000.0
 
     scale = panel_field(
         st,
@@ -1204,7 +1201,8 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
     ):
         max_frames = _ANIM_FRAME_CAP
 
-    render_frames = min(n_frames, max_frames) if max_frames else n_frames
+    # BUG-93: a replay faster than the format can show renders fewer frames.
+    render_frames = clip_frame_count(n_frames, frame_ms, fmt, max_frames)
     est_s = render_frames * _ANIM_RENDER_S_PER_FRAME + _ANIM_RENDER_COLD_START_S
     note = f"{n_frames} frames · clip ≈ {clip_s:.1f}s · ~{est_s:.0f}s to render"
     if render_frames != n_frames:
@@ -3924,7 +3922,7 @@ def _build_and_render_animation(
     dataset_name_b: str = "",
 ):
     """Build + render the animation figure (single or dual co-animation) in the
-    main column. Returns ``(fig, playback_ms, save_slug, file_stem)``.
+    main column. Returns ``(fig, save_slug, file_stem)``.
 
     ``trial_fixations`` / ``fixations_b`` arrive already drift-corrected (PRE-3 is
     applied once by the caller for all three render paths); ``drift_corrected``
@@ -3933,12 +3931,6 @@ def _build_and_render_animation(
     dual = fixations_b is not None and not fixations_b.empty
     grid_step_ms = viz_settings.get("anim_grid_step_ms")
     max_frames = viz_settings.get("anim_max_frames")
-    _reading_span_ms, playback_ms = animation_playback_ms(
-        [trial_fixations] + ([fixations_b] if dual else []),
-        playback_speed,
-        grid_step_ms=grid_step_ms,
-        max_frames=max_frames,
-    )
     # The reading-time / playback info box renders in the side panel under the
     # Animate toggle (see _render_anim_info_box), not here.
     animation_settings = settings.with_overrides(
@@ -4026,7 +4018,7 @@ def _build_and_render_animation(
         )
     # The camera saves whichever frame is on screen, hence the `_frame` suffix.
     _render_true_scale_chart(fig, key="single_anim", download_name=f"{file_stem}_frame")
-    return fig, playback_ms, save_slug, file_stem
+    return fig, save_slug, file_stem
 
 
 def _render_pair_export(
@@ -4122,7 +4114,6 @@ def _render_export_panel(
     *,
     animate: bool,
     save_slug: str,
-    playback_ms: float | None,
     file_stem: str | None,
     combos: pd.DataFrame,
     words_filtered: pd.DataFrame,
@@ -4155,11 +4146,7 @@ def _render_export_panel(
     if displayed_fig is None:
         st.caption("Select a trial to export its figure.")
     elif animate:
-        _render_animation_export(
-            displayed_fig,
-            file_stem=file_stem or "animation",
-            playback_ms=playback_ms or 0.0,
-        )
+        _render_animation_export(displayed_fig, file_stem=file_stem or "animation")
     else:
         _render_save_plot_button(
             displayed_fig,
@@ -5603,7 +5590,6 @@ def render_single_trial_tab(
     # and SVG are saved from that plot in the browser.
     displayed_plot_key = "single"
     save_slug = f"{selected_participant}__{selected_trial}"
-    anim_playback_ms = None
     anim_file_stem = None
     # Use the windowed second scanpath: a window that empties B falls back to a
     # single-trial animation (and info box). A co-animation is an overlay on one
@@ -5749,22 +5735,20 @@ def render_single_trial_tab(
             # Building the per-fixation animation frames takes a moment — show a
             # loading banner so the screen isn't blank meanwhile.
             with st.spinner("Building animation…"):
-                displayed_fig, anim_playback_ms, save_slug, anim_file_stem = (
-                    _build_and_render_animation(
-                        trial_words,
-                        plot_fixations,
-                        compare_meta["words"] if dual_anim else None,
-                        plot_compare_fix if dual_anim else None,
-                        selected_participant,
-                        selected_trial,
-                        compare_participant,
-                        compare_trial,
-                        dataset_name_b=_compare_dataset_name(compare_meta),
-                        settings=render_settings,
-                        viz_settings=viz_settings,
-                        playback_speed=playback_speed,
-                        drift_corrected=drift_corrected_primary,
-                    )
+                displayed_fig, save_slug, anim_file_stem = _build_and_render_animation(
+                    trial_words,
+                    plot_fixations,
+                    compare_meta["words"] if dual_anim else None,
+                    plot_compare_fix if dual_anim else None,
+                    selected_participant,
+                    selected_trial,
+                    compare_participant,
+                    compare_trial,
+                    dataset_name_b=_compare_dataset_name(compare_meta),
+                    settings=render_settings,
+                    viz_settings=viz_settings,
+                    playback_speed=playback_speed,
+                    drift_corrected=drift_corrected_primary,
                 )
             if comparing and cross_dataset and not compare_comparable:
                 # UX-144: the replay has no split layout and shows A alone, so
@@ -5969,7 +5953,6 @@ def render_single_trial_tab(
                     displayed_fig,
                     animate=animate,
                     save_slug=save_slug,
-                    playback_ms=anim_playback_ms,
                     file_stem=anim_file_stem,
                     combos=combos,
                     words_filtered=words_filtered,

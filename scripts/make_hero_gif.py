@@ -22,7 +22,6 @@ from pathlib import Path
 
 import scanpath_studio as sps
 from scanpath_studio.animation_export import export_animation
-from scanpath_studio.plots import animation_playback_ms
 
 PARTICIPANT = "l7_1090"
 PARAGRAPH = "l7_1090_2_2_4_Ele_r0"
@@ -51,25 +50,19 @@ def main() -> None:
         words, fixations, PARTICIPANT, PARAGRAPH, playback_speed=PLAYBACK_SPEED
     )
 
-    # Match the tab's per-frame duration so the clip's runtime equals the
-    # on-screen Play (see tabs.render_animation_tab / animation_playback_ms).
-    _, fixs, _, _ = sps.api._select_trial(words, fixations, PARTICIPANT, PARAGRAPH)
-    _span, playback_ms = animation_playback_ms([fixs], PLAYBACK_SPEED)
-    n_frames = len(fig.frames or ())
-    frame_ms = playback_ms / n_frames if n_frames else 16.0
-
     def _progress(done: int, total: int) -> None:
         print(f"\r  frame {done}/{total}", end="", flush=True)
 
+    # The clip keeps the replay's own clock (BUG-93): reading time / speed.
     data = export_animation(
         fig,
         fmt="gif",
-        frame_duration_ms=frame_ms,
         scale=args.scale,
         progress_callback=_progress,
     )
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_bytes(data)
+    n_frames = len(fig.frames or ())
     print(f"\nwrote {args.out} ({len(data) / 1024:.0f} KB, {n_frames} frames)")
 
 

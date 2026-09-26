@@ -621,7 +621,47 @@ def _animation_export_app():
         go.Scatter(x=[0, 1], y=[0, 1]),
         frames=[go.Frame(name="0", data=[go.Scatter(x=[0], y=[0])], traces=[0])],
     )
-    _render_animation_export(fig, file_stem="anim", playback_ms=1000.0)
+    _render_animation_export(fig, file_stem="anim")
+
+
+def _animation_clip_app():
+    import plotly.graph_objects as go
+
+    from scanpath_studio.tabs import _render_animation_export
+
+    # Three frames whose clock says the replay lasts 10 s of reading at ×2 —
+    # what `make_scanpath_animation` stamps (BUG-93).
+    fig = go.Figure(
+        go.Scatter(x=[0, 1], y=[0, 1]),
+        frames=[
+            go.Frame(name=str(k), data=[go.Scatter(x=[k], y=[k])], traces=[0])
+            for k in range(3)
+        ],
+        layout={
+            "meta": {
+                "scanpath_autoplay": False,
+                "scanpath_frame_times_ms": [0.0, 5000.0, 10000.0],
+                "scanpath_playback_speed": 2.0,
+            }
+        },
+    )
+    _render_animation_export(fig, file_stem="anim")
+
+
+def test_the_clip_lasts_what_the_figures_own_replay_does(monkeypatch):
+    # BUG-93: the GIF/MP4 took a playback time the tab measured on its own, from
+    # fixations the builder's Discard flags had not dropped yet, so a clip could
+    # outlast the replay it was made from. It reads the figure's clock now.
+    AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
+    from scanpath_studio import tabs
+
+    monkeypatch.setattr(tabs, "chrome_available", lambda: True)
+    at = AppTest.from_function(_animation_clip_app)
+    at.session_state["anim_export_format"] = "MP4"
+    at = at.run(timeout=30)
+
+    assert not at.exception, at.exception
+    assert "clip ≈ 5.0s" in " ".join(caption.value for caption in at.caption)
 
 
 def test_animation_html_is_built_on_click_not_per_rerun(monkeypatch):
@@ -639,20 +679,27 @@ def test_animation_html_is_built_on_click_not_per_rerun(monkeypatch):
     assert button.label == "⬇ Download HTML"
 
 
-def test_animation_html_autoplays_at_the_configured_speed():
-    from scanpath_studio import plots, tabs
+def test_animation_html_carries_the_replay_player():
+    from scanpath_studio import tabs
 
     fig = go.Figure(
         go.Scatter(x=[0, 1], y=[0, 1]),
         frames=[go.Frame(name="0", data=[go.Scatter(x=[0], y=[0])], traces=[0])],
     )
-    paused = tabs._animation_html(fig)
+    bare = tabs._animation_html(fig)
+    # BUG-93: a replay built by `make_scanpath_animation` stamps its clock, and
+    # the download keeps time with the same wall-clock player as the app.
     fig.update_layout(
-        meta={plots._AUTOPLAY_META_FLAG: True, plots._AUTOPLAY_META_DURATION: 123}
+        meta={
+            "scanpath_autoplay": True,
+            "scanpath_frame_times_ms": [0.0],
+            "scanpath_playback_speed": 1.0,
+        }
     )
-    autoplaying = tabs._animation_html(fig)
+    replay = tabs._animation_html(fig)
 
-    # Plotly fills the kickoff's `{plot_id}` in, so match its frame duration.
-    assert "frame:{duration:123" in plots.animation_autoplay_post_script(123)
-    assert "frame:{duration:123" not in paused
-    assert "frame:{duration:123" in autoplaying
+    assert "plotly_buttonclicked" not in bare
+    assert "plotly_buttonclicked" in replay
+    # Plotly's own auto_play is off either way: it ignores the configured speed.
+    assert "Plotly.animate('" not in bare
+    assert "Plotly.animate('" not in replay

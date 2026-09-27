@@ -20,7 +20,7 @@ import pandas as pd
 import plotly.io as pio
 import streamlit as st
 
-from scanpath_studio import alignment
+from scanpath_studio import alignment, loading
 from scanpath_studio.aggregation import (
     MEASURES,
     Measure,
@@ -7182,15 +7182,22 @@ def render_corpus_analysis_tab(
     # aggregatable measures" on Per text and one or two fixation-level measures
     # elsewhere. Computed once per filtered pool, imported IA values still
     # winning column by column, and handed back as the same object (no copy).
-    words_filtered = frame_cache(
-        "corpus_measures",
-        (frame_fingerprint(words_filtered), frame_fingerprint(fixations_filtered)),
-        lambda: (
-            compute_per_word_measures(fixations_filtered, words_filtered)
-            if not words_filtered.empty and not fixations_filtered.empty
-            else words_filtered
-        ),
-    )
+    #
+    # UX-166: the per-word measures of the whole pool are the Corpus view's
+    # first slow region — opening its card releases the page skeleton, so the
+    # view appears with this card at its top while they compute.
+    with loading.card(
+        st.empty(), key="corpus_measures", title="Computing reading measures"
+    ):
+        words_filtered = frame_cache(
+            "corpus_measures",
+            (frame_fingerprint(words_filtered), frame_fingerprint(fixations_filtered)),
+            lambda: (
+                compute_per_word_measures(fixations_filtered, words_filtered)
+                if not words_filtered.empty and not fixations_filtered.empty
+                else words_filtered
+            ),
+        )
     with st.container(key="tutorial_corpus_subtabs"):
         text_tab, sentence_tab, reader_tab, groups_tab = st.tabs(
             list(CORPUS_SUBTABS),

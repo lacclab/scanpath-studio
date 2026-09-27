@@ -77,7 +77,8 @@ def build_combo_options_for(
     )
 
 
-@st.cache_data(show_spinner="Building trial list…")
+# UX-166: the dataset card lists this step.
+@st.cache_data(show_spinner=False)
 def _build_combo_options_cached(
     _fixations: pd.DataFrame,
     composite_cols: tuple[str, ...],

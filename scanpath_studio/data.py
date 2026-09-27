@@ -591,7 +591,8 @@ def onestop_data_provenance(participant: str | None = None) -> dict:
     return info
 
 
-@st.cache_data(show_spinner="Loading OneStop lacclab export…")
+# UX-166: the dataset card lists this step.
+@st.cache_data(show_spinner=False)
 def load_onestop_server_bundle(
     participant: str | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:

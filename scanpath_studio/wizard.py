@@ -309,9 +309,9 @@ def _finalize_wizard_dataset() -> None:
     st.session_state["_pending_source_choice"] = ds_name
     st.session_state["_show_upload_wizard"] = False
     st.session_state["setup_complete"] = True
-    # Flag the transition so main() paints a "loading" bridge over the wizard
-    # while the new dataset's first figure builds — otherwise the wizard lingers
-    # on screen (stale DOM) for the seconds the heavy first render takes.
+    # Flag the transition so main() shows the dataset card at once (UX-166)
+    # rather than after its usual delay — otherwise the closed wizard is all the
+    # user sees (stale DOM) for the seconds the heavy first render takes.
     st.session_state["_wizard_finalizing"] = True
     # …and ask for VAL-7's Trial ID verdict on the dataset this just created.
     # It runs as part of the load that is about to happen (`main` already

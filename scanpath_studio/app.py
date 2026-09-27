@@ -29,6 +29,7 @@ Usage:
 
 from __future__ import annotations
 
+import contextlib
 import html
 import logging
 import os
@@ -1589,7 +1590,8 @@ def _dataset_access_status(
     return False
 
 
-@st.cache_data(show_spinner="Loading PoTeC…")
+# UX-166: the dataset card lists this step.
+@st.cache_data(show_spinner=False)
 def _cached_potec_raw_frames(root: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Cached raw PoTeC frames (pre-normalization) — the full corpus.
 
@@ -1647,7 +1649,8 @@ def _load_potec_source(
         return pd.DataFrame(), pd.DataFrame()
 
 
-@st.cache_data(show_spinner="Loading MultiplEYE…")
+# UX-166: the dataset card lists this step.
+@st.cache_data(show_spinner=False)
 def _cached_multipleye_raw_frames(
     root: str, fixation_source: str
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -1726,7 +1729,8 @@ def _load_multipleye_source(
         return pd.DataFrame(), pd.DataFrame()
 
 
-@st.cache_data(show_spinner="Loading OneStop…")
+# UX-166: the dataset card lists this step.
+@st.cache_data(show_spinner=False)
 def _cached_onestop_raw_frames(
     root: str, regime: str, parts: tuple[str, ...], variant: str
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -1845,7 +1849,8 @@ def _load_onestop_public_source(
         return pd.DataFrame(), pd.DataFrame()
 
 
-@st.cache_data(show_spinner="Loading EyeGenBench…")
+# UX-166: the dataset card lists this step.
+@st.cache_data(show_spinner=False)
 def _cached_eyegenbench_raw_frames(
     root: str, dataset: str
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -2618,7 +2623,8 @@ def _cached_trial_identity_report(
     return diagnose_trial_identity(_words, _fixations, sample_trials=sample_trials)
 
 
-@st.cache_data(show_spinner="Loading MultiplEYE server bundle…")
+# UX-166: the dataset card lists this step.
+@st.cache_data(show_spinner=False)
 def _cached_multipleye_server_bundle(
     participant: str | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -6546,7 +6552,75 @@ def _activate_data_source(data_choice: str, *, preproc_host=None) -> dict:
     return preprocessing
 
 
+#: UX-168: the last dataset whose pipeline finished — where Cancel goes back to.
+#: Not the wizard's `_prev_source`, which only records where leaving the
+#: add-dataset wizard returns to.
+LAST_LOADED_SOURCE_KEY = "_sps_last_loaded_source"
+#: UX-166: the dataset task this session's pipeline is running, set when the
+#: card opens and cleared when it ends; found still set by the next run, it
+#: means that run was abandoned mid-load.
+DATASET_TASK_KEY = "_sps_dataset_task"
+
+
+def _open_dataset_card(
+    page: loading.Page, data_choice: str, *, view_switched: bool, finalizing: bool
+) -> loading.Card | None:
+    """UX-166: this run's dataset card, or ``None`` when there is no load to wait on.
+
+    A view switch opens it at once, titled for the view, without steps: the
+    dataset is loaded already, and the skeleton is what answers the click.
+    """
+    if data_choice in (UPLOAD_CHOICE, AUTHOR_CHOICE):
+        return None
+    token = str(st.session_state.get("data_source_choice") or data_choice)
+    task_key = ("dataset", loading.session_id(), token)
+    st.session_state[DATASET_TASK_KEY] = task_key
+    if view_switched:
+        return page.open_card(
+            title=f"Opening {view_label(st.session_state.get('_last_rendered_view'))}",
+            task_key=task_key,
+            reveal_now=True,
+        )
+    stored = data_choice in st.session_state.get("_datasets", {})
+    steps = (
+        ("Building the trial list",)
+        if stored
+        else ("Reading files", "Normalizing", "Building the trial list")
+    )
+    return page.open_card(
+        title=f"Loading {_dataset_display_name(token)}",
+        steps=steps,
+        task_key=task_key,
+        duration_key=("dataset", token),
+        reveal_now=finalizing,
+    )
+
+
+def _finish_dataset_card(card: loading.Card | None) -> None:
+    """UX-166: the pipeline finished — every step ✓, the skeleton left up."""
+    if card is None:
+        return
+    card.finish()
+    card.close(keep=True)
+    st.session_state[LAST_LOADED_SOURCE_KEY] = str(
+        st.session_state.get("data_source_choice") or ""
+    )
+    st.session_state.pop(DATASET_TASK_KEY, None)
+
+
 def main() -> None:
+    """Main application entry point: one script run, inside a loading scope.
+
+    UX-165: ``loading.run_scope`` guarantees that no loading card's timer thread
+    outlives the run that started it — whether the run ends normally, returns
+    early, raises, or is abandoned by a click — and ends quietly a run whose
+    work was cancelled. The run itself is `_run_app`.
+    """
+    with loading.run_scope():
+        _run_app()
+
+
+def _run_app() -> None:
     """Main application entry point.
 
     Orchestrates the full application workflow:
@@ -6590,9 +6664,15 @@ def main() -> None:
     # win over restored settings; an explicit ?source= also wins over the stored
     # data-source choice.
     app_url = str(getattr(st.context, "url", "") or "")
-    if restore_local_state(
-        st.session_state, app_url, protect_data_source=url_source is not None
+    # UX-166: restoring large uploads reads their Parquet files before even the
+    # title is drawn, so it gets a card of its own at the very top of the page.
+    with loading.card(
+        st.empty(), key="restore", title="Restoring your datasets from this computer"
     ):
+        restored = restore_local_state(
+            st.session_state, app_url, protect_data_source=url_source is not None
+        )
+    if restored:
         # ENG-30: say it once, where the user is looking. Silently repopulating a
         # session reads as "the app kept my data somewhere" without saying where;
         # the toast points at the menu panel that answers that.
@@ -6794,36 +6874,19 @@ def main() -> None:
     # its Session-page panel from it (including the BUG-31 wizard hold-override
     # — see the note there); the dispatch below reuses the same value.
 
-    # Switching view is a full rerun — data load, filters, then a page of fresh
-    # figures — and Streamlit leaves the OLD view painted until the new run
-    # overwrites each element. So a click on "Corpus Analysis" left the scanpath
-    # sitting there, looking like nothing had happened. Paint a bridge the
-    # moment we know the view changed: it lands high on the page, before the
-    # slow work, so the click gets an immediate answer. Cleared just before the
-    # real view renders. Same pattern (and reasoning) as `_finalizing_bridge`
-    # above — see ENG-36 for why the message keeps its own line above the
-    # skeleton rather than relying on a bare skeleton to explain itself.
-    #
-    # The container is created on EVERY run, not only on a switch, and only
-    # *filled* on a switch. Streamlit reconciles the element tree by position:
-    # a run that skipped creating it left the previous run's banner + skeleton
-    # sitting there unclaimed, so the "Loading…" never went away. Always
-    # claiming the slot means the next run overwrites it with an empty
-    # container, which is what clears it.
-    #
-    # It has to be an `st.empty()` placeholder, not a plain container:
-    # `container.empty()` *appends* an empty child, it does not drop the
-    # children already written into it, so the banner and skeleton survived the
-    # clear below and sat above the finished page until some later rerun
-    # happened to redraw the slot. A placeholder holds exactly one element — a
-    # child container when there is something to say, nothing after `.empty()`.
-    _view_bridge = st.empty()
-    if st.session_state.get("_last_rendered_view") not in (None, active_view):
-        _bridge_box = _view_bridge.container()
-        _bridge_box.info(f"Loading {view_label(active_view)}…", icon=ICONS["loading"])
-        _bridge_box.skeleton(height=420)
-    else:
-        _view_bridge = None
+    # UX-166 — the Scanpath and Corpus views render inside one reserved area.
+    # Its first child is the page slot: `loading.Page` fills it with a skeleton
+    # of the view and the dataset card while a load is slow, and CSS hides the
+    # rest of the area meanwhile — the previous page, or the new one being laid
+    # out under it. It replaces the old "Loading <view>…" bridge, which a view
+    # switch now shows at once as that view's skeleton. The slot is recreated
+    # empty on every run, so nothing it held can outlive the run (BUG-81).
+    view_area = st.container(key=loading.VIEW_AREA_KEY)
+    view_first_slot = view_area.empty()
+    view_switched = st.session_state.get("_last_rendered_view") not in (
+        None,
+        active_view,
+    )
     st.session_state["_last_rendered_view"] = active_view
 
     # DATA-26 — the **Data** page ("Data Management"). One place for
@@ -6982,6 +7045,8 @@ def main() -> None:
     from scanpath_studio.wizard import _enter_add_data_wizard
 
     data_choice = resolve_data_source(host=setup_source_slot)
+    # UX-166: on the Data page the dataset card sits above the table.
+    data_page_slot = setup_source_slot.empty()
     # UX-54: the page lists every dataset as a *table* — one row each, sortable,
     # with the counts beside the name and the per-row actions in the row they
     # belong to. Reserved here (so it keeps its place at the top of the page)
@@ -6991,6 +7056,18 @@ def main() -> None:
     # source picker it used to aim at is not on this page (only Scanpath and
     # Corpus Analysis draw one), so the step outlined nothing.
     dataset_table_slot = setup_source_slot.container(key="tutorial_available_datasets")
+    # UX-166: this run's page — the slot the skeleton and the dataset card draw
+    # into while a load is slow: the view area's first child on Scanpath and
+    # Corpus Analysis, the slot above the table on the Data page.
+    page = loading.page(
+        data_page_slot if data_view else view_first_slot,
+        view="data"
+        if data_view
+        else "corpus"
+        if active_view == _VIEW_CORPUS
+        else "scanpath",
+        plot_height=loading.recorded_plot_height("single", 480),
+    )
     # DATA-35: under the table, not on the heading's line. Left-aligned in a
     # narrow column so a stretched button doesn't run the width of the page.
     add_dataset_slot = None
@@ -7023,39 +7100,28 @@ def main() -> None:
     preproc_settings = _activate_data_source(
         data_choice, preproc_host=setup_preproc_slot
     )
-    # Just-finalized upload: paint a "loading" bridge into the main area now so it
-    # repaints over the wizard (instead of the wizard lingering until the slow
-    # first figure finishes). Cleared just before the tabs render below.
-    #
-    # ENG-36: the message keeps its own line — a bare skeleton says "loading" but
-    # not *what*, and the wizard has just closed under the user — while
-    # `st.skeleton` (1.59) reserves the height the plot is about to take, so the
-    # page doesn't reflow when the figure lands. Standalone mode, not the `with`
-    # form: the wait spans everything between here and the tab render below, not
-    # one block.
-    # An `st.empty()` placeholder for the same reason as the view bridge above:
-    # `.empty()` on a plain container adds a child instead of clearing one.
-    _finalizing_bridge = None
-    if st.session_state.pop("_wizard_finalizing", False):
-        _finalizing_bridge = st.empty()
-        _finalizing_box = _finalizing_bridge.container()
-        _finalizing_box.info(
-            f"{ICONS['success']} Dataset added — loading your scanpaths…",
-            icon=ICONS["loading"],
-        )
-        _finalizing_box.skeleton(height=420)
+    # UX-166 — one card over the dataset pipeline, drawn in the page slot. The
+    # post-wizard "Dataset added — loading your scanpaths…" bridge it replaces
+    # is this card shown at once.
+    dataset_card = _open_dataset_card(
+        page,
+        data_choice,
+        view_switched=view_switched,
+        finalizing=bool(st.session_state.pop("_wizard_finalizing", False)),
+    )
 
-    def _clear_loading_bridges() -> None:
-        """Drop the "⏳ Loading…" banners once the page has something to show.
+    def _end_loading() -> None:
+        """Take the dataset card and the page skeleton down on an early return.
 
-        BUG-81: only the normal path cleared them, so every early return below
-        (the wizard, a mapping that can't be satisfied, a filter that empties
-        the pool) left the banner + skeleton above the real content until the
-        next click — on the very page the warning had just sent the user to.
+        BUG-81: only the normal path cleared the old loading banners, so every
+        early return (the wizard, a mapping that can't be satisfied, a filter
+        that empties the pool) left one above the real content until the next
+        click — on the very page the warning had just sent the user to.
         """
-        for bridge in (_finalizing_bridge, _view_bridge):
-            if bridge is not None:
-                bridge.empty()
+        if dataset_card is not None:
+            dataset_card.close()
+        st.session_state.pop(DATASET_TASK_KEY, None)
+        page.release()
 
     def _render_datasets_table(words, fixations, raw_gaze) -> None:
         """📂 Available datasets, whenever the Data page is showing its overview.
@@ -7149,7 +7215,7 @@ def main() -> None:
         if wizard_active:
             _render_offpage_setup_notice(data_view)
             _fill_recovery_cache_panel()
-            _clear_loading_bridges()
+            _end_loading()
             return
     elif data_choice == AUTHOR_CHOICE:
         words_df, fixations_df = _render_authoring_source()
@@ -7212,6 +7278,12 @@ def main() -> None:
             options_host=source_options_slot,
             location_host=data_location_slot,
         )
+        if dataset_card is not None and len(dataset_card.steps) == 3:
+            dataset_card.step(
+                1,
+                f"Normalizing {len(raw_words_df):,} word rows and "
+                f"{len(raw_fixations_df):,} fixations",
+            )
         declared_word_schema, declared_fix_schema = declared_schemas_for(data_choice)
         words_df, fixations_df, mapping_problems = prepare_data(
             raw_words_df,
@@ -7244,7 +7316,7 @@ def main() -> None:
         _render_offpage_setup_notice(data_view)
         _fill_recovery_cache_panel()
         _render_datasets_table(None, None, None)
-        _clear_loading_bridges()
+        _end_loading()
         return
 
     # VIZ-14: local/desktop users can attach stimulus screenshots without
@@ -7290,6 +7362,14 @@ def main() -> None:
             data_choice, host=data_location_slot, notices=menu.notices
         )
 
+    # UX-166: the two notices the pipeline draws on its way — the data-quality
+    # warning and UX-7(b)'s missing-corpus panel — belong *above* the view they
+    # describe. The Scanpath and Corpus views now render inside `view_area`,
+    # created before this point, so on those views the notices go into it too
+    # (after the page slot, so they wait under a skeleton with the rest of the
+    # new page); the Data page keeps them where they always were.
+    view_notices = contextlib.nullcontext() if data_view else view_area
+
     if preproc_settings["enabled"]:
         fixations_df, preproc_report = preprocess_fixation_stage(
             words_df, fixations_df, preproc_settings
@@ -7304,10 +7384,12 @@ def main() -> None:
             else preproc_report.iloc[0:0]
         )
         if not suspicious.empty:
-            st.warning(
-                f"Data quality: {len(suspicious)} trial(s) put at least 12 "
-                "fixations on one word. Check stimulus alignment or line assignment."
-            )
+            with view_notices:
+                st.warning(
+                    f"Data quality: {len(suspicious)} trial(s) put at least 12 "
+                    "fixations on one word. Check stimulus alignment or line "
+                    "assignment."
+                )
     else:
         st.session_state["_preprocessing_report"] = pd.DataFrame()
         st.session_state["_preprocessing_settings"] = dict(preproc_settings)
@@ -7315,7 +7397,8 @@ def main() -> None:
     # UX-7(b): if the selected corpus isn't on disk, say so here — in the main
     # area, where the (demo) plot the user is actually looking at is — rather than
     # leaving it to a line on the 🗂️ Data page they may never open.
-    _render_dataset_unavailable()
+    with view_notices:
+        _render_dataset_unavailable()
 
     # Whole-dataset frames, captured BEFORE the trial-filter funnel —
     # the Bulk Export tab's "Export the whole dataset" option exports these,
@@ -7411,6 +7494,8 @@ def main() -> None:
     # data. The controls now live in the Scanpath tab's Trial Selection panel
     # (rendered there via render_trial_filters); here we just read the last
     # selection from session_state so filtering stays global across every view.
+    if dataset_card is not None and dataset_card.steps:
+        dataset_card.step(len(dataset_card.steps) - 1)  # Building the trial list
     trial_filters = read_trial_filters()
     words_df, fixations_df = filter_trials(
         words_df,
@@ -7491,7 +7576,7 @@ def main() -> None:
         _render_empty_after_filtering(words_all, fixations_all, trial_filters)
         _fill_recovery_cache_panel()
         _render_datasets_table(words_all, fixations_all, raw_gaze_df)
-        _clear_loading_bridges()
+        _end_loading()
         return
 
     # Build trial combinations for selection UI — from fixations normally, then
@@ -7604,9 +7689,9 @@ def main() -> None:
         else raw_gaze_df
     )
 
-    # Clear the "loading" bridges now that the real content is about to render
-    # in their place — the post-finalize one, and the view-switch one.
-    _clear_loading_bridges()
+    # UX-166: the load is done; the skeleton stays until the view has drawn its
+    # controls and its first slow region opens (see `loading.card`).
+    _finish_dataset_card(dataset_card)
 
     # Render tabbed interface. Animation is now a checkbox inside the Scanpath
     # Visualization tab (no separate Animated Scanpath tab); Bulk Export has its
@@ -7629,6 +7714,7 @@ def main() -> None:
     )
 
     if data_view:
+        loading.release_page()  # UX-166: the Data page's card sits above its table
         # DATA-26 — fill the page reserved before the load. Everything above the
         # dispatch already landed in its slot (source picker · description ·
         # options · data location · wizard · mode-A mapping panels); what is left
@@ -7744,48 +7830,54 @@ def main() -> None:
                     raw_gaze_filtered,
                 )
     elif active_view == _VIEW_CORPUS:
-        # UX-25: Corpus Analysis has no "Filter by" row, so the picker gets its
-        # own compact row at the top of the page — it stays reachable on every
-        # view.
-        _ds_col, _ = st.columns([2, 5])
-        render_data_source_picker(host=_ds_col)
-        with st.container(key="tutorial_corpus_analysis"):
-            render_corpus_analysis_tab(
-                words_filtered,
-                fixations_filtered,
-                canvas_width=canvas_width,
-                canvas_height=canvas_height,
-                base_font_size=base_font_size,
-                font_family=font_family,
-                viz_settings=viz_settings,
-                line_spacing=line_spacing,
-                scale_text_to_boxes=scale_text_to_boxes,
-                canvas_renderer=canvas_renderer,
-            )
+        with view_area:
+            # UX-25: Corpus Analysis has no "Filter by" row, so the picker gets
+            # its own compact row at the top of the page — it stays reachable on
+            # every view.
+            _ds_col, _ = st.columns([2, 5])
+            render_data_source_picker(host=_ds_col)
+            with st.container(key="tutorial_corpus_analysis"):
+                render_corpus_analysis_tab(
+                    words_filtered,
+                    fixations_filtered,
+                    canvas_width=canvas_width,
+                    canvas_height=canvas_height,
+                    base_font_size=base_font_size,
+                    font_family=font_family,
+                    viz_settings=viz_settings,
+                    line_spacing=line_spacing,
+                    scale_text_to_boxes=scale_text_to_boxes,
+                    canvas_renderer=canvas_renderer,
+                )
     else:
         # The Scanpath view renders the viz controls itself (right rail) and
         # writes the global_* keys; re-read them below so Save & restore captures
         # any edits the user just made in the rail. Data Inspection + Share are
         # subtabs of this view now — passed in as renderers so the page owns its
         # subtab bar (Data Inspection renders inline; Share builds the deep link).
-        render_single_trial_tab(
-            words_filtered,
-            fixations_filtered,
-            combos,
-            canvas_width=canvas_width,
-            canvas_height=canvas_height,
-            base_font_size=base_font_size,
-            font_family=font_family,
-            raw_gaze=raw_gaze_filtered,
-            line_spacing=line_spacing,
-            scale_text_to_boxes=scale_text_to_boxes,
-            combos_all=combos_all,
-            words_all=words_all,
-            fixations_all=fixations_all,
-            share_renderer=lambda: _render_share_body(data_choice),
-            data_source_renderer=render_data_source_picker,
-            canvas_renderer=canvas_renderer,
-        )
+        with view_area:
+            render_single_trial_tab(
+                words_filtered,
+                fixations_filtered,
+                combos,
+                canvas_width=canvas_width,
+                canvas_height=canvas_height,
+                base_font_size=base_font_size,
+                font_family=font_family,
+                raw_gaze=raw_gaze_filtered,
+                line_spacing=line_spacing,
+                scale_text_to_boxes=scale_text_to_boxes,
+                combos_all=combos_all,
+                words_all=words_all,
+                fixations_all=fixations_all,
+                share_renderer=lambda: _render_share_body(data_choice),
+                data_source_renderer=render_data_source_picker,
+                canvas_renderer=canvas_renderer,
+            )
+
+    # UX-166: a view that never reached a slow region (no trial selected, an
+    # empty view) still takes the skeleton down.
+    loading.release_page()
 
     # Re-resolve viz settings from session_state AFTER the dispatch so the Save &
     # restore panel reflects any edits made in the Scanpath rail this run (the

@@ -441,6 +441,22 @@ _NATIVE_ZOOM_BUTTONS = (
 _ZOOM_MAX = 8.0
 
 _TRUE_SCALE_TEMPLATE = """
+<style>
+  /* UX-169: a placeholder at the figure's size while plotly.js loads and the
+     figure draws — seconds for a big replay. It fades in only after 300 ms, so
+     a small figure never flickers, and goes on Plotly's first draw. Ahead of
+     the markup on purpose: the figure (megabytes for a replay) sits between
+     the placeholder and the script, and a rule parsed after it would leave
+     the placeholder unstyled — invisible — for exactly that wait. */
+  @keyframes sps-skel-in { to { opacity: 1; } }
+  @keyframes sps-skel-pulse { 50% { opacity: 0.55; } }
+  #skel-__KEY__ { position: absolute; inset: 0; z-index: 4; pointer-events: none;
+    opacity: 0; border-radius: 8px; background: rgba(128, 128, 128, 0.10);
+    animation: sps-skel-in .2s ease .3s forwards,
+               sps-skel-pulse 1.6s ease-in-out .5s infinite; }
+  @media (prefers-reduced-motion: reduce) {
+    #skel-__KEY__ { animation: sps-skel-in .01s linear .3s forwards; } }
+</style>
 <div id="wrap-__KEY__" style="position:relative;width:100%;">
   <div id="fit-__KEY__" style="width:100%;overflow:hidden;position:relative;">
     <div id="skel-__KEY__" aria-hidden="true"></div>
@@ -451,19 +467,6 @@ _TRUE_SCALE_TEMPLATE = """
   </div>
   __TOOLBAR__
 </div>
-<style>
-  /* UX-169: a placeholder at the figure's size while plotly.js loads and the
-     figure draws — seconds for a big replay. It fades in only after 300 ms, so
-     a small figure never flickers, and goes on Plotly's first draw. */
-  @keyframes sps-skel-in { to { opacity: 1; } }
-  @keyframes sps-skel-pulse { 50% { opacity: 0.55; } }
-  #skel-__KEY__ { position: absolute; inset: 0; z-index: 4; pointer-events: none;
-    opacity: 0; border-radius: 8px; background: rgba(128, 128, 128, 0.10);
-    animation: sps-skel-in .2s ease .3s forwards,
-               sps-skel-pulse 1.6s ease-in-out .5s infinite; }
-  @media (prefers-reduced-motion: reduce) {
-    #skel-__KEY__ { animation: sps-skel-in .01s linear .3s forwards; } }
-</style>
 <script>
 (function() {
   var W = __W__, H = __H__, ZMAX = __ZMAX__, ZOOMABLE = __ZOOMABLE__;

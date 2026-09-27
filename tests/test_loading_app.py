@@ -642,3 +642,8 @@ def test_the_plot_frame_carries_a_placeholder_removed_on_first_draw():
     assert "dropSkeleton" in html
     # It must run for the small multiples too, which return before the zoom code.
     assert html.index("dropSkeleton") < html.index("if (!ZOOMABLE)")
+    # Styled before it is parsed: the figure's own markup (megabytes for a
+    # replay) comes between them, so a rule after it would leave the
+    # placeholder unstyled — invisible — for exactly the wait it is for.
+    assert html.index("#skel-k {") < html.index('id="skel-k"')
+    assert html.index('id="skel-k"') < html.index('id="truescale-k"')

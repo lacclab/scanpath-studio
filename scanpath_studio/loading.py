@@ -160,9 +160,14 @@ def steps_html(snap: Snapshot) -> str:
 
 
 def bar_html(snap: Snapshot) -> str:
-    """A thin bar: filling when a total is known, sliding otherwise."""
-    if snap.total:
-        pct = max(0, min(100, round(100 * (snap.done or 0) / snap.total)))
+    """A thin bar: filling when a total is known, sliding otherwise — and full
+    once the task has finished (a kept page card, every step ticked)."""
+    if snap.finished or snap.total:
+        pct = (
+            100
+            if snap.finished
+            else max(0, min(100, round(100 * (snap.done or 0) / snap.total)))
+        )
         return (
             '<div class="sps-bar" role="progressbar" aria-valuemin="0" '
             f'aria-valuemax="100" aria-valuenow="{pct}">'

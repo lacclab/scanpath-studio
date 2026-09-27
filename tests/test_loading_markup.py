@@ -65,6 +65,14 @@ def test_the_bar_is_determinate_only_with_a_total():
     assert "sps-bar-indeterminate" in loading.bar_html(_snap(total=None))
 
 
+def test_a_finished_task_shows_a_full_bar_not_a_sliding_one():
+    """The page card stays up, every step ticked, until the view draws — a
+    bar still sliding there would say the load is still working."""
+    html = loading.bar_html(_snap(finished=True, done=None, total=None))
+    assert 'aria-valuenow="100"' in html
+    assert "sps-bar-indeterminate" not in html
+
+
 def test_the_size_box_holds_the_exact_iframe_height():
     html = loading.size_box_html(960, 702)
     assert "height:702px" in html

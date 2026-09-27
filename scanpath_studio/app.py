@@ -1503,6 +1503,10 @@ def _render_dataset_unavailable() -> None:
             key=f"{note['key_prefix']}_download_main",
             type="primary",
         ):
+            # UX-166: the download is a wait of its own. Take the dataset card
+            # and the skeleton down first, or they hide this panel and its
+            # spinner while describing a step that isn't what is running.
+            loading.release_page()
             try:
                 with st.spinner(f"Downloading into {note['root']} …"):
                     download(note["root"])
@@ -1580,6 +1584,9 @@ def _dataset_access_status(
         key_prefix=key_prefix,
     )
     if cfg.button("⬇ Download", key=f"{key_prefix}_download", type="primary"):
+        # UX-166: as for the main area's ⬇ Download now — the dataset card must
+        # not cover the download with a step that isn't what is running.
+        loading.release_page()
         try:
             with st.spinner(f"Downloading into {root} …"):
                 download(root)
@@ -6563,22 +6570,31 @@ DATASET_TASK_KEY = "_sps_dataset_task"
 
 
 def _open_dataset_card(
-    page: loading.Page, data_choice: str, *, view_switched: bool, finalizing: bool
+    page: loading.Page,
+    data_choice: str,
+    *,
+    view: str,
+    view_switched: bool,
+    finalizing: bool,
 ) -> loading.Card | None:
     """UX-166: this run's dataset card, or ``None`` when there is no load to wait on.
 
-    A view switch opens it at once, titled for the view, without steps: the
-    dataset is loaded already, and the skeleton is what answers the click.
+    A switch to ``view`` opens it at once, titled for the view, without steps:
+    the dataset is loaded already, and the skeleton is what answers the click.
+    That card has a task of its own, so it never joins a load's task (nor a
+    load, its), while `DATASET_TASK_KEY` still names the dataset's — a view
+    switch in the middle of a load is not "another dataset".
     """
     if data_choice in (UPLOAD_CHOICE, AUTHOR_CHOICE):
         return None
     token = str(st.session_state.get("data_source_choice") or data_choice)
-    task_key = ("dataset", loading.session_id(), token)
+    session = loading.session_id()
+    task_key = ("dataset", session, token)
     st.session_state[DATASET_TASK_KEY] = task_key
     if view_switched:
         return page.open_card(
-            title=f"Opening {view_label(st.session_state.get('_last_rendered_view'))}",
-            task_key=task_key,
+            title=f"Opening {view_label(view)}",
+            task_key=("view", session, view),
             reveal_now=True,
         )
     stored = data_choice in st.session_state.get("_datasets", {})
@@ -6621,28 +6637,22 @@ def main() -> None:
 
 
 def _run_app() -> None:
-    """Main application entry point.
+    """One script run, top to bottom (``main`` wraps it in a loading scope).
 
-    Orchestrates the full application workflow:
-        1. Configure Streamlit page and custom CSS
-        2. Render title and caption
-        3. Load and normalize data (words, fixations, optional raw gaze)
-        4. Apply user-selected filters (participants, trials, texts)
-        5. Render the plot controls (canvas, fonts, visualization settings)
-        6. Render the active view (Scanpath Visualization / Corpus Analysis / Data Inspection)
-
-    Data Flow:
-        CSV upload → schema inference → normalization → filtering →
-        trial combination building → visualization rendering
-
-    UI Structure:
-        Sidebar: Data source, filters, canvas settings, viz controls
-        Main area: 4 tabs for different views of the data
-
-    Error Handling:
-        - Stops execution if schema inference fails
-        - Shows warning if filtering eliminates all data
-        - Handles missing raw gaze data gracefully
+    1. Page setup: config and CSS, the URL presets, and the recovery-cache
+       restore under a card of its own.
+    2. Chrome: the top nav resolves the active view; then the menu bar, the
+       title and the tours and dialogs.
+    3. Reserved slots, in screen order: the view area the Scanpath and Corpus
+       views render into, then the 🗂️ Data page's overview and editor slots.
+    4. The dataset pipeline, under the dataset card: load → normalize →
+       filter → the trial list. It returns early, through ``_end_loading``, for
+       an open add-dataset wizard, a mapping that can't be satisfied, or a
+       filter that empties the pool.
+    5. The active view: 🗺️ Scanpath or 📊 Corpus Analysis inside the view
+       area, or the Data page's slots filled.
+    6. The epilogue: the JSON backup, the recovery-cache save, and the
+       💾 Session dialog.
     """
     configure_page()
     # PERF-3: the cache-key memo is scoped to ONE script run — drop last run's
@@ -6960,6 +6970,11 @@ def _run_app() -> None:
     # The editor's own header bar — the ✏️ Edit dataset screen's title and its
     # way back, filled below once the dataset's display name is known.
     editor_head_slot = editor_page.container()
+    # UX-166: the dataset card's slot on the ✏️ Edit dataset screen, directly
+    # under its header bar. The overview, where the card sits otherwise, is
+    # hidden while the editor is open — and a card nobody can see would still
+    # silence every spinner on the page.
+    editor_loading_slot = editor_page.empty()
     # UX-135 — the editor's sections are the add screen's numbered *parts*, not
     # a `st.divider()` + `st.subheader()` + `st.caption()` stack. `_editor_part`
     # below draws one headline into each of the slots reserved here; the
@@ -7067,9 +7082,16 @@ def _run_app() -> None:
     dataset_table_slot = setup_source_slot.container(key="tutorial_available_datasets")
     # UX-166: this run's page — the slot the skeleton and the dataset card draw
     # into while a load is slow: the view area's first child on Scanpath and
-    # Corpus Analysis, the slot above the table on the Data page.
+    # Corpus Analysis; on the Data page, the slot above the table, or the one
+    # under the ✏️ Edit dataset header while the editor is open.
+    if not data_view:
+        page_slot = view_first_slot
+    elif editing:
+        page_slot = editor_loading_slot
+    else:
+        page_slot = data_page_slot
     page = loading.page(
-        data_page_slot if data_view else view_first_slot,
+        page_slot,
         view="data"
         if data_view
         else "corpus"
@@ -7115,6 +7137,7 @@ def _run_app() -> None:
     dataset_card = _open_dataset_card(
         page,
         data_choice,
+        view=active_view,
         view_switched=view_switched,
         finalizing=bool(st.session_state.pop("_wizard_finalizing", False)),
     )
@@ -7168,6 +7191,15 @@ def _run_app() -> None:
     # above. VIZ-31 had already moved "Experimental Setup" out of it: monitor
     # geometry, fonts, text colour and plot background are figure settings, and
     # they render in the Scanpath rail beside the layers they restyle.)
+
+    # UX-166: what the pipeline draws on its way to the view belongs *above* it —
+    # the ✏️ Author editor (the view's input), the data-quality warning and
+    # UX-7(b)'s missing-corpus panel (notes on it). The Scanpath and Corpus
+    # views render inside `view_area`, created before all of this, so on those
+    # views these go into it too (after the page slot, so they wait under a
+    # skeleton with the rest of the new page); the Data page keeps them where
+    # they always were.
+    view_notices = contextlib.nullcontext() if data_view else view_area
 
     # Load + map core data. The **Upload** source renders each table as an
     # [upload box → mapping] group on the 🗂️ Data page (words, fixations, raw gaze) and
@@ -7227,7 +7259,8 @@ def _run_app() -> None:
             _end_loading()
             return
     elif data_choice == AUTHOR_CHOICE:
-        words_df, fixations_df = _render_authoring_source()
+        with view_notices:
+            words_df, fixations_df = _render_authoring_source()
         raw_words_df, raw_fixations_df = words_df, fixations_df
         raw_gaze_df = pd.DataFrame()
         mapping_problems = []
@@ -7288,11 +7321,17 @@ def _run_app() -> None:
             location_host=data_location_slot,
         )
         if dataset_card is not None and len(dataset_card.steps) == 3:
-            dataset_card.step(
-                1,
-                f"Normalizing {len(raw_words_df):,} word rows and "
-                f"{len(raw_fixations_df):,} fixations",
-            )
+            if st.session_state.get(_UNAVAILABLE_KEY):
+                # UX-166: the corpus isn't here, so the rows just read are the
+                # bundled demo's stand-in — not counts for the corpus the card
+                # names. The step moves on under its plain label.
+                dataset_card.step(1)
+            else:
+                dataset_card.step(
+                    1,
+                    f"Normalizing {len(raw_words_df):,} word rows and "
+                    f"{len(raw_fixations_df):,} fixations",
+                )
         declared_word_schema, declared_fix_schema = declared_schemas_for(data_choice)
         words_df, fixations_df, mapping_problems = prepare_data(
             raw_words_df,
@@ -7370,14 +7409,6 @@ def _run_app() -> None:
         raw_gaze_df = load_raw_gaze_data(
             data_choice, host=data_location_slot, notices=menu.notices
         )
-
-    # UX-166: the two notices the pipeline draws on its way — the data-quality
-    # warning and UX-7(b)'s missing-corpus panel — belong *above* the view they
-    # describe. The Scanpath and Corpus views now render inside `view_area`,
-    # created before this point, so on those views the notices go into it too
-    # (after the page slot, so they wait under a skeleton with the rest of the
-    # new page); the Data page keeps them where they always were.
-    view_notices = contextlib.nullcontext() if data_view else view_area
 
     if preproc_settings["enabled"]:
         fixations_df, preproc_report = preprocess_fixation_stage(

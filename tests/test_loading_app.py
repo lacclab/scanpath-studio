@@ -2,16 +2,26 @@
 
 A run freezes with ``st.stop()`` inside the step under test, so the tree keeps
 the card that step is showing — with ``loading._KEEP_ON_STOP`` set, since a
-stopped run otherwise clears its cards. ``loading.DELAY_S = 0`` reveals cards
-on the script thread, so what AppTest sees does not depend on timing.
+stopped run otherwise clears its cards. ``_KEEP_ON_STOP`` also switches off the
+run's own end-of-run clear, which is how a test pins that a *release* path took
+a card down. ``loading.DELAY_S = 0`` reveals cards on the script thread, so what
+AppTest sees does not depend on timing; ``DELAY_S = 30`` makes sure nothing but
+an explicit ``reveal_now`` can show one.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from scanpath_studio import app, loading
-from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_DATA, _VIEW_SCANPATH
+from scanpath_studio import app, loading, progress
+from scanpath_studio.constants import (
+    _VIEW_CORPUS,
+    _VIEW_DATA,
+    _VIEW_SCANPATH,
+    DATA_EDITOR_KEY,
+    DATA_OVERVIEW_OFFSCREEN_KEY,
+    DATASET_EDITOR_OPEN_KEY,
+)
 from tests.conftest import APP_SCRIPT, pin_view
 
 AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
@@ -37,6 +47,30 @@ def _markdown(at) -> str:
     )
 
 
+def _markdown_in(block) -> str:
+    return "\n".join(m.value for m in block.markdown)
+
+
+def _loading_an_unavailable_corpus(monkeypatch, download=None):
+    """The loader records the corpus as missing — the demo, here the synthetic
+    trial, stands in — exactly as `_dataset_access_status` does for a corpus
+    that hasn't been downloaded."""
+    real_load = app.load_words_and_fixations
+
+    def _load(*args, **kwargs):
+        app._note_dataset_unavailable(
+            label="A corpus",
+            reason="it hasn't been downloaded yet.",
+            action="Fetch it once",
+            root="/nowhere",
+            download=download,
+            key_prefix="t6",
+        )
+        return real_load(*args, **kwargs)
+
+    monkeypatch.setattr(app, "load_words_and_fixations", _load)
+
+
 @pytest.fixture
 def at():
     test = AppTest.from_file(APP_SCRIPT, default_timeout=120)
@@ -44,12 +78,28 @@ def at():
     return test
 
 
-def test_a_finished_load_leaves_no_card_and_no_skeleton(at):
+def test_a_finished_load_leaves_no_card_and_no_skeleton(at, monkeypatch):
+    """The card showed (``DELAY_S = 0``) and the run's own clear is off, so only
+    the release after the dispatch can have taken it and the skeleton down."""
+    monkeypatch.setattr(loading, "DELAY_S", 0)
+    monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
     at.run()
     assert not at.exception, at.exception
     text = _markdown(at)
     assert "sps-card-head" not in text and "sps-page-skeleton" not in text
     assert at.session_state[app.LAST_LOADED_SOURCE_KEY] == SYNTHETIC
+
+
+def test_the_data_page_takes_its_card_down_before_drawing_its_table(at, monkeypatch):
+    """The Data branch releases the page first thing: frozen as the table is
+    drawn, the card that showed is already gone."""
+    monkeypatch.setattr(loading, "DELAY_S", 0)
+    monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
+    monkeypatch.setattr(app, "render_dataset_table", _stop)
+    pin_view(at, _VIEW_DATA)
+    at.run()
+    text = _markdown(at)
+    assert "sps-card-head" not in text and "sps-page-skeleton" not in text
 
 
 def test_a_slow_load_shows_the_skeleton_and_its_step_list(at, monkeypatch):
@@ -62,12 +112,13 @@ def test_a_slow_load_shows_the_skeleton_and_its_step_list(at, monkeypatch):
     text = _markdown(at)
     assert "sps-sk-scanpath" in text and "sps-reveal-page" in text
     assert "sps-step-done" in text  # Reading files ✓
-    assert "Normalizing" in text  # the current step, with the row counts
+    assert "word rows and" in text  # the current step, with the row counts
 
 
 def test_switching_view_shows_the_target_skeleton_at_once(at, monkeypatch):
     at.run()
-    monkeypatch.setattr(loading, "DELAY_S", 0)
+    monkeypatch.setattr(loading, "DELAY_S", 30)  # only `reveal_now` can show it
+    monkeypatch.setattr(loading, "REFRESH_S", 30)
     monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
     monkeypatch.setattr(app, "render_corpus_analysis_tab", _stop)
     pin_view(at, _VIEW_CORPUS)
@@ -75,6 +126,38 @@ def test_switching_view_shows_the_target_skeleton_at_once(at, monkeypatch):
     text = _markdown(at)
     assert "Opening Corpus Analysis" in text
     assert "sps-sk-corpus" in text
+
+
+def test_a_view_switch_card_has_a_task_of_its_own(at, monkeypatch):
+    """The switch card and a load card never join each other's task, while
+    ``DATASET_TASK_KEY`` still names the dataset: a switch is not a new load."""
+    at.run()
+    monkeypatch.setattr(loading, "DELAY_S", 30)
+    monkeypatch.setattr(loading, "REFRESH_S", 30)
+    monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
+    monkeypatch.setattr(app, "prepare_data", _stop)
+    pin_view(at, _VIEW_CORPUS)
+    at.run()
+    kind, session, token = at.session_state[app.DATASET_TASK_KEY]
+    assert (kind, token) == ("dataset", SYNTHETIC)
+    view_task = progress._REGISTRY[("view", session, _VIEW_CORPUS)]
+    assert view_task.snapshot().title == "Opening Corpus Analysis"
+
+
+def test_a_just_added_dataset_shows_its_card_at_once(at, monkeypatch):
+    """✅ Add dataset closes the wizard on this run, so the card answers at once
+    rather than after the delay — the only way it can show under a 30 s one."""
+    pin_view(at, _VIEW_DATA)
+    at.run()
+    monkeypatch.setattr(loading, "DELAY_S", 30)
+    monkeypatch.setattr(loading, "REFRESH_S", 30)
+    monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
+    monkeypatch.setattr(app, "prepare_data", _stop)
+    at.session_state["_wizard_finalizing"] = True
+    pin_view(at, _VIEW_DATA)
+    at.run()
+    text = _markdown(at)
+    assert "Loading Synthetic test trial" in text and "sps-reveal-page" in text
 
 
 def _unmappable(raw_words, raw_fixations, **_kwargs):
@@ -119,6 +202,79 @@ def test_the_missing_corpus_notice_stays_above_the_view(at, monkeypatch):
     assert order.index("missing-corpus-notice") < order.index("scanpath-view-body")
 
 
+def test_the_author_editor_stays_above_the_view(at, monkeypatch):
+    """The ✏️ Author editor is the view's input: with the view inside the reserved
+    area the editor goes in there too, or it lands below its own output."""
+    real_editor = app._render_authoring_source
+
+    def _editor():
+        import streamlit as st
+
+        st.markdown("author-editor")
+        return real_editor()
+
+    def _view(*_args, **_kwargs):
+        import streamlit as st
+
+        st.markdown("scanpath-view-body")
+
+    monkeypatch.setattr(app, "_render_authoring_source", _editor)
+    monkeypatch.setattr(app, "render_single_trial_tab", _view)
+    at.session_state["data_source_choice"] = app.AUTHOR_CHOICE
+    at.run()
+    assert not at.exception, at.exception
+    order = [m.value for m in at.markdown]
+    assert order.index("author-editor") < order.index("scanpath-view-body")
+
+
+def test_a_download_takes_the_dataset_card_down_first(at, monkeypatch):
+    """UX-7(b)'s ⬇ Download now runs while the dataset card is still open. The
+    card must come down first, or it hides the panel and its spinner behind a
+    step that isn't what is running."""
+    seen = {}
+
+    def _download(_root):
+        state = loading._RUN.get()
+        seen["page_up"] = state is not None and state.page is not None
+        seen["covered"] = loading.covered()
+        raise OSError("offline")  # the run carries on, no rerun
+
+    monkeypatch.setattr(loading, "DELAY_S", 0)
+    _loading_an_unavailable_corpus(monkeypatch, download=_download)
+    at.run()
+    at.button(key="t6_download_main").click().run()
+    assert seen == {"page_up": False, "covered": False}
+
+
+def test_an_unavailable_corpus_gets_no_counts_on_its_card(at, monkeypatch):
+    """The rows read for a corpus that isn't here are the demo's stand-in, so
+    the card moves on to Normalizing without claiming them as the corpus's."""
+    at.run()
+    monkeypatch.setattr(loading, "DELAY_S", 0)
+    monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
+    _loading_an_unavailable_corpus(monkeypatch)
+    monkeypatch.setattr(app, "prepare_data", _stop)
+    at.run()
+    text = _markdown(at)
+    assert "Normalizing" in text and "word rows and" not in text
+
+
+def test_the_editors_card_sits_on_the_editor_screen(at, monkeypatch):
+    """While ✏️ Edit dataset is open the overview is hidden, and a card drawn
+    there would be invisible while still silencing every spinner — so the page
+    lives in the slot under the editor's header."""
+    monkeypatch.setattr(loading, "DELAY_S", 0)
+    monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
+    monkeypatch.setattr(app, "prepare_data", _stop)
+    at.session_state[DATASET_EDITOR_OPEN_KEY] = True
+    pin_view(at, _VIEW_DATA)
+    at.run()
+    editor = at.main.get_by_key(DATA_EDITOR_KEY)
+    overview = at.main.get_by_key(DATA_OVERVIEW_OFFSCREEN_KEY)
+    assert "sps-card-head" in _markdown_in(editor)
+    assert "sps-card-head" not in _markdown_in(overview)
+
+
 def test_only_the_data_view_hides_what_the_view_area_holds(at, monkeypatch):
     """T6-1: on the Data view the reserved area holds only what the previous view
     left there (the Data page draws outside it), so its first slot carries a
@@ -137,9 +293,11 @@ def test_only_the_data_view_hides_what_the_view_area_holds(at, monkeypatch):
 def test_the_data_views_marker_outlives_its_card(at, monkeypatch):
     """The Data page keeps drawing after its card is released, so the marker
     can't be the card's: here the card shows at once and is gone by the end of
-    the run, and the marker is still there."""
+    the run — with the run's own clear off, a release took it — and the marker
+    is still there."""
     at.run()
     monkeypatch.setattr(loading, "DELAY_S", 0)
+    monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
     pin_view(at, _VIEW_DATA)
     at.run()
     assert not at.exception, at.exception

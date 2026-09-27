@@ -36,6 +36,15 @@ def test_spinners_hide_while_a_card_shows_and_motion_can_be_reduced():
     assert "prefers-reduced-motion: reduce" in CSS
 
 
+def test_reduced_motion_stops_the_bar_sliding_and_filling():
+    """Under ``prefers-reduced-motion`` nothing moves: the sliding bar's
+    animation is off, and the filling bar's width jumps instead of easing."""
+    block = CSS[CSS.index("@media (prefers-reduced-motion: reduce)") :]
+    block = block[: block.index("\n    }\n") + 6]
+    assert ".sps-bar-indeterminate > span" in block
+    assert re.search(r"\.sps-bar > span \{ transition: none !important; \}", block)
+
+
 def test_the_step_the_live_region_speaks_is_not_drawn_twice():
     """The card's live region carries the current step for a screen reader
     (`loading.head_html`); the detail line or step list already shows it, so

@@ -18,6 +18,7 @@ never leak the in-flight registry entry or hang a waiter forever.
 from __future__ import annotations
 
 import contextlib
+import logging
 import threading
 from dataclasses import dataclass, field
 
@@ -407,14 +408,17 @@ class TestSharedBuild:
         assert waiter_publish_calls == ["value"]
 
     def test_a_raising_publish_does_not_leak_the_entry_or_hang_a_waiter(
-        self, monkeypatch
+        self, monkeypatch, caplog
     ):
         """Ruling T5-5 (fix-round-2): a24e105's try/finally always popped the
         entry and signalled `done`; the "latest request wins" fix (T5-1) lost
         that by writing the cleanup out per path, so a raising `publish`
         (reproduced by the reviewer via `_vouch_for_frames` racing another
         session's concurrent insert) leaked the `_INFLIGHT` entry and hung
-        every waiter — already joined or not — forever."""
+        every waiter — already joined or not — forever. Both failures are
+        WARNINGs: swallowed, a publish that keeps failing would show only as
+        every rerun rebuilding."""
+        caplog.set_level(logging.DEBUG, logger=data_module.__name__)
         monkeypatch.setattr(data_module, "_InFlight", _FlagWaitInFlight)
         ident = ("s", "raising-publish")
         registered = threading.Event()
@@ -451,6 +455,27 @@ class TestSharedBuild:
         assert results["owner"] == "value"
         assert results["waiter"] == "value"
         assert ident not in data_module._INFLIGHT
+        publish_failures = sorted(
+            record.getMessage().split(" for ")[0]
+            for record in caplog.records
+            if record.levelno == logging.WARNING and "publish failed" in record.msg
+        )
+        assert publish_failures == [
+            "_shared_build publish failed",
+            "_shared_build waiter publish failed",
+        ]
+
+    def test_a_failed_lookup_is_only_a_miss_and_logs_at_debug(self, caplog):
+        """A lookup that fails is a miss — the build goes ahead — so it stays at
+        DEBUG; only a failed publish, which silently stops the caching, warns."""
+        caplog.set_level(logging.DEBUG, logger=data_module.__name__)
+
+        def raising_lookup():
+            raise RuntimeError("boom")
+
+        assert _shared_build(("s", "lookup-level"), lambda: 1, lookup=raising_lookup)
+        (record,) = [r for r in caplog.records if "lookup failed" in r.msg]
+        assert record.levelno == logging.DEBUG
 
     def test_a_raising_lookup_still_builds_and_cleans_up(self, monkeypatch):
         """Ruling T5-5 (fix-round-2): a raising `lookup` is treated as a miss

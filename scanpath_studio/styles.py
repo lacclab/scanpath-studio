@@ -355,6 +355,7 @@ def get_app_css() -> str:
     @media (prefers-reduced-motion: reduce) {
         .sps-ring, .sps-sk, .sps-bar-indeterminate > span,
         [class*="st-key-sps_card_"]:has(.sps-reveal) .sps-size-box { animation: none !important; }
+        .sps-bar > span { transition: none !important; }
     }
 
     /* === Visual polish ==========================================================

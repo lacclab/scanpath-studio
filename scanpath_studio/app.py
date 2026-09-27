@@ -38,6 +38,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pandas as pd
 import streamlit as st
@@ -276,6 +277,9 @@ from scanpath_studio.utils import build_combo_options, extract_trial
 from scanpath_studio.utils import (  # noqa: F401
     build_comparison_options as _build_comparison_options,
 )
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from streamlit.delta_generator import DeltaGenerator
 
 
 def __getattr__(name):
@@ -1474,7 +1478,14 @@ def _stop_download(task_key: tuple) -> None:
     progress.cancel(task_key)
 
 
-def _download_with_card(slot, download, root: str, *, label: str, key: str) -> None:
+def _download_with_card(
+    slot: DeltaGenerator,
+    download: Callable[[str], None],
+    root: str,
+    *,
+    label: str,
+    key: str,
+) -> None:
     """Run ``download(root)`` under a card with a Stop button (UX-168)."""
     task_key = ("download", loading.session_id(), key)
     with loading.card(

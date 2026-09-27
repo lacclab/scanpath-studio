@@ -32,7 +32,7 @@ import logging
 import re
 import threading
 import time
-from collections.abc import Callable, Hashable, Iterator, Sequence
+from collections.abc import Callable, Hashable, Iterator, MutableMapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -205,6 +205,10 @@ def size_box_html(width: int, height: int, *, card_key: str) -> str:
     column and the column in a narrow one, and centres over the figure
     (styles.py). A definite cap from above, deliberately: a grid track sized by
     its content grows past a narrow column or collapses to the card.
+
+    Raises `ValueError` for a ``card_key`` that isn't a plain name (letters,
+    digits, ``_`` and ``-``): it becomes a selector in a raw ``<style>``, where
+    anything else would make the rule invalid and leave the card unstyled.
     """
     if not _CARD_KEY.fullmatch(card_key):
         # It becomes a selector in a raw <style>: fail loudly, not unstyled.
@@ -274,7 +278,7 @@ def estimate_plot_size(
     return int(width), int(height) + 12
 
 
-def _session():
+def _session() -> MutableMapping[str, Any]:
     """Session state, or a throwaway dict outside a script run."""
     try:
         return st.session_state
@@ -775,7 +779,8 @@ def page(slot, *, view: str, plot_height: int = 480) -> Page:
 
 
 def release_page() -> bool:
-    """Release this run's page, if any; say whether it was showing."""
+    """Release this run's page, if any; say whether its wait was one the user
+    saw (`Page.release`)."""
     state = _RUN.get()
     current = state.page if state is not None else None
     return current.release() if current is not None else False

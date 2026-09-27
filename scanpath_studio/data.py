@@ -215,9 +215,9 @@ def _shared_build(
     T5-5 — a24e105 always popped the entry and signalled ``done``; the "latest
     request wins" fix lost that guarantee by writing the cleanup out per path
     instead of in one ``finally``): a failing ``lookup`` is treated as a miss
-    (logged at debug, then built normally); a failing ``publish`` is logged
-    and swallowed — the build itself already succeeded, ``entry.ok`` is
-    already ``True``, and its caller still gets its value either way.
+    (logged at debug, then built normally); a failing ``publish`` is logged as
+    a warning and swallowed — the build itself already succeeded, ``entry.ok``
+    is already ``True``, and its caller still gets its value either way.
     """
     while True:
         with _INFLIGHT_LOCK:
@@ -265,7 +265,10 @@ def _shared_build(
                     try:
                         publish(value)
                     except Exception:
-                        _LOGGER.debug(
+                        # A WARNING, not DEBUG (the in-app log captures from
+                        # INFO): swallowed, a publish that keeps failing shows
+                        # only as every rerun rebuilding.
+                        _LOGGER.warning(
                             "_shared_build publish failed for %r; the built "
                             "value is still returned, just not cached",
                             ident,
@@ -289,7 +292,7 @@ def _shared_build(
                 try:
                     publish(entry.value)
                 except Exception:
-                    _LOGGER.debug(
+                    _LOGGER.warning(
                         "_shared_build waiter publish failed for %r",
                         ident,
                         exc_info=True,

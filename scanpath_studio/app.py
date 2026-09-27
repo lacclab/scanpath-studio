@@ -6716,6 +6716,10 @@ def _open_dataset_card(
     corpus, re-hashing the frames each hit hands back; shown, it blanked the
     view to the skeleton on every widget touch. So it shows only once one of
     its builds has reported, i.e. missed. ``reveal_now`` still shows it at once.
+
+    **A rerun of the dataset on screen is an update:** "Updating <dataset>",
+    with no Cancel, no "last load" hint and no duration recorded — a filter
+    change's re-run is not how long the dataset takes to open.
     """
     if data_choice in (UPLOAD_CHOICE, AUTHOR_CHOICE):
         previous = st.session_state.pop(DATASET_TASK_KEY, None)
@@ -6741,12 +6745,19 @@ def _open_dataset_card(
         if stored
         else ("Reading files", "Normalizing", "Building the trial list")
     )
+    # UX-166: the dataset already on screen, run again — a filter change on a
+    # big corpus, a re-normalization — is an update, not a load: titled so, with
+    # no "last load" hint and no duration of its own, since an update's time
+    # must never stand in for how long the dataset took to open. (It offers no
+    # Cancel either — `_dataset_cancel`'s T8-2 rule, the same test.) A dataset
+    # just added is always a load: the wizard, not a dataset, was on screen.
+    updating = not finalizing and st.session_state.get(LAST_LOADED_SOURCE_KEY) == token
     return page.open_card(
-        title=f"Loading {_dataset_display_name(token)}",
+        title=f"{'Updating' if updating else 'Loading'} {_dataset_display_name(token)}",
         steps=steps,
         cancel=_dataset_cancel(token, task_key),
         task_key=task_key,
-        duration_key=("dataset", token),
+        duration_key=None if updating else ("dataset", token),
         reveal_now=finalizing or view_switched,
         reveal_on_work=True,
     )

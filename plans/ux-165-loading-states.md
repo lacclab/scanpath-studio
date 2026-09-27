@@ -238,6 +238,11 @@ button.
   6 s" — `progress.last_duration` for the same dataset in this server process,
   recorded only by a load that did work and took at least the delay. There is
   no estimate otherwise.
+- **A slow re-run of the dataset already on screen is an update, not a load**
+  (a filter change on a big corpus, a re-normalization): its card reads
+  "Updating *dataset*", with no "last load" hint, and records no duration of
+  its own — an update's time must never stand in for how long the dataset took
+  to open. A dataset just added is always a load.
 
 ### 1.4 Every other spinner
 
@@ -464,7 +469,7 @@ server has finished.
 - **After a dataset cancel,** `menu.notices` shows "Stopped loading PoTeC ·
   **Try again**". Try again re-selects that dataset through the same seam.
 - **A slow rerun of the dataset already on screen offers no Cancel:** there is
-  nothing to go back to. A view switch that lands on a load in flight shows
+  nothing to go back to, and its card reads "Updating *dataset*" (§1.3). A view switch that lands on a load in flight shows
   that load's card, with its steps and Cancel — in flight meaning a live task
   still holds it (`progress.running`), not just that `_sps_dataset_task` is
   set: a run that ended by `st.stop()`, an exception or `st.rerun()` mid-load

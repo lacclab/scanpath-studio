@@ -770,6 +770,45 @@ def test_a_slow_rerun_of_the_dataset_on_screen_offers_no_cancel(at, monkeypatch)
         at.button(key="sps_cancel_page")
 
 
+def test_a_slow_rerun_of_the_dataset_on_screen_says_updating(at, monkeypatch):
+    """A filter change on a big corpus re-runs the pipeline for the dataset on
+    screen: an update, not a load — "Loading …" with its steps ticking read as
+    a reload. No Cancel (nothing to go back to) and no "last load" hint."""
+    at.run()  # synthetic finishes: the dataset on screen
+    monkeypatch.setitem(progress._DURATIONS, ("dataset", SYNTHETIC), 6.0)
+    monkeypatch.setattr(loading, "DELAY_S", 0)
+    monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
+    monkeypatch.setattr(app, "prepare_data", _stop)
+    at.run()  # a rerun of the same dataset, now slow
+    text = _markdown(at)
+    assert f"Updating {SYNTHETIC}" in text
+    assert f"Loading {SYNTHETIC}" not in text
+    assert "last load" not in text
+    assert "sps_cancel_page" not in [button.key for button in at.button]
+
+
+def _working(real: Callable) -> Callable:
+    """``real`` behind a report — real work in the pipeline, as a miss makes."""
+
+    def _work(*args, **kwargs):
+        progress.report()
+        return real(*args, **kwargs)
+
+    return _work
+
+
+def test_an_updates_time_never_replaces_the_loads(at, monkeypatch):
+    """ "last load" is how long the dataset took to open; a slow update of the
+    one on screen, however much work it did, is not that."""
+    at.run()  # synthetic finishes
+    monkeypatch.setitem(progress._DURATIONS, ("dataset", SYNTHETIC), 6.0)
+    monkeypatch.setattr(loading, "DELAY_S", 0)  # any wait would count
+    monkeypatch.setattr(app, "read_trial_filters", _working(app.read_trial_filters))
+    at.run()  # the same dataset again, doing real work this time
+    assert not at.exception, at.exception
+    assert progress.last_duration(("dataset", SYNTHETIC)) == 6.0
+
+
 def test_the_demos_own_first_load_of_a_session_gets_no_cancel(monkeypatch):
     """T8-4: `_dataset_cancel`'s ``None`` branch — with nothing finished loading
     yet this session, the demo is the fallback ``back``, but never Cancel back

@@ -474,8 +474,12 @@ the whole MiB, so Stop could take ~10 s on a slow line — and the connection
 times out after 60 s without data, so a stalled download ends too (an
 `OSError`, which the ⬇ Download buttons report). A cancel deletes the `.part`
 file. The atomic `.part` → final rename they already
-do means a stopped download can never pass for a complete one. PoTeC's zip is
-then unpacked with a per-member count. `_dataset_access_status`'s and
+do means a stopped download can never pass for a complete one — and it happens
+only once the whole body has arrived: `read1` returns `b""` on an early EOF
+exactly as at the real end, so a body shorter than its `Content-Length`, or a
+chunked one cut short (`http.client.IncompleteRead`, not an `OSError`), is a
+`ConnectionError`, and a cleanup that fails never masks it. PoTeC's zip is
+then unpacked with a per-member count; a damaged one is a `ValueError`. `_dataset_access_status`'s and
 `_render_dataset_unavailable`'s `st.spinner("Downloading into …")` become
 download cards.
 

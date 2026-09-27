@@ -29,6 +29,8 @@ Typical use::
 
 from __future__ import annotations
 
+import contextlib
+import http.client
 import io
 import json
 import logging
@@ -37,7 +39,7 @@ import re
 import shutil
 import urllib.request
 import zipfile
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 
 import pandas as pd
@@ -104,14 +106,38 @@ def _content_length(response) -> int | None:
     return int(value) if value and str(value).isdigit() else None
 
 
-def _fetch_bytes(url: str, *, detail: str) -> bytes:
-    """``url``'s body, read as it arrives with progress (UX-168)."""
-    with urllib.request.urlopen(url, timeout=_DOWNLOAD_TIMEOUT_S) as response:
-        total = _content_length(response)
-        buffer = io.BytesIO()
+def _read_body(response, write: Callable[[bytes], object], *, detail: str) -> None:
+    """Hand ``response``'s body to ``write`` as it arrives, with progress.
+
+    Only a body that arrives whole returns (UX-168). `read1` returns ``b""`` on
+    an early EOF — a server, proxy or load balancer closing the connection
+    mid-body — exactly as at the real end, so a body shorter than its
+    ``Content-Length`` is a `ConnectionError`; so is a chunked body cut short,
+    which `http.client` raises as an `IncompleteRead` (an `HTTPException`, not
+    an `OSError`). Both ⬇ Download buttons report an `OSError`, and a caller
+    must never commit what was read.
+    """
+    total = _content_length(response)
+    done = 0
+    try:
         while chunk := response.read1(_DOWNLOAD_CHUNK):
-            buffer.write(chunk)
-            progress.report(buffer.tell(), total, unit="bytes", detail=detail)
+            write(chunk)
+            done += len(chunk)
+            progress.report(done, total, unit="bytes", detail=detail)
+    except http.client.HTTPException as exc:
+        raise ConnectionError(
+            f"the download ended early after {done:,} bytes ({exc})"
+        ) from exc
+    if total is not None and done < total:
+        raise ConnectionError(f"the download ended early: {done:,} of {total:,} bytes")
+
+
+def _fetch_bytes(url: str, *, detail: str) -> bytes:
+    """``url``'s body, read as it arrives with progress (UX-168) — all of it, or
+    a `ConnectionError` (`_read_body`)."""
+    with urllib.request.urlopen(url, timeout=_DOWNLOAD_TIMEOUT_S) as response:
+        buffer = io.BytesIO()
+        _read_body(response, buffer.write, detail=detail)
         return buffer.getvalue()
 
 
@@ -119,7 +145,9 @@ def _fetch_to_file(url: str, dest: Path, *, detail: str) -> None:
     """Stream ``url`` into ``dest`` through a ``.part`` file (UX-168).
 
     The ``.part`` → final rename keeps an interrupted fetch from passing for a
-    complete file; a cancel (or any failure) deletes the partial file.
+    complete file, and it happens only once the whole body has arrived
+    (`_read_body`); a cancel (or any failure) deletes the partial file — and a
+    cleanup that fails in turn never masks the error that caused it.
     """
     tmp = dest.with_name(dest.name + ".part")
     try:
@@ -127,15 +155,11 @@ def _fetch_to_file(url: str, dest: Path, *, detail: str) -> None:
             urllib.request.urlopen(url, timeout=_DOWNLOAD_TIMEOUT_S) as response,
             tmp.open("wb") as out,
         ):
-            total = _content_length(response)
-            done = 0
-            while chunk := response.read1(_DOWNLOAD_CHUNK):
-                out.write(chunk)
-                done += len(chunk)
-                progress.report(done, total, unit="bytes", detail=detail)
+            _read_body(response, out.write, detail=detail)
         tmp.replace(dest)
     except BaseException:
-        tmp.unlink(missing_ok=True)
+        with contextlib.suppress(OSError):
+            tmp.unlink(missing_ok=True)
         raise
 
 
@@ -194,6 +218,12 @@ def download_potec(root, *, fixation_source: str = "scanpaths") -> Path:
                         detail="Unpacking the archive",
                     )
             (staging / fixation_source).replace(eyetracking_dir)
+        except zipfile.BadZipFile as exc:
+            # UX-168: a damaged archive — opened or extracted — is a data error
+            # both ⬇ Download buttons report, not a raw traceback.
+            raise ValueError(
+                f"The PoTeC archive from {url} isn't a readable zip file ({exc})."
+            ) from exc
         finally:
             shutil.rmtree(staging, ignore_errors=True)
 

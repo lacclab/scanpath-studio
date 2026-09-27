@@ -6682,6 +6682,12 @@ def _run_app() -> None:
         restored = restore_local_state(
             st.session_state, app_url, protect_data_source=url_source is not None
         )
+    # UX-167: Streamlit matches a rerun's elements to the last run's by position,
+    # so a notice that shows on one run only (the unavailable-link warning below)
+    # must not move the page under it — it writes into this container, drawn on
+    # every run. The toasts need no slot: `st.toast` draws in Streamlit's event
+    # container, outside the page.
+    page_notices = st.container()
     if restored:
         # ENG-30: say it once, where the user is looking. Silently repopulating a
         # session reads as "the app kept my data somewhere" without saying where;
@@ -6763,7 +6769,7 @@ def _run_app() -> None:
             # never silently open a different corpus. There is no remedy to name
             # (DATA-55): the app no longer discovers corpora, and until DATA-56's
             # add-from-a-folder flow nothing in it adds one.
-            st.warning(
+            page_notices.warning(
                 f"This link opens the corpus `{slug}`, which isn't available "
                 "here. The link's view settings still apply to whatever you open."
             )
@@ -6862,23 +6868,30 @@ def _run_app() -> None:
     # work, so the welcome streams to the browser immediately instead of
     # after the full first render. Replay clicks arm the tour in the button's
     # on_click callback, which runs before this point in the rerun.
-    maybe_show_welcome_tour()
-    render_spotlight_tour()
-    # UX-40: task-oriented tutorials share the spotlight mechanism but keep
-    # their own progress and do not inherit the welcome tour's opt-out.
-    render_use_case_tutorial()
-    # UX-39: arm the title's easter egg. After the tour/tutorial renders, because
-    # its suppression reads the `tour_mode` / `tutorial_active` those set — and it
-    # doesn't care about DOM order, being a height-0 script that retries until the
-    # heading has hydrated.
-    render_easter_egg()
-    # UX-15: same deal for the FAQ dialog — the ❓ Help menu button that arms it
-    # renders at the bottom of this function, so serving it here is what keeps
-    # the modal from waiting out the whole rerun. Ditto ℹ️ About, a dialog since
-    # the menu bar made it a popover inside a popover.
-    maybe_show_faq()
-    maybe_show_about()
-    maybe_show_tutorial_library()
+    #
+    # UX-167: one container for the whole block, so it always holds exactly one
+    # index below it — `render_easter_egg()` is the case that bit: it draws a
+    # bare iframe except while a tour or tutorial is active, so the first run
+    # after one closes used to insert an element above the view and shift it.
+    # See scanpath_studio/CLAUDE.md → Gotchas.
+    with st.container():
+        maybe_show_welcome_tour()
+        render_spotlight_tour()
+        # UX-40: task-oriented tutorials share the spotlight mechanism but keep
+        # their own progress and do not inherit the welcome tour's opt-out.
+        render_use_case_tutorial()
+        # UX-39: arm the title's easter egg. After the tour/tutorial renders, because
+        # its suppression reads the `tour_mode` / `tutorial_active` those set — and it
+        # doesn't care about DOM order, being a height-0 script that retries until the
+        # heading has hydrated.
+        render_easter_egg()
+        # UX-15: same deal for the FAQ dialog — the ❓ Help menu button that arms it
+        # renders at the bottom of this function, so serving it here is what keeps
+        # the modal from waiting out the whole rerun. Ditto ℹ️ About, a dialog since
+        # the menu bar made it a popover inside a popover.
+        maybe_show_faq()
+        maybe_show_about()
+        maybe_show_tutorial_library()
 
     # `active_view` was already resolved above, before `render_top_menu` drew
     # its Session-page panel from it (including the BUG-31 wizard hold-override
@@ -6893,6 +6906,11 @@ def _run_app() -> None:
     # empty on every run, so nothing it held can outlive the run (BUG-81).
     view_area = st.container(key=loading.VIEW_AREA_KEY)
     view_first_slot = view_area.empty()
+    # UX-167: reserved right after the page slot — creation order is screen
+    # order, so this is always the view area's second child — and given to the
+    # conditional notices below (`view_notices`) so the view's own blocks after
+    # them keep their place whether or not a notice draws this run.
+    view_notices_slot = view_area.container()
     if active_view == _VIEW_DATA:
         # UX-166: the Data page draws outside the area, so on that view it only
         # ever holds what the previous view left there — until this run ends,
@@ -7198,8 +7216,10 @@ def _run_app() -> None:
     # views render inside `view_area`, created before all of this, so on those
     # views these go into it too (after the page slot, so they wait under a
     # skeleton with the rest of the new page); the Data page keeps them where
-    # they always were.
-    view_notices = contextlib.nullcontext() if data_view else view_area
+    # they always were. UX-167: `view_notices_slot` is its own container, held
+    # on every run, so the view's blocks below it keep their place whether or
+    # not a notice draws this run.
+    view_notices = contextlib.nullcontext() if data_view else view_notices_slot
 
     # Load + map core data. The **Upload** source renders each table as an
     # [upload box → mapping] group on the 🗂️ Data page (words, fixations, raw gaze) and

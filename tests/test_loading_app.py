@@ -321,3 +321,89 @@ def test_a_slow_figure_holds_its_area_with_a_size_box(at, monkeypatch):
     text = _markdown(at)
     assert f"height:{expected[1]}px" in text
     assert "Drawing the scanpath" in text
+
+
+# UX-167 — Streamlit matches a rerun's elements to the last run's by position, so
+# one element more or fewer above `sps_view` shifts it: the browser lays the new
+# view area on the *next* block's slot and inherits its children, dropping the old
+# view (rail, pickers, plot) for the whole run. These three pin that every
+# once-in-a-while element above the view (the easter egg, the unavailable-link
+# warning, the view's own conditional notices) draws inside a container held on
+# every run.
+
+
+def _child_index(block, key: str) -> int:
+    """The index, in ``block``, of the child that is — or holds — the keyed block."""
+    for index, child in block.children.items():
+        if _holds_key(child, key):
+            return index
+    raise AssertionError(f"no block keyed {key!r}")
+
+
+def _holds_key(node, key: str) -> bool:
+    proto_id = getattr(getattr(node, "proto", None), "id", "") or ""
+    if proto_id.endswith(f"-{key}"):
+        return True
+    return any(
+        _holds_key(child, key) for child in getattr(node, "children", {}).values()
+    )
+
+
+def test_the_view_keeps_its_place_when_the_tour_closes(at):
+    """render_easter_egg() draws a bare iframe except while a tour is active, so
+    the first run after the tour closes inserts one element above the view —
+    today that shifts `sps_view` from main child 8 to 9."""
+    at.session_state["tour_mode"] = "spotlight"
+    at.run()
+    assert not at.exception, at.exception
+    index_before = _child_index(at.main, loading.VIEW_AREA_KEY)
+    del at.session_state["tour_mode"]
+    at.run()
+    assert not at.exception, at.exception
+    index_after = _child_index(at.main, loading.VIEW_AREA_KEY)
+    assert index_after == index_before
+
+
+def test_the_view_keeps_its_place_after_a_link_notice(at, monkeypatch):
+    """A link naming a corpus that isn't here warns on its first run only, so
+    the next run must not shift the view. (The recovery toasts need no such
+    test: ``st.toast`` draws in Streamlit's event container, not the page.)"""
+    monkeypatch.setattr(app, "_apply_url_preset", lambda: app.CORPUS_SOURCE_TOKEN)
+    monkeypatch.setattr(app, "corpus_choice_for_slug", lambda _slug: None)
+    at.query_params[app.PARAM_CORPUS] = "not-a-real-corpus"
+    at.run()
+    assert not at.exception, at.exception
+    index_before = _child_index(at.main, loading.VIEW_AREA_KEY)
+    monkeypatch.setattr(app, "_apply_url_preset", lambda: None)
+    at.run()
+    assert not at.exception, at.exception
+    index_after = _child_index(at.main, loading.VIEW_AREA_KEY)
+    assert index_after == index_before
+
+
+def test_the_views_blocks_keep_their_place_when_a_notice_comes_and_goes(
+    at, monkeypatch
+):
+    """A conditional notice written through `view_notices` sits directly before
+    the view's own blocks inside `sps_view`, so today it shifts them too — the
+    plot/rail columns block would land on the wrong slot and inherit its
+    children."""
+    calls = {"n": 0}
+
+    def _unavailable_once():
+        import streamlit as st
+
+        calls["n"] += 1
+        if calls["n"] == 1:
+            st.warning("gone after this run")
+
+    monkeypatch.setattr(app, "_render_dataset_unavailable", _unavailable_once)
+    at.run()
+    assert not at.exception, at.exception
+    view_area = at.main.children[_child_index(at.main, loading.VIEW_AREA_KEY)]
+    index_before = _child_index(view_area, "scanpath_rail")
+    at.run()
+    assert not at.exception, at.exception
+    view_area = at.main.children[_child_index(at.main, loading.VIEW_AREA_KEY)]
+    index_after = _child_index(view_area, "scanpath_rail")
+    assert index_after == index_before

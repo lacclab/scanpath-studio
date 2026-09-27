@@ -213,6 +213,7 @@ from scanpath_studio.persistence import (
     consume_restore_skipped,
     human_size,
     is_loopback_url,
+    local_state_restored,
     persistence_paused,
     restore_local_state,
     restored_from_cache,
@@ -6771,7 +6772,7 @@ def _run_app() -> None:
     """One script run, top to bottom (``main`` wraps it in a loading scope).
 
     1. Page setup: config and CSS, the URL presets, and the recovery-cache
-       restore under a card of its own.
+       restore — under a card of its own until the session has restored.
     2. Chrome: the top nav resolves the active view; then the menu bar, the
        title and the tours and dialogs.
     3. Reserved slots, in screen order: the view area the Scanpath and Corpus
@@ -6806,10 +6807,22 @@ def _run_app() -> None:
     # data-source choice.
     app_url = str(getattr(st.context, "url", "") or "")
     # UX-166: restoring large uploads reads their Parquet files before even the
-    # title is drawn, so it gets a card of its own at the very top of the page.
-    with loading.card(
-        st.empty(), key="restore", title="Restoring your datasets from this computer"
-    ):
+    # title is drawn, so it gets a card of its own at the very top of the page —
+    # only while there is something to restore: once the session has had its
+    # one attempt the call returns at once, and a card around it would cost
+    # every run a timer thread and a task for nothing. Its slot is held on every
+    # run either way (UX-167: one element fewer here would shift the view).
+    restore_slot = st.empty()
+    restoring = (
+        contextlib.nullcontext()
+        if local_state_restored(st.session_state)
+        else loading.card(
+            restore_slot,
+            key="restore",
+            title="Restoring your datasets from this computer",
+        )
+    )
+    with restoring:
         restored = restore_local_state(
             st.session_state, app_url, protect_data_source=url_source is not None
         )

@@ -676,6 +676,18 @@ def restore_local_state(
     return restored_from_cache(session)
 
 
+def local_state_restored(session) -> bool:
+    """Whether this session has had its one restore attempt already.
+
+    Set by :func:`restore_local_state` on its first call whatever the outcome —
+    restored, nothing cached, persistence off, or skipped (BUG-71) — and every
+    later call returns at once. The app opens the restore card only before it
+    (UX-166): a card around a call that does nothing cost each run a timer
+    thread and a task for nothing.
+    """
+    return bool(session.get(_RESTORED_KEY))
+
+
 def _unlink_quietly(path: Path) -> None:
     try:
         path.unlink(missing_ok=True)

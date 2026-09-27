@@ -301,6 +301,38 @@ def test_a_just_added_dataset_shows_its_card_at_once(at, monkeypatch):
     assert "Loading Synthetic test trial" in text and "sps-reveal-page" in text
 
 
+def _record_opened_cards(monkeypatch) -> list[str]:
+    """The key of every card a run opens, in order."""
+    opened: list[str] = []
+    real_open = loading.Card.open
+
+    def _open(self, **kwargs):
+        opened.append(self.key)
+        return real_open(self, **kwargs)
+
+    monkeypatch.setattr(loading.Card, "open", _open)
+    return opened
+
+
+def test_the_restore_card_opens_only_while_there_is_something_to_restore(
+    at, monkeypatch
+):
+    """The recovery cache is restored once a session, and `restore_local_state`
+    returns at once after that — so a card around it on every later run was a
+    timer thread and a task for nothing. Its slot is still held on every run
+    (UX-167), so the view keeps its place."""
+    opened = _record_opened_cards(monkeypatch)
+    at.run()
+    assert not at.exception, at.exception
+    assert "restore" in opened
+    view_index = _child_index(at.main, loading.VIEW_AREA_KEY)
+    opened.clear()
+    at.run()
+    assert not at.exception, at.exception
+    assert "restore" not in opened
+    assert _child_index(at.main, loading.VIEW_AREA_KEY) == view_index
+
+
 def _unmappable(raw_words, raw_fixations, **_kwargs):
     return raw_words, raw_fixations, ["A required column isn't mapped yet."]
 

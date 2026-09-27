@@ -169,6 +169,12 @@ def download_potec(root, *, fixation_source: str = "scanpaths") -> Path:
                     # real per-trial TSVs.
                     if m.startswith(f"{fixation_source}/") and m.endswith(".tsv")
                 ]
+                if not members:
+                    # Say what is wrong, not that the staging folder is missing.
+                    raise ValueError(
+                        f"The PoTeC archive from {url} holds no "
+                        f"{fixation_source}/*.tsv files; its layout may have changed."
+                    )
                 for index, member in enumerate(members, start=1):
                     archive.extract(member, staging)
                     progress.report(

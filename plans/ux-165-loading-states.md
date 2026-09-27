@@ -425,9 +425,10 @@ server has finished.
 | Compare's second dataset | **Compare within *A's dataset*** | Returns B to A's dataset (`cmp_dataset` = "This dataset"). |
 | Corpus download (PoTeC, OneStop) | **Stop download** | Stops the transfer and deletes the partial `.part` file. |
 
-- **"Previous dataset" is a new session value,** `_last_loaded_source`: the
-  `(data_source_choice, public_dataset_choice)` pair written when a dataset
-  pipeline finishes. It is not the wizard's `_prev_source`, which only records
+- **"Previous dataset" is a new session value,** `_sps_last_loaded_source`:
+  the `data_source_choice` written when a dataset pipeline finishes — it holds
+  the corpus label itself, and `resolve_data_source` re-derives
+  `public_dataset_choice` from it. It is not the wizard's `_prev_source`, which only records
   where to return when leaving the add-dataset wizard. The callback writes
   through the existing pre-widget `_pending_source_choice` seam
   ([app.py:3678](../scanpath_studio/app.py:3678)).
@@ -489,7 +490,7 @@ download cards.
   progress hook does nothing without a watcher, so headless output is
   byte-identical. State this for `surface-parity-reviewer`.
 - **No wire-format keys.** Loading state never travels in a link or a saved
-  config. `_last_loaded_source`, the recorded plot sizes and the in-flight
+  config. `_sps_last_loaded_source`, the recorded plot sizes and the in-flight
   bookkeeping are underscore-prefixed session internals, outside
   `session_keys.py`, like `share_identity_mode` before them. They are not
   persisted by the recovery cache.

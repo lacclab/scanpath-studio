@@ -108,3 +108,22 @@ def test_a_cancelled_unpack_leaves_no_partial_corpus(monkeypatch, tmp_path):
             datasets.download_potec(tmp_path)
     assert not (tmp_path / "eyetracking_data" / "scanpaths").exists()
     assert not list((tmp_path / "eyetracking_data").glob(".*.part"))
+
+
+def test_an_archive_without_the_fixation_files_fails_with_a_clear_message(
+    monkeypatch, tmp_path
+):
+    """If the OSF archive ever stops carrying `scanpaths/*.tsv`, the download
+    must say so — not fail on the hidden staging folder's path — and leave
+    nothing behind that could pass for the corpus."""
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w") as z:
+        z.writestr("__MACOSX/._scanpaths", "cruft")
+        z.writestr("readme.txt", "no fixation files here")
+    monkeypatch.setattr(
+        datasets, "_fetch_bytes", lambda url, *, detail: archive.getvalue()
+    )
+    with pytest.raises(ValueError, match="scanpaths"):
+        datasets.download_potec(tmp_path)
+    assert not (tmp_path / "eyetracking_data" / "scanpaths").exists()
+    assert not list((tmp_path / "eyetracking_data").glob(".*.part"))

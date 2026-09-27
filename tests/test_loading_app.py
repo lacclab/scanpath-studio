@@ -851,3 +851,16 @@ def test_the_plot_frame_carries_a_placeholder_removed_on_first_draw():
     # placeholder unstyled — invisible — for exactly the wait it is for.
     assert html.index("#skel-k {") < html.index('id="skel-k"')
     assert html.index('id="skel-k"') < html.index('id="truescale-k"')
+
+
+def test_a_run_that_builds_no_replay_stops_the_one_left_building(at):
+    """Animate switched off with its own switch mid-build opens no animation
+    card, so nothing else would cancel the build an earlier run left running
+    — it would run on beside this run's static figure."""
+    stale = ("anim", "an-earlier-run", "p", "t")
+    task = progress.begin(stale, title="Building the animation")  # held: stays live
+    at.session_state[tabs.ANIM_TASK_KEY] = stale
+    at.run()  # Animate is off by default
+    assert not at.exception, at.exception
+    assert task.cancelled
+    assert tabs.ANIM_TASK_KEY not in at.session_state

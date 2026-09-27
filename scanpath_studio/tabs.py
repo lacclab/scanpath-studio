@@ -4186,6 +4186,16 @@ def _claim_animation_task(task_key: tuple) -> None:
     st.session_state[ANIM_TASK_KEY] = task_key
 
 
+def _abandon_animation_task() -> None:
+    """This run builds no replay: stop the one an earlier run left building
+    (UX-169) — Animate switched off with its own switch mid-build, or a trial
+    with nothing to animate — rather than let it run on beside this run's
+    figure. Show static plot cancels its build itself (`_cancel_animation`)."""
+    previous = st.session_state.pop(ANIM_TASK_KEY, None)
+    if previous is not None:
+        progress.cancel(tuple(previous))
+
+
 def _release_animation_task(task_key: tuple) -> None:
     """This run's replay is built: nothing of it is left to cancel.
 
@@ -6072,6 +6082,8 @@ def render_single_trial_tab(
             )
 
     with plot_slot:
+        if not (animate and not trial_fixations.empty):
+            _abandon_animation_task()
         if global_raw_toggle and not trial_has_raw_gaze:
             plot_notes_slot.warning(
                 "Raw gaze not available for this trial.", icon=ICONS["warning"]

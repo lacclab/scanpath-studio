@@ -87,9 +87,16 @@ def _read_potec_tsv(path) -> pd.DataFrame:
     )
 
 
-#: UX-168: download in chunks of this size, reporting bytes after each — the
-#: progress the card shows, and the checkpoint a Cancel stops at.
+#: UX-168: download in reads of at most this size, reporting bytes after each —
+#: the progress the card shows, and the checkpoint a Cancel stops at. Each is a
+#: `read1`, which returns whatever has arrived: a `read` waits for the whole
+#: MiB, so on a 100 KB/s line Stop took ~10 s to act.
 _DOWNLOAD_CHUNK = 1 << 20
+#: UX-168: seconds a download may wait on the network — to connect, or for its
+#: next bytes — before giving up. Without it a stalled connection blocked its
+#: read forever, so Stop, which acts between reads, never could; the timeout
+#: surfaces as an `OSError`, which both ⬇ Download buttons already report.
+_DOWNLOAD_TIMEOUT_S = 60
 
 
 def _content_length(response) -> int | None:
@@ -98,11 +105,11 @@ def _content_length(response) -> int | None:
 
 
 def _fetch_bytes(url: str, *, detail: str) -> bytes:
-    """``url``'s body, read in chunks with progress (UX-168)."""
-    with urllib.request.urlopen(url) as response:
+    """``url``'s body, read as it arrives with progress (UX-168)."""
+    with urllib.request.urlopen(url, timeout=_DOWNLOAD_TIMEOUT_S) as response:
         total = _content_length(response)
         buffer = io.BytesIO()
-        while chunk := response.read(_DOWNLOAD_CHUNK):
+        while chunk := response.read1(_DOWNLOAD_CHUNK):
             buffer.write(chunk)
             progress.report(buffer.tell(), total, unit="bytes", detail=detail)
         return buffer.getvalue()
@@ -116,10 +123,13 @@ def _fetch_to_file(url: str, dest: Path, *, detail: str) -> None:
     """
     tmp = dest.with_name(dest.name + ".part")
     try:
-        with urllib.request.urlopen(url) as response, tmp.open("wb") as out:
+        with (
+            urllib.request.urlopen(url, timeout=_DOWNLOAD_TIMEOUT_S) as response,
+            tmp.open("wb") as out,
+        ):
             total = _content_length(response)
             done = 0
-            while chunk := response.read(_DOWNLOAD_CHUNK):
+            while chunk := response.read1(_DOWNLOAD_CHUNK):
                 out.write(chunk)
                 done += len(chunk)
                 progress.report(done, total, unit="bytes", detail=detail)

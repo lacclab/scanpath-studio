@@ -742,7 +742,7 @@ def test_download_onestop_atomic_and_skips_existing(monkeypatch, tmp_path):
     calls = []
 
     class _FakeResp(io.BytesIO):
-        """UX-168: `download_onestop` now reads in chunks (`.read(size)`), so
+        """UX-168: `download_onestop` now reads in chunks (`.read1(size)`), so
         this has to behave like a real response body — `io.BytesIO` does —
         rather than returning the whole payload on every call. No declared
         Content-Length, same as before this fake grew one."""
@@ -757,7 +757,7 @@ def test_download_onestop_atomic_and_skips_existing(monkeypatch, tmp_path):
         def __exit__(self, *a):
             return False
 
-    def fake_urlopen(url):
+    def fake_urlopen(url, timeout=None):
         calls.append(url)
         return _FakeResp(_zip_bytes("x.csv", b"a\n1\n"))
 

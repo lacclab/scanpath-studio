@@ -11,13 +11,22 @@ from scanpath_studio import datasets, progress
 
 
 class _Response(io.BytesIO):
+    """A response body. ``read1`` — what the downloads read with — returns what
+    has arrived, up to the size asked; ``on_read`` fires after each one."""
+
     def __init__(self, data: bytes, *, length: bool = True, on_read=None):
         super().__init__(data)
         self.headers = {"Content-Length": str(len(data))} if length else {}
         self._on_read = on_read
+        self.reads: list[str] = []
 
     def read(self, size=-1):
-        chunk = super().read(size)
+        self.reads.append("read")
+        return super().read(size)
+
+    def read1(self, size=-1):
+        self.reads.append("read1")
+        chunk = super().read1(size)
         if self._on_read is not None:
             self._on_read()
         return chunk
@@ -29,10 +38,42 @@ class _Response(io.BytesIO):
         self.close()
 
 
+def _serving(response: _Response, opened: list | None = None):
+    """An `urlopen` that hands back ``response``, noting each call's timeout."""
+
+    def urlopen(url, timeout=None):
+        if opened is not None:
+            opened.append(timeout)
+        return response
+
+    return urlopen
+
+
+@pytest.mark.parametrize("fetch", ["to_file", "bytes"])
+def test_a_download_reads_what_has_arrived_and_times_out(monkeypatch, tmp_path, fetch):
+    """Stop acts at the next checkpoint, which a download reaches once a read
+    returns — and ``read(n)`` waits for all *n* bytes: ~10 s for a MiB at
+    100 KB/s. ``read1`` returns whatever has arrived. A connection that stalls
+    outright times out instead of hanging for good, as the `OSError` both
+    download buttons already report."""
+    response, opened = _Response(b"z" * 10), []
+    monkeypatch.setattr(datasets.urllib.request, "urlopen", _serving(response, opened))
+    if fetch == "to_file":
+        datasets._fetch_to_file(
+            "https://example.invalid/r", tmp_path / "r.zip", detail="IA report"
+        )
+    else:
+        datasets._fetch_bytes("https://example.invalid/r", detail="archive")
+    (timeout,) = opened
+    assert timeout is not None
+    assert timeout == datasets._DOWNLOAD_TIMEOUT_S
+    assert response.reads and set(response.reads) == {"read1"}
+
+
 def test_a_download_reports_bytes_and_lands_atomically(monkeypatch, tmp_path):
     monkeypatch.setattr(datasets, "_DOWNLOAD_CHUNK", 4)
     monkeypatch.setattr(
-        datasets.urllib.request, "urlopen", lambda url: _Response(b"x" * 10)
+        datasets.urllib.request, "urlopen", _serving(_Response(b"x" * 10))
     )
     dest = tmp_path / "report.csv.zip"
     with progress.task(("t", "dl"), title="Downloading") as task:
@@ -54,7 +95,7 @@ def test_cancelling_mid_download_leaves_no_file_behind(monkeypatch, tmp_path):
     monkeypatch.setattr(
         datasets.urllib.request,
         "urlopen",
-        lambda url: _Response(b"x" * 12, on_read=lambda: progress.cancel(key)),
+        _serving(_Response(b"x" * 12, on_read=lambda: progress.cancel(key))),
     )
     dest = tmp_path / "report.csv.zip"
     with progress.task(key, title="Downloading"):
@@ -71,7 +112,7 @@ def test_fetch_bytes_without_a_length_still_reports(monkeypatch):
     monkeypatch.setattr(
         datasets.urllib.request,
         "urlopen",
-        lambda url: _Response(b"y" * 9, length=False),
+        _serving(_Response(b"y" * 9, length=False)),
     )
     with progress.task(("t", "bytes"), title="Downloading") as task:
         assert (

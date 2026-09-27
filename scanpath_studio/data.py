@@ -13,15 +13,17 @@ import warnings
 import weakref
 import zipfile
 from collections import OrderedDict
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
 import streamlit as st
 
+from . import progress
 from .constants import DEFAULT_FIGURE_SIZE, PACKAGE_NAME
 from .multipart import (
     CANVAS_HEIGHT,
@@ -104,6 +106,16 @@ _FINGERPRINT_MEMO_MAX = 64
 #: hashed". Process-wide on purpose — a fingerprint depends only on content.
 _STABLE_FINGERPRINTS: dict[int, tuple[weakref.ref, tuple | None]] = {}
 _STABLE_FINGERPRINTS_MAX = 64
+#: UX-166 fix-round-2 (Ruling T5-6): guards every iteration/mutation of
+#: `_STABLE_FINGERPRINTS` above. The dict is process-wide, so two script runs
+#: can reach `_vouch_for_frames` at once — a superseded run's build publishing
+#: beside the run that replaced it, or two sessions' runs — though no build is
+#: ever shared *across* sessions (`frame_cache`'s identity includes the
+#: session's own store). An unlocked `.items()` iteration racing another
+#: thread's insert raised `RuntimeError: dictionary changed size during
+#: iteration`. Plain `.get` reads (`frame_fingerprint` below) need no lock under
+#: the GIL — only the sweep-and-insert and the write-back do.
+_STABLE_FINGERPRINTS_LOCK = threading.Lock()
 
 
 def _vouch_for_frames(value) -> None:
@@ -116,17 +128,180 @@ def _vouch_for_frames(value) -> None:
         parts = value
     else:
         return
-    for dead in [k for k, (ref, _) in _STABLE_FINGERPRINTS.items() if ref() is None]:
-        _STABLE_FINGERPRINTS.pop(dead, None)
-    for frame in parts:
-        if len(_STABLE_FINGERPRINTS) >= _STABLE_FINGERPRINTS_MAX:
-            break
-        if isinstance(frame, pd.DataFrame) and not frame.empty:
-            _STABLE_FINGERPRINTS.setdefault(id(frame), (weakref.ref(frame), None))
+    with _STABLE_FINGERPRINTS_LOCK:
+        for dead in [
+            k for k, (ref, _) in _STABLE_FINGERPRINTS.items() if ref() is None
+        ]:
+            _STABLE_FINGERPRINTS.pop(dead, None)
+        for frame in parts:
+            if len(_STABLE_FINGERPRINTS) >= _STABLE_FINGERPRINTS_MAX:
+                break
+            if isinstance(frame, pd.DataFrame) and not frame.empty:
+                _STABLE_FINGERPRINTS.setdefault(id(frame), (weakref.ref(frame), None))
 
 
 #: Session-state home of the no-copy frame caches (PERF-6), one entry per slot.
 _FRAME_CACHE_KEY = "_sps_frame_cache"
+
+#: UX-166 "latest request wins" (T5-1): the store key `(_LATEST_REQUESTED,
+#: slot)` — a tuple, so it can never collide with a real (string) slot name —
+#: holds the most recently *requested* key for that slot, recorded by
+#: `frame_cache` on every call, hit or miss. A build that finishes only writes
+#: `store[slot]` while this still names its own key; otherwise a newer request
+#: has already been *made* — whether or not it has itself finished yet, or
+#: ever will — and this build's (still-valid, still returned to its own
+#: caller) result must not clobber it.
+_LATEST_REQUESTED = "__requested__"
+
+
+@dataclass
+class _InFlight:
+    done: threading.Event = field(default_factory=threading.Event)
+    value: Any = None
+    ok: bool = False
+    #: Set only when the owner's build raised an ordinary ``Exception`` — never
+    #: for a ``BaseException`` that isn't one (`progress.Cancelled`, Streamlit's
+    #: `StopException`). See `_shared_build`.
+    error: Exception | None = None
+
+
+#: UX-166: builds in progress, so a rerun that asks for the same frame waits
+#: for the one already running instead of starting a second. A click during a
+#: long load abandons the running script and starts a new one at once
+#: (`runner.fastReruns`); without this the new run normalized the corpus again
+#: beside the first. `st.cache_data` has the same guarantee through its own
+#: per-key lock.
+_INFLIGHT: dict[tuple, _InFlight] = {}
+_INFLIGHT_LOCK = threading.Lock()
+
+#: `lookup`/`publish` (see `_shared_build`) return/accept this to mean "no
+#: cached value" — never `None`, since a legitimate result can itself be `None`.
+_MISSING = object()
+
+
+def _shared_build(
+    ident: tuple,
+    build: Callable[[], Any],
+    *,
+    lookup: Callable[[], Any] | None = None,
+    publish: Callable[[Any], None] | None = None,
+) -> Any:
+    """``build()``, run once for everyone asking for ``ident`` at the same time.
+
+    A caller that finds a build running waits for it and reuses its result.
+    If the owner's build raises an ordinary ``Exception``, that same exception
+    is re-raised in every waiter too — the input hasn't changed, so rebuilding
+    would just fail again the same way. Only a ``BaseException`` that is *not*
+    an ``Exception`` (`progress.Cancelled`, Streamlit's `StopException`) means
+    nobody actually finished the build, so a waiter then builds it itself.
+
+    ``lookup``/``publish`` let a cache-shaped caller close UX-166's "latest
+    request wins" race: a new owner calls ``lookup()`` right after winning
+    ownership — a value another, faster build already published for this
+    exact ``ident`` a moment earlier is reused without rebuilding — and a
+    successful build calls ``publish(value)`` *before* the in-flight entry is
+    popped, so "is this result still wanted, or has a newer request for this
+    slot already been made" is decided while this ``ident`` still has exactly
+    one owner. A joined waiter calls its own ``publish(entry.value)`` too
+    (UX-166 fix-round-2, Minor #1 of Ruling T5-5): the owner's own decision was
+    made against whatever key was latest *then*, and a request for this exact
+    ``ident`` can itself become the latest again before the owner's entry is
+    popped — without this, that waiter would still get the right *value* back
+    but the store would never hold it.
+
+    Neither ``lookup`` nor ``publish`` is called for a plain (non-cache) use
+    of this function, and neither's own failure is allowed to leak the
+    in-flight entry or hang every waiter forever (UX-166 fix-round-2, Ruling
+    T5-5 — a24e105 always popped the entry and signalled ``done``; the "latest
+    request wins" fix lost that guarantee by writing the cleanup out per path
+    instead of in one ``finally``): a failing ``lookup`` is treated as a miss
+    (logged at debug, then built normally); a failing ``publish`` is logged as
+    a warning and swallowed — the build itself already succeeded, ``entry.ok``
+    is already ``True``, and its caller still gets its value either way.
+    """
+    while True:
+        with _INFLIGHT_LOCK:
+            entry = _INFLIGHT.get(ident)
+            owner = entry is None
+            if owner:
+                entry = _InFlight()
+                _INFLIGHT[ident] = entry
+        if owner:
+            # UX-166 fix-round-2 (Ruling T5-5): the whole owner branch is one
+            # try/finally, so the registry pop and `done.set()` ALWAYS run —
+            # whether `lookup`, `build` or `publish` raises, or nothing does.
+            # Without this, a raising `publish` (the reviewer's repro:
+            # `_vouch_for_frames` racing another session's concurrent insert)
+            # left the entry registered forever: every waiter already joined
+            # blocks in `entry.done.wait()` with no timeout and no Streamlit
+            # checkpoint to free it, and every later miss for this `ident`
+            # joins the same dead entry and hangs too.
+            try:
+                hit = _MISSING
+                if lookup is not None:
+                    try:
+                        hit = lookup()
+                    except Exception:
+                        _LOGGER.debug(
+                            "_shared_build lookup failed for %r; building instead",
+                            ident,
+                            exc_info=True,
+                        )
+                        hit = _MISSING
+                if hit is not _MISSING:
+                    value = hit
+                else:
+                    try:
+                        value = build()
+                    except BaseException as exc:
+                        if isinstance(exc, Exception):
+                            entry.error = exc
+                        raise
+                entry.value = value
+                entry.ok = True
+                # Only a build we actually ran gets published — a lookup hit
+                # means the store already holds this exact key's value.
+                if hit is _MISSING and publish is not None:
+                    try:
+                        publish(value)
+                    except Exception:
+                        # A WARNING, not DEBUG (the in-app log captures from
+                        # INFO): swallowed, a publish that keeps failing shows
+                        # only as every rerun rebuilding.
+                        _LOGGER.warning(
+                            "_shared_build publish failed for %r; the built "
+                            "value is still returned, just not cached",
+                            ident,
+                            exc_info=True,
+                        )
+                return value
+            finally:
+                with _INFLIGHT_LOCK:
+                    _INFLIGHT.pop(ident, None)
+                entry.done.set()
+        # UX-166: waiting on a build another run started is this run's work too
+        # — the owner reports into its own task, so without this a gated card
+        # over the wait (the Corpus measures, opened afresh each run) never
+        # shows. It is also a cancel checkpoint: a waiter whose own task was
+        # cancelled stops here instead of waiting out a build it no longer
+        # wants. A hit returned above, so an all-hit rerun never gets here.
+        progress.report()
+        entry.done.wait()
+        if entry.ok:
+            if publish is not None:
+                try:
+                    publish(entry.value)
+                except Exception:
+                    _LOGGER.warning(
+                        "_shared_build waiter publish failed for %r",
+                        ident,
+                        exc_info=True,
+                    )
+            return entry.value
+        if entry.error is not None:
+            raise entry.error
+        # The owner was cancelled or stopped, not merely wrong: nobody actually
+        # built this. Loop back and become the new owner ourselves.
 
 
 def frame_cache(slot: str, key, build):
@@ -149,6 +324,14 @@ def frame_cache(slot: str, key, build):
     the current one would cost more memory than the copy ever did. Falls back to
     calling ``build`` when there is no session state, which is what the headless
     API and the CLI see.
+
+    Keys must be hashable (they are compared with ``==`` and stored as dict
+    keys). Concurrent requests for the same slot + key share one build in
+    flight (`_shared_build`); a build that finishes only *publishes* — writes
+    the entry every later request for that key reuses — while its key is still
+    the slot's most recently requested one (UX-166's "latest request wins"),
+    so a superseded build's late finish can never clobber a newer result. It
+    still returns its value to its own caller either way.
     """
     try:
         store = st.session_state.setdefault(_FRAME_CACHE_KEY, {})
@@ -159,13 +342,39 @@ def frame_cache(slot: str, key, build):
         # which is invisible except as everything being slow.
         _LOGGER.debug("frame_cache falling back to a plain call: %s", exc)
         return build()
+    # UX-166: record this as the slot's latest request on EVERY call — a hit
+    # included, since "the user cancelled back to an earlier dataset" is a hit
+    # for the slot's *current* entry, and without recording it here too an
+    # abandoned build for a *different* key would still look, to its own late
+    # `publish`, like nobody had asked for anything else since.
+    with _INFLIGHT_LOCK:
+        store[(_LATEST_REQUESTED, slot)] = key
     entry = store.get(slot)
     if entry is not None and entry[0] == key:
         return entry[1]
-    value = build()
-    store[slot] = (key, value)
-    _vouch_for_frames(value)
-    return value
+
+    def _lookup() -> Any:
+        # UX-166: a new owner re-checks the store before building — a
+        # concurrent build for this exact key may have just published,
+        # between our own miss above and winning ownership below.
+        with _INFLIGHT_LOCK:
+            current = store.get(slot)
+        if current is not None and current[0] == key:
+            return current[1]
+        return _MISSING
+
+    def _publish(value: Any) -> None:
+        with _INFLIGHT_LOCK:
+            wins = store.get((_LATEST_REQUESTED, slot)) == key
+            if wins:
+                store[slot] = (key, value)
+        if wins:
+            _vouch_for_frames(value)
+
+    # UX-166: shared with a build already running for this session, slot and key.
+    return _shared_build(
+        (id(store), slot, key), build, lookup=_lookup, publish=_publish
+    )
 
 
 def clear_frame_cache() -> None:
@@ -243,7 +452,8 @@ def frame_fingerprint(df: pd.DataFrame | None) -> tuple:
         return stable[1]
     value = _compute_frame_fingerprint(df)
     if stable is not None:
-        _STABLE_FINGERPRINTS[key] = (stable[0], value)
+        with _STABLE_FINGERPRINTS_LOCK:
+            _STABLE_FINGERPRINTS[key] = (stable[0], value)
     # Drop entries whose frame has already been collected before evicting a live
     # one — those are pure bookkeeping and cost nothing to lose.
     if len(memo) >= _FINGERPRINT_MEMO_MAX:
@@ -393,7 +603,8 @@ def onestop_data_provenance(participant: str | None = None) -> dict:
     return info
 
 
-@st.cache_data(show_spinner="Loading OneStop lacclab export…")
+# UX-166: the dataset card lists this step.
+@st.cache_data(show_spinner=False)
 def load_onestop_server_bundle(
     participant: str | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -408,6 +619,7 @@ def load_onestop_server_bundle(
     RAM for the L2 cohort). Used when no participant is specified, or when
     a deep link points at a pid whose shard hasn't been generated yet.
     """
+    progress.report()  # UX-166: a miss — real work, so the gated card may show
     base = onestop_data_dir()
     if base is None:
         return pd.DataFrame(), pd.DataFrame()
@@ -4431,6 +4643,10 @@ def default_filters(words: pd.DataFrame, fixations: pd.DataFrame) -> dict:
 def _default_filters_cached(
     _words: pd.DataFrame, _fixations: pd.DataFrame, cache_key
 ) -> dict:
+    # UX-166: keyed on the filtered pair, so this misses on every filter change
+    # while everything upstream hits — the report shows the gated dataset card
+    # while the new pool is worked out, not only once the trial list builds.
+    progress.report()
     filters = dict(
         participants=_union_column_values(_words, _fixations, "participant_id"),
         trials=_union_column_values(_words, _fixations, "trial_id"),

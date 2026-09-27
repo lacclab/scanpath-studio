@@ -914,3 +914,14 @@ def test_a_restore_that_crashes_the_app_does_not_crash_the_next_launch(
     assert not second.exception, [e.message for e in second.exception]
     assert any("didn't finish opening" in t.value for t in second.toast)
     assert (tmp_path / "manifest.json").read_text(encoding="utf-8") == manifest
+
+
+def test_restoring_datasets_reports_each_one(tmp_path):
+    """UX-166: the restore card counts datasets as they are read back."""
+    from scanpath_studio import progress
+
+    assert save_state({"_datasets": {"My corpus": _dataset()}}, tmp_path)
+    with progress.task(("t", "restore"), title="Restoring") as task:
+        assert restore_state({}, tmp_path)
+    snap = task.snapshot()
+    assert (snap.done, snap.total, snap.unit) == (1, 1, "datasets")

@@ -36,6 +36,7 @@ from urllib.parse import urlparse
 
 import pandas as pd
 
+from . import progress
 from .annotations import ANNOTATIONS_STATE_KEY, records_to_store, store_to_records
 from .constants import DATASET_COUNTS_STORE_KEY
 from .session_keys import (
@@ -406,7 +407,8 @@ def restore_state(
                 return False
             restored_datasets = {}
             stored_entries = {}
-            for name, entry in _as_mapping(manifest.get("datasets", {})).items():
+            stored_datasets = _as_mapping(manifest.get("datasets", {}))
+            for index, (name, entry) in enumerate(stored_datasets.items(), start=1):
                 entry = _as_mapping(entry)
                 payload = dict(_as_mapping(entry.get("metadata", {})))
                 for frame_key, relative in _as_mapping(entry.get("frames", {})).items():
@@ -416,6 +418,7 @@ def restore_state(
                     payload.setdefault(frame_key, pd.DataFrame())
                 restored_datasets[str(name)] = payload
                 stored_entries[str(name)] = entry
+                progress.report(index, len(stored_datasets), unit="datasets")
             stored_session = _restorable_session(manifest.get("session", {}))
             annotations = manifest.get("annotations", [])
             # One malformed record costs that record, not the rest.
@@ -671,6 +674,18 @@ def restore_local_state(
         _finish_restore(session)
         return False
     return restored_from_cache(session)
+
+
+def local_state_restored(session) -> bool:
+    """Whether this session has had its one restore attempt already.
+
+    Set by :func:`restore_local_state` on its first call whatever the outcome —
+    restored, nothing cached, persistence off, or skipped (BUG-71) — and every
+    later call returns at once. The app opens the restore card only before it
+    (UX-166): a card around a call that does nothing cost each run a timer
+    thread and a task for nothing.
+    """
+    return bool(session.get(_RESTORED_KEY))
 
 
 def _unlink_quietly(path: Path) -> None:

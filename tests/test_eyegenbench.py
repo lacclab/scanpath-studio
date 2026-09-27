@@ -4,7 +4,7 @@ import shutil
 import pandas as pd
 import pytest
 
-from scanpath_studio import data, eyegenbench
+from scanpath_studio import data, eyegenbench, progress
 from tests.conftest import add_benchmark_corpora
 
 
@@ -124,6 +124,22 @@ def test_raw_frames_returns_both_tables(bundle):
     words, fixations = eyegenbench.eyegenbench_raw_frames(bundle, dataset="PoTeC")
     assert list(words["ia_label"]) == ["ab", "cd"]
     assert len(fixations) == 2
+
+
+def test_reading_a_corpus_reports_before_its_first_table(bundle, monkeypatch):
+    """UX-166: "0 of 2 tables" before the first read, so a gated card is armed
+    from the start — then one report per table, as before."""
+    calls = []
+    real_report = progress.report
+
+    def spy(done=None, total=None, *, unit="", detail=None):
+        calls.append((done, total, unit))
+        return real_report(done, total, unit=unit, detail=detail)
+
+    monkeypatch.setattr(progress, "report", spy)
+    with progress.task(("t", "eyegenbench-first"), title="Loading PoTeC"):
+        eyegenbench.eyegenbench_raw_frames(bundle, dataset="PoTeC")
+    assert calls == [(0, 2, "tables"), (1, 2, "tables"), (2, 2, "tables")]
 
 
 def test_auto_detection_agrees_with_our_schemas(bundle):

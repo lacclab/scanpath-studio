@@ -291,7 +291,8 @@ class TestTheVerdictIsRaisedWhereTheMappingIsChosen:
 
         from scanpath_studio import app
 
-        source = inspect.getsource(app.main)
+        # UX-166: `main` wraps the run in a loading scope; `_run_app` is the run.
+        source = inspect.getsource(app._run_app)
         assert "_trial_identity_alert_dialog(" in source
         assert "TRIAL_IDENTITY_CHECK_KEY" in source
         # The banner it replaced (`menu.notices.warning(f"{identity_warning} …")`).

@@ -161,18 +161,12 @@ class TestRetimingIsByteIdentical:
 
 class TestTheAppReusesItsFrames:
     def _render(self, settings, viz, speed):
+        frames = (_words(), _fixations(), None, None, "p1", "t1", None, None)
+        plan = tabs._plan_replay(
+            *frames, settings=settings, viz_settings=viz, playback_speed=speed
+        )
         view, *_ = tabs._build_and_render_animation(
-            _words(),
-            _fixations(),
-            None,
-            None,
-            "p1",
-            "t1",
-            None,
-            None,
-            settings=settings,
-            viz_settings=viz,
-            playback_speed=speed,
+            *frames, viz_settings=viz, plan=plan
         )
         return view.figure()
 

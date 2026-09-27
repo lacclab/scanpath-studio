@@ -76,18 +76,16 @@ def page(monkeypatch):
 
 
 def _render(speed: float = 1.0, *, autoplay: bool = True, **viz):
-    view, _slug, _stem = tabs._build_and_render_animation(
-        _words(),
-        _fixations(),
-        None,
-        None,
-        "p1",
-        "t1",
-        None,
-        None,
+    frames = (_words(), _fixations(), None, None, "p1", "t1", None, None)
+    viz_settings = {"anim_autoplay": autoplay, "critical_span_style": "None", **viz}
+    plan = tabs._plan_replay(
+        *frames,
         settings=plots.FigureSettings.from_mapping({}, **_CANVAS),
-        viz_settings={"anim_autoplay": autoplay, "critical_span_style": "None", **viz},
+        viz_settings=viz_settings,
         playback_speed=speed,
+    )
+    view, _slug, _stem = tabs._build_and_render_animation(
+        *frames, viz_settings=viz_settings, plan=plan
     )
     return view
 

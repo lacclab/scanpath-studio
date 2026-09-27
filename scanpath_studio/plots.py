@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
+from . import progress
 from .constants import (
     CANVAS_PAD_FRACTION,
     CANVAS_PAD_MIN_PX,
@@ -4125,7 +4126,11 @@ def _render_scanpath_animation(
     )
 
     frames = []
+    n_frames = len(frame_times)
     for k, t in enumerate(frame_times):
+        # UX-169: the card's "120 of 361 frames" — and a cancel checkpoint, so an
+        # abandoned build stops within a frame. A no-op outside a card.
+        progress.report(k + 1, n_frames, unit="frames")
         traces_in_frame = []
         traces_idx_in_frame = []
         for s in specs:

@@ -33,6 +33,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from . import progress
+
 MANIFEST_NAME = "manifest.json"
 _TABLES = ("words", "fixations", "participants")
 
@@ -242,10 +244,13 @@ def _dataset_dir(root, dataset: str) -> Path:
 def eyegenbench_raw_frames(root, *, dataset: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Raw (pre-normalization) ``(words, fixations)`` frames for ``dataset``."""
     directory = _dataset_dir(root, dataset)
-    return (
-        pd.read_parquet(directory / "words.parquet"),
-        pd.read_parquet(directory / "fixations.parquet"),
-    )
+    # UX-166: "0 of 2" first, so a gated card is armed before the first table.
+    progress.report(0, 2, unit="tables")
+    words = pd.read_parquet(directory / "words.parquet")
+    progress.report(1, 2, unit="tables")
+    fixations = pd.read_parquet(directory / "fixations.parquet")
+    progress.report(2, 2, unit="tables")
+    return words, fixations
 
 
 def load_eyegenbench(root, *, dataset: str) -> tuple[pd.DataFrame, pd.DataFrame]:

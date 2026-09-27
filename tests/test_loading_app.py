@@ -624,3 +624,21 @@ def test_the_animation_cancel_switches_animate_off():
     at = AppTest.from_function(_animation_cancel_script).run()
     at.button(key="c").click().run()
     assert at.session_state["single_animate"] is False
+
+
+# UX-169 — a placeholder inside the plot's frame.
+
+
+def test_the_plot_frame_carries_a_placeholder_removed_on_first_draw():
+    html, _ = tabs._true_scale_html(
+        '<div id="truescale-k"></div>',
+        key="k",
+        width=100,
+        height=50,
+        max_height=None,
+        zoomable=True,
+    )
+    assert 'id="skel-k"' in html
+    assert "dropSkeleton" in html
+    # It must run for the small multiples too, which return before the zoom code.
+    assert html.index("dropSkeleton") < html.index("if (!ZOOMABLE)")

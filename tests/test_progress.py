@@ -59,6 +59,14 @@ def test_begin_joins_a_running_task_but_not_a_finished_or_cancelled_one():
     assert progress.begin(("t", "join"), title="x") is not second
 
 
+def test_begin_fresh_replaces_any_existing_record_even_mid_flight():
+    first = progress.begin(("t", "fresh"), title="x")
+    second = progress.begin(("t", "fresh"), title="x", fresh=True)
+    assert second is not first
+    assert not first.finished and not first.cancelled  # replaced, not touched
+    assert progress.begin(("t", "fresh"), title="x") is second
+
+
 def test_finish_records_the_duration_under_its_duration_key():
     task = progress.begin(("t", "dur"), title="x")
     seconds = task.finish(duration_key=("dataset", "Demo"))

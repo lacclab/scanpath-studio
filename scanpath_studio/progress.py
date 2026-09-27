@@ -172,15 +172,20 @@ _ACTIVE: contextvars.ContextVar[Task | None] = contextvars.ContextVar(
 )
 
 
-def begin(key: Hashable, *, title: str, steps: Sequence[str] = ()) -> Task:
+def begin(
+    key: Hashable, *, title: str, steps: Sequence[str] = (), fresh: bool = False
+) -> Task:
     """The task for ``key`` — the one already running, or a new one.
 
     Joining is what lets a rerun that interrupted a load keep showing that
     load's counts instead of starting from zero. A finished or cancelled task
-    is never joined: its record is replaced.
+    is never joined: its record is replaced. ``fresh=True`` replaces any
+    existing record unconditionally, even one still mid-flight — for a caller
+    with no stable identity to join across runs in the first place (e.g. a
+    region card opened with no explicit task key).
     """
     with _REGISTRY_LOCK:
-        task = _REGISTRY.get(key)
+        task = None if fresh else _REGISTRY.get(key)
         if task is None or task.cancelled or task.finished:
             task = Task(key, title=title, steps=steps)
             _REGISTRY[key] = task

@@ -26,17 +26,25 @@ from __future__ import annotations
 import contextlib
 import contextvars
 import html
+import logging
 import threading
 from collections.abc import Callable, Hashable, Iterator, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
 import streamlit as st
-from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
+from streamlit.runtime.scriptrunner import (
+    RerunException,
+    StopException,
+    add_script_run_ctx,
+    get_script_run_ctx,
+)
 
 from scanpath_studio import progress
 from scanpath_studio.constants import SELECTOR_ROW_GRID, icon_html
 from scanpath_studio.progress import Snapshot
+
+_LOGGER = logging.getLogger(__name__)
 
 #: Nothing shows for this long — Streamlit's own spinner delay.
 DELAY_S: float = 0.5
@@ -48,6 +56,9 @@ PLOT_SIZES_KEY = "_sps_plot_sizes"
 VIEW_AREA_KEY = "sps_view"
 #: The page card's key — there is one page per run.
 PAGE_CARD_KEY = "page"
+#: Tests that inspect a card frozen by ``st.stop()`` set this so the off-thread
+#: clear (`_clear_off_thread`) doesn't fire; production code never does.
+_KEEP_ON_STOP: bool = False
 
 
 def _esc(text: Any) -> str:
@@ -281,7 +292,7 @@ def session_id() -> str:
 
 @dataclass
 class _RunState:
-    cards: list = field(default_factory=list)
+    cards: list[Card] = field(default_factory=list)
     page: Page | None = None
 
 
@@ -291,10 +302,16 @@ _RUN: contextvars.ContextVar[_RunState | None] = contextvars.ContextVar(
 
 
 def _run() -> _RunState:
+    """The current run's state — or a throwaway one outside `run_scope`.
+
+    Never sets the ContextVar itself: `run_scope` owns that set/reset pairing.
+    A fragment rerun can reuse the same ScriptRunner thread, so a stray
+    `_RUN.set(...)` here — with nothing that would ever reset it — would leak
+    one run's cards/page into a later one that never entered `run_scope`.
+    """
     state = _RUN.get()
     if state is None:
-        state = _RunState()
-        _RUN.set(state)
+        return _RunState()
     return state
 
 
@@ -327,12 +344,41 @@ class _Ticker(threading.Thread):
             self._on_reveal()
             while not self._halt.wait(self._interval):
                 self._on_tick()
+        except StopException:
+            # The run's coordinator has been told to stop; nothing left to
+            # update, and this is an expected outcome, not a bug — no log.
+            return
         except Exception:
-            # A placeholder whose run has ended: nothing left to update.
+            # A placeholder whose run has ended: nothing left to update, but
+            # unlike a stop this wasn't expected, so leave a trace of it.
+            _LOGGER.debug("Loading card ticker stopped early", exc_info=True)
             return
 
     def halt(self) -> None:
         self._halt.set()
+
+
+def _clear_off_thread(slot) -> None:
+    """Clear ``slot`` from a short-lived helper thread.
+
+    Once a run is stopped or superseded, Streamlit raises `StopException` /
+    `RerunException` on the SCRIPT thread the next time it tries to send a
+    message, instead of sending it — so `slot.empty()` never lands there.
+    Off the script thread, Streamlit only checks a parallel-fragment
+    coordinator (absent for a plain helper thread like this one), so the same
+    call from here goes through.
+    """
+
+    def _clear() -> None:
+        try:
+            slot.empty()
+        except Exception:
+            pass
+
+    thread = threading.Thread(target=_clear, daemon=True, name="scanpath-loading-clear")
+    add_script_run_ctx(thread)
+    thread.start()
+    thread.join(timeout=1.0)
 
 
 class Card:
@@ -361,6 +407,7 @@ class Card:
         self._cancel = cancel
         self._size = size
         self._skeleton = skeleton
+        self._explicit_task_key = task_key is not None
         self._task_key = (
             task_key if task_key is not None else ("card", session_id(), key)
         )
@@ -386,11 +433,12 @@ class Card:
         return self._task
 
     def open(self, *, reveal_now: bool = False) -> Card:
-        """Draw the card hidden — its size box shows at once — and arm the timer."""
-        self._task = progress.begin(
-            self._task_key, title=self._title, steps=self._steps
-        )
-        self._token = progress.activate(self._task)
+        """Draw the card hidden — its size box shows at once — and arm the timer.
+
+        Drawing happens before the task is begun and activated: if drawing
+        itself fails (e.g. the run is already being torn down), no task is
+        left active or half-started for something to have to clean up.
+        """
         box = self._slot.container(key=f"sps_card_{self.key}")
         if self._size is not None:
             box.markdown(size_box_html(*self._size), unsafe_allow_html=True)
@@ -411,6 +459,13 @@ class Card:
         self._reveal = body.empty()
         self.is_open = True
         _run().cards.append(self)
+        self._task = progress.begin(
+            self._task_key,
+            title=self._title,
+            steps=self._steps,
+            fresh=not self._explicit_task_key,
+        )
+        self._token = progress.activate(self._task)
         if reveal_now or DELAY_S <= 0:
             self._show()
             if DELAY_S > 0:
@@ -465,29 +520,62 @@ class Card:
             return
         self._task.step_to(index, label)
         # With no timer running (DELAY_S == 0, as the headless tests use),
-        # nothing else would repaint a shown card.
-        if self._revealed and self._ticker is None:
+        # nothing else would repaint a shown card. `is_open` also guards a
+        # card whose slot is already cleared: `_ticker` goes back to None
+        # once halted, but `_revealed` stays True forever.
+        if self.is_open and self._revealed and self._ticker is None:
             self._paint()
 
     def finish(self) -> None:
         if self._task is not None:
             self._task.finish(duration_key=self._duration_key)
 
+    def _retire(self) -> None:
+        """Finish this card's task with no duration key, so a later run's
+        `progress.begin` for the same key never joins it.
+
+        Called whenever this card's run ends in a way that will not itself
+        resume the task (a normal close, or an ordinary exception) — never
+        when `close()` hits `StopException`/`RerunException`, the one case
+        `progress.begin`'s joining exists for (see `Card.close`).
+        """
+        if self._task is not None:
+            self._task.finish()
+
     def close(self, *, keep: bool = False) -> None:
         """Stop the timer and take the card down — or, with ``keep``, leave it
-        showing every step done (the page card, until its page is released)."""
+        showing every step done (the page card, until its page is released).
+
+        A stopped or superseded run can't clear its own slot from the script
+        thread — Streamlit raises `StopException`/`RerunException` there
+        instead of sending the message (see `_clear_off_thread`) — so that's
+        caught here and retried off-thread before the exception is re-raised,
+        unless `_KEEP_ON_STOP` (tests only) says to leave the card frozen. A
+        slot that clears normally retires this card's task; one Streamlit
+        aborted stays joinable, since a rerun that interrupted a load is
+        exactly the case joining exists for.
+        """
         if not self.is_open:
             return
         self._halt()
-        if self._token is not None:
-            progress.deactivate(self._token)
-            self._token = None
-        self.is_open = False
-        if keep:
-            if self._revealed:
-                self._paint()
-        else:
-            self._slot.empty()
+        try:
+            if keep:
+                if self._revealed:
+                    self._paint()
+            else:
+                try:
+                    self._slot.empty()
+                except (StopException, RerunException):
+                    if not _KEEP_ON_STOP:
+                        _clear_off_thread(self._slot)
+                    raise
+                else:
+                    self._retire()
+        finally:
+            if self._token is not None:
+                progress.deactivate(self._token)
+                self._token = None
+            self.is_open = False
 
 
 class Page:
@@ -526,13 +614,19 @@ class Page:
         return self.card.open(reveal_now=reveal_now)
 
     def release(self) -> bool:
-        """Take the skeleton down; say whether it was showing."""
+        """Take the skeleton down; say whether it was showing.
+
+        Closes the card *before* reading `revealed`: a concurrently-ticking
+        card could still be mid-`_show()` on its timer thread, and closing
+        joins that thread first, so the read afterwards can't race a reveal
+        that was already underway.
+        """
         if self._released:
             return False
         self._released = True
-        revealed = bool(self.card is not None and self.card.revealed)
         if self.card is not None and self.card.is_open:
             self.card.close(keep=True)
+        revealed = bool(self.card is not None and self.card.revealed)
         self._slot.empty()
         state = _RUN.get()
         if state is not None and state.page is self:
@@ -570,6 +664,12 @@ def card(
     Opening one releases the page skeleton: the view has drawn its controls by
     the time it reaches its first slow region. When the skeleton was showing,
     the card shows at once too, so the wait reads as one continuous state.
+
+    An ordinary exception from the block retires the card's task (see
+    `Card._retire`) before re-raising — a card with an explicit `task_key`
+    that failed must not look, to a later run, like one still safely loading.
+    `open()` is inside the ``try`` too, so `close()` still runs (a no-op,
+    since it never got to `is_open = True`) if opening itself raises.
     """
     page_was_showing = release_page()
     region = Card(
@@ -583,10 +683,13 @@ def card(
         task_key=task_key,
         duration_key=duration_key,
     )
-    region.open(reveal_now=page_was_showing)
     try:
+        region.open(reveal_now=page_was_showing)
         yield region
         region.finish()
+    except Exception:
+        region._retire()
+        raise
     finally:
         region.close()
 
@@ -598,6 +701,12 @@ def run_scope() -> Iterator[None]:
     It also ends quietly a run whose work was cancelled: only an abandoned run
     ever computes a cancelled task (`progress.begin` never joins one), so its
     page is gone and Streamlit drops whatever it sends.
+
+    A card or the page left open when the run ends — interrupted, or simply
+    never closed — is cleared off-thread here too, the same
+    `StopException`/`RerunException` problem `Card.close()` guards against,
+    for whatever this run didn't get to close itself. `_KEEP_ON_STOP` (tests
+    only) skips it, same as in `close()`.
     """
     token = _RUN.set(_RunState())
     try:
@@ -607,8 +716,14 @@ def run_scope() -> Iterator[None]:
         pass
     finally:
         state = _RUN.get()
-        for opened in list(state.cards if state is not None else ()):
-            opened._halt()
+        if state is not None:
+            for opened in list(state.cards):
+                opened._halt()
+                if opened.is_open and not _KEEP_ON_STOP:
+                    _clear_off_thread(opened._slot)
+            run_page = state.page
+            if run_page is not None and not run_page._released and not _KEEP_ON_STOP:
+                _clear_off_thread(run_page._slot)
         _RUN.reset(token)
 
 
@@ -618,7 +733,7 @@ def covered() -> bool:
     return bool(state is not None and any(c.is_open for c in state.cards))
 
 
-def spinner(text: str):
+def spinner(text: str) -> contextlib.AbstractContextManager[Any]:
     """``st.spinner`` with the elapsed time — silent while a card covers it."""
     if covered():
         return contextlib.nullcontext()

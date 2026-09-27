@@ -877,6 +877,8 @@ def _render_true_scale_plot(
     # Iframe height = full true height (or the cap); the script trims the
     # visible block to the scaled height.
     _embed_html_iframe(html, height=iframe_height)
+    # UX-167: the next figure under this key holds its area at this size.
+    loading.record_plot_size(key, width, iframe_height)
 
 
 def _different_texts_note(text_a: str | None, text_b: str | None) -> str | None:
@@ -1735,7 +1737,7 @@ def _figure_input_key(
     return tuple(parts)
 
 
-@st.cache_data(show_spinner="Rendering scanpath…")
+@st.cache_data(show_spinner=False)
 def _cached_scanpath_figure(
     _words: pd.DataFrame,
     _fixations: pd.DataFrame,
@@ -1857,7 +1859,7 @@ class _ReplayView:
         return go.Figure(self.figure_dict())
 
 
-@st.cache_data(show_spinner="Building the replay…", max_entries=8)
+@st.cache_data(show_spinner=False, max_entries=8)
 def _cached_replay_view(
     clip_inputs,
     autoplay: bool,
@@ -1874,8 +1876,8 @@ def _cached_replay_view(
     ``download_name`` only the embed; they are here to key the markup. On a miss
     ``_finished_figure`` builds the figure, through the replay cache; a hit
     never touches that cache, whose every hit unpickles the whole figure.
-    Entries are small: the view is compressed. The spinner is this cache's —
-    Streamlit shows only the outermost one of nested caches.
+    Entries are small: the view is compressed. UX-167: no spinner — the plot's
+    loading card covers the build.
     """
     return _ReplayView.from_figure(
         _finished_figure(),
@@ -4795,7 +4797,13 @@ def render_single_trial_tab(
         compare_screen_slot = st.container(key="tour_grp_compare_screen_picker")
         chips_slot = st.container(key="tour_grp_chips")
         compare_chips_slot = st.container(key="tour_grp_compare_chips")
+        # UX-167: notes about the figure that come *before* it sit above the
+        # stage, so the figure is always the stage's second child and a figure
+        # already on screen stays put while the next one is built.
+        plot_notes_slot = st.container()
         plot_slot = st.container(key="tour_grp_plot")
+        # The stage's first child: the size box + loading card (styles.py).
+        plot_loading_slot = plot_slot.empty()
 
     # UX-43: a second row repeats the 4:1 split and reserves only its left side
     # for the per-trial panels. Keeping the slot OUT of the plot/rail row means
@@ -5944,16 +5952,27 @@ def render_single_trial_tab(
 
     with plot_slot:
         if global_raw_toggle and not trial_has_raw_gaze:
-            st.warning("Raw gaze not available for this trial.", icon=ICONS["warning"])
+            plot_notes_slot.warning(
+                "Raw gaze not available for this trial.", icon=ICONS["warning"]
+            )
         if animate and trial_fixations.empty:
-            st.info(
+            # UX-167: no figure will be drawn this run — take the page skeleton
+            # down now rather than leaving it up through the subtabs below, and
+            # the note goes above the stage like every other pre-figure note.
+            loading.release_page()
+            plot_notes_slot.info(
                 "Animation needs a **fixations** table — there's nothing to "
                 "animate for this selection."
             )
         elif animate:
-            # Building the per-fixation animation frames takes a moment — show a
-            # loading banner so the screen isn't blank meanwhile.
-            with st.spinner("Building animation…"):
+            with loading.card(
+                plot_loading_slot,
+                key="single_anim",
+                title="Building the animation",
+                size=loading.plot_size(
+                    "single_anim", canvas_width, canvas_height, animation=True
+                ),
+            ):
                 anim_view, save_slug, anim_file_stem = _build_and_render_animation(
                     trial_words,
                     plot_fixations,
@@ -6000,32 +6019,39 @@ def render_single_trial_tab(
                 f"{compare_participant}__{compare_trial}"
             )
             displayed_plot_key = "compare"
-            displayed_fig = _render_comparison_figure(
-                combos,
-                cmp_words,
-                cmp_fixations,
-                selected_participant,
-                selected_trial,
-                selected_text,
-                figure_compare_participant,
-                compare_trial,
-                render_settings,
-                viz_settings,
-                layout=compare_layout,
-                compare_stimulus=compare_stimulus,
-                compare_meta=compare_meta,
-                shared_numeric=shared_numeric,
-                # BUG-85: the gate says why the pair cannot overlay; that it is
-                # drawn side by side instead is this surface's own resolve.
-                setup_note=(
-                    f"{compare_setup_note} They are shown side by side instead."
-                    if compare_layout != requested_layout
-                    else compare_setup_note
-                ),
-                primary_combo_row=primary_combo_row,
-                download_name=f"scanpath_{_safe_filename(save_slug)}",
-                figure_participant_b=self_compare_figure_id,
-            )
+            with loading.card(
+                plot_loading_slot,
+                key="compare",
+                title="Drawing the comparison",
+                size=loading.plot_size("compare", canvas_width, canvas_height),
+            ):
+                displayed_fig = _render_comparison_figure(
+                    combos,
+                    cmp_words,
+                    cmp_fixations,
+                    selected_participant,
+                    selected_trial,
+                    selected_text,
+                    figure_compare_participant,
+                    compare_trial,
+                    render_settings,
+                    viz_settings,
+                    layout=compare_layout,
+                    compare_stimulus=compare_stimulus,
+                    compare_meta=compare_meta,
+                    shared_numeric=shared_numeric,
+                    # BUG-85: the gate says why the pair cannot overlay; that it
+                    # is drawn side by side instead is this surface's own
+                    # resolve.
+                    setup_note=(
+                        f"{compare_setup_note} They are shown side by side instead."
+                        if compare_layout != requested_layout
+                        else compare_setup_note
+                    ),
+                    primary_combo_row=primary_combo_row,
+                    download_name=f"scanpath_{_safe_filename(save_slug)}",
+                    figure_participant_b=self_compare_figure_id,
+                )
         else:
             # PRE-3: the corrected frame (`plot_fixations`) was built above and is
             # shared with the animation + comparison paths. Only the static figure
@@ -6041,34 +6067,42 @@ def render_single_trial_tab(
                     extra_settings["connector_y"] = tuple(
                         pd.to_numeric(fig_fixations["y"], errors="coerce")
                     )
-            static_settings = render_settings.with_overrides(**extra_settings)
-            build_inputs = static_settings.for_builder(STATIC_FIGURE_OPTIONS)
-            _amend_snippet_settings(static_settings, "static")
-            build_inputs["raw_gaze"] = figure_raw_gaze
-            displayed_fig = _cached_scanpath_figure(
-                trial_words,
-                plot_fixations,
-                static_settings,
-                figure_raw_gaze,
-                fig_key=_figure_input_key(trial_words, plot_fixations, build_inputs),
-            )
-            _apply_preprocessing_caption(
-                displayed_fig, selected_participant, selected_trial
-            )
-            _apply_title_caption(
-                displayed_fig,
-                viz_settings,
-                trial_words,
-                plot_fixations,
-                selected_participant,
-                selected_trial,
-                combo_row=primary_combo_row,
-            )
-            _render_true_scale_chart(
-                displayed_fig,
+            with loading.card(
+                plot_loading_slot,
                 key="single",
-                download_name=f"scanpath_{_safe_filename(save_slug)}",
-            )
+                title="Drawing the scanpath",
+                size=loading.plot_size("single", canvas_width, canvas_height),
+            ):
+                static_settings = render_settings.with_overrides(**extra_settings)
+                build_inputs = static_settings.for_builder(STATIC_FIGURE_OPTIONS)
+                _amend_snippet_settings(static_settings, "static")
+                build_inputs["raw_gaze"] = figure_raw_gaze
+                displayed_fig = _cached_scanpath_figure(
+                    trial_words,
+                    plot_fixations,
+                    static_settings,
+                    figure_raw_gaze,
+                    fig_key=_figure_input_key(
+                        trial_words, plot_fixations, build_inputs
+                    ),
+                )
+                _apply_preprocessing_caption(
+                    displayed_fig, selected_participant, selected_trial
+                )
+                _apply_title_caption(
+                    displayed_fig,
+                    viz_settings,
+                    trial_words,
+                    plot_fixations,
+                    selected_participant,
+                    selected_trial,
+                    combo_row=primary_combo_row,
+                )
+                _render_true_scale_chart(
+                    displayed_fig,
+                    key="single",
+                    download_name=f"scanpath_{_safe_filename(save_slug)}",
+                )
 
     # Per-trial panels sit directly BELOW the plot, in the next row's left column. Trial
     # Info is gone — the chip strip above the plot now carries the trial's identity,

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from scanpath_studio import app, loading, progress
+from scanpath_studio import app, loading, progress, tabs
 from scanpath_studio.constants import (
     _VIEW_CORPUS,
     _VIEW_DATA,
@@ -303,3 +303,21 @@ def test_the_data_views_marker_outlives_its_card(at, monkeypatch):
     assert not at.exception, at.exception
     text = _markdown(at)
     assert "sps-view-hidden" in text and "sps-card-head" not in text
+
+
+def test_a_drawn_figure_records_its_embedded_size(at):
+    at.run()
+    width, height = at.session_state[loading.PLOT_SIZES_KEY]["single"]
+    assert width > 0 and height > 12
+
+
+def test_a_slow_figure_holds_its_area_with_a_size_box(at, monkeypatch):
+    at.run()
+    expected = at.session_state[loading.PLOT_SIZES_KEY]["single"]
+    monkeypatch.setattr(loading, "DELAY_S", 0)
+    monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
+    monkeypatch.setattr(tabs, "_cached_scanpath_figure", _stop)
+    at.run()
+    text = _markdown(at)
+    assert f"height:{expected[1]}px" in text
+    assert "Drawing the scanpath" in text

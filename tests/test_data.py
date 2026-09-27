@@ -139,6 +139,102 @@ class TestPickColumnPrefixSuffixSecondPass:
         assert pick_column(df, ["word_id", "IA_ID", "aoi"]) is None
 
 
+class TestBoxEdgesResolveAsOneSet:
+    """DATA-57: the four edges are picked as a set sharing one affix, so an AOI
+    table carrying two box encodings still auto-fills instead of every edge
+    being ambiguous."""
+
+    def test_two_edge_sets_pick_the_first_in_the_header(self):
+        # The shape of a real EyeLink AOI export: LEFT_px … next to a derived
+        # aoi_left … (plus aoi_width / aoi_height).
+        df = pd.DataFrame(
+            {
+                c: [1]
+                for c in (
+                    "word",
+                    "BOTTOM_px",
+                    "LEFT_px",
+                    "RIGHT_px",
+                    "TOP_px",
+                    "aoi_bottom",
+                    "aoi_height",
+                    "aoi_left",
+                    "aoi_right",
+                    "aoi_top",
+                    "aoi_width",
+                )
+            }
+        )
+        schema = propose_word_schema(df)
+        assert [schema[e] for e in ("left", "right", "top", "bottom")] == [
+            "LEFT_px",
+            "RIGHT_px",
+            "TOP_px",
+            "BOTTOM_px",
+        ]
+        # Origin + size follow the same set — no `*_px` size columns, so none,
+        # rather than aoi_width from the other box.
+        assert (schema["x"], schema["y"]) == ("LEFT_px", "TOP_px")
+        assert schema["width"] is None and schema["height"] is None
+
+    def test_the_chosen_sets_size_columns_come_with_it(self):
+        df = pd.DataFrame(
+            {
+                c: [1]
+                for c in (
+                    "aoi_left",
+                    "aoi_right",
+                    "aoi_top",
+                    "aoi_bottom",
+                    "LEFT_px",
+                    "RIGHT_px",
+                    "TOP_px",
+                    "BOTTOM_px",
+                    "aoi_width",
+                    "aoi_height",
+                )
+            }
+        )
+        schema = propose_word_schema(df)
+        assert schema["left"] == "aoi_left"
+        assert (schema["width"], schema["height"]) == ("aoi_width", "aoi_height")
+
+    def test_camel_case_edges_are_auto_detected(self):
+        df = pd.DataFrame(
+            {c: [1] for c in ("Word", "BoxLeft", "BoxRight", "BoxTop", "BoxBottom")}
+        )
+        schema = propose_word_schema(df)
+        assert [schema[e] for e in ("left", "right", "top", "bottom")] == [
+            "BoxLeft",
+            "BoxRight",
+            "BoxTop",
+            "BoxBottom",
+        ]
+
+    def test_an_incomplete_set_is_not_guessed(self):
+        # Two lefts and nothing else of either set: still ambiguous.
+        df = pd.DataFrame({c: [1] for c in ("LEFT_px", "aoi_left", "aoi_right")})
+        assert propose_word_schema(df)["left"] is None
+
+    def test_exact_edges_keep_winning(self):
+        df = pd.DataFrame(
+            {
+                c: [1]
+                for c in (
+                    "IA_LEFT",
+                    "IA_RIGHT",
+                    "IA_TOP",
+                    "IA_BOTTOM",
+                    "aoi_left",
+                    "aoi_right",
+                    "aoi_top",
+                    "aoi_bottom",
+                )
+            }
+        )
+        assert propose_word_schema(df)["left"] == "IA_LEFT"
+
+
 class TestProposeWordSchemaMatching:
     """propose_word_schema resolves real-world column-name variants."""
 

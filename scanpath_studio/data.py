@@ -483,6 +483,7 @@ def _norm_col(name) -> str:
 
 
 _COL_SEPARATORS = re.compile(r"[^a-zA-Z0-9]+")
+_CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
 
 
 def _col_tokens(name) -> list[str]:
@@ -494,6 +495,9 @@ def _col_tokens(name) -> list[str]:
     with the unit noise already gone, not left to coincidentally never match
     a candidate."""
     text = _TRAILING_UNIT.sub("", str(name))
+    # DATA-57: a CamelCase name (`BoxLeft`, `AoiTop`) has no separator to split
+    # on, so a lower→upper case change counts as one.
+    text = _CAMEL_BOUNDARY.sub(" ", text)
     return [tok.lower() for tok in _COL_SEPARATORS.split(text) if tok]
 
 
@@ -878,8 +882,73 @@ RAW_GAZE_TIMESTAMP_CANDIDATES = [
 ]
 
 
+_BOX_EDGES = ("left", "right", "top", "bottom")
+
+
+def _pick_box_edge_set(words: pd.DataFrame) -> dict[str, str] | None:
+    """The four word-box edge columns, resolved as one set (DATA-57).
+
+    ``pick_column`` looks at each edge on its own, and its second pass accepts a
+    prefixed or suffixed name (``LEFT_px``, ``aoi_left``) only when it is the
+    *only* column carrying that token. An AOI export routinely carries two box
+    encodings side by side — EyeLink's ``LEFT_px`` … ``BOTTOM_px`` next to a
+    derived ``aoi_left`` … ``aoi_bottom`` — so every edge was ambiguous and the
+    whole box landed in the manual step. The edges are not independent: they
+    share an affix. So each column naming exactly one edge is keyed by the rest
+    of its name (``*_px``, ``aoi_*``), and a key that covers all four edges is a
+    set. The set whose first column comes first in the table wins, which keeps
+    the choice deterministic and matches reading the header left to right.
+
+    Returns ``{edge: column}`` plus the shared affix under ``"affix"`` (for
+    ``_affix_sibling``), or ``None`` when no complete set exists."""
+    groups: dict[tuple[str, ...], dict[str, str]] = {}
+    order: dict[tuple[str, ...], int] = {}
+    for pos, col in enumerate(words.columns):
+        tokens = _col_tokens(col)
+        edges = [tok for tok in tokens if tok in _BOX_EDGES]
+        if len(edges) != 1:
+            continue
+        affix = tuple("*" if tok == edges[0] else tok for tok in tokens)
+        group = groups.setdefault(affix, {})
+        if edges[0] not in group:
+            group[edges[0]] = col
+            order.setdefault(affix, pos)
+    complete = [a for a, g in groups.items() if len(g) == len(_BOX_EDGES)]
+    if not complete:
+        return None
+    affix = min(complete, key=order.__getitem__)
+    return {**groups[affix], "affix": affix}
+
+
+def _affix_sibling(
+    words: pd.DataFrame, affix: tuple[str, ...], token: str
+) -> str | None:
+    """The column named like an edge set's affix with ``token`` in the edge's
+    place — ``aoi_width`` beside ``aoi_left`` … ``aoi_bottom``."""
+    want = [token if tok == "*" else tok for tok in affix]
+    return next((col for col in words.columns if _col_tokens(col) == want), None)
+
+
 def propose_word_schema(words: pd.DataFrame) -> dict[str, str | None]:
     """Return a candidate column mapping for words/IA data without erroring."""
+    schema = _propose_word_schema_by_field(words)
+    if all(schema[edge] for edge in _BOX_EDGES):
+        return schema
+    edge_set = _pick_box_edge_set(words)
+    if edge_set is None:
+        return schema
+    affix = edge_set.pop("affix")
+    schema.update(edge_set)
+    # The origin + size fields follow the same set, so the two encodings the
+    # mapping screen offers describe one box rather than two.
+    schema["x"] = schema["x"] or edge_set["left"]
+    schema["y"] = schema["y"] or edge_set["top"]
+    for size in ("width", "height"):
+        schema[size] = _affix_sibling(words, affix, size)
+    return schema
+
+
+def _propose_word_schema_by_field(words: pd.DataFrame) -> dict[str, str | None]:
     return dict(
         participant=pick_column(words, PARTICIPANT_CANDIDATES),
         trial=pick_column(words, TRIAL_CANDIDATES),

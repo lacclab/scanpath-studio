@@ -28,6 +28,7 @@ import contextvars
 import html
 import logging
 import threading
+import time
 from collections.abc import Callable, Hashable, Iterator, Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -417,6 +418,8 @@ class Card:
         self._token: contextvars.Token | None = None
         self._ticker: _Ticker | None = None
         self._revealed = False
+        self._revealed_at: float | None = None
+        self._revealed_by_timer = False
         self.is_open = False
         self._skeleton_ph = self._head = self._detail = self._bar = self._reveal = None
 
@@ -427,6 +430,24 @@ class Card:
     @property
     def revealed(self) -> bool:
         return self._revealed
+
+    @property
+    def was_seen(self) -> bool:
+        """Did this card stand for a wait the user saw?
+
+        Revealed by its timer (the wait outlasted `DELAY_S`), or on screen for at
+        least `DELAY_S` since an immediate reveal (``reveal_now``). A page card
+        revealed at once and taken down a moment later — a quick view switch —
+        was not: nothing should carry its reveal on to the next card.
+        """
+        if not self._revealed:
+            return False
+        if self._revealed_by_timer:
+            return True
+        return (
+            self._revealed_at is not None
+            and time.monotonic() - self._revealed_at >= DELAY_S
+        )
 
     @property
     def task(self) -> progress.Task | None:
@@ -496,13 +517,18 @@ class Card:
         self._reveal.markdown(
             f'<span class="{self._reveal_class}"></span>', unsafe_allow_html=True
         )
+        self._revealed_at = time.monotonic()
         self._revealed = True
+
+    def _show_by_timer(self) -> None:
+        self._show()
+        self._revealed_by_timer = True
 
     def _arm(self, *, delay: float, revealed: bool) -> None:
         ticker = _Ticker(
             delay=delay,
             interval=REFRESH_S,
-            on_reveal=self._paint if revealed else self._show,
+            on_reveal=self._paint if revealed else self._show_by_timer,
             on_tick=self._paint,
         )
         add_script_run_ctx(ticker)
@@ -527,8 +553,20 @@ class Card:
             self._paint()
 
     def finish(self) -> None:
-        if self._task is not None:
-            self._task.finish(duration_key=self._duration_key)
+        """Every step done — and the "last load" time recorded, for a real wait.
+
+        Only a task that took at least `DELAY_S` records its duration: the
+        dataset card opens on every run, and a plain rerun's 0.04 s would
+        otherwise overwrite the real load's time, so a slow load read "last
+        load 0.0 s". A task that is already finished — retired by
+        `Page.release` when something else interrupted the load, an inline
+        download say — records nothing either.
+        """
+        task = self._task
+        if task is None or task.finished:
+            return
+        waited = time.monotonic() - task.started
+        task.finish(duration_key=self._duration_key if waited >= DELAY_S else None)
 
     def _retire(self) -> None:
         """Finish this card's task with no duration key, so a later run's
@@ -614,24 +652,39 @@ class Page:
         return self.card.open(reveal_now=reveal_now)
 
     def release(self) -> bool:
-        """Take the skeleton down; say whether it was showing.
+        """Take the skeleton down; say whether its wait was one the user saw.
 
-        Closes the card *before* reading `revealed`: a concurrently-ticking
-        card could still be mid-`_show()` on its timer thread, and closing
-        joins that thread first, so the read afterwards can't race a reveal
-        that was already underway.
+        A region card opening next shows at once only then (`card`), so a long
+        wait reads as one continuous state — but a page revealed at once for a
+        quick view switch (`Card.was_seen`) must not make the view's first card
+        flash for a frame.
+
+        Closes the card *before* reading it: a concurrently-ticking card could
+        still be mid-`_show()` on its timer thread, and closing joins that
+        thread first, so the read afterwards can't race a reveal that was
+        already underway.
+
+        Once its own slot has cleared, an unfinished task of the card's is
+        retired (finished, no duration): something released the page in the
+        middle of the load — an inline download, say — and the next run must
+        start that load's card afresh, not join a task stopped mid-step. A clear
+        Streamlit aborts (a stopped or superseded run) raises before that point,
+        so an abandoned run's task stays joinable.
         """
         if self._released:
             return False
         self._released = True
-        if self.card is not None and self.card.is_open:
-            self.card.close(keep=True)
-        revealed = bool(self.card is not None and self.card.revealed)
+        card = self.card
+        if card is not None and card.is_open:
+            card.close(keep=True)
+        seen = bool(card is not None and card.was_seen)
         self._slot.empty()
+        if card is not None and card.task is not None and not card.task.finished:
+            card.task.finish()
         state = _RUN.get()
         if state is not None and state.page is self:
             state.page = None
-        return revealed
+        return seen
 
 
 def page(slot, *, view: str, plot_height: int = 480) -> Page:
@@ -662,8 +715,9 @@ def card(
     """A region card for one ``with`` block.
 
     Opening one releases the page skeleton: the view has drawn its controls by
-    the time it reaches its first slow region. When the skeleton was showing,
-    the card shows at once too, so the wait reads as one continuous state.
+    the time it reaches its first slow region. When the skeleton stood for a
+    wait the user saw (`Page.release`), the card shows at once too, so the
+    wait reads as one continuous state.
 
     An ordinary exception from the block retires the card's task (see
     `Card._retire`) before re-raising — a card with an explicit `task_key`
@@ -671,7 +725,7 @@ def card(
     `open()` is inside the ``try`` too, so `close()` still runs (a no-op,
     since it never got to `is_open = True`) if opening itself raises.
     """
-    page_was_showing = release_page()
+    page_was_seen = release_page()
     region = Card(
         slot,
         key=key,
@@ -684,7 +738,7 @@ def card(
         duration_key=duration_key,
     )
     try:
-        region.open(reveal_now=page_was_showing)
+        region.open(reveal_now=page_was_seen)
         yield region
         region.finish()
     except Exception:
@@ -707,18 +761,30 @@ def run_scope() -> Iterator[None]:
     `StopException`/`RerunException` problem `Card.close()` guards against,
     for whatever this run didn't get to close itself. `_KEEP_ON_STOP` (tests
     only) skips it, same as in `close()`.
+
+    A run that ends with an ordinary exception also retires the tasks of the
+    cards it left open (see `Card._retire`) before the exception carries on:
+    nothing will resume them, and a later run must not join a load that
+    failed. A stopped or superseded run (`StopException`/`RerunException`,
+    which are not `Exception`s) leaves them joinable, as `Card.close` does.
     """
     token = _RUN.set(_RunState())
+    failed = False
     try:
         with progress.scope():
             yield
     except progress.Cancelled:
         pass
+    except Exception:
+        failed = True
+        raise
     finally:
         state = _RUN.get()
         if state is not None:
             for opened in list(state.cards):
                 opened._halt()
+                if opened.is_open and failed:
+                    opened._retire()
                 if opened.is_open and not _KEEP_ON_STOP:
                     _clear_off_thread(opened._slot)
             run_page = state.page

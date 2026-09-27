@@ -442,13 +442,17 @@ server has finished.
 
 | Wait | Label | Effect |
 |---|---|---|
-| Dataset load, cold or switching | **Back to *previous dataset*** | Reopens the last dataset that finished loading in this session, instantly from cache. On a fresh start with nothing loaded yet, the Bundled demo. |
+| Dataset load, cold or switching | **Back to *previous dataset*** | Reopens the last dataset you had open in this session, instantly from cache. On a fresh start with nothing open yet, the Bundled demo. |
 | Animation build | **Show static plot** | `single_animate = False`. |
 | Compare's second dataset | **Compare within *A's dataset*** | Returns B to A's dataset (`cmp_dataset` = "This dataset"). |
 | Corpus download (PoTeC, OneStop) | **Stop download** | Stops the transfer and deletes the partial `.part` file. |
 
 - **"Previous dataset" is a new session value,** `_sps_last_loaded_source`:
-  the `data_source_choice` written when a dataset pipeline finishes — it holds
+  the `data_source_choice` written by every run that leaves a dataset on
+  screen (`app._remember_open_dataset`) — a finished pipeline, the ✏️ Author
+  editor (which opens no card), and the early returns for a mapping still to
+  fix or a filter that emptied the pool; never the add-dataset wizard, which
+  shows none. It holds
   the corpus label itself, and `resolve_data_source` re-derives
   `public_dataset_choice` from it. It is not the wizard's `_prev_source`, which only records
   where to return when leaving the add-dataset wizard. The callback writes

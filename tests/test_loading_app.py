@@ -769,6 +769,59 @@ def test_a_view_switch_onto_an_in_flight_load_opens_the_loads_own_card(at, monke
     assert cancel.label.startswith("Back to")
 
 
+def _cancel_labels_of_a_slow_switch_to(at, monkeypatch, target: str) -> list[str]:
+    """Switch to ``target``, frozen mid-load with its card shown: the labels of
+    the Cancel buttons it offers (``[]`` for none)."""
+    monkeypatch.setattr(loading, "DELAY_S", 0)
+    monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
+    monkeypatch.setattr(app, "prepare_data", _stop)
+    at.session_state["_pending_source_choice"] = target
+    at.run()
+    return [button.label for button in at.button if button.key == "sps_cancel_page"]
+
+
+def _emptied(words, fixations, **_kwargs):
+    return words.iloc[0:0], fixations.iloc[0:0]
+
+
+def test_cancel_goes_back_to_the_author_editor_you_had_open(at, monkeypatch):
+    """✏️ Author opens no card, so no pipeline "finished" for it — yet it is
+    where you were, and Cancel went back past it to the demo."""
+    at.session_state["data_source_choice"] = app.AUTHOR_CHOICE
+    at.run()
+    assert not at.exception, at.exception
+    labels = _cancel_labels_of_a_slow_switch_to(at, monkeypatch, SYNTHETIC)
+    assert labels == [f"Back to {app._dataset_display_name(app.AUTHOR_CHOICE)}"]
+
+
+def test_cancel_goes_back_to_a_dataset_whose_mapping_needs_fixing(at, monkeypatch):
+    """A dataset open with its mapping still to fix returns early, before the
+    pipeline finishes — but it is what was on screen."""
+    monkeypatch.setattr(app, "debug_enabled", lambda: True)  # keeps it offered
+    monkeypatch.setattr(app, "prepare_data", _unmappable)
+    at.run()
+    assert not at.exception, at.exception
+    labels = _cancel_labels_of_a_slow_switch_to(at, monkeypatch, app.DEMO_CHOICE)
+    assert labels == [f"Back to {SYNTHETIC}"]
+
+
+def test_cancel_goes_back_to_a_dataset_whose_filters_left_no_trials(at, monkeypatch):
+    monkeypatch.setattr(app, "debug_enabled", lambda: True)  # keeps it offered
+    monkeypatch.setattr(app, "filter_trials", _emptied)
+    at.run()
+    assert not at.exception, at.exception
+    labels = _cancel_labels_of_a_slow_switch_to(at, monkeypatch, app.DEMO_CHOICE)
+    assert labels == [f"Back to {SYNTHETIC}"]
+
+
+def test_the_add_dataset_wizard_is_never_where_cancel_goes_back_to(at):
+    """The wizard shows no dataset — leaving it has its own way back."""
+    at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+    at.run()
+    assert not at.exception, at.exception
+    assert app.LAST_LOADED_SOURCE_KEY not in at.session_state
+
+
 def test_a_hidden_last_loaded_dataset_is_never_offered_as_a_cancel_target(monkeypatch):
     """T8-5: `resolve_data_source` can heal a stale/hidden selection to
     ``entries[0]`` — a Cancel that still read "Back to <hidden dataset>" would

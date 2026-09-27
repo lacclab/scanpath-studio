@@ -6592,9 +6592,9 @@ def _activate_data_source(data_choice: str, *, preproc_host=None) -> dict:
     return preprocessing
 
 
-#: UX-168: the last dataset whose pipeline finished — where Cancel goes back to.
-#: Not the wizard's `_prev_source`, which only records where leaving the
-#: add-dataset wizard returns to.
+#: UX-168: the last dataset a run left on screen — where Cancel goes back to
+#: (`_remember_open_dataset`). Not the wizard's `_prev_source`, which only
+#: records where leaving the add-dataset wizard returns to.
 LAST_LOADED_SOURCE_KEY = "_sps_last_loaded_source"
 #: UX-166: the dataset task this session's pipeline is running, set when the
 #: card opens and cleared when it ends; found still set by the next run, it
@@ -6608,13 +6608,13 @@ def _dataset_cancel(token: str, task_key: tuple) -> loading.Cancel | None:
     """The dataset card's Cancel: only for a load the user started — cold, or
     by switching away from what was already on screen.
 
-    **T8-2:** the last dataset that *finished* loading is where Cancel goes
-    back to, but a rerun of **that same dataset** (a filter change, a
-    re-normalization, a slow step on ✏️ Edit dataset) must offer none at all —
-    there is nothing the user asked to leave, and clicking it would abandon the
-    dataset they are looking at. The Bundled demo is the fallback only when
-    nothing has finished loading yet this session, never back to `token` itself
-    either way.
+    **T8-2:** the last dataset a run left on screen (`_remember_open_dataset`)
+    is where Cancel goes back to, but a rerun of **that same dataset** (a filter
+    change, a re-normalization, a slow step on ✏️ Edit dataset) must offer none
+    at all — there is nothing the user asked to leave, and clicking it would
+    abandon the dataset they are looking at. The Bundled demo is the fallback
+    only when no dataset has been on screen yet this session, never back to
+    `token` itself either way.
 
     **T8-5:** `back` must also be a dataset this run can actually open —
     `resolve_data_source` heals a stale/hidden/removed selection to
@@ -6744,16 +6744,31 @@ def _open_dataset_card(
     )
 
 
-def _finish_dataset_card(card: loading.Card | None) -> None:
-    """UX-166: the pipeline finished — every step ✓, the skeleton left up."""
-    if card is None:
+def _remember_open_dataset(data_choice: str) -> None:
+    """UX-168: the dataset this run leaves on screen is where Cancel goes back to.
+
+    Recorded on every path that leaves a dataset showing, not only a finished
+    pipeline: the ✏️ Author editor (which opens no card), a dataset whose
+    mapping still needs fixing, one whose filters left no trials — "Back to"
+    must name the dataset you had open, not one further back. Never for the
+    add-dataset wizard (``UPLOAD_CHOICE``), which shows no dataset and has its
+    own way back (`_prev_source`). The value is the dataset card's own token.
+    """
+    if data_choice == UPLOAD_CHOICE:
         return
-    card.finish()
-    card.close(keep=True)
     st.session_state[LAST_LOADED_SOURCE_KEY] = str(
-        st.session_state.get("data_source_choice") or ""
+        st.session_state.get("data_source_choice") or data_choice
     )
-    st.session_state.pop(DATASET_TASK_KEY, None)
+
+
+def _finish_dataset_card(card: loading.Card | None, data_choice: str) -> None:
+    """UX-166: the pipeline finished — every step ✓, the skeleton left up — and
+    the dataset is on screen (`_remember_open_dataset`), card or none."""
+    if card is not None:
+        card.finish()
+        card.close(keep=True)
+        st.session_state.pop(DATASET_TASK_KEY, None)
+    _remember_open_dataset(data_choice)
 
 
 def main() -> None:
@@ -7306,18 +7321,24 @@ def _run_app() -> None:
         finalizing=bool(st.session_state.pop("_wizard_finalizing", False)),
     )
 
-    def _end_loading() -> None:
+    def _end_loading(*, showing_dataset: bool = True) -> None:
         """Take the dataset card and the page skeleton down on an early return.
 
         BUG-81: only the normal path cleared the old loading banners, so every
         early return (the wizard, a mapping that can't be satisfied, a filter
         that empties the pool) left one above the real content until the next
         click — on the very page the warning had just sent the user to.
+
+        ``showing_dataset``: the run leaves the dataset on screen — a mapping
+        still to fix, a filter that emptied the pool — so it is where Cancel
+        goes back to (UX-168); the add-dataset wizard's return shows none.
         """
         if dataset_card is not None:
             dataset_card.close()
         st.session_state.pop(DATASET_TASK_KEY, None)
         page.release()
+        if showing_dataset:
+            _remember_open_dataset(data_choice)
 
     def _render_datasets_table(words, fixations, raw_gaze) -> None:
         """📂 Available datasets, whenever the Data page is showing its overview.
@@ -7422,7 +7443,7 @@ def _run_app() -> None:
         if wizard_active:
             _render_offpage_setup_notice(data_view)
             _fill_recovery_cache_panel()
-            _end_loading()
+            _end_loading(showing_dataset=False)
             return
     elif data_choice == AUTHOR_CHOICE:
         with view_notices:
@@ -7897,7 +7918,7 @@ def _run_app() -> None:
 
     # UX-166: the load is done; the skeleton stays until the view has drawn its
     # controls and its first slow region opens (see `loading.card`).
-    _finish_dataset_card(dataset_card)
+    _finish_dataset_card(dataset_card, data_choice)
 
     # Render tabbed interface. Animation is now a checkbox inside the Scanpath
     # Visualization tab (no separate Animated Scanpath tab); Bulk Export has its

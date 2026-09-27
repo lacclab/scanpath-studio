@@ -236,16 +236,17 @@ waits run long. Where a card is on screen, the spinners it covers are silenced
 (`show_spinner=False` on the cached loaders the card wraps), so banners no
 longer stack.
 
-## 2. Dataset loads (UX-166)
+### 1.5 Slow work lets the server send
 
-**Slow work lets the server send.** A CPU-bound build on the script thread
-holds the GIL, and the server's event loop needs several handoffs of it to
+A CPU-bound build on the script thread holds the GIL, and the server's event loop needs several handoffs of it to
 send one message, so a run's queue — the card's reveal included — used to
 reach the browser only once the build ended (measured on the cold first
 replay: the rail at 3.2 s, the card never). Inside a task, every checkpoint
 therefore sleeps 1 ms at most every 25 ms (`progress.YIELD_EVERY_S` /
 `YIELD_S`); measured again, the rail arrived at 0.6 s and the card showed on
 time, counting frames.
+
+## 2. Dataset loads (UX-166)
 
 ### 2.1 What the card covers
 

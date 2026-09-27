@@ -15,8 +15,9 @@ from your own experiment.
 While a dataset opens, the page shows a skeleton of the view with the steps of
 the load — reading the files, normalizing them, building the trial list — each
 ticked off with its time. **Back to *dataset*** stops the load and reopens the
-dataset you had before, and a notice offers **Try again**. A dataset opened
-once since the app started opens again without the wait.
+dataset you had before, and a notice offers **Try again**. Opening a dataset
+again skips reading its files — they stay cached until the app restarts — so
+it's quicker the second time.
 
 ## What your data needs
 

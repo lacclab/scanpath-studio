@@ -9,7 +9,7 @@ import json
 import os
 import pickle
 import zlib
-from collections.abc import Callable
+from collections.abc import Callable, Hashable
 from dataclasses import dataclass, replace
 from dataclasses import fields as dataclass_fields
 from functools import partial
@@ -4158,16 +4158,26 @@ ANIM_TASK_KEY = "_sps_anim_task"
 
 
 def _animation_task_key(
-    participant, trial, screen=None, *, compare: tuple | None = None
+    participant,
+    trial,
+    screen=None,
+    *,
+    compare: tuple | None = None,
+    inputs: Hashable | None = None,
 ) -> tuple:
-    """The replay's task key: what it is a replay *of*.
+    """The replay's task key: what it is a replay *of* — its frames.
 
     Keyed by the session alone, a run that stepped to another trial mid-build
     joined the old build's task — two frame loops' counts interleaved on one
-    card while the obsolete build ran on beside the new one. A multipart replay
-    covers one screen, so the screen is part of it (``None`` for a trial with
-    one); ``compare`` is B's ``(participant, trial, screen)`` for a co-replay,
-    and is passed only then — B steps through its own screens (UX-112).
+    card while the obsolete build ran on beside the new one at half the speed.
+    A multipart replay covers one screen, so the screen is part of it (``None``
+    for a trial with one); ``compare`` is B's ``(participant, trial, screen)``
+    for a co-replay, and is passed only then — B steps through its own screens
+    (UX-112). ``inputs`` is the replay's input key (`_ReplayPlan.key`), so a
+    setting that changes the frames — marker size, colours, saccades, the
+    fixation flags or window, drift correction … — is another replay too,
+    while the speed and autoplay, which the frames are built without
+    (PERF-15), are not.
     """
 
     def _identity(who, what, where) -> tuple:
@@ -4176,15 +4186,19 @@ def _animation_task_key(
     key = ("anim", loading.session_id(), *_identity(participant, trial, screen))
     if compare is not None:
         key += _identity(*compare)
+    if inputs is not None:
+        key += (inputs,)
     return key
 
 
 def _claim_animation_task(task_key: tuple) -> None:
-    """Cancel the replay a run was building for another trial, then remember
+    """Cancel the replay a run was building of other frames, then remember
     this one's (UX-169).
 
-    That build is for a trial no longer on screen. The same key — a setting
-    changed mid-build — is left to join, since it may well be the same build.
+    Another trial, screen or B, or a setting that changes the frames: that
+    build is of a replay no longer wanted. The same key — nothing changed but
+    the speed or autoplay, say — joins the build under way, which is exactly
+    the one this run wants.
     """
     previous = st.session_state.get(ANIM_TASK_KEY)
     if previous is not None and tuple(previous) != task_key:
@@ -4193,10 +4207,12 @@ def _claim_animation_task(task_key: tuple) -> None:
 
 
 def _abandon_animation_task() -> None:
-    """This run builds no replay: stop the one an earlier run left building
-    (UX-169) — Animate switched off with its own switch mid-build, or a trial
-    with nothing to animate — rather than let it run on beside this run's
-    figure. Show static plot cancels its build itself (`_cancel_animation`)."""
+    """This Scanpath run builds no replay: stop the one an earlier run left
+    building (UX-169) — Animate switched off with its own switch mid-build, or
+    a trial with nothing to animate — rather than let a replay of frames no
+    longer wanted run on beside this run's figure. Show static plot cancels
+    its build itself (`_cancel_animation`). A run on another view never gets
+    here: a replay left building there lands in the cache for the way back."""
     previous = st.session_state.pop(ANIM_TASK_KEY, None)
     if previous is not None:
         progress.cancel(tuple(previous))
@@ -4211,7 +4227,24 @@ def _release_animation_task(task_key: tuple) -> None:
         st.session_state.pop(ANIM_TASK_KEY, None)
 
 
-def _build_and_render_animation(
+@dataclass(frozen=True)
+class _ReplayPlan:
+    """What one replay is built from, worked out before its card opens (UX-169).
+
+    ``settings`` carries the real clock — speed and autoplay — for the player
+    and the snippet; ``frame_settings`` is the same with the clock fixed
+    (PERF-15), which with B's frames makes ``inputs``, and ``key`` is their
+    fingerprint: the replay cache's key, and the part of the replay's task key
+    (`_animation_task_key`'s ``inputs``) that names its frames.
+    """
+
+    settings: FigureSettings
+    frame_settings: FigureSettings
+    inputs: dict
+    key: tuple
+
+
+def _plan_replay(
     trial_words: pd.DataFrame,
     trial_fixations: pd.DataFrame,
     words_b: pd.DataFrame | None,
@@ -4226,10 +4259,11 @@ def _build_and_render_animation(
     playback_speed: float,
     drift_corrected: bool = False,
     dataset_name_b: str = "",
-):
-    """Build + render the animation figure (single or dual co-animation) in the
-    main column. Returns ``(view, save_slug, file_stem)`` — the replay's
-    `_ReplayView`, whose ``figure()`` is the finished figure (PERF-16).
+) -> _ReplayPlan:
+    """The replay's `_ReplayPlan` — drawing nothing, so the call site can run it
+    before the card opens: the replay's task is keyed by its frames (UX-169).
+    `_build_and_render_animation` builds from exactly this plan, so the key the
+    task was named by and the key the frames are cached under are one value.
 
     ``trial_fixations`` / ``fixations_b`` arrive already drift-corrected (PRE-3 is
     applied once by the caller for all three render paths); ``drift_corrected``
@@ -4272,7 +4306,6 @@ def _build_and_render_animation(
         anim_grid_step_ms=grid_step_ms,
         anim_max_frames=max_frames,
     )
-    _amend_snippet_settings(animation_settings, "animation")
     # PERF-15: the frames depend on neither the speed nor autoplay (BUG-93), nor
     # on the Illustration reasons (the builder never reads them — but a non-1×
     # speed is one, so they change with it). Build and key the replay on fixed
@@ -4287,7 +4320,65 @@ def _build_and_render_animation(
     }
     anim_inputs["fixations_b"] = fixations_b if dual else None
     anim_inputs["words_b"] = words_b if dual else None
-    anim_key = _figure_input_key(trial_words, trial_fixations, anim_inputs)
+    return _ReplayPlan(
+        settings=animation_settings,
+        frame_settings=frame_settings,
+        inputs=anim_inputs,
+        key=_figure_input_key(trial_words, trial_fixations, anim_inputs),
+    )
+
+
+def _build_and_render_animation(
+    trial_words: pd.DataFrame,
+    trial_fixations: pd.DataFrame,
+    words_b: pd.DataFrame | None,
+    fixations_b: pd.DataFrame | None,
+    selected_participant: str,
+    selected_trial: str,
+    compare_participant: str | None,
+    compare_trial: str | None,
+    *,
+    viz_settings: dict,
+    plan: _ReplayPlan | None = None,
+    settings: FigureSettings | None = None,
+    playback_speed: float = 1.0,
+    drift_corrected: bool = False,
+    dataset_name_b: str = "",
+):
+    """Build + render the animation figure (single or dual co-animation) in the
+    main column. Returns ``(view, save_slug, file_stem)`` — the replay's
+    `_ReplayView`, whose ``figure()`` is the finished figure (PERF-16).
+
+    ``plan`` is the `_ReplayPlan` the app's call site worked out for these same
+    arguments before opening the card, since the replay's task is keyed by it
+    (UX-169); given one, ``settings`` / ``playback_speed`` / ``drift_corrected``
+    are not read. A caller without one (the tests) passes those instead, and
+    the plan is worked out here — by the same `_plan_replay`, so there is one
+    derivation of the key either way."""
+    if plan is None:
+        if settings is None:
+            raise TypeError("_build_and_render_animation needs a plan or settings")
+        plan = _plan_replay(
+            trial_words,
+            trial_fixations,
+            words_b,
+            fixations_b,
+            selected_participant,
+            selected_trial,
+            compare_participant,
+            compare_trial,
+            settings=settings,
+            viz_settings=viz_settings,
+            playback_speed=playback_speed,
+            drift_corrected=drift_corrected,
+            dataset_name_b=dataset_name_b,
+        )
+    dual = fixations_b is not None and not fixations_b.empty
+    animation_settings = plan.settings
+    frame_settings = plan.frame_settings
+    anim_inputs = plan.inputs
+    anim_key = plan.key
+    _amend_snippet_settings(animation_settings, "animation")
     playback_speed = animation_settings.playback_speed
     autoplay = animation_settings.autoplay
     reasons = viz_settings.get("illustration_reasons")
@@ -6104,6 +6195,28 @@ def render_single_trial_tab(
                 "animate for this selection."
             )
         elif animate:
+            replay_frames = (
+                trial_words,
+                plot_fixations,
+                compare_meta["words"] if dual_anim else None,
+                plot_compare_fix if dual_anim else None,
+                selected_participant,
+                selected_trial,
+                compare_participant,
+                compare_trial,
+            )
+            dataset_name_b = _compare_dataset_name(compare_meta)
+            # UX-169: planned before the card opens, since the replay's task is
+            # keyed by its frames — a setting that changes them cancels the
+            # build under way — and the build below uses this very plan.
+            replay = _plan_replay(
+                *replay_frames,
+                settings=render_settings,
+                viz_settings=viz_settings,
+                playback_speed=playback_speed,
+                drift_corrected=drift_corrected_primary,
+                dataset_name_b=dataset_name_b,
+            )
             anim_task = _animation_task_key(
                 selected_participant,
                 selected_trial,
@@ -6113,6 +6226,7 @@ def render_single_trial_tab(
                     if dual_anim
                     else None
                 ),
+                inputs=replay.key,
             )
             _claim_animation_task(anim_task)
             with loading.card(
@@ -6129,19 +6243,10 @@ def render_single_trial_tab(
                 ),
             ):
                 anim_view, save_slug, anim_file_stem = _build_and_render_animation(
-                    trial_words,
-                    plot_fixations,
-                    compare_meta["words"] if dual_anim else None,
-                    plot_compare_fix if dual_anim else None,
-                    selected_participant,
-                    selected_trial,
-                    compare_participant,
-                    compare_trial,
-                    dataset_name_b=_compare_dataset_name(compare_meta),
-                    settings=render_settings,
+                    *replay_frames,
                     viz_settings=viz_settings,
-                    playback_speed=playback_speed,
-                    drift_corrected=drift_corrected_primary,
+                    plan=replay,
+                    dataset_name_b=dataset_name_b,
                 )
             _release_animation_task(anim_task)
             if comparing and cross_dataset and not compare_comparable:

@@ -411,10 +411,15 @@ as a skeleton. No flag has to track whether a figure is on screen.
     `_cached_replay_view`; UX-169 sets its `show_spinner=False`, since the card
     replaces it.
   - On a cache hit no frame is built, so the card never appears.
-  - Its task is keyed by the trial and its screen (and B's, for a co-replay),
-    and remembered in `_sps_anim_task` while the build runs: stepping to another
-    trial or screen mid-build cancels the replay being built for the last one; a
-    setting change on the same one joins it. A run that builds no replay —
+  - Its task is keyed by what it is a replay *of*: the trial and its screen
+    (and B's, for a co-replay) and the replay's own input key — `anim_key`, the
+    replay cache's key, built with the clock fixed (PERF-15) and worked out
+    before the card opens (`tabs._plan_replay`) — and remembered in
+    `_sps_anim_task` while the build runs. Stepping to another trial or screen,
+    or a setting that changes the frames (marker size, colours, saccades, the
+    fixation flags or window, drift correction …), mid-build cancels the build
+    of the replay no longer wanted; a speed or autoplay change keeps the key and
+    joins it. A run that builds no replay —
     Animate switched off, or a trial with nothing to animate — cancels a
     remembered one too.
   - Cancel: "Show static plot" (§4).

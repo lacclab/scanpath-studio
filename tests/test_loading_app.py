@@ -827,15 +827,16 @@ def test_stepping_to_another_trial_cancels_the_replay_built_for_the_last(at):
 
 
 def test_the_same_trial_joins_the_replay_being_built(at, monkeypatch):
-    """A rerun that opens the card for the trial still being built — a setting
-    change mid-build, say — joins that build's task rather than cancelling it."""
+    """A rerun that opens the card for the replay still being built — nothing
+    changed that the frames are built from — joins that build's task rather
+    than cancelling it."""
     at.session_state["single_animate"] = True
     monkeypatch.setattr(tabs, "_build_and_render_animation", _stop)  # mid-build
     at.run()
     key = tuple(at.session_state[ANIM_TASK])
     shown = at.session_state["_share_selection"]
     assert key[0] == "anim"
-    assert key[2:] == (
+    assert key[2:5] == (
         str(shown["participant_id"]),
         str(shown["trial_id"]),
         shown.get("screen_id"),  # None: a single-screen trial
@@ -845,6 +846,43 @@ def test_the_same_trial_joins_the_replay_being_built(at, monkeypatch):
     at.run()
     assert not task.cancelled
     assert begun[key] is task
+
+
+def _a_replay_left_building(at, monkeypatch) -> tuple[tuple, progress.Task]:
+    """Animate on, the build frozen mid-way — its task held, so it stays live."""
+    at.session_state["single_animate"] = True
+    monkeypatch.setattr(tabs, "_build_and_render_animation", _stop)  # mid-build
+    at.run()
+    assert not at.exception, at.exception
+    building = tuple(at.session_state[ANIM_TASK])
+    return building, progress.begin(building, title="Building the animation")
+
+
+def test_a_setting_that_changes_the_frames_cancels_the_replay_being_built(
+    at, monkeypatch
+):
+    """A replay is a replay of its frames: a rail setting that changes them —
+    the saccades switched off here — makes the build under way an obsolete one.
+    Joined, two frame loops counted into one card, and the old build, which
+    nothing could cancel, ran to its end beside the new one at half the speed."""
+    building, task = _a_replay_left_building(at, monkeypatch)
+    at.session_state["global_show_saccades"] = False
+    at.run()
+    assert not at.exception, at.exception
+    assert task.cancelled
+    assert tuple(at.session_state[ANIM_TASK]) != building
+
+
+def test_a_speed_change_joins_the_replay_being_built(at, monkeypatch):
+    """The speed reaches only the player's clock (PERF-15) — the frames are
+    built at ×1 whatever it is — so the build under way is the one this run
+    wants: the same key, and nothing cancelled."""
+    building, task = _a_replay_left_building(at, monkeypatch)
+    at.session_state["single_playback_speed"] = 2.0
+    at.run()
+    assert not at.exception, at.exception
+    assert tuple(at.session_state[ANIM_TASK]) == building
+    assert not task.cancelled
 
 
 TWO_SCREENS = "Two screens"

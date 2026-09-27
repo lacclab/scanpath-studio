@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 import threading
 
 import pytest
@@ -255,8 +256,11 @@ def _task_script():
     from scanpath_studio import loading, progress
 
     with loading.run_scope():
-        with loading.card(st.empty(), key="p", title="t", task_key=("k", "run")):
+        with loading.card(
+            st.empty(), key="p", title="t", task_key=("k", "run")
+        ) as opened:
             st.session_state["active_inside"] = progress.active() is not None
+            st.session_state["task"] = opened.task  # held past the run
         st.session_state["active_after"] = progress.active() is not None
 
 
@@ -265,7 +269,27 @@ def test_a_card_activates_its_task_and_finishes_it_on_a_clean_exit():
     assert not at.exception
     assert at.session_state["active_inside"] is True
     assert at.session_state["active_after"] is False
-    assert progress._REGISTRY[("k", "run")].finished is True
+    assert at.session_state["task"].finished is True
+
+
+def _finished_card_script():
+    import streamlit as st
+
+    from scanpath_studio import loading
+
+    with loading.run_scope():
+        with loading.card(st.empty(), key="gone", title="t", task_key=("k", "gone")):
+            pass
+
+
+def test_a_runs_task_leaves_the_registry_once_the_run_is_over():
+    """UX-165: every task key carries the session id, so a registry that kept
+    each task for the life of the server grew with every session. A task stays
+    registered exactly while something holds it — during the run, its card."""
+    at = AppTest.from_function(_finished_card_script).run()
+    assert not at.exception
+    gc.collect()
+    assert ("k", "gone") not in progress._REGISTRY
 
 
 def _failing_card_script():
@@ -428,7 +452,8 @@ def _failing_run_script():
 
     with loading.run_scope():
         page = loading.page(st.empty(), view="scanpath")
-        page.open_card(title="Loading", task_key=("k", "failed-run"))
+        card = page.open_card(title="Loading", task_key=("k", "failed-run"))
+        st.session_state["task"] = card.task  # held past the run
         raise ValueError("the pipeline broke")
 
 
@@ -437,7 +462,7 @@ def test_a_run_that_fails_retires_its_open_cards_tasks():
     not join it; the error itself still reaches the page."""
     at = AppTest.from_function(_failing_run_script).run()
     assert at.exception
-    assert progress._REGISTRY[("k", "failed-run")].finished is True
+    assert at.session_state["task"].finished is True
 
 
 def _stopped_run_script():
@@ -447,14 +472,19 @@ def _stopped_run_script():
 
     with loading.run_scope():
         page = loading.page(st.empty(), view="scanpath")
-        page.open_card(title="Loading", task_key=("k", "stopped-run"))
+        card = page.open_card(title="Loading", task_key=("k", "stopped-run"))
+        # Held past the run, as a superseded run's still-computing thread holds
+        # it: the case joining exists for.
+        st.session_state["task"] = card.task
         st.stop()
 
 
 def test_a_stopped_run_leaves_its_open_cards_tasks_joinable():
     at = AppTest.from_function(_stopped_run_script).run()
     assert not at.exception
-    assert progress._REGISTRY[("k", "stopped-run")].finished is False
+    task = at.session_state["task"]
+    assert task.finished is False
+    assert progress.begin(("k", "stopped-run"), title="Loading") is task
 
 
 def _last_load_script():

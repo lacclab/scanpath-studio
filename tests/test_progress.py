@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 import threading
 
 import pytest
@@ -71,6 +72,36 @@ def test_begin_joins_a_running_task_but_not_a_finished_or_cancelled_one():
     assert second is not first
     second.cancel()
     assert progress.begin(("t", "join"), title="x") is not second
+
+
+def test_a_task_a_running_thread_holds_stays_joinable_and_goes_once_let_go():
+    """A superseded run whose thread is still computing a load is what joining
+    is for: while it holds its task, a new run's `begin` joins that task. Once
+    nothing holds it, it leaves the registry, so the next `begin` starts afresh
+    rather than keeping every session's tasks for the life of the server."""
+    started, release = threading.Event(), threading.Event()
+
+    def superseded_run():
+        with progress.task(("t", "held"), title="Loading PoTeC"):
+            started.set()
+            release.wait(timeout=5)
+
+    worker = threading.Thread(target=superseded_run, daemon=True)
+    worker.start()
+    try:
+        assert started.wait(timeout=5)
+        gc.collect()
+        joined = progress.begin(("t", "held"), title="Loading again")
+        title = joined.snapshot().title
+        del joined  # hold nothing past this point
+        assert title == "Loading PoTeC"  # the running task, joined
+    finally:
+        release.set()
+        worker.join(timeout=5)
+    gc.collect()
+    assert ("t", "held") not in progress._REGISTRY
+    fresh = progress.begin(("t", "held"), title="Loading again")
+    assert fresh.snapshot().title == "Loading again"
 
 
 def test_begin_fresh_replaces_any_existing_record_even_mid_flight():

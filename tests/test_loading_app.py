@@ -157,12 +157,30 @@ def test_a_view_switch_card_has_a_task_of_its_own(at, monkeypatch):
     monkeypatch.setattr(loading, "REFRESH_S", 30)
     monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
     monkeypatch.setattr(app, "prepare_data", _stop)
+    begun = _hold_every_task(monkeypatch)
     pin_view(at, _VIEW_CORPUS)
     at.run()
     kind, session, token = at.session_state[app.DATASET_TASK_KEY]
     assert (kind, token) == ("dataset", SYNTHETIC)
-    view_task = progress._REGISTRY[("card", session, loading.PAGE_CARD_KEY)]
+    view_task = begun[("card", session, loading.PAGE_CARD_KEY)]
     assert view_task.snapshot().title == "Opening Corpus Analysis"
+
+
+def _hold_every_task(monkeypatch) -> dict:
+    """Keep every task `progress.begin` hands out, by key, past its run.
+
+    The registry keeps a task only while something holds it, and a run's cards
+    are gone once it ends; this is how a test reads a task a run began.
+    """
+    begun: dict = {}
+    real_begin = progress.begin
+
+    def _begin(key, **kwargs):
+        begun[key] = real_begin(key, **kwargs)
+        return begun[key]
+
+    monkeypatch.setattr(progress, "begin", _begin)
+    return begun
 
 
 # UX-166 — a card over work that is cheap on a cache hit shows only for real work.

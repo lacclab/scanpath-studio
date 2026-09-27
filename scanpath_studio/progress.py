@@ -36,6 +36,7 @@ from __future__ import annotations
 import contextvars
 import threading
 import time
+import weakref
 from collections.abc import Hashable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -218,7 +219,12 @@ class Task:
             )
 
 
-_REGISTRY: dict[Hashable, Task] = {}
+#: Every task key carries the session id, so a plain dict here kept every task of
+#: every session for the life of the server. Weak: a task stays registered
+#: exactly while something holds it — its card during the run, and a superseded
+#: run's thread while that is still computing it, the case joining exists for.
+_REGISTRY: weakref.WeakValueDictionary[Hashable, Task] = weakref.WeakValueDictionary()
+#: One float per duration key (a dataset name), so this one stays a plain dict.
 _DURATIONS: dict[Hashable, float] = {}
 _REGISTRY_LOCK = threading.Lock()
 _ACTIVE: contextvars.ContextVar[Task | None] = contextvars.ContextVar(
@@ -232,8 +238,9 @@ def begin(
     """The task for ``key`` — the one already running, or a new one.
 
     Joining is what lets a rerun that interrupted a load keep showing that
-    load's counts instead of starting from zero. A finished or cancelled task
-    is never joined: its record is replaced. ``fresh=True`` replaces any
+    load's counts instead of starting from zero — while the interrupted run's
+    thread still holds the task (`_REGISTRY` is weak). A finished or cancelled
+    task is never joined: its record is replaced. ``fresh=True`` replaces any
     existing record unconditionally, even one still mid-flight — for a caller
     with no stable identity to join across runs in the first place (e.g. a
     region card opened with no explicit task key).

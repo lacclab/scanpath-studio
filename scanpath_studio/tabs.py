@@ -4116,6 +4116,12 @@ def _compare_dataset_name(compare_meta: dict | None) -> str:
     return str((compare_meta or {}).get("dataset") or current_dataset_name())
 
 
+def _cancel_animation(task_key: tuple) -> None:
+    """UX-169: Cancel on the animation card — back to the static plot."""
+    progress.cancel(task_key)
+    st.session_state["single_animate"] = False
+
+
 def _build_and_render_animation(
     trial_words: pd.DataFrame,
     trial_fixations: pd.DataFrame,
@@ -4246,6 +4252,9 @@ def _build_and_render_animation(
             anim_inputs["words_b"],
             anim_key=anim_key,
         )
+        # UX-169: the frames exist; what is left is the player — the clock, the
+        # labels and the 10 MB of markup `_ReplayView.from_figure` writes.
+        progress.step_to(1)
         set_replay_clock(
             fig, frame_step_ms, playback_speed=playback_speed, autoplay=autoplay
         )
@@ -6004,12 +6013,18 @@ def render_single_trial_tab(
                 "animate for this selection."
             )
         elif animate:
+            anim_task = ("anim", loading.session_id())
             with loading.card(
                 plot_loading_slot,
                 key="single_anim",
                 title="Building the animation",
+                steps=("Building frames", "Preparing the player"),
                 size=loading.plot_size(
                     "single_anim", canvas_width, canvas_height, animation=True
+                ),
+                task_key=anim_task,
+                cancel=loading.Cancel(
+                    "Show static plot", _cancel_animation, args=(anim_task,)
                 ),
             ):
                 anim_view, save_slug, anim_file_stem = _build_and_render_animation(

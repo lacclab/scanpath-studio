@@ -606,3 +606,21 @@ def test_a_hidden_last_loaded_dataset_is_never_offered_as_a_cancel_target(monkey
     test.run()  # loading Synthetic, with the demo hidden since it last finished
     with pytest.raises(KeyError):
         test.button(key="sps_cancel_page")
+
+
+# UX-169 — the animation card's Cancel switches Animate off.
+
+
+def _animation_cancel_script():
+    import streamlit as st
+
+    from scanpath_studio import tabs
+
+    st.session_state.setdefault("single_animate", True)
+    st.button("x", key="c", on_click=tabs._cancel_animation, args=(("anim", "k"),))
+
+
+def test_the_animation_cancel_switches_animate_off():
+    at = AppTest.from_function(_animation_cancel_script).run()
+    at.button(key="c").click().run()
+    assert at.session_state["single_animate"] is False

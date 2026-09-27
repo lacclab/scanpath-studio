@@ -6,7 +6,8 @@ import threading
 
 import pytest
 
-from scanpath_studio import progress
+from scanpath_studio import api, progress
+from scanpath_studio.synthetic import load_synthetic_data
 
 
 def test_calls_without_an_active_task_do_nothing():
@@ -167,6 +168,17 @@ def test_a_cancelled_task_raises_before_it_yields(fake_time):
         with pytest.raises(progress.Cancelled):
             progress.report(0, 10)
     assert fake_time.sleeps == []
+
+
+def test_building_a_replay_reports_every_frame():
+    words, fixations = api.load_scanpath_data(*load_synthetic_data())
+    pid = str(fixations["participant_id"].iloc[0])
+    trial = str(fixations["trial_id"].iloc[0])
+    with progress.task(("t", "replay"), title="x", steps=("Building frames",)) as task:
+        fig = api.animate_scanpath(words, fixations, pid, trial)
+    snap = task.snapshot()
+    assert snap.unit == "frames"
+    assert snap.done == snap.total == len(fig.frames)
 
 
 def test_two_threads_reporting_to_one_task_share_one_yield(monkeypatch):

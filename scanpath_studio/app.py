@@ -6655,7 +6655,8 @@ def _render_cancelled_load_notice(host) -> None:
     row = host.container(
         key="sps_cancelled_notice", horizontal=True, vertical_alignment="center"
     )
-    row.caption(f"Stopped loading **{note['name']}**.")
+    # As wide as its words, so Try again sits beside them, not across the page.
+    row.caption(f"Stopped loading **{note['name']}**.", width="content")
     row.button(
         "Try again",
         key="sps_try_again",

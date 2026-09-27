@@ -26,6 +26,7 @@ import pytest
 import streamlit as st
 
 from scanpath_studio import data as data_module
+from scanpath_studio import progress
 from scanpath_studio.data import _shared_build, frame_cache
 
 #: Every threaded test below is fully deterministic (Event-based, no sleeps)
@@ -470,6 +471,115 @@ class TestSharedBuild:
         assert result == "value"
         assert calls == [1]
         assert ident not in data_module._INFLIGHT
+
+    def test_waiting_on_a_build_in_flight_counts_as_work(self, monkeypatch):
+        """UX-166: a rerun that lands on another run's build waits for it, and
+        the owner's reports go to the owner's task — so the waiter reports once
+        itself, or a gated card over the wait (the Corpus measures) never shows."""
+        monkeypatch.setattr(data_module, "_InFlight", _FlagWaitInFlight)
+        ident = ("s", "waiting-is-work")
+        registered, release = threading.Event(), threading.Event()
+        waiting_task = progress.Task(("t", "waiter"), title="Computing")
+
+        def build():
+            registered.set()
+            release.wait()
+            return "measures"
+
+        def waiter_call():
+            token = progress.activate(waiting_task)
+            try:
+                _shared_build(ident, _must_not_run)
+            finally:
+                progress.deactivate(token)
+
+        owner = _run_daemon(lambda: _shared_build(ident, build))
+        with _released_afterward(release):
+            _wait_or_fail(registered, msg="owner never started building")
+            entry = data_module._INFLIGHT[ident]
+            waiter = _run_daemon(waiter_call)
+            _wait_or_fail(entry.done.waiting, msg="waiter never reached done.wait()")
+            worked_while_waiting = waiting_task.worked
+        _join_or_fail(owner)
+        _join_or_fail(waiter)
+        assert worked_while_waiting is True
+
+    def test_a_cancelled_waiter_stops_before_it_waits(self, monkeypatch):
+        """The waiter's report is a cancel checkpoint too: a waiter whose own task
+        was cancelled stops at once instead of waiting out a build it no longer
+        wants."""
+        monkeypatch.setattr(data_module, "_InFlight", _FlagWaitInFlight)
+        ident = ("s", "cancelled-waiter")
+        registered, release = threading.Event(), threading.Event()
+        cancelled_task = progress.Task(("t", "cancelled-waiter"), title="Computing")
+        cancelled_task.cancel()
+        raised = []
+
+        def build():
+            registered.set()
+            release.wait()
+            return "measures"
+
+        def waiter_call():
+            token = progress.activate(cancelled_task)
+            try:
+                _shared_build(ident, _must_not_run)
+            except progress.Cancelled as exc:
+                raised.append(exc)
+            finally:
+                progress.deactivate(token)
+
+        owner = _run_daemon(lambda: _shared_build(ident, build))
+        with _released_afterward(release):
+            _wait_or_fail(registered, msg="owner never started building")
+            entry = data_module._INFLIGHT[ident]
+            waiter = _run_daemon(waiter_call)
+            # Joined while the owner is still building: it did not wait for it.
+            waiter.join(timeout=2)
+            finished_first = not waiter.is_alive()
+            waited = entry.done.waiting.is_set()
+        _join_or_fail(owner)
+        _join_or_fail(waiter)
+        assert finished_first and not waited
+        assert raised
+
+    def test_a_waiter_on_the_owners_own_task_leaves_its_count(self, monkeypatch):
+        """A rerun that joined the load's task (the dataset card's explicit key)
+        and then waits on that load's build reports into the very task the
+        owner is counting in — which must not wipe the owner's live count."""
+        monkeypatch.setattr(data_module, "_InFlight", _FlagWaitInFlight)
+        ident = ("s", "joined-waiter")
+        registered, release = threading.Event(), threading.Event()
+        shared = progress.Task(("t", "joined-waiter"), title="Normalizing")
+
+        def build():
+            progress.report(1, 3, detail="fixations")
+            registered.set()
+            release.wait()
+            return "normalized"
+
+        def under_the_shared_task(call):
+            def run():
+                token = progress.activate(shared)
+                try:
+                    call()
+                finally:
+                    progress.deactivate(token)
+
+            return run
+
+        owner = _run_daemon(under_the_shared_task(lambda: _shared_build(ident, build)))
+        with _released_afterward(release):
+            _wait_or_fail(registered, msg="owner never started building")
+            entry = data_module._INFLIGHT[ident]
+            waiter = _run_daemon(
+                under_the_shared_task(lambda: _shared_build(ident, _must_not_run))
+            )
+            _wait_or_fail(entry.done.waiting, msg="waiter never reached done.wait()")
+            snap = shared.snapshot()
+        _join_or_fail(owner)
+        _join_or_fail(waiter)
+        assert (snap.done, snap.total, snap.detail) == (1, 3, "fixations")
 
 
 @pytest.mark.timeout(_THREAD_TEST_TIMEOUT)

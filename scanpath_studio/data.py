@@ -276,6 +276,13 @@ def _shared_build(
                 with _INFLIGHT_LOCK:
                     _INFLIGHT.pop(ident, None)
                 entry.done.set()
+        # UX-166: waiting on a build another run started is this run's work too
+        # — the owner reports into its own task, so without this a gated card
+        # over the wait (the Corpus measures, opened afresh each run) never
+        # shows. It is also a cancel checkpoint: a waiter whose own task was
+        # cancelled stops here instead of waiting out a build it no longer
+        # wants. A hit returned above, so an all-hit rerun never gets here.
+        progress.report()
         entry.done.wait()
         if entry.ok:
             if publish is not None:

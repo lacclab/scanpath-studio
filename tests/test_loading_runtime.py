@@ -377,6 +377,66 @@ def test_a_release_streamlit_aborts_leaves_the_task_joinable():
     assert at.session_state["retired"] is False
 
 
+def _waiting_card_script():
+    import threading
+    import time
+
+    import streamlit as st
+    from streamlit.runtime.scriptrunner import add_script_run_ctx
+
+    from scanpath_studio import data, loading
+
+    building, release = threading.Event(), threading.Event()
+
+    def earlier_runs_build():
+        building.set()
+        release.wait(timeout=5)
+        return "measures"
+
+    with loading.run_scope():
+        # An earlier run of this session, still computing: its thread owns the
+        # build and reports into a task of its own, never this run's.
+        earlier = threading.Thread(
+            target=lambda: data.frame_cache("t_waiter", "key", earlier_runs_build),
+            daemon=True,
+        )
+        add_script_run_ctx(earlier)
+        earlier.start()
+        building.wait(timeout=5)
+        with loading.card(
+            st.empty(),
+            key="waiting",
+            title="Computing reading measures",
+            reveal_on_work=True,
+        ) as card:
+
+            def release_once_shown():
+                deadline = time.monotonic() + 1.5
+                while not card.revealed and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                release.set()
+
+            threading.Thread(target=release_once_shown, daemon=True).start()
+            st.session_state["waited_for"] = data.frame_cache(
+                "t_waiter", "key", lambda: "rebuilt"
+            )
+            st.session_state["waiter_revealed"] = card.revealed
+        earlier.join(timeout=5)
+
+
+def test_a_gated_card_over_a_build_another_run_owns_shows(monkeypatch):
+    """A click that leaves the Corpus pool unchanged lands on the measures the
+    last run is still computing: this run's card begins a fresh task and waits
+    in `frame_cache` for that build. The wait is this run's work, so the card
+    shows for it."""
+    monkeypatch.setattr(loading, "DELAY_S", 0.05)
+    monkeypatch.setattr(loading, "REFRESH_S", 0.02)
+    at = AppTest.from_function(_waiting_card_script, default_timeout=10).run()
+    assert not at.exception, at.exception
+    assert at.session_state["waited_for"] == "measures"  # the earlier run's build
+    assert at.session_state["waiter_revealed"] is True
+
+
 def _timed_card_script():
     import streamlit as st
 

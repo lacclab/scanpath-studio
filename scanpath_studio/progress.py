@@ -157,9 +157,17 @@ class Task:
         unit: str = "",
         detail: str | None = None,
     ) -> None:
+        """Record progress — and that work is happening (:attr:`worked`).
+
+        A bare ``report()`` (no count, unit or detail) only does the latter,
+        leaving the count as it is: a run that waits on a build another run is
+        counting into the same, joined task must not wipe that count.
+        """
         self._checkpoint()
         with self._lock:
             self._worked = True
+            if done is None and total is None and not unit and detail is None:
+                return
             self._done = done
             self._total = total
             if unit:
@@ -300,7 +308,8 @@ def report(
 ) -> None:
     """Record progress on the active task — a no-op without one.
 
-    Any call, a bare ``report()`` included, marks the task as having worked.
+    Any call, a bare ``report()`` included, marks the task as having worked;
+    a bare one leaves its count alone (see :meth:`Task.report`).
     """
     current = _ACTIVE.get()
     if current is not None:

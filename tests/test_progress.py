@@ -43,6 +43,18 @@ def test_a_report_marks_its_task_as_having_worked_but_a_step_does_not():
         assert task.worked is True
 
 
+def test_a_bare_report_marks_work_and_leaves_the_count_alone():
+    """A bare ``report()`` says work is happening — and is a cancel checkpoint —
+    but counts nothing: a run waiting on a build that another run is counting
+    into the same, joined task must not wipe that build's live "1 of 3"."""
+    with progress.task(("t", "bare"), title="Normalizing") as task:
+        progress.report(1, 3, detail="fixations")
+        progress.report()
+        snap = task.snapshot()
+    assert (snap.done, snap.total, snap.detail) == (1, 3, "fixations")
+    assert task.worked is True
+
+
 def test_step_to_never_moves_back():
     with progress.task(("t", "back"), title="x", steps=("a", "b", "c")) as task:
         progress.step_to(2)

@@ -202,7 +202,8 @@ button.
   delay. They are gated (`reveal_on_work`): past the delay, the timer reveals
   one only once its task has reported — a miss — checking again at each
   refresh. Every build they cover reports on a miss; one with no loop to count
-  calls a bare `report()` first thing.
+  calls a bare `report()` first thing. Waiting on another run's build in
+  flight counts too: the waiter reports once before it waits.
 - **The area holds its final size from the first instant,** so nothing jumps
   even when the card never appears (§2.2, §3.1).
 - **The card refreshes about four times a second** — elapsed time, counts and

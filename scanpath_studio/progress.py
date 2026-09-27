@@ -113,9 +113,16 @@ class Task:
         module docstring) at most every ``YIELD_EVERY_S``."""
         if self._cancelled.is_set():
             raise Cancelled(self.key)
-        if _clock() - self._last_yield >= YIELD_EVERY_S:
+        # The slot is claimed under the lock, before the sleep, so two threads
+        # reporting to one joined task take one yield per window between them;
+        # the sleep is outside it, since the card's timer reads snapshots under
+        # this lock.
+        with self._lock:
+            due = _clock() - self._last_yield >= YIELD_EVERY_S
+            if due:
+                self._last_yield = _clock()
+        if due:
             _sleep(YIELD_S)
-            self._last_yield = _clock()
 
     def report(
         self,

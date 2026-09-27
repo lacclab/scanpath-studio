@@ -167,3 +167,32 @@ def test_a_cancelled_task_raises_before_it_yields(fake_time):
         with pytest.raises(progress.Cancelled):
             progress.report(0, 10)
     assert fake_time.sleeps == []
+
+
+def test_two_threads_reporting_to_one_task_share_one_yield(monkeypatch):
+    """A joined task is reported to from two threads. The slot is claimed under
+    the task's lock *before* the sleep, so while one thread sleeps the other
+    sees the window taken — one yield per window, not one per thread."""
+    sleeps: list[float] = []
+    in_sleep = threading.Event()
+    release = threading.Event()
+
+    def sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+        if len(sleeps) == 1:  # hold the first sleeper mid-yield
+            in_sleep.set()
+            release.wait(timeout=5)
+
+    monkeypatch.setattr(progress, "_clock", lambda: 100.0)
+    monkeypatch.setattr(progress, "_sleep", sleep)
+    task = progress.Task(("t", "joined"), title="Building")
+    first = threading.Thread(target=task.report, args=(0, 10), daemon=True)
+    first.start()
+    try:
+        assert in_sleep.wait(timeout=5)
+        task.report(1, 10)  # the second thread, mid-way through the first's yield
+    finally:
+        release.set()
+        first.join(timeout=5)
+    assert not first.is_alive()
+    assert sleeps == [progress.YIELD_S]

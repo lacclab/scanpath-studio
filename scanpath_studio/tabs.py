@@ -7228,7 +7228,7 @@ def render_corpus_analysis_tab(
             )
 
 
-@st.cache_data(show_spinner="Computing sentence measures…")
+@st.cache_data(show_spinner="Computing sentence measures…", show_time=True)
 def _c_sentence_measures(_words, _fix, fwkey, ffkey):
     from scanpath_studio.preprocessing import sentence_measures
 
@@ -9193,7 +9193,7 @@ def _render_raw_metadata_tab(label: str, attached, id_note: str) -> None:
     _render_raw_table(attached.frame)
 
 
-@st.cache_data(show_spinner="Building stimuli list…")
+@st.cache_data(show_spinner="Building stimuli list…", show_time=True)
 def _build_stimuli_table_cached(_words: pd.DataFrame, cache_key) -> pd.DataFrame:
     """One row per Text ID, with the stimulus text reconstructed from its words.
 
@@ -9347,7 +9347,7 @@ def _fill_raw_data_tabs(
 # -----------------------------------------------------------------------------
 
 
-@st.cache_data(show_spinner="Computing dataset statistics…")
+@st.cache_data(show_spinner="Computing dataset statistics…", show_time=True)
 def _dataset_statistics(
     _words: pd.DataFrame,
     _fixations: pd.DataFrame,
@@ -11439,7 +11439,7 @@ def _render_arrived_provenance_note(snapshot, *, host=None) -> None:
     )
 
 
-@st.cache_data(show_spinner="Building the derived analysis tables…")
+@st.cache_data(show_spinner="Building the derived analysis tables…", show_time=True)
 def _c_derived_tables(
     _words: pd.DataFrame,
     _fixations: pd.DataFrame,

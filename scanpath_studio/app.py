@@ -3257,7 +3257,7 @@ def _uploaded_file_key(uploaded) -> tuple:
     )
 
 
-@st.cache_data(show_spinner="Reading uploaded data…")
+@st.cache_data(show_spinner="Reading uploaded data…", show_time=True)
 def _read_uploaded_table_cached(
     _uploaded, file_key, kind=None, chosen=(), text_column=None, identity=()
 ) -> pd.DataFrame:
@@ -3277,7 +3277,7 @@ def _read_uploaded_table_cached(
     return read_table(_uploaded, plan=plan)
 
 
-@st.cache_data(show_spinner="Reading uploaded data…")
+@st.cache_data(show_spinner="Reading uploaded data…", show_time=True)
 def _read_uploaded_tables_cached(
     _uploaded_list, file_keys, kind=None, chosen=(), text_column=None, identity=()
 ) -> pd.DataFrame:

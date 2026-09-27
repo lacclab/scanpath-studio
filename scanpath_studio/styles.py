@@ -199,45 +199,135 @@ def get_app_css() -> str:
     }
     div[data-testid="stPopoverBody"] p { line-height: 1.45; }
 
-    /* === Emphasised loading spinner ============================================
-       The cache_data spinners ("Reading uploaded data…", "Normalizing data…", …)
-       can run for a while on a large upload, so make them an unmissable pulsing
-       banner instead of a small inline spinner. Blue tint + border reads on both
-       the light and dark themes; the keyframes are scoped so the app-wide
-       "animation: none" rules above don't kill the pulse or the spin. */
+    /* === Streamlit's spinners (UX-165) ======================================
+       The cache_data spinners and st.spinner — calm and inline now. They used
+       to be a pulsing blue banner; the long waits have loading cards
+       (loading.py) since UX-165, and what is left is short enough that a
+       banner shouted louder than the wait deserved. */
     div[data-testid="stSpinner"] {
+        width: fit-content;
+        padding: 0.35rem 0.75rem !important;
+        margin: 0.3rem 0 !important;
+        border: 1px solid var(--sps-border);
+        border-radius: 999px;
+        background: var(--sps-page-bg);
+    }
+    div[data-testid="stSpinner"] p { font-size: 0.9rem; margin: 0; }
+
+    /* === UX-165 · loading states =============================================
+       One card for every long wait (loading.py): hidden for its first
+       loading.DELAY_S, then revealed by a timer thread writing `.sps-reveal`
+       into it. A region card sits over a size box that holds its area at the
+       height the content will take; the page card sits over a skeleton of the
+       view. Nothing here animates for readers who ask for reduced motion. */
+    [class*="st-key-sps_cardbody_"] { display: none !important; }
+    [class*="st-key-sps_card_"]:has(.sps-reveal) [class*="st-key-sps_cardbody_"] {
         display: flex !important;
-        align-items: center;
-        gap: 0.9rem;
-        width: 100%;
+        flex-direction: column;
+        gap: 0.4rem !important;
+        width: min(24rem, 100%);
         box-sizing: border-box;
-        padding: 1.2rem 1.5rem !important;
-        margin: 0.7rem 0 !important;
-        border-radius: 14px;
-        border: 1px solid #185fa5;
-        background: linear-gradient(90deg, #1f77b4, #3a8fd0 55%, #5aa9e6);
-        box-shadow: 0 8px 24px rgba(31, 119, 180, 0.38);
-        animation: sps-spinner-pulse 1.6s ease-in-out infinite !important;
+        padding: 0.8rem 1rem 0.75rem;
+        border: 1px solid var(--sps-border);
+        border-radius: 12px;
+        background: var(--sps-page-bg);
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
     }
-    /* white message text on the filled blue banner */
-    div[data-testid="stSpinner"] p,
-    div[data-testid="stSpinner"] div {
-        font-size: 1.45rem !important;
-        font-weight: 700 !important;
-        letter-spacing: 0.2px;
-        color: #ffffff !important;
+    [class*="st-key-sps_card_"]:not(.st-key-sps_card_page) {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr);
     }
-    /* enlarge the spinning Material icon (sized by font-size; it spins natively) */
-    div[data-testid="stSpinner"] [data-testid="stIconMaterial"] {
-        font-size: 2.5rem !important;
-        width: 2.5rem !important;
-        height: 2.5rem !important;
-        color: #ffffff !important;
+    [class*="st-key-sps_card_"]:not(.st-key-sps_card_page) > * { grid-area: 1 / 1; }
+    [class*="st-key-sps_card_"] > [data-testid="stLayoutWrapper"]:has(> [class*="st-key-sps_cardbody_"]) {
+        align-self: center;
+        justify-self: center;
+        z-index: 2;
     }
-    @keyframes sps-spinner-pulse {
-        0%   { box-shadow: 0 0 0 0 rgba(90, 169, 230, 0.6), 0 8px 24px rgba(31,119,180,0.38); }
-        70%  { box-shadow: 0 0 0 16px rgba(90, 169, 230, 0.0), 0 8px 24px rgba(31,119,180,0.38); }
-        100% { box-shadow: 0 0 0 0 rgba(90, 169, 230, 0.0), 0 8px 24px rgba(31,119,180,0.38); }
+    .sps-size-box { width: 100%; pointer-events: none; }
+    [class*="st-key-sps_card_"]:has(.sps-reveal) .sps-size-box {
+        border-radius: 8px;
+        background:
+            linear-gradient(rgba(128, 128, 128, 0.10), rgba(128, 128, 128, 0.10)),
+            color-mix(in srgb, var(--sps-page-bg) 60%, transparent);
+        animation: sps-sk-pulse 1.6s ease-in-out infinite;
+    }
+    .sps-card-head { display: flex; align-items: center; gap: 0.55rem; }
+    .sps-card-title { font-weight: 600; flex: 1; min-width: 0; }
+    .sps-card-time {
+        font-size: 0.8rem; opacity: 0.7; white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+    .sps-card-detail, .sps-step-count, .sps-step-time {
+        font-size: 0.85rem; opacity: 0.8; font-variant-numeric: tabular-nums;
+    }
+    .sps-ring {
+        display: inline-block; flex: none;
+        width: 0.95rem; height: 0.95rem; box-sizing: border-box;
+        border-radius: 50%;
+        border: 2px solid var(--sps-accent-border);
+        border-top-color: var(--sps-accent);
+        animation: sps-spin 0.8s linear infinite;
+    }
+    .sps-steps {
+        list-style: none; margin: 0; padding: 0;
+        display: flex; flex-direction: column; gap: 0.3rem;
+    }
+    .sps-step { display: flex; align-items: center; gap: 0.5rem; font-size: 0.88rem; margin: 0 !important; }
+    .sps-step .sps-icon { font-size: 1rem; }
+    .sps-step-done .sps-icon { color: #2e9d5b; }
+    .sps-step-todo { opacity: 0.5; }
+    .sps-step-label { flex: 1; min-width: 0; }
+    .sps-bar { height: 4px; border-radius: 2px; overflow: hidden; background: var(--sps-accent-soft); }
+    .sps-bar > span { display: block; height: 100%; background: var(--sps-accent); transition: width 0.25s ease; }
+    .sps-bar-indeterminate > span { width: 35%; animation: sps-slide 1.3s ease-in-out infinite; }
+    /* The page card: a skeleton of the view with the card over it. While it
+       shows, everything else in the view's area — the previous page, or the
+       new one being laid out underneath — stays hidden. */
+    .st-key-sps_view:has(.sps-reveal-page) > :not(:first-child) { display: none !important; }
+    .st-key-sps_card_page { display: grid !important; grid-template-columns: minmax(0, 1fr); }
+    .st-key-sps_card_page > * { grid-area: 1 / 1; }
+    .st-key-sps_card_page > [data-testid="stLayoutWrapper"]:has(> .st-key-sps_cardbody_page) {
+        align-self: start; justify-self: center; margin-top: 7rem;
+    }
+    .st-key-sps_card_page:has(.sps-sk-scanpath) > [data-testid="stLayoutWrapper"]:has(> .st-key-sps_cardbody_page) {
+        justify-self: start; margin-left: max(0px, calc(40% - 12rem));
+    }
+    .sps-page-skeleton { pointer-events: none; }
+    .sps-sk {
+        border-radius: 0.5rem; background: rgba(128, 128, 128, 0.12);
+        animation: sps-sk-pulse 1.6s ease-in-out infinite;
+    }
+    .sps-sk-scanpath { display: grid; grid-template-columns: 4fr 1fr; gap: 3rem; }
+    .sps-sk-main { display: flex; flex-direction: column; gap: 0.7rem; min-width: 0; }
+    .sps-sk-selectors { display: grid; gap: 1rem; }
+    .sps-sk-field { height: 2.5rem; }
+    .sps-sk-chips { display: flex; gap: 0.45rem; flex-wrap: wrap; }
+    .sps-sk-chip { width: 7.5rem; height: 1.7rem; border-radius: 999px; }
+    .sps-sk-rail {
+        display: flex; flex-direction: column; gap: 0.5rem;
+        padding-left: 1rem; border-left: 1px solid var(--sps-border);
+    }
+    .sps-sk-row { height: 2.3rem; }
+    .sps-sk-corpus { display: flex; flex-direction: column; gap: 1rem; }
+    .sps-sk-tabs { height: 2.4rem; width: 60%; }
+    .sps-sk-chart { height: 22rem; }
+    .sps-sk-table { display: flex; flex-direction: column; gap: 0.4rem; }
+    .sps-sk-table .sps-sk-row { height: 2rem; }
+    /* UX-167 — the Scanpath plot area is a stage: its first child (the loading
+       card) and its second (the figure) share one cell, so a card can open over
+       a figure already on screen without moving it. Notes written after the
+       figure flow into the rows below. */
+    .st-key-tour_grp_plot { display: grid !important; grid-template-columns: minmax(0, 1fr); }
+    .st-key-tour_grp_plot > :nth-child(-n + 2) { grid-area: 1 / 1; }
+    .st-key-tour_grp_plot > :first-child { z-index: 3; }
+    /* A card already says what the app is waiting on. */
+    .stApp:has(.sps-reveal) div[data-testid="stSpinner"] { display: none !important; }
+    @keyframes sps-spin { to { transform: rotate(360deg); } }
+    @keyframes sps-sk-pulse { 50% { opacity: 0.55; } }
+    @keyframes sps-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(290%); } }
+    @media (prefers-reduced-motion: reduce) {
+        .sps-ring, .sps-sk, .sps-bar-indeterminate > span,
+        [class*="st-key-sps_card_"]:has(.sps-reveal) .sps-size-box { animation: none !important; }
     }
 
     /* === Visual polish ==========================================================

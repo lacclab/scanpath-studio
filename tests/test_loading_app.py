@@ -712,6 +712,46 @@ def test_compares_cancel_names_a_and_returns_to_this_dataset(at, monkeypatch):
     assert at.session_state[COMPARE_SOURCE_STATE_KEY] == tabs.THIS_DATASET
 
 
+#: The session's remembered load of Compare's B dataset (UX-168) — an
+#: ``_sps_*`` internal.
+COMPARE_TASK = "_sps_compare_task"
+
+
+def _a_b_load_left_running(at) -> progress.Task:
+    """An earlier run's load of another corpus for B, still going: its task is
+    held (so it stays live) and remembered as B's."""
+    stale = ("compare_dataset", "an-earlier-run", "Another corpus")
+    task = progress.begin(stale, title="Loading Another corpus for scanpath B")
+    at.session_state[COMPARE_TASK] = stale
+    return task
+
+
+def test_picking_another_dataset_for_b_mid_load_cancels_the_first(at):
+    """Two corpora never load at once for B either: the first is a load nobody
+    is waiting for once B is another dataset."""
+    task = _a_b_load_left_running(at)
+    at.session_state["single_compare_toggle"] = True
+    at.session_state[COMPARE_SOURCE_STATE_KEY] = app.DEMO_CHOICE
+    at.run()
+    assert not at.exception, at.exception
+    assert task.cancelled
+    assert COMPARE_TASK not in at.session_state  # the demo's own load completed
+
+
+@pytest.mark.parametrize("stop", ["this dataset", "compare off"])
+def test_a_run_that_loads_no_dataset_for_b_stops_the_one_left_loading(at, stop):
+    """B back on "This dataset", or Compare switched off, loads nothing for B:
+    the load an earlier run left going would run on for nothing on screen."""
+    task = _a_b_load_left_running(at)
+    if stop == "this dataset":
+        at.session_state["single_compare_toggle"] = True
+        at.session_state[COMPARE_SOURCE_STATE_KEY] = tabs.THIS_DATASET
+    at.run()  # Compare is off by default
+    assert not at.exception, at.exception
+    assert task.cancelled
+    assert COMPARE_TASK not in at.session_state
+
+
 # UX-168 fix round 1 (task-8-findings-r1.md) — T8-2 … T8-5.
 
 

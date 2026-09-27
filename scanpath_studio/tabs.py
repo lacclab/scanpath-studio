@@ -2013,6 +2013,47 @@ def _cancel_compare_source(task_key: tuple) -> None:
     st.session_state[COMPARE_SOURCE_KEY] = THIS_DATASET
 
 
+#: UX-168: the task Compare's B card was last opened for, held while B's
+#: dataset loads and dropped once the card's block completes — the replay's
+#: `ANIM_TASK_KEY`, for B. An ``_sps_*`` internal: never on the wire, never in
+#: the recovery cache.
+COMPARE_TASK_KEY = "_sps_compare_task"
+
+
+def _claim_compare_task(task_key: tuple) -> None:
+    """Cancel the load a run started for another dataset as B, then remember
+    this one's (UX-168).
+
+    Two corpora never load at once for B either, as for A: once B is another
+    dataset, the first is a load nobody is waiting for. The same key — B's own
+    load still under way — joins it.
+    """
+    previous = st.session_state.get(COMPARE_TASK_KEY)
+    if previous is not None and tuple(previous) != task_key:
+        progress.cancel(tuple(previous))
+    st.session_state[COMPARE_TASK_KEY] = task_key
+
+
+def _abandon_compare_task() -> None:
+    """This run loads no second dataset for B — "This dataset", a corpus not
+    set up yet, or Compare off: stop the one an earlier run left loading
+    (UX-168) rather than let it run on for nothing on screen. Compare within
+    <A>, the card's own Cancel, cancels its load itself (`_cancel_compare_source`).
+    """
+    previous = st.session_state.pop(COMPARE_TASK_KEY, None)
+    if previous is not None:
+        progress.cancel(tuple(previous))
+
+
+def _release_compare_task(task_key: tuple) -> None:
+    """B's dataset is loaded: nothing of it is left to cancel.
+
+    Only its own key is dropped — a later run may already have claimed another.
+    """
+    if st.session_state.get(COMPARE_TASK_KEY) == task_key:
+        st.session_state.pop(COMPARE_TASK_KEY, None)
+
+
 def _resolve_compare_source(
     ready_by_name: dict[str, bool],
     reason_by_name: dict[str, str],
@@ -2036,17 +2077,22 @@ def _resolve_compare_source(
     **UX-168:** ``loading_slot`` gives B's own load a card, with a Cancel back to
     "This dataset" — the compare picker is a selectbox in the middle of the plot
     column, so ``None`` (the default) still loads B plain, with no card and no
-    way to cancel it.
+    way to cancel it. With a card, the load is remembered while it runs
+    (`COMPARE_TASK_KEY`), so picking another dataset for B mid-load — or one
+    that loads nothing: "This dataset", a corpus not set up yet — stops it.
     """
     chosen = str(st.session_state.get(COMPARE_SOURCE_KEY) or THIS_DATASET)
     if chosen == THIS_DATASET:
+        _abandon_compare_task()
         return None, ""
     if not ready_by_name.get(chosen, False):
+        _abandon_compare_task()
         return None, f"{ICONS['warning']} {reason_by_name.get(chosen, '')}"
     if loading_slot is None:
         source = load_secondary_dataset(chosen)
     else:
         task_key = ("compare_dataset", loading.session_id(), chosen)
+        _claim_compare_task(task_key)
         with loading.card(
             loading_slot,
             # This card's own key — deliberately not `COMPARE_SOURCE_KEY`
@@ -2065,6 +2111,7 @@ def _resolve_compare_source(
             reveal_on_work=True,
         ):
             source = load_secondary_dataset(chosen)
+        _release_compare_task(task_key)
     if source is None:
         return (
             None,
@@ -5687,6 +5734,9 @@ def render_single_trial_tab(
                 compare_screens, key_prefix="single_compare"
             )
     else:
+        # UX-168: Compare off loads no second dataset — stop the one an
+        # earlier run left loading for B.
+        _abandon_compare_task()
         compare_words_pool = words_filtered
         compare_fixations_pool = fixations_filtered
 

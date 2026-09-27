@@ -509,7 +509,11 @@ download cards.
   and the new run joins it (§2.4).
 - **Picking a different dataset while one is loading counts as cancelling the
   first.** The new run sees the session's in-flight dataset task under a
-  different key and cancels it, so two corpora never load at once.
+  different key and cancels it, so two corpora never load at once. The same
+  holds for Compare's B: its card's task is remembered in `_sps_compare_task`
+  while B's dataset loads, so another dataset for B cancels it, and so does a
+  run that loads nothing for B — "This dataset", a corpus not set up yet, or
+  Compare switched off.
 - **If Cancel lands just as the work finishes, Cancel still wins,** since the
   user asked to go back. The finished result stays cached, so Try again is
   instant.

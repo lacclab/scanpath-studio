@@ -243,6 +243,7 @@ from scanpath_studio.utils import (
     COMPARE_DATASET_SEP,
     COMPARE_OPTIONS_SNAPSHOT_KEY,
     COMPARE_STEP_LINK_KEY,
+    TRIAL_SORT_DATA_ORDER,
     TRIAL_SORT_DEFAULT,
     align_compare_columns,
     at_list_end,
@@ -2329,11 +2330,17 @@ def _render_compare_selector(
             # on. Resolved into a local, never written back to the widget key:
             # the user's chosen sort must survive un-linking (the same
             # don't-rewrite-a-gated-setting rule as `controls._mode_gate`).
+            # UX-171: pinned to the order A walks by default — data order when
+            # the pool carries it, else Trial ID.
             if compare_step_linked() and sort_choice == _CMP_SORT_DEFAULT:
-                order_choice = TRIAL_SORT_DEFAULT
+                order_choice = (
+                    TRIAL_SORT_DATA_ORDER
+                    if TRIAL_SORT_DATA_ORDER in sort_keys
+                    else TRIAL_SORT_DEFAULT
+                )
                 st.caption(
-                    "Sorted by **Trial ID** while *Step · A and B together* is on, "
-                    "so B keeps its place in the list when A changes text."
+                    f"Sorted by **{order_choice}** while *Step · A and B together* "
+                    "is on, so B keeps its place in the list when A changes text."
                 )
             else:
                 order_choice = sort_choice

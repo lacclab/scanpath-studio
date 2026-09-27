@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **A Code of Conduct, linked from the README and CONTRIBUTING** (ENG-82)
+
+### Details
+
+#### Added
+- **A Code of Conduct, linked from the README and CONTRIBUTING** (ENG-82) — `CODE_OF_CONDUCT.md` is the Contributor Covenant 2.1, unchanged except for its reporting address: `lacclab.technion@gmail.com`, the lab address `pyproject.toml` already publishes. It was the one file missing from GitHub's community profile, which read 87 % before the public release. CONTRIBUTING's opening now points at it and at `SECURITY.md`. The repository's topics grew from three to ten at the same time, so it shows up for the searches eye-tracking researchers run.
+
 ## [0.31.2] - 2026-09-27
 
 ### Changed

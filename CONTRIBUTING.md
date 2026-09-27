@@ -5,6 +5,11 @@ research tool; contributions, bug reports, and feature requests are welcome via
 [issues](https://github.com/lacclab/scanpath-studio/issues) and pull
 requests.
 
+Everyone taking part — in issues, pull requests, discussions or anywhere else
+the project lives — is expected to follow the
+[Code of Conduct](CODE_OF_CONDUCT.md). Security problems go through
+[SECURITY.md](SECURITY.md), not a public issue.
+
 ## Development setup
 
 ```bash

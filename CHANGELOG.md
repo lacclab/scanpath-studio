@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.31.2] - 2026-09-27
+
 ### Changed
 - **`export_animation` needs no frame time, and `plots.animation_autoplay_frame_duration` is gone** (BUG-93)
 

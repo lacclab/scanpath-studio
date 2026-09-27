@@ -361,8 +361,9 @@ display caps. It takes the true-scale iframe's fixed height — the figure's
 height + 12; `html_embed.embed_html_iframe` passes an int to `st.iframe`, so the
 row is exactly that tall at any column width — and the figure's own width,
 capped by the column. The row keeps its height, and the rail with it; and since
-the card's grid track is the box's width, the card centres over the figure, not
-the column.
+the box also caps its card's container at the figure's width, the card centres
+over the figure, not the column — with every width resolved from the column
+down, so the card can neither overflow a narrow column nor collapse.
 
 **The view keeps its place.** Streamlit matches a rerun's elements to the last
 run's by position, so anything drawn only sometimes above the view — the page

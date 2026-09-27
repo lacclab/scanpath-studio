@@ -6,7 +6,9 @@ Three pieces, all built on :mod:`scanpath_studio.progress`:
 * :func:`card` — a region card. It holds its region at the height the content
   will take (``size``), shows nothing for :data:`DELAY_S`, then reveals a card —
   title, elapsed time, a count or a step list, a bar, an optional Cancel — that
-  a timer thread keeps current while the script thread is blocked.
+  a timer thread keeps current while the script thread is blocked. A card over
+  work that is cheap on a cache hit is *gated* (``reveal_on_work``): it waits,
+  past the delay, for its task's first report — a miss.
 * :class:`Page` — the page skeleton and the dataset card, for a load that holds
   up a whole view. It outlives its card: :meth:`Page.release` takes it down once
   the new page has drawn its controls, and a region card opening releases it.
@@ -336,6 +338,10 @@ def _run() -> _RunState:
 class _Ticker(threading.Thread):
     """The timer thread: wait out the delay, reveal, then refresh.
 
+    With ``ready`` (a gated card, `Card`'s ``reveal_on_work``) the reveal also
+    waits for ``ready()`` to hold, asked again every ``interval`` once the delay
+    is over — so a card over a cache hit never shows, however long the hit takes.
+
     Its event is ``_halt``, never ``_stop``: `threading.Thread` has an internal
     ``_stop`` method that ``join`` calls.
     """
@@ -347,18 +353,23 @@ class _Ticker(threading.Thread):
         interval: float,
         on_reveal: Callable[[], None],
         on_tick: Callable[[], None],
+        ready: Callable[[], bool] | None = None,
     ):
         super().__init__(daemon=True, name="scanpath-loading-ticker")
         self._delay = delay
         self._interval = interval
         self._on_reveal = on_reveal
         self._on_tick = on_tick
+        self._ready = ready
         self._halt = threading.Event()
 
     def run(self) -> None:
         if self._halt.wait(self._delay):
             return
         try:
+            while self._ready is not None and not self._ready():
+                if self._halt.wait(self._interval):
+                    return
             self._on_reveal()
             while not self._halt.wait(self._interval):
                 self._on_tick()
@@ -400,7 +411,15 @@ def _clear_off_thread(slot) -> None:
 
 
 class Card:
-    """One loading card in one slot (see the module docstring)."""
+    """One loading card in one slot (see the module docstring).
+
+    ``reveal_on_work`` gates the card, for one over work that is cheap on a
+    cache hit and slow only on a miss (the dataset pipeline, Compare's second
+    dataset, the Corpus view's measures): its timer reveals it only once its
+    task has reported (`progress.Task.worked`), so a plain rerun — however long
+    its cache checks take on a big corpus — never shows it. ``reveal_now``
+    still shows it at once.
+    """
 
     def __init__(
         self,
@@ -416,6 +435,7 @@ class Card:
         task_key: Hashable | None = None,
         duration_key: Hashable | None = None,
         reveal_class: str = "sps-reveal",
+        reveal_on_work: bool = False,
     ):
         self._slot = slot
         self.key = key
@@ -431,6 +451,7 @@ class Card:
         )
         self._duration_key = duration_key
         self._reveal_class = reveal_class
+        self._reveal_on_work = reveal_on_work
         self._task: progress.Task | None = None
         self._token: contextvars.Token | None = None
         self._ticker: _Ticker | None = None
@@ -455,8 +476,9 @@ class Card:
     def was_seen(self) -> bool:
         """Did this card stand for a wait the user saw?
 
-        Revealed by its timer (the wait outlasted `DELAY_S`), or on screen for at
-        least `DELAY_S` since an immediate reveal (``reveal_now``). A page card
+        Revealed by its timer (the wait outlasted `DELAY_S` — and, for a gated
+        card, did real work), or on screen for at least `DELAY_S` since an
+        immediate reveal (``reveal_now``). A page card
         revealed at once and taken down a moment later — a quick view switch —
         was not: nothing should carry its reveal on to the next card.
         """
@@ -479,6 +501,10 @@ class Card:
         Drawing happens before the task is begun and activated: if drawing
         itself fails (e.g. the run is already being torn down), no task is
         left active or half-started for something to have to clean up.
+
+        ``DELAY_S <= 0`` (the headless tests' setting) reveals every card here,
+        on the script thread — a gated one too: "show everything at once" is
+        what that setting is for.
         """
         box = self._slot.container(key=f"sps_card_{self.key}")
         if self._size is not None:
@@ -545,12 +571,16 @@ class Card:
         self._show()
         self._revealed_by_timer = True
 
+    def _has_worked(self) -> bool:
+        return self._task is not None and self._task.worked
+
     def _arm(self, *, delay: float, revealed: bool) -> None:
         ticker = _Ticker(
             delay=delay,
             interval=REFRESH_S,
             on_reveal=self._paint if revealed else self._show_by_timer,
             on_tick=self._paint,
+            ready=self._has_worked if self._reveal_on_work and not revealed else None,
         )
         add_script_run_ctx(ticker)
         ticker.start()
@@ -574,20 +604,23 @@ class Card:
             self._paint()
 
     def finish(self) -> None:
-        """Every step done — and the "last load" time recorded, for a real wait.
+        """Every step done — and the "last load" time recorded, for a real load.
 
-        Only a task that took at least `DELAY_S` records its duration: the
+        Only a task that did real work (`progress.Task.worked` — something
+        reported) *and* took at least `DELAY_S` records its duration: the
         dataset card opens on every run, and a plain rerun's 0.04 s would
         otherwise overwrite the real load's time, so a slow load read "last
-        load 0.0 s". A task that is already finished — retired by
-        `Page.release` when something else interrupted the load, an inline
-        download say — records nothing either.
+        load 0.0 s" — nor is a plain rerun that happened to be slow, all cache
+        checks on a big corpus, a load. A task that is already finished —
+        retired by `Page.release` when something else interrupted the load, an
+        inline download say — records nothing either.
         """
         task = self._task
         if task is None or task.finished:
             return
         waited = time.monotonic() - task.started
-        task.finish(duration_key=self._duration_key if waited >= DELAY_S else None)
+        record = task.worked and waited >= DELAY_S
+        task.finish(duration_key=self._duration_key if record else None)
 
     def _retire(self) -> None:
         """Finish this card's task with no duration key, so a later run's
@@ -657,6 +690,7 @@ class Page:
         task_key: Hashable | None = None,
         duration_key: Hashable | None = None,
         reveal_now: bool = False,
+        reveal_on_work: bool = False,
     ) -> Card:
         self.card = Card(
             self._slot,
@@ -669,6 +703,7 @@ class Page:
             task_key=task_key,
             duration_key=duration_key,
             reveal_class="sps-reveal sps-reveal-page",
+            reveal_on_work=reveal_on_work,
         )
         return self.card.open(reveal_now=reveal_now)
 
@@ -732,13 +767,14 @@ def card(
     size: tuple[int, int] | None = None,
     task_key: Hashable | None = None,
     duration_key: Hashable | None = None,
+    reveal_on_work: bool = False,
 ) -> Iterator[Card]:
     """A region card for one ``with`` block.
 
     Opening one releases the page skeleton: the view has drawn its controls by
     the time it reaches its first slow region. When the skeleton stood for a
     wait the user saw (`Page.release`), the card shows at once too, so the
-    wait reads as one continuous state.
+    wait reads as one continuous state. ``reveal_on_work`` gates it (`Card`).
 
     An ordinary exception from the block retires the card's task (see
     `Card._retire`) before re-raising — a card with an explicit `task_key`
@@ -757,6 +793,7 @@ def card(
         size=size,
         task_key=task_key,
         duration_key=duration_key,
+        reveal_on_work=reveal_on_work,
     )
     try:
         region.open(reveal_now=page_was_seen)

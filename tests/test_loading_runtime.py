@@ -304,6 +304,7 @@ def _released_mid_load_script():
             duration_key=("d", "released-mid-load"),
         )
         card.step(1)
+        progress.report()  # real work, so only the retire can stop the record
         page.release()  # an inline download interrupts the load
         task = progress._REGISTRY[("k", "released-mid-load")]
         st.session_state["retired"] = task.finished
@@ -355,18 +356,19 @@ def test_a_release_streamlit_aborts_leaves_the_task_joinable():
 def _timed_card_script():
     import streamlit as st
 
-    from scanpath_studio import loading
+    from scanpath_studio import loading, progress
 
     with loading.run_scope():
         with loading.card(
             st.empty(), key="timed", title="Quick", duration_key=("d", "timed")
         ):
-            pass
+            progress.report()  # real work: a quick one
 
 
 def test_last_load_is_recorded_only_for_a_real_wait(monkeypatch):
     """The dataset card opens on every run: a plain rerun's few milliseconds must
-    not overwrite the real load's time as "last load"."""
+    not overwrite the real load's time as "last load". (A run that did no work
+    at all records nothing however long it took — the gated card below.)"""
     monkeypatch.delitem(progress._DURATIONS, ("d", "timed"), raising=False)
     monkeypatch.setattr(loading, "DELAY_S", 30)  # far longer than the block
     AppTest.from_function(_timed_card_script).run()
@@ -374,6 +376,49 @@ def test_last_load_is_recorded_only_for_a_real_wait(monkeypatch):
     monkeypatch.setattr(loading, "DELAY_S", 0)  # every wait counts
     AppTest.from_function(_timed_card_script).run()
     assert progress.last_duration(("d", "timed")) is not None
+
+
+def _gated_card_script():
+    import time
+
+    import streamlit as st
+
+    from scanpath_studio import loading, progress
+
+    with loading.run_scope():
+        with loading.card(
+            st.empty(),
+            key="gated",
+            title="Checking the cache",
+            reveal_on_work=True,
+            duration_key=("d", "gated"),
+        ) as card:
+            # Well past the delay before anything reports, so only the gate can
+            # be what holds the card back.
+            time.sleep(loading.DELAY_S * 4)
+            if st.session_state["gated_reports"]:
+                progress.report()  # a cache miss: real work starts
+                deadline = time.monotonic() + 3.0
+                while not card.revealed and time.monotonic() < deadline:
+                    time.sleep(0.01)
+            st.session_state["gated_revealed"] = card.revealed
+
+
+@pytest.mark.parametrize("reports", [False, True])
+def test_a_gated_card_shows_only_once_its_task_has_worked(monkeypatch, reports):
+    """UX-166: a card over work that is cheap on a cache hit (``reveal_on_work``)
+    stays hidden however long its block runs until its task reports — then the
+    timer, checking again every ``REFRESH_S``, reveals it. And only such a load
+    is a "last load" to quote: a rerun that did no work records nothing."""
+    monkeypatch.setattr(loading, "DELAY_S", 0.05)
+    monkeypatch.setattr(loading, "REFRESH_S", 0.02)
+    monkeypatch.delitem(progress._DURATIONS, ("d", "gated"), raising=False)
+    at = AppTest.from_function(_gated_card_script)
+    at.session_state["gated_reports"] = reports
+    at.run()
+    assert not at.exception, at.exception
+    assert at.session_state["gated_revealed"] is reports
+    assert (progress.last_duration(("d", "gated")) is not None) is reports
 
 
 def _failing_run_script():
@@ -415,7 +460,7 @@ def test_a_stopped_run_leaves_its_open_cards_tasks_joinable():
 def _last_load_script():
     import streamlit as st
 
-    from scanpath_studio import loading
+    from scanpath_studio import loading, progress
 
     with loading.run_scope():
         page = loading.page(st.empty(), view="data")
@@ -425,6 +470,7 @@ def _last_load_script():
             task_key=("d", "last-at-open-task"),
             duration_key=("d", "last-at-open"),
         )
+        progress.report()  # real work, so `finish` has a duration to record
         card.finish()  # records this load's own (tiny) duration
         card.close(keep=True)  # the kept card's final repaint
         st.stop()
@@ -438,4 +484,5 @@ def test_the_last_load_hint_quotes_the_previous_load_not_this_one(monkeypatch):
     monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
     at = AppTest.from_function(_last_load_script).run()
     assert not at.exception, at.exception
+    assert progress.last_duration(("d", "last-at-open")) < 6.0  # its own, recorded
     assert "last load 6.0 s" in _markdown(at)

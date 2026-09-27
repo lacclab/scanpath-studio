@@ -23,6 +23,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+from . import progress
 from .constants import DEFAULT_FIGURE_SIZE, PACKAGE_NAME
 from .multipart import (
     CANVAS_HEIGHT,
@@ -106,13 +107,14 @@ _FINGERPRINT_MEMO_MAX = 64
 _STABLE_FINGERPRINTS: dict[int, tuple[weakref.ref, tuple | None]] = {}
 _STABLE_FINGERPRINTS_MAX = 64
 #: UX-166 fix-round-2 (Ruling T5-6): guards every iteration/mutation of
-#: `_STABLE_FINGERPRINTS` above. `frame_cache`'s `publish` can now reach
-#: `_vouch_for_frames` from a concurrent *session's* build (a rerun sharing an
-#: in-flight normalization with another one), and an unlocked `.items()`
-#: iteration racing another thread's insert raised
-#: `RuntimeError: dictionary changed size during iteration`. Plain `.get`
-#: reads (`frame_fingerprint` below) need no lock under the GIL — only the
-#: sweep-and-insert and the write-back do.
+#: `_STABLE_FINGERPRINTS` above. The dict is process-wide, so two script runs
+#: can reach `_vouch_for_frames` at once — a superseded run's build publishing
+#: beside the run that replaced it, or two sessions' runs — though no build is
+#: ever shared *across* sessions (`frame_cache`'s identity includes the
+#: session's own store). An unlocked `.items()` iteration racing another
+#: thread's insert raised `RuntimeError: dictionary changed size during
+#: iteration`. Plain `.get` reads (`frame_fingerprint` below) need no lock under
+#: the GIL — only the sweep-and-insert and the write-back do.
 _STABLE_FINGERPRINTS_LOCK = threading.Lock()
 
 
@@ -607,6 +609,7 @@ def load_onestop_server_bundle(
     RAM for the L2 cohort). Used when no participant is specified, or when
     a deep link points at a pid whose shard hasn't been generated yet.
     """
+    progress.report()  # UX-166: a miss — real work, so the gated card may show
     base = onestop_data_dir()
     if base is None:
         return pd.DataFrame(), pd.DataFrame()

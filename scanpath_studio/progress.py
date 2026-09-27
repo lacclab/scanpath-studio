@@ -10,6 +10,12 @@ The two calls are also the **cancel checkpoint**: after :func:`cancel`, the next
 call in the computing thread raises :class:`Cancelled`, so abandoned work stops
 within one file, frame or chunk instead of running to the end of its step.
 
+A :func:`report` also says that **real work** is happening (:attr:`Task.worked`),
+which is what a card over work that is cheap on a cache hit waits for before it
+shows (``loading.Card``'s ``reveal_on_work``). So a build such a card covers
+that has no loop to report from calls a bare ``report()`` first thing: it only
+runs on a miss.
+
 And they are where slow work **lets the server talk**. A CPU-bound build on the
 script thread holds Python's GIL, and the server's event loop needs several
 handoffs of it to send one message, each waiting out the interpreter's switch
@@ -93,6 +99,7 @@ class Task:
         self.started = time.monotonic()
         self._step_started = self.started
         self._finished = False
+        self._worked = False
         self._cancelled = threading.Event()
         self._last_yield = float("-inf")
 
@@ -104,6 +111,18 @@ class Task:
     def finished(self) -> bool:
         with self._lock:
             return self._finished
+
+    @property
+    def worked(self) -> bool:
+        """Has anything reported to this task — real work, i.e. a cache miss?
+
+        Set by :meth:`report`, never by :meth:`step_to`: the orchestrator moves
+        between steps on a cache hit just the same, while only a build that is
+        actually running reports (a bare ``report()`` is enough). A gated card
+        (``loading.Card``'s ``reveal_on_work``) waits for this.
+        """
+        with self._lock:
+            return self._worked
 
     def cancel(self) -> None:
         self._cancelled.set()
@@ -134,6 +153,7 @@ class Task:
     ) -> None:
         self._checkpoint()
         with self._lock:
+            self._worked = True
             self._done = done
             self._total = total
             if unit:
@@ -266,7 +286,10 @@ def report(
     unit: str = "",
     detail: str | None = None,
 ) -> None:
-    """Record progress on the active task — a no-op without one."""
+    """Record progress on the active task — a no-op without one.
+
+    Any call, a bare ``report()`` included, marks the task as having worked.
+    """
     current = _ACTIVE.get()
     if current is not None:
         current.report(done, total, unit=unit, detail=detail)

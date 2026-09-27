@@ -29,6 +29,19 @@ def test_a_task_records_counts_and_moves_through_its_steps():
         assert snap.step_seconds[0] is not None and snap.step_seconds[1] is None
 
 
+def test_a_report_marks_its_task_as_having_worked_but_a_step_does_not():
+    """UX-166: a gated card shows only once its task has done real work — a
+    cache miss, which each build under one reports, if only with a bare
+    ``report()``. Moving between steps is the orchestrator's bookkeeping, done
+    on a cache hit just the same, so it counts for nothing."""
+    with progress.task(("t", "worked"), title="Loading", steps=("a", "b")) as task:
+        assert task.worked is False
+        progress.step_to(1)
+        assert task.worked is False
+        progress.report()
+        assert task.worked is True
+
+
 def test_step_to_never_moves_back():
     with progress.task(("t", "back"), title="x", steps=("a", "b", "c")) as task:
         progress.step_to(2)

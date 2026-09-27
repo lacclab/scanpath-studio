@@ -2655,6 +2655,9 @@ def _cached_trial_identity_report(
     on full OneStop); the 🗂️ Data page's *Check every trial* button asks for the
     census by passing ``None``, and lands on its own cache entry.
     """
+    # UX-166: only a miss gets here — the report is what shows the gated
+    # dataset card for the census's seconds.
+    progress.report()
     return diagnose_trial_identity(_words, _fixations, sample_trials=sample_trials)
 
 
@@ -2663,6 +2666,7 @@ def _cached_trial_identity_report(
 def _cached_multipleye_server_bundle(
     participant: str | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    progress.report()  # a miss: real work, so the gated dataset card may show
     return load_multipleye_server_bundle(participant)
 
 
@@ -6698,6 +6702,12 @@ def _open_dataset_card(
     mid-load cancels a load left running just the same, and that branch has no
     load of its own to name `DATASET_TASK_KEY` after, so it clears the key
     rather than replacing it.
+
+    **The load card is gated** (``reveal_on_work``): it opens on every run, and
+    a plain rerun — every build a cache hit — can outlast the delay on a big
+    corpus, re-hashing the frames each hit hands back; shown, it blanked the
+    view to the skeleton on every widget touch. So it shows only once one of
+    its builds has reported, i.e. missed. ``reveal_now`` still shows it at once.
     """
     if data_choice in (UPLOAD_CHOICE, AUTHOR_CHOICE):
         previous = st.session_state.pop(DATASET_TASK_KEY, None)
@@ -6729,6 +6739,7 @@ def _open_dataset_card(
         task_key=task_key,
         duration_key=("dataset", token),
         reveal_now=finalizing or view_switched,
+        reveal_on_work=True,
     )
 
 

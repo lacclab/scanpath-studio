@@ -196,6 +196,13 @@ button.
 
 - **Nothing shows for the first 0.5 s** — the same delay as Streamlit's
   spinner. Most reruns are fast and must not flash.
+- **A card over work that is cheap on a cache hit waits for real work.** The
+  dataset card, Compare's B card and the Corpus measures card open on every
+  run, and on a big corpus a plain rerun's cache checks alone can outlast the
+  delay. They are gated (`reveal_on_work`): past the delay, the timer reveals
+  one only once its task has reported — a miss — checking again at each
+  refresh. Every build they cover reports on a miss; one with no loop to count
+  calls a bare `report()` first thing.
 - **The area holds its final size from the first instant,** so nothing jumps
   even when the card never appears (§2.2, §3.1).
 - **The card refreshes about four times a second** — elapsed time, counts and
@@ -223,8 +230,9 @@ button.
   900").
 - **Later steps** are greyed out.
 - **The title line** carries the total elapsed time and, when known, "last load:
-  6 s" — `progress.last_duration` for the same dataset in this server process.
-  There is no estimate otherwise.
+  6 s" — `progress.last_duration` for the same dataset in this server process,
+  recorded only by a load that did work and took at least the delay. There is
+  no estimate otherwise.
 
 ### 1.4 Every other spinner
 

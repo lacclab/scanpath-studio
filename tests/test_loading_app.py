@@ -11,9 +11,24 @@ an explicit ``reveal_now`` can show one.
 
 from __future__ import annotations
 
+import time
+import uuid
+from collections.abc import Callable
+
+import pandas as pd
 import pytest
 
-from scanpath_studio import app, datasets, loading, progress, tabs
+from scanpath_studio import (
+    api,
+    app,
+    compare_source,
+    data,
+    datasets,
+    loading,
+    progress,
+    tabs,
+    utils,
+)
 from scanpath_studio.constants import (
     _VIEW_CORPUS,
     _VIEW_DATA,
@@ -23,6 +38,7 @@ from scanpath_studio.constants import (
     DATASET_EDITOR_OPEN_KEY,
 )
 from scanpath_studio.session_keys import COMPARE_SOURCE_STATE_KEY
+from scanpath_studio.synthetic import load_synthetic_data
 from tests.conftest import APP_SCRIPT, pin_view
 
 AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
@@ -147,6 +163,108 @@ def test_a_view_switch_card_has_a_task_of_its_own(at, monkeypatch):
     assert (kind, token) == ("dataset", SYNTHETIC)
     view_task = progress._REGISTRY[("card", session, loading.PAGE_CARD_KEY)]
     assert view_task.snapshot().title == "Opening Corpus Analysis"
+
+
+# UX-166 — a card over work that is cheap on a cache hit shows only for real work.
+
+
+def _slowed(real, seconds: float):
+    """``real`` behind a wait that reports nothing: what a plain rerun's cache
+    checks cost on a big corpus (hashing the frames each cache hit hands back),
+    with no work behind them."""
+
+    def _slow(*args, **kwargs):
+        time.sleep(seconds)
+        return real(*args, **kwargs)
+
+    return _slow
+
+
+def _slow_pipeline_frozen_before_the_view(monkeypatch) -> None:
+    """A pipeline that outlasts the card's delay many times over, frozen before
+    the view releases the page — with the run's own clear off, a page card that
+    had shown would still be on the page."""
+    monkeypatch.setattr(loading, "DELAY_S", 0.05)
+    monkeypatch.setattr(loading, "REFRESH_S", 0.02)
+    monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
+    monkeypatch.setattr(app, "read_trial_filters", _slowed(app.read_trial_filters, 0.4))
+    monkeypatch.setattr(app, "render_single_trial_tab", _stop)
+
+
+def test_a_plain_rerun_shows_no_page_card_however_long_it_takes(at, monkeypatch):
+    """On a big corpus a plain rerun's pipeline — every build a cache hit — can
+    outlast the delay, and the card then blanked the view to the skeleton on
+    every widget touch. A hit reports nothing, so the card stays hidden."""
+    at.run()  # the load itself
+    _slow_pipeline_frozen_before_the_view(monkeypatch)
+    at.run()  # a plain rerun of the same dataset
+    assert not at.exception, at.exception
+    text = _markdown(at)
+    assert "sps-reveal-page" not in text and "sps-card-head" not in text
+
+
+def test_the_same_slow_rerun_that_loads_a_dataset_shows_the_page_card(at, monkeypatch):
+    """The control: switching dataset normalizes it — a miss, which reports —
+    so the same slow pipeline does show the card."""
+    at.run()
+    _slow_pipeline_frozen_before_the_view(monkeypatch)
+    at.session_state["_pending_source_choice"] = app.DEMO_CHOICE
+    at.run()
+    assert not at.exception, at.exception
+    text = _markdown(at)
+    assert "sps-reveal-page" in text
+    assert f"Loading {app._dataset_display_name(app.DEMO_CHOICE)}" in text
+
+
+def _reports_on_a_miss(build: Callable[[], object]) -> bool:
+    """Run ``build`` under a task of its own, and say whether it reported."""
+    task = progress.Task(("t", "gated-miss"), title="Loading")
+    token = progress.activate(task)
+    try:
+        build()
+    finally:
+        progress.deactivate(token)
+    return task.worked
+
+
+def _normalized_synthetic() -> tuple[pd.DataFrame, pd.DataFrame]:
+    return api.load_scanpath_data(*load_synthetic_data())
+
+
+def test_the_server_bundles_report_on_a_miss(monkeypatch):
+    """A gated card opens on a report, so a build under one that reports nothing
+    on a miss would never show it, however slow. The file readers and
+    normalization report from their loops; these report once, first thing."""
+    empty = (pd.DataFrame(), pd.DataFrame())
+    monkeypatch.delenv(data.ONESTOP_DATA_DIR_ENV, raising=False)
+    monkeypatch.setattr(app, "load_multipleye_server_bundle", lambda _pid: empty)
+    for cached in (
+        data.load_onestop_server_bundle,
+        app._cached_multipleye_server_bundle,
+    ):
+        cached.clear()
+        try:
+            assert _reports_on_a_miss(cached), cached.__name__
+        finally:
+            cached.clear()  # nothing stubbed stays cached for later tests
+
+
+def test_the_trial_list_and_the_identity_check_report_on_a_miss():
+    words, fixations = _normalized_synthetic()
+    fresh = ("t", "gated-miss", uuid.uuid4().hex)  # a key nothing has cached
+    assert _reports_on_a_miss(
+        lambda: utils._build_combo_options_cached(fixations, (), cache_key=fresh)
+    )
+    assert _reports_on_a_miss(
+        lambda: app._cached_trial_identity_report(words, fixations, cache_key=fresh)
+    )
+
+
+def test_compares_second_dataset_and_the_corpus_measures_report_on_a_miss():
+    compare_source._load_builtin_frames.clear()
+    assert _reports_on_a_miss(lambda: compare_source._load_builtin_frames(SYNTHETIC))
+    words, fixations = _normalized_synthetic()
+    assert _reports_on_a_miss(lambda: tabs._corpus_word_measures(words, fixations))
 
 
 def test_a_just_added_dataset_shows_its_card_at_once(at, monkeypatch):

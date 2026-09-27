@@ -2059,6 +2059,10 @@ def _resolve_compare_source(
                 _cancel_compare_source,
                 args=(task_key,),
             ),
+            # UX-166: B is resolved on every run with Compare on — a cache hit,
+            # slow only in its checks on a big corpus — so the card waits for
+            # one of its builds to report a miss.
+            reveal_on_work=True,
         ):
             source = load_secondary_dataset(chosen)
     if source is None:
@@ -7244,6 +7248,20 @@ def _text_column(frame: pd.DataFrame) -> str | None:
     return None
 
 
+def _corpus_word_measures(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
+    """The Corpus view's per-word measures — what `frame_cache` builds on a miss.
+
+    It reports once, first thing (UX-166): only a miss runs it, and the gated
+    ``corpus_measures`` card waits for a report before it shows.
+    """
+    progress.report()
+    if words.empty or fixations.empty:
+        return words
+    from scanpath_studio.measures import compute_per_word_measures
+
+    return compute_per_word_measures(fixations, words)
+
+
 def render_corpus_analysis_tab(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
@@ -7287,8 +7305,7 @@ def render_corpus_analysis_tab(
     # Keyed → the `.st-key-…` selector the "Explore a corpus question" tutorial
     # spotlights when it names the subtab to open (UX-40). The tab bar carries no
     # widget key, so a tutorial can only *point* at it, never switch it.
-    from scanpath_studio.measures import compute_per_word_measures
-
+    #
     # BUG-78: every subtab reads its measures off the words frame, and only an
     # IA export ships them — so a Tobii/SMI upload, the synthetic trial or an
     # authored scanpath (boxes + fixations, nothing pre-aggregated) got "No
@@ -7298,18 +7315,18 @@ def render_corpus_analysis_tab(
     #
     # UX-166: the per-word measures of the whole pool are the Corpus view's
     # first slow region — opening its card releases the page skeleton, so the
-    # view appears with this card at its top while they compute.
+    # view appears with this card at its top while they compute. It opens on
+    # every run and a hit is cheap, so it is gated: it shows only for a miss.
     with loading.card(
-        st.empty(), key="corpus_measures", title="Computing reading measures"
+        st.empty(),
+        key="corpus_measures",
+        title="Computing reading measures",
+        reveal_on_work=True,
     ):
         words_filtered = frame_cache(
             "corpus_measures",
             (frame_fingerprint(words_filtered), frame_fingerprint(fixations_filtered)),
-            lambda: (
-                compute_per_word_measures(fixations_filtered, words_filtered)
-                if not words_filtered.empty and not fixations_filtered.empty
-                else words_filtered
-            ),
+            partial(_corpus_word_measures, words_filtered, fixations_filtered),
         )
     with st.container(key="tutorial_corpus_subtabs"):
         text_tab, sentence_tab, reader_tab, groups_tab = st.tabs(

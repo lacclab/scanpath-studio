@@ -168,10 +168,12 @@ the core data dependencies acyclic.
   everything the run has queued, the card's own reveal included, until it ends.
   Never create a Streamlit element inside the progress hook's callers' cached
   functions: the hook is a side channel precisely because `st.cache_data`
-  replays elements. A cached build under a **gated** card (the dataset
-  pipeline, Compare's B, the Corpus measures — `loading.py` above) must report
-  on a miss — a bare `progress.report()` first thing when it has no loop to
-  report from — or that card never shows for it, however slow.
+  replays elements. A build under a **gated** card (the dataset pipeline,
+  Compare's B, the Corpus measures — `loading.py` above) must report at the
+  **start** of its work on a miss: a bare `progress.report()` first thing when
+  it has no loop to count, and `report(0, total, …)` before a loop that reports
+  after each unit — one that doesn't hides its first unit (for OneStop, a whole
+  report) — or that card shows late, or never.
 - **Keep the plot stage's order** (UX-167): notes that come before the figure go
   to `plot_notes_slot`, never into `tour_grp_plot` ahead of the figure — the
   figure must be the stage's second child, or a figure on screen vanishes the

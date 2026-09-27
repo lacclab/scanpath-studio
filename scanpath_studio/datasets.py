@@ -315,6 +315,9 @@ def _potec_fixations(
             if reader_set is not None and reader_id not in reader_set:
                 continue
             jobs.append((path, centers))
+    # UX-166: "0 of N" before the first file, so a gated card is armed from the
+    # start — a report only after each file would hide the first one.
+    progress.report(0, len(jobs), unit="files")
     frames = []
     for index, (path, centers) in enumerate(jobs, start=1):
         fixations = _read_potec_tsv(path)
@@ -813,6 +816,9 @@ def onestop_raw_frames(
         download_onestop(root, regime=regime, parts=part_list)
 
     reports = [(kind, part) for kind in ("ia", "fixations") for part in part_list]
+    # UX-166: "0 of N" first — one report here is a whole IA or fixation file,
+    # so a report only after it would hide most of the load from a gated card.
+    progress.report(0, len(reports), unit="reports")
     word_frames, fix_frames = [], []
     for index, (kind, part) in enumerate(reports, start=1):
         frame = _read_onestop_part(root, kind, regime, part, variant)
@@ -1364,6 +1370,9 @@ def _multipleye_fixations(
         for path in sorted(session_dir.glob(f"*_{suffix}.csv"))
         if (info := _wanted(path)) is not None
     ]
+    # UX-166: "0 of N" before the first file, so a gated card is armed from the
+    # start — a report only after each file would hide the first one.
+    progress.report(0, len(reading), unit="files")
     frames = []
     for index, (path, info) in enumerate(reading, start=1):
         stamped = _stamp_multipleye_fixations(pd.read_csv(path), info, kinds=kinds)

@@ -201,8 +201,9 @@ button.
   run, and on a big corpus a plain rerun's cache checks alone can outlast the
   delay. They are gated (`reveal_on_work`): past the delay, the timer reveals
   one only once its task has reported — a miss — checking again at each
-  refresh. Every build they cover reports on a miss; one with no loop to count
-  calls a bare `report()` first thing. Waiting on another run's build in
+  refresh. Every build they cover reports at the start of a miss: one with no
+  loop to count calls a bare `report()` first thing, and a corpus reader
+  reports "0 of N" before its first file. Waiting on another run's build in
   flight counts too: the waiter reports once before it waits.
 - **The area holds its final size from the first instant,** so nothing jumps
   even when the card never appears (§2.2, §3.1).
@@ -277,8 +278,9 @@ The figure is not a step. Once the trial list exists the real page appears,
 and the plot shows its own card if the figure is slow (§3).
 
 The count sources: `potec_raw_frames` reports per file, `multipleye_raw_frames`
-per session folder, the OneStop readers per report part, and the benchmark
-reader per Parquet file. Counts are as fine as each loader's own loop, and a
+per file, the OneStop readers per report part, and the benchmark reader per
+Parquet file — each starting with "0 of N" before its first, so the card is
+armed from the start. Counts are as fine as each loader's own loop, and a
 source with no loop reports none, so its step shows no count.
 
 ### 2.2 Where it shows: the view's reserved area

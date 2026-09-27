@@ -5,6 +5,7 @@ fixations, and the PoTeC loader."""
 import io
 import json
 import zipfile
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -13,6 +14,7 @@ import pytest
 import scanpath_studio as sps
 from scanpath_studio import data as data_module
 from scanpath_studio import datasets as datasets_module
+from scanpath_studio import progress
 from scanpath_studio.plots import make_scanpath_figure
 
 # ---------------------------------------------------------------------------
@@ -544,8 +546,8 @@ def test_potec_reports_each_fixation_file(potec_root, monkeypatch):
     "1 of 2 files" while loading. Fix-round-1 (Minor #8) also pins the FULL
     call sequence via a spy on `progress.report` — not just the final
     snapshot, since a cancel checkpoint needs the intermediate reports to
-    actually have happened, in order, one per file."""
-    from scanpath_studio import progress
+    actually have happened, in order, one per file. The first, "0 of 2", comes
+    before any file is read (see the next test)."""
     from scanpath_studio.datasets import potec_raw_frames
 
     calls = []
@@ -558,9 +560,51 @@ def test_potec_reports_each_fixation_file(potec_root, monkeypatch):
     monkeypatch.setattr(progress, "report", spy)
     with progress.task(("t", "potec"), title="Loading PoTeC") as task:
         potec_raw_frames(potec_root, texts=["b0"])
-    assert calls == [(1, 2, "files"), (2, 2, "files")]
+    assert calls == [(0, 2, "files"), (1, 2, "files"), (2, 2, "files")]
     snap = task.snapshot()
     assert (snap.done, snap.total, snap.unit) == (2, 2, "files")
+
+
+def _state_of_the_active_task() -> tuple:
+    task = progress.active()
+    snap = task.snapshot()
+    return (task.worked, snap.done, snap.total, snap.unit)
+
+
+def test_a_potec_load_has_reported_before_its_first_fixation_file(
+    potec_root, monkeypatch
+):
+    """UX-166: a gated card shows once its task reports, and a loop that reports
+    only *after* each file hides its first file — for OneStop, a whole report —
+    behind the delay. So a reader reports "0 of N" before it reads anything."""
+    seen = []
+    real_read = datasets_module._read_potec_tsv
+
+    def _read(path):
+        if "eyetracking_data" in Path(path).parts:
+            seen.append(_state_of_the_active_task())
+        return real_read(path)
+
+    monkeypatch.setattr(datasets_module, "_read_potec_tsv", _read)
+    with progress.task(("t", "potec-first"), title="Loading PoTeC"):
+        datasets_module.potec_raw_frames(potec_root, texts=["b0"])
+    assert seen[0] == (True, 0, 2, "files")
+
+
+def test_a_onestop_load_has_reported_before_its_first_report(
+    onestop_offline, tmp_path, monkeypatch
+):
+    seen = []
+    real_read = datasets_module._read_onestop_part
+
+    def _read(*args, **kwargs):
+        seen.append(_state_of_the_active_task())
+        return real_read(*args, **kwargs)
+
+    monkeypatch.setattr(datasets_module, "_read_onestop_part", _read)
+    with progress.task(("t", "onestop-first"), title="Loading OneStop"):
+        datasets_module.onestop_raw_frames(tmp_path, regime="ordinary", download=True)
+    assert seen[0] == (True, 0, 2, "reports")
 
 
 def test_potec_present(tmp_path):
@@ -1309,6 +1353,23 @@ def test_multipleye_raw_frames_auto_detect_path(multipleye_root):
     assert set(words["participant_id"]) == {"001_ZH_CH_1_ET1"}  # broadcast worked
     assert set(words["trial_id"]) == {"Lit_Demo_1"}
     assert set(words["screen_id"]) == {"page_1", "page_2"}
+
+
+def test_a_multipleye_load_reports_before_its_first_file(multipleye_root, monkeypatch):
+    """UX-166: "0 of N files" first, so a gated card is armed before the first
+    file is read — then one report per file, as before."""
+    calls = []
+    real_report = progress.report
+
+    def spy(done=None, total=None, *, unit="", detail=None):
+        calls.append((done, total, unit))
+        return real_report(done, total, unit=unit, detail=detail)
+
+    monkeypatch.setattr(progress, "report", spy)
+    with progress.task(("t", "multipleye-first"), title="Loading MultiplEYE"):
+        datasets_module.multipleye_raw_frames(multipleye_root)
+    files = calls[-1][1]
+    assert calls == [(index, files, "files") for index in range(files + 1)]
 
 
 def test_multipleye_inventory(multipleye_root):

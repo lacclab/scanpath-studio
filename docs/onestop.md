@@ -76,7 +76,9 @@ shows whether they're already present (until they are, the app shows the bundled
 demo, with a **⬇ Download now** panel). For the Public variant, if they're
 present the corpus loads with no network access; if not, click **⬇ Download** to
 fetch them into the folder (cached on disk, so only the first load pays the
-download — reports range from tens to a few hundred MB each).
+download — reports range from tens to a few hundred MB each). While it
+downloads, a card shows how much has arrived; **Stop download** ends it and
+deletes the partial file.
 
 !!! note "On a server other machines can reach"
     When the app is served to other machines (the hosted demo, or

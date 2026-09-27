@@ -109,7 +109,7 @@ All checked against the installed Streamlit 1.64:
 - **Caching the finished replay, and labelling GIF/MP4 exports from inputs** —
   PERF-16, in the other session.
 - **Shrinking the replay page itself** (14.8 MB for 361 frames). A real cost,
-  but a separate job; filed as a backlog issue.
+  but a separate job; filed as **PERF-17** (#242).
 - **Keeping the page fully usable during loads** (approach 2, background jobs).
   It restructures `main`'s single pipeline for no gain in cancelling, which
   fast reruns already make instant.
@@ -238,6 +238,15 @@ longer stack.
 
 ## 2. Dataset loads (UX-166)
 
+**Slow work lets the server send.** A CPU-bound build on the script thread
+holds the GIL, and the server's event loop needs several handoffs of it to
+send one message, so a run's queue — the card's reveal included — used to
+reach the browser only once the build ended (measured on the cold first
+replay: the rail at 3.2 s, the card never). Inside a task, every checkpoint
+therefore sleeps 1 ms at most every 25 ms (`progress.YIELD_EVERY_S` /
+`YIELD_S`); measured again, the rail arrived at 0.6 s and the card showed on
+time, counting frames.
+
 ### 2.1 What the card covers
 
 In `main`, one `loading.card` spans the dataset pipeline, from the load
@@ -348,9 +357,18 @@ its target:
 **The size.** The placeholder takes the figure's display size: the last figure
 rendered under the same plot key (`single`, `single_anim`, `compare`), recorded
 in session state when it is embedded, else an estimate from the canvas and the
-display caps. It scales with the column as `_render_true_scale_chart` does —
-`width: min(100%, Wpx); aspect-ratio: W / H` for the script's
-`Math.min(1, avail / W)` — so the row keeps its height and the rail with it.
+display caps. It takes the true-scale iframe's fixed height — the figure's
+height + 12; `html_embed.embed_html_iframe` passes an int to `st.iframe`, so the
+row is exactly that tall at any column width — and the figure's own width,
+capped by the column. The row keeps its height, and the rail with it; and since
+the card's grid track is the box's width, the card centres over the figure, not
+the column.
+
+**The view keeps its place.** Streamlit matches a rerun's elements to the last
+run's by position, so anything drawn only sometimes above the view — the page
+chrome, a run's notices, the view area's own notices — sits inside a container
+drawn every run; one element more above `sps_view` would otherwise drop the
+whole view and redraw it from nothing.
 
 ### 3.2 Two cases
 
@@ -362,10 +380,10 @@ display caps. It scales with the column as `_render_true_scale_chart` does —
   takes over 0.5 s, the old one dims under the card; then the new figure
   replaces it in place. Stepping through trials stays continuous.
 
-"A figure on screen" is the recorded size from the previous run, popped when a
-render starts. A run interrupted before its embed leaves nothing recorded, so
-the next run treats the stage as empty — the placeholder then replaces whatever
-is there, which is the safe failure.
+Both cases are one mechanism: the size box always sits in the stage's first
+child. Unrevealed it is transparent and only holds the height; revealed it is a
+translucent veil — over an old figure it reads as dimming, over an empty area
+as a skeleton. No flag has to track whether a figure is on screen.
 
 ### 3.3 Per figure type
 
@@ -402,7 +420,7 @@ server has finished.
 |---|---|---|
 | Dataset load, cold or switching | **Back to *previous dataset*** | Reopens the last dataset that finished loading in this session, instantly from cache. On a fresh start with nothing loaded yet, the Bundled demo. |
 | Animation build | **Show static plot** | `single_animate = False`. |
-| Compare's second dataset | **Compare within *A's dataset*** | Restores B's source (`cmp_dataset`) to its previous value. |
+| Compare's second dataset | **Compare within *A's dataset*** | Returns B to A's dataset (`cmp_dataset` = "This dataset"). |
 | Corpus download (PoTeC, OneStop) | **Stop download** | Stops the transfer and deletes the partial `.part` file. |
 
 - **"Previous dataset" is a new session value,** `_last_loaded_source`: the
@@ -413,6 +431,9 @@ server has finished.
   ([app.py:3678](../scanpath_studio/app.py:3678)).
 - **After a dataset cancel,** `menu.notices` shows "Stopped loading PoTeC ·
   **Try again**". Try again re-selects that dataset through the same seam.
+- **A slow rerun of the dataset already on screen offers no Cancel:** there is
+  nothing to go back to. A view switch that lands on a load in flight shows
+  that load's card, with its steps and Cancel.
 - **After an animation cancel,** the Animate switch being off says what
   happened, so there is no notice.
 - **Views and long computations** (Corpus Analysis charts, the Data page's
@@ -454,8 +475,8 @@ download cards.
 - **Another session waiting on the same computation is unaffected:** when the
   cancelled thread releases the compute lock without a result, the waiting
   thread computes it itself.
-- **`Cancelled` is caught by the card's exit,** which ends that run quietly.
-  Only an abandoned run ever computes a cancelled task — `progress.task()`
+- **`Cancelled` is caught by `loading.run_scope`,** which ends that run quietly.
+  Only an abandoned run ever computes a cancelled task — `progress.begin()`
   never joins a cancelled one, it starts afresh — so there is no page left to
   show an error on, and catching it keeps the server log clean.
 

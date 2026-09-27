@@ -323,6 +323,21 @@ def step_to(index: int, label: str | None = None) -> None:
         current.step_to(index, label)
 
 
+def running(key: Hashable) -> bool:
+    """Is a task running under ``key`` — registered, neither finished nor
+    cancelled?
+
+    The registry is weak (`_REGISTRY`), so a task is in it only while something
+    holds it: its card during its run, or a superseded run's thread still
+    computing it. A key some run left behind — one that ended by ``st.stop()``,
+    an exception or a rerun in the middle of its work — names no task once
+    nothing holds that task any more, and so no work in flight.
+    """
+    with _REGISTRY_LOCK:
+        current = _REGISTRY.get(key)
+    return current is not None and not current.finished and not current.cancelled
+
+
 def cancel(key: Hashable) -> None:
     """Cancel ``key``'s task: its computing thread stops at its next checkpoint."""
     with _REGISTRY_LOCK:

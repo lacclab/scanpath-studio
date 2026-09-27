@@ -116,6 +116,27 @@ def test_a_task_a_running_thread_holds_stays_joinable_and_goes_once_let_go():
     assert fresh.snapshot().title == "Loading again"
 
 
+def test_running_is_a_live_task_neither_finished_nor_cancelled():
+    """A key a run left behind — one that ended by `st.stop()`, an exception or
+    a rerun mid-load — is no load in flight once nothing holds its task."""
+    held = progress.begin(("t", "running"), title="x")
+    assert progress.running(("t", "running")) is True
+    held.finish()
+    assert progress.running(("t", "running")) is False
+
+    cancelled = progress.begin(("t", "running-cancelled"), title="x")
+    cancelled.cancel()
+    assert progress.running(("t", "running-cancelled")) is False
+
+    assert progress.running(("t", "running-never-begun")) is False
+
+    dropped = progress.begin(("t", "running-dropped"), title="x")
+    assert progress.running(("t", "running-dropped")) is True
+    del dropped
+    gc.collect()
+    assert progress.running(("t", "running-dropped")) is False
+
+
 def test_begin_fresh_replaces_any_existing_record_even_mid_flight():
     first = progress.begin(("t", "fresh"), title="x")
     second = progress.begin(("t", "fresh"), title="x", fresh=True)

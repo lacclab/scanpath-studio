@@ -11,6 +11,7 @@ an explicit ``reveal_now`` can show one.
 
 from __future__ import annotations
 
+import gc
 import time
 import uuid
 from collections.abc import Callable
@@ -755,10 +756,15 @@ def test_a_view_switch_onto_an_in_flight_load_opens_the_loads_own_card(at, monke
     monkeypatch.setattr(loading, "REFRESH_S", 30)
     monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
     monkeypatch.setattr(app, "prepare_data", _stop)
+    # In flight: an abandoned run's thread would still be computing the load,
+    # holding its task. `st.stop()` froze the run instead, so hold it here — a
+    # task nothing holds is no load in flight (FR-6, the test after this one).
+    _hold_every_task(monkeypatch)
     demo = app.DEMO_CHOICE
     at.session_state["_pending_source_choice"] = demo
     at.run()  # Bundled Demo's load starts and is now in flight
     assert at.session_state[app.DATASET_TASK_KEY][2] == demo
+    gc.collect()  # live because it is held, not because nothing collected it
     pin_view(at, _VIEW_CORPUS)
     at.run()  # a view switch landing on that same in-flight load
     text = _markdown(at)
@@ -820,6 +826,31 @@ def test_the_add_dataset_wizard_is_never_where_cancel_goes_back_to(at):
     at.run()
     assert not at.exception, at.exception
     assert app.LAST_LOADED_SOURCE_KEY not in at.session_state
+
+
+def test_a_view_switch_after_a_stopped_load_shows_the_view_not_a_load(at, monkeypatch):
+    """A run that ends mid-pipeline — `st.stop()`, an exception, `st.rerun()` —
+    leaves `DATASET_TASK_KEY` set, naming a task nothing holds any more. No load
+    is in flight, so a view switch shows that view's own skeleton — not a load's
+    card, revealed at once, with steps and a Cancel for nothing."""
+    at.run()  # synthetic finishes
+    monkeypatch.setattr(loading, "DELAY_S", 30)  # only `reveal_now` can show it
+    monkeypatch.setattr(loading, "REFRESH_S", 30)
+    monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
+    monkeypatch.setattr(app, "prepare_data", _stop)
+    demo = app.DEMO_CHOICE
+    at.session_state["_pending_source_choice"] = demo
+    at.run()  # the demo's load, stopped mid-pipeline: its key is left behind
+    left = tuple(at.session_state[app.DATASET_TASK_KEY])
+    assert left[2] == demo
+    gc.collect()
+    assert left not in progress._REGISTRY  # nothing holds its task any more
+    pin_view(at, _VIEW_CORPUS)
+    at.run()
+    text = _markdown(at)
+    assert "Opening Corpus Analysis" in text
+    assert f"Loading {app._dataset_display_name(demo)}" not in text
+    assert "sps_cancel_page" not in [button.key for button in at.button]
 
 
 def test_a_hidden_last_loaded_dataset_is_never_offered_as_a_cancel_target(monkeypatch):

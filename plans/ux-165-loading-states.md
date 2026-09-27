@@ -462,7 +462,11 @@ server has finished.
   **Try again**". Try again re-selects that dataset through the same seam.
 - **A slow rerun of the dataset already on screen offers no Cancel:** there is
   nothing to go back to. A view switch that lands on a load in flight shows
-  that load's card, with its steps and Cancel.
+  that load's card, with its steps and Cancel — in flight meaning a live task
+  still holds it (`progress.running`), not just that `_sps_dataset_task` is
+  set: a run that ended by `st.stop()`, an exception or `st.rerun()` mid-load
+  leaves the key behind with nothing computing it, and the switch after it
+  shows the view's own skeleton.
 - **After an animation cancel,** the Animate switch being off says what
   happened, so there is no notice.
 - **Views and long computations** (Corpus Analysis charts, the Data page's

@@ -6683,7 +6683,7 @@ def _open_dataset_card(
 
     A switch to ``view`` opens the task-less "Opening <view>" card at once,
     titled for the view and without steps, **only when no load was already in
-    flight** (`previous is None` below): the dataset is loaded already, so the
+    flight** (``in_flight`` below): the dataset is loaded already, so the
     skeleton is what answers the click, and each switch's task is its own
     (never joined by a load's task, nor joining one — nor a later switch to the
     same view, which must never join a stale one either). **T8-3:** a view
@@ -6694,6 +6694,13 @@ def _open_dataset_card(
     Cancel must never be hidden behind the view-switch skeleton. `DATASET_TASK_KEY`
     still names the dataset's either way — a view switch in the middle of a
     load is not "another dataset".
+
+    **In flight** means a live, unfinished task still holds the key
+    (`progress.running`), not just that the key is set: a run that ended by
+    ``st.stop()``, an exception or ``st.rerun()`` mid-pipeline leaves
+    `DATASET_TASK_KEY` behind with nothing computing it, and a view switch after
+    that would otherwise show a load's card — steps, Cancel, revealed at once —
+    for no load at all.
 
     **UX-168:** a run that finds *another* dataset's task still marked running
     under `DATASET_TASK_KEY` was started by picking this one mid-load (directly,
@@ -6719,10 +6726,11 @@ def _open_dataset_card(
     session = loading.session_id()
     task_key = ("dataset", session, token)
     previous = st.session_state.get(DATASET_TASK_KEY)
+    in_flight = previous is not None and progress.running(tuple(previous))
     if previous is not None and tuple(previous) != task_key:
         progress.cancel(tuple(previous))
     st.session_state[DATASET_TASK_KEY] = task_key
-    if view_switched and previous is None:
+    if view_switched and not in_flight:
         return page.open_card(
             title=f"Opening {view_label(view)}",
             reveal_now=True,

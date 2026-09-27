@@ -64,8 +64,8 @@
             <a id="indexLink" class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_wizard_shell_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.16.1">coverage.py v7.16.1</a>,
-            created at 2026-09-27 06:45 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
+            created at 2026-09-27 21:33 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -391,9 +391,9 @@
     <p class="run"><span class="n"><a id="t309" href="#t309">309</a></span><span class="t">    <span class="nam">st</span><span class="op">.</span><span class="nam">session_state</span><span class="op">[</span><span class="str">&quot;_pending_source_choice&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">ds_name</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t310" href="#t310">310</a></span><span class="t">    <span class="nam">st</span><span class="op">.</span><span class="nam">session_state</span><span class="op">[</span><span class="str">&quot;_show_upload_wizard&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="key">False</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t311" href="#t311">311</a></span><span class="t">    <span class="nam">st</span><span class="op">.</span><span class="nam">session_state</span><span class="op">[</span><span class="str">&quot;setup_complete&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="key">True</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t312" href="#t312">312</a></span><span class="t">    <span class="com"># Flag the transition so main() paints a &quot;loading&quot; bridge over the wizard</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t313" href="#t313">313</a></span><span class="t">    <span class="com"># while the new dataset&#x27;s first figure builds &#8212; otherwise the wizard lingers</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t314" href="#t314">314</a></span><span class="t">    <span class="com"># on screen (stale DOM) for the seconds the heavy first render takes.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t312" href="#t312">312</a></span><span class="t">    <span class="com"># Flag the transition so main() shows the dataset card at once (UX-166)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t313" href="#t313">313</a></span><span class="t">    <span class="com"># rather than after its usual delay &#8212; otherwise the closed wizard is all the</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t314" href="#t314">314</a></span><span class="t">    <span class="com"># user sees (stale DOM) for the seconds the heavy first render takes.</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t315" href="#t315">315</a></span><span class="t">    <span class="nam">st</span><span class="op">.</span><span class="nam">session_state</span><span class="op">[</span><span class="str">&quot;_wizard_finalizing&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="key">True</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t316" href="#t316">316</a></span><span class="t">    <span class="com"># &#8230;and ask for VAL-7&#x27;s Trial ID verdict on the dataset this just created.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t317" href="#t317">317</a></span><span class="t">    <span class="com"># It runs as part of the load that is about to happen (`main` already</span>&nbsp;</span><span class="r"></span></p>
@@ -3916,8 +3916,8 @@
             <a class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a class="nav" href="z_370c57a259db20f3_wizard_shell_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.16.1">coverage.py v7.16.1</a>,
-            created at 2026-09-27 06:45 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
+            created at 2026-09-27 21:33 +0000
         </p>
     </div>
 </footer>

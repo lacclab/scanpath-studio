@@ -46,7 +46,7 @@ The first column is what the app's **Parts** picker shows; the second is the lit
 
 Every part ships an **interest-area report** (one row per word, with bounding boxes and reading measures) and a **fixation report**, all in the same schema — so each part renders as a scanpath. Selecting **several parts** makes each part its own trial (the part is folded into the trial id, e.g. `Paragraph::1` vs `Title::1`, so their word boxes don't collide). On OSF only *Paragraph* is regime-split; the other parts come from the all-regimes full release, so they are not narrowed to the chosen regime: they hold every regime's trials.
 
-The **✏️ Edit** screen's data-location part lists the **Expected files** and shows whether they're already present (until they are, the app shows the bundled demo, with a **⬇ Download now** panel). For the Public variant, if they're present the corpus loads with no network access; if not, click **⬇ Download** to fetch them into the folder (cached on disk, so only the first load pays the download — reports range from tens to a few hundred MB each).
+The **✏️ Edit** screen's data-location part lists the **Expected files** and shows whether they're already present (until they are, the app shows the bundled demo, with a **⬇ Download now** panel). For the Public variant, if they're present the corpus loads with no network access; if not, click **⬇ Download** to fetch them into the folder (cached on disk, so only the first load pays the download — reports range from tens to a few hundred MB each). While it downloads, a card shows how much has arrived; **Stop download** ends it and deletes the partial file.
 
 On a server other machines can reach
 

@@ -51,7 +51,7 @@ These are visualization choices, not edits to the source data or reading-measure
 
 ## Replay and compare
 
-- **Animate** replays the selected trial. The **▾** beside it controls playback speed, autoplay, and smoothness.
+- **Animate** replays the selected trial. The **▾** beside it controls playback speed, autoplay, and smoothness. Building a replay shows a frame count; **Show static plot** cancels it.
 - **Compare** adds a second reading to the selected one — overlaid on the same stimulus by default, or side by side / top & bottom from the **▾** beside it.
 - **Comparisons** shows trials whose chosen field matches the selected trial. Choosing text id finds other readings of the text; choosing participant id finds that reader's other trials.
 

@@ -21,9 +21,9 @@ script thread holds Python's GIL, and the server's event loop needs several
 handoffs of it to send one message, each waiting out the interpreter's switch
 interval — so everything a run queues, a card's own reveal included, used to
 reach the browser only once the build ended. Inside a task, a call therefore
-sleeps for ``YIELD_S`` whenever ``YIELD_EVERY_S`` has passed since the task last
-did: a sleep releases the GIL outright, and the loop drains its queue
-uncontended.
+sleeps for ``YIELD_S`` whenever ``YIELD_EVERY_S`` has passed since the task
+began or last did — so a task quicker than that never sleeps: a sleep releases
+the GIL outright, and the loop drains its queue uncontended.
 
 Nothing here creates a Streamlit element, deliberately. The replay's frame loop
 runs inside two nested ``st.cache_data`` functions, and Streamlit replays every
@@ -42,9 +42,10 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 
 #: How often a task's checkpoints hand the GIL over, and for how long — at most
-#: YIELD_S / YIELD_EVERY_S (4%) of the work's time. Measured on the cold first
-#: replay build: the rail reached the browser at 0.5 s instead of 3.2 s, and the
-#: card showed on time instead of not at all.
+#: YIELD_S / YIELD_EVERY_S (4%) of the work's time, the first time one interval
+#: into the task. Measured on the cold first replay build: the rail reached the
+#: browser at 0.5 s instead of 3.2 s, and the card showed on time instead of not
+#: at all.
 YIELD_EVERY_S = 0.025
 YIELD_S = 0.001
 
@@ -102,7 +103,11 @@ class Task:
         self._finished = False
         self._worked = False
         self._cancelled = threading.Event()
-        self._last_yield = float("-inf")
+        # The first yield comes YIELD_EVERY_S into the task, not at its first
+        # checkpoint: a plain rerun's page card makes one, and a quick run must
+        # not pay a sleep for it. Read from `_clock`, the clock `_checkpoint`
+        # compares against (and the one a test replaces).
+        self._last_yield = _clock()
 
     @property
     def cancelled(self) -> bool:

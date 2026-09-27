@@ -184,20 +184,30 @@ def test_reporting_hands_the_gil_over_at_most_every_yield_interval(fake_time):
     """A CPU-bound build on the script thread starves the server's event loop,
     so nothing a run sends reaches the browser until the build ends — a card's
     own reveal included. A report inside a task therefore sleeps briefly, but
-    only once per ``YIELD_EVERY_S``; the first one yields at once, draining
-    what the run queued before its slow work began."""
+    only once per ``YIELD_EVERY_S``, counted from the task's start."""
     step = progress.YIELD_EVERY_S
     with progress.task(("t", "yield"), title="Building"):
-        progress.report(0, 10)  # first: yields at once
+        progress.report(0, 10)  # the task has only just begun
         fake_time.now += step * 0.4
         progress.report(1, 10)  # too soon
         fake_time.now += step * 0.4
         progress.report(2, 10)  # still too soon (0.8 of the interval)
         fake_time.now += step * 0.4
-        progress.report(3, 10)  # 1.2 intervals since the last yield
+        progress.report(3, 10)  # 1.2 intervals since the task began: yields
         fake_time.now += step * 3
         progress.step_to(1)  # a step change is a checkpoint too
-    assert fake_time.sleeps == [progress.YIELD_S] * 3
+    assert fake_time.sleeps == [progress.YIELD_S] * 2
+
+
+def test_a_quick_task_never_sleeps(fake_time):
+    """The first yield comes one interval into a task, not at its first
+    checkpoint: the page card's step change is one on every plain rerun, and a
+    quick run must not pay a sleep for it."""
+    with progress.task(("t", "quick"), title="Loading", steps=("a", "b")):
+        progress.step_to(1)
+        fake_time.now += progress.YIELD_EVERY_S * 0.9
+        progress.report(1, 2)
+    assert fake_time.sleeps == []
 
 
 def test_no_yield_without_an_active_task(fake_time):
@@ -239,9 +249,11 @@ def test_two_threads_reporting_to_one_task_share_one_yield(monkeypatch):
             in_sleep.set()
             release.wait(timeout=5)
 
-    monkeypatch.setattr(progress, "_clock", lambda: 100.0)
+    now = [100.0]
+    monkeypatch.setattr(progress, "_clock", lambda: now[0])
     monkeypatch.setattr(progress, "_sleep", sleep)
     task = progress.Task(("t", "joined"), title="Building")
+    now[0] += progress.YIELD_EVERY_S  # past the task's first interval, then held
     first = threading.Thread(target=task.report, args=(0, 10), daemon=True)
     first.start()
     try:

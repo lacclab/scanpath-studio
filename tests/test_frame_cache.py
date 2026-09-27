@@ -7,22 +7,32 @@ data the app already has, and never writes to (see
 slot and hands back *the object itself*.
 
 UX-166 added `_shared_build` (a rerun joins a build already in flight instead
-of starting a second) and its fix round (T5-1) added "latest request wins": a
+of starting a second). Its fix rounds added "latest request wins" (T5-1): a
 build that finishes only publishes into the shared cache while its key is
 still the slot's most recently *requested* one, so a superseded build's late
-finish can never clobber a newer result.
+finish can never clobber a newer result; and (T5-5, fix round 2) made the
+owner branch exception-safe end to end — a raising `lookup`/`publish` must
+never leak the in-flight registry entry or hang a waiter forever.
 """
 
 from __future__ import annotations
 
+import contextlib
 import threading
 from dataclasses import dataclass, field
 
 import pandas as pd
+import pytest
 import streamlit as st
 
 from scanpath_studio import data as data_module
 from scanpath_studio.data import _shared_build, frame_cache
+
+#: Every threaded test below is fully deterministic (Event-based, no sleeps)
+#: and should finish in well under a second; this is a backstop only — a
+#: regression that reintroduces a hang fails the test instead of the whole
+#: suite (UX-166 fix-round-2, Minor #2 of Ruling T5-5).
+_THREAD_TEST_TIMEOUT = 30
 
 
 def _frame(n=3):
@@ -56,6 +66,37 @@ class _FlagWaitInFlight:
     value: object = None
     ok: bool = False
     error: Exception | None = None
+
+
+def _run_daemon(target) -> threading.Thread:
+    """Start `target` as a **daemon** thread (UX-166 fix-round-2, Minor #2):
+    a regression that leaves it parked forever must not also block pytest —
+    or the whole process — from exiting. Every caller still joins it with a
+    bounded timeout and asserts it actually finished; the daemon flag is the
+    second line of defense, not the only one."""
+    thread = threading.Thread(target=target, daemon=True)
+    thread.start()
+    return thread
+
+
+def _join_or_fail(thread: threading.Thread, *, timeout: float = 5) -> None:
+    thread.join(timeout=timeout)
+    assert not thread.is_alive(), "thread did not finish within the timeout"
+
+
+def _wait_or_fail(event: threading.Event, *, timeout: float = 5, msg: str) -> None:
+    assert event.wait(timeout=timeout), msg
+
+
+@contextlib.contextmanager
+def _released_afterward(release: threading.Event):
+    """`release.set()` always runs on the way out (UX-166 fix-round-2,
+    Minor #2): an owner thread parked on `release.wait()` must never be left
+    hanging just because an assertion inside the block failed first."""
+    try:
+        yield
+    finally:
+        release.set()
 
 
 class TestFrameCache:
@@ -169,6 +210,7 @@ class TestFingerprintsOutliveTheRun:
         assert len(calls) == 3
 
 
+@pytest.mark.timeout(_THREAD_TEST_TIMEOUT)
 class TestSharedBuild:
     """UX-166: a rerun joins a build already in flight instead of starting one.
 
@@ -179,7 +221,10 @@ class TestSharedBuild:
     `_shared_build` that shares nothing fails these tests loudly: the
     `data_module._INFLIGHT[ident]` lookup right after `registered.wait()`
     raises `KeyError`, since a non-sharing implementation never registers
-    anything there.
+    anything there. Every wait/join is bounded and asserted, `release` always
+    fires (even if an earlier assertion in the block failed), and threads are
+    daemons — a regression that reintroduces a hang fails fast instead of
+    parking the test suite (fix-round-2, Minor #2).
     """
 
     def test_two_callers_share_one_build(self, monkeypatch):
@@ -195,24 +240,21 @@ class TestSharedBuild:
             return object()
 
         results = {}
+        owner = _run_daemon(
+            lambda: results.__setitem__("owner", _shared_build(("s", 1), build))
+        )
+        with _released_afterward(release):
+            _wait_or_fail(registered, msg="owner never started building")
+            entry = data_module._INFLIGHT[("s", 1)]
 
-        def owner_call():
-            results["owner"] = _shared_build(("s", 1), build)
-
-        owner = threading.Thread(target=owner_call)
-        owner.start()
-        registered.wait()
-        entry = data_module._INFLIGHT[("s", 1)]
-
-        def waiter_call():
-            results["waiter"] = _shared_build(("s", 1), _must_not_run)
-
-        waiter = threading.Thread(target=waiter_call)
-        waiter.start()
-        assert entry.done.waiting.wait(timeout=5), "waiter never reached done.wait()"
-        release.set()
-        owner.join()
-        waiter.join()
+            waiter = _run_daemon(
+                lambda: results.__setitem__(
+                    "waiter", _shared_build(("s", 1), _must_not_run)
+                )
+            )
+            _wait_or_fail(entry.done.waiting, msg="waiter never reached done.wait()")
+        _join_or_fail(owner)
+        _join_or_fail(waiter)
 
         assert len(calls) == 1
         assert results["owner"] is results["waiter"]
@@ -240,6 +282,7 @@ class TestSharedBuild:
             return "ok"
 
         errors = []
+        results = {}
 
         def owner_call():
             try:
@@ -247,22 +290,19 @@ class TestSharedBuild:
             except progress.Cancelled as exc:
                 errors.append(exc)
 
-        owner = threading.Thread(target=owner_call)
-        owner.start()
-        registered.wait()
-        entry = data_module._INFLIGHT[("s", 2)]
+        owner = _run_daemon(owner_call)
+        with _released_afterward(release):
+            _wait_or_fail(registered, msg="owner never started building")
+            entry = data_module._INFLIGHT[("s", 2)]
 
-        results = {}
-
-        def waiter_call():
-            results["waiter"] = _shared_build(("s", 2), succeeding)
-
-        waiter = threading.Thread(target=waiter_call)
-        waiter.start()
-        assert entry.done.waiting.wait(timeout=5), "waiter never reached done.wait()"
-        release.set()
-        owner.join()
-        waiter.join()
+            waiter = _run_daemon(
+                lambda: results.__setitem__(
+                    "waiter", _shared_build(("s", 2), succeeding)
+                )
+            )
+            _wait_or_fail(entry.done.waiting, msg="waiter never reached done.wait()")
+        _join_or_fail(owner)
+        _join_or_fail(waiter)
 
         assert calls == ["owner", "waiter"]
         assert errors
@@ -271,9 +311,10 @@ class TestSharedBuild:
     def test_an_ordinary_error_is_re_raised_in_the_waiter_not_rebuilt(
         self, monkeypatch
     ):
-        """Minor #5: an ordinary `Exception` is not a cancellation — re-running
-        the owner's build would just fail again the same way, so every waiter
-        gets the SAME exception instead of rebuilding."""
+        """Minor #5 (fix-round-1): an ordinary `Exception` is not a
+        cancellation — re-running the owner's build would just fail again the
+        same way, so every waiter gets the SAME exception instead of
+        rebuilding."""
         monkeypatch.setattr(data_module, "_InFlight", _FlagWaitInFlight)
         registered = threading.Event()
         release = threading.Event()
@@ -291,6 +332,7 @@ class TestSharedBuild:
             raise AssertionError("the waiter must not rebuild")
 
         owner_errors = []
+        waiter_errors = []
 
         def owner_call():
             try:
@@ -298,35 +340,143 @@ class TestSharedBuild:
             except RuntimeError as exc:
                 owner_errors.append(exc)
 
-        owner = threading.Thread(target=owner_call)
-        owner.start()
-        registered.wait()
-        entry = data_module._INFLIGHT[("s", 3)]
-
-        waiter_errors = []
-
         def waiter_call():
             try:
                 _shared_build(("s", 3), must_not_run)
             except RuntimeError as exc:
                 waiter_errors.append(exc)
 
-        waiter = threading.Thread(target=waiter_call)
-        waiter.start()
-        assert entry.done.waiting.wait(timeout=5), "waiter never reached done.wait()"
-        release.set()
-        owner.join()
-        waiter.join()
+        owner = _run_daemon(owner_call)
+        with _released_afterward(release):
+            _wait_or_fail(registered, msg="owner never started building")
+            entry = data_module._INFLIGHT[("s", 3)]
+
+            waiter = _run_daemon(waiter_call)
+            _wait_or_fail(entry.done.waiting, msg="waiter never reached done.wait()")
+        _join_or_fail(owner)
+        _join_or_fail(waiter)
 
         assert calls == ["owner"]
         assert owner_errors == [boom]
         assert waiter_errors == [boom]
 
+    def test_a_waiter_gets_its_own_publish_opportunity(self, monkeypatch):
+        """Minor #1 of Ruling T5-5 (fix-round-2): the owner's own `publish`
+        decides against whatever key was latest *at its own decision time* —
+        a joined waiter's request can itself be the latest again by the time
+        it wakes, so it gets an independent, guarded shot at publishing too.
+        Proven here by giving the owner and the waiter two DIFFERENT publish
+        callbacks and asserting both actually ran with the shared value."""
+        monkeypatch.setattr(data_module, "_InFlight", _FlagWaitInFlight)
+        ident = ("s", "waiter-publish")
+        registered = threading.Event()
+        release = threading.Event()
+        owner_publish_calls = []
+        waiter_publish_calls = []
 
+        def build():
+            registered.set()
+            release.wait()
+            return "value"
+
+        results = {}
+
+        def owner_call():
+            results["owner"] = _shared_build(
+                ident, build, publish=owner_publish_calls.append
+            )
+
+        def waiter_call():
+            results["waiter"] = _shared_build(
+                ident, _must_not_run, publish=waiter_publish_calls.append
+            )
+
+        owner = _run_daemon(owner_call)
+        with _released_afterward(release):
+            _wait_or_fail(registered, msg="owner never started building")
+            entry = data_module._INFLIGHT[ident]
+
+            waiter = _run_daemon(waiter_call)
+            _wait_or_fail(entry.done.waiting, msg="waiter never reached done.wait()")
+        _join_or_fail(owner)
+        _join_or_fail(waiter)
+
+        assert results["owner"] == results["waiter"] == "value"
+        assert owner_publish_calls == ["value"]
+        assert waiter_publish_calls == ["value"]
+
+    def test_a_raising_publish_does_not_leak_the_entry_or_hang_a_waiter(
+        self, monkeypatch
+    ):
+        """Ruling T5-5 (fix-round-2): a24e105's try/finally always popped the
+        entry and signalled `done`; the "latest request wins" fix (T5-1) lost
+        that by writing the cleanup out per path, so a raising `publish`
+        (reproduced by the reviewer via `_vouch_for_frames` racing another
+        session's concurrent insert) leaked the `_INFLIGHT` entry and hung
+        every waiter — already joined or not — forever."""
+        monkeypatch.setattr(data_module, "_InFlight", _FlagWaitInFlight)
+        ident = ("s", "raising-publish")
+        registered = threading.Event()
+        release = threading.Event()
+
+        def raising_publish(value):
+            raise RuntimeError("dictionary changed size during iteration")
+
+        def build():
+            registered.set()
+            release.wait()
+            return "value"
+
+        results = {}
+
+        def owner_call():
+            results["owner"] = _shared_build(ident, build, publish=raising_publish)
+
+        def waiter_call():
+            results["waiter"] = _shared_build(
+                ident, _must_not_run, publish=raising_publish
+            )
+
+        owner = _run_daemon(owner_call)
+        with _released_afterward(release):
+            _wait_or_fail(registered, msg="owner never started building")
+            entry = data_module._INFLIGHT[ident]
+
+            waiter = _run_daemon(waiter_call)
+            _wait_or_fail(entry.done.waiting, msg="waiter never reached done.wait()")
+        _join_or_fail(owner)
+        _join_or_fail(waiter)  # must not hang despite `publish` always raising
+
+        assert results["owner"] == "value"
+        assert results["waiter"] == "value"
+        assert ident not in data_module._INFLIGHT
+
+    def test_a_raising_lookup_still_builds_and_cleans_up(self, monkeypatch):
+        """Ruling T5-5 (fix-round-2): a raising `lookup` is treated as a miss
+        — logged, then built normally — never left to skip the cleanup."""
+        monkeypatch.setattr(data_module, "_InFlight", _FlagWaitInFlight)
+        ident = ("s", "raising-lookup")
+        calls = []
+
+        def raising_lookup():
+            raise RuntimeError("boom")
+
+        def build():
+            calls.append(1)
+            return "value"
+
+        result = _shared_build(ident, build, lookup=raising_lookup)
+
+        assert result == "value"
+        assert calls == [1]
+        assert ident not in data_module._INFLIGHT
+
+
+@pytest.mark.timeout(_THREAD_TEST_TIMEOUT)
 class TestFrameCacheSharesInFlightBuilds:
-    """Minor #8: `frame_cache` itself — not just `_shared_build` directly —
-    shares one build in flight across two threads asking for the same slot
-    and key, in the same bare-mode session store."""
+    """Minor #8 (fix-round-1): `frame_cache` itself — not just `_shared_build`
+    directly — shares one build in flight across two threads asking for the
+    same slot and key, in the same bare-mode session store."""
 
     def test_two_threads_share_one_build(self, monkeypatch):
         monkeypatch.setattr(data_module, "_InFlight", _FlagWaitInFlight)
@@ -342,36 +492,33 @@ class TestFrameCacheSharesInFlightBuilds:
             return _frame()
 
         results = {}
+        owner = _run_daemon(
+            lambda: results.__setitem__("owner", frame_cache(slot, key, build))
+        )
+        with _released_afterward(release):
+            _wait_or_fail(registered, msg="owner never started building")
 
-        def owner_call():
-            results["owner"] = frame_cache(slot, key, build)
+            store = st.session_state.setdefault(data_module._FRAME_CACHE_KEY, {})
+            entry = data_module._INFLIGHT[(id(store), slot, key)]
 
-        owner = threading.Thread(target=owner_call)
-        owner.start()
-        registered.wait()
-
-        store = st.session_state.setdefault(data_module._FRAME_CACHE_KEY, {})
-        entry = data_module._INFLIGHT[(id(store), slot, key)]
-
-        def waiter_call():
-            results["waiter"] = frame_cache(slot, key, _must_not_run)
-
-        waiter = threading.Thread(target=waiter_call)
-        waiter.start()
-        assert entry.done.waiting.wait(timeout=5), "waiter never reached done.wait()"
-        release.set()
-        owner.join()
-        waiter.join()
+            waiter = _run_daemon(
+                lambda: results.__setitem__(
+                    "waiter", frame_cache(slot, key, _must_not_run)
+                )
+            )
+            _wait_or_fail(entry.done.waiting, msg="waiter never reached done.wait()")
+        _join_or_fail(owner)
+        _join_or_fail(waiter)
 
         assert len(calls) == 1
         assert results["owner"] is results["waiter"]
 
 
 def test_a_stopped_sessions_build_still_lands_in_the_store(monkeypatch):
-    """Minor #8, end to end with the debug_log fix: `timed()`'s log line runs
-    *after* the build finishes, and used to let an abandoned run's
-    StopException throw the just-finished result away before `frame_cache`
-    could store it (UX-166's first bug)."""
+    """Minor #8 (fix-round-1), end to end with the debug_log fix: `timed()`'s
+    log line runs *after* the build finishes, and used to let an abandoned
+    run's StopException throw the just-finished result away before
+    `frame_cache` could store it (UX-166's first bug)."""
     from streamlit.runtime.scriptrunner import StopException
 
     from scanpath_studio import debug_log
@@ -396,6 +543,7 @@ def test_a_stopped_sessions_build_still_lands_in_the_store(monkeypatch):
     assert store.get(slot) == (key, built)
 
 
+@pytest.mark.timeout(_THREAD_TEST_TIMEOUT)
 class TestLatestRequestWins:
     """UX-166 fix-round-1 (T5-1): a build a newer request already superseded
     must not clobber that newer result when it finally finishes — its own
@@ -418,19 +566,15 @@ class TestLatestRequestWins:
             return "value_a"
 
         results = {}
+        t_a = _run_daemon(
+            lambda: results.__setitem__("a", frame_cache(slot, "K_A", build_a))
+        )
+        with _released_afterward(release):
+            _wait_or_fail(registered, msg="A never started building")
 
-        def request_a():
-            results["a"] = frame_cache(slot, "K_A", build_a)
-
-        t_a = threading.Thread(target=request_a)
-        t_a.start()
-        registered.wait()
-
-        results["b"] = frame_cache(slot, "K_B", lambda: "value_b")
-        assert results["b"] == "value_b"
-
-        release.set()
-        t_a.join()
+            results["b"] = frame_cache(slot, "K_B", lambda: "value_b")
+            assert results["b"] == "value_b"
+        _join_or_fail(t_a)
         assert results["a"] == "value_a"  # still returned to A's own caller
 
         rebuilt = []
@@ -459,21 +603,19 @@ class TestLatestRequestWins:
             return "value_a"
 
         results = {}
-
-        def request_a():
-            results["a"] = frame_cache(slot, "K_A", build_a)
-
-        t_a = threading.Thread(target=request_a)
-        t_a.start()
-        registered.wait()
-
         rebuilt = []
-        hit = frame_cache(slot, "K_B", lambda: rebuilt.append(1) or "should not run")
-        assert hit == "value_b"
-        assert rebuilt == []
+        t_a = _run_daemon(
+            lambda: results.__setitem__("a", frame_cache(slot, "K_A", build_a))
+        )
+        with _released_afterward(release):
+            _wait_or_fail(registered, msg="A never started building")
 
-        release.set()
-        t_a.join()
+            hit = frame_cache(
+                slot, "K_B", lambda: rebuilt.append(1) or "should not run"
+            )
+            assert hit == "value_b"
+            assert rebuilt == []
+        _join_or_fail(t_a)
         assert results["a"] == "value_a"
 
         final = frame_cache(slot, "K_B", lambda: rebuilt.append(1) or "should not run")

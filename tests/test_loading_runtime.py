@@ -410,3 +410,32 @@ def test_a_stopped_run_leaves_its_open_cards_tasks_joinable():
     at = AppTest.from_function(_stopped_run_script).run()
     assert not at.exception
     assert progress._REGISTRY[("k", "stopped-run")].finished is False
+
+
+def _last_load_script():
+    import streamlit as st
+
+    from scanpath_studio import loading
+
+    with loading.run_scope():
+        page = loading.page(st.empty(), view="data")
+        card = page.open_card(
+            title="Loading X",
+            steps=("Reading files",),
+            task_key=("d", "last-at-open-task"),
+            duration_key=("d", "last-at-open"),
+        )
+        card.finish()  # records this load's own (tiny) duration
+        card.close(keep=True)  # the kept card's final repaint
+        st.stop()
+
+
+def test_the_last_load_hint_quotes_the_previous_load_not_this_one(monkeypatch):
+    """The hint is read once, when the card opens: the final repaint after
+    `finish` must not quote the load's own time back as its "last load"."""
+    monkeypatch.setitem(progress._DURATIONS, ("d", "last-at-open"), 6.0)
+    monkeypatch.setattr(loading, "DELAY_S", 0)
+    monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
+    at = AppTest.from_function(_last_load_script).run()
+    assert not at.exception, at.exception
+    assert "last load 6.0 s" in _markdown(at)

@@ -424,6 +424,9 @@ class Card:
         self._revealed_by_timer = False
         self.is_open = False
         self._skeleton_ph = self._head = self._detail = self._bar = self._reveal = None
+        # The "last load" hint, read once when the card opens: `finish` records
+        # this load's own time, and the final repaint mustn't quote it back.
+        self._last_duration: float | None = None
 
     @property
     def steps(self) -> tuple[str, ...]:
@@ -482,6 +485,8 @@ class Card:
         self._reveal = body.empty()
         self.is_open = True
         _run().cards.append(self)
+        if self._duration_key is not None:
+            self._last_duration = progress.last_duration(self._duration_key)
         self._task = progress.begin(
             self._task_key,
             title=self._title,
@@ -499,12 +504,9 @@ class Card:
 
     def _paint(self) -> None:
         snap = self._task.snapshot()
-        last = (
-            progress.last_duration(self._duration_key)
-            if self._duration_key is not None
-            else None
+        self._head.markdown(
+            head_html(snap, last=self._last_duration), unsafe_allow_html=True
         )
-        self._head.markdown(head_html(snap, last=last), unsafe_allow_html=True)
         body = steps_html(snap) if self._step_list and snap.steps else detail_html(snap)
         if body:
             self._detail.markdown(body, unsafe_allow_html=True)

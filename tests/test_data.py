@@ -144,24 +144,24 @@ class TestBoxEdgesResolveAsOneSet:
     table carrying two box encodings still auto-fills instead of every edge
     being ambiguous."""
 
-    def test_two_edge_sets_pick_the_first_in_the_header(self):
-        # The shape of a real EyeLink AOI export: LEFT_px … next to a derived
-        # aoi_left … (plus aoi_width / aoi_height).
+    def test_two_edge_sets_pick_the_last_in_the_header(self):
+        # The shape of a real AOI export: aoi_left … (plus aoi_width /
+        # aoi_height) with LEFT_px … appended after it.
         df = pd.DataFrame(
             {
                 c: [1]
                 for c in (
                     "word",
-                    "BOTTOM_px",
-                    "LEFT_px",
-                    "RIGHT_px",
-                    "TOP_px",
                     "aoi_bottom",
                     "aoi_height",
                     "aoi_left",
                     "aoi_right",
                     "aoi_top",
                     "aoi_width",
+                    "BOTTOM_px",
+                    "LEFT_px",
+                    "RIGHT_px",
+                    "TOP_px",
                 )
             }
         )
@@ -182,14 +182,14 @@ class TestBoxEdgesResolveAsOneSet:
             {
                 c: [1]
                 for c in (
-                    "aoi_left",
-                    "aoi_right",
-                    "aoi_top",
-                    "aoi_bottom",
                     "LEFT_px",
                     "RIGHT_px",
                     "TOP_px",
                     "BOTTOM_px",
+                    "aoi_left",
+                    "aoi_right",
+                    "aoi_top",
+                    "aoi_bottom",
                     "aoi_width",
                     "aoi_height",
                 )

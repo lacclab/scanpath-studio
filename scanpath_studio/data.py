@@ -896,8 +896,10 @@ def _pick_box_edge_set(words: pd.DataFrame) -> dict[str, str] | None:
     whole box landed in the manual step. The edges are not independent: they
     share an affix. So each column naming exactly one edge is keyed by the rest
     of its name (``*_px``, ``aoi_*``), and a key that covers all four edges is a
-    set. The set whose first column comes first in the table wins, which keeps
-    the choice deterministic and matches reading the header left to right.
+    set. The set that comes **last** in the table wins: a derived box is
+    usually appended after the one the export shipped with, and the columns a
+    lab adds later are the ones it means (``aoi_left`` … then ``LEFT_px`` …
+    picks ``LEFT_px``).
 
     Returns ``{edge: column}`` plus the shared affix under ``"affix"`` (for
     ``_affix_sibling``), or ``None`` when no complete set exists."""
@@ -916,7 +918,7 @@ def _pick_box_edge_set(words: pd.DataFrame) -> dict[str, str] | None:
     complete = [a for a, g in groups.items() if len(g) == len(_BOX_EDGES)]
     if not complete:
         return None
-    affix = min(complete, key=order.__getitem__)
+    affix = max(complete, key=order.__getitem__)
     return {**groups[affix], "affix": affix}
 
 

@@ -183,6 +183,98 @@ def test_a_page_shown_and_released_at_once_hands_nothing_on(monkeypatch):
     assert "Drawing" not in _markdown(at)
 
 
+def _inherit_script():
+    """A seen page, then one region card per ``plan`` entry, in order:
+    ``"plain"`` (ungated), ``"gated_silent"`` (gated, reports nothing — a cache
+    hit) or ``"gated_reports"`` (gated, reports at once — a miss)."""
+    import time
+
+    import streamlit as st
+
+    from scanpath_studio import loading, progress
+
+    seen = []
+    with loading.run_scope():
+        area = st.container(key=loading.VIEW_AREA_KEY)
+        page = loading.page(area.empty(), view="scanpath", plot_height=300)
+        dataset = page.open_card(title="Loading Demo", steps=("Reading files",))
+        deadline = time.monotonic() + 3.0
+        while not dataset.revealed and time.monotonic() < deadline:
+            time.sleep(0.01)  # a slow load: the page's own timer reveals it
+        dataset.finish()
+        dataset.close(keep=True)
+        with area:
+            for index, kind in enumerate(st.session_state["plan"]):
+                with loading.card(
+                    st.empty(),
+                    key=f"c{index}",
+                    title=f"Card {index}",
+                    reveal_on_work=kind != "plain",
+                ) as opened:
+                    record = {"at_open": opened.revealed}
+                    if kind == "gated_reports":
+                        reported = time.monotonic()
+                        progress.report()  # a miss: real work starts
+                        deadline = reported + 3.0
+                        while not opened.revealed and time.monotonic() < deadline:
+                            time.sleep(0.005)
+                        record["shown_after"] = time.monotonic() - reported
+                    elif kind == "gated_silent":
+                        # Several refreshes, and past the card's own delay too.
+                        time.sleep(max(6 * loading.REFRESH_S, 1.5 * loading.DELAY_S))
+                    record["at_close"] = opened.revealed
+                seen.append(record)
+    st.session_state["seen"] = seen
+
+
+@pytest.fixture
+def after_a_seen_wait(monkeypatch):
+    """Run `_inherit_script` with ``plan``; the delay is real (> 0), so only the
+    carried wait can show a card the moment it opens."""
+    monkeypatch.setattr(loading, "DELAY_S", 0.5)
+    monkeypatch.setattr(loading, "REFRESH_S", 0.02)
+
+    def run(*plan: str) -> list[dict]:
+        at = AppTest.from_function(_inherit_script, default_timeout=20)
+        at.session_state["plan"] = list(plan)
+        at.run()
+        assert not at.exception, at.exception
+        return at.session_state["seen"]
+
+    return run
+
+
+def test_a_gated_card_carries_a_seen_wait_on_to_the_figures_card(after_a_seen_wait):
+    """After a slow dataset switch the user saw, Compare's B card (gated) opens
+    first. On a cache hit it must neither flash nor use up the page's reveal —
+    or the figure card waits its own delay with the previous dataset's figure
+    unveiled under the new controls."""
+    b_card, figure = after_a_seen_wait("gated_silent", "plain")
+    assert b_card == {"at_open": False, "at_close": False}
+    assert figure["at_open"] is True
+
+
+def test_a_gated_card_that_works_after_a_seen_wait_shows_without_the_delay(
+    after_a_seen_wait,
+):
+    """Through its gate, but with no delay: the moment its task reports — a
+    real load of B — it shows, within about one refresh; and the figure card
+    after it still shows at once."""
+    b_card, figure = after_a_seen_wait("gated_reports", "plain")
+    assert b_card["at_open"] is False
+    assert b_card["at_close"] is True
+    assert b_card["shown_after"] < loading.DELAY_S / 2
+    assert figure["at_open"] is True
+
+
+def test_a_seen_wait_is_carried_on_to_one_card_only(after_a_seen_wait):
+    """The first ungated card uses the carried wait up; one after it waits its
+    own delay like any other, rather than flashing for a frame."""
+    _, first, second = after_a_seen_wait("gated_silent", "plain", "plain")
+    assert first["at_open"] is True
+    assert second["at_open"] is False
+
+
 def _stopped_card_script():
     import streamlit as st
 

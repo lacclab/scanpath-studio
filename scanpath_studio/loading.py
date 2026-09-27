@@ -314,6 +314,10 @@ def session_id() -> str:
 class _RunState:
     cards: list[Card] = field(default_factory=list)
     page: Page | None = None
+    #: The page stood for a wait the user saw, and no ungated region card has
+    #: carried it on yet (`card`): set by the region card whose opening released
+    #: the page, cleared by the first ungated one — a gated card never clears it.
+    inherit_seen: bool = False
 
 
 _RUN: contextvars.ContextVar[_RunState | None] = contextvars.ContextVar(
@@ -418,7 +422,9 @@ class Card:
     dataset, the Corpus view's measures): its timer reveals it only once its
     task has reported (`progress.Task.worked`), so a plain rerun — however long
     its cache checks take on a big corpus — never shows it. ``reveal_now``
-    still shows it at once.
+    still shows it at once. A region card that continues a wait the user saw
+    (``inherit``, see `card`) skips the delay instead: ungated it shows at
+    once; gated it shows the moment its task reports, and never on a hit.
     """
 
     def __init__(
@@ -495,16 +501,23 @@ class Card:
     def task(self) -> progress.Task | None:
         return self._task
 
-    def open(self, *, reveal_now: bool = False) -> Card:
+    def open(self, *, reveal_now: bool = False, inherit: bool = False) -> Card:
         """Draw the card hidden — its size box shows at once — and arm the timer.
 
         Drawing happens before the task is begun and activated: if drawing
         itself fails (e.g. the run is already being torn down), no task is
         left active or half-started for something to have to clean up.
 
-        ``DELAY_S <= 0`` (the headless tests' setting) reveals every card here,
-        on the script thread — a gated one too: "show everything at once" is
-        what that setting is for.
+        ``reveal_now`` shows the card here, gated or not — a view switch's
+        skeleton, the card after adding a dataset, a view switch onto a load in
+        flight: the wait is known to be long before it starts. ``DELAY_S <= 0``
+        (the headless tests' setting) does the same for every card: "show
+        everything at once" is what that setting is for.
+
+        ``inherit`` — the card continues a wait the user saw (`card`) — skips
+        the delay but not the gate: an ungated card shows here, as with
+        ``reveal_now``; a gated one is armed with no delay, so it shows the
+        moment its task reports work and never on a cache hit.
         """
         box = self._slot.container(key=f"sps_card_{self.key}")
         if self._size is not None:
@@ -537,10 +550,12 @@ class Card:
             fresh=not self._explicit_task_key,
         )
         self._token = progress.activate(self._task)
-        if reveal_now or DELAY_S <= 0:
+        if reveal_now or DELAY_S <= 0 or (inherit and not self._reveal_on_work):
             self._show()
             if DELAY_S > 0:
                 self._arm(delay=REFRESH_S, revealed=True)
+        elif inherit:
+            self._arm(delay=0, revealed=False)
         else:
             self._arm(delay=DELAY_S, revealed=False)
         return self
@@ -773,8 +788,16 @@ def card(
 
     Opening one releases the page skeleton: the view has drawn its controls by
     the time it reaches its first slow region. When the skeleton stood for a
-    wait the user saw (`Page.release`), the card shows at once too, so the
-    wait reads as one continuous state. ``reveal_on_work`` gates it (`Card`).
+    wait the user saw (`Page.release`), the wait carries on (`Card.open`'s
+    ``inherit``), so it reads as one continuous state: to the first **ungated**
+    region card of the run, which shows at once and uses it up. A gated card
+    (``reveal_on_work``, see `Card`) on the way shows through its gate with no
+    delay — the moment it reports work, never on a cache hit — and passes the
+    wait on: Compare's B card, cached, must not flash, nor leave the figure's
+    card after it to wait its own delay with the previous dataset's figure
+    unveiled. Only this function's own release starts the carry; one
+    `release_page()` made elsewhere (an inline download, a view with nothing to
+    draw) hands nothing on.
 
     An ordinary exception from the block retires the card's task (see
     `Card._retire`) before re-raising — a card with an explicit `task_key`
@@ -782,7 +805,12 @@ def card(
     `open()` is inside the ``try`` too, so `close()` still runs (a no-op,
     since it never got to `is_open = True`) if opening itself raises.
     """
-    page_was_seen = release_page()
+    state = _run()
+    if release_page():
+        state.inherit_seen = True
+    inherit = state.inherit_seen
+    if inherit and not reveal_on_work:
+        state.inherit_seen = False  # the first ungated card carries it on
     region = Card(
         slot,
         key=key,
@@ -796,7 +824,7 @@ def card(
         reveal_on_work=reveal_on_work,
     )
     try:
-        region.open(reveal_now=page_was_seen)
+        region.open(inherit=inherit)
         yield region
         region.finish()
     except Exception:

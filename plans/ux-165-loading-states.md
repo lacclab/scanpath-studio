@@ -570,8 +570,9 @@ download cards.
   different key and cancels it, so two corpora never load at once. The same
   holds for Compare's B: its card's task is remembered in `_sps_compare_task`
   while B's dataset loads, so another dataset for B cancels it, and so does a
-  run that loads nothing for B — "This dataset", a corpus not set up yet, or
-  Compare switched off.
+  Scanpath run that picks "This dataset" or a corpus not set up yet for B, or
+  that has Compare switched off. A switch to another view — or a run that stops
+  before the compare row — leaves B's load running, as §3.3 does a replay's.
 - **If Cancel lands just as the work finishes, Cancel still wins,** since the
   user asked to go back. The finished result stays cached, so Try again is
   instant.

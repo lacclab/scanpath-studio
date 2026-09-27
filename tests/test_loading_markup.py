@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from scanpath_studio import loading
 from scanpath_studio.constants import SELECTOR_ROW_GRID
 from scanpath_studio.progress import Snapshot
@@ -85,6 +87,15 @@ def test_the_size_box_caps_its_card_at_the_figures_width():
     html = loading.size_box_html(960, 702, card_key="single_anim")
     assert html.startswith('<div class="sps-size-box"')
     assert "<style>.st-key-sps_card_single_anim{max-width:960px}</style>" in html
+
+
+def test_a_card_key_that_is_not_a_plain_name_is_refused():
+    """The key goes into a raw `<style>` selector: anything but a plain name
+    would make the rule invalid — the card unstyled — so it fails loudly."""
+    with pytest.raises(ValueError):
+        loading.size_box_html(960, 702, card_key="single anim")
+    with pytest.raises(ValueError):
+        loading.size_box_html(960, 702, card_key="x}body{display:none")
 
 
 def test_the_scanpath_skeleton_follows_the_selector_grid_and_plot_height():

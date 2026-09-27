@@ -27,6 +27,7 @@ import contextlib
 import contextvars
 import html
 import logging
+import re
 import threading
 import time
 from collections.abc import Callable, Hashable, Iterator, Sequence
@@ -176,6 +177,10 @@ def bar_html(snap: Snapshot) -> str:
     return '<div class="sps-bar sps-bar-indeterminate" aria-hidden="true"><span></span></div>'
 
 
+#: A card key the size box can name in a selector.
+_CARD_KEY = re.compile(r"[A-Za-z0-9_-]+")
+
+
 def size_box_html(width: int, height: int, *, card_key: str) -> str:
     """The placeholder that holds a figure's place, and its card's width.
 
@@ -188,6 +193,9 @@ def size_box_html(width: int, height: int, *, card_key: str) -> str:
     (styles.py). A definite cap from above, deliberately: a grid track sized by
     its content grows past a narrow column or collapses to the card.
     """
+    if not _CARD_KEY.fullmatch(card_key):
+        # It becomes a selector in a raw <style>: fail loudly, not unstyled.
+        raise ValueError(f"card key {card_key!r} must be a plain name")
     return (
         f'<div class="sps-size-box" aria-hidden="true" style="height:{int(height)}px"></div>'
         f"<style>.st-key-sps_card_{card_key}{{max-width:{int(width)}px}}</style>"

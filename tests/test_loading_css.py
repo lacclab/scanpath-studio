@@ -96,6 +96,26 @@ def test_a_card_sits_centred_over_the_figure_it_stands_in_for():
     assert "width: 100%;" in CSS[CSS.index(body) :].split("}", 1)[0]
 
 
+def test_the_page_card_centres_on_the_corpus_and_data_views():
+    """Every card's body wrapper has a width of its own, so the page card's
+    `justify-self: center` places it — on the Scanpath view its own rule puts
+    it over the plot column instead."""
+    page = (
+        ".st-key-sps_card_page:has(.sps-reveal) > "
+        '[data-testid="stLayoutWrapper"]:has(> .st-key-sps_cardbody_page) {'
+    )
+    rule = CSS[CSS.index(page) :].split("}", 1)[0]
+    assert "justify-self: center;" in rule
+    wrapper = (
+        '[class*="st-key-sps_card_"] > [data-testid="stLayoutWrapper"]'
+        ':has(> [class*="st-key-sps_cardbody_"]) {'
+    )
+    assert (
+        "width: min(24rem, 100%) !important;"
+        in CSS[CSS.index(wrapper) :].split("}", 1)[0]
+    )
+
+
 def _nested_has(css: str) -> list[str]:
     """Every selector in ``css`` with a `:has()` inside another `:has()`."""
     rules = re.sub(r"/\*.*?\*/", "", css, flags=re.DOTALL)

@@ -111,3 +111,59 @@ def test_scope_clears_a_task_left_active_by_an_earlier_run():
             assert progress.active() is None
     finally:
         progress.deactivate(token)
+
+
+class _FakeTime:
+    """A clock the test moves by hand, and a sleep that only records."""
+
+    def __init__(self):
+        self.now = 100.0
+        self.sleeps: list[float] = []
+
+    def clock(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+
+
+@pytest.fixture
+def fake_time(monkeypatch):
+    fake = _FakeTime()
+    monkeypatch.setattr(progress, "_clock", fake.clock)
+    monkeypatch.setattr(progress, "_sleep", fake.sleep)
+    return fake
+
+
+def test_reporting_hands_the_gil_over_at_most_every_yield_interval(fake_time):
+    """A CPU-bound build on the script thread starves the server's event loop,
+    so nothing a run sends reaches the browser until the build ends — a card's
+    own reveal included. A report inside a task therefore sleeps briefly, but
+    only once per ``YIELD_EVERY_S``; the first one yields at once, draining
+    what the run queued before its slow work began."""
+    step = progress.YIELD_EVERY_S
+    with progress.task(("t", "yield"), title="Building"):
+        progress.report(0, 10)  # first: yields at once
+        fake_time.now += step * 0.4
+        progress.report(1, 10)  # too soon
+        fake_time.now += step * 0.4
+        progress.report(2, 10)  # still too soon (0.8 of the interval)
+        fake_time.now += step * 0.4
+        progress.report(3, 10)  # 1.2 intervals since the last yield
+        fake_time.now += step * 3
+        progress.step_to(1)  # a step change is a checkpoint too
+    assert fake_time.sleeps == [progress.YIELD_S] * 3
+
+
+def test_no_yield_without_an_active_task(fake_time):
+    progress.report(1, 2)
+    progress.step_to(1)
+    assert fake_time.sleeps == []
+
+
+def test_a_cancelled_task_raises_before_it_yields(fake_time):
+    with progress.task(("t", "yield-cancel"), title="Building") as task:
+        task.cancel()
+        with pytest.raises(progress.Cancelled):
+            progress.report(0, 10)
+    assert fake_time.sleeps == []

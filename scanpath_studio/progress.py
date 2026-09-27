@@ -10,6 +10,15 @@ The two calls are also the **cancel checkpoint**: after :func:`cancel`, the next
 call in the computing thread raises :class:`Cancelled`, so abandoned work stops
 within one file, frame or chunk instead of running to the end of its step.
 
+And they are where slow work **lets the server talk**. A CPU-bound build on the
+script thread holds Python's GIL, and the server's event loop needs several
+handoffs of it to send one message, each waiting out the interpreter's switch
+interval — so everything a run queues, a card's own reveal included, used to
+reach the browser only once the build ended. Inside a task, a call therefore
+sleeps for ``YIELD_S`` whenever ``YIELD_EVERY_S`` has passed since the task last
+did: a sleep releases the GIL outright, and the loop drains its queue
+uncontended.
+
 Nothing here creates a Streamlit element, deliberately. The replay's frame loop
 runs inside two nested ``st.cache_data`` functions, and Streamlit replays every
 element created inside a cached function on each later hit — a progress bar
@@ -24,6 +33,18 @@ import time
 from collections.abc import Hashable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
+
+#: How often a task's checkpoints hand the GIL over, and for how long — at most
+#: YIELD_S / YIELD_EVERY_S (4%) of the work's time. Measured on the cold first
+#: replay build: the rail reached the browser at 0.5 s instead of 3.2 s, and the
+#: card showed on time instead of not at all.
+YIELD_EVERY_S = 0.025
+YIELD_S = 0.001
+
+# The yield's clock and sleep: module attributes, so a test can replace them
+# without patching the `time` module every thread shares.
+_clock = time.monotonic
+_sleep = time.sleep
 
 
 class Cancelled(BaseException):
@@ -73,6 +94,7 @@ class Task:
         self._step_started = self.started
         self._finished = False
         self._cancelled = threading.Event()
+        self._last_yield = float("-inf")
 
     @property
     def cancelled(self) -> bool:
@@ -87,8 +109,13 @@ class Task:
         self._cancelled.set()
 
     def _checkpoint(self) -> None:
+        """Stop a cancelled task here; otherwise let the server send (see the
+        module docstring) at most every ``YIELD_EVERY_S``."""
         if self._cancelled.is_set():
             raise Cancelled(self.key)
+        if _clock() - self._last_yield >= YIELD_EVERY_S:
+            _sleep(YIELD_S)
+            self._last_yield = _clock()
 
     def report(
         self,

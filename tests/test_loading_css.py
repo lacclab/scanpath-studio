@@ -63,16 +63,18 @@ def test_a_card_takes_no_space_until_it_shows():
     ) not in CSS
 
 
-def test_no_rule_nests_has_inside_has():
-    """A browser drops a rule whose `:has()` holds another `:has()` — the
-    first cut of the rule above did, silently, so the check is on every rule."""
-    rules = re.sub(r"/\*.*?\*/", "", CSS, flags=re.DOTALL)
+def _nested_has(css: str) -> list[str]:
+    """Every selector in ``css`` with a `:has()` inside another `:has()`."""
+    rules = re.sub(r"/\*.*?\*/", "", css, flags=re.DOTALL)
+    found = []
     for selector in re.findall(r"([^{}]+)\{", rules):
         inside: list[bool] = []  # one entry per open paren: is it a :has(?
         i = 0
         while i < len(selector):
             if selector.startswith(":has(", i):
-                assert not any(inside), f"nested :has() in {selector.strip()!r}"
+                if any(inside):
+                    found.append(selector.strip())
+                    break
                 inside.append(True)
                 i += len(":has(")
                 continue
@@ -81,3 +83,21 @@ def test_no_rule_nests_has_inside_has():
             elif selector[i] == ")" and inside:
                 inside.pop()
             i += 1
+    return found
+
+
+def test_no_rule_nests_has_inside_has():
+    """A browser drops a rule whose `:has()` holds another `:has()` — the
+    first cut of the rule above did, silently, so the check is on every rule."""
+    assert _nested_has(CSS) == []
+
+
+def test_the_nesting_check_catches_what_it_is_for():
+    """The check above passing means something only if it can fail: the first
+    cut's shape is flagged, the flat form and a `:has()` in a comment are not."""
+    nested = '.w:has(> [class*="c_"]:not(:has(.sps-reveal))) { display: none; }'
+    flat = '.w:has(> [class*="c_"]):not(:has(.sps-reveal)) { display: none; }'
+    comment = "/* `:has()` may not nest inside `:has()` */ .x { color: red; }"
+    assert _nested_has(nested) == [nested.split("{")[0].strip()]
+    assert _nested_has(flat) == []
+    assert _nested_has(comment) == []

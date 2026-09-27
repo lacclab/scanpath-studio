@@ -420,6 +420,58 @@ def test_a_stamped_screen_order_survives_a_mapping_that_does_not_name_it():
     assert order.to_dict() == {"intro": 1, "question": 2}
 
 
+def test_an_unmapped_screen_index_column_does_not_make_a_table_multipart():
+    """DATA-59: with no screen field mapped, a raw `screen_index` column must not
+    ride through BUG-79's stamp path — it derived a `screen_id` from it, so an
+    AOI table stayed multipart after its screen fields were cleared, and the
+    pair was refused ("Multipart identity is present in only one report")."""
+    from scanpath_studio.data import normalize_fixations, normalize_words
+    from scanpath_studio.multipart import has_screen_identity, validate_matching_parts
+
+    words = pd.DataFrame(
+        {
+            "participant_id": ["p1", "p1"],
+            "trial_id": ["t1", "t1"],
+            "word_id": [0, 1],
+            "text": ["a", "b"],
+            "x": [0, 10],
+            "y": [0, 0],
+            "width": [10, 10],
+            "height": [10, 10],
+            "screen_index": [1, 1],
+        }
+    )
+    fixations = pd.DataFrame(
+        {
+            "participant_id": ["p1"],
+            "trial_id": ["t1"],
+            "x": [5.0],
+            "y": [5.0],
+            "duration_ms": [100],
+        }
+    )
+    word_schema = {
+        "participant": "participant_id",
+        "trial": "trial_id",
+        "word_id": "word_id",
+        "text": "text",
+        "x": "x",
+        "y": "y",
+        "width": "width",
+        "height": "height",
+    }
+    fix_schema = {
+        "participant": "participant_id",
+        "trial": "trial_id",
+        "x": "x",
+        "y": "y",
+        "duration": "duration_ms",
+    }
+    out_words = normalize_words(words, word_schema)
+    assert not has_screen_identity(out_words)
+    validate_matching_parts(out_words, normalize_fixations(fixations, fix_schema))
+
+
 def test_a_co_animation_draws_one_screen_of_a_multipart_second_reading():
     """BUG-85: `trial_b=` cut B to one trial but kept every screen of it, so a
     multipart B drew all its screens as one trail in A's coordinates — each

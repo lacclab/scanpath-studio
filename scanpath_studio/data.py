@@ -3524,8 +3524,17 @@ def _copy_screen_fields(
     # the frame from the mapping, so the stamp was dropped and screen order
     # re-derived from row order: AOI-file order on the words, each reader's
     # onset order on the fixations. MultiplEYE's per-reader question order then
-    # conflicted and the 🗂️ Data page crashed. A canonical column rides through.
-    if SCREEN_INDEX not in df.columns and SCREEN_INDEX in source.columns:
+    # conflicted and the 🗂️ Data page crashed. A canonical column rides through
+    # — but only onto a frame the mapping made multipart (DATA-59). With no
+    # screen field mapped, a raw `screen_index` column is just a column: riding
+    # it through derived a `screen_id` from it, so clearing the screen fields
+    # in the mapping still made the AOI table multipart while the fixations
+    # were not, and the pair was refused.
+    if (
+        SCREEN_ID in df.columns
+        and SCREEN_INDEX not in df.columns
+        and SCREEN_INDEX in source.columns
+    ):
         df[SCREEN_INDEX] = _to_number(source[SCREEN_INDEX])
     return normalize_screen_identity(df)
 

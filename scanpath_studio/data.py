@@ -17,6 +17,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -129,6 +130,50 @@ def _vouch_for_frames(value) -> None:
 _FRAME_CACHE_KEY = "_sps_frame_cache"
 
 
+@dataclass
+class _InFlight:
+    done: threading.Event = field(default_factory=threading.Event)
+    value: Any = None
+    ok: bool = False
+
+
+#: UX-166: builds in progress, so a rerun that asks for the same frame waits
+#: for the one already running instead of starting a second. A click during a
+#: long load abandons the running script and starts a new one at once
+#: (`runner.fastReruns`); without this the new run normalized the corpus again
+#: beside the first. `st.cache_data` has the same guarantee through its own
+#: per-key lock.
+_INFLIGHT: dict[tuple, _InFlight] = {}
+_INFLIGHT_LOCK = threading.Lock()
+
+
+def _shared_build(ident: tuple, build):
+    """``build()``, run once for everyone asking for ``ident`` at the same time.
+
+    A caller that finds a build running waits for it. If that build fails — or
+    was cancelled (`progress.Cancelled`) — the waiter builds it itself.
+    """
+    while True:
+        with _INFLIGHT_LOCK:
+            entry = _INFLIGHT.get(ident)
+            owner = entry is None
+            if owner:
+                entry = _InFlight()
+                _INFLIGHT[ident] = entry
+        if owner:
+            try:
+                entry.value = build()
+                entry.ok = True
+                return entry.value
+            finally:
+                with _INFLIGHT_LOCK:
+                    _INFLIGHT.pop(ident, None)
+                entry.done.set()
+        entry.done.wait()
+        if entry.ok:
+            return entry.value
+
+
 def frame_cache(slot: str, key, build):
     """Return ``build()``'s result, reusing the last one while ``key`` holds.
 
@@ -162,7 +207,8 @@ def frame_cache(slot: str, key, build):
     entry = store.get(slot)
     if entry is not None and entry[0] == key:
         return entry[1]
-    value = build()
+    # UX-166: shared with a build already running for this session, slot and key.
+    value = _shared_build((id(store), slot, key), build)
     store[slot] = (key, value)
     _vouch_for_frames(value)
     return value

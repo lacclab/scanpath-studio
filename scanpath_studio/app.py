@@ -53,8 +53,8 @@ if __package__ is None or __package__ == "":
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
 
+from scanpath_studio import loading, wizard_shell
 from scanpath_studio import metadata as metadata_mod
-from scanpath_studio import wizard_shell
 from scanpath_studio.annotations import (
     filter_keys,
 )
@@ -2801,38 +2801,27 @@ def _normalize_pair(
     # costs. `frame_cache` keeps one and returns the object itself.
     # PERF-6: the spinner says how much data is being normalized, because on a
     # real corpus this is a ~20 s wait and "Normalizing data…" gives no sense of
-    # whether that is expected. `show_spinner=False` on the cached function, so
-    # there is one spinner rather than two nested ones.
-    notice = st.spinner(
+    # whether that is expected. UX-166 moved it *outside* the cache: a spinner's
+    # exit is a yield point, and inside `build` an abandoned run raised there
+    # and threw the finished normalization away. `st.spinner` shows only after
+    # 0.5 s, so a cache hit still never flashes it, and `loading.spinner` stays
+    # silent under the dataset card, which lists normalization as a step.
+    with loading.spinner(
         f"Normalizing {len(words_df):,} word rows and {len(fixations_df):,} fixations…"
-    )
-    return frame_cache(
-        "normalized_pair",
-        cache_key,
-        lambda: _with_spinner(
-            notice,
-            _normalize_pair_uncached,
-            words_df,
-            word_schema,
-            fixations_df,
-            fix_schema,
+    ):
+        return frame_cache(
+            "normalized_pair",
             cache_key,
-            _keep_words=keep_words,
-            _keep_fix=keep_fix,
-        ),
-    )
-
-
-def _with_spinner(notice, func, *args, **kwargs):
-    """Run ``func`` under ``notice``, so the spinner only shows on real work.
-
-    The message is built before the cache lookup (it needs the input sizes), but
-    must not *render* on a cache hit — a spinner that flashes on every rerun is
-    noise. Entering the context here means it opens only when the work actually
-    runs.
-    """
-    with notice:
-        return func(*args, **kwargs)
+            lambda: _normalize_pair_uncached(
+                words_df,
+                word_schema,
+                fixations_df,
+                fix_schema,
+                cache_key,
+                _keep_words=keep_words,
+                _keep_fix=keep_fix,
+            ),
+        )
 
 
 def _reset_active_mapping() -> None:

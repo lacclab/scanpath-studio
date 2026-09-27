@@ -36,6 +36,7 @@ from urllib.parse import urlparse
 
 import pandas as pd
 
+from . import progress
 from .annotations import ANNOTATIONS_STATE_KEY, records_to_store, store_to_records
 from .constants import DATASET_COUNTS_STORE_KEY
 from .session_keys import (
@@ -406,7 +407,8 @@ def restore_state(
                 return False
             restored_datasets = {}
             stored_entries = {}
-            for name, entry in _as_mapping(manifest.get("datasets", {})).items():
+            stored_datasets = _as_mapping(manifest.get("datasets", {}))
+            for index, (name, entry) in enumerate(stored_datasets.items(), start=1):
                 entry = _as_mapping(entry)
                 payload = dict(_as_mapping(entry.get("metadata", {})))
                 for frame_key, relative in _as_mapping(entry.get("frames", {})).items():
@@ -416,6 +418,7 @@ def restore_state(
                     payload.setdefault(frame_key, pd.DataFrame())
                 restored_datasets[str(name)] = payload
                 stored_entries[str(name)] = entry
+                progress.report(index, len(stored_datasets), unit="datasets")
             stored_session = _restorable_session(manifest.get("session", {}))
             annotations = manifest.get("annotations", [])
             # One malformed record costs that record, not the rest.

@@ -41,6 +41,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from . import progress
+
 _LOGGER = logging.getLogger(__name__)
 
 # PoTeC text p3 contains the German word "null" — pandas' default NA list
@@ -227,7 +229,8 @@ def _potec_fixations(
     suffix = "scanpath" if source == "scanpaths" else "fixations"
 
     reader_set = None if readers is None else {str(r) for r in readers}
-    frames = []
+    # UX-166: gather the files first, so the card can say "312 of 900 files".
+    jobs: list[tuple[Path, pd.DataFrame]] = []
     for text_id in texts:
         char_boxes = _read_potec_ias(root, text_id)
         char_x = (char_boxes["start_x"] + char_boxes["end_x"]) / 2.0
@@ -235,14 +238,16 @@ def _potec_fixations(
         centers = pd.DataFrame(
             {"aoi": char_boxes["aoi"], "x": char_x, "y": char_y}
         ).drop_duplicates("aoi")
-
         for path in sorted((base / source).glob(f"reader*_{text_id}_{suffix}.tsv")):
             reader_id = path.stem.removeprefix("reader").split("_")[0]
             if reader_set is not None and reader_id not in reader_set:
                 continue
-            fixations = _read_potec_tsv(path)
-            fixations = fixations.merge(centers, on="aoi", how="left")
-            frames.append(fixations)
+            jobs.append((path, centers))
+    frames = []
+    for index, (path, centers) in enumerate(jobs, start=1):
+        fixations = _read_potec_tsv(path)
+        frames.append(fixations.merge(centers, on="aoi", how="left"))
+        progress.report(index, len(jobs), unit="files")
     if not frames:
         raise FileNotFoundError(
             f"No PoTeC fixation files matched the requested readers/texts "
@@ -738,13 +743,12 @@ def onestop_raw_frames(
     if download and variant == "public":
         download_onestop(root, regime=regime, parts=part_list)
 
-    word_frames = [
-        _read_onestop_part(root, "ia", regime, part, variant) for part in part_list
-    ]
-    fix_frames = [
-        _read_onestop_part(root, "fixations", regime, part, variant)
-        for part in part_list
-    ]
+    reports = [(kind, part) for kind in ("ia", "fixations") for part in part_list]
+    word_frames, fix_frames = [], []
+    for index, (kind, part) in enumerate(reports, start=1):
+        frame = _read_onestop_part(root, kind, regime, part, variant)
+        (word_frames if kind == "ia" else fix_frames).append(frame)
+        progress.report(index, len(reports), unit="reports")
     words = pd.concat(word_frames, ignore_index=True, sort=False)
     fixations = pd.concat(fix_frames, ignore_index=True, sort=False)
     return _fold_onestop_part_into_identity(words, fixations, part_list)
@@ -1281,17 +1285,20 @@ def _multipleye_fixations(
             return None
         return info
 
+    reading = [
+        path
+        for session_dir in sorted(p for p in base.iterdir() if p.is_dir())
+        if session_filter is None or session_dir.name in session_filter
+        for path in sorted(session_dir.glob(f"*_{suffix}.csv"))
+    ]
     frames = []
-    for session_dir in sorted(p for p in base.iterdir() if p.is_dir()):
-        if session_filter is not None and session_dir.name not in session_filter:
-            continue
-        for path in sorted(session_dir.glob(f"*_{suffix}.csv")):
-            info = _wanted(path)
-            if info is None:
-                continue
+    for index, path in enumerate(reading, start=1):
+        info = _wanted(path)
+        if info is not None:
             stamped = _stamp_multipleye_fixations(pd.read_csv(path), info, kinds=kinds)
             if not stamped.empty:
                 frames.append(stamped)
+        progress.report(index, len(reading), unit="files")
     if not frames:
         raise FileNotFoundError(
             f"No MultiplEYE {source} files matched under {base} "

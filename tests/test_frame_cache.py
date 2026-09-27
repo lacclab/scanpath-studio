@@ -9,9 +9,12 @@ slot and hands back *the object itself*.
 
 from __future__ import annotations
 
+import threading
+import time
+
 import pandas as pd
 
-from scanpath_studio.data import frame_cache
+from scanpath_studio.data import _shared_build, frame_cache
 
 
 def _frame(n=3):
@@ -127,3 +130,58 @@ class TestFingerprintsOutliveTheRun:
             data.reset_fingerprint_memo()
             data.frame_fingerprint(frame)
         assert len(calls) == 3
+
+
+class TestSharedBuild:
+    """UX-166: a rerun joins a build already in flight instead of starting one."""
+
+    def test_two_callers_share_one_build(self):
+        calls = []
+        results = []
+
+        def build():
+            calls.append(1)
+            time.sleep(0.2)
+            return object()
+
+        workers = [
+            threading.Thread(
+                target=lambda: results.append(_shared_build(("s", 1), build))
+            )
+            for _ in range(2)
+        ]
+        for w in workers:
+            w.start()
+        for w in workers:
+            w.join()
+        assert len(calls) == 1
+        assert results[0] is results[1]
+
+    def test_a_failed_owner_leaves_the_waiter_to_build_it_itself(self):
+        started = threading.Event()
+        calls = []
+
+        def failing():
+            calls.append("owner")
+            started.set()
+            time.sleep(0.1)
+            raise RuntimeError("cancelled")
+
+        def succeeding():
+            calls.append("waiter")
+            return "ok"
+
+        errors = []
+
+        def owner():
+            try:
+                _shared_build(("s", 2), failing)
+            except RuntimeError as exc:
+                errors.append(exc)
+
+        t = threading.Thread(target=owner)
+        t.start()
+        started.wait()
+        assert _shared_build(("s", 2), succeeding) == "ok"
+        t.join()
+        assert calls == ["owner", "waiter"] and errors

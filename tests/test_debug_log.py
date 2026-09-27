@@ -387,3 +387,21 @@ def test_the_url_param_does_not_override_turning_it_off():
     assert not at.exception, at.exception
     assert at.session_state[debug_log.DEBUG_STATE_KEY] is False
     assert not [s for s in at.selectbox if s.key == "_debug_level"]
+
+
+def test_an_abandoned_runs_stop_does_not_escape_the_log_handler(monkeypatch):
+    """UX-166: an abandoned run's session state raises StopException on any
+    access. Escaping `emit`, it threw away the result of every cached build
+    that logs through `timed()`."""
+    import logging
+
+    from streamlit.runtime.scriptrunner import StopException
+
+    def _stopped():
+        raise StopException()
+
+    monkeypatch.setattr(debug_log, "_buffer", _stopped)
+    record = logging.LogRecord(
+        "scanpath_studio", logging.INFO, __file__, 1, "x", None, None
+    )
+    debug_log._SessionStateHandler().emit(record)  # must not raise

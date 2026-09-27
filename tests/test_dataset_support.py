@@ -539,6 +539,16 @@ def test_load_potec_missing_data_message(tmp_path):
         datasets_module.load_potec(tmp_path, texts=["b0"])
 
 
+def test_potec_reports_each_fixation_file(potec_root):
+    from scanpath_studio import progress
+    from scanpath_studio.datasets import potec_raw_frames
+
+    with progress.task(("t", "potec"), title="Loading PoTeC") as task:
+        potec_raw_frames(potec_root, texts=["b0"])
+    snap = task.snapshot()
+    assert (snap.done, snap.total, snap.unit) == (2, 2, "files")
+
+
 def test_potec_present(tmp_path):
     # The app loads the whole corpus, so "present" requires every text's word +
     # char AOI files (what download_potec fetches), not just one.

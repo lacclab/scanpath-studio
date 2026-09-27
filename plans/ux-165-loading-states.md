@@ -124,26 +124,37 @@ A new module with **no Streamlit import**, so `datasets.py` and `plots.py` can
 call it and the headless API and CLI stay byte-identical.
 
 ```python
-class Cancelled(Exception): ...
+class Cancelled(BaseException): ...
 
 
-@contextmanager
-def task(key, *, title: str, steps: Sequence[str] = ()) -> Iterator[Task]:
-    """Register (or join) the task for ``key`` and make it this context's own."""
+def begin(key, *, title: str, steps: Sequence[str] = (), fresh: bool = False) -> Task:
+    """The task for ``key`` — the one already running, or a new one."""
+
+
+def activate(task: Task) -> contextvars.Token:  # and deactivate(token)
+    """Make ``task`` the one this context's checkpoints report to."""
 
 
 def report(
-    done: int | None = None, total: int | None = None, *, detail: str | None = None
+    done: int | None = None,
+    total: int | None = None,
+    *,
+    unit: str = "",
+    detail: str | None = None,
 ) -> None:
-    """Update the active task's current step; a cancel checkpoint."""
+    """Record progress on the active task — and that it did work; a checkpoint."""
 
 
-def advance(label: str | None = None) -> None:
-    """Finish the current step (recording its time) and start the next."""
+def step_to(index: int, label: str | None = None) -> None:
+    """Start step ``index`` (relabelled if given), finishing the ones before it."""
 
 
 def cancel(key) -> None:
-    """Mark ``key``'s task cancelled; its next ``report``/``advance`` raises."""
+    """Cancel ``key``'s task: its next ``report``/``step_to`` raises."""
+
+
+def running(key) -> bool:
+    """A task is registered under ``key``, neither finished nor cancelled."""
 
 
 def last_duration(key) -> float | None:
@@ -151,17 +162,31 @@ def last_duration(key) -> float | None:
 ```
 
 - **It does nothing unless something is watching.** With no active task,
-  `report` and `advance` return at once. The API, the CLI and the tests that
+  `report` and `step_to` return at once. The API, the CLI and the tests that
   call loaders directly see no change.
 - **The active task is a `ContextVar`,** which cached functions see because
-  they run in the caller's thread and context.
+  they run in the caller's thread and context. A card `begin`s its task and
+  `activate`s it for its block; `task(...)` is the same pair for one `with`
+  block, for a caller with no card (the tests), and `scope()` clears whatever
+  an earlier run left active in the thread.
 - **Tasks live in a module-level registry keyed by task, not by run.** A run
   that starts while an abandoned run is still computing the same key joins its
-  `Task`, so the card's counts carry on instead of resetting (§2.4). Each `Task`
-  guards its fields with a lock, and readers take a snapshot.
-- **`report` and `advance` are the cancel checkpoints.** After `cancel(key)`,
+  `Task`, so the card's counts carry on instead of resetting (§2.4); `begin`
+  never joins a finished or cancelled one, and `fresh=True` (a card with no key
+  of its own) always starts afresh. The registry is weak: a task stays in it
+  only while something holds it — its card during the run, or a superseded
+  run's thread still computing it — so `running(key)` tells a load in flight
+  from a key some stopped run left behind. Each `Task` guards its fields with
+  a lock, and readers take a snapshot.
+- **`report` and `step_to` are the cancel checkpoints.** After `cancel(key)`,
   the next call in the computing thread raises `Cancelled`, so the work stops
-  within one file, frame or chunk (§4.3).
+  within one file, frame or chunk (§4.3). It is a `BaseException`, like
+  Streamlit's own `StopException`, so no `except Exception` in the load path
+  can mistake a cancel for a data error.
+- **A `report` also says that real work is happening** (`Task.worked`) — what a
+  gated card waits for (§1.2); a bare `report()` says only that, leaving the
+  count alone, and `step_to` never does, since the orchestrator steps through a
+  cache hit just the same.
 - **It creates no Streamlit elements.** The frame loop will run inside two
   nested `st.cache_data` functions since PERF-16, and elements created there
   are replayed on every cache hit. The hook only updates the record; the card
@@ -173,7 +198,7 @@ def last_duration(key) -> float | None:
 with loading.card(slot, title="Building the animation",
                   size=(width, height),
                   cancel=Cancel("Show static plot", on_click=…),
-                  key="single_anim") as task:
+                  key="single_anim") as card:
     ...  # the slow work, unchanged
 ```
 
@@ -198,7 +223,19 @@ button.
 **Timing:**
 
 - **Nothing shows for the first 0.5 s** — the same delay as Streamlit's
-  spinner. Most reruns are fast and must not flash.
+  spinner. Most reruns are fast and must not flash. A card shows **at once**
+  only when the wait is already known to be long: a view switch's skeleton,
+  the card after adding a dataset, a view switch onto a load in flight
+  (`reveal_now`), and a card that continues a wait the user saw (below).
+- **A wait the user saw carries on.** When the page skeleton stood for a wait
+  the user saw — revealed by its timer, or up for at least the delay — the
+  region card whose opening releases it starts the carry, and the first
+  **ungated** region card of the run shows at once and uses it up. A gated
+  card on the way (Compare's B, below) shows through its gate with no delay —
+  the moment its task reports work, never on a cache hit — and passes the
+  carry on, so the figure's card still shows at once instead of waiting its own
+  delay over the previous dataset's figure. A `release_page()` made anywhere
+  else (an inline download, a view with nothing to draw) carries nothing.
 - **A card over work that is cheap on a cache hit waits for real work.** The
   dataset card, Compare's B card and the Corpus measures card open on every
   run, and on a big corpus a plain rerun's cache checks alone can outlast the
@@ -268,28 +305,31 @@ time, counting frames.
 
 ### 2.1 What the card covers
 
-In `main`, one `loading.card` spans the dataset pipeline, from the load
+In `main`, one card — the page's (`Page.open_card`, §2.2) — spans the
+dataset pipeline, from the load
 ([app.py:2628](../scanpath_studio/app.py:2628)) and `prepare_data`
 ([app.py:2985](../scanpath_studio/app.py:2985)) through the trial-identity
 report to `build_combo_options`
-([utils.py:45](../scanpath_studio/utils.py:45)). `main` calls `advance()` at
-each boundary, and the loaders call `report()` inside a step.
+([utils.py:45](../scanpath_studio/utils.py:45)). `main` moves the card to
+the next step at each boundary (`Card.step` → `progress.step_to`), and the
+loaders call `report()` inside a step.
 
 | Source | Steps (with the count each reports) |
 |---|---|
-| PoTeC · MultiplEYE · OneStop (public, server bundle) · a prepared benchmark corpus | Reading files (*i* of *N*) → Normalizing *N* word rows and *M* fixations (words, fixations, cross-checks) → Building the trial list (*N* trials) |
+| PoTeC · MultiplEYE · OneStop (public, server bundle) · a prepared benchmark corpus | Reading files (*i* of *N*) → Normalizing *N* word rows and *M* fixations (words, fixations, cross-checks) → Building the trial list |
 | Bundled demo · synthetic trial | The same steps; in practice under 0.5 s, so never shown |
-| An uploaded dataset already in the session | None — it opens instantly |
+| An uploaded dataset already in the session | Building the trial list alone — its frames are stored normalized, so in practice it opens at once |
 | A fresh start that restores large uploads from this computer | "Restoring your datasets from this computer" (*i* of *N* datasets), in its own card at the very top of the page, before the nav; no Cancel |
 
 The figure is not a step. Once the trial list exists the real page appears,
 and the plot shows its own card if the figure is slow (§3).
 
 The count sources: `potec_raw_frames` reports per file, `multipleye_raw_frames`
-per file, the OneStop readers per report part, and the benchmark reader per
-Parquet file — each starting with "0 of N" before its first, so the card is
-armed from the start. Counts are as fine as each loader's own loop, and a
-source with no loop reports none, so its step shows no count.
+per file, the OneStop readers per report, and the benchmark reader per table
+— each starting with "0 of N" before its first, so the card is armed from the
+start. Counts are as fine as each loader's own loop, and a source with no loop
+reports none, so its step shows no count — the trial list among them: it
+reports once, bare, to say it is working.
 
 ### 2.2 Where it shows: the view's reserved area
 
@@ -304,31 +344,38 @@ container.
 - **During a slow load,** the timer fills that placeholder with a **skeleton of
   the view you are on** and the step-list card:
   - Scanpath: the selector row on `SELECTOR_ROW_GRID`'s tracks, the chip row,
-    the plot box at the dataset's screen proportions (the registry's declared
-    monitor, else the current canvas), and the rail, with the card centred on
-    the plot box;
+    the plot box at the height the session's last static figure was recorded
+    at (`loading.recorded_plot_height("single", 480)` — 480 px before the
+    first), and the rail, with the card centred on the plot box;
   - Corpus Analysis: the subtab bar and chart blocks.
 - **While the skeleton shows, CSS hides everything after it in the area** —
-  `.st-key-sps_view:has(.sps-page-skeleton)` hides its later siblings. That
-  covers whatever sits below: the previous page, or the new one being laid out.
+  `.st-key-sps_view:has(.sps-reveal-page)` (the page card's reveal marker)
+  hides its later siblings. That covers whatever sits below: the previous
+  page, or the new one being laid out.
 - **The skeleton outlives the card.** When the pipeline finishes, every step
   shows ✓ and the skeleton stays up. It comes down only once the new page has
-  drawn its controls and its plot area's placeholder: the view calls
-  `page.release()` as it enters its first slow region (the plot build in
-  Scanpath, the charts in Corpus Analysis), and `main`'s dispatch calls it as
-  a fallback. So the old page never flashes back between the skeleton and the
-  new page.
+  drawn its controls and its plot area's placeholder: the view's first region
+  card releases it as it opens (`loading.card` calls `release_page()`) — the
+  figure's card in Scanpath (Compare's B card first, when B has a dataset of
+  its own), the reading-measures card in Corpus Analysis — and `main`'s
+  dispatch calls `release_page()` as a fallback. So the old page never flashes
+  back between the skeleton and the new page.
 
 ```python
-page = loading.page(view_area, view=active_view)  # reserves the placeholder
-with page.card(title="Loading PoTeC", steps=[...], cancel=Cancel(...)):
-    ...  # the dataset pipeline; main calls progress.advance() between steps
+page = loading.page(view_first_slot, view="scanpath", plot_height=…)
+card = page.open_card(title="Loading PoTeC", steps=[...], cancel=Cancel(...),
+                      task_key=…, duration_key=…, reveal_on_work=True)
+...  # the dataset pipeline; main calls card.step(i) between steps
+card.finish(); card.close(keep=True)  # every step ✓, the skeleton still up
 ...
-page.release()  # inside the view, as its first slow region starts
+with loading.card(plot_slot, …):  # the view's first region card releases the page
+    ...
 ```
 - **On the Data page,** the header and "Available datasets" still draw at once.
-  The card sits in the dataset-table slot, with a few skeleton rows, until the
-  table can be filled.
+  The page is hosted there rather than in `sps_view`: its card sits in the slot
+  above the dataset table (under ✏️ Edit dataset's header while the editor is
+  open), with a few skeleton rows, until the pipeline ends — the Data page
+  releases it first thing, before drawing the table.
 
 ### 2.3 Switching views and datasets
 
@@ -427,9 +474,10 @@ as a skeleton. No flag has to track whether a figure is on screen.
     or a setting that changes the frames (marker size, colours, saccades, the
     fixation flags or window, drift correction …), mid-build cancels the build
     of the replay no longer wanted; a speed or autoplay change keeps the key and
-    joins it. A run that builds no replay —
-    Animate switched off, or a trial with nothing to animate — cancels a
-    remembered one too.
+    joins it. A **Scanpath** run that builds no replay (Animate switched off
+    with its own switch, or a trial with nothing to animate) cancels a
+    remembered one too; a switch to another view leaves it building, and its
+    result is cached for the way back.
   - Cancel: "Show static plot" (§4).
 
 ### 3.4 Inside the plot's frame (UX-169)
@@ -477,11 +525,12 @@ server has finished.
   shows the view's own skeleton.
 - **After an animation cancel,** the Animate switch being off says what
   happened, so there is no notice.
-- **Views and long computations** (Corpus Analysis charts, the Data page's
-  statistics) get the card but **no Cancel**. The top nav stays clickable
-  during any wait, and clicking it abandons the current work at once. For a
-  view, going somewhere else *is* the change of mind; Cancel is reserved for
-  choices with a clear previous state.
+- **Views and long computations get no Cancel.** The Corpus view's reading
+  measures get a card (gated, §1.2); its charts and the Data page's statistics
+  get the calm spinner with its elapsed time (§1.4), not a card. The top nav
+  stays clickable during any wait, and clicking it abandons the current work
+  at once. For a view, going somewhere else *is* the change of mind; Cancel is
+  reserved for choices with a clear previous state.
 
 ### 4.2 Downloads
 
@@ -514,7 +563,8 @@ download cards.
   were read and the user cancelled during normalization, Try again skips the
   reading.
 - **Any other click during a load does not cancel it.** The work continues,
-  and the new run joins it (§2.4).
+  and the new run joins it (§2.4). (A replay being built is keyed by its
+  frames instead, so a setting that changes them does cancel it — §3.3.)
 - **Picking a different dataset while one is loading counts as cancelling the
   first.** The new run sees the session's in-flight dataset task under a
   different key and cancels it, so two corpora never load at once. The same

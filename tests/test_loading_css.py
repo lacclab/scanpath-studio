@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from scanpath_studio.styles import get_app_css
 
 CSS = get_app_css()
@@ -39,3 +41,43 @@ def test_the_data_view_hides_what_the_previous_view_left():
         ".st-key-sps_view:has(.sps-view-hidden) > :not(:first-child) "
         "{ display: none !important; }"
     ) in CSS
+
+
+def test_a_card_takes_no_space_until_it_shows():
+    """UX-166: a card opens hidden — the page card on every run — so until it is
+    revealed its slot is out of the layout; otherwise each rerun pushes the view
+    down by the card's margins and back. A size box is the exception: holding
+    the area is what a region card's box is for."""
+    assert (
+        '[data-testid="stLayoutWrapper"]:has(> [class*="st-key-sps_card_"])'
+        ":not(:has(.sps-reveal)):not(:has(.sps-size-box)) "
+        "{ display: none !important; }"
+    ) in CSS
+    assert (
+        ".st-key-sps_card_page:has(.sps-reveal) > "
+        '[data-testid="stLayoutWrapper"]:has(> .st-key-sps_cardbody_page)'
+    ) in CSS
+    assert (
+        ".st-key-sps_card_page > "
+        '[data-testid="stLayoutWrapper"]:has(> .st-key-sps_cardbody_page) {'
+    ) not in CSS
+
+
+def test_no_rule_nests_has_inside_has():
+    """A browser drops a rule whose `:has()` holds another `:has()` — the
+    first cut of the rule above did, silently, so the check is on every rule."""
+    rules = re.sub(r"/\*.*?\*/", "", CSS, flags=re.DOTALL)
+    for selector in re.findall(r"([^{}]+)\{", rules):
+        inside: list[bool] = []  # one entry per open paren: is it a :has(?
+        i = 0
+        while i < len(selector):
+            if selector.startswith(":has(", i):
+                assert not any(inside), f"nested :has() in {selector.strip()!r}"
+                inside.append(True)
+                i += len(":has(")
+                continue
+            if selector[i] == "(":
+                inside.append(False)
+            elif selector[i] == ")" and inside:
+                inside.pop()
+            i += 1

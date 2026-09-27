@@ -221,6 +221,14 @@ def get_app_css() -> str:
        height the content will take; the page card sits over a skeleton of the
        view. Nothing here animates for readers who ask for reduced motion. */
     [class*="st-key-sps_cardbody_"] { display: none !important; }
+    /* A card opens hidden — the page card on every run — so until it shows,
+       its slot is out of the layout: an empty slot still takes a gap, and the
+       page card's margins would push the whole view down and back on each
+       rerun. A size box keeps it in: holding the area is that box's job. */
+    /* Flat on purpose: `:has()` may not nest inside `:has()`, and a browser
+       drops a rule that tries. The wrapper holds only its card, so "no
+       .sps-reveal in the wrapper" is "the card isn't showing". */
+    [data-testid="stLayoutWrapper"]:has(> [class*="st-key-sps_card_"]):not(:has(.sps-reveal)):not(:has(.sps-size-box)) { display: none !important; }
     [class*="st-key-sps_card_"]:has(.sps-reveal) [class*="st-key-sps_cardbody_"] {
         display: flex !important;
         flex-direction: column;
@@ -288,7 +296,7 @@ def get_app_css() -> str:
     .st-key-sps_view:has(.sps-view-hidden) > :not(:first-child) { display: none !important; }
     .st-key-sps_card_page { display: grid !important; grid-template-columns: minmax(0, 1fr); }
     .st-key-sps_card_page > * { grid-area: 1 / 1; }
-    .st-key-sps_card_page > [data-testid="stLayoutWrapper"]:has(> .st-key-sps_cardbody_page) {
+    .st-key-sps_card_page:has(.sps-reveal) > [data-testid="stLayoutWrapper"]:has(> .st-key-sps_cardbody_page) {
         align-self: start; justify-self: center; margin-top: 7rem;
     }
     .st-key-sps_card_page:has(.sps-sk-scanpath) > [data-testid="stLayoutWrapper"]:has(> .st-key-sps_cardbody_page) {

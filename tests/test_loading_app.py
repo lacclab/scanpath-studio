@@ -794,6 +794,42 @@ def test_the_animation_cancel_switches_animate_off():
     assert at.session_state["single_animate"] is False
 
 
+#: The session's remembered replay task (UX-169) — an ``_sps_*`` internal.
+ANIM_TASK = "_sps_anim_task"
+
+
+def test_stepping_to_another_trial_cancels_the_replay_built_for_the_last(at):
+    """A replay's task is keyed by what it is a replay of. A run that opens the
+    card for another trial than the one remembered cancels that build — it is
+    for a trial no longer on screen — instead of joining it, which interleaved
+    two frame loops' counts on one card while the obsolete build ran on."""
+    stale = ("anim", "a-superseded-run", "another reader", "another trial")
+    task = progress.begin(stale, title="Building the animation")
+    at.session_state[ANIM_TASK] = stale
+    at.session_state["single_animate"] = True
+    at.run()
+    assert not at.exception, at.exception
+    assert task.cancelled
+    assert ANIM_TASK not in at.session_state  # this run's build completed
+
+
+def test_the_same_trial_joins_the_replay_being_built(at, monkeypatch):
+    """A rerun that opens the card for the trial still being built — a setting
+    change mid-build, say — joins that build's task rather than cancelling it."""
+    at.session_state["single_animate"] = True
+    monkeypatch.setattr(tabs, "_build_and_render_animation", _stop)  # mid-build
+    at.run()
+    key = tuple(at.session_state[ANIM_TASK])
+    shown = at.session_state["_share_selection"]
+    assert key[0] == "anim"
+    assert key[2:] == (str(shown["participant_id"]), str(shown["trial_id"]))
+    task = progress.begin(key, title="Building the animation")  # still building
+    begun = _hold_every_task(monkeypatch)
+    at.run()
+    assert not task.cancelled
+    assert begun[key] is task
+
+
 # UX-169 — a placeholder inside the plot's frame.
 
 

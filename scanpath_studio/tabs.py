@@ -4151,6 +4151,50 @@ def _cancel_animation(task_key: tuple) -> None:
     st.session_state["single_animate"] = False
 
 
+#: UX-169: the replay task this session's card was last opened for, held while
+#: its build runs and dropped once the card's block completes. An ``_sps_*``
+#: internal: never on the wire, never in the recovery cache.
+ANIM_TASK_KEY = "_sps_anim_task"
+
+
+def _animation_task_key(
+    participant, trial, compare_participant=None, compare_trial=None
+) -> tuple:
+    """The replay's task key: what it is a replay *of*.
+
+    Keyed by the session alone, a run that stepped to another trial mid-build
+    joined the old build's task — two frame loops' counts interleaved on one
+    card while the obsolete build ran on beside the new one. B's reader and
+    trial are part of it for a co-replay (pass them only then).
+    """
+    key = ("anim", loading.session_id(), str(participant), str(trial))
+    if compare_participant is not None or compare_trial is not None:
+        key += (str(compare_participant), str(compare_trial))
+    return key
+
+
+def _claim_animation_task(task_key: tuple) -> None:
+    """Cancel the replay a run was building for another trial, then remember
+    this one's (UX-169).
+
+    That build is for a trial no longer on screen. The same key — a setting
+    changed mid-build — is left to join, since it may well be the same build.
+    """
+    previous = st.session_state.get(ANIM_TASK_KEY)
+    if previous is not None and tuple(previous) != task_key:
+        progress.cancel(tuple(previous))
+    st.session_state[ANIM_TASK_KEY] = task_key
+
+
+def _release_animation_task(task_key: tuple) -> None:
+    """This run's replay is built: nothing of it is left to cancel.
+
+    Only its own key is dropped — a later run may already have claimed another.
+    """
+    if st.session_state.get(ANIM_TASK_KEY) == task_key:
+        st.session_state.pop(ANIM_TASK_KEY, None)
+
+
 def _build_and_render_animation(
     trial_words: pd.DataFrame,
     trial_fixations: pd.DataFrame,
@@ -6042,7 +6086,12 @@ def render_single_trial_tab(
                 "animate for this selection."
             )
         elif animate:
-            anim_task = ("anim", loading.session_id())
+            anim_task = _animation_task_key(
+                selected_participant,
+                selected_trial,
+                *((compare_participant, compare_trial) if dual_anim else ()),
+            )
+            _claim_animation_task(anim_task)
             with loading.card(
                 plot_loading_slot,
                 key="single_anim",
@@ -6071,6 +6120,7 @@ def render_single_trial_tab(
                     playback_speed=playback_speed,
                     drift_corrected=drift_corrected_primary,
                 )
+            _release_animation_task(anim_task)
             if comparing and cross_dataset and not compare_comparable:
                 # UX-144: the replay has no split layout and shows A alone, so
                 # that is what it says. BUG-85 took the static figure's "shown

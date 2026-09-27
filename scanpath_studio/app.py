@@ -6567,6 +6567,52 @@ LAST_LOADED_SOURCE_KEY = "_sps_last_loaded_source"
 #: card opens and cleared when it ends; found still set by the next run, it
 #: means that run was abandoned mid-load.
 DATASET_TASK_KEY = "_sps_dataset_task"
+#: UX-168: set by Cancel on the dataset card, read once by the next run's notice.
+CANCELLED_LOAD_KEY = "_sps_cancelled_load"
+
+
+def _dataset_cancel(token: str, task_key: tuple) -> loading.Cancel | None:
+    """The dataset card's Cancel: back to the last dataset that finished loading
+    in this session, else the Bundled demo — never back to the one it cancels."""
+    back = st.session_state.get(LAST_LOADED_SOURCE_KEY) or DEMO_CHOICE
+    if back == token:
+        back = DEMO_CHOICE
+    if back == token:
+        return None
+    return loading.Cancel(
+        f"Back to {_dataset_display_name(back)}",
+        _cancel_dataset_load,
+        args=(task_key, token, _dataset_display_name(token), back),
+    )
+
+
+def _cancel_dataset_load(task_key: tuple, token: str, name: str, back: str) -> None:
+    """UX-168: Cancel on the dataset card — stop the load, reopen ``back``."""
+    progress.cancel(task_key)
+    st.session_state["_pending_source_choice"] = back
+    st.session_state[CANCELLED_LOAD_KEY] = {"token": token, "name": name}
+
+
+def _retry_load(token: str) -> None:
+    st.session_state["_pending_source_choice"] = token
+
+
+def _render_cancelled_load_notice(host) -> None:
+    """UX-168: "Stopped loading X · Try again", once, where the notices go."""
+    note = st.session_state.pop(CANCELLED_LOAD_KEY, None)
+    if not note:
+        return
+    row = host.container(
+        key="sps_cancelled_notice", horizontal=True, vertical_alignment="center"
+    )
+    row.caption(f"Stopped loading **{note['name']}**.")
+    row.button(
+        "Try again",
+        key="sps_try_again",
+        on_click=_retry_load,
+        args=(note["token"],),
+        type="tertiary",
+    )
 
 
 def _open_dataset_card(
@@ -6579,22 +6625,38 @@ def _open_dataset_card(
 ) -> loading.Card | None:
     """UX-166: this run's dataset card, or ``None`` when there is no load to wait on.
 
-    A switch to ``view`` opens it at once, titled for the view, without steps:
-    the dataset is loaded already, and the skeleton is what answers the click.
-    That card has a task of its own, so it never joins a load's task (nor a
-    load, its), while `DATASET_TASK_KEY` still names the dataset's — a view
-    switch in the middle of a load is not "another dataset".
+    A switch to ``view`` opens it at once, titled for the view, without steps
+    or a stable task key: the dataset is loaded already, so the skeleton is
+    what answers the click, and each switch's task is its own (never joined by
+    a load's task, nor joining one — nor a later switch to the same view, which
+    must never join a stale one either), while `DATASET_TASK_KEY` still names
+    the dataset's — a view switch in the middle of a load is not "another
+    dataset".
+
+    **UX-168:** a run that finds *another* dataset's task still marked running
+    under `DATASET_TASK_KEY` was started by picking this one mid-load (directly,
+    or via Cancel) — the user changed their mind, so the abandoned load is
+    cancelled here, at its next checkpoint, instead of competing for the CPU.
+    Checked before the early return below too: switching to Upload or Author
+    mid-load cancels a load left running just the same, and that branch has no
+    load of its own to name `DATASET_TASK_KEY` after, so it clears the key
+    rather than replacing it.
     """
     if data_choice in (UPLOAD_CHOICE, AUTHOR_CHOICE):
+        previous = st.session_state.pop(DATASET_TASK_KEY, None)
+        if previous is not None:
+            progress.cancel(tuple(previous))
         return None
     token = str(st.session_state.get("data_source_choice") or data_choice)
     session = loading.session_id()
     task_key = ("dataset", session, token)
+    previous = st.session_state.get(DATASET_TASK_KEY)
+    if previous is not None and tuple(previous) != task_key:
+        progress.cancel(tuple(previous))
     st.session_state[DATASET_TASK_KEY] = task_key
     if view_switched:
         return page.open_card(
             title=f"Opening {view_label(view)}",
-            task_key=("view", session, view),
             reveal_now=True,
         )
     stored = data_choice in st.session_state.get("_datasets", {})
@@ -6606,6 +6668,7 @@ def _open_dataset_card(
     return page.open_card(
         title=f"Loading {_dataset_display_name(token)}",
         steps=steps,
+        cancel=_dataset_cancel(token, task_key),
         task_key=task_key,
         duration_key=("dataset", token),
         reveal_now=finalizing,
@@ -6841,6 +6904,7 @@ def _run_app() -> None:
 
     menu = render_top_menu(show_debug=debug_enabled(), active_view=active_view)
     _render_about_panel(menu.title)
+    _render_cancelled_load_notice(menu.notices)
 
     def _fill_recovery_cache_panel(backup_renderer=None) -> None:
         """Serve the 💾 Session dialog, once, on whichever path we leave by.

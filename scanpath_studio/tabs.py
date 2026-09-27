@@ -20,7 +20,7 @@ import pandas as pd
 import plotly.io as pio
 import streamlit as st
 
-from scanpath_studio import alignment, loading
+from scanpath_studio import alignment, loading, progress
 from scanpath_studio.aggregation import (
     MEASURES,
     Measure,
@@ -1982,8 +1982,17 @@ def _compare_source_choices() -> tuple[list[str], dict[str, bool], dict[str, str
     return names, ready_by_name, reason_by_name
 
 
+def _cancel_compare_source(task_key: tuple) -> None:
+    """UX-168: Cancel on B's dataset card — compare within A's dataset again."""
+    progress.cancel(task_key)
+    st.session_state[COMPARE_SOURCE_KEY] = THIS_DATASET
+
+
 def _resolve_compare_source(
-    ready_by_name: dict[str, bool], reason_by_name: dict[str, str]
+    ready_by_name: dict[str, bool],
+    reason_by_name: dict[str, str],
+    *,
+    loading_slot=None,
 ) -> tuple[SecondaryDataset | None, str]:
     """Load scanpath B's dataset (**CMP-8 §5.1**), narrowed by its own filters.
 
@@ -1998,13 +2007,37 @@ def _resolve_compare_source(
     above it. That is the same contract A has — ``render_trial_filters`` stashes
     its result, and every widget's ``on_change`` recomputes the stash before the
     rerun, so a filter change still applies on the run it happens.
+
+    **UX-168:** ``loading_slot`` gives B's own load a card, with a Cancel back to
+    "This dataset" — the compare picker is a selectbox in the middle of the plot
+    column, so ``None`` (the default — every direct test call in this module's
+    test suite) still loads B plain, with no card and no way to cancel it.
     """
     chosen = str(st.session_state.get(COMPARE_SOURCE_KEY) or THIS_DATASET)
     if chosen == THIS_DATASET:
         return None, ""
     if not ready_by_name.get(chosen, False):
         return None, f"{ICONS['warning']} {reason_by_name.get(chosen, '')}"
-    source = load_secondary_dataset(chosen)
+    if loading_slot is None:
+        source = load_secondary_dataset(chosen)
+    else:
+        task_key = ("compare_dataset", loading.session_id(), chosen)
+        with loading.card(
+            loading_slot,
+            # Not `COMPARE_SOURCE_KEY` ("cmp_dataset") — that string names the
+            # picker's own persisted widget key, and reusing it here would trip
+            # `test_every_wire_format_widget_declares_persist_state`'s AST scan
+            # (`loading.card` has no `persist_state` param to give it).
+            key="compare_dataset",
+            title=f"Loading {chosen} for scanpath B",
+            task_key=task_key,
+            cancel=loading.Cancel(
+                f"Compare within {current_dataset_name()}",
+                _cancel_compare_source,
+                args=(task_key,),
+            ),
+        ):
+            source = load_secondary_dataset(chosen)
     if source is None:
         return (
             None,
@@ -2136,6 +2169,7 @@ def _render_compare_selector(
     combos_all: pd.DataFrame | None = None,
     words_all: pd.DataFrame | None = None,
     fixations_all: pd.DataFrame | None = None,
+    loading_slot=None,
 ) -> tuple[
     str | None,
     str | None,
@@ -2164,9 +2198,15 @@ def _render_compare_selector(
     ``SELECTOR_ROW_GRID`` — instead of a dataset row, a *Filter B by* row and a
     picker row stacked above the chips. The dataset is therefore resolved from
     session state *before* the row is drawn (``_resolve_compare_source``), since
-    how many candidates B has is what decides whether the row has a slider."""
+    how many candidates B has is what decides whether the row has a slider.
+
+    **UX-168:** ``loading_slot`` is threaded straight through to
+    ``_resolve_compare_source`` so B's own load gets a card + Cancel there.
+    """
     names, ready_by_name, reason_by_name = _compare_source_choices()
-    source, source_notice = _resolve_compare_source(ready_by_name, reason_by_name)
+    source, source_notice = _resolve_compare_source(
+        ready_by_name, reason_by_name, loading_slot=loading_slot
+    )
     filter_source = source
     comparison_pool = source
     if source is not None:
@@ -5425,6 +5465,7 @@ def render_single_trial_tab(
                     combos_all=combos_all,
                     words_all=words_all,
                     fixations_all=fixations_all,
+                    loading_slot=plot_loading_slot,
                 )
             )
         # UX-112: B's own screen navigator, directly under B's own row —

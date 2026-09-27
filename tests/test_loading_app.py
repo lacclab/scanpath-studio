@@ -22,6 +22,7 @@ from scanpath_studio.constants import (
     DATA_OVERVIEW_OFFSCREEN_KEY,
     DATASET_EDITOR_OPEN_KEY,
 )
+from scanpath_studio.session_keys import COMPARE_SOURCE_STATE_KEY
 from tests.conftest import APP_SCRIPT, pin_view
 
 AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
@@ -130,7 +131,11 @@ def test_switching_view_shows_the_target_skeleton_at_once(at, monkeypatch):
 
 def test_a_view_switch_card_has_a_task_of_its_own(at, monkeypatch):
     """The switch card and a load card never join each other's task, while
-    ``DATASET_TASK_KEY`` still names the dataset: a switch is not a new load."""
+    ``DATASET_TASK_KEY`` still names the dataset: a switch is not a new load.
+
+    UX-168/Ruling T6-8: the switch card opens with no explicit ``task_key``, so
+    it gets ``Card``'s own implicit one (``"card", session, PAGE_CARD_KEY``) —
+    a fresh task every time, never the dataset's and never a stale switch's."""
     at.run()
     monkeypatch.setattr(loading, "DELAY_S", 30)
     monkeypatch.setattr(loading, "REFRESH_S", 30)
@@ -140,7 +145,7 @@ def test_a_view_switch_card_has_a_task_of_its_own(at, monkeypatch):
     at.run()
     kind, session, token = at.session_state[app.DATASET_TASK_KEY]
     assert (kind, token) == ("dataset", SYNTHETIC)
-    view_task = progress._REGISTRY[("view", session, _VIEW_CORPUS)]
+    view_task = progress._REGISTRY[("card", session, loading.PAGE_CARD_KEY)]
     assert view_task.snapshot().title == "Opening Corpus Analysis"
 
 
@@ -407,3 +412,67 @@ def test_the_views_blocks_keep_their_place_when_a_notice_comes_and_goes(
     view_area = at.main.children[_child_index(at.main, loading.VIEW_AREA_KEY)]
     index_after = _child_index(view_area, "scanpath_rail")
     assert index_after == index_before
+
+
+# UX-168 — Cancel a dataset load or Compare's second dataset.
+
+
+def test_cancel_goes_back_to_the_last_dataset_and_try_again_returns(at, monkeypatch):
+    at.run()  # synthetic finishes: it is the dataset Cancel goes back to
+    monkeypatch.setattr(loading, "DELAY_S", 0)
+    # Ruling T3-1: freezing with `st.stop()` leaves a stopped run's cards to be
+    # cleared unless `_KEEP_ON_STOP` says otherwise — without it, `sps_cancel_page`
+    # would be gone before the test can click it. `monkeypatch.undo()` below
+    # restores both this and `DELAY_S` together, as intended.
+    monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
+    monkeypatch.setattr(app, "prepare_data", _stop)
+    demo = app.DEMO_CHOICE
+    at.session_state["_pending_source_choice"] = demo
+    at.run()
+    cancel = at.button(key="sps_cancel_page")
+    assert cancel.label.startswith("Back to")
+    monkeypatch.undo()
+    cancel.click().run()
+    assert at.session_state["data_source_choice"] == SYNTHETIC
+    at.button(key="sps_try_again").click().run()
+    assert at.session_state["data_source_choice"] == demo
+
+
+def test_picking_another_dataset_mid_load_cancels_the_first(at):
+    at.run()
+    stale = ("dataset", "an-abandoned-run", "Other")
+    task = progress.begin(stale, title="Loading Other")
+    at.session_state[app.DATASET_TASK_KEY] = stale
+    at.run()
+    assert task.cancelled
+
+
+@pytest.mark.parametrize("choice", [app.UPLOAD_CHOICE, app.AUTHOR_CHOICE])
+def test_switching_to_upload_or_author_cancels_a_stale_load(at, choice):
+    """The early return for the Upload wizard / Author source has no load of
+    its own, so a task another run left running under ``DATASET_TASK_KEY`` would
+    otherwise never be cancelled or cleared — the key would just sit there,
+    stale, for as long as the session lasted."""
+    stale = ("dataset", "an-abandoned-run", "Other")
+    task = progress.begin(stale, title="Loading Other")
+    at.session_state[app.DATASET_TASK_KEY] = stale
+    at.session_state["data_source_choice"] = choice
+    at.run()
+    assert not at.exception, at.exception
+    assert task.cancelled
+    assert app.DATASET_TASK_KEY not in at.session_state
+
+
+def _compare_cancel_script():
+    import streamlit as st
+
+    from scanpath_studio import tabs
+
+    st.session_state.setdefault("cmp_dataset", "Bundled Demo")
+    st.button("x", key="c", on_click=tabs._cancel_compare_source, args=(("cmp", "k"),))
+
+
+def test_the_compare_cancel_goes_back_to_this_dataset():
+    at = AppTest.from_function(_compare_cancel_script).run()
+    at.button(key="c").click().run()
+    assert at.session_state[COMPARE_SOURCE_STATE_KEY] == tabs.THIS_DATASET

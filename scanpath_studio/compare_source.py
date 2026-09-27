@@ -248,7 +248,7 @@ def secondary_dataset_options(
     return [option for option in options if option[0] != exclude]
 
 
-@st.cache_data(show_spinner="Loading comparison dataset…")
+@st.cache_data(show_spinner=False)  # UX-168: B's dataset card covers this.
 def _load_public_frames(
     label: str, root: str, options: tuple
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -277,7 +277,7 @@ def _load_public_frames(
     return datasets.load_multipleye(root, fixation_source=kwargs["fixation_source"])
 
 
-@st.cache_data(show_spinner="Loading comparison dataset…")
+@st.cache_data(show_spinner=False)  # UX-168: B's dataset card covers this.
 def _load_builtin_frames(name: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Normalized frames for the bundled demo / synthetic trial.
 

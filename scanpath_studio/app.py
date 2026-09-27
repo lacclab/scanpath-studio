@@ -6761,8 +6761,9 @@ def main() -> None:
 
     UX-165: ``loading.run_scope`` guarantees that no loading card's timer thread
     outlives the run that started it — whether the run ends normally, returns
-    early, raises, or is abandoned by a click — and ends quietly a run whose
-    work was cancelled. The run itself is `_run_app`.
+    early, raises, or is abandoned by a click — and ends a run whose work was
+    cancelled as a stopped one, which keeps the state of the widgets it never
+    reached. The run itself is `_run_app`.
     """
     with loading.run_scope():
         _run_app()

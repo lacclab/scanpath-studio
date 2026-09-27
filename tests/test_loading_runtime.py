@@ -115,9 +115,70 @@ def _cancelled_script():
         raise progress.Cancelled("abandoned")
 
 
-def test_run_scope_ends_a_cancelled_run_quietly():
+def test_a_cancelled_run_ends_with_no_error_on_the_page():
     at = AppTest.from_function(_cancelled_script).run()
     assert not at.exception
+
+
+def _cancelled_mid_card_script():
+    import streamlit as st
+    from streamlit.runtime.scriptrunner import StopException
+
+    from scanpath_studio import loading, progress
+
+    surfaced = None
+    try:
+        with loading.run_scope():
+            card = loading.Card(st.empty(), key="cut", title="Cut short").open(
+                reveal_now=True
+            )
+            st.session_state["card"] = card
+            st.session_state["armed"] = card._ticker is not None
+            raise progress.Cancelled("abandoned")
+    except StopException:
+        surfaced = "StopException"
+    st.session_state["surfaced"] = surfaced
+    st.session_state["halted"] = st.session_state["card"]._ticker is None
+
+
+def test_a_cancelled_run_ends_as_a_stopped_one_and_still_clears_its_card(
+    monkeypatch,
+):
+    """`run_scope` turns a `Cancelled` into Streamlit's own `StopException`, so
+    the run ends as a premature stop — and its `finally` still halts and
+    clears every card the run left open."""
+    monkeypatch.setattr(loading, "DELAY_S", 30)  # shown at once, its timer armed
+    at = AppTest.from_function(_cancelled_mid_card_script).run()
+    assert not at.exception, at.exception
+    assert at.session_state["surfaced"] == "StopException"
+    assert at.session_state["armed"] is True
+    assert at.session_state["halted"] is True
+    assert "Cut short" not in _markdown(at)
+
+
+def _cancelled_before_a_widget_script():
+    import streamlit as st
+
+    from scanpath_studio import loading, progress
+
+    with loading.run_scope():
+        if st.session_state.get("cancel_now"):
+            raise progress.Cancelled("abandoned")
+        st.text_input("Below the cancel point", key="later_field")
+
+
+def test_a_cancelled_run_keeps_the_widgets_it_never_reached():
+    """A run cut short that ends as a normal finish gets Streamlit's
+    stale-widget sweep, which drops the state of every widget it never reached;
+    only a premature stop (`StopException`) is spared it."""
+    at = AppTest.from_function(_cancelled_before_a_widget_script).run()
+    at.text_input(key="later_field").input("kept").run()
+    assert at.session_state["later_field"] == "kept"
+    at.session_state["cancel_now"] = True
+    at.run()
+    assert not at.exception, at.exception
+    assert "later_field" in at.session_state
+    assert at.session_state["later_field"] == "kept"
 
 
 def _page_script():

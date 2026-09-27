@@ -508,10 +508,14 @@ download cards.
 - **Another session waiting on the same computation is unaffected:** when the
   cancelled thread releases the compute lock without a result, the waiting
   thread computes it itself.
-- **`Cancelled` is caught by `loading.run_scope`,** which ends that run quietly.
-  Only an abandoned run ever computes a cancelled task — `progress.begin()`
-  never joins a cancelled one, it starts afresh — so there is no page left to
-  show an error on, and catching it keeps the server log clean.
+- **`Cancelled` is caught by `loading.run_scope`,** which ends that run as a
+  stopped one: it re-raises it as Streamlit's own `StopException`, so the run
+  is a premature stop — no error on the page or in the server log, and
+  Streamlit skips its stale-widget sweep, keeping the state of every widget the
+  run never reached (a normal finish would drop it). Only an abandoned run ever
+  computes a cancelled task — `progress.begin()` never joins a cancelled one,
+  it starts afresh — so there is no page left to show anything on; the stop
+  keeps a cut-short run from ever ending as a successful one.
 
 ## 5. The four-surface rule and the wire format
 

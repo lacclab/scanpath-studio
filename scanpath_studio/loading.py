@@ -838,9 +838,14 @@ def card(
 def run_scope() -> Iterator[None]:
     """Wrap one script run: fresh state in, every timer stopped out.
 
-    It also ends quietly a run whose work was cancelled: only an abandoned run
-    ever computes a cancelled task (`progress.begin` never joins one), so its
-    page is gone and Streamlit drops whatever it sends.
+    A run whose work was cancelled ends as a **stopped** one: the `Cancelled`
+    is re-raised as Streamlit's own `StopException`, which Streamlit treats as
+    a premature stop and so skips its stale-widget sweep — the state of every
+    widget the run never reached is kept, where a normal finish would drop it.
+    Today only an abandoned run ever computes a cancelled task
+    (`progress.begin` never joins one), so its page is gone and Streamlit drops
+    whatever it sends either way; the stop is what keeps a cut-short run from
+    ending as a successful one, should a cancel ever reach a run on screen.
 
     A card or the page left open when the run ends — interrupted, or simply
     never closed — is cleared off-thread here too, the same
@@ -860,7 +865,7 @@ def run_scope() -> Iterator[None]:
         with progress.scope():
             yield
     except progress.Cancelled:
-        pass
+        raise StopException() from None
     except Exception:
         failed = True
         raise

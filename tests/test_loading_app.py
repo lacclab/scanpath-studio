@@ -278,6 +278,19 @@ def test_the_trial_list_and_the_identity_check_report_on_a_miss():
     )
 
 
+def test_a_filter_changes_default_filters_report_on_a_miss():
+    """Keyed on the *filtered* pair, so it misses on every filter change while
+    everything upstream of it hits: its report is what shows the dataset card
+    while the new pool is worked out, rather than only at the trial list. (The
+    filtering itself, `data.filter_trials`, is uncached and runs every run —
+    a report there would mark every run as work.)"""
+    words, fixations = _normalized_synthetic()
+    fresh = ("t", "gated-miss", uuid.uuid4().hex)  # a key nothing has cached
+    assert _reports_on_a_miss(
+        lambda: data._default_filters_cached(words, fixations, cache_key=fresh)
+    )
+
+
 def test_compares_second_dataset_and_the_corpus_measures_report_on_a_miss():
     compare_source._load_builtin_frames.clear()
     assert _reports_on_a_miss(lambda: compare_source._load_builtin_frames(SYNTHETIC))

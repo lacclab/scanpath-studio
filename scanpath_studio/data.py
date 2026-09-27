@@ -4640,6 +4640,10 @@ def default_filters(words: pd.DataFrame, fixations: pd.DataFrame) -> dict:
 def _default_filters_cached(
     _words: pd.DataFrame, _fixations: pd.DataFrame, cache_key
 ) -> dict:
+    # UX-166: keyed on the filtered pair, so this misses on every filter change
+    # while everything upstream hits — the report shows the gated dataset card
+    # while the new pool is worked out, not only once the trial list builds.
+    progress.report()
     filters = dict(
         participants=_union_column_values(_words, _fixations, "participant_id"),
         trials=_union_column_values(_words, _fixations, "trial_id"),

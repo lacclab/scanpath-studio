@@ -252,7 +252,7 @@ def _animate(viz: dict, monkeypatch, *, drift_corrected: bool = False, dual=Fals
     # PERF-16's view cache sits in front of it, so empty that too.
     monkeypatch.setattr(tabs, "_cached_scanpath_animation", spy)
     tabs._cached_replay_view.clear()
-    view, *_ = tabs._build_and_render_animation(
+    frames = (
         _trial(_words(), "A"),
         _trial(_fixations(), "A"),
         _trial(_words(), "B") if dual else None,
@@ -261,11 +261,15 @@ def _animate(viz: dict, monkeypatch, *, drift_corrected: bool = False, dual=Fals
         "t1",
         "B" if dual else None,
         "t1" if dual else None,
+    )
+    plan = tabs._plan_replay(
+        *frames,
         settings=_figure_settings(viz),
         viz_settings=viz,
         playback_speed=1.0,
         drift_corrected=drift_corrected,
     )
+    view, *_ = tabs._build_and_render_animation(*frames, viz_settings=viz, plan=plan)
     return view.figure(), seen
 
 

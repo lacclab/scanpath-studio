@@ -4386,40 +4386,16 @@ def _build_and_render_animation(
     compare_trial: str | None,
     *,
     viz_settings: dict,
-    plan: _ReplayPlan | None = None,
-    settings: FigureSettings | None = None,
-    playback_speed: float = 1.0,
-    drift_corrected: bool = False,
+    plan: _ReplayPlan,
     dataset_name_b: str = "",
 ):
     """Build + render the animation figure (single or dual co-animation) in the
     main column. Returns ``(view, save_slug, file_stem)`` — the replay's
     `_ReplayView`, whose ``figure()`` is the finished figure (PERF-16).
 
-    ``plan`` is the `_ReplayPlan` the app's call site worked out for these same
-    arguments before opening the card, since the replay's task is keyed by it
-    (UX-169); given one, ``settings`` / ``playback_speed`` / ``drift_corrected``
-    are not read. A caller without one (the tests) passes those instead, and
-    the plan is worked out here — by the same `_plan_replay`, so there is one
-    derivation of the key either way."""
-    if plan is None:
-        if settings is None:
-            raise TypeError("_build_and_render_animation needs a plan or settings")
-        plan = _plan_replay(
-            trial_words,
-            trial_fixations,
-            words_b,
-            fixations_b,
-            selected_participant,
-            selected_trial,
-            compare_participant,
-            compare_trial,
-            settings=settings,
-            viz_settings=viz_settings,
-            playback_speed=playback_speed,
-            drift_corrected=drift_corrected,
-            dataset_name_b=dataset_name_b,
-        )
+    ``plan`` is `_plan_replay`'s for these same arguments, worked out before the
+    card opens because the replay's task is keyed by it (UX-169) — so the key
+    the task carries and the key the build uses are one derivation."""
     dual = fixations_b is not None and not fixations_b.empty
     animation_settings = plan.settings
     frame_settings = plan.frame_settings

@@ -74,15 +74,17 @@ def test_a_finished_task_shows_a_full_bar_not_a_sliding_one():
 
 
 def test_the_size_box_holds_the_exact_iframe_height():
-    html = loading.size_box_html(960, 702)
+    html = loading.size_box_html(960, 702, card_key="single")
     assert "height:702px" in html
 
 
-def test_the_size_box_has_the_figures_own_width_capped_by_its_column():
-    """A definite width — not a percentage — so the card's grid track can size
-    to the figure, and the card centre over the figure, not the whole stage."""
-    html = loading.size_box_html(960, 702)
-    assert "width:960px;max-width:100%" in html
+def test_the_size_box_caps_its_card_at_the_figures_width():
+    """The card's own container is capped at the figure's width, so its grid
+    track is the figure's width in a wide column and the column's in a narrow
+    one — no intrinsic sizing, so it can neither overflow nor collapse."""
+    html = loading.size_box_html(960, 702, card_key="single_anim")
+    assert html.startswith('<div class="sps-size-box"')
+    assert "<style>.st-key-sps_card_single_anim{max-width:960px}</style>" in html
 
 
 def test_the_scanpath_skeleton_follows_the_selector_grid_and_plot_height():

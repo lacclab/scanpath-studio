@@ -233,8 +233,7 @@ def get_app_css() -> str:
         display: flex !important;
         flex-direction: column;
         gap: 0.4rem !important;
-        width: 24rem;
-        max-width: 100%;
+        width: 100%;
         box-sizing: border-box;
         padding: 0.8rem 1rem 0.75rem;
         border: 1px solid var(--sps-border);
@@ -242,24 +241,27 @@ def get_app_css() -> str:
         background: var(--sps-page-bg);
         box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
     }
-    /* One track, as wide as the size box (its width is definite), so "centre"
-       means over the figure; a card with no size box gets a track as wide as
-       itself, and sits where it is written. */
+    /* One track, as wide as the card's container — which the size box's own
+       rule caps at the figure's width (loading.size_box_html) — so "centre"
+       means over the figure, and every width resolves from the column down: a
+       track sized by its content would grow past a narrow column, or collapse
+       to the card. */
     [class*="st-key-sps_card_"]:not(.st-key-sps_card_page) {
         display: grid !important;
-        grid-template-columns: fit-content(100%);
+        grid-template-columns: minmax(0, 1fr);
     }
     [class*="st-key-sps_card_"]:not(.st-key-sps_card_page) > * { grid-area: 1 / 1; }
     /* Streamlit stretches a block's wrapper to the full width, and no
-       `justify-self` moves a stretched box — so it shrinks to the card. */
+       `justify-self` moves a stretched box — so it takes the card's width. */
     [class*="st-key-sps_card_"] > [data-testid="stLayoutWrapper"]:has(> [class*="st-key-sps_cardbody_"]) {
-        width: fit-content !important;
-        max-width: 100%;
+        width: min(24rem, 100%) !important;
         align-self: center;
         justify-self: center;
         z-index: 2;
     }
-    .sps-size-box { pointer-events: none; }
+    /* A card with no area to hold sits where it is written, like its neighbours. */
+    [class*="st-key-sps_card_"]:not(.st-key-sps_card_page):not(:has(.sps-size-box)) > [data-testid="stLayoutWrapper"]:has(> [class*="st-key-sps_cardbody_"]) { justify-self: start; }
+    .sps-size-box { width: 100%; pointer-events: none; }
     [class*="st-key-sps_card_"]:has(.sps-reveal) .sps-size-box {
         border-radius: 8px;
         background:

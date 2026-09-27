@@ -65,31 +65,35 @@ def test_a_card_takes_no_space_until_it_shows():
 
 def test_a_card_sits_centred_over_the_figure_it_stands_in_for():
     """UX-167: Streamlit stretches a block's wrapper to the full width, so the
-    body's wrapper shrinks to the card — or no `justify-self` places it — and
-    a region card's one grid track sizes to its size box, so "centre" means
-    over the figure. A card with no size box gets a track as wide as itself,
-    and sits where it is written."""
+    body's wrapper takes a width of its own — or no `justify-self` places it.
+    Every width resolves top-down from the column (the size box caps its card
+    at the figure's width): a track sized by its content would overflow a
+    narrow column or collapse to the card. A card with no size box sits where
+    it is written; the page card keeps its own placement."""
     assert (
         '[class*="st-key-sps_card_"]:not(.st-key-sps_card_page) {\n'
         "        display: grid !important;\n"
-        "        grid-template-columns: fit-content(100%);"
+        "        grid-template-columns: minmax(0, 1fr);"
     ) in CSS
+    assert "fit-content" not in CSS[CSS.index("UX-165 · loading states") :]
     wrapper = (
         '[class*="st-key-sps_card_"] > [data-testid="stLayoutWrapper"]'
         ':has(> [class*="st-key-sps_cardbody_"]) {'
     )
     rule = CSS[CSS.index(wrapper) :].split("}", 1)[0]
-    assert "width: fit-content !important;" in rule
+    assert "width: min(24rem, 100%) !important;" in rule
     assert "justify-self: center;" in rule
-    # A definite width: a percentage of a shrink-to-fit wrapper is circular,
-    # and the card would shrink to its text.
+    assert (
+        '[class*="st-key-sps_card_"]:not(.st-key-sps_card_page)'
+        ":not(:has(.sps-size-box)) > "
+        '[data-testid="stLayoutWrapper"]:has(> [class*="st-key-sps_cardbody_"]) '
+        "{ justify-self: start; }"
+    ) in CSS
+    assert ".sps-size-box { width: 100%; pointer-events: none; }" in CSS
     body = (
         '[class*="st-key-sps_card_"]:has(.sps-reveal) [class*="st-key-sps_cardbody_"] {'
     )
-    assert (
-        "width: 24rem;\n        max-width: 100%;"
-        in CSS[CSS.index(body) :].split("}", 1)[0]
-    )
+    assert "width: 100%;" in CSS[CSS.index(body) :].split("}", 1)[0]
 
 
 def _nested_has(css: str) -> list[str]:

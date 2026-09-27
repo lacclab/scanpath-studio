@@ -176,19 +176,21 @@ def bar_html(snap: Snapshot) -> str:
     return '<div class="sps-bar sps-bar-indeterminate" aria-hidden="true"><span></span></div>'
 
 
-def size_box_html(width: int, height: int) -> str:
-    """The placeholder that holds a figure's place.
+def size_box_html(width: int, height: int, *, card_key: str) -> str:
+    """The placeholder that holds a figure's place, and its card's width.
 
     ``height`` is the true-scale iframe's *fixed* height (the figure's own
     height + 12): `html_embed.embed_html_iframe` passes an int to `st.iframe`,
     so the row is exactly that tall at any column width. ``width`` is where the
-    figure itself will stop — a definite width, capped by the column, so the
-    card's grid track sizes to it and the card centres over the figure
-    (styles.py), not over the whole plot column.
+    figure itself stops; the rule beside the box caps the card's own container
+    there, so the card — box and body — spans exactly the figure in a wide
+    column and the column in a narrow one, and centres over the figure
+    (styles.py). A definite cap from above, deliberately: a grid track sized by
+    its content grows past a narrow column or collapses to the card.
     """
     return (
-        '<div class="sps-size-box" aria-hidden="true" '
-        f'style="height:{int(height)}px;width:{int(width)}px;max-width:100%"></div>'
+        f'<div class="sps-size-box" aria-hidden="true" style="height:{int(height)}px"></div>'
+        f"<style>.st-key-sps_card_{card_key}{{max-width:{int(width)}px}}</style>"
     )
 
 
@@ -472,7 +474,9 @@ class Card:
         """
         box = self._slot.container(key=f"sps_card_{self.key}")
         if self._size is not None:
-            box.markdown(size_box_html(*self._size), unsafe_allow_html=True)
+            box.markdown(
+                size_box_html(*self._size, card_key=self.key), unsafe_allow_html=True
+            )
         if self._skeleton is not None:
             self._skeleton_ph = box.empty()
         body = box.container(key=f"sps_cardbody_{self.key}")

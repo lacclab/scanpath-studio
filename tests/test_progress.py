@@ -7,7 +7,7 @@ import threading
 
 import pytest
 
-from scanpath_studio import api, progress
+from scanpath_studio import api, plots, progress, tabs
 from scanpath_studio.synthetic import load_synthetic_data
 
 
@@ -266,6 +266,79 @@ def test_building_a_replay_reports_every_frame():
     snap = task.snapshot()
     assert snap.unit == "frames"
     assert snap.done == snap.total == len(fig.frames)
+
+
+def test_a_replay_cancelled_mid_build_caches_nothing_and_the_next_starts_afresh(
+    monkeypatch,
+):
+    """UX-169: a cancelled replay stops within a frame — `Cancelled` straight
+    out of the app's cached build — and, having returned nothing, leaves
+    nothing in the cache. The next build, under a fresh task (`begin` never
+    joins a cancelled one), is a miss: it starts again from the first frame
+    and runs to the last."""
+    words, fixations = api.load_scanpath_data(*load_synthetic_data())
+    pid = str(fixations["participant_id"].iloc[0])
+    trial = str(fixations["trial_id"].iloc[0])
+    plan = tabs._plan_replay(
+        words,
+        fixations,
+        None,
+        None,
+        pid,
+        trial,
+        None,
+        None,
+        settings=plots.FigureSettings.from_mapping(
+            {},
+            canvas_width=800,
+            canvas_height=600,
+            base_font_size=12,
+            font_family="Arial",
+        ),
+        viz_settings={"critical_span_style": "None"},
+        playback_speed=1.0,
+    )
+    key = ("t", "replay-cancelled-mid-build")
+    frames: list[int] = []
+    builds: list[int] = []
+    real_report, real_build = progress.report, tabs.build_scanpath_replay
+
+    def report(done=None, total=None, **kwargs):
+        if kwargs.get("unit") == "frames":
+            frames.append(done)
+            if done == 3 and len(builds) == 1:  # a few frames into the first build
+                progress.cancel(key)
+        real_report(done, total, **kwargs)
+
+    def build(*args, **kwargs):
+        builds.append(len(builds) + 1)
+        return real_build(*args, **kwargs)
+
+    def replay():
+        return tabs._cached_scanpath_animation(
+            words, fixations, plan.frame_settings, None, None, anim_key=plan.key
+        )
+
+    monkeypatch.setattr(progress, "report", report)
+    monkeypatch.setattr(tabs, "build_scanpath_replay", build)
+    tabs._cached_scanpath_animation.clear()
+    try:
+        with progress.task(key, title="Building the animation") as cancelled:
+            with pytest.raises(progress.Cancelled):
+                replay()
+        assert cancelled.cancelled
+        assert frames == [1, 2, 3]
+        frames.clear()
+        with progress.task(key, title="Building the animation") as fresh:
+            fig, _frame_step_ms = replay()
+        assert fresh is not cancelled and not fresh.cancelled
+        assert builds == [1, 2]  # a miss: the cancelled build cached nothing
+        assert len(fig.frames) > 3
+        assert frames == list(range(1, len(fig.frames) + 1))
+        snap = fresh.snapshot()
+        assert snap.done == snap.total == len(fig.frames)
+    finally:
+        tabs._cached_scanpath_animation.clear()
 
 
 def test_two_threads_reporting_to_one_task_share_one_yield(monkeypatch):

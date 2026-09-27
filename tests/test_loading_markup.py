@@ -67,7 +67,14 @@ def test_the_bar_is_determinate_only_with_a_total():
 
 def test_the_size_box_holds_the_exact_iframe_height():
     html = loading.size_box_html(960, 702)
-    assert "height:702px" in html and "max-width:960px" in html
+    assert "height:702px" in html
+
+
+def test_the_size_box_has_the_figures_own_width_capped_by_its_column():
+    """A definite width — not a percentage — so the card's grid track can size
+    to the figure, and the card centre over the figure, not the whole stage."""
+    html = loading.size_box_html(960, 702)
+    assert "width:960px;max-width:100%" in html
 
 
 def test_the_scanpath_skeleton_follows_the_selector_grid_and_plot_height():

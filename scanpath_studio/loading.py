@@ -176,12 +176,14 @@ def size_box_html(width: int, height: int) -> str:
 
     ``height`` is the true-scale iframe's *fixed* height (the figure's own
     height + 12): `html_embed.embed_html_iframe` passes an int to `st.iframe`,
-    so the row is exactly that tall at any column width. ``width`` caps it where
-    the figure itself will stop.
+    so the row is exactly that tall at any column width. ``width`` is where the
+    figure itself will stop — a definite width, capped by the column, so the
+    card's grid track sizes to it and the card centres over the figure
+    (styles.py), not over the whole plot column.
     """
     return (
         '<div class="sps-size-box" aria-hidden="true" '
-        f'style="height:{int(height)}px;max-width:{int(width)}px"></div>'
+        f'style="height:{int(height)}px;width:{int(width)}px;max-width:100%"></div>'
     )
 
 

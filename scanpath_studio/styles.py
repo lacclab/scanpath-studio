@@ -233,7 +233,8 @@ def get_app_css() -> str:
         display: flex !important;
         flex-direction: column;
         gap: 0.4rem !important;
-        width: min(24rem, 100%);
+        width: 24rem;
+        max-width: 100%;
         box-sizing: border-box;
         padding: 0.8rem 1rem 0.75rem;
         border: 1px solid var(--sps-border);
@@ -241,17 +242,24 @@ def get_app_css() -> str:
         background: var(--sps-page-bg);
         box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
     }
+    /* One track, as wide as the size box (its width is definite), so "centre"
+       means over the figure; a card with no size box gets a track as wide as
+       itself, and sits where it is written. */
     [class*="st-key-sps_card_"]:not(.st-key-sps_card_page) {
         display: grid !important;
-        grid-template-columns: minmax(0, 1fr);
+        grid-template-columns: fit-content(100%);
     }
     [class*="st-key-sps_card_"]:not(.st-key-sps_card_page) > * { grid-area: 1 / 1; }
+    /* Streamlit stretches a block's wrapper to the full width, and no
+       `justify-self` moves a stretched box — so it shrinks to the card. */
     [class*="st-key-sps_card_"] > [data-testid="stLayoutWrapper"]:has(> [class*="st-key-sps_cardbody_"]) {
+        width: fit-content !important;
+        max-width: 100%;
         align-self: center;
         justify-self: center;
         z-index: 2;
     }
-    .sps-size-box { width: 100%; pointer-events: none; }
+    .sps-size-box { pointer-events: none; }
     [class*="st-key-sps_card_"]:has(.sps-reveal) .sps-size-box {
         border-radius: 8px;
         background:

@@ -4158,18 +4158,24 @@ ANIM_TASK_KEY = "_sps_anim_task"
 
 
 def _animation_task_key(
-    participant, trial, compare_participant=None, compare_trial=None
+    participant, trial, screen=None, *, compare: tuple | None = None
 ) -> tuple:
     """The replay's task key: what it is a replay *of*.
 
     Keyed by the session alone, a run that stepped to another trial mid-build
     joined the old build's task — two frame loops' counts interleaved on one
-    card while the obsolete build ran on beside the new one. B's reader and
-    trial are part of it for a co-replay (pass them only then).
+    card while the obsolete build ran on beside the new one. A multipart replay
+    covers one screen, so the screen is part of it (``None`` for a trial with
+    one); ``compare`` is B's ``(participant, trial, screen)`` for a co-replay,
+    and is passed only then — B steps through its own screens (UX-112).
     """
-    key = ("anim", loading.session_id(), str(participant), str(trial))
-    if compare_participant is not None or compare_trial is not None:
-        key += (str(compare_participant), str(compare_trial))
+
+    def _identity(who, what, where) -> tuple:
+        return (str(who), str(what), None if where is None else str(where))
+
+    key = ("anim", loading.session_id(), *_identity(participant, trial, screen))
+    if compare is not None:
+        key += _identity(*compare)
     return key
 
 
@@ -6101,7 +6107,12 @@ def render_single_trial_tab(
             anim_task = _animation_task_key(
                 selected_participant,
                 selected_trial,
-                *((compare_participant, compare_trial) if dual_anim else ()),
+                selected_screen,
+                compare=(
+                    (compare_participant, compare_trial, selected_compare_screen)
+                    if dual_anim
+                    else None
+                ),
             )
             _claim_animation_task(anim_task)
             with loading.card(

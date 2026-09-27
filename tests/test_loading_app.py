@@ -38,7 +38,7 @@ from scanpath_studio.constants import (
     DATASET_EDITOR_OPEN_KEY,
 )
 from scanpath_studio.session_keys import COMPARE_SOURCE_STATE_KEY
-from scanpath_studio.synthetic import load_synthetic_data
+from scanpath_studio.synthetic import load_synthetic_data, make_multipart_synthetic_data
 from tests.conftest import APP_SCRIPT, pin_view
 
 AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
@@ -835,12 +835,65 @@ def test_the_same_trial_joins_the_replay_being_built(at, monkeypatch):
     key = tuple(at.session_state[ANIM_TASK])
     shown = at.session_state["_share_selection"]
     assert key[0] == "anim"
-    assert key[2:] == (str(shown["participant_id"]), str(shown["trial_id"]))
+    assert key[2:] == (
+        str(shown["participant_id"]),
+        str(shown["trial_id"]),
+        shown.get("screen_id"),  # None: a single-screen trial
+    )
     task = progress.begin(key, title="Building the animation")  # still building
     begun = _hold_every_task(monkeypatch)
     at.run()
     assert not task.cancelled
     assert begun[key] is task
+
+
+TWO_SCREENS = "Two screens"
+
+
+def _store_two_screen_dataset(at) -> None:
+    """A stored multipart dataset: one trial read over two screens."""
+    words, fixations = make_multipart_synthetic_data()
+    at.session_state["_datasets"] = {
+        TWO_SCREENS: {
+            "words": words,
+            "fixations": fixations,
+            "raw_gaze": pd.DataFrame(),
+            "filter_fields": [],
+            "composite_trial_columns": [],
+        }
+    }
+    at.session_state["data_source_choice"] = TWO_SCREENS
+
+
+def test_stepping_to_another_screen_cancels_the_replay_built_for_the_last(
+    monkeypatch,
+):
+    """A multipart replay covers one screen, so ▶ to the next screen of the same
+    trial mid-build must cancel the build for the screen left behind — not join
+    it, which interleaved two frame loops' counts on one card."""
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
+    _store_two_screen_dataset(at)
+    at.session_state["single_animate"] = True
+    monkeypatch.setattr(tabs, "_build_and_render_animation", _stop)  # mid-build
+    at.run()
+    assert not at.exception, at.exception
+    first_screen = tuple(at.session_state[ANIM_TASK])
+    task = progress.begin(first_screen, title="Building the animation")  # building
+    at.button(key="single_screen_next").click().run()
+    assert not at.exception, at.exception
+    assert at.session_state["single_screen_id"] == "question"
+    assert task.cancelled
+
+
+def test_a_co_replays_key_names_bs_screen_too():
+    """In a co-replay B steps through its own screens (UX-112), so B's screen is
+    part of what the replay is of, beside B's reader and trial."""
+    a = ("synthetic", "multipart_demo", "intro")
+    on_bs_intro = tabs._animation_task_key(*a, compare=a)
+    on_bs_question = tabs._animation_task_key(
+        *a, compare=("synthetic", "multipart_demo", "question")
+    )
+    assert on_bs_intro != on_bs_question
 
 
 # UX-169 — a placeholder inside the plot's frame.
@@ -875,5 +928,32 @@ def test_a_run_that_builds_no_replay_stops_the_one_left_building(at):
     at.session_state[tabs.ANIM_TASK_KEY] = stale
     at.run()  # Animate is off by default
     assert not at.exception, at.exception
+    assert task.cancelled
+    assert tabs.ANIM_TASK_KEY not in at.session_state
+
+
+def test_animate_on_a_trial_with_no_fixations_stops_the_replay_left_building():
+    """The other run that builds no replay: Animate is on, but this trial has no
+    fixations to animate — so no animation card opens to cancel the build an
+    earlier run left running for another trial."""
+    words, _ = _normalized_synthetic()
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
+    at.session_state["_datasets"] = {
+        "Words only": {
+            "words": words,
+            "fixations": data.empty_fixations_frame(),
+            "raw_gaze": pd.DataFrame(),
+            "filter_fields": [],
+            "composite_trial_columns": [],
+        }
+    }
+    at.session_state["data_source_choice"] = "Words only"
+    stale = ("anim", "an-earlier-run", "p", "t", None)
+    task = progress.begin(stale, title="Building the animation")  # held: stays live
+    at.session_state[tabs.ANIM_TASK_KEY] = stale
+    at.session_state["single_animate"] = True
+    at.run()
+    assert not at.exception, at.exception
+    assert any("nothing to animate" in info.value for info in at.info)
     assert task.cancelled
     assert tabs.ANIM_TASK_KEY not in at.session_state

@@ -53,7 +53,7 @@ if __package__ is None or __package__ == "":
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
 
-from scanpath_studio import loading, wizard_shell
+from scanpath_studio import loading, progress, wizard_shell
 from scanpath_studio import metadata as metadata_mod
 from scanpath_studio.annotations import (
     filter_keys,
@@ -2746,17 +2746,25 @@ def _normalize_pair_uncached(
         word_rows=len(_words_df),
         fixation_rows=len(_fixations_df),
     ):
+        # UX-166 (T5-3): three reportable parts, so a cancel checkpoint exists
+        # partway through instead of only at the very end — on a real corpus
+        # this stage alone is the ~20 s wait the spinner above describes.
+        progress.report(0, 3, detail="words")
         words_norm = (
             normalize_words(_words_df, _word_schema, keep_columns=_keep_words)
             if _word_schema is not None
             else empty_words_frame()
         )
+        progress.report(1, 3, detail="fixations")
         fixations_norm = (
             normalize_fixations(_fixations_df, _fix_schema, keep_columns=_keep_fix)
             if _fix_schema is not None
             else empty_fixations_frame()
         )
-        return harmonize_frames(words_norm, fixations_norm)
+        progress.report(2, 3, detail="cross-checks")
+        result = harmonize_frames(words_norm, fixations_norm)
+        progress.report(3, 3)
+        return result
 
 
 def _normalize_pair(

@@ -405,3 +405,24 @@ def test_an_abandoned_runs_stop_does_not_escape_the_log_handler(monkeypatch):
         "scanpath_studio", logging.INFO, __file__, 1, "x", None, None
     )
     debug_log._SessionStateHandler().emit(record)  # must not raise
+
+
+def test_a_rerun_request_is_not_swallowed_by_the_log_handler(monkeypatch):
+    """UX-166 fix-round-1 (T5-2): `ScriptRequests.on_scriptrunner_yield` clears
+    a RERUN request as it hands it over, while a STOP request stays set — so
+    unlike StopException, catching RerunException here would consume the
+    rerun once and for all if `emit` happened to be the first checkpoint after
+    the click. Only StopException may be swallowed."""
+    import logging
+
+    from streamlit.runtime.scriptrunner import RerunException
+
+    def _rerunning():
+        raise RerunException(None)
+
+    monkeypatch.setattr(debug_log, "_buffer", _rerunning)
+    record = logging.LogRecord(
+        "scanpath_studio", logging.INFO, __file__, 1, "x", None, None
+    )
+    with pytest.raises(RerunException):
+        debug_log._SessionStateHandler().emit(record)

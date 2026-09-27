@@ -653,3 +653,43 @@ class TestForceLtrLocaleScript:
 
         source = inspect.getsource(app_module.configure_page)
         assert "embed_html_iframe(_FORCE_LTR_LOCALE_SCRIPT, height=0)" in source
+
+
+class TestNormalizePairUncachedReportsItsParts:
+    """UX-166 fix-round-1 (T5-3, spec gap): the spec's step table names
+    normalization's three parts (words, fixations, cross-checks) so a
+    cancelled normalization has a checkpoint partway through instead of only
+    at the very end — on a real corpus this stage alone is a ~20 s wait."""
+
+    def _schemas_and_frames(self):
+        from scanpath_studio import data as data_module
+        from tests.synthetic_data import make_synthetic_fixations, make_synthetic_words
+
+        words = make_synthetic_words()
+        fixations = make_synthetic_fixations()
+        word_schema = data_module.propose_word_schema(words)
+        fix_schema = data_module.propose_fix_schema(fixations)
+        return words, word_schema, fixations, fix_schema
+
+    def test_the_final_snapshot_is_done_equals_total_equals_three(self):
+        from scanpath_studio import progress
+
+        words, word_schema, fixations, fix_schema = self._schemas_and_frames()
+        with progress.task(("t", "normalize-parts"), title="Normalizing") as task:
+            app_module._normalize_pair_uncached(
+                words, word_schema, fixations, fix_schema, ("k", 1)
+            )
+        snap = task.snapshot()
+        assert snap.done == snap.total == 3
+
+    def test_cancelling_first_raises_cancelled(self):
+        from scanpath_studio import progress
+
+        words, word_schema, fixations, fix_schema = self._schemas_and_frames()
+        key = ("t", "normalize-parts-cancel")
+        with progress.task(key, title="Normalizing"):
+            progress.cancel(key)
+            with pytest.raises(progress.Cancelled):
+                app_module._normalize_pair_uncached(
+                    words, word_schema, fixations, fix_schema, ("k", 2)
+                )

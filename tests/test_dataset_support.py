@@ -539,12 +539,26 @@ def test_load_potec_missing_data_message(tmp_path):
         datasets_module.load_potec(tmp_path, texts=["b0"])
 
 
-def test_potec_reports_each_fixation_file(potec_root):
+def test_potec_reports_each_fixation_file(potec_root, monkeypatch):
+    """UX-166: `_potec_fixations` reports each file read, so a card can say
+    "1 of 2 files" while loading. Fix-round-1 (Minor #8) also pins the FULL
+    call sequence via a spy on `progress.report` — not just the final
+    snapshot, since a cancel checkpoint needs the intermediate reports to
+    actually have happened, in order, one per file."""
     from scanpath_studio import progress
     from scanpath_studio.datasets import potec_raw_frames
 
+    calls = []
+    real_report = progress.report
+
+    def spy(done=None, total=None, *, unit="", detail=None):
+        calls.append((done, total, unit))
+        return real_report(done, total, unit=unit, detail=detail)
+
+    monkeypatch.setattr(progress, "report", spy)
     with progress.task(("t", "potec"), title="Loading PoTeC") as task:
         potec_raw_frames(potec_root, texts=["b0"])
+    assert calls == [(1, 2, "files"), (2, 2, "files")]
     snap = task.snapshot()
     assert (snap.done, snap.total, snap.unit) == (2, 2, "files")
 

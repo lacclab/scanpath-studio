@@ -13,7 +13,7 @@ import warnings
 import weakref
 import zipfile
 from collections import OrderedDict
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
@@ -129,12 +129,25 @@ def _vouch_for_frames(value) -> None:
 #: Session-state home of the no-copy frame caches (PERF-6), one entry per slot.
 _FRAME_CACHE_KEY = "_sps_frame_cache"
 
+#: UX-166 "latest request wins" (T5-1): the store key `(_LATEST_REQUESTED,
+#: slot)` — a tuple, so it can never collide with a real (string) slot name —
+#: holds the most recently *requested* key for that slot, recorded by
+#: `frame_cache` on every call, hit or miss. A build that finishes only writes
+#: `store[slot]` while this still names its own key; otherwise a newer request
+#: has already been answered and this build's (still-valid, still returned to
+#: its own caller) result must not clobber it.
+_LATEST_REQUESTED = "__requested__"
+
 
 @dataclass
 class _InFlight:
     done: threading.Event = field(default_factory=threading.Event)
     value: Any = None
     ok: bool = False
+    #: Set only when the owner's build raised an ordinary ``Exception`` — never
+    #: for a ``BaseException`` that isn't one (`progress.Cancelled`, Streamlit's
+    #: `StopException`). See `_shared_build`.
+    error: Exception | None = None
 
 
 #: UX-166: builds in progress, so a rerun that asks for the same frame waits
@@ -146,12 +159,35 @@ class _InFlight:
 _INFLIGHT: dict[tuple, _InFlight] = {}
 _INFLIGHT_LOCK = threading.Lock()
 
+#: `lookup`/`publish` (see `_shared_build`) return/accept this to mean "no
+#: cached value" — never `None`, since a legitimate result can itself be `None`.
+_MISSING = object()
 
-def _shared_build(ident: tuple, build):
+
+def _shared_build(
+    ident: tuple,
+    build: Callable[[], Any],
+    *,
+    lookup: Callable[[], Any] | None = None,
+    publish: Callable[[Any], None] | None = None,
+) -> Any:
     """``build()``, run once for everyone asking for ``ident`` at the same time.
 
-    A caller that finds a build running waits for it. If that build fails — or
-    was cancelled (`progress.Cancelled`) — the waiter builds it itself.
+    A caller that finds a build running waits for it and reuses its result.
+    If the owner's build raises an ordinary ``Exception``, that same exception
+    is re-raised in every waiter too — the input hasn't changed, so rebuilding
+    would just fail again the same way. Only a ``BaseException`` that is *not*
+    an ``Exception`` (`progress.Cancelled`, Streamlit's `StopException`) means
+    nobody actually finished the build, so a waiter then builds it itself.
+
+    ``lookup``/``publish`` let a cache-shaped caller close UX-166's "latest
+    request wins" race: a new owner calls ``lookup()`` right after winning
+    ownership — a value another, faster build already published for this
+    exact ``ident`` a moment earlier is reused without rebuilding — and a
+    successful build calls ``publish(value)`` *before* the in-flight entry is
+    popped, so "is this result still wanted, or has a newer request already
+    been answered" is decided while this ``ident`` still has exactly one
+    owner. Neither is called for a plain (non-cache) use of this function.
     """
     while True:
         with _INFLIGHT_LOCK:
@@ -161,17 +197,39 @@ def _shared_build(ident: tuple, build):
                 entry = _InFlight()
                 _INFLIGHT[ident] = entry
         if owner:
+            if lookup is not None:
+                hit = lookup()
+                if hit is not _MISSING:
+                    entry.value = hit
+                    entry.ok = True
+                    with _INFLIGHT_LOCK:
+                        _INFLIGHT.pop(ident, None)
+                    entry.done.set()
+                    return hit
             try:
-                entry.value = build()
-                entry.ok = True
-                return entry.value
-            finally:
+                value = build()
+            except BaseException as exc:
+                if isinstance(exc, Exception):
+                    entry.error = exc
                 with _INFLIGHT_LOCK:
                     _INFLIGHT.pop(ident, None)
                 entry.done.set()
+                raise
+            entry.value = value
+            entry.ok = True
+            if publish is not None:
+                publish(value)
+            with _INFLIGHT_LOCK:
+                _INFLIGHT.pop(ident, None)
+            entry.done.set()
+            return value
         entry.done.wait()
         if entry.ok:
             return entry.value
+        if entry.error is not None:
+            raise entry.error
+        # The owner was cancelled or stopped, not merely wrong: nobody actually
+        # built this. Loop back and become the new owner ourselves.
 
 
 def frame_cache(slot: str, key, build):
@@ -194,6 +252,14 @@ def frame_cache(slot: str, key, build):
     the current one would cost more memory than the copy ever did. Falls back to
     calling ``build`` when there is no session state, which is what the headless
     API and the CLI see.
+
+    Keys must be hashable (they are compared with ``==`` and stored as dict
+    keys). Concurrent requests for the same slot + key share one build in
+    flight (`_shared_build`); a build that finishes only *publishes* — writes
+    the entry every later request for that key reuses — while its key is still
+    the slot's most recently requested one (UX-166's "latest request wins"),
+    so a superseded build's late finish can never clobber a newer result. It
+    still returns its value to its own caller either way.
     """
     try:
         store = st.session_state.setdefault(_FRAME_CACHE_KEY, {})
@@ -204,14 +270,39 @@ def frame_cache(slot: str, key, build):
         # which is invisible except as everything being slow.
         _LOGGER.debug("frame_cache falling back to a plain call: %s", exc)
         return build()
+    # UX-166: record this as the slot's latest request on EVERY call — a hit
+    # included, since "the user cancelled back to an earlier dataset" is a hit
+    # for the slot's *current* entry, and without recording it here too an
+    # abandoned build for a *different* key would still look, to its own late
+    # `publish`, like nobody had asked for anything else since.
+    with _INFLIGHT_LOCK:
+        store[(_LATEST_REQUESTED, slot)] = key
     entry = store.get(slot)
     if entry is not None and entry[0] == key:
         return entry[1]
+
+    def _lookup() -> Any:
+        # UX-166: a new owner re-checks the store before building — a
+        # concurrent build for this exact key may have just published,
+        # between our own miss above and winning ownership below.
+        with _INFLIGHT_LOCK:
+            current = store.get(slot)
+        if current is not None and current[0] == key:
+            return current[1]
+        return _MISSING
+
+    def _publish(value: Any) -> None:
+        with _INFLIGHT_LOCK:
+            wins = store.get((_LATEST_REQUESTED, slot)) == key
+            if wins:
+                store[slot] = (key, value)
+        if wins:
+            _vouch_for_frames(value)
+
     # UX-166: shared with a build already running for this session, slot and key.
-    value = _shared_build((id(store), slot, key), build)
-    store[slot] = (key, value)
-    _vouch_for_frames(value)
-    return value
+    return _shared_build(
+        (id(store), slot, key), build, lookup=_lookup, publish=_publish
+    )
 
 
 def clear_frame_cache() -> None:

@@ -1285,19 +1285,21 @@ def _multipleye_fixations(
             return None
         return info
 
+    # UX-166 fix-round-1 (Minor #6): keep only files `_wanted` will actually
+    # read, so "N of M files" isn't inflated by ones a session/stimulus filter
+    # (or an unparseable name) was always going to skip.
     reading = [
-        path
+        (path, info)
         for session_dir in sorted(p for p in base.iterdir() if p.is_dir())
         if session_filter is None or session_dir.name in session_filter
         for path in sorted(session_dir.glob(f"*_{suffix}.csv"))
+        if (info := _wanted(path)) is not None
     ]
     frames = []
-    for index, path in enumerate(reading, start=1):
-        info = _wanted(path)
-        if info is not None:
-            stamped = _stamp_multipleye_fixations(pd.read_csv(path), info, kinds=kinds)
-            if not stamped.empty:
-                frames.append(stamped)
+    for index, (path, info) in enumerate(reading, start=1):
+        stamped = _stamp_multipleye_fixations(pd.read_csv(path), info, kinds=kinds)
+        if not stamped.empty:
+            frames.append(stamped)
         progress.report(index, len(reading), unit="files")
     if not frames:
         raise FileNotFoundError(

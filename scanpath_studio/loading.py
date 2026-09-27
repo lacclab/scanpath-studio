@@ -98,14 +98,25 @@ def format_count(done: int | None, total: int | None, unit: str) -> str:
 
 
 def head_html(snap: Snapshot, *, last: float | None = None) -> str:
-    """The card's first line: spinner, title, elapsed (+ the last load's time)."""
+    """The card's first line: spinner, title, elapsed (+ the last load's time).
+
+    Its live region (``role="status"``) is the title and the current step's
+    label only — the label visually hidden, since the detail line or the step
+    list already shows it — so a screen reader hears each step once. The
+    elapsed time and the count, repainted about four times a second, sit
+    outside it: still on the card, just not announced on every tick.
+    """
     when = format_elapsed(snap.elapsed)
     if last is not None:
         when += f" · last load {format_elapsed(last)}"
+    step = snap.steps[snap.current] if 0 <= snap.current < len(snap.steps) else ""
+    spoken = _esc(snap.title)
+    if step:
+        spoken += f'<span class="sps-sr-only"> · {_esc(step)}</span>'
     return (
-        '<div class="sps-card-head" role="status" aria-live="polite">'
+        '<div class="sps-card-head">'
         '<span class="sps-ring" aria-hidden="true"></span>'
-        f'<span class="sps-card-title">{_esc(snap.title)}</span>'
+        f'<span class="sps-card-title" role="status" aria-live="polite">{spoken}</span>'
         f'<span class="sps-card-time">{_esc(when)}</span></div>'
     )
 

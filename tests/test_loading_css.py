@@ -36,6 +36,16 @@ def test_spinners_hide_while_a_card_shows_and_motion_can_be_reduced():
     assert "prefers-reduced-motion: reduce" in CSS
 
 
+def test_the_step_the_live_region_speaks_is_not_drawn_twice():
+    """The card's live region carries the current step for a screen reader
+    (`loading.head_html`); the detail line or step list already shows it, so
+    in the head it is visually hidden."""
+    rule = re.search(r"\.sps-sr-only \{([^}]*)\}", CSS)
+    assert rule is not None
+    assert "clip-path: inset(50%)" in rule.group(1)
+    assert "position: absolute" in rule.group(1)
+
+
 def test_the_data_view_hides_what_the_previous_view_left():
     assert (
         ".st-key-sps_view:has(.sps-view-hidden) > :not(:first-child) "

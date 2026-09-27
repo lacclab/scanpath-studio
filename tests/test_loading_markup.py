@@ -2,11 +2,37 @@
 
 from __future__ import annotations
 
+from html.parser import HTMLParser
+
 import pytest
 
 from scanpath_studio import loading
 from scanpath_studio.constants import SELECTOR_ROW_GRID
 from scanpath_studio.progress import Snapshot
+
+
+class _LiveRegions(HTMLParser):
+    """The text inside each live region (``role="status"``) of some markup."""
+
+    def __init__(self):
+        super().__init__()
+        self.regions: list[str] = []
+        self._depth = 0
+
+    def handle_starttag(self, tag, attrs):
+        if self._depth:
+            self._depth += 1
+        elif dict(attrs).get("role") == "status":
+            self._depth = 1
+            self.regions.append("")
+
+    def handle_endtag(self, tag):
+        if self._depth:
+            self._depth -= 1
+
+    def handle_data(self, data):
+        if self._depth:
+            self.regions[-1] += data
 
 
 def _snap(**overrides) -> Snapshot:
@@ -46,6 +72,26 @@ def test_the_head_carries_title_time_and_last_load_and_escapes_the_title():
     assert "Load &lt;b&gt;x&lt;/b&gt;" in html
     assert "4.2 s · last load 6.0 s" in html
     assert 'role="status"' in html
+
+
+def test_the_live_region_announces_the_title_and_step_not_the_clock():
+    """The head repaints about four times a second. A live region around the
+    elapsed time had a screen reader read the clock out on every tick; around
+    the title and the current step, it speaks once per step."""
+    html = loading.head_html(_snap(), last=6.0)
+    live = _LiveRegions()
+    live.feed(html)
+    (said,) = live.regions
+    assert "Loading PoTeC" in said and "Normalizing" in said
+    assert "4.2 s" not in said and "last load" not in said
+    assert "312" not in said  # nor the count
+    assert "4.2 s · last load 6.0 s" in html  # still on the card, just not spoken
+
+
+def test_a_card_with_no_steps_announces_its_title_alone():
+    live = _LiveRegions()
+    live.feed(loading.head_html(_snap(steps=(), current=0)))
+    assert live.regions == ["Loading PoTeC"]
 
 
 def test_the_detail_line_joins_step_detail_and_count():

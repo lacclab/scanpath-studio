@@ -271,6 +271,13 @@ def get_app_css() -> str:
     }
     .sps-card-head { display: flex; align-items: center; gap: 0.55rem; }
     .sps-card-title { font-weight: 600; flex: 1; min-width: 0; }
+    /* Spoken, not drawn: the current step in the card's live region, which the
+       detail line or step list already shows (loading.head_html). */
+    .sps-sr-only {
+        position: absolute !important; width: 1px; height: 1px;
+        margin: -1px; padding: 0; border: 0; overflow: hidden;
+        clip-path: inset(50%); white-space: nowrap;
+    }
     .sps-card-time {
         font-size: 0.8rem; opacity: 0.7; white-space: nowrap;
         font-variant-numeric: tabular-nums;

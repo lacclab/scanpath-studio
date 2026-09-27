@@ -188,8 +188,11 @@ with loading.card(slot, title="Building the animation",
 
 The card uses the app's own colours (`--sps-*`), with the accent blue only on
 the bar, and works in the dark theme. Its icons are Material Symbols from
-`constants.ICONS` (UX-138; `tests/test_icons.py`). It is marked
-`role="status"` with `aria-live="polite"`, and Cancel is a real, focusable
+`constants.ICONS` (UX-138; `tests/test_icons.py`). Its title and current
+step form a `role="status"` region with `aria-live="polite"` (the step
+visually hidden there, since the detail line or step list shows it); the
+elapsed time and the count sit outside it, so a screen reader hears each step
+once rather than the clock at every refresh. Cancel is a real, focusable
 button.
 
 **Timing:**

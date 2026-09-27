@@ -284,6 +284,8 @@ def get_app_css() -> str:
        shows, everything else in the view's area — the previous page, or the
        new one being laid out underneath — stays hidden. */
     .st-key-sps_view:has(.sps-reveal-page) > :not(:first-child) { display: none !important; }
+    /* On the Data view the area holds only the last view's leftovers (the Data page draws outside it). */
+    .st-key-sps_view:has(.sps-view-hidden) > :not(:first-child) { display: none !important; }
     .st-key-sps_card_page { display: grid !important; grid-template-columns: minmax(0, 1fr); }
     .st-key-sps_card_page > * { grid-area: 1 / 1; }
     .st-key-sps_card_page > [data-testid="stLayoutWrapper"]:has(> .st-key-sps_cardbody_page) {

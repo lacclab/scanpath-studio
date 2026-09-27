@@ -6883,6 +6883,15 @@ def _run_app() -> None:
     # empty on every run, so nothing it held can outlive the run (BUG-81).
     view_area = st.container(key=loading.VIEW_AREA_KEY)
     view_first_slot = view_area.empty()
+    if active_view == _VIEW_DATA:
+        # UX-166: the Data page draws outside the area, so on that view it only
+        # ever holds what the previous view left there — until this run ends,
+        # the old page, above the new one. This marker hides it (styles.py) for
+        # the whole run; it is not the page card's, which the Data page outlives.
+        view_first_slot.markdown(
+            '<span class="sps-view-hidden" aria-hidden="true"></span>',
+            unsafe_allow_html=True,
+        )
     view_switched = st.session_state.get("_last_rendered_view") not in (
         None,
         active_view,

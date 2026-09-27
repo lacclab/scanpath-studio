@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 
 from scanpath_studio import app, loading
-from scanpath_studio.constants import _VIEW_CORPUS
+from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_DATA, _VIEW_SCANPATH
 from tests.conftest import APP_SCRIPT, pin_view
 
 AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
@@ -117,3 +117,31 @@ def test_the_missing_corpus_notice_stays_above_the_view(at, monkeypatch):
     assert not at.exception, at.exception
     order = [m.value for m in at.markdown]
     assert order.index("missing-corpus-notice") < order.index("scanpath-view-body")
+
+
+def test_only_the_data_view_hides_what_the_view_area_holds(at, monkeypatch):
+    """T6-1: on the Data view the reserved area holds only what the previous view
+    left there (the Data page draws outside it), so its first slot carries a
+    marker the CSS hides the rest of the area by — from the top of the run, before
+    any card exists, and never on a view the area actually holds."""
+    at.run()  # Scanpath, so the Data run below starts over its leftovers
+    monkeypatch.setattr(app, "resolve_data_source", _stop)  # before any card
+    pin_view(at, _VIEW_DATA)
+    at.run()
+    assert "sps-view-hidden" in _markdown(at)
+    pin_view(at, _VIEW_SCANPATH)
+    at.run()
+    assert "sps-view-hidden" not in _markdown(at)
+
+
+def test_the_data_views_marker_outlives_its_card(at, monkeypatch):
+    """The Data page keeps drawing after its card is released, so the marker
+    can't be the card's: here the card shows at once and is gone by the end of
+    the run, and the marker is still there."""
+    at.run()
+    monkeypatch.setattr(loading, "DELAY_S", 0)
+    pin_view(at, _VIEW_DATA)
+    at.run()
+    assert not at.exception, at.exception
+    text = _markdown(at)
+    assert "sps-view-hidden" in text and "sps-card-head" not in text

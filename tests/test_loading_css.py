@@ -32,3 +32,10 @@ def test_the_plot_area_is_a_stage_with_two_stacked_children():
 def test_spinners_hide_while_a_card_shows_and_motion_can_be_reduced():
     assert '.stApp:has(.sps-reveal) div[data-testid="stSpinner"]' in CSS
     assert "prefers-reduced-motion: reduce" in CSS
+
+
+def test_the_data_view_hides_what_the_previous_view_left():
+    assert (
+        ".st-key-sps_view:has(.sps-view-hidden) > :not(:first-child) "
+        "{ display: none !important; }"
+    ) in CSS

@@ -70,8 +70,9 @@ Optional passthrough columns go through the `WORD_OPTIONAL_FIELDS` /
 
 ## Gotchas
 
-- The spatial plot must stay on `tabs._render_true_scale_chart` — never
-  switch it to `st.plotly_chart`.
+- The spatial plot must stay on `tabs._render_true_scale_chart` (the cached
+  replay on its two halves, `_true_scale_plot_html` + `_render_true_scale_plot`
+  — PERF-16) — never switch it to `st.plotly_chart`.
 - Verify behavior headlessly with
   `AppTest.from_file("streamlit_app.py")`; the live preview is slow. If a
   code change doesn't show in a running server, restart it — Streamlit

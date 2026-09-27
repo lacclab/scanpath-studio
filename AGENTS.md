@@ -35,7 +35,7 @@ scanpath_studio/
 ├─ data.py           schema inference, normalization, filtering (incl. condition/annotation trial filters), sample loaders
 ├─ multipart.py      ordered child-screen identity + validation, nested manifest assignment, per-screen extraction/catalogue/canvas helpers
 ├─ datasets.py       public-corpus ownership (PoTeC, MultiplEYE, OneStop), including server-bundle discovery, feeding the app + headless API. MultiplEYE models one reading of a stimulus as one trial whose `screen_id`s are the reading pages **and** the comprehension-question screens (DATA-24)
-├─ eyegenbench.py    DATA-27: reads a locally prepared bundle of the harmonised public corpora (built by `scripts/prepare_eyegenbench.py` from the EyeGenBench pipeline), each one its own top-level data source. Read the bundle's manifest for what is actually there rather than assuming a count — see `docs/benchmark-corpora.md`
+├─ eyegenbench.py    DATA-27: reads a locally prepared bundle of the harmonised public corpora (built by `scripts/prepare_eyegenbench.py` from the EyeGenBench pipeline), each one its own top-level data source once added. **The app no longer discovers them** (DATA-55): `app.added_benchmark_datasets` is the only way in and is empty until DATA-56's add-from-a-folder flow, and an added corpus is also behind `SCANPATH_EXPERIMENTAL=1` (`constants.benchmark_corpora_enabled`). Read the bundle's manifest for what is actually there rather than assuming a count — see `docs/benchmark-corpora.md`
 ├─ eyegenbench_geometry.py  recovers word boxes for those corpora, which the harmonised output discards, in four labelled fidelity tiers (`resolve_geometry`)
 ├─ fields.py         the `label | field` row primitive shared by the plot rail, the wizard and the Scanpath subtabs — its own module because `controls` cannot supply it to the panels that import `controls`
 ├─ html_embed.py     same-origin HTML iframe helper shared by plots, tours and Share (`st.iframe`, not the deprecated components embed) + ENG-64's `plotlyjs_script`/`plotlyjs_src`: the figure iframes load the installed plotly's own `plotly.min.js` from the app's server, not cdn.plot.ly
@@ -230,12 +230,16 @@ python desktop/smoke_test.py     # selfcheck + server-boot smoke test
 # Docs site (MkDocs Material; API autodoc via mkdocstrings from docstrings)
 pip install -e ".[docs]"
 mkdocs serve                 # local preview
-mkdocs build --strict        # CI gate (.github/workflows/docs.yml → GitHub Pages)
+mkdocs build --strict        # CI gate: every PR (ci.yml) and the deploy (docs.yml)
+uv run --with playwright python scripts/capture_docs_screenshots.py  # re-capture app screenshots
 ```
 
 User-facing docs live in `docs/` and publish to
 <https://lacclab.github.io/scanpath-studio/>. The Python API reference is
-generated from the `api.py` docstrings, so keep those current.
+generated from the `api.py` docstrings, so keep those current. The gallery,
+printed example output, CLI and figure-option references, in-app tutorial steps,
+and the Cite / Changelog pages are generated at build time by `exec="true"`
+fences calling `scripts/docs_support.py` — see CONTRIBUTING.md → *Docs site*.
 
 CI on GitHub Actions runs pytest on Python 3.11/3.12/3.13/3.14 plus ruff
 lint+format checks on every pull request, and one `pytest --cov` leg that fails
@@ -262,6 +266,11 @@ omitted from the measurement: they walk corpora that cannot exist in CI.
 - Centralized palette / sizing in `constants.py`. Marker sizes come from
   `plots._compute_marker_sizes` so single-trial and comparison figures render
   identically.
+- Icons drawn as chrome (labels, `icon=`, headings, alerts) come from
+  `constants.ICONS` — Material Symbols, keyed by concept (UX-138); inside raw
+  HTML use `constants.icon_html`. Never a literal emoji or `:material/…:` there
+  (`tests/test_icons.py`). Prose — help text, tour bodies, docstrings, `cli.py`,
+  `docs/` — keeps its emoji ("the 🗂️ **Data** page").
 
 ## Testing patterns
 

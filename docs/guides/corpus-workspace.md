@@ -1,17 +1,14 @@
 # Corpus workspace
 
-The corpus tools answer questions across trials. They share the active data
-source and trial filters with the Scanpath view.
+The corpus tools share the active data source and trial filters with the
+Scanpath view.
 
 ## Inspect before analysing
 
-Open the 🗂️ **Data** page to check headline counts, column mappings, stimulus
-rows, fixations, and raw gaze. Use it to confirm:
-
-- participant, text, and trial IDs have the intended meaning;
-- word boxes and fixations use the same coordinate system;
-- each analysis field survived loading;
-- the filtered pool still contains the expected groups.
+Open the 🗂️ **Data** page to check the headline counts and raw tables (the
+column mapping is under ✏️ **Edit dataset**). Confirm that IDs mean what you
+intend, that word boxes and fixations share one coordinate system, and that the
+fields you need survived loading.
 
 ## Reading measures
 
@@ -26,6 +23,10 @@ happens when a value is missing — is listed in
 ## Choose the analysis view
 
 Select **📊 Corpus Analysis** in the navigation.
+
+<figure class="sps-screenshot" markdown>
+![Corpus Analysis, Per text: each reader's total fixation duration on every word of one text, against the cohort mean](../assets/screenshots/corpus-analysis.webp)
+</figure>
 
 | View | Unit of interest | Typical use |
 | --- | --- | --- |
@@ -47,10 +48,8 @@ that is a range question, and the trial filters have the slider for it.
 
 ## Move between summary and evidence
 
-Download the table beside a result for downstream analysis. When a point or
-group looks unusual, return to the Scanpath view and inspect contributing
-trials. Corpus charts summarize the active pool; they do not diagnose recording
-quality on their own.
+Each result has a **⬇ Download this table (CSV)** button. When a point or group
+looks unusual, return to the Scanpath view and inspect the trials behind it.
 
 For the compact end-to-end workflow, see the
 [Corpus analysis tutorial](../tutorials/corpus-analysis.md).

@@ -48,7 +48,9 @@ from .constants import (
     SACCADE_DASH_OPTIONS,
     SACCADE_WIDTH_BOUNDS,
     UNIFORM_COLOR_FIELD,
+    benchmark_corpora_enabled,
     drift_correction_enabled,
+    multipleye_enabled,
     palette_settings,
 )
 
@@ -388,17 +390,26 @@ def _render_parser() -> argparse.ArgumentParser:
         "75 reader ids (sparse within 0–105; --list-trials shows them), trials "
         "are text ids (b0–b5, p0–p5).",
     )
+
+    # DATA-55: the harmonised benchmark corpora are held back from the beta, the
+    # same way DATA-54 holds back MultiplEYE's flags below: they still parse and
+    # work, but `--help` (and the generated CLI reference) doesn't list them.
+    def benchmark_help(text: str) -> str:
+        return text if benchmark_corpora_enabled() else argparse.SUPPRESS
+
     src.add_argument(
         "--eyegenbench",
         metavar="DIR",
-        help="EyeGenBench bundle directory (built by "
-        "scripts/prepare_eyegenbench.py). Pick the corpus with "
-        "--eyegenbench-dataset.",
+        help=benchmark_help(
+            "EyeGenBench bundle directory (built by "
+            "scripts/prepare_eyegenbench.py). Pick the corpus with "
+            "--eyegenbench-dataset."
+        ),
     )
     src.add_argument(
         "--eyegenbench-dataset",
         metavar="NAME",
-        help="Which EyeGenBench corpus to render, e.g. PoTeC.",
+        help=benchmark_help("Which EyeGenBench corpus to render, e.g. PoTeC."),
     )
     src.add_argument(
         "--onestop",
@@ -444,28 +455,41 @@ def _render_parser() -> argparse.ArgumentParser:
         help="OneStop source variant for --onestop: 'public' (OSF download) or "
         "'lacclab' (a local lab-processed export; no download).",
     )
+
+    # DATA-54: MultiplEYE is held back from the beta. Its flags still parse and
+    # work, so a script that already uses them keeps running (PRE-22's rule), but
+    # `--help` — and the docs' reference, generated from it — don't list them.
+    def mpe_help(text: str) -> str:
+        return text if multipleye_enabled() else argparse.SUPPRESS
+
     src.add_argument(
         "--source",
         metavar="NAME",
         choices=["multipleye"],
-        help="Load a native server-bundle corpus from its RAW export instead of "
-        "raw words/fixations tables. Currently only 'multipleye' — pair with "
-        "--export DIR. Renders through the same native loader (correct word "
-        "boxes/text/page layout, 1920x1080 monitor) as the interactive viewer.",
+        help=mpe_help(
+            "Load a native server-bundle corpus from its RAW export instead of "
+            "raw words/fixations tables. Currently only 'multipleye' — pair with "
+            "--export DIR. Renders through the same native loader (correct word "
+            "boxes/text/page layout, 1920x1080 monitor) as the interactive viewer."
+        ),
     )
     src.add_argument(
         "--export",
         metavar="DIR",
-        help="Raw export root for --source (e.g. a MultiplEYE_*_* export dir with "
-        "per-session scanpaths/ subfolders). Defaults to $MULTIPLEYE_DATA_DIR "
-        "for --source multipleye.",
+        help=mpe_help(
+            "Raw export root for --source (e.g. a MultiplEYE_*_* export dir with "
+            "per-session scanpaths/ subfolders). Defaults to $MULTIPLEYE_DATA_DIR "
+            "for --source multipleye."
+        ),
     )
     src.add_argument(
         "--no-question-screens",
         action="store_true",
-        help="--source multipleye: load the reading pages only, leaving out the "
-        "comprehension-question screens (they are included by default, as "
-        "screens of the same trial).",
+        help=mpe_help(
+            "--source multipleye: load the reading pages only, leaving out the "
+            "comprehension-question screens (they are included by default, as "
+            "screens of the same trial)."
+        ),
     )
 
     src.add_argument(
@@ -774,9 +798,10 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--color-by",
         metavar="FIELD",
-        help=f"Fixation color field, e.g. duration_ms or gpt2_surprisal "
-        f"(default: {UNIFORM_COLOR_FIELD} — one flat colour, since marker size "
-        f"already shows duration).",
+        help=f"Fixation color field, e.g. duration_ms or gpt2_surprisal, or "
+        f"'line' to colour each fixation by its text line (same as "
+        f"--color-by-line; default: {UNIFORM_COLOR_FIELD} — one flat colour, "
+        f"since marker size already shows duration).",
     )
     viz.add_argument(
         "--fixation-color",
@@ -903,7 +928,7 @@ def _render_parser() -> argparse.ArgumentParser:
         "--color-by-line",
         action="store_true",
         help="Colour each fixation by the text line it lands on (lines inferred "
-        "from the word boxes); overrides --color-by.",
+        "from the word boxes); overrides --color-by. Same as --color-by line.",
     )
     viz.add_argument(
         "--fixation-color-range",
@@ -1189,9 +1214,10 @@ def _render_parser() -> argparse.ArgumentParser:
         choices=["overlay", "side-by-side", "stacked"],
         default="overlay",
         help="How the two scanpaths are arranged (default: overlay). Across two "
-        "datasets, overlay needs both to have been recorded on the same known "
-        "screen — otherwise it is refused rather than silently split, so pass "
-        "side-by-side or stacked for a mismatched pair.",
+        "datasets, overlay needs both canvases to be the same size — two "
+        "different canvases are refused rather than silently split, so pass "
+        "side-by-side or stacked for them. Matching canvases that a dataset "
+        "never recorded still overlay, with a warning.",
     )
     cmp_group.add_argument(
         "--compare-stimulus",
@@ -1280,40 +1306,12 @@ def _render_parser() -> argparse.ArgumentParser:
         "--compare-canvas",
         metavar="WxH",
         help="Second dataset's monitor size in px, e.g. 1680x1050. Read off its "
-        "data when omitted. Overlay compares this against --canvas.",
+        "data when omitted. An overlay, or an --animate co-animation, compares "
+        "this against --canvas.",
     )
-    # These two are accepted and recorded on the setup snapshots but are not read
-    # by the current render path: CMP-11 shipped as a gate, not a rescaling, so
-    # nothing converts to degrees. They exist because SetupSnapshot is on the CLI
-    # surface now and a half-populated one is worse than a complete one.
-    cmp_group.add_argument(
-        "--monitor-mm",
-        type=float,
-        default=None,
-        metavar="MM",
-        help="Physical width of the FIRST dataset's monitor, in millimetres.",
-    )
-    cmp_group.add_argument(
-        "--viewing-distance",
-        type=float,
-        default=None,
-        metavar="MM",
-        help="Eye-to-screen distance for the FIRST dataset, in millimetres.",
-    )
-    cmp_group.add_argument(
-        "--compare-monitor-mm",
-        type=float,
-        default=None,
-        metavar="MM",
-        help="Physical width of the SECOND dataset's monitor, in millimetres.",
-    )
-    cmp_group.add_argument(
-        "--compare-viewing-distance",
-        type=float,
-        default=None,
-        metavar="MM",
-        help="Eye-to-screen distance for the SECOND dataset, in millimetres.",
-    )
+    # BUG-85 removed --monitor-mm / --viewing-distance and their --compare-*
+    # twins: they were recorded on the setup snapshots and read by nothing —
+    # CMP-11 is a gate on pixels, not a rescaling, so no figure used them.
     return parser
 
 
@@ -1463,16 +1461,17 @@ def _compare_second_dataset(api, args, words, fixations):
 
 
 def _compare_animation_frames(api, args, words, fixations, canvas) -> dict:
-    """B's single-trial frames for a dual co-animation, gated like the overlay.
+    """`animate_scanpath`'s keywords for scanpath B of a dual co-animation.
 
-    A co-animation draws both readings on one clock in one coordinate space —
-    i.e. an overlay — so it is refused for two different screens on exactly the
-    same terms `compare_scanpaths` refuses `layout="overlay"`, rather than
-    quietly replaying scanpath A alone (which is what happened before CMP-9
-    reached this branch at all).
+    B's single-trial frames and, when they come from a second dataset, that
+    dataset's name and whatever screens the flags state. A co-animation draws
+    both readings on one clock in one coordinate space — an overlay — so the API
+    refuses two different screens on exactly the terms `compare_scanpaths`
+    refuses ``layout="overlay"``, reading a screen the flags don't state off its
+    data (CMP-21). This used to check only when ``--compare-canvas`` was given,
+    and co-animated without looking otherwise.
     """
-    from .experimental_setup import setups_comparable
-    from .utils import extract_trial, qualify_for_compare
+    from .utils import extract_trial
 
     participant_b, trial_b = _parse_compare_with(args.compare_with)
     words_b, fixations_b, cross_dataset = _compare_second_dataset(
@@ -1485,69 +1484,61 @@ def _compare_animation_frames(api, args, words, fixations, canvas) -> dict:
             f"No fixations for the compared scanpath participant={participant_b!r}, "
             f"trial={trial_b!r}. Use --list-trials to see the available pairs."
         )
+    frames = {"words_b": trial_words_b, "fixations_b": trial_fix_b}
     if cross_dataset:
-        setup_a = _compare_setup_snapshot(
-            canvas, args.monitor_mm, args.viewing_distance
+        frames.update(
+            dataset_b=args.compare_dataset_name,
+            setup=_compare_setup_snapshot(canvas),
+            setup_b=_compare_setup_snapshot(_parse_canvas(args.compare_canvas)),
         )
-        setup_b = _compare_setup_snapshot(
-            _parse_canvas(args.compare_canvas),
-            args.compare_monitor_mm,
-            args.compare_viewing_distance,
+    return frames
+
+
+def _inferred_screen_hint(args, canvas: tuple | None) -> str:
+    """The flag that states a screen a refusal only read off the data (CMP-21).
+
+    `setups_comparable` says the readings were *recorded* on different screens,
+    but a screen no flag gives is the extent of that trial's data — rarely the
+    whole display — so `render` names the flag that states it.
+    """
+    a_inferred, b_inferred = canvas is None, args.compare_canvas is None
+    if a_inferred and b_inferred:
+        return (
+            " Neither screen was stated, so both were read off the data, which "
+            "rarely spans the whole screen; if they were shown on one, state it "
+            "with --canvas and --compare-canvas."
         )
-        if setup_a is not None and setup_b is not None:
-            comparable, note = setups_comparable(setup_a, setup_b)
-            if not comparable:
-                raise SystemExit(
-                    f"{note} An animated comparison replays both readings on one "
-                    f"clock in one coordinate space, so it needs the same screen. "
-                    f"Drop --animate to compare them as separate panels."
-                )
-            if note:
-                # Allowed, but the matching canvas is a shared default rather than
-                # a recorded screen. Same stream as the other render warnings.
-                print(f"Warning: {note}", file=sys.stderr)
-        trial_words_b = qualify_for_compare(trial_words_b, args.compare_dataset_name)
-        trial_fix_b = qualify_for_compare(trial_fix_b, args.compare_dataset_name)
-    return {"words_b": trial_words_b, "fixations_b": trial_fix_b}
+    if b_inferred:
+        return (
+            " The second dataset's screen was read off its data, which rarely "
+            "spans the whole screen; if both were shown on one, state it with "
+            "--compare-canvas."
+        )
+    if a_inferred:
+        return (
+            " The first dataset's screen was read off its data, which rarely "
+            "spans the whole screen; if both were shown on one, state it with "
+            "--canvas."
+        )
+    return ""
 
 
-def _compare_setup_snapshot(
-    canvas: tuple | None,
-    monitor_mm: float | None,
-    viewing_distance: float | None,
-):
-    """A `SetupSnapshot` from the CLI's geometry flags, or ``None`` if silent.
+def _compare_setup_snapshot(canvas: tuple | None):
+    """A `SetupSnapshot` for a canvas the caller stated, or ``None`` if silent.
 
-    ``None`` lets `api.compare_scanpaths` infer the screen from the data, which
-    is the right default — inventing a canvas here would be a claim the caller
-    never made.
+    ``None`` lets `api.compare_scanpaths` and `api.animate_scanpath` infer the
+    screen from the data, which is the right default — inventing a canvas here
+    would be a claim the caller never made. A stated canvas is a known screen:
+    ``MEASURED``.
     """
     from .experimental_setup import Provenance, SetupSnapshot
 
-    if canvas is None and monitor_mm is None and viewing_distance is None:
+    if canvas is None:
         return None
-    fields: dict = {}
-    if canvas is not None:
-        fields.update(canvas_width=int(canvas[0]), canvas_height=int(canvas[1]))
-    if monitor_mm is not None:
-        fields["monitor_width_mm"] = float(monitor_mm)
-    if viewing_distance is not None:
-        fields["viewing_distance_mm"] = float(viewing_distance)
     return SetupSnapshot(
-        **fields,
-        # No canvas given means the snapshot carries the *default* one, so it must
-        # say ASSUMED — `setups_comparable` treats that as "screen unknown" and
-        # refuses the overlay. Reporting ESTIMATED here let `--monitor-mm 520`
-        # alone launder a default 2560x1440 into a screen the caller never stated,
-        # and it would then compare equal to a real 2560x1440.
-        screen_provenance=(
-            Provenance.MEASURED if canvas is not None else Provenance.ASSUMED
-        ),
-        geometry_provenance=(
-            Provenance.MEASURED
-            if (monitor_mm is not None and viewing_distance is not None)
-            else Provenance.ASSUMED
-        ),
+        canvas_width=int(canvas[0]),
+        canvas_height=int(canvas[1]),
+        screen_provenance=Provenance.MEASURED,
     )
 
 
@@ -1812,12 +1803,6 @@ def _print_reproduction_code(
     # named, never dropped — the same rule `cli_unsupported` applies in the other
     # direction. Translating a command into a notebook cell has to be honest
     # about the parts of the command that didn't come along.
-    if args.monitor_mm is not None or args.viewing_distance is not None:
-        caveats.append(
-            "--monitor-mm / --viewing-distance describe the recording setup; "
-            "the snippet has no field for them. Build an "
-            "experimental_setup.SetupSnapshot and pass it as `setup=`."
-        )
     if args.image_root:
         caveats.append(
             "--image-root / --image-pattern resolve one stimulus image per row; "
@@ -2002,11 +1987,18 @@ def render(argv: list[str]) -> None:
         )
         != 1
     ):
+        # Only the inputs `--help` lists: the DATA-54/55 held-back sources still
+        # count towards the guard, but the message doesn't advertise them.
+        inputs = ["--sample", "--authoring PATH", "--potec DIR"]
+        if benchmark_corpora_enabled():
+            inputs.append("--eyegenbench DIR --eyegenbench-dataset NAME")
+        inputs.append("--onestop DIR")
+        if multipleye_enabled():
+            inputs.append("--source NAME [--export DIR]")
         raise SystemExit(
-            "Provide exactly one input: --sample, --authoring PATH, --potec DIR, "
-            "--eyegenbench DIR --eyegenbench-dataset NAME, --onestop DIR, "
-            "--source NAME [--export DIR], or your own tables (--words and/or "
-            "--fixations; one of them is enough for single-report datasets)."
+            f"Provide exactly one input: {', '.join(inputs)}, or your own tables "
+            "(--words and/or --fixations; one of them is enough for "
+            "single-report datasets)."
         )
     if not (args.list_trials or args.list_parts) and not args.output:
         raise SystemExit("Missing -o/--output (or use --list-trials/--list-parts).")
@@ -2506,7 +2498,7 @@ def render(argv: list[str]) -> None:
     if args.snap_fixations:
         overrides["fixation_snap_to_word"] = True
     if args.illustration:
-        overrides.update(
+        preset = dict(
             show_words=False,
             show_word_labels=True,
             show_fixations=True,
@@ -2520,6 +2512,19 @@ def render(argv: list[str]) -> None:
             fixation_snap_to_word=True,
             fixation_opacity=1.0,
         )
+        # BUG-85 review: an explicit flag wins over the preset, as it does over
+        # `plot_scanpath(illustration=True, …)` — the preset used to overwrite
+        # `--color-by`, `--no-labels` and the rest set above. The layer switches
+        # always sit in `overrides`, so they count only when moved off default.
+        stated = {
+            key
+            for key in preset
+            if key in overrides
+            and (
+                not key.startswith("show_") or overrides[key] != parser.get_default(key)
+            )
+        }
+        overrides.update({k: v for k, v in preset.items() if k not in stated})
     # VIZ-4: image stimulus background. make_scanpath_figure only draws the image
     # when a size is known, so default to the PNG's own pixel size, then the
     # canvas.
@@ -2675,14 +2680,28 @@ def render(argv: list[str]) -> None:
                 )
                 fig = next(iter(figures.values()))
             else:
-                fig = api.animate_scanpath(
-                    words,
-                    fixations,
-                    participant,
-                    trial,
-                    screen=args.screen,
-                    **animation_options,
-                )
+                from .experimental_setup import IncomparableScreensError
+
+                try:
+                    fig = api.animate_scanpath(
+                        words,
+                        fixations,
+                        participant,
+                        trial,
+                        screen=args.screen,
+                        **animation_options,
+                    )
+                except IncomparableScreensError as exc:
+                    # CMP-21: the API's way out is Python. BUG-85: dropping
+                    # --animate alone lands on the default overlay, refused on
+                    # the same terms — so this names the layout flag too.
+                    raise SystemExit(
+                        f"{exc.reason} An animated comparison replays both "
+                        "readings on one clock in one coordinate space, so it "
+                        "needs one screen too. Drop --animate and pass "
+                        "--compare-layout side-by-side (or stacked) to compare "
+                        "them in separate panels." + _inferred_screen_hint(args, canvas)
+                    ) from None
         elif args.compare_with is not None:
             # `is not None`, not truthiness: `--compare-with ""` is a malformed
             # request, and falling through here would silently render an ordinary
@@ -2691,6 +2710,8 @@ def render(argv: list[str]) -> None:
             # animate/static branches rather than an option on one of them: the
             # comparison builder takes neither `--animate`'s playback settings
             # nor the static path's per-layer extras.
+            from .experimental_setup import IncomparableScreensError
+
             compare_participant, compare_trial = _parse_compare_with(args.compare_with)
             loaded_b, loaded_fix_b, cross_dataset = _compare_second_dataset(
                 api, args, words, fixations
@@ -2705,34 +2726,38 @@ def render(argv: list[str]) -> None:
             # what skips the namespacing.
             words_b = loaded_b if cross_dataset else None
             fixations_b = loaded_fix_b if cross_dataset else None
-            fig = api.compare_scanpaths(
-                words,
-                fixations,
-                (participant, trial),
-                (compare_participant, compare_trial),
-                words_b=words_b,
-                fixations_b=fixations_b,
-                dataset_b=args.compare_dataset_name,
-                layout=args.compare_layout,
-                compare_stimulus=args.compare_stimulus,
-                labels=_compare_labels(args),
-                setup=_compare_setup_snapshot(
-                    canvas, args.monitor_mm, args.viewing_distance
-                ),
-                setup_b=_compare_setup_snapshot(
-                    _parse_canvas(args.compare_canvas),
-                    args.compare_monitor_mm,
-                    args.compare_viewing_distance,
-                ),
-                drift_correction=args.drift_correction,
-                # EXP-11: a builder parameter, like the drift correction beside
-                # it, so it has to be named here — it is not in `overrides`.
-                # Left out, a windowed comparison drew both whole trials while
-                # the `--print-code` recipe for it said otherwise.
-                fix_index_range=_parse_fix_index_range(args.fix_index_range),
-                **overrides,
-                **common,  # carries canvas_size / fonts / title / caption
-            )
+            try:
+                fig = api.compare_scanpaths(
+                    words,
+                    fixations,
+                    (participant, trial),
+                    (compare_participant, compare_trial),
+                    words_b=words_b,
+                    fixations_b=fixations_b,
+                    dataset_b=args.compare_dataset_name,
+                    layout=args.compare_layout,
+                    compare_stimulus=args.compare_stimulus,
+                    labels=_compare_labels(args),
+                    setup=_compare_setup_snapshot(canvas),
+                    setup_b=_compare_setup_snapshot(_parse_canvas(args.compare_canvas)),
+                    drift_correction=args.drift_correction,
+                    # EXP-11: a builder parameter, like the drift correction
+                    # beside it, so it has to be named here — it is not in
+                    # `overrides`. Left out, a windowed comparison drew both
+                    # whole trials while the `--print-code` recipe said otherwise.
+                    fix_index_range=_parse_fix_index_range(args.fix_index_range),
+                    **overrides,
+                    **common,  # carries canvas_size / fonts / title / caption
+                )
+            except IncomparableScreensError as exc:
+                # BUG-85: the API's way out is Python (`layout='side_by_side'`),
+                # which this used to print verbatim to someone at a shell.
+                raise SystemExit(
+                    f"{exc.reason} So no overlay was drawn; pass --compare-layout "
+                    "side-by-side (or stacked) to compare them in separate panels, "
+                    "each drawn to its own screen."
+                    + _inferred_screen_hint(args, canvas)
+                ) from None
         else:
             static_options = dict(
                 raw_gaze=raw_gaze,
@@ -2826,8 +2851,9 @@ def render(argv: list[str]) -> None:
         )
 
 
-def analyze(argv: list[str]) -> None:
-    """Preprocess data and export the complete EXP-3 analysis family."""
+def _analyze_parser() -> argparse.ArgumentParser:
+    """The `analyze` parser — its own function so the docs' CLI reference is
+    generated from it rather than restated (ENG-79)."""
     parser = argparse.ArgumentParser(
         prog="scanpath-studio analyze",
         description="Write fixation, saccade, word, sentence, trial, reader, "
@@ -2886,7 +2912,12 @@ def analyze(argv: list[str]) -> None:
         "amplitudes to the saccade table.",
     )
     _add_schema_flags(parser)
-    args = parser.parse_args(argv)
+    return parser
+
+
+def analyze(argv: list[str]) -> None:
+    """Preprocess data and export the complete EXP-3 analysis family."""
+    args = _analyze_parser().parse_args(argv)
     word_schema = _parse_schema_arg(args.word_schema, "--word-schema")
     fix_schema = _parse_schema_arg(args.fix_schema, "--fix-schema")
 
@@ -2952,8 +2983,8 @@ def analyze(argv: list[str]) -> None:
     print(f"Wrote {len(tables)} tables + run_config.json to {destination}")
 
 
-def corpus(argv: list[str]) -> None:
-    """Render a styled corpus figure from a tidy CSV (AN-29)."""
+def _corpus_parser() -> argparse.ArgumentParser:
+    """The `corpus` parser (see `_analyze_parser`)."""
     parser = argparse.ArgumentParser(
         prog="scanpath-studio corpus",
         description="Render a styled corpus figure from a tidy CSV you already "
@@ -3002,7 +3033,12 @@ def corpus(argv: list[str]) -> None:
         default="#e45756",
         help="Second series colour (default: #e45756).",
     )
-    args = parser.parse_args(argv)
+    return parser
+
+
+def corpus(argv: list[str]) -> None:
+    """Render a styled corpus figure from a tidy CSV (AN-29)."""
+    args = _corpus_parser().parse_args(argv)
     from . import api
 
     # EXP-13: each of these ended in a traceback — a missing or unparseable
@@ -3027,14 +3063,8 @@ def corpus(argv: list[str]) -> None:
     print(f"Wrote {out}")
 
 
-def cache(argv: list[str]) -> None:
-    """Inspect or clear the on-device recovery cache (ENG-30).
-
-    The terminal counterpart of the app's 💾 Session → 🗄️ Automatic recovery
-    block, so the
-    storage a local run creates can be found, measured and deleted without
-    launching the app (or after closing it).
-    """
+def _cache_parser() -> argparse.ArgumentParser:
+    """The `cache` parser (see `_analyze_parser`)."""
     parser = argparse.ArgumentParser(
         prog="scanpath-studio cache",
         description="Show what a local run has stored on this computer "
@@ -3049,7 +3079,18 @@ def cache(argv: list[str]) -> None:
     parser.add_argument(
         "--clear", action="store_true", help="delete the stored session"
     )
-    args = parser.parse_args(argv)
+    return parser
+
+
+def cache(argv: list[str]) -> None:
+    """Inspect or clear the on-device recovery cache (ENG-30).
+
+    The terminal counterpart of the app's 💾 Session → 🗄️ Automatic recovery
+    block, so the
+    storage a local run creates can be found, measured and deleted without
+    launching the app (or after closing it).
+    """
+    args = _cache_parser().parse_args(argv)
     from .persistence import PERSIST_ENV_VAR, cache_status, clear_local_state
     from .persistence import human_size as _human_size
 

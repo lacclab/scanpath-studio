@@ -44,6 +44,10 @@ LABEL_GAP = "xsmall"
 #: punctuation.
 _MD_MARKS = re.compile(r"\*\*|`")
 _WHITESPACE_RUN = re.compile(r"\s+")
+#: A `constants.ICONS` shortcode (UX-138) — in the label, or in a gate reason
+#: folded into the help: drawn as the glyph in the visible title, but a
+#: tooltip is plain text and would spell it out.
+_ICON_CODE = re.compile(r":material/[a-z0-9_]+:\s*")
 
 
 def plain(text: str) -> str:
@@ -87,7 +91,8 @@ def row_label(host, label: str, help: str | None, *, emphasis: bool = False) -> 
             unsafe_allow_html=True,
         )
         return
-    tip = html.escape(f"{text} — {plain(help)}", quote=True)
+    tip = _ICON_CODE.sub("", f"{text} — {plain(help)}")
+    tip = html.escape(tip, quote=True)
     host.markdown(
         f'<span class="sps-fhelp" data-tip="{tip}" aria-label="{tip}">'
         f'<span class="sps-flabel sps-flabel-help{emph}">{html.escape(text)}</span>'

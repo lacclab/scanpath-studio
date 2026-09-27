@@ -27,6 +27,8 @@ from typing import Any
 
 import streamlit as st
 
+from .constants import ICONS
+
 # Keep the buffer small: it lives in session_state and is re-rendered every run.
 _MAX_RECORDS = 500
 _BUFFER_KEY = "_debug_log_records"
@@ -282,7 +284,7 @@ def render_debug_toggle(host=None) -> None:
     """
     st.session_state[_DEBUG_TOGGLE_KEY] = bool(st.session_state.get(DEBUG_STATE_KEY))
     (host if host is not None else st).toggle(
-        "🐛 Debug mode",
+        f"{ICONS['debug']} Debug mode",
         key=_DEBUG_TOGGLE_KEY,
         on_change=_mirror_debug_toggle,
         help="Add a 🐛 Debug panel to the Session menu: the captured log, a "
@@ -411,7 +413,7 @@ def render_debug_panel(host=None) -> None:
             "state": snapshot,
         }
         st.download_button(
-            "⬇️ Download logs (JSON)",
+            f"{ICONS['download']} Download logs (JSON)",
             data=json.dumps(export, indent=2, default=str),
             file_name="scanpath_studio_debug.json",
             mime="application/json",

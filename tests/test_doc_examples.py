@@ -17,9 +17,11 @@ import pytest
 
 from scanpath_studio import api, cli
 
-DOCS = Path(__file__).resolve().parents[1] / "docs"
-#: The pages whose shell examples use the bundled demo.
-PAGES = ("cli.md", "automation.md", "agents.md")
+ROOT = Path(__file__).resolve().parents[1]
+DOCS = ROOT / "docs"
+#: The pages whose shell examples use the bundled demo — the README's too
+#: (ENG-76), which promises they run as-is.
+PAGES = ("cli.md", "automation.md", "agents.md", "../README.md")
 
 
 def _sample_commands(page: str) -> list[str]:
@@ -54,6 +56,18 @@ def test_a_documented_sample_command_runs(tmp_path, monkeypatch, page, command):
         argv[index] = str(tmp_path / (Path(argv[index]).stem + ".html"))
     monkeypatch.chdir(tmp_path)
     cli.main(argv)
+
+
+def test_the_readme_python_example_runs_as_written(tmp_path, monkeypatch):
+    """The README's Python block is the first code most people paste (ENG-76)."""
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    (block,) = re.findall(r"```python\n(.*?)```", text, flags=re.DOTALL)
+    monkeypatch.chdir(tmp_path)
+    namespace: dict = {}
+    exec(compile(block, "<README>", "exec"), namespace)  # noqa: S102
+    assert namespace["fig"].data
+    assert not namespace["measures"].empty
+    assert (tmp_path / "scanpath.html").exists()
 
 
 def test_the_documented_figure_code_call_builds_its_figure(monkeypatch):

@@ -64,7 +64,6 @@ from scanpath_studio.constants import (
     AUTHOR_CHOICE,
     BACKGROUND_PRESETS,
     BENCHMARK_LABEL_SUFFIX,
-    BENCHMARK_SETUP_CHOICE,
     BENCHMARK_SHORT_SUFFIX,
     BENCHMARK_WIP_SUFFIX,
     CITATION,
@@ -83,6 +82,7 @@ from scanpath_studio.constants import (
     EYEGENBENCH_DEFAULT_DIR,
     FOCUS_MAPPING_KEY,
     FONT_FAMILY,
+    ICONS,
     MULTIPLEYE_BUNDLE_CHOICE,
     MULTIPLEYE_DEFAULT_DIR,
     ONESTOP_CHOICE,
@@ -102,16 +102,24 @@ from scanpath_studio.constants import (
     WIZARD_LEAVE_KEY,
     WIZARD_STAY_KEY,
     WORD_LABEL_COLOR,
+    benchmark_corpora_enabled,
+    icon_html,
     language_display,
+    multipleye_enabled,
     preprocessing_enabled,
     upload_limit_mb,
 )
 from scanpath_studio.controls import (
+    _LABEL_GAP,
     FIX_FIELD_SPECS,
     RAW_GAZE_FIELD_SPECS,
     WORD_FIELD_SPECS,
+    _label_w,
     _labeled,
     _pin,
+    _row_label,
+    _sub_caption,
+    _sub_row,
     clear_trial_filter,
     clear_trial_filters,
     column_mapping_ui,
@@ -336,97 +344,82 @@ _FORCE_LTR_LOCALE_SCRIPT = """
 """
 
 
-#: BUG-48. Streamlit's own `help=` tooltips get **stuck open**: the hover state
-#: lives in a React component, and the pointer can leave a target without that
-#: component ever seeing `mouseleave` — a rerun that re-renders the row under the
-#: cursor is the common way, and the app reruns on every widget touch. The
-#: leftover panel then floats over the page until the same target is hovered and
-#: left again, and (before the `pointer-events` rule in `styles.get_app_css`)
-#: swallowed clicks aimed at whatever it covered, which is the likeliest reason
-#: a rail's ▾ sometimes did nothing on the first press.
+#: BUG-86. Streamlit's `help=` tooltip keeps its panel open for as long as
+#: focus is inside the trigger, and it can leave several panels in the page at
+#: once — some still open, some stuck half-closed (`data-exiting`) with no
+#: owner at all; a clicked ▶ left "Next trial." behind through reruns. CSS alone
+#: can only ask "is *some* trigger hovered?", so hovering any tooltip button
+#: brought every stale panel back. This marks a panel *owned* while its **own**
+#: trigger — the element whose `aria-describedby` names the panel's id — is
+#: `:hover` or holds `:focus-visible`, and `styles.get_app_css` hides every
+#: panel that is not, once this is running (the `data-sps-tooltip-owners` flag
+#: on `<html>`). It reads only the browser's own hover/focus state and never
+#: touches React's, so it cannot fight the component.
 #:
-#: The fix is a *sweeper* installed once on the parent document: on any pointer
-#: move that is not over a tooltip target — and only while a tooltip layer
-#: actually exists, so the common case is one `querySelector` — every hover
-#: target is sent the `mouseout` React synthesizes `onMouseLeave` from. Nothing
-#: is closed while the pointer is genuinely on a target, so a real tooltip is
-#: untouched. Idempotent: a *heartbeat* on the parent document means re-running
-#: this on a later rerun installs nothing twice while the previous installation
-#: is still alive — and does reinstall if it isn't (BUG-51).
-_TOOLTIP_SWEEPER_SCRIPT = """
+#: A panel is judged the moment it appears — synchronously in a
+#: `MutationObserver`, which runs before the browser paints — so a stale one
+#: is never shown for a frame; pointer and focus moves re-judge at most once a
+#: frame. The code runs in the *parent* page's realm (a `<script>` added to its
+#: head, once per page load), not as closures from this iframe's: an iframe's
+#: listeners die with it, which is what BUG-51 had to hand-roll a heartbeat for.
+_TOOLTIP_OWNER_SCRIPT = """
 <script>
 (function () {
-    try {
-        var doc = window.parent.document;
-        /* A *heartbeat*, not a one-shot flag. Everything below is a closure
-           from THIS iframe's realm, registered on the parent — so if Streamlit
-           ever tears the iframe down, the listeners and the timer go with it,
-           and a plain "already installed" flag would then block the next run
-           from ever putting them back. The poll stamps the clock on every tick
-           instead, so a later run can tell a live installation (leave it alone)
-           from a dead one (replace it). A dead realm's listeners are inert, so
-           re-adding over them costs nothing. */
-        var HEARTBEAT_MS = 250;
-        var STALE_MS = 5000;
-        var beat = doc.__spsTooltipSweeperBeat;
-        if (typeof beat === 'number' && Date.now() - beat < STALE_MS) { return; }
-        doc.__spsTooltipSweeperBeat = Date.now();
-        var TARGET = '[data-testid="stTooltipHoverTarget"]';
-        var LAYER = '[data-baseweb="tooltip"]';
+    function install() {
+        var OWNED = "data-sps-tooltip-owned";
+        var PANEL = '[data-testid="stTooltipContent"], '
+            + '[data-testid="stTooltipErrorContent"]';
         var pending = false;
-        /* BUG-48 round 2. The question is not "where did the pointer just
-           move?" but "is any tooltip target actually under the pointer?", and
-           `:hover` answers that directly — it is the browser's own bookkeeping,
-           so it stays right when no event reached us at all. */
-        function anyTargetHovered(targets) {
-            for (var i = 0; i < targets.length; i++) {
-                try {
-                    if (targets[i].matches(':hover')) { return true; }
-                } catch (e) { /* :hover unsupported in matches() */ }
-            }
-            return false;
+        function ownerIsActive(tip) {
+            if (!tip.id) { return false; }
+            var owner = document.querySelector(
+                '[aria-describedby~="' + CSS.escape(tip.id) + '"]'
+            );
+            return !!owner && (
+                owner.matches(":hover")
+                || owner.matches(":focus-visible")
+                || !!owner.querySelector(":focus-visible")
+            );
         }
-        function sweep() {
+        function update() {
+            pending = false;
+            var tips = document.querySelectorAll('[role="tooltip"]');
+            for (var i = 0; i < tips.length; i++) {
+                var tip = tips[i];
+                if (!tip.querySelector(PANEL)) { continue; }
+                var owned = ownerIsActive(tip);
+                if (owned !== tip.hasAttribute(OWNED)) {
+                    tip.toggleAttribute(OWNED, owned);
+                }
+            }
+        }
+        function schedule() {
             if (pending) { return; }
             pending = true;
-            window.parent.requestAnimationFrame(function () {
-                pending = false;
-                /* Nothing open — the whole cost of a quiet pointer move. */
-                if (!doc.querySelector(LAYER)) { return; }
-                var targets = doc.querySelectorAll(TARGET);
-                if (anyTargetHovered(targets)) { return; }
-                targets.forEach(function (el) {
-                    el.dispatchEvent(new window.parent.MouseEvent('mouseout', {
-                        bubbles: true,
-                        cancelable: true,
-                        relatedTarget: doc.body,
-                    }));
-                });
-            });
+            requestAnimationFrame(update);
         }
-        doc.addEventListener('pointermove', sweep, true);
-        /* A pointer that leaves the window entirely fires no move inside it. */
-        doc.addEventListener('pointerleave', sweep, true);
-        /* ...and neither does one that leaves *into* something the parent
-           document cannot see or that never moves again. Both happen here on
-           every session: the plot, the tours and the copy widgets are same-
-           origin iframes, and a pointer that crosses into one stops producing
-           events in the parent entirely; separately, a rerun that re-renders
-           the row a tooltip belongs to re-opens the panel from React state,
-           which on this app can land a second or more after the pointer has
-           already come to rest somewhere else. Neither case produces the
-           pointermove the listeners above wait for, so the panel used to sit
-           there until that same target was hovered and left again. A quarter-
-           second poll closes both, and costs one `querySelector` per tick
-           whenever no tooltip is open — which is almost always. The same tick
-           stamps the heartbeat above, which is what makes this installation
-           visible as *alive* to a later run. */
-        window.parent.setInterval(function () {
-            doc.__spsTooltipSweeperBeat = Date.now();
-            sweep();
-        }, HEARTBEAT_MS);
+        ["pointerover", "pointerout", "focusin", "focusout", "keydown"].forEach(
+            function (type) { document.addEventListener(type, schedule, true); }
+        );
+        new MutationObserver(update).observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ["aria-describedby"],
+        });
+        update();
+        document.documentElement.setAttribute("data-sps-tooltip-owners", "");
+    }
+    try {
+        var host = window.parent;
+        if (host.__spsTooltipOwnerInstalled) { return; }
+        var script = host.document.createElement("script");
+        script.textContent = "(" + install.toString() + ")();";
+        host.document.head.appendChild(script);
+        host.__spsTooltipOwnerInstalled = true;
     } catch (e) {
-        /* Any browser that refuses this is left exactly as it was found. */
+        /* The CSS floor in styles.get_app_css still hides every panel while
+           no trigger is hovered or keyboard-focused. */
     }
 })();
 </script>
@@ -444,12 +437,16 @@ def configure_page() -> None:
     """
     st.set_page_config(
         page_title="Scanpath Studio - Visualization of Eye Movements in Reading",
+        # UX-138 left the favicon an emoji on purpose: Streamlit draws an emoji
+        # page icon as an inline SVG, but turns a `:material/…:` one into a
+        # fonts.gstatic.com URL — a request to Google on every page load, and no
+        # icon at all offline or in the desktop bundle.
         page_icon="👀",
         layout="wide",
     )
     st.markdown(get_app_css(), unsafe_allow_html=True)
     embed_html_iframe(_FORCE_LTR_LOCALE_SCRIPT, height=0)
-    embed_html_iframe(_TOOLTIP_SWEEPER_SCRIPT, height=0)
+    embed_html_iframe(_TOOLTIP_OWNER_SCRIPT, height=0)
 
 
 #: The app's wordmark, shown in Streamlit's own header (UX-62). Inside the
@@ -727,11 +724,14 @@ def _forget_cache_confirmation(host) -> None:
     host.warning(
         "Delete the recovery copy from this computer? Your open session and "
         "automatic-saving setting stay unchanged.",
-        icon="⚠️",
+        icon=ICONS["warning"],
     )
     yes, no = host.columns(2)
     if yes.button(
-        "🗑 Clear cache", key="forget_cache_confirm", type="primary", width="stretch"
+        f"{ICONS['delete']} Clear cache",
+        key="forget_cache_confirm",
+        type="primary",
+        width="stretch",
     ):
         _forget_recovery_cache()
         st.session_state.pop(_FORGET_CACHE_PENDING_KEY, None)
@@ -825,7 +825,7 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
         )
 
         if restored_from_cache(st.session_state):
-            st.success("Recovered when the app opened.", icon="↩️")
+            st.success("Recovered when the app opened.", icon=ICONS["recovery"])
         if status["exists"] and status["readable"]:
             n_sets = len(status["datasets"])
             # "datasets **you added**", not "datasets": only an upload is copied
@@ -853,7 +853,7 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
                 "The stored session can't be read (written by a different "
                 "version, or incomplete). It is ignored; saving over it is "
                 "safe.",
-                icon="⚠️",
+                icon=ICONS["warning"],
             )
         elif st.session_state.get("_recovery_cache_forgotten"):
             st.caption("Cleared. Nothing is stored on this computer.")
@@ -878,7 +878,7 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
             "**Clear recovery cache** for that.",
         )
         if st.button(
-            "🗑 Clear recovery cache",
+            f"{ICONS['delete']} Clear recovery cache",
             key="forget_recovery_cache_btn",
             width="stretch",
             disabled=not status["exists"],
@@ -907,7 +907,7 @@ def _render_recovery_details(host, status: dict) -> None:
     a popover nests fine inside a dialog (only popover-in-popover and
     dialog-in-dialog are refused).
     """
-    with host.popover("❔ What's saved, and where", width="stretch"):
+    with host.popover(f"{ICONS['help']} What's saved, and where", width="stretch"):
         st.markdown(
             "**Which datasets.** Only the datasets **you added** are copied "
             "here. The bundled demo and the public corpora are reloaded from "
@@ -952,11 +952,11 @@ def _reset_everything_confirmation(host) -> None:
     host.warning(
         "Remove uploaded datasets, annotations, mappings and settings, then "
         "return to the bundled demo?",
-        icon="⚠️",
+        icon=ICONS["warning"],
     )
     yes, no = host.columns(2)
     if yes.button(
-        "♻️ Reset everything",
+        f"{ICONS['reset']} Reset everything",
         key="reset_everything_confirm",
         type="primary",
         width="stretch",
@@ -972,7 +972,7 @@ def _render_reset_everything_panel(*, slot=None) -> None:
     """Render Session's always-reachable full reset action."""
     container = slot if slot is not None else st.container()
     if container.button(
-        "♻️ Reset everything",
+        f"{ICONS['reset']} Reset everything",
         key="session_reset_everything",
         width="stretch",
         help="Remove uploaded datasets and all session settings, then return to "
@@ -994,7 +994,7 @@ def _arm_session() -> None:
     st.session_state[_SESSION_DIALOG_KEY] = True
 
 
-@st.dialog("💾 Session", width="large")
+@st.dialog(f"{ICONS['session']} Session", width="large")
 def _session_dialog(app_url: str, backup_renderer=None) -> None:
     """The 💾 Session modal: what this session is holding, and how to keep it.
 
@@ -1025,11 +1025,11 @@ def _session_dialog(app_url: str, backup_renderer=None) -> None:
     )
 
     recovery = st.container(key="session_auto_recovery")
-    recovery.markdown("#### 🗄️ Automatic recovery")
+    recovery.markdown(f"#### {ICONS['recovery']} Automatic recovery")
     _render_recovery_cache_panel(app_url, slot=recovery.container())
 
     backup = st.container(key="session_json_backup")
-    backup.markdown("#### ⬇️ JSON backup")
+    backup.markdown(f"#### {ICONS['download']} JSON backup")
     if backup_renderer is not None:
         backup_renderer(backup.container())
     else:
@@ -1040,11 +1040,11 @@ def _session_dialog(app_url: str, backup_renderer=None) -> None:
         )
 
     reset = st.container(key="session_reset")
-    reset.markdown("#### ♻️ Reset")
+    reset.markdown(f"#### {ICONS['reset']} Reset")
     _render_reset_everything_panel(slot=reset.container())
 
     debug_tools = st.container(key="session_debug_tools")
-    debug_tools.markdown("#### 🐛 Debug tools")
+    debug_tools.markdown(f"#### {ICONS['debug']} Debug tools")
     render_debug_toggle(debug_tools.container())
     if debug_enabled():
         render_debug_panel(debug_tools.container())
@@ -1084,7 +1084,7 @@ def maybe_show_about() -> None:
         _about_dialog()
 
 
-@st.dialog("ℹ️ About Scanpath Studio", width="large")
+@st.dialog(f"{ICONS['about']} About Scanpath Studio", width="large")
 def _about_dialog() -> None:
     """The About modal: version, authors, links, citation, AI-assistance note."""
     from scanpath_studio import __version__
@@ -1099,6 +1099,7 @@ def _about_dialog() -> None:
         "Lion, Ella and "
         'Jakobi, Deborah N. and Reich, David R. and J{\\"a}ger, Lena and '
         "Berzak, Yevgeni},\n"
+        f"doi = {{{CITATION['doi']}}},\n"
         "license = {MIT},\n"
         "month = jun,\n"
         "title = {{Scanpath Studio}},\n"
@@ -1121,8 +1122,9 @@ Developed by [Omer Shubi](https://omershubi.github.io/),
 [Lena Jäger]({_DILI}/group-leader/jaeger.html), and
 [Yevgeni Berzak](https://dds.technion.ac.il/people/academic-staff/yevgeni-berzak/).
 
-📚 [Documentation]({CITATION["docs_url"]}) ↗ ·
-💻 [Code]({CITATION["url"]}) ↗
+{ICONS["docs"]} [Documentation]({CITATION["docs_url"]}) ↗ ·
+{ICONS["code"]} [Code]({CITATION["url"]}) ↗ ·
+{ICONS["doi"]} [DOI](https://doi.org/{CITATION["doi"]}) ↗
 """
     )
     # UX-16: the BibTeX block is tall enough to push everything above it out
@@ -1132,7 +1134,9 @@ Developed by [Omer Shubi](https://omershubi.github.io/),
     # separate the three blocks are gone (the user's call): on a modal this
     # short the bold headings already carry the split, and three rules in half a
     # screen read as clutter.
-    st.markdown("**📖 Citing Scanpath Studio** — a paper is in preparation.")
+    st.markdown(
+        f"**{ICONS['docs']} Citing Scanpath Studio** — a paper is in preparation."
+    )
     with st.expander("Show BibTeX", expanded=False):
         st.code(bibtex, language="bibtex", wrap_lines=True)
         st.markdown(
@@ -1147,7 +1151,7 @@ If you use the bundled demo data, also cite
     # in, which they have no way to check. Deliberately not a liability
     # disclaimer either: MIT already carries that. The heading says the
     # "built with AI assistance" half, so the prose no longer repeats it.
-    st.markdown("**🤖 Built with AI assistance**")
+    st.markdown(f"**{ICONS['ai']} Built with AI assistance**")
     st.markdown(
         f"""
 Cross-check results before publishing.
@@ -1423,17 +1427,16 @@ def _dataset_dir_input(
         # A typed path must survive a run in which this input doesn't render —
         # Streamlit drops an unrendered widget's key at end of run (BUG-15 /
         # ENG-36), and *every* one of these inputs renders only while its own
-        # corpus is the selected source. The benchmark bootstrap entry made that
-        # fatal (it vanishes the moment the path it was given succeeds, so the
-        # path was lost and the corpora disappeared again on the next run — R39
-        # shipped non-functional); for the other corpora it silently forgot a
+        # corpus is the selected source, so without this it silently forgot a
         # hand-typed location as soon as the user looked at another source. One
         # rule here rather than one call site remembering and three forgetting.
         persist_state="session",
     )
     # Vertical-align the button with the input (past its label).
     browse_col.markdown("<div style='height:1.7em'></div>", unsafe_allow_html=True)
-    if browse_col.button("📁", key=f"{key_prefix}_browse", help="Browse for a folder"):
+    if browse_col.button(
+        ICONS["folder"], key=f"{key_prefix}_browse", help="Browse for a folder"
+    ):
         chosen = _pick_directory_dialog()
         if chosen:
             st.session_state[f"{dir_key}_picked"] = chosen
@@ -1495,7 +1498,7 @@ def _render_dataset_unavailable() -> None:
     # and three background colours for what is a single message.
     with st.container(border=True, key="dataset_unavailable_panel"):
         st.markdown(
-            f"#### 📦 {note['label']} isn't here yet\n"
+            f"#### {ICONS['missing_bundle']} {note['label']} isn't here yet\n"
             f"{note['reason'].rstrip('.')} — **showing the bundled demo corpus** "
             f"meanwhile."
         )
@@ -1868,43 +1871,25 @@ def _cached_eyegenbench_raw_frames(
 
 
 # A malformed manifest (an entry with no `name`, a `datasets` value that isn't a
-# list of objects) must degrade to "no corpora discovered", not crash the app:
-# `KeyError` is in here because it escapes the usual IO triple and every
-# discovery site reads entry keys (M7).
+# list of objects) must degrade to a load error, not crash the app: `KeyError`
+# is in here because it escapes the usual IO triple and every reader of a
+# manifest reads entry keys (M7).
 _MANIFEST_ERRORS = (FileNotFoundError, ValueError, OSError, KeyError)
 
 
-@st.cache_data(show_spinner=False)
-def _cached_eyegenbench_datasets(root: str) -> tuple:
-    """Cached manifest entries for a bundle directory (M8).
+def added_benchmark_datasets() -> tuple:
+    """Manifest entries for the benchmark corpora the user added — none yet.
 
-    Discovery now runs on **every** picker build and every `compare_source`
-    enumeration, once per corpus in the bundle — where the old single-source
-    shape read the manifest only while that one source was selected. Same
-    convention as `_cached_multipleye_inventory`: keyed on the resolved root, so
-    pointing the directory input somewhere else busts it.
+    DATA-55 retired automatic discovery. The app used to list every corpus in a
+    bundle it found on disk (``data/EyeGenBench``, or a folder typed into a
+    "set up" entry), which put data in the picker that nobody had chosen, so a
+    corpus is now listed only because someone added it. The flow that adds one —
+    choose a folder, scan it, pick the corpora — is DATA-56. Until it lands this
+    is empty, and the per-corpus machinery it feeds (the registry entry, the
+    loader, the geometry badge, the share-link slug, Compare and the code
+    snippet) is reached only by tests, which replace this function.
     """
-    from scanpath_studio.eyegenbench import eyegenbench_datasets
-
-    return tuple(eyegenbench_datasets(root))
-
-
-def discovered_benchmark_datasets() -> tuple:
-    """Manifest entries for the prepared bundle, or ``()`` when there is none.
-
-    Never raises: the picker calls this while building its option list, long
-    before anything is in a position to report a load failure to the user (the
-    corpus' own loader does that, with the directory input right beside it).
-    """
-    from scanpath_studio.eyegenbench import entry_name
-
-    try:
-        entries = _cached_eyegenbench_datasets(_eyegenbench_root_from_state())
-    except _MANIFEST_ERRORS:
-        return ()
-    # `entry_name` owns the "a row with no usable name is skipped" rule (N5);
-    # spelling it again here is how the two would drift.
-    return tuple(entry for entry in entries if entry_name(entry))
+    return ()
 
 
 # geometry_source values are eyegenbench_geometry.py's GEOMETRY_REAL /
@@ -1912,10 +1897,10 @@ def discovered_benchmark_datasets() -> tuple:
 # here). Surfaced on each corpus' entry so a user can tell which they're looking
 # at rather than trusting a blanket claim in the description.
 _EYEGENBENCH_GEOMETRY_BADGES = {
-    "real": "✅ **Real** screen geometry — measured word boxes.",
-    "reconstructed": "🛠️ **Reconstructed** geometry — no measured boxes for "
+    "real": f"{ICONS['geometry_real']} **Real** screen geometry — measured word boxes.",
+    "reconstructed": f"{ICONS['geometry_reconstructed']} **Reconstructed** geometry — no measured boxes for "
     "this corpus; derived from its documented display setup.",
-    "synthesized": "🧪 **Synthesized** geometry — no measured boxes or "
+    "synthesized": f"{ICONS['geometry_synthesized']} **Synthesized** geometry — no measured boxes or "
     "documented display setup; a default layout was assumed.",
 }
 
@@ -1935,7 +1920,7 @@ def _geometry_coverage_note(entry) -> str:
 
     The counts are read through `eyegenbench.entry_count`, which is also what
     keeps a hand-mangled manifest from raising out of the *picker build* — this
-    runs for every discovered corpus via `_benchmark_description` (N1). An
+    runs for every added corpus via `_benchmark_description` (N1). An
     unreadable count lands in the same vaguer wording as an absent one: it is
     the R34-honest answer either way, and it is never worth taking the source
     list down over a typo in a number.
@@ -1979,7 +1964,7 @@ def geometry_badge(entry) -> str:
     if badge is None:
         return f"Screen geometry: {source}"
     if note := _geometry_coverage_note(entry):
-        badge = f"✅ **Real** screen geometry — {note}."
+        badge = f"{ICONS['geometry_real']} **Real** screen geometry — {note}."
     try:
         recorded_y = float(entry.get("recorded_fixation_y_fraction", 0.0))
     except (TypeError, ValueError):
@@ -2005,15 +1990,14 @@ def picker_name_for(choice: str, registry: dict | None = None) -> str:
     """Exactly the name the **Data source** picker renders for ``choice``.
 
     Anything that tells a user to "select X" must quote this, not the registry
-    key. The two differ: the picker shows the entry's `short`, and now a (WIP)
-    marker on top of it, so the bootstrap entry's key reads *"Harmonised
-    benchmark corpora — set up a local bundle"* while the list actually offers
-    *"Harmonised benchmark corpora — set up (WIP)"*. A remedy naming a string
-    that appears nowhere in the list is worse than no remedy — the reader hunts
-    for it and concludes the app is broken.
+    key. The two differ: the picker shows the entry's `short`, with a (WIP)
+    marker on top of it for a benchmark corpus, so *"Provo — harmonised benchmark
+    corpus"* is offered as *"Provo (WIP)"*. A remedy naming a string that appears
+    nowhere in the list is worse than no remedy — the reader hunts for it and
+    concludes the app is broken.
 
-    Pass ``registry`` when formatting a list of options: discovery depends on a
-    directory the user can change, so one run must format every option against
+    Pass ``registry`` when formatting a list of options: the added corpora can
+    change at runtime, so one run must format every option against
     **one** snapshot (M6). Re-resolving per option lets an option's rendered text
     change underneath a widget mid-run, and Streamlit finds the selected value's
     formatted form no longer among its own options.
@@ -2039,18 +2023,17 @@ def mark_wip_if_benchmark(choice: str) -> str:
 
 
 def spec_is_benchmark(spec) -> bool:
-    """True for a registry entry this feature owns: a prepared corpus or the
-    bootstrap placeholder.
+    """True for a registry entry this feature owns: a prepared benchmark corpus.
 
-    Dispatches on the entry's own fields — `benchmark_dataset` (set by
-    `_benchmark_registry_entries`) and `setup_only` — the same discriminator
-    `compare_source.secondary_dataset_options` uses, and deliberately **not** on
-    the label's text: PoTeC and OneStop each ship natively *and* harmonised, so a
-    substring test on the label would sweep the native entries in too.
+    Dispatches on the entry's own `benchmark_dataset` field (set by
+    `_benchmark_registry_entries`) — the same discriminator `compare_source`
+    uses, and deliberately **not** on the label's text: PoTeC and OneStop each
+    ship natively *and* harmonised, so a substring test on the label would sweep
+    the native entries in too.
     """
     if not isinstance(spec, dict):
         return False
-    return bool(spec.get("benchmark_dataset") or spec.get("setup_only"))
+    return bool(spec.get("benchmark_dataset"))
 
 
 def _benchmark_short_name(name: str) -> str:
@@ -2133,9 +2116,7 @@ def _benchmark_dir_input(loc) -> str:
     """The shared bundle-directory input, rendered by every benchmark entry.
 
     One session key (`eyegenbench_dir`) across all of them: the corpora live in
-    one prepared bundle, so pointing any entry somewhere else moves them all —
-    and it is what keeps the location changeable once the bootstrap entry has
-    disappeared.
+    one prepared bundle, so pointing any entry somewhere else moves them all.
     """
     return _dataset_dir_input(
         loc,
@@ -2146,35 +2127,6 @@ def _benchmark_dir_input(loc) -> str:
         structure_md=_EYEGENBENCH_STRUCTURE_MD,
         key_prefix="eyegenbench",
     )
-
-
-def _load_benchmark_setup_source(
-    options_host=None, location_host=None
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """The bootstrap entry, offered only while **zero** corpora are discovered.
-
-    Without it the setup is unreachable: discovery reads a directory the user can
-    change at runtime, so a bundle at a non-default path yields no corpora, no
-    entries — and therefore nowhere to type the path. This one placeholder
-    renders the same directory input and *Expected files* note every corpus entry
-    does, and disappears as soon as the manifest resolves.
-    """
-    opt = options_host if options_host is not None else st.container()
-    loc = location_host if location_host is not None else st.container()
-    root = _benchmark_dir_input(loc)
-    _dataset_access_status(
-        loc,
-        root=root,
-        present=False,
-        key_prefix="eyegenbench",
-        label="Harmonised benchmark corpora",
-    )
-    opt.info(
-        "No prepared corpora found here yet. Build a bundle with "
-        "`python scripts/prepare_eyegenbench.py --all`, then point the folder "
-        "below at it — each prepared corpus then appears as its own data source."
-    )
-    return load_sample_data()
 
 
 def _load_benchmark_source(
@@ -2210,7 +2162,7 @@ def _load_benchmark_source(
     if not ready:
         return load_sample_data()
     entry = next(
-        (e for e in discovered_benchmark_datasets() if entry_name(e) == dataset),
+        (e for e in added_benchmark_datasets() if entry_name(e) == dataset),
         None,
     )
     if entry and (badge := geometry_badge(entry)):
@@ -2230,6 +2182,10 @@ def _load_benchmark_source(
 # caption). To add a corpus: write a loader in datasets.py, wrap it in a
 # `_load_*_source` function above, and add one entry here — the
 # searchable picker scales as the catalogue grows.
+#: The MultiplEYE entry's registry label, named because DATA-54's beta gate
+#: (`constants.multipleye_enabled`) has to find it.
+MULTIPLEYE_PUBLIC_CHOICE = "MultiplEYE — multilingual reading (ZH-CH sample)"
+
 PUBLIC_DATASET_REGISTRY: dict = {
     "PoTeC — Potsdam Textbook Corpus": dict(
         loader=_load_potec_source,
@@ -2256,11 +2212,11 @@ PUBLIC_DATASET_REGISTRY: dict = {
         # Word boxes come from the corpus' own `.ias` character files, but the
         # release discards the recorded screen (x, y) — `datasets._potec_fixations`
         # places each fixation at the centre of the character it names.
-        geometry="🛠️ **Reconstructed** fixation coordinates — the release keeps "
+        geometry=f"{ICONS['geometry_reconstructed']} **Reconstructed** fixation coordinates — the release keeps "
         "no recorded (x, y), so each fixation sits at the centre of the "
         "character it names. The word boxes are the corpus' own `.ias` files.",
     ),
-    "MultiplEYE — multilingual reading (ZH-CH sample)": dict(
+    MULTIPLEYE_PUBLIC_CHOICE: dict(
         loader=_load_multipleye_source,
         monitor=(1920, 1080),  # MultiplEYE physical screen (coords offset to it)
         short="MultiplEYE",
@@ -2273,7 +2229,7 @@ PUBLIC_DATASET_REGISTRY: dict = {
         # session folders are on the machine it runs on, so there is no corpus-
         # wide number that would be true of the next person's copy — the row
         # fills in the moment it is opened, which is the honest answer.
-        geometry="✅ **Real** — recorded fixation coordinates, with word boxes "
+        geometry=f"{ICONS['geometry_real']} **Real** — recorded fixation coordinates, with word boxes "
         "aggregated from the corpus' own character AOI files.",
     ),
     ONESTOP_PUBLIC_CHOICE: dict(
@@ -2317,7 +2273,7 @@ PUBLIC_DATASET_REGISTRY: dict = {
             "practice article (`article_id` 0), which the corpus' published "
             "30 articles / 162 paragraphs does not count."
         ),
-        geometry="✅ **Real** — recorded fixation coordinates and EyeLink's own "
+        geometry=f"{ICONS['geometry_real']} **Real** — recorded fixation coordinates and EyeLink's own "
         "interest-area boxes.",
     ),
 }
@@ -2350,7 +2306,7 @@ _BUILTIN_DATASET_ABOUT: dict[str, dict] = {
         published_counts_source=(
             "Counted from the files bundled with this release of the package."
         ),
-        geometry="✅ **Real** — OneStop's recorded fixations and interest-area "
+        geometry=f"{ICONS['geometry_real']} **Real** — OneStop's recorded fixations and interest-area "
         "boxes. The raw-gaze overlay is **synthesized**, as OneStop publishes "
         "no raw samples.",
     ),
@@ -2389,13 +2345,13 @@ _BUILTIN_DATASET_ABOUT: dict[str, dict] = {
             "The fixture's own specification — six words on two lines, nine "
             "fixations, one of them out of text (`synthetic.py`)."
         ),
-        geometry="🧪 **Synthesized** — the layout and the fixations are both "
+        geometry=f"{ICONS['geometry_synthesized']} **Synthesized** — the layout and the fixations are both "
         "hand-specified, not recorded.",
     ),
     AUTHOR_CHOICE: dict(
         description="Type a text and place fixations on it yourself, for "
         "figures that illustrate a pattern rather than report a recording.",
-        geometry="🧪 **Synthesized** — you draw it; the app lays the text out "
+        geometry=f"{ICONS['geometry_synthesized']} **Synthesized** — you draw it; the app lays the text out "
         "deterministically and marks the figure as an illustration.",
     ),
 }
@@ -2440,11 +2396,11 @@ def dataset_about(token: str, registry: dict | None = None) -> dict:
 
 
 def _benchmark_registry_entries() -> dict:
-    """One registry entry per prepared benchmark corpus (R36).
+    """One registry entry per benchmark corpus the user added (R36, DATA-55).
 
-    Built from the local bundle's manifest, so it varies with the directory the
-    user points at — which is why the registry as a whole had to become a
-    function. Each entry has the same shape as the static built-ins above
+    Built from those corpora's manifest entries (`added_benchmark_datasets`),
+    so it varies at runtime — which is why the registry as a whole had to become
+    a function. Each entry has the same shape as the static built-ins above
     (`short` / `language` / `size` / `description` / `link` / `monitor`) and is
     presented identically: one 🌐 entry in the flat picker, nothing nested.
 
@@ -2459,8 +2415,10 @@ def _benchmark_registry_entries() -> dict:
     from scanpath_studio.eyegenbench import declared_monitor, entry_name
 
     entries: dict = {}
-    for entry in discovered_benchmark_datasets():
-        name = entry_name(entry)
+    for entry in added_benchmark_datasets():
+        # `entry_name` owns the "a row with no usable name is skipped" rule (N5).
+        if not (name := entry_name(entry)):
+            continue
         short = _benchmark_short_name(name)
         spec = dict(
             loader=partial(_load_benchmark_source, dataset=name),
@@ -2498,33 +2456,24 @@ def _benchmark_registry_entries() -> dict:
 
 
 def public_dataset_registry() -> dict:
-    """Every public corpus on offer: the static built-ins ∪ discovered corpora.
+    """Every public corpus on offer: the static built-ins ∪ the added corpora.
 
     `PUBLIC_DATASET_REGISTRY` stays the literal home of the three built-ins, whose
-    entries are fixed at import time. The prepared benchmark corpora can't be:
-    they depend on a bundle directory the user can change mid-session, so they
-    are composed in here and every consumer calls this instead of reading the
-    dict. Discovery is cached (`_cached_eyegenbench_datasets`), so calling it
-    several times a run costs one manifest read.
+    entries are fixed at import time. The benchmark corpora a user adds can't be,
+    so they are composed in here and every consumer calls this instead of reading
+    the dict. Nothing is discovered: a corpus is here only because someone added
+    it (DATA-55; the flow that adds one is DATA-56).
+
+    DATA-54 and DATA-55 hold MultiplEYE and the harmonised benchmark corpora back
+    for the beta unless ``SCANPATH_EXPERIMENTAL`` is on. Gating here, the one
+    place every consumer reads, is what hides them from the picker, the 🗂️ Data
+    page, Compare's second dataset and share links at once.
     """
     registry = dict(PUBLIC_DATASET_REGISTRY)
-    discovered = _benchmark_registry_entries()
-    registry.update(discovered)
-    if not discovered:
-        # R39: with nothing discovered there is no entry, so there would be
-        # nowhere to type the bundle's path. Exactly one placeholder carries the
-        # directory input until a corpus exists.
-        registry[BENCHMARK_SETUP_CHOICE] = dict(
-            loader=_load_benchmark_setup_source,
-            short="Harmonised benchmark corpora — set up",
-            language="Multilingual",
-            size="not set up yet",
-            description="Public reading corpora harmonised to one schema by the "
-            "EyeGenBench pipeline. Build a bundle locally and point this at it; "
-            "each prepared corpus then appears as its own data source.",
-            link="https://github.com/EyeBench/EyeGenBench",
-            setup_only=True,
-        )
+    if not multipleye_enabled():
+        registry.pop(MULTIPLEYE_PUBLIC_CHOICE, None)
+    if benchmark_corpora_enabled():
+        registry.update(_benchmark_registry_entries())
     return registry
 
 
@@ -2568,24 +2517,6 @@ def _public_dataset_monitor(data_choice: str) -> tuple[int, int] | None:
         st.session_state.get("public_dataset_choice", "")
     )
     return spec.get("monitor") if spec else None
-
-
-def _eyegenbench_root_from_state() -> str:
-    """The prepared-bundle directory the picker is currently pointed at.
-
-    Mirrors `_dataset_dir_input`'s own resolution (the S2 branch included) so
-    discovery agrees with what a corpus' loader reads later in the same run,
-    without threading the resolved root through session state as a second copy
-    of the truth."""
-    if not local_filesystem_enabled():
-        return (
-            str(data_root())
-            if data_root()
-            else _resolve_data_dir(EYEGENBENCH_DEFAULT_DIR)
-        )
-    return _resolve_data_dir(
-        st.session_state.get("eyegenbench_dir", EYEGENBENCH_DEFAULT_DIR)
-    )
 
 
 #: The recording-setup values a fresh session pins before anything declares
@@ -2672,7 +2603,7 @@ def _cached_words_join_nothing(
 
 #: BUG-32 — said once per page, in the notices strip, while it holds.
 WORDS_JOIN_NOTHING_WARNING = (
-    "⚠️ **No fixation has word boxes.** A words / AOI table was loaded, but none "
+    f"{ICONS['warning']} **No fixation has word boxes.** A words / AOI table was loaded, but none "
     "of its participant + trial pairs is in the fixations, so every trial draws "
     "without its text or its word-level measures. The usual cause is a **Trial "
     "ID** or **Participant ID** mapping that names different trials in the two "
@@ -2976,7 +2907,7 @@ def reset_column_mapping() -> None:
 
 #: Label + tooltip of the "known-good state" button, shared by the off-page
 #: signpost and the 💾 Session menu so the two read as the same action.
-DEMO_RESET_LABEL = "🧪 Load the bundled demo"
+DEMO_RESET_LABEL = f"{ICONS['demo']} Load the bundled demo"
 DEMO_RESET_HELP = (
     "Switches to the demo corpus and re-detects its column mapping. Your "
     "uploaded datasets stay in the source list."
@@ -3220,13 +3151,13 @@ def _render_unmapped_view(
     rejected = [p for p in problems if p.startswith(MAPPING_FAILURE_LEAD)]
     if rejected:
         for problem in rejected:
-            st.error(problem, icon="🚫")
+            st.error(problem, icon=ICONS["error"])
         st.caption(
             "Change the field it names in **1 · Data tables & column mapping** above, "
             "or start again from what auto-detection proposes."
         )
         st.button(
-            "↩️ Reset to the auto-detected mapping",
+            f"{ICONS['undo']} Reset to the auto-detected mapping",
             key="reset_column_mapping",
             on_click=reset_column_mapping,
         )
@@ -3297,11 +3228,11 @@ def _render_offpage_setup_notice(data_view: bool) -> None:
     st.info(
         "**This dataset isn't set up yet**, so there's nothing to plot. "
         "Finish it on the 🗂️ **Data** page — or start over from the demo.",
-        icon="🗂️",
+        icon=ICONS["view_data"],
     )
     finish, demo = st.columns(2)
     finish.button(
-        "🗂️ Go to Data setup",
+        f"{ICONS['view_data']} Go to Data setup",
         on_click=_go_data,
         type="primary",
         width="stretch",
@@ -3853,22 +3784,14 @@ def resolve_data_source(host=None) -> str:
         st.session_state["data_source_choice"] = corpus or entries[0]
 
     # Heal a stale/invalid selection (e.g. a removed dataset) so the picker never
-    # errors on an option that is no longer in the list. Anything that *was* a
-    # benchmark entry gets its own landing, in preference to `entries[0]` (the
-    # demo): the bootstrap placeholder disappears precisely *because* it
-    # succeeded, so sending the user who just supplied a bundle path somewhere
-    # else entirely answers them with a non-answer — and, the demo rendering no
-    # directory input, drops them straight back out of the corpora they found.
-    # The same reasoning covers a stale *corpus* label (the bundle directory was
-    # repointed, or that corpus was removed from it): another prepared corpus is
-    # a better answer than the demo whenever one is reachable (N2).
+    # errors on an option that is no longer in the list. A stale benchmark
+    # *corpus* label (the bundle directory was repointed, or that corpus was
+    # removed from it) lands on another added corpus in preference to
+    # `entries[0]` (the demo) whenever one is reachable (N2).
     stale = str(st.session_state.get("data_source_choice") or "")
     if stale not in entries:
-        was_benchmark = stale == BENCHMARK_SETUP_CHOICE or stale.endswith(
-            BENCHMARK_LABEL_SUFFIX
-        )
         healed = ""
-        if was_benchmark:
+        if stale.endswith(BENCHMARK_LABEL_SUFFIX):
             healed = next(
                 (
                     label
@@ -3986,8 +3909,8 @@ def render_data_source_picker(host=None) -> None:
 
     def _entry_label(token: str) -> str:
         # Reads the `registry` snapshot resolved just above rather than calling
-        # `public_dataset_registry()` per token: discovery depends on a directory
-        # the user can change, so one run must format its options against one
+        # `public_dataset_registry()` per token: the added corpora can change at
+        # runtime, so one run must format its options against one
         # snapshot (which is also why the old `_public_dataset_label` helper,
         # which built its own, had no business being called from here — M6).
         tag = kinds.get(token, "")
@@ -4040,10 +3963,10 @@ def render_data_source_picker(host=None) -> None:
 #: that opens it. Icon-only (no trailing word) so the four action columns read as
 #: a compact icon strip rather than four button-sized columns — the label lives
 #: in each column's `help` tooltip instead.
-_DATASET_EDIT_LABEL = ":material/edit:"
-_DATASET_RENAME_LABEL = ":material/drive_file_rename_outline:"
-_DATASET_REMOVE_LABEL = ":material/delete:"
-_DATASET_ABOUT_LABEL = ":material/info:"
+_DATASET_EDIT_LABEL = ICONS["edit"]
+_DATASET_RENAME_LABEL = ICONS["rename"]
+_DATASET_REMOVE_LABEL = ICONS["delete"]
+_DATASET_ABOUT_LABEL = ICONS["info"]
 
 #: Pixel width of an icon-only action column — just enough for one glyph and its
 #: padding, so the four actions don't eat as much of the table's width as the
@@ -4679,7 +4602,7 @@ def _render_dataset_overview(token: str, *, registry: dict) -> None:
     if not has_detail:
         return
     trigger, _ = st.columns([1, 3])
-    with trigger.popover("❔ About this dataset", width="stretch"):
+    with trigger.popover(f"{ICONS['help']} About this dataset", width="stretch"):
         _render_dataset_about_body(token, registry=registry, description=rest)
 
 
@@ -4751,7 +4674,7 @@ def _open_mapping_editor() -> None:
     st.session_state[DATASET_EDITOR_OPEN_KEY] = True
 
 
-@st.dialog("⚠️ Check the Trial ID mapping")
+@st.dialog(f"{ICONS['warning']} Check the Trial ID mapping")
 def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
     """VAL-9 — VAL-7's verdict, raised where the Trial ID was just chosen.
 
@@ -4767,7 +4690,7 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
     Buttons are handled by their return value, never ``on_click`` — a dialog
     body is a fragment (see ``_leave_dataset_editor_dialog``).
     """
-    st.warning(warning, icon="⚠️")
+    st.warning(warning, icon=ICONS["warning"])
     st.caption(
         "A Trial ID that doesn't fully identify one reading concatenates several "
         "into one scanpath — which renders perfectly happily, as an ordinary "
@@ -4776,7 +4699,7 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
     )
     edit_col, keep_col = st.columns(2, gap="small")
     if edit_col.button(
-        "✏️ Edit the mapping",
+        f"{ICONS['edit']} Edit the mapping",
         key="trial_identity_alert_edit",
         type="primary",
         width="stretch",
@@ -4894,7 +4817,7 @@ def _render_dataset_editor_bar(host, data_choice: str) -> None:
     bar = host.container(key="dataset_editor_bar")
     title_col, back_col = bar.columns([8, 2], vertical_alignment="center")
     title_col.markdown(
-        f'<div class="sps-wiz-title">✏️ Edit {html.escape(name)}</div>',
+        f'<div class="sps-wiz-title">{icon_html("edit")} Edit {html.escape(name)}</div>',
         unsafe_allow_html=True,
     )
     back_col.button(
@@ -5645,6 +5568,267 @@ def seed_canvas_state(
     )
 
 
+#: The CSS stack UX-163's *Multilingual* button writes into the text font — a
+#: CJK / Hebrew / Arabic-capable fallback (PRE-6).
+_MULTILINGUAL_FONT_STACK = (
+    "'Noto Sans', 'Noto Sans Hebrew', 'Noto Sans Arabic', "
+    "'Noto Sans CJK SC', 'Arial Unicode MS', sans-serif"
+)
+
+
+def _rail_monitor_row(host) -> tuple[int, int]:
+    """The monitor's pixel size as one ``Monitor | W × H px`` row (UX-163)."""
+    label_w = _label_w()
+    rest = 1.0 - label_w
+    label_col, width_col, times_col, height_col, unit_col = host.columns(
+        [label_w, rest * 0.4, rest * 0.08, rest * 0.4, rest * 0.12],
+        gap=_LABEL_GAP,
+        vertical_alignment="center",
+    )
+    _row_label(
+        label_col,
+        "Monitor",
+        "The presentation monitor's width × height in pixels. Keep it true to the "
+        "experiment's screen so coordinates and word boxes stay to scale.",
+    )
+    width = width_col.number_input(
+        "Monitor width (px)",
+        min_value=100,
+        max_value=10000,
+        step=10,
+        key="global_canvas_width",
+        persist_state="session",
+        label_visibility="collapsed",
+    )
+    _sub_caption(times_col, "×")
+    height = height_col.number_input(
+        "Monitor height (px)",
+        min_value=100,
+        max_value=10000,
+        step=10,
+        key="global_canvas_height",
+        persist_state="session",
+        label_visibility="collapsed",
+    )
+    _sub_caption(unit_col, "px")
+    return int(width), int(height)
+
+
+def _rail_text_rows(
+    host,
+    *,
+    seeded: tuple,
+    display_dpi: float,
+    words_filtered: pd.DataFrame,
+    font_css,
+    disabled: bool,
+    section: str | None,
+) -> tuple[int, str, float, bool]:
+    """The rail's typography rows, under 📄 Stimulus → *Text* (UX-163).
+
+    Four captioned rows (`_sub_row`) instead of up to nine that came and went:
+
+    * *Fit* — **Scale to boxes** and the line spacing it divides a box by
+      (greyed while it is off);
+    * *Size* — the unit (px / pt) and the size. While the text is fitted to the
+      boxes the size is the axis, legend and fallback text's, in px, so the unit
+      greys; otherwise it is the reading text's, and a size in points is
+      converted with the dataset DPI (px = pt × DPI ÷ 72);
+    * *Font* — the font family and the *Multilingual* stack;
+    * *Color* — the text colour, then the plot background (and its custom
+      colour, greyed unless *Custom…* is picked).
+
+    ``disabled`` greys every row while the Text layer is off (UX-97's contract:
+    the settings stay readable, and their stored values are untouched).
+    Returns ``(base_font_size, font_family, line_spacing, scale_text_to_boxes)``.
+    """
+    off_reason = (
+        f"{ICONS['warning']} **Text** is off — turn it on to change this. Your "
+        "settings are kept either way."
+        if disabled
+        else ""
+    )
+
+    def tip(text: str) -> str:
+        return f"{off_reason}\n\n{text}" if off_reason else text
+
+    with host:
+        fit = _sub_row(
+            "Fit",
+            section=section,
+            section_help="How the reading text is drawn.",
+            caption_help=tip(
+                "**Scale to boxes** sizes the text from the word-box height "
+                "(text height = box height ÷ line spacing), so it fills the real "
+                "line slot and scales with the figure. The spacing beside it is "
+                "how many line slots one box spans — OneStop uses 3. Untick to "
+                "set a fixed size below."
+            ),
+        )
+        fit_col, spacing_cap_col, spacing_col = fit.columns(
+            [0.55, 0.2, 0.25], gap=_LABEL_GAP, vertical_alignment="center"
+        )
+        scale_text_to_boxes = fit_col.checkbox(
+            "Scale to boxes",
+            key="global_scale_text_to_boxes",
+            persist_state="session",
+            disabled=disabled,
+        )
+        _sub_caption(spacing_cap_col, "Spacing")
+        line_spacing = spacing_col.number_input(
+            "Line spacing",
+            min_value=1.0,
+            max_value=10.0,
+            step=0.5,
+            key="global_line_spacing",
+            persist_state="session",
+            disabled=disabled or not scale_text_to_boxes,
+            label_visibility="collapsed",
+        )
+
+        size = _sub_row(
+            "Size",
+            caption_help=tip(
+                "With **Scale to boxes** on, this is the axis, legend and "
+                "fallback text size in px. Off, it is the reading text's size — "
+                "in px, or in points converted with the dataset DPI "
+                "(px = pt × DPI ÷ 72)."
+            ),
+        )
+        unit_col, size_col = size.columns(
+            [0.5, 0.5], gap=_LABEL_GAP, vertical_alignment="center"
+        )
+        use_pt = unit_col.segmented_control(
+            "Font unit",
+            options=[False, True],
+            format_func=lambda use_pt: "pt" if use_pt else "px",
+            key="global_use_stimulus_font_pt",
+            persist_state="session",
+            disabled=disabled or scale_text_to_boxes,
+            label_visibility="collapsed",
+        )
+        if not scale_text_to_boxes and use_pt:
+            stimulus_font_pt = size_col.number_input(
+                "Font size (pt)",
+                min_value=4.0,
+                max_value=144.0,
+                step=0.5,
+                key="global_stimulus_font_pt",
+                persist_state="session",
+                disabled=disabled,
+                label_visibility="collapsed",
+            )
+            st.session_state["global_base_font_size"] = int(
+                min(max(round(font_pt_to_px(stimulus_font_pt, display_dpi)), 6), 72)
+            )
+            base_font_size = int(st.session_state["global_base_font_size"])
+        else:
+            base_font_size = size_col.number_input(
+                "Plot font size (px)" if scale_text_to_boxes else "Font size (px)",
+                min_value=6,
+                max_value=72,
+                step=1,
+                key="global_base_font_size",
+                persist_state="session",
+                disabled=disabled,
+                label_visibility="collapsed",
+            )
+
+        font = _sub_row(
+            "Font",
+            caption_help=tip(
+                "The font for the word labels — the exact font from your "
+                "experiment (e.g. 'Courier New') or a CSS fallback stack. "
+                "**Multilingual** fills in a CJK / Hebrew / Arabic-capable stack "
+                "(PRE-6)."
+            ),
+        )
+        family_col, stack_col = font.columns(
+            [0.6, 0.4], gap=_LABEL_GAP, vertical_alignment="center"
+        )
+        font_family = family_col.text_input(
+            "Text font",
+            key="global_font_family",
+            persist_state="session",
+            disabled=disabled,
+            label_visibility="collapsed",
+        )
+        stack_col.button(
+            "Multilingual",
+            on_click=lambda: st.session_state.update(
+                global_font_family=_MULTILINGUAL_FONT_STACK
+            ),
+            disabled=disabled,
+            width="stretch",
+        )
+
+        # Seeded rather than given a `value=`: restored pre-widget by a deep
+        # link / saved config (BUG-17). `seed_canvas_state` pins it too, so a
+        # custom background survives the runs this picker is greyed.
+        _pin("global_bg_custom", DEFAULT_BACKGROUND_COLOR)
+        color = _sub_row(
+            "Color",
+            caption_help=tip(
+                "The reading text's colour, then the background of the plotting "
+                "area (and of exported figures) — with its own colour when "
+                "*Custom…* is picked."
+            ),
+        )
+        text_color_col, bg_cap_col, bg_col, bg_custom_col = color.columns(
+            [0.17, 0.33, 0.33, 0.17], gap=_LABEL_GAP, vertical_alignment="center"
+        )
+        text_color_col.color_picker(
+            "Text color",
+            key="global_text_color",
+            persist_state="session",
+            disabled=disabled,
+            label_visibility="collapsed",
+        )
+        _sub_caption(bg_cap_col, "Background")
+        bg_choice = bg_col.selectbox(
+            "Plot background",
+            options=list(BACKGROUND_PRESETS.keys()) + ["Custom…"],
+            key="global_bg_choice",
+            persist_state="session",
+            disabled=disabled,
+            label_visibility="collapsed",
+        )
+        bg_custom_col.color_picker(
+            "Custom background color",
+            key="global_bg_custom",
+            persist_state="session",
+            disabled=disabled or bg_choice != "Custom…",
+            label_visibility="collapsed",
+        )
+
+        if "right_to_left" in words_filtered and words_filtered["right_to_left"].any():
+            st.caption(
+                "↔ RTL script detected. Landing positions are measured from the "
+                "logical word start; browser bidi shaping is used for labels."
+            )
+        hint = _stimulus_font_install_hint(font_css)
+        if hint is not None:
+            font_name, font_url = hint
+            st.caption(
+                f"{ICONS['info']} This corpus was rendered in **{font_name}**. For "
+                "the overlaid text to match the stimulus image exactly, install "
+                "that font (it isn't bundled), then reload — otherwise labels "
+                f"(especially URLs / Latin) can drift. [Download]({font_url}). Or "
+                "turn on the stimulus **Image** to read the original text."
+            )
+    line_spacing_value = (
+        float(line_spacing)
+        if line_spacing is not None
+        else float(st.session_state.get("global_line_spacing", seeded[4]))
+    )
+    return (
+        int(base_font_size),
+        str(font_family),
+        line_spacing_value,
+        bool(scale_text_to_boxes),
+    )
+
+
 def render_canvas_controls(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
@@ -5655,6 +5839,8 @@ def render_canvas_controls(
     bare: bool = False,
     text_host=None,
     render_text: bool = True,
+    text_disabled: bool = False,
+    text_section: str | None = None,
 ) -> tuple[int, int, int, str, float, bool]:
     """Render the canvas-geometry, typography and background panel.
 
@@ -5687,6 +5873,14 @@ def render_canvas_controls(
     stimulus font conversion) reads them from state exactly as before, which is
     also what keeps a share link carrying them working.
 
+    **UX-163/164 — in ``bare`` mode the rows take the rail popovers' shape.**
+    The monitor's width and height share one ``Monitor | W × H px`` row, and the
+    typography is four captioned rows — *Fit*, *Size*, *Font*, *Color* — under
+    the 📄 Stimulus popover's *Text* row (`_rail_text_rows`). ``text_disabled``
+    greys them while the Text layer is off, rather than leaving them undrawn;
+    ``text_section`` titles the group where no *Text* row precedes it (the
+    Corpus figure-style panel). The wizard's standalone form is unchanged.
+
     Returns:
         Tuple of (canvas_width, canvas_height, base_font_size, font_family,
         line_spacing, scale_text_to_boxes).
@@ -5713,28 +5907,33 @@ def render_canvas_controls(
     # section that owns it, and the caller has already opened the one disclosure.
     screen = display
     text = text_host if (bare and text_host is not None) else display
-    canvas_width = field(
-        screen,
-        "number_input",
-        "Monitor width (px)",
-        min_value=100,
-        max_value=10000,
-        step=10,
-        help="Use the real monitor width in pixels to keep coordinates true to scale.",
-        key="global_canvas_width",
-        persist_state="session",
-    )
-    canvas_height = field(
-        screen,
-        "number_input",
-        "Monitor height (px)",
-        min_value=100,
-        max_value=10000,
-        step=10,
-        help="Use the real monitor height in pixels to keep coordinates true to scale.",
-        key="global_canvas_height",
-        persist_state="session",
-    )
+    if bare:
+        canvas_width, canvas_height = _rail_monitor_row(screen)
+    else:
+        canvas_width = field(
+            screen,
+            "number_input",
+            "Monitor width (px)",
+            min_value=100,
+            max_value=10000,
+            step=10,
+            help="Use the real monitor width in pixels to keep coordinates true "
+            "to scale.",
+            key="global_canvas_width",
+            persist_state="session",
+        )
+        canvas_height = field(
+            screen,
+            "number_input",
+            "Monitor height (px)",
+            min_value=100,
+            max_value=10000,
+            step=10,
+            help="Use the real monitor height in pixels to keep coordinates true "
+            "to scale.",
+            key="global_canvas_height",
+            persist_state="session",
+        )
     # DATA-2: physical setup values live beside the pixel canvas they explain.
     # They are persisted with the plot config and immediately yield a px/degree
     # scale for downstream saccade/reporting work.
@@ -5818,7 +6017,28 @@ def render_canvas_controls(
             bool(seeded[5]),
         )
 
-    # --- 🔤 Text & fonts (sub-group in bare mode) -------------------------
+    if bare:
+        base_font_size, font_family, line_spacing, scale_text_to_boxes = (
+            _rail_text_rows(
+                text,
+                seeded=seeded,
+                display_dpi=float(display_dpi),
+                words_filtered=words_filtered,
+                font_css=font_css,
+                disabled=text_disabled,
+                section=text_section,
+            )
+        )
+        return (
+            int(canvas_width),
+            int(canvas_height),
+            int(base_font_size),
+            font_family,
+            float(line_spacing),
+            bool(scale_text_to_boxes),
+        )
+
+    # --- 🔤 Text & fonts (the wizard's flat form) -------------------------
     # Reading text is true-to-scale by default: it auto-sizes to the word boxes
     # (text height = box_height / line_spacing) and scales with the figure, so it
     # always fills the real line slot. Untick to fall back to a fixed font size.
@@ -5927,7 +6147,7 @@ def render_canvas_controls(
     if hint is not None:
         font_name, font_url = hint
         text.caption(
-            f"ℹ️ This corpus was rendered in **{font_name}**. For the overlaid text "
+            f"{ICONS['info']} This corpus was rendered in **{font_name}**. For the overlaid text "
             "to match the stimulus image exactly, install that font on this "
             "computer (it isn't bundled), then reload — otherwise the browser "
             "substitutes a fallback and labels (especially URLs / Latin) can "
@@ -6010,7 +6230,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
     )
     from scanpath_studio.authoring_component import render_authoring_canvas
 
-    st.subheader("✏️ Author a scanpath")
+    st.subheader(f"{ICONS['author']} Author a scanpath")
     st.caption(
         "Write the stimulus, then click or drag directly on the canvas. X/Y are "
         "the primary authored values; the optional target word is useful for "
@@ -6193,7 +6413,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
             st.rerun()
 
     st.download_button(
-        "💾 Save authoring file",
+        f"{ICONS['save']} Save authoring file",
         data=authoring_json(text, effective_events, layout=layout),
         file_name="authored-scanpath.json",
         mime="application/json",
@@ -6404,7 +6624,7 @@ def main() -> None:
         st.toast(
             f"Recovered {_restored_recap()} from this computer — see 💾 Session "
             "→ Automatic recovery.",
-            icon="↩️",
+            icon=ICONS["recovery"],
         )
     elif consume_restore_skipped(st.session_state):
         # BUG-71: the last launch that restored the cache never finished, so this
@@ -6414,7 +6634,7 @@ def main() -> None:
             "time. It is still saved on this computer and saving is paused, so it "
             "stays that way: reload to try again, or clear it in 💾 Session → "
             "Automatic recovery.",
-            icon="⚠️",
+            icon=ICONS["warning"],
             duration="long",
         )
     linked_choice = None
@@ -6467,19 +6687,12 @@ def main() -> None:
             # The common case, not an edge case: the recipient has no prepared
             # bundle, or a different subset of one. Say which corpus was named
             # and leave the picker exactly where it was — never wedge it, and
-            # never silently open a different corpus. The remedy names what is
-            # actually clickable: the bundle directory input renders *inside* a
-            # benchmark corpus entry, so it can only be reached by selecting one
-            # of those entries first (with no bundle at all, that is the single
-            # "set up a local bundle" entry the registry offers in their place).
+            # never silently open a different corpus. There is no remedy to name
+            # (DATA-55): the app no longer discovers corpora, and until DATA-56's
+            # add-from-a-folder flow nothing in it adds one.
             st.warning(
                 f"This link opens the corpus `{slug}`, which isn't available "
-                "here. To get it, open **Data source** and select a harmonised "
-                f"benchmark corpus — or **{picker_name_for(BENCHMARK_SETUP_CHOICE)}** "
-                "if you have "
-                "none yet — then point its *Data directory* at a prepared bundle "
-                "containing this corpus. The link's view settings still apply to "
-                "whatever you open."
+                "here. The link's view settings still apply to whatever you open."
             )
     elif url_source == "upload":
         st.session_state.setdefault("_show_upload_wizard", True)
@@ -6624,7 +6837,7 @@ def main() -> None:
     _view_bridge = st.empty()
     if st.session_state.get("_last_rendered_view") not in (None, active_view):
         _bridge_box = _view_bridge.container()
-        _bridge_box.info(f"Loading {view_label(active_view)}…", icon="⏳")
+        _bridge_box.info(f"Loading {view_label(active_view)}…", icon=ICONS["loading"])
         _bridge_box.skeleton(height=420)
     else:
         _view_bridge = None
@@ -6687,7 +6900,7 @@ def main() -> None:
         # reading the list and not finding what you wanted, so it belongs at the
         # end of the list rather than above it. Its slot is reserved beside the
         # table below; the button itself is filled once `data_choice` is known.
-        overview_page.subheader("📂 Available datasets")
+        overview_page.subheader(f"{ICONS['datasets']} Available datasets")
     setup_source_slot = overview_page.container()
     # The editor's own header bar — the ✏️ Edit dataset screen's title and its
     # way back, filled below once the dataset's display name is known.
@@ -6823,7 +7036,7 @@ def main() -> None:
         # instantiate. UX-77 put it on the section heading's line; DATA-35 moved
         # it under the table.
         add_dataset_slot.button(
-            "➕ Add dataset",
+            f"{ICONS['add']} Add dataset",
             key="add_data_btn",
             on_click=_enter_add_data_wizard,
             help="Upload your own eye-tracking tables.",
@@ -6857,7 +7070,10 @@ def main() -> None:
     if st.session_state.pop("_wizard_finalizing", False):
         _finalizing_bridge = st.empty()
         _finalizing_box = _finalizing_bridge.container()
-        _finalizing_box.info("✅ Dataset added — loading your scanpaths…", icon="⏳")
+        _finalizing_box.info(
+            f"{ICONS['success']} Dataset added — loading your scanpaths…",
+            icon=ICONS["loading"],
+        )
         _finalizing_box.skeleton(height=420)
 
     def _clear_loading_bridges() -> None:
@@ -6889,7 +7105,7 @@ def main() -> None:
             dataset_table_slot.success(
                 f"**{_dataset_display_name(str(saved))}** updated — mapping, "
                 "recording setup and any table you added are saved.",
-                icon="✅",
+                icon=ICONS["success"],
             )
         render_dataset_table(
             host=dataset_table_slot,
@@ -7300,7 +7516,7 @@ def main() -> None:
             # don't cover any trial in the current filter (raw gaze typically
             # exists for only a subset of trials). The overlay is optional.
             menu.notices.caption(
-                f"ℹ️ The loaded raw-gaze samples ({len(raw_gaze_df):,} rows) don't "
+                f"{ICONS['info']} The loaded raw-gaze samples ({len(raw_gaze_df):,} rows) don't "
                 "overlap the current trial filter, so the raw-gaze overlay is "
                 "unavailable here."
             )
@@ -7380,12 +7596,20 @@ def main() -> None:
         scale_text_to_boxes,
     ) = seed_canvas_state(words_filtered, canvas_geometry_frame, data_choice)
 
-    def canvas_renderer(slot, text_host=None, *, render_text: bool = True) -> None:
+    def canvas_renderer(
+        slot,
+        text_host=None,
+        *,
+        render_text: bool = True,
+        text_disabled: bool = False,
+    ) -> None:
         """Render the canvas/text controls into the rail, in two places.
 
         UX-81 split the panel between two sections: the screen half into
         ``slot`` (📐 Figure & canvas) and the typography half into ``text_host``
         (📄 Stimulus → Text). One call, so each widget is created exactly once.
+        With no ``text_host`` (the Corpus style panel) the typography rows are
+        titled *Text* themselves, since no *Text* row precedes them there.
         """
         render_canvas_controls(
             words_filtered,
@@ -7395,6 +7619,8 @@ def main() -> None:
             bare=True,
             text_host=text_host,
             render_text=render_text,
+            text_disabled=text_disabled,
+            text_section=None if text_host is not None else "Text",
         )
 
     # The visualization controls moved out of the sidebar into the Scanpath
@@ -7545,7 +7771,7 @@ def main() -> None:
             # and the counts they came for. The row's own ℹ️ About button still
             # opens the whole thing as a dialog, for this dataset and every
             # other — that is the place detail belongs.
-            st.subheader(f"🔎 What's in the `{dataset_label}` dataset")
+            st.subheader(f"{ICONS['search']} What's in the `{dataset_label}` dataset")
             _render_dataset_overview(active_token, registry=public_dataset_registry())
             # Keyed wrapper → the stable `.st-key-…` selector the "Load and
             # verify a dataset" tutorial spotlights (it kept its name across the

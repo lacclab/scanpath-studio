@@ -42,8 +42,9 @@ gating (`controls._mode_gate`) covers builders that ignore the setting.
 
 ## 3. Render-path invariants
 
-- Spatial plots stay on `tabs._render_true_scale_chart` — flag any new
-  `st.plotly_chart` call on a spatial/scanpath figure.
+- Spatial plots stay on `tabs._render_true_scale_chart` (the cached replay on
+  its two halves, `_true_scale_plot_html` + `_render_true_scale_plot` —
+  PERF-16) — flag any new `st.plotly_chart` call on a spatial/scanpath figure.
 - New top-level traces in `make_scanpath_figure` with a non-fixation name are
   added to `plots._trace_layer` (VIZ-5 separable layers).
 - No `st.select_slider` that can receive a single option (browser throws).

@@ -1,5 +1,15 @@
 # Harmonised benchmark corpora
 
+> **Not on the docs site (ENG-80), and not in the app for now (DATA-55).** A
+> bundle can only be built with the EyeGenBench pipeline, which is not public
+> yet, so this page is kept in the repository for the people who can build one
+> rather than published. The app no longer discovers these corpora — it used to
+> list every one in a bundle it found on disk, which put data in the picker that
+> nobody had chosen — and the flow that will add them (choose a folder, scan it,
+> pick the corpora) is DATA-56. Until then, load them with `load_eyegenbench` or
+> `render --eyegenbench` (the CLI section below); the in-app sections describe
+> the per-corpus integration that flow will feed, which the app keeps for it.
+
 Thirty-one public eye-tracking-while-reading corpora, re-derived into one common
 schema by the [EyeGenBench](https://github.com/EyeBench/EyeGenBench) pipeline,
 prepared into a local bundle and offered in Scanpath Studio. They are what makes
@@ -46,16 +56,14 @@ On a server other machines can reach (the hosted demo, or
 `--server.address 0.0.0.0`) there is no *Data directory* box to set: the app
 reads the bundle from the server's configured data location
 (`SCANPATH_DATA_ROOT`, else the default above), unless it was started with
-`SCANPATH_LOCAL_FS=1`. See [Launch](cli.md#launch) and [Security](security.md).
+`SCANPATH_LOCAL_FS=1`. See [Launch](cli.md#launch).
 
 A caption under the picker states the corpus's geometry provenance, and the
 description carries its licence and citation. If the bundle isn't where you
 pointed, the app says so and keeps the bundled demo loaded rather than failing.
 
-With **no** corpora discovered the picker offers a single entry,
-*🌐 Harmonised benchmark corpora — set up (WIP)*, which exists only to carry the
-directory input; it disappears as soon as a bundle is found. As with every
-public corpus, `SCANPATH_PUBLIC_DATASETS=0` hides them all.
+As with every public corpus, `SCANPATH_PUBLIC_DATASETS=0` hides them all, and
+while the corpora are unfinished `SCANPATH_EXPERIMENTAL=1` is needed as well.
 
 Two corpora ship **both** natively and harmonised — PoTeC and OneStop — and both
 entries are kept on purpose. The harmonised copy is labelled
@@ -196,11 +204,13 @@ per paragraph and summarised per corpus, so a corpus labelled `real` may hold
 paragraphs that fell back to a reconstructed layout — a paragraph nobody fixated
 at all contributes no measured box. The app therefore never prints a bare
 "✅ Real" when coverage is partial; it prints *measured word boxes for N of M
-texts; the rest fall back to reconstructed layout*. The distinction matters: on
-measured geometry you can trust absolute positions (where on the screen a reader
-looked, how far a saccade travelled in pixels); on a reconstructed or synthesized
-layout you can trust reading order and relative structure, but the coordinates
-are a plausible rendering of the text, not the one the reader saw. PoTeC and
+texts; the rest fall back to reconstructed layout*. Either way a fixation's
+position is derived from its word box, not recorded gaze: x is the box's left
+edge plus the corpus's landing fraction of its width (clipped to 0–1, 0.5 when
+missing), y is the box centre unless the corpus recorded a y on measured
+geometry, and a fixation outside every box is dropped. On a reconstructed or
+synthesized layout the boxes themselves are a plausible rendering of the text,
+not the one the reader saw. PoTeC and
 Provo are uniformly measured (no text falls back); OneStop is not — six of its
 345 texts have no measured boxes — so its caption carries the qualifier.
 
@@ -246,9 +256,9 @@ Two things that surprise people:
   directory.
 - **The corpus set is large, and the script guards on free space.** Before each
   corpus it checks for 15 GB free and stops the whole sweep if there is less,
-  rather than filling the disk. Rerunning after freeing space picks up where it
-  left off: each corpus's manifest entry is written as soon as its three Parquet
-  files are on disk, so an interrupted run leaves a valid, smaller bundle.
+  rather than filling the disk. An interrupted run leaves a valid, smaller
+  bundle: each corpus's manifest entry is written as soon as its three Parquet
+  files are on disk.
 
 One corpus at a time is prepared and recorded, and a corpus that fails is skipped
 with its reason printed rather than taking the sweep down.
@@ -272,8 +282,8 @@ OneStops apart. If two entries would ever claim one slug, the link scheme
 **refuses** it on both sides rather than guessing which corpus you meant.
 
 A recipient without that corpus prepared is the common case, not an edge case:
-the link says which corpus it names, tells them how to point at a bundle, and
-leaves their data source exactly where it was. The bundle *directory* never
+the link says which corpus it names and leaves their data source exactly where
+it was. The bundle *directory* never
 travels on the link — it is a local path, and it is the sender's.
 
 **CLI.**
@@ -313,9 +323,8 @@ fixation rows.
 ## Caveats
 
 - **Check the geometry tier before you make a claim about positions.** Most of
-  the catalogue is reconstructed or synthesized. Reading order, fixation
-  durations and word-level measures are the corpus's own data; pixel coordinates
-  on a non-`real` corpus are a rendering.
+  the catalogue is reconstructed or synthesized, and pixel coordinates on a
+  non-`real` corpus are a rendering.
 - **Licences are mostly unstated.** Twenty-five corpora record
   *unknown — consult the corpus*. Check the publisher's terms before
   redistributing data or figures.

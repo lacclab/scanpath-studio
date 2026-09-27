@@ -74,9 +74,9 @@ from .plots import (  # noqa: E402
     COMPARISON_FIGURE_OPTIONS,
     STATIC_FIGURE_OPTIONS,
     FigureSettings,
+    _resolve_trial_display_name,
     add_illustration_label,
-    animation_autoplay_frame_duration,
-    animation_autoplay_post_script,
+    animation_player_post_script,
     make_comparison_figure,
     make_difference_profile_figure,
     make_distribution_figure,
@@ -106,7 +106,7 @@ def build_authored_scanpath(
 def load_authored_scanpath(
     source: str | Path,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Load an authoring JSON path (or payload), including schema-1 migration."""
+    """Load a scanpath-author JSON file (or its text) as normalized word/fixation frames."""
     from .authoring import parse_authoring_document
 
     raw = str(source)
@@ -566,7 +566,8 @@ def load_scanpath_data(
     file per participant and/or text) are concatenated, with each file's stem kept in
     a ``source_file`` column. Column schemas are auto-detected (EyeLink, Gazepoint,
     Tobii, SMI, Pupil Labs, and snake_case names); pass ``word_schema`` /
-    ``fix_schema`` mappings (field → column name, see ``controls.WORD_FIELD_SPECS``)
+    ``fix_schema`` mappings (field → column name; see
+    [`propose_schema`][scanpath_studio.api.propose_schema])
     to override detection. For per-word reading measures, pass the result to
     [`compute_word_metrics`][scanpath_studio.api.compute_word_metrics].
 
@@ -648,7 +649,7 @@ def load_participant_metadata(
     id_column: str | None = None,
     participants: pd.DataFrame | list | None = None,
 ):
-    """Load a participant-level metadata table (DATA-20 milestone 1).
+    """Load a participant-level metadata table.
 
     ``table`` is a DataFrame or a path/glob to a CSV/TSV/Parquet/Excel file with
     **one row per reader**: an id column plus anything known about them
@@ -700,7 +701,7 @@ def load_trial_metadata(
     participant_column: str | None = None,
     trials: pd.DataFrame | None = None,
 ):
-    """Load a trial-level metadata table (DATA-29 — milestone 2).
+    """Load a trial-level metadata table.
 
     The sibling of
     [`load_participant_metadata`][scanpath_studio.api.load_participant_metadata], one
@@ -821,7 +822,7 @@ def load_sample_data() -> tuple[pd.DataFrame, pd.DataFrame]:
 def load_raw_gaze(
     table: TablesLike, *, raw_gaze_schema: dict | None = None
 ) -> pd.DataFrame:
-    """Load and normalize a raw (sample-level) gaze table for ``raw_gaze=`` (EXP-20).
+    """Load and normalize a raw (sample-level) gaze table for ``raw_gaze=``.
 
     The third table [`plot_scanpath`][scanpath_studio.api.plot_scanpath] can draw, under
     the fixations: one row per eye-tracker sample, with a participant, a trial, ``x`` /
@@ -849,8 +850,7 @@ def load_sample_raw_gaze() -> pd.DataFrame:
     """The bundled demo's raw gaze, normalized — what the app overlays on it.
 
     OneStop ships no sample-level gaze, so this is **synthesized** from one of
-    the demo's real trials (see ``update_sample_data.synthesize_raw_gaze``) and
-    covers that trial alone."""
+    the demo's real trials and covers that trial alone."""
     return load_raw_gaze(_data.load_sample_raw_gaze())
 
 
@@ -866,14 +866,14 @@ def compute_word_metrics(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Dat
 
 
 def trial_summary(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
-    """Exportable one-row-per-trial reading summary (AN-30)."""
+    """Exportable one-row-per-trial reading summary."""
     from .aggregation import trial_summary_table
 
     return trial_summary_table(words, fixations)
 
 
 def reader_summary(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
-    """Exportable one-row-per-reader reading summary (AN-30)."""
+    """Exportable one-row-per-reader reading summary."""
     from .aggregation import reader_summary_table
 
     return reader_summary_table(words, fixations)
@@ -922,7 +922,11 @@ def analysis_tables(
     pixels_per_degree: float | None = None,
     raw_gaze: pd.DataFrame | None = None,
 ) -> dict[str, pd.DataFrame]:
-    """Full measure family used by EXP-3 bulk/headless exports."""
+    """The tables ``scanpath-studio analyze`` writes, as a dict of frames.
+
+    ``fixations``, ``saccades``, ``word_measures``, ``sentence_measures``,
+    ``trial_summary``, ``reader_summary``, ``characters`` and ``cleaning_qa``.
+    """
     from .measures import assign_fixations_to_words, enrich_fixations
     from .preprocessing import (
         character_grid,
@@ -1026,9 +1030,8 @@ def plot_corpus_figure(
     ``profile`` expects ``word_id`` plus ``value_col`` (and optional ``lo`` /
     ``hi``); ``distribution`` expects ``value_col``; ``difference`` expects
     ``word_id`` and ``diff``. When ``series_col`` is present, it defines the
-    overlaid profile/distribution series. This is the API counterpart of the
-    Corpus Analysis in-view styling controls (AN-29). A table missing a column
-    its ``kind`` reads raises ``ValueError`` naming it and the columns present.
+    overlaid profile/distribution series. A table missing a column its ``kind``
+    reads raises ``ValueError`` naming it and the columns present.
     """
     kind = str(kind).lower()
     _require_corpus_columns(data, kind, value_col)
@@ -1103,9 +1106,7 @@ def list_parts(
 ) -> pd.DataFrame:
     """Ordered screens in multipart data, optionally narrowed to one parent.
 
-    Legacy single-screen data returns an empty table: it has no synthetic
-    exported screen row, so existing callers can distinguish recorded part
-    identity from the compatibility default.
+    Single-screen data returns an empty table.
     """
     _require_normalized(words, "words")
     _require_normalized(fixations, "fixations")
@@ -1409,7 +1410,7 @@ def figure_options(kind: str = "static") -> dict:
     (whose builder supports a subset), and ``kind="comparison"``
     [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths]. The values are the
     *effective* defaults — `CANONICAL_FIGURE_DEFAULTS` where it sets one, the builder's
-    own signature default otherwise — so a scripted caller can diff its intended
+    default otherwise — so a scripted caller can diff its intended
     settings against what it would get::
 
         {k: v for k, v in sps.figure_options().items() if k.startswith("show_")}
@@ -1532,24 +1533,18 @@ def plot_scanpath(
     the real monitor resolution (e.g. ``(2560, 1440)`` for OneStop) to keep coordinates
     true to scale. For a multipart trial, ``screen`` selects one child screen; omitting
     it selects the first recorded screen and never concatenates coordinate spaces.
-    ``raw_gaze`` is a normalized frame (see `data.normalize_raw_gaze`) and is filtered
-    to the selected trial.
+    ``raw_gaze`` is a frame from [`load_raw_gaze`][scanpath_studio.api.load_raw_gaze],
+    filtered to the selected trial.
 
-    ``drift_correction`` (PRE-3/PRE-17) names a method from
-    ``alignment.ALGORITHMS``: the ten Carr et al. (2021) algorithms plus
-    run-based ``"slice"`` and ``"consensus"``. Each fixation is snapped to its
-    assigned text line and coloured by line, exactly as the app's *Drift
-    correction* control does. ``drift_connectors=True`` also draws a faint line
-    from each fixation's original y to its corrected one. Drift correction is held
-    back behind ``SCANPATH_EXPERIMENTAL=1`` (PRE-21): without it, any
-    ``drift_correction`` other than ``None`` / ``"off"`` raises ``ValueError``.
+    ``drift_correction`` / ``drift_connectors`` are experimental: without
+    ``SCANPATH_EXPERIMENTAL=1`` any ``drift_correction`` other than ``None`` /
+    ``"off"`` raises ``ValueError``.
 
-    ``fix_index_range=(start, end)`` (VIZ-7) draws only fixations ``start``
+    ``fix_index_range=(start, end)`` draws only fixations ``start``
     through ``end`` (1-based, both inclusive) of the trial — the headless form of
-    the app's fixation-index window. It is applied before the drift correction,
-    like the app.
+    the app's fixation-index window.
 
-    ``title`` / ``caption`` (EXP-5) stamp a title/caption band onto the figure
+    ``title`` / ``caption`` stamp a title/caption band onto the figure
     without shrinking the plot area, exactly like the rail's *Title & caption on
     the figure* control — literal text here, not the rail's ``{trial_id}``-style
     pattern, since the caller already knows which trial this is.
@@ -1672,41 +1667,72 @@ def animate_scanpath(
     illustration_label: str = "auto",
     title: str = "",
     caption: str = "",
+    trial_b: tuple[str, str] | None = None,
+    dataset_b: str | None = None,
+    setup: SetupSnapshot | None = None,
+    setup_b: SetupSnapshot | None = None,
     **animation_overrides,
 ) -> go.Figure:
     """Build the animated scanpath replay for one trial.
 
     Same trial selection and canvas semantics as
     [`plot_scanpath`][scanpath_studio.api.plot_scanpath], including ``screen`` selection
-    for multipart trials. The returned Plotly figure plays in real reading time scaled
-    by ``playback_speed``; save it as interactive HTML with
-    [`save_figure`][scanpath_studio.api.save_figure], or rasterize to GIF/MP4 with
-    `animation_export.export_animation`. ``fix_index_range=(start, end)`` replays only
-    that window of the trial's fixations (1-based, inclusive), like
+    for multipart trials. The replay takes the reading time divided by
+    ``playback_speed``: save it as interactive HTML with
+    [`save_figure`][scanpath_studio.api.save_figure], whose page keeps that clock
+    itself, or rasterize it to GIF/MP4 with `animation_export.export_animation`, which
+    lasts as long. (`fig.show()` plays it on Plotly's own frame queue, which runs
+    slow.) ``fix_index_range=(start, end)`` replays only that window of the trial's
+    fixations (1-based, inclusive), like
     [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
 
-    With ``autoplay`` (default ``True``, VIZ-10) the saved interactive HTML auto-starts
+    With ``autoplay`` (default ``True``) the saved interactive HTML auto-starts
     the replay on load *at ``playback_speed``* —
     [`save_figure`][scanpath_studio.api.save_figure] honors the marker the builder
     stamps on the figure. Pass ``autoplay=False`` to save a figure that opens paused
-    (press ▶ Play to run it). Autoplay only affects the interactive HTML; GIF/MP4
-    rasterization renders every frame regardless.
+    (press ▶ Play to run it). Autoplay only affects the interactive HTML; a GIF/MP4
+    always plays from its first frame.
 
     When ``playback_speed`` is not ``1``, the automatic Illustration label says
     the replay timing was changed. ``illustration_label`` accepts ``"auto"``,
     ``"show"``, or ``"hide"`` like [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
 
+    ``trial_b=(participant, trial)`` co-animates a second reading on the same
+    clock, like the app's Animate + Compare. It is looked up in ``words_b`` /
+    ``fixations_b`` when given, else in ``words`` / ``fixations`` — the way
+    [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths] takes it.
+    Without ``trial_b``, ``words_b`` / ``fixations_b`` must hold one trial; B
+    frames holding several raise ``ValueError`` rather than drawing them all. A
+    multipart B is drawn at its first recorded screen; cut B's frames to
+    another with `multipart.extract_part` to draw that one.
+
+    **Two datasets.** Both readings are drawn in A's coordinates, so a
+    co-animation is an overlay, and a reading from another dataset has to share
+    A's screen. Name that dataset with ``dataset_b`` (or give its ``setup_b``)
+    and the pair is checked the way `compare_scanpaths` checks an overlay: two
+    different canvases raise ``IncomparableScreensError``, a ``ValueError``,
+    rather than draw. ``setup`` / ``setup_b`` are
+    `experimental_setup.SetupSnapshot` values; a side without one is read off
+    its data — the extent of that one trial, which rarely spans the whole
+    screen, so state both when you know them — and ``canvas_size`` covers A
+    when you only have a resolution. ``dataset_b`` also prefixes B's
+    participant ids with the dataset's name, as `compare_scanpaths` does, so a
+    hover says whose reader it is. ``words_b`` / ``fixations_b`` passed without
+    either are taken to be from A's dataset, as `render` passes them for
+    ``--compare-with`` alone, and are not checked: two readings of one corpus
+    can span different extents, and inferring a canvas from each would refuse
+    pairs that shared a screen.
+
     The animation builder accepts a subset of the static figure's options
     (``show_words``, ``show_word_labels``, ``show_saccades``, ``show_order``, styling,
     and second-scanpath overlays) — see ``figure_options("animation")``; an unsupported
-    key raises a ``ValueError`` naming the valid ones rather than an opaque
-    ``TypeError``. The shared options default to the same values as
+    key raises a ``ValueError`` naming the valid ones. The shared options default to the same values as
     [`plot_scanpath`][scanpath_studio.api.plot_scanpath] (`CANONICAL_FIGURE_DEFAULTS`),
-    so the replay matches the static figure. ``palette=`` (VIZ-18) works here too; the
+    so the replay matches the static figure. ``palette=`` works here too; the
     colours it implies that the animation doesn't support are dropped rather than
     raising, since the caller named a look, not those individual keys.
 
-    ``title`` / ``caption`` (EXP-5) — same as
+    ``title`` / ``caption`` — same as
     [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
     """
     valid = set(_ANIMATION_FIGURE_PARAMS)
@@ -1741,14 +1767,40 @@ def animate_scanpath(
         if not full_order.empty:
             full_fix_range = (int(full_order.min()), int(full_order.max()))
     trial_fixations = _apply_fix_index_range(trial_fixations, fix_index_range, pid, tid)
-    if canvas_size is None:
-        canvas_size = screen_canvas_size(trial_words)
-        if canvas_size is None:
-            canvas_size = screen_canvas_size(trial_fixations)
-        if canvas_size is None:
-            canvas_size = _data.compute_canvas_size(trial_words, trial_fixations)
-    fixations_b = animation_overrides.pop("fixations_b", None)
-    words_b = animation_overrides.pop("words_b", None)
+    # A's screen: a stated `setup`, else `canvas_size`, else read off the data —
+    # the order `compare_scanpaths` resolves it in, and what CMP-21's gate reads.
+    setup_a = _compare_setup(
+        setup, canvas_size, trial_words, trial_fixations, side="setup"
+    )
+    passed_b = (
+        animation_overrides.pop("words_b", None),
+        animation_overrides.pop("fixations_b", None),
+    )
+    second_dataset = dataset_b is not None or setup_b is not None
+    if second_dataset and all(frame is None for frame in passed_b):
+        raise ValueError(
+            "dataset_b / setup_b describe scanpath B's own dataset, but neither "
+            "words_b nor fixations_b was passed. Pass B's frames too, or leave "
+            "both out to draw trial_b from these frames."
+        )
+    words_b, fixations_b = _second_reading(words, fixations, *passed_b, trial_b)
+    if second_dataset and fixations_b is not None and not fixations_b.empty:
+        _refuse_co_animation_across_screens(
+            setup_a,
+            setup_b,
+            words_b,
+            fixations_b,
+            a_inferred=setup is None and canvas_size is None,
+        )
+    if dataset_b is not None:
+        # As `compare_scanpaths` and the app do: B's readers carry their
+        # dataset's name, so a hover says whose reader it is.
+        from .utils import qualify_for_compare
+
+        words_b, fixations_b = (
+            None if frame is None else qualify_for_compare(frame, dataset_b)
+            for frame in (words_b, fixations_b)
+        )
     label_mode = str(illustration_label).capitalize()
     if label_mode not in {"Auto", "Show", "Hide"}:
         raise ValueError("illustration_label must be 'auto', 'show', or 'hide'.")
@@ -1765,8 +1817,8 @@ def animate_scanpath(
         )
     render_settings = FigureSettings.from_mapping(
         animation_overrides,
-        canvas_width=int(canvas_size[0]),
-        canvas_height=int(canvas_size[1]),
+        canvas_width=int(setup_a.canvas_width),
+        canvas_height=int(setup_a.canvas_height),
         base_font_size=int(base_font_size),
         font_family=font_family,
         playback_speed=playback_speed,
@@ -1782,6 +1834,138 @@ def animate_scanpath(
     add_illustration_label(fig, animation_overrides.get("illustration_reasons"))
     annotate_figure(fig, title=title, caption=caption)
     return fig
+
+
+def _second_reading(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    words_b: pd.DataFrame | None,
+    fixations_b: pd.DataFrame | None,
+    trial_b: tuple[str, str] | None,
+) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
+    """Scanpath B's frames for a co-animation, cut to one reading (BUG-85).
+
+    The animation builder draws every row it is handed, so frames passed the
+    way `compare_scanpaths` takes them — B's whole corpus — drew every fixation
+    in it. ``trial_b`` picks the reading, in B's own frames when given and A's
+    otherwise, as `compare_scanpaths` does; without it B's frames must hold one
+    trial, since guessing among several would draw somebody else's reading.
+    A multipart B keeps one screen, never all of them — each is its own
+    coordinate space: its first, as A without ``screen=`` and the app's B
+    navigator start, unless the caller cut B to another with `extract_part`.
+    """
+    if trial_b is None:
+        source = fixations_b if fixations_b is not None else words_b
+        if source is None or source.empty:
+            return words_b, fixations_b
+        label = "fixations_b" if fixations_b is not None else "words_b"
+        pairs = _require_normalized(source, label)[
+            ["participant_id", "trial_id"]
+        ].drop_duplicates()
+        if len(pairs) > 1:
+            raise ValueError(
+                f"{label} holds {len(pairs)} trials, so the second scanpath is "
+                "ambiguous. Pass trial_b=(participant, trial) to pick one — "
+                "compare_scanpaths takes it the same way."
+            )
+        pid_b, tid_b = (str(value) for value in pairs.iloc[0])
+    else:
+        pid_b, tid_b = str(trial_b[0]), str(trial_b[1])
+        words_b = words if words_b is None else words_b
+        fixations_b = fixations if fixations_b is None else fixations_b
+
+    def one_reading(frame: pd.DataFrame | None, label: str) -> pd.DataFrame | None:
+        # `extract_part` masks afresh, as `_select_trial` slices A. Not
+        # `utils.extract_trial`: its position cache is keyed by the frame's
+        # identity, so an in-place edit between two calls handed back somebody
+        # else's rows.
+        if frame is None or frame.empty:
+            return frame
+        return extract_part(_require_normalized(frame, label), pid_b, tid_b)
+
+    trial_words_b = one_reading(words_b, "words_b")
+    trial_fix_b = one_reading(fixations_b, "fixations_b")
+    if trial_b is not None and (trial_fix_b is None or trial_fix_b.empty):
+        raise ValueError(
+            f"No fixations for the second scanpath participant={pid_b!r}, "
+            f"trial={tid_b!r}. list_trials() shows what the frames contain."
+        )
+    catalog = part_catalog(trial_words_b, trial_fix_b)
+    if not catalog.empty:
+        screen_b = str(catalog[SCREEN_ID].iloc[0])
+        trial_words_b, trial_fix_b = (
+            extract_part(frame, pid_b, tid_b, screen_b)
+            if frame is not None and SCREEN_ID in frame.columns
+            else frame
+            for frame in (trial_words_b, trial_fix_b)
+        )
+    return trial_words_b, trial_fix_b
+
+
+def _inferred_screen_hint(*, a_inferred: bool, b_inferred: bool) -> str:
+    """How to state a screen that a refusal only read off the data (CMP-21).
+
+    `setups_comparable` says the readings were *recorded* on different screens,
+    but a screen nobody stated is the extent of that trial's data, which rarely
+    spans the whole display — so the refusal names the parameter that states it.
+    """
+    if a_inferred and b_inferred:
+        return (
+            " Neither screen was stated, so both were read off the data, which "
+            "rarely spans the whole screen; if they were shown on one, pass it as "
+            "setup= and setup_b=."
+        )
+    if a_inferred:
+        return (
+            " A's screen was read off its data, which rarely spans the whole "
+            "screen; if both were shown on one, pass A's as setup= or canvas_size=."
+        )
+    if b_inferred:
+        return (
+            " B's screen was read off its data, which rarely spans the whole "
+            "screen; if both were shown on one, pass B's as setup_b=."
+        )
+    return ""
+
+
+def _refuse_co_animation_across_screens(
+    setup_a: SetupSnapshot,
+    setup_b: SetupSnapshot | None,
+    words_b: pd.DataFrame | None,
+    fixations_b: pd.DataFrame,
+    *,
+    a_inferred: bool,
+) -> None:
+    """Refuse a co-animation of two datasets shown on different screens (CMP-21).
+
+    A co-animation draws both readings on one clock in A's coordinates, which
+    makes it an overlay, so it is held to `compare_scanpaths`'s overlay gate: the
+    same `setups_comparable` predicate and the same error, with B's screen read
+    off its data when the caller did not state it.
+    """
+    from .experimental_setup import IncomparableScreensError, setups_comparable
+
+    resolved_b = _compare_setup(
+        setup_b,
+        None,
+        words_b if words_b is not None else pd.DataFrame(),
+        fixations_b,
+        side="setup_b",
+    )
+    comparable, note = setups_comparable(setup_a, resolved_b)
+    if not comparable:
+        hint = _inferred_screen_hint(a_inferred=a_inferred, b_inferred=setup_b is None)
+        raise IncomparableScreensError(
+            f"{note} A co-animation replays both readings on one clock in one "
+            "coordinate space, so none was drawn; compare them with "
+            "compare_scanpaths(layout='side_by_side') (or 'stacked'), each drawn "
+            f"to its own screen.{hint}",
+            reason=note,
+        )
+    if note:
+        # As in `compare_scanpaths`: matching canvases, but at least one screen
+        # was never recorded — drawn, with the caveat where a script can see it.
+        logging.getLogger(__name__).warning("animate_scanpath: %s", note)
 
 
 def render_parent_trial(
@@ -1919,7 +2103,7 @@ def compare_scanpaths(
     caption: str = "",
     **figure_overrides,
 ) -> go.Figure:
-    """Build a two-scanpath comparison figure (CMP-9).
+    """Build a two-scanpath comparison figure.
 
     The headless form of the app's **Compare** mode. ``trial_a`` / ``trial_b``
     are ``(participant, trial)`` pairs; ``layout`` is ``"overlay"``,
@@ -1933,14 +2117,10 @@ def compare_scanpaths(
     are never modified, and nothing in the returned figure's data depends on the
     namespace beyond the trace labels.
 
-    **The overlay gate.** Overlaying pools both readings into one axis range, so
-    across datasets it is allowed only when both were recorded on the same known
-    screen (`experimental_setup.setups_comparable`). Unlike the app — which
-    resolves an incomparable overlay to side-by-side, because a user can see
-    what they got — this **raises** ``ValueError``: silently returning a
-    differently-shaped figure than the one a script asked for is the wrong
-    failure mode headlessly. Ask for ``layout="side_by_side"`` to get the app's
-    fallback. Nothing is ever rescaled or reprojected.
+    **The overlay gate.** Across datasets an overlay needs both canvases to be
+    the same size; otherwise this raises ``ValueError`` (the app falls back to
+    side by side). Pass ``layout="side_by_side"`` or ``"stacked"`` to compare
+    readings from different screens. Nothing is rescaled.
 
     ``setup`` / ``setup_b`` are `experimental_setup.SetupSnapshot`
     values — what the gate reads. ``canvas_size`` covers A when you only have a
@@ -1953,13 +2133,17 @@ def compare_scanpaths(
 
     Remaining keywords are forwarded to `plots.make_comparison_figure`
     (e.g. ``show_words=False``, ``color_by="duration_ms"``); an unknown one
-    raises ``TypeError`` naming the closest valid options. Which settings a
-    comparison figure actually honours is the table in
-    ``scanpath_studio/CLAUDE.md`` → *Which viz settings apply in which render
-    path*.
+    raises ``TypeError`` naming the closest valid options;
+    ``figure_options("comparison")`` lists the accepted keywords.
     """
-    from .experimental_setup import setups_comparable
-    from .utils import align_compare_columns, extract_trial, qualify_for_compare
+    from .experimental_setup import IncomparableScreensError, setups_comparable
+    from .utils import (
+        align_compare_columns,
+        extract_trial,
+        qualify_for_compare,
+        self_compare_participant,
+        separate_self_compare,
+    )
 
     resolved_layout = _COMPARE_LAYOUTS.get(str(layout).strip().lower())
     if resolved_layout is None:
@@ -2006,9 +2190,17 @@ def compare_scanpaths(
     if resolved_layout == "overlay" and cross_dataset:
         comparable, note = setups_comparable(setup_a, resolved_setup_b)
         if not comparable:
-            raise ValueError(
-                f"{note} Pass layout='side_by_side' (or 'stacked') to compare "
-                f"them anyway, each panel drawn to its own screen."
+            # BUG-85: the reason says why; this says what happened here and how
+            # to ask for the split in Python. `render` rewords it in its flags.
+            hint = _inferred_screen_hint(
+                a_inferred=setup is None and canvas_size is None,
+                b_inferred=setup_b is None,
+            )
+            raise IncomparableScreensError(
+                f"{note} So no overlay was drawn; pass layout='side_by_side' (or "
+                f"'stacked') to compare them in separate panels, each drawn to "
+                f"its own screen.{hint}",
+                reason=note,
             )
         if note:
             # The canvases match but at least one corpus never recorded a screen,
@@ -2041,6 +2233,19 @@ def compare_scanpaths(
         trial_fix_a, _ = correct(trial_fix_a, trial_words_a, drift_correction)
         trial_fix_b, _ = correct(trial_fix_b, trial_words_b, drift_correction)
 
+    if not cross_dataset and (pid_a, tid_a) == (pid_b, tid_b):
+        # CMP-22: a trial compared with itself — rename B's copy apart, or the
+        # figure's (participant, trial) slice hands each side both copies.
+        # The renamed id is for slicing only, so B's default legend name is
+        # resolved here from the real one.
+        if not labels:
+            labels = tuple(
+                _resolve_trial_display_name(pid_a, tid_a, trial_words_a, None, idx)
+                for idx in (0, 1)
+            )
+        trial_words_b = separate_self_compare(trial_words_b, pid_b)
+        trial_fix_b = separate_self_compare(trial_fix_b, pid_b)
+        figure_pid_b = self_compare_participant(pid_b)
     merged_words, merged_words_b, _ = align_compare_columns(
         trial_words_a, trial_words_b
     )
@@ -2089,19 +2294,16 @@ def save_figure(
     path = Path(path)
     suffix = path.suffix.lower()
     if suffix == ".html":
-        # VIZ-10: an autoplay animation carries its per-frame duration; kick off
-        # `Plotly.animate` at that speed on load (Plotly's own `auto_play` ignores
-        # it). Any animation is otherwise saved paused so it doesn't run at the
-        # wrong default speed; static figures write unchanged.
-        autoplay_ms = animation_autoplay_frame_duration(fig)
-        if autoplay_ms is not None:
+        # BUG-93: an animation replays on the wall-clock player, which also
+        # autoplays it at the configured speed when asked (VIZ-10). Plotly's own
+        # `auto_play` stays off — it ignores the frame duration. Static figures
+        # write unchanged.
+        if fig.frames:
             fig.write_html(
                 str(path),
                 auto_play=False,
-                post_script=animation_autoplay_post_script(autoplay_ms),
+                post_script=animation_player_post_script(fig),
             )
-        elif fig.frames:
-            fig.write_html(str(path), auto_play=False)
         else:
             fig.write_html(str(path))
         return path
@@ -2131,7 +2333,7 @@ def save_figure_layers(
     width: int | None = None,
     height: int | None = None,
 ) -> dict:
-    """Split a scanpath figure into its layers and save one file per layer (VIZ-5).
+    """Split a scanpath figure into its layers and save one file per layer.
 
     Writes ``<directory>/<layer>.<fmt>`` for each *visible* layer (word boxes /
     fixations / saccades / heatmap / labels / stimulus image / frame) and returns
@@ -2192,7 +2394,7 @@ def figure_code(
     output: str | None = None,
     **figure_overrides,
 ) -> str:
-    """The API or CLI code that reproduces a figure (EXP-7).
+    """The API or CLI code that reproduces a figure.
 
     The headless twin of the app's 🔗 Share → *Reproduce this figure in code* block: give
     it the same arguments you would give
@@ -2214,13 +2416,13 @@ def figure_code(
     Python form, ``--raw-gaze`` in the CLI one.
 
     ``compare_dataset`` names the corpus scanpath B was loaded from when it is a
-    *second* one (CMP-8). B's participant id belongs to that corpus rather than
+    *second* one. B's participant id belongs to that corpus rather than
     the one the snippet loads, so naming it turns a snippet that would quietly
     reference a missing reader into one that says where B comes from.
 
     ``compare_labels`` is the pair you would pass
     [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths] as ``labels=`` — the
-    two trace labels, when they are not the composed defaults (EXP-8 §1). Both forms
+    two trace labels, when they are not the composed defaults. Both forms
     carry them: ``labels=`` in the Python snippet, ``--label-a`` / ``--label-b`` in the
     CLI one.
 
@@ -2235,11 +2437,9 @@ def figure_code(
     [`figure_options`][scanpath_studio.api.figure_options] are written, so the snippet
     stays readable; ``explicit=True`` emits every option at its current value.
     ``flavor`` is ``"python"``, ``"cli"``, or ``"both"`` (the two separated by a blank
-    line). Every figure option has a ``render`` flag (EXP-20); one that ever did not
-    would be named in a trailing comment rather than dropped, and anything *neither*
-    form can promise — a raw-gaze table with no path to name, an uploaded stimulus
-    image, B's rows when they come from a second corpus — follows as ``# Note:``
-    comments (EXP-8 §2), matching the ⚠️ captions the app shows and the ``Note:`` lines
+    line). Anything neither form can reproduce — a raw-gaze table with no path to
+    name, an uploaded stimulus image, B's rows from a second corpus — follows as
+    ``# Note:`` comments, matching the ⚠️ captions the app shows and the ``Note:`` lines
     `render --print-code` writes to stderr. See `code_snippet.ReproductionCode` for the
     structured form.
     """
@@ -2314,7 +2514,7 @@ def figure_code(
 
 
 def cache_status() -> dict:
-    """Describe the on-device recovery cache a local app run keeps (ENG-30).
+    """Describe the on-device recovery cache a local app run keeps.
 
     The app stores completed uploaded datasets, column mappings, view settings and
     annotations under the user's cache directory so a refresh or restart resumes

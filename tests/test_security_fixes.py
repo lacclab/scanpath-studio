@@ -1,7 +1,7 @@
 """Regression tests for the security-audit fixes tracked as DATA-16.
 
-Each class pins one finding from ``docs/security.md`` so the fix can't quietly
-regress:
+Each class pins one finding of the security audit (0.25.0; kept in the git
+history, off the docs site since ENG-80) so the fix can't quietly regress:
 
 * **S3** — a share link carries the selected participant and trial; lower-level
   callers can still omit either identifier when constructing a URL directly.

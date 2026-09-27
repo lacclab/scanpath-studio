@@ -90,3 +90,94 @@
 .md-typeset .grid.cards > ul > li > p:first-child .twemoji {
   color: var(--md-primary-fg-color);
 }
+
+/* ---------- Figures built at docs-build time (ENG-78) ----------
+   `docs_support.embed` + javascripts/figures.js: the figure renders at its
+   own pixel size inside `.sps-plot-stage` and is scaled to the column as one
+   block, so the host reserves its aspect ratio until then. */
+
+.md-typeset .sps-figure {
+  margin: 1.2em 0;
+}
+
+.md-typeset .sps-plot {
+  position: relative;
+  width: 100%;
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: 0.4rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  /* The figures carry the stimulus page's own white background. */
+  background: #fff;
+}
+
+.md-typeset .sps-plot-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+
+.md-typeset .sps-plot[data-state="error"]::after {
+  content: "This figure could not be drawn — try reloading the page.";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #555;
+  font-size: 0.75rem;
+}
+
+/* A legend drawn under a figure from the app's own colours. */
+.md-typeset .sps-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1rem;
+  margin: 0.5rem 0 0;
+  font-size: 0.7rem;
+}
+
+.md-typeset .sps-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.md-typeset .sps-swatch {
+  width: 1.2rem;
+  height: 0.25rem;
+  border-radius: 0.1rem;
+}
+
+/* A figure's code sits right under it, as its caption would. */
+.md-typeset .sps-figure + .highlight,
+.md-typeset .sps-figure + div > .highlight {
+  margin-top: 0.4em;
+}
+
+/* ---------- Generated reference tables (ENG-79) ---------- */
+
+/* An option name is one token; let the table scroll rather than break it. */
+.md-typeset .sps-reference-table td:first-child code,
+.md-typeset .sps-reference-table td:nth-child(3) code {
+  white-space: nowrap;
+}
+
+/* ---------- Home page recording ---------- */
+
+.md-typeset video.sps-shot {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* ---------- Annotated screenshots (ENG-78) ---------- */
+
+.md-typeset figure.sps-screenshot {
+  margin: 1.2em 0;
+}
+
+.md-typeset figure.sps-screenshot img {
+  border-radius: 0.4rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+}

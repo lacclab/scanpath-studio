@@ -393,9 +393,11 @@ REGISTER: tuple[Computation, ...] = (
         category=CATEGORY_ASSIGNMENT,
         summary="Label each outgoing saccade by its reading role (VIZ-8).",
         formula=(
-            "Forward within a line, return sweep (large leftward drop to the "
-            "next line), within-line regression, or between-line regression, "
-            "from the assigned line and word order."
+            "From the word and text line of the two fixations, in this order: "
+            "refixation (same word), regression (up to an earlier line, or back "
+            "within a line), return sweep (down to a later line), forward (the "
+            "next word on the line), skip (two or more words ahead on the line); "
+            "`other` when either fixation has no assigned word."
         ),
         code="scanpath_studio/measures.py:classify_saccades",
         output="saccade_type",
@@ -1385,8 +1387,11 @@ REGISTER: tuple[Computation, ...] = (
         category=CATEGORY_DISPLAY,
         summary="One line of text fills its share of the recorded line pitch.",
         formula=(
-            "Text is drawn at `1/line_spacing` of the word-box height the data "
-            "already encodes, so the stimulus keeps the geometry it was read at."
+            "A word label's font is `1/line_spacing` of the line pitch (the median "
+            "line-to-line distance of the word boxes), capped so the words fit "
+            "their box widths (`plots._width_fit_font`; the smaller wins), in "
+            "data pixels converted at the figure's display scale. The figure is "
+            "drawn at its exact pixel size and scaled as one block."
         ),
         code="scanpath_studio/tabs.py:_render_true_scale_chart",
         precedence=(
@@ -1404,16 +1409,25 @@ REGISTER: tuple[Computation, ...] = (
         category=CATEGORY_DISPLAY,
         summary="How recorded time maps to playback time.",
         formula=(
-            "Frames follow `fix.rebased_onsets`, scaled by the playback speed. "
-            "A multipart replay changes screen at the boundary and draws no "
-            "connector across canvases."
+            "Frames sit on a uniform reading-time grid over `fix.rebased_onsets`; "
+            "the frame at reading time t is on screen once t / playback speed of "
+            "wall time has passed, so a replay lasts reading span / speed. The "
+            "player keeps that clock itself, skipping frames a display is too "
+            "slow to show, and a GIF/MP4 lasts the same. A multipart replay "
+            "changes screen at the boundary and draws no connector across "
+            "canvases."
         ),
         code="scanpath_studio/plots.py:make_scanpath_animation",
         unit="ms (recorded) → ms (playback)",
+        precedence=(
+            "Plotly's own frame queue is never the clock: it rounds every frame "
+            "up to whole display ticks and the error accumulates (BUG-93). "
+            "Without the player (`fig.show()`) the figure falls back to it."
+        ),
         tiers="C, D",
         status=STATUS_CONVENTION,
         consumers=(_UI, _API, _CLI, _EXPORT),
-        tests=("tests/test_animation_export.py",),
+        tests=("tests/test_replay_player.py", "tests/test_animation_export.py"),
     ),
     Computation(
         id="disp.illustration",
@@ -1439,6 +1453,12 @@ BY_ID = {entry.id: entry for entry in REGISTER}
 def entries_in(category: str) -> tuple[Computation, ...]:
     """Every register entry in one category, in declaration order."""
     return tuple(entry for entry in REGISTER if entry.category == category)
+
+
+def anchor(entry_id: str) -> str:
+    """The page anchor of one entry — its id, so a link to ``measure.ffd``
+    survives any rewording of the entry's name (``#measure-ffd``)."""
+    return entry_id.replace(".", "-").replace("_", "-")
 
 
 def to_markdown() -> str:
@@ -1478,7 +1498,8 @@ def to_markdown() -> str:
         '!!! note "Tier B is largely absent, on purpose"',
         "",
         "    Comparing against an independent implementation is "
-        "[VAL-4](https://github.com/lacclab/scanpath-studio), which is on hold. "
+        "[VAL-4](https://github.com/lacclab/scanpath-studio/issues/130), which is "
+        "on hold. "
         "Scientific measures therefore read *Partially verified* even where "
         "their hand oracle is exact. The one real exception is the drift-"
         "correction port, which was written against a published reference.",
@@ -1490,8 +1511,8 @@ def to_markdown() -> str:
     ]
     for entry in REGISTER:
         lines.append(
-            f"| `{entry.id}` | {entry.name} | {entry.category} | "
-            f"{entry.unit or '—'} | {entry.status} |"
+            f"| [`{entry.id}`](#{anchor(entry.id)}) | {entry.name} | "
+            f"{entry.category} | {entry.unit or '—'} | {entry.status} |"
         )
     lines.append("")
     for category in CATEGORIES:
@@ -1501,7 +1522,7 @@ def to_markdown() -> str:
         lines += [f"## {category}", ""]
         for entry in entries:
             lines += [
-                f"### `{entry.id}` — {entry.name}",
+                f"### `{entry.id}` — {entry.name} {{ #{anchor(entry.id)} }}",
                 "",
                 entry.summary,
                 "",

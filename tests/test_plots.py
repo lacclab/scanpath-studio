@@ -7,7 +7,6 @@ import pytest
 from scanpath_studio.constants import SACCADE_CLASS_COLORS, SACCADE_CLASS_LABELS
 from scanpath_studio.plots import (
     _ANIM_MAX_FRAMES,
-    _ANIM_MIN_FRAME_MS,
     _arch_points,
     _image_to_data_uri,
     _latin_advance,
@@ -16,9 +15,8 @@ from scanpath_studio.plots import (
     _saccade_arrow_markers,
     _width_fit_font,
     _word_label_font_px,
-    animation_autoplay_frame_duration,
-    animation_autoplay_post_script,
     animation_playback_ms,
+    animation_player_post_script,
     build_critical_span_overlay,
     build_word_boxes,
     make_comparison_figure,
@@ -1287,8 +1285,10 @@ class TestMakeScanpathAnimation:
         assert len(long_fig.frames) <= _ANIM_MAX_FRAMES + 1 < long_n
 
 
-class TestAnimationAutoplay:
-    """VIZ-10: autoplay-on-load marker + the client-side kickoff script."""
+class TestAnimationPlayer:
+    """VIZ-10 autoplay + BUG-93: the replay's clock and its autoplay intent ride on
+    ``layout.meta``, for the wall-clock player every HTML surface embeds. (How
+    that player keeps time is `tests/test_replay_player.py`.)"""
 
     def _anim(self, words, fixations, **kw):
         return make_scanpath_animation(
@@ -1302,68 +1302,68 @@ class TestAnimationAutoplay:
             **kw,
         )
 
-    def test_autoplay_on_by_default_stamps_frame_duration(
+    def test_meta_carries_the_frame_clock(
         self, normalized_words_df, normalized_fixations_df
     ):
         fig = self._anim(normalized_words_df, normalized_fixations_df)
-        # The marker rides on layout.meta so every HTML embedder honors it.
-        assert fig.layout.meta["scanpath_autoplay"] is True
-        dur = animation_autoplay_frame_duration(fig)
-        assert isinstance(dur, int) and dur >= _ANIM_MIN_FRAME_MS
-        # The autoplay duration MUST equal the ▶ Play button's frame duration, so
-        # the auto-started replay runs at the configured speed, not Plotly's
-        # default. (Both come from _anim_timeline.)
-        play = fig.layout.updatemenus[0].buttons[0]
-        assert play.label.startswith("▶")
-        assert play.args[1]["frame"]["duration"] == dur
+        meta = fig.layout.meta
+        assert meta["scanpath_autoplay"] is True
+        assert meta["scanpath_playback_speed"] == 4.0
+        # One reading time per frame, from the first fixation to the reading's
+        # end — what the player turns elapsed wall time into a frame with.
+        times = meta["scanpath_frame_times_ms"]
+        assert len(times) == len(fig.frames)
+        assert times[0] == 0
+        assert times == sorted(times)
+        span, _playback = animation_playback_ms([normalized_fixations_df], 4.0)
+        assert times[-1] == pytest.approx(span)
 
-    def test_autoplay_off_suppresses_kickoff(
+    def test_autoplay_off_still_gets_the_player(
         self, normalized_words_df, normalized_fixations_df
     ):
+        # Autoplay is a flag the player reads; ▶ Play needs the player's clock
+        # whether or not the replay starts by itself.
         fig = self._anim(normalized_words_df, normalized_fixations_df, autoplay=False)
         assert fig.layout.meta["scanpath_autoplay"] is False
-        assert animation_autoplay_frame_duration(fig) is None
+        assert animation_player_post_script(fig) is not None
 
-    def test_no_frames_never_autoplays(
-        self, normalized_words_df, normalized_fixations_df
-    ):
-        # Empty fixations → no frames → nothing to auto-start even with autoplay on.
+    def test_no_frames_no_player(self, normalized_words_df, normalized_fixations_df):
+        # Empty fixations → no frames → nothing to play, even with autoplay on.
         empty = normalized_fixations_df.iloc[0:0]
         fig = self._anim(normalized_words_df, empty, autoplay=True)
         assert fig.layout.meta["scanpath_autoplay"] is False
-        assert animation_autoplay_frame_duration(fig) is None
+        assert animation_player_post_script(fig) is None
 
-    def test_static_figure_has_no_autoplay(
+    def test_static_figure_has_no_player(
         self, normalized_words_df, normalized_fixations_df
     ):
         fig = make_scanpath_figure(
             normalized_words_df, normalized_fixations_df, **_scanpath_kwargs()
         )
-        assert animation_autoplay_frame_duration(fig) is None
+        assert animation_player_post_script(fig) is None
 
-    def test_post_script_is_plotly_animate_at_the_given_duration(self):
-        script = animation_autoplay_post_script(123)
+    def test_the_player_finds_the_buttons_by_name(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        fig = self._anim(normalized_words_df, normalized_fixations_df)
+        buttons = fig.layout.updatemenus[0].buttons
+        assert [b.name for b in buttons] == ["play", "pause", "restart"]
+        assert buttons[0].label.startswith("▶")
+
+    def test_the_player_waits_for_the_real_frame_list(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        # VIZ-10 regression: Plotly keeps frames on gd._transitionData._frames,
+        # NOT gd.frames (undefined), and attaches them after newPlot resolves —
+        # so the player polls for that list instead of trusting a fixed delay.
+        script = animation_player_post_script(
+            self._anim(normalized_words_df, normalized_fixations_df)
+        )
         # {plot_id} stays literal for Plotly to substitute at write time.
         assert "{plot_id}" in script
-        assert "Plotly.animate" in script
-        assert "123" in script
-        assert "redraw:false" in script
-
-    def test_post_script_reads_real_frame_location_and_starts_from_first(self):
-        # VIZ-10 regression: Plotly stores frames on gd._transitionData._frames,
-        # NOT gd.frames (which is undefined) — a guard that checks gd.frames alone
-        # always bails, so autoplay never fires. The kickoff must poll the real
-        # location and start a clean 0->end run (fromcurrent:false).
-        script = animation_autoplay_post_script(100)
         assert "_transitionData" in script
         assert "_frames" in script
-        assert "fromcurrent:false" in script
-        # It polls (loops) rather than firing a single fixed-delay shot.
         assert "setTimeout" in script
-
-    def test_post_script_floors_tiny_durations(self):
-        # A sub-minimum duration is clamped so the kickoff can't request a 0ms grid.
-        assert str(_ANIM_MIN_FRAME_MS) in animation_autoplay_post_script(0)
 
 
 class TestStimulusImageOpacity:
@@ -1780,35 +1780,27 @@ class TestAnimationFrameGrid:
 class TestAnimationPlaybackTiming:
     """The side panel must quote the *actual* animation runtime."""
 
-    def test_playback_ms_matches_play_button(
-        self, normalized_words_df, normalized_fixations_df
+    @pytest.mark.parametrize("speed", [0.25, 1.0, 1.5, 8.0])
+    def test_playback_ms_is_the_reading_span_over_the_speed(
+        self, normalized_fixations_df, speed
     ):
-        # animation_playback_ms must equal what Play actually runs: Play advances
-        # all frames at a single frame-duration, so runtime == n_frames * that.
-        speed = 2.0
-        fig = make_scanpath_animation(
-            normalized_words_df,
-            normalized_fixations_df,
-            canvas_width=800,
-            canvas_height=600,
-            base_font_size=12,
-            font_family="Arial",
-            playback_speed=speed,
-        )
-        play_btn = fig.layout.updatemenus[0].buttons[0]
-        frame_ms = play_btn.args[1]["frame"]["duration"]
-        expected = len(fig.frames) * frame_ms
-        _span, playback_ms = animation_playback_ms([normalized_fixations_df], speed)
-        assert playback_ms == expected
+        # BUG-93: the replay runs on the wall clock (animation_player_post_script),
+        # so what it takes — and what the side panel quotes — is the reading span
+        # divided by the speed. It used to be n_frames × Play's frame duration,
+        # which quoted a floored, truncated duration that Play then overran.
+        span, playback_ms = animation_playback_ms([normalized_fixations_df], speed)
+        assert span > 0
+        assert playback_ms == pytest.approx(span / speed)
 
     def test_playback_ms_empty(self):
         assert animation_playback_ms([], 1.0) == (0.0, 0.0)
 
     def test_frame_floor_clamps_fast_playback(self, normalized_words_df):
-        # The Play frame duration floors at _ANIM_MIN_FRAME_MS so frames stay
-        # renderable (browsers cap ~60fps). Under the uniform time grid (VIZ-11)
-        # the per-frame duration is step / playback_speed, so a very high speed
-        # would drive it below the floor — the clamp keeps it at the floor.
+        # Plotly's own Play — what a figure plays with where the player script
+        # isn't embedded, e.g. `fig.show()` — floors its frame duration at
+        # _ANIM_MIN_FRAME_MS. Under the uniform time grid (VIZ-11) that duration
+        # is step / playback_speed, so a very high speed would drive it below
+        # the floor — the clamp keeps it at the floor.
         from scanpath_studio.plots import _ANIM_MIN_FRAME_MS
 
         fix = pd.DataFrame(

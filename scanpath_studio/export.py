@@ -31,7 +31,7 @@ import io
 import json
 import re
 import zipfile
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import PurePosixPath
@@ -46,6 +46,7 @@ from .constants import (
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_LINE_SPACING,
     DEFAULT_PALETTE,
+    ICONS,
     SACCADE_CLASS_ORDER,
     UNIFORM_COLOR_FIELD,
     drift_correction_enabled,
@@ -518,45 +519,51 @@ def _figure_renderer(enabled: bool):
     latency. Falls back to per-call ``to_image`` if the warm server can't start
     (or no figures were requested), so behavior is unchanged when Kaleido/Chrome
     is unavailable — the per-trial failure is still surfaced as an export error.
+
+    ``enabled`` also holds ``animation_export.KALEIDO_LOCK`` until the server has
+    stopped, since that server is one per process (UX-150).
     """
-    server = None
-    if enabled:
-        try:
-            import kaleido
+    from .animation_export import KALEIDO_LOCK
 
-            from .animation_export import chromium_browser_path
-
-            browser_path = chromium_browser_path()
-            if browser_path is not None:
-                kaleido.start_sync_server(path=browser_path, silence_warnings=True)
-                server = kaleido
-        except Exception:
-            server = None
-
-    def render(fig, fmt: str, width: int, height: int, scale: int) -> bytes:
-        if server is not None:
-            data = server.calc_fig_sync(
-                fig,
-                opts={
-                    "format": fmt,
-                    "width": int(width),
-                    "height": int(height),
-                    "scale": scale,
-                },
-            )
-            return bytes(data)
-        return fig.to_image(
-            format=fmt, width=int(width), height=int(height), scale=scale
-        )
-
-    try:
-        yield render
-    finally:
-        if server is not None:
+    with KALEIDO_LOCK if enabled else nullcontext():
+        server = None
+        if enabled:
             try:
-                server.stop_sync_server(silence_warnings=True)
-            except Exception:  # pragma: no cover - best-effort teardown
-                pass
+                import kaleido
+
+                from .animation_export import chromium_browser_path
+
+                browser_path = chromium_browser_path()
+                if browser_path is not None:
+                    kaleido.start_sync_server(path=browser_path, silence_warnings=True)
+                    server = kaleido
+            except Exception:
+                server = None
+
+        def render(fig, fmt: str, width: int, height: int, scale: int) -> bytes:
+            if server is not None:
+                data = server.calc_fig_sync(
+                    fig,
+                    opts={
+                        "format": fmt,
+                        "width": int(width),
+                        "height": int(height),
+                        "scale": scale,
+                    },
+                )
+                return bytes(data)
+            return fig.to_image(
+                format=fmt, width=int(width), height=int(height), scale=scale
+            )
+
+        try:
+            yield render
+        finally:
+            if server is not None:
+                try:
+                    server.stop_sync_server(silence_warnings=True)
+                except Exception:  # pragma: no cover - best-effort teardown
+                    pass
 
 
 def render_static_figure_bytes(
@@ -1168,7 +1175,7 @@ def render_export_options(
         # Kaleido/Chrome, unlike the browser-free HTML the user chose), so warn.
         if separable_layers and not (include_png or include_svg or include_pdf):
             st.caption(
-                "⚠️ Separable layers export as **SVG** (a static vector needing "
+                f"{ICONS['warning']} Separable layers export as **SVG** (a static vector needing "
                 "Chrome/Kaleido) — HTML figures can't be split. Pick SVG/PDF/PNG "
                 "above to choose the layer format."
             )
@@ -1225,8 +1232,7 @@ def render_export_options(
         if title_pattern or caption_pattern:
             st.caption(
                 "Title & caption on the figure — set on the Scanpath rail's "
-                "**📐 Figure & canvas** → *Title & caption on the figure*, and "
-                "applied here too."
+                "**📐 Figure & canvas** → *Title & caption*, and applied here too."
             )
 
     return ExportOptions(
@@ -1334,11 +1340,13 @@ class ComparisonSide:
     def slug(self) -> str:
         return f"{_safe_id(self.participant)}__{_safe_id(self.trial)}"
 
-    def stamped(self) -> tuple[pd.DataFrame, pd.DataFrame]:
+    def stamped(self, side: str | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Both frames with a ``dataset`` column, so the pair's tables are readable.
 
         Two corpora can hold the same ``(participant_id, trial_id)``; without
         this column the rows in ``fixations.csv`` would be indistinguishable.
+        ``side`` (CMP-22) also stamps a ``scanpath`` column, ``"A"`` or ``"B"``:
+        B can now be A's own trial, whose rows match A's on every other column.
         """
         label = self.dataset or "(this dataset)"
         out = []
@@ -1348,6 +1356,8 @@ class ComparisonSide:
                 continue
             stamped = frame.copy()
             stamped["dataset"] = label
+            if side is not None:
+                stamped["scanpath"] = side
             out.append(stamped)
         return out[0], out[1]
 
@@ -1423,8 +1433,8 @@ def pair_export(
                 )
             zf.writestr(f"{folder}/figure.{fmt}", data)
 
-        words_a, fix_a = side_a.stamped()
-        words_b, fix_b = side_b.stamped()
+        words_a, fix_a = side_a.stamped("A")
+        words_b, fix_b = side_b.stamped("B")
         for fmt in options.table_formats():
             if options.include_fixations:
                 _write_table(
@@ -1435,8 +1445,11 @@ def pair_export(
                 )
             if options.include_measures:
                 measures = [
-                    compute_word_metrics(words, fixations)
-                    for words, fixations in ((words_a, fix_a), (words_b, fix_b))
+                    compute_word_metrics(words, fixations).assign(scanpath=side)
+                    for side, words, fixations in (
+                        ("A", words_a, fix_a),
+                        ("B", words_b, fix_b),
+                    )
                     if words is not None and not words.empty
                 ]
                 if measures:
@@ -1629,6 +1642,7 @@ def bulk_export(
         "",
         f"Authors: {CITATION['authors']}",
         f"Tool: {CITATION['title']}",
+        f"DOI: https://doi.org/{CITATION['doi']}",
         "",
         "## Layout",
         "- `per_trial/<participant>__<trial>/` holds artifacts for each trial.",

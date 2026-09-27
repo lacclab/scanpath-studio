@@ -5,11 +5,14 @@ import pandas as pd
 import pytest
 
 from scanpath_studio import data, eyegenbench
+from tests.conftest import add_benchmark_corpora
 
 
-@pytest.fixture
-def bundle(tmp_path):
-    """A minimal two-word, two-fixation EyeGenBench bundle."""
+def write_bundle(tmp_path):
+    """Write a minimal two-word, two-fixation EyeGenBench bundle; return its root.
+
+    A plain function beside the fixture so another test module can build the
+    same bundle without importing a fixture (DATA-55's gate tests)."""
     root = tmp_path / "EyeGenBench"
     ds = root / "PoTeC"
     ds.mkdir(parents=True)
@@ -69,6 +72,12 @@ def bundle(tmp_path):
         encoding="utf-8",
     )
     return root
+
+
+@pytest.fixture
+def bundle(tmp_path):
+    """A minimal two-word, two-fixation EyeGenBench bundle."""
+    return write_bundle(tmp_path)
 
 
 def test_present_is_true_for_a_complete_bundle(bundle):
@@ -209,7 +218,7 @@ def test_registry_lists_each_prepared_corpus_as_its_own_entry(bundle, monkeypatc
     """Task 11R: a prepared corpus is a top-level entry, not a nested choice."""
     from scanpath_studio import app
 
-    monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(bundle))
+    add_benchmark_corpora(monkeypatch, bundle)
     registry = app.public_dataset_registry()
     label = app.benchmark_corpus_label("PoTeC")
     assert label in registry
@@ -228,34 +237,31 @@ def test_registry_lists_each_prepared_corpus_as_its_own_entry(bundle, monkeypatc
     assert "EyeGenBench" in entry["description"]
     # The static built-ins stay exactly as they are; the function composes.
     assert set(app.PUBLIC_DATASET_REGISTRY) <= set(registry)
-    # The bootstrap entry is only for when nothing is discovered.
-    assert app.BENCHMARK_SETUP_CHOICE not in registry
 
 
-def test_registry_offers_one_setup_entry_when_nothing_is_discovered(
-    tmp_path, monkeypatch
-):
-    """R39: with no corpora there is nowhere to type the bundle path, so exactly
-    one placeholder entry carries the directory input."""
-    from scanpath_studio import app
+def test_a_bundle_on_disk_is_not_discovered(bundle, monkeypatch):
+    """DATA-55: a corpus is listed only because someone added it, never because
+    a bundle sits at the default location — and there is no "set up" entry
+    listing whatever a typed folder holds. The suite runs with
+    ``SCANPATH_EXPERIMENTAL=1``, so this is not the beta gate answering."""
+    from scanpath_studio import app, compare_source, constants
 
-    monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(tmp_path / "absent"))
+    for module in (constants, app, compare_source):
+        monkeypatch.setattr(module, "EYEGENBENCH_DEFAULT_DIR", str(bundle))
     registry = app.public_dataset_registry()
-    assert app.BENCHMARK_SETUP_CHOICE in registry
-    assert not any(spec.get("benchmark_dataset") for spec in registry.values())
+    assert set(registry) == set(app.PUBLIC_DATASET_REGISTRY)
 
 
-def test_a_manifest_entry_with_no_name_does_not_crash_discovery(bundle, monkeypatch):
-    """M7: reading a nameless entry raises `KeyError`, which escapes the
-    (FileNotFoundError, ValueError, OSError) catch and took the app down."""
+def test_an_added_manifest_entry_with_no_name_is_skipped(bundle, monkeypatch):
+    """M7: a nameless entry must not take the registry — and so every picker —
+    down; `entry_name` is the one rule for skipping it (N5)."""
     from scanpath_studio import app
 
     (bundle / "manifest.json").write_text(
         json.dumps({"datasets": [{"language": "de"}]}), encoding="utf-8"
     )
-    monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(bundle))
-    assert app.discovered_benchmark_datasets() == ()
-    assert app.BENCHMARK_SETUP_CHOICE in app.public_dataset_registry()
+    add_benchmark_corpora(monkeypatch, bundle)
+    assert set(app.public_dataset_registry()) == set(app.PUBLIC_DATASET_REGISTRY)
 
 
 def test_geometry_badge_never_claims_uniformly_real_geometry():
@@ -326,8 +332,7 @@ def test_a_harmonised_label_reaches_the_benchmark_loader_not_the_native_corpus(
     """
     from scanpath_studio import app, compare_source, datasets
 
-    for module in (app, compare_source):
-        monkeypatch.setattr(module, "EYEGENBENCH_DEFAULT_DIR", str(bundle))
+    add_benchmark_corpora(monkeypatch, bundle)
     label = app.benchmark_corpus_label("PoTeC")
 
     root, kwargs = compare_source._public_location(label)
@@ -349,46 +354,11 @@ def test_a_harmonised_label_reaches_the_benchmark_loader_not_the_native_corpus(
     assert label in names
 
 
-def test_the_bootstrap_placeholder_is_never_offered_as_a_comparison_source(
-    tmp_path, monkeypatch
-):
-    """The `setup_only` skip in `secondary_dataset_options`, actually pinned.
-
-    N3: the version of this assertion that lived in the dispatch test above ran
-    with a corpus discovered — and with one discovered the placeholder is not in
-    the registry at all, so "it isn't in the options" held whether or not
-    `setup_only` was honoured. The state that can fail is the *empty* bundle
-    directory, which is the only state the placeholder exists in: it is a place
-    to type a path, not a dataset, so compare mode must skip it rather than
-    offer the user a source B that would load the demo.
-    """
-    from scanpath_studio import app, compare_source
-
-    empty = tmp_path / "no-bundle-here"
-    empty.mkdir()
-    for module in (app, compare_source):
-        monkeypatch.setattr(module, "EYEGENBENCH_DEFAULT_DIR", str(empty))
-    monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
-    app._cached_eyegenbench_datasets.clear()
-
-    registry = app.public_dataset_registry()
-    assert app.BENCHMARK_SETUP_CHOICE in registry, (
-        "premise: with nothing discovered the placeholder IS in the registry, "
-        "so the enumeration has something to skip"
-    )
-    names = [name for name, _ready, _why in compare_source.secondary_dataset_options()]
-    assert app.BENCHMARK_SETUP_CHOICE not in names
-    # The built-ins are still offered, so this isn't passing by enumerating
-    # nothing at all.
-    assert set(app.PUBLIC_DATASET_REGISTRY) <= set(names)
-
-
 def test_the_two_potec_entries_get_distinguishable_unready_hints(bundle, monkeypatch):
     """M12: "Open PoTeC…" named an entry the user couldn't pick out of two."""
     from scanpath_studio import app, compare_source
 
-    for module in (app, compare_source):
-        monkeypatch.setattr(module, "EYEGENBENCH_DEFAULT_DIR", str(bundle))
+    add_benchmark_corpora(monkeypatch, bundle)
     native = next(k for k in app.PUBLIC_DATASET_REGISTRY if "PoTeC" in k)
     harmonised = app.benchmark_corpus_label("PoTeC")
     assert compare_source._short_name(native) != compare_source._short_name(harmonised)
@@ -418,12 +388,10 @@ def test_a_nameless_manifest_row_before_a_valid_one_does_not_crash(bundle, monke
     assert eyegenbench.eyegenbench_present(bundle) is True
     assert eyegenbench.eyegenbench_monitor(bundle, "PoTeC") is None
 
-    for module in (app, compare_source):
-        monkeypatch.setattr(module, "EYEGENBENCH_DEFAULT_DIR", str(bundle))
+    add_benchmark_corpora(monkeypatch, bundle)
     monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
-    app._cached_eyegenbench_datasets.clear()
     label = app.benchmark_corpus_label("PoTeC")
-    # Discovery drops the unusable row and keeps the usable one…
+    # The registry drops the unusable row and keeps the usable one…
     assert label in app.public_dataset_registry()
     # …and the compare-B enumeration, which probes *every* registry entry on
     # every rerun Compare is on, is where the escaping KeyError took the app
@@ -454,8 +422,7 @@ def test_an_invented_default_screen_is_declined_by_both_surfaces(bundle, monkeyp
     manifest["datasets"][0].update(invented)
     (bundle / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     assert eyegenbench.eyegenbench_monitor(bundle, "PoTeC") is None
-    monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(bundle))
-    app._cached_eyegenbench_datasets.clear()
+    add_benchmark_corpora(monkeypatch, bundle)
     entry = app.public_dataset_registry()[app.benchmark_corpus_label("PoTeC")]
     assert "monitor" not in entry
 
@@ -534,8 +501,7 @@ def test_the_cli_and_the_picker_resolve_the_same_screen(bundle, tmp_path, monkey
         return seen["canvas"]
 
     def _picker_monitor():
-        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(bundle))
-        app._cached_eyegenbench_datasets.clear()
+        add_benchmark_corpora(monkeypatch, bundle)
         entry = app.public_dataset_registry()[app.benchmark_corpus_label("PoTeC")]
         return entry.get("monitor")
 
@@ -577,8 +543,7 @@ def test_a_malformed_count_does_not_take_the_picker_down(bundle, monkeypatch):
         }
     )
     (bundle / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-    monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(bundle))
-    app._cached_eyegenbench_datasets.clear()
+    add_benchmark_corpora(monkeypatch, bundle)
 
     entry = app.public_dataset_registry()[app.benchmark_corpus_label("PoTeC")]
     # Unreadable counts drop out of the caption rather than crashing or

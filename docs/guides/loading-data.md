@@ -7,13 +7,10 @@ from your own experiment.
 
 - **Bundled Demo:** immediate, small, and suitable for learning the interface.
 - **Public corpus:** choose the corpus and local data directory; download when
-  prompted. Corpora prepared from a local benchmark bundle appear here too, one
-  entry each — see [Harmonised benchmark corpora](../benchmark-corpora.md).
+  prompted.
 - **➕ Add dataset:** upload or select your own files and map their columns
   (🗂️ **Data → 📂 Available datasets**).
 - **✏️ Author a scanpath:** sketch a trial from text, with no files at all.
-
-Run locally or use the desktop app for sensitive participant data.
 
 ## What your data needs
 
@@ -35,10 +32,8 @@ canonical fields and units.
 
 ## Use the setup wizard
 
-The wizard is **three numbered parts**, in the only order they can happen in —
-there is nothing to map until a file has been read — with **⬇️ Save setup** and
-**✅ Add dataset** at the foot. Everything is on one screen, so the whole mapping
-is visible at once.
+The wizard is **three numbered parts** on one screen, with **⬇️ Save setup** and
+**✅ Add dataset** at the foot.
 
 **1. Dataset name** — what the dataset is called in 📂 **Available datasets**.
 
@@ -67,8 +62,7 @@ columns.
   ids that live only in the file name.
 - Below the three tables, under **Metadata**, are three optional keyed tables:
   **one row per reader** (native language, age, comprehension score), **one row
-  per reading** (list name, presentation order, a per-trial score) and **one row
-  per text** — see [Participant metadata](../data-format.md#participant-metadata)
+  per trial** (list name, presentation order) and **one row per text** — see [Participant metadata](../data-format.md#participant-metadata)
   and [Trial metadata](../data-format.md#trial-metadata). The same
   attach-and-report UI is on 🗂️ **Data → ✏️ Edit dataset** for datasets that do
   not come through this wizard.
@@ -84,9 +78,6 @@ cells in a mapped number column that don't parse, rows with no trial or reader
 id, positions that are screen fractions rather than pixels — together with what
 the load does with them.
 
-After loading, open the 🗂️ **Data** page and confirm that both tables share the
-expected trials and coordinate range.
-
 📂 **Available datasets** lists the same headline fields shown in the active
 dataset summary — participants, texts, trials, fixations, words, gaze points and
 multipart screens; click a name to open it, and the open row is tinted. Rename or
@@ -95,23 +86,21 @@ was mapped — the same field grid the wizard draws, and, for a dataset added wi
 only one of the two main tables, an uploader for the other one. Adding the
 missing half there normalizes it and joins it to what is already loaded, so a
 fixations-only dataset can gain its word boxes (or an AOI-only one its
-fixations) without being added again. Uploaded data is renamed or deleted in the session; packaged and
-public sources keep their stable identifiers and are renamed for display or
-hidden for this session.
+fixations) without being added again.
 
-A public corpus arrives with its own published figures, so a row you have never
-opened is not a blank one. The **Counts** column says which you are reading —
-*Published* is a claim about the corpus, *Loaded* a fact about this session — and
-ℹ️ **About** names where each published figure came from, setting the two side by
-side once the dataset is open. Loading **less** than a corpus publishes is the
-ordinary case (one OneStop regime, one MultiplEYE session folder) and is not
-flagged; loading **more** is, because only a wrong published figure explains it.
+<figure class="sps-screenshot" markdown>
+![The Data page: the available datasets, and the counts and tables of the open one](../assets/screenshots/data-page.webp)
+</figure>
+
+For a public corpus you haven't opened, the **Counts** column shows its
+*Published* figures; once loaded it shows *Loaded* ones. ℹ️ **About** names the
+source of each published figure.
 
 ### The recording setup asks how you know
 
 **Recording setup** describes the screen the data was **recorded** on — not the
-screen you are reading this on. It has **no defaults**: a wrong monitor size
-silently rescales every figure, so the app will not guess one for you. Each of
+screen you are reading this on. Nothing is preselected: a wrong monitor size
+silently rescales every figure. Each of
 the three groups — *Screen*, *Physical size & viewing distance*, and *Reading
 text size* — asks how you know the value, with choices of its own:
 
@@ -126,36 +115,19 @@ text size* — asks how you know the value, with choices of its own:
 | Reading text size | *Scale to the word boxes* or *I know the stimulus font* | `measured` |
 | | *Use a default (16 px)* | `assumed` |
 
-Only the screen can be estimated from your data, and only the physical size can
-be skipped.
+**Add dataset** stays disabled until all three are answered. Values derived
+from a skipped group (pixels per degree, point-to-pixel conversion) are hidden
+rather than computed from a default.
 
-**Add dataset** stays disabled until all three are answered. Nothing derived from
-a skipped group is shown: with no physical width there is no honest pixels-per-
-degree or point-to-pixel conversion, so those are hidden rather than computed from
-a default.
-
-The answer travels with the dataset. It appears beside each value in the
-wizard and under 🗂️ **Data → ✏️ Edit dataset → Recording setup**,
-rides a share link as `setup_prov` (beside the values themselves, wherever they
-differ from the source's own), and is written into the saved-setup JSON and
-into `plot_config.json` in a bulk export — so a figure set records that its
-monitor size was assumed, and whoever opens your link can tell your measurements
-from the app's guesses.
+The answer travels with the dataset — on share links, in the saved-setup JSON
+and in a bulk export's `plot_config.json` — so readers can tell measured values
+from assumed ones.
 
 Answers are remembered across datasets in a session as **pre-filled values with
 the choice reset**: quick for a second export from the same lab, while still
 making you assert that the setup applies to this dataset too.
 
-## Derived and preserved fields
-
-When x/y fixations and word boxes are available, the app can assign fixations to
-words and compute standard per-word reading measures. Recognized precomputed
-EyeLink IA measures take precedence. Fields not mapped or explicitly retained
-may be dropped during normalization.
-
 ## Reuse the setup
 
-Download the setup JSON from the wizard and restore it for the next export from
-the same pipeline. If a mapping was wrong, edit it under
-🗂️ **Data → ✏️ Edit dataset → Data tables & column mapping** or reload the files when a
-required column was not retained.
+✏️ **Edit dataset** can offer only the columns kept at import; to map a
+dropped column, add the files again.

@@ -14,7 +14,7 @@ import shlex
 
 import pytest
 
-from scanpath_studio import api, cli
+from scanpath_studio import api, cli, url_state
 from scanpath_studio import code_snippet as cs
 from tests.conftest import APP_SCRIPT
 
@@ -860,7 +860,7 @@ def test_the_panel_switches_flavour():
     at = _panel(
         **{
             cs.SNIPPET_STATE_KEY: state,
-            "snippet_flavor": "⌨️ CLI",
+            "snippet_flavor": url_state._SNIPPET_FLAVORS[1],
         }
     )
     assert at.code[0].language == "bash"
@@ -883,7 +883,9 @@ def test_the_panel_names_what_the_cli_cannot_say(monkeypatch):
         participant="p1",
         trial="t1",
     )
-    at = _panel(**{cs.SNIPPET_STATE_KEY: state, "snippet_flavor": "⌨️ CLI"})
+    at = _panel(
+        **{cs.SNIPPET_STATE_KEY: state, "snippet_flavor": url_state._SNIPPET_FLAVORS[1]}
+    )
     copy = " ".join(element.value for element in at.caption)
     assert "fixation_color_range" in copy
 
@@ -1186,15 +1188,68 @@ def test_the_raster_geometry_reaches_both_flavours():
     assert "--width 1600" in code.cli and "--scale 3" in code.cli
 
 
-def test_a_dual_animation_says_where_scanpath_b_goes():
+def test_a_dual_animation_names_scanpath_b_in_both_forms():
     """CMP-11: Animate + Compare is one figure with two readings, so `kind` is
-    "animation" and B rides in `compare`. B's frames are frames, not options."""
+    "animation" and B rides in `compare`. BUG-85 gave `animate_scanpath` the
+    `trial_b=` pair `compare_scanpaths` takes, so the Python form names B too
+    instead of replaying A alone."""
     state = _state(
         kind="animation",
         compare=cs.CompareTarget(participant="p2", trial="t2"),
     )
+    code = cs.reproduction_code(DEMO, state)
+    assert "trial_b=('p2', 't2')" in code.python
+    assert "--compare-with p2:t2" in code.cli
+    assert not any("replays A alone" in note for note in code.caveats)
+
+
+def test_a_cross_dataset_dual_animation_leaves_bs_frames_to_the_caller():
+    """B's reader belongs to its own corpus, which the snippet cannot load — and
+    `trial_b=` alone would look that id up in A's corpus, so it is not written."""
+    state = _state(
+        kind="animation",
+        compare=cs.CompareTarget(participant="p2", trial="t2", dataset="PoTeC"),
+    )
+    code = cs.reproduction_code(DEMO, state)
+    assert "trial_b=" not in code.python
+    notes = " ".join(code.caveats)
+    assert "words_b=" in notes and "trial_b=('p2', 't2')" in notes
+
+
+def test_a_multipart_dual_animation_says_which_screen_b_is_drawn_at():
+    """`animate_scanpath` draws B at its first recorded screen, and the snippet
+    cannot know which one the app's own B navigator shows — so it says how to
+    pick another rather than quietly drawing a different page."""
+    state = _state(
+        kind="animation",
+        screen="question",
+        compare=cs.CompareTarget(participant="p2", trial="t2"),
+    )
     notes = " ".join(cs.reproduction_code(DEMO, state).caveats)
-    assert "words_b=" in notes and "p2" in notes
+    assert "first screen" in notes and "extract_part" in notes
+
+
+def test_a_dual_animation_snippet_rebuilds_the_two_reading_replay(demo_trial):
+    """Run the printed recipe: the `trial_b=` it names draws exactly the second
+    reading `animate_scanpath` draws for that pair."""
+    words, fixations, participant, trial = demo_trial
+    combos = api.list_trials(words, fixations)
+    other = combos[combos["trial_id"] != trial].iloc[0]
+    trial_b = (str(other["participant_id"]), str(other["trial_id"]))
+    state = cs.FigureState(
+        kind="animation",
+        settings=api.figure_options("animation"),
+        participant=participant,
+        trial=trial,
+        canvas=(2560, 1440),
+        compare=cs.CompareTarget(participant=trial_b[0], trial=trial_b[1]),
+    )
+    namespace: dict = {}
+    exec(compile(cs.python_snippet(DEMO, state), "<snippet>", "exec"), namespace)  # noqa: S102
+    expected = api.animate_scanpath(
+        words, fixations, participant, trial, canvas_size=(2560, 1440), trial_b=trial_b
+    )
+    assert _figure_fingerprint(namespace["fig"]) == _figure_fingerprint(expected)
 
 
 def test_the_illustration_disclosure_choice_reaches_both_snippets():
@@ -1225,6 +1280,21 @@ def test_a_cross_dataset_comparison_says_whose_reader_b_is():
     assert not any(
         "second dataset" in n for n in cs.reproduction_code(DEMO, same).caveats
     )
+
+
+def test_a_second_datasets_co_animation_note_names_its_screen_too():
+    """CMP-21: with `dataset_b=` the co-animation checks the two screens, and a
+    screen nobody states is read off that trial's data — so the note on how to
+    finish the snippet names B's screen too, or following it gets the figure
+    refused."""
+    state = _state(
+        kind="animation",
+        canvas=(2560, 1440),
+        compare=cs.CompareTarget(participant="reader_07", trial="t9", dataset="PoTeC"),
+    )
+    notes = " ".join(cs.reproduction_code(DEMO, state).caveats)
+    assert "dataset_b='PoTeC'" in notes
+    assert "setup_b=" in notes and "--compare-canvas" in notes
 
 
 # ---------------------------------------------------------------------------

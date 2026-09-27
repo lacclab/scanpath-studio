@@ -243,12 +243,7 @@ def secondary_dataset_options(
     options.append((SYNTHETIC_CHOICE, True, ""))
     if app.public_datasets_enabled():
         options.extend(
-            (label, *_public_ready(label))
-            for label, spec in app.public_dataset_registry().items()
-            # The bootstrap entry (offered only while no benchmark corpus is
-            # discovered) is a place to type a directory, not a dataset — there
-            # is nothing to compare against.
-            if not spec.get("setup_only")
+            (label, *_public_ready(label)) for label in app.public_dataset_registry()
         )
     return [option for option in options if option[0] != exclude]
 

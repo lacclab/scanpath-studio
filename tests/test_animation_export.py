@@ -112,6 +112,8 @@ class TestStaticBase:
         # Top margin trimmed to the slim static band, height reduced to match.
         assert base.layout.margin.t == ae._STATIC_TOP_MARGIN_PX
         assert int(base.layout.height) < int(anim_fig.layout.height)
+        # BUG-93: the replay's clock is for the live player, not every raster.
+        assert base.layout.meta is None
 
     def test_does_not_mutate_original(self, anim_fig):
         n_frames = len(anim_fig.frames)
@@ -121,6 +123,7 @@ class TestStaticBase:
         assert len(anim_fig.frames) == n_frames
         assert len(anim_fig.layout.updatemenus) == 1
         assert len(anim_fig.layout.sliders) == 1
+        assert anim_fig.layout.meta["scanpath_frame_times_ms"]
 
 
 class TestElapsedLabels:
@@ -194,6 +197,20 @@ class TestEncodeGif:
             img.seek(i)
             durations.append(img.info["duration"])
         assert durations == [100, 100, 300, 100, 100]
+
+    @pytest.mark.parametrize("frame_ms", [26.667, 37.5, 97.6, 136.1])
+    def test_delays_add_up_to_the_clip(self, frame_ms):
+        # BUG-93: GIF stores whole centiseconds and Pillow truncates the rest, so
+        # a 26.7 ms frame was written as 20 ms and the clip ran 25 % fast. Each
+        # delay is rounded against the running total instead.
+        data = encode_gif(_solid_frames(30), frame_ms)
+        img = Image.open(io.BytesIO(data))
+        delays = []
+        for i in range(img.n_frames):
+            img.seek(i)
+            delays.append(img.info["duration"])
+        assert sum(delays) == pytest.approx(30 * frame_ms, abs=10)
+        assert min(delays) >= 20
 
 
 class TestGifPixelBudget:
@@ -280,6 +297,19 @@ class TestExportAnimationValidation:
             export_animation(go.Figure(), fmt="mp4", frame_duration_ms=50.0)
 
 
+def test_the_missing_browser_hint_works_in_the_desktop_app_too():
+    """BUG-85: the hint's fixes were `kaleido_get_chrome`, `plotly_get_chrome`
+    and a Python one-liner — none of which exists in the frozen desktop bundle.
+    What both installs can do is install a browser `chromium_browser_path`
+    finds; the one command it keeps is labelled as the pip install's."""
+    hint = ae.CHROME_INSTALL_HINT
+    for browser in ("Chrome", "Chromium", "Edge"):
+        assert browser in hint
+    assert "kaleido_get_chrome" not in hint
+    assert "get_chrome_sync" not in hint
+    assert "pip install" in hint
+
+
 class TestDownsampleDurationPreserved:
     """Downsampling renders fewer frames but holds each longer, so total runtime
     is unchanged. This tests the orchestration math with the renderer stubbed."""
@@ -328,6 +358,63 @@ class TestDownsampleDurationPreserved:
         export_animation(anim_fig, fmt="mp4", frame_duration_ms=33.0)
         assert captured["n"] == n
         assert captured["dur"] == pytest.approx(33.0)
+
+
+class TestRealTimeClip:
+    """BUG-93: a clip lasts what the on-screen replay lasts — the reading span
+    over the speed — however fast that replay is."""
+
+    def _capture(self, monkeypatch, fmt):
+        captured = {}
+
+        def fake_render(
+            fig, *, scale, show_elapsed, frame_indices, progress_callback=None
+        ):
+            captured["indices"] = list(frame_indices)
+            return [_png((0, 0, 0))] * len(frame_indices), (48, 32)
+
+        def fake_encode(pngs, duration_ms, **kwargs):
+            captured["n"] = len(pngs)
+            captured["dur"] = duration_ms
+            return b"stub"
+
+        monkeypatch.setattr(ae, "render_png_frames", fake_render)
+        monkeypatch.setattr(ae, f"encode_{fmt}", fake_encode)
+        return captured
+
+    @pytest.mark.parametrize("fmt", ["gif", "mp4"])
+    def test_the_frame_time_defaults_to_the_replays_own(
+        self, monkeypatch, anim_fig, normalized_fixations_df, fmt
+    ):
+        captured = self._capture(monkeypatch, fmt)
+        export_animation(anim_fig, fmt=fmt)
+        _span, playback_ms = animation_playback_ms([normalized_fixations_df], 1.0)
+        assert captured["n"] == len(anim_fig.frames)
+        assert captured["n"] * captured["dur"] == pytest.approx(playback_ms)
+
+    def test_a_figure_without_a_replay_clock_needs_a_frame_time(self, anim_fig):
+        bare = go.Figure(anim_fig)
+        bare.layout.meta = None
+        with pytest.raises(ValueError, match="frame_duration_ms"):
+            export_animation(bare, fmt="mp4")
+
+    @pytest.mark.parametrize(("fmt", "shortest_ms"), [("mp4", _MP4_DT_MS), ("gif", 20)])
+    def test_a_replay_faster_than_the_format_drops_frames(
+        self, monkeypatch, anim_fig, fmt, shortest_ms
+    ):
+        # A 5 ms frame is shorter than one 60 fps video frame, and than the
+        # shortest delay GIF viewers honour. Holding every frame that long would
+        # stretch the clip; dropping frames keeps it on time — what the player
+        # does between display ticks.
+        captured = self._capture(monkeypatch, fmt)
+        n = len(anim_fig.frames)
+        export_animation(anim_fig, fmt=fmt, frame_duration_ms=5.0)
+        assert captured["n"] < n
+        assert captured["dur"] >= shortest_ms - 1e-9
+        assert captured["n"] * captured["dur"] == pytest.approx(n * 5.0)
+        # The clip still opens on the first fixation and ends on the whole path.
+        assert captured["indices"][0] == 0
+        assert captured["indices"][-1] == n - 1
 
 
 class TestEndToEnd:

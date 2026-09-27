@@ -178,6 +178,22 @@ def get_app_css() -> str:
 
     div[data-testid="stPopover"] button { border-radius: 999px; }
     div[data-testid="stPopover"] button p { white-space: nowrap; }
+    /* BUG-89 — a click on a popover's ▾ must land on the button, not the
+       chevron glyph. Opening swaps that glyph (expand_more → expand_less), so
+       the span the pointer hit is detached by the time the click bubbles to
+       `document`. There Streamlit's own outside-click handler ignores the
+       opening click only within 50 ms of it; if the popover takes longer to
+       render (the rail's big ones often do), the detached target fails its
+       "inside the trigger?" test and the popover closes itself 2 ms after
+       opening. The next click then closes an already-closed popover, which is
+       why it took 2–3 clicks. With the glyph transparent to the pointer the
+       target is always an element that survives the re-render. The chevron is
+       the one `aria-hidden` child of the trigger; its label and icon keep
+       their nodes. */
+    [data-testid="stPopoverButton"] [aria-hidden="true"],
+    [data-testid="stPopoverButton"] [aria-hidden="true"] * {
+        pointer-events: none;
+    }
     div[data-testid="stPopoverBody"] {
         min-width: min(28rem, 90vw);
     }
@@ -238,6 +254,16 @@ def get_app_css() -> str:
         --sps-border: rgba(128, 128, 128, 0.22);
         --sps-code-fg: #15639c;
         --sps-shadow-hover: 0 6px 18px rgba(31, 119, 180, 0.16);
+        /* UX-145 — the page background, for the few surfaces that must be
+           opaque (a sticky bar content scrolls under). Streamlit exposes no
+           CSS variable for it on the main page, and prefers-color-scheme is
+           the OS preference, not the theme picked in ⋮ → Settings. But
+           Streamlit does set `color-scheme` on `.stApp` to match the active
+           theme, and `light-dark()` resolves against it — so this follows a
+           theme switch instantly, without a rerun. The two colours are
+           `constants.APP_THEME` / `APP_THEME_DARK`'s backgroundColor, pinned
+           by tests/test_theme.py. */
+        --sps-page-bg: light-dark(#ffffff, #0e1117);
     }
     /* In dark mode the brand blue is too dark for badge text; brighten it.
        The app's theme is "Auto" (follows the OS) in the common case, so the OS
@@ -433,18 +459,40 @@ def get_app_css() -> str:
         flex: 1 1 auto;
         padding-right: 0.45rem;
     }
-    /* UX-103 — on the RAIL's rows the switch and the name are now two separate
-       children (the switch is drawn with its label collapsed, to be rid of the
-       native `title=` tooltip Streamlit stamps on a truncating label). Without
-       this the rule above would hand the switch half the row, because both
-       halves match it. Only the name is flexible; the switch is its own width.
-       Scoped to `split_mode_rail_` on purpose: 🎬 Animate and ⚖️ Compare above
-       the plot still carry their label inside the toggle, where the slot has to
-       stay the flexible one. */
-    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_rail_"]
-        > div:has([data-testid="stCheckbox"]) {
-        flex: 0 0 auto;
-        padding-right: 0.4rem;
+    /* UX-153 — a rail row with no switch (🧹 Filter, 📐 Figure & canvas) is
+       one control, so its name opens the popover. The ▾ trigger's click target
+       is stretched over the whole row by an `::after` overlay, which keeps the
+       row's look, and the popover still anchors on the ▾ itself. The row is
+       the overlay's containing block, so nothing between it and the button
+       may be positioned. `transform: none` matters for the same reason:
+       the app-wide hover lift (`translateY(-1px)`) would make the button
+       the containing block mid-hover, shrinking the overlay out from under
+       the pointer. The rows with a switch don't get this: their name is the
+       switch's label and flips it, as on Animate and Compare. */
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_rail_"]:not(
+            :has([data-testid="stCheckbox"])
+        ) {
+        position: relative;
+    }
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_rail_"]:not(
+            :has([data-testid="stCheckbox"])
+        ) [data-testid="stPopover"] button {
+        position: static !important;
+        transform: none !important;
+    }
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_rail_"]:not(
+            :has([data-testid="stCheckbox"])
+        ) [data-testid="stPopover"] button::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+    }
+    /* ...and the whole row lights up on hover, not only the ▾ half, since
+       the whole row is what a click opens. */
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_rail_"]:not(
+            :has([data-testid="stCheckbox"])
+        ):has([data-testid="stPopover"] button:hover:enabled) {
+        background: var(--sps-accent-soft);
     }
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
         [data-testid="stWidgetLabel"] p,
@@ -453,6 +501,28 @@ def get_app_css() -> str:
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+    }
+    /* UX-153 — every toggle in these rows takes `wrap=True`, which switches
+       off Streamlit's truncate mode (and the native `title=` tooltip it
+       stamps), and with it the `min-width: 0` chain that let the label
+       shrink to an ellipsis. Both are put back here. The `p *` arm is for a
+       bold label's <strong>: the ≤1200px rule further down lets rail labels
+       wrap, which would break "Raw gaze" onto two lines in a row that is one
+       line by contract; this selector outranks it. */
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stWidgetLabel"] p * {
+        white-space: nowrap;
+    }
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stCheckbox"],
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stCheckbox"] label,
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stWidgetLabel"],
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stWidgetLabel"] [data-testid="stMarkdownContainer"] {
+        min-width: 0;
+        max-width: 100%;
     }
     /* UX-102 — and the same `p` must give up its bottom margin, or the row
        grows a scrollbar. Streamlit 1.62 gives every `wrap=False` horizontal
@@ -668,6 +738,16 @@ def get_app_css() -> str:
     /* A row whose title carries help. The dotted underline is the only remaining
        hint that there is something to hover, now that the `?` icon is folded
        into the title itself. */
+    /* UX-158 — a row's caption inside a titled group of rows (`controls._sub_row`):
+       the group's title leads the first row, and each row's own caption is
+       quieter so the title still reads as the heading of the run. */
+    .sps-fsub {
+        font-size: 0.85rem;
+        opacity: 0.72;
+    }
+    /* UX-158/159 — a rail popover's rows (`controls._popover_rows`), a little
+       further apart than the app-wide gap:0 (the later rule wins the tie). */
+    div[class*="st-key-rail_rows_"] { gap: 0.5rem !important; }
     .sps-flabel-help {
         text-decoration: underline dotted;
         text-decoration-color: rgba(128, 128, 128, 0.6);
@@ -725,8 +805,14 @@ def get_app_css() -> str:
         display: block;
         max-width: 100%;
     }
+    /* BUG-91: the box exists only while it is shown. It used to sit there at
+       `opacity: 0` all the time, and an absolutely-positioned box still counts
+       towards its scroll container's overflow — so a long tooltip on a popover's
+       last rows let the popover scroll down into empty space. `content: none`
+       removes the box outright; the fade is an animation that starts once it is
+       created, not an opacity transition on a box that is always there. */
     .sps-fhelp::after {
-        content: attr(data-tip);
+        content: none;
         position: absolute;
         top: calc(100% + 0.3rem);
         left: 0;
@@ -744,13 +830,15 @@ def get_app_css() -> str:
         text-align: left;
         box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
         pointer-events: none;
-        opacity: 0;
-        transition: opacity 80ms linear;
     }
     .sps-fhelp:hover::after,
     .sps-fhelp:focus-within::after {
-        opacity: 1;
-        transition-delay: 120ms;
+        content: attr(data-tip);
+        animation: sps-tip-in 80ms linear 120ms both;
+    }
+    @keyframes sps-tip-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
     }
 
     /* UX-53 round 3 — the wizard's descriptive prose is hover-only, so it reuses
@@ -1057,7 +1145,7 @@ def get_app_css() -> str:
         position: sticky;
         top: 3.2rem;
         z-index: 60;
-        background: var(--background-color, #fff);
+        background: var(--sps-page-bg);
         padding: 0.35rem 0 0.4rem;
         margin-bottom: 0.2rem;
         border-bottom: 1px solid rgba(128, 128, 128, 0.25);
@@ -1201,6 +1289,23 @@ def get_app_css() -> str:
     /* UX-71 — see `mapping_menu_css()` below: the option list is widened only
        on the two mapping surfaces, so this global sheet leaves dropdowns alone. */
 
+    /* UX-138 — `constants.icon_html`: a Material Symbols glyph inside raw HTML,
+       where a `:material/…:` shortcode is inert. Same font Streamlit loads for
+       its own icons; the span's text is the ligature (the icon's name). */
+    .sps-icon {
+        font-family: "Material Symbols Rounded";
+        font-weight: normal;
+        font-style: normal;
+        font-size: 1.2em;
+        line-height: 1;
+        letter-spacing: normal;
+        text-transform: none;
+        white-space: nowrap;
+        direction: ltr;
+        font-feature-settings: "liga";
+        vertical-align: -0.2em;
+        user-select: none;
+    }
     /* UX-53 round 4 — the auto-detection flag beside a mapping row is the ✨ and
        nothing else; which column was detected is on its tooltip. The old inline
        sentence ("✨ auto-detected `CURRENT_FIX_INDEX`") ran wider than the
@@ -1255,16 +1360,23 @@ def get_app_css() -> str:
         opacity: 0.72;
     }
 
-    /* Control rail: a subtle card so it reads as a panel, with a hair more
-       breathing room between the stacked toggles than the app-wide gap:0 rule.
-       UX-43 gives it its own scroll area exactly as tall as the plot row: the
-       subtabs live in the next row and can grow without stretching the rail. */
+    /* Control rail: set off from the plot by one hairline on its left edge, on
+       the page's own background — UX-151 retired the tinted, bordered card,
+       whose fill put a second surface behind rows that already carry their own
+       outline. A hair more breathing room between the stacked toggles than the
+       app-wide gap:0 rule. UX-43 gives it its own scroll area exactly as tall
+       as the plot row: the subtabs live in the next row and can grow without
+       stretching the rail. */
     .st-key-scanpath_rail {
-        border: 1px solid var(--sps-border);
-        border-radius: 12px;
-        padding: 0.55rem 0.85rem 0.35rem;
-        background: var(--sps-accent-soft);
+        border-left: 1px solid var(--sps-border);
+        padding: 0.1rem 0.35rem 1.5rem 1rem;
         box-sizing: border-box;
+        /* The card's bottom edge was what made the row cut off at the plot's
+           foot read as "scrolls" rather than "cropped"; without it, the last
+           1.5rem fades out instead. The mask is fixed to the box, not to the
+           scrolled content, so the matching bottom padding is what lets the
+           last control clear it once the rail is scrolled to the end. */
+        mask-image: linear-gradient(to bottom, #000 calc(100% - 1.5rem), transparent);
         height: 100%;
         max-height: 100%;
         overflow-y: auto;
@@ -1450,7 +1562,9 @@ def get_app_css() -> str:
         min-height: 0;
     }
     /* The 2×2 Quick-view grid keeps full labels at ordinary rail widths and
-       falls back to icons only at the narrowest size. */
+       falls back to icons only at the narrowest size. UX-138: the label's own
+       Material icon is what stays — the text collapses around it — so the
+       fallback no longer re-draws each glyph from a `content:` rule. */
     @container sps-rail (max-width: 320px) {
         .st-key-viz_view_scanpath button p,
         .st-key-viz_view_heatmap button p,
@@ -1458,16 +1572,14 @@ def get_app_css() -> str:
         .st-key-viz_view_custom button p {
             font-size: 0;
         }
-        .st-key-viz_view_scanpath button p::before,
-        .st-key-viz_view_heatmap button p::before,
-        .st-key-viz_view_illustration button p::before,
-        .st-key-viz_view_custom button p::before {
-            font-size: 1rem;
+        /* A markdown `:material/…:` renders as `span[role="img"]` — the
+           `stIconMaterial` test id is only on the `icon=` slot. */
+        .st-key-viz_view_scanpath button p span[role="img"],
+        .st-key-viz_view_heatmap button p span[role="img"],
+        .st-key-viz_view_illustration button p span[role="img"],
+        .st-key-viz_view_custom button p span[role="img"] {
+            font-size: 1.1rem;
         }
-        .st-key-viz_view_scanpath button p::before { content: "👁️"; }
-        .st-key-viz_view_heatmap button p::before { content: "🔥"; }
-        .st-key-viz_view_illustration button p::before { content: "✏️"; }
-        .st-key-viz_view_custom button p::before { content: "🛠️"; }
     }
     /* BUG-24: the rail's heading row holds nothing but the heading. UX-44 put a
        compact Reset pill beside it in a second column, which did not fit — the
@@ -1506,15 +1618,21 @@ def get_app_css() -> str:
     /* Section headers now use proper heading levels so screen-reader users get
        a valid outline (no h1→h5 jump): the rail/export sections are <h2>, their
        sub-sections <h3>. Pin the visual size back to the original compact look
-       (by Streamlit's stable text-derived ids) so the layout is unchanged. */
-    #plot-controls, #scope, #figures, #also-include {
+       (by Streamlit's stable text-derived ids) so the layout is unchanged.
+       BUG-88: the rail's heading is pinned by its container key instead. The
+       text-derived id folds an icon's name into it, so UX-138's Material icon
+       turned the id `plot-controls` into `tune-plot-controls` — the pin stopped
+       matching and the heading fell back to Streamlit's 36px h2, which the
+       narrow rail wraps onto two lines. A heading that carries an icon has to
+       be pinned by a key. */
+    .st-key-plot_controls_header h2, #scope, #figures, #also-include {
         font-size: 20px !important; line-height: 24px !important;
         font-weight: 600 !important; padding: 6px 0 16px !important;
         /* In the narrow plot-side rail these can wrap; only ever break at a
            space, never mid-word ("Visualizatio↵n"). */
         word-break: normal !important; overflow-wrap: normal !important;
     }
-    #plot-controls {
+    .st-key-plot_controls_header h2 {
         margin: 2.4px 0 1.6px !important;
         white-space: nowrap;
     }
@@ -1544,19 +1662,49 @@ def get_app_css() -> str:
         font-size: 0.92rem !important;
     }
     /* BUG-48 — a `help=` tooltip must never intercept a click. Streamlit's
-       tooltip is a portalled panel whose open state lives in React, and the
-       pointer can leave its target without that component ever seeing
-       `mouseleave` (a rerun that re-renders the row under the cursor is the
-       usual way, and this app reruns on every widget touch). The panel then
-       floats over the page — and, being an ordinary positioned element, ate the
-       next click that landed on whatever it covered, which is the likeliest
-       reason a rail's ▾ sometimes did nothing on the first press.
-       `app._TOOLTIP_SWEEPER_SCRIPT` is what closes the stuck panel; this is the
-       guard that makes a stuck one harmless in the meantime. Safe because no
-       `help=` in this app contains a link — every tooltip is read, never
-       clicked. */
+       tooltip is a portalled panel whose open state lives in React, so it can
+       outlive the hover that opened it; being an ordinary positioned element it
+       then ate the next click that landed on whatever it covered, which is the
+       likeliest reason a rail's ▾ sometimes did nothing on the first press.
+       Safe because no `help=` in this app contains a link — every tooltip is
+       read, never clicked. */
     div[data-testid="stTooltipContent"] {
         pointer-events: none;
+    }
+    /* BUG-86 — …and it is shown only while *its own* trigger is under the
+       pointer or holds *keyboard* focus. Streamlit 1.64's trigger will not
+       close on pointer-leave while focus is inside it, clicking a button puts
+       focus there, and it can leave several panels in the page at once (some
+       stuck half-closed) — so every button or popover with `help=` that was
+       clicked (the ◀ ▶ ⇅ funnel row, the rail's ▾, the presets) kept its panel
+       floating after the pointer moved on. `:hover` and `:focus-visible` are
+       the browser's own bookkeeping, right even when no event reached React,
+       and `:focus-visible` is what tells a keyboard user's focus, which should
+       keep its tooltip, from the focus a click leaves behind, which should not.
+       Two selectors, because CSS cannot relate a portalled panel to the
+       trigger that owns it:
+       · once `app._TOOLTIP_OWNER_SCRIPT` is running (its flag on `<html>`),
+         a panel shows only while marked `[data-sps-tooltip-owned]` — its own
+         trigger (the element whose `aria-describedby` names it) is hovered or
+         keyboard-focused. That is what stops a hover on one button reviving
+         every other stale panel, and a panel is judged before it is painted;
+       · `body:not(:has(…))` hides every panel while no trigger at all is, the
+         floor if that script cannot run.
+       The hide is immediate: a delayed one (for a fade that Streamlit's own
+       entrance animation, holding opacity at 1, never let run) flashed a stale
+       panel for 100 ms. This replaced BUG-48/51's JavaScript sweeper, which
+       waited for a Base Web `[data-baseweb="tooltip"]` layer that Streamlit no
+       longer renders and so never closed anything;
+       `tests/test_tooltip_visibility.py` fails if the DOM named here leaves
+       Streamlit's bundle. */
+    html[data-sps-tooltip-owners] [role="tooltip"]:not([data-sps-tooltip-owned]) :is([data-testid="stTooltipContent"], [data-testid="stTooltipErrorContent"]),
+    body:not(:has(
+        [data-testid="stTooltipHoverTarget"]:hover,
+        [data-testid="stTooltipHoverTarget"] :focus-visible,
+        [data-testid="stTooltipErrorHoverTarget"]:hover,
+        [data-testid="stTooltipErrorHoverTarget"] :focus-visible
+    )) :is([data-testid="stTooltipContent"], [data-testid="stTooltipErrorContent"]) {
+        visibility: hidden;
     }
 
     /* ── UX-19: width breakpoints ────────────────────────────────────────────
@@ -1583,7 +1731,7 @@ def get_app_css() -> str:
         }
         /* The pinned section-header sizes (see the heading-level rules above)
            are what push the narrow rail's headers to two lines first. */
-        #plot-controls, #scope, #figures, #also-include {
+        .st-key-plot_controls_header h2, #scope, #figures, #also-include {
             font-size: 18px !important; line-height: 22px !important;
         }
     }

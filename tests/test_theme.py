@@ -17,6 +17,7 @@ import streamlit.web.cli as st_cli
 
 from scanpath_studio import cli
 from scanpath_studio.constants import APP_THEME, APP_THEME_DARK
+from scanpath_studio.styles import get_app_css
 
 _CONFIG_TOML = Path(__file__).resolve().parents[1] / ".streamlit" / "config.toml"
 _DOCS_CSS = Path(__file__).resolve().parents[1] / "docs" / "stylesheets" / "extra.css"
@@ -39,6 +40,24 @@ def test_docs_stylesheet_matches_theme_constants():
     css = _DOCS_CSS.read_text(encoding="utf-8")
     assert APP_THEME["primaryColor"] in css
     assert APP_THEME_DARK["primaryColor"] in css
+
+
+def test_app_css_page_background_matches_theme_constants():
+    """UX-145: the opaque page-background token mirrors both theme backgrounds.
+
+    The sticky header bars (✏️ Edit dataset, the add-dataset wizard) must be
+    opaque in whichever theme is active. Streamlit exposes no CSS variable for
+    that on the main page — the old ``var(--background-color, #fff)`` named one
+    that does not exist, so the fallback painted a white strip in dark mode —
+    so ``styles.py`` resolves it with ``light-dark()`` against the ``color-scheme``
+    Streamlit sets on ``.stApp``. CSS can't import Python, so pin the two colours
+    here the way the docs palette is pinned above."""
+    css = get_app_css()
+    light, dark = APP_THEME["backgroundColor"], APP_THEME_DARK["backgroundColor"]
+    assert f"--sps-page-bg: light-dark({light}, {dark});" in css
+    assert "var(--background-color" not in css
+    bar_rule = css.split(".st-key-wiz_sticky_bar {", 1)[1].split("}", 1)[0]
+    assert "background: var(--sps-page-bg);" in bar_rule
 
 
 def test_theme_flags_are_valid_config_options():

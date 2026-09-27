@@ -16,6 +16,7 @@ import logging
 import pytest
 
 from scanpath_studio import debug_log
+from scanpath_studio.constants import ICONS
 from tests.conftest import APP_SCRIPT, arm_session_dialog
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
@@ -320,7 +321,7 @@ def test_the_toggle_reveals_the_panel():
     # …and it remains under the Session dialog's Debug tools block rather than
     # recreating the old menu-bar popover.
     headings = " ".join(str(markdown.value) for markdown in at.markdown)
-    assert "🐛 Debug tools" in headings
+    assert f"{ICONS['debug']} Debug tools" in headings
     labels = {popover.proto.popover.label for popover in at.get("popover")}
     assert "🐛 Debug" not in labels
 

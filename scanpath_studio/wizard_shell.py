@@ -44,6 +44,8 @@ from enum import Enum
 
 import streamlit as st
 
+from .constants import ICONS, icon_html
+
 #: Prefix for the accordion's per-step open flags. Deliberately *not* the
 #: ``col_map_`` prefix — ``tabs._collect_column_mapping`` sweeps that whole
 #: namespace into the saved config, and a UI open/closed flag is not mapping.
@@ -63,11 +65,15 @@ class StepStatus(Enum):
     """Optional and untouched."""
 
 
+#: Status → its `constants.ICONS` concept (UX-138). A concept rather than the
+#: shortcode, because the badge is drawn two ways: as markdown on the review
+#: panel (:func:`badge`) and inside the part title's raw HTML (:func:`part`),
+#: where a shortcode is inert.
 _BADGES: dict[StepStatus, str] = {
-    StepStatus.DONE: "✅",
-    StepStatus.ACTION: "⚠️",
-    StepStatus.TODO: "⬜",
-    StepStatus.OPTIONAL: "➖",
+    StepStatus.DONE: "step_done",
+    StepStatus.ACTION: "step_action",
+    StepStatus.TODO: "step_todo",
+    StepStatus.OPTIONAL: "step_optional",
 }
 
 
@@ -235,7 +241,7 @@ def part(
     carry judgements a title cannot ("does the Trial ID identify one reading?").
     """
     box = host.container(key=part_key(step.id))
-    mark = f"{badge(status)} " if status else ""
+    mark = f"{icon_html(_badge_concept(status))} " if status else ""
     title = html.escape(step.title)
     if note:
         title = (
@@ -257,9 +263,13 @@ def part(
     return box.container()
 
 
-def badge(status: StepStatus) -> str:
-    """The emoji shown against a step with this status."""
+def _badge_concept(status: StepStatus) -> str:
     return _BADGES.get(status, _BADGES[StepStatus.TODO])
+
+
+def badge(status: StepStatus) -> str:
+    """The icon shortcode shown against a step with this status."""
+    return ICONS[_badge_concept(status)]
 
 
 def go_to_step(step_id: str) -> None:

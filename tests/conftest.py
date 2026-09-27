@@ -52,36 +52,30 @@ def experimental_off(monkeypatch):
     monkeypatch.delenv("SCANPATH_EXPERIMENTAL", raising=False)
 
 
-@pytest.fixture(autouse=True, scope="session")
-def _no_developer_local_benchmark_bundle(tmp_path_factory):
-    """Point benchmark discovery at an empty directory for the whole suite (M16).
+def add_benchmark_corpora(monkeypatch, root, names=None) -> None:
+    """Stand in for DATA-56's add flow: list the corpora at ``root`` as added.
 
-    DATA-27 made the public-dataset registry a *function* that enumerates every
-    prepared corpus found under `EYEGENBENCH_DEFAULT_DIR` — which is
-    ``data/EyeGenBench`` inside the repo. A developer who has built a bundle
-    there (or, worse, is building one *while* the suite runs) therefore gets a
-    different registry from CI's, and any test that reasons about the whole
-    registry — how many corpora, which short names, whether an option list
-    contains one — silently changes meaning with the contents of an untracked
-    directory. Pinning it here means a benchmark corpus exists in a test only
-    when that test writes one and points the constant at it, which every
-    DATA-27 test already does (a `monkeypatch.setattr` inside a test wins over
-    this).
-
-    **Every module that binds the name is patched**, not just `app`: each does
-    its own ``from .constants import EYEGENBENCH_DEFAULT_DIR``, so each holds a
-    separate binding and patching `constants` alone reaches none of them. In
-    particular `compare_source` resolves the bundle location independently when
-    it enumerates comparison sources, so an `app`-only patch would leave the
-    compare surface reading the developer's real ``data/EyeGenBench``.
+    DATA-55 retired discovery, so a benchmark corpus reaches the registry only
+    through `app.added_benchmark_datasets`, which is empty in the app. This
+    replaces it with the manifest entries at ``root`` — all of them, or those
+    named in ``names`` — read on every call, as the registry is rebuilt on every
+    call. It also points each module's `EYEGENBENCH_DEFAULT_DIR` at ``root``, so
+    the corpus' loader and Compare read the bundle that was added: each module
+    does its own ``from .constants import EYEGENBENCH_DEFAULT_DIR``, so each
+    holds a separate binding and patching `constants` alone reaches none of them.
     """
     from scanpath_studio import app, compare_source, constants
+    from scanpath_studio.eyegenbench import entry_name, eyegenbench_datasets
 
-    empty = tmp_path_factory.mktemp("no-benchmark-bundle")
-    with pytest.MonkeyPatch.context() as mp:
-        for module in (constants, app, compare_source):
-            mp.setattr(module, "EYEGENBENCH_DEFAULT_DIR", str(empty))
-        yield
+    def added() -> tuple:
+        entries = tuple(eyegenbench_datasets(root))
+        if names is None:
+            return entries
+        return tuple(entry for entry in entries if entry_name(entry) in names)
+
+    monkeypatch.setattr(app, "added_benchmark_datasets", added)
+    for module in (constants, app, compare_source):
+        monkeypatch.setattr(module, "EYEGENBENCH_DEFAULT_DIR", str(root))
 
 
 @pytest.fixture(autouse=True, scope="session")

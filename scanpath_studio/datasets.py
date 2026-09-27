@@ -34,6 +34,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import urllib.request
 import zipfile
 from collections.abc import Iterable
@@ -86,6 +87,48 @@ def _read_potec_tsv(path) -> pd.DataFrame:
     )
 
 
+#: UX-168: download in chunks of this size, reporting bytes after each — the
+#: progress the card shows, and the checkpoint a Cancel stops at.
+_DOWNLOAD_CHUNK = 1 << 20
+
+
+def _content_length(response) -> int | None:
+    value = response.headers.get("Content-Length")
+    return int(value) if value and str(value).isdigit() else None
+
+
+def _fetch_bytes(url: str, *, detail: str) -> bytes:
+    """``url``'s body, read in chunks with progress (UX-168)."""
+    with urllib.request.urlopen(url) as response:
+        total = _content_length(response)
+        buffer = io.BytesIO()
+        while chunk := response.read(_DOWNLOAD_CHUNK):
+            buffer.write(chunk)
+            progress.report(buffer.tell(), total, unit="bytes", detail=detail)
+        return buffer.getvalue()
+
+
+def _fetch_to_file(url: str, dest: Path, *, detail: str) -> None:
+    """Stream ``url`` into ``dest`` through a ``.part`` file (UX-168).
+
+    The ``.part`` → final rename keeps an interrupted fetch from passing for a
+    complete file; a cancel (or any failure) deletes the partial file.
+    """
+    tmp = dest.with_name(dest.name + ".part")
+    try:
+        with urllib.request.urlopen(url) as response, tmp.open("wb") as out:
+            total = _content_length(response)
+            done = 0
+            while chunk := response.read(_DOWNLOAD_CHUNK):
+                out.write(chunk)
+                done += len(chunk)
+                progress.report(done, total, unit="bytes", detail=detail)
+        tmp.replace(dest)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
 def download_potec(root, *, fixation_source: str = "scanpaths") -> Path:
     """Download the PoTeC files :func:`load_potec` needs into ``root``.
 
@@ -109,18 +152,34 @@ def download_potec(root, *, fixation_source: str = "scanpaths") -> Path:
     if not eyetracking_dir.is_dir():
         url = _POTEC_OSF_URL.format(resource=_POTEC_OSF_RESOURCES[fixation_source])
         print(f"Downloading PoTeC {fixation_source} from {url} …")
-        with urllib.request.urlopen(url) as response:
-            payload = response.read()
-        (root / "eyetracking_data").mkdir(parents=True, exist_ok=True)
-        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
-            members = [
-                m
-                for m in archive.namelist()
-                # The OSF zips carry macOS resource-fork cruft; keep only the
-                # real per-trial TSVs.
-                if m.startswith(f"{fixation_source}/") and m.endswith(".tsv")
-            ]
-            archive.extractall(root / "eyetracking_data", members=members)
+        payload = _fetch_bytes(url, detail=f"PoTeC {fixation_source} archive")
+        target = root / "eyetracking_data"
+        target.mkdir(parents=True, exist_ok=True)
+        # UX-168: unpack into a staging folder and rename it into place only
+        # when complete. A cancel mid-unpack would otherwise leave a partial
+        # `scanpaths/` that `potec_present`'s "any .tsv" check accepts.
+        staging = target / f".{fixation_source}.part"
+        shutil.rmtree(staging, ignore_errors=True)
+        try:
+            with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+                members = [
+                    m
+                    for m in archive.namelist()
+                    # The OSF zips carry macOS resource-fork cruft; keep only the
+                    # real per-trial TSVs.
+                    if m.startswith(f"{fixation_source}/") and m.endswith(".tsv")
+                ]
+                for index, member in enumerate(members, start=1):
+                    archive.extract(member, staging)
+                    progress.report(
+                        index,
+                        len(members),
+                        unit="files",
+                        detail="Unpacking the archive",
+                    )
+            (staging / fixation_source).replace(eyetracking_dir)
+        finally:
+            shutil.rmtree(staging, ignore_errors=True)
 
     for text_id in _POTEC_TEXTS:
         for rel in (
@@ -137,10 +196,7 @@ def download_potec(root, *, fixation_source: str = "scanpaths") -> Path:
             # interrupted fetch never leaves a truncated AOI file that
             # `dest.is_file()` / `potec_present` would then treat as complete —
             # mirroring download_onestop.
-            tmp = dest.with_name(dest.name + ".part")
-            with urllib.request.urlopen(url) as response:
-                tmp.write_bytes(response.read())
-            tmp.replace(dest)
+            _fetch_to_file(url, dest, detail=f"AOI file {rel.rsplit('/', 1)[-1]}")
     return root
 
 
@@ -558,10 +614,7 @@ def download_onestop(
             # interrupted write (killed process / full disk) never leaves a
             # truncated .csv.zip that `dest.is_file()` would then skip forever —
             # forcing a manual delete. The reports are large, so the window is real.
-            tmp = dest.with_name(dest.name + ".part")
-            with urllib.request.urlopen(url) as response:
-                tmp.write_bytes(response.read())
-            tmp.replace(dest)
+            _fetch_to_file(url, dest, detail=f"{part} {kind} report")
     return root
 
 

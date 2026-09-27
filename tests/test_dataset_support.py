@@ -741,18 +741,21 @@ def test_download_onestop_atomic_and_skips_existing(monkeypatch, tmp_path):
     reports already on disk on a re-run."""
     calls = []
 
-    class _FakeResp:
+    class _FakeResp(io.BytesIO):
+        """UX-168: `download_onestop` now reads in chunks (`.read(size)`), so
+        this has to behave like a real response body — `io.BytesIO` does —
+        rather than returning the whole payload on every call. No declared
+        Content-Length, same as before this fake grew one."""
+
         def __init__(self, data):
-            self._data = data
+            super().__init__(data)
+            self.headers = {}
 
         def __enter__(self):
             return self
 
         def __exit__(self, *a):
             return False
-
-        def read(self):
-            return self._data
 
     def fake_urlopen(url):
         calls.append(url)

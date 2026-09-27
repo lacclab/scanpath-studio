@@ -1468,6 +1468,24 @@ def _note_dataset_unavailable(
     )
 
 
+def _stop_download(task_key: tuple) -> None:
+    """UX-168: Stop on a download card — the transfer ends at its next chunk."""
+    progress.cancel(task_key)
+
+
+def _download_with_card(slot, download, root: str, *, label: str, key: str) -> None:
+    """Run ``download(root)`` under a card with a Stop button (UX-168)."""
+    task_key = ("download", loading.session_id(), key)
+    with loading.card(
+        slot,
+        key=f"download_{key}",
+        title=f"Downloading {label}",
+        task_key=task_key,
+        cancel=loading.Cancel("Stop download", _stop_download, args=(task_key,)),
+    ):
+        download(root)
+
+
 def _render_dataset_unavailable() -> None:
     """UX-7(b): a first-class "this corpus isn't here yet" state in the main area.
 
@@ -1498,18 +1516,25 @@ def _render_dataset_unavailable() -> None:
         st.markdown("\n".join(f"- {line}" for line in details))
         if download is None:
             return
-        if st.button(
+        clicked = st.button(
             "⬇ Download now",
             key=f"{note['key_prefix']}_download_main",
             type="primary",
-        ):
+        )
+        download_slot = st.empty()
+        if clicked:
             # UX-166: the download is a wait of its own. Take the dataset card
             # and the skeleton down first, or they hide this panel and its
             # spinner while describing a step that isn't what is running.
             loading.release_page()
             try:
-                with st.spinner(f"Downloading into {note['root']} …"):
-                    download(note["root"])
+                _download_with_card(
+                    download_slot,
+                    download,
+                    note["root"],
+                    label=note["label"],
+                    key=f"{note['key_prefix']}_main",
+                )
             except (OSError, ValueError) as exc:
                 st.error(
                     f"Download failed: {exc}\n\nIf you're offline, download the "
@@ -1583,13 +1608,16 @@ def _dataset_access_status(
         download=download,
         key_prefix=key_prefix,
     )
-    if cfg.button("⬇ Download", key=f"{key_prefix}_download", type="primary"):
+    clicked = cfg.button("⬇ Download", key=f"{key_prefix}_download", type="primary")
+    download_slot = cfg.empty()
+    if clicked:
         # UX-166: as for the main area's ⬇ Download now — the dataset card must
         # not cover the download with a step that isn't what is running.
         loading.release_page()
         try:
-            with st.spinner(f"Downloading into {root} …"):
-                download(root)
+            _download_with_card(
+                download_slot, download, root, label=label, key=key_prefix
+            )
         except (OSError, ValueError) as exc:
             cfg.error(f"Download failed: {exc}")
             return False

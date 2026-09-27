@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from scanpath_studio import app, loading, progress, tabs
+from scanpath_studio import app, datasets, loading, progress, tabs
 from scanpath_studio.constants import (
     _VIEW_CORPUS,
     _VIEW_DATA,
@@ -234,8 +234,13 @@ def test_the_author_editor_stays_above_the_view(at, monkeypatch):
 
 def test_a_download_takes_the_dataset_card_down_first(at, monkeypatch):
     """UX-7(b)'s ⬇ Download now runs while the dataset card is still open. The
-    card must come down first, or it hides the panel and its spinner behind a
-    step that isn't what is running."""
+    card must come down first, or it hides the panel behind a step that isn't
+    what is running.
+
+    UX-168: downloading now opens its own progress card around the fetch, so
+    ``covered()`` is True once the download starts — that card, not the old
+    dataset skeleton, is what covers. ``page_up`` is the assertion that
+    matters here: the *page* (the skeleton) is what must be gone."""
     seen = {}
 
     def _download(_root):
@@ -248,7 +253,31 @@ def test_a_download_takes_the_dataset_card_down_first(at, monkeypatch):
     _loading_an_unavailable_corpus(monkeypatch, download=_download)
     at.run()
     at.button(key="t6_download_main").click().run()
-    assert seen == {"page_up": False, "covered": False}
+    assert seen == {"page_up": False, "covered": True}
+
+
+def test_the_editors_download_releases_the_page_first(at, monkeypatch, tmp_path):
+    """Ruling T6-8: the editor's own ⬇ Download (`_dataset_access_status`)
+    must release the page before downloading too, exactly like the main-area
+    ⬇ Download now above — same fixture shape, driven on PoTeC's editor
+    button instead of the main-area empty-state one."""
+    seen = {}
+
+    def _download(_root):
+        state = loading._RUN.get()
+        seen["page_up"] = state is not None and state.page is not None
+        seen["covered"] = loading.covered()
+        raise OSError("offline")  # the run carries on, no rerun
+
+    monkeypatch.setattr(loading, "DELAY_S", 0)
+    monkeypatch.setattr(datasets, "download_potec", _download)
+    at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
+    at.session_state["public_dataset_choice"] = "PoTeC — Potsdam Textbook Corpus"
+    at.session_state["potec_dir"] = str(tmp_path)  # empty dir → not present yet
+    at.run()
+    assert not at.exception, at.exception
+    at.button(key="potec_download").click().run()
+    assert seen == {"page_up": False, "covered": True}
 
 
 def test_an_unavailable_corpus_gets_no_counts_on_its_card(at, monkeypatch):

@@ -6572,13 +6572,35 @@ CANCELLED_LOAD_KEY = "_sps_cancelled_load"
 
 
 def _dataset_cancel(token: str, task_key: tuple) -> loading.Cancel | None:
-    """The dataset card's Cancel: back to the last dataset that finished loading
-    in this session, else the Bundled demo — never back to the one it cancels."""
-    back = st.session_state.get(LAST_LOADED_SOURCE_KEY) or DEMO_CHOICE
-    if back == token:
-        back = DEMO_CHOICE
+    """The dataset card's Cancel: only for a load the user started — cold, or
+    by switching away from what was already on screen.
+
+    **T8-2:** the last dataset that *finished* loading is where Cancel goes
+    back to, but a rerun of **that same dataset** (a filter change, a
+    re-normalization, a slow step on ✏️ Edit dataset) must offer none at all —
+    there is nothing the user asked to leave, and clicking it would abandon the
+    dataset they are looking at. The Bundled demo is the fallback only when
+    nothing has finished loading yet this session, never back to `token` itself
+    either way.
+
+    **T8-5:** `back` must also be a dataset this run can actually open —
+    `resolve_data_source` heals a stale/hidden/removed selection to
+    `entries[0]` (published as `_data_source_entries`, before this runs), so a
+    button still reading "Back to <back>" could silently reopen something else.
+    Falls back to the demo when it is offered and isn't `token`, else no
+    Cancel.
+    """
+    last = st.session_state.get(LAST_LOADED_SOURCE_KEY)
+    if last == token:
+        return None
+    back = last or DEMO_CHOICE
     if back == token:
         return None
+    entries = st.session_state.get("_data_source_entries") or ()
+    if back not in entries:
+        if DEMO_CHOICE not in entries or DEMO_CHOICE == token:
+            return None
+        back = DEMO_CHOICE
     return loading.Cancel(
         f"Back to {_dataset_display_name(back)}",
         _cancel_dataset_load,
@@ -6625,13 +6647,19 @@ def _open_dataset_card(
 ) -> loading.Card | None:
     """UX-166: this run's dataset card, or ``None`` when there is no load to wait on.
 
-    A switch to ``view`` opens it at once, titled for the view, without steps
-    or a stable task key: the dataset is loaded already, so the skeleton is
-    what answers the click, and each switch's task is its own (never joined by
-    a load's task, nor joining one — nor a later switch to the same view, which
-    must never join a stale one either), while `DATASET_TASK_KEY` still names
-    the dataset's — a view switch in the middle of a load is not "another
-    dataset".
+    A switch to ``view`` opens the task-less "Opening <view>" card at once,
+    titled for the view and without steps, **only when no load was already in
+    flight** (`previous is None` below): the dataset is loaded already, so the
+    skeleton is what answers the click, and each switch's task is its own
+    (never joined by a load's task, nor joining one — nor a later switch to the
+    same view, which must never join a stale one either). **T8-3:** a view
+    switch that instead lands on an in-flight load — the previous run's, or one
+    a dataset pick in the same click just started — opens the ordinary dataset
+    card instead (steps, Cancel, the explicit `task_key`, so it joins that
+    load), revealed at once rather than task-less: a load's own progress and
+    Cancel must never be hidden behind the view-switch skeleton. `DATASET_TASK_KEY`
+    still names the dataset's either way — a view switch in the middle of a
+    load is not "another dataset".
 
     **UX-168:** a run that finds *another* dataset's task still marked running
     under `DATASET_TASK_KEY` was started by picking this one mid-load (directly,
@@ -6654,7 +6682,7 @@ def _open_dataset_card(
     if previous is not None and tuple(previous) != task_key:
         progress.cancel(tuple(previous))
     st.session_state[DATASET_TASK_KEY] = task_key
-    if view_switched:
+    if view_switched and previous is None:
         return page.open_card(
             title=f"Opening {view_label(view)}",
             reveal_now=True,
@@ -6671,7 +6699,7 @@ def _open_dataset_card(
         cancel=_dataset_cancel(token, task_key),
         task_key=task_key,
         duration_key=("dataset", token),
-        reveal_now=finalizing,
+        reveal_now=finalizing or view_switched,
     )
 
 

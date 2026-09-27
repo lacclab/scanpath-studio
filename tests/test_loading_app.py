@@ -418,6 +418,12 @@ def test_the_views_blocks_keep_their_place_when_a_notice_comes_and_goes(
 
 
 def test_cancel_goes_back_to_the_last_dataset_and_try_again_returns(at, monkeypatch):
+    # T8-5: Cancel's "back" must be one of this run's own `_data_source_entries`
+    # (`resolve_data_source`'s published list) — and the synthetic trial is only
+    # ever in that list while debug mode is on or it is the active choice, so
+    # once the run below switches away from it, it needs debug mode to still be
+    # a reachable "Back to …" target instead of silently offering none.
+    monkeypatch.setattr(app, "debug_enabled", lambda: True)
     at.run()  # synthetic finishes: it is the dataset Cancel goes back to
     monkeypatch.setattr(loading, "DELAY_S", 0)
     # Ruling T3-1: freezing with `st.stop()` leaves a stopped run's cards to be
@@ -476,3 +482,98 @@ def test_the_compare_cancel_goes_back_to_this_dataset():
     at = AppTest.from_function(_compare_cancel_script).run()
     at.button(key="c").click().run()
     assert at.session_state[COMPARE_SOURCE_STATE_KEY] == tabs.THIS_DATASET
+
+
+def test_compares_cancel_names_a_and_returns_to_this_dataset(at, monkeypatch):
+    """T8-4: the full-app wiring — `loading_slot=plot_loading_slot` reaching
+    `_resolve_compare_source`, the card it opens, and the callback — pinned
+    together rather than only through the isolated script above."""
+    at.session_state["single_compare_toggle"] = True
+    at.session_state[COMPARE_SOURCE_STATE_KEY] = app.DEMO_CHOICE
+    monkeypatch.setattr(loading, "DELAY_S", 0)
+    monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
+    monkeypatch.setattr(tabs, "load_secondary_dataset", _stop)
+    at.run()
+    cancel = at.button(key="sps_cancel_compare_dataset")
+    assert cancel.label == f"Compare within {SYNTHETIC}"
+    monkeypatch.undo()
+    cancel.click().run()
+    assert at.session_state[COMPARE_SOURCE_STATE_KEY] == tabs.THIS_DATASET
+
+
+# UX-168 fix round 1 (task-8-findings-r1.md) — T8-2 … T8-5.
+
+
+def test_a_slow_rerun_of_the_dataset_on_screen_offers_no_cancel(at, monkeypatch):
+    """T8-2: Cancel is for a load the user started — cold, or by switching away
+    from what was on screen — never for a slow rerun of the dataset already on
+    screen (a filter change, a re-normalization, a slow ✏️ Edit dataset step):
+    there is nothing to switch away from, and clicking it must not abandon the
+    dataset the user is looking at."""
+    at.run()  # synthetic finishes: LAST_LOADED_SOURCE_KEY == SYNTHETIC == token
+    monkeypatch.setattr(loading, "DELAY_S", 0)
+    monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
+    monkeypatch.setattr(app, "prepare_data", _stop)
+    at.run()  # a rerun of the SAME dataset, now slow
+    with pytest.raises(KeyError):
+        at.button(key="sps_cancel_page")
+
+
+def test_the_demos_own_first_load_of_a_session_gets_no_cancel(monkeypatch):
+    """T8-4: `_dataset_cancel`'s ``None`` branch — with nothing finished loading
+    yet this session, the demo is the fallback ``back``, but never Cancel back
+    to the very dataset it would be cancelling."""
+    test = AppTest.from_file(APP_SCRIPT, default_timeout=120)
+    test.session_state["data_source_choice"] = app.DEMO_CHOICE
+    monkeypatch.setattr(loading, "DELAY_S", 0)
+    monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
+    monkeypatch.setattr(app, "prepare_data", _stop)
+    test.run()
+    with pytest.raises(KeyError):
+        test.button(key="sps_cancel_page")
+
+
+def test_a_view_switch_onto_an_in_flight_load_opens_the_loads_own_card(at, monkeypatch):
+    """T8-3: a view switch that lands on an in-flight load must not hide it
+    behind the task-less "Opening <view>" skeleton — the load's own steps and
+    Cancel have to stay visible, and its checkpoints must keep reporting to its
+    own task rather than a fresh one a later dataset pick can't find."""
+    monkeypatch.setattr(app, "debug_enabled", lambda: True)  # keeps SYNTHETIC
+    # in `_data_source_entries` below (T8-5), so Cancel has somewhere to go.
+    at.run()  # synthetic finishes: LAST_LOADED_SOURCE_KEY == SYNTHETIC
+    monkeypatch.setattr(loading, "DELAY_S", 30)  # only `reveal_now` can show it
+    monkeypatch.setattr(loading, "REFRESH_S", 30)
+    monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
+    monkeypatch.setattr(app, "prepare_data", _stop)
+    demo = app.DEMO_CHOICE
+    at.session_state["_pending_source_choice"] = demo
+    at.run()  # Bundled Demo's load starts and is now in flight
+    assert at.session_state[app.DATASET_TASK_KEY][2] == demo
+    pin_view(at, _VIEW_CORPUS)
+    at.run()  # a view switch landing on that same in-flight load
+    text = _markdown(at)
+    assert f"Loading {app._dataset_display_name(demo)}" in text
+    assert "sps-reveal-page" in text
+    assert "sps-step-done" in text  # Reading files ✓ — the in-flight task's own
+    cancel = at.button(key="sps_cancel_page")
+    assert cancel.label.startswith("Back to")
+
+
+def test_a_hidden_last_loaded_dataset_is_never_offered_as_a_cancel_target(monkeypatch):
+    """T8-5: `resolve_data_source` can heal a stale/hidden selection to
+    ``entries[0]`` — a Cancel that still read "Back to <hidden dataset>" would
+    silently reopen something else instead of what it says, so a dataset no
+    longer in this run's `_data_source_entries` must not be offered at all."""
+    test = AppTest.from_file(APP_SCRIPT, default_timeout=120)
+    test.session_state["data_source_choice"] = app.DEMO_CHOICE
+    monkeypatch.setattr(app, "debug_enabled", lambda: True)  # keeps SYNTHETIC
+    # selectable below despite not being the active dataset.
+    test.run()  # Bundled Demo finishes: LAST_LOADED_SOURCE_KEY == DEMO_CHOICE
+    test.session_state[app.HIDDEN_DATASETS_KEY] = [app.DEMO_CHOICE]
+    monkeypatch.setattr(loading, "DELAY_S", 0)
+    monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
+    monkeypatch.setattr(app, "prepare_data", _stop)
+    test.session_state["_pending_source_choice"] = SYNTHETIC
+    test.run()  # loading Synthetic, with the demo hidden since it last finished
+    with pytest.raises(KeyError):
+        test.button(key="sps_cancel_page")

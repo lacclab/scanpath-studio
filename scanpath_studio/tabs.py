@@ -2010,8 +2010,8 @@ def _resolve_compare_source(
 
     **UX-168:** ``loading_slot`` gives B's own load a card, with a Cancel back to
     "This dataset" — the compare picker is a selectbox in the middle of the plot
-    column, so ``None`` (the default — every direct test call in this module's
-    test suite) still loads B plain, with no card and no way to cancel it.
+    column, so ``None`` (the default) still loads B plain, with no card and no
+    way to cancel it.
     """
     chosen = str(st.session_state.get(COMPARE_SOURCE_KEY) or THIS_DATASET)
     if chosen == THIS_DATASET:
@@ -2024,10 +2024,8 @@ def _resolve_compare_source(
         task_key = ("compare_dataset", loading.session_id(), chosen)
         with loading.card(
             loading_slot,
-            # Not `COMPARE_SOURCE_KEY` ("cmp_dataset") — that string names the
-            # picker's own persisted widget key, and reusing it here would trip
-            # `test_every_wire_format_widget_declares_persist_state`'s AST scan
-            # (`loading.card` has no `persist_state` param to give it).
+            # This card's own key — deliberately not `COMPARE_SOURCE_KEY`
+            # ("cmp_dataset"), which names the picker's persisted widget key.
             key="compare_dataset",
             title=f"Loading {chosen} for scanpath B",
             task_key=task_key,

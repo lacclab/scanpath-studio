@@ -5914,6 +5914,8 @@ def render_single_trial_tab(
     # full range when only A is windowed, because the API's `fix_index_range`
     # windows *both* scanpaths where the app's A slider never cuts B.
     snippet_window_b = None
+    # What the Illustration disclosure is told about B's window (CMP-24).
+    window_b = full_b = None
     if comparing and not compare_fix.empty and "order_in_trial" in compare_fix:
         order_b = pd.to_numeric(compare_fix["order_in_trial"], errors="coerce").dropna()
         full_b = (int(order_b.min()), int(order_b.max())) if not order_b.empty else None
@@ -5939,6 +5941,10 @@ def render_single_trial_tab(
         data_source=st.session_state.get("_active_data_source"),
         fix_index_range=fix_range,
         full_fixation_range=full_fix_range,
+        # CMP-24: B's own flags and window disclose as A's do.
+        fixation_flags_b=figure_settings.get("fixation_flags_b"),
+        fix_index_range_b=window_b,
+        full_fixation_range_b=full_b,
         raw_gaze_only=trial_fixations.empty
         and raw_gaze is not None
         and not raw_gaze.empty,

@@ -1798,6 +1798,15 @@ def animate_scanpath(
             fixations_b,
             a_inferred=setup is None and canvas_size is None,
         )
+    full_fix_range_b = None
+    if (
+        fixations_b is not None
+        and not fixations_b.empty
+        and "order_in_trial" in fixations_b.columns
+    ):
+        order_b = pd.to_numeric(fixations_b["order_in_trial"], errors="coerce").dropna()
+        if not order_b.empty:
+            full_fix_range_b = (int(order_b.min()), int(order_b.max()))
     if fix_index_range_b is not None and fixations_b is not None:
         pid_b, tid_b = (str(v) for v in (trial_b or ("B", "B")))
         fixations_b = _apply_fix_index_range(
@@ -1822,6 +1831,12 @@ def animate_scanpath(
             {**animation_overrides, "playback_speed": playback_speed},
             fix_index_range=fix_index_range,
             full_fixation_range=full_fix_range,
+            # CMP-24: B's own flags and window, when it co-animates.
+            fixation_flags_b=animation_overrides.get("fixation_flags_b")
+            if fixations_b is not None
+            else None,
+            fix_index_range_b=fix_index_range_b,
+            full_fixation_range_b=full_fix_range_b,
         )
         animation_overrides["illustration_reasons"] = resolve_label_reasons(
             label_mode, reasons

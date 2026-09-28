@@ -284,3 +284,17 @@ def test_the_compare_legend_reads_larger_than_the_body(layout):
     """UX-172: the A/B legend is 1.3x the figure's base font."""
     fig = _figure(layout=layout, show_legend=True)
     assert fig.layout.legend.font.size == round(16 * 1.3)
+
+
+def test_bs_own_filters_disclose_like_as():
+    """Review of #251: B's Discard flags and B's window alter the figure as much
+    as A's do, so they reach the Illustration disclosure too."""
+    from scanpath_studio.illustration import illustration_reasons
+
+    assert illustration_reasons({}) == []
+    assert illustration_reasons({}, fixation_flags_b=_DISCARD_SHORT) == [
+        "flagged fixations hidden"
+    ]
+    assert illustration_reasons(
+        {}, fix_index_range_b=(1, 2), full_fixation_range_b=(1, 4)
+    ) == ["fixation subset"]

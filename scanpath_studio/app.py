@@ -132,6 +132,7 @@ from scanpath_studio.controls import (
 from scanpath_studio.data import (
     FIX_OPTIONAL_FIELDS,
     IDENTITY_SCHEMA_FIELDS,
+    STIMULUS_WORDS_FLAG,
     TRIAL_IDENTITY_SAMPLE,
     WORD_OPTIONAL_FIELDS,
     ReadPlan,
@@ -7519,10 +7520,21 @@ def _run_app() -> None:
         # AOI table stranded on the placeholder reader, so every scanpath drew
         # without its boxes and text. Repair it once, in the store itself, so
         # the recovery cache writes the repaired frames and it stays fixed.
-        repaired = repair_stranded_stimulus_words(stored["words"], stored["fixations"])
-        if repaired is not None:
-            stored = {**stored, "words": repaired[0], "fixations": repaired[1]}
-            st.session_state["_datasets"][data_choice] = stored
+        # A repair that cannot be made is not retried while the frames are the
+        # same: the diagnosis is only "the flag is still set", so a failed
+        # attempt would otherwise redo the whole harmonize on every rerun.
+        failed = st.session_state.setdefault("_data39_repair_failed", {})
+        attempt = frame_fingerprint(stored["words"])
+        if failed.get(data_choice) != attempt:
+            repaired = repair_stranded_stimulus_words(
+                stored["words"], stored["fixations"]
+            )
+            if repaired is not None:
+                stored = {**stored, "words": repaired[0], "fixations": repaired[1]}
+                st.session_state["_datasets"][data_choice] = stored
+                failed.pop(data_choice, None)
+            elif STIMULUS_WORDS_FLAG in stored["words"].columns:
+                failed[data_choice] = attempt
         words_df, fixations_df = stored["words"], stored["fixations"]
         raw_gaze_df = stored["raw_gaze"]
         raw_words_df, raw_fixations_df = words_df, fixations_df

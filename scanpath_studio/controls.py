@@ -3244,14 +3244,27 @@ def render_pattern_help(host, fields: dict) -> None:
 def _trial_rows(
     frame: pd.DataFrame | None, trial_fixations: pd.DataFrame
 ) -> pd.DataFrame:
-    """``frame``'s rows for the trial ``trial_fixations`` holds (EXP-22)."""
+    """``frame``'s rows for the trial ``trial_fixations`` holds (EXP-22).
+
+    Cached on the frame's fingerprint and the trial: ``frame`` is the filtered
+    corpus, and slicing it by string ids is a full scan the rail would otherwise
+    repeat on every rerun while *Title & caption* is on."""
     if frame is None or frame.empty or trial_fixations.empty:
         return pd.DataFrame()
-    mask = pd.Series(True, index=frame.index)
-    for column in ("participant_id", "trial_id"):
-        if column in frame.columns and column in trial_fixations.columns:
-            mask &= frame[column].astype(str) == str(trial_fixations[column].iloc[0])
-    return frame[mask]
+    ids = tuple(
+        (column, str(trial_fixations[column].iloc[0]))
+        for column in ("participant_id", "trial_id")
+        if column in frame.columns and column in trial_fixations.columns
+    )
+    return _c_trial_rows(frame, frame_fingerprint(frame), ids)
+
+
+@st.cache_data(show_spinner=False, max_entries=8)
+def _c_trial_rows(_frame: pd.DataFrame, fingerprint, ids: tuple) -> pd.DataFrame:
+    mask = pd.Series(True, index=_frame.index)
+    for column, value in ids:
+        mask &= _frame[column].astype(str) == value
+    return _frame[mask]
 
 
 def _selected_metadata_rows(trial_fixations: pd.DataFrame | None) -> dict:

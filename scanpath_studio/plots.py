@@ -548,6 +548,17 @@ _LEGEND_RESERVE_PX = 60
 # Top reserve for the overlay-comparison figure's title + A/B legend (same idea
 # as _LEGEND_RESERVE_PX, but the title needs a touch more room).
 _OVERLAY_TOP_PX = 64
+#: UX-172: the Compare A/B legend is the only thing naming the two readings, so
+#: it reads larger than the figure's body text (overlay, split and co-animation).
+_COMPARE_LEGEND_FONT_SCALE = 1.3
+
+
+def _compare_legend_font(base_font_size, font_family=None) -> dict:
+    """The A/B legend's font in every Compare figure (UX-172)."""
+    font = {"size": round(float(base_font_size or 16) * _COMPARE_LEGEND_FONT_SCALE)}
+    if font_family:
+        font["family"] = font_family
+    return font
 
 
 # A horizontal colorbar sits below the plot, so it reserves bottom (not right).
@@ -4345,6 +4356,8 @@ def _render_scanpath_animation(
             bordercolor="#cccccc",
             borderwidth=1,
         )
+        if dual:
+            layout["legend"]["font"] = _compare_legend_font(base_font_size, font_family)
     fig.update_layout(**layout)
     # BUG-93: the replay's clock — each frame's reading time and the speed — for
     # the wall-clock player every HTML surface embeds, plus VIZ-10's autoplay
@@ -5287,10 +5300,17 @@ def _make_split_comparison_figure(
         margin=dict(
             l=grid_left,
             r=0,
-            t=24 if show_legend else 0,
+            t=(_compare_legend_font(base_font_size)["size"] + 14) if show_legend else 0,
             b=bottom_px + grid_bottom,
         ),
-        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.05,
+            xanchor="right",
+            x=1,
+            font=_compare_legend_font(base_font_size, font_family),
+        ),
         template="plotly_white",
         plot_bgcolor=background_color,
         paper_bgcolor=background_color,
@@ -5635,7 +5655,14 @@ def _render_comparison_figure(
         margin=dict(l=grid_left, r=0, t=top_px, b=bottom_px + grid_bottom),
         xaxis=xaxis,
         yaxis=yaxis,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+            font=_compare_legend_font(base_font_size, font_family),
+        ),
         template="plotly_white",
         plot_bgcolor=background_color,
         paper_bgcolor=background_color,

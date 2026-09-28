@@ -277,3 +277,10 @@ def _share_app():
     ]
     query, _caveats = _build_share_query(DEMO_CHOICE)
     st.session_state["_query"] = query
+
+
+@pytest.mark.parametrize("layout", ["overlay", "side_by_side"])
+def test_the_compare_legend_reads_larger_than_the_body(layout):
+    """UX-172: the A/B legend is 1.3x the figure's base font."""
+    fig = _figure(layout=layout, show_legend=True)
+    assert fig.layout.legend.font.size == round(16 * 1.3)

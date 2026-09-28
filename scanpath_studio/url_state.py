@@ -2696,6 +2696,19 @@ def _build_share_query(
     if snapshot is not None:
         params[SETUP_PROVENANCE_PARAM] = format_provenance_param(snapshot)
 
+    # EXP-22: a `{trials.font_size}`-style field reads a metadata table, and
+    # the tables belong to the sender's dataset — they never ride a link. The
+    # pattern travels; its value only resolves where the same table is attached.
+    if st.session_state.get("global_show_title_caption") and any(
+        f"{{{table}." in str(st.session_state.get(key) or "")
+        for key in ("global_title_pattern", "global_caption_pattern")
+        for table in ("participants", "trials", "texts")
+    ):
+        caveats.append(
+            "The title or caption names a metadata table's field (like "
+            "`{trials.font_size}`). Metadata tables don't travel in a link, so "
+            "it shows empty unless the recipient attaches the same table."
+        )
     return urlencode(params), caveats
 
 

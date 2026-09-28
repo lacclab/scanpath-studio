@@ -122,3 +122,29 @@ def test_the_list_heads_each_tables_fields():
     assert "{trials.font_size}" in tables
     # Only the known tables are grouped; any other dotted name stays plain.
     assert "{words.x}" in text and "**AOI table**" in text
+
+
+def _share_app():
+    import streamlit as st
+
+    from scanpath_studio.constants import DEMO_CHOICE
+    from scanpath_studio.url_state import _build_share_query
+
+    st.session_state["_share_selection"] = {"participant_id": "p1", "trial_id": "t1"}
+    st.session_state["global_show_title_caption"] = True
+    st.session_state["global_title_pattern"] = st.session_state["_pattern"]
+    _query, caveats = _build_share_query(DEMO_CHOICE)
+    st.session_state["_caveats"] = caveats
+
+
+@pytest.mark.parametrize(
+    ("pattern", "warned"),
+    [("{trials.font_size}", True), ("{trial_id}", False)],
+)
+def test_the_link_says_a_metadata_field_does_not_travel(pattern, warned):
+    at = streamlit_testing.AppTest.from_function(_share_app)
+    at.session_state["_pattern"] = pattern
+    at.run(timeout=30)
+    assert not at.exception, at.exception
+    said = any("Metadata tables" in c for c in at.session_state["_caveats"])
+    assert said is warned

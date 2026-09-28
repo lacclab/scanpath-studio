@@ -223,6 +223,38 @@ CMP_OPACITY = "cmp{idx}_opacity"
 # UX-31: the A/B legend label override ("" = the auto "participant · trial").
 CMP_LABEL_PATTERN = "cmp{idx}_label_pattern"
 
+# --- CMP-24: scanpath B's own filters in Compare ----------------------------
+# A's filters are the rail's ordinary ones (`global_fixclass_*`,
+# `global_saccade_classes`, `single_fix_range`), which is what makes a filter set
+# on one trial still apply once a second is brought in. Only B has keys of its
+# own — B-only on purpose rather than `cmp{idx}_*` templates, since a `cmp0_*`
+# copy would hand A a second, competing filter. B's Highlight marker and colour
+# are A's: what B chooses is *which* fixations, not how a flag is drawn.
+CMP_B_FIXCLASS_SHORT_MODE = "cmp1_fixclass_short_mode"
+CMP_B_FIXCLASS_SHORT_THRESHOLD_MS = "cmp1_fixclass_short_threshold_ms"
+CMP_B_FIXCLASS_LONG_MODE = "cmp1_fixclass_long_mode"
+CMP_B_FIXCLASS_LONG_THRESHOLD_MS = "cmp1_fixclass_long_threshold_ms"
+CMP_B_FIXCLASS_OOB_MODE = "cmp1_fixclass_oob_mode"
+CMP_B_FIXCLASS_BLINK_MODE = "cmp1_fixclass_blink_mode"
+CMP_B_SACCADE_CLASSES = "cmp1_saccade_classes"
+#: B's fixation-index window — VIZ-7's slider, for the second scanpath.
+SINGLE_COMPARE_FIX_RANGE = "single_compare_fix_range"
+#: …on the wire. Optional, like A's `fix_range`: an untouched window is the
+#: trial's own full range, not a setting.
+COMPARE_FIX_RANGE_PARAM = "cmp_b_fix_range"
+#: The B filter keys a saved config's second `compare` entry restores.
+COMPARE_B_FILTER_STATE_KEYS = frozenset(
+    {
+        CMP_B_FIXCLASS_SHORT_MODE,
+        CMP_B_FIXCLASS_SHORT_THRESHOLD_MS,
+        CMP_B_FIXCLASS_LONG_MODE,
+        CMP_B_FIXCLASS_LONG_THRESHOLD_MS,
+        CMP_B_FIXCLASS_OOB_MODE,
+        CMP_B_FIXCLASS_BLINK_MODE,
+        CMP_B_SACCADE_CLASSES,
+    }
+)
+
 #: EXP-19 — the link's spelling of the same styles: ``cmp_a_<field>`` for the
 #: first scanpath (``cmp0_*``) and ``cmp_b_<field>`` for the second (``cmp1_*``),
 #: ``<field>`` being the saved config's own name for it. The letters rather than
@@ -438,6 +470,12 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
         **_compare_style_params(
             "fix_color", "saccade_color", "saccade_style", "label_pattern"
         ),
+        # CMP-24.
+        "cmp_b_saccade_classes": CMP_B_SACCADE_CLASSES,
+        "cmp_b_fixclass_short_mode": CMP_B_FIXCLASS_SHORT_MODE,
+        "cmp_b_fixclass_long_mode": CMP_B_FIXCLASS_LONG_MODE,
+        "cmp_b_fixclass_oob_mode": CMP_B_FIXCLASS_OOB_MODE,
+        "cmp_b_fixclass_blink_mode": CMP_B_FIXCLASS_BLINK_MODE,
     }
 )
 
@@ -456,6 +494,9 @@ SHARE_INT_PARAMS: Mapping[str, str] = MappingProxyType(
         "canvas_width": GLOBAL_CANVAS_WIDTH,
         "canvas_height": GLOBAL_CANVAS_HEIGHT,
         "base_font_size": GLOBAL_BASE_FONT_SIZE,
+        # CMP-24.
+        "cmp_b_fixclass_short_threshold_ms": CMP_B_FIXCLASS_SHORT_THRESHOLD_MS,
+        "cmp_b_fixclass_long_threshold_ms": CMP_B_FIXCLASS_LONG_THRESHOLD_MS,
     }
 )
 
@@ -497,6 +538,8 @@ SHARE_INT_RANGE_PARAMS: Mapping[str, str] = MappingProxyType(
         FIX_RANGE_PARAM: SINGLE_FIX_RANGE,
         # EXP-19.
         **_compare_style_params("marker_size_range"),
+        # CMP-24 — B's window; optional on the same terms as A's.
+        COMPARE_FIX_RANGE_PARAM: SINGLE_COMPARE_FIX_RANGE,
     }
 )
 
@@ -575,17 +618,33 @@ SETUP_PARAMS: Mapping[str, str] = MappingProxyType(
         "use_stimulus_font_pt": GLOBAL_USE_STIMULUS_FONT_PT,
     }
 )
+#: CMP-24 — B's filters travel on the terms of B's styles: only beside a
+#: `compare=`, and only when they differ from a fresh session's.
+COMPARE_B_FILTER_PARAMS: Mapping[str, str] = MappingProxyType(
+    {
+        "cmp_b_saccade_classes": CMP_B_SACCADE_CLASSES,
+        "cmp_b_fixclass_short_mode": CMP_B_FIXCLASS_SHORT_MODE,
+        "cmp_b_fixclass_short_threshold_ms": CMP_B_FIXCLASS_SHORT_THRESHOLD_MS,
+        "cmp_b_fixclass_long_mode": CMP_B_FIXCLASS_LONG_MODE,
+        "cmp_b_fixclass_long_threshold_ms": CMP_B_FIXCLASS_LONG_THRESHOLD_MS,
+        "cmp_b_fixclass_oob_mode": CMP_B_FIXCLASS_OOB_MODE,
+        "cmp_b_fixclass_blink_mode": CMP_B_FIXCLASS_BLINK_MODE,
+    }
+)
 COMPARE_STYLE_PARAMS: Mapping[str, str] = MappingProxyType(
-    _compare_style_params(
-        "fix_color",
-        "saccade_color",
-        "saccade_style",
-        "saccade_width",
-        "marker_size_range",
-        "hollow",
-        "opacity",
-        "label_pattern",
-    )
+    {
+        **_compare_style_params(
+            "fix_color",
+            "saccade_color",
+            "saccade_style",
+            "saccade_width",
+            "marker_size_range",
+            "hollow",
+            "opacity",
+            "label_pattern",
+        ),
+        **COMPARE_B_FILTER_PARAMS,
+    }
 )
 
 # Session keys `app.main`'s `?source=` dispatch writes when a link names a data
@@ -609,6 +668,7 @@ URL_OPTIONAL_PARAMS = frozenset(
         COMPARE_SOURCE_PARAM,
         PARAM_CORPUS,
         FIX_RANGE_PARAM,
+        COMPARE_FIX_RANGE_PARAM,
         *SETUP_PARAMS,
         *COMPARE_STYLE_PARAMS,
     }
@@ -650,6 +710,8 @@ URL_BOUNDED_STATE_KEYS = frozenset(
         GLOBAL_COLORBAR_TICKFONT_SIZE,
         GLOBAL_FIXCLASS_SHORT_THRESHOLD_MS,
         GLOBAL_FIXCLASS_LONG_THRESHOLD_MS,
+        CMP_B_FIXCLASS_SHORT_THRESHOLD_MS,
+        CMP_B_FIXCLASS_LONG_THRESHOLD_MS,
         # EXP-19 — every numeric one of the two new groups.
         GLOBAL_CANVAS_WIDTH,
         GLOBAL_CANVAS_HEIGHT,
@@ -855,6 +917,8 @@ PLOT_CONFIG_OTHER_STATE_KEYS = frozenset(
         SINGLE_COMPARE_STIMULUS,
         # BUG-72 — the replay speed, restored from the config's `animation`.
         SINGLE_PLAYBACK_SPEED,
+        # CMP-24 — B's filters, from the config's second `compare` entry.
+        *COMPARE_B_FILTER_STATE_KEYS,
     }
 )
 

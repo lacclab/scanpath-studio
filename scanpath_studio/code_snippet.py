@@ -338,6 +338,9 @@ class FigureState:
     title: str = ""
     caption: str = ""
     fix_index_range: tuple[int, int] | None = None
+    #: CMP-24 — scanpath B's own window (``compare_scanpaths`` /
+    #: ``animate_scanpath``'s ``fix_index_range_b``); only beside a ``compare``.
+    fix_index_range_b: tuple[int, int] | None = None
     illustration_label: str = "auto"
     drift_correction: str | None = None
     drift_connectors: bool = False
@@ -424,7 +427,12 @@ def figure_kwargs(
         if key in _DERIVED_SETTINGS:
             continue
         value = settings[key]
+        if key == "fixation_flags_b" and _same_flags(
+            value, settings.get("fixation_flags")
+        ):
+            continue  # CMP-24: B inheriting A's flags is the builder's default
         if key in _COMPARE_STYLE_SIDES:
+            value = _drop_inherited_filters(value, settings)
             # The rail always builds a complete style dict, so the one an
             # untouched Compare carries is not a choice anyone made — only
             # what it changes is (EXP-20).
@@ -446,6 +454,53 @@ def figure_kwargs(
 
 #: The per-scanpath style options → which scanpath each styles.
 _COMPARE_STYLE_SIDES = {"style_a": 0, "style_b": 1}
+
+
+def _active_flags(flags) -> dict:
+    """The part of a fixation-flags dict that draws anything: each category not
+    *Off*, with the threshold short/long use. Two dicts with the same active
+    part filter identically (CMP-24)."""
+    out = {}
+    for category, spec in (flags or {}).items():
+        if not isinstance(spec, dict) or str(spec.get("mode") or "Off") == "Off":
+            continue
+        entry = {"mode": spec.get("mode")}
+        if category in ("short", "long") and spec.get("threshold_ms") is not None:
+            entry["threshold_ms"] = float(spec["threshold_ms"])
+        out[category] = entry
+    return out
+
+
+def _same_flags(a, b) -> bool:
+    return _active_flags(a) == _active_flags(b)
+
+
+def _visible_classes(classes) -> frozenset | None:
+    from .constants import SACCADE_CLASS_ORDER
+
+    if not classes or set(classes) >= set(SACCADE_CLASS_ORDER):
+        return None
+    return frozenset(classes)
+
+
+def _drop_inherited_filters(style, settings: dict):
+    """A per-scanpath style without the filters it merely repeats (CMP-24).
+
+    The rail hands B its whole filter set every run; where it equals the
+    figure's own ``fixation_flags`` / ``saccade_classes`` the builder draws B the
+    same without it, so a snippet should not restate it."""
+    if not isinstance(style, dict):
+        return style
+    style = dict(style)
+    if "fixation_flags" in style and _same_flags(
+        style["fixation_flags"], settings.get("fixation_flags")
+    ):
+        style.pop("fixation_flags")
+    if "saccade_classes" in style and _visible_classes(
+        style["saccade_classes"]
+    ) == _visible_classes(settings.get("saccade_classes")):
+        style.pop("saccade_classes")
+    return style
 
 
 def compare_style_delta(style, idx: int, marker_size_range) -> dict | None:
@@ -537,11 +592,12 @@ def _highlight_column(value):
     return ["--highlight-column", "" if value is None else str(value)]
 
 
-def _fixation_flags(value):
+def _fixation_flags(value, flag: str = "--fixation-flag"):
     """The PRE-2 classification dict → one ``--fixation-flag`` per category.
 
     Only categories that are actually doing something are written: an *Off*
     category is the default, and the builder reads a missing one the same way.
+    ``flag`` is ``--compare-fixation-flag`` for scanpath B's own (CMP-24).
     """
     argv: list[str] = []
     for category, spec in (value or {}).items():
@@ -559,8 +615,15 @@ def _fixation_flags(value):
             parts.append(f"symbol={spec['symbol']}")
         if spec.get("color"):
             parts.append(f"color={spec['color']}")
-        argv += ["--fixation-flag", ",".join(parts)]
+        argv += [flag, ",".join(parts)]
     return argv
+
+
+def _compare_fixation_flags(value):
+    """B's flags (CMP-24). An all-*Off* set still has to be said when A's are
+    on, or B would inherit them — so it is spelled as one explicit *off*."""
+    argv = _fixation_flags(value, "--compare-fixation-flag")
+    return argv or ["--compare-fixation-flag", "short=off"]
 
 
 def _heatmap_metric(value):
@@ -757,6 +820,15 @@ def _style_spec(flag: str) -> Any:
     def emit(value):
         if not isinstance(value, dict) or not value:
             return []
+        filters: list[str] = []
+        if flag == "--style-b":
+            # CMP-24: B's filters have flags of their own, not style keys.
+            if "fixation_flags" in value:
+                filters += _compare_fixation_flags(value["fixation_flags"])
+            if "saccade_classes" in value:
+                filters += _comma_list("--compare-saccade-classes")(
+                    value["saccade_classes"]
+                )
         parts = []
         for key in _STYLE_SPEC_KEYS:
             if key not in value:
@@ -772,7 +844,7 @@ def _style_spec(flag: str) -> Any:
             else:
                 text = str(item)
             parts.append(f"{key}={text}")
-        return [flag, ",".join(parts)] if parts else []
+        return ([flag, ",".join(parts)] if parts else []) + filters
 
     return emit
 
@@ -881,6 +953,8 @@ _CLI_EMITTERS: dict[str, Any] = {
     "compare_stimulus": _lowercase("--compare-stimulus"),
     "style_a": _style_spec("--style-a"),
     "style_b": _style_spec("--style-b"),
+    # CMP-24 — the co-animation's B flags.
+    "fixation_flags_b": _compare_fixation_flags,
     "background_image_b": _valued("--stimulus-image-b"),
     "background_image_size_b": _pair("--stimulus-image-size-b", "x"),
     "background_image_origin_b": _pair("--stimulus-image-origin-b", ","),
@@ -891,7 +965,7 @@ _CLI_EMITTERS: dict[str, Any] = {
 #: the animation builder takes them and ignores them — so there they are left
 #: off the command rather than written into one `render` would reject.
 _COMPARE_ONLY_SETTINGS = frozenset(
-    {"show_legend", "label_a", "label_b", "compare_stimulus"}
+    {"show_legend", "label_a", "label_b", "compare_stimulus", "fixation_flags_b"}
 )
 
 
@@ -961,6 +1035,10 @@ def _call_kwargs(state: FigureState, *, explicit: bool) -> list[tuple[str, Any]]
             # no such keyword — see CLAUDE.md's render-path table.
             if state.drift_connectors and state.kind == "static":
                 out.append(("drift_connectors", True))
+    # CMP-24 — B's own window, on both builders that draw a B.
+    if state.fix_index_range_b and state.compare is not None:
+        lo, hi = state.fix_index_range_b
+        out.append(("fix_index_range_b", (int(lo), int(hi))))
     # The disclosure is a rail choice, not a derived value: `illustration_reasons`
     # (what the app resolved it to) is in `_DERIVED_SETTINGS`, so without the
     # *label mode* the snippet would silently re-derive at "auto" and disagree
@@ -1208,6 +1286,9 @@ def cli_snippet(
     if state.fix_index_range:
         lo, hi = state.fix_index_range
         argv += ["--fix-index-range", f"{int(lo)}:{int(hi)}"]
+    if state.fix_index_range_b and state.compare is not None:
+        lo, hi = state.fix_index_range_b
+        argv += ["--compare-fix-index-range", f"{int(lo)}:{int(hi)}"]
     if draws_raw_gaze(state):
         argv += _raw_gaze_cli(source)
     if state.kind == "comparison":

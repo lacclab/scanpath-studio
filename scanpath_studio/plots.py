@@ -118,6 +118,9 @@ class FigureSettings:
     background_color: str | None = None
     color_by_line: bool = False
     fixation_flags: dict | None = None
+    #: CMP-24: scanpath B's own flags in a co-animation (Animate + Compare);
+    #: ``None`` gives B the same ``fixation_flags`` as A.
+    fixation_flags_b: dict | None = None
     span_border_color: str = "#000000"
     colorbar_orientation: str = "Vertical"
     colorbar_tickangle: int = 0
@@ -1745,22 +1748,7 @@ def _add_saccade_layer(
             fixations, x_field, y_field, arch_frac
         )
         if amx and keep is not None and saccade_classes is not None:
-            # An arrowhead belongs to the saccade leaving fixation `aseg[j]` in
-            # time order, which is exactly how `_saccade_segments_by_class` keys
-            # a segment — so the filter drops arrows for hidden saccades instead
-            # of leaving them floating over nothing.
-            ordered_cls = saccade_classes.reindex(
-                fixations.sort_values("timestamp_ms").index
-            ).tolist()
-            mask = [
-                (
-                    "other"
-                    if i >= len(ordered_cls) or pd.isna(ordered_cls[i])
-                    else ordered_cls[i]
-                )
-                in keep
-                for i in aseg
-            ]
+            mask = _arrow_class_mask(fixations, saccade_classes, keep, aseg)
             amx = [v for v, m in zip(amx, mask) if m]
             amy = [v for v, m in zip(amy, mask) if m]
             aang = [v for v, m in zip(aang, mask) if m]
@@ -3671,6 +3659,7 @@ def _render_scanpath_animation(
     fixation_colorscale = settings.fixation_colorscale
     fixation_color_range = settings.fixation_color_range
     fixation_flags = settings.fixation_flags
+    fixation_flags_b = settings.fixation_flags_b
     show_colorbars = settings.show_colorbars
     colorbar_orientation = settings.colorbar_orientation
     colorbar_tickangle = settings.colorbar_tickangle
@@ -3773,10 +3762,13 @@ def _render_scanpath_animation(
         words,
         words_b if (words_b is not None and not words_b.empty) else words,
     ]
+    # CMP-24: B carries its own flags when it was given any.
+    flags_b = flags if fixation_flags_b is None else (fixation_flags_b or {})
+    entry_flags = [flags, flags_b]
     if flags:
         fixations = _discard_flagged_fixations(fixations, entry_words[0], flags)
-        if fixations_b is not None:
-            fixations_b = _discard_flagged_fixations(fixations_b, entry_words[1], flags)
+    if flags_b and fixations_b is not None:
+        fixations_b = _discard_flagged_fixations(fixations_b, entry_words[1], flags_b)
 
     entries = [
         (fixations, COMPARISON_PALETTE[0], label_a),
@@ -3786,13 +3778,14 @@ def _render_scanpath_animation(
     # The words frame each surviving scanpath is flagged against (the highlight
     # overlay's out-of-bounds test). `_scanpath_anim_specs` skips empty
     # scanpaths, so apply the same skip rule here to stay aligned with `specs`.
-    surviving_words = [
-        w
-        for (fix_df, _color, _label), w in zip(entries, entry_words)
+    surviving = [
+        (w, f)
+        for (fix_df, _color, _label), w, f in zip(entries, entry_words, entry_flags)
         if fix_df is not None and not fix_df.empty
     ]
-    for spec, spec_words in zip(specs, surviving_words):
+    for spec, (spec_words, spec_flags) in zip(specs, surviving):
         spec["words"] = spec_words
+        spec["flags"] = spec_flags
     dual = len(specs) > 1
     if not dual and specs:
         # A lone scanpath always wears the canonical single-replay colour,
@@ -4041,10 +4034,11 @@ def _render_scanpath_animation(
         # every animated trace — fixations that aren't flagged are masked out
         # permanently, the rest un-mask as the replay reaches them.
         s["flag_overlays"] = []
-        if flags:
-            overlay_masks = _fixation_flag_masks(ordered, s["words"], flags)
+        s_flags = s.get("flags", flags)
+        if s_flags:
+            overlay_masks = _fixation_flag_masks(ordered, s["words"], s_flags)
             for category in _FIX_FLAG_CATEGORIES:
-                spec_flags = flags.get(category, {})
+                spec_flags = s_flags.get(category, {})
                 if spec_flags.get("mode") != "Highlight":
                     continue
                 hit = overlay_masks[category].to_numpy()
@@ -4403,9 +4397,63 @@ def _comparison_scanpath_style(
     }
     if override:
         # Drop falsy values (None / "") so a blank colour can't override the
-        # palette default and reach Plotly as a dark/None marker colour.
-        base.update({k: v for k, v in override.items() if v})
+        # palette default and reach Plotly as a dark/None marker colour. The
+        # per-scanpath filters (CMP-24) are the exception: an empty one is a
+        # real answer — "no filter on this scanpath" — not a missing colour.
+        base.update(
+            {
+                k: v
+                for k, v in override.items()
+                if v or (k in COMPARE_FILTER_STYLE_KEYS and v is not None)
+            }
+        )
     return base
+
+
+#: CMP-24: the style keys that carry a scanpath's own *filters* rather than its
+#: look. A comparison draws each reading under its own — the figure-level
+#: ``fixation_flags`` / ``saccade_classes`` apply to a scanpath whose style names
+#: none, so one setting filters both and a style entry overrides it per side.
+COMPARE_FILTER_STYLE_KEYS = frozenset({"fixation_flags", "saccade_classes"})
+
+
+def _visible_saccade_classes(classes: Iterable[str] | None) -> set[str] | None:
+    """The saccade classes to draw, ``None`` meaning all (VIZ-31's rule: an empty
+    or complete list is no filter)."""
+    if not classes or set(classes) >= set(SACCADE_CLASS_ORDER):
+        return None
+    return set(classes)
+
+
+def _comparison_filters(style: dict, settings: FigureSettings) -> dict:
+    """One scanpath's filters (CMP-24): its style's own, else the figure's."""
+    return dict(
+        fixation_flags=style.get("fixation_flags", settings.fixation_flags),
+        saccade_classes=style.get("saccade_classes", settings.saccade_classes),
+    )
+
+
+def _arrow_class_mask(
+    fixations: pd.DataFrame, saccade_classes: pd.Series, keep: set, aseg: list
+) -> list[bool]:
+    """Which arrowheads belong to a visible saccade class (VIZ-31).
+
+    An arrowhead belongs to the saccade leaving fixation ``aseg[j]`` in time
+    order, which is exactly how ``_saccade_segments_by_class`` keys a segment —
+    so the filter drops arrows for hidden saccades instead of leaving them
+    floating over nothing."""
+    ordered_cls = saccade_classes.reindex(
+        fixations.sort_values("timestamp_ms").index
+    ).tolist()
+    return [
+        (
+            "other"
+            if i >= len(ordered_cls) or pd.isna(ordered_cls[i])
+            else ordered_cls[i]
+        )
+        in keep
+        for i in aseg
+    ]
 
 
 def _add_comparison_fixation_trace(
@@ -4430,6 +4478,9 @@ def _add_comparison_fixation_trace(
     fixation_hover_fields: Sequence[str] | None = None,
     row: int | None = None,
     col: int | None = None,
+    trial_words: pd.DataFrame | None = None,
+    fixation_flags: dict | None = None,
+    saccade_classes: Iterable[str] | None = None,
 ) -> None:
     """Add one scanpath's saccades + fixation markers to a comparison figure.
 
@@ -4456,9 +4507,26 @@ def _add_comparison_fixation_trace(
     independent and keep their own toggles, so a lines-only comparison is still
     reachable. This is what makes a comparison *heatmap* readable: the whole
     point of the split word boxes is lost under two full sets of markers.
+
+    CMP-24: ``fixation_flags`` and ``saccade_classes`` are *this* scanpath's
+    filters, applied as the static figure applies them — *Discard* drops markers
+    and their index labels (the saccades still bridge across them), *Highlight*
+    overlays its marker, and hidden saccade classes lose their line and arrow.
+    Both need ``trial_words`` for the geometry they classify against.
     """
     if trial_fix.empty:
         return
+    words_for_flags = trial_words if trial_words is not None else pd.DataFrame()
+    keep = _visible_saccade_classes(saccade_classes)
+    class_series = None
+    if keep is not None and (show_saccades or show_saccade_arrows):
+        existing = trial_fix.get("saccade_class")
+        if existing is not None:
+            class_series = existing
+        else:
+            from .measures import classify_saccades
+
+            class_series = classify_saccades(trial_fix, words_for_flags)
     fix_color = style["fix_color"]
     saccade_color = style["saccade_color"]
     saccade_style = style.get("saccade_style", "solid")
@@ -4474,7 +4542,17 @@ def _add_comparison_fixation_trace(
     # it once so the segments and the arrowheads can never disagree (BUG-9).
     arch_frac: float | None = None
     if show_saccades and len(trial_fix) > 1:
-        sx, sy = _saccade_segments(trial_fix, "x", "y", arch_frac)
+        if class_series is not None:
+            segs = _saccade_segments_by_class(
+                trial_fix, "x", "y", class_series, arch_frac
+            )
+            sx, sy = [], []
+            for cls_name, (cx, cy) in segs.items():
+                if cls_name in keep:
+                    sx.extend(cx)
+                    sy.extend(cy)
+        else:
+            sx, sy = _saccade_segments(trial_fix, "x", "y", arch_frac)
         if sx:
             _add(
                 go.Scatter(
@@ -4491,7 +4569,12 @@ def _add_comparison_fixation_trace(
                 )
             )
     if show_saccade_arrows and len(trial_fix) > 1:
-        amx, amy, aang = _saccade_arrow_markers(trial_fix, "x", "y", arch_frac)
+        amx, amy, aang, aseg = _saccade_arrow_rows(trial_fix, "x", "y", arch_frac)
+        if amx and class_series is not None:
+            mask = _arrow_class_mask(trial_fix, class_series, keep, aseg)
+            amx = [v for v, m in zip(amx, mask) if m]
+            amy = [v for v, m in zip(amy, mask) if m]
+            aang = [v for v, m in zip(aang, mask) if m]
         if amx:
             _add(
                 go.Scatter(
@@ -4515,6 +4598,17 @@ def _add_comparison_fixation_trace(
     if not show_fixations:
         return
 
+    # Only the categories doing something: the rail always sends all four, so
+    # an untouched set must cost nothing (the classification scans the boxes).
+    flags = {
+        cat: spec
+        for cat, spec in (fixation_flags or {}).items()
+        if isinstance(spec, dict) and str(spec.get("mode") or "Off") != "Off"
+    }
+    if flags:
+        trial_fix = _discard_flagged_fixations(trial_fix, words_for_flags, flags)
+        if trial_fix.empty:
+            return
     sizes = _compute_marker_sizes(trial_fix["duration_ms"], style["marker_size_range"])
     # Metric colouring ("Color fixations by") when a numeric column is chosen:
     # colour the FILL by the metric (shared colorscale/range across both
@@ -4589,6 +4683,36 @@ def _add_comparison_fixation_trace(
             customdata=customdata,
         )
     )
+    if flags:
+        overlay = _fixation_flag_masks(trial_fix, words_for_flags, flags)
+        for cat in _FIX_FLAG_CATEGORIES:
+            spec = flags.get(cat, {})
+            if spec.get("mode") != "Highlight" or cat not in overlay:
+                continue
+            hits = trial_fix[overlay[cat]]
+            if hits.empty:
+                continue
+            name = _FIX_FLAG_LABELS[cat]
+            _add(
+                go.Scatter(
+                    x=hits["x"],
+                    y=hits["y"],
+                    mode="markers",
+                    marker=dict(
+                        symbol=spec.get("symbol") or "x",
+                        size=13,
+                        color=spec.get("color") or OUT_OF_TEXT_COLOR,
+                        line=dict(color=fix_color, width=1.5),
+                    ),
+                    name=f"{display_name} · {name}",
+                    legendgroup=display_name,
+                    showlegend=show_legend,
+                    hovertemplate=(
+                        f"{display_name} · {name} fixation<br>"
+                        "x %{x:.0f}, y %{y:.0f}<extra></extra>"
+                    ),
+                )
+            )
 
 
 def _comparison_metric_colorbar(
@@ -5040,6 +5164,8 @@ def _make_split_comparison_figure(
             fixation_hover_fields=fixation_hover_fields,
             row=row,
             col=col,
+            trial_words=spec["trial_words"],
+            **_comparison_filters(spec["style"], settings),
         )
 
         panel_fits.append(
@@ -5406,6 +5532,8 @@ def _render_comparison_figure(
             colorbar_style=cb_style,
             fixation_symbol=fixation_symbol,
             fixation_hover_fields=fixation_hover_fields,
+            trial_words=spec["trial_words"],
+            **_comparison_filters(spec["style"], settings),
         )
         if show_words and draws_stimulus[_idx]:
             existing = list(fig.layout.shapes) if fig.layout.shapes else []
@@ -6494,6 +6622,8 @@ STATIC_FIGURE_OPTIONS = _setting_names(
         # stimulus?" question to answer. The *animation* builder does read it (a
         # dual co-animation takes `words_b`), so it is NOT excluded there.
         "compare_stimulus",
+        # CMP-24 — B's flags in a co-animation; one trial has no B.
+        "fixation_flags_b",
     }
 )
 #: What `make_comparison_figure` accepts (CMP-9). Only the animation-only fields
@@ -6509,6 +6639,8 @@ COMPARISON_FIGURE_OPTIONS = _setting_names(
         "autoplay",
         "anim_grid_step_ms",
         "anim_max_frames",
+        # CMP-24 — a comparison reads B's filters off `style_b` instead.
+        "fixation_flags_b",
     }
 )
 ANIMATION_FIGURE_OPTIONS = _setting_names(

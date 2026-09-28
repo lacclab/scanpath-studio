@@ -131,10 +131,12 @@ from scanpath_studio.controls import (
     _popover_rows,
     _sub_row,
     column_mapping_ui,
+    compare_b_filters,
     corpus_style_controls,
     current_dataset_name,
     inline_field_label,
     read_trial_filters,
+    render_compare_filters,
     render_narrow_by,
     render_pattern_help,
     render_pattern_input,
@@ -1570,6 +1572,7 @@ def _publish_snippet_state(
     playback_speed: float,
     compare: CompareTarget | None,
     full_fix_range: tuple[int, int] | None = None,
+    fix_index_range_b: tuple[int, int] | None = None,
 ) -> None:
     """EXP-7: park the state the Share subtab's code snippet is written from.
 
@@ -1600,6 +1603,7 @@ def _publish_snippet_state(
         title=title,
         caption=caption,
         fix_index_range=window,
+        fix_index_range_b=fix_index_range_b if compare is not None else None,
         # "Off" is the rail's word for no correction; the API's is None.
         drift_correction=(
             None
@@ -3544,6 +3548,14 @@ def _render_save_restore_expander(
         }
         for idx in range(2)
     ]
+    # CMP-24: B's own filters ride its entry (A's are the ordinary ones). Modes
+    # and thresholds only — B draws a Highlight with A's marker and colour.
+    b_filters = compare_b_filters()
+    compare_styles[1]["fixation_flags"] = {
+        cat: {k: v for k, v in spec.items() if k in ("mode", "threshold_ms")}
+        for cat, spec in b_filters["fixation_flags"].items()
+    }
+    compare_styles[1]["saccade_classes"] = b_filters["saccade_classes"]
     plot_config = _build_studio_config(
         selected_participant=selected_participant,
         selected_trial=selected_trial,
@@ -4151,7 +4163,12 @@ def _build_and_render_animation(
     # values, then stamp the real speed and autoplay onto the copy the cache
     # hands back: moving the speed slider no longer rebuilds every frame.
     frame_settings = animation_settings.with_overrides(
-        playback_speed=1.0, autoplay=True, illustration_reasons=None
+        playback_speed=1.0,
+        autoplay=True,
+        illustration_reasons=None,
+        # CMP-24: B's flags only matter to a replay that draws B — the same rule
+        # as `fixations_b` below, so a lone replay's key never carries them.
+        **({} if dual else {"fixation_flags_b": None}),
     )
     anim_inputs = {
         field.name: getattr(frame_settings, field.name)
@@ -4736,6 +4753,8 @@ def render_single_trial_tab(
     # live in the left column, including the per-trial subtabs directly below the
     # plot. The rail is kept narrow (the plot is the hero) and scrolls separately.
     plot_col, rail_col = st.columns([4, 1], gap="large")
+    # Rail containers filled after the rail itself (CMP-24: B's filters).
+    rail_slots: dict = {}
     with rail_col:
         rail = st.container(key="scanpath_rail")
 
@@ -5367,6 +5386,8 @@ def render_single_trial_tab(
             fixations_filtered,
             base_font_size,
             host=rail,
+            # CMP-24: where scanpath B's filters go, once B is loaded below.
+            slots=rail_slots,
             has_raw_gaze=has_raw_gaze,
             has_stimulus_image=has_stimulus_image,
             words=words_filtered,
@@ -5555,6 +5576,11 @@ def render_single_trial_tab(
     )
     cross_dataset = bool(compare_meta and compare_meta.get("dataset"))
     compare_fix = compare_meta["fixations"] if compare_meta else pd.DataFrame()
+    # CMP-24: B's own filters, into the slot the rail reserved under A's — drawn
+    # here because this is the first point B's fixations exist to size its
+    # window. Everything below reads them in this same run.
+    if comparing:
+        render_compare_filters(rail_slots.get("compare_filter"), compare_fix)
     # CMP-11: the one predicate both gates below consult. Computed here because
     # this is the first point B's screen is known.
     # The *trial's* frames, not the filtered corpus: A's canvas is overwritten with
@@ -5612,7 +5638,32 @@ def render_single_trial_tab(
     # any trial B with MORE fixations than A lost its trailing ones on every
     # comparison, whether or not the slider was ever touched. B is never
     # windowed by A's control.
+    #
+    # CMP-24: B has a window of its own (`single_compare_fix_range`), bounded by
+    # B's fixations and applied on exactly A's terms — its full range published
+    # beside A's, so the Share link can tell a real window from the default.
     fig_compare_fix = compare_fix
+    # What the snippet names as B's window: B's own when it has one — and B's
+    # full range when only A is windowed, because the API's `fix_index_range`
+    # windows *both* scanpaths where the app's A slider never cuts B.
+    snippet_window_b = None
+    if comparing and not compare_fix.empty and "order_in_trial" in compare_fix:
+        order_b = pd.to_numeric(compare_fix["order_in_trial"], errors="coerce").dropna()
+        full_b = (int(order_b.min()), int(order_b.max())) if not order_b.empty else None
+        selection = st.session_state.get("_share_selection")
+        if full_b is not None and isinstance(selection, dict):
+            selection["compare_full_fix_range"] = full_b
+        window_b = st.session_state.get("single_compare_fix_range")
+        if window_b is not None and (full_b is None or tuple(window_b) != full_b):
+            fig_compare_fix = _slice_fix_range(compare_fix, window_b)
+            snippet_window_b = tuple(int(v) for v in window_b)
+        elif windowed and full_b is not None:
+            snippet_window_b = full_b
+    # The dual animation takes B's flags as a setting (the static comparison
+    # reads them off B's style); set only while comparing, so a single-trial
+    # figure's cache key is unchanged.
+    if comparing:
+        figure_settings["fixation_flags_b"] = compare_b_filters()["fixation_flags"]
     detected_reasons = illustration_reasons(
         {
             **viz_settings,
@@ -5896,6 +5947,7 @@ def render_single_trial_tab(
         caption=_snippet_caption,
         playback_speed=playback_speed,
         full_fix_range=full_fix_range,
+        fix_index_range_b=snippet_window_b,
         compare=(
             CompareTarget(
                 # The real ids, never the CMP-8 namespaced ones — a snippet
@@ -5932,7 +5984,7 @@ def render_single_trial_tab(
                 _discard_flagged_fixations(
                     fig_compare_fix,
                     compare_meta["words"],
-                    viz_settings.get("fixation_flags"),
+                    figure_settings.get("fixation_flags_b"),
                 )
                 if dual_anim
                 else None

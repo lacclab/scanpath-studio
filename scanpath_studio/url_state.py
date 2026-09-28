@@ -77,6 +77,7 @@ from .controls import (
 )
 from .experimental_setup import format_provenance_param, parse_provenance_param
 from .session_keys import (
+    COMPARE_FIX_RANGE_PARAM,
     COMPARE_LAYOUT_PARAM,
     COMPARE_PARAM,
     COMPARE_SOURCE_PARAM,
@@ -420,6 +421,13 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     },
     # EXP-19: Compare's per-scanpath colours, line style and legend label.
     **_cmp_style_params("fix_color", "saccade_color", "saccade_style", "label_pattern"),
+    # CMP-24: scanpath B's own filters — which classes it draws, and each fixation
+    # flag's mode. A's are the ordinary `saccade_classes` / `fixclass_*` above.
+    "cmp_b_saccade_classes": "cmp1_saccade_classes",
+    **{
+        f"cmp_b_fixclass_{cat}_mode": f"cmp1_fixclass_{cat}_mode"
+        for cat in ("short", "long", "oob", "blink")
+    },
 }
 #: The `_SHARE_VALUE_PARAMS` that carry a colour — read through
 #: `_parse_hex_color` rather than `str` (BUG-69).
@@ -459,6 +467,9 @@ _SHARE_INT_PARAMS = {
     "canvas_width": "global_canvas_width",
     "canvas_height": "global_canvas_height",
     "base_font_size": "global_base_font_size",
+    # CMP-24: B's two fixation-flag thresholds.
+    "cmp_b_fixclass_short_threshold_ms": "cmp1_fixclass_short_threshold_ms",
+    "cmp_b_fixclass_long_threshold_ms": "cmp1_fixclass_long_threshold_ms",
 }
 _SHARE_FLOAT_PARAMS = {
     "preproc_short_threshold_ms": "global_preproc_short_threshold_ms",
@@ -501,6 +512,9 @@ _SHARE_INT_RANGE_PARAMS = {
     FIX_RANGE_PARAM: "single_fix_range",
     # EXP-19.
     **_cmp_style_params("marker_size_range"),
+    # CMP-24 — B's own window. Written on A's terms: see the
+    # `COMPARE_FIX_RANGE_PARAM` block in `_build_share_query`.
+    COMPARE_FIX_RANGE_PARAM: "single_compare_fix_range",
 }
 _SHARE_FLOAT_RANGE_PARAMS = {
     "fixation_color_range": "global_fixation_color_range",
@@ -539,6 +553,7 @@ _URL_PRESETS = {
     # its options, so an unknown class name has to be rejected here rather than
     # wedging the rail.
     "saccade_classes": ("global_saccade_classes", _parse_saccade_classes),
+    "cmp_b_saccade_classes": ("cmp1_saccade_classes", _parse_saccade_classes),
     # CMP-11 — same rule again: both are `st.segmented_control` options.
     "cmp_layout": ("single_compare_layout", _parse_compare_layout),
     "cmp_stimulus": ("single_compare_stimulus", _parse_compare_stimulus),
@@ -560,6 +575,14 @@ _URL_PRESETS = {
             ("mode", _parse_fixclass_mode),
             ("symbol", _parse_fixclass_symbol),
         )
+    },
+    # CMP-24 — B's flag modes, the same closed vocabulary as A's.
+    **{
+        f"cmp_b_fixclass_{cat}_mode": (
+            f"cmp1_fixclass_{cat}_mode",
+            _parse_fixclass_mode,
+        )
+        for cat in ("short", "long", "oob", "blink")
     },
     # EXP-19 — the per-scanpath line style is a selectbox (raises on anything
     # else), and the legend label is figure text from someone else (BUG-75).
@@ -614,6 +637,8 @@ _URL_BOUNDED = {
     "global_colorbar_tickfont_size": (6, 20),
     "global_fixclass_short_threshold_ms": (1, 60_000),
     "global_fixclass_long_threshold_ms": (1, 60_000),
+    "cmp1_fixclass_short_threshold_ms": (1, 60_000),
+    "cmp1_fixclass_long_threshold_ms": (1, 60_000),
     # EXP-19: the recording setup and the per-scanpath styles, which used to be
     # saved-config only and clamped by `_CONFIG_BOUNDED` alone. Mirrors the
     # widgets (`app.render_canvas_controls`, `controls._render_compare_*`).
@@ -2260,6 +2285,11 @@ def _restore_plot_config(
             if isinstance(entry.get("label_pattern"), str):
                 # BUG-75: legend text is figure text too.
                 put(f"cmp{idx}_label_pattern", _strip_markup(entry["label_pattern"]))
+            # CMP-24: scanpath B's own filters ride its entry. A's are the
+            # config's ordinary `fixation_flags` / `saccade_classes`, so an
+            # entry-level copy on the first scanpath is not read.
+            if idx == 1:
+                _restore_compare_b_filters(entry, put)
 
     selection = section("selection")
     if selection:
@@ -2611,6 +2641,22 @@ def _build_share_query(
             int(v) for v in full
         ):
             params.pop(FIX_RANGE_PARAM, None)
+    # CMP-24 — B's window on exactly the terms of A's, against B's own flag and
+    # B's own full range (`compare_full_fix_range`), and only beside the
+    # `compare=` that names the trial it indexes into.
+    window_b = st.session_state.get("single_compare_fix_range")
+    if COMPARE_PARAM not in params or not st.session_state.get(
+        "single_compare_fix_range_user_set"
+    ):
+        params.pop(COMPARE_FIX_RANGE_PARAM, None)
+    elif isinstance(window_b, (list, tuple)) and len(window_b) == 2:
+        full_b = (st.session_state.get("_share_selection") or {}).get(
+            "compare_full_fix_range"
+        )
+        if full_b is not None and tuple(int(v) for v in window_b) == tuple(
+            int(v) for v in full_b
+        ):
+            params.pop(COMPARE_FIX_RANGE_PARAM, None)
     # EXP-19 — the recording setup and Compare's per-scanpath styles travel only
     # when they say something the recipient's own session would not: the
     # generic sweeps above stamp every seeded key, and a demo link that restated
@@ -2651,6 +2697,34 @@ def _build_share_query(
         params[SETUP_PROVENANCE_PARAM] = format_provenance_param(snapshot)
 
     return urlencode(params), caveats
+
+
+def _restore_compare_b_filters(entry: dict, put) -> None:
+    """Seed scanpath B's filter keys from its saved-config ``compare`` entry
+    (CMP-24) — the same validation A's ``fixation_flags`` / ``saccade_classes``
+    get, onto B's ``cmp1_*`` keys. B saves no marker or colour (it draws with
+    A's), so only each category's mode and threshold are read."""
+    flags = entry.get("fixation_flags")
+    if isinstance(flags, dict):
+        for cat in _FIXCLASS_CATEGORIES:
+            spec = flags.get(cat)
+            if not isinstance(spec, dict):
+                continue
+            if spec.get("mode") in _FIXCLASS_MODES:
+                put(f"cmp1_fixclass_{cat}_mode", spec["mode"])
+            if cat in ("short", "long") and spec.get("threshold_ms") is not None:
+                try:
+                    put(
+                        f"cmp1_fixclass_{cat}_threshold_ms",
+                        int(float(spec["threshold_ms"])),
+                    )
+                except (TypeError, ValueError):
+                    pass
+    classes = entry.get("saccade_classes")
+    if isinstance(classes, list):
+        kept = [cls for cls in SACCADE_CLASS_ORDER if cls in set(classes)]
+        if kept:
+            put("cmp1_saccade_classes", kept)
 
 
 def _link_defaults(data_choice: str) -> dict:

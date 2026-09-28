@@ -1664,6 +1664,7 @@ def animate_scanpath(
     playback_speed: float = 1.0,
     autoplay: bool = True,
     fix_index_range: tuple[int, int] | None = None,
+    fix_index_range_b: tuple[int, int] | None = None,
     illustration_label: str = "auto",
     title: str = "",
     caption: str = "",
@@ -1696,6 +1697,11 @@ def animate_scanpath(
     When ``playback_speed`` is not ``1``, the automatic Illustration label says
     the replay timing was changed. ``illustration_label`` accepts ``"auto"``,
     ``"show"``, or ``"hide"`` like [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
+
+    CMP-24: in a co-animation ``fix_index_range`` windows A only (the app's
+    rule — A's slider never cuts B), ``fix_index_range_b`` windows B, and
+    ``fixation_flags_b`` gives B flags of its own (``None``: A's
+    ``fixation_flags``).
 
     ``trial_b=(participant, trial)`` co-animates a second reading on the same
     clock, like the app's Animate + Compare. It is looked up in ``words_b`` /
@@ -1791,6 +1797,11 @@ def animate_scanpath(
             words_b,
             fixations_b,
             a_inferred=setup is None and canvas_size is None,
+        )
+    if fix_index_range_b is not None and fixations_b is not None:
+        pid_b, tid_b = (str(v) for v in (trial_b or ("B", "B")))
+        fixations_b = _apply_fix_index_range(
+            fixations_b, fix_index_range_b, pid_b, tid_b
         )
     if dataset_b is not None:
         # As `compare_scanpaths` and the app do: B's readers carry their
@@ -2098,6 +2109,7 @@ def compare_scanpaths(
     base_font_size: int = 16,
     font_family: str = FONT_FAMILY,
     fix_index_range: tuple[int, int] | None = None,
+    fix_index_range_b: tuple[int, int] | None = None,
     drift_correction: str | None = None,
     title: str = "",
     caption: str = "",
@@ -2130,6 +2142,16 @@ def compare_scanpaths(
     ``"both"`` (default), ``"a"`` or ``"b"``. Two datasets' AOIs coincide only
     when the text is identical. Split layouts ignore it; each panel owns its own
     stimulus.
+
+    **Filters, per scanpath (CMP-24).** ``fixation_flags`` and
+    ``saccade_classes`` filter both scanpaths, as they filter
+    [`plot_scanpath`][scanpath_studio.api.plot_scanpath]'s one; the same two keys
+    in ``style_a`` / ``style_b`` give that scanpath its own, overriding them —
+    e.g. ``style_b={"fixation_flags": {"short": {"mode": "Discard",
+    "threshold_ms": 80}}, "saccade_classes": ["regression"]}``. The app's
+    Compare mode draws A under the rail's filters and B under B's own.
+    ``fix_index_range`` windows both scanpaths; ``fix_index_range_b`` gives B a
+    window of its own (the app's B slider).
 
     Remaining keywords are forwarded to `plots.make_comparison_figure`
     (e.g. ``show_words=False``, ``color_by="duration_ms"``); an unknown one
@@ -2219,7 +2241,12 @@ def compare_scanpaths(
             else pid_b
         )
     trial_fix_a = _apply_fix_index_range(trial_fix_a, fix_index_range, pid_a, tid_a)
-    trial_fix_b = _apply_fix_index_range(trial_fix_b, fix_index_range, pid_b, tid_b)
+    trial_fix_b = _apply_fix_index_range(
+        trial_fix_b,
+        fix_index_range if fix_index_range_b is None else fix_index_range_b,
+        pid_b,
+        tid_b,
+    )
     if drift_correction:
         # PRE-21: same contract as plot_scanpath — raise, don't silently skip.
         if not drift_correction_enabled():

@@ -809,7 +809,9 @@ _FIXCLASS_CATEGORIES = (
 )
 
 
-def _render_fixation_cleaning(*, disabled: bool = False, reason: str = "") -> None:
+def _render_fixation_cleaning(
+    *, disabled: bool = False, reason: str = "", prefix: str = "global"
+) -> None:
     """PRE-2 short / long / out-of-bounds / blink visual filtering controls.
 
     VIZ-27 gives this its own popover instead of burying data inclusion under
@@ -826,10 +828,21 @@ def _render_fixation_cleaning(*, disabled: bool = False, reason: str = "") -> No
     ``fixation_flags`` (VIZ-23 — *Discard* drops the rows before the replay's
     frames are built, *Highlight* overlays them as the trail reaches them); the
     comparison builders take no flags argument, so the whole block renders
-    disabled (with the reason) in Compare only."""
+    disabled (with the reason) in Compare only.
+
+    CMP-24: the comparison builders take the flags now, one set per scanpath.
+    ``prefix`` is the key namespace — ``global`` for A (and every non-compare
+    figure), ``cmp1`` for scanpath B, whose table has only the *Mode* and *ms*
+    columns: B chooses which of its fixations are flagged, and a Highlight draws
+    with A's marker and colour."""
+    own_look = prefix == "global"
     label_w = _label_w()
     rest = 1.0 - label_w
-    weights = [label_w, rest * 0.3, rest * 0.22, rest * 0.32, rest * 0.16]
+    weights = (
+        [label_w, rest * 0.3, rest * 0.22, rest * 0.32, rest * 0.16]
+        if own_look
+        else [label_w, rest * 0.5, rest * 0.5]
+    )
     mode_help = _gated_help(
         "**Highlight** marks these fixations with an overlay marker; **Discard** "
         "hides them from the plot only (reading measures and exported tables are "
@@ -839,16 +852,17 @@ def _render_fixation_cleaning(*, disabled: bool = False, reason: str = "") -> No
     head = st.columns(weights, gap=_LABEL_GAP, vertical_alignment="center")
     _sub_caption(head[1], "Mode", mode_help)
     _sub_caption(head[2], "ms", "Short: below this many ms. Long: above it.")
-    _sub_caption(head[3], "Marker", "The marker a Highlight draws.")
-    _sub_caption(head[4], "Color")
-    for prefix, label, row_help, has_threshold in _FIXCLASS_CATEGORIES:
+    if own_look:
+        _sub_caption(head[3], "Marker", "The marker a Highlight draws.")
+        _sub_caption(head[4], "Color")
+    for category, label, row_help, has_threshold in _FIXCLASS_CATEGORIES:
         row_disabled, help_text = _layer_gate(disabled, _gated_help(row_help, reason))
         cols = st.columns(weights, gap=_LABEL_GAP, vertical_alignment="center")
         _row_label(cols[0], label, help_text)
         mode = cols[1].selectbox(
             f"{label} fixations",
             options=_FIXCLASS_MODES,
-            key=f"global_fixclass_{prefix}_mode",
+            key=f"{prefix}_fixclass_{category}_mode",
             persist_state="session",
             disabled=row_disabled,
             help=mode_help,
@@ -859,17 +873,19 @@ def _render_fixation_cleaning(*, disabled: bool = False, reason: str = "") -> No
                 f"{label} threshold (ms)",
                 min_value=1,
                 step=10,
-                key=f"global_fixclass_{prefix}_threshold_ms",
+                key=f"{prefix}_fixclass_{category}_threshold_ms",
                 persist_state="session",
                 disabled=row_disabled or mode == "Off",
                 label_visibility="collapsed",
             )
+        if not own_look:
+            continue
         highlight_idle = row_disabled or mode != "Highlight"
         cols[3].selectbox(
             f"{label} marker",
             options=list(_OUT_OF_TEXT_MARKERS),
             format_func=lambda s: _OUT_OF_TEXT_MARKERS[s],
-            key=f"global_fixclass_{prefix}_symbol",
+            key=f"global_fixclass_{category}_symbol",
             persist_state="session",
             disabled=highlight_idle,
             label_visibility="collapsed",
@@ -878,48 +894,55 @@ def _render_fixation_cleaning(*, disabled: bool = False, reason: str = "") -> No
         # at its proto default (black) — BUG-15 / ENG-36.
         cols[4].color_picker(
             f"{label} color",
-            key=f"global_fixclass_{prefix}_color",
+            key=f"global_fixclass_{category}_color",
             persist_state="session",
             disabled=highlight_idle,
             label_visibility="collapsed",
         )
 
 
-def _collect_fixation_flags() -> dict:
+def _collect_fixation_flags(prefix: str = "global") -> dict:
     """Build the ``fixation_flags`` dict the figure builder consumes from the
     ``global_fixclass_*`` session keys (PRE-2). One entry per category; ``oob`` has
-    no threshold."""
+    no threshold.
+
+    CMP-24: ``prefix="cmp1"`` is scanpath B's set — its own modes and thresholds,
+    A's markers and colours (see ``_render_fixation_cleaning``)."""
     ss = st.session_state
     return {
         "short": {
-            "mode": ss.get("global_fixclass_short_mode", "Off"),
-            "threshold_ms": float(ss.get("global_fixclass_short_threshold_ms") or 80),
+            "mode": ss.get(f"{prefix}_fixclass_short_mode", "Off"),
+            "threshold_ms": float(
+                ss.get(f"{prefix}_fixclass_short_threshold_ms") or 80
+            ),
             "symbol": ss.get("global_fixclass_short_symbol") or "triangle-up-open",
             "color": ss.get("global_fixclass_short_color") or "#ff7f0e",
         },
         "long": {
-            "mode": ss.get("global_fixclass_long_mode", "Off"),
-            "threshold_ms": float(ss.get("global_fixclass_long_threshold_ms") or 800),
+            "mode": ss.get(f"{prefix}_fixclass_long_mode", "Off"),
+            "threshold_ms": float(
+                ss.get(f"{prefix}_fixclass_long_threshold_ms") or 800
+            ),
             "symbol": ss.get("global_fixclass_long_symbol") or "square-open",
             "color": ss.get("global_fixclass_long_color") or "#9467bd",
         },
         "oob": {
-            "mode": ss.get("global_fixclass_oob_mode", "Off"),
+            "mode": ss.get(f"{prefix}_fixclass_oob_mode", "Off"),
             "symbol": ss.get("global_fixclass_oob_symbol") or "x",
             "color": ss.get("global_fixclass_oob_color") or OUT_OF_TEXT_COLOR,
         },
         "blink": {
-            "mode": ss.get("global_fixclass_blink_mode", "Off"),
+            "mode": ss.get(f"{prefix}_fixclass_blink_mode", "Off"),
             "symbol": ss.get("global_fixclass_blink_symbol") or "diamond-open",
             "color": ss.get("global_fixclass_blink_color") or "#17becf",
         },
     }
 
 
-def _fixation_filter_badge() -> str:
+def _fixation_filter_badge(prefix: str = "global") -> str:
     """Compact VIZ-27 badge summarising active visual filters."""
     active = [
-        st.session_state.get(f"global_fixclass_{name}_mode", "Off")
+        st.session_state.get(f"{prefix}_fixclass_{name}_mode", "Off")
         for name in ("short", "long", "oob", "blink")
     ]
     n_active = sum(mode != "Off" for mode in active)
@@ -940,17 +963,25 @@ def _plot_filter_badge() -> str:
     badged its own trigger before (VIZ-27): a thinned figure otherwise reads as
     missing data. The detail stays on each half's own badge inside.
     """
-    return " •" if _fixation_filter_badge() or _saccade_filter_badge() else ""
+    comparing = bool(st.session_state.get("_resolved_comparing"))
+    b_active = comparing and bool(
+        _fixation_filter_badge("cmp1")
+        or _saccade_filter_badge("cmp1_saccade_classes")
+        or st.session_state.get("single_compare_fix_range_user_set")
+    )
+    return (
+        " •" if _fixation_filter_badge() or _saccade_filter_badge() or b_active else ""
+    )
 
 
-def _saccade_filter_badge() -> str:
+def _saccade_filter_badge(key: str = "global_saccade_classes") -> str:
     """Compact badge summarising the VIZ-31 saccade reading-class filter.
 
     Mirrors :func:`_fixation_filter_badge` — an active filter must be visible
     without opening the popover, or a figure missing half its saccades reads as
     a data problem. Empty (or a full selection) means no filter, so no badge.
     """
-    selected = st.session_state.get("global_saccade_classes")
+    selected = st.session_state.get(key)
     if not selected:
         return ""
     hidden = [cls for cls in SACCADE_CLASS_ORDER if cls not in set(selected)]
@@ -3341,6 +3372,15 @@ def compare_style_defaults() -> dict:
                 f"cmp{idx}_label_pattern": "",
             }
         )
+    # CMP-24 — scanpath B's own filters (A's are the rail's ordinary ones).
+    defaults.update(
+        {
+            "cmp1_saccade_classes": list(SACCADE_CLASS_ORDER),
+            **{f"cmp1_fixclass_{cat}_mode": "Off" for cat, *_ in _FIXCLASS_CATEGORIES},
+            "cmp1_fixclass_short_threshold_ms": 80,
+            "cmp1_fixclass_long_threshold_ms": 800,
+        }
+    )
     return defaults
 
 
@@ -3491,7 +3531,82 @@ def _collect_compare_styles() -> tuple[dict, dict]:
                 opacity=float(st.session_state.get(f"cmp{idx}_opacity", 1.0)),
             )
         )
+    # CMP-24: B draws under its own filters. A's style names none, so the
+    # builders give A the figure's — the rail's ordinary filters.
+    styles[1].update(compare_b_filters())
     return styles[0], styles[1]
+
+
+def _ordered_saccade_classes(key: str) -> list[str]:
+    """A saccade-class multiselect's value in ``SACCADE_CLASS_ORDER`` (VIZ-31) —
+    a cleared one reads as every class, i.e. no filter."""
+    chosen = set(st.session_state.get(key) or SACCADE_CLASS_ORDER)
+    return [cls_name for cls_name in SACCADE_CLASS_ORDER if cls_name in chosen]
+
+
+def compare_b_filters() -> dict:
+    """Scanpath B's filters, as the comparison builders read them off its style
+    (CMP-24) — ``plots.COMPARE_FILTER_STYLE_KEYS``."""
+    return dict(
+        fixation_flags=_collect_fixation_flags("cmp1"),
+        saccade_classes=_ordered_saccade_classes("cmp1_saccade_classes"),
+    )
+
+
+def render_compare_filters(host, compare_fixations: pd.DataFrame | None) -> None:
+    """Scanpath B's half of the 🧹 Filter section (CMP-24).
+
+    Rendered into the slot ``render_plot_controls`` reserved under A's filters —
+    after the rail, because B is picked (and its fixations loaded) below it. The
+    same three filters A has: the fixation-index window, the short / long /
+    out-of-bounds / blink flags, and which saccade classes are drawn. Every value
+    rides B's own keys (``session_keys.COMPARE_B_FILTER_STATE_KEYS`` and
+    ``single_compare_fix_range``), so the two readings are filtered apart.
+    """
+    if host is None:
+        return
+    animating = bool(st.session_state.get("_resolved_animating"))
+    with host:
+        with (
+            _rail_subsection(
+                st,
+                f"{ICONS['fixations']} Fixations · B{_fixation_filter_badge('cmp1')}",
+            ),
+            _popover_rows("filter_fix_b"),
+        ):
+            _render_fix_range_slider(
+                compare_fixations,
+                key="single_compare_fix_range",
+                trial_state_key="_compare_fix_range_trial",
+                all_trials_key=None,
+            )
+            _render_fixation_cleaning(prefix="cmp1")
+        _cls_dis, _cls_reason = _mode_gate(animating, True, in_animation=False)
+        with (
+            _rail_subsection(
+                st,
+                f"{ICONS['saccades']} Saccades · B"
+                f"{_saccade_filter_badge('cmp1_saccade_classes')}",
+                note=_cls_reason,
+            ),
+            _popover_rows("filter_sac_b"),
+        ):
+            _labeled(
+                st,
+                "multiselect",
+                "Show saccade types · B",
+                display="Types",
+                options=SACCADE_CLASS_ORDER,
+                format_func=lambda cls: SACCADE_CLASS_LABELS[cls],
+                key="cmp1_saccade_classes",
+                persist_state="session",
+                disabled=_cls_dis,
+                help=_gated_help(
+                    "The reading classes scanpath B draws — A's are the list "
+                    "above. Clearing it means *no filter*.",
+                    _cls_reason,
+                ),
+            )
 
 
 def _fix_range_bounds(fixations: pd.DataFrame | None) -> tuple[int, int]:
@@ -3540,7 +3655,13 @@ def _fix_range_trial_key(fixations: pd.DataFrame | None) -> tuple | None:
     return tuple(parts) or None
 
 
-def _render_fix_range_slider(fixations: pd.DataFrame | None) -> None:
+def _render_fix_range_slider(
+    fixations: pd.DataFrame | None,
+    *,
+    key: str = "single_fix_range",
+    trial_state_key: str = "_fix_range_trial",
+    all_trials_key: str | None = "single_fix_range_all_trials",
+) -> None:
     """Render the VIZ-7 fixation-index window slider (``single_fix_range``).
 
     The slider value persists across trial changes (which shift the bounds), so
@@ -3592,6 +3713,9 @@ def _render_fix_range_slider(fixations: pd.DataFrame | None) -> None:
     """
     if fixations is None:
         return
+    # CMP-24: the same slider serves scanpath B under its own keys; B's window is
+    # always per-trial (no *All trials* box — B's trial moves with its picker).
+    user_key = f"{key}_user_set"
     min_fix, max_fix = _fix_range_bounds(fixations)
     if max_fix < 1 or min_fix >= max_fix:
         # Nothing meaningful to window — clear any stale stored range so the
@@ -3599,44 +3723,44 @@ def _render_fix_range_slider(fixations: pd.DataFrame | None) -> None:
         # `min_fix >= max_fix` half is the single-fixation frame: a one-value
         # range slider throws in the browser, and on a multipart screen that
         # frame's lone index is 509, not 1 (BUG-47).
-        if st.session_state.get("single_fix_range") is not None:
-            st.session_state["single_fix_range"] = None
-        st.session_state["single_fix_range_user_set"] = False
+        if st.session_state.get(key) is not None:
+            st.session_state[key] = None
+        st.session_state[user_key] = False
         return
     # Notice a trial change *before* resolving the stored window: in per-trial
     # mode, un-freezing the window is what makes the `user_set is False` branch
     # below expand it to the new trial's full range.
-    all_trials = bool(st.session_state.get("single_fix_range_all_trials", False))
+    all_trials = bool(all_trials_key and st.session_state.get(all_trials_key, False))
     trial_key = _fix_range_trial_key(fixations)
     if trial_key is not None:
-        previous = st.session_state.get("_fix_range_trial")
-        st.session_state["_fix_range_trial"] = trial_key
+        previous = st.session_state.get(trial_state_key)
+        st.session_state[trial_state_key] = trial_key
         if previous is not None and previous != trial_key and not all_trials:
-            st.session_state["single_fix_range_user_set"] = False
-    stored = st.session_state.get("single_fix_range")
-    user_set = st.session_state.get("single_fix_range_user_set")
+            st.session_state[user_key] = False
+    stored = st.session_state.get(key)
+    user_set = st.session_state.get(user_key)
     if stored is None:
-        st.session_state["single_fix_range"] = (min_fix, max_fix)
-        st.session_state["single_fix_range_user_set"] = False
+        st.session_state[key] = (min_fix, max_fix)
+        st.session_state[user_key] = False
     elif user_set is False:
         # BUG-16: an untouched auto-default follows the selected trial and always
         # expands to its full range — which is the frame's OWN range, floor
         # included, so that an untouched window equals the full range on a later
         # multipart screen too and no Illustration disclosure fires (BUG-47).
-        st.session_state["single_fix_range"] = (min_fix, max_fix)
+        st.session_state[key] = (min_fix, max_fix)
     elif isinstance(stored, (tuple, list)) and len(stored) == 2:
         # A value supplied before this widget first renders (test seam, restored
         # session, or future deep link) is explicit and should be preserved.
-        st.session_state.setdefault("single_fix_range_user_set", True)
+        st.session_state.setdefault(user_key, True)
         lo = max(min_fix, min(int(stored[0]), max_fix))
         hi = max(lo, min(int(stored[1]), max_fix))
-        st.session_state["single_fix_range"] = (lo, hi)
+        st.session_state[key] = (lo, hi)
     else:
-        st.session_state["single_fix_range"] = (min_fix, max_fix)
-        st.session_state["single_fix_range_user_set"] = False
+        st.session_state[key] = (min_fix, max_fix)
+        st.session_state[user_key] = False
 
     def _mark_fix_range_user_set() -> None:
-        st.session_state["single_fix_range_user_set"] = True
+        st.session_state[user_key] = True
 
     all_trials_disabled, _ = _layer_gate(False, None)
 
@@ -3646,17 +3770,19 @@ def _render_fix_range_slider(fixations: pd.DataFrame | None) -> None:
     def _all_trials(col) -> None:
         col.checkbox(
             "All trials",
-            key="single_fix_range_all_trials",
+            key=all_trials_key,
             persist_state="session",
             disabled=all_trials_disabled,
         )
 
     _range_slider(
         st,
-        "Fixation index range",
+        "Fixation index range"
+        if key == "single_fix_range"
+        else "B fixation index range",
         display="Index range",
         label_left=True,
-        key="single_fix_range",
+        key=key,
         persist_state="session",
         min_value=min_fix,
         max_value=max_fix,
@@ -3666,9 +3792,9 @@ def _render_fix_range_slider(fixations: pd.DataFrame | None) -> None:
         "the bulk (multiple-trial) export is unaffected. **All trials** off "
         "(default) — the window belongs to this trial; picking another shows "
         "all of its fixations again. On — keep the same window as you move "
-        "through trials, clamped to each one's length. Either way **Compare** "
-        "windows both scanpaths by the same range.",
-        lead=_all_trials,
+        "through trials, clamped to each one's length. In **Compare** this "
+        "windows scanpath A; B has a window of its own.",
+        lead=_all_trials if all_trials_key else None,
     )
 
 
@@ -4296,6 +4422,7 @@ def render_plot_controls(
     words: pd.DataFrame | None = None,
     fix_range_fixations: pd.DataFrame | None = None,
     canvas_renderer=None,
+    slots: dict | None = None,
 ) -> dict:
     """Render the visualization controls and return the resolved settings dict.
 
@@ -4593,6 +4720,12 @@ def render_plot_controls(
     # themselves use).
     filter_fix_slot = filter_grp.container()
     filter_sac_slot = filter_grp.container()
+    # CMP-24: scanpath B's own filters, filled by `render_compare_filters` once B
+    # is loaded (below the rail). Handed back through `slots`, not the settings
+    # dict, which is hashed into figure keys and must stay plain data.
+    if comparing and slots is not None:
+        slots["compare_filter"] = filter_grp.container()
+    ab = " · A" if comparing else ""
     # Canvas/text and the former Figure/axes controls share one disclosure: both
     # describe the figure's framing rather than a data layer. The injected canvas
     # renderer writes directly into this expander (not a nested expander), as its
@@ -4974,13 +5107,15 @@ def render_plot_controls(
     # appearance. Keep it beside the fixation layer as a first-class popover and
     # show a local badge so an active Discard cannot be forgotten. A chip in the
     # trial-fact strip was rejected because this is a view setting, not trial data.
-    _flag_dis, _flag_reason = _mode_gate(animating, comparing, **_no_compare)
+    # CMP-24: every builder honours the flags now — Compare draws each scanpath
+    # under its own set — so nothing greys this block any more.
+    _flag_dis, _flag_reason = False, ""
     # UX-162: the subsection says only why it is greyed, when it is; what it does
     # is in the rows' tooltips now, beside the controls it describes.
     with (
         _rail_subsection(
             filter_fix_slot,
-            f"{ICONS['fixations']} Fixations{_fixation_filter_badge()}",
+            f"{ICONS['fixations']} Fixations{ab}{_fixation_filter_badge()}",
             note=_flag_reason,
         ),
         _layer_off(
@@ -5178,11 +5313,13 @@ def render_plot_controls(
     # same reason the class *colouring* is: the classification never reaches the
     # animation or comparison builders (see CLAUDE.md's render-path table), so the
     # picker greys out there rather than silently dropping the filter.
-    _cls_dis, _cls_reason = _mode_gate(animating, comparing, **_static_only)
+    # CMP-24: the comparison builders honour the class filter now; only the
+    # animation still has no classification to filter on.
+    _cls_dis, _cls_reason = _mode_gate(animating, comparing, in_animation=False)
     with (
         _rail_subsection(
             filter_sac_slot,
-            f"{ICONS['saccades']} Saccades{_saccade_filter_badge()}",
+            f"{ICONS['saccades']} Saccades{ab}{_saccade_filter_badge()}",
             note=_cls_reason,
         ),
         _layer_off(f"{ICONS['saccades']} Saccades", off=not show_saccades),
@@ -6249,6 +6386,11 @@ def reset_viz_settings() -> None:
 
     keys = set(_sk.PLOT_CONFIG_STATE_KEYS)
     keys |= set(_sk.compare_state_keys(0)) | set(_sk.compare_state_keys(1))
+    # CMP-24 — B's own filters and window.
+    keys |= set(_sk.COMPARE_B_FILTER_STATE_KEYS) | {
+        _sk.SINGLE_COMPARE_FIX_RANGE,
+        f"{_sk.SINGLE_COMPARE_FIX_RANGE}_user_set",
+    }
     keys |= {k for k in st.session_state if str(k).startswith("global_")}
     keys |= {
         "single_fix_range",

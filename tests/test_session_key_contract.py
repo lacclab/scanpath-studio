@@ -301,6 +301,9 @@ def test_deep_link_seeds_frozen_state_keys():
     for category in ("short", "long", "oob", "blink"):
         validated[f"fixclass_{category}_mode"] = "Discard"
         validated[f"fixclass_{category}_symbol"] = "x"
+        # CMP-24 — B's flag modes, the same closed vocabulary.
+        validated[f"cmp_b_fixclass_{category}_mode"] = "Discard"
+    validated["cmp_b_saccade_classes"] = "forward,regression"
     # EXP-19: a per-scanpath line style is the selectbox's own label.
     validated.update(
         {p: "Dash-dot" for p in sk.COMPARE_STYLE_PARAMS if p.endswith("_style")}
@@ -528,7 +531,20 @@ def _restore_config_app():
         },
         # VIZ-43 — raw gaze's own style (`available`/`points` are read-only).
         "raw_gaze": {"color": "#445566", "marker_size": 6.0, "opacity": 0.4},
-        "compare": [compare_entry, dict(compare_entry)],
+        # CMP-24 — B's entry carries B's own filters too.
+        "compare": [
+            compare_entry,
+            {
+                **compare_entry,
+                "fixation_flags": {
+                    "short": {"mode": "Discard", "threshold_ms": 90},
+                    "long": {"mode": "Highlight", "threshold_ms": 900},
+                    "oob": {"mode": "Discard"},
+                    "blink": {"mode": "Off"},
+                },
+                "saccade_classes": ["forward", "regression"],
+            },
+        ],
         # CMP-11 — the compare *view*, distinct from the per-scanpath styling
         # list above. Both fields are validated against the segmented controls'
         # options, so placeholders would be skipped rather than written.

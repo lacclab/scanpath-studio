@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+from . import progress
 from .annotations import get_entry
 from .constants import SELECTOR_ROW_GRID, SELECTOR_ROW_TRIO
 from .data import frame_fingerprint
@@ -77,12 +78,14 @@ def build_combo_options_for(
     )
 
 
-@st.cache_data(show_spinner="Building trial list…")
+# UX-166: the dataset card lists this step.
+@st.cache_data(show_spinner=False)
 def _build_combo_options_cached(
     _fixations: pd.DataFrame,
     composite_cols: tuple[str, ...],
     cache_key,
 ) -> tuple[pd.DataFrame, list[str], dict[str, tuple[str, str]]]:
+    progress.report()  # a miss: real work, so a gated card over it may show
     fixations = _fixations
     trial_col = (
         "unique_trial_id" if "unique_trial_id" in fixations.columns else "trial_id"

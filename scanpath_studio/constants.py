@@ -960,7 +960,6 @@ ICONS: dict[str, str] = {
     "error": ":material/block:",
     "success": ":material/check_circle:",
     "info": ":material/info:",
-    "loading": ":material/hourglass_top:",
     "tip": ":material/lightbulb:",
     "participant": ":material/person:",
     "trial_metadata": ":material/table:",

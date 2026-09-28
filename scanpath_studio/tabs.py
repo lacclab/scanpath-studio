@@ -9,7 +9,7 @@ import json
 import os
 import pickle
 import zlib
-from collections.abc import Callable
+from collections.abc import Callable, Hashable
 from dataclasses import dataclass, replace
 from dataclasses import fields as dataclass_fields
 from functools import partial
@@ -20,7 +20,7 @@ import pandas as pd
 import plotly.io as pio
 import streamlit as st
 
-from scanpath_studio import alignment
+from scanpath_studio import alignment, loading, progress
 from scanpath_studio import metadata as _metadata_mod
 from scanpath_studio.aggregation import (
     MEASURES,
@@ -445,8 +445,25 @@ _NATIVE_ZOOM_BUTTONS = (
 _ZOOM_MAX = 8.0
 
 _TRUE_SCALE_TEMPLATE = """
+<style>
+  /* UX-169: a placeholder at the figure's size while plotly.js loads and the
+     figure draws — seconds for a big replay. It fades in only after 300 ms, so
+     a small figure never flickers, and goes on Plotly's first draw. Ahead of
+     the markup on purpose: the figure (megabytes for a replay) sits between
+     the placeholder and the script, and a rule parsed after it would leave
+     the placeholder unstyled — invisible — for exactly that wait. */
+  @keyframes sps-skel-in { to { opacity: 1; } }
+  @keyframes sps-skel-pulse { 50% { opacity: 0.55; } }
+  #skel-__KEY__ { position: absolute; inset: 0; z-index: 4; pointer-events: none;
+    opacity: 0; border-radius: 8px; background: rgba(128, 128, 128, 0.10);
+    animation: sps-skel-in .2s ease .3s forwards,
+               sps-skel-pulse 1.6s ease-in-out .5s infinite; }
+  @media (prefers-reduced-motion: reduce) {
+    #skel-__KEY__ { animation: sps-skel-in .01s linear .3s forwards; } }
+</style>
 <div id="wrap-__KEY__" style="position:relative;width:100%;">
-  <div id="fit-__KEY__" style="width:100%;overflow:hidden;">
+  <div id="fit-__KEY__" style="width:100%;overflow:hidden;position:relative;">
+    <div id="skel-__KEY__" aria-hidden="true"></div>
     <div id="size-__KEY__" style="width:__W__px;height:__H__px;">
       <div id="box-__KEY__" style="width:__W__px;height:__H__px;
            transform-origin:top left;">__PLOT__</div>
@@ -509,6 +526,14 @@ _TRUE_SCALE_TEMPLATE = """
   render();
   window.addEventListener("resize", render);
   setTimeout(render, 150);
+
+  (function dropSkeleton() {
+    var sk = document.getElementById("skel-__KEY__");
+    if (!sk) { return; }
+    var gd = document.getElementById("truescale-__KEY__");
+    if (!gd || !gd._fullLayout) { setTimeout(dropSkeleton, 60); return; }
+    sk.parentNode.removeChild(sk);
+  })();
 
   if (!ZOOMABLE) { return; }
 
@@ -881,6 +906,8 @@ def _render_true_scale_plot(
     # Iframe height = full true height (or the cap); the script trims the
     # visible block to the scaled height.
     _embed_html_iframe(html, height=iframe_height)
+    # UX-167: the next figure under this key holds its area at this size.
+    loading.record_plot_size(key, width, iframe_height)
 
 
 def _different_texts_note(text_a: str | None, text_b: str | None) -> str | None:
@@ -1741,7 +1768,7 @@ def _figure_input_key(
     return tuple(parts)
 
 
-@st.cache_data(show_spinner="Rendering scanpath…")
+@st.cache_data(show_spinner=False)
 def _cached_scanpath_figure(
     _words: pd.DataFrame,
     _fixations: pd.DataFrame,
@@ -1863,7 +1890,7 @@ class _ReplayView:
         return go.Figure(self.figure_dict())
 
 
-@st.cache_data(show_spinner="Building the replay…", max_entries=8)
+@st.cache_data(show_spinner=False, max_entries=8)
 def _cached_replay_view(
     clip_inputs,
     autoplay: bool,
@@ -1880,8 +1907,8 @@ def _cached_replay_view(
     ``download_name`` only the embed; they are here to key the markup. On a miss
     ``_finished_figure`` builds the figure, through the replay cache; a hit
     never touches that cache, whose every hit unpickles the whole figure.
-    Entries are small: the view is compressed. The spinner is this cache's —
-    Streamlit shows only the outermost one of nested caches.
+    Entries are small: the view is compressed. UX-167: no spinner — the plot's
+    loading card covers the build.
     """
     return _ReplayView.from_figure(
         _finished_figure(),
@@ -1986,8 +2013,58 @@ def _compare_source_choices() -> tuple[list[str], dict[str, bool], dict[str, str
     return names, ready_by_name, reason_by_name
 
 
+def _cancel_compare_source(task_key: tuple) -> None:
+    """UX-168: Cancel on B's dataset card — compare within A's dataset again."""
+    progress.cancel(task_key)
+    st.session_state[COMPARE_SOURCE_KEY] = THIS_DATASET
+
+
+#: UX-168: the task Compare's B card was last opened for, held while B's
+#: dataset loads and dropped once the card's block completes — the replay's
+#: `ANIM_TASK_KEY`, for B. An ``_sps_*`` internal: never on the wire, never in
+#: the recovery cache.
+COMPARE_TASK_KEY = "_sps_compare_task"
+
+
+def _claim_compare_task(task_key: tuple) -> None:
+    """Cancel the load a run started for another dataset as B, then remember
+    this one's (UX-168).
+
+    Two corpora never load at once for B either, as for A: once B is another
+    dataset, the first is a load nobody is waiting for. The same key — B's own
+    load still under way — joins it.
+    """
+    previous = st.session_state.get(COMPARE_TASK_KEY)
+    if previous is not None and tuple(previous) != task_key:
+        progress.cancel(tuple(previous))
+    st.session_state[COMPARE_TASK_KEY] = task_key
+
+
+def _abandon_compare_task() -> None:
+    """This run loads no second dataset for B — "This dataset", a corpus not
+    set up yet, or Compare off: stop the one an earlier run left loading
+    (UX-168) rather than let it run on for nothing on screen. Compare within
+    <A>, the card's own Cancel, cancels its load itself (`_cancel_compare_source`).
+    """
+    previous = st.session_state.pop(COMPARE_TASK_KEY, None)
+    if previous is not None:
+        progress.cancel(tuple(previous))
+
+
+def _release_compare_task(task_key: tuple) -> None:
+    """B's dataset is loaded: nothing of it is left to cancel.
+
+    Only its own key is dropped — a later run may already have claimed another.
+    """
+    if st.session_state.get(COMPARE_TASK_KEY) == task_key:
+        st.session_state.pop(COMPARE_TASK_KEY, None)
+
+
 def _resolve_compare_source(
-    ready_by_name: dict[str, bool], reason_by_name: dict[str, str]
+    ready_by_name: dict[str, bool],
+    reason_by_name: dict[str, str],
+    *,
+    loading_slot=None,
 ) -> tuple[SecondaryDataset | None, str]:
     """Load scanpath B's dataset (**CMP-8 §5.1**), narrowed by its own filters.
 
@@ -2002,13 +2079,45 @@ def _resolve_compare_source(
     above it. That is the same contract A has — ``render_trial_filters`` stashes
     its result, and every widget's ``on_change`` recomputes the stash before the
     rerun, so a filter change still applies on the run it happens.
+
+    **UX-168:** ``loading_slot`` gives B's own load a card, with a Cancel back to
+    "This dataset" — the compare picker is a selectbox in the middle of the plot
+    column, so ``None`` (the default) still loads B plain, with no card and no
+    way to cancel it. With a card, the load is remembered while it runs
+    (`COMPARE_TASK_KEY`), so picking another dataset for B mid-load — or one
+    that loads nothing: "This dataset", a corpus not set up yet — stops it.
     """
     chosen = str(st.session_state.get(COMPARE_SOURCE_KEY) or THIS_DATASET)
     if chosen == THIS_DATASET:
+        _abandon_compare_task()
         return None, ""
     if not ready_by_name.get(chosen, False):
+        _abandon_compare_task()
         return None, f"{ICONS['warning']} {reason_by_name.get(chosen, '')}"
-    source = load_secondary_dataset(chosen)
+    if loading_slot is None:
+        source = load_secondary_dataset(chosen)
+    else:
+        task_key = ("compare_dataset", loading.session_id(), chosen)
+        _claim_compare_task(task_key)
+        with loading.card(
+            loading_slot,
+            # This card's own key — deliberately not `COMPARE_SOURCE_KEY`
+            # ("cmp_dataset"), which names the picker's persisted widget key.
+            key="compare_dataset",
+            title=f"Loading {chosen} for scanpath B",
+            task_key=task_key,
+            cancel=loading.Cancel(
+                f"Compare within {current_dataset_name()}",
+                _cancel_compare_source,
+                args=(task_key,),
+            ),
+            # UX-166: B is resolved on every run with Compare on — a cache hit,
+            # slow only in its checks on a big corpus — so the card waits for
+            # one of its builds to report a miss.
+            reveal_on_work=True,
+        ):
+            source = load_secondary_dataset(chosen)
+        _release_compare_task(task_key)
     if source is None:
         return (
             None,
@@ -2140,6 +2249,7 @@ def _render_compare_selector(
     combos_all: pd.DataFrame | None = None,
     words_all: pd.DataFrame | None = None,
     fixations_all: pd.DataFrame | None = None,
+    loading_slot=None,
 ) -> tuple[
     str | None,
     str | None,
@@ -2168,9 +2278,15 @@ def _render_compare_selector(
     ``SELECTOR_ROW_GRID`` — instead of a dataset row, a *Filter B by* row and a
     picker row stacked above the chips. The dataset is therefore resolved from
     session state *before* the row is drawn (``_resolve_compare_source``), since
-    how many candidates B has is what decides whether the row has a slider."""
+    how many candidates B has is what decides whether the row has a slider.
+
+    **UX-168:** ``loading_slot`` is threaded straight through to
+    ``_resolve_compare_source`` so B's own load gets a card + Cancel there.
+    """
     names, ready_by_name, reason_by_name = _compare_source_choices()
-    source, source_notice = _resolve_compare_source(ready_by_name, reason_by_name)
+    source, source_notice = _resolve_compare_source(
+        ready_by_name, reason_by_name, loading_slot=loading_slot
+    )
     filter_source = source
     comparison_pool = source
     if source is not None:
@@ -4100,7 +4216,106 @@ def _compare_dataset_name(compare_meta: dict | None) -> str:
     return str((compare_meta or {}).get("dataset") or current_dataset_name())
 
 
-def _build_and_render_animation(
+def _cancel_animation(task_key: tuple) -> None:
+    """UX-169: Cancel on the animation card — back to the static plot."""
+    progress.cancel(task_key)
+    st.session_state["single_animate"] = False
+
+
+#: UX-169: the replay task this session's card was last opened for, held while
+#: its build runs and dropped once the card's block completes. An ``_sps_*``
+#: internal: never on the wire, never in the recovery cache.
+ANIM_TASK_KEY = "_sps_anim_task"
+
+
+def _animation_task_key(
+    participant,
+    trial,
+    screen=None,
+    *,
+    compare: tuple | None = None,
+    inputs: Hashable | None = None,
+) -> tuple:
+    """The replay's task key: what it is a replay *of* — its frames.
+
+    Keyed by the session alone, a run that stepped to another trial mid-build
+    joined the old build's task — two frame loops' counts interleaved on one
+    card while the obsolete build ran on beside the new one at half the speed.
+    A multipart replay covers one screen, so the screen is part of it (``None``
+    for a trial with one); ``compare`` is B's ``(participant, trial, screen)``
+    for a co-replay, and is passed only then — B steps through its own screens
+    (UX-112). ``inputs`` is the replay's input key (`_ReplayPlan.key`), so a
+    setting that changes the frames — marker size, colours, saccades, the
+    fixation flags or window, drift correction … — is another replay too,
+    while the speed and autoplay, which the frames are built without
+    (PERF-15), are not.
+    """
+
+    def _identity(who, what, where) -> tuple:
+        return (str(who), str(what), None if where is None else str(where))
+
+    key = ("anim", loading.session_id(), *_identity(participant, trial, screen))
+    if compare is not None:
+        key += _identity(*compare)
+    if inputs is not None:
+        key += (inputs,)
+    return key
+
+
+def _claim_animation_task(task_key: tuple) -> None:
+    """Cancel the replay a run was building of other frames, then remember
+    this one's (UX-169).
+
+    Another trial, screen or B, or a setting that changes the frames: that
+    build is of a replay no longer wanted. The same key — nothing changed but
+    the speed or autoplay, say — joins the build under way, which is exactly
+    the one this run wants.
+    """
+    previous = st.session_state.get(ANIM_TASK_KEY)
+    if previous is not None and tuple(previous) != task_key:
+        progress.cancel(tuple(previous))
+    st.session_state[ANIM_TASK_KEY] = task_key
+
+
+def _abandon_animation_task() -> None:
+    """This Scanpath run builds no replay: stop the one an earlier run left
+    building (UX-169) — Animate switched off with its own switch mid-build, or
+    a trial with nothing to animate — rather than let a replay of frames no
+    longer wanted run on beside this run's figure. Show static plot cancels
+    its build itself (`_cancel_animation`). A run on another view never gets
+    here: a replay left building there lands in the cache for the way back."""
+    previous = st.session_state.pop(ANIM_TASK_KEY, None)
+    if previous is not None:
+        progress.cancel(tuple(previous))
+
+
+def _release_animation_task(task_key: tuple) -> None:
+    """This run's replay is built: nothing of it is left to cancel.
+
+    Only its own key is dropped — a later run may already have claimed another.
+    """
+    if st.session_state.get(ANIM_TASK_KEY) == task_key:
+        st.session_state.pop(ANIM_TASK_KEY, None)
+
+
+@dataclass(frozen=True)
+class _ReplayPlan:
+    """What one replay is built from, worked out before its card opens (UX-169).
+
+    ``settings`` carries the real clock — speed and autoplay — for the player
+    and the snippet; ``frame_settings`` is the same with the clock fixed
+    (PERF-15), which with B's frames makes ``inputs``, and ``key`` is their
+    fingerprint: the replay cache's key, and the part of the replay's task key
+    (`_animation_task_key`'s ``inputs``) that names its frames.
+    """
+
+    settings: FigureSettings
+    frame_settings: FigureSettings
+    inputs: dict
+    key: tuple
+
+
+def _plan_replay(
     trial_words: pd.DataFrame,
     trial_fixations: pd.DataFrame,
     words_b: pd.DataFrame | None,
@@ -4115,10 +4330,11 @@ def _build_and_render_animation(
     playback_speed: float,
     drift_corrected: bool = False,
     dataset_name_b: str = "",
-):
-    """Build + render the animation figure (single or dual co-animation) in the
-    main column. Returns ``(view, save_slug, file_stem)`` — the replay's
-    `_ReplayView`, whose ``figure()`` is the finished figure (PERF-16).
+) -> _ReplayPlan:
+    """The replay's `_ReplayPlan` — drawing nothing, so the call site can run it
+    before the card opens: the replay's task is keyed by its frames (UX-169).
+    `_build_and_render_animation` builds from exactly this plan, so the key the
+    task was named by and the key the frames are cached under are one value.
 
     ``trial_fixations`` / ``fixations_b`` arrive already drift-corrected (PRE-3 is
     applied once by the caller for all three render paths); ``drift_corrected``
@@ -4161,7 +4377,6 @@ def _build_and_render_animation(
         anim_grid_step_ms=grid_step_ms,
         anim_max_frames=max_frames,
     )
-    _amend_snippet_settings(animation_settings, "animation")
     # PERF-15: the frames depend on neither the speed nor autoplay (BUG-93), nor
     # on the Illustration reasons (the builder never reads them — but a non-1×
     # speed is one, so they change with it). Build and key the replay on fixed
@@ -4181,7 +4396,41 @@ def _build_and_render_animation(
     }
     anim_inputs["fixations_b"] = fixations_b if dual else None
     anim_inputs["words_b"] = words_b if dual else None
-    anim_key = _figure_input_key(trial_words, trial_fixations, anim_inputs)
+    return _ReplayPlan(
+        settings=animation_settings,
+        frame_settings=frame_settings,
+        inputs=anim_inputs,
+        key=_figure_input_key(trial_words, trial_fixations, anim_inputs),
+    )
+
+
+def _build_and_render_animation(
+    trial_words: pd.DataFrame,
+    trial_fixations: pd.DataFrame,
+    words_b: pd.DataFrame | None,
+    fixations_b: pd.DataFrame | None,
+    selected_participant: str,
+    selected_trial: str,
+    compare_participant: str | None,
+    compare_trial: str | None,
+    *,
+    viz_settings: dict,
+    plan: _ReplayPlan,
+    dataset_name_b: str = "",
+):
+    """Build + render the animation figure (single or dual co-animation) in the
+    main column. Returns ``(view, save_slug, file_stem)`` — the replay's
+    `_ReplayView`, whose ``figure()`` is the finished figure (PERF-16).
+
+    ``plan`` is `_plan_replay`'s for these same arguments, worked out before the
+    card opens because the replay's task is keyed by it (UX-169) — so the key
+    the task carries and the key the build uses are one derivation."""
+    dual = fixations_b is not None and not fixations_b.empty
+    animation_settings = plan.settings
+    frame_settings = plan.frame_settings
+    anim_inputs = plan.inputs
+    anim_key = plan.key
+    _amend_snippet_settings(animation_settings, "animation")
     playback_speed = animation_settings.playback_speed
     autoplay = animation_settings.autoplay
     reasons = viz_settings.get("illustration_reasons")
@@ -4235,6 +4484,9 @@ def _build_and_render_animation(
             anim_inputs["words_b"],
             anim_key=anim_key,
         )
+        # UX-169: the frames exist; what is left is the player — the clock, the
+        # labels and the 10 MB of markup `_ReplayView.from_figure` writes.
+        progress.step_to(1)
         set_replay_clock(
             fig, frame_step_ms, playback_speed=playback_speed, autoplay=autoplay
         )
@@ -4826,7 +5078,13 @@ def render_single_trial_tab(
         compare_screen_slot = st.container(key="tour_grp_compare_screen_picker")
         chips_slot = st.container(key="tour_grp_chips")
         compare_chips_slot = st.container(key="tour_grp_compare_chips")
+        # UX-167: notes about the figure that come *before* it sit above the
+        # stage, so the figure is always the stage's second child and a figure
+        # already on screen stays put while the next one is built.
+        plot_notes_slot = st.container()
         plot_slot = st.container(key="tour_grp_plot")
+        # The stage's first child: the size box + loading card (styles.py).
+        plot_loading_slot = plot_slot.empty()
 
     # UX-43: a second row repeats the 4:1 split and reserves only its left side
     # for the per-trial panels. Keeping the slot OUT of the plot/rail row means
@@ -5450,6 +5708,7 @@ def render_single_trial_tab(
                     combos_all=combos_all,
                     words_all=words_all,
                     fixations_all=fixations_all,
+                    loading_slot=plot_loading_slot,
                 )
             )
         # UX-112: B's own screen navigator, directly under B's own row —
@@ -5484,6 +5743,9 @@ def render_single_trial_tab(
                 compare_screens, key_prefix="single_compare"
             )
     else:
+        # UX-168: Compare off loads no second dataset — stop the one an
+        # earlier run left loading for B.
+        _abandon_compare_task()
         compare_words_pool = words_filtered
         compare_fixations_pool = fixations_filtered
 
@@ -6007,32 +6269,76 @@ def render_single_trial_tab(
             )
 
     with plot_slot:
+        if not (animate and not trial_fixations.empty):
+            _abandon_animation_task()
         if global_raw_toggle and not trial_has_raw_gaze:
-            st.warning("Raw gaze not available for this trial.", icon=ICONS["warning"])
+            plot_notes_slot.warning(
+                "Raw gaze not available for this trial.", icon=ICONS["warning"]
+            )
         if animate and trial_fixations.empty:
-            st.info(
+            # UX-167: no figure will be drawn this run — take the page skeleton
+            # down now rather than leaving it up through the subtabs below, and
+            # the note goes above the stage like every other pre-figure note.
+            loading.release_page()
+            plot_notes_slot.info(
                 "Animation needs a **fixations** table — there's nothing to "
                 "animate for this selection."
             )
         elif animate:
-            # Building the per-fixation animation frames takes a moment — show a
-            # loading banner so the screen isn't blank meanwhile.
-            with st.spinner("Building animation…"):
+            replay_frames = (
+                trial_words,
+                plot_fixations,
+                compare_meta["words"] if dual_anim else None,
+                plot_compare_fix if dual_anim else None,
+                selected_participant,
+                selected_trial,
+                compare_participant,
+                compare_trial,
+            )
+            dataset_name_b = _compare_dataset_name(compare_meta)
+            # UX-169: planned before the card opens, since the replay's task is
+            # keyed by its frames — a setting that changes them cancels the
+            # build under way — and the build below uses this very plan.
+            replay = _plan_replay(
+                *replay_frames,
+                settings=render_settings,
+                viz_settings=viz_settings,
+                playback_speed=playback_speed,
+                drift_corrected=drift_corrected_primary,
+                dataset_name_b=dataset_name_b,
+            )
+            anim_task = _animation_task_key(
+                selected_participant,
+                selected_trial,
+                selected_screen,
+                compare=(
+                    (compare_participant, compare_trial, selected_compare_screen)
+                    if dual_anim
+                    else None
+                ),
+                inputs=replay.key,
+            )
+            _claim_animation_task(anim_task)
+            with loading.card(
+                plot_loading_slot,
+                key="single_anim",
+                title="Building the animation",
+                steps=("Building frames", "Preparing the player"),
+                size=loading.plot_size(
+                    "single_anim", canvas_width, canvas_height, animation=True
+                ),
+                task_key=anim_task,
+                cancel=loading.Cancel(
+                    "Show static plot", _cancel_animation, args=(anim_task,)
+                ),
+            ):
                 anim_view, save_slug, anim_file_stem = _build_and_render_animation(
-                    trial_words,
-                    plot_fixations,
-                    compare_meta["words"] if dual_anim else None,
-                    plot_compare_fix if dual_anim else None,
-                    selected_participant,
-                    selected_trial,
-                    compare_participant,
-                    compare_trial,
-                    dataset_name_b=_compare_dataset_name(compare_meta),
-                    settings=render_settings,
+                    *replay_frames,
                     viz_settings=viz_settings,
-                    playback_speed=playback_speed,
-                    drift_corrected=drift_corrected_primary,
+                    plan=replay,
+                    dataset_name_b=dataset_name_b,
                 )
+            _release_animation_task(anim_task)
             if comparing and cross_dataset and not compare_comparable:
                 # UX-144: the replay has no split layout and shows A alone, so
                 # that is what it says. BUG-85 took the static figure's "shown
@@ -6064,32 +6370,39 @@ def render_single_trial_tab(
                 f"{compare_participant}__{compare_trial}"
             )
             displayed_plot_key = "compare"
-            displayed_fig = _render_comparison_figure(
-                combos,
-                cmp_words,
-                cmp_fixations,
-                selected_participant,
-                selected_trial,
-                selected_text,
-                figure_compare_participant,
-                compare_trial,
-                render_settings,
-                viz_settings,
-                layout=compare_layout,
-                compare_stimulus=compare_stimulus,
-                compare_meta=compare_meta,
-                shared_numeric=shared_numeric,
-                # BUG-85: the gate says why the pair cannot overlay; that it is
-                # drawn side by side instead is this surface's own resolve.
-                setup_note=(
-                    f"{compare_setup_note} They are shown side by side instead."
-                    if compare_layout != requested_layout
-                    else compare_setup_note
-                ),
-                primary_combo_row=primary_combo_row,
-                download_name=f"scanpath_{_safe_filename(save_slug)}",
-                figure_participant_b=self_compare_figure_id,
-            )
+            with loading.card(
+                plot_loading_slot,
+                key="compare",
+                title="Drawing the comparison",
+                size=loading.plot_size("compare", canvas_width, canvas_height),
+            ):
+                displayed_fig = _render_comparison_figure(
+                    combos,
+                    cmp_words,
+                    cmp_fixations,
+                    selected_participant,
+                    selected_trial,
+                    selected_text,
+                    figure_compare_participant,
+                    compare_trial,
+                    render_settings,
+                    viz_settings,
+                    layout=compare_layout,
+                    compare_stimulus=compare_stimulus,
+                    compare_meta=compare_meta,
+                    shared_numeric=shared_numeric,
+                    # BUG-85: the gate says why the pair cannot overlay; that it
+                    # is drawn side by side instead is this surface's own
+                    # resolve.
+                    setup_note=(
+                        f"{compare_setup_note} They are shown side by side instead."
+                        if compare_layout != requested_layout
+                        else compare_setup_note
+                    ),
+                    primary_combo_row=primary_combo_row,
+                    download_name=f"scanpath_{_safe_filename(save_slug)}",
+                    figure_participant_b=self_compare_figure_id,
+                )
         else:
             # PRE-3: the corrected frame (`plot_fixations`) was built above and is
             # shared with the animation + comparison paths. Only the static figure
@@ -6105,34 +6418,42 @@ def render_single_trial_tab(
                     extra_settings["connector_y"] = tuple(
                         pd.to_numeric(fig_fixations["y"], errors="coerce")
                     )
-            static_settings = render_settings.with_overrides(**extra_settings)
-            build_inputs = static_settings.for_builder(STATIC_FIGURE_OPTIONS)
-            _amend_snippet_settings(static_settings, "static")
-            build_inputs["raw_gaze"] = figure_raw_gaze
-            displayed_fig = _cached_scanpath_figure(
-                trial_words,
-                plot_fixations,
-                static_settings,
-                figure_raw_gaze,
-                fig_key=_figure_input_key(trial_words, plot_fixations, build_inputs),
-            )
-            _apply_preprocessing_caption(
-                displayed_fig, selected_participant, selected_trial
-            )
-            _apply_title_caption(
-                displayed_fig,
-                viz_settings,
-                trial_words,
-                plot_fixations,
-                selected_participant,
-                selected_trial,
-                combo_row=primary_combo_row,
-            )
-            _render_true_scale_chart(
-                displayed_fig,
+            with loading.card(
+                plot_loading_slot,
                 key="single",
-                download_name=f"scanpath_{_safe_filename(save_slug)}",
-            )
+                title="Drawing the scanpath",
+                size=loading.plot_size("single", canvas_width, canvas_height),
+            ):
+                static_settings = render_settings.with_overrides(**extra_settings)
+                build_inputs = static_settings.for_builder(STATIC_FIGURE_OPTIONS)
+                _amend_snippet_settings(static_settings, "static")
+                build_inputs["raw_gaze"] = figure_raw_gaze
+                displayed_fig = _cached_scanpath_figure(
+                    trial_words,
+                    plot_fixations,
+                    static_settings,
+                    figure_raw_gaze,
+                    fig_key=_figure_input_key(
+                        trial_words, plot_fixations, build_inputs
+                    ),
+                )
+                _apply_preprocessing_caption(
+                    displayed_fig, selected_participant, selected_trial
+                )
+                _apply_title_caption(
+                    displayed_fig,
+                    viz_settings,
+                    trial_words,
+                    plot_fixations,
+                    selected_participant,
+                    selected_trial,
+                    combo_row=primary_combo_row,
+                )
+                _render_true_scale_chart(
+                    displayed_fig,
+                    key="single",
+                    download_name=f"scanpath_{_safe_filename(save_slug)}",
+                )
 
     # Per-trial panels sit directly BELOW the plot, in the next row's left column. Trial
     # Info is gone — the chip strip above the plot now carries the trial's identity,
@@ -7197,6 +7518,20 @@ def _text_column(frame: pd.DataFrame) -> str | None:
     return None
 
 
+def _corpus_word_measures(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
+    """The Corpus view's per-word measures — what `frame_cache` builds on a miss.
+
+    It reports once, first thing (UX-166): only a miss runs it, and the gated
+    ``corpus_measures`` card waits for a report before it shows.
+    """
+    progress.report()
+    if words.empty or fixations.empty:
+        return words
+    from scanpath_studio.measures import compute_per_word_measures
+
+    return compute_per_word_measures(fixations, words)
+
+
 def render_corpus_analysis_tab(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
@@ -7240,23 +7575,29 @@ def render_corpus_analysis_tab(
     # Keyed → the `.st-key-…` selector the "Explore a corpus question" tutorial
     # spotlights when it names the subtab to open (UX-40). The tab bar carries no
     # widget key, so a tutorial can only *point* at it, never switch it.
-    from scanpath_studio.measures import compute_per_word_measures
-
+    #
     # BUG-78: every subtab reads its measures off the words frame, and only an
     # IA export ships them — so a Tobii/SMI upload, the synthetic trial or an
     # authored scanpath (boxes + fixations, nothing pre-aggregated) got "No
     # aggregatable measures" on Per text and one or two fixation-level measures
     # elsewhere. Computed once per filtered pool, imported IA values still
     # winning column by column, and handed back as the same object (no copy).
-    words_filtered = frame_cache(
-        "corpus_measures",
-        (frame_fingerprint(words_filtered), frame_fingerprint(fixations_filtered)),
-        lambda: (
-            compute_per_word_measures(fixations_filtered, words_filtered)
-            if not words_filtered.empty and not fixations_filtered.empty
-            else words_filtered
-        ),
-    )
+    #
+    # UX-166: the per-word measures of the whole pool are the Corpus view's
+    # first slow region — opening its card releases the page skeleton, so the
+    # view appears with this card at its top while they compute. It opens on
+    # every run and a hit is cheap, so it is gated: it shows only for a miss.
+    with loading.card(
+        st.empty(),
+        key="corpus_measures",
+        title="Computing reading measures",
+        reveal_on_work=True,
+    ):
+        words_filtered = frame_cache(
+            "corpus_measures",
+            (frame_fingerprint(words_filtered), frame_fingerprint(fixations_filtered)),
+            partial(_corpus_word_measures, words_filtered, fixations_filtered),
+        )
     with st.container(key="tutorial_corpus_subtabs"):
         text_tab, sentence_tab, reader_tab, groups_tab = st.tabs(
             list(CORPUS_SUBTABS),
@@ -7294,7 +7635,7 @@ def render_corpus_analysis_tab(
             )
 
 
-@st.cache_data(show_spinner="Computing sentence measures…")
+@st.cache_data(show_spinner="Computing sentence measures…", show_time=True)
 def _c_sentence_measures(_words, _fix, fwkey, ffkey):
     from scanpath_studio.preprocessing import sentence_measures
 
@@ -9259,7 +9600,7 @@ def _render_raw_metadata_tab(label: str, attached, id_note: str) -> None:
     _render_raw_table(attached.frame)
 
 
-@st.cache_data(show_spinner="Building stimuli list…")
+@st.cache_data(show_spinner="Building stimuli list…", show_time=True)
 def _build_stimuli_table_cached(_words: pd.DataFrame, cache_key) -> pd.DataFrame:
     """One row per Text ID, with the stimulus text reconstructed from its words.
 
@@ -9413,7 +9754,7 @@ def _fill_raw_data_tabs(
 # -----------------------------------------------------------------------------
 
 
-@st.cache_data(show_spinner="Computing dataset statistics…")
+@st.cache_data(show_spinner="Computing dataset statistics…", show_time=True)
 def _dataset_statistics(
     _words: pd.DataFrame,
     _fixations: pd.DataFrame,
@@ -11615,7 +11956,7 @@ def _render_arrived_provenance_note(snapshot, *, host=None) -> None:
     )
 
 
-@st.cache_data(show_spinner="Building the derived analysis tables…")
+@st.cache_data(show_spinner="Building the derived analysis tables…", show_time=True)
 def _c_derived_tables(
     _words: pd.DataFrame,
     _fixations: pd.DataFrame,

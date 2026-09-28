@@ -26,6 +26,7 @@ from time import perf_counter
 from typing import Any
 
 import streamlit as st
+from streamlit.runtime.scriptrunner import StopException
 
 from .constants import ICONS
 
@@ -199,7 +200,17 @@ class _SessionStateHandler(logging.Handler):
                     "count": 1,
                 }
             )
-        except Exception:  # pragma: no cover - logging must never crash callers
+        except (Exception, StopException):
+            # UX-166: an abandoned run's session state raises StopException on
+            # any access. Escaping here, it threw away the finished result of
+            # every cached build that logs through `timed()` — the log line comes
+            # after the value is computed. A stop stays requested, so the run
+            # still stops at its next yield point; logging must never crash its
+            # caller. RerunException is deliberately NOT caught here: unlike a
+            # stop, `ScriptRequests.on_scriptrunner_yield` *consumes* a rerun
+            # request as it hands it over, so swallowing it here — if `emit` is
+            # the first checkpoint after the request — would discard the rerun
+            # itself (reachable with `runner.fastReruns = false`).
             pass
 
 

@@ -182,7 +182,8 @@ class TestTheSlotOrder:
     def _positions(*names):
         from scanpath_studio import app
 
-        source = inspect.getsource(app.main)
+        # UX-166: `main` wraps the run in a loading scope; `_run_app` is the run.
+        source = inspect.getsource(app._run_app)
         found = {}
         for name in names:
             marker = f"{name} = editor_page.container("

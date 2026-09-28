@@ -1131,3 +1131,14 @@ class TestMetadataTablesInTheRecoveryCache:
     def test_cache_status_counts_the_tables(self, tmp_path):
         save_state(self._attached(), tmp_path)
         assert cache_status(tmp_path, environ={})["metadata"] == 3
+
+
+def test_restoring_datasets_reports_each_one(tmp_path):
+    """UX-166: the restore card counts datasets as they are read back."""
+    from scanpath_studio import progress
+
+    assert save_state({"_datasets": {"My corpus": _dataset()}}, tmp_path)
+    with progress.task(("t", "restore"), title="Restoring") as task:
+        assert restore_state({}, tmp_path)
+    snap = task.snapshot()
+    assert (snap.done, snap.total, snap.unit) == (1, 1, "datasets")

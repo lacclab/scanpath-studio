@@ -29,17 +29,22 @@ Typical use::
 
 from __future__ import annotations
 
+import contextlib
+import http.client
 import io
 import json
 import logging
 import os
 import re
+import shutil
 import urllib.request
 import zipfile
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 
 import pandas as pd
+
+from . import progress
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -84,6 +89,80 @@ def _read_potec_tsv(path) -> pd.DataFrame:
     )
 
 
+#: UX-168: download in reads of at most this size, reporting bytes after each —
+#: the progress the card shows, and the checkpoint a Cancel stops at. Each is a
+#: `read1`, which returns whatever has arrived: a `read` waits for the whole
+#: MiB, so on a 100 KB/s line Stop took ~10 s to act.
+_DOWNLOAD_CHUNK = 1 << 20
+#: UX-168: seconds a download may wait on the network — to connect, or for its
+#: next bytes — before giving up. Without it a stalled connection blocked its
+#: read forever, so Stop, which acts between reads, never could; the timeout
+#: surfaces as an `OSError`, which both ⬇ Download buttons already report.
+_DOWNLOAD_TIMEOUT_S = 60
+
+
+def _content_length(response) -> int | None:
+    value = response.headers.get("Content-Length")
+    return int(value) if value and str(value).isdigit() else None
+
+
+def _read_body(response, write: Callable[[bytes], object], *, detail: str) -> None:
+    """Hand ``response``'s body to ``write`` as it arrives, with progress.
+
+    Only a body that arrives whole returns (UX-168). `read1` returns ``b""`` on
+    an early EOF — a server, proxy or load balancer closing the connection
+    mid-body — exactly as at the real end, so a body shorter than its
+    ``Content-Length`` is a `ConnectionError`; so is a chunked body cut short,
+    which `http.client` raises as an `IncompleteRead` (an `HTTPException`, not
+    an `OSError`). Both ⬇ Download buttons report an `OSError`, and a caller
+    must never commit what was read.
+    """
+    total = _content_length(response)
+    done = 0
+    try:
+        while chunk := response.read1(_DOWNLOAD_CHUNK):
+            write(chunk)
+            done += len(chunk)
+            progress.report(done, total, unit="bytes", detail=detail)
+    except http.client.HTTPException as exc:
+        raise ConnectionError(
+            f"the download ended early after {done:,} bytes ({exc})"
+        ) from exc
+    if total is not None and done < total:
+        raise ConnectionError(f"the download ended early: {done:,} of {total:,} bytes")
+
+
+def _fetch_bytes(url: str, *, detail: str) -> bytes:
+    """``url``'s body, read as it arrives with progress (UX-168) — all of it, or
+    a `ConnectionError` (`_read_body`)."""
+    with urllib.request.urlopen(url, timeout=_DOWNLOAD_TIMEOUT_S) as response:
+        buffer = io.BytesIO()
+        _read_body(response, buffer.write, detail=detail)
+        return buffer.getvalue()
+
+
+def _fetch_to_file(url: str, dest: Path, *, detail: str) -> None:
+    """Stream ``url`` into ``dest`` through a ``.part`` file (UX-168).
+
+    The ``.part`` → final rename keeps an interrupted fetch from passing for a
+    complete file, and it happens only once the whole body has arrived
+    (`_read_body`); a cancel (or any failure) deletes the partial file — and a
+    cleanup that fails in turn never masks the error that caused it.
+    """
+    tmp = dest.with_name(dest.name + ".part")
+    try:
+        with (
+            urllib.request.urlopen(url, timeout=_DOWNLOAD_TIMEOUT_S) as response,
+            tmp.open("wb") as out,
+        ):
+            _read_body(response, out.write, detail=detail)
+        tmp.replace(dest)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            tmp.unlink(missing_ok=True)
+        raise
+
+
 def download_potec(root, *, fixation_source: str = "scanpaths") -> Path:
     """Download the PoTeC files :func:`load_potec` needs into ``root``.
 
@@ -107,18 +186,46 @@ def download_potec(root, *, fixation_source: str = "scanpaths") -> Path:
     if not eyetracking_dir.is_dir():
         url = _POTEC_OSF_URL.format(resource=_POTEC_OSF_RESOURCES[fixation_source])
         print(f"Downloading PoTeC {fixation_source} from {url} …")
-        with urllib.request.urlopen(url) as response:
-            payload = response.read()
-        (root / "eyetracking_data").mkdir(parents=True, exist_ok=True)
-        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
-            members = [
-                m
-                for m in archive.namelist()
-                # The OSF zips carry macOS resource-fork cruft; keep only the
-                # real per-trial TSVs.
-                if m.startswith(f"{fixation_source}/") and m.endswith(".tsv")
-            ]
-            archive.extractall(root / "eyetracking_data", members=members)
+        payload = _fetch_bytes(url, detail=f"PoTeC {fixation_source} archive")
+        target = root / "eyetracking_data"
+        target.mkdir(parents=True, exist_ok=True)
+        # UX-168: unpack into a staging folder and rename it into place only
+        # when complete. A cancel mid-unpack would otherwise leave a partial
+        # `scanpaths/` that `potec_present`'s "any .tsv" check accepts.
+        staging = target / f".{fixation_source}.part"
+        shutil.rmtree(staging, ignore_errors=True)
+        try:
+            with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+                members = [
+                    m
+                    for m in archive.namelist()
+                    # The OSF zips carry macOS resource-fork cruft; keep only the
+                    # real per-trial TSVs.
+                    if m.startswith(f"{fixation_source}/") and m.endswith(".tsv")
+                ]
+                if not members:
+                    # Say what is wrong, not that the staging folder is missing.
+                    raise ValueError(
+                        f"The PoTeC archive from {url} holds no "
+                        f"{fixation_source}/*.tsv files; its layout may have changed."
+                    )
+                for index, member in enumerate(members, start=1):
+                    archive.extract(member, staging)
+                    progress.report(
+                        index,
+                        len(members),
+                        unit="files",
+                        detail="Unpacking the archive",
+                    )
+            (staging / fixation_source).replace(eyetracking_dir)
+        except zipfile.BadZipFile as exc:
+            # UX-168: a damaged archive — opened or extracted — is a data error
+            # both ⬇ Download buttons report, not a raw traceback.
+            raise ValueError(
+                f"The PoTeC archive from {url} isn't a readable zip file ({exc})."
+            ) from exc
+        finally:
+            shutil.rmtree(staging, ignore_errors=True)
 
     for text_id in _POTEC_TEXTS:
         for rel in (
@@ -135,10 +242,7 @@ def download_potec(root, *, fixation_source: str = "scanpaths") -> Path:
             # interrupted fetch never leaves a truncated AOI file that
             # `dest.is_file()` / `potec_present` would then treat as complete —
             # mirroring download_onestop.
-            tmp = dest.with_name(dest.name + ".part")
-            with urllib.request.urlopen(url) as response:
-                tmp.write_bytes(response.read())
-            tmp.replace(dest)
+            _fetch_to_file(url, dest, detail=f"AOI file {rel.rsplit('/', 1)[-1]}")
     return root
 
 
@@ -227,7 +331,8 @@ def _potec_fixations(
     suffix = "scanpath" if source == "scanpaths" else "fixations"
 
     reader_set = None if readers is None else {str(r) for r in readers}
-    frames = []
+    # UX-166: gather the files first, so the card can say "312 of 900 files".
+    jobs: list[tuple[Path, pd.DataFrame]] = []
     for text_id in texts:
         char_boxes = _read_potec_ias(root, text_id)
         char_x = (char_boxes["start_x"] + char_boxes["end_x"]) / 2.0
@@ -235,14 +340,19 @@ def _potec_fixations(
         centers = pd.DataFrame(
             {"aoi": char_boxes["aoi"], "x": char_x, "y": char_y}
         ).drop_duplicates("aoi")
-
         for path in sorted((base / source).glob(f"reader*_{text_id}_{suffix}.tsv")):
             reader_id = path.stem.removeprefix("reader").split("_")[0]
             if reader_set is not None and reader_id not in reader_set:
                 continue
-            fixations = _read_potec_tsv(path)
-            fixations = fixations.merge(centers, on="aoi", how="left")
-            frames.append(fixations)
+            jobs.append((path, centers))
+    # UX-166: "0 of N" before the first file, so a gated card is armed from the
+    # start — a report only after each file would hide the first one.
+    progress.report(0, len(jobs), unit="files")
+    frames = []
+    for index, (path, centers) in enumerate(jobs, start=1):
+        fixations = _read_potec_tsv(path)
+        frames.append(fixations.merge(centers, on="aoi", how="left"))
+        progress.report(index, len(jobs), unit="files")
     if not frames:
         raise FileNotFoundError(
             f"No PoTeC fixation files matched the requested readers/texts "
@@ -553,10 +663,7 @@ def download_onestop(
             # interrupted write (killed process / full disk) never leaves a
             # truncated .csv.zip that `dest.is_file()` would then skip forever —
             # forcing a manual delete. The reports are large, so the window is real.
-            tmp = dest.with_name(dest.name + ".part")
-            with urllib.request.urlopen(url) as response:
-                tmp.write_bytes(response.read())
-            tmp.replace(dest)
+            _fetch_to_file(url, dest, detail=f"{part} {kind} report")
     return root
 
 
@@ -738,13 +845,15 @@ def onestop_raw_frames(
     if download and variant == "public":
         download_onestop(root, regime=regime, parts=part_list)
 
-    word_frames = [
-        _read_onestop_part(root, "ia", regime, part, variant) for part in part_list
-    ]
-    fix_frames = [
-        _read_onestop_part(root, "fixations", regime, part, variant)
-        for part in part_list
-    ]
+    reports = [(kind, part) for kind in ("ia", "fixations") for part in part_list]
+    # UX-166: "0 of N" first — one report here is a whole IA or fixation file,
+    # so a report only after it would hide most of the load from a gated card.
+    progress.report(0, len(reports), unit="reports")
+    word_frames, fix_frames = [], []
+    for index, (kind, part) in enumerate(reports, start=1):
+        frame = _read_onestop_part(root, kind, regime, part, variant)
+        (word_frames if kind == "ia" else fix_frames).append(frame)
+        progress.report(index, len(reports), unit="reports")
     words = pd.concat(word_frames, ignore_index=True, sort=False)
     fixations = pd.concat(fix_frames, ignore_index=True, sort=False)
     return _fold_onestop_part_into_identity(words, fixations, part_list)
@@ -1281,17 +1390,25 @@ def _multipleye_fixations(
             return None
         return info
 
+    # UX-166 fix-round-1 (Minor #6): keep only files `_wanted` will actually
+    # read, so "N of M files" isn't inflated by ones a session/stimulus filter
+    # (or an unparseable name) was always going to skip.
+    reading = [
+        (path, info)
+        for session_dir in sorted(p for p in base.iterdir() if p.is_dir())
+        if session_filter is None or session_dir.name in session_filter
+        for path in sorted(session_dir.glob(f"*_{suffix}.csv"))
+        if (info := _wanted(path)) is not None
+    ]
+    # UX-166: "0 of N" before the first file, so a gated card is armed from the
+    # start — a report only after each file would hide the first one.
+    progress.report(0, len(reading), unit="files")
     frames = []
-    for session_dir in sorted(p for p in base.iterdir() if p.is_dir()):
-        if session_filter is not None and session_dir.name not in session_filter:
-            continue
-        for path in sorted(session_dir.glob(f"*_{suffix}.csv")):
-            info = _wanted(path)
-            if info is None:
-                continue
-            stamped = _stamp_multipleye_fixations(pd.read_csv(path), info, kinds=kinds)
-            if not stamped.empty:
-                frames.append(stamped)
+    for index, (path, info) in enumerate(reading, start=1):
+        stamped = _stamp_multipleye_fixations(pd.read_csv(path), info, kinds=kinds)
+        if not stamped.empty:
+            frames.append(stamped)
+        progress.report(index, len(reading), unit="files")
     if not frames:
         raise FileNotFoundError(
             f"No MultiplEYE {source} files matched under {base} "

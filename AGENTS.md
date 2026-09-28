@@ -40,6 +40,8 @@ scanpath_studio/
 ├─ fields.py         the `label | field` row primitive shared by the plot rail, the wizard and the Scanpath subtabs — its own module because `controls` cannot supply it to the panels that import `controls`
 ├─ html_embed.py     same-origin HTML iframe helper shared by plots, tours and Share (`st.iframe`, not the deprecated components embed) + ENG-64's `plotlyjs_script`/`plotlyjs_src`: the figure iframes load the installed plotly's own `plotly.min.js` from the app's server, not cdn.plot.ly
 ├─ easter_egg.py     UX-39: triple-click the title, googly eyes. Browser-only on purpose — no session key, no rerun, nothing to expose on the other three surfaces
+├─ progress.py       UX-165: a Streamlit-free progress hook — loaders and builders `report()` counts, the orchestrator `step_to()`s; a no-op without a task, and the cancel checkpoint (`Cancelled`) with one
+├─ loading.py        UX-165: loading cards drawn hidden by the script thread and revealed + refreshed by a timer thread (the `st.spinner` pattern); `card()` for a region, `Page` for the page skeleton + dataset card, `run_scope()` around each run, Cancel buttons that restore the previous choice
 ├─ measures.py       canonical reading measures (FFD, FPRT, RPD, TFD, regressions), run materialization, and geometry helpers
 ├─ preprocessing.py  optional soft-exclusion/merge pipeline + pass, sentence, saccade, character, RTL, QA, and sensitivity tables. PRE-22 holds the **app panel** back from this release (`constants.preprocessing_enabled`, the `SCANPATH_EXPERIMENTAL=1` gate); the API, `analyze` and this module are shipped and unchanged
 ├─ authoring.py      deterministic text/word layout + stable hand-authored fixation reducers and versioned JSON round-trip

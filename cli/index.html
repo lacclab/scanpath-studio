@@ -2734,7 +2734,7 @@ with the default and help <code>--help</code> prints.</p>
 <td><code>--fix-index-range</code></td>
 <td><code>START:END</code></td>
 <td>—</td>
-<td>Draw only fixations START through END of the trial (1-based, both inclusive), e.g. <code>--fix-index-range</code> 1:40. Honoured by <code>--animate</code> too, which then replays only that window, and by <code>--compare-with</code>, which windows both scanpaths.</td>
+<td>Draw only fixations START through END of the trial (1-based, both inclusive), e.g. <code>--fix-index-range</code> 1:40. Honoured by <code>--animate</code> too, which then replays only that window, and by <code>--compare-with</code>, which windows both scanpaths (unless <code>--compare-fix-index-range</code> gives B its own).</td>
 </tr>
 <tr>
 <td><code>--highlight-column</code></td>
@@ -3210,6 +3210,24 @@ with the default and help <code>--help</code> prints.</p>
 <td><code>SPEC</code></td>
 <td>—</td>
 <td>Styling for the SECOND scanpath, repeatable: KEY=VALUE[,...] with KEY one of fix_color / saccade_color (#RRGGBB), saccade_style (solid|dash|dot|dashdot), saccade_width (px), marker_size_range (MIN:MAX), opacity (0.1–1), hollow (true|false) — e.g. <code>--style-b</code> fix_color=#D55E00,opacity=0.5.</td>
+</tr>
+<tr>
+<td><code>--compare-fixation-flag</code></td>
+<td><code>SPEC</code></td>
+<td>—</td>
+<td>Fixation classification for the SECOND scanpath only, repeatable; same SPEC as <code>--fixation-flag</code>, e.g. <code>--compare-fixation-flag</code> short=discard,threshold_ms=80. Replaces <code>--fixation-flag</code> for B.</td>
+</tr>
+<tr>
+<td><code>--compare-saccade-classes</code></td>
+<td><code>CLASSES</code></td>
+<td>—</td>
+<td>The reading classes the SECOND scanpath draws, comma-separated (same names as <code>--saccade-classes</code>). Replaces <code>--saccade-classes</code> for B. Not with <code>--animate</code>, which draws every class.</td>
+</tr>
+<tr>
+<td><code>--compare-fix-index-range</code></td>
+<td><code>START:END</code></td>
+<td>—</td>
+<td>Draw only fixations START through END of the SECOND scanpath (1-based, inclusive). Replaces <code>--fix-index-range</code> for B.</td>
 </tr>
 <tr>
 <td><code>--stimulus-image-b</code></td>

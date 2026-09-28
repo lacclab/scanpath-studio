@@ -1901,16 +1901,27 @@ behind each line, and the releases before 0.28.0, are in
 <p><h2 id="unreleased">Unreleased<a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
 <p><strong>Added</strong></p>
 <ul>
+<li><strong>Column auto-detection catches a vendor prefix or suffix on a known column name</strong> (DATA-25)</li>
+<li><strong>In Compare, each scanpath has its own filters — fixation window, short / long / off-text / blink flags and saccade types</strong> (CMP-24)</li>
+<li><strong>A title or caption can name a metadata table's fields, and a data table's saved fields, as <code>{table.field}</code></strong> (EXP-22)</li>
 <li><strong>A long wait says what the app is doing: a card with the step, a count, the elapsed time and a Cancel</strong> (UX-165)</li>
 <li><strong>Cancel a dataset load, an animation build, Compare's second dataset or a download, and go back to where you were</strong> (UX-168)</li>
 </ul>
 <p><strong>Changed</strong></p>
 <ul>
+<li><strong>The trial picker walks trials in the order the data has them; Trial ID is a choice in ⇅</strong> (UX-171)</li>
 <li><strong>A dataset that takes a while to open shows a skeleton of the page and its steps, not a lone banner</strong> (UX-166)</li>
 <li><strong>Building an animation counts its frames, and the plot shows a placeholder until the browser has drawn it</strong> (UX-169)</li>
+<li><strong>Compare's A/B legend is larger, so the two readings' names read at a glance</strong> (UX-172)</li>
 </ul>
 <p><strong>Fixed</strong></p>
 <ul>
+<li><strong>✅ Save changes on ✏️ Edit dataset no longer strips the word boxes and text from a dataset whose <abbr title="Area of interest: here, a word's bounding box">AOI</abbr> table has no reader column</strong> (DATA-39)</li>
+<li><strong>Attached participant, trial and text tables survive a refresh, and their fields stay in the filters, chips and trial sorting</strong> (DATA-38)</li>
+<li><strong>✅ Save changes on ✏️ Edit dataset keeps an estimated screen, and the estimate reads the data</strong> (DATA-46)</li>
+<li><strong>Metadata tables belong to the dataset they were attached to</strong> (DATA-47)</li>
+<li><strong><abbr title="Area of interest: here, a word's bounding box">AOI</abbr> box columns with a prefix or suffix auto-fill even when the table carries two box encodings</strong> (DATA-57)</li>
+<li><strong>Clearing the screen fields in a mapping makes the table single-screen again</strong> (DATA-59)</li>
 <li><strong>The plot-controls rail no longer looks cut off while a figure is being drawn</strong> (UX-167)</li>
 </ul>
 <h2 id="0312-2026-09-27">0.31.2 — 2026-09-27<a class="headerlink" href="#0312-2026-09-27" title="Permanent link">&para;</a></h2>

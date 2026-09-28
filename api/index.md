@@ -307,7 +307,7 @@ Remaining keywords override the app's defaults and are forwarded to `plots.make_
 ### scanpath_studio.api.animate_scanpath
 
 ```
-animate_scanpath(words: DataFrame, fixations: DataFrame, participant: str | None = None, trial: str | None = None, *, screen: str | None = None, canvas_size: tuple[int, int] | None = None, base_font_size: int = 16, font_family: str = FONT_FAMILY, playback_speed: float = 1.0, autoplay: bool = True, fix_index_range: tuple[int, int] | None = None, illustration_label: str = 'auto', title: str = '', caption: str = '', trial_b: tuple[str, str] | None = None, dataset_b: str | None = None, setup: SetupSnapshot | None = None, setup_b: SetupSnapshot | None = None, **animation_overrides) -> Figure
+animate_scanpath(words: DataFrame, fixations: DataFrame, participant: str | None = None, trial: str | None = None, *, screen: str | None = None, canvas_size: tuple[int, int] | None = None, base_font_size: int = 16, font_family: str = FONT_FAMILY, playback_speed: float = 1.0, autoplay: bool = True, fix_index_range: tuple[int, int] | None = None, fix_index_range_b: tuple[int, int] | None = None, illustration_label: str = 'auto', title: str = '', caption: str = '', trial_b: tuple[str, str] | None = None, dataset_b: str | None = None, setup: SetupSnapshot | None = None, setup_b: SetupSnapshot | None = None, **animation_overrides) -> Figure
 ```
 
 Build the animated scanpath replay for one trial.
@@ -317,6 +317,8 @@ Same trial selection and canvas semantics as plot_scanpath, including `screen` s
 With `autoplay` (default `True`) the saved interactive HTML auto-starts the replay on load *at `playback_speed`* — save_figure honors the marker the builder stamps on the figure. Pass `autoplay=False` to save a figure that opens paused (press ▶ Play to run it). Autoplay only affects the interactive HTML; a GIF/MP4 always plays from its first frame.
 
 When `playback_speed` is not `1`, the automatic Illustration label says the replay timing was changed. `illustration_label` accepts `"auto"`, `"show"`, or `"hide"` like plot_scanpath.
+
+CMP-24: in a co-animation `fix_index_range` windows A only (the app's rule — A's slider never cuts B), `fix_index_range_b` windows B, and `fixation_flags_b` gives B flags of its own (`None`: A's `fixation_flags`).
 
 `trial_b=(participant, trial)` co-animates a second reading on the same clock, like the app's Animate + Compare. It is looked up in `words_b` / `fixations_b` when given, else in `words` / `fixations` — the way compare_scanpaths takes it. Without `trial_b`, `words_b` / `fixations_b` must hold one trial; B frames holding several raise `ValueError` rather than drawing them all. A multipart B is drawn at its first recorded screen; cut B's frames to another with `multipart.extract_part` to draw that one.
 
@@ -329,7 +331,7 @@ The animation builder accepts a subset of the static figure's options (`show_wor
 ### scanpath_studio.api.compare_scanpaths
 
 ```
-compare_scanpaths(words: DataFrame, fixations: DataFrame, trial_a: tuple[str, str], trial_b: tuple[str, str], *, words_b: DataFrame | None = None, fixations_b: DataFrame | None = None, dataset_b: str = 'Dataset B', layout: str = 'overlay', compare_stimulus: str = 'both', setup: SetupSnapshot | None = None, setup_b: SetupSnapshot | None = None, canvas_size: tuple[int, int] | None = None, labels: tuple[str, str] | None = None, style_a: dict | None = None, style_b: dict | None = None, base_font_size: int = 16, font_family: str = FONT_FAMILY, fix_index_range: tuple[int, int] | None = None, drift_correction: str | None = None, title: str = '', caption: str = '', **figure_overrides) -> Figure
+compare_scanpaths(words: DataFrame, fixations: DataFrame, trial_a: tuple[str, str], trial_b: tuple[str, str], *, words_b: DataFrame | None = None, fixations_b: DataFrame | None = None, dataset_b: str = 'Dataset B', layout: str = 'overlay', compare_stimulus: str = 'both', setup: SetupSnapshot | None = None, setup_b: SetupSnapshot | None = None, canvas_size: tuple[int, int] | None = None, labels: tuple[str, str] | None = None, style_a: dict | None = None, style_b: dict | None = None, base_font_size: int = 16, font_family: str = FONT_FAMILY, fix_index_range: tuple[int, int] | None = None, fix_index_range_b: tuple[int, int] | None = None, drift_correction: str | None = None, title: str = '', caption: str = '', **figure_overrides) -> Figure
 ```
 
 Build a two-scanpath comparison figure.
@@ -343,6 +345,8 @@ The headless form of the app's **Compare** mode. `trial_a` / `trial_b` are `(par
 `setup` / `setup_b` are `experimental_setup.SetupSnapshot` values — what the gate reads. `canvas_size` covers A when you only have a resolution; omit both and the canvas is read off the data.
 
 `compare_stimulus` picks whose word boxes and text an **overlay** draws — `"both"` (default), `"a"` or `"b"`. Two datasets' AOIs coincide only when the text is identical. Split layouts ignore it; each panel owns its own stimulus.
+
+**Filters, per scanpath (CMP-24).** `fixation_flags` and `saccade_classes` filter both scanpaths, as they filter plot_scanpath's one; the same two keys in `style_a` / `style_b` give that scanpath its own, overriding them — e.g. `style_b={"fixation_flags": {"short": {"mode": "Discard", "threshold_ms": 80}}, "saccade_classes": ["regression"]}`. The app's Compare mode draws A under the rail's filters and B under B's own. `fix_index_range` windows both scanpaths; `fix_index_range_b` gives B a window of its own (the app's B slider).
 
 Remaining keywords are forwarded to `plots.make_comparison_figure` (e.g. `show_words=False`, `color_by="duration_ms"`); an unknown one raises `TypeError` naming the closest valid options; `figure_options("comparison")` lists the accepted keywords.
 
@@ -469,6 +473,7 @@ Every keyword the figure builders take, with the default it renders with, the `r
 | `fixation_color_range`      | `None`                                         | `--fixation-color-range`                                  | all three        |
 | `fixation_colorscale`       | `'Viridis'`                                    | `--fixation-colorscale`                                   | all three        |
 | `fixation_flags`            | `None`                                         | `--fixation-flag`                                         | all three        |
+| `fixation_flags_b`          | `None`                                         | `--compare-fixation-flag`                                 | animate          |
 | `fixation_hover_fields`     | `['order_in_trial', 'duration_ms', 'word_id']` | `--fixation-hover-fields`                                 | all three        |
 | `fixation_opacity`          | `0.7`                                          | `--fixation-opacity`                                      | all three        |
 | `fixation_snap_to_word`     | `False`                                        | `--snap-fixations`                                        | plot, compare    |

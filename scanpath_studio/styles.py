@@ -1350,6 +1350,19 @@ def get_app_css() -> str:
         margin: 0.55rem 0 1rem;
     }
 
+    /* AN-32 — the Corpus Analysis page with no reading measures to show: its
+       sections, drawn as a greyed tab strip so what it offers stays visible. */
+    .sps-corpus-off {
+        display: flex;
+        gap: 1.5rem;
+        margin-top: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--sps-line, rgba(128, 128, 128, 0.22));
+        opacity: 0.45;
+        pointer-events: none;
+        user-select: none;
+    }
+
     /* UX-113 — the filename-derive row's Apply button: a gentle tint of the
        app's own accent (the same tokens the code chips and tab hover use),
        not the loud filled `primary` blue reserved for the page's one commit

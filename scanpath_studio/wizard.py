@@ -51,6 +51,7 @@ from .controls import (
 from .data import (
     FIX_OPTIONAL_FIELDS,
     PARTICIPANT_CANDIDATES,
+    READING_MEASURE_KEYS,
     SOURCE_FILE_COLUMN,
     WORD_OPTIONAL_FIELDS,
     aggregate_char_boxes,
@@ -2649,6 +2650,14 @@ _FIX_ROW2_W = (0.155, 0.2113, 0.2113, 0.2113, 0.2113)
 #: the box gets most of the row, Line index the rest (UX-55 r3).
 _AOI_ROW2_W = (0.155, 0.678, 0.167)
 
+#: AN-32 — rows 3-4 of the AOI block: the reading measures the report brings,
+#: seven to a line under the same name column (thirteen fields on one line
+#: would leave each select a sliver). Shared with the ✏️ Edit dataset grid.
+MEASURE_ROW_W = (0.155, *([0.845 / 7] * 7))
+#: The measures, split into those two lines: durations and the count first,
+#: then the flags, the regression count and the landing measures.
+MEASURE_ROWS = (READING_MEASURE_KEYS[:7], READING_MEASURE_KEYS[7:])
+
 #: Row 2 of the Raw gaze block (UX-113): X · Y · Timestamp — no Duration, raw
 #: gaze has no such concept (unlike row 1, which reuses `_ID_ROW1_W` outright:
 #: same six identity fields, same shape as Fixations/AOI above it).
@@ -3237,6 +3246,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
         feature_rows["words"] = words_block.columns(
             _AOI_ROW2_W, gap="small", vertical_alignment="bottom"
         )
+        # AN-32: the two measure lines, reserved here so they sit under the
+        # box row and above the character-AOI toggle, whatever fills first.
+        measure_rows = [
+            words_block.columns(MEASURE_ROW_W, gap="small", vertical_alignment="bottom")
+            for _ in MEASURE_ROWS
+        ]
         extra_rows["words"] = words_block.container()
         keep_rows["words"] = words_block.container()
 
@@ -3450,6 +3465,28 @@ def _render_data_setup(active: bool) -> _UploadResult:
                     ["line"],
                 )
             )
+            # AN-32 — the reading measures, two lines named once. Each is an
+            # optional field seeded from its EyeLink name, so an IA report maps
+            # them all without a click and a report without them leaves the
+            # lines empty rather than hiding them behind a switch.
+            for line, (row, keys) in enumerate(zip(measure_rows, MEASURE_ROWS)):
+                if line == 0:
+                    row[0].markdown(
+                        '<div class="sps-id-row-name sps-geo-row-name">'
+                        "Reading measures</div>",
+                        unsafe_allow_html=True,
+                    )
+                for cell, key in zip(row[1:], keys):
+                    word_schema.update(
+                        _map_section(
+                            raw_words,
+                            WORD_FIELD_SPECS,
+                            prop_w,
+                            "col_map_words",
+                            cell,
+                            [key],
+                        )
+                    )
             # UX-104 — line 3 of the AOI block. One row per *character* is a
             # fact about this table, so the question sits with the fields that
             # describe it, not in a later section the user reads after they

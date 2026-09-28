@@ -51,7 +51,7 @@ from .constants import (
     palette_settings,
     upload_limit_mb,
 )
-from .data import frame_fingerprint
+from .data import READING_MEASURE_FIELDS, READING_MEASURE_KEYS, frame_fingerprint
 from .export import (
     DEFAULT_CAPTION_PATTERN,
     DEFAULT_TITLE_PATTERN,
@@ -1793,6 +1793,10 @@ def _default_box_format(proposed: dict[str, str | None]) -> str:
 # blocks that each restart their own numbering (e.g. a comprehension
 # question's answer blocks) ever needs it.
 _ADVANCED_MAPPING_KEYS = frozenset({"screen_id", "block"})
+#: AN-32 — the reading measures fold into a group of their own wherever every
+#: field is listed at once (the ⚙️ Configure panel), so thirteen optional
+#: fields never stretch the required ones apart.
+_MEASURE_MAPPING_KEYS = frozenset(READING_MEASURE_KEYS)
 
 #: Mapping keys that are **resolved but never rendered** (UX-53 round 3).
 #:
@@ -1898,6 +1902,18 @@ WORD_FIELD_SPECS: list[dict] = [
         "required": True,
         "help": "Bounding box per word/AOI. Edges = left/right/top/bottom (EyeLink IA_*); origin+size = x/y/width/height.",
     },
+    # AN-32: the reading measures a dataset brings, one optional field each —
+    # the Corpus Analysis page shows these and computes none. Short labels, as
+    # they share two lines; the full name and the EyeLink column are the hover.
+    *(
+        {
+            "key": key,
+            "label": label,
+            "help": f"{name}. Auto-detected from EyeLink's `{candidates[0]}`"
+            " (or a column named like it). Leave empty if your report has none.",
+        }
+        for key, _column, label, name, _kind, candidates in READING_MEASURE_FIELDS
+    ),
 ]
 
 FIX_FIELD_SPECS: list[dict] = [
@@ -2437,6 +2453,8 @@ def column_mapping_ui(
         """The container a field's row renders into (main, or Advanced)."""
         if group_advanced and field_key in _ADVANCED_MAPPING_KEYS:
             return hosts.get("advanced") or hosts["main"]
+        if group_advanced and field_key in _MEASURE_MAPPING_KEYS:
+            return hosts.get("measures") or hosts["main"]
         return hosts["main"]
 
     #: Grid cursor for `columns_per_row > 1`: the current row's columns and how
@@ -2631,7 +2649,19 @@ def column_mapping_ui(
         # (Streamlit lays containers out in creation order, and
         # `_assemble_mapping` interleaves them).
         hosts["main"] = st.container()
+        measures_slot = st.container()
         advanced_slot = st.container()
+        if group_advanced and any(
+            spec["key"] in _MEASURE_MAPPING_KEYS for spec in field_specs
+        ):
+            hosts["measures"] = measures_slot.expander(
+                f"{ICONS['settings']} Reading measures",
+                expanded=any(proposed.get(key) for key in _MEASURE_MAPPING_KEYS),
+            )
+            hosts["measures"].caption(
+                "The per-AOI measures your report already has (FFD, TFD, …). "
+                "The Corpus Analysis page shows these; it computes none."
+            )
         if group_advanced and any(
             spec["key"] in _ADVANCED_MAPPING_KEYS for spec in field_specs
         ):

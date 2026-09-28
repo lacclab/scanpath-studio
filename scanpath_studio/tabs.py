@@ -147,6 +147,8 @@ from scanpath_studio.controls import (
     render_viz_reset,
 )
 from scanpath_studio.data import (
+    READING_MEASURE_FIELDS,
+    READING_MEASURE_KEYS,
     aggregate_char_boxes,
     compute_word_metrics,
     derive_trial_index,
@@ -154,7 +156,6 @@ from scanpath_studio.data import (
     empty_words_frame,
     filter_to_keys,
     filter_trials,
-    frame_cache,
     frame_fingerprint,
     harmonize_frames,
     has_explicit_trial_index,
@@ -7524,18 +7525,44 @@ def _text_column(frame: pd.DataFrame) -> str | None:
     return None
 
 
-def _corpus_word_measures(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
-    """The Corpus view's per-word measures — what `frame_cache` builds on a miss.
+def _corpus_unavailable_notice() -> None:
+    """The Corpus Analysis page when the data brings no reading measures (AN-32).
 
-    It reports once, first thing (UX-166): only a miss runs it, and the gated
-    ``corpus_measures`` card waits for a report before it shows.
-    """
-    progress.report()
-    if words.empty or fixations.empty:
-        return words
-    from scanpath_studio.measures import compute_per_word_measures
+    The page computes no measure of its own, so without an uploaded one there is
+    nothing for any of its sections to show. It says so, points at where the
+    measures are mapped, and draws its sections greyed so what it *would* offer
+    stays visible."""
+    st.info(
+        f"{ICONS['info']} **No reading measures in this dataset.** Corpus "
+        "Analysis shows the per-AOI measures your report brings — FFD, TFD, "
+        "first-pass time, regression path and the rest — and computes none of "
+        "its own. Map them under **Reading measures** in the AOI table, on ✏️ "
+        "Edit dataset or when you add a dataset; an EyeLink interest-area report "
+        "(`IA_DWELL_TIME`, `IA_FIRST_FIXATION_DURATION`, …) maps them "
+        "automatically."
+    )
+    st.button(
+        f"{ICONS['edit']} Map reading measures",
+        key="corpus_map_measures",
+        on_click=_open_measure_mapping,
+    )
+    sections = "".join(
+        f'<span class="sps-corpus-off-tab">{html.escape(name)}</span>'
+        for name in CORPUS_SUBTABS
+    )
+    st.markdown(
+        f'<div class="sps-corpus-off" aria-disabled="true">{sections}</div>',
+        unsafe_allow_html=True,
+    )
 
-    return compute_per_word_measures(fixations, words)
+
+def _open_measure_mapping() -> None:
+    """Take the user to ✏️ Edit dataset, where the measures are mapped."""
+    from scanpath_studio.app import _open_mapping_editor
+    from scanpath_studio.url_state import _go_data
+
+    _open_mapping_editor()
+    _go_data()
 
 
 def render_corpus_analysis_tab(
@@ -7560,6 +7587,12 @@ def render_corpus_analysis_tab(
     picker / aggregation / spread / normalization controls. (**Generations** moved
     to the Scanpath view's **Comparisons** subtab — ENG-8.)
     """
+    # AN-32: the page shows the reading measures the dataset *brought* and
+    # computes none — BUG-78 used to derive them from the fixations and word
+    # boxes when a report had none. Without one there is nothing to show.
+    if not available_measures(words_filtered, None, per_word_only=True):
+        _corpus_unavailable_notice()
+        return
     viz_settings = corpus_style_controls(
         fixations_filtered,
         base_font_size,
@@ -7582,28 +7615,6 @@ def render_corpus_analysis_tab(
     # spotlights when it names the subtab to open (UX-40). The tab bar carries no
     # widget key, so a tutorial can only *point* at it, never switch it.
     #
-    # BUG-78: every subtab reads its measures off the words frame, and only an
-    # IA export ships them — so a Tobii/SMI upload, the synthetic trial or an
-    # authored scanpath (boxes + fixations, nothing pre-aggregated) got "No
-    # aggregatable measures" on Per text and one or two fixation-level measures
-    # elsewhere. Computed once per filtered pool, imported IA values still
-    # winning column by column, and handed back as the same object (no copy).
-    #
-    # UX-166: the per-word measures of the whole pool are the Corpus view's
-    # first slow region — opening its card releases the page skeleton, so the
-    # view appears with this card at its top while they compute. It opens on
-    # every run and a hit is cheap, so it is gated: it shows only for a miss.
-    with loading.card(
-        st.empty(),
-        key="corpus_measures",
-        title="Computing reading measures",
-        reveal_on_work=True,
-    ):
-        words_filtered = frame_cache(
-            "corpus_measures",
-            (frame_fingerprint(words_filtered), frame_fingerprint(fixations_filtered)),
-            partial(_corpus_word_measures, words_filtered, fixations_filtered),
-        )
     with st.container(key="tutorial_corpus_subtabs"):
         text_tab, sentence_tab, reader_tab, groups_tab = st.tabs(
             list(CORPUS_SUBTABS),
@@ -9940,6 +9951,8 @@ _WORD_REMAP_CANON = {
     "y": "y",
     "width": "width",
     "height": "height",
+    # AN-32 — each reading measure is stored under its canonical column.
+    **{key: column for key, column, *_ in READING_MEASURE_FIELDS},
 }
 _FIX_REMAP_CANON = {
     "participant": "participant_id",
@@ -10861,6 +10874,10 @@ def _remap_proposed(schema: dict | None, frame_columns, canon: dict) -> dict:
             proposed[key] = None
         elif is_word_box and key in ("x", "y", "width", "height"):
             proposed[key] = canonical
+        elif key in READING_MEASURE_KEYS:
+            # AN-32: a stored measure column is what the dataset brought, even
+            # when it was saved before measures had a mapping of their own.
+            proposed[key] = canonical
         elif key == "text_id":
             # text_id always exists post-normalization (falls back to trial_id);
             # always seed it so a remap preserves text grouping instead of
@@ -11091,7 +11108,13 @@ def _apply_remap() -> None:
 #: line, so a field can never be dropped by this list falling behind
 #: ``*_FIELD_SPECS``.
 def _edit_rows() -> tuple:
-    from scanpath_studio.wizard import _AOI_ROW2_W, _FIX_ROW2_W, _ID_ROW1_W
+    from scanpath_studio.wizard import (
+        _AOI_ROW2_W,
+        _FIX_ROW2_W,
+        _ID_ROW1_W,
+        MEASURE_ROW_W,
+        MEASURE_ROWS,
+    )
 
     return (
         (
@@ -11132,6 +11155,17 @@ def _edit_rows() -> tuple:
             "",
         ),
         ("", _AOI_ROW2_W, (("words", "box"), ("words", "line")), "aggregate"),
+        # AN-32 — the reading measures, on the same two lines the add screen
+        # gives them. Part of the AOI block, so no block gap above them.
+        *(
+            (
+                "Reading measures" if line == 0 else "",
+                MEASURE_ROW_W,
+                tuple(("words", key) for key in keys),
+                "measures",
+            )
+            for line, keys in enumerate(MEASURE_ROWS)
+        ),
         (
             "Raw gaze",
             _ID_ROW1_W,
@@ -11356,7 +11390,7 @@ def _render_remap_fields(
         # A hairline between blocks, as on the add screen — a block is one
         # table read across two lines, and without the gap the six rows read as
         # one long grid whose left-hand names label the wrong things.
-        if label and drawn:
+        if label and drawn and extra != "measures":
             st.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
         drawn.add(label or "-")
         row = st.columns(

@@ -955,31 +955,29 @@ class TestSpotlightSelectorsResolve:
         assert '[class*="_cell_confirm"] button {' in css
         assert '[class*="_confirm"] button {' not in css
 
-    def test_subtabs_use_a_second_plot_width_row(self):
-        """UX-43: open subtab content cannot contribute to the rail-row height."""
+    def test_subtabs_stay_in_the_plot_column(self):
+        """UX-173: a tall rail cannot push the panels away from a short plot."""
         import inspect
 
         from scanpath_studio.tabs import render_single_trial_tab
 
         source = inspect.getsource(render_single_trial_tab)
         assert 'plot_col, rail_col = st.columns([4, 1], gap="large")' in source
-        assert 'subtabs_col, _ = st.columns([4, 1], gap="large")' in source
-        assert 'subtabs_slot = subtabs_col.container(key="tour_grp_subtabs")' in source
+        assert 'subtabs_col, _ = st.columns([4, 1], gap="large")' not in source
+        assert '        subtabs_slot = st.container(key="tour_grp_subtabs")' in source
         assert "with subtabs_slot:" in source
 
-    def test_visualization_rail_has_responsive_independent_scroll(self):
-        """UX-43: desktop scrolls the rail; narrow layouts return to page flow."""
+    def test_visualization_rail_uses_page_flow(self):
+        """UX-173: controls are neither capped at plot height nor faded out."""
         from scanpath_studio.styles import get_app_css
 
         css = get_app_css()
         assert ".st-key-scanpath_rail {" in css
-        assert '[data-testid="stColumn"]:has(.st-key-scanpath_rail) {' in css
-        assert "position: absolute;" in css
-        assert "height: 100%;" in css
-        assert "max-height: 100%;" in css
-        assert "overflow-y: auto;" in css
-        assert "@media (max-width: 900px)" in css
-        assert "overflow-y: visible;" in css
+        rail_rule = css.split(".st-key-scanpath_rail {", 1)[1].split("}", 1)[0]
+        assert "height:" not in rail_rule
+        assert "overflow" not in rail_rule
+        assert "mask-image" not in rail_rule
+        assert '[data-testid="stColumn"]:has(.st-key-scanpath_rail)' not in css
 
     def test_plot_rail_uses_one_compact_control_header(self):
         """UX-44: modes and visualization settings share one rail heading."""

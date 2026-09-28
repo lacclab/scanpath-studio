@@ -21,6 +21,7 @@ import plotly.io as pio
 import streamlit as st
 
 from scanpath_studio import alignment, loading, progress
+from scanpath_studio import metadata as _metadata_mod
 from scanpath_studio.aggregation import (
     MEASURES,
     Measure,
@@ -131,10 +132,12 @@ from scanpath_studio.controls import (
     _popover_rows,
     _sub_row,
     column_mapping_ui,
+    compare_b_filters,
     corpus_style_controls,
     current_dataset_name,
     inline_field_label,
     read_trial_filters,
+    render_compare_filters,
     render_narrow_by,
     render_pattern_help,
     render_pattern_input,
@@ -243,6 +246,7 @@ from scanpath_studio.utils import (
     COMPARE_DATASET_SEP,
     COMPARE_OPTIONS_SNAPSHOT_KEY,
     COMPARE_STEP_LINK_KEY,
+    TRIAL_SORT_DATA_ORDER,
     TRIAL_SORT_DEFAULT,
     align_compare_columns,
     at_list_end,
@@ -1596,6 +1600,7 @@ def _publish_snippet_state(
     playback_speed: float,
     compare: CompareTarget | None,
     full_fix_range: tuple[int, int] | None = None,
+    fix_index_range_b: tuple[int, int] | None = None,
 ) -> None:
     """EXP-7: park the state the Share subtab's code snippet is written from.
 
@@ -1626,6 +1631,7 @@ def _publish_snippet_state(
         title=title,
         caption=caption,
         fix_index_range=window,
+        fix_index_range_b=fix_index_range_b if compare is not None else None,
         # "Off" is the rail's word for no correction; the API's is None.
         drift_correction=(
             None
@@ -2445,11 +2451,17 @@ def _render_compare_selector(
             # on. Resolved into a local, never written back to the widget key:
             # the user's chosen sort must survive un-linking (the same
             # don't-rewrite-a-gated-setting rule as `controls._mode_gate`).
+            # UX-171: pinned to the order A walks by default — data order when
+            # the pool carries it, else Trial ID.
             if compare_step_linked() and sort_choice == _CMP_SORT_DEFAULT:
-                order_choice = TRIAL_SORT_DEFAULT
+                order_choice = (
+                    TRIAL_SORT_DATA_ORDER
+                    if TRIAL_SORT_DATA_ORDER in sort_keys
+                    else TRIAL_SORT_DEFAULT
+                )
                 st.caption(
-                    "Sorted by **Trial ID** while *Step · A and B together* is on, "
-                    "so B keeps its place in the list when A changes text."
+                    f"Sorted by **{order_choice}** while *Step · A and B together* "
+                    "is on, so B keeps its place in the list when A changes text."
                 )
             else:
                 order_choice = sort_choice
@@ -3653,6 +3665,14 @@ def _render_save_restore_expander(
         }
         for idx in range(2)
     ]
+    # CMP-24: B's own filters ride its entry (A's are the ordinary ones). Modes
+    # and thresholds only — B draws a Highlight with A's marker and colour.
+    b_filters = compare_b_filters()
+    compare_styles[1]["fixation_flags"] = {
+        cat: {k: v for k, v in spec.items() if k in ("mode", "threshold_ms")}
+        for cat, spec in b_filters["fixation_flags"].items()
+    }
+    compare_styles[1]["saccade_classes"] = b_filters["saccade_classes"]
     plot_config = _build_studio_config(
         selected_participant=selected_participant,
         selected_trial=selected_trial,
@@ -4090,6 +4110,10 @@ def _rendered_title_caption(
         # animation, compare) all get it without each remembering to.
         dataset_name=current_dataset_name() if dataset_name is None else dataset_name,
         compare_row=compare_row,
+        # EXP-22: `{trials.font_size}` and the other tables' fields.
+        metadata_rows=_metadata_mod.pattern_rows(
+            participant, trial, (combo_row or {}).get("text_id")
+        ),
     )
     return (
         render_pattern(title_pattern, fields) if title_pattern else "",
@@ -4359,7 +4383,12 @@ def _plan_replay(
     # values, then stamp the real speed and autoplay onto the copy the cache
     # hands back: moving the speed slider no longer rebuilds every frame.
     frame_settings = animation_settings.with_overrides(
-        playback_speed=1.0, autoplay=True, illustration_reasons=None
+        playback_speed=1.0,
+        autoplay=True,
+        illustration_reasons=None,
+        # CMP-24: B's flags only matter to a replay that draws B — the same rule
+        # as `fixations_b` below, so a lone replay's key never carries them.
+        **({} if dual else {"fixation_flags_b": None}),
     )
     anim_inputs = {
         field.name: getattr(frame_settings, field.name)
@@ -4981,6 +5010,8 @@ def render_single_trial_tab(
     # live in the left column, including the per-trial subtabs directly below the
     # plot. The rail is kept narrow (the plot is the hero) and scrolls separately.
     plot_col, rail_col = st.columns([4, 1], gap="large")
+    # Rail containers filled after the rail itself (CMP-24: B's filters).
+    rail_slots: dict = {}
     with rail_col:
         rail = st.container(key="scanpath_rail")
 
@@ -5618,6 +5649,8 @@ def render_single_trial_tab(
             fixations_filtered,
             base_font_size,
             host=rail,
+            # CMP-24: where scanpath B's filters go, once B is loaded below.
+            slots=rail_slots,
             has_raw_gaze=has_raw_gaze,
             has_stimulus_image=has_stimulus_image,
             words=words_filtered,
@@ -5810,6 +5843,11 @@ def render_single_trial_tab(
     )
     cross_dataset = bool(compare_meta and compare_meta.get("dataset"))
     compare_fix = compare_meta["fixations"] if compare_meta else pd.DataFrame()
+    # CMP-24: B's own filters, into the slot the rail reserved under A's — drawn
+    # here because this is the first point B's fixations exist to size its
+    # window. Everything below reads them in this same run.
+    if comparing:
+        render_compare_filters(rail_slots.get("compare_filter"), compare_fix)
     # CMP-11: the one predicate both gates below consult. Computed here because
     # this is the first point B's screen is known.
     # The *trial's* frames, not the filtered corpus: A's canvas is overwritten with
@@ -5867,7 +5905,34 @@ def render_single_trial_tab(
     # any trial B with MORE fixations than A lost its trailing ones on every
     # comparison, whether or not the slider was ever touched. B is never
     # windowed by A's control.
+    #
+    # CMP-24: B has a window of its own (`single_compare_fix_range`), bounded by
+    # B's fixations and applied on exactly A's terms — its full range published
+    # beside A's, so the Share link can tell a real window from the default.
     fig_compare_fix = compare_fix
+    # What the snippet names as B's window: B's own when it has one — and B's
+    # full range when only A is windowed, because the API's `fix_index_range`
+    # windows *both* scanpaths where the app's A slider never cuts B.
+    snippet_window_b = None
+    # What the Illustration disclosure is told about B's window (CMP-24).
+    window_b = full_b = None
+    if comparing and not compare_fix.empty and "order_in_trial" in compare_fix:
+        order_b = pd.to_numeric(compare_fix["order_in_trial"], errors="coerce").dropna()
+        full_b = (int(order_b.min()), int(order_b.max())) if not order_b.empty else None
+        selection = st.session_state.get("_share_selection")
+        if full_b is not None and isinstance(selection, dict):
+            selection["compare_full_fix_range"] = full_b
+        window_b = st.session_state.get("single_compare_fix_range")
+        if window_b is not None and (full_b is None or tuple(window_b) != full_b):
+            fig_compare_fix = _slice_fix_range(compare_fix, window_b)
+            snippet_window_b = tuple(int(v) for v in window_b)
+        elif windowed and full_b is not None:
+            snippet_window_b = full_b
+    # The dual animation takes B's flags as a setting (the static comparison
+    # reads them off B's style); set only while comparing, so a single-trial
+    # figure's cache key is unchanged.
+    if comparing:
+        figure_settings["fixation_flags_b"] = compare_b_filters()["fixation_flags"]
     detected_reasons = illustration_reasons(
         {
             **viz_settings,
@@ -5876,6 +5941,10 @@ def render_single_trial_tab(
         data_source=st.session_state.get("_active_data_source"),
         fix_index_range=fix_range,
         full_fixation_range=full_fix_range,
+        # CMP-24: B's own flags and window disclose as A's do.
+        fixation_flags_b=figure_settings.get("fixation_flags_b"),
+        fix_index_range_b=window_b,
+        full_fixation_range_b=full_b,
         raw_gaze_only=trial_fixations.empty
         and raw_gaze is not None
         and not raw_gaze.empty,
@@ -6151,6 +6220,7 @@ def render_single_trial_tab(
         caption=_snippet_caption,
         playback_speed=playback_speed,
         full_fix_range=full_fix_range,
+        fix_index_range_b=snippet_window_b,
         compare=(
             CompareTarget(
                 # The real ids, never the CMP-8 namespaced ones — a snippet
@@ -6187,7 +6257,7 @@ def render_single_trial_tab(
                 _discard_flagged_fixations(
                     fig_compare_fix,
                     compare_meta["words"],
-                    viz_settings.get("fixation_flags"),
+                    figure_settings.get("fixation_flags_b"),
                 )
                 if dual_anim
                 else None
@@ -6632,6 +6702,8 @@ def _render_bulk_export(
                 active_combos,
                 active_words,
                 active_fix,
+                # EXP-22: each trial's metadata rows, for `{table.field}`.
+                metadata_rows_for=_metadata_mod.pattern_rows,
                 canvas_width=canvas_width,
                 canvas_height=canvas_height,
                 base_font_size=base_font_size,
@@ -9934,6 +10006,31 @@ def _clear_participant_metadata() -> None:
     st.session_state.pop("participant_metadata_upload", None)
 
 
+def _restored_metadata_note(host, attached, *, grain: str, on_detach) -> None:
+    """DATA-38 — the uploader-side line for a table with no file behind it.
+
+    A table that came back from the recovery cache or a saved config has
+    nothing in its uploader, so the file chip that normally *is* the detach
+    control (UX-129) is not there to press. This says where the table came from
+    and puts a ✕ Detach back, for this case only. Changing its key or its
+    fields means uploading the file again — the raw table it was cut from is
+    not part of what is restored.
+    """
+    n_fields = len(attached.fields)
+    host.caption(
+        f"↩️ **{attached.source_name}** — restored, {n_fields} "
+        f"field{'s' if n_fields != 1 else ''}. Upload the file again to change "
+        "its key or its fields."
+    )
+    host.button(
+        "✕ Detach",
+        key=f"{grain}_metadata_detach_restored",
+        on_click=on_detach,
+        help="Remove this table. Its fields leave the filters, the chips and "
+        "trial sorting.",
+    )
+
+
 def render_participant_metadata_section(
     participants, *, host=None, live_join: bool = True, upload_host=None
 ) -> None:
@@ -10043,6 +10140,16 @@ def _participant_metadata_body(
         # simply didn't render last run" — safe to clear on sight. UX-129:
         # this is also why there is no separate ✕ Detach button any more —
         # removing the file from the uploader chip already does exactly this.
+        # DATA-38: except for a *restored* table, which never had a file in
+        # this uploader — clearing it here would undo the restore on sight.
+        if md.is_restored(st.session_state, "participant"):
+            _restored_metadata_note(
+                stats_host,
+                active_participant_metadata(),
+                grain="participant",
+                on_detach=_clear_participant_metadata,
+            )
+            return
         _clear_participant_metadata()
         return
     else:
@@ -10232,7 +10339,16 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
     if upload is None:
         if md.active_trials() is None:
             return
-        # UX-115/UX-129 — see the matching note in `_participant_metadata_body`.
+        # UX-115/UX-129/DATA-38 — see the matching note in
+        # `_participant_metadata_body`.
+        if md.is_restored(st.session_state, "trial"):
+            _restored_metadata_note(
+                stats_host,
+                md.active_trials(),
+                grain="trial",
+                on_detach=_clear_trial_metadata,
+            )
+            return
         _clear_trial_metadata()
         return
     else:
@@ -10437,7 +10553,16 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
     if upload is None:
         if md.active_texts() is None:
             return
-        # UX-115/UX-129 — see the matching note in `_participant_metadata_body`.
+        # UX-115/UX-129/DATA-38 — see the matching note in
+        # `_participant_metadata_body`.
+        if md.is_restored(st.session_state, "text"):
+            _restored_metadata_note(
+                stats_host,
+                md.active_texts(),
+                grain="text",
+                on_detach=_clear_text_metadata,
+            )
+            return
         _clear_text_metadata()
         return
     else:
@@ -10799,6 +10924,7 @@ def _apply_remap() -> None:
     # fixations placed at word-box centres) are exactly what makes a half
     # uploaded today line up with a half uploaded weeks ago. Both halves are
     # written back, because harmonizing can change either.
+    harmonized = False
     for table_key in added:
         raw = st.session_state.get(_added_raw_key(name, table_key))
         if raw is None or raw.empty or table_key not in pending:
@@ -10824,6 +10950,7 @@ def _apply_remap() -> None:
                     other = empty_words_frame()
                 other, fresh = harmonize_frames(other, fresh)
                 new_entry["words"], new_entry["fixations"] = other, fresh
+            harmonized = True
         except Exception as exc:
             # The mapping is complete but the pipeline rejects the combination
             # (`app.mapping_failure_problem` names the usual causes). Reported
@@ -10836,6 +10963,58 @@ def _apply_remap() -> None:
             }
             return
         new_schemas[table_key] = schema
+    # DATA-39 — the same cross-frame fixups for the tables this save *remapped*,
+    # which until now never got them. A remapped AOI table with no Participant
+    # comes back stimulus-level (the first reader's copy of each trial, on the
+    # "" placeholder reader), and only `harmonize_frames` broadcasts it back
+    # onto the readers in the fixations; without it no trial found its word
+    # boxes, so every scanpath lost its AOIs and its text the moment ✅ Save
+    # changes was pressed — which is what attaching a metadata table on this
+    # screen asks for. Idempotent on frames that were already harmonized, so the
+    # ordinary per-reader case saves exactly as before. After the added tables,
+    # not before: a table added above has *already* been harmonized with these,
+    # and harmonizing a stimulus-level words frame against the empty fixations
+    # of a words-only dataset first would stamp it with the synthetic reader and
+    # leave nothing for the added fixations to broadcast onto.
+    before = new_entry.get("words")
+    if (
+        not harmonized
+        and "words" in pending
+        and isinstance(before, pd.DataFrame)
+        and not before.empty
+    ):
+        fixations = new_entry.get("fixations")
+        has_fixations = isinstance(fixations, pd.DataFrame) and not fixations.empty
+        try:
+            words, fixations = harmonize_frames(
+                before, fixations if has_fixations else empty_fixations_frame()
+            )
+        except Exception as exc:
+            # Same reason as the added tables above: an `on_click` must report,
+            # not raise — e.g. a changed Trial/Screen pick whose parts no longer
+            # match the stored fixations (`validate_matching_parts`).
+            from scanpath_studio.app import mapping_failure_problem
+
+            st.session_state["_remap_problems"] = {
+                "words": [mapping_failure_problem(exc)]
+            }
+            return
+        if words.empty:
+            # The broadcast keeps only trials some reader has fixations for.
+            # Import drops the rest too, but here the stored boxes would be
+            # overwritten by nothing — refuse rather than lose them.
+            st.session_state["_remap_problems"] = {
+                "words": [
+                    "No AOI row matches a trial in the fixations under this "
+                    "mapping, so saving would leave the dataset with no word "
+                    "boxes. Check the Trial ID (and Screen) picks for both "
+                    "tables."
+                ]
+            }
+            return
+        new_entry["words"] = words
+        if has_fixations:
+            new_entry["fixations"] = fixations
     new_entry["schemas"] = new_schemas
     # Recompute the composite trial components from the new trial mapping so the
     # cascading trial picker stays in sync (mirrors the wizard finalize).
@@ -10888,6 +11067,9 @@ def _apply_remap() -> None:
     for key in [k for k in st.session_state if str(k).startswith("_remap_")]:
         if key != "_remap_applied":
             st.session_state.pop(key, None)
+    # DATA-46 — and the "use the current estimate" choice, which belongs to it.
+    for key in [k for k in st.session_state if str(k).endswith("_setup_reestimate")]:
+        st.session_state.pop(key, None)
     st.session_state.pop(DATASET_EDITOR_OPEN_KEY, None)
     st.session_state.pop(FOCUS_MAPPING_KEY, None)
 

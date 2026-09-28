@@ -86,8 +86,8 @@ class TestCompositeTrialPicker:
         assert not at.exception
         stepped = at.session_state["_picked"][1]
         assert stepped != first
-        # Options are the joined ids, in sorted order.
-        assert [first, stepped] == ["A_p1_False", "A_p1_True"]
+        # Options are the joined ids, in data order (UX-171).
+        assert [first, stepped] == ["A_p1_False", "B_p1_False"]
 
     def test_condition_beyond_participant_and_text_is_just_another_trial(self):
         # A trial id carrying a *condition* (repeated_reading_trial) beyond the two
@@ -98,9 +98,9 @@ class TestCompositeTrialPicker:
         picker = next(s for s in at.selectbox if s.label.startswith("**Select Trial**"))
         assert list(picker.options) == [
             "A_p1_False",
-            "A_p1_True",
-            "A_p2_False",
             "B_p1_False",
+            "A_p2_False",
+            "A_p1_True",
         ]
 
     def test_single_composite_trial_degrades_without_slider(self):

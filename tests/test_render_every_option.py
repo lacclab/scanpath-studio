@@ -73,6 +73,8 @@ NON_DEFAULT = {
     "marker_size_range": (5, 20),
     "fixation_snap_to_word": True,
     "fixation_flags": {"short": {"mode": "Discard", "threshold_ms": 90.0}},
+    # CMP-24 — the co-animation's B flags (`--compare-fixation-flag`).
+    "fixation_flags_b": {"long": {"mode": "Highlight", "threshold_ms": 700.0}},
     "fixation_hover_fields": ["duration_ms"],
     "word_hover_fields": ["text"],
     "word_hover_measure": "first_fixation_ms",

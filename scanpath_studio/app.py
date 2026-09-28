@@ -132,6 +132,7 @@ from scanpath_studio.controls import (
 from scanpath_studio.data import (
     FIX_OPTIONAL_FIELDS,
     IDENTITY_SCHEMA_FIELDS,
+    STIMULUS_WORDS_FLAG,
     TRIAL_IDENTITY_SAMPLE,
     WORD_OPTIONAL_FIELDS,
     ReadPlan,
@@ -168,6 +169,7 @@ from scanpath_studio.data import (
     read_table,
     read_table_columns,
     read_tables,
+    repair_stranded_stimulus_words,
     reset_fingerprint_memo,
     resolve_stimulus_image_paths,
     trial_identity_warning,
@@ -754,12 +756,14 @@ def _toggle_recovery_saving() -> None:
     st.session_state.pop("_recovery_cache_forgotten", None)
 
 
-#: UX-136 — the three kinds `persistence.restored_summary` counts, in the order
-#: the 🗄️ Automatic recovery panel lists them, with their singular/plural nouns.
+#: UX-136 — the kinds `persistence.restored_summary` counts, in the order the
+#: 🗄️ Automatic recovery panel lists them, with their singular/plural nouns.
+#: DATA-38 added the attached metadata tables.
 _RESTORED_KIND_NOUNS = (
     ("datasets", "dataset", "datasets"),
     ("annotations", "annotation", "annotations"),
     ("designs", "design", "designs"),
+    ("metadata", "metadata table", "metadata tables"),
 )
 
 
@@ -841,7 +845,15 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
                 f"{'s' if status['annotations'] != 1 else ''} · "
                 f"{status['designs']} design"
                 f"{'s' if status['designs'] != 1 else ''} · "
-                f"{human_size(status['bytes'])}"
+                # DATA-38 — named only when there are any, so the common
+                # line keeps its length.
+                + (
+                    f"{status['metadata']} metadata table"
+                    f"{'s' if status['metadata'] != 1 else ''} · "
+                    if status.get("metadata")
+                    else ""
+                )
+                + f"{human_size(status['bytes'])}"
             )
         elif status["exists"]:
             st.warning(
@@ -908,8 +920,8 @@ def _render_recovery_details(host, status: dict) -> None:
             "here. The bundled demo and the public corpora are reloaded from "
             "their own source instead, so they are never stored — which is why "
             "the count can read 0 while a dataset is open. Your settings, "
-            "designs and annotations are saved either way, which is what the "
-            "size covers."
+            "designs, annotations and attached metadata tables are saved "
+            "either way, which is what the size covers."
         )
         st.markdown(f"**Where.** `{status['directory']}`")
         if str(status["directory"]).endswith(CACHE_DIR_NAME):
@@ -4782,6 +4794,9 @@ def _close_dataset_editor() -> None:
     # until ✅ Save changes runs.
     for key in [k for k in st.session_state if str(k).startswith("_remap_")]:
         st.session_state.pop(key, None)
+    # DATA-46: "use the current estimate" is a choice for one editing session.
+    for key in [k for k in st.session_state if str(k).endswith("_setup_reestimate")]:
+        st.session_state.pop(key, None)
 
 
 def _ask_leave_dataset_editor() -> None:
@@ -7278,6 +7293,20 @@ def _run_app() -> None:
     from scanpath_studio.wizard import _enter_add_data_wizard
 
     data_choice = resolve_data_source(host=setup_source_slot)
+    # DATA-47 — the metadata tables belong to a dataset. Swap the selected one's
+    # onto the session keys every consumer reads (`metadata.active()` & co.),
+    # filing the previous dataset's away. Keyed by the concrete canonical choice
+    # the dataset table uses, not `data_choice` — every public corpus loads
+    # through one category token, and they must not share a table. The add
+    # wizard's dataset has no name yet, so it gets the pending slot.
+    from scanpath_studio import metadata as _metadata
+
+    _metadata.activate_dataset(
+        st.session_state,
+        _metadata.PENDING_DATASET
+        if data_choice == UPLOAD_CHOICE
+        else str(st.session_state.get("data_source_choice") or data_choice),
+    )
     # UX-166: on the Data page the dataset card sits above the table.
     data_page_slot = setup_source_slot.empty()
     # UX-54: the page lists every dataset as a *table* — one row each, sortable,
@@ -7487,6 +7516,25 @@ def _run_app() -> None:
         # to it is instant (no re-upload, no re-mapping). See _render_data_setup's
         # finalize and resolve_data_source.
         stored = st.session_state["_datasets"][data_choice]
+        # DATA-39 — a dataset saved on ✏️ Edit dataset before that fix has its
+        # AOI table stranded on the placeholder reader, so every scanpath drew
+        # without its boxes and text. Repair it once, in the store itself, so
+        # the recovery cache writes the repaired frames and it stays fixed.
+        # A repair that cannot be made is not retried while the frames are the
+        # same: the diagnosis is only "the flag is still set", so a failed
+        # attempt would otherwise redo the whole harmonize on every rerun.
+        failed = st.session_state.setdefault("_data39_repair_failed", {})
+        attempt = frame_fingerprint(stored["words"])
+        if failed.get(data_choice) != attempt:
+            repaired = repair_stranded_stimulus_words(
+                stored["words"], stored["fixations"]
+            )
+            if repaired is not None:
+                stored = {**stored, "words": repaired[0], "fixations": repaired[1]}
+                st.session_state["_datasets"][data_choice] = stored
+                failed.pop(data_choice, None)
+            elif STIMULUS_WORDS_FLAG in stored["words"].columns:
+                failed[data_choice] = attempt
         words_df, fixations_df = stored["words"], stored["fixations"]
         raw_gaze_df = stored["raw_gaze"]
         raw_words_df, raw_fixations_df = words_df, fixations_df

@@ -73,6 +73,168 @@ class TestPickColumn:
         assert pick_column(df, ["ia_left"]) == "IA_LEFT"
 
 
+class TestPickColumnPrefixSuffixSecondPass:
+    """`pick_column`'s second pass (DATA-25): a vendor prefix or suffix on a
+    known name (`AOI_LEFT`, `LEFT_px`) is caught by matching whole,
+    separator-split tokens — but only when exactly one column survives it
+    across the whole candidate list. Two or more survivors is ambiguity and
+    falls back to `None`, same as no match at all."""
+
+    def test_prefixed_column_is_matched(self):
+        df = pd.DataFrame({"AOI_LEFT": [1], "other": [2]})
+        assert pick_column(df, ["left"]) == "AOI_LEFT"
+
+    def test_suffixed_column_is_matched(self):
+        df = pd.DataFrame({"LEFT_px": [1], "other": [2]})
+        assert pick_column(df, ["left"]) == "LEFT_px"
+
+    def test_exact_pass_wins_before_the_second_pass_is_even_tried(self):
+        # A literal "left" column wins outright; AOI_LEFT is never considered.
+        df = pd.DataFrame({"left": [1], "AOI_LEFT": [2]})
+        assert pick_column(df, ["left"]) == "left"
+
+    def test_ambiguous_shared_token_falls_back_to_none(self):
+        # Both columns contain the whole token "left" — ambiguity, not a guess.
+        df = pd.DataFrame({"top_left_x": [1], "top_left_y": [2]})
+        assert pick_column(df, ["left"]) is None
+
+    def test_ambiguous_single_letter_token_falls_back_to_none(self):
+        # Both contain the whole token "x" — same ambiguity, different shape.
+        df = pd.DataFrame({"max_x": [1], "fix_x": [2]})
+        assert pick_column(df, ["x"]) is None
+
+    def test_unique_survivor_among_similar_names_still_wins(self):
+        # Only one column carries the token "x" this time — no ambiguity.
+        df = pd.DataFrame({"fix_x": [1], "other": [2]})
+        assert pick_column(df, ["x"]) == "fix_x"
+
+    def test_whole_token_match_not_substring(self):
+        # "top" must never match inside "stop_time" — whole tokens only.
+        df = pd.DataFrame({"stop_time": [1]})
+        assert pick_column(df, ["top"]) is None
+
+    def test_whole_token_match_not_substring_for_short_candidates(self):
+        # "id" must never match inside "guid".
+        df = pd.DataFrame({"guid": [1]})
+        assert pick_column(df, ["id"]) is None
+
+    def test_second_pass_checks_every_candidate_in_the_list(self):
+        df = pd.DataFrame({"AOI_RIGHT": [1], "other": [2]})
+        assert pick_column(df, ["IA_RIGHT", "right", "end_x"]) == "AOI_RIGHT"
+
+    def test_survivors_are_scoped_to_one_candidate_list_at_a_time(self):
+        df = pd.DataFrame({"AOI_LEFT": [1], "AOI_RIGHT": [2]})
+        assert pick_column(df, ["left"]) == "AOI_LEFT"
+        assert pick_column(df, ["right"]) == "AOI_RIGHT"
+
+    def test_a_word_id_candidate_stays_safe_next_to_aoi_edge_columns(self):
+        # "aoi" is itself a literal WORD_ID_CANDIDATES entry (some exports
+        # call an interest-area index column "aoi"). With all four AOI edge
+        # columns present, "aoi" is a token on every one of them — ambiguous,
+        # so a missing word-id column correctly falls to manual mapping
+        # instead of silently grabbing one of the edges.
+        df = pd.DataFrame(
+            {"AOI_LEFT": [1], "AOI_RIGHT": [2], "AOI_TOP": [3], "AOI_BOTTOM": [4]}
+        )
+        assert pick_column(df, ["word_id", "IA_ID", "aoi"]) is None
+
+
+class TestBoxEdgesResolveAsOneSet:
+    """DATA-57: the four edges are picked as a set sharing one affix, so an AOI
+    table carrying two box encodings still auto-fills instead of every edge
+    being ambiguous."""
+
+    def test_two_edge_sets_pick_the_last_in_the_header(self):
+        # The shape of a real AOI export: aoi_left … (plus aoi_width /
+        # aoi_height) with LEFT_px … appended after it.
+        df = pd.DataFrame(
+            {
+                c: [1]
+                for c in (
+                    "word",
+                    "aoi_bottom",
+                    "aoi_height",
+                    "aoi_left",
+                    "aoi_right",
+                    "aoi_top",
+                    "aoi_width",
+                    "BOTTOM_px",
+                    "LEFT_px",
+                    "RIGHT_px",
+                    "TOP_px",
+                )
+            }
+        )
+        schema = propose_word_schema(df)
+        assert [schema[e] for e in ("left", "right", "top", "bottom")] == [
+            "LEFT_px",
+            "RIGHT_px",
+            "TOP_px",
+            "BOTTOM_px",
+        ]
+        # Origin + size follow the same set — no `*_px` size columns, so none,
+        # rather than aoi_width from the other box.
+        assert (schema["x"], schema["y"]) == ("LEFT_px", "TOP_px")
+        assert schema["width"] is None and schema["height"] is None
+
+    def test_the_chosen_sets_size_columns_come_with_it(self):
+        df = pd.DataFrame(
+            {
+                c: [1]
+                for c in (
+                    "LEFT_px",
+                    "RIGHT_px",
+                    "TOP_px",
+                    "BOTTOM_px",
+                    "aoi_left",
+                    "aoi_right",
+                    "aoi_top",
+                    "aoi_bottom",
+                    "aoi_width",
+                    "aoi_height",
+                )
+            }
+        )
+        schema = propose_word_schema(df)
+        assert schema["left"] == "aoi_left"
+        assert (schema["width"], schema["height"]) == ("aoi_width", "aoi_height")
+
+    def test_camel_case_edges_are_auto_detected(self):
+        df = pd.DataFrame(
+            {c: [1] for c in ("Word", "BoxLeft", "BoxRight", "BoxTop", "BoxBottom")}
+        )
+        schema = propose_word_schema(df)
+        assert [schema[e] for e in ("left", "right", "top", "bottom")] == [
+            "BoxLeft",
+            "BoxRight",
+            "BoxTop",
+            "BoxBottom",
+        ]
+
+    def test_an_incomplete_set_is_not_guessed(self):
+        # Two lefts and nothing else of either set: still ambiguous.
+        df = pd.DataFrame({c: [1] for c in ("LEFT_px", "aoi_left", "aoi_right")})
+        assert propose_word_schema(df)["left"] is None
+
+    def test_exact_edges_keep_winning(self):
+        df = pd.DataFrame(
+            {
+                c: [1]
+                for c in (
+                    "IA_LEFT",
+                    "IA_RIGHT",
+                    "IA_TOP",
+                    "IA_BOTTOM",
+                    "aoi_left",
+                    "aoi_right",
+                    "aoi_top",
+                    "aoi_bottom",
+                )
+            }
+        )
+        assert propose_word_schema(df)["left"] == "IA_LEFT"
+
+
 class TestProposeWordSchemaMatching:
     """propose_word_schema resolves real-world column-name variants."""
 
@@ -96,6 +258,45 @@ class TestProposeWordSchemaMatching:
         assert schema["right"] == "IA Right"
         assert schema["top"] == "IA Top"
         assert schema["bottom"] == "IA Bottom"
+
+    def test_aoi_prefixed_edges_are_auto_detected(self):
+        # DATA-25 second pass: a vendor's AOI_LEFT/RIGHT/TOP/BOTTOM naming
+        # reaches the same fields IA_LEFT etc. do, without the manual
+        # column-mapping step.
+        df = pd.DataFrame(
+            {
+                "participant_id": ["p1"],
+                "trial_id": ["t1"],
+                "AOI_LEFT": [100],
+                "AOI_RIGHT": [150],
+                "AOI_TOP": [50],
+                "AOI_BOTTOM": [100],
+            }
+        )
+        schema = propose_word_schema(df)
+        assert schema["left"] == "AOI_LEFT"
+        assert schema["right"] == "AOI_RIGHT"
+        assert schema["top"] == "AOI_TOP"
+        assert schema["bottom"] == "AOI_BOTTOM"
+
+    def test_unit_suffixed_edges_are_auto_detected(self):
+        # A different shape of the same problem: a bare unit suffix rather
+        # than a vendor prefix.
+        df = pd.DataFrame(
+            {
+                "participant_id": ["p1"],
+                "trial_id": ["t1"],
+                "LEFT_px": [100],
+                "RIGHT_px": [150],
+                "TOP_px": [50],
+                "BOTTOM_px": [100],
+            }
+        )
+        schema = propose_word_schema(df)
+        assert schema["left"] == "LEFT_px"
+        assert schema["right"] == "RIGHT_px"
+        assert schema["top"] == "TOP_px"
+        assert schema["bottom"] == "BOTTOM_px"
 
 
 class TestProposeFixSchemaMatching:
@@ -1562,3 +1763,54 @@ class TestVendorUnitsAreRead:
         raw = pd.DataFrame({"x": [120.5, 300.0], "y": [80.0, 80.0]})
         schema = {"x": "x", "y": "y"}
         assert data_module.screen_fraction_issues(raw, schema, table="F") == []
+
+
+class TestCanvasGeometryFrames:
+    """DATA-46 — the wizard estimates the screen before anything is normalized,
+    so it has to read the *mapped* geometry, not columns called ``x``."""
+
+    def test_eyelink_edges_estimate_from_the_boxes_and_fixations(self):
+        words = pd.DataFrame(
+            {
+                "IA_LEFT": [100, 900],
+                "IA_RIGHT": [180, 2150],
+                "IA_TOP": [200, 1150],
+                "IA_BOTTOM": [240, 1190],
+            }
+        )
+        fixations = pd.DataFrame({"CURRENT_FIX_X": [120.0], "CURRENT_FIX_Y": [210.0]})
+        geometry = data_module.canvas_geometry_frames(
+            words,
+            {
+                "left": "IA_LEFT",
+                "right": "IA_RIGHT",
+                "top": "IA_TOP",
+                "bottom": "IA_BOTTOM",
+            },
+            fixations,
+            {"x": "CURRENT_FIX_X", "y": "CURRENT_FIX_Y"},
+        )
+        assert data_module.compute_canvas_size(*geometry) == (2200, 1200)
+        # The raw tables alone were read as "nothing to estimate from".
+        raw = data_module.compute_canvas_size(words, fixations)
+        assert raw == tuple(int(v) for v in data_module.DEFAULT_FIGURE_SIZE)
+
+    def test_origin_and_size_boxes(self):
+        words = pd.DataFrame(
+            {"left_px": [10], "top_px": [20], "w": [1990], "h": [1380]}
+        )
+        geometry = data_module.canvas_geometry_frames(
+            words,
+            {"x": "left_px", "y": "top_px", "width": "w", "height": "h"},
+            None,
+            None,
+        )
+        assert data_module.compute_canvas_size(*geometry) == (2000, 1400)
+
+    def test_an_unmapped_field_is_simply_absent(self):
+        words = pd.DataFrame({"IA_LEFT": [0], "IA_RIGHT": [10]})
+        word_geometry, fixation_geometry = data_module.canvas_geometry_frames(
+            words, {"left": "IA_LEFT", "right": "IA_RIGHT"}, None, {"x": None}
+        )
+        assert "y" not in word_geometry.columns
+        assert fixation_geometry.empty

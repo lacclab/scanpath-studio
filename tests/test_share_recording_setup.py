@@ -55,6 +55,14 @@ STYLES_SENT = {
     "cmp1_opacity": 0.9,
     "cmp1_hollow": True,
     "cmp1_label_pattern": "B: {participant_id}",
+    # CMP-24 — B's own filters ride the same group.
+    "cmp1_fixclass_short_mode": "Discard",
+    "cmp1_fixclass_short_threshold_ms": 90,
+    "cmp1_fixclass_long_mode": "Highlight",
+    "cmp1_fixclass_long_threshold_ms": 900,
+    "cmp1_fixclass_oob_mode": "Discard",
+    "cmp1_fixclass_blink_mode": "Highlight",
+    "cmp1_saccade_classes": ["forward", "regression"],
 }
 
 SENT = {**SETUP_SENT, **STYLES_SENT}
@@ -66,7 +74,9 @@ def test_the_new_params_are_exactly_the_saved_config_only_keys():
     assert set(sk.SETUP_PARAMS.values()) == set(SETUP_SENT)
     assert set(sk.COMPARE_STYLE_PARAMS.values()) == set(STYLES_SENT)
     assert set(sk.COMPARE_STYLE_PARAMS.values()) == (
-        sk.compare_state_keys(0) | sk.compare_state_keys(1)
+        sk.compare_state_keys(0)
+        | sk.compare_state_keys(1)
+        | sk.COMPARE_B_FILTER_STATE_KEYS
     )
 
 

@@ -400,6 +400,48 @@ class TestSortValueIsVisibleInThePicker:
         ]
 
 
+def _numeric_ids_picker_app():
+    """Trials 1..12 recorded in numeric order — their ids sort 1, 10, 11, 12, 2."""
+    import pandas as pd
+
+    from scanpath_studio.utils import build_combo_options, select_trial
+
+    fixations = pd.DataFrame(
+        {
+            "participant_id": "p1",
+            "trial_id": [str(n) for n in range(1, 13)],
+            "duration_ms": 100.0,
+        }
+    )
+    combos, _, _ = build_combo_options(fixations)
+    select_trial(combos, key_prefix="single", fixations=fixations)
+
+
+class TestDataOrderIsTheDefault:
+    """UX-171: the picker walks trials in the order the data has them; sorting by
+    Trial ID is a choice in ⇅, not the default."""
+
+    def _picker(self, at):
+        return next(s for s in at.selectbox if s.label.startswith("**Select Trial**"))
+
+    def test_the_picker_starts_in_data_order_on_the_first_trial(self):
+        at = AppTest.from_function(_numeric_ids_picker_app)
+        at.run(timeout=20)
+        assert not at.exception, at.exception
+        assert at.selectbox(key="single_trial_sort").value == "Data order"
+        picker = self._picker(at)
+        assert picker.label == "**Select Trial**"
+        assert list(picker.options) == [str(n) for n in range(1, 13)]
+        assert picker.value == "1"
+
+    def test_trial_id_is_still_a_choice(self):
+        at = AppTest.from_function(_numeric_ids_picker_app)
+        at.run(timeout=20)
+        at.selectbox(key="single_trial_sort").set_value(TRIAL_SORT_DEFAULT)
+        at.run(timeout=20)
+        assert list(self._picker(at).options)[:3] == ["1", "10", "11"]
+
+
 def test_default_label_is_stable():
     """The picker seeds its state to this string; renaming it silently resets."""
     assert TRIAL_SORT_DEFAULT == "Trial ID"

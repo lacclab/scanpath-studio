@@ -253,12 +253,21 @@ class TestTheLinkedStepEndToEnd:
         labels = [row[0] for row in snapshot]
         return labels.index(at.session_state[utils.COMPARE_TRIAL_KEY])
 
-    def test_linked_puts_the_pool_in_trial_id_order(self):
+    def test_linked_puts_the_pool_in_data_order(self):
+        """UX-171: the order A walks by default, so both step along one track —
+        the same list as choosing ⇅ *Data order* by hand."""
+        at = self._boot_compare()
+        at.selectbox(key="single_compare_order").set_value(utils.TRIAL_SORT_DATA_ORDER)
+        at.run(timeout=90)
+        chosen = [
+            row[2] for row in at.session_state[utils.COMPARE_OPTIONS_SNAPSHOT_KEY]
+        ]
         at = self._boot_compare()
         at.checkbox(key=utils.COMPARE_STEP_LINK_KEY).set_value(True).run(timeout=90)
         assert not at.exception, at.exception
         ids = [row[2] for row in at.session_state[utils.COMPARE_OPTIONS_SNAPSHOT_KEY]]
-        assert ids == utils.sort_trial_options(ids, None)
+        assert ids == chosen
+        assert ids != utils.sort_trial_options(ids, None)
 
     def test_unlinked_the_relation_ranking_still_leads(self):
         """The pin is scoped to linking — 📄-first is what makes B easy to

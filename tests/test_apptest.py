@@ -2421,6 +2421,81 @@ class TestSetupWizard:
         assert entry["schemas"]["words"]["text"] == "difficulty_level"
         assert list(entry["words"]["text"]) == ["Adv", "Adv", "Ele", "Ele"]
 
+    def test_saving_a_text_level_aoi_table_keeps_every_trials_boxes(self, monkeypatch):
+        """DATA-39 — an AOI table with no participant column (one row per word
+        per *text*) is broadcast onto the readers at import. ✅ Save changes on
+        the ✏️ Edit dataset screen — what attaching a metadata table there asks
+        for — used to re-derive it onto the ``""`` placeholder reader and never
+        broadcast it back, so every trial lost its word boxes and its text."""
+        import pandas as pd
+
+        from scanpath_studio import app
+        from scanpath_studio.constants import DATASET_EDITOR_OPEN_KEY
+        from scanpath_studio.utils import extract_trial
+
+        raw_words = pd.DataFrame(
+            {
+                "trial_id": ["t1", "t1"],
+                "word_id": [1, 2],
+                "IA_LEFT": [0, 10],
+                "IA_RIGHT": [10, 20],
+                "IA_TOP": [0, 0],
+                "IA_BOTTOM": [10, 10],
+                "IA_LABEL": ["a", "b"],
+            }
+        )
+        raw_fix = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1", "p2"],
+                "trial_id": ["t1", "t1", "t1"],
+                "CURRENT_FIX_X": [5.0, 15.0, 5.0],
+                "CURRENT_FIX_Y": [5.0, 5.0, 5.0],
+                "CURRENT_FIX_DURATION": [100, 120, 90],
+            }
+        )
+        monkeypatch.setattr(
+            app,
+            "_read_uploaded_frame",
+            lambda **kw: (
+                raw_words
+                if kw["state_prefix"] == "col_map_words"
+                else raw_fix
+                if kw["state_prefix"] == "col_map_fix"
+                else pd.DataFrame()
+            ),
+        )
+
+        def boxes_per_trial(entry):
+            words, fixations = entry["words"], entry["fixations"]
+            pairs = fixations[["participant_id", "trial_id"]].drop_duplicates()
+            return {
+                (p, t): sorted(extract_trial(words, p, t)["text"])
+                for p, t in pairs.itertuples(index=False)
+            }
+
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        answer_setup_step(at)
+        at.run(timeout=60)
+        next(b for b in at.button if b.key == "wizard_finalize").click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        name = at.session_state["data_source_choice"]
+        before = boxes_per_trial(at.session_state["_datasets"][name])
+        assert before and all(v == ["a", "b"] for v in before.values()), before
+
+        at.session_state[DATASET_EDITOR_OPEN_KEY] = name
+        pin_data_view(at)
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        next(b for b in at.button if b.key == f"remap_apply_{name}").click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+        entry = at.session_state["_datasets"][name]
+        assert boxes_per_trial(entry) == before
+        assert "_stimulus_words" not in entry["words"].columns
+
     def test_per_table_trial_pickers_and_setup_step(self, monkeypatch):
         """Group A + C: a Trial ID picker per table (UX-53 r13 dropped the
         unified picker and its toggle) and the inline Experimental Setup
@@ -3925,3 +4000,105 @@ class TestRecordingSetupGate(TestSetupWizard):
         from scanpath_studio.experimental_setup import SetupSnapshot
 
         assert SetupSnapshot.from_dict(entry["setup"]).px_per_degree is None
+
+    def test_the_estimate_survives_an_untouched_save_changes(self, monkeypatch):
+        """DATA-46 — the wizard estimated from the raw upload, whose `IA_LEFT` /
+        `CURRENT_FIX_X` it cannot read, so an EyeLink export's "estimate" was the
+        2560 × 1440 default; ✏️ Edit dataset then estimated for real from the
+        stored frames, and ✅ Save changes with nothing touched wrote that over
+        the saved screen."""
+        from scanpath_studio.constants import DATASET_EDITOR_OPEN_KEY
+        from scanpath_studio.data import compute_canvas_size
+
+        app = self._inject(monkeypatch)
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.session_state[_SETUP_MODE_KEYS["screen"]] = "Estimate from my data"
+        at.session_state[_SETUP_MODE_KEYS["geometry"]] = (
+            "Skip — I don't need visual-angle units"
+        )
+        at.session_state[_SETUP_MODE_KEYS["text"]] = "Use a default (16 px)"
+        at.run(timeout=60)
+        next(b for b in at.button if b.key == "wizard_finalize").click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        name = at.session_state["data_source_choice"]
+        entry = at.session_state["_datasets"][name]
+        # The estimate is the data's own extent, not the default screen.
+        saved = (entry["setup"]["canvas_width"], entry["setup"]["canvas_height"])
+        assert saved == compute_canvas_size(entry["words"], entry["fixations"])
+        assert saved != (2560, 1440)
+
+        # Make the stored data disagree with the saved estimate, as data edited
+        # since the dataset was added would: the editor must still keep it.
+        stored = dict(entry["setup"])
+        stored["canvas_width"], stored["canvas_height"] = 3000, 2000
+        at.session_state["_datasets"][name] = {**entry, "setup": stored}
+
+        at.session_state[DATASET_EDITOR_OPEN_KEY] = name
+        pin_data_view(at)
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # The fresh estimate is offered, not applied.
+        assert any(b.key == f"edit_{name}_setup_reestimate_btn" for b in at.button)
+        next(b for b in at.button if b.key == f"remap_apply_{name}").click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        setup = at.session_state["_datasets"][name]["setup"]
+        assert (setup["canvas_width"], setup["canvas_height"]) == (3000, 2000)
+        assert setup["provenance"]["screen"] == "estimated"
+
+
+class TestMetadataBelongsToItsDataset:
+    """DATA-47 through ``app.main`` — a table attached to one dataset stays
+    with it: the add wizard starts without it, another dataset does not see it,
+    and it is back when its own dataset is selected again."""
+
+    @staticmethod
+    def _attached(at):
+        from scanpath_studio import metadata as md
+
+        try:
+            return at.session_state[md.SESSION_KEY]
+        except (KeyError, AttributeError):
+            return None
+
+    def test_a_table_stays_with_the_dataset_it_was_attached_to(self):
+        import pandas as pd
+
+        from scanpath_studio import app
+        from scanpath_studio import metadata as md
+
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=60)
+        at.session_state[md.SESSION_KEY] = md.build_participant_metadata(
+            pd.DataFrame({"participant_id": ["p1"], "age": [30]}),
+            "participant_id",
+            source_name="synthetic-readers.csv",
+        )
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state[md.OWNER_KEY] == SYNTHETIC_SOURCE
+
+        # ➕ Add dataset: the new dataset has no tables of its own yet.
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert self._attached(at) is None
+
+        # Another dataset does not see it …
+        at.session_state["_show_upload_wizard"] = False
+        at.session_state["setup_complete"] = True
+        at.session_state["_pending_source_choice"] = app.DEMO_CHOICE
+        at.run(timeout=120)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state[md.OWNER_KEY] == app.DEMO_CHOICE
+        assert self._attached(at) is None
+
+        # … and its own dataset has it back.
+        at.session_state["_pending_source_choice"] = SYNTHETIC_SOURCE
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        attached = self._attached(at)
+        assert attached is not None
+        assert attached.source_name == "synthetic-readers.csv"

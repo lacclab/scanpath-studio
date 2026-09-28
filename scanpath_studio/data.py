@@ -694,13 +694,45 @@ def _norm_col(name) -> str:
     return re.sub(r"[^a-z0-9]", "", text.lower())
 
 
+_COL_SEPARATORS = re.compile(r"[^a-zA-Z0-9]+")
+_CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
+
+
+def _col_tokens(name) -> list[str]:
+    """Split a raw column name into its separator-delimited tokens (DATA-25
+    second pass), each folded like ``_norm_col``.
+
+    The trailing-unit block is dropped from the *whole* name first, same as
+    ``_norm_col`` — so a vendor's ``LEFT_px`` tokenizes to ``["left", "px"]``
+    with the unit noise already gone, not left to coincidentally never match
+    a candidate."""
+    text = _TRAILING_UNIT.sub("", str(name))
+    # DATA-57: a CamelCase name (`BoxLeft`, `AoiTop`) has no separator to split
+    # on, so a lower→upper case change counts as one.
+    text = _CAMEL_BOUNDARY.sub(" ", text)
+    return [tok.lower() for tok in _COL_SEPARATORS.split(text) if tok]
+
+
 def pick_column(df: pd.DataFrame, candidates: Iterable[str]) -> str | None:
     """Return the first matching column name from a candidate list.
 
     Matching is case- and separator-insensitive (see ``_norm_col``). Candidate
     order is still priority order — the first candidate with any match wins (so
     EyeLink names keep beating Gazepoint), and among equally-normalized columns
-    the leftmost one wins."""
+    the leftmost one wins.
+
+    If nothing matches exactly, a second pass (DATA-25) catches a vendor
+    prefix or suffix on a known name — ``AOI_LEFT``, ``LEFT_px`` — by
+    splitting each column on its separators and checking whether any *whole*
+    token equals a candidate. There is no prefix vocabulary to maintain, and
+    no substring matching, so ``top`` never matches ``stop_time`` (the whole
+    token is ``stop``, not ``top``) and ``id`` never matches ``guid``. That
+    still leaves real ambiguity — ``top_left_x`` and ``top_left_y`` both
+    contain the token ``left``; ``max_x`` and ``fix_x`` both contain ``x`` —
+    so the second pass is accepted only when it turns up **exactly one**
+    column across every candidate in the list. Two or more survivors is
+    ambiguity, and ambiguity means the manual mapping step, not a guess: the
+    safety here is uniqueness, not a whitelist."""
     lookup: dict[str, str] = {}
     for col in df.columns:
         lookup.setdefault(_norm_col(col), col)
@@ -708,6 +740,11 @@ def pick_column(df: pd.DataFrame, candidates: Iterable[str]) -> str | None:
         hit = lookup.get(_norm_col(name))
         if hit is not None:
             return hit
+
+    normed_candidates = {_norm_col(name) for name in candidates}
+    survivors = [col for col in df.columns if normed_candidates & set(_col_tokens(col))]
+    if len(survivors) == 1:
+        return survivors[0]
     return None
 
 
@@ -1057,8 +1094,75 @@ RAW_GAZE_TIMESTAMP_CANDIDATES = [
 ]
 
 
+_BOX_EDGES = ("left", "right", "top", "bottom")
+
+
+def _pick_box_edge_set(words: pd.DataFrame) -> dict[str, str] | None:
+    """The four word-box edge columns, resolved as one set (DATA-57).
+
+    ``pick_column`` looks at each edge on its own, and its second pass accepts a
+    prefixed or suffixed name (``LEFT_px``, ``aoi_left``) only when it is the
+    *only* column carrying that token. An AOI export routinely carries two box
+    encodings side by side — EyeLink's ``LEFT_px`` … ``BOTTOM_px`` next to a
+    derived ``aoi_left`` … ``aoi_bottom`` — so every edge was ambiguous and the
+    whole box landed in the manual step. The edges are not independent: they
+    share an affix. So each column naming exactly one edge is keyed by the rest
+    of its name (``*_px``, ``aoi_*``), and a key that covers all four edges is a
+    set. The set that comes **last** in the table wins: a derived box is
+    usually appended after the one the export shipped with, and the columns a
+    lab adds later are the ones it means (``aoi_left`` … then ``LEFT_px`` …
+    picks ``LEFT_px``).
+
+    Returns ``{edge: column}`` plus the shared affix under ``"affix"`` (for
+    ``_affix_sibling``), or ``None`` when no complete set exists."""
+    groups: dict[tuple[str, ...], dict[str, str]] = {}
+    order: dict[tuple[str, ...], int] = {}
+    for pos, col in enumerate(words.columns):
+        tokens = _col_tokens(col)
+        edges = [tok for tok in tokens if tok in _BOX_EDGES]
+        if len(edges) != 1:
+            continue
+        affix = tuple("*" if tok == edges[0] else tok for tok in tokens)
+        group = groups.setdefault(affix, {})
+        if edges[0] not in group:
+            group[edges[0]] = col
+            order.setdefault(affix, pos)
+    complete = [a for a, g in groups.items() if len(g) == len(_BOX_EDGES)]
+    if not complete:
+        return None
+    affix = max(complete, key=order.__getitem__)
+    return {**groups[affix], "affix": affix}
+
+
+def _affix_sibling(
+    words: pd.DataFrame, affix: tuple[str, ...], token: str
+) -> str | None:
+    """The column named like an edge set's affix with ``token`` in the edge's
+    place — ``aoi_width`` beside ``aoi_left`` … ``aoi_bottom``."""
+    want = [token if tok == "*" else tok for tok in affix]
+    return next((col for col in words.columns if _col_tokens(col) == want), None)
+
+
 def propose_word_schema(words: pd.DataFrame) -> dict[str, str | None]:
     """Return a candidate column mapping for words/IA data without erroring."""
+    schema = _propose_word_schema_by_field(words)
+    if all(schema[edge] for edge in _BOX_EDGES):
+        return schema
+    edge_set = _pick_box_edge_set(words)
+    if edge_set is None:
+        return schema
+    affix = edge_set.pop("affix")
+    schema.update(edge_set)
+    # The origin + size fields follow the same set, so the two encodings the
+    # mapping screen offers describe one box rather than two.
+    schema["x"] = schema["x"] or edge_set["left"]
+    schema["y"] = schema["y"] or edge_set["top"]
+    for size in ("width", "height"):
+        schema[size] = _affix_sibling(words, affix, size)
+    return schema
+
+
+def _propose_word_schema_by_field(words: pd.DataFrame) -> dict[str, str | None]:
     return dict(
         participant=pick_column(words, PARTICIPANT_CANDIDATES),
         trial=pick_column(words, TRIAL_CANDIDATES),
@@ -2887,6 +2991,39 @@ def broadcast_stimulus_words(
     return stimulus.merge(pairs, on=merge_on, how="inner").drop(columns=[_WORD_TRIAL])
 
 
+def repair_stranded_stimulus_words(
+    words: pd.DataFrame, fixations: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame] | None:
+    """DATA-39 — re-broadcast a stored AOI table the old ✅ Save changes stranded.
+
+    Before DATA-39 was fixed, saving an edit to a dataset whose AOI table has no
+    participant column left every word on the ``""`` placeholder reader with
+    the ``_stimulus_words`` flag still set, so no trial found its boxes. A
+    *stored* frame can only carry that flag through that bug —
+    ``broadcast_stimulus_words`` always drops it — so its presence is the
+    diagnosis, and running the broadcast it missed is the repair. Returns the
+    repaired ``(words, fixations)``, or ``None`` when there is nothing to repair
+    or the frames will not harmonize (the dataset is then left as it was).
+    """
+    if not isinstance(words, pd.DataFrame) or STIMULUS_WORDS_FLAG not in words.columns:
+        return None
+    has_fixations = isinstance(fixations, pd.DataFrame) and not fixations.empty
+    try:
+        repaired, harmonized = harmonize_frames(
+            words, fixations if has_fixations else empty_fixations_frame()
+        )
+    except Exception:  # a repair must never break the load
+        _LOGGER.warning(
+            "DATA-39: could not repair a stored AOI table left on the placeholder "
+            "reader; press Save changes on the Edit dataset screen to retry.",
+            exc_info=True,
+        )
+        return None
+    if repaired.empty:
+        return None
+    return repaired, (harmonized if has_fixations else fixations)
+
+
 def fill_fixation_xy_from_words(
     fixations: pd.DataFrame, words: pd.DataFrame
 ) -> pd.DataFrame:
@@ -3599,8 +3736,17 @@ def _copy_screen_fields(
     # the frame from the mapping, so the stamp was dropped and screen order
     # re-derived from row order: AOI-file order on the words, each reader's
     # onset order on the fixations. MultiplEYE's per-reader question order then
-    # conflicted and the 🗂️ Data page crashed. A canonical column rides through.
-    if SCREEN_INDEX not in df.columns and SCREEN_INDEX in source.columns:
+    # conflicted and the 🗂️ Data page crashed. A canonical column rides through
+    # — but only onto a frame the mapping made multipart (DATA-59). With no
+    # screen field mapped, a raw `screen_index` column is just a column: riding
+    # it through derived a `screen_id` from it, so clearing the screen fields
+    # in the mapping still made the AOI table multipart while the fixations
+    # were not, and the pair was refused.
+    if (
+        SCREEN_ID in df.columns
+        and SCREEN_INDEX not in df.columns
+        and SCREEN_INDEX in source.columns
+    ):
         df[SCREEN_INDEX] = _to_number(source[SCREEN_INDEX])
     return normalize_screen_identity(df)
 
@@ -3870,13 +4016,40 @@ def remap_normalized_frame(
     normalization ``unique_trial_id`` / ``unique_text_id`` are restored
     (= ``trial_id`` / ``text_id``) when the single-column path didn't set them,
     so the frame's identity columns stay consistent with the composite path and
-    downstream readers of ``unique_text_id`` keep working."""
+    downstream readers of ``unique_text_id`` keep working.
+
+    DATA-39: a **words** frame remapped with no Participant is a stimulus-level
+    AOI table, exactly as it was at import — ``normalize_words`` re-flags it for
+    ``broadcast_stimulus_words``. But the stored frame was *already* broadcast
+    (one copy of every trial's words per reader), so only the first reader's
+    copy of each trial is kept here, and the caller must run
+    ``harmonize_frames`` to broadcast it again. Skipping either step is the bug
+    this fixes: without the collapse every reader gets every reader's boxes;
+    without the harmonize every word is left on the ``""`` placeholder reader,
+    so no trial finds its boxes and the scanpath plot loses its AOIs and its
+    text. The collapse picks a *reader*, never a key: deduplicating on
+    ``word_id`` would also merge rows that are not copies at all — character
+    AOIs sharing a word id, or ids that do not parse as numbers and all fold to
+    NaN."""
     referenced = _schema_source_columns(schema)
     working = frame.drop(
         columns=[
             c for c in _REMAP_DERIVED_IDS if c in frame.columns and c not in referenced
         ]
     )
+    if (
+        kind == "words"
+        and not schema.get("participant")
+        and "participant_id" in working.columns
+        and "trial_id" in working.columns
+        and not working.empty
+    ):
+        copy_keys = [c for c in ("trial_id", SCREEN_ID) if c in working.columns]
+        reader = working["participant_id"].astype(str)
+        first = reader.groupby(
+            [working[c] for c in copy_keys], dropna=False, sort=False
+        ).transform("first")
+        working = working[reader == first]
     keep = set(working.columns)
     if kind == "words":
         result = normalize_words(working, schema, keep_columns=keep)
@@ -4439,6 +4612,65 @@ def compute_canvas_size(
     width = int(np.ceil(max(x_candidates) / 100.0) * 100)
     height = int(np.ceil(max(y_candidates) / 100.0) * 100)
     return max(width, 100), max(height, 100)
+
+
+def canvas_geometry_frames(
+    words: pd.DataFrame | None,
+    word_schema: dict | None,
+    fixations: pd.DataFrame | None,
+    fixation_schema: dict | None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """The mapped geometry of *raw* tables, in the canonical columns
+    :func:`compute_canvas_size` reads (DATA-46).
+
+    The add-dataset wizard asks for the screen before anything is normalized, so
+    it only has the upload as read — ``IA_LEFT`` and ``CURRENT_FIX_X``, not
+    ``x``. Handed straight to :func:`compute_canvas_size`, an EyeLink export has
+    no column called ``x``, and the "estimate" was the default screen under
+    another name. This projects just the mapped coordinate columns (word boxes
+    as edges *or* origin + size, fixation x/y) onto ``x``/``y``/``width``/
+    ``height`` — cheap, and correct for any mapping the user has picked so far.
+    A field that is not mapped yet is simply absent.
+    """
+
+    def column(frame: pd.DataFrame, schema: dict, key: str):
+        name = schema.get(key)
+        if not isinstance(name, str) or name not in frame.columns:
+            return None
+        return _to_number(frame[name])
+
+    word_geometry = pd.DataFrame()
+    if words is not None and not words.empty and word_schema:
+        left, right = (
+            column(words, word_schema, "left"),
+            column(words, word_schema, "right"),
+        )
+        top, bottom = (
+            column(words, word_schema, "top"),
+            column(words, word_schema, "bottom"),
+        )
+        if left is not None and right is not None:
+            word_geometry["x"], word_geometry["width"] = left, right - left
+        elif (x := column(words, word_schema, "x")) is not None:
+            word_geometry["x"] = x
+            if (width := column(words, word_schema, "width")) is not None:
+                word_geometry["width"] = width
+        if top is not None and bottom is not None:
+            word_geometry["y"], word_geometry["height"] = top, bottom - top
+        elif (y := column(words, word_schema, "y")) is not None:
+            word_geometry["y"] = y
+            if (height := column(words, word_schema, "height")) is not None:
+                word_geometry["height"] = height
+
+    fixation_geometry = pd.DataFrame()
+    if fixations is not None and not fixations.empty and fixation_schema:
+        x, y = (
+            column(fixations, fixation_schema, "x"),
+            column(fixations, fixation_schema, "y"),
+        )
+        if x is not None and y is not None:
+            fixation_geometry["x"], fixation_geometry["y"] = x, y
+    return word_geometry, fixation_geometry
 
 
 # Primary EyeLink IA measures. When a words frame already carries all of these

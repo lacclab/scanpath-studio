@@ -366,6 +366,106 @@ class TestTheAppSurfaces:
         assert url_state is not None
 
 
+class TestARestoredTableSurvivesTheDataPage:
+    """DATA-38 — a table the recovery cache (or a saved config) brings back has
+    no file in its uploader, and the Data page reads an empty uploader as "the
+    user just removed it" (UX-115). Unmarked, the first visit to that page
+    detached exactly what the restore brought back."""
+
+    def _booted_with(self, *, restored: bool):
+        from tests.conftest import pin_data_view
+
+        at, readers = TestTheAppSurfaces()._booted()
+        built = md.build_participant_metadata(
+            pd.DataFrame(
+                {
+                    "participant_id": readers,
+                    "native_language": ["Hebrew"] + ["English"] * (len(readers) - 1),
+                }
+            ),
+            "participant_id",
+            source_name="readers.csv",
+        )
+        if restored:
+            md.mark_restored(at.session_state, "participant", built)
+        else:
+            # A table attached from a file that has since left the uploader.
+            at.session_state[md.SESSION_KEY] = built
+            at.session_state[md.RAW_SESSION_KEY] = built.frame
+            at.session_state[md.FILE_SESSION_KEY] = "some-file-id"
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        self.readers = readers
+        return at
+
+    def test_a_restored_table_stays_attached(self):
+        from scanpath_studio.constants import _VIEW_SCANPATH
+        from tests.conftest import pin_view
+
+        at = self._booted_with(restored=True)
+        assert at.session_state[md.SESSION_KEY].names == ("native_language",)
+        # … and its field still narrows the pool, which is what the bug took.
+        pin_view(at, _VIEW_SCANPATH)
+        at.session_state["filter_meta_native_language"] = ["Hebrew"]
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        assert at.session_state["_trial_filters"]["participants"] == [self.readers[0]]
+
+    def test_a_restored_table_can_still_be_detached(self):
+        """No file chip to dismiss, so the ✕ Detach comes back for this case."""
+        from tests.conftest import pin_data_view
+
+        at = self._booted_with(restored=True)
+        detach = [
+            b for b in at.button if b.key == "participant_metadata_detach_restored"
+        ]
+        assert detach, "no ✕ Detach for a restored table"
+        detach[0].click()
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        assert md.SESSION_KEY not in at.session_state
+        assert not md.is_restored(at.session_state, "participant")
+
+    def test_removing_an_uploaded_file_still_detaches_it(self):
+        """UX-115 unchanged: a table that *did* come from the uploader goes when
+        its file does."""
+        at = self._booted_with(restored=False)
+        assert md.SESSION_KEY not in at.session_state
+
+
+class TestAConfigRestoreBesideALiveFile:
+    """💾 Save & restore marks the table it brings back as restored — unless
+    the uploader still holds a file, whose identity it then keeps, so the next
+    render does not read that file as new and replace the restored table."""
+
+    def _restore(self, *, uploader):
+        import streamlit as st
+
+        from scanpath_studio import url_state
+
+        st.session_state.clear()
+        if uploader is not None:
+            st.session_state["participant_metadata_upload"] = uploader
+        st.session_state[md.FILE_SESSION_KEY] = "live-file-id"
+        built = md.build_participant_metadata(
+            pd.DataFrame({"participant_id": ["p1"], "age": [30]}), "participant_id"
+        )
+        url_state._attach_restored_metadata("participant", built)
+        return st.session_state
+
+    def test_an_empty_uploader_marks_the_table_restored(self):
+        session = self._restore(uploader=None)
+        assert md.is_restored(session, "participant")
+        assert session[md.SESSION_KEY].names == ("age",)
+
+    def test_a_live_file_keeps_its_identity(self):
+        session = self._restore(uploader=object())
+        assert session[md.FILE_SESSION_KEY] == "live-file-id"
+        assert session[md.SESSION_KEY].names == ("age",)
+
+
 def test_loader_bookkeeping_is_not_registered_as_a_field():
     """`data.read_tables` tags rows with `source_file`; that is not metadata.
 
@@ -832,3 +932,154 @@ class TestTheWizardStep:
         assert not at.exception, at.exception
         keys = [u.key for u in at.file_uploader if u.key]
         assert keys.count("participant_metadata_upload") == 1, keys
+
+
+class TestTablesBelongToADataset:
+    """DATA-47 — metadata tables are per dataset, like every other table.
+
+    They were one slot per grain for the whole session: a new dataset opened
+    with the last one's tables, attaching a table to dataset B replaced dataset
+    A's, and detaching it anywhere removed it everywhere."""
+
+    @staticmethod
+    def _readers(source: str, field: str = "age"):
+        return md.build_participant_metadata(
+            pd.DataFrame({"participant_id": ["p1", "p2"], field: [1, 2]}),
+            "participant_id",
+            source_name=source,
+        )
+
+    def test_switching_datasets_swaps_their_tables(self):
+        session = {}
+        md.activate_dataset(session, "A")
+        session[md.SESSION_KEY] = self._readers("a.csv")
+        md.activate_dataset(session, "B")
+        assert md.SESSION_KEY not in session  # B has none of its own
+        session[md.SESSION_KEY] = self._readers("b.csv", "site")
+        md.activate_dataset(session, "A")
+        assert session[md.SESSION_KEY].source_name == "a.csv"
+        assert md.is_restored(session, "participant")
+        md.activate_dataset(session, "B")
+        assert session[md.SESSION_KEY].source_name == "b.csv"
+        assert list(session[md.SESSION_KEY].names) == ["site"]
+
+    def test_a_swap_clears_the_uploader_so_its_file_does_not_reattach(self):
+        session = {md.OWNER_KEY: "A", md.SESSION_KEY: self._readers("a.csv")}
+        session["participant_metadata_upload"] = object()
+        session["participant_metadata_id_column"] = "participant_id"
+        session["participant_metadata_keep_fields"] = ["age"]
+        session["_participant_metadata_name"] = "a.csv"
+        md.activate_dataset(session, "B")
+        for key in (
+            "participant_metadata_upload",
+            "participant_metadata_id_column",
+            "participant_metadata_keep_fields",
+            "_participant_metadata_name",
+        ):
+            assert key not in session
+
+    def test_the_first_run_adopts_what_is_attached(self):
+        """A session whose tables have no owner yet (its first run) keeps them."""
+        session = {md.SESSION_KEY: self._readers("a.csv")}
+        md.activate_dataset(session, "A")
+        assert session[md.SESSION_KEY].source_name == "a.csv"
+        assert session[md.OWNER_KEY] == "A"
+
+    def test_a_new_dataset_starts_empty_and_keeps_what_it_attached(self):
+        session = {}
+        md.activate_dataset(session, "A")
+        session[md.SESSION_KEY] = self._readers("a.csv")
+        md.begin_pending_dataset(session)
+        md.activate_dataset(session, md.PENDING_DATASET)
+        assert md.SESSION_KEY not in session
+        session[md.SESSION_KEY] = self._readers("new.csv")
+        md.adopt_pending_dataset(session, "New")
+        assert not md.activate_dataset(session, "New")  # nothing to swap
+        assert session[md.SESSION_KEY].source_name == "new.csv"
+        md.activate_dataset(session, "A")
+        assert session[md.SESSION_KEY].source_name == "a.csv"
+        assert md.PENDING_DATASET not in md.dataset_payloads(session)
+
+    def test_a_cancelled_wizard_leaves_nothing_behind(self):
+        session = {}
+        md.activate_dataset(session, "A")
+        session[md.SESSION_KEY] = self._readers("a.csv")
+        md.begin_pending_dataset(session)
+        md.activate_dataset(session, md.PENDING_DATASET)
+        session[md.SESSION_KEY] = self._readers("abandoned.csv")
+        md.activate_dataset(session, "A")  # ✕ Cancel returns to A
+        assert session[md.SESSION_KEY].source_name == "a.csv"
+        md.begin_pending_dataset(session)  # the next ➕ Add dataset
+        md.activate_dataset(session, md.PENDING_DATASET)
+        assert md.SESSION_KEY not in session
+
+    def test_detaching_on_one_dataset_leaves_the_other(self):
+        session = {}
+        md.activate_dataset(session, "A")
+        session[md.SESSION_KEY] = self._readers("a.csv")
+        md.activate_dataset(session, "B")
+        session[md.SESSION_KEY] = self._readers("b.csv")
+        session.pop(md.SESSION_KEY)  # detach B's
+        md.activate_dataset(session, "A")
+        assert session[md.SESSION_KEY].source_name == "a.csv"
+        md.activate_dataset(session, "B")
+        assert md.SESSION_KEY not in session
+
+    def test_remove_and_rename_follow_the_dataset(self):
+        session = {}
+        md.activate_dataset(session, "A")
+        session[md.SESSION_KEY] = self._readers("a.csv")
+        md.activate_dataset(session, "B")
+        md.rename_dataset(session, "A", "A2")
+        md.activate_dataset(session, "A2")
+        assert session[md.SESSION_KEY].source_name == "a.csv"
+        md.forget_dataset(session, "A2")
+        assert md.SESSION_KEY not in session
+        assert "A2" not in md.dataset_payloads(session)
+
+    def test_the_cache_payloads_round_trip_per_dataset(self):
+        session = {}
+        md.activate_dataset(session, "A")
+        session[md.SESSION_KEY] = self._readers("a.csv")
+        md.activate_dataset(session, "B")
+        session[md.SESSION_KEY] = self._readers("b.csv")
+        written = {"datasets": md.dataset_payloads(session)}
+        assert set(written["datasets"]) == {"A", "B"}
+
+        restored = {}
+        assert md.restore_dataset_payloads(restored, written) == 2
+        md.activate_dataset(restored, "B")
+        assert restored[md.SESSION_KEY].source_name == "b.csv"
+        md.activate_dataset(restored, "A")
+        assert restored[md.SESSION_KEY].source_name == "a.csv"
+
+    def test_the_signature_moves_when_a_stored_table_does(self):
+        session = {}
+        assert md.store_signature(session) == []
+        md.activate_dataset(session, "A")
+        session[md.SESSION_KEY] = self._readers("a.csv")
+        before = md.store_signature(session)
+        md.activate_dataset(session, "B")  # A's table moves into the store
+        assert md.store_signature(session) != before
+        assert md.store_signature(session)  # still something to write
+
+    def test_compare_b_filters_by_its_own_datasets_table(self, monkeypatch):
+        """CMP-8's scanpath B can come from another dataset — its filters must
+        then narrow by *that* dataset's table, not the selected one's."""
+        import streamlit as st
+
+        session = {}
+        md.activate_dataset(session, "B")
+        session[md.SESSION_KEY] = self._readers("b.csv", "site")
+        md.activate_dataset(session, "A")
+        session[md.SESSION_KEY] = self._readers("a.csv")
+        monkeypatch.setattr(st, "session_state", session)
+
+        assert md.attached_for("participant").source_name == "a.csv"
+        assert md.attached_for("participant", "cmp").source_name == "a.csv"
+        session["cmp_dataset"] = "B"
+        assert md.attached_for("participant").source_name == "a.csv"
+        assert md.attached_for("participant", "cmp").source_name == "b.csv"
+        assert md.attached_for("trial", "cmp") is None
+        session["cmp_dataset"] = "This dataset"
+        assert md.attached_for("participant", "cmp").source_name == "a.csv"

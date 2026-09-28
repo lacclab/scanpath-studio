@@ -254,6 +254,105 @@ def _settings_summary(settings: dict) -> str:
 #: draws two readings into one frame. Each gains an ``_a`` / ``_b`` variant.
 PAIRED_PATTERN_FIELDS = ("dataset_name", "participant_id", "trial_id", "text_id")
 
+#: EXP-22 — the tables a pattern can name a field of, as ``{table.field}``, and
+#: the heading each gets in the *Available fields* list. The metadata tables
+#: plus the two data tables' saved fields; a qualified name is what tells two
+#: tables' ``font_size`` apart, and what keeps them out of the plain list.
+TABLE_PATTERN_LABELS = {
+    "participants": "Participants table",
+    "trials": "Trials table",
+    "texts": "Texts table",
+    "fixations": "Fixations table",
+    "words": "AOI table",
+}
+
+#: Columns a data table always carries or the app derives — the trial's own
+#: identity, geometry and timing, which the plain fields already cover or which
+#: are not one value per trial. What is left is what the user kept.
+_CORE_TABLE_COLUMNS = frozenset(
+    {
+        "participant_id",
+        "trial_id",
+        "text_id",
+        "paragraph_id",
+        "unique_trial_id",
+        "unique_text_id",
+        "unique_paragraph_id",
+        "word_id",
+        "text",
+        "line_idx",
+        "x",
+        "y",
+        "width",
+        "height",
+        "screen_id",
+        "screen_index",
+        "canvas_width",
+        "canvas_height",
+        "screen_timestamp_ms",
+        "screen_fixation_id",
+        "duration_ms",
+        "timestamp_ms",
+        "fixation_id",
+        "order_in_trial",
+        "pass_index",
+        "saccade_type",
+        "saccade_amplitude",
+        "eye",
+        "source_file",
+        "TRIAL_INDEX",
+        "trial_index",
+    }
+)
+
+
+def _saved_table_fields(frame: pd.DataFrame | None) -> dict:
+    """A data table's saved fields that hold one value for the whole trial.
+
+    A field that varies within the trial (a word's surprisal, a fixation's
+    pupil size) has no single value to put in a title, so it is not offered."""
+    out: dict = {}
+    if frame is None or getattr(frame, "empty", True):
+        return out
+    for column in frame.columns:
+        name = str(column)
+        if name.startswith("_") or name in _CORE_TABLE_COLUMNS:
+            continue
+        values = frame[column].dropna()
+        if values.empty:
+            continue
+        try:
+            distinct = values.unique()
+        except TypeError:  # unhashable cells (lists, dicts)
+            continue
+        if len(distinct) != 1 or isinstance(distinct[0], (list, dict, set, tuple)):
+            continue
+        out[name] = distinct[0]
+    return out
+
+
+def table_pattern_fields(
+    trial_words: pd.DataFrame | None,
+    trial_fixations: pd.DataFrame | None,
+    metadata_rows: dict | None = None,
+) -> dict[str, dict]:
+    """``{table: {"table.field": value}}`` for one trial (EXP-22).
+
+    ``metadata_rows`` is this trial's row of each attached metadata table
+    (``metadata.pattern_rows``); the fixations and AOI tables contribute their
+    saved fields that are constant within the trial. Grouped by table so the
+    *Available fields* list can head each group; :func:`pattern_fields`
+    flattens it."""
+    tables: dict[str, dict] = {}
+    for table, row in (metadata_rows or {}).items():
+        if row:
+            tables[table] = {f"{table}.{name}": value for name, value in row.items()}
+    for table, frame in (("fixations", trial_fixations), ("words", trial_words)):
+        saved = _saved_table_fields(frame)
+        if saved:
+            tables[table] = {f"{table}.{name}": value for name, value in saved.items()}
+    return tables
+
 
 def pattern_fields(
     participant: str,
@@ -264,6 +363,7 @@ def pattern_fields(
     combo_row: dict | None = None,
     dataset_name: str = "",
     compare_row: dict | None = None,
+    metadata_rows: dict | None = None,
 ) -> dict:
     """Every value a filename / title / caption pattern can substitute.
 
@@ -284,8 +384,17 @@ def pattern_fields(
     there is no second reading) so that a pattern written in compare mode still
     validates and renders on a single-trial figure instead of erroring on a
     surface the author cannot see.
+
+    EXP-22: every attached metadata table's fields and each data table's saved
+    fields join as ``{table.field}`` (:func:`table_pattern_fields`) — qualified,
+    so a trial table's ``font_size`` and a recorded ``font_size`` are both
+    reachable, and none of the plain names above changes.
     """
     fields: dict = dict(combo_row or {})
+    for table in table_pattern_fields(
+        trial_words, trial_fixations, metadata_rows
+    ).values():
+        fields.update(table)
     fields.update(
         participant_id=participant,
         trial_id=trial,
@@ -1594,8 +1703,13 @@ def bulk_export(
     raw_gaze: pd.DataFrame | None = None,
     progress_callback=None,
     status_callback: StatusCallback | None = None,
+    metadata_rows_for=None,
 ) -> tuple[bytes, ExportProgress]:
     """Build a zip archive of selected artifacts and return its bytes.
+
+    ``metadata_rows_for(participant, trial, text_id)`` (EXP-22) returns a
+    trial's metadata-table rows for ``{table.field}`` patterns — the app passes
+    ``metadata.pattern_rows``; headless callers have no attached tables.
 
     progress_callback (if given) is invoked with an ExportProgress after every
     trial so the UI can update a progress bar.
@@ -1760,6 +1874,13 @@ def bulk_export(
                 settings,
                 combo_row=combo._asdict(),
                 dataset_name=options.dataset_name,
+                metadata_rows=(
+                    metadata_rows_for(
+                        participant, trial, combo._asdict().get("text_id")
+                    )
+                    if metadata_rows_for is not None
+                    else None
+                ),
             )
 
             def _path(artifact: str, ext: str, _f=fields, _slug=screen_slug) -> str:

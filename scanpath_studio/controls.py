@@ -3213,13 +3213,60 @@ def render_pattern_help(host, fields: dict) -> None:
     """
     if not fields:
         return
+    from .export import TABLE_PATTERN_LABELS
+
+    # EXP-22: `{table.field}` names are listed under their table's heading,
+    # after the plain list — which they are kept out of, so it reads as it did.
+    grouped: dict[str, list[str]] = {}
+    plain = []
+    for name in fields:
+        table, dot, _rest = str(name).partition(".")
+        if dot and table in TABLE_PATTERN_LABELS:
+            grouped.setdefault(table, []).append(name)
+        else:
+            plain.append(name)
+    sections = [
+        f"**{TABLE_PATTERN_LABELS[table]}**\n\n"
+        + "\n".join(f"- `{{{name}}}`" for name in sorted(grouped[table]))
+        for table in TABLE_PATTERN_LABELS
+        if table in grouped
+    ]
     with host.expander("Available fields", expanded=False):
         st.markdown(
             "Type any of these in a pattern and the trial's own value is "
             "substituted:\n\n"
-            + "\n".join(f"- `{{{name}}}`" for name in sorted(fields))
+            + "\n".join(f"- `{{{name}}}`" for name in sorted(plain))
+            + "".join(f"\n\n{section}" for section in sections)
             + "\n\nAnything else is left as literal text."
         )
+
+
+def _trial_rows(
+    frame: pd.DataFrame | None, trial_fixations: pd.DataFrame
+) -> pd.DataFrame:
+    """``frame``'s rows for the trial ``trial_fixations`` holds (EXP-22)."""
+    if frame is None or frame.empty or trial_fixations.empty:
+        return pd.DataFrame()
+    mask = pd.Series(True, index=frame.index)
+    for column in ("participant_id", "trial_id"):
+        if column in frame.columns and column in trial_fixations.columns:
+            mask &= frame[column].astype(str) == str(trial_fixations[column].iloc[0])
+    return frame[mask]
+
+
+def _selected_metadata_rows(trial_fixations: pd.DataFrame | None) -> dict:
+    """The attached metadata tables' rows for the trial ``trial_fixations`` is
+    (EXP-22) — enough to name every field, whichever trial it is."""
+    from . import metadata as md
+
+    ids = {}
+    if trial_fixations is not None and not trial_fixations.empty:
+        for column in ("participant_id", "trial_id", "text_id"):
+            if column in trial_fixations.columns:
+                ids[column] = str(trial_fixations[column].iloc[0])
+    return md.pattern_rows(
+        ids.get("participant_id"), ids.get("trial_id"), ids.get("text_id")
+    )
 
 
 def current_dataset_name() -> str:
@@ -6052,13 +6099,23 @@ def render_plot_controls(
             "is not scaled down; the figure grows to make room.",
         )
         if show_title_caption:
+            # EXP-22: the *selected* trial's frames, not the corpus the rail
+            # was handed — its tables name the `{table.field}` fields the boxes
+            # validate against and the list shows, and "one value per trial"
+            # has to be read off one trial.
+            _sel_fix = (
+                fix_range_fixations
+                if fix_range_fixations is not None
+                else pd.DataFrame()
+            )
             _title_caption_fields = pattern_fields(
                 "p01",
                 "t01",
-                words if words is not None else pd.DataFrame(),
-                trial_fixations if trial_fixations is not None else pd.DataFrame(),
+                _trial_rows(words, _sel_fix),
+                _sel_fix,
                 {},
                 dataset_name=current_dataset_name(),
+                metadata_rows=_selected_metadata_rows(_sel_fix),
             )
             # EXP-5: two text boxes, two previews and a field list, inline — the
             # overlay's width is the point, and Streamlit won't nest a popover.

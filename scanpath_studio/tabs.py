@@ -21,6 +21,7 @@ import plotly.io as pio
 import streamlit as st
 
 from scanpath_studio import alignment
+from scanpath_studio import metadata as _metadata_mod
 from scanpath_studio.aggregation import (
     MEASURES,
     Measure,
@@ -3993,6 +3994,10 @@ def _rendered_title_caption(
         # animation, compare) all get it without each remembering to.
         dataset_name=current_dataset_name() if dataset_name is None else dataset_name,
         compare_row=compare_row,
+        # EXP-22: `{trials.font_size}` and the other tables' fields.
+        metadata_rows=_metadata_mod.pattern_rows(
+            participant, trial, (combo_row or {}).get("text_id")
+        ),
     )
     return (
         render_pattern(title_pattern, fields) if title_pattern else "",
@@ -6370,6 +6375,8 @@ def _render_bulk_export(
                 active_combos,
                 active_words,
                 active_fix,
+                # EXP-22: each trial's metadata rows, for `{table.field}`.
+                metadata_rows_for=_metadata_mod.pattern_rows,
                 canvas_width=canvas_width,
                 canvas_height=canvas_height,
                 base_font_size=base_font_size,

@@ -1622,6 +1622,49 @@ _COMPARE_SAME_DATASET = "This dataset"
 _BUILT_KEY = "_metadata_built_for_compare"
 
 
+#: EXP-22 — the table each grain is named by in a title / caption pattern:
+#: ``{trials.font_size}`` is the trial table's ``font_size``.
+PATTERN_TABLE_NAMES = {
+    GRAIN_PARTICIPANT: "participants",
+    GRAIN_TRIAL: "trials",
+    GRAIN_TEXT: "texts",
+}
+
+
+def pattern_rows(
+    participant, trial, text_id=None, *, prefix: str = ""
+) -> dict[str, dict[str, object]]:
+    """This trial's row of every attached metadata table (EXP-22).
+
+    ``{"participants": {...}, "trials": {...}, "texts": {...}}`` — only the
+    tables that are attached, each with every registered field (a reader, trial
+    or text the table does not mention gets ``None`` values, so the field still
+    exists and a pattern naming it still validates). What
+    ``export.table_pattern_fields`` turns into ``{trials.font_size}``.
+    """
+    rows: dict[str, dict[str, object]] = {}
+    table = attached_for(GRAIN_PARTICIPANT, prefix)
+    if table is not None:
+        found = table.values_for(participant) if participant is not None else {}
+        rows["participants"] = {name: found.get(name) for name in table.names}
+    table = attached_for(GRAIN_TRIAL, prefix)
+    if table is not None:
+        found: dict = {}
+        if trial is not None and not table.frame.empty:
+            match = table.frame["trial_id"] == str(trial)
+            if table.keyed_by_participant:
+                match &= table.frame["participant_id"] == str(participant)
+            hit = table.frame[match]
+            if not hit.empty:
+                found = hit.iloc[0].to_dict()
+        rows["trials"] = {name: found.get(name) for name in table.names}
+    table = attached_for(GRAIN_TEXT, prefix)
+    if table is not None:
+        found = table.values_for(text_id) if text_id is not None else {}
+        rows["texts"] = {name: found.get(name) for name in table.names}
+    return rows
+
+
 def attached_for(grain: str, prefix: str = ""):
     """The table ``grain``'s filters under key ``prefix`` narrow by (DATA-47).
 

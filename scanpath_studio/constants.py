@@ -562,6 +562,7 @@ CITATION = {
 # cycle (app.py re-imports them for its own use and for tests).
 UPLOAD_CHOICE = "Upload tables"
 AUTHOR_CHOICE = "Author a scanpath"
+MANUAL_SAMPLE_CHOICE = "Synthetic sample"
 DEMO_CHOICE = "Bundled Demo"
 SYNTHETIC_CHOICE = "Synthetic test trial"
 PUBLIC_DATASETS_CHOICE = "Public datasets"
@@ -802,7 +803,9 @@ FOCUS_MAPPING_KEY = "_focus_column_mapping"
 # shrink: two datasets under comparison are told apart by that label. What gave
 # way is the scrubber (5.0 → 3.6) and the filters, which became one icon in the
 # actions cluster rather than a labelled **More** button of their own.
-SELECTOR_ROW_GRID = [2.9, 2.8, 4.0, 2.2]
+# UX-143: the first track also holds +; borrow from the scrubber to keep the
+# dataset name readable. The same track boundaries apply to the related rows.
+SELECTOR_ROW_GRID = [3.6, 2.8, 3.3, 2.2]
 
 #: The pre-UX-64 three-track shape, for the rows that still have three things
 #: on them — the multipart screen navigator and compare mode's own picker rows.

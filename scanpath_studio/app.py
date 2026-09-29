@@ -63,6 +63,7 @@ from scanpath_studio.annotations import (
 from scanpath_studio.constants import (
     _VIEW_CORPUS,
     _VIEW_DATA,
+    _VIEW_SCANPATH,
     AUTHOR_CHOICE,
     BACKGROUND_PRESETS,
     BENCHMARK_LABEL_SUFFIX,
@@ -85,6 +86,7 @@ from scanpath_studio.constants import (
     FOCUS_MAPPING_KEY,
     FONT_FAMILY,
     ICONS,
+    MANUAL_SAMPLE_CHOICE,
     MULTIPLEYE_BUNDLE_CHOICE,
     MULTIPLEYE_DEFAULT_DIR,
     ONESTOP_CHOICE,
@@ -2382,6 +2384,12 @@ _BUILTIN_DATASET_ABOUT: dict[str, dict] = {
             "treat this as a floor."
         ),
     ),
+    MANUAL_SAMPLE_CHOICE: dict(
+        language="English",
+        description="An editable, manually authored scanpath. Change the text, drag "
+        "fixations, or edit their timing in the authoring editor.",
+        geometry=f"{ICONS['geometry_synthesized']} **Synthesized** — manually authored, not recorded.",
+    ),
     SYNTHETIC_CHOICE: dict(
         language="English",
         description="A hand-built trial with every measure traced by hand — the "
@@ -3715,10 +3723,10 @@ def resolve_data_source(host=None) -> str:
 
     Returns the selected source: ``DEMO_CHOICE`` ("Bundled Demo"), a stored
     uploaded dataset's name, ``ONESTOP_CHOICE`` / ``PUBLIC_DATASETS_CHOICE`` when
-    available, ``SYNTHETIC_CHOICE`` if already selected, or ``UPLOAD_CHOICE``
+    available, ``SYNTHETIC_CHOICE``, or ``UPLOAD_CHOICE``
     while the "➕ Add data" wizard is active. Switching to a stored dataset reloads
-    it from session (no re-upload); the synthetic source is no longer offered
-    fresh and "Public Datasets" shows grayed-out until the feature flag is on.
+    it from session (no re-upload). Manual authoring is opened by the + menu;
+    its draft joins the list once opened, including through an old deep link.
 
     **UX-25** moved the *visible* picker out of the sidebar and onto the main
     view's "Filter by" row (:func:`render_data_source_picker`). The picker has to
@@ -3786,11 +3794,26 @@ def resolve_data_source(host=None) -> str:
         kinds[MULTIPLEYE_BUNDLE_CHOICE] = "🔒"
     entries.append(DEMO_CHOICE)
     kinds[DEMO_CHOICE] = "🧪"
-    entries.append(AUTHOR_CHOICE)
-    kinds[AUTHOR_CHOICE] = "✏️"
+    entries.append(MANUAL_SAMPLE_CHOICE)
+    kinds[MANUAL_SAMPLE_CHOICE] = "✏️"
+    if (
+        debug_enabled()
+        or st.session_state.get("data_source_choice") == SYNTHETIC_CHOICE
+    ):
+        entries.append(SYNTHETIC_CHOICE)
+        kinds[SYNTHETIC_CHOICE] = "🧪"
+    if st.session_state.get(
+        "data_source_choice"
+    ) == AUTHOR_CHOICE or AUTHOR_CHOICE in st.session_state.get(
+        "_manual_scanpath_drafts", {}
+    ):
+        entries.append(AUTHOR_CHOICE)
+        kinds[AUTHOR_CHOICE] = "✏️"
     for name in uploaded:
         entries.append(name)
-        kinds[name] = "🔒"
+        kinds[name] = (
+            "✏️" if st.session_state["_datasets"][name].get("authoring") else "🔒"
+        )
     # DATA-27 (Task 11R): every prepared benchmark corpus is in here as its own
     # 🌐 entry, exactly like the built-ins — `public_dataset_registry()` composes
     # the two. Resolved once and reused below so the whole run agrees on one
@@ -3799,20 +3822,6 @@ def resolve_data_source(host=None) -> str:
     for label in registry:
         entries.append(label)
         kinds[label] = "🌐"
-    # UX-37: the ground-truth trial is offered **while debug mode is on** (the
-    # ❓ Help toggle), rather than only via `?source=synthetic` — a URL the About
-    # note and the docs had to spell out, which is the hidden-behind-a-param
-    # problem this item exists to remove. It is a six-word verification fixture,
-    # not a corpus, so it sits with the other developer affordances instead of
-    # in every user's source list. Still selectable when something already chose
-    # it, so a `?source=synthetic` link and the AppTests keep working.
-    if (
-        debug_enabled()
-        or st.session_state.get("data_source_choice") == SYNTHETIC_CHOICE
-    ):
-        entries.append(SYNTHETIC_CHOICE)
-        kinds[SYNTHETIC_CHOICE] = "🧪"
-
     # Removing an app-owned/public source means removing it from this session's
     # available list, not deleting packaged files or a public corpus. Keep the
     # stable token intact for links and loader dispatch; the ordinary stale-
@@ -3874,6 +3883,10 @@ def resolve_data_source(host=None) -> str:
     return choice
 
 
+# Picker-only sentinel: never a dataset, a comparison source or a share token.
+_MORE_DATASETS_PLACEHOLDER = "__more_datasets_coming_soon__"
+
+
 def _on_data_source_pick() -> None:
     """Route the main-view picker's choice through the pre-widget seam (UX-25).
 
@@ -3885,8 +3898,53 @@ def _on_data_source_pick() -> None:
     keep assigning the canonical key without the widget reconciling it away.
     """
     picked = st.session_state.get("data_source_picker")
+    if picked == _MORE_DATASETS_PLACEHOLDER:
+        st.session_state["data_source_picker"] = st.session_state["data_source_choice"]
+        return
     if picked:
+        if picked in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
+            _remember_authoring_return()
         st.session_state["_pending_source_choice"] = picked
+
+
+def _remember_authoring_return() -> None:
+    source = st.session_state.get("data_source_choice", DEMO_CHOICE)
+    if source not in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
+        st.session_state["_author_return_source"] = source
+
+
+def _cancel_authoring() -> None:
+    st.session_state["_pending_source_choice"] = st.session_state.get(
+        "_author_return_source", DEMO_CHOICE
+    )
+    st.session_state["main_nav"] = _VIEW_SCANPATH
+
+
+def _save_authored_dataset(name_key: str) -> None:
+    from scanpath_studio.wizard import _safe_dataset_name
+
+    payload = st.session_state.pop("_author_save_payload", None)
+    if payload is None:
+        return
+    requested = str(st.session_state.get(name_key) or "My scanpath").strip()
+    if requested in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
+        requested += " (authored)"
+    name = _safe_dataset_name(requested)
+    st.session_state.setdefault("_datasets", {})[name] = payload
+    st.session_state["_pending_source_choice"] = name
+    st.session_state["main_nav"] = _VIEW_SCANPATH
+    st.session_state["setup_complete"] = True
+
+
+def _enter_manual_dataset() -> None:
+    """Open (or resume) the manual editor through the ordinary source switch."""
+    _remember_authoring_return()
+    hidden = list(st.session_state.get(HIDDEN_DATASETS_KEY) or [])
+    if AUTHOR_CHOICE in hidden:
+        hidden.remove(AUTHOR_CHOICE)
+        st.session_state[HIDDEN_DATASETS_KEY] = hidden
+    st.session_state["_pending_source_choice"] = AUTHOR_CHOICE
+    st.session_state["main_nav"] = _VIEW_SCANPATH
 
 
 def leave_add_data_wizard() -> None:
@@ -3941,19 +3999,13 @@ def discard_and_leave_wizard() -> None:
 
 
 def render_data_source_picker(host=None) -> None:
-    """Render the data-source picker in the main view (UX-25).
+    """Render the dataset picker and its + creation menu (UX-143).
 
-    Sits on the "Filter by" row, left of the label, so the top of the page reads
-    left-to-right as *which dataset → how to narrow it → which trial* — the app is
-    built to be read straight down the page. Renders from the entry list
-    :func:`resolve_data_source` published earlier this run; a pick is
-    applied on the next run via :func:`_on_data_source_pick`.
-
-    UX-64 reduced it to the selectbox alone. Adding a dataset, removing one and
-    the contribute link were behind a ➕ popover here; the 🗂️ Data page owns all
-    three now, and the width it frees is what lets the dataset picker keep its
-    size on the single control line.
+    The menu sits between the dataset and trial selectors. Creation uses the
+    existing manual editor or file wizard; the placeholder is picker-only.
     """
+    from scanpath_studio.wizard import _enter_add_data_wizard
+
     entries = list(st.session_state.get("_data_source_entries") or [])
     if not entries:
         return
@@ -3963,6 +4015,8 @@ def render_data_source_picker(host=None) -> None:
     registry = public_dataset_registry()
 
     def _entry_label(token: str) -> str:
+        if token == _MORE_DATASETS_PLACEHOLDER:
+            return "More coming soon!"
         # Reads the `registry` snapshot resolved just above rather than calling
         # `public_dataset_registry()` per token: the added corpora can change at
         # runtime, so one run must format its options against one
@@ -3985,14 +4039,13 @@ def render_data_source_picker(host=None) -> None:
         return f"{tag} {name}".strip()
 
     # Keyed wrapper → stable `.st-key-…` selector for the spotlight tour.
-    box = (host if host is not None else st).container(key="tour_grp_data_source")
-    # UX-64: the picker is the whole control now. The ➕ popover that sat beside
-    # it — Add data, remove-an-upload, the contribute link — is gone: the 🗂️ Data
-    # page is the only way to add a dataset, which is where the wizard renders
-    # anyway, and removing one moves there too (#UX-54's dataset table). Dropping
-    # it is also what frees the width for the single control line, since the
-    # dataset picker itself must **not** shrink — you may be comparing two.
-    #
+    box = (host if host is not None else st).container(
+        key="tour_grp_data_source",
+        horizontal=True,
+        vertical_alignment="bottom",
+        gap="xsmall",
+        wrap=False,
+    )
     # Mirror the canonical key onto the widget key before it instantiates, so a
     # deep link / restore / wizard finalize shows up in the picker.
     current = st.session_state.get("data_source_choice")
@@ -4000,15 +4053,33 @@ def render_data_source_picker(host=None) -> None:
         st.session_state["data_source_picker"] = current
     box.selectbox(
         "**Select Dataset**",
-        entries,
+        [*entries, _MORE_DATASETS_PLACEHOLDER],
         format_func=_entry_label,
         help=(
-            "Which dataset the app is showing. Add, rename or remove one on "
-            "the 🗂️ Data page."
+            "Which dataset the app is showing. Use + to create a scanpath or "
+            "import files. Rename or remove datasets on the 🗂️ Data page. "
+            "More coming soon! is a preview of future datasets."
         ),
         key="data_source_picker",
         on_change=_on_data_source_pick,
     )
+    with box.popover(ICONS["add"], help="Add dataset", key="add_dataset_menu"):
+        st.button(
+            "Create manually",
+            icon=ICONS["author"],
+            key="add_manual_dataset_btn",
+            help="Write a text and place its fixations, or resume your manual scanpath.",
+            on_click=_enter_manual_dataset,
+            width="stretch",
+        )
+        st.button(
+            "Import files",
+            icon=ICONS["upload"],
+            key="import_dataset_btn",
+            help="Add your fixation and word/AOI tables with the setup wizard.",
+            on_click=_enter_add_data_wizard,
+            width="stretch",
+        )
 
 
 #: Cell text of the dataset table's action buttons. `st.column_config.ButtonColumn`
@@ -4057,6 +4128,8 @@ def _dataset_display_name(token: str, registry: dict | None = None) -> str:
     alias = (st.session_state.get(DATASET_ALIASES_KEY) or {}).get(token)
     if alias:
         return str(alias)
+    if token == AUTHOR_CHOICE:
+        return "My scanpath"
     registry = public_dataset_registry() if registry is None else registry
     return picker_name_for(token, registry) if token in registry else token
 
@@ -4349,8 +4422,12 @@ def _select_dataset(name: str) -> None:
     wizard finalize use: ``data_source_choice`` is a widget key elsewhere, so
     this is the one way an assignment lands before the widgets instantiate.
     """
+    if name in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
+        _remember_authoring_return()
     st.session_state["_pending_source_choice"] = name
     st.session_state["data_source_choice"] = name
+    if name == MANUAL_SAMPLE_CHOICE:
+        st.session_state["main_nav"] = _VIEW_SCANPATH
 
 
 #: UX-54 r2 — the upload the ✕ Delete button asked about, awaiting confirmation.
@@ -4958,8 +5035,8 @@ def render_dataset_table(
     }
     rows = []
     for token in entries:
-        if token == UPLOAD_CHOICE:
-            continue  # the wizard, not a dataset
+        if token in (UPLOAD_CHOICE, AUTHOR_CHOICE):
+            continue  # creation flows have their own buttons below the table
         own = token in uploaded
         name = _dataset_display_name(token, registry)
         # DATA-32: counted once per version of a dataset and remembered, so a
@@ -5070,8 +5147,9 @@ def render_dataset_table(
         token = _clicked("dataset_table_edit")
         if token is not None:
             _select_dataset(token)
-            st.session_state[FOCUS_MAPPING_KEY] = token
-            st.session_state[DATASET_EDITOR_OPEN_KEY] = True
+            if token != MANUAL_SAMPLE_CHOICE:
+                st.session_state[FOCUS_MAPPING_KEY] = token
+                st.session_state[DATASET_EDITOR_OPEN_KEY] = True
             st.session_state[_TABLE_NEEDS_APP_RERUN] = True
 
     def _on_delete() -> None:
@@ -6285,7 +6363,45 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
     )
     from scanpath_studio.authoring_component import render_authoring_canvas
 
-    st.subheader(f"{ICONS['author']} Author a scanpath")
+    source = st.session_state.get("data_source_choice", AUTHOR_CHOICE)
+    drafts = st.session_state.setdefault("_manual_scanpath_drafts", {})
+    previous = st.session_state.get("_author_editor_source")
+    if previous != source:
+        document = drafts.get(source)
+        if document is None and (
+            source == MANUAL_SAMPLE_CHOICE or previous is not None
+        ):
+            seed_text = (
+                "The cat sat\non the mat."
+                if source == MANUAL_SAMPLE_CHOICE
+                else "Reading unfolds through a sequence of careful eye movements."
+            )
+            document = (
+                seed_text,
+                dict(DEFAULT_LAYOUT),
+                default_events(layout_text(seed_text)),
+            )
+        if document is not None:
+            seed_text, seed_layout, seed_events = document
+            st.session_state["author_text"] = seed_text
+            st.session_state["_author_layout"] = seed_layout
+            st.session_state["_authored_events_frame"] = seed_events
+            st.session_state["_author_text_for_events"] = seed_text
+            st.session_state["_author_selected_fixation"] = None
+            st.session_state["_author_events_editor_revision"] = (
+                int(st.session_state.get("_author_events_editor_revision", 0)) + 1
+            )
+        st.session_state["_author_editor_source"] = source
+    header = st.container(horizontal=True, vertical_alignment="center")
+    header.subheader(
+        f"{ICONS['author']} "
+        + (
+            "Edit synthetic sample"
+            if source == MANUAL_SAMPLE_CHOICE
+            else "Author a scanpath"
+        )
+    )
+    header.button("Cancel", key="cancel_authoring", on_click=_cancel_authoring)
     st.caption(
         "Write the stimulus, then click or drag directly on the canvas. X/Y are "
         "the primary authored values; the optional target word is useful for "
@@ -6295,12 +6411,12 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
     restored = st.file_uploader(
         "Restore authoring file",
         type=["json"],
-        key="author_restore_upload",
+        key=f"author_restore_upload_{source}",
         help="Load a JSON file previously saved from this editor.",
         max_upload_size=upload_limit_mb(),
     )
     if restored is not None:
-        identity = (restored.name, restored.size)
+        identity = (source, restored.name, restored.size)
         if st.session_state.get("_author_restore_identity") != identity:
             try:
                 document = parse_authoring_document(restored.getvalue().decode("utf-8"))
@@ -6317,10 +6433,13 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
                 )
                 st.session_state["_author_restore_identity"] = identity
 
+    st.session_state.setdefault(
+        "author_text", "Reading unfolds through a sequence of careful eye movements."
+    )
     text = st.text_area(
         "Stimulus text",
-        value="Reading unfolds through a sequence of careful eye movements.",
         key="author_text",
+        persist_state="session",
         height=100,
     )
     layout = {**DEFAULT_LAYOUT, **st.session_state.get("_author_layout", {})}
@@ -6467,14 +6586,36 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
             st.session_state["_author_events_editor_revision"] = editor_revision + 1
             st.rerun()
 
-    st.download_button(
-        f"{ICONS['save']} Save authoring file",
-        data=authoring_json(text, effective_events, layout=layout),
-        file_name="authored-scanpath.json",
-        mime="application/json",
-        disabled=not events_valid,
+    fixations = authored_fixations(words, effective_events)
+    name_key = f"author_dataset_name_{source}"
+    st.text_input(
+        "Dataset name",
+        value="Synthetic sample (edited)"
+        if source == MANUAL_SAMPLE_CHOICE
+        else "My scanpath",
+        key=name_key,
     )
-    return words, authored_fixations(words, effective_events)
+    can_save = events_valid and not words.empty and not fixations.empty and not dropped
+    if can_save:
+        st.session_state["_author_save_payload"] = {
+            "words": words,
+            "fixations": fixations,
+            "raw_gaze": pd.DataFrame(),
+            "authoring": authoring_json(text, effective_events, layout=layout),
+        }
+    else:
+        st.session_state.pop("_author_save_payload", None)
+    st.button(
+        "Save dataset",
+        icon=ICONS["save"],
+        key="save_authored_dataset",
+        type="primary",
+        disabled=not can_save,
+        on_click=_save_authored_dataset,
+        args=(name_key,),
+    )
+    drafts[source] = (text, dict(layout), effective_events.copy())
+    return words, fixations
 
 
 #: PRE-1 control defaults. These keys are a wire format — a deep link or a saved
@@ -6585,6 +6726,8 @@ def _activate_data_source(data_choice: str, *, preproc_host=None) -> dict:
     it was a popover on the top menu bar until the page took it).
     """
     st.session_state["_active_data_source"] = data_choice
+    if data_choice not in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
+        st.session_state.pop("_author_editor_source", None)
     preprocessing = _preprocessing_settings(preproc_host)
     if st.session_state.get("_share_selection_source") != data_choice:
         st.session_state.pop("_share_selection", None)
@@ -6747,7 +6890,7 @@ def _open_dataset_card(
     with no Cancel, no "last load" hint and no duration recorded — a filter
     change's re-run is not how long the dataset takes to open.
     """
-    if data_choice in (UPLOAD_CHOICE, AUTHOR_CHOICE):
+    if data_choice in (UPLOAD_CHOICE, AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
         previous = st.session_state.pop(DATASET_TASK_KEY, None)
         if previous is not None:
             progress.cancel(tuple(previous))
@@ -7341,7 +7484,7 @@ def _run_app() -> None:
     # narrow column so a stretched button doesn't run the width of the page.
     add_dataset_slot = None
     if data_view and not wizard_owns_page:
-        add_dataset_slot, _ = setup_source_slot.columns([1, 4])
+        add_dataset_slot = setup_source_slot.container(horizontal=True)
     if data_view and add_dataset_slot is not None and data_choice != UPLOAD_CHOICE:
         # UX-64 took ➕ Add data off the Scanpath row and made this page the only
         # way in — so the way in has to *be* here. Without this button
@@ -7355,8 +7498,14 @@ def _run_app() -> None:
             key="add_data_btn",
             on_click=_enter_add_data_wizard,
             help="Upload your own eye-tracking tables.",
-            width="stretch",
+            width="content",
             type="primary",
+        )
+        add_dataset_slot.button(
+            "Create manual scanpath",
+            icon=ICONS["author"],
+            key="create_manual_scanpath_btn",
+            on_click=_enter_manual_dataset,
         )
     if data_view and editing:
         _render_dataset_editor_bar(editor_head_slot, data_choice)
@@ -7504,9 +7653,14 @@ def _run_app() -> None:
             _fill_recovery_cache_panel()
             _end_loading(showing_dataset=False)
             return
-    elif data_choice == AUTHOR_CHOICE:
+    elif data_choice in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
         with view_notices:
             words_df, fixations_df = _render_authoring_source()
+        if active_view == _VIEW_SCANPATH:
+            # The authoring canvas is this screen's visualization.
+            _fill_recovery_cache_panel()
+            _end_loading()
+            return
         raw_words_df, raw_fixations_df = words_df, fixations_df
         raw_gaze_df = pd.DataFrame()
         mapping_problems = []

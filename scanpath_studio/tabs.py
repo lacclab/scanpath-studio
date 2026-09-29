@@ -5935,6 +5935,11 @@ def render_single_trial_tab(
             "playback_speed": playback_speed if animate else 1.0,
         },
         data_source=st.session_state.get("_active_data_source"),
+        synthetic=bool(
+            st.session_state.get("_datasets", {})
+            .get(st.session_state.get("data_source_choice"), {})
+            .get("authoring")
+        ),
         fix_index_range=fix_range,
         full_fixation_range=full_fix_range,
         # CMP-24: B's own flags and window disclose as A's do.

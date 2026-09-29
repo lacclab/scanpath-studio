@@ -339,17 +339,15 @@ def test_a_legacy_debug_url_param_still_arms_it():
 
 
 @pytest.mark.timeout(90)
-class TestTheGroundTruthTrialIsDebugOnly:
-    """UX-37: the six-word verification fixture is a developer affordance, not a
-    corpus, so it sits behind the same toggle as the log panel rather than in
-    every user's data-source list. (It used to be advertised in the AI-assistance
-    note; that prose was cut, but the route it described still has to work.)"""
+class TestTheGroundTruthTrialIsAlwaysAvailable:
+    """The editable sample is public; the old verification fixture is debug-only."""
 
-    def test_it_is_absent_until_debug_mode_is_on(self):
+    def test_it_is_available_with_or_without_debug_mode(self):
         at = AppTest.from_file(APP_SCRIPT)
         arm_session_dialog(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert "Synthetic sample" in at.session_state["_data_source_entries"]
         assert "Synthetic test trial" not in at.session_state["_data_source_entries"]
 
         arm_session_dialog(at)

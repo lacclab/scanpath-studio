@@ -38,15 +38,18 @@ from .constants import (
     upload_limit_mb,
 )
 from .controls import (
+    _GRID_LABEL_W,
     ADD_ATTEMPTED_KEY,
     FIX_FIELD_SPECS,
     RAW_GAZE_FIELD_SPECS,
     TOUCHED_FIELDS_KEY,
     WORD_FIELD_SPECS,
+    _mark_field_touched,
     claim_mapping,
     column_mapping_ui,
     inline_field_label,
-    mark_missing_cells,
+    mark_cells,
+    multi_field_flag,
 )
 from .data import (
     FIX_OPTIONAL_FIELDS,
@@ -757,7 +760,7 @@ def _render_identity_field(
     if has_words:
         tables.append(("words", "AOI", raw_words, word_schema))
 
-    missing_cells: list[str] = []
+    tinted: dict[str, list[str]] = {}
     for cell, (slug, table_label, raw, schema) in zip(cells, tables):
         key = f"col_map_{slug}_{field_key}"
         # UX-108 — the file's real header, not `raw.columns`: PERF-6 parses
@@ -776,7 +779,12 @@ def _render_identity_field(
         # carries no table name (r15): the rows are now grouped *by* table and
         # each is labelled once at its head, so repeating it on all three fields
         # would say the same thing three times.
-        inline_field_label(cell, label, f"{help_text} ({table_label} table)")
+        # UX-173: the title shares its line with the ✨ flag, as a select's
+        # does, so an auto-detected id can be seen and confirmed.
+        label_col, flag_col = cell.container().columns(
+            _GRID_LABEL_W, gap=None, vertical_alignment="center"
+        )
+        inline_field_label(label_col, label, f"{help_text} ({table_label} table)")
         # UX-91: a keyed wrapper so an empty *required* picker can be tinted the
         # red every other required field turns after a failed add. These
         # multiselects are the wizard's own — they never went through
@@ -789,12 +797,21 @@ def _render_identity_field(
             key=key,
             help=help_text,
             label_visibility="collapsed",
+            on_change=_mark_field_touched,
+            args=(key,),
         )
         schema[field_key] = _mapping(chosen)
-        if required and not chosen and st.session_state.get(ADD_ATTEMPTED_KEY):
-            missing_cells.append(cell_key)
-    if missing_cells:
-        mark_missing_cells(missing_cells)
+        state = multi_field_flag(
+            flag_col,
+            state_key=key,
+            cell_key=cell_key,
+            chosen=list(chosen),
+            default=[c for c in default_cols if c in options],
+            required=required,
+        )
+        if state:
+            tinted.setdefault(state, []).append(cell_key)
+    mark_cells(tinted)
 
 
 #: UX-113 — session key holding the *committed* filename-derive settings

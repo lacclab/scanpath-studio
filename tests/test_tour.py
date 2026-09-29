@@ -994,12 +994,10 @@ class TestSpotlightSelectorsResolve:
         )
         assert 'st.markdown("## 🎛️ View modes")' not in tab_source
         assert 'st.markdown("## 🎨 Visualization")' not in tab_source
-        assert "sps-control-label" in control_source
-        # VIZ-39: the 2×2 grid of built-in designs is unchanged — 🛠️ Custom is
-        # still the unnamed "your last hand-tuning" slot — and the user's own
-        # named designs are the library beneath it.
-        assert 'key="viz_view_custom"' in control_source
-        assert "_render_saved_designs(viz)" in control_source
+        design_source = inspect.getsource(controls._render_designs)
+        assert "sps-control-label" in design_source
+        assert 'key="viz_view_custom"' in design_source
+        assert "_render_designs(viz)" in control_source
         # UX-80: a section is a `[toggle | ▾]` row, not an expander.
         assert "_rail_section(" in control_source
         assert 'viz.expander("↗️ Saccades"' not in control_source

@@ -12,7 +12,8 @@ participant, trial, and visualization settings; the UI has no identity-mode
 picker, though `_build_share_query` retains opt-out arguments for headless callers.
 
 The plot rail starts with equal-width, 2.7rem-tall Animate/Compare split controls
-and a 2×2 Quick-view grid (Scanpath / Heatmap / Illustration / persistent Custom).
+and a Designs list (Scanpath / Heatmap / Illustration / persistent Custom, then
+saved designs), one per row, with Save beside the heading.
 Named views reset to the visualization defaults before applying their preset;
 Custom alone restores hand-tuned state. The split-row CSS is scoped to the keyed
 `stHorizontalBlock`, not the similarly named popover wrapper, so each row has one

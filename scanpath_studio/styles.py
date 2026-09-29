@@ -1558,7 +1558,7 @@ def get_app_css() -> str:
         padding-right: 0.4rem;
         padding-top: 0.1rem;
     }
-    /* Design presets and Palette use the same quietly muted label treatment. */
+    /* Designs and Palette use the same quietly muted label treatment. */
     .sps-control-label {
         color: inherit;
         opacity: 0.72;
@@ -1568,39 +1568,6 @@ def get_app_css() -> str:
     }
     .st-key-scanpath_rail .st-key-global_palette [data-testid="stWidgetLabel"] {
         opacity: 0.72;
-    }
-    /* Give the heading a small breathing space, while keeping the 2×2 grid
-       itself tighter than ordinary Streamlit column rows. */
-    .st-key-scanpath_rail .st-key-quick_views_grid {
-        margin-top: 0;
-        padding-top: 0.45rem;
-        margin-bottom: 0.05rem;
-    }
-    .st-key-scanpath_rail .st-key-quick_views_grid > [data-testid="stVerticalBlock"] {
-        gap: 0.15rem !important;
-    }
-    /* VIZ-39 — 🎨 My designs. 💾 Save is drawn *into* the expander's own title
-       bar: `design_shell` is the positioning context, and the header row's
-       right-hand side is empty (the chevron sits left), so the list underneath
-       keeps the full width of the rail instead of losing a fifth of it to one
-       icon in a column of its own. */
-    .st-key-scanpath_rail .st-key-design_shell {
-        position: relative;
-    }
-    .st-key-scanpath_rail .st-key-design_save {
-        position: absolute;
-        top: 0.3rem;
-        right: 0.4rem;
-        width: auto !important;
-        z-index: 3;
-    }
-    .st-key-scanpath_rail .st-key-design_save button {
-        min-height: 1.9rem;
-        padding: 0 0.4rem;
-    }
-    /* Keep the title itself clear of the button it now shares a line with. */
-    .st-key-scanpath_rail .st-key-design_shell summary {
-        padding-right: 2.4rem;
     }
     /* One saved design is one bordered card, not three loose buttons: the row's
        own container carries the border, and the controls inside it are borderless
@@ -1649,26 +1616,6 @@ def get_app_css() -> str:
     .st-key-scanpath_rail [class*="st-key-design_row_"] [data-testid="stTextInputRootElement"] {
         height: 2.1rem;
         min-height: 0;
-    }
-    /* The 2×2 Quick-view grid keeps full labels at ordinary rail widths and
-       falls back to icons only at the narrowest size. UX-138: the label's own
-       Material icon is what stays — the text collapses around it — so the
-       fallback no longer re-draws each glyph from a `content:` rule. */
-    @container sps-rail (max-width: 320px) {
-        .st-key-viz_view_scanpath button p,
-        .st-key-viz_view_heatmap button p,
-        .st-key-viz_view_illustration button p,
-        .st-key-viz_view_custom button p {
-            font-size: 0;
-        }
-        /* A markdown `:material/…:` renders as `span[role="img"]` — the
-           `stIconMaterial` test id is only on the `icon=` slot. */
-        .st-key-viz_view_scanpath button p span[role="img"],
-        .st-key-viz_view_heatmap button p span[role="img"],
-        .st-key-viz_view_illustration button p span[role="img"],
-        .st-key-viz_view_custom button p span[role="img"] {
-            font-size: 1.1rem;
-        }
     }
     /* BUG-24: the rail's heading row holds nothing but the heading. UX-44 put a
        compact Reset pill beside it in a second column, which did not fit — the

@@ -1297,33 +1297,69 @@ def _is_restorable_global(key: object) -> bool:
     return name.startswith("global_") and not name.endswith("_upload")
 
 
-def _render_saved_designs(host) -> None:
-    """The user's own designs: save, apply, rename, delete (VIZ-39).
-
-    The list is an expander, because it grows and the rail is narrow — and
-    because it is the *built-ins* above that should stay one click away. The 💾
-    button is drawn **into the expander's own title bar** (`.st-key-design_shell`
-    is the positioning context; the CSS lives in `styles.py`) rather than in a
-    column beside it: a column would take a fifth of the rail's width away from
-    the list underneath for a single icon, and the header row's right-hand side
-    is empty space Streamlit is not using. Saving stays on screen whether the
-    list is open or shut, which is the point.
-    """
+def _render_designs(host) -> None:
+    """Built-in and saved designs in one list, with a shared save action."""
     saved = design_presets()
     active = selected_design_name()
-    label = (
-        f"{ICONS['designs']} My designs ({len(saved)})"
-        if saved
-        else f"{ICONS['designs']} My designs"
+    shell = host.container(key="design_shell", gap="xsmall")
+    heading = shell.container(
+        horizontal=True,
+        horizontal_alignment="distribute",
+        vertical_alignment="center",
     )
-    shell = host.container(key="design_shell")
-    with shell.expander(label, expanded=bool(st.session_state.get(_DESIGN_EDIT_KEY))):
-        if not saved:
-            st.caption(
-                "No saved designs yet. Set the layers, colours and figure up "
-                "the way you like them, then hit 💾 — it lands here, one click "
-                "from every trial you look at afterwards."
-            )
+    heading.markdown(
+        '<div class="sps-control-label">Designs</div>',
+        unsafe_allow_html=True,
+    )
+    if heading.button(
+        "",
+        icon=ICONS["save"],
+        key="design_save",
+        help="Save the plot settings on screen now as a named design.",
+    ):
+        st.session_state[_DESIGN_SAVE_PENDING_KEY] = True
+        st.session_state[_DESIGN_SAVE_MODE_KEY] = _SAVE_MODE_NEW
+    active_view = _active_quick_view()
+    design_list = shell.container(key="design_list", gap="xsmall")
+    design_list.button(
+        f"{ICONS['preset_scanpath']} Scanpath",
+        key="viz_view_scanpath",
+        type="primary" if active_view == "scanpath" else "secondary",
+        width="stretch",
+        help="Fixations + saccades over the text — the core scanpath.",
+        on_click=_apply_view_preset,
+        args=("scanpath",),
+    )
+    design_list.button(
+        f"{ICONS['heatmap']} Heatmap",
+        key="viz_view_heatmap",
+        type="primary" if active_view == "heatmap" else "secondary",
+        width="stretch",
+        help="Fixation-density heatmap over the text, nothing else.",
+        on_click=_apply_view_preset,
+        args=("heatmap",),
+    )
+    design_list.button(
+        f"{ICONS['illustration']} Illustration",
+        key="viz_view_illustration",
+        type="primary" if active_view == "illustration" else "secondary",
+        width="stretch",
+        help="A clean schematic: snapped fixations, arced connectors, and a "
+        "uniform visual style.",
+        on_click=_apply_view_preset,
+        args=("illustration",),
+    )
+    design_list.button(
+        f"{ICONS['preset_custom']} Custom",
+        key="viz_view_custom",
+        type="primary" if active_view == _CUSTOM_VIEW else "secondary",
+        width="stretch",
+        help="Your most recent custom plot settings. Save it under a name in "
+        "Designs to keep it.",
+        on_click=_apply_view_preset,
+        args=(_CUSTOM_VIEW,),
+    )
+    with design_list:
         for name in saved:
             # One bordered container per design, so a design reads as one object
             # rather than as three buttons that happen to be adjacent.
@@ -1364,14 +1400,6 @@ def _render_saved_designs(host) -> None:
                 on_click=_ask_delete_design,
                 args=(name,),
             )
-    if shell.button(
-        "",
-        icon=ICONS["save"],
-        key="design_save",
-        help="Save the plot settings on screen now as a named design.",
-    ):
-        st.session_state[_DESIGN_SAVE_PENDING_KEY] = True
-        st.session_state[_DESIGN_SAVE_MODE_KEY] = _SAVE_MODE_NEW
     if st.session_state.get(_DESIGN_SAVE_PENDING_KEY):
         _design_save_dialog()
     pending_delete = st.session_state.get(_DESIGN_DELETE_PENDING_KEY)
@@ -4543,62 +4571,8 @@ def render_plot_controls(
     # dict always carries every key the figure builders depend on.
     viz = (host if host is not None else st).container(key="tour_grp_viz_controls")
 
-    # --- Design presets ---------------------------------------------------
-    # VIZ-39 renamed this from "Quick views" and gave it a second half: the four
-    # built-in designs in the 2x2 grid they have always been in, and the user's
-    # own saved designs in an expander under them. 🛠️ Custom is not a design —
-    # it is the one unnamed slot holding *your most recent hand-tuning*, so
-    # switching to a built-in and back does not lose it. Naming settings you
-    # want to keep is what "My designs" is for. The remaining preset keys
-    # (`reading_order`, `everything`) stay in `_VIEW_PRESETS` for any deep link.
-    viz.markdown(
-        '<div class="sps-control-label">Design presets</div>',
-        unsafe_allow_html=True,
-    )
-    # A 2×2 grid keeps the labels readable in the narrow rail.
-    _active = _active_quick_view()
-    _qv_grid = viz.container(key="quick_views_grid")
-    _qv_top = _qv_grid.columns(2, gap="small")
-    _qv_top[0].button(
-        f"{ICONS['preset_scanpath']} Scanpath",
-        key="viz_view_scanpath",
-        type="primary" if _active == "scanpath" else "secondary",
-        width="stretch",
-        help="Fixations + saccades over the text — the core scanpath.",
-        on_click=_apply_view_preset,
-        args=("scanpath",),
-    )
-    _qv_top[1].button(
-        f"{ICONS['heatmap']} Heatmap",
-        key="viz_view_heatmap",
-        type="primary" if _active == "heatmap" else "secondary",
-        width="stretch",
-        help="Fixation-density heatmap over the text, nothing else.",
-        on_click=_apply_view_preset,
-        args=("heatmap",),
-    )
-    _qv_bottom = _qv_grid.columns(2, gap="small")
-    _qv_bottom[0].button(
-        f"{ICONS['illustration']} Illustration",
-        key="viz_view_illustration",
-        type="primary" if _active == "illustration" else "secondary",
-        width="stretch",
-        help="A clean schematic: snapped fixations, arced connectors, and a "
-        "uniform visual style.",
-        on_click=_apply_view_preset,
-        args=("illustration",),
-    )
-    _qv_bottom[1].button(
-        f"{ICONS['preset_custom']} Custom",
-        key="viz_view_custom",
-        type="primary" if _active == _CUSTOM_VIEW else "secondary",
-        width="stretch",
-        help="Your most recent custom plot settings. Save it under a name in "
-        "🎨 My designs to keep it.",
-        on_click=_apply_view_preset,
-        args=(_CUSTOM_VIEW,),
-    )
-    _render_saved_designs(viz)
+    # Built-in and saved designs share one list and save action (UX-175).
+    _render_designs(viz)
 
     # VIZ-31: the Illustration *label* (the publication-disclosure override) now
     # lives in the "📐 Figure & canvas" group below, with the other figure-level

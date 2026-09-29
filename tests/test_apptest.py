@@ -91,6 +91,26 @@ def _enter_add_data(at: AppTest) -> None:
 
 @pytest.mark.timeout(60)
 class TestAppLaunches:
+    def test_designs_render_as_one_visible_list(self):
+        at = _make_apptest(synthetic=True)
+        at.session_state[controls.DESIGN_PRESETS_KEY] = {"Paper": {}}
+        at.run(timeout=30)
+        assert not at.exception
+        buttons = [button.key for button in at.button]
+        design_keys = [
+            "design_save",
+            "viz_view_scanpath",
+            "viz_view_heatmap",
+            "viz_view_illustration",
+            "viz_view_custom",
+            "design_apply_Paper",
+            "design_edit_Paper",
+            "design_delete_Paper",
+        ]
+        assert [key for key in buttons if key in design_keys] == design_keys
+        assert any("Designs" in item.value for item in at.markdown)
+        assert not any("My designs" in item.label for item in at.expander)
+
     def test_app_launches_with_bundled_demo(self):
         # The bundled demo must boot the full five-tab UI cleanly: no Python
         # exceptions and no st.error surfaced on the default render.

@@ -33,10 +33,12 @@ choose parent-trial or current-screen scope.
 ## Control the layers
 
 The **🎛️ Plot controls** rail beside the plot starts with the **🎬 Animate** and
-**⚖️ Compare** rows, four **Design presets** (👁️ Scanpath, 🔥 Heatmap,
-✏️ Illustration, 🛠️ Custom) and a **Palette**. Scanpath, Heatmap and
-Illustration reset to the app defaults before applying their view; **Custom**
-restores your last hand-made settings. Seven sections follow:
+**⚖️ Compare** rows. **Designs** lists four built-in options (👁️ Scanpath,
+🔥 Heatmap, ✏️ Illustration, 🛠️ Custom) and your saved designs, one per row.
+The Save button beside the heading adds a design. **Palette** follows the list.
+Scanpath, Heatmap and Illustration reset to the app defaults before applying
+their view; **Custom** restores your last hand-made settings. Seven sections
+follow:
 
 | Section | Layers | Use it for |
 | --- | --- | --- |

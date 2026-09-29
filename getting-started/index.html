@@ -1871,13 +1871,13 @@ if your OS blocks the unsigned build.</p>
 </ol>
 <p>Next, pick a <a href="../tutorials/">tutorial</a>.</p>
 <h2 id="3-load-your-data">3. Load your data<a class="headerlink" href="#3-load-your-data" title="Permanent link">&para;</a></h2>
-<p>Open 🗂️ <strong>Data</strong>, select <strong>➕ Add dataset</strong>, upload your fixation and words/<abbr title="Interest area: EyeLink's name for an AOI">IA</abbr>
+<p>Click <strong>+</strong> beside <strong>Select Dataset</strong>, choose <strong>Import files</strong>, upload your fixation and words/<abbr title="Interest area: EyeLink's name for an AOI">IA</abbr>
 tables, check the proposed column mapping, answer <strong>Recording setup</strong>, then
 select <strong>✅ Add dataset</strong>. See
 <a href="../guides/loading-data/">Loading public and own data</a> for accepted formats,
-manual mapping, and common checks.</p>
+manual mapping, and common checks. <strong>🗂️ Data → ➕ Add dataset</strong> opens the same wizard.</p>
 <h2 id="author-a-scanpath-without-files">Author a scanpath without files<a class="headerlink" href="#author-a-scanpath-without-files" title="Permanent link">&para;</a></h2>
-<p>Choose <strong>✏️ Author a scanpath</strong> as the data source when you want to sketch a
+<p>Choose <strong>+ → Create manually</strong> beside <strong>Select Dataset</strong> when you want to sketch a
 trial from text instead of uploading tables. Enter the stimulus, inspect the
 generated word boxes, then edit the scanpath in either place:</p>
 <ul>
@@ -1888,9 +1888,13 @@ generated word boxes, then edit the scanpath in either place:</p>
 </ul>
 <p>The editor starts with one centred fixation per word. X/Y is the authoritative
 location; <strong>Target word</strong> is optional metadata for reading measures, so a
-fixation may sit between or outside words. <strong>💾 Save authoring file</strong> saves the
-layout as JSON to reopen later, render it with <code>scanpath-studio render --authoring</code>, or
-load it with <code>scanpath_studio.load_authored_scanpath</code>.</p>
+fixation may sit between or outside words. Enter a <strong>Dataset name</strong> and choose
+<strong>Save dataset</strong> to add it to the dataset list and open its regular visualization.
+<strong>Cancel</strong> returns to the previous dataset without adding one.</p>
+<p>For a ready-made example, choose <strong>Synthetic sample</strong> in the dataset picker:
+a manually authored six-word example. Its text, fixation positions, and timing
+are editable in the same editor; its draft is separate from your own scanpath.
+You can also start a scanpath from <strong>🗂️ Data → Create manual scanpath</strong>.</p>
 <h2 id="run-from-source">Run from source<a class="headerlink" href="#run-from-source" title="Permanent link">&para;</a></h2>
 <p>To run from a source checkout, see the
 <a href="https://github.com/lacclab/scanpath-studio/blob/main/CONTRIBUTING.md">contributor guide</a>.</p>
@@ -1914,7 +1918,7 @@ load it with <code>scanpath_studio.load_authored_scanpath</code>.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 26, 2026 09:57:31 UTC">September 26, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 29, 2026 05:26:15 UTC">September 29, 2026</span>
   </span>
 
     

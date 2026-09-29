@@ -20,8 +20,14 @@ outline. Checkbox
 rows use the shared label-left/underline-help primitive. Compare displays the
 wire value `Stacked` as **Top & bottom**; the wire value remains unchanged.
 Animation transport is above the plot and a non-1× speed triggers the automatic
-Illustration label. `SELECTOR_ROW_GRID` is `[2.9, 2.8, 4.0, 2.2]` so the trial
-scrubber has more room. Comparison-subtab candidates match the selected trial on
+Illustration label. `SELECTOR_ROW_GRID` is `[3.6, 2.8, 3.3, 2.2]`: UX-143 gives
+the dataset track room for the **+ → Create manually / Import files** menu.
+The dataset picker offers an editable, manually authored **Synthetic sample**
+by default and the picker-only
+**More coming soon!** placeholder. A manual draft appears as **My scanpath**
+once opened; Data Management omits that row and has a **Create manual scanpath**
+button. The sample and manual draft are separate; both share as authored scanpaths.
+Comparison-subtab candidates match the selected trial on
 one chosen field, keep each candidate's own stimulus and the main plot styling,
 exclude the selected trial, and show only trial IDs above their panels.
 

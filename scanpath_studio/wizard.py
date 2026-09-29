@@ -1517,7 +1517,10 @@ def _wizard_table_keep_picker(
         # Trial-level conditions and detected measures/linguistic features
         # were both auto-kept before UX-114 split them into two pickers —
         # same net defaults, offered as one choice now.
-        if d["category"] in ("meta", "measure", "linguistic"):
+        # AN-32: not the leftover measures — the ones the app uses are mapped on
+        # the *Reading measures* lines above, and pre-keeping the rest (last-run
+        # dwell, trial dwell/count, …) only widened every table by default.
+        if d["category"] in ("meta", "linguistic"):
             default.append(src)
         if d["category"] == "meta":
             meta_dest_by_source[src] = d["dest"]
@@ -3469,13 +3472,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
             # optional field seeded from its EyeLink name, so an IA report maps
             # them all without a click and a report without them leaves the
             # lines empty rather than hiding them behind a switch.
-            for line, (row, keys) in enumerate(zip(measure_rows, MEASURE_ROWS)):
-                if line == 0:
-                    row[0].markdown(
-                        '<div class="sps-id-row-name sps-geo-row-name">'
-                        "Reading measures</div>",
-                        unsafe_allow_html=True,
-                    )
+            # No name in the row's first column: on this screen it holds the
+            # AOI uploader, centred on the whole block, and a label there
+            # printed over the file card. Each field names its measure.
+            for row, keys in zip(measure_rows, MEASURE_ROWS):
                 for cell, key in zip(row[1:], keys):
                     word_schema.update(
                         _map_section(

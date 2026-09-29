@@ -143,3 +143,49 @@ class TestThePages:
         labels = " ".join(picker.options)
         assert "Total fixation duration" in labels
         assert "Single-fixation" not in labels and "landing" not in labels.lower()
+
+
+class TestTheKeepPicker:
+    """AN-32 follow-up: a measure mapped on the *Reading measures* lines was
+    also offered — and pre-kept — as an extra field under its canonical name."""
+
+    def test_a_mapped_measure_is_not_an_extra_field(self):
+        words, _ = data.load_sample_data()
+        schema = propose_word_schema(words)
+        cats = data.categorize_columns(words, schema, data.WORD_OPTIONAL_FIELDS)
+        offered = {d["source"] for d in cats["detected_optional"]}
+        assert "IA_DWELL_TIME" not in offered
+        assert "IA_FIRST_FIXATION_DURATION" not in offered
+
+    def test_a_source_listed_twice_is_offered_once(self):
+        raw = pd.DataFrame(
+            columns=["IA_SECOND_RUN_DWELL_TIME", "IA_REGRESSION_IN_COUNT"]
+        )
+        cats = data.categorize_columns(raw, {}, data.WORD_OPTIONAL_FIELDS)
+        sources = [d["source"] for d in cats["detected_optional"]]
+        assert sorted(sources) == sorted(set(sources))
+
+    def test_leftover_measures_are_not_kept_by_default(self, monkeypatch):
+        from scanpath_studio import app
+        from tests.conftest import APP_SCRIPT
+
+        words, fixations = app.load_sample_data()
+        frames = {"col_map_words": words, "col_map_fix": fixations}
+        monkeypatch.setattr(
+            app,
+            "_read_uploaded_frame",
+            lambda **kw: frames.get(kw["state_prefix"], pd.DataFrame()),
+        )
+        at = streamlit_testing.AppTest.from_file(APP_SCRIPT)
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        kept = set(at.session_state["wizard_keep_col_map_words"])
+        assert not kept & {
+            "IA_DWELL_TIME",
+            "IA_LAST_RUN_DWELL_TIME",
+            "TRIAL_DWELL_TIME",
+        }
+        # A linguistic feature the Corpus page uses is still pre-kept.
+        if "word_length" in words.columns:
+            assert "word_length" in kept

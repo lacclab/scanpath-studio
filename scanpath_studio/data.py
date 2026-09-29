@@ -3560,8 +3560,15 @@ WORD_OPTIONAL_FIELDS = [
     ("TRIAL_DWELL_TIME", "trial_dwell_time_ms", "numeric", "measure"),
     ("TRIAL_FIXATION_COUNT", "trial_fixation_count", "numeric", "measure"),
     ("TRIAL_IA_COUNT", "trial_ia_count", "numeric", "measure"),
-    ("word_length", "word_length", "numeric", "measure"),
-    ("word_length_no_punctuation", "word_length_no_punctuation", "numeric", "measure"),
+    # A property of the word, not of the reading — and Corpus Analysis' "Word
+    # length" feature, so it stays pre-kept with the other linguistic fields.
+    ("word_length", "word_length", "numeric", "linguistic"),
+    (
+        "word_length_no_punctuation",
+        "word_length_no_punctuation",
+        "numeric",
+        "linguistic",
+    ),
     ("gpt2_surprisal", "gpt2_surprisal", "numeric", "linguistic"),
     ("wordfreq_frequency", "wordfreq_frequency", "numeric", "linguistic"),
     ("subtlex_frequency", "subtlex_frequency", "numeric", "linguistic"),
@@ -3821,13 +3828,19 @@ def categorize_columns(raw: pd.DataFrame, schema: dict, registry: list) -> dict:
 
     ``mapped`` = source columns the schema references; ``detected_optional`` =
     registry entries present in the frame (each ``{source, dest, category}``);
-    ``unclaimed`` = everything else (offered as filter fields / extra keeps)."""
+    ``unclaimed`` = everything else (offered as filter fields / extra keeps).
+
+    AN-32: a registry column the schema already maps is *mapped*, not a detected
+    extra — `IA_DWELL_TIME` mapped as TFD was also offered, pre-kept, as
+    `total_fixation_duration_ms` — and a source the registry lists twice (a
+    compatibility alias) is detected once, under its first entry."""
     mapped = {c for c in _schema_source_columns(schema) if c in raw.columns}
-    detected = [
-        {"source": src, "dest": dest, "category": category}
-        for src, dest, _kind, category in registry
-        if src in raw.columns
-    ]
+    detected: list = []
+    seen: set = set()
+    for src, dest, _kind, category in registry:
+        if src in raw.columns and src not in mapped and src not in seen:
+            seen.add(src)
+            detected.append({"source": src, "dest": dest, "category": category})
     detected_sources = {d["source"] for d in detected}
     unclaimed = [
         c for c in raw.columns if c not in mapped and c not in detected_sources

@@ -34,6 +34,8 @@ from .constants import (
     ICONS,
     OUT_OF_TEXT_COLOR,
     PALETTES,
+    RAW_GAZE_SEEDED_FOR_KEY,
+    RAW_GAZE_SNAP_RESTORE_KEY,
     SACCADE_CLASS_COLORS,
     SACCADE_CLASS_EDITABLE,
     SACCADE_CLASS_LABELS,
@@ -1298,6 +1300,18 @@ _VIEW_PRESETS: dict[str, dict[str, object]] = {
 }
 
 
+def _forget_raw_gaze_default(ss) -> None:
+    """Let the next run decide the raw-gaze layer for the open dataset again.
+
+    A named design or *Reset* puts the view back to the defaults, and on a
+    dataset whose only gaze is samples the default is **on** — a preset whose
+    name says nothing about raw gaze must not leave that dataset a blank plot.
+    Clearing the record (and the stashed pre-snap value, which the reset has
+    just made stale) is what lets `app.seed_raw_gaze_default` apply it."""
+    ss.pop(RAW_GAZE_SEEDED_FOR_KEY, None)
+    ss.pop(RAW_GAZE_SNAP_RESTORE_KEY, None)
+
+
 def _drop_linked_view_params() -> None:
     """Take a deep link's view params off the URL once a design is chosen.
 
@@ -1386,6 +1400,9 @@ def _apply_view_preset(name: str) -> None:
     ss.pop("_font_seeded_for", None)
     ss.pop("_palette_picked", None)
     ss.pop(_PRE_ILLUSTRATION_STATE, None)
+    # VIZ-45 — the raw-gaze layer is dataset-dependent too. Not for a saved
+    # design above: that is the user's own record, raw-gaze switch included.
+    _forget_raw_gaze_default(ss)
 
     # A deep-link preset is applied at the top of every rerun. Once the user has
     # explicitly chosen a design preset it must not immediately put the old visual
@@ -4747,6 +4764,7 @@ def render_plot_controls(
     fix_range_fixations: pd.DataFrame | None = None,
     canvas_renderer=None,
     slots: dict | None = None,
+    has_fixations: bool = True,
 ) -> dict:
     """Render the visualization controls and return the resolved settings dict.
 
@@ -4959,18 +4977,32 @@ def render_plot_controls(
     fix_off_disabled, _fix_off_reason = _mode_gate(
         animating, comparing, in_animation=False, in_compare=True
     )
+    # VIZ-45: a trial with no fixations (raw gaze only, or words only) has
+    # nothing for these two layers to draw, and the samples are never turned
+    # into fixations — so the switches grey with that reason, keeping their
+    # values for the next trial that has fixations.
+    no_fixations_note = (
+        ""
+        if has_fixations
+        else f"{ICONS['warning']} This trial has no fixations, so there is nothing "
+        "for this layer to draw. Gaze samples are not turned into fixations; "
+        f"they draw as recorded under {ICONS['raw_gaze']} **Raw gaze**."
+    )
     show_fix, fix_grp = _rail_section(
         viz,
         f"{ICONS['fixations']} **Fixations**",
         slug="fix",
         key="global_show_fix",
         persist_state="session",
-        disabled=fix_off_disabled,
-        note=f"{ICONS['warning']} Fixations always draw in **Animate** mode — the replay is made "
-        "of them. Your setting is kept for the static and comparison figures; "
-        "the styling below still applies."
-        if fix_off_disabled
-        else "",
+        disabled=fix_off_disabled or not has_fixations,
+        note=no_fixations_note
+        or (
+            f"{ICONS['warning']} Fixations always draw in **Animate** mode — the "
+            "replay is made of them. Your setting is kept for the static and "
+            "comparison figures; the styling below still applies."
+            if fix_off_disabled
+            else ""
+        ),
     )
     show_saccades, sac_grp = _rail_section(
         viz,
@@ -4978,6 +5010,8 @@ def render_plot_controls(
         slug="sac",
         key="global_show_saccades",
         persist_state="session",
+        disabled=not has_fixations,
+        note=no_fixations_note,
     )
     # UX-128: a master switch for the section's three layers (text, boxes,
     # image), matching Fixations/Saccades. Earlier this was name-only — each
@@ -6747,6 +6781,8 @@ def reset_viz_settings() -> None:
     st.session_state.pop("_font_seeded_for", None)
     st.session_state.pop("_palette_picked", None)
     st.session_state.pop(_PRE_ILLUSTRATION_STATE, None)
+    # VIZ-45 — and the raw-gaze layer's dataset default, the same way.
+    _forget_raw_gaze_default(st.session_state)
     for param in _sk.URL_PRESET_PARAMS:
         st.query_params.pop(param, None)
 
@@ -6810,16 +6846,25 @@ SUMMARY_CHIP_FIELDS = {
     "@word_count": "Number of words",
     "@fixation_count": "Number of fixations",
     "@in_text_fixations": "Fixations in word boxes",
+    # VIZ-45: a raw-gaze trial's own headline number. Written only for a trial
+    # that has samples (`tabs._summary_rows`), so a dataset without raw gaze
+    # never shows it.
+    "@gaze_sample_count": "Number of gaze samples",
 }
-#: …and the two of them that are shown by default. The other two are offered in
-#: *Available* like any other field. All four used to be default chips behind a
-#: **Summary stats** popover; now that they are chips on the strip itself, four
-#: of them crowd out the conditions beside them — and the two here are the ones
-#: worth a permanent chip ("how long was this reading, and how many fixations").
-#: Word count is a property of the text rather than of the reading, and the
-#: in-text count only means something when you are already chasing a geometry
-#: problem.
-_CHIP_DEFAULT_SUMMARY = ("@reading_time_s", "@fixation_count")
+#: …and the ones shown by default. The other two are offered in *Available*
+#: like any other field. All four used to be default chips behind a **Summary
+#: stats** popover; now that they are chips on the strip itself, four of them
+#: crowd out the conditions beside them — and reading time and the fixation
+#: count are the ones worth a permanent chip ("how long was this reading, and
+#: how many fixations"). Word count is a property of the text rather than of
+#: the reading, and the in-text count only means something when you are
+#: already chasing a geometry problem.
+#:
+#: VIZ-45 added the gaze-sample count. A summary chip is drawn only for a number
+#: the trial has, so a trial with fixations and no samples still shows the same
+#: two chips, and a raw-gaze-only trial — whose reading time and fixation count
+#: were never measured and are left out — shows the one count it has.
+_CHIP_DEFAULT_SUMMARY = ("@reading_time_s", "@fixation_count", "@gaze_sample_count")
 
 
 def _trial_level_columns(words: pd.DataFrame, fixations: pd.DataFrame) -> set:

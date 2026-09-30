@@ -74,6 +74,10 @@ SOURCE_POTEC = "potec"
 SOURCE_ONESTOP = "onestop"
 SOURCE_MULTIPLEYE = "multipleye"
 SOURCE_BENCHMARK = "benchmark"
+#: VIZ-45: a dataset recorded as raw gaze alone — no words or fixations table,
+#: so its data half is the samples (``options["raw_gaze"]``, the paths) and the
+#: builder is handed ``None`` for the other two.
+SOURCE_RAW_GAZE = "raw_gaze"
 SOURCE_UNKNOWN = "unknown"
 
 #: What a snippet says when it cannot name the data. An uploaded table lives in
@@ -280,6 +284,14 @@ def _unknown_cli(source: SnippetSource) -> list[str]:
     return ["--words", "words.csv", "--fixations", "fixations.csv"]
 
 
+def _raw_gaze_only_python(source: SnippetSource) -> list[str]:
+    return [_raw_gaze_python(source), "words, fixations = None, None"]
+
+
+def _raw_gaze_only_cli(source: SnippetSource) -> list[str]:
+    return _raw_gaze_cli(source)
+
+
 #: kind → (Python loader lines, CLI input flags). A source whose CLI writer is
 #: ``None`` has no ``render`` flags at all, and the CLI snippet says so rather
 #: than inventing one.
@@ -292,6 +304,7 @@ _SOURCE_WRITERS: dict[str, tuple[Any, Any]] = {
     SOURCE_ONESTOP: (_onestop_python, _onestop_cli),
     SOURCE_MULTIPLEYE: (_multipleye_python, _multipleye_cli),
     SOURCE_BENCHMARK: (_benchmark_python, _benchmark_cli),
+    SOURCE_RAW_GAZE: (_raw_gaze_only_python, _raw_gaze_only_cli),
     SOURCE_UNKNOWN: (_unknown_python, _unknown_cli),
 }
 
@@ -1075,6 +1088,16 @@ def draws_raw_gaze(state: FigureState) -> bool:
     return state.kind == "static" and bool(state.settings.get("show_raw_gaze"))
 
 
+def _passes_raw_gaze(source: SnippetSource, state: FigureState) -> bool:
+    """Whether the builder call names ``raw_gaze=raw_gaze``.
+
+    Wherever the layer is drawn — and always for a raw-gaze-only source
+    (VIZ-45), whose samples are the data the trial is looked up in."""
+    return draws_raw_gaze(state) or (
+        source.kind == SOURCE_RAW_GAZE and state.kind == "static"
+    )
+
+
 def _raw_gaze_paths(source: SnippetSource) -> list[str] | None:
     paths = source.options.get("raw_gaze")
     if not paths:
@@ -1126,7 +1149,8 @@ def python_snippet(
     loader, _ = _SOURCE_WRITERS.get(source.kind, _SOURCE_WRITERS[SOURCE_UNKNOWN])
     lines = ["import scanpath_studio as sps", ""]
     lines += loader(source)
-    if draws_raw_gaze(state):
+    # A raw-gaze-only source loaded its samples as its data half already.
+    if draws_raw_gaze(state) and source.kind != SOURCE_RAW_GAZE:
         lines.append(_raw_gaze_python(source))
     lines.append("")
 
@@ -1136,7 +1160,11 @@ def python_snippet(
         # EXP-14: an unnamed trial is `render`'s "first available" — so the
         # Python half picks that same one rather than quoting `participant=''`,
         # which matches no trial and raised on the snippet's first run.
-        lines.append("trials = sps.list_trials(words, fixations)")
+        lines.append(
+            "trials = sps.list_trials(words, fixations, raw_gaze=raw_gaze)"
+            if _passes_raw_gaze(source, state)
+            else "trials = sps.list_trials(words, fixations)"
+        )
         for column, value in (
             ("participant_id", state.participant),
             ("trial_id", state.trial),
@@ -1164,7 +1192,7 @@ def python_snippet(
             and not compare.dataset
         ):
             args.append(f"trial_b=({_py(compare.participant)}, {_py(compare.trial)})")
-    if draws_raw_gaze(state):
+    if _passes_raw_gaze(source, state):
         args.append("raw_gaze=raw_gaze")
 
     call = [f"fig = sps.{func}("]
@@ -1289,7 +1317,8 @@ def cli_snippet(
     if state.fix_index_range_b and state.compare is not None:
         lo, hi = state.fix_index_range_b
         argv += ["--compare-fix-index-range", f"{int(lo)}:{int(hi)}"]
-    if draws_raw_gaze(state):
+    # A raw-gaze-only source's input flags *are* its --raw-gaze (VIZ-45).
+    if draws_raw_gaze(state) and source.kind != SOURCE_RAW_GAZE:
         argv += _raw_gaze_cli(source)
     if state.kind == "comparison":
         compare = state.compare or CompareTarget()

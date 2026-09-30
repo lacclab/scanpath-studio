@@ -3126,6 +3126,14 @@ def _render_paragraph_panel(
     when no word text is available. ``bare=True`` drops the expander wrapper so
     the panel can sit directly inside a subtab."""
     if "text" not in trial_words.columns or trial_words.empty:
+        if bare:
+            # VIZ-45: the subtab is on screen, so an empty body reads as broken.
+            # The stimulus comes from the words/AOI table — a raw-gaze-only or a
+            # fixations-only trial has none.
+            st.caption(
+                f"{ICONS['info']} No stimulus text for this trial — it comes from "
+                "the words / AOI table, and this trial has no rows there."
+            )
         return
     # UX-32: the name-hint detection supplies the defaults; the ⚙️ Fields popover
     # is what lets a corpus whose columns are named differently use the panel.
@@ -3235,25 +3243,109 @@ def _in_text_fixation_value(
     return f"{n_in} / {n_total}"
 
 
+def _no_fixations_note(
+    *,
+    trial_has_fixations: bool,
+    trial_has_raw_gaze: bool,
+    raw_gaze_shown: bool,
+    animate_requested: bool,
+    compare_requested: bool,
+) -> str:
+    """What a trial with no fixations shows, and what it cannot (VIZ-45).
+
+    Said above the plot, because the rail alone can only grey a control: a
+    raw-gaze-only trial draws its samples as recorded and nothing else of the
+    scanpath, and "nothing is detected from the samples" is the fact that
+    explains every greyed control at once. ``""`` for a trial with fixations,
+    and for a words-only trial that asked for neither mode (its figure is its
+    text, and nothing is missing from it that the rail does not already say).
+    """
+    if trial_has_fixations:
+        return ""
+    modes = [
+        name
+        for name, on in (("Animate", animate_requested), ("Compare", compare_requested))
+        if on
+    ]
+    resolved = (
+        f" {' and '.join(f'**{m}**' for m in modes)} "
+        f"{'draw' if len(modes) > 1 else 'draws'} fixations, so the static figure "
+        "is shown instead."
+        if modes
+        else ""
+    )
+    if not trial_has_raw_gaze:
+        return (
+            f"{ICONS['info']} This trial has no fixations.{resolved}" if modes else ""
+        )
+    shown = (
+        "Its gaze samples are drawn as recorded."
+        if raw_gaze_shown
+        else f"Turn on {ICONS['raw_gaze']} **Raw gaze** to draw its gaze samples."
+    )
+    return (
+        f"{ICONS['info']} **Raw gaze only** — this trial has no fixations. {shown} "
+        "Fixations, saccades, the replay and Compare are built from fixations, "
+        "and Scanpath Studio does not detect fixations from gaze samples."
+        f"{resolved}"
+    )
+
+
 def _summary_rows(
-    trial_words: pd.DataFrame, trial_fixations: pd.DataFrame
+    trial_words: pd.DataFrame,
+    trial_fixations: pd.DataFrame,
+    trial_raw_gaze: pd.DataFrame | None = None,
 ) -> list[dict]:
     """Field/Value rows summarising a trial — totals + in-text fixation count.
 
     Folded into the metadata table (formerly the three `st.metric` cards plus
-    the out-of-text caption), so a trial's headline numbers live in one place."""
+    the out-of-text caption), so a trial's headline numbers live in one place.
+
+    VIZ-45: **a row is written only for a number that was measured.** Every
+    count used to be written whatever the trial had, so a raw-gaze-only trial
+    read "Total reading time (s) = 0.0 · Number of fixations = 0" — two measured
+    zeros for two things nobody measured — and a words-only one did the same.
+    Reading time needs a recorded dwell time or fixations to sum, the word count
+    a words table, the fixation count fixations; a row with nothing behind it is
+    left out, and the chip strip skips a field with no row. The sample count is
+    a raw-gaze trial's own headline number, so it is a row whenever the trial
+    has samples."""
     stats = compute_trial_stats(trial_words, trial_fixations)
-    rows = [
-        {
-            "Field": "Total reading time (s)",
-            "Value": f"{stats['total_reading_time_s']:.1f}",
-        },
-        {"Field": "Number of words", "Value": f"{stats['word_count']:,}"},
-        {"Field": "Number of fixations", "Value": f"{stats['fixation_count']:,}"},
-    ]
+    has_words = trial_words is not None and not trial_words.empty
+    has_fixations = trial_fixations is not None and not trial_fixations.empty
+    recorded_dwell = (
+        has_words
+        and "trial_dwell_time_ms" in trial_words.columns
+        and bool(
+            pd.to_numeric(trial_words["trial_dwell_time_ms"], errors="coerce")
+            .notna()
+            .any()
+        )
+    )
+    rows = []
+    if recorded_dwell or has_fixations:
+        rows.append(
+            {
+                "Field": "Total reading time (s)",
+                "Value": f"{stats['total_reading_time_s']:.1f}",
+            }
+        )
+    if has_words:
+        rows.append({"Field": "Number of words", "Value": f"{stats['word_count']:,}"})
+    if has_fixations:
+        rows.append(
+            {"Field": "Number of fixations", "Value": f"{stats['fixation_count']:,}"}
+        )
     in_text = _in_text_fixation_value(trial_words, trial_fixations)
     if in_text is not None:
         rows.append({"Field": "Fixations in word boxes", "Value": in_text})
+    if trial_raw_gaze is not None and not trial_raw_gaze.empty:
+        rows.append(
+            {
+                "Field": SUMMARY_CHIP_FIELDS["@gaze_sample_count"],
+                "Value": f"{len(trial_raw_gaze):,}",
+            }
+        )
     return rows
 
 
@@ -4574,6 +4666,7 @@ def _render_export_panel(
     base_font_size: int,
     font_family: str,
     viz_settings: dict,
+    raw_gaze_all: pd.DataFrame | None = None,
     line_spacing: float,
     scale_text_to_boxes: bool,
     selected_participant: str,
@@ -4617,7 +4710,12 @@ def _render_export_panel(
 
     st.divider()
     st.markdown("## Export bundle")
-    bulk_settings = _build_figure_settings(viz_settings, False)
+    # VIZ-45: the batch draws raw gaze when the rail does — it used to be forced
+    # off here, so a raw-gaze-only dataset exported blank figures. Each trial's
+    # own samples are handed to its figure inside `bulk_export`.
+    bulk_settings = _build_figure_settings(
+        viz_settings, bool(viz_settings.get("show_raw_gaze"))
+    )
     bulk_settings["line_spacing"] = line_spacing
     bulk_settings["scale_text_to_boxes"] = scale_text_to_boxes
     # EXP-4 / VIZ-24: the bulk export rebuilds every figure from scratch, so the
@@ -4695,6 +4793,7 @@ def _render_export_panel(
         words_all,
         fixations_all,
         raw_gaze,
+        raw_gaze_all=raw_gaze if raw_gaze_all is None else raw_gaze_all,
         canvas_width=int(canvas_width),
         canvas_height=int(canvas_height),
         base_font_size=int(base_font_size),
@@ -4818,6 +4917,7 @@ def _render_trial_condition_chips(
     fields,
     *,
     leading_chip: tuple[str, str] | None = None,
+    trial_raw_gaze: pd.DataFrame | None = None,
 ) -> list[tuple[str, str]]:
     """Render the ``Field = Value`` chip strip above the plot — the trial's
     identity and experiment conditions, so "what am I looking at" is answered at
@@ -4850,12 +4950,14 @@ def _render_trial_condition_chips(
             if summary_lookup is None:
                 summary_lookup = {
                     r["Field"]: r["Value"]
-                    for r in _summary_rows(trial_words, trial_fixations)
+                    for r in _summary_rows(trial_words, trial_fixations, trial_raw_gaze)
                 }
             label = SUMMARY_CHIP_FIELDS[col]
             value = summary_lookup.get(label)
             if value in (None, ""):
-                continue  # e.g. "Fixations in word boxes" unavailable for this trial
+                # Not measured for this trial (VIZ-45): no fixations to count, no
+                # words to count, no word boxes for "Fixations in word boxes".
+                continue
             primary.append(
                 (html.escape(f"{label} = {value}"), _chip_color(col, str(value)))
             )
@@ -4915,6 +5017,7 @@ def render_single_trial_tab(
     combos_all: pd.DataFrame | None = None,
     words_all: pd.DataFrame | None = None,
     fixations_all: pd.DataFrame | None = None,
+    raw_gaze_all: pd.DataFrame | None = None,
     share_renderer: Callable[[bool], None] | None = None,
     # UX-25: renders the data-source picker into the "Filter by" row's first
     # column. Passed by ``app.main`` (which owns the source list + wizard hooks).
@@ -4986,8 +5089,20 @@ def render_single_trial_tab(
                 _FILTER_ICON, width="content", help="Filter the trial list"
             )
             box = pop.container(key="tour_grp_narrow_by")
-            render_narrow_by(words_all, fixations_all, text_host=box, part_host=box)
-            render_trial_filters(words_all, fixations_all, host=box)
+            # VIZ-45: a raw-gaze-only dataset's readers and trials are in its
+            # samples, so that is what the filters are offered from (and what
+            # `app.main` narrows with them); beside fixations or words the
+            # samples follow those tables' filters instead.
+            filter_fixations = (
+                raw_gaze_all
+                if words_all.empty
+                and fixations_all.empty
+                and raw_gaze_all is not None
+                and not raw_gaze_all.empty
+                else fixations_all
+            )
+            render_narrow_by(words_all, filter_fixations, text_host=box, part_host=box)
+            render_trial_filters(words_all, filter_fixations, host=box)
 
         # Trial picker (its own row of columns): selectbox + slider + ◀ ▶.
         with st.container(key="tour_grp_trial_picker"):
@@ -5090,6 +5205,11 @@ def render_single_trial_tab(
         trial_fixations = parent_fixations
         trial_raw_gaze = parent_raw_gaze
     trial_has_raw_gaze = not trial_raw_gaze.empty
+    # VIZ-45: the replay, Compare and the fixation / saccade layers are all made
+    # of fixations, and nothing in the app derives fixations from samples — so a
+    # trial without them (raw gaze only, or words only) draws the static figure,
+    # with those controls greyed and the reason said above the plot.
+    trial_has_fixations = not trial_fixations.empty
     has_raw_gaze = raw_gaze is not None and not raw_gaze.empty
 
     # Stimulus-page background image (MultiplEYE): the per-trial image path lives
@@ -5169,24 +5289,29 @@ def render_single_trial_tab(
                 # label mode, which stamps a native `title=` tooltip repeating
                 # the label — icon ligature included, so it read "movie
                 # Animate". `styles.py` draws the one-line ellipsis instead.
-                animate = st.toggle(
+                animate_requested = st.toggle(
                     f"{ICONS['animate']} **Animate**",
                     key="single_animate",
                     persist_state="session",
                     wrap=True,
                 )
+                # VIZ-45: the replay is built from fixations, so a trial with none
+                # draws the static figure (its raw gaze, its text) instead of
+                # nothing. The toggle keeps the user's value — resolve, don't
+                # rewrite — and the next trial with fixations replays again.
+                animate = animate_requested and trial_has_fixations
                 # The ▾ opens whether or not Animate is on — what a mode *offers* is
                 # part of deciding whether to turn it on, and a menu that refuses to
                 # open shows nothing. Off, every control inside is greyed instead
                 # (`anim_gate`), which is the same "your value is kept" contract the
                 # rail's own mode gating uses. Disabled or not, the body always runs,
                 # which is what keeps `playback_speed` / `anim_info_slot` defined.
-                anim_disabled = not animate or trial_fixations.empty
+                anim_disabled = not animate
                 anim_gate = (
                     ""
                     if not anim_disabled
                     else f"{ICONS['warning']} Turn on **Animate** to change playback."
-                    if not animate
+                    if not animate_requested
                     else f"{ICONS['warning']} This trial has no fixations to replay."
                 )
                 # UX-80 r2: no `icon=` — Streamlit already draws a chevron on a
@@ -5375,17 +5500,23 @@ def render_single_trial_tab(
                 # the deep link the same way it would fight a restored config.
                 st.session_state.setdefault(SINGLE_COMPARE_TOGGLE, False)
                 # UX-153: `wrap=True` for the same reason as Animate above.
-                compare_enabled = st.toggle(
+                compare_requested = st.toggle(
                     f"{ICONS['compare']} **Compare**",
                     key=SINGLE_COMPARE_TOGGLE,
                     persist_state="session",
                     wrap=True,
                 )
+                # VIZ-45: Compare draws two readings' fixations and has no raw-gaze
+                # layer, so a trial without fixations stays on its static figure
+                # rather than drawing an empty comparison — same resolve as Animate.
+                compare_enabled = compare_requested and trial_has_fixations
                 # Opens either way; greyed inside while Compare is off — see the
                 # Animate row above for why the menu does not refuse to open.
                 cmp_disabled = not compare_enabled
                 cmp_gate = (
-                    f"{ICONS['warning']} Turn on **Compare** to change these."
+                    f"{ICONS['warning']} This trial has no fixations to compare."
+                    if compare_requested and cmp_disabled
+                    else f"{ICONS['warning']} Turn on **Compare** to change these."
                     if cmp_disabled
                     else ""
                 )
@@ -5598,6 +5729,7 @@ def render_single_trial_tab(
             slots=rail_slots,
             has_raw_gaze=has_raw_gaze,
             has_stimulus_image=has_stimulus_image,
+            has_fixations=trial_has_fixations,
             words=words_filtered,
             # The selected trial's fixations size the VIZ-7 fixation-index window
             # slider (its max is this trial's fixation count).
@@ -5895,9 +6027,6 @@ def render_single_trial_tab(
         fixation_flags_b=figure_settings.get("fixation_flags_b"),
         fix_index_range_b=window_b,
         full_fixation_range_b=full_b,
-        raw_gaze_only=trial_fixations.empty
-        and raw_gaze is not None
-        and not raw_gaze.empty,
     )
     label_reasons = resolve_label_reasons(
         viz_settings.get("illustration_label", "Auto"), detected_reasons
@@ -6026,6 +6155,7 @@ def render_single_trial_tab(
                 leading_chip=(f"Trial ID = {selected_trial}", color_a)
                 if comparing and color_a
                 else None,
+                trial_raw_gaze=trial_raw_gaze,
             )
     if comparing and compare_meta:
         with compare_chips_slot:
@@ -6225,22 +6355,23 @@ def render_single_trial_tab(
             )
 
     with plot_slot:
-        if not (animate and not trial_fixations.empty):
+        if not animate:
             _abandon_animation_task()
         if global_raw_toggle and not trial_has_raw_gaze:
             plot_notes_slot.warning(
                 "Raw gaze not available for this trial.", icon=ICONS["warning"]
             )
-        if animate and trial_fixations.empty:
-            # UX-167: no figure will be drawn this run — take the page skeleton
-            # down now rather than leaving it up through the subtabs below, and
-            # the note goes above the stage like every other pre-figure note.
-            loading.release_page()
-            plot_notes_slot.info(
-                "Animation needs a **fixations** table — there's nothing to "
-                "animate for this selection."
-            )
-        elif animate:
+        no_fixations_note = _no_fixations_note(
+            trial_has_fixations=trial_has_fixations,
+            trial_has_raw_gaze=trial_has_raw_gaze,
+            raw_gaze_shown=effective_show_raw_gaze,
+            animate_requested=animate_requested,
+            compare_requested=compare_requested,
+        )
+        if no_fixations_note:
+            # UX-167: above the stage, like every other pre-figure note.
+            plot_notes_slot.caption(no_fixations_note)
+        if animate:
             replay_frames = (
                 trial_words,
                 plot_fixations,
@@ -6522,6 +6653,7 @@ def render_single_trial_tab(
                     words_all=words_all,
                     fixations_all=fixations_all,
                     raw_gaze=raw_gaze if raw_gaze is not None else pd.DataFrame(),
+                    raw_gaze_all=raw_gaze_all,
                     canvas_width=canvas_width,
                     canvas_height=canvas_height,
                     base_font_size=base_font_size,
@@ -6566,6 +6698,7 @@ def _render_bulk_export(
     figure_settings: dict,
     selected_participant: str,
     selected_trial: str,
+    raw_gaze_all: pd.DataFrame | None = None,
 ) -> None:
     """Render configurable bulk-export UI (artifact picker + run + download)."""
     options = render_export_options(
@@ -6579,8 +6712,13 @@ def _render_bulk_export(
         selected_trial=selected_trial,
     )
     # Tick "Export the whole dataset" → export the unfiltered frames.
+    active_raw_gaze = raw_gaze
     if options.export_unfiltered:
         active_combos, active_words, active_fix = combos_all, words_all, fixations_all
+        # VIZ-45: the whole dataset's samples too, or its samples-only trials
+        # would reach `bulk_export` with nothing to draw and be skipped.
+        if raw_gaze_all is not None:
+            active_raw_gaze = raw_gaze_all
     else:
         active_combos, active_words, active_fix = (
             combos,
@@ -6672,7 +6810,7 @@ def _render_bulk_export(
                 y_field=y_field,
                 settings=figure_settings,
                 options=options,
-                raw_gaze=raw_gaze,
+                raw_gaze=active_raw_gaze,
                 status_callback=on_status,
             )
         except Exception as exc:
@@ -7484,33 +7622,60 @@ def _text_column(frame: pd.DataFrame) -> str | None:
     return None
 
 
-def _corpus_unavailable_notice() -> None:
+def _corpus_unavailable_notice(
+    *, has_aoi_table: bool = True, has_raw_gaze: bool = False
+) -> None:
     """The Corpus Analysis page when the data brings no reading measures (AN-32).
 
     The page computes no measure of its own, so without an uploaded one there is
     nothing for any of its sections to show. It says so, points at where the
     measures are mapped, and draws its sections greyed so what it *would* offer
-    stays visible."""
+    stays visible.
+
+    VIZ-45: a dataset with **no AOI table at all** — raw gaze only, or fixations
+    only — has nowhere to map a measure, so it is told that instead, and a
+    raw-gaze one is told that the samples carry no measures either."""
     editable = _active_stored_dataset() is not None
-    where = (
-        "Map them under **Reading measures** in this dataset's AOI table, on ✏️ "
-        "Edit dataset"
-        if editable
-        else "This dataset is built in and cannot be remapped — add your own "
-        "report with ➕ Add dataset and map them under **Reading measures** in "
-        "its AOI table"
-    )
-    st.info(
-        f"{ICONS['info']} **No reading measures in this dataset.** Corpus "
-        "Analysis shows the per-AOI measures your report brings — FFD, TFD, "
-        "first-pass time, regression path and the rest — and computes none of "
-        f"its own. {where}; an EyeLink interest-area report "
-        "(`IA_DWELL_TIME`, `IA_FIRST_FIXATION_DURATION`, …) maps them "
-        "automatically."
-    )
+    if not has_aoi_table:
+        where = (
+            "Add one to this dataset on ✏️ Edit dataset"
+            if editable
+            else "Add a dataset that has one with ➕ Add dataset"
+        )
+        samples = (
+            " Raw gaze samples carry no reading measures, and Scanpath Studio "
+            "neither detects fixations from them nor computes measures."
+            if has_raw_gaze
+            else ""
+        )
+        st.info(
+            f"{ICONS['info']} **No reading measures in this dataset.** Corpus "
+            "Analysis shows the per-AOI measures an interest-area (AOI) report "
+            "brings — FFD, TFD, first-pass time, regression path and the rest — "
+            f"and this dataset has no AOI table.{samples} {where}; an EyeLink "
+            "interest-area report (`IA_DWELL_TIME`, `IA_FIRST_FIXATION_DURATION`, "
+            "…) maps its measures automatically."
+        )
+    else:
+        where = (
+            "Map them under **Reading measures** in this dataset's AOI table, on "
+            "✏️ Edit dataset"
+            if editable
+            else "This dataset is built in and cannot be remapped — add your own "
+            "report with ➕ Add dataset and map them under **Reading measures** in "
+            "its AOI table"
+        )
+        st.info(
+            f"{ICONS['info']} **No reading measures in this dataset.** Corpus "
+            "Analysis shows the per-AOI measures your report brings — FFD, TFD, "
+            "first-pass time, regression path and the rest — and computes none "
+            f"of its own. {where}; an EyeLink interest-area report "
+            "(`IA_DWELL_TIME`, `IA_FIRST_FIXATION_DURATION`, …) maps them "
+            "automatically."
+        )
     # Only where there is an editor to open: a built-in source has none, and
     # the button would land on an ✏️ Edit dataset screen with nothing on it.
-    if editable:
+    if editable and has_aoi_table:
         st.button(
             f"{ICONS['edit']} Map reading measures",
             key="corpus_map_measures",
@@ -7547,6 +7712,7 @@ def render_corpus_analysis_tab(
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
     canvas_renderer: Callable[[Any], None] | None = None,
+    has_raw_gaze: bool = False,
 ) -> None:
     """Corpus Analysis tab — question-oriented analysis sections.
 
@@ -7561,7 +7727,9 @@ def render_corpus_analysis_tab(
     # computes none — BUG-78 used to derive them from the fixations and word
     # boxes when a report had none. Without one there is nothing to show.
     if not available_measures(words_filtered, None, per_word_only=True):
-        _corpus_unavailable_notice()
+        _corpus_unavailable_notice(
+            has_aoi_table=not words_filtered.empty, has_raw_gaze=has_raw_gaze
+        )
         return
     viz_settings = corpus_style_controls(
         fixations_filtered,

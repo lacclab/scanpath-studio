@@ -208,6 +208,16 @@ scanpath-studio render --sample -p l37_1129 -t l37_1129_2_2_2_Adv_r0 \
   --sample-raw-gaze --raw-gaze-opacity 0.4 -o raw_gaze.html
 ```
 
+On its own, with no other input, `--raw-gaze` is the dataset: `--list-trials`
+lists its trials and `render` draws the chosen trial's samples as recorded.
+No fixations are detected from them, so `--animate` and `--compare-with` exit
+with that reason instead.
+
+```bash
+scanpath-studio render --raw-gaze gaze_samples.csv --list-trials
+scanpath-studio render --raw-gaze gaze_samples.csv -t t3 -o samples.png
+```
+
 ## Analyze
 
 The `analyze` command writes the full tabular family without opening the app:

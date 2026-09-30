@@ -133,7 +133,11 @@ Ready-made public corpora have their own loaders — `sps.load_potec(dir)` and
 A raw-gaze table is loaded with `load_raw_gaze(path_or_frame)` (columns
 auto-detected; `raw_gaze_schema=` overrides), or `load_sample_raw_gaze()` for
 the demo's. Passing it as `plot_scanpath(raw_gaze=…)` filters it to the trial
-and switches the layer on.
+and switches the layer on. It can be the only table: pass `None` for the words
+and fixations (`sps.list_trials(raw_gaze=gaze)`,
+`sps.plot_scanpath(raw_gaze=gaze, trial="t3")`) and the samples are drawn as
+recorded. No fixations are detected from them, so `animate_scanpath` raises
+`ValueError` for a trial without fixations.
 
 For a multipart parent, inspect `sps.list_parts(words, fixations, pid, tid)`,
 pass `screen="…"` to `plot_scanpath` / `animate_scanpath`, or call

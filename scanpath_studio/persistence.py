@@ -39,7 +39,12 @@ import pandas as pd
 
 from . import progress
 from .annotations import ANNOTATIONS_STATE_KEY, records_to_store, store_to_records
-from .constants import DATASET_COUNTS_STORE_KEY, DATASET_DESCRIPTIONS_KEY
+from .constants import (
+    DATASET_COUNTS_STORE_KEY,
+    DATASET_DESCRIPTIONS_KEY,
+    RAW_GAZE_SEEDED_FOR_KEY,
+    RAW_GAZE_SNAP_RESTORE_KEY,
+)
 from .session_keys import (
     COLUMN_MAPPING_PREFIX,
     DESIGN_PRESETS,
@@ -114,6 +119,11 @@ _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
     # design library. A plain session key so editing one never touches the
     # stored frames (see `constants.DATASET_DESCRIPTIONS_KEY`).
     DATASET_DESCRIPTIONS_KEY,
+    # VIZ-45 — which dataset the raw-gaze layer's default was last decided for,
+    # and what it overwrote. Without them a relaunch onto a raw-gaze-only
+    # dataset decides again and turns back on a layer the user switched off.
+    RAW_GAZE_SEEDED_FOR_KEY,
+    RAW_GAZE_SNAP_RESTORE_KEY,
 }
 
 

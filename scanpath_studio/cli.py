@@ -1056,7 +1056,9 @@ def _render_parser() -> argparse.ArgumentParser:
         nargs="+",
         help="Raw (sample-level) gaze table(s) to draw under the fixations, "
         "columns auto-detected like --fixations (same formats; several "
-        "paths or a quoted glob concatenate). Static figures only.",
+        "paths or a quoted glob concatenate). Static figures only. On its own "
+        "(no other input) it is the dataset: its trials are listed and drawn "
+        "as recorded — no fixations are detected from the samples.",
     )
     viz.add_argument(
         "--sample-raw-gaze",
@@ -1735,6 +1737,13 @@ def _snippet_source_from_args(args) -> SnippetSource:
                 "fixations": list(args.fixations or []),
             },
         )
+    if args.raw_gaze and not args.sample:
+        # VIZ-45: --raw-gaze as the only input — the samples are the dataset.
+        return cs.SnippetSource(
+            kind=cs.SOURCE_RAW_GAZE,
+            label="raw gaze",
+            options={"raw_gaze": list(args.raw_gaze)},
+        )
     return cs.SnippetSource(kind=cs.SOURCE_DEMO, label="Bundled Demo")
 
 
@@ -2013,20 +2022,21 @@ def render(argv: list[str]) -> None:
     args = parser.parse_args(argv)
     # Validate everything derivable from argv before the (possibly minutes-long
     # on full corpora) data load.
-    if (
-        sum(
-            [
-                args.sample,
-                bool(args.authoring),
-                bool(args.words or args.fixations),
-                bool(args.potec),
-                bool(args.eyegenbench),
-                bool(args.onestop),
-                bool(args.source),
-            ]
-        )
-        != 1
-    ):
+    corpus_inputs = [
+        args.sample,
+        bool(args.authoring),
+        bool(args.potec),
+        bool(args.eyegenbench),
+        bool(args.onestop),
+        bool(args.source),
+    ]
+    # VIZ-45: your own tables are words and/or fixations — or raw gaze alone,
+    # for a dataset recorded as samples only. Beside any other input,
+    # --raw-gaze stays what it always was: a layer drawn over that input.
+    own_tables = bool(args.words or args.fixations) or (
+        bool(args.raw_gaze) and not any(corpus_inputs)
+    )
+    if sum([*corpus_inputs, own_tables]) != 1:
         # Only the inputs `--help` lists: the DATA-54/55 held-back sources still
         # count towards the guard, but the message doesn't advertise them.
         inputs = ["--sample", "--authoring PATH", "--potec DIR"]
@@ -2038,7 +2048,7 @@ def render(argv: list[str]) -> None:
         raise SystemExit(
             f"Provide exactly one input: {', '.join(inputs)}, or your own tables "
             "(--words and/or --fixations; one of them is enough for "
-            "single-report datasets)."
+            "single-report datasets; --raw-gaze alone for raw gaze only)."
         )
     if not (args.list_trials or args.list_parts) and not args.output:
         raise SystemExit("Missing -o/--output (or use --list-trials/--list-parts).")
@@ -2238,18 +2248,26 @@ def render(argv: list[str]) -> None:
         # EXP-13: the one input branch that had no guard, so a missing file or
         # an unrecognised column ended the run in a traceback — whose hint
         # named a `word_schema=` argument the command line could not pass.
-        try:
-            words, fixations = api.load_scanpath_data(
-                args.words,
-                args.fixations,
-                word_schema=word_schema,
-                fix_schema=fix_schema,
-                image_root=args.image_root,
-                image_pattern=args.image_pattern,
-                trial_parts_manifest=manifest,
-            )
-        except (ValueError, OSError) as exc:
-            raise SystemExit(_load_error_message(exc)) from exc
+        if not (args.words or args.fixations):
+            # VIZ-45: raw gaze alone. The two frames are the empty canonical
+            # ones `load_scanpath_data` returns for a table it is not given;
+            # the samples are loaded below with every other raw-gaze input.
+            from .data import empty_fixations_frame, empty_words_frame
+
+            words, fixations = empty_words_frame(), empty_fixations_frame()
+        else:
+            try:
+                words, fixations = api.load_scanpath_data(
+                    args.words,
+                    args.fixations,
+                    word_schema=word_schema,
+                    fix_schema=fix_schema,
+                    image_root=args.image_root,
+                    image_pattern=args.image_pattern,
+                    trial_parts_manifest=manifest,
+                )
+            except (ValueError, OSError) as exc:
+                raise SystemExit(_load_error_message(exc)) from exc
 
     if args.image_root and not (args.words or args.fixations):
         from .data import resolve_stimulus_image_paths
@@ -2352,8 +2370,21 @@ def render(argv: list[str]) -> None:
             if ids:
                 print(f"  {len(ids)} {label}: {', '.join(ids)}", file=sys.stderr)
 
+    # EXP-20: raw gaze is a third table. Loaded before --list-trials so the list
+    # names the trials only its samples cover (VIZ-45).
+    raw_gaze = None
+    if args.raw_gaze or args.sample_raw_gaze:
+        try:
+            raw_gaze = (
+                api.load_sample_raw_gaze()
+                if args.sample_raw_gaze
+                else api.load_raw_gaze(args.raw_gaze, raw_gaze_schema=raw_gaze_schema)
+            )
+        except (ValueError, OSError) as exc:
+            raise SystemExit("--raw-gaze: " + _load_error_message(exc)) from exc
+
     if args.list_trials:
-        combos = api.list_trials(words, fixations)
+        combos = api.list_trials(words, fixations, raw_gaze=raw_gaze)
         if (
             args.participant_metadata
             or attached_trials is not None
@@ -2390,26 +2421,35 @@ def render(argv: list[str]) -> None:
             print(parts.to_string(index=False))
         return
 
-    raw_gaze = None
-    if args.raw_gaze or args.sample_raw_gaze:
-        try:
-            raw_gaze = (
-                api.load_sample_raw_gaze()
-                if args.sample_raw_gaze
-                else api.load_raw_gaze(args.raw_gaze, raw_gaze_schema=raw_gaze_schema)
-            )
-        except (ValueError, OSError) as exc:
-            raise SystemExit("--raw-gaze: " + _load_error_message(exc)) from exc
-
     try:
         # A given -p/-t must match exactly (mistyped ids are errors, never
         # silently swapped for another trial); only genuinely unspecified
-        # parts default to the first available combo, like the app.
+        # parts default to the first available combo, like the app. VIZ-45:
+        # a trial only the raw gaze has is one of them.
         participant, trial = api._resolve_trial(
-            words, fixations, args.participant, args.trial, default_first=True
+            words,
+            fixations,
+            args.participant,
+            args.trial,
+            default_first=True,
+            raw_gaze=raw_gaze,
         )
     except ValueError as exc:
         raise SystemExit(str(exc))
+    if fixations.empty and raw_gaze is not None:
+        # VIZ-45: say it in the command's own terms before the API says it in
+        # Python's. Both modes are made of fixations, and none are detected
+        # from the samples.
+        for flag, given in (
+            ("--animate", args.animate),
+            ("--compare-with", args.compare_with is not None),
+        ):
+            if given:
+                raise SystemExit(
+                    f"{flag} draws fixations, and this data has none — only raw "
+                    "gaze samples, which Scanpath Studio does not turn into "
+                    f"fixations. Drop {flag} to draw the samples."
+                )
     print(f"Rendering participant={participant} trial={trial}", file=sys.stderr)
 
     overrides = {

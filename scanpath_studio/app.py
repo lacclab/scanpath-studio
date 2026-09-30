@@ -100,6 +100,8 @@ from scanpath_studio.constants import (
     ONESTOP_VARIANT_LABELS,
     POTEC_DEFAULT_DIR,
     PUBLIC_DATASETS_CHOICE,
+    RAW_GAZE_SEEDED_FOR_KEY,
+    RAW_GAZE_SNAP_RESTORE_KEY,
     SYNTHETIC_CHOICE,
     TRIAL_IDENTITY_CHECK_KEY,
     TRIAL_IDENTITY_FULL_KEY,
@@ -150,7 +152,6 @@ from scanpath_studio.data import (
     empty_words_frame,
     filter_data,
     filter_frame_to_keys,
-    filter_raw_gaze,
     filter_to_keys,
     filter_trials,
     frame_cache,
@@ -170,6 +171,7 @@ from scanpath_studio.data import (
     propose_fix_schema,
     propose_raw_gaze_schema,
     propose_word_schema,
+    raw_gaze_in_pool,
     read_table,
     read_table_columns,
     read_tables,
@@ -264,6 +266,7 @@ from scanpath_studio.url_state import (
     _go_data,
     _render_share_body,
     corpus_choice_for_slug,
+    link_sets,
     link_setup_keys_for,
     scope_link_setup,
 )
@@ -275,7 +278,7 @@ from scanpath_studio.url_state import (
 # ``scanpath_studio.app``, so wizard's ``from . import app`` re-imports app fresh,
 # re-entering this import while wizard is still half-loaded → ImportError.
 # Deferring it lets app finish loading before wizard is ever imported.
-from scanpath_studio.utils import build_combo_options, extract_trial
+from scanpath_studio.utils import build_combo_options, combo_source, extract_trial
 
 # Re-exported under a private alias so tests can import it from `app`; keep the
 # F401 silence (it's not used by app.py itself).
@@ -2324,6 +2327,66 @@ _FONT_SNAP_KEYS = (
     "global_scale_text_to_boxes",
 )
 _FONT_SNAP_RESTORE_KEY = "_font_snap_restore"
+
+#: VIZ-45 — the raw-gaze layer's per-dataset default follows the font snap's
+#: shape (BUG-50): `controls.RAW_GAZE_SEEDED_FOR_KEY` records the dataset it was
+#: last decided for, and `controls.RAW_GAZE_SNAP_RESTORE_KEY` the value it
+#: overwrote, so leaving that dataset can put it back. Both are recovery-cache
+#: session keys (`persistence._SESSION_KEYS`), so a relaunch onto the same
+#: dataset does not decide again over the user's own choice.
+_RAW_GAZE_LAYER_KEY = "global_show_raw_gaze"
+
+
+def seed_raw_gaze_default(
+    session, source_key: tuple, *, samples_only: bool, from_link: bool = False
+) -> None:
+    """Turn the 🔵 Raw gaze layer on for a dataset whose only gaze is samples.
+
+    VIZ-45: a dataset with raw gaze and no fixations opened as a blank plot,
+    because the layer defaults off — the only data it had was hidden. So the
+    default is **the dataset's**, not the app's: opening a dataset that has raw
+    gaze and no fixations (``samples_only``, decided on the unfiltered frames)
+    turns the layer on; opening any other dataset leaves it where it was.
+
+    It is decided **once per dataset** (``source_key``, `seed_canvas_state`'s
+    key), the way the canvas and font snaps are, which is what lets an explicit
+    choice win: switching the layer off on that dataset sticks for as long as it
+    stays open, because nothing decides again until the dataset changes. The
+    value it overwrote is kept and put back on the way out, so the fixation
+    dataset opened next keeps whatever the user had there rather than inheriting
+    the raw-gaze one's. A share link that named the layer (``from_link``) is the
+    sender's explicit choice and is left alone, like its canvas.
+
+    A built-in design preset or *Reset* forgets the decision
+    (`controls._forget_raw_gaze_default`), so they come back to the dataset's
+    default rather than the factory one — a raw-gaze-only dataset with the layer
+    off shows no gaze whatever the preset's name. A saved design does not: it is
+    the user's own record, its raw-gaze switch included.
+    """
+    token = "\x1f".join(str(part) for part in source_key)
+    if session.get(RAW_GAZE_SEEDED_FOR_KEY) == token:
+        return
+    if samples_only:
+        if not from_link:
+            if RAW_GAZE_SNAP_RESTORE_KEY not in session:
+                # Stashed on the first of a run of raw-gaze datasets only, so
+                # raw-gaze → raw-gaze → fixations restores the pre-raw-gaze
+                # value. `None` = absent: leaving restores the factory default.
+                session[RAW_GAZE_SNAP_RESTORE_KEY] = {
+                    "value": session.get(_RAW_GAZE_LAYER_KEY)
+                }
+            session[_RAW_GAZE_LAYER_KEY] = True
+        # A link's value overwrote nothing, so there is nothing to put back.
+    else:
+        stashed = session.get(RAW_GAZE_SNAP_RESTORE_KEY)
+        if isinstance(stashed, dict):
+            session.pop(RAW_GAZE_SNAP_RESTORE_KEY, None)
+            prior = stashed.get("value")
+            if prior is None:
+                session.pop(_RAW_GAZE_LAYER_KEY, None)
+            else:
+                session[_RAW_GAZE_LAYER_KEY] = bool(prior)
+    session[RAW_GAZE_SEEDED_FOR_KEY] = token
 
 
 def _dataset_font(words: pd.DataFrame) -> tuple[float | None, str | None]:
@@ -7765,6 +7828,7 @@ def _run_app() -> None:
     # the Bulk Export tab's "Export the whole dataset" option exports these,
     # ignoring the current filters.
     words_all, fixations_all = words_df, fixations_df
+    raw_gaze_all = raw_gaze_df
     # DATA-20: every reader in the dataset, before any narrowing — what the
     # participant-metadata join is reported against.
     #
@@ -7870,6 +7934,23 @@ def _run_app() -> None:
     # `filter_trials` — the table is never broadcast onto the frames, which is
     # DATA-20's rule and the reason this design holds at either grain. `None`
     # means no constraint; an empty set legitimately narrows to nothing.
+    # VIZ-45: the samples table is narrowed by participant like the other two.
+    # It used to be narrowed only through them (the participant and trial lists
+    # the filtered words/fixations still held, below), which did nothing on a
+    # raw-gaze-only dataset. The condition filters reach it only when it is the
+    # dataset's only table — they are offered from its own columns then
+    # (`tabs.render_single_trial_tab` → `_render_filters`); beside fixations
+    # they name *their* columns, and a raw-gaze column of the same name (a
+    # `text_id` that merely mirrors the trial id) means something else.
+    samples_only_dataset = words_all.empty and fixations_all.empty
+    if not raw_gaze_df.empty:
+        _, raw_gaze_df = filter_trials(
+            empty_words_frame(),
+            raw_gaze_df,
+            participants=trial_filters["participants"],
+            metadata=trial_filters["metadata"] if samples_only_dataset else None,
+            ranges=trial_filters.get("ranges") if samples_only_dataset else None,
+        )
     trialmeta_keys = trial_filters.get("trial_keys")
     if trialmeta_keys is not None:
         words_df, fixations_df = filter_to_keys(words_df, fixations_df, trialmeta_keys)
@@ -7911,19 +7992,24 @@ def _run_app() -> None:
     )
     words_filtered, fixations_filtered = filter_data(words_df, fixations_df, filters)
 
-    # Filter raw gaze data to match selected participants/trials
+    # The samples of the trials in the pool — and of every trial only the raw
+    # gaze has, which no filter on the other two tables can speak for (VIZ-45;
+    # this used to keep only the participants and trials those tables listed,
+    # so a samples-only trial was dropped from any dataset with fixations).
     if not raw_gaze_scoped.empty:
-        raw_gaze_filtered = filter_raw_gaze(
+        raw_gaze_filtered = raw_gaze_in_pool(
             raw_gaze_scoped,
-            filters.get("participants", []),
-            filters.get("trials", []),
+            words_all,
+            fixations_all,
+            words_filtered,
+            fixations_filtered,
         )
         if raw_gaze_filtered.empty:
             # Informational, not an error: the loaded raw-gaze samples just
             # don't cover any trial in the current filter (raw gaze typically
             # exists for only a subset of trials). The overlay is optional.
             menu.notices.caption(
-                f"{ICONS['info']} The loaded raw-gaze samples ({len(raw_gaze_df):,} rows) don't "
+                f"{ICONS['info']} The loaded raw-gaze samples ({len(raw_gaze_all):,} rows) don't "
                 "overlap the current trial filter, so the raw-gaze overlay is "
                 "unavailable here."
             )
@@ -7936,18 +8022,15 @@ def _run_app() -> None:
     if words_filtered.empty and fixations_filtered.empty and raw_gaze_filtered.empty:
         _render_empty_after_filtering(words_all, fixations_all, trial_filters)
         _finish_page()
-        _render_datasets_table(words_all, fixations_all, raw_gaze_df)
+        _render_datasets_table(words_all, fixations_all, raw_gaze_all)
         _end_loading()
         return
 
     # Build trial combinations for selection UI — from fixations normally, then
-    # words (words-only datasets), then raw gaze (raw-gaze-only datasets).
+    # words (words-only datasets), then raw gaze (raw-gaze-only datasets), plus
+    # any trial only the raw gaze has (VIZ-45, `utils.combo_source`).
     combos, _, _ = build_combo_options(
-        fixations_filtered
-        if not fixations_filtered.empty
-        else words_filtered
-        if not words_filtered.empty
-        else raw_gaze_filtered
+        combo_source(fixations_filtered, words_filtered, raw_gaze_filtered)
     )
     # DATA-20 §3 — the *one* place the participant table is joined onto anything.
     # `combos` is one row per trial (tens to thousands), so this is the cheap
@@ -7981,12 +8064,18 @@ def _run_app() -> None:
     # file persists across reruns.
     _apply_uploaded_plot_config(combos, fixations_filtered)
 
-    # Canvas and visualization controls (the Scanpath rail). For a raw-gaze-only dataset,
-    # size the canvas from the gaze extent and default the raw-gaze overlay on —
-    # it's the only layer there, so the plot would otherwise be blank.
-    raw_gaze_only = words_filtered.empty and fixations_filtered.empty
-    if raw_gaze_only and "global_show_raw_gaze" not in st.session_state:
-        st.session_state["global_show_raw_gaze"] = True
+    # Canvas and visualization controls (the Scanpath rail). For a dataset whose
+    # only gaze is samples, size the canvas from the gaze extent and turn the
+    # raw-gaze layer on — it's the only gaze layer there, so the plot would
+    # otherwise show no gaze at all (VIZ-45). Decided once per dataset, on the
+    # unfiltered frames; a link that names the layer decides it instead.
+    raw_gaze_source_key = (data_choice, st.session_state.get("public_dataset_choice"))
+    seed_raw_gaze_default(
+        st.session_state,
+        raw_gaze_source_key,
+        samples_only=fixations_all.empty and not raw_gaze_all.empty,
+        from_link=link_sets(_RAW_GAZE_LAYER_KEY),
+    )
     # VIZ-31: the monitor/font/background panel moved out of the sidebar into the
     # Scanpath rail, so it is *resolved* here (no widgets) and *rendered* later,
     # inside the rail, via the `canvas_renderer` below. Resolving first is what
@@ -8043,11 +8132,7 @@ def _run_app() -> None:
     # Whole-dataset combos for the Bulk Export tab's "Export the whole dataset"
     # option, mirroring how `combos` is built from the filtered frames.
     combos_all, _, _ = build_combo_options(
-        fixations_all
-        if not fixations_all.empty
-        else words_all
-        if not words_all.empty
-        else raw_gaze_df
+        combo_source(fixations_all, words_all, raw_gaze_all)
     )
 
     # UX-166: the load is done; the skeleton stays until the view has drawn its
@@ -8085,7 +8170,7 @@ def _run_app() -> None:
         # dataset are this run's frames, which do not exist until the load has
         # happened. Unfiltered on purpose — the table describes the *dataset*,
         # not what the current Narrow-by left standing.
-        _render_datasets_table(words_all, fixations_all, raw_gaze_df)
+        _render_datasets_table(words_all, fixations_all, raw_gaze_all)
         # UX-135 — one numbered headline over the whole first part, drawn into
         # the slot reserved above the description. Everything from here to the
         # metadata tables is that part; the mapping no longer titles itself,
@@ -8208,6 +8293,7 @@ def _run_app() -> None:
                     line_spacing=line_spacing,
                     scale_text_to_boxes=scale_text_to_boxes,
                     canvas_renderer=canvas_renderer,
+                    has_raw_gaze=not raw_gaze_filtered.empty,
                 )
     else:
         # The Scanpath view renders the viz controls itself (right rail) and
@@ -8274,6 +8360,7 @@ def _run_app() -> None:
                 combos_all=combos_all,
                 words_all=words_all,
                 fixations_all=fixations_all,
+                raw_gaze_all=raw_gaze_all,
                 share_renderer=lambda visible: _render_share_body(
                     data_choice,
                     settings_file=_render_share_settings_file,

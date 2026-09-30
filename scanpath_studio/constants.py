@@ -734,6 +734,14 @@ DATASET_COUNTS_STORE_KEY = "_dataset_counts_store"
 #: upload's Parquet files. Here for the same import-cycle reason as above.
 DATASET_DESCRIPTIONS_KEY = "_dataset_descriptions"
 
+#: VIZ-45 — the raw-gaze layer's per-dataset default (`app.seed_raw_gaze_default`):
+#: the dataset it was last decided for, and the value that decision overwrote.
+#: Recovery-cache session keys, so a relaunch onto the same dataset does not
+#: decide again over the user's own choice; here for the import-cycle reason
+#: above (`persistence`, `controls` and `app` all read them).
+RAW_GAZE_SEEDED_FOR_KEY = "_raw_gaze_seeded_for"
+RAW_GAZE_SNAP_RESTORE_KEY = "_raw_gaze_snap_restore"
+
 #: DATA-35 — "the ✏️ Edit dataset screen is open". The Data page is two screens
 #: now: the **overview** (the dataset table + what's in the open dataset) and the
 #: **editor** (everything that configures it — source options and location,

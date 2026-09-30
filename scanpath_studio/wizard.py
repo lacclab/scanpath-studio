@@ -3645,7 +3645,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
         rg_row1[0].container(key="wiz_map_upload_col_map_raw_gaze"),
         label="Raw gaze table (optional)",
         short_label="Raw gaze",
-        help_text="Millisecond-level gaze overlay (one file). " + _upload_types_note,
+        # VIZ-45: raw gaze can be the dataset's only table, not just an
+        # overlay — and nothing is derived from it, which is worth saying
+        # before someone uploads samples expecting fixations back.
+        help_text="Sample-level gaze (one file), drawn as recorded — under the "
+        "fixations, or on its own as the dataset's only table. No fixations "
+        "are detected from it. " + _upload_types_note,
         prefix="col_map_raw_gaze",
         multi=False,
         noun="gaze points",

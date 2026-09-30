@@ -30,6 +30,7 @@ from .code_snippet import (
     SOURCE_MULTIPLEYE,
     SOURCE_ONESTOP,
     SOURCE_POTEC,
+    SOURCE_RAW_GAZE,
     SOURCE_SYNTHETIC,
     SOURCE_UNKNOWN,
     UNKNOWN_SOURCE_NOTE,
@@ -1041,6 +1042,26 @@ def _apply_url_preset() -> str | None:
 
     source = qp.get("source")
     return source.lower() if source else None
+
+
+def link_sets(state_key: str) -> bool:
+    """Whether the open deep link carries a value for ``state_key`` (VIZ-45).
+
+    For a setting whose default depends on the dataset — the raw-gaze layer —
+    rather than on a source's declared screen, so it is not scoped the way
+    `link_setup_keys_for` is: a link to an uploaded dataset names no source
+    this app can open, yet its `show_raw_gaze=0` is still the sender's explicit
+    choice. It holds while the link's view params are on the URL, which is also
+    exactly while `_apply_url_preset` keeps re-seeding them; choosing a design
+    takes them off (`controls._drop_linked_view_params`)."""
+    try:
+        params = st.query_params
+    except Exception:
+        return False
+    return any(
+        url_key in params and target == state_key
+        for url_key, (target, _coerce) in _URL_PRESETS.items()
+    )
 
 
 def scope_link_setup(choice: str | None) -> None:
@@ -2977,10 +2998,34 @@ def _snippet_source(data_choice: str) -> SnippetSource:
             label=MULTIPLEYE_BUNDLE_CHOICE,
             options={"root": root("multipleye_dir", "data/MultiplEYE")},
         )
+    stored = (st.session_state.get("_datasets") or {}).get(data_choice)
+    if isinstance(stored, dict) and _samples_only(stored):
+        # VIZ-45: an uploaded dataset recorded as raw gaze alone. Its snippet
+        # loads the samples (under a placeholder path — an upload has none the
+        # server could quote) and hands the builder no words or fixations,
+        # rather than the generic two-table loader it could never have run.
+        return SnippetSource(
+            kind=SOURCE_RAW_GAZE,
+            label=data_choice,
+            note=UNKNOWN_SOURCE_NOTE,
+        )
     return SnippetSource(
         kind=SOURCE_UNKNOWN,
         label=data_choice,
         note=UNKNOWN_SOURCE_NOTE,
+    )
+
+
+def _samples_only(stored: dict) -> bool:
+    """A stored dataset whose only table is raw gaze (VIZ-45)."""
+
+    def empty(frame) -> bool:
+        return frame is None or getattr(frame, "empty", True)
+
+    return (
+        empty(stored.get("words"))
+        and empty(stored.get("fixations"))
+        and not empty(stored.get("raw_gaze"))
     )
 
 

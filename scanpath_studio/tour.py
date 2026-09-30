@@ -1803,7 +1803,7 @@ _FAQ_ITEMS = [
         "upload. A local or desktop run also keeps a **recovery copy** here "
         "(added datasets, mappings, settings, annotations), so a refresh "
         "resumes where you left off; **🗂️ Data → Saved on this computer** says "
-        "what is stored and deletes it. Two caveats: "
+        "what is stored and where. Two caveats: "
         "`streamlit run` listens on your whole network (use "
         "`--server.address=127.0.0.1`), and the online demo runs on "
         "Streamlit's server, with no recovery.",
@@ -1816,6 +1816,13 @@ _FAQ_ITEMS = [
         "copy, export annotations from **🗂️ Data → Annotations** and the "
         "figure's settings from **🗺️ Scanpath → 🔗 Share → File**; neither file "
         "holds dataset rows.",
+    ),
+    (
+        "How do I turn the recovery copy off, or delete it?",
+        "Start the app with `scanpath-studio run --no-persist` (or set "
+        "`SCANPATH_STUDIO_PERSIST=0`) and nothing is saved. "
+        "`scanpath-studio cache --clear` deletes what is already stored, and "
+        "`SCANPATH_STUDIO_STATE_DIR=/your/folder` saves it somewhere else.",
     ),
     (
         "PDF or video export fails but HTML works.",

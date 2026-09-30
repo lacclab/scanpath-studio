@@ -3039,7 +3039,9 @@ SHARE_SECTIONS = (SHARE_LINK, SHARE_CODE, SHARE_FILE)
 SHARE_SECTION_KEY = "share_section"
 
 
-def _render_share_body(data_choice: str, settings_file=None) -> None:
+def _render_share_body(
+    data_choice: str, settings_file=None, *, visible: bool = True
+) -> None:
     """Render the **Share** subtab: **Link · Code · File**, one at a time.
 
     - **Link** — a deep link to the current view (data source + trial +
@@ -3050,7 +3052,10 @@ def _render_share_body(data_choice: str, settings_file=None) -> None:
     - **File** — a settings file to download or restore (UX-179), drawn by
       ``settings_file``: a zero-argument callable from ``app.main``, which holds
       the resolved figure settings it writes. ``None`` where there is no figure
-      to describe, and the option says so rather than vanishing.
+      to describe, and the option says so rather than vanishing. It runs only
+      while the subtab is ``visible``: building the file re-reads every figure
+      setting and slices the trial's raw gaze, which a subtab nobody is looking
+      at should not pay for on every rerun.
     """
     choice = (
         st.segmented_control(
@@ -3066,6 +3071,8 @@ def _render_share_body(data_choice: str, settings_file=None) -> None:
         _render_code_snippet_body(data_choice)
         return
     if choice == SHARE_FILE:
+        if not visible:
+            return
         if settings_file is None:
             st.caption("A settings file needs a figure to describe.")
         else:

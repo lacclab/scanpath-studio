@@ -4915,7 +4915,7 @@ def render_single_trial_tab(
     combos_all: pd.DataFrame | None = None,
     words_all: pd.DataFrame | None = None,
     fixations_all: pd.DataFrame | None = None,
-    share_renderer: Callable[[], None] | None = None,
+    share_renderer: Callable[[bool], None] | None = None,
     # UX-25: renders the data-source picker into the "Filter by" row's first
     # column. Passed by ``app.main`` (which owns the source list + wizard hooks).
     data_source_renderer: Callable[[object], None] | None = None,
@@ -6540,7 +6540,10 @@ def render_single_trial_tab(
     # the spotlight target for the publication-figure tutorial (UX-40).
     with tab_share, st.container(key="tutorial_share"):
         if share_renderer is not None:
-            share_renderer()
+            # UX-179: whether the subtab is on screen. The Link keeps being
+            # built every run (its query is read back through session state),
+            # but File's settings file is only worth building when visible.
+            share_renderer(tab_share.open)
         else:
             st.caption("Sharing is unavailable in this context.")
 

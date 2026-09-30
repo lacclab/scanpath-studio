@@ -124,8 +124,8 @@ added again. Its tabs hold the counts — screens, words and gaze points
 included — the raw tables, and **Annotations**: every favorite, tag and note on
 the dataset's trials, to **Export** as JSON, **Import** from such a file (or an
 Export bundle's `annotations.json`), or **Delete**. At the foot of the page,
-**Saved on this computer** reports what the recovery cache holds, with **Clear
-recovery cache** and **Reset everything**.
+**Saved on this computer** reports what the recovery cache holds and the folder
+it is in.
 
 <figure class="sps-screenshot" markdown>
 ![The Data page: the available datasets, and the counts and tables of the open one](../assets/screenshots/data-page.webp)

@@ -58,9 +58,17 @@ from **🔗 Share → File** there.
 
 Local and desktop use stays on your machine: nothing is uploaded, and there are
 no accounts or analytics. A local or desktop run also keeps a recovery copy of
-your datasets and settings; **🗂️ Data → Saved on this computer** shows it and
-deletes it, and `scanpath-studio run --no-persist` turns it off. Don't upload identifiable data to the hosted demo. See
+your datasets and settings; **🗂️ Data → Saved on this computer** shows what
+it holds and where. Don't upload identifiable data to the hosted demo. See
 [Privacy](privacy.md).
+
+## How do I turn the recovery copy off, or delete it?
+
+Start the app with `scanpath-studio run --no-persist`, or set
+`SCANPATH_STUDIO_PERSIST=0`, and nothing is saved. `scanpath-studio cache
+--clear` deletes what is already stored — close the app first, or its next
+change writes a new copy — and `SCANPATH_STUDIO_STATE_DIR=/your/folder` keeps it
+somewhere else. See [Recovery cache](cli.md#recovery-cache).
 
 ## How do I cite the app?
 

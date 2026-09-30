@@ -2580,8 +2580,7 @@ def clear_cache() -> dict:
     Parquet files); anything else in the folder is left alone. A *running* local
     app writes its session back out at the end of its next change — start it
     with ``scanpath-studio run --no-persist`` or ``SCANPATH_STUDIO_PERSIST=0`` to
-    stop that (the app's **Clear recovery cache** button, like this function,
-    leaves saving on)."""
+    stop that."""
     from .persistence import clear_local_state
 
     clear_local_state()

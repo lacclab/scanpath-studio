@@ -19,12 +19,11 @@ alone — the desktop app, or a launch with `server.address` set to `127.0.0.1`,
 server other machines can reach stores nothing: a hosted deployment, and a bare
 `streamlit run`, which listens on every interface.
 
-The cache is visible and removable from inside the app: **Saved on this
-computer**, at the foot of the **🗂️ Data** page, reports what is stored and how
-large it is, names the folder (**What's saved, and where**), and deletes the
-stored copy (**Clear recovery cache**, which leaves saving on). To run without
-it, start the app with `scanpath-studio run --no-persist`, or set
-`SCANPATH_STUDIO_PERSIST=0`. The same from a terminal, with the app closed:
+The cache is visible from inside the app: **Saved on this computer**, at the
+foot of the **🗂️ Data** page, reports what is stored, how large it is and the
+folder it is in. To run without it, start the app with
+`scanpath-studio run --no-persist`, or set `SCANPATH_STUDIO_PERSIST=0`. To see
+or delete it, use a terminal, with the app closed:
 
 ```bash
 scanpath-studio cache                       # what is stored, where, how big

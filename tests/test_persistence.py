@@ -23,7 +23,6 @@ from scanpath_studio.persistence import (
     restored_summary,
     save_local_state,
     save_state,
-    skip_next_local_save,
 )
 from scanpath_studio.session_keys import DESIGN_PRESETS
 
@@ -315,22 +314,6 @@ def test_clear_local_state_survives_an_undeletable_cache(tmp_path, monkeypatch):
     assert clear_local_state(session) is False
     assert module._LAST_FINGERPRINT_KEY not in session
     assert session["_datasets"]
-
-
-def test_clear_can_skip_one_rewrite_without_pausing_future_saves(tmp_path, monkeypatch):
-    monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
-    monkeypatch.setattr(persistence, "state_directory", lambda *a, **k: tmp_path)
-    session = {"_datasets": {"Corpus": _dataset()}}
-    assert save_local_state(session, "http://localhost:8501")
-
-    clear_local_state(session)
-    skip_next_local_save(session)
-
-    assert not save_local_state(session, "http://localhost:8501")
-    assert not (tmp_path / "manifest.json").exists()
-    assert not persistence_paused(session)
-    session["global_show_heatmap"] = True
-    assert save_local_state(session, "http://localhost:8501")
 
 
 def test_restored_flag_marks_only_a_session_that_got_data_back(tmp_path):

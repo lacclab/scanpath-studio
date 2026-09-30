@@ -214,11 +214,8 @@ from scanpath_studio.menu import (
 )
 from scanpath_studio.multipart import SCREEN_ID, extract_part, part_catalog
 from scanpath_studio.persistence import (
-    CACHE_DIR_NAME,
     PERSIST_ENV_VAR,
-    STATE_DIR_ENV_VAR,
     cache_status,
-    clear_local_state,
     consume_restore_skipped,
     human_size,
     is_loopback_url,
@@ -229,7 +226,6 @@ from scanpath_studio.persistence import (
     restored_summary,
     save_local_state,
     server_bound_to_loopback,
-    skip_next_local_save,
 )
 from scanpath_studio.session_keys import COLUMN_MAPPING_PREFIX, PARAM_CORPUS
 from scanpath_studio.styles import get_app_css
@@ -681,26 +677,6 @@ def _render_empty_after_filtering(
         )
 
 
-def _forget_recovery_cache() -> None:
-    """``on_click`` for *Clear recovery cache*: delete the on-device copy.
-
-    The click's rerun would write the still-open session straight back to
-    disk, so exactly that one write is suppressed; later changes save normally.
-    """
-    clear_local_state(st.session_state)
-    skip_next_local_save(st.session_state)
-    st.session_state["_recovery_cache_forgotten"] = True
-    # Close the popover the confirm sat in, or it hangs open over the answer.
-    st.session_state[_CLEAR_POPOVER_KEY] = False
-
-
-#: UX-179 — the section's two confirmation popovers. Keyed, with an
-#: ``on_change``, so their open state is server-side and a confirm button can
-#: close its own popover (Streamlit's documented pattern for ``st.popover``).
-_CLEAR_POPOVER_KEY = "saved_here_clear_popover"
-_RESET_POPOVER_KEY = "saved_here_reset_popover"
-
-
 #: UX-136 — the kinds `persistence.restored_summary` counts, in the order the
 #: *Saved on this computer* section lists them, with their singular/plural nouns.
 #: DATA-38 added the attached metadata tables.
@@ -736,26 +712,23 @@ def _restored_recap(session=None) -> str:
 def _render_saved_here_section(app_url: str, host) -> None:
     """🗂️ Data → **Saved on this computer** (UX-179; ENG-30 underneath).
 
-    The foot of the Data page's overview: what the recovery cache holds, the
-    two ways to throw work away (*Clear recovery cache*, *Reset everything*),
-    and the fine print. It was the retired 💾 Session dialog's first and third
-    blocks; it lives here because its count is "datasets **you added**", which is the
-    table above it.
+    The foot of the Data page's overview, and a read-out only: what the
+    recovery cache holds and the folder it is in. It was the retired 💾 Session
+    dialog's first block; it lives here because its count is "datasets **you
+    added**", which is the table above it.
+
+    UX-179 left it no controls. The *Save changes automatically* toggle, *Clear
+    recovery cache* and *Reset everything* are gone: opting out is a launch
+    choice (``run --no-persist`` / ``SCANPATH_STUDIO_PERSIST=0``, in the FAQ),
+    and clearing is ``scanpath-studio cache --clear`` or ``api.clear_cache``.
+    The one in-session pause left is BUG-71's, after a restore that crashed,
+    which the section names.
 
     Drawn *after* this run's ``save_local_state`` (``main``'s
     ``_finish_page``), so the status line reports the write that just happened.
     ``cache_status`` re-reads the manifest each run — a few ``stat`` calls and a
     small JSON — rather than being cached: a status line that lags what it
     reports is worse than none.
-
-    There is no *Save changes automatically* toggle any more (UX-179). Opting
-    out is a launch choice — ``--no-persist`` or ``SCANPATH_PERSIST=0`` — and
-    the one in-session pause left is BUG-71's, after a restore that crashed,
-    which the status line names.
-
-    Both confirmations are popovers with an ``on_click`` button: this is an
-    ordinary page, not a dialog, so a callback reruns the whole app (the
-    inverse of ``_delete_confirmation_dialog``'s rule).
     """
     status = cache_status(url=app_url)
     host.divider()
@@ -773,7 +746,6 @@ def _render_saved_here_section(app_url: str, host) -> None:
                 else ""
             )
         )
-        _render_reset_everything(host)
         return
 
     host.caption(
@@ -784,9 +756,9 @@ def _render_saved_here_section(app_url: str, host) -> None:
     if status["exists"] and status["readable"]:
         n_sets = len(status["datasets"])
         # "datasets **you added**", not "datasets": only an upload is copied
-        # here, so the count reads 0 while the bundled demo or a public corpus
-        # is open — which looked like a bug until the line said which datasets
-        # it was counting. The popover below has the full reason.
+        # here — the bundled demo and the public corpora reload from their own
+        # source — so the count reads 0 while one of those is open, which looked
+        # like a bug until the line said which datasets it was counting.
         host.markdown(
             f"**Saved here:** {n_sets} dataset{'s' if n_sets != 1 else ''} "
             f"you added · {status['annotations']} annotation"
@@ -809,105 +781,16 @@ def _render_saved_here_section(app_url: str, host) -> None:
             "or incomplete). It is ignored; saving over it is safe.",
             icon=ICONS["warning"],
         )
-    elif st.session_state.get("_recovery_cache_forgotten"):
-        host.caption("Cleared. Nothing is stored on this computer.")
     else:
         host.caption("Nothing saved yet. The first change creates the cache.")
+    host.markdown(f"**Folder:** `{status['directory']}`")
     if persistence_paused(st.session_state):
         # BUG-71 — the only pause left: the last launch never finished opening
         # with this cache, so this session neither restored nor overwrites it.
         host.caption(
             "Saving is paused for this session, so the copy above stays as it "
-            "was. Reload to try restoring it again, or clear it."
-        )
-
-    row = host.container(horizontal=True, gap="small")
-    with row.popover(
-        "Clear recovery cache",
-        icon=ICONS["delete"],
-        disabled=not status["exists"],
-        key=_CLEAR_POPOVER_KEY,
-        on_change="rerun",
-    ):
-        st.write(
-            "Delete the recovery copy from this computer? What you have open "
-            "stays, and the next change starts a new copy."
-        )
-        st.button(
-            "Clear cache",
-            icon=ICONS["delete"],
-            key="forget_cache_confirm",
-            type="primary",
-            on_click=_forget_recovery_cache,
-        )
-    _render_reset_everything(row)
-    _render_recovery_details(row, status)
-
-
-def _render_recovery_details(host, status: dict) -> None:
-    """The ❔ popover holding *Saved on this computer*'s fine print.
-
-    Three questions that each need a sentence and are each asked once: *which*
-    datasets the count covers, where the folder is (and what the ``v1`` in its
-    name means), and how to turn saving off or move it. They used to be three
-    inline captions under the Clear button, which made a wall of environment
-    variables the last thing on a panel about saving.
-    """
-    with host.popover("What's saved, and where", icon=ICONS["help"]):
-        st.markdown(
-            "**Which datasets.** Only the datasets **you added** are copied "
-            "here. The bundled demo and the public corpora are reloaded from "
-            "their own source instead, so they are never stored — which is why "
-            "the count can read 0 while a dataset is open. Your settings, "
-            "designs, annotations and attached metadata tables are saved "
-            "either way, which is what the size covers."
-        )
-        st.markdown(f"**Where.** `{status['directory']}`")
-        if str(status["directory"]).endswith(CACHE_DIR_NAME):
-            st.caption(
-                f"`{CACHE_DIR_NAME}` is the *cache format's* version, not the "
-                "app's — it stays the same across app updates, and a future "
-                "format change starts a new folder beside this one rather than "
-                "overwriting a session the new code could not read."
-            )
-        st.markdown(
-            "**Turning it off.** Start the app with `scanpath-studio run "
-            f"--no-persist` or `{PERSIST_ENV_VAR}=0` to never save, or "
-            f"`{STATE_DIR_ENV_VAR}=/your/folder` to save somewhere else. "
-            "`scanpath-studio cache` reports the same details from a terminal."
-        )
-
-
-def _reset_everything() -> None:
-    """``on_click`` for *Reset everything*: drop all user-owned state.
-
-    Removes the recovery cache, the URL and every session key, so the click's
-    rerun opens on the bundled demo like a first visit.
-    """
-    clear_local_state(st.session_state)
-    st.query_params.clear()
-    st.session_state.clear()
-    st.session_state[_RESET_POPOVER_KEY] = False
-
-
-def _render_reset_everything(host) -> None:
-    """The *Reset everything* popover and its confirmation (UX-179)."""
-    with host.popover(
-        "Reset everything",
-        icon=ICONS["reset"],
-        key=_RESET_POPOVER_KEY,
-        on_change="rerun",
-    ):
-        st.write(
-            "Remove uploaded datasets, annotations, mappings and settings, then "
-            "return to the bundled demo?"
-        )
-        st.button(
-            "Reset everything",
-            icon=ICONS["reset"],
-            key="reset_everything_confirm",
-            type="primary",
-            on_click=_reset_everything,
+            "was. Reload to try restoring it again, or delete it with "
+            "`scanpath-studio cache --clear`."
         )
 
 
@@ -7059,8 +6942,8 @@ def _run_app() -> None:
         st.toast(
             "Your last session didn't finish opening, so it wasn't restored this "
             "time. It is still saved on this computer and saving is paused, so it "
-            "stays that way: reload to try again, or clear it in 🗂️ Data → "
-            "Saved on this computer.",
+            "stays that way: reload to try again, or delete it with "
+            "`scanpath-studio cache --clear`.",
             icon=ICONS["warning"],
             duration="long",
         )
@@ -8346,15 +8229,16 @@ def _run_app() -> None:
             pid = str(selection.get("participant_id") or "")
             trial = str(selection.get("trial_id") or "")
             screen = selection.get("screen_id")
+            # The trial first (position-indexed), then its screen: `extract_part`
+            # compares strings row by row, which over a whole sample-level
+            # raw-gaze frame is seconds per call.
             trial_raw_gaze = (
-                (
-                    extract_part(raw_gaze_filtered, pid, trial, screen)
-                    if screen is not None and SCREEN_ID in raw_gaze_filtered.columns
-                    else extract_trial(raw_gaze_filtered, pid, trial)
-                )
+                extract_trial(raw_gaze_filtered, pid, trial)
                 if pid and trial and not raw_gaze_filtered.empty
                 else pd.DataFrame()
             )
+            if screen is not None and SCREEN_ID in trial_raw_gaze.columns:
+                trial_raw_gaze = extract_part(trial_raw_gaze, pid, trial, screen)
             figure_settings = _build_figure_settings(live, not trial_raw_gaze.empty)
             figure_settings["raw_gaze"] = (
                 trial_raw_gaze if not trial_raw_gaze.empty else None
@@ -8390,8 +8274,10 @@ def _run_app() -> None:
                 combos_all=combos_all,
                 words_all=words_all,
                 fixations_all=fixations_all,
-                share_renderer=lambda: _render_share_body(
-                    data_choice, settings_file=_render_share_settings_file
+                share_renderer=lambda visible: _render_share_body(
+                    data_choice,
+                    settings_file=_render_share_settings_file,
+                    visible=visible,
                 ),
                 data_source_renderer=render_data_source_picker,
                 canvas_renderer=canvas_renderer,

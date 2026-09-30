@@ -576,8 +576,8 @@ class TestBulkExportFlow:
 @pytest.mark.timeout(180)
 class TestRecoveryCachePanelFlow:
     """ENG-30 → UX-179 — 🗂️ Data → *Saved on this computer* is the on-device
-    cache's only user-visible surface, so it has to report the real store and
-    its Clear action has to reach ``persistence``.
+    cache's only in-app surface, so it has to report the real store. It is a
+    read-out: clearing is `scanpath-studio cache --clear` / `api.clear_cache`.
     """
 
     @staticmethod
@@ -593,58 +593,36 @@ class TestRecoveryCachePanelFlow:
         monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
-        # The confirmation popovers are lazy (`on_change="rerun"`), so their
-        # buttons exist only while open — open both, as a click would.
-        at.session_state["saved_here_clear_popover"] = True
-        at.session_state["saved_here_reset_popover"] = True
         return _rerun(at, view=VIEW_DATA)
 
-    def test_panel_reports_the_store_and_clear_empties_it(self, tmp_path, monkeypatch):
+    def test_panel_reports_the_store_and_its_folder(self, tmp_path, monkeypatch):
         from scanpath_studio import persistence
 
         at = self._boot_local(tmp_path, monkeypatch)
         _clean(at, "cache panel:")
         body = " ".join(str(m.value) for m in at.markdown)
         assert "**Saved here:**" in body
+        # The folder is on the page itself, not behind a popover.
+        assert f"**Folder:** `{tmp_path}`" in body
 
         # Working in the app writes the cache — the panel's own claim.
-        manifest = tmp_path / "manifest.json"
-        assert manifest.is_file()
+        assert (tmp_path / "manifest.json").is_file()
         assert persistence.cache_status(tmp_path)["settings"] > 0
-        # UX-179: no in-app saving toggle; opting out is `--no-persist`.
+        # UX-179: a read-out — no saving toggle, no Clear, no Reset.
         assert not [t for t in at.toggle if t.key == "persist_local_saving"]
-
-        # The popover's confirm button does the delete (its `on_click` runs
-        # before the rerun, which `skip_next_local_save` keeps from rewriting).
-        confirm = [b for b in at.button if b.key == "forget_cache_confirm"]
-        assert confirm, "the Clear confirmation button is missing"
-        confirm[0].click()
-        at = _rerun(at, view=VIEW_DATA)
-        _clean(at, "after confirming clear:")
-        assert not manifest.exists()
-        assert not persistence.cache_status(tmp_path)["exists"]
-        # …and the confirm closed its own popover.
-        assert at.session_state["saved_here_clear_popover"] is False
-        captions = " ".join(str(c.value) for c in at.caption)
-        assert "Cleared. Nothing is stored on this computer." in captions
-
-        # Only the immediate rewrite is skipped: the next real change saves.
-        at.session_state["global_show_heatmap"] = not bool(
-            at.session_state["global_show_heatmap"]
-        )
-        at = _rerun(at, view=VIEW_DATA)
-        _clean(at, "after changing the cleared session:")
-        assert manifest.is_file()
+        labels = {p.proto.popover.label for p in at.get("popover")}
+        gone = {"Clear recovery cache", "Reset everything", "What's saved, and where"}
+        assert not labels & gone, labels
 
     def test_the_section_is_only_on_the_data_page(self, tmp_path, monkeypatch):
         monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
         monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
-        at.session_state["saved_here_clear_popover"] = True
         at.run(timeout=60)
         _clean(at, "Scanpath view:")
-        assert not [b for b in at.button if b.key == "forget_cache_confirm"]
+        body = " ".join(str(m.value) for m in at.markdown)
+        assert "**Saved here:**" not in body
 
     def test_an_attached_metadata_table_survives_a_refresh(self, tmp_path, monkeypatch):
         """DATA-38 — the reported bug end to end: attach a table, refresh, and
@@ -690,14 +668,12 @@ class TestRecoveryCachePanelFlow:
         monkeypatch.delenv("SCANPATH_STUDIO_PERSIST", raising=False)
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
-        at.session_state["saved_here_reset_popover"] = True
         at = _rerun(at, view=VIEW_DATA)
         _clean(at, "hosted cache panel:")
         captions = " ".join(str(c.value) for c in at.caption)
         assert "Not available here." in captions
-        # …and nothing to clear, but Reset still works on the in-memory session.
-        assert not [b for b in at.button if b.key == "forget_cache_confirm"]
-        assert [b for b in at.button if b.key == "reset_everything_confirm"]
+        body = " ".join(str(m.value) for m in at.markdown)
+        assert "**Folder:**" not in body
 
 
 class TestAddDatasetMenu:

@@ -13,10 +13,9 @@ is also *inspectable*: :func:`cache_status` reports what is stored, where, how
 big it is and when it was written without importing Streamlit, and it backs the
 in-app 🗂️ Data → *Saved on this computer* section
 (``app._render_saved_here_section``, UX-179), the ``scanpath-studio cache`` CLI
-subcommand and ``api.cache_status``. The stored files can be deleted
-(:func:`clear_local_state`); a clear initiated in the app uses
-:func:`skip_next_local_save` so the end of that rerun does not immediately
-recreate them. Saving is paused for a session only by BUG-71's breaker
+subcommand and ``api.cache_status``. The stored files are deleted from outside
+the app — ``scanpath-studio cache --clear`` / ``api.clear_cache``, both
+:func:`clear_local_state`. Saving is paused for a session only by BUG-71's breaker
 (:func:`persistence_paused`); opting out is a launch choice
 (``run --no-persist`` / ``SCANPATH_STUDIO_PERSIST=0``).
 """
@@ -65,7 +64,6 @@ STATE_DIR_ENV_VAR = "SCANPATH_STUDIO_STATE_DIR"
 _RESTORED_KEY = "_local_persistence_restored"
 _RESTORED_PAYLOAD_KEY = "_local_persistence_restored_payload"
 _PAUSED_KEY = "_local_persistence_paused"
-_SKIP_NEXT_SAVE_KEY = "_local_persistence_skip_next_save"
 _LAST_FINGERPRINT_KEY = "_local_persistence_fingerprint"
 _LAST_DATASET_IDENTITY_KEY = "_local_persistence_dataset_identity"
 _LAST_DATASET_ENTRIES_KEY = "_local_persistence_dataset_entries"
@@ -863,30 +861,15 @@ def persistence_paused(session) -> bool:
     return bool(session.get(_PAUSED_KEY))
 
 
-def skip_next_local_save(session) -> None:
-    """Suppress exactly one end-of-run persistence write.
-
-    Clearing the recovery cache triggers a full app rerun before ``main``
-    reaches its persistence epilogue. The fresh run must not write the same
-    live session straight back to disk, but it also must not turn off automatic
-    saving. A one-shot marker expresses that distinction; the following user
-    change saves normally.
-    """
-    session[_SKIP_NEXT_SAVE_KEY] = True
-
-
 def clear_local_state(session=None, root: Path | None = None) -> bool:
     """Delete the stored cache and forget what this session had written.
 
     The in-memory datasets are deliberately left alone — this removes the copy
-    on disk, it does not close the user's work. Callers clearing it from a
-    widget-driven rerun can use :func:`skip_next_local_save` to prevent the
-    immediate epilogue write without changing the saving preference.
+    on disk, it does not close the user's work.
 
     Deleting the files is best-effort: a locked or read-only cache directory
-    must not wedge *"Clear recovery cache"* or *"Reset everything"*, which are
-    the two actions a user reaches for precisely when the session is already
-    broken. An :class:`OSError` is logged and reported as ``False``; the
+    must not wedge ``scanpath-studio cache --clear``, which a user reaches for
+    precisely when the session is already broken. An :class:`OSError` is logged and reported as ``False``; the
     in-session bookkeeping is cleared either way.
     """
     removed = True
@@ -1020,10 +1003,8 @@ def cache_status(
 def save_local_state(session, url: str) -> bool:
     # BUG-71: reaching the epilogue means this run rendered, so a restore it
     # applied is not the kind that breaks the app — before any early return, since
-    # a paused or skipped save still ran to here.
+    # a paused save still ran to here.
     _finish_restore(session)
-    if session.pop(_SKIP_NEXT_SAVE_KEY, False):
-        return False
     if not persistence_enabled(url) or persistence_paused(session):
         return False
     try:

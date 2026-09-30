@@ -259,9 +259,10 @@ class TestTrialFiltersKeepTheDesign:
     def test_a_trial_filter_leaves_the_preset_alone(self, booted_app):
         at = booted_app
         hover = list(at.session_state["global_fixation_hover_fields"])
-        # The demo's l25_1042 has word boxes but no fixations, so its trial
-        # offered the hover picker nothing — which wiped the user's picks.
-        for participant in (["l37_1129"], ["l25_1042"], []):
+        # A trial with no fixations used to wipe the user's hover picks; the
+        # unit test above covers that since DATA-43 dropped the demo's one
+        # such reader, so this narrows by the two readers it still has.
+        for participant in (["l37_1129"], ["l7_1090"], []):
             box = next(m for m in at.multiselect if m.key == "filter_participants")
             box.set_value(participant)
             self._run(at)

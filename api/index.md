@@ -60,9 +60,7 @@ Returns the normalized `(words, fixations)` frames the plotting functions expect
 load_sample_data() -> tuple[DataFrame, DataFrame]
 ```
 
-Return the bundled OneStop demo, normalized and ready to plot.
-
-Three readers' word boxes ship with the package but only two of them have fixations, so list_trials reports the two plottable readers.
+Return the bundled OneStop demo, normalized and ready to plot: two readers, twelve paragraphs each, every one of them with fixations.
 
 ### scanpath_studio.api.load_raw_gaze
 
@@ -406,7 +404,7 @@ sps.save_figure(fig, 'scanpath.png')
 ### scanpath_studio.api.figure_code
 
 ```
-figure_code(*, kind: str = 'static', source: str = 'demo', source_options: dict | None = None, participant: str = '', trial: str = '', screen: str | None = None, compare: tuple[str, str] | None = None, compare_layout: str = 'overlay', compare_stimulus: str = 'both', compare_dataset: str = '', compare_labels: tuple[str, str] | None = None, canvas_size: tuple[int, int] | None = None, base_font_size: int = 16, font_family: str = FONT_FAMILY, title: str = '', caption: str = '', fix_index_range: tuple[int, int] | None = None, illustration_label: str = 'auto', drift_correction: str | None = None, drift_connectors: bool = False, playback_speed: float = 1.0, autoplay: bool = True, flavor: str = 'python', explicit: bool = False, output: str | None = None, **figure_overrides) -> str
+figure_code(*, kind: str = 'static', source: str = 'demo', source_options: dict | None = None, participant: str = '', trial: str = '', screen: str | None = None, compare: tuple[str, str] | None = None, compare_layout: str = 'overlay', compare_stimulus: str = 'both', compare_dataset: str = '', compare_canvas: tuple[int, int] | None = None, compare_labels: tuple[str, str] | None = None, canvas_size: tuple[int, int] | None = None, base_font_size: int = 16, font_family: str = FONT_FAMILY, title: str = '', caption: str = '', fix_index_range: tuple[int, int] | None = None, illustration_label: str = 'auto', drift_correction: str | None = None, drift_connectors: bool = False, playback_speed: float = 1.0, autoplay: bool = True, flavor: str = 'python', explicit: bool = False, output: str | None = None, **figure_overrides) -> str
 ```
 
 The API or CLI code that reproduces a figure.
@@ -420,7 +418,7 @@ print(sps.figure_code(participant="l7_1090", trial="l7_1090_2_1_1_Ele_r0",
 
 `source` names how the data is loaded — `"demo"`, `"synthetic"`, `"files"`, `"potec"`, `"onestop"`, `"multipleye"`, `"benchmark"`, `"author"`, or `"unknown"` for data a snippet can't name — with `source_options` carrying that loader's arguments (`{"root": …}`, `{"words": [...], "fixations": [...]}`, and so on). With `show_raw_gaze=True` the raw-gaze table is read too: the demo's own, or the path(s) given as `source_options["raw_gaze"]` (plus an optional `"raw_gaze_schema"`) — load_raw_gaze in the Python form, `--raw-gaze` in the CLI one.
 
-`compare_dataset` names the corpus scanpath B was loaded from when it is a *second* one. B's participant id belongs to that corpus rather than the one the snippet loads, so naming it turns a snippet that would quietly reference a missing reader into one that says where B comes from.
+`compare_dataset` names the corpus scanpath B was loaded from when it is a *second* one. B's participant id belongs to that corpus rather than the one the snippet loads, so both forms then load B's own tables and name B in them — `words_b=` / `fixations_b=` / `dataset_b=`, and `--compare-words` / `--compare-fixations` beside `--compare-with` — from the placeholder paths `B_WORDS` / `B_FIXATIONS`, which you point at its files. `compare_canvas` is B's screen, `(width, height)`, when you know it: written as `setup_b=` and `--compare-canvas`, which a co-animation across datasets needs.
 
 `compare_labels` is the pair you would pass compare_scanpaths as `labels=` — the two trace labels, when they are not the composed defaults. Both forms carry them: `labels=` in the Python snippet, `--label-a` / `--label-b` in the CLI one.
 

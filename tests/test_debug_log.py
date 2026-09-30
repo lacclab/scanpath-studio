@@ -339,17 +339,15 @@ def test_a_legacy_debug_url_param_still_arms_it():
 
 
 @pytest.mark.timeout(90)
-class TestTheGroundTruthTrialIsDebugOnly:
-    """UX-37: the six-word verification fixture is a developer affordance, not a
-    corpus, so it sits behind the same toggle as the log panel rather than in
-    every user's data-source list. (It used to be advertised in the AI-assistance
-    note; that prose was cut, but the route it described still has to work.)"""
+class TestTheGroundTruthTrialIsAlwaysAvailable:
+    """The editable sample is public; the old verification fixture is debug-only."""
 
-    def test_it_is_absent_until_debug_mode_is_on(self):
+    def test_it_is_available_with_or_without_debug_mode(self):
         at = AppTest.from_file(APP_SCRIPT)
         arm_session_dialog(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert "Synthetic sample" in at.session_state["_data_source_entries"]
         assert "Synthetic test trial" not in at.session_state["_data_source_entries"]
 
         arm_session_dialog(at)
@@ -387,3 +385,42 @@ def test_the_url_param_does_not_override_turning_it_off():
     assert not at.exception, at.exception
     assert at.session_state[debug_log.DEBUG_STATE_KEY] is False
     assert not [s for s in at.selectbox if s.key == "_debug_level"]
+
+
+def test_an_abandoned_runs_stop_does_not_escape_the_log_handler(monkeypatch):
+    """UX-166: an abandoned run's session state raises StopException on any
+    access. Escaping `emit`, it threw away the result of every cached build
+    that logs through `timed()`."""
+    import logging
+
+    from streamlit.runtime.scriptrunner import StopException
+
+    def _stopped():
+        raise StopException()
+
+    monkeypatch.setattr(debug_log, "_buffer", _stopped)
+    record = logging.LogRecord(
+        "scanpath_studio", logging.INFO, __file__, 1, "x", None, None
+    )
+    debug_log._SessionStateHandler().emit(record)  # must not raise
+
+
+def test_a_rerun_request_is_not_swallowed_by_the_log_handler(monkeypatch):
+    """UX-166 fix-round-1 (T5-2): `ScriptRequests.on_scriptrunner_yield` clears
+    a RERUN request as it hands it over, while a STOP request stays set — so
+    unlike StopException, catching RerunException here would consume the
+    rerun once and for all if `emit` happened to be the first checkpoint after
+    the click. Only StopException may be swallowed."""
+    import logging
+
+    from streamlit.runtime.scriptrunner import RerunException
+
+    def _rerunning():
+        raise RerunException(None)
+
+    monkeypatch.setattr(debug_log, "_buffer", _rerunning)
+    record = logging.LogRecord(
+        "scanpath_studio", logging.INFO, __file__, 1, "x", None, None
+    )
+    with pytest.raises(RerunException):
+        debug_log._SessionStateHandler().emit(record)

@@ -28,9 +28,7 @@ Read them before changing code. The rules most worth repeating:
   `tabs._render_true_scale_chart`, never `st.plotly_chart`.
 - **Every item has a stable ID** (`VIZ-37`), cited in the commit subject and a
   two-tier `CHANGELOG.md` entry. Take the next number from `CHANGELOG.md`, the
-  GitHub issues, `tracker/data.js` *and* the open PRs (`CLAUDE.md` → *Tracking
-  work*).
+  GitHub issues *and* the open PRs (`CLAUDE.md` → *Tracking work*).
 - **`main` is protected** — land work through a branch and a pull request. No AI
   co-author trailers in commit messages.
-- **Don't edit** `tracker/` (a frozen archive), `uv.lock`, `site/` or
-  `*.egg-info`.
+- **Don't edit** `uv.lock`, `site/` or `*.egg-info`.

@@ -40,6 +40,8 @@ scanpath_studio/
 ├─ fields.py         the `label | field` row primitive shared by the plot rail, the wizard and the Scanpath subtabs — its own module because `controls` cannot supply it to the panels that import `controls`
 ├─ html_embed.py     same-origin HTML iframe helper shared by plots, tours and Share (`st.iframe`, not the deprecated components embed) + ENG-64's `plotlyjs_script`/`plotlyjs_src`: the figure iframes load the installed plotly's own `plotly.min.js` from the app's server, not cdn.plot.ly
 ├─ easter_egg.py     UX-39: triple-click the title, googly eyes. Browser-only on purpose — no session key, no rerun, nothing to expose on the other three surfaces
+├─ progress.py       UX-165: a Streamlit-free progress hook — loaders and builders `report()` counts, the orchestrator `step_to()`s; a no-op without a task, and the cancel checkpoint (`Cancelled`) with one
+├─ loading.py        UX-165: loading cards drawn hidden by the script thread and revealed + refreshed by a timer thread (the `st.spinner` pattern); `card()` for a region, `Page` for the page skeleton + dataset card, `run_scope()` around each run, Cancel buttons that restore the previous choice
 ├─ measures.py       canonical reading measures (FFD, FPRT, RPD, TFD, regressions), run materialization, and geometry helpers
 ├─ preprocessing.py  optional soft-exclusion/merge pipeline + pass, sentence, saccade, character, RTL, QA, and sensitivity tables. PRE-22 holds the **app panel** back from this release (`constants.preprocessing_enabled`, the `SCANPATH_EXPERIMENTAL=1` gate); the API, `analyze` and this module are shipped and unchanged
 ├─ authoring.py      deterministic text/word layout + stable hand-authored fixation reducers and versioned JSON round-trip
@@ -146,6 +148,10 @@ reader ids → the existing `participants` filter slot), and the only join is
 reader rows that *disagree* are dropped and reported, never resolved by taking
 the first.
 
+**The tables belong to a dataset (DATA-47)**, like every other table: the
+session keys hold the selected dataset's, `metadata.activate_dataset` swaps
+them when the selection changes, and the recovery cache stores them per dataset.
+
 ### Trial annotations & filtering
 
 `annotations.py` keeps parent-trial and optional screen-scoped favorites / tags /
@@ -168,10 +174,10 @@ arranged on the **[Scanpath Studio board](https://github.com/orgs/lacclab/projec
 Not every ID has an issue, deliberately: `CHANGELOG.md` allocates the IDs and
 carries the write-up for finished work, and an issue is opened when the item
 needs the **Review** gate, is blocked on the user (`waiting-on-you`), or is
-carried across sessions. So take a new ID's number from all three registries —
-the changelog, `gh issue list`, and `tracker/data.js` — never GitHub alone, and
-since `main` became protected, **check the open PRs too**: an ID sitting in an
-unmerged branch's changelog is in none of the three.
+carried across sessions. So take a new ID's number from both registries —
+the changelog and `gh issue list` — never GitHub alone, and since `main` became
+protected, **check the open PRs too**: an ID sitting in an unmerged branch's
+changelog is in neither.
 
 Status (`Backlog · Planned · In progress · On hold · Review`) and priority live
 in the board's single-select columns, and kind is the native issue type
@@ -183,12 +189,10 @@ open, with everything waiting on them in a `### ⚖ Waiting on you` checklist. F
 conventions, including the four-section body shape, in `CLAUDE.md` →
 *Tracking work*.
 
-The in-repo tracker was migrated on 2026-08-20 (ENG-32) and is now a **read-only
-archive**: `tracker/data.js` + `index.html` hold the 320 items closed before the
-move with their write-ups, `python3 tracker/server.py` serves them (static, no
-write API), and `tracker/migrated.json` maps each migrated ID to its issue.
-Don't edit it — `tests/test_tracker_server.py` fails if an open item there has no
-issue, and if the server or page regrows a way to write.
+The in-repo tracker was migrated on 2026-08-20 (ENG-32) and removed on
+2026-09-30 (ENG-84). Its 320 closed items, with their write-ups, are still at the
+`v0.31.2` tag: `git show v0.31.2:tracker/data.js`, with `migrated.json` mapping
+each migrated ID to its issue.
 
 ## Build / Lint / Test
 
@@ -354,5 +358,6 @@ link / CLI / API silently can't be shared, scripted, or rendered headlessly.
    on GitHub with the project name `scanpath-studio`).
 6. The `Desktop builds` workflow (`.github/workflows/desktop.yml`) builds the
    standalone per-OS desktop bundles (`desktop/` — PyInstaller launcher + spec
-   + smoke test; design in `plans/eng-15-desktop-app.md`) and attaches them to
+   + smoke test; design in [`plans/eng-15-desktop-app.md`](https://github.com/lacclab/scanpath-studio/blob/v0.31.2/plans/eng-15-desktop-app.md) at
+   `v0.31.2`) and attaches them to
    the GitHub release for the tag.

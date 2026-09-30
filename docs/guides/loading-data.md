@@ -6,11 +6,20 @@ from your own experiment.
 ## Choose a source
 
 - **Bundled Demo:** immediate, small, and suitable for learning the interface.
+- **Synthetic sample:** an editable, manually authored six-word scanpath.
 - **Public corpus:** choose the corpus and local data directory; download when
   prompted.
-- **➕ Add dataset:** upload or select your own files and map their columns
-  (🗂️ **Data → 📂 Available datasets**).
-- **✏️ Author a scanpath:** sketch a trial from text, with no files at all.
+- **+ → Import files:** upload or select your own files and map their columns.
+  Also available through **🗂️ Data → ➕ Add dataset**.
+- **+ → Create manually:** sketch a trial from text, with no files at all.
+  Also available through **🗂️ Data → Create manual scanpath**.
+
+While a dataset opens, the page shows a skeleton of the view with the steps of
+the load — reading the files, normalizing them, building the trial list — each
+ticked off with its time. **Back to *dataset*** stops the load and reopens the
+dataset you had before, and a notice offers **Try again**. Opening a dataset
+again skips reading its files — they stay cached until the app restarts — so
+it's quicker the second time.
 
 ## What your data needs
 

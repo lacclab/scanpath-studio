@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+from . import progress
 from .annotations import get_entry
 from .constants import SELECTOR_ROW_GRID, SELECTOR_ROW_TRIO
 from .data import frame_fingerprint
@@ -77,12 +78,14 @@ def build_combo_options_for(
     )
 
 
-@st.cache_data(show_spinner="Building trial list…")
+# UX-166: the dataset card lists this step.
+@st.cache_data(show_spinner=False)
 def _build_combo_options_cached(
     _fixations: pd.DataFrame,
     composite_cols: tuple[str, ...],
     cache_key,
 ) -> tuple[pd.DataFrame, list[str], dict[str, tuple[str, str]]]:
+    progress.report()  # a miss: real work, so a gated card over it may show
     fixations = _fixations
     trial_col = (
         "unique_trial_id" if "unique_trial_id" in fixations.columns else "trial_id"
@@ -195,6 +198,10 @@ def extract_trial(frame: pd.DataFrame, participant_id, trial_id) -> pd.DataFrame
 # computed per-trial stats, reader/text properties, and any trial-level column
 # the dataset carries. Pure and frame-driven, so they're testable without the UI.
 TRIAL_SORT_DEFAULT = "Trial ID"
+#: UX-171: the order the trials appear in the data — the picker's default when
+#: the combos carry it. ``Trial ID`` (sorted by id, so ``1, 10, 100, 2`` for
+#: numeric ids) stays in the menu as a choice.
+TRIAL_SORT_DATA_ORDER = "Data order"
 # Computed stat label → (frame it needs, how to aggregate it per trial).
 # "fixations" / "words" name which frame the aggregation runs on.
 _TRIAL_SORT_STATS = {
@@ -525,7 +532,7 @@ def trial_sort_keys(
         and "_data_order" in combos.columns
     ):
         deduped = combos.drop_duplicates(subset=[trial_field])
-        keys["Data order"] = pd.Series(
+        keys[TRIAL_SORT_DATA_ORDER] = pd.Series(
             deduped["_data_order"].to_numpy(),
             index=deduped[trial_field].astype(str).to_numpy(),
         )
@@ -636,10 +643,16 @@ def _render_trial_sort_popover(
     keys = trial_sort_keys(combos, trial_field, words=words, fixations=fixations)
     if not keys:
         return None, False, TRIAL_SORT_DEFAULT
-    options = [TRIAL_SORT_DEFAULT, *keys]
+    # UX-171: data order leads and is the default; Trial ID follows it.
+    default = TRIAL_SORT_DATA_ORDER if TRIAL_SORT_DATA_ORDER in keys else None
+    options = [
+        *([default] if default else []),
+        TRIAL_SORT_DEFAULT,
+        *(k for k in keys if k != default),
+    ]
     state_key = f"{key_prefix}_trial_sort"
     if st.session_state.get(state_key) not in options:
-        st.session_state[state_key] = TRIAL_SORT_DEFAULT
+        st.session_state[state_key] = options[0]
     with host.popover("⇅", width="content", help="Sort the trial list"):
         choice = labeled(
             st,
@@ -825,7 +838,10 @@ def _select_trial_none_mode(
     # Save-&-restore code seeds it (`_restore_selection`). The slider mirrors it
     # and ◀ ▶ step it; all stay in sync via the trial id.
     current_label = st.session_state.get(trial_id_key) if trial_id_key else None
-    if current_label not in trial_options:
+    # Seeded rather than chosen: re-seeded to the *sorted* list's first trial
+    # once the ⇅ order is known (UX-171 — data order's first, not the id's).
+    seeded = current_label not in trial_options
+    if seeded:
         current_label = trial_options[0]
         if trial_id_key:
             st.session_state[trial_id_key] = current_label
@@ -905,13 +921,22 @@ def _select_trial_none_mode(
                 trial_options, sort_key, descending=sort_desc
             )
             idx_of = {opt: i for i, opt in enumerate(trial_options)}
-            lookup = sort_key.to_dict()
-            sort_values.update(
-                {opt: format_sort_value(lookup.get(opt)) for opt in trial_options}
-            )
-            picker_label = (
-                f"**Select Trial**  ·  by {sort_choice} {'↓' if sort_desc else '↑'}"
-            )
+            # UX-171: data order is the default and its values are bare ranks,
+            # so it carries no per-option value and names itself only reversed.
+            if sort_choice != TRIAL_SORT_DATA_ORDER:
+                lookup = sort_key.to_dict()
+                sort_values.update(
+                    {opt: format_sort_value(lookup.get(opt)) for opt in trial_options}
+                )
+            if sort_choice != TRIAL_SORT_DATA_ORDER or sort_desc:
+                picker_label = (
+                    f"**Select Trial**  ·  by {sort_choice} {'↓' if sort_desc else '↑'}"
+                )
+            if seeded:
+                current_label = trial_options[0]
+                if trial_id_key:
+                    st.session_state[trial_id_key] = current_label
+                st.session_state[slider_key] = current_label
         current_idx = trial_options.index(current_label)
     else:
         # A one-trial pool has no slider (`st.select_slider` throws on a single

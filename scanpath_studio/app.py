@@ -29,6 +29,7 @@ Usage:
 
 from __future__ import annotations
 
+import contextlib
 import html
 import logging
 import os
@@ -37,6 +38,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pandas as pd
 import streamlit as st
@@ -53,14 +55,15 @@ if __package__ is None or __package__ == "":
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
 
+from scanpath_studio import loading, progress, wizard_shell
 from scanpath_studio import metadata as metadata_mod
-from scanpath_studio import wizard_shell
 from scanpath_studio.annotations import (
     filter_keys,
 )
 from scanpath_studio.constants import (
     _VIEW_CORPUS,
     _VIEW_DATA,
+    _VIEW_SCANPATH,
     AUTHOR_CHOICE,
     BACKGROUND_PRESETS,
     BENCHMARK_LABEL_SUFFIX,
@@ -83,6 +86,7 @@ from scanpath_studio.constants import (
     FOCUS_MAPPING_KEY,
     FONT_FAMILY,
     ICONS,
+    MANUAL_SAMPLE_CHOICE,
     MULTIPLEYE_BUNDLE_CHOICE,
     MULTIPLEYE_DEFAULT_DIR,
     ONESTOP_CHOICE,
@@ -130,6 +134,7 @@ from scanpath_studio.controls import (
 from scanpath_studio.data import (
     FIX_OPTIONAL_FIELDS,
     IDENTITY_SCHEMA_FIELDS,
+    STIMULUS_WORDS_FLAG,
     TRIAL_IDENTITY_SAMPLE,
     WORD_OPTIONAL_FIELDS,
     ReadPlan,
@@ -166,6 +171,7 @@ from scanpath_studio.data import (
     read_table,
     read_table_columns,
     read_tables,
+    repair_stranded_stimulus_words,
     reset_fingerprint_memo,
     resolve_stimulus_image_paths,
     trial_identity_warning,
@@ -212,6 +218,7 @@ from scanpath_studio.persistence import (
     consume_restore_skipped,
     human_size,
     is_loopback_url,
+    local_state_restored,
     persistence_paused,
     restore_local_state,
     restored_from_cache,
@@ -274,6 +281,9 @@ from scanpath_studio.utils import build_combo_options, extract_trial
 from scanpath_studio.utils import (  # noqa: F401
     build_comparison_options as _build_comparison_options,
 )
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from streamlit.delta_generator import DeltaGenerator
 
 
 def __getattr__(name):
@@ -748,12 +758,14 @@ def _toggle_recovery_saving() -> None:
     st.session_state.pop("_recovery_cache_forgotten", None)
 
 
-#: UX-136 — the three kinds `persistence.restored_summary` counts, in the order
-#: the 🗄️ Automatic recovery panel lists them, with their singular/plural nouns.
+#: UX-136 — the kinds `persistence.restored_summary` counts, in the order the
+#: 🗄️ Automatic recovery panel lists them, with their singular/plural nouns.
+#: DATA-38 added the attached metadata tables.
 _RESTORED_KIND_NOUNS = (
     ("datasets", "dataset", "datasets"),
     ("annotations", "annotation", "annotations"),
     ("designs", "design", "designs"),
+    ("metadata", "metadata table", "metadata tables"),
 )
 
 
@@ -835,7 +847,15 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
                 f"{'s' if status['annotations'] != 1 else ''} · "
                 f"{status['designs']} design"
                 f"{'s' if status['designs'] != 1 else ''} · "
-                f"{human_size(status['bytes'])}"
+                # DATA-38 — named only when there are any, so the common
+                # line keeps its length.
+                + (
+                    f"{status['metadata']} metadata table"
+                    f"{'s' if status['metadata'] != 1 else ''} · "
+                    if status.get("metadata")
+                    else ""
+                )
+                + f"{human_size(status['bytes'])}"
             )
         elif status["exists"]:
             st.warning(
@@ -902,8 +922,8 @@ def _render_recovery_details(host, status: dict) -> None:
             "here. The bundled demo and the public corpora are reloaded from "
             "their own source instead, so they are never stored — which is why "
             "the count can read 0 while a dataset is open. Your settings, "
-            "designs and annotations are saved either way, which is what the "
-            "size covers."
+            "designs, annotations and attached metadata tables are saved "
+            "either way, which is what the size covers."
         )
         st.markdown(f"**Where.** `{status['directory']}`")
         if str(status["directory"]).endswith(CACHE_DIR_NAME):
@@ -1467,6 +1487,31 @@ def _note_dataset_unavailable(
     )
 
 
+def _stop_download(task_key: tuple) -> None:
+    """UX-168: Stop on a download card — the transfer ends at its next chunk."""
+    progress.cancel(task_key)
+
+
+def _download_with_card(
+    slot: DeltaGenerator,
+    download: Callable[[str], None],
+    root: str,
+    *,
+    label: str,
+    key: str,
+) -> None:
+    """Run ``download(root)`` under a card with a Stop button (UX-168)."""
+    task_key = ("download", loading.session_id(), key)
+    with loading.card(
+        slot,
+        key=f"download_{key}",
+        title=f"Downloading {label}",
+        task_key=task_key,
+        cancel=loading.Cancel("Stop download", _stop_download, args=(task_key,)),
+    ):
+        download(root)
+
+
 def _render_dataset_unavailable() -> None:
     """UX-7(b): a first-class "this corpus isn't here yet" state in the main area.
 
@@ -1497,14 +1542,25 @@ def _render_dataset_unavailable() -> None:
         st.markdown("\n".join(f"- {line}" for line in details))
         if download is None:
             return
-        if st.button(
+        clicked = st.button(
             "⬇ Download now",
             key=f"{note['key_prefix']}_download_main",
             type="primary",
-        ):
+        )
+        download_slot = st.empty()
+        if clicked:
+            # UX-166: the download is a wait of its own. Take the dataset card
+            # and the skeleton down first, or they hide this panel and its
+            # spinner while describing a step that isn't what is running.
+            loading.release_page()
             try:
-                with st.spinner(f"Downloading into {note['root']} …"):
-                    download(note["root"])
+                _download_with_card(
+                    download_slot,
+                    download,
+                    note["root"],
+                    label=note["label"],
+                    key=f"{note['key_prefix']}_main",
+                )
             except (OSError, ValueError) as exc:
                 st.error(
                     f"Download failed: {exc}\n\nIf you're offline, download the "
@@ -1578,10 +1634,16 @@ def _dataset_access_status(
         download=download,
         key_prefix=key_prefix,
     )
-    if cfg.button("⬇ Download", key=f"{key_prefix}_download", type="primary"):
+    clicked = cfg.button("⬇ Download", key=f"{key_prefix}_download", type="primary")
+    download_slot = cfg.empty()
+    if clicked:
+        # UX-166: as for the main area's ⬇ Download now — the dataset card must
+        # not cover the download with a step that isn't what is running.
+        loading.release_page()
         try:
-            with st.spinner(f"Downloading into {root} …"):
-                download(root)
+            _download_with_card(
+                download_slot, download, root, label=label, key=key_prefix
+            )
         except (OSError, ValueError) as exc:
             cfg.error(f"Download failed: {exc}")
             return False
@@ -1589,7 +1651,8 @@ def _dataset_access_status(
     return False
 
 
-@st.cache_data(show_spinner="Loading PoTeC…")
+# UX-166: the dataset card lists this step.
+@st.cache_data(show_spinner=False)
 def _cached_potec_raw_frames(root: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Cached raw PoTeC frames (pre-normalization) — the full corpus.
 
@@ -1647,7 +1710,8 @@ def _load_potec_source(
         return pd.DataFrame(), pd.DataFrame()
 
 
-@st.cache_data(show_spinner="Loading MultiplEYE…")
+# UX-166: the dataset card lists this step.
+@st.cache_data(show_spinner=False)
 def _cached_multipleye_raw_frames(
     root: str, fixation_source: str
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -1726,7 +1790,8 @@ def _load_multipleye_source(
         return pd.DataFrame(), pd.DataFrame()
 
 
-@st.cache_data(show_spinner="Loading OneStop…")
+# UX-166: the dataset card lists this step.
+@st.cache_data(show_spinner=False)
 def _cached_onestop_raw_frames(
     root: str, regime: str, parts: tuple[str, ...], variant: str
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -1845,7 +1910,8 @@ def _load_onestop_public_source(
         return pd.DataFrame(), pd.DataFrame()
 
 
-@st.cache_data(show_spinner="Loading EyeGenBench…")
+# UX-166: the dataset card lists this step.
+@st.cache_data(show_spinner=False)
 def _cached_eyegenbench_raw_frames(
     root: str, dataset: str
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -2318,6 +2384,12 @@ _BUILTIN_DATASET_ABOUT: dict[str, dict] = {
             "treat this as a floor."
         ),
     ),
+    MANUAL_SAMPLE_CHOICE: dict(
+        language="English",
+        description="An editable, manually authored scanpath. Change the text, drag "
+        "fixations, or edit their timing in the authoring editor.",
+        geometry=f"{ICONS['geometry_synthesized']} **Synthesized** — manually authored, not recorded.",
+    ),
     SYNTHETIC_CHOICE: dict(
         language="English",
         description="A hand-built trial with every measure traced by hand — the "
@@ -2615,13 +2687,18 @@ def _cached_trial_identity_report(
     on full OneStop); the 🗂️ Data page's *Check every trial* button asks for the
     census by passing ``None``, and lands on its own cache entry.
     """
+    # UX-166: only a miss gets here — the report is what shows the gated
+    # dataset card for the census's seconds.
+    progress.report()
     return diagnose_trial_identity(_words, _fixations, sample_trials=sample_trials)
 
 
-@st.cache_data(show_spinner="Loading MultiplEYE server bundle…")
+# UX-166: the dataset card lists this step.
+@st.cache_data(show_spinner=False)
 def _cached_multipleye_server_bundle(
     participant: str | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    progress.report()  # a miss: real work, so the gated dataset card may show
     return load_multipleye_server_bundle(participant)
 
 
@@ -2746,17 +2823,25 @@ def _normalize_pair_uncached(
         word_rows=len(_words_df),
         fixation_rows=len(_fixations_df),
     ):
+        # UX-166 (T5-3): three reportable parts, so a cancel checkpoint exists
+        # partway through instead of only at the very end — on a real corpus
+        # this stage alone is the ~20 s wait the spinner above describes.
+        progress.report(0, 3, detail="words")
         words_norm = (
             normalize_words(_words_df, _word_schema, keep_columns=_keep_words)
             if _word_schema is not None
             else empty_words_frame()
         )
+        progress.report(1, 3, detail="fixations")
         fixations_norm = (
             normalize_fixations(_fixations_df, _fix_schema, keep_columns=_keep_fix)
             if _fix_schema is not None
             else empty_fixations_frame()
         )
-        return harmonize_frames(words_norm, fixations_norm)
+        progress.report(2, 3, detail="cross-checks")
+        result = harmonize_frames(words_norm, fixations_norm)
+        progress.report(3, 3)
+        return result
 
 
 def _normalize_pair(
@@ -2801,38 +2886,27 @@ def _normalize_pair(
     # costs. `frame_cache` keeps one and returns the object itself.
     # PERF-6: the spinner says how much data is being normalized, because on a
     # real corpus this is a ~20 s wait and "Normalizing data…" gives no sense of
-    # whether that is expected. `show_spinner=False` on the cached function, so
-    # there is one spinner rather than two nested ones.
-    notice = st.spinner(
+    # whether that is expected. UX-166 moved it *outside* the cache: a spinner's
+    # exit is a yield point, and inside `build` an abandoned run raised there
+    # and threw the finished normalization away. `st.spinner` shows only after
+    # 0.5 s, so a cache hit still never flashes it, and `loading.spinner` stays
+    # silent under the dataset card, which lists normalization as a step.
+    with loading.spinner(
         f"Normalizing {len(words_df):,} word rows and {len(fixations_df):,} fixations…"
-    )
-    return frame_cache(
-        "normalized_pair",
-        cache_key,
-        lambda: _with_spinner(
-            notice,
-            _normalize_pair_uncached,
-            words_df,
-            word_schema,
-            fixations_df,
-            fix_schema,
+    ):
+        return frame_cache(
+            "normalized_pair",
             cache_key,
-            _keep_words=keep_words,
-            _keep_fix=keep_fix,
-        ),
-    )
-
-
-def _with_spinner(notice, func, *args, **kwargs):
-    """Run ``func`` under ``notice``, so the spinner only shows on real work.
-
-    The message is built before the cache lookup (it needs the input sizes), but
-    must not *render* on a cache hit — a spinner that flashes on every rerun is
-    noise. Entering the context here means it opens only when the work actually
-    runs.
-    """
-    with notice:
-        return func(*args, **kwargs)
+            lambda: _normalize_pair_uncached(
+                words_df,
+                word_schema,
+                fixations_df,
+                fix_schema,
+                cache_key,
+                _keep_words=keep_words,
+                _keep_fix=keep_fix,
+            ),
+        )
 
 
 def _reset_active_mapping() -> None:
@@ -3257,7 +3331,7 @@ def _uploaded_file_key(uploaded) -> tuple:
     )
 
 
-@st.cache_data(show_spinner="Reading uploaded data…")
+@st.cache_data(show_spinner="Reading uploaded data…", show_time=True)
 def _read_uploaded_table_cached(
     _uploaded, file_key, kind=None, chosen=(), text_column=None, identity=()
 ) -> pd.DataFrame:
@@ -3277,7 +3351,7 @@ def _read_uploaded_table_cached(
     return read_table(_uploaded, plan=plan)
 
 
-@st.cache_data(show_spinner="Reading uploaded data…")
+@st.cache_data(show_spinner="Reading uploaded data…", show_time=True)
 def _read_uploaded_tables_cached(
     _uploaded_list, file_keys, kind=None, chosen=(), text_column=None, identity=()
 ) -> pd.DataFrame:
@@ -3649,10 +3723,10 @@ def resolve_data_source(host=None) -> str:
 
     Returns the selected source: ``DEMO_CHOICE`` ("Bundled Demo"), a stored
     uploaded dataset's name, ``ONESTOP_CHOICE`` / ``PUBLIC_DATASETS_CHOICE`` when
-    available, ``SYNTHETIC_CHOICE`` if already selected, or ``UPLOAD_CHOICE``
+    available, ``SYNTHETIC_CHOICE``, or ``UPLOAD_CHOICE``
     while the "➕ Add data" wizard is active. Switching to a stored dataset reloads
-    it from session (no re-upload); the synthetic source is no longer offered
-    fresh and "Public Datasets" shows grayed-out until the feature flag is on.
+    it from session (no re-upload). Manual authoring is opened by the + menu;
+    its draft joins the list once opened, including through an old deep link.
 
     **UX-25** moved the *visible* picker out of the sidebar and onto the main
     view's "Filter by" row (:func:`render_data_source_picker`). The picker has to
@@ -3720,11 +3794,26 @@ def resolve_data_source(host=None) -> str:
         kinds[MULTIPLEYE_BUNDLE_CHOICE] = "🔒"
     entries.append(DEMO_CHOICE)
     kinds[DEMO_CHOICE] = "🧪"
-    entries.append(AUTHOR_CHOICE)
-    kinds[AUTHOR_CHOICE] = "✏️"
+    entries.append(MANUAL_SAMPLE_CHOICE)
+    kinds[MANUAL_SAMPLE_CHOICE] = "✏️"
+    if (
+        debug_enabled()
+        or st.session_state.get("data_source_choice") == SYNTHETIC_CHOICE
+    ):
+        entries.append(SYNTHETIC_CHOICE)
+        kinds[SYNTHETIC_CHOICE] = "🧪"
+    if st.session_state.get(
+        "data_source_choice"
+    ) == AUTHOR_CHOICE or AUTHOR_CHOICE in st.session_state.get(
+        "_manual_scanpath_drafts", {}
+    ):
+        entries.append(AUTHOR_CHOICE)
+        kinds[AUTHOR_CHOICE] = "✏️"
     for name in uploaded:
         entries.append(name)
-        kinds[name] = "🔒"
+        kinds[name] = (
+            "✏️" if st.session_state["_datasets"][name].get("authoring") else "🔒"
+        )
     # DATA-27 (Task 11R): every prepared benchmark corpus is in here as its own
     # 🌐 entry, exactly like the built-ins — `public_dataset_registry()` composes
     # the two. Resolved once and reused below so the whole run agrees on one
@@ -3733,20 +3822,6 @@ def resolve_data_source(host=None) -> str:
     for label in registry:
         entries.append(label)
         kinds[label] = "🌐"
-    # UX-37: the ground-truth trial is offered **while debug mode is on** (the
-    # ❓ Help toggle), rather than only via `?source=synthetic` — a URL the About
-    # note and the docs had to spell out, which is the hidden-behind-a-param
-    # problem this item exists to remove. It is a six-word verification fixture,
-    # not a corpus, so it sits with the other developer affordances instead of
-    # in every user's source list. Still selectable when something already chose
-    # it, so a `?source=synthetic` link and the AppTests keep working.
-    if (
-        debug_enabled()
-        or st.session_state.get("data_source_choice") == SYNTHETIC_CHOICE
-    ):
-        entries.append(SYNTHETIC_CHOICE)
-        kinds[SYNTHETIC_CHOICE] = "🧪"
-
     # Removing an app-owned/public source means removing it from this session's
     # available list, not deleting packaged files or a public corpus. Keep the
     # stable token intact for links and loader dispatch; the ordinary stale-
@@ -3808,6 +3883,10 @@ def resolve_data_source(host=None) -> str:
     return choice
 
 
+# Picker-only sentinel: never a dataset, a comparison source or a share token.
+_MORE_DATASETS_PLACEHOLDER = "__more_datasets_coming_soon__"
+
+
 def _on_data_source_pick() -> None:
     """Route the main-view picker's choice through the pre-widget seam (UX-25).
 
@@ -3819,8 +3898,126 @@ def _on_data_source_pick() -> None:
     keep assigning the canonical key without the widget reconciling it away.
     """
     picked = st.session_state.get("data_source_picker")
+    if picked == _MORE_DATASETS_PLACEHOLDER:
+        st.session_state["data_source_picker"] = st.session_state["data_source_choice"]
+        return
     if picked:
+        if picked == AUTHOR_CHOICE:
+            _remember_authoring_return()
         st.session_state["_pending_source_choice"] = picked
+
+
+def _remember_authoring_return() -> None:
+    source = st.session_state.get("data_source_choice", DEMO_CHOICE)
+    if source not in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
+        st.session_state["_author_return_source"] = source
+
+
+#: The authoring source whose editor is open. ``AUTHOR_CHOICE`` is always an
+#: editor; the synthetic sample is a dataset that is *shown* like any other until
+#: its ✏️ Edit button arms this key. It is dropped as soon as another source is
+#: active, so coming back to the sample shows it rather than reopening the editor.
+_AUTHOR_EDITING_KEY = "_author_editing"
+
+#: The synthetic sample's stimulus until it has been edited.
+_MANUAL_SAMPLE_TEXT = "The cat sat\non the mat."
+
+
+def _authoring_editor_open(data_choice: str) -> bool:
+    """Whether ``data_choice`` renders the authoring editor instead of a view."""
+    return data_choice == AUTHOR_CHOICE or (
+        data_choice == MANUAL_SAMPLE_CHOICE
+        and st.session_state.get(_AUTHOR_EDITING_KEY) == MANUAL_SAMPLE_CHOICE
+    )
+
+
+def _edit_manual_sample() -> None:
+    """Open the authoring editor on the synthetic sample (its ✏️ Edit button)."""
+    st.session_state[_AUTHOR_EDITING_KEY] = MANUAL_SAMPLE_CHOICE
+    st.session_state["main_nav"] = _VIEW_SCANPATH
+
+
+def _manual_sample_document() -> tuple[pd.DataFrame, pd.DataFrame, dict]:
+    """The synthetic sample's ``(words, events, layout)``, drawn from its draft.
+
+    The seed text until it has been edited, the draft afterwards — the same
+    document the editor shows, so viewing the sample never needs the editor.
+    """
+    from scanpath_studio.authoring import DEFAULT_LAYOUT, default_events, layout_text
+
+    draft = st.session_state.get("_manual_scanpath_drafts", {}).get(
+        MANUAL_SAMPLE_CHOICE
+    )
+    if draft is None:
+        layout = dict(DEFAULT_LAYOUT)
+        words = layout_text(_MANUAL_SAMPLE_TEXT, **layout)
+        return words, default_events(words), layout
+    text, layout, events = draft
+    layout = {**DEFAULT_LAYOUT, **layout}
+    return layout_text(text, **layout), events, layout
+
+
+def _manual_sample_frames() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """The synthetic sample's words and fixations (see `_manual_sample_document`)."""
+    from scanpath_studio.authoring import authored_fixations
+
+    words, events, _layout = _manual_sample_document()
+    return words, authored_fixations(words, events)
+
+
+def _manual_sample_canvas() -> tuple[int, int]:
+    """The canvas the authoring editor draws the sample on, as a figure size.
+
+    The sample declares its own screen: without it the figure inherits the
+    previous source's (the demo's 2560 × 1440) and six words sit in a corner.
+    """
+    words, _events, layout = _manual_sample_document()
+    height = 480
+    if not words.empty:
+        height = max(
+            height,
+            int(words["y"].max() + words["height"].max() + layout["margin"]),
+        )
+    return int(layout["canvas_width"]), height
+
+
+def _cancel_authoring() -> None:
+    if st.session_state.get(_AUTHOR_EDITING_KEY) == MANUAL_SAMPLE_CHOICE:
+        # Back out of the sample's editor to the sample itself.
+        st.session_state.pop(_AUTHOR_EDITING_KEY, None)
+        st.session_state["main_nav"] = _VIEW_SCANPATH
+        return
+    st.session_state["_pending_source_choice"] = st.session_state.get(
+        "_author_return_source", DEMO_CHOICE
+    )
+    st.session_state["main_nav"] = _VIEW_SCANPATH
+
+
+def _save_authored_dataset(name_key: str) -> None:
+    from scanpath_studio.wizard import _safe_dataset_name
+
+    payload = st.session_state.pop("_author_save_payload", None)
+    if payload is None:
+        return
+    requested = str(st.session_state.get(name_key) or "My scanpath").strip()
+    if requested in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
+        requested += " (authored)"
+    name = _safe_dataset_name(requested)
+    st.session_state.setdefault("_datasets", {})[name] = payload
+    st.session_state["_pending_source_choice"] = name
+    st.session_state["main_nav"] = _VIEW_SCANPATH
+    st.session_state["setup_complete"] = True
+
+
+def _enter_manual_dataset() -> None:
+    """Open (or resume) the manual editor through the ordinary source switch."""
+    _remember_authoring_return()
+    hidden = list(st.session_state.get(HIDDEN_DATASETS_KEY) or [])
+    if AUTHOR_CHOICE in hidden:
+        hidden.remove(AUTHOR_CHOICE)
+        st.session_state[HIDDEN_DATASETS_KEY] = hidden
+    st.session_state["_pending_source_choice"] = AUTHOR_CHOICE
+    st.session_state["main_nav"] = _VIEW_SCANPATH
 
 
 def leave_add_data_wizard() -> None:
@@ -3875,19 +4072,13 @@ def discard_and_leave_wizard() -> None:
 
 
 def render_data_source_picker(host=None) -> None:
-    """Render the data-source picker in the main view (UX-25).
+    """Render the dataset picker and its + creation menu (UX-143).
 
-    Sits on the "Filter by" row, left of the label, so the top of the page reads
-    left-to-right as *which dataset → how to narrow it → which trial* — the app is
-    built to be read straight down the page. Renders from the entry list
-    :func:`resolve_data_source` published earlier this run; a pick is
-    applied on the next run via :func:`_on_data_source_pick`.
-
-    UX-64 reduced it to the selectbox alone. Adding a dataset, removing one and
-    the contribute link were behind a ➕ popover here; the 🗂️ Data page owns all
-    three now, and the width it frees is what lets the dataset picker keep its
-    size on the single control line.
+    The menu sits between the dataset and trial selectors. Creation uses the
+    existing manual editor or file wizard; the placeholder is picker-only.
     """
+    from scanpath_studio.wizard import _enter_add_data_wizard
+
     entries = list(st.session_state.get("_data_source_entries") or [])
     if not entries:
         return
@@ -3897,6 +4088,8 @@ def render_data_source_picker(host=None) -> None:
     registry = public_dataset_registry()
 
     def _entry_label(token: str) -> str:
+        if token == _MORE_DATASETS_PLACEHOLDER:
+            return "More coming soon!"
         # Reads the `registry` snapshot resolved just above rather than calling
         # `public_dataset_registry()` per token: the added corpora can change at
         # runtime, so one run must format its options against one
@@ -3919,14 +4112,13 @@ def render_data_source_picker(host=None) -> None:
         return f"{tag} {name}".strip()
 
     # Keyed wrapper → stable `.st-key-…` selector for the spotlight tour.
-    box = (host if host is not None else st).container(key="tour_grp_data_source")
-    # UX-64: the picker is the whole control now. The ➕ popover that sat beside
-    # it — Add data, remove-an-upload, the contribute link — is gone: the 🗂️ Data
-    # page is the only way to add a dataset, which is where the wizard renders
-    # anyway, and removing one moves there too (#UX-54's dataset table). Dropping
-    # it is also what frees the width for the single control line, since the
-    # dataset picker itself must **not** shrink — you may be comparing two.
-    #
+    box = (host if host is not None else st).container(
+        key="tour_grp_data_source",
+        horizontal=True,
+        vertical_alignment="bottom",
+        gap="xsmall",
+        wrap=False,
+    )
     # Mirror the canonical key onto the widget key before it instantiates, so a
     # deep link / restore / wizard finalize shows up in the picker.
     current = st.session_state.get("data_source_choice")
@@ -3934,15 +4126,33 @@ def render_data_source_picker(host=None) -> None:
         st.session_state["data_source_picker"] = current
     box.selectbox(
         "**Select Dataset**",
-        entries,
+        [*entries, _MORE_DATASETS_PLACEHOLDER],
         format_func=_entry_label,
         help=(
-            "Which dataset the app is showing. Add, rename or remove one on "
-            "the 🗂️ Data page."
+            "Which dataset the app is showing. Use + to create a scanpath or "
+            "import files. Rename or remove datasets on the 🗂️ Data page. "
+            "More coming soon! is a preview of future datasets."
         ),
         key="data_source_picker",
         on_change=_on_data_source_pick,
     )
+    with box.popover(ICONS["add"], help="Add dataset", key="add_dataset_menu"):
+        st.button(
+            "Create manually",
+            icon=ICONS["author"],
+            key="add_manual_dataset_btn",
+            help="Write a text and place its fixations, or resume your manual scanpath.",
+            on_click=_enter_manual_dataset,
+            width="stretch",
+        )
+        st.button(
+            "Import files",
+            icon=ICONS["upload"],
+            key="import_dataset_btn",
+            help="Add your fixation and word/AOI tables with the setup wizard.",
+            on_click=_enter_add_data_wizard,
+            width="stretch",
+        )
 
 
 #: Cell text of the dataset table's action buttons. `st.column_config.ButtonColumn`
@@ -3991,6 +4201,8 @@ def _dataset_display_name(token: str, registry: dict | None = None) -> str:
     alias = (st.session_state.get(DATASET_ALIASES_KEY) or {}).get(token)
     if alias:
         return str(alias)
+    if token == AUTHOR_CHOICE:
+        return "My scanpath"
     registry = public_dataset_registry() if registry is None else registry
     return picker_name_for(token, registry) if token in registry else token
 
@@ -4283,6 +4495,8 @@ def _select_dataset(name: str) -> None:
     wizard finalize use: ``data_source_choice`` is a widget key elsewhere, so
     this is the one way an assignment lands before the widgets instantiate.
     """
+    if name == AUTHOR_CHOICE:
+        _remember_authoring_return()
     st.session_state["_pending_source_choice"] = name
     st.session_state["data_source_choice"] = name
 
@@ -4728,6 +4942,9 @@ def _close_dataset_editor() -> None:
     # until ✅ Save changes runs.
     for key in [k for k in st.session_state if str(k).startswith("_remap_")]:
         st.session_state.pop(key, None)
+    # DATA-46: "use the current estimate" is a choice for one editing session.
+    for key in [k for k in st.session_state if str(k).endswith("_setup_reestimate")]:
+        st.session_state.pop(key, None)
 
 
 def _ask_leave_dataset_editor() -> None:
@@ -4889,8 +5106,8 @@ def render_dataset_table(
     }
     rows = []
     for token in entries:
-        if token == UPLOAD_CHOICE:
-            continue  # the wizard, not a dataset
+        if token in (UPLOAD_CHOICE, AUTHOR_CHOICE):
+            continue  # creation flows have their own buttons below the table
         own = token in uploaded
         name = _dataset_display_name(token, registry)
         # DATA-32: counted once per version of a dataset and remembered, so a
@@ -5001,8 +5218,13 @@ def render_dataset_table(
         token = _clicked("dataset_table_edit")
         if token is not None:
             _select_dataset(token)
-            st.session_state[FOCUS_MAPPING_KEY] = token
-            st.session_state[DATASET_EDITOR_OPEN_KEY] = True
+            if token == MANUAL_SAMPLE_CHOICE:
+                # The sample has no column mapping to edit — its editor is the
+                # authoring canvas, which only this button opens.
+                _edit_manual_sample()
+            else:
+                st.session_state[FOCUS_MAPPING_KEY] = token
+                st.session_state[DATASET_EDITOR_OPEN_KEY] = True
             st.session_state[_TABLE_NEEDS_APP_RERUN] = True
 
     def _on_delete() -> None:
@@ -5182,6 +5404,8 @@ def resolve_source_monitor(
     # `eyegenbench_geometry.DISPLAY_SPECS["onestop"]`.
     if data_choice in (ONESTOP_CHOICE, DEMO_CHOICE):
         return 2560, 1440, True
+    if data_choice == MANUAL_SAMPLE_CHOICE:
+        return (*_manual_sample_canvas(), True)
     if (monitor := _public_dataset_monitor(data_choice)) is not None:
         return monitor[0], monitor[1], True
     # A public corpus reached by its own registry *label* rather than through the
@@ -6216,7 +6440,45 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
     )
     from scanpath_studio.authoring_component import render_authoring_canvas
 
-    st.subheader(f"{ICONS['author']} Author a scanpath")
+    source = st.session_state.get("data_source_choice", AUTHOR_CHOICE)
+    drafts = st.session_state.setdefault("_manual_scanpath_drafts", {})
+    previous = st.session_state.get("_author_editor_source")
+    if previous != source:
+        document = drafts.get(source)
+        if document is None and (
+            source == MANUAL_SAMPLE_CHOICE or previous is not None
+        ):
+            seed_text = (
+                _MANUAL_SAMPLE_TEXT
+                if source == MANUAL_SAMPLE_CHOICE
+                else "Reading unfolds through a sequence of careful eye movements."
+            )
+            document = (
+                seed_text,
+                dict(DEFAULT_LAYOUT),
+                default_events(layout_text(seed_text)),
+            )
+        if document is not None:
+            seed_text, seed_layout, seed_events = document
+            st.session_state["author_text"] = seed_text
+            st.session_state["_author_layout"] = seed_layout
+            st.session_state["_authored_events_frame"] = seed_events
+            st.session_state["_author_text_for_events"] = seed_text
+            st.session_state["_author_selected_fixation"] = None
+            st.session_state["_author_events_editor_revision"] = (
+                int(st.session_state.get("_author_events_editor_revision", 0)) + 1
+            )
+        st.session_state["_author_editor_source"] = source
+    header = st.container(horizontal=True, vertical_alignment="center")
+    header.subheader(
+        f"{ICONS['author']} "
+        + (
+            "Edit synthetic sample"
+            if source == MANUAL_SAMPLE_CHOICE
+            else "Author a scanpath"
+        )
+    )
+    header.button("Cancel", key="cancel_authoring", on_click=_cancel_authoring)
     st.caption(
         "Write the stimulus, then click or drag directly on the canvas. X/Y are "
         "the primary authored values; the optional target word is useful for "
@@ -6226,12 +6488,12 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
     restored = st.file_uploader(
         "Restore authoring file",
         type=["json"],
-        key="author_restore_upload",
+        key=f"author_restore_upload_{source}",
         help="Load a JSON file previously saved from this editor.",
         max_upload_size=upload_limit_mb(),
     )
     if restored is not None:
-        identity = (restored.name, restored.size)
+        identity = (source, restored.name, restored.size)
         if st.session_state.get("_author_restore_identity") != identity:
             try:
                 document = parse_authoring_document(restored.getvalue().decode("utf-8"))
@@ -6248,10 +6510,13 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
                 )
                 st.session_state["_author_restore_identity"] = identity
 
+    st.session_state.setdefault(
+        "author_text", "Reading unfolds through a sequence of careful eye movements."
+    )
     text = st.text_area(
         "Stimulus text",
-        value="Reading unfolds through a sequence of careful eye movements.",
         key="author_text",
+        persist_state="session",
         height=100,
     )
     layout = {**DEFAULT_LAYOUT, **st.session_state.get("_author_layout", {})}
@@ -6398,14 +6663,36 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
             st.session_state["_author_events_editor_revision"] = editor_revision + 1
             st.rerun()
 
-    st.download_button(
-        f"{ICONS['save']} Save authoring file",
-        data=authoring_json(text, effective_events, layout=layout),
-        file_name="authored-scanpath.json",
-        mime="application/json",
-        disabled=not events_valid,
+    fixations = authored_fixations(words, effective_events)
+    name_key = f"author_dataset_name_{source}"
+    st.text_input(
+        "Dataset name",
+        value="Synthetic sample (edited)"
+        if source == MANUAL_SAMPLE_CHOICE
+        else "My scanpath",
+        key=name_key,
     )
-    return words, authored_fixations(words, effective_events)
+    can_save = events_valid and not words.empty and not fixations.empty and not dropped
+    if can_save:
+        st.session_state["_author_save_payload"] = {
+            "words": words,
+            "fixations": fixations,
+            "raw_gaze": pd.DataFrame(),
+            "authoring": authoring_json(text, effective_events, layout=layout),
+        }
+    else:
+        st.session_state.pop("_author_save_payload", None)
+    st.button(
+        "Save dataset",
+        icon=ICONS["save"],
+        key="save_authored_dataset",
+        type="primary",
+        disabled=not can_save,
+        on_click=_save_authored_dataset,
+        args=(name_key,),
+    )
+    drafts[source] = (text, dict(layout), effective_events.copy())
+    return words, fixations
 
 
 #: PRE-1 control defaults. These keys are a wire format — a deep link or a saved
@@ -6516,6 +6803,10 @@ def _activate_data_source(data_choice: str, *, preproc_host=None) -> dict:
     it was a popover on the top menu bar until the page took it).
     """
     st.session_state["_active_data_source"] = data_choice
+    if st.session_state.get(_AUTHOR_EDITING_KEY) != data_choice:
+        st.session_state.pop(_AUTHOR_EDITING_KEY, None)
+    if not _authoring_editor_open(data_choice):
+        st.session_state.pop("_author_editor_source", None)
     preprocessing = _preprocessing_settings(preproc_host)
     if st.session_state.get("_share_selection_source") != data_choice:
         st.session_state.pop("_share_selection", None)
@@ -6549,29 +6840,234 @@ def _activate_data_source(data_choice: str, *, preproc_host=None) -> dict:
     return preprocessing
 
 
+#: UX-168: the last dataset a run left on screen — where Cancel goes back to
+#: (`_remember_open_dataset`). Not the wizard's `_prev_source`, which only
+#: records where leaving the add-dataset wizard returns to.
+LAST_LOADED_SOURCE_KEY = "_sps_last_loaded_source"
+#: UX-166: the dataset task this session's pipeline is running, set when the
+#: card opens and cleared when it ends; found still set by the next run, it
+#: means that run was abandoned mid-load.
+DATASET_TASK_KEY = "_sps_dataset_task"
+#: UX-168: set by Cancel on the dataset card, read once by the next run's notice.
+CANCELLED_LOAD_KEY = "_sps_cancelled_load"
+
+
+def _dataset_cancel(token: str, task_key: tuple) -> loading.Cancel | None:
+    """The dataset card's Cancel: only for a load the user started — cold, or
+    by switching away from what was already on screen.
+
+    **T8-2:** the last dataset a run left on screen (`_remember_open_dataset`)
+    is where Cancel goes back to, but a rerun of **that same dataset** (a filter
+    change, a re-normalization, a slow step on ✏️ Edit dataset) must offer none
+    at all — there is nothing the user asked to leave, and clicking it would
+    abandon the dataset they are looking at. The Bundled demo is the fallback
+    only when no dataset has been on screen yet this session, never back to
+    `token` itself either way.
+
+    **T8-5:** `back` must also be a dataset this run can actually open —
+    `resolve_data_source` heals a stale/hidden/removed selection to
+    `entries[0]` (published as `_data_source_entries`, before this runs), so a
+    button still reading "Back to <back>" could silently reopen something else.
+    Falls back to the demo when it is offered and isn't `token`, else no
+    Cancel.
+    """
+    last = st.session_state.get(LAST_LOADED_SOURCE_KEY)
+    if last == token:
+        return None
+    back = last or DEMO_CHOICE
+    if back == token:
+        return None
+    entries = st.session_state.get("_data_source_entries") or ()
+    if back not in entries:
+        if DEMO_CHOICE not in entries or DEMO_CHOICE == token:
+            return None
+        back = DEMO_CHOICE
+    return loading.Cancel(
+        f"Back to {_dataset_display_name(back)}",
+        _cancel_dataset_load,
+        args=(task_key, token, _dataset_display_name(token), back),
+    )
+
+
+def _cancel_dataset_load(task_key: tuple, token: str, name: str, back: str) -> None:
+    """UX-168: Cancel on the dataset card — stop the load, reopen ``back``."""
+    progress.cancel(task_key)
+    st.session_state["_pending_source_choice"] = back
+    st.session_state[CANCELLED_LOAD_KEY] = {"token": token, "name": name}
+
+
+def _retry_load(token: str) -> None:
+    st.session_state["_pending_source_choice"] = token
+
+
+def _render_cancelled_load_notice(host) -> None:
+    """UX-168: "Stopped loading X · Try again", once, where the notices go."""
+    note = st.session_state.pop(CANCELLED_LOAD_KEY, None)
+    if not note:
+        return
+    row = host.container(
+        key="sps_cancelled_notice", horizontal=True, vertical_alignment="center"
+    )
+    # As wide as its words, so Try again sits beside them, not across the page.
+    row.caption(f"Stopped loading **{note['name']}**.", width="content")
+    row.button(
+        "Try again",
+        key="sps_try_again",
+        on_click=_retry_load,
+        args=(note["token"],),
+        type="tertiary",
+    )
+
+
+def _open_dataset_card(
+    page: loading.Page,
+    data_choice: str,
+    *,
+    view: str,
+    view_switched: bool,
+    finalizing: bool,
+) -> loading.Card | None:
+    """UX-166: this run's dataset card, or ``None`` when there is no load to wait on.
+
+    A switch to ``view`` opens the task-less "Opening <view>" card at once,
+    titled for the view and without steps, **only when no load was already in
+    flight** (``in_flight`` below): the dataset is loaded already, so the
+    skeleton is what answers the click, and each switch's task is its own
+    (never joined by a load's task, nor joining one — nor a later switch to the
+    same view, which must never join a stale one either). **T8-3:** a view
+    switch that instead lands on an in-flight load — the previous run's, or one
+    a dataset pick in the same click just started — opens the ordinary dataset
+    card instead (steps, Cancel, the explicit `task_key`, so it joins that
+    load), revealed at once rather than task-less: a load's own progress and
+    Cancel must never be hidden behind the view-switch skeleton. `DATASET_TASK_KEY`
+    still names the dataset's either way — a view switch in the middle of a
+    load is not "another dataset".
+
+    **In flight** means a live, unfinished task still holds the key
+    (`progress.running`), not just that the key is set: a run that ended by
+    ``st.stop()``, an exception or ``st.rerun()`` mid-pipeline leaves
+    `DATASET_TASK_KEY` behind with nothing computing it, and a view switch after
+    that would otherwise show a load's card — steps, Cancel, revealed at once —
+    for no load at all.
+
+    **UX-168:** a run that finds *another* dataset's task still marked running
+    under `DATASET_TASK_KEY` was started by picking this one mid-load (directly,
+    or via Cancel) — the user changed their mind, so the abandoned load is
+    cancelled here, at its next checkpoint, instead of competing for the CPU.
+    Checked before the early return below too: switching to Upload or Author
+    mid-load cancels a load left running just the same, and that branch has no
+    load of its own to name `DATASET_TASK_KEY` after, so it clears the key
+    rather than replacing it.
+
+    **The load card is gated** (``reveal_on_work``): it opens on every run, and
+    a plain rerun — every build a cache hit — can outlast the delay on a big
+    corpus, re-hashing the frames each hit hands back; shown, it blanked the
+    view to the skeleton on every widget touch. So it shows only once one of
+    its builds has reported, i.e. missed. ``reveal_now`` still shows it at once.
+
+    **A rerun of the dataset on screen is an update:** "Updating <dataset>",
+    with no Cancel, no "last load" hint and no duration recorded — a filter
+    change's re-run is not how long the dataset takes to open.
+    """
+    if data_choice == UPLOAD_CHOICE or _authoring_editor_open(data_choice):
+        previous = st.session_state.pop(DATASET_TASK_KEY, None)
+        if previous is not None:
+            progress.cancel(tuple(previous))
+        return None
+    token = str(st.session_state.get("data_source_choice") or data_choice)
+    session = loading.session_id()
+    task_key = ("dataset", session, token)
+    previous = st.session_state.get(DATASET_TASK_KEY)
+    in_flight = previous is not None and progress.running(tuple(previous))
+    if previous is not None and tuple(previous) != task_key:
+        progress.cancel(tuple(previous))
+    st.session_state[DATASET_TASK_KEY] = task_key
+    if view_switched and not in_flight:
+        return page.open_card(
+            title=f"Opening {view_label(view)}",
+            reveal_now=True,
+        )
+    stored = data_choice in st.session_state.get("_datasets", {})
+    steps = (
+        ("Building the trial list",)
+        if stored
+        else ("Reading files", "Normalizing", "Building the trial list")
+    )
+    # UX-166: the dataset already on screen, run again — a filter change on a
+    # big corpus, a re-normalization — is an update, not a load: titled so, with
+    # no "last load" hint and no duration of its own, since an update's time
+    # must never stand in for how long the dataset took to open. (It offers no
+    # Cancel either — `_dataset_cancel`'s T8-2 rule, the same test.) A dataset
+    # just added is always a load: the wizard, not a dataset, was on screen.
+    updating = not finalizing and st.session_state.get(LAST_LOADED_SOURCE_KEY) == token
+    return page.open_card(
+        title=f"{'Updating' if updating else 'Loading'} {_dataset_display_name(token)}",
+        steps=steps,
+        cancel=_dataset_cancel(token, task_key),
+        task_key=task_key,
+        duration_key=None if updating else ("dataset", token),
+        reveal_now=finalizing or view_switched,
+        reveal_on_work=True,
+    )
+
+
+def _remember_open_dataset(data_choice: str) -> None:
+    """UX-168: the dataset this run leaves on screen is where Cancel goes back to.
+
+    Recorded on every path that leaves a dataset showing, not only a finished
+    pipeline: the ✏️ Author editor (which opens no card), a dataset whose
+    mapping still needs fixing, one whose filters left no trials — "Back to"
+    must name the dataset you had open, not one further back. Never for the
+    add-dataset wizard (``UPLOAD_CHOICE``), which shows no dataset and has its
+    own way back (`_prev_source`). The value is the dataset card's own token.
+    """
+    if data_choice == UPLOAD_CHOICE:
+        return
+    st.session_state[LAST_LOADED_SOURCE_KEY] = str(
+        st.session_state.get("data_source_choice") or data_choice
+    )
+
+
+def _finish_dataset_card(card: loading.Card | None, data_choice: str) -> None:
+    """UX-166: the pipeline finished — every step ✓, the skeleton left up — and
+    the dataset is on screen (`_remember_open_dataset`), card or none."""
+    if card is not None:
+        card.finish()
+        card.close(keep=True)
+        st.session_state.pop(DATASET_TASK_KEY, None)
+    _remember_open_dataset(data_choice)
+
+
 def main() -> None:
-    """Main application entry point.
+    """Main application entry point: one script run, inside a loading scope.
 
-    Orchestrates the full application workflow:
-        1. Configure Streamlit page and custom CSS
-        2. Render title and caption
-        3. Load and normalize data (words, fixations, optional raw gaze)
-        4. Apply user-selected filters (participants, trials, texts)
-        5. Render the plot controls (canvas, fonts, visualization settings)
-        6. Render the active view (Scanpath Visualization / Corpus Analysis / Data Inspection)
+    UX-165: ``loading.run_scope`` guarantees that no loading card's timer thread
+    outlives the run that started it — whether the run ends normally, returns
+    early, raises, or is abandoned by a click — and ends a run whose work was
+    cancelled as a stopped one, which keeps the state of the widgets it never
+    reached. The run itself is `_run_app`.
+    """
+    with loading.run_scope():
+        _run_app()
 
-    Data Flow:
-        CSV upload → schema inference → normalization → filtering →
-        trial combination building → visualization rendering
 
-    UI Structure:
-        Sidebar: Data source, filters, canvas settings, viz controls
-        Main area: 4 tabs for different views of the data
+def _run_app() -> None:
+    """One script run, top to bottom (``main`` wraps it in a loading scope).
 
-    Error Handling:
-        - Stops execution if schema inference fails
-        - Shows warning if filtering eliminates all data
-        - Handles missing raw gaze data gracefully
+    1. Page setup: config and CSS, the URL presets, and the recovery-cache
+       restore — under a card of its own until the session has restored.
+    2. Chrome: the top nav resolves the active view; then the menu bar, the
+       title and the tours and dialogs.
+    3. Reserved slots, in screen order: the view area the Scanpath and Corpus
+       views render into, then the 🗂️ Data page's overview and editor slots.
+    4. The dataset pipeline, under the dataset card: load → normalize →
+       filter → the trial list. It returns early, through ``_end_loading``, for
+       an open add-dataset wizard, a mapping that can't be satisfied, or a
+       filter that empties the pool.
+    5. The active view: 🗺️ Scanpath or 📊 Corpus Analysis inside the view
+       area, or the Data page's slots filled.
+    6. The epilogue: the JSON backup, the recovery-cache save, and the
+       💾 Session dialog.
     """
     configure_page()
     # PERF-3: the cache-key memo is scoped to ONE script run — drop last run's
@@ -6593,9 +7089,33 @@ def main() -> None:
     # win over restored settings; an explicit ?source= also wins over the stored
     # data-source choice.
     app_url = str(getattr(st.context, "url", "") or "")
-    if restore_local_state(
-        st.session_state, app_url, protect_data_source=url_source is not None
-    ):
+    # UX-166: restoring large uploads reads their Parquet files before even the
+    # title is drawn, so it gets a card of its own at the very top of the page —
+    # only while there is something to restore: once the session has had its
+    # one attempt the call returns at once, and a card around it would cost
+    # every run a timer thread and a task for nothing. Its slot is held on every
+    # run either way (UX-167: one element fewer here would shift the view).
+    restore_slot = st.empty()
+    restoring = (
+        contextlib.nullcontext()
+        if local_state_restored(st.session_state)
+        else loading.card(
+            restore_slot,
+            key="restore",
+            title="Restoring your datasets from this computer",
+        )
+    )
+    with restoring:
+        restored = restore_local_state(
+            st.session_state, app_url, protect_data_source=url_source is not None
+        )
+    # UX-167: Streamlit matches a rerun's elements to the last run's by position,
+    # so a notice that shows on one run only (the unavailable-link warning below)
+    # must not move the page under it — it writes into this container, drawn on
+    # every run. The toasts need no slot: `st.toast` draws in Streamlit's event
+    # container, outside the page.
+    page_notices = st.container()
+    if restored:
         # ENG-30: say it once, where the user is looking. Silently repopulating a
         # session reads as "the app kept my data somewhere" without saying where;
         # the toast points at the menu panel that answers that.
@@ -6676,7 +7196,7 @@ def main() -> None:
             # never silently open a different corpus. There is no remedy to name
             # (DATA-55): the app no longer discovers corpora, and until DATA-56's
             # add-from-a-folder flow nothing in it adds one.
-            st.warning(
+            page_notices.warning(
                 f"This link opens the corpus `{slug}`, which isn't available "
                 "here. The link's view settings still apply to whatever you open."
             )
@@ -6748,6 +7268,7 @@ def main() -> None:
 
     menu = render_top_menu(show_debug=debug_enabled(), active_view=active_view)
     _render_about_panel(menu.title)
+    _render_cancelled_load_notice(menu.notices)
 
     def _fill_recovery_cache_panel(backup_renderer=None) -> None:
         """Serve the 💾 Session dialog, once, on whichever path we leave by.
@@ -6775,58 +7296,62 @@ def main() -> None:
     # work, so the welcome streams to the browser immediately instead of
     # after the full first render. Replay clicks arm the tour in the button's
     # on_click callback, which runs before this point in the rerun.
-    maybe_show_welcome_tour()
-    render_spotlight_tour()
-    # UX-40: task-oriented tutorials share the spotlight mechanism but keep
-    # their own progress and do not inherit the welcome tour's opt-out.
-    render_use_case_tutorial()
-    # UX-39: arm the title's easter egg. After the tour/tutorial renders, because
-    # its suppression reads the `tour_mode` / `tutorial_active` those set — and it
-    # doesn't care about DOM order, being a height-0 script that retries until the
-    # heading has hydrated.
-    render_easter_egg()
-    # UX-15: same deal for the FAQ dialog — the ❓ Help menu button that arms it
-    # renders at the bottom of this function, so serving it here is what keeps
-    # the modal from waiting out the whole rerun. Ditto ℹ️ About, a dialog since
-    # the menu bar made it a popover inside a popover.
-    maybe_show_faq()
-    maybe_show_about()
-    maybe_show_tutorial_library()
+    #
+    # UX-167: one container for the whole block, so it always holds exactly one
+    # index below it — `render_easter_egg()` is the case that bit: it draws a
+    # bare iframe except while a tour or tutorial is active, so the first run
+    # after one closes used to insert an element above the view and shift it.
+    # See scanpath_studio/CLAUDE.md → Gotchas.
+    with st.container():
+        maybe_show_welcome_tour()
+        render_spotlight_tour()
+        # UX-40: task-oriented tutorials share the spotlight mechanism but keep
+        # their own progress and do not inherit the welcome tour's opt-out.
+        render_use_case_tutorial()
+        # UX-39: arm the title's easter egg. After the tour/tutorial renders, because
+        # its suppression reads the `tour_mode` / `tutorial_active` those set — and it
+        # doesn't care about DOM order, being a height-0 script that retries until the
+        # heading has hydrated.
+        render_easter_egg()
+        # UX-15: same deal for the FAQ dialog — the ❓ Help menu button that arms it
+        # renders at the bottom of this function, so serving it here is what keeps
+        # the modal from waiting out the whole rerun. Ditto ℹ️ About, a dialog since
+        # the menu bar made it a popover inside a popover.
+        maybe_show_faq()
+        maybe_show_about()
+        maybe_show_tutorial_library()
 
     # `active_view` was already resolved above, before `render_top_menu` drew
     # its Session-page panel from it (including the BUG-31 wizard hold-override
     # — see the note there); the dispatch below reuses the same value.
 
-    # Switching view is a full rerun — data load, filters, then a page of fresh
-    # figures — and Streamlit leaves the OLD view painted until the new run
-    # overwrites each element. So a click on "Corpus Analysis" left the scanpath
-    # sitting there, looking like nothing had happened. Paint a bridge the
-    # moment we know the view changed: it lands high on the page, before the
-    # slow work, so the click gets an immediate answer. Cleared just before the
-    # real view renders. Same pattern (and reasoning) as `_finalizing_bridge`
-    # above — see ENG-36 for why the message keeps its own line above the
-    # skeleton rather than relying on a bare skeleton to explain itself.
-    #
-    # The container is created on EVERY run, not only on a switch, and only
-    # *filled* on a switch. Streamlit reconciles the element tree by position:
-    # a run that skipped creating it left the previous run's banner + skeleton
-    # sitting there unclaimed, so the "Loading…" never went away. Always
-    # claiming the slot means the next run overwrites it with an empty
-    # container, which is what clears it.
-    #
-    # It has to be an `st.empty()` placeholder, not a plain container:
-    # `container.empty()` *appends* an empty child, it does not drop the
-    # children already written into it, so the banner and skeleton survived the
-    # clear below and sat above the finished page until some later rerun
-    # happened to redraw the slot. A placeholder holds exactly one element — a
-    # child container when there is something to say, nothing after `.empty()`.
-    _view_bridge = st.empty()
-    if st.session_state.get("_last_rendered_view") not in (None, active_view):
-        _bridge_box = _view_bridge.container()
-        _bridge_box.info(f"Loading {view_label(active_view)}…", icon=ICONS["loading"])
-        _bridge_box.skeleton(height=420)
-    else:
-        _view_bridge = None
+    # UX-166 — the Scanpath and Corpus views render inside one reserved area.
+    # Its first child is the page slot: `loading.Page` fills it with a skeleton
+    # of the view and the dataset card while a load is slow, and CSS hides the
+    # rest of the area meanwhile — the previous page, or the new one being laid
+    # out under it. It replaces the old "Loading <view>…" bridge, which a view
+    # switch now shows at once as that view's skeleton. The slot is recreated
+    # empty on every run, so nothing it held can outlive the run (BUG-81).
+    view_area = st.container(key=loading.VIEW_AREA_KEY)
+    view_first_slot = view_area.empty()
+    # UX-167: reserved right after the page slot — creation order is screen
+    # order, so this is always the view area's second child — and given to the
+    # conditional notices below (`view_notices`) so the view's own blocks after
+    # them keep their place whether or not a notice draws this run.
+    view_notices_slot = view_area.container()
+    if active_view == _VIEW_DATA:
+        # UX-166: the Data page draws outside the area, so on that view it only
+        # ever holds what the previous view left there — until this run ends,
+        # the old page, above the new one. This marker hides it (styles.py) for
+        # the whole run; it is not the page card's, which the Data page outlives.
+        view_first_slot.markdown(
+            '<span class="sps-view-hidden" aria-hidden="true"></span>',
+            unsafe_allow_html=True,
+        )
+    view_switched = st.session_state.get("_last_rendered_view") not in (
+        None,
+        active_view,
+    )
     st.session_state["_last_rendered_view"] = active_view
 
     # DATA-26 — the **Data** page ("Data Management"). One place for
@@ -6891,6 +7416,11 @@ def main() -> None:
     # The editor's own header bar — the ✏️ Edit dataset screen's title and its
     # way back, filled below once the dataset's display name is known.
     editor_head_slot = editor_page.container()
+    # UX-166: the dataset card's slot on the ✏️ Edit dataset screen, directly
+    # under its header bar. The overview, where the card sits otherwise, is
+    # hidden while the editor is open — and a card nobody can see would still
+    # silence every spinner on the page.
+    editor_loading_slot = editor_page.empty()
     # UX-135 — the editor's sections are the add screen's numbered *parts*, not
     # a `st.divider()` + `st.subheader()` + `st.caption()` stack. `_editor_part`
     # below draws one headline into each of the slots reserved here; the
@@ -6985,6 +7515,22 @@ def main() -> None:
     from scanpath_studio.wizard import _enter_add_data_wizard
 
     data_choice = resolve_data_source(host=setup_source_slot)
+    # DATA-47 — the metadata tables belong to a dataset. Swap the selected one's
+    # onto the session keys every consumer reads (`metadata.active()` & co.),
+    # filing the previous dataset's away. Keyed by the concrete canonical choice
+    # the dataset table uses, not `data_choice` — every public corpus loads
+    # through one category token, and they must not share a table. The add
+    # wizard's dataset has no name yet, so it gets the pending slot.
+    from scanpath_studio import metadata as _metadata
+
+    _metadata.activate_dataset(
+        st.session_state,
+        _metadata.PENDING_DATASET
+        if data_choice == UPLOAD_CHOICE
+        else str(st.session_state.get("data_source_choice") or data_choice),
+    )
+    # UX-166: on the Data page the dataset card sits above the table.
+    data_page_slot = setup_source_slot.empty()
     # UX-54: the page lists every dataset as a *table* — one row each, sortable,
     # with the counts beside the name and the per-row actions in the row they
     # belong to. Reserved here (so it keeps its place at the top of the page)
@@ -6994,11 +7540,30 @@ def main() -> None:
     # source picker it used to aim at is not on this page (only Scanpath and
     # Corpus Analysis draw one), so the step outlined nothing.
     dataset_table_slot = setup_source_slot.container(key="tutorial_available_datasets")
+    # UX-166: this run's page — the slot the skeleton and the dataset card draw
+    # into while a load is slow: the view area's first child on Scanpath and
+    # Corpus Analysis; on the Data page, the slot above the table, or the one
+    # under the ✏️ Edit dataset header while the editor is open.
+    if not data_view:
+        page_slot = view_first_slot
+    elif editing:
+        page_slot = editor_loading_slot
+    else:
+        page_slot = data_page_slot
+    page = loading.page(
+        page_slot,
+        view="data"
+        if data_view
+        else "corpus"
+        if active_view == _VIEW_CORPUS
+        else "scanpath",
+        plot_height=loading.recorded_plot_height("single", 480),
+    )
     # DATA-35: under the table, not on the heading's line. Left-aligned in a
     # narrow column so a stretched button doesn't run the width of the page.
     add_dataset_slot = None
     if data_view and not wizard_owns_page:
-        add_dataset_slot, _ = setup_source_slot.columns([1, 4])
+        add_dataset_slot = setup_source_slot.container(horizontal=True)
     if data_view and add_dataset_slot is not None and data_choice != UPLOAD_CHOICE:
         # UX-64 took ➕ Add data off the Scanpath row and made this page the only
         # way in — so the way in has to *be* here. Without this button
@@ -7012,8 +7577,14 @@ def main() -> None:
             key="add_data_btn",
             on_click=_enter_add_data_wizard,
             help="Upload your own eye-tracking tables.",
-            width="stretch",
+            width="content",
             type="primary",
+        )
+        add_dataset_slot.button(
+            "Create manual scanpath",
+            icon=ICONS["author"],
+            key="create_manual_scanpath_btn",
+            on_click=_enter_manual_dataset,
         )
     if data_view and editing:
         _render_dataset_editor_bar(editor_head_slot, data_choice)
@@ -7026,39 +7597,35 @@ def main() -> None:
     preproc_settings = _activate_data_source(
         data_choice, preproc_host=setup_preproc_slot
     )
-    # Just-finalized upload: paint a "loading" bridge into the main area now so it
-    # repaints over the wizard (instead of the wizard lingering until the slow
-    # first figure finishes). Cleared just before the tabs render below.
-    #
-    # ENG-36: the message keeps its own line — a bare skeleton says "loading" but
-    # not *what*, and the wizard has just closed under the user — while
-    # `st.skeleton` (1.59) reserves the height the plot is about to take, so the
-    # page doesn't reflow when the figure lands. Standalone mode, not the `with`
-    # form: the wait spans everything between here and the tab render below, not
-    # one block.
-    # An `st.empty()` placeholder for the same reason as the view bridge above:
-    # `.empty()` on a plain container adds a child instead of clearing one.
-    _finalizing_bridge = None
-    if st.session_state.pop("_wizard_finalizing", False):
-        _finalizing_bridge = st.empty()
-        _finalizing_box = _finalizing_bridge.container()
-        _finalizing_box.info(
-            f"{ICONS['success']} Dataset added — loading your scanpaths…",
-            icon=ICONS["loading"],
-        )
-        _finalizing_box.skeleton(height=420)
+    # UX-166 — one card over the dataset pipeline, drawn in the page slot. The
+    # post-wizard "Dataset added — loading your scanpaths…" bridge it replaces
+    # is this card shown at once.
+    dataset_card = _open_dataset_card(
+        page,
+        data_choice,
+        view=active_view,
+        view_switched=view_switched,
+        finalizing=bool(st.session_state.pop("_wizard_finalizing", False)),
+    )
 
-    def _clear_loading_bridges() -> None:
-        """Drop the "⏳ Loading…" banners once the page has something to show.
+    def _end_loading(*, showing_dataset: bool = True) -> None:
+        """Take the dataset card and the page skeleton down on an early return.
 
-        BUG-81: only the normal path cleared them, so every early return below
-        (the wizard, a mapping that can't be satisfied, a filter that empties
-        the pool) left the banner + skeleton above the real content until the
-        next click — on the very page the warning had just sent the user to.
+        BUG-81: only the normal path cleared the old loading banners, so every
+        early return (the wizard, a mapping that can't be satisfied, a filter
+        that empties the pool) left one above the real content until the next
+        click — on the very page the warning had just sent the user to.
+
+        ``showing_dataset``: the run leaves the dataset on screen — a mapping
+        still to fix, a filter that emptied the pool — so it is where Cancel
+        goes back to (UX-168); the add-dataset wizard's return shows none.
         """
-        for bridge in (_finalizing_bridge, _view_bridge):
-            if bridge is not None:
-                bridge.empty()
+        if dataset_card is not None:
+            dataset_card.close()
+        st.session_state.pop(DATASET_TASK_KEY, None)
+        page.release()
+        if showing_dataset:
+            _remember_open_dataset(data_choice)
 
     def _render_datasets_table(words, fixations, raw_gaze) -> None:
         """📂 Available datasets, whenever the Data page is showing its overview.
@@ -7096,6 +7663,17 @@ def main() -> None:
     # above. VIZ-31 had already moved "Experimental Setup" out of it: monitor
     # geometry, fonts, text colour and plot background are figure settings, and
     # they render in the Scanpath rail beside the layers they restyle.)
+
+    # UX-166: what the pipeline draws on its way to the view belongs *above* it —
+    # the ✏️ Author editor (the view's input), the data-quality warning and
+    # UX-7(b)'s missing-corpus panel (notes on it). The Scanpath and Corpus
+    # views render inside `view_area`, created before all of this, so on those
+    # views these go into it too (after the page slot, so they wait under a
+    # skeleton with the rest of the new page); the Data page keeps them where
+    # they always were. UX-167: `view_notices_slot` is its own container, held
+    # on every run, so the view's blocks below it keep their place whether or
+    # not a notice draws this run.
+    view_notices = contextlib.nullcontext() if data_view else view_notices_slot
 
     # Load + map core data. The **Upload** source renders each table as an
     # [upload box → mapping] group on the 🗂️ Data page (words, fixations, raw gaze) and
@@ -7152,10 +7730,24 @@ def main() -> None:
         if wizard_active:
             _render_offpage_setup_notice(data_view)
             _fill_recovery_cache_panel()
-            _clear_loading_bridges()
+            _end_loading(showing_dataset=False)
             return
-    elif data_choice == AUTHOR_CHOICE:
-        words_df, fixations_df = _render_authoring_source()
+    elif data_choice == MANUAL_SAMPLE_CHOICE and not _authoring_editor_open(
+        data_choice
+    ):
+        # The example is shown like any stored dataset; ✏️ Edit opens its editor.
+        words_df, fixations_df = _manual_sample_frames()
+        raw_words_df, raw_fixations_df = words_df, fixations_df
+        raw_gaze_df = pd.DataFrame()
+        mapping_problems = []
+    elif data_choice in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
+        with view_notices:
+            words_df, fixations_df = _render_authoring_source()
+        if active_view == _VIEW_SCANPATH:
+            # The authoring canvas is this screen's visualization.
+            _fill_recovery_cache_panel()
+            _end_loading()
+            return
         raw_words_df, raw_fixations_df = words_df, fixations_df
         raw_gaze_df = pd.DataFrame()
         mapping_problems = []
@@ -7165,6 +7757,25 @@ def main() -> None:
         # to it is instant (no re-upload, no re-mapping). See _render_data_setup's
         # finalize and resolve_data_source.
         stored = st.session_state["_datasets"][data_choice]
+        # DATA-39 — a dataset saved on ✏️ Edit dataset before that fix has its
+        # AOI table stranded on the placeholder reader, so every scanpath drew
+        # without its boxes and text. Repair it once, in the store itself, so
+        # the recovery cache writes the repaired frames and it stays fixed.
+        # A repair that cannot be made is not retried while the frames are the
+        # same: the diagnosis is only "the flag is still set", so a failed
+        # attempt would otherwise redo the whole harmonize on every rerun.
+        failed = st.session_state.setdefault("_data39_repair_failed", {})
+        attempt = frame_fingerprint(stored["words"])
+        if failed.get(data_choice) != attempt:
+            repaired = repair_stranded_stimulus_words(
+                stored["words"], stored["fixations"]
+            )
+            if repaired is not None:
+                stored = {**stored, "words": repaired[0], "fixations": repaired[1]}
+                st.session_state["_datasets"][data_choice] = stored
+                failed.pop(data_choice, None)
+            elif STIMULUS_WORDS_FLAG in stored["words"].columns:
+                failed[data_choice] = attempt
         words_df, fixations_df = stored["words"], stored["fixations"]
         raw_gaze_df = stored["raw_gaze"]
         raw_words_df, raw_fixations_df = words_df, fixations_df
@@ -7215,6 +7826,18 @@ def main() -> None:
             options_host=source_options_slot,
             location_host=data_location_slot,
         )
+        if dataset_card is not None and len(dataset_card.steps) == 3:
+            if st.session_state.get(_UNAVAILABLE_KEY):
+                # UX-166: the corpus isn't here, so the rows just read are the
+                # bundled demo's stand-in — not counts for the corpus the card
+                # names. The step moves on under its plain label.
+                dataset_card.step(1)
+            else:
+                dataset_card.step(
+                    1,
+                    f"Normalizing {len(raw_words_df):,} word rows and "
+                    f"{len(raw_fixations_df):,} fixations",
+                )
         declared_word_schema, declared_fix_schema = declared_schemas_for(data_choice)
         words_df, fixations_df, mapping_problems = prepare_data(
             raw_words_df,
@@ -7247,7 +7870,7 @@ def main() -> None:
         _render_offpage_setup_notice(data_view)
         _fill_recovery_cache_panel()
         _render_datasets_table(None, None, None)
-        _clear_loading_bridges()
+        _end_loading()
         return
 
     # VIZ-14: local/desktop users can attach stimulus screenshots without
@@ -7307,10 +7930,12 @@ def main() -> None:
             else preproc_report.iloc[0:0]
         )
         if not suspicious.empty:
-            st.warning(
-                f"Data quality: {len(suspicious)} trial(s) put at least 12 "
-                "fixations on one word. Check stimulus alignment or line assignment."
-            )
+            with view_notices:
+                st.warning(
+                    f"Data quality: {len(suspicious)} trial(s) put at least 12 "
+                    "fixations on one word. Check stimulus alignment or line "
+                    "assignment."
+                )
     else:
         st.session_state["_preprocessing_report"] = pd.DataFrame()
         st.session_state["_preprocessing_settings"] = dict(preproc_settings)
@@ -7318,7 +7943,8 @@ def main() -> None:
     # UX-7(b): if the selected corpus isn't on disk, say so here — in the main
     # area, where the (demo) plot the user is actually looking at is — rather than
     # leaving it to a line on the 🗂️ Data page they may never open.
-    _render_dataset_unavailable()
+    with view_notices:
+        _render_dataset_unavailable()
 
     # Whole-dataset frames, captured BEFORE the trial-filter funnel —
     # the Bulk Export tab's "Export the whole dataset" option exports these,
@@ -7414,6 +8040,8 @@ def main() -> None:
     # data. The controls now live in the Scanpath tab's Trial Selection panel
     # (rendered there via render_trial_filters); here we just read the last
     # selection from session_state so filtering stays global across every view.
+    if dataset_card is not None and dataset_card.steps:
+        dataset_card.step(len(dataset_card.steps) - 1)  # Building the trial list
     trial_filters = read_trial_filters()
     words_df, fixations_df = filter_trials(
         words_df,
@@ -7494,7 +8122,7 @@ def main() -> None:
         _render_empty_after_filtering(words_all, fixations_all, trial_filters)
         _fill_recovery_cache_panel()
         _render_datasets_table(words_all, fixations_all, raw_gaze_df)
-        _clear_loading_bridges()
+        _end_loading()
         return
 
     # Build trial combinations for selection UI — from fixations normally, then
@@ -7607,9 +8235,9 @@ def main() -> None:
         else raw_gaze_df
     )
 
-    # Clear the "loading" bridges now that the real content is about to render
-    # in their place — the post-finalize one, and the view-switch one.
-    _clear_loading_bridges()
+    # UX-166: the load is done; the skeleton stays until the view has drawn its
+    # controls and its first slow region opens (see `loading.card`).
+    _finish_dataset_card(dataset_card, data_choice)
 
     # Render tabbed interface. Animation is now a checkbox inside the Scanpath
     # Visualization tab (no separate Animated Scanpath tab); Bulk Export has its
@@ -7632,6 +8260,7 @@ def main() -> None:
     )
 
     if data_view:
+        loading.release_page()  # UX-166: the Data page's card sits above its table
         # DATA-26 — fill the page reserved before the load. Everything above the
         # dispatch already landed in its slot (source picker · description ·
         # options · data location · wizard · mode-A mapping panels); what is left
@@ -7747,48 +8376,54 @@ def main() -> None:
                     raw_gaze_filtered,
                 )
     elif active_view == _VIEW_CORPUS:
-        # UX-25: Corpus Analysis has no "Filter by" row, so the picker gets its
-        # own compact row at the top of the page — it stays reachable on every
-        # view.
-        _ds_col, _ = st.columns([2, 5])
-        render_data_source_picker(host=_ds_col)
-        with st.container(key="tutorial_corpus_analysis"):
-            render_corpus_analysis_tab(
-                words_filtered,
-                fixations_filtered,
-                canvas_width=canvas_width,
-                canvas_height=canvas_height,
-                base_font_size=base_font_size,
-                font_family=font_family,
-                viz_settings=viz_settings,
-                line_spacing=line_spacing,
-                scale_text_to_boxes=scale_text_to_boxes,
-                canvas_renderer=canvas_renderer,
-            )
+        with view_area:
+            # UX-25: Corpus Analysis has no "Filter by" row, so the picker gets
+            # its own compact row at the top of the page — it stays reachable on
+            # every view.
+            _ds_col, _ = st.columns([2, 5])
+            render_data_source_picker(host=_ds_col)
+            with st.container(key="tutorial_corpus_analysis"):
+                render_corpus_analysis_tab(
+                    words_filtered,
+                    fixations_filtered,
+                    canvas_width=canvas_width,
+                    canvas_height=canvas_height,
+                    base_font_size=base_font_size,
+                    font_family=font_family,
+                    viz_settings=viz_settings,
+                    line_spacing=line_spacing,
+                    scale_text_to_boxes=scale_text_to_boxes,
+                    canvas_renderer=canvas_renderer,
+                )
     else:
         # The Scanpath view renders the viz controls itself (right rail) and
         # writes the global_* keys; re-read them below so Save & restore captures
         # any edits the user just made in the rail. Data Inspection + Share are
         # subtabs of this view now — passed in as renderers so the page owns its
         # subtab bar (Data Inspection renders inline; Share builds the deep link).
-        render_single_trial_tab(
-            words_filtered,
-            fixations_filtered,
-            combos,
-            canvas_width=canvas_width,
-            canvas_height=canvas_height,
-            base_font_size=base_font_size,
-            font_family=font_family,
-            raw_gaze=raw_gaze_filtered,
-            line_spacing=line_spacing,
-            scale_text_to_boxes=scale_text_to_boxes,
-            combos_all=combos_all,
-            words_all=words_all,
-            fixations_all=fixations_all,
-            share_renderer=lambda: _render_share_body(data_choice),
-            data_source_renderer=render_data_source_picker,
-            canvas_renderer=canvas_renderer,
-        )
+        with view_area:
+            render_single_trial_tab(
+                words_filtered,
+                fixations_filtered,
+                combos,
+                canvas_width=canvas_width,
+                canvas_height=canvas_height,
+                base_font_size=base_font_size,
+                font_family=font_family,
+                raw_gaze=raw_gaze_filtered,
+                line_spacing=line_spacing,
+                scale_text_to_boxes=scale_text_to_boxes,
+                combos_all=combos_all,
+                words_all=words_all,
+                fixations_all=fixations_all,
+                share_renderer=lambda: _render_share_body(data_choice),
+                data_source_renderer=render_data_source_picker,
+                canvas_renderer=canvas_renderer,
+            )
+
+    # UX-166: a view that never reached a slow region (no trial selected, an
+    # empty view) still takes the skeleton down.
+    loading.release_page()
 
     # Re-resolve viz settings from session_state AFTER the dispatch so the Save &
     # restore panel reflects any edits made in the Scanpath rail this run (the

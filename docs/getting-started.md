@@ -41,15 +41,15 @@ Next, pick a [tutorial](tutorials/index.md).
 
 ## 3. Load your data
 
-Open 🗂️ **Data**, select **➕ Add dataset**, upload your fixation and words/IA
+Click **+** beside **Select Dataset**, choose **Import files**, upload your fixation and words/IA
 tables, check the proposed column mapping, answer **Recording setup**, then
 select **✅ Add dataset**. See
 [Loading public and own data](guides/loading-data.md) for accepted formats,
-manual mapping, and common checks.
+manual mapping, and common checks. **🗂️ Data → ➕ Add dataset** opens the same wizard.
 
 ## Author a scanpath without files
 
-Choose **✏️ Author a scanpath** as the data source when you want to sketch a
+Choose **+ → Create manually** beside **Select Dataset** when you want to sketch a
 trial from text instead of uploading tables. Enter the stimulus, inspect the
 generated word boxes, then edit the scanpath in either place:
 
@@ -60,9 +60,15 @@ generated word boxes, then edit the scanpath in either place:
 
 The editor starts with one centred fixation per word. X/Y is the authoritative
 location; **Target word** is optional metadata for reading measures, so a
-fixation may sit between or outside words. **💾 Save authoring file** saves the
-layout as JSON to reopen later, render it with `scanpath-studio render --authoring`, or
-load it with `scanpath_studio.load_authored_scanpath`.
+fixation may sit between or outside words. Enter a **Dataset name** and choose
+**Save dataset** to add it to the dataset list and open its regular visualization.
+**Cancel** returns to the previous dataset without adding one.
+
+For a ready-made example, choose **Synthetic sample** in the dataset picker:
+a manually authored six-word example that opens like any other dataset. To
+change its text, fixation positions, or timing, press **Edit** on its row in
+**🗂️ Data → Available datasets**; its draft is separate from your own scanpath.
+You can also start a scanpath from **🗂️ Data → Create manual scanpath**.
 
 ## Run from source
 

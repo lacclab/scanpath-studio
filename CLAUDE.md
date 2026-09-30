@@ -60,9 +60,9 @@ you work under `scanpath_studio/`); contributor setup is in
 - **Work lives in [GitHub Issues](https://github.com/lacclab/scanpath-studio/issues)**,
   arranged on the **[Scanpath Studio board](https://github.com/orgs/lacclab/projects/5)**
   (project 5). `gh issue view <n>`, `gh issue create`,
-  `gh project item-list 5 --owner lacclab`. The in-repo tracker was migrated on
-  2026-08-20 (ENG-32) and is now a **read-only archive** — see *The archive* at
-  the end of this section.
+  `gh project item-list 5 --owner lacclab`. The in-repo tracker that preceded
+  them was migrated on 2026-08-20 (ENG-32) and removed on 2026-09-30 (ENG-84) —
+  see *The archive* at the end of this section.
 - **Not every ID gets an issue, and that is deliberate.** `CHANGELOG.md` is where
   IDs are allocated and where the write-up for finished work lives; an issue is
   opened when an item needs something an issue is *for*. Open one when the item
@@ -84,18 +84,21 @@ you work under `scanpath_studio/`); contributor setup is in
 - **Stable IDs are still the currency.** Every issue is titled
   `[VIZ-37] <title>`, because the docs, the `plans/` notes and the git history
   cite items by that ID and always will. **Take the next free number by checking
-  all three registries**, because most IDs live in only one of them:
-  `CHANGELOG.md` (where the majority are — see the bullet above),
-  `gh issue list --state all --search "[DATA-"`, and `tracker/data.js` (the
-  pre-migration archive). Searching GitHub alone will hand you a number the
-  changelog already spent:
+  both registries**, because most IDs live in only one of them:
+  `CHANGELOG.md` (where the majority are — see the bullet above) and
+  `gh issue list --state all --search "[DATA-"`. Searching GitHub alone will
+  hand you a number the changelog already spent:
 
   ```bash
-  grep -oh "\bDATA-[0-9]*\b" CHANGELOG.md tracker/data.js docs/*.md scanpath_studio/*.py | sort -u -V | tail -3
+  grep -oh "\bDATA-[0-9]*\b" CHANGELOG.md docs/*.md scanpath_studio/*.py | sort -u -V | tail -3
   ```
 
-  **Three registries stopped being enough once `main` became protected.** An ID
-  that lives in an *unmerged branch* is invisible to all three — it is in that
+  (The pre-migration archive was the third registry until ENG-84 removed it; for
+  every prefix the changelog already held its highest number, so dropping it
+  hands out no used ID.)
+
+  **Two registries stopped being enough once `main` became protected.** An ID
+  that lives in an *unmerged branch* is invisible to both — it is in that
   branch's `CHANGELOG.md`, not main's, and it has no issue yet — so the command
   above can hand you a number another open PR already spent, while you are
   following this rule to the letter. It happened on 2026-09-15 in both
@@ -171,14 +174,13 @@ session, and put `(VIZ-37)` in the commit subject so the issue and the code stay
 findable from each other. Notice an unrelated problem? Fix it on the spot if it
 is small, otherwise `gh issue create` so it does not get lost.
 
-**The archive.** [`tracker/data.js`](tracker/data.js) + `index.html` still hold
-the 320 items closed before the migration, with their full write-ups, and
-`python3 tracker/server.py` serves them read-only at
-<http://127.0.0.1:8765/tracker/>. `tracker/migrated.json` maps each ID that moved
-to its issue number. **Do not add to it or edit it** — it is a frozen record, and
-`tests/test_tracker_server.py` fails if an open item there has no issue.
-[`tracker/to_github_issues.py`](tracker/to_github_issues.py) is the migration
-script, kept as the record of how the move was made.
+**The archive.** The 320 items closed before the migration, with their full
+write-ups, lived in `tracker/` until ENG-84 removed it (2026-09-30). They are
+still at the `v0.31.2` tag —
+[`tracker/`](https://github.com/lacclab/scanpath-studio/tree/v0.31.2/tracker), or
+`git show v0.31.2:tracker/data.js` — with `migrated.json` mapping each ID that
+moved to its issue and `to_github_issues.py` as the record of how the move was
+made. Look an old ID up there; nothing new goes into it.
 
 ## On release
 

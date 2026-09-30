@@ -688,7 +688,8 @@ def _render_parser() -> argparse.ArgumentParser:
         help="VIZ-7: draw only fixations START through END of the trial "
         "(1-based, both inclusive), e.g. --fix-index-range 1:40. Honoured by "
         "--animate too, which then replays only that window, and by "
-        "--compare-with, which windows both scanpaths.",
+        "--compare-with, which windows both scanpaths (unless "
+        "--compare-fix-index-range gives B its own).",
     )
     viz.add_argument(
         "--highlight-column",
@@ -1263,6 +1264,33 @@ def _render_parser() -> argparse.ArgumentParser:
             "marker_size_range (MIN:MAX), opacity (0.1–1), hollow (true|false) — "
             f"e.g. --style-{side} fix_color=#D55E00,opacity=0.5.",
         )
+    # CMP-24: scanpath B's own filters — the app's "· B" blocks under 🧹 Filter.
+    # A's are the ordinary --fixation-flag / --saccade-classes /
+    # --fix-index-range, which on their own filter both scanpaths.
+    cmp_group.add_argument(
+        "--compare-fixation-flag",
+        dest="compare_fixation_flags",
+        action="append",
+        metavar="SPEC",
+        help="Fixation classification for the SECOND scanpath only, repeatable; "
+        "same SPEC as --fixation-flag, e.g. --compare-fixation-flag "
+        "short=discard,threshold_ms=80. Replaces --fixation-flag for B.",
+    )
+    cmp_group.add_argument(
+        "--compare-saccade-classes",
+        dest="compare_saccade_classes",
+        metavar="CLASSES",
+        help="The reading classes the SECOND scanpath draws, comma-separated "
+        "(same names as --saccade-classes). Replaces --saccade-classes for B. "
+        "Not with --animate, which draws every class.",
+    )
+    cmp_group.add_argument(
+        "--compare-fix-index-range",
+        dest="compare_fix_index_range",
+        metavar="START:END",
+        help="Draw only fixations START through END of the SECOND scanpath "
+        "(1-based, inclusive). Replaces --fix-index-range for B.",
+    )
     cmp_group.add_argument(
         "--stimulus-image-b",
         metavar="PATH",
@@ -1564,6 +1592,18 @@ def _parse_canvas(value: str | None) -> tuple | None:
     if w <= 0 or h <= 0:
         raise SystemExit(f"--canvas dimensions must be positive, got {value!r}")
     return (w, h)
+
+
+def _parse_saccade_classes_arg(value: str, flag: str) -> list[str]:
+    """A ``--saccade-classes``-style list → the classes in canonical order (VIZ-31)."""
+    names = [p.strip() for p in value.split(",") if p.strip()]
+    unknown = [n for n in names if n not in SACCADE_CLASS_ORDER]
+    if unknown or not names:
+        raise SystemExit(
+            f"{flag} expects a comma-separated subset of "
+            f"{', '.join(SACCADE_CLASS_ORDER)}; got {value!r}."
+        )
+    return [cls for cls in SACCADE_CLASS_ORDER if cls in set(names)]
 
 
 def _parse_fix_index_range(value: str | None) -> tuple | None:
@@ -2038,6 +2078,9 @@ def render(argv: list[str]) -> None:
             ("--stimulus-image-b", args.stimulus_image_b),
             ("--stimulus-image-size-b", args.stimulus_image_size_b),
             ("--stimulus-image-origin-b", args.stimulus_image_origin_b),
+            ("--compare-fixation-flag", args.compare_fixation_flags),
+            ("--compare-saccade-classes", args.compare_saccade_classes),
+            ("--compare-fix-index-range", args.compare_fix_index_range),
         )
         if given
     ]
@@ -2481,17 +2524,9 @@ def render(argv: list[str]) -> None:
     # "only the regressions, in one colour" is as valid as "all of them, coloured
     # by type" — so it is its own flag rather than a mode.
     if args.saccade_classes:
-        names = [p.strip() for p in args.saccade_classes.split(",") if p.strip()]
-        unknown = [n for n in names if n not in SACCADE_CLASS_ORDER]
-        if unknown or not names:
-            raise SystemExit(
-                f"--saccade-classes expects a comma-separated subset of "
-                f"{', '.join(SACCADE_CLASS_ORDER)}; got "
-                f"{args.saccade_classes!r}."
-            )
-        overrides["saccade_classes"] = [
-            cls for cls in SACCADE_CLASS_ORDER if cls in set(names)
-        ]
+        overrides["saccade_classes"] = _parse_saccade_classes_arg(
+            args.saccade_classes, "--saccade-classes"
+        )
     # VIZ-9: linear-reading mode.
     if args.saccade_arcs:
         overrides["saccade_render_mode"] = "Arc"
@@ -2567,6 +2602,35 @@ def render(argv: list[str]) -> None:
             style = _parse_style_spec(getattr(args, f"style_{side}"), f"--style-{side}")
             if style:
                 overrides[f"style_{side}"] = style
+        # CMP-24: B's own filters. A comparison reads them off B's style; the
+        # co-animation takes B's flags as a setting and draws every class.
+        b_flags = (
+            _parse_fixation_flags(args.compare_fixation_flags)
+            if args.compare_fixation_flags
+            else None
+        )
+        b_classes = (
+            _parse_saccade_classes_arg(
+                args.compare_saccade_classes, "--compare-saccade-classes"
+            )
+            if args.compare_saccade_classes
+            else None
+        )
+        if args.animate:
+            if b_classes is not None:
+                raise SystemExit(
+                    "--compare-saccade-classes filters a comparison figure; the "
+                    "--animate co-animation has no saccade-class filter."
+                )
+            if b_flags is not None:
+                overrides["fixation_flags_b"] = b_flags
+        elif b_flags is not None or b_classes is not None:
+            style_b = dict(overrides.get("style_b") or {})
+            if b_flags is not None:
+                style_b["fixation_flags"] = b_flags
+            if b_classes is not None:
+                style_b["saccade_classes"] = b_classes
+            overrides["style_b"] = style_b
         if args.stimulus_image_b:
             from .plots import _png_pixel_size
 
@@ -2657,6 +2721,11 @@ def render(argv: list[str]) -> None:
                 labels = _compare_labels(args)
                 if labels is not None:
                     anim_kwargs["label_a"], anim_kwargs["label_b"] = labels
+                # CMP-24: B's own window.
+                if args.compare_fix_index_range:
+                    anim_kwargs["fix_index_range_b"] = _parse_fix_index_range(
+                        args.compare_fix_index_range
+                    )
             animation_options = dict(
                 playback_speed=args.playback_speed,
                 autoplay=args.autoplay,
@@ -2746,6 +2815,10 @@ def render(argv: list[str]) -> None:
                     # `overrides`. Left out, a windowed comparison drew both
                     # whole trials while the `--print-code` recipe said otherwise.
                     fix_index_range=_parse_fix_index_range(args.fix_index_range),
+                    # CMP-24: B's own window, when given.
+                    fix_index_range_b=_parse_fix_index_range(
+                        args.compare_fix_index_range
+                    ),
                     **overrides,
                     **common,  # carries canvas_size / fonts / title / caption
                 )
@@ -3135,6 +3208,8 @@ def cache(argv: list[str]) -> None:
     print(
         f"         {rows} · {status['annotations']} annotated "
         f"trial(s) · {status['designs']} saved design(s) · "
+        # DATA-38 — the attached metadata tables, the panel's own count.
+        f"{status.get('metadata', 0)} metadata table(s) · "
         f"{status['settings']} setting(s)"
     )
     print(f"Size:    {_human_size(status['bytes'])}")

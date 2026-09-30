@@ -13,15 +13,17 @@ import warnings
 import weakref
 import zipfile
 from collections import OrderedDict
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
 import streamlit as st
 
+from . import progress
 from .constants import DEFAULT_FIGURE_SIZE, PACKAGE_NAME
 from .multipart import (
     CANVAS_HEIGHT,
@@ -104,6 +106,16 @@ _FINGERPRINT_MEMO_MAX = 64
 #: hashed". Process-wide on purpose — a fingerprint depends only on content.
 _STABLE_FINGERPRINTS: dict[int, tuple[weakref.ref, tuple | None]] = {}
 _STABLE_FINGERPRINTS_MAX = 64
+#: UX-166 fix-round-2 (Ruling T5-6): guards every iteration/mutation of
+#: `_STABLE_FINGERPRINTS` above. The dict is process-wide, so two script runs
+#: can reach `_vouch_for_frames` at once — a superseded run's build publishing
+#: beside the run that replaced it, or two sessions' runs — though no build is
+#: ever shared *across* sessions (`frame_cache`'s identity includes the
+#: session's own store). An unlocked `.items()` iteration racing another
+#: thread's insert raised `RuntimeError: dictionary changed size during
+#: iteration`. Plain `.get` reads (`frame_fingerprint` below) need no lock under
+#: the GIL — only the sweep-and-insert and the write-back do.
+_STABLE_FINGERPRINTS_LOCK = threading.Lock()
 
 
 def _vouch_for_frames(value) -> None:
@@ -116,17 +128,180 @@ def _vouch_for_frames(value) -> None:
         parts = value
     else:
         return
-    for dead in [k for k, (ref, _) in _STABLE_FINGERPRINTS.items() if ref() is None]:
-        _STABLE_FINGERPRINTS.pop(dead, None)
-    for frame in parts:
-        if len(_STABLE_FINGERPRINTS) >= _STABLE_FINGERPRINTS_MAX:
-            break
-        if isinstance(frame, pd.DataFrame) and not frame.empty:
-            _STABLE_FINGERPRINTS.setdefault(id(frame), (weakref.ref(frame), None))
+    with _STABLE_FINGERPRINTS_LOCK:
+        for dead in [
+            k for k, (ref, _) in _STABLE_FINGERPRINTS.items() if ref() is None
+        ]:
+            _STABLE_FINGERPRINTS.pop(dead, None)
+        for frame in parts:
+            if len(_STABLE_FINGERPRINTS) >= _STABLE_FINGERPRINTS_MAX:
+                break
+            if isinstance(frame, pd.DataFrame) and not frame.empty:
+                _STABLE_FINGERPRINTS.setdefault(id(frame), (weakref.ref(frame), None))
 
 
 #: Session-state home of the no-copy frame caches (PERF-6), one entry per slot.
 _FRAME_CACHE_KEY = "_sps_frame_cache"
+
+#: UX-166 "latest request wins" (T5-1): the store key `(_LATEST_REQUESTED,
+#: slot)` — a tuple, so it can never collide with a real (string) slot name —
+#: holds the most recently *requested* key for that slot, recorded by
+#: `frame_cache` on every call, hit or miss. A build that finishes only writes
+#: `store[slot]` while this still names its own key; otherwise a newer request
+#: has already been *made* — whether or not it has itself finished yet, or
+#: ever will — and this build's (still-valid, still returned to its own
+#: caller) result must not clobber it.
+_LATEST_REQUESTED = "__requested__"
+
+
+@dataclass
+class _InFlight:
+    done: threading.Event = field(default_factory=threading.Event)
+    value: Any = None
+    ok: bool = False
+    #: Set only when the owner's build raised an ordinary ``Exception`` — never
+    #: for a ``BaseException`` that isn't one (`progress.Cancelled`, Streamlit's
+    #: `StopException`). See `_shared_build`.
+    error: Exception | None = None
+
+
+#: UX-166: builds in progress, so a rerun that asks for the same frame waits
+#: for the one already running instead of starting a second. A click during a
+#: long load abandons the running script and starts a new one at once
+#: (`runner.fastReruns`); without this the new run normalized the corpus again
+#: beside the first. `st.cache_data` has the same guarantee through its own
+#: per-key lock.
+_INFLIGHT: dict[tuple, _InFlight] = {}
+_INFLIGHT_LOCK = threading.Lock()
+
+#: `lookup`/`publish` (see `_shared_build`) return/accept this to mean "no
+#: cached value" — never `None`, since a legitimate result can itself be `None`.
+_MISSING = object()
+
+
+def _shared_build(
+    ident: tuple,
+    build: Callable[[], Any],
+    *,
+    lookup: Callable[[], Any] | None = None,
+    publish: Callable[[Any], None] | None = None,
+) -> Any:
+    """``build()``, run once for everyone asking for ``ident`` at the same time.
+
+    A caller that finds a build running waits for it and reuses its result.
+    If the owner's build raises an ordinary ``Exception``, that same exception
+    is re-raised in every waiter too — the input hasn't changed, so rebuilding
+    would just fail again the same way. Only a ``BaseException`` that is *not*
+    an ``Exception`` (`progress.Cancelled`, Streamlit's `StopException`) means
+    nobody actually finished the build, so a waiter then builds it itself.
+
+    ``lookup``/``publish`` let a cache-shaped caller close UX-166's "latest
+    request wins" race: a new owner calls ``lookup()`` right after winning
+    ownership — a value another, faster build already published for this
+    exact ``ident`` a moment earlier is reused without rebuilding — and a
+    successful build calls ``publish(value)`` *before* the in-flight entry is
+    popped, so "is this result still wanted, or has a newer request for this
+    slot already been made" is decided while this ``ident`` still has exactly
+    one owner. A joined waiter calls its own ``publish(entry.value)`` too
+    (UX-166 fix-round-2, Minor #1 of Ruling T5-5): the owner's own decision was
+    made against whatever key was latest *then*, and a request for this exact
+    ``ident`` can itself become the latest again before the owner's entry is
+    popped — without this, that waiter would still get the right *value* back
+    but the store would never hold it.
+
+    Neither ``lookup`` nor ``publish`` is called for a plain (non-cache) use
+    of this function, and neither's own failure is allowed to leak the
+    in-flight entry or hang every waiter forever (UX-166 fix-round-2, Ruling
+    T5-5 — a24e105 always popped the entry and signalled ``done``; the "latest
+    request wins" fix lost that guarantee by writing the cleanup out per path
+    instead of in one ``finally``): a failing ``lookup`` is treated as a miss
+    (logged at debug, then built normally); a failing ``publish`` is logged as
+    a warning and swallowed — the build itself already succeeded, ``entry.ok``
+    is already ``True``, and its caller still gets its value either way.
+    """
+    while True:
+        with _INFLIGHT_LOCK:
+            entry = _INFLIGHT.get(ident)
+            owner = entry is None
+            if owner:
+                entry = _InFlight()
+                _INFLIGHT[ident] = entry
+        if owner:
+            # UX-166 fix-round-2 (Ruling T5-5): the whole owner branch is one
+            # try/finally, so the registry pop and `done.set()` ALWAYS run —
+            # whether `lookup`, `build` or `publish` raises, or nothing does.
+            # Without this, a raising `publish` (the reviewer's repro:
+            # `_vouch_for_frames` racing another session's concurrent insert)
+            # left the entry registered forever: every waiter already joined
+            # blocks in `entry.done.wait()` with no timeout and no Streamlit
+            # checkpoint to free it, and every later miss for this `ident`
+            # joins the same dead entry and hangs too.
+            try:
+                hit = _MISSING
+                if lookup is not None:
+                    try:
+                        hit = lookup()
+                    except Exception:
+                        _LOGGER.debug(
+                            "_shared_build lookup failed for %r; building instead",
+                            ident,
+                            exc_info=True,
+                        )
+                        hit = _MISSING
+                if hit is not _MISSING:
+                    value = hit
+                else:
+                    try:
+                        value = build()
+                    except BaseException as exc:
+                        if isinstance(exc, Exception):
+                            entry.error = exc
+                        raise
+                entry.value = value
+                entry.ok = True
+                # Only a build we actually ran gets published — a lookup hit
+                # means the store already holds this exact key's value.
+                if hit is _MISSING and publish is not None:
+                    try:
+                        publish(value)
+                    except Exception:
+                        # A WARNING, not DEBUG (the in-app log captures from
+                        # INFO): swallowed, a publish that keeps failing shows
+                        # only as every rerun rebuilding.
+                        _LOGGER.warning(
+                            "_shared_build publish failed for %r; the built "
+                            "value is still returned, just not cached",
+                            ident,
+                            exc_info=True,
+                        )
+                return value
+            finally:
+                with _INFLIGHT_LOCK:
+                    _INFLIGHT.pop(ident, None)
+                entry.done.set()
+        # UX-166: waiting on a build another run started is this run's work too
+        # — the owner reports into its own task, so without this a gated card
+        # over the wait (the Corpus measures, opened afresh each run) never
+        # shows. It is also a cancel checkpoint: a waiter whose own task was
+        # cancelled stops here instead of waiting out a build it no longer
+        # wants. A hit returned above, so an all-hit rerun never gets here.
+        progress.report()
+        entry.done.wait()
+        if entry.ok:
+            if publish is not None:
+                try:
+                    publish(entry.value)
+                except Exception:
+                    _LOGGER.warning(
+                        "_shared_build waiter publish failed for %r",
+                        ident,
+                        exc_info=True,
+                    )
+            return entry.value
+        if entry.error is not None:
+            raise entry.error
+        # The owner was cancelled or stopped, not merely wrong: nobody actually
+        # built this. Loop back and become the new owner ourselves.
 
 
 def frame_cache(slot: str, key, build):
@@ -149,6 +324,14 @@ def frame_cache(slot: str, key, build):
     the current one would cost more memory than the copy ever did. Falls back to
     calling ``build`` when there is no session state, which is what the headless
     API and the CLI see.
+
+    Keys must be hashable (they are compared with ``==`` and stored as dict
+    keys). Concurrent requests for the same slot + key share one build in
+    flight (`_shared_build`); a build that finishes only *publishes* — writes
+    the entry every later request for that key reuses — while its key is still
+    the slot's most recently requested one (UX-166's "latest request wins"),
+    so a superseded build's late finish can never clobber a newer result. It
+    still returns its value to its own caller either way.
     """
     try:
         store = st.session_state.setdefault(_FRAME_CACHE_KEY, {})
@@ -159,13 +342,39 @@ def frame_cache(slot: str, key, build):
         # which is invisible except as everything being slow.
         _LOGGER.debug("frame_cache falling back to a plain call: %s", exc)
         return build()
+    # UX-166: record this as the slot's latest request on EVERY call — a hit
+    # included, since "the user cancelled back to an earlier dataset" is a hit
+    # for the slot's *current* entry, and without recording it here too an
+    # abandoned build for a *different* key would still look, to its own late
+    # `publish`, like nobody had asked for anything else since.
+    with _INFLIGHT_LOCK:
+        store[(_LATEST_REQUESTED, slot)] = key
     entry = store.get(slot)
     if entry is not None and entry[0] == key:
         return entry[1]
-    value = build()
-    store[slot] = (key, value)
-    _vouch_for_frames(value)
-    return value
+
+    def _lookup() -> Any:
+        # UX-166: a new owner re-checks the store before building — a
+        # concurrent build for this exact key may have just published,
+        # between our own miss above and winning ownership below.
+        with _INFLIGHT_LOCK:
+            current = store.get(slot)
+        if current is not None and current[0] == key:
+            return current[1]
+        return _MISSING
+
+    def _publish(value: Any) -> None:
+        with _INFLIGHT_LOCK:
+            wins = store.get((_LATEST_REQUESTED, slot)) == key
+            if wins:
+                store[slot] = (key, value)
+        if wins:
+            _vouch_for_frames(value)
+
+    # UX-166: shared with a build already running for this session, slot and key.
+    return _shared_build(
+        (id(store), slot, key), build, lookup=_lookup, publish=_publish
+    )
 
 
 def clear_frame_cache() -> None:
@@ -243,7 +452,8 @@ def frame_fingerprint(df: pd.DataFrame | None) -> tuple:
         return stable[1]
     value = _compute_frame_fingerprint(df)
     if stable is not None:
-        _STABLE_FINGERPRINTS[key] = (stable[0], value)
+        with _STABLE_FINGERPRINTS_LOCK:
+            _STABLE_FINGERPRINTS[key] = (stable[0], value)
     # Drop entries whose frame has already been collected before evicting a live
     # one — those are pure bookkeeping and cost nothing to lose.
     if len(memo) >= _FINGERPRINT_MEMO_MAX:
@@ -393,7 +603,8 @@ def onestop_data_provenance(participant: str | None = None) -> dict:
     return info
 
 
-@st.cache_data(show_spinner="Loading OneStop lacclab export…")
+# UX-166: the dataset card lists this step.
+@st.cache_data(show_spinner=False)
 def load_onestop_server_bundle(
     participant: str | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -408,6 +619,7 @@ def load_onestop_server_bundle(
     RAM for the L2 cohort). Used when no participant is specified, or when
     a deep link points at a pid whose shard hasn't been generated yet.
     """
+    progress.report()  # UX-166: a miss — real work, so the gated card may show
     base = onestop_data_dir()
     if base is None:
         return pd.DataFrame(), pd.DataFrame()
@@ -482,13 +694,45 @@ def _norm_col(name) -> str:
     return re.sub(r"[^a-z0-9]", "", text.lower())
 
 
+_COL_SEPARATORS = re.compile(r"[^a-zA-Z0-9]+")
+_CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
+
+
+def _col_tokens(name) -> list[str]:
+    """Split a raw column name into its separator-delimited tokens (DATA-25
+    second pass), each folded like ``_norm_col``.
+
+    The trailing-unit block is dropped from the *whole* name first, same as
+    ``_norm_col`` — so a vendor's ``LEFT_px`` tokenizes to ``["left", "px"]``
+    with the unit noise already gone, not left to coincidentally never match
+    a candidate."""
+    text = _TRAILING_UNIT.sub("", str(name))
+    # DATA-57: a CamelCase name (`BoxLeft`, `AoiTop`) has no separator to split
+    # on, so a lower→upper case change counts as one.
+    text = _CAMEL_BOUNDARY.sub(" ", text)
+    return [tok.lower() for tok in _COL_SEPARATORS.split(text) if tok]
+
+
 def pick_column(df: pd.DataFrame, candidates: Iterable[str]) -> str | None:
     """Return the first matching column name from a candidate list.
 
     Matching is case- and separator-insensitive (see ``_norm_col``). Candidate
     order is still priority order — the first candidate with any match wins (so
     EyeLink names keep beating Gazepoint), and among equally-normalized columns
-    the leftmost one wins."""
+    the leftmost one wins.
+
+    If nothing matches exactly, a second pass (DATA-25) catches a vendor
+    prefix or suffix on a known name — ``AOI_LEFT``, ``LEFT_px`` — by
+    splitting each column on its separators and checking whether any *whole*
+    token equals a candidate. There is no prefix vocabulary to maintain, and
+    no substring matching, so ``top`` never matches ``stop_time`` (the whole
+    token is ``stop``, not ``top``) and ``id`` never matches ``guid``. That
+    still leaves real ambiguity — ``top_left_x`` and ``top_left_y`` both
+    contain the token ``left``; ``max_x`` and ``fix_x`` both contain ``x`` —
+    so the second pass is accepted only when it turns up **exactly one**
+    column across every candidate in the list. Two or more survivors is
+    ambiguity, and ambiguity means the manual mapping step, not a guess: the
+    safety here is uniqueness, not a whitelist."""
     lookup: dict[str, str] = {}
     for col in df.columns:
         lookup.setdefault(_norm_col(col), col)
@@ -496,6 +740,11 @@ def pick_column(df: pd.DataFrame, candidates: Iterable[str]) -> str | None:
         hit = lookup.get(_norm_col(name))
         if hit is not None:
             return hit
+
+    normed_candidates = {_norm_col(name) for name in candidates}
+    survivors = [col for col in df.columns if normed_candidates & set(_col_tokens(col))]
+    if len(survivors) == 1:
+        return survivors[0]
     return None
 
 
@@ -845,8 +1094,75 @@ RAW_GAZE_TIMESTAMP_CANDIDATES = [
 ]
 
 
+_BOX_EDGES = ("left", "right", "top", "bottom")
+
+
+def _pick_box_edge_set(words: pd.DataFrame) -> dict[str, str] | None:
+    """The four word-box edge columns, resolved as one set (DATA-57).
+
+    ``pick_column`` looks at each edge on its own, and its second pass accepts a
+    prefixed or suffixed name (``LEFT_px``, ``aoi_left``) only when it is the
+    *only* column carrying that token. An AOI export routinely carries two box
+    encodings side by side — EyeLink's ``LEFT_px`` … ``BOTTOM_px`` next to a
+    derived ``aoi_left`` … ``aoi_bottom`` — so every edge was ambiguous and the
+    whole box landed in the manual step. The edges are not independent: they
+    share an affix. So each column naming exactly one edge is keyed by the rest
+    of its name (``*_px``, ``aoi_*``), and a key that covers all four edges is a
+    set. The set that comes **last** in the table wins: a derived box is
+    usually appended after the one the export shipped with, and the columns a
+    lab adds later are the ones it means (``aoi_left`` … then ``LEFT_px`` …
+    picks ``LEFT_px``).
+
+    Returns ``{edge: column}`` plus the shared affix under ``"affix"`` (for
+    ``_affix_sibling``), or ``None`` when no complete set exists."""
+    groups: dict[tuple[str, ...], dict[str, str]] = {}
+    order: dict[tuple[str, ...], int] = {}
+    for pos, col in enumerate(words.columns):
+        tokens = _col_tokens(col)
+        edges = [tok for tok in tokens if tok in _BOX_EDGES]
+        if len(edges) != 1:
+            continue
+        affix = tuple("*" if tok == edges[0] else tok for tok in tokens)
+        group = groups.setdefault(affix, {})
+        if edges[0] not in group:
+            group[edges[0]] = col
+            order.setdefault(affix, pos)
+    complete = [a for a, g in groups.items() if len(g) == len(_BOX_EDGES)]
+    if not complete:
+        return None
+    affix = max(complete, key=order.__getitem__)
+    return {**groups[affix], "affix": affix}
+
+
+def _affix_sibling(
+    words: pd.DataFrame, affix: tuple[str, ...], token: str
+) -> str | None:
+    """The column named like an edge set's affix with ``token`` in the edge's
+    place — ``aoi_width`` beside ``aoi_left`` … ``aoi_bottom``."""
+    want = [token if tok == "*" else tok for tok in affix]
+    return next((col for col in words.columns if _col_tokens(col) == want), None)
+
+
 def propose_word_schema(words: pd.DataFrame) -> dict[str, str | None]:
     """Return a candidate column mapping for words/IA data without erroring."""
+    schema = _propose_word_schema_by_field(words)
+    if all(schema[edge] for edge in _BOX_EDGES):
+        return schema
+    edge_set = _pick_box_edge_set(words)
+    if edge_set is None:
+        return schema
+    affix = edge_set.pop("affix")
+    schema.update(edge_set)
+    # The origin + size fields follow the same set, so the two encodings the
+    # mapping screen offers describe one box rather than two.
+    schema["x"] = schema["x"] or edge_set["left"]
+    schema["y"] = schema["y"] or edge_set["top"]
+    for size in ("width", "height"):
+        schema[size] = _affix_sibling(words, affix, size)
+    return schema
+
+
+def _propose_word_schema_by_field(words: pd.DataFrame) -> dict[str, str | None]:
     return dict(
         participant=pick_column(words, PARTICIPANT_CANDIDATES),
         trial=pick_column(words, TRIAL_CANDIDATES),
@@ -2675,6 +2991,39 @@ def broadcast_stimulus_words(
     return stimulus.merge(pairs, on=merge_on, how="inner").drop(columns=[_WORD_TRIAL])
 
 
+def repair_stranded_stimulus_words(
+    words: pd.DataFrame, fixations: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame] | None:
+    """DATA-39 — re-broadcast a stored AOI table the old ✅ Save changes stranded.
+
+    Before DATA-39 was fixed, saving an edit to a dataset whose AOI table has no
+    participant column left every word on the ``""`` placeholder reader with
+    the ``_stimulus_words`` flag still set, so no trial found its boxes. A
+    *stored* frame can only carry that flag through that bug —
+    ``broadcast_stimulus_words`` always drops it — so its presence is the
+    diagnosis, and running the broadcast it missed is the repair. Returns the
+    repaired ``(words, fixations)``, or ``None`` when there is nothing to repair
+    or the frames will not harmonize (the dataset is then left as it was).
+    """
+    if not isinstance(words, pd.DataFrame) or STIMULUS_WORDS_FLAG not in words.columns:
+        return None
+    has_fixations = isinstance(fixations, pd.DataFrame) and not fixations.empty
+    try:
+        repaired, harmonized = harmonize_frames(
+            words, fixations if has_fixations else empty_fixations_frame()
+        )
+    except Exception:  # a repair must never break the load
+        _LOGGER.warning(
+            "DATA-39: could not repair a stored AOI table left on the placeholder "
+            "reader; press Save changes on the Edit dataset screen to retry.",
+            exc_info=True,
+        )
+        return None
+    if repaired.empty:
+        return None
+    return repaired, (harmonized if has_fixations else fixations)
+
+
 def fill_fixation_xy_from_words(
     fixations: pd.DataFrame, words: pd.DataFrame
 ) -> pd.DataFrame:
@@ -3387,8 +3736,17 @@ def _copy_screen_fields(
     # the frame from the mapping, so the stamp was dropped and screen order
     # re-derived from row order: AOI-file order on the words, each reader's
     # onset order on the fixations. MultiplEYE's per-reader question order then
-    # conflicted and the 🗂️ Data page crashed. A canonical column rides through.
-    if SCREEN_INDEX not in df.columns and SCREEN_INDEX in source.columns:
+    # conflicted and the 🗂️ Data page crashed. A canonical column rides through
+    # — but only onto a frame the mapping made multipart (DATA-59). With no
+    # screen field mapped, a raw `screen_index` column is just a column: riding
+    # it through derived a `screen_id` from it, so clearing the screen fields
+    # in the mapping still made the AOI table multipart while the fixations
+    # were not, and the pair was refused.
+    if (
+        SCREEN_ID in df.columns
+        and SCREEN_INDEX not in df.columns
+        and SCREEN_INDEX in source.columns
+    ):
         df[SCREEN_INDEX] = _to_number(source[SCREEN_INDEX])
     return normalize_screen_identity(df)
 
@@ -3658,13 +4016,40 @@ def remap_normalized_frame(
     normalization ``unique_trial_id`` / ``unique_text_id`` are restored
     (= ``trial_id`` / ``text_id``) when the single-column path didn't set them,
     so the frame's identity columns stay consistent with the composite path and
-    downstream readers of ``unique_text_id`` keep working."""
+    downstream readers of ``unique_text_id`` keep working.
+
+    DATA-39: a **words** frame remapped with no Participant is a stimulus-level
+    AOI table, exactly as it was at import — ``normalize_words`` re-flags it for
+    ``broadcast_stimulus_words``. But the stored frame was *already* broadcast
+    (one copy of every trial's words per reader), so only the first reader's
+    copy of each trial is kept here, and the caller must run
+    ``harmonize_frames`` to broadcast it again. Skipping either step is the bug
+    this fixes: without the collapse every reader gets every reader's boxes;
+    without the harmonize every word is left on the ``""`` placeholder reader,
+    so no trial finds its boxes and the scanpath plot loses its AOIs and its
+    text. The collapse picks a *reader*, never a key: deduplicating on
+    ``word_id`` would also merge rows that are not copies at all — character
+    AOIs sharing a word id, or ids that do not parse as numbers and all fold to
+    NaN."""
     referenced = _schema_source_columns(schema)
     working = frame.drop(
         columns=[
             c for c in _REMAP_DERIVED_IDS if c in frame.columns and c not in referenced
         ]
     )
+    if (
+        kind == "words"
+        and not schema.get("participant")
+        and "participant_id" in working.columns
+        and "trial_id" in working.columns
+        and not working.empty
+    ):
+        copy_keys = [c for c in ("trial_id", SCREEN_ID) if c in working.columns]
+        reader = working["participant_id"].astype(str)
+        first = reader.groupby(
+            [working[c] for c in copy_keys], dropna=False, sort=False
+        ).transform("first")
+        working = working[reader == first]
     keep = set(working.columns)
     if kind == "words":
         result = normalize_words(working, schema, keep_columns=keep)
@@ -4229,6 +4614,65 @@ def compute_canvas_size(
     return max(width, 100), max(height, 100)
 
 
+def canvas_geometry_frames(
+    words: pd.DataFrame | None,
+    word_schema: dict | None,
+    fixations: pd.DataFrame | None,
+    fixation_schema: dict | None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """The mapped geometry of *raw* tables, in the canonical columns
+    :func:`compute_canvas_size` reads (DATA-46).
+
+    The add-dataset wizard asks for the screen before anything is normalized, so
+    it only has the upload as read — ``IA_LEFT`` and ``CURRENT_FIX_X``, not
+    ``x``. Handed straight to :func:`compute_canvas_size`, an EyeLink export has
+    no column called ``x``, and the "estimate" was the default screen under
+    another name. This projects just the mapped coordinate columns (word boxes
+    as edges *or* origin + size, fixation x/y) onto ``x``/``y``/``width``/
+    ``height`` — cheap, and correct for any mapping the user has picked so far.
+    A field that is not mapped yet is simply absent.
+    """
+
+    def column(frame: pd.DataFrame, schema: dict, key: str):
+        name = schema.get(key)
+        if not isinstance(name, str) or name not in frame.columns:
+            return None
+        return _to_number(frame[name])
+
+    word_geometry = pd.DataFrame()
+    if words is not None and not words.empty and word_schema:
+        left, right = (
+            column(words, word_schema, "left"),
+            column(words, word_schema, "right"),
+        )
+        top, bottom = (
+            column(words, word_schema, "top"),
+            column(words, word_schema, "bottom"),
+        )
+        if left is not None and right is not None:
+            word_geometry["x"], word_geometry["width"] = left, right - left
+        elif (x := column(words, word_schema, "x")) is not None:
+            word_geometry["x"] = x
+            if (width := column(words, word_schema, "width")) is not None:
+                word_geometry["width"] = width
+        if top is not None and bottom is not None:
+            word_geometry["y"], word_geometry["height"] = top, bottom - top
+        elif (y := column(words, word_schema, "y")) is not None:
+            word_geometry["y"] = y
+            if (height := column(words, word_schema, "height")) is not None:
+                word_geometry["height"] = height
+
+    fixation_geometry = pd.DataFrame()
+    if fixations is not None and not fixations.empty and fixation_schema:
+        x, y = (
+            column(fixations, fixation_schema, "x"),
+            column(fixations, fixation_schema, "y"),
+        )
+        if x is not None and y is not None:
+            fixation_geometry["x"], fixation_geometry["y"] = x, y
+    return word_geometry, fixation_geometry
+
+
 # Primary EyeLink IA measures. When a words frame already carries all of these
 # (a pre-aggregated export, e.g. OneStop), the fixation-based recompute is a
 # fallback whose output is discarded by the "existing values win" merge — so we
@@ -4431,6 +4875,10 @@ def default_filters(words: pd.DataFrame, fixations: pd.DataFrame) -> dict:
 def _default_filters_cached(
     _words: pd.DataFrame, _fixations: pd.DataFrame, cache_key
 ) -> dict:
+    # UX-166: keyed on the filtered pair, so this misses on every filter change
+    # while everything upstream hits — the report shows the gated dataset card
+    # while the new pool is worked out, not only once the trial list builds.
+    progress.report()
     filters = dict(
         participants=_union_column_values(_words, _fixations, "participant_id"),
         trials=_union_column_values(_words, _fixations, "trial_id"),

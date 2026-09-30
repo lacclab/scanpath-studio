@@ -80,8 +80,8 @@ beside the participant table — under **Metadata** in part 2 of the add-dataset
 wizard, and on 🗂️ **Data → ✏️ Edit dataset** under **Metadata → Trials** for a
 dataset that is already loaded — and its columns behave like fields in the data in the same
 way: they filter trials, show up as chips above the plot, sort the trial picker,
-appear in the inspection tables, and travel with exports
-(`metadata/trials.csv`) and saved sessions.
+group cohorts in Corpus Analysis, appear in the inspection tables, and travel
+with exports (`metadata/trials.csv`) and saved sessions.
 
 ```csv
 trial_id,list_name,presentation_order,comprehension

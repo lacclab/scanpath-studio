@@ -329,6 +329,13 @@ class CompareTarget:
     #: `_amend_snippet_settings` merge structurally cannot see them — the same
     #: reason `layout` and `compare_stimulus` are fields here.
     labels: tuple[str, str] | None = None
+    #: EXP-21 — only beside a ``dataset``: B's own screen, when it is known
+    #: (``setup_b=`` / ``--compare-canvas``), and the table paths B was read
+    #: from, when there are any to name (``render --print-code`` has them; the
+    #: app's uploads and corpora do not, so the snippet writes placeholders).
+    canvas: tuple[int, int] | None = None
+    words: tuple[str, ...] = ()
+    fixations: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -1145,6 +1152,86 @@ def _raw_gaze_cli(source: SnippetSource) -> list[str]:
     return argv
 
 
+#: EXP-21 — what a snippet loads scanpath B from when it comes from a second
+#: dataset whose files it cannot name (an upload, a corpus the app opened).
+B_WORDS_PLACEHOLDER = "B_WORDS"
+B_FIXATIONS_PLACEHOLDER = "B_FIXATIONS"
+#: `render`'s own default for `--compare-dataset-name` (and `compare_scanpaths`'
+#: for `dataset_b=`), so the CLI half writes the flag only when it differs.
+_DEFAULT_DATASET_B = "Dataset B"
+
+
+def second_dataset(state: FigureState) -> CompareTarget | None:
+    """Scanpath B's target when it comes from a second dataset, else ``None``.
+
+    EXP-21: B's ids then belong to *that* corpus, so both halves load its
+    tables and name B in them — ``words_b=`` / ``fixations_b=`` in Python,
+    ``--compare-words`` / ``--compare-fixations`` beside ``--compare-with`` on
+    the CLI — rather than looking B's reader up in A's corpus.
+    """
+    compare = state.compare
+    if state.kind == "static" or compare is None:
+        return None
+    if not (compare.dataset and compare.trial):
+        return None
+    return compare
+
+
+def _second_dataset_tables(compare: CompareTarget) -> tuple[list, list]:
+    """B's words / fixations paths: the ones it was read from, when there are
+    any (either may be absent, as `render` allows), else both placeholders."""
+    if compare.words or compare.fixations:
+        return list(compare.words), list(compare.fixations)
+    return [B_WORDS_PLACEHOLDER], [B_FIXATIONS_PLACEHOLDER]
+
+
+def _second_dataset_python(compare: CompareTarget) -> list[str]:
+    words, fixations = _second_dataset_tables(compare)
+    lines = [
+        f"# Scanpath B is from a second dataset, {compare.dataset}.",
+        "words_b, fixations_b = sps.load_scanpath_data(",
+        f"    {_py(_one_or_list(words) if words else None)},",
+        f"    {_py(_one_or_list(fixations) if fixations else None)},",
+        ")",
+    ]
+    if compare.canvas:
+        # `--compare-canvas`'s own snapshot (`cli._compare_setup_snapshot`): a
+        # stated screen is a measured one, which is what the overlay gate reads.
+        width, height = (int(v) for v in compare.canvas)
+        lines += [
+            "setup_b = SetupSnapshot(",
+            f"    canvas_width={width},",
+            f"    canvas_height={height},",
+            "    screen_provenance=Provenance.MEASURED,",
+            ")",
+        ]
+    return lines
+
+
+def _second_dataset_kwargs(compare: CompareTarget) -> list[str]:
+    kwargs = [
+        "words_b=words_b",
+        "fixations_b=fixations_b",
+        f"dataset_b={_py(compare.dataset)}",
+    ]
+    if compare.canvas:
+        kwargs.append("setup_b=setup_b")
+    return kwargs
+
+
+def _second_dataset_cli(compare: CompareTarget, *, explicit: bool) -> list[str]:
+    words, fixations = _second_dataset_tables(compare)
+    argv = ["--compare-words", *words] if words else []
+    if fixations:
+        argv += ["--compare-fixations", *fixations]
+    if explicit or compare.dataset != _DEFAULT_DATASET_B:
+        argv += ["--compare-dataset-name", str(compare.dataset)]
+    if compare.canvas:
+        width, height = (int(v) for v in compare.canvas)
+        argv += ["--compare-canvas", f"{width}x{height}"]
+    return argv
+
+
 def python_snippet(
     source: SnippetSource,
     state: FigureState,
@@ -1161,11 +1248,19 @@ def python_snippet(
     translated invocation writes the same-sized file, not just the same
     picture."""
     loader, _ = _SOURCE_WRITERS.get(source.kind, _SOURCE_WRITERS[SOURCE_UNKNOWN])
-    lines = ["import scanpath_studio as sps", ""]
+    other = second_dataset(state)
+    lines = ["import scanpath_studio as sps"]
+    if other is not None and other.canvas:
+        lines.append(
+            "from scanpath_studio.experimental_setup import Provenance, SetupSnapshot"
+        )
+    lines.append("")
     lines += loader(source)
     # A raw-gaze-only source loaded its samples as its data half already.
     if draws_raw_gaze(state) and source.kind != SOURCE_RAW_GAZE:
         lines.append(_raw_gaze_python(source))
+    if other is not None:
+        lines += _second_dataset_python(other)
     lines.append("")
 
     func = _API_FUNCTION[state.kind]
@@ -1195,17 +1290,14 @@ def python_snippet(
     else:
         args.append(f"participant={participant}")
         args.append(f"trial={trial}")
-        # BUG-85: a co-animation names B the way `compare_scanpaths` does. Not
-        # for a second dataset's reader, though — `trial_b=` alone would look
-        # that id up in this corpus; the caveat below says to load B's first.
+        # BUG-85: a co-animation names B the way `compare_scanpaths` does — in
+        # B's own frames when it comes from a second dataset (EXP-21), which
+        # `trial_b=` alone would look up in this corpus.
         compare = state.compare
-        if (
-            state.kind == "animation"
-            and compare is not None
-            and compare.trial
-            and not compare.dataset
-        ):
+        if state.kind == "animation" and compare is not None and compare.trial:
             args.append(f"trial_b=({_py(compare.participant)}, {_py(compare.trial)})")
+    if other is not None:
+        args += _second_dataset_kwargs(other)
     if _passes_raw_gaze(source, state):
         args.append("raw_gaze=raw_gaze")
     if _raw_gaze_layer_off(source, state):
@@ -1259,6 +1351,7 @@ def cli_snippet(
     snippet can't quietly promise a figure the CLI won't produce.
     """
     _, source_cli = _SOURCE_WRITERS.get(source.kind, _SOURCE_WRITERS[SOURCE_UNKNOWN])
+    other = second_dataset(state)
     argv: list[str] = ["scanpath-studio", "render"]
     if source_cli is None:
         argv += _unknown_cli(source)
@@ -1299,13 +1392,15 @@ def cli_snippet(
             argv.append("--no-autoplay")
         # EXP-20: CMP-11's two-reading replay. `render --animate --compare-with`
         # draws it, and the replay's B-side options (`--compare-stimulus`, the
-        # labels, the legend) are refused without it — so the CLI form names B,
-        # where the Python one has to leave B's frames to the caller.
+        # labels, the legend) are refused without it. EXP-21: a second
+        # dataset's B is named in that dataset's own tables, as in Python.
         if state.compare is not None and state.compare.trial:
             argv += [
                 "--compare-with",
                 f"{state.compare.participant}:{state.compare.trial}",
             ]
+            if other is not None:
+                argv += _second_dataset_cli(other, explicit=explicit)
     else:
         if state.drift_correction:
             # PRE-21 gates both flags behind SCANPATH_EXPERIMENTAL=1, so
@@ -1341,6 +1436,8 @@ def cli_snippet(
     if state.kind == "comparison":
         compare = state.compare or CompareTarget()
         argv += ["--compare-with", f"{compare.participant}:{compare.trial}"]
+        if other is not None:
+            argv += _second_dataset_cli(other, explicit=explicit)
         argv += ["--compare-layout", _CLI_COMPARE_LAYOUT.get(compare.layout, "overlay")]
         if explicit or compare.compare_stimulus != "both":
             argv += ["--compare-stimulus", str(compare.compare_stimulus).lower()]
@@ -1495,34 +1592,30 @@ def state_caveats(source: SnippetSource, state: FigureState) -> list[str]:
             "its frames with `multipart.extract_part` and pass them as "
             "`words_b=` / `fixations_b=`."
         )
-    # CMP-11: Animate + Compare is *one* figure with two readings on one clock,
-    # so `kind` is "animation" and B rides along in `compare`. Since BUG-85 the
-    # Python form names B with `trial_b=`, as `compare_scanpaths` does — all but
-    # a second dataset's reader, whose frames the snippet cannot load (below).
-    compare = state.compare
-    # CMP-8: scanpath B can come from a *second* dataset, and its participant id
-    # is that corpus's own — writing it against the loaded corpus would name a
-    # reader who isn't in it. Both surfaces have the seam (`words_b=` /
-    # `--compare-words`); the snippet can't fill it in, so it says whose it is.
-    if compare is not None and compare.dataset:
+    # CMP-8 / EXP-21: scanpath B can come from a *second* dataset, and its
+    # participant id is that corpus's own. Both halves load B's tables and name
+    # B in them (`words_b=` / `--compare-words`); when the snippet can't name
+    # those tables it writes placeholders, and this says whose they are.
+    other = second_dataset(state)
+    if other is not None:
         note = (
-            f"Scanpath B comes from a second dataset (`{compare.dataset}`), so "
-            f"`{compare.participant}` is that corpus's reader, not this one's. "
-            "Load it too and pass it as `words_b=` / `fixations_b=` "
-            "(`--compare-words` / `--compare-fixations` on the CLI)."
+            f"Scanpath B comes from a second dataset (`{other.dataset}`), so "
+            f"`{other.participant}` is that corpus's reader, not this one's."
         )
-        if state.kind == "animation":
+        if not (other.words or other.fixations):
+            note += (
+                f" The snippet loads it from `{B_WORDS_PLACEHOLDER}` / "
+                f"`{B_FIXATIONS_PLACEHOLDER}` (`--compare-words` / "
+                "`--compare-fixations` on the CLI): point those at its tables."
+            )
+        if state.kind == "animation" and other.canvas is None:
             # CMP-21: with `dataset_b=`, `animate_scanpath` checks the two screens
             # as the app did before drawing this — and a screen nobody states is
             # read off that trial's data, which rarely matches, so B's is named.
             note += (
-                " In Python, name the reading with "
-                f"`trial_b=({_py(compare.participant)}, {_py(compare.trial)})` and "
-                f"its dataset with `dataset_b={_py(compare.dataset)}`. A "
-                "co-animation needs both readings on one screen, so state B's "
+                " A co-animation needs both readings on one screen, so state B's "
                 "too, as `setup_b=` (`--compare-canvas` on the CLI): one read off "
-                "B's data rarely matches. Until then the Python snippet replays A "
-                "alone."
+                "B's data rarely matches."
             )
         notes.append(note)
     if state.kind == "comparison" and str(state.illustration_label).lower() != "auto":

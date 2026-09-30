@@ -1727,6 +1727,7 @@ def bulk_export(
     status_callback: StatusCallback | None = None,
     metadata_rows_for=None,
     annotation_records: list[dict] | None = None,
+    annotation_dataset: str | None = None,
 ) -> tuple[bytes, ExportProgress]:
     """Build a zip archive of selected artifacts and return its bytes.
 
@@ -1738,6 +1739,8 @@ def bulk_export(
     ``annotations.json`` when ``options.include_annotations`` is set, in
     ``annotations.current_records()``'s shape; only those on the exported
     trials go in. The app passes the session's; headless callers have none.
+    ``annotation_dataset`` is the dataset they were made on, which the file
+    names (annotations file schema 3, DATA-48).
 
     progress_callback (if given) is invoked with an ExportProgress after every
     trial so the UI can update a progress bar.
@@ -2266,7 +2269,9 @@ def bulk_export(
         trials = zip(combos["participant_id"], combos["trial_id"], strict=True)
         kept = records_in(records_to_store(annotation_records), trials)
         if kept:
-            data = serialize(records_to_store(kept)).encode("utf-8")
+            data = serialize(records_to_store(kept), dataset=annotation_dataset).encode(
+                "utf-8"
+            )
             zf.writestr("annotations.json", data)
             progress.bytes_written += len(data)
     emit_status(

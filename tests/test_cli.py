@@ -1784,13 +1784,13 @@ def test_streamlit_flags_and_script_paths_still_launch_the_app(monkeypatch):
     assert calls == [["--server.headless", "true"], ["streamlit_app.py"]]
 
 
-def test_the_sample_help_does_not_promise_three_renderable_readers(capsys):
-    """Three readers' word boxes ship, but only two have fixations."""
+def test_the_sample_help_names_the_readers_it_ships(capsys):
+    """DATA-43: the demo is two readers, every one with fixations."""
     with pytest.raises(SystemExit):
         cli.main(["render", "--help"])
     out = " ".join(capsys.readouterr().out.split())
-    assert "3-participant" not in out
-    assert "fixations — so trials to render — for 2 of them" in out
+    assert "3-participant" not in out and "3 readers" not in out
+    assert "2 readers, 12 paragraphs each" in out
 
 
 # ---------------------------------------------------------------------------

@@ -30,8 +30,9 @@ DATA_DIR = Path(__file__).parent
 DEFAULT_SOURCE_DIR = DATA_DIR / "OneStop"
 DEFAULT_OUTPUT_DIR = DATA_DIR / "sample_data"
 
-# Read at most this many rows from each giant source CSV; large enough to span
-# many participants and trials while staying memory-friendly.
+# Search for the demo slice in at most this many rows of each giant source CSV;
+# large enough to span many participants and trials while staying
+# memory-friendly. The readers it picks are then read in full (DATA-43).
 DEFAULT_MAX_ROWS = 300_000
 
 IA_KEEP_COLUMNS = [
@@ -158,6 +159,49 @@ def load_subset(
     if missing_core:
         raise RuntimeError(f"Missing required columns {missing_core} in {source_csv}")
     return pd.read_csv(source_csv, usecols=use_cols, nrows=max_rows, low_memory=False)
+
+
+def load_participants(
+    source_csv: Path,
+    preferred_columns: Iterable[str],
+    participants: Iterable[str],
+    chunksize: int = 500_000,
+) -> pd.DataFrame:
+    """Every row of ``participants`` in ``source_csv``, read in chunks (DATA-43).
+
+    ``load_subset``'s row cap bounds the *search* for a demo slice; the slice
+    itself has to be read whole. Capped, the IA and fixation reports stop at
+    different readers — an IA row per word, a fixation row per fixation — so a
+    reader could land inside one cap and outside the other, and the demo shipped
+    a reader with word boxes and no fixations."""
+    source_csv = _resolve_csv_path(source_csv)
+    available_cols = pd.read_csv(source_csv, nrows=0, low_memory=False).columns
+    use_cols = [col for col in preferred_columns if col in available_cols]
+    wanted = {str(p) for p in participants}
+    parts = [
+        chunk[chunk["participant_id"].astype(str).isin(wanted)]
+        for chunk in pd.read_csv(
+            source_csv, usecols=use_cols, chunksize=chunksize, low_memory=False
+        )
+    ]
+    return pd.concat(parts, ignore_index=True)
+
+
+def check_fixations_cover_words(ia: pd.DataFrame, fixations: pd.DataFrame) -> None:
+    """Raise unless every ``(participant, trial)`` in ``ia`` has fixations.
+
+    A trial with word boxes and no fixations is counted on the 🗂️ Data page and
+    cannot be opened (DATA-43); a demo that ships one is a broken demo, so the
+    build stops instead of writing it."""
+    keys = ["participant_id", "unique_trial_id"]
+    have = set(map(tuple, fixations[keys].astype(str).drop_duplicates().to_numpy()))
+    need = set(map(tuple, ia[keys].astype(str).drop_duplicates().to_numpy()))
+    missing = sorted(need - have)
+    if missing:
+        raise RuntimeError(
+            f"{len(missing)} demo trial(s) have word boxes but no fixations, "
+            f"e.g. {missing[:3]}."
+        )
 
 
 def normalize_flags(df: pd.DataFrame) -> pd.DataFrame:
@@ -454,7 +498,8 @@ def main() -> None:
         "--max-rows",
         type=int,
         default=DEFAULT_MAX_ROWS,
-        help="Cap on rows read from each source CSV.",
+        help="Cap on rows read from each source CSV while searching for the "
+        "slice; the picked readers are then read in full.",
     )
     parser.add_argument("--source-dir", type=Path, default=DEFAULT_SOURCE_DIR)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
@@ -483,12 +528,33 @@ def main() -> None:
         )
     )
 
+    # DATA-43: only a reader both capped reads reached can be picked…
+    ia_full = ia_full[
+        ia_full["participant_id"]
+        .astype(str)
+        .isin(fix_full["participant_id"].astype(str))
+    ]
     participants, articles = pick_demo_slice(
         ia_full, args.participants, args.articles, args.seed
+    )
+    # …and the picked readers are then read whole, not up to the cap, so the
+    # last reader inside a cap is not cut off part-way through a trial.
+    ia_full = add_unique_ids(
+        load_participants(
+            args.source_dir / "ia_Paragraph.csv", IA_KEEP_COLUMNS, participants
+        )
+    )
+    fix_full = add_unique_ids(
+        load_participants(
+            args.source_dir / "fixations_Paragraph.csv",
+            FIXATION_KEEP_COLUMNS,
+            participants,
+        )
     )
 
     ia_sample = filter_demo(ia_full, participants, articles)
     fix_sample = filter_demo(fix_full, participants, articles)
+    check_fixations_cover_words(ia_sample, fix_sample)
 
     write_outputs(ia_sample, args.output_dir / "ia")
     write_outputs(fix_sample, args.output_dir / "fixations")

@@ -54,6 +54,7 @@ from dataclasses import dataclass, replace
 import numpy as np
 import pandas as pd
 
+from . import data as _data
 from .data import (
     stable_id,
     trial_id_series,
@@ -62,18 +63,32 @@ from .data import (
 )
 from .session_keys import COMPARE_SOURCE_STATE_KEY
 
-# Source columns that plausibly hold the reader id, most explicit first. Shares
-# the spirit of `data.pick_column`'s candidate lists: first hit wins, and the
-# user can always override the guess in the UI.
-PARTICIPANT_ID_CANDIDATES: tuple[str, ...] = (
-    "participant_id",
-    "participant",
-    "subject_id",
-    "subject",
-    "reader_id",
-    "reader",
-    "pid",
-    "RECORDING_SESSION_LABEL",
+
+def _with_data_candidates(data_candidates: list[str], *extras: str) -> tuple[str, ...]:
+    """``data``'s own candidate list, in its order, then the metadata-only
+    spellings it does not already hold (compared case-insensitively, as the
+    ``infer_*_id_column`` lookups compare).
+
+    DATA-44: the metadata lists used to be hand-copied twins of ``data``'s and
+    drifted — the text list lost ``unique_paragraph_id``, the demo corpus's own
+    text id — so a table exported beside the data needed a manual pick. Deriving
+    them means a name ``data`` learns is a name a metadata table is keyed by."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for name in (*data_candidates, *extras):
+        if name.lower() not in seen:
+            seen.add(name.lower())
+            out.append(name)
+    return tuple(out)
+
+
+# Source columns that plausibly hold the reader id, most explicit first: the
+# names `data.PARTICIPANT_CANDIDATES` maps the reader from, so a metadata file
+# exported beside the data usually needs no picking, plus a few spellings only a
+# hand-made readers table tends to use. First hit wins, and the user can always
+# override the guess in the UI.
+PARTICIPANT_ID_CANDIDATES: tuple[str, ...] = _with_data_candidates(
+    _data.PARTICIPANT_CANDIDATES, "participant", "subject", "reader", "pid"
 )
 
 # Grain of a field — the entity one row describes. PARTICIPANT (DATA-20),
@@ -83,30 +98,15 @@ GRAIN_PARTICIPANT = "participant"
 GRAIN_TRIAL = "trial"
 GRAIN_TEXT = "text"
 
-# Source columns that plausibly hold the trial id, most explicit first — the
-# trial-grain twin of PARTICIPANT_ID_CANDIDATES, and deliberately the same names
-# `data.TRIAL_ID_CANDIDATES` looks for, so a metadata file exported beside the
-# data usually needs no picking at all.
-TRIAL_ID_CANDIDATES: tuple[str, ...] = (
-    "trial_id",
-    "unique_trial_id",
-    "trial",
-    "trial_index",
-    "TRIAL_INDEX",
-    "item_id",
-    "paragraph_id",
-    "text_id",
+# Source columns that plausibly hold the trial id — the trial-grain twin of
+# PARTICIPANT_ID_CANDIDATES, derived from `data.TRIAL_CANDIDATES` the same way.
+TRIAL_ID_CANDIDATES: tuple[str, ...] = _with_data_candidates(
+    _data.TRIAL_CANDIDATES, "item_id"
 )
 
-# The text-grain twin of TRIAL_ID_CANDIDATES — most explicit first.
-TEXT_ID_CANDIDATES: tuple[str, ...] = (
-    "text_id",
-    "unique_text_id",
-    "text",
-    "paragraph_id",
-    "item_id",
-    "stimulus_id",
-    "stimulus",
+# The text-grain twin, derived from `data.TEXT_ID_CANDIDATES`.
+TEXT_ID_CANDIDATES: tuple[str, ...] = _with_data_candidates(
+    _data.TEXT_ID_CANDIDATES, "text", "item_id", "stimulus_id"
 )
 
 # Loader bookkeeping, never user metadata: `data.read_tables` tags each row with

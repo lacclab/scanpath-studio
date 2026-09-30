@@ -37,8 +37,9 @@ from urllib.parse import urlparse
 
 import pandas as pd
 
+import scanpath_studio.annotations as annotations_mod
+
 from . import progress
-from .annotations import ANNOTATIONS_STATE_KEY, records_to_store, store_to_records
 from .constants import (
     DATASET_COUNTS_STORE_KEY,
     DATASET_DESCRIPTIONS_KEY,
@@ -267,7 +268,8 @@ def _state_fingerprint(
         for key, value in session.items()
         if key in _SESSION_KEYS or str(key).startswith(COLUMN_MAPPING_PREFIX)
     }
-    annotations = store_to_records(session.get(ANNOTATIONS_STATE_KEY, {}))
+    # DATA-48: the live store by content, every other dataset's by revision.
+    annotations = annotations_mod.store_signature(session)
     encoded = json.dumps(
         [datasets, values, annotations, metadata_signature],
         ensure_ascii=False,
@@ -380,12 +382,12 @@ def _manifest_for(
             if str(key).startswith(COLUMN_MAPPING_PREFIX)
         }
     )
-    annotations = store_to_records(session.get(ANNOTATIONS_STATE_KEY, {}))
     return {
         "schema": SCHEMA_VERSION,
         "datasets": datasets,
         "session": values,
-        "annotations": annotations,
+        # DATA-48: `{"datasets": {name: [records]}}` — each dataset's own.
+        "annotations": annotations_mod.cache_payload(session),
     }
 
 
@@ -513,15 +515,6 @@ def restore_state(
                 stored_entries[str(name)] = entry
                 progress.report(index, len(stored_datasets), unit="datasets")
             stored_session = _restorable_session(manifest.get("session", {}))
-            annotations = manifest.get("annotations", [])
-            # One malformed record costs that record, not the rest.
-            records = [
-                record
-                for record in (annotations if isinstance(annotations, list) else [])
-                if isinstance(record, dict)
-            ]
-            store = records_to_store(records)
-
             existing = dict(session.get("_datasets", {}))
             if restored_datasets:
                 session["_datasets"] = {**restored_datasets, **existing}
@@ -540,10 +533,13 @@ def restore_state(
             for key, value in stored_session.items():
                 if key not in skip:
                     session.setdefault(key, value)
-            summary["annotations"] = 0
-            if ANNOTATIONS_STATE_KEY not in session:
-                session[ANNOTATIONS_STATE_KEY] = store
-                summary["annotations"] = len(records)
+            # DATA-48 — per dataset, `{"datasets": {name: [records]}}`. A
+            # manifest from before that holds one flat list naming no dataset;
+            # `restore_payload` hands it to the dataset this session opens on
+            # (the one the manifest had selected), once — see its docstring.
+            summary["annotations"] = annotations_mod.restore_payload(
+                session, manifest.get("annotations")
+            )
             # DATA-38 — the attached metadata tables. Counted, because a user
             # recognises their participant table coming back (UX-136's test for
             # what is worth announcing), unlike a restored canvas width.
@@ -995,7 +991,9 @@ def cache_status(
             if all(entry["rows"] for entry in status["datasets"])
             else None
         )
-        status["annotations"] = len(list(manifest.get("annotations", [])))
+        status["annotations"] = annotations_mod.payload_count(
+            manifest.get("annotations")
+        )
         stored_session = dict(manifest.get("session", {}))
         status["designs"] = len(dict(stored_session.get(DESIGN_PRESETS, {})))
         status["metadata"] = len(

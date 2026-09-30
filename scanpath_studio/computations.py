@@ -1023,10 +1023,18 @@ REGISTER: tuple[Computation, ...] = (
         formula=(
             "A spec maps column → allowed values; the mask is the conjunction of "
             "membership tests. Two modes: split one field, or two independent "
-            "filter sets."
+            "filter sets. A key may be a tuple of columns matched as one "
+            "composite key: a trial-metadata field resolves to the "
+            "(participant, trial) readings its rows describe, a reader field to "
+            "reader ids and a text field to text ids — the tables are never "
+            "joined onto the frames."
         ),
         code="scanpath_studio/aggregation.py:group_mask",
-        missing="A column absent from the frame contributes no constraint.",
+        missing=(
+            "A column (or any column of a composite key) absent from the frame "
+            "contributes no constraint; a metadata selection that matches "
+            "nothing selects no rows."
+        ),
         tiers="A, C",
         status=STATUS_VERIFIED,
         consumers=(_CORPUS, _API),

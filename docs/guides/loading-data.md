@@ -93,8 +93,8 @@ participants, texts, trials and fixations, and its **Status**. Click anywhere on
 a row to open that dataset. The open one is marked **Current** and tinted, and
 the list does not reorder when you switch. Click a column heading to sort by it;
 datasets without that count sort last. The bin at the end of a row removes that
-dataset, after a confirmation; a dataset you added takes the annotations on its
-trials with it. Past eight datasets, a search box and Kind /
+dataset, after a confirmation; a dataset you added takes its annotations with
+it. Past eight datasets, a search box and Kind /
 Language filters appear. **+ Add dataset**, under the list, imports your own
 files or starts a scanpath by hand.
 
@@ -121,9 +121,11 @@ main tables, it has an uploader for the other. Adding the missing half there
 normalizes it and joins it to what is already loaded, so a fixations-only
 dataset can gain its word boxes (or an AOI-only one its fixations) without being
 added again. Its tabs hold the counts — screens, words and gaze points
-included — the raw tables, and **Annotations**: every favorite, tag and note on
-the dataset's trials, to **Export** as JSON, **Import** from such a file (or an
-Export bundle's `annotations.json`), or **Delete**. At the foot of the page,
+included — the raw tables, and **Annotations**: every favorite, tag and note
+made on this dataset, to **Export** as JSON, **Import** from such a file (or an
+Export bundle's `annotations.json`), or **Delete**. Annotations belong to the
+dataset they were made on: another dataset that reuses the same participant and
+trial ids does not show them, and an import goes into the dataset that is open. At the foot of the page,
 **Saved on this computer** reports what the recovery cache holds and the folder
 it is in.
 

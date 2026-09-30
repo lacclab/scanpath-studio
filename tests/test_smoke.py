@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 
 import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
 import pytest
 from PIL import Image
@@ -70,6 +71,33 @@ class TestSampleDataPipeline:
         assert words["participant_id"].nunique() >= 2, (
             "Demo corpus should bundle multiple participants for the comparison feature"
         )
+
+    def test_every_reader_and_trial_with_word_boxes_has_fixations(self):
+        """DATA-43: the demo shipped a reader (`l25_1042`) with word boxes and
+        no fixations — counted on the 🗂️ Data page, unreachable in the trial
+        picker. Checked on the raw files, both formats, before any join."""
+        from scanpath_studio.update_sample_data import (
+            DEFAULT_OUTPUT_DIR,
+            check_fixations_cover_words,
+        )
+
+        for suffix in ("csv", "parquet"):
+            read = pd.read_csv if suffix == "csv" else pd.read_parquet
+            ia = read(DEFAULT_OUTPUT_DIR / f"ia.{suffix}")
+            fixations = read(DEFAULT_OUTPUT_DIR / f"fixations.{suffix}")
+            assert set(ia["participant_id"]) == set(fixations["participant_id"])
+            check_fixations_cover_words(ia, fixations)
+
+    def test_the_build_refuses_a_trial_without_fixations(self):
+        from scanpath_studio.update_sample_data import check_fixations_cover_words
+
+        ia = pd.DataFrame(
+            {"participant_id": ["a", "b"], "unique_trial_id": ["a_t1", "b_t1"]}
+        )
+        fixations = ia.iloc[:1]
+        with pytest.raises(RuntimeError, match="no fixations"):
+            check_fixations_cover_words(ia, fixations)
+        check_fixations_cover_words(ia.iloc[:1], fixations)
 
     def test_has_both_difficulty_levels(self, normalized_demo):
         words, _ = normalized_demo

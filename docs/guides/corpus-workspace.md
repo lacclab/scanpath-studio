@@ -40,11 +40,16 @@ minimum-readers threshold prevents sparse word estimates from looking complete.
 
 **Groups** defines a cohort either by splitting one field or from an independent
 filter set. With a
-[participant metadata](../data-format.md#participant-metadata) table attached,
-its fields are offered alongside the trial conditions, marked 👤 — a reader
-attribute answers a different question from a trial condition, so the picker
-says which is which. A field with more than 60 distinct values is not offered:
-that is a range question, and the trial filters have the slider for it.
+[participant](../data-format.md#participant-metadata),
+[trial](../data-format.md#trial-metadata) or
+[text metadata](../data-format.md#text-metadata) table attached, its fields are
+offered alongside the trial conditions, marked 👤 (reader), 📋 (trial) or
+📄 (text) — each answers a different question from a trial condition, so the
+picker says which is which. A reader field selects that reader's trials, a trial
+field the readings its rows describe, and a text field every reading of those
+texts; in a filter set they combine with each other and with the other pickers.
+A field with more than 60 distinct values is not offered: that is a range
+question, and the trial filters have the slider for it.
 
 ## Move between summary and evidence
 

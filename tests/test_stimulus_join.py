@@ -879,3 +879,95 @@ def test_no_field_picker_offers_an_internal_column():
     spans, qa = tabs._stimulus_field_candidates(trial)
     assert not (set(spans) | set(qa)) & internal
     assert not set(data_module.user_columns(f)) & internal
+
+
+class TestTextIdMappedSignal:
+    """DATA-49 final round: whether a Text ID was mapped comes from the schema
+    (`data.TEXT_ID_MAPPED`), not from its values."""
+
+    def test_a_mapped_text_id_equal_to_the_trial_ids_still_joins(self):
+        """AOI trials 1, 2 with texts alpha, beta; the fixations' trial *is*
+        the text (alpha, beta) and Text ID is mapped to that column."""
+        words = _aoi(["1", "2"], ["alpha", "beta"], ["a", "b"])
+        fixations = _fix(["r1", "r2"], ["alpha", "beta"], ["alpha", "beta"])
+        w, f = sps.load_scanpath_data(
+            words=words,
+            fixations=fixations,
+            word_schema={**_EDGE_SCHEMA, "trial": "trial", "text_id": "text"},
+            fix_schema={**_FIX_SCHEMA, "trial": "text", "text_id": "text"},
+        )
+        assert f[data_module.TEXT_ID_MAPPED].all()
+        assert _boxes(w, "r1", "alpha") == ["a"]
+        assert _boxes(w, "r2", "beta") == ["b"]
+
+    def test_an_unmapped_text_id_is_flagged_as_the_fallback(self):
+        f = normalize_fixations(_fix(["r1"], ["t1"], ["x"]), _FIX_SCHEMA)
+        assert not f[data_module.TEXT_ID_MAPPED].any()
+        assert data_module._text_is_fallback(f)
+
+    def test_the_flag_survives_an_edit_dataset_remap(self):
+        f = normalize_fixations(
+            _fix(["r1"], ["t1"], ["t1"]), {**_FIX_SCHEMA, "text_id": "text"}
+        )
+        remapped = data_module.remap_normalized_frame(
+            f,
+            {
+                "participant": "participant_id",
+                "trial": "trial_id",
+                "text_id": "text_id",
+                "x": "x",
+                "y": "y",
+                "duration": "duration_ms",
+            },
+            kind="fixations",
+        )
+        assert remapped[data_module.TEXT_ID_MAPPED].all()
+
+    def test_zero_padding_keeps_a_fallback_text_id_a_fallback(self):
+        """Probe Z1: AOI trial "007" with text "T7"; fixations trial 7 (an int)
+        and no Text ID. Padding the trial id pads its fallback text id too, so
+        nothing reads "7" as a real Text ID and no warning is raised."""
+        import warnings
+
+        words = _aoi(["007"], ["T7"], ["seven"])
+        fixations = _fix(["r1"], [7], ["unused"])
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", data_module.StimulusJoinWarning)
+            w, f = sps.load_scanpath_data(
+                words=words,
+                fixations=fixations,
+                word_schema={**_EDGE_SCHEMA, "trial": "trial", "text_id": "text"},
+                fix_schema=_FIX_SCHEMA,
+            )
+        assert set(f["trial_id"]) == set(f["text_id"]) == {"007"}
+        assert _boxes(w, "r1", "007") == ["seven"]
+
+    def test_zero_padding_without_the_flag_pads_the_copied_text_id(self):
+        words = normalize_words(
+            _aoi(["007"], ["T7"], ["seven"]),
+            {**_EDGE_SCHEMA, "trial": "trial", "text_id": "text"},
+        )
+        fixations = normalize_fixations(_fix(["r1"], [7], ["u"]), _FIX_SCHEMA).drop(
+            columns=[data_module.TEXT_ID_MAPPED]
+        )
+        _w, f, join = data_module.harmonize_frames_with_join(words, fixations)
+        assert set(f["text_id"]) == {"007"}
+        assert not join.needs_warning
+
+
+class TestRepeatBases:
+    def test_only_the_suffixes_the_disambiguation_writes_count(self):
+        fixations = pd.DataFrame(
+            {
+                "participant_id": ["r1"] * 5,
+                "trial_id": ["a", "a_r2", "a_r1", "a_r0", "a_r02"],
+            }
+        )
+        assert data_module.repeat_bases(fixations) == {("r1", "a_r2"): "a"}
+
+    def test_a_repeat_is_keyed_per_reader(self):
+        """r2 has a trial genuinely named `a_r2` and no `a`: it is no repeat."""
+        fixations = pd.DataFrame(
+            {"participant_id": ["r1", "r1", "r2"], "trial_id": ["a", "a_r2", "a_r2"]}
+        )
+        assert data_module.repeat_bases(fixations) == {("r1", "a_r2"): "a"}

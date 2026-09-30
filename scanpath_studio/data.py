@@ -3103,11 +3103,18 @@ BASE_TRIAL_ID = "_base_trial_id"
 #: (the reading supplies `trial_id`). ✏️ Edit dataset keeps one copy per value
 #: of it to get the stimulus table back (`remap_normalized_frame`).
 AOI_TRIAL_ID = "_aoi_trial_id"
+#: Whether this frame's `text_id` came from a mapped Text ID (a schema pick,
+#: auto-detected or not, or a literal `unique_paragraph_id`) rather than the
+#: trial-id fallback — written by `normalize_*` from the schema, so a mapped
+#: Text ID whose values happen to equal the trial ids still counts (DATA-49).
+TEXT_ID_MAPPED = "_text_id_mapped"
 #: Bookkeeping columns the pipeline needs and the user never sees: kept in the
 #: frames and the recovery cache, dropped from exports and the Data page's
 #: tables (`drop_internal_columns`), and never offered as a field — their
 #: leading underscore is what the field listers skip.
-INTERNAL_COLUMNS = frozenset({STIMULUS_WORDS_FLAG, BASE_TRIAL_ID, AOI_TRIAL_ID})
+INTERNAL_COLUMNS = frozenset(
+    {STIMULUS_WORDS_FLAG, BASE_TRIAL_ID, AOI_TRIAL_ID, TEXT_ID_MAPPED}
+)
 #: Scratch column the stimulus broadcast merges through.
 _STIMULUS_KEY = "_stimulus_key"
 
@@ -3317,10 +3324,15 @@ def _as_key(values: pd.Series) -> pd.Series:
 def _text_is_fallback(frame: pd.DataFrame) -> bool:
     """Whether ``text_id`` is only the trial-id fallback on this frame.
 
-    With no Text ID mapped, ``normalize_*`` copy the (unsuffixed) trial id into
-    ``text_id``, so a frame whose ``text_id`` equals that id on every row says
-    nothing about texts. Compared over distinct pairs, so it is cheap on a
-    million rows."""
+    Read from ``_text_id_mapped``, which ``normalize_*`` write from the schema,
+    so a mapped Text ID is mapped even when its values equal the trial ids.
+    Only a frame normalized without it (a stored dataset from before, frames
+    built by hand) falls back to the values: with no Text ID mapped,
+    ``normalize_*`` copy the (unsuffixed) trial id into ``text_id``, so a
+    ``text_id`` equal to that id on every row says nothing about texts.
+    Compared over distinct pairs, so it is cheap on a million rows."""
+    if TEXT_ID_MAPPED in frame.columns:
+        return not bool(frame[TEXT_ID_MAPPED].fillna(False).astype(bool).any())
     columns = ["text_id", "trial_id"] + [BASE_TRIAL_ID] * (BASE_TRIAL_ID in frame)
     pairs = frame[columns].drop_duplicates()
     trial = pairs["trial_id"]
@@ -3585,9 +3597,11 @@ def broadcast_stimulus_words(
     takes the boxes of the first AOI trial it finds by its own trial id (ids
     shared across readers), by the id it had before a repeat's ``_r2`` suffix
     (``_base_trial_id``, BUG-57), or by its **Text ID** (trial ids that embed
-    the reader) — never through a Text ID the AOI table gives to several
-    trials, and by its Text ID over a trial id that names another text's AOI
-    trial. When no reading finds any — or, on a multipart dataset, when any
+    the reader). The Text-ID route needs a real fixations Text ID (mapped, not
+    the trial-id fallback — ``_text_id_mapped``), and never uses one the AOI
+    table gives to several trials. A trial-id match always stands; mapped Text
+    IDs that disagree with it are counted and warned about, never redirected.
+    When no reading finds any — or, on a multipart dataset, when any
     reading screen finds none — it raises :class:`StimulusJoinError` rather than
     return a dataset without them, and when only some do it warns
     (:class:`StimulusJoinWarning`). One vectorised merge — it runs on
@@ -3803,6 +3817,27 @@ def correct_word_id_offset(
     return fixations
 
 
+def _pad_ids(frame: pd.DataFrame, column: str, mapping: dict) -> pd.DataFrame:
+    """``frame`` with ``column`` respelled by a zero-padding ``mapping``.
+
+    Padding a trial id also pads what was copied from it: a repeat's
+    ``_base_trial_id``, and a fallback ``text_id`` (no Text ID mapped, so it
+    *is* the trial id) — left at "7" beside a trial "007" it would read as a
+    real Text ID of its own (DATA-49)."""
+    frame = frame.copy()
+    if column == "trial_id":
+        if "text_id" in frame.columns:
+            copied = _as_key(frame["text_id"]) == _as_key(frame["trial_id"])
+            if TEXT_ID_MAPPED in frame.columns:
+                copied &= ~frame[TEXT_ID_MAPPED].fillna(False).astype(bool)
+            frame.loc[copied, "text_id"] = frame.loc[copied, "text_id"].replace(mapping)
+        if BASE_TRIAL_ID in frame.columns:
+            # A repeat is joined by the id it was suffixed from.
+            frame[BASE_TRIAL_ID] = frame[BASE_TRIAL_ID].replace(mapping)
+    frame[column] = frame[column].replace(mapping)
+    return frame
+
+
 def _restore_zero_padding(
     words: pd.DataFrame, fixations: pd.DataFrame
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -3830,14 +3865,9 @@ def _restore_zero_padding(
             if not mapping:
                 continue
             if frame_name == "words":
-                words = words.copy()
-                words[column] = words[column].replace(mapping)
+                words = _pad_ids(words, column, mapping)
             else:
-                fixations = fixations.copy()
-                fixations[column] = fixations[column].replace(mapping)
-                if column == "trial_id" and BASE_TRIAL_ID in fixations.columns:
-                    # A repeat is joined by the id it was suffixed from.
-                    fixations[BASE_TRIAL_ID] = fixations[BASE_TRIAL_ID].replace(mapping)
+                fixations = _pad_ids(fixations, column, mapping)
             _LOGGER.info(
                 "The %s table spelled %d %s value(s) without the zero-padding the "
                 "other table uses (e.g. %r for %r); matched them up.",
@@ -4395,6 +4425,24 @@ def _copy_screen_fields(
     return normalize_screen_identity(df)
 
 
+def _text_id_mapped_flag(
+    source: pd.DataFrame, schema: dict, *, renormalizing: bool
+) -> bool | np.ndarray | None:
+    """What ``normalize_*`` write to ``_text_id_mapped`` (``None``: nothing).
+
+    A schema Text ID — auto-detected or picked — or a literal
+    ``unique_paragraph_id`` is mapped. On ✏️ Edit dataset the proposal maps
+    Text ID to the stored ``text_id`` column itself, which says nothing new: the
+    stored frame's own flag is kept, and a frame stored without one gets none
+    (so its values decide, as before)."""
+    text = schema.get("text_id")
+    if renormalizing and text and trial_mapping_columns(text) == ["text_id"]:
+        if TEXT_ID_MAPPED in source.columns:
+            return source[TEXT_ID_MAPPED].fillna(False).astype(bool).to_numpy()
+        return None
+    return bool(text) or "unique_paragraph_id" in source.columns
+
+
 def _drop_reserved_columns(
     raw: pd.DataFrame, schema: dict, *, table: str
 ) -> pd.DataFrame:
@@ -4413,8 +4461,9 @@ def _drop_reserved_columns(
     warnings.warn(
         f"{table}: {', '.join(repr(c) for c in clash)} "
         f"{'is a name' if len(clash) == 1 else 'are names'} Scanpath Studio "
-        "reserves for its own bookkeeping, so the column was ignored. Rename it "
-        "to keep it.",
+        "reserves for its own bookkeeping, so the column was ignored and "
+        "rebuilt. That is expected when re-loading a table Scanpath Studio "
+        "wrote; rename a column of your own to keep it.",
         UserWarning,
         stacklevel=3,
     )
@@ -4478,6 +4527,9 @@ def normalize_words(
         # DATA-49: a repeated reading's text is the id it was suffixed from —
         # the text a stimulus-level AOI table knows it by.
         df["text_id"] = unsuffixed
+    mapped = _text_id_mapped_flag(words, schema, renormalizing=_renormalizing)
+    if mapped is not None:
+        df[TEXT_ID_MAPPED] = mapped
     df = _copy_screen_fields(df, words, schema)
     df["word_id"] = _to_number(words[schema["word_id"]])
     if schema.get("text"):
@@ -4569,6 +4621,9 @@ def normalize_fixations(
     else:
         # DATA-49: the text a repeated reading is of, without its `_r2`.
         df["text_id"] = unsuffixed
+    mapped = _text_id_mapped_flag(fixations, schema, renormalizing=_renormalizing)
+    if mapped is not None:
+        df[TEXT_ID_MAPPED] = mapped
     if "unique_paragraph_id" in fixations.columns:
         df["unique_text_id"] = stable_id(fixations["unique_paragraph_id"])
     df = _copy_screen_fields(df, fixations, schema)
@@ -4685,7 +4740,8 @@ _REMAP_DERIVED_IDS = ("unique_trial_id", "unique_text_id", "unique_paragraph_id"
 
 
 def repeat_bases(fixations: pd.DataFrame | None) -> dict:
-    """Each repeated reading's trial id → the trial id it was recorded under.
+    """Each repeated reading's ``(reader, trial id)`` → the trial id it was
+    recorded under.
 
     From ``_base_trial_id`` when the fixations carry it. A stored frame from
     before DATA-49 does not, so its suffixes are read back instead: a trial
@@ -4695,17 +4751,18 @@ def repeat_bases(fixations: pd.DataFrame | None) -> dict:
     the boxes back into the AOI trial it copied."""
     if fixations is None or fixations.empty or "trial_id" not in fixations:
         return {}
-    if BASE_TRIAL_ID in fixations.columns:
-        pairs = fixations[["trial_id", BASE_TRIAL_ID]].dropna().drop_duplicates()
-        pairs = pairs.astype(str)
-        return dict(
-            zip(
-                pairs.loc[pairs["trial_id"] != pairs[BASE_TRIAL_ID], "trial_id"],
-                pairs.loc[pairs["trial_id"] != pairs[BASE_TRIAL_ID], BASE_TRIAL_ID],
-            )
-        )
     if "participant_id" not in fixations.columns:
         return {}
+    if BASE_TRIAL_ID in fixations.columns:
+        pairs = fixations[["participant_id", "trial_id", BASE_TRIAL_ID]]
+        pairs = pairs.dropna().drop_duplicates().astype(str)
+        pairs = pairs[pairs["trial_id"] != pairs[BASE_TRIAL_ID]]
+        return dict(
+            zip(
+                zip(pairs["participant_id"], pairs["trial_id"]),
+                pairs[BASE_TRIAL_ID],
+            )
+        )
     keys = fixations[["participant_id", "trial_id"]].dropna().drop_duplicates()
     keys = keys.astype(str)
     base = keys["trial_id"].str.extract(_REPEAT_SUFFIX, expand=False)
@@ -4715,11 +4772,26 @@ def repeat_bases(fixations: pd.DataFrame | None) -> dict:
         [candidates["participant_id"], candidates["base"]]
     ).isin(have)
     chosen = candidates[known]
-    return dict(zip(chosen["trial_id"], chosen["base"]))
+    return dict(zip(zip(chosen["participant_id"], chosen["trial_id"]), chosen["base"]))
 
 
-#: A repeated reading's suffix as `_disambiguate_repeated_readings` writes it.
-_REPEAT_SUFFIX = r"^(.+)_r\d+$"
+#: A repeated reading's suffix exactly as `_disambiguate_repeated_readings`
+#: writes it: `_r2`, `_r3` …, never `_r0`/`_r1` or a zero-padded number.
+_REPEAT_SUFFIX = r"^(.+)_r(?:[2-9]|[1-9]\d+)$"
+
+
+def _map_repeats(frame: pd.DataFrame, repeat_of: dict) -> pd.Series:
+    """``frame``'s trial ids with each repeat replaced by its base, looked up
+    per ``(reader, trial)`` in a :func:`repeat_bases` mapping."""
+    ids = frame["trial_id"].astype(str)
+    if not repeat_of or "participant_id" not in frame.columns:
+        return ids
+    table = pd.Series(
+        list(repeat_of.values()), index=pd.MultiIndex.from_tuples(list(repeat_of))
+    )
+    wanted = pd.MultiIndex.from_arrays([frame["participant_id"].astype(str), ids])
+    found = table.reindex(wanted).to_numpy()
+    return pd.Series(np.where(pd.isna(found), ids.to_numpy(), found), index=frame.index)
 
 
 def remap_normalized_frame(
@@ -4785,9 +4857,9 @@ def remap_normalized_frame(
         # A fixations frame stored before `_base_trial_id` existed: give its
         # repeats the id they were recorded under, so the join still finds
         # their boxes after the save.
-        ids = working["trial_id"].astype(str)
-        if ids.isin(repeat_of).any():
-            working = working.assign(**{BASE_TRIAL_ID: ids.map(repeat_of).fillna(ids)})
+        bases = _map_repeats(working, repeat_of)
+        if (bases != working["trial_id"].astype(str)).any():
+            working = working.assign(**{BASE_TRIAL_ID: bases})
     if (
         kind == "words"
         and not schema.get("participant")
@@ -4820,8 +4892,7 @@ def remap_normalized_frame(
                 + working["trial_id"].astype(str)
             )
             if repeat_of:
-                ids = working["trial_id"].astype(str)
-                working = working.assign(trial_id=ids.map(repeat_of).fillna(ids))
+                working = working.assign(trial_id=_map_repeats(working, repeat_of))
             copy_keys = [c for c in ("trial_id", SCREEN_ID) if c in working.columns]
         first = reading.groupby(
             [working[c] for c in copy_keys], dropna=False, sort=False

@@ -122,8 +122,10 @@ Headless, it is `--text-metadata FILE` on `scanpath-studio render` and
   repeated reading, whose trial ID ends in `_r2`) by the trial ID it had before
   that suffix, then by its **Text ID**, for example when the trial ID includes
   the reader. A Text ID that the words table gives to more than one of its
-  trials is not used, and a Text ID the fixations don't map (so it is only
-  their trial ID) is never used to find boxes. A trial-ID match always stands;
+  trials is not used. The Text ID route needs a Text ID mapped for the
+  fixations (auto-detected or picked, even when its values equal the trial
+  IDs); without one, their Text ID is only a copy of the trial ID and is never
+  used to find boxes. A trial-ID match always stands;
   when both tables map a Text ID and a reading's disagrees with the one on the
   boxes its trial ID found, you get a warning naming an example. If no reading
   finds any boxes, the add-dataset screen

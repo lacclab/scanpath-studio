@@ -581,15 +581,18 @@ def load_scanpath_data(
     are copied onto every reading in the fixations — each reading matched by
     its trial id, else the trial id it had before a repeat's ``_r2`` suffix,
     else its ``text_id`` (trial ids that embed the reader), with a
-    ``UserWarning`` when some readings match none — and fixations without x/y
-    but with a word/AoI ID are placed at word-box centers.
+    ``data.StimulusJoinWarning`` (a ``UserWarning``) when some readings match
+    none — and fixations without x/y but with a word/AoI ID are placed at
+    word-box centers. Columns named in ``data.INTERNAL_COLUMNS`` are the
+    pipeline's bookkeeping (``data.drop_internal_columns`` removes them).
 
     Returns the normalized ``(words, fixations)`` frames the plotting
     functions expect. Raises ``ValueError`` if a required field can't be found —
     the message names the canonical field, the column names auto-detection
     looked for, and the columns the table actually has — and
     ``data.StimulusJoinError`` (a ``ValueError``) when a stimulus-level words
-    table shares neither a trial id nor a ``text_id`` with any reading.
+    table shares neither a trial id nor a ``text_id`` with any reading (or,
+    multipart, with every screen a reading has fixations on).
     """
     if words is None and fixations is None:
         raise ValueError("Provide at least one of words= or fixations=.")

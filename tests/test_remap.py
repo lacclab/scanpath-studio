@@ -523,7 +523,8 @@ class TestStimulusLevelWordsRemap:
 
         (problem,) = problems["words"]
         assert problem.startswith(MAPPING_FAILURE_LEAD)
-        assert "shares a trial ID or a Text ID with it" in problem
+        assert "in the fixations finds them" in problem
+        assert "share neither a trial ID nor a Text ID" in problem
         assert saved is entry
         assert self._boxes(saved["words"]) == self._boxes(words)
 
@@ -792,3 +793,211 @@ class TestEditorSetupExport:
         assert "_editor_setup_config" in source
         # It borrows the wizard's own column widths so the two rows line up.
         assert "_FOOTER_ROW_W" in source
+
+
+class TestStimulusProvenanceOnRemap:
+    """DATA-49 review, round 3: a broadcast copy carries the AOI trial it came
+    from (`data.AOI_TRIAL_ID`), so ✏️ Edit dataset gets the stimulus table back
+    exactly — one copy per AOI trial — whatever route each reading took."""
+
+    _EDGE = {
+        "word_id": "wid",
+        "text": "txt",
+        "left": "L",
+        "right": "R",
+        "top": "T",
+        "bottom": "B",
+    }
+    _FIX = {
+        "participant": "subj",
+        "trial": "tr",
+        "x": "fx",
+        "y": "fy",
+        "duration": "dur",
+    }
+
+    @staticmethod
+    def _aoi(trials, texts, labels, **extra):
+        n = len(trials)
+        return pd.DataFrame(
+            {
+                "item": trials,
+                "text": texts,
+                "wid": list(range(n)),
+                "txt": labels,
+                "L": [0.0] * n,
+                "R": [40.0] * n,
+                "T": [0.0] * n,
+                "B": [20.0] * n,
+                **extra,
+            }
+        )
+
+    @staticmethod
+    def _fix(subjects, trials, texts, **extra):
+        n = len(subjects)
+        return pd.DataFrame(
+            {
+                "subj": subjects,
+                "tr": trials,
+                "text": texts,
+                "fx": [10.0] * n,
+                "fy": [5.0] * n,
+                "dur": [100] * n,
+                **extra,
+            }
+        )
+
+    def _save(
+        self,
+        raw_w,
+        word_schema,
+        raw_f,
+        fix_schema,
+        *,
+        words_pick=None,
+        fix_pick=None,
+        keep_w=(),
+        keep_f=(),
+    ):
+        """Load the pair as the wizard stores it, then press ✅ Save changes with
+        the editor's own proposals (optionally re-picking one Trial ID)."""
+        from scanpath_studio.data import harmonize_frames
+        from scanpath_studio.tabs import (
+            _FIX_REMAP_CANON,
+            _WORD_REMAP_CANON,
+            _remap_proposed,
+        )
+
+        words, fixations = harmonize_frames(
+            normalize_words(raw_w, word_schema, keep_columns=set(keep_w) or None),
+            normalize_fixations(raw_f, fix_schema, keep_columns=set(keep_f) or None),
+        )
+        entry = {
+            "words": words,
+            "fixations": fixations,
+            "raw_gaze": pd.DataFrame(),
+            "schemas": {"words": word_schema, "fixations": fix_schema},
+        }
+        pending = {
+            "words": _remap_proposed(word_schema, words.columns, _WORD_REMAP_CANON),
+            "fixations": _remap_proposed(
+                fix_schema, fixations.columns, _FIX_REMAP_CANON
+            ),
+        }
+        if words_pick:
+            pending["words"] = {**pending["words"], "trial": words_pick}
+        if fix_pick:
+            pending["fixations"] = {**pending["fixations"], "trial": fix_pick}
+        problems, saved = TestStimulusLevelWordsRemap._apply(entry, pending)
+        return words, problems, saved
+
+    @staticmethod
+    def _cells(words, reader, trial, column="text"):
+        from scanpath_studio.utils import extract_trial
+
+        return extract_trial(words, reader, trial)[column].tolist()
+
+    def test_a_kept_column_that_differs_between_identical_trials_survives(self):
+        """F1: two AOI trials with the same text and boxes but a different
+        `cond` stay two trials; an unchanged save rewrites neither."""
+        raw_w = self._aoi(
+            ["t4", "t5"], ["T", "T"], ["same", "same"], cond=["easy", "hard"]
+        )
+        raw_w["wid"] = [0, 0]
+        raw_f = self._fix(["p1", "p1", "p2", "p2"], ["t4", "t5", "t4", "t5"], ["T"] * 4)
+        _before, problems, saved = self._save(
+            raw_w,
+            {**self._EDGE, "trial": "item", "text_id": "text"},
+            raw_f,
+            {**self._FIX, "text_id": "text"},
+            keep_w=("cond",),
+        )
+        assert not problems
+        for reader in ("p1", "p2"):
+            assert self._cells(saved["words"], reader, "t4", "cond") == ["easy"]
+            assert self._cells(saved["words"], reader, "t5", "cond") == ["hard"]
+
+    def test_a_mixed_route_dataset_survives_a_new_fixation_trial_pick(self):
+        """F2: one reading joined by trial id, one by Text ID; a new fixations
+        Trial ID pick re-joins both by text instead of refusing."""
+        raw_w = self._aoi(["A", "B"], ["tA", "tB"], ["a", "b"])
+        raw_f = self._fix(["p1", "p2"], ["A", "p2_B"], ["tA", "tB"], alt=["X1", "X2"])
+        _before, problems, saved = self._save(
+            raw_w,
+            {**self._EDGE, "trial": "item", "text_id": "text"},
+            raw_f,
+            {**self._FIX, "text_id": "text"},
+            fix_pick="alt",
+            keep_f=("alt",),
+        )
+        assert not problems
+        assert self._cells(saved["words"], "p1", "X1") == ["a"]
+        assert self._cells(saved["words"], "p2", "X2") == ["b"]
+
+    def _repeat_case(self, **kwargs):
+        raw_w = self._aoi(["a1p1", "a1p2"], ["a1", "a1"], ["first", "second"])
+        # The raw paragraph column the repro re-picks, kept as an extra field.
+        raw_w["paragraph"] = raw_w["item"]
+        raw_f = self._fix(
+            ["r1", "r1", "r1"],
+            ["a1p1", "a1p2", "a1p1"],
+            ["a1"] * 3,
+            TRIAL_INDEX=[1, 2, 3],
+        )
+        return self._save(
+            raw_w,
+            {**self._EDGE, "trial": "item", "text_id": "text"},
+            raw_f,
+            {**self._FIX, "text_id": "text"},
+            keep_w=("paragraph",),
+            **kwargs,
+        )
+
+    def test_a_repeat_keeps_one_copy_of_its_boxes_under_the_default_proposal(self):
+        """F3, the editor's own proposal: the fixations' Trial ID stays the
+        stored (suffixed) `trial_id`, so `_base_trial_id` must survive it."""
+        before, problems, saved = self._repeat_case()
+        assert not problems
+        assert self._cells(before, "r1", "a1p1_r2") == ["first"]
+        for trial, text in (
+            ("a1p1", ["first"]),
+            ("a1p1_r2", ["first"]),
+            ("a1p2", ["second"]),
+        ):
+            assert self._cells(saved["words"], "r1", trial) == text, trial
+
+    def test_a_repeat_keeps_one_copy_after_re_picking_the_words_trial_id(self):
+        """F3, the repro: re-pick the words' Trial ID to the raw paragraph column —
+        `a1p1` must not get its boxes twice, nor `a1p1_r2` none."""
+        _before, problems, saved = self._repeat_case(words_pick="paragraph")
+        assert not problems
+        for trial, text in (
+            ("a1p1", ["first"]),
+            ("a1p1_r2", ["first"]),
+            ("a1p2", ["second"]),
+        ):
+            assert self._cells(saved["words"], "r1", trial) == text, trial
+
+    def test_a_partial_join_during_a_save_is_shown_on_the_page(self):
+        """F5: the warning is raised inside the button's callback, so it is
+        parked for the screen the save returns to."""
+        import warnings
+
+        import streamlit as st
+
+        from scanpath_studio import tabs
+
+        raw_w = self._aoi(["t1"], ["t1"], ["one"])
+        raw_f = self._fix(["p1", "p2"], ["t1", "q"], ["t1", "zz"])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            _before, problems, _saved = self._save(
+                raw_w,
+                {**self._EDGE, "trial": "item", "text_id": "text"},
+                raw_f,
+                {**self._FIX, "text_id": "text"},
+            )
+        assert not problems
+        notices = st.session_state.get(tabs.STIMULUS_JOIN_NOTICE_KEY)
+        assert notices and "1 of 2 readings have word boxes" in notices[0]

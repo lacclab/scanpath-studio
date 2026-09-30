@@ -52,7 +52,12 @@ from .constants import (
     palette_settings,
     upload_limit_mb,
 )
-from .data import READING_MEASURE_FIELDS, READING_MEASURE_KEYS, frame_fingerprint
+from .data import (
+    INTERNAL_COLUMNS,
+    READING_MEASURE_FIELDS,
+    READING_MEASURE_KEYS,
+    frame_fingerprint,
+)
 from .export import (
     DEFAULT_CAPTION_PATTERN,
     DEFAULT_TITLE_PATTERN,
@@ -6874,7 +6879,7 @@ def _chip_field_options(words, fixations, trial_level: set) -> list[str]:
         add("participant_id")
     add(next((c for c in _CHIP_TEXT_ID_COLS if c in words.columns), ""))
     for c in list(words.columns) + list(fixations.columns):
-        if c in trial_level:
+        if c in trial_level and c not in INTERNAL_COLUMNS:
             add(c)
     # DATA-20: participant-grain metadata is constant within a trial by
     # construction, so it belongs in this list on exactly the same terms as a

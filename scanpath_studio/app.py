@@ -233,6 +233,7 @@ from scanpath_studio.styles import get_app_css
 from scanpath_studio.tabs import (
     EDITOR_NAME_FIELD_KEY,
     EDITOR_PENDING_NAME_KEY,
+    STIMULUS_JOIN_NOTICE_KEY,
     _build_figure_settings,
     _render_column_mapping_section,
     dataset_editor_is_dirty,
@@ -7472,12 +7473,17 @@ def _run_app() -> None:
         # UX-107 — ✅ Save changes closes the editor, so its success line
         # belongs here, on the screen it returns to.
         saved = st.session_state.pop("_remap_applied", None)
+        join_notices = st.session_state.pop(STIMULUS_JOIN_NOTICE_KEY, None)
         if saved:
             dataset_table_slot.success(
                 f"**{_dataset_display_name(str(saved))}** updated — mapping, "
                 "recording setup and any table you added are saved.",
                 icon=ICONS["success"],
             )
+            # DATA-49: a save whose word boxes reached only some readings says
+            # so here — its warning was raised inside the button's callback.
+            for notice in join_notices or []:
+                dataset_table_slot.warning(notice, icon=ICONS["warning"])
         # Rendered *inside* the slot rather than handed it: the table is a
         # fragment, and a fragment rerun may only draw widgets into its own
         # containers.

@@ -179,7 +179,7 @@ class TestSharedAndRepeatedIds:
 
     def test_a_repeated_reading_joins_by_the_id_it_was_recorded_under(self):
         """BUG-57 falls out of the general join: `_disambiguate_repeated_readings`
-        records the id it suffixed (`base_trial_id`), so the `_r2` reading finds
+        records the id it suffixed (`_base_trial_id`), so the `_r2` reading finds
         its boxes by trial id, and its fallback Text ID is the unsuffixed id."""
         fixations = pd.DataFrame(
             {
@@ -649,3 +649,119 @@ class TestHeadlessSurfaces:
         assert result.returncode != 0
         assert "Text ID" in result.stderr
         assert "--word-schema" in result.stderr and "--fix-schema" in result.stderr
+
+
+class TestRoutesAreCrossChecked:
+    def test_a_trial_id_naming_another_texts_trial_gives_way_to_the_text_id(self):
+        """Trial ids that are presentation order: reader A's trial "1" read text
+        t5. The exact trial id would hand A text 1's boxes, so the Text ID wins
+        and the redirect is reported (DATA-49 review, F4)."""
+        words = _aoi(["1", "5"], ["t1", "t5"], ["one", "five"])
+        fixations = _fix(["A", "B"], ["1", "1"], ["t5", "t1"])
+        with pytest.warns(data_module.StimulusJoinWarning, match="another text"):
+            w, _ = sps.load_scanpath_data(
+                words=words,
+                fixations=fixations,
+                word_schema={**_EDGE_SCHEMA, "trial": "trial", "text_id": "text"},
+                fix_schema={**_FIX_SCHEMA, "text_id": "text"},
+            )
+        assert _boxes(w, "A", "1") == ["five"]
+        assert _boxes(w, "B", "1") == ["one"]
+        join = plan_stimulus_join(
+            normalize_words(
+                words, {**_EDGE_SCHEMA, "trial": "trial", "text_id": "text"}
+            ),
+            normalize_fixations(fixations, {**_FIX_SCHEMA, "text_id": "text"}),
+        )
+        assert (join.by_trial, join.by_text, join.redirected) == (1, 1, 1)
+
+
+class TestMessages:
+    def test_counts_are_singular_when_one(self):
+        words = normalize_words(
+            _aoi(["A"], ["tA"], ["a"]),
+            {**_EDGE_SCHEMA, "trial": "trial", "text_id": "text"},
+        )
+        fixations = normalize_fixations(
+            _fix(["p1", "p2"], ["A", "zz"], ["tA", "nope"]),
+            {**_FIX_SCHEMA, "text_id": "text"},
+        )
+        text = plan_stimulus_join(words, fixations).describe()
+        assert "1 of 2 readings have word boxes" in text
+        assert "1 reading shares neither a trial ID nor a Text ID" in text
+
+    def test_readings_left_out_by_an_ambiguous_text_are_told_why(self):
+        words = normalize_words(
+            _aoi(["T1", "T2", "T3"], ["X", "X", "Y"], ["x1", "x2", "y"]),
+            {**_EDGE_SCHEMA, "trial": "trial", "text_id": "text"},
+        )
+        fixations = normalize_fixations(
+            _fix(["r1", "r2", "r3"], ["r1_Y", "r2_X", "r3_Q"], ["Y", "X", "Q"]),
+            {**_FIX_SCHEMA, "text_id": "text"},
+        )
+        join = plan_stimulus_join(words, fixations)
+        assert (join.matched, join.ambiguous_readings) == (1, 1)
+        text = join.describe()
+        assert "1 reading shares neither" in text
+        assert "1 reading names a Text ID the AOI table gives to more than one" in text
+        assert "'X'" in text and "that Text ID cannot pick" in text
+
+    def test_a_multipart_partial_join_is_refused_up_front(self):
+        """Every screen a reading has fixations on needs its boxes, so a
+        multipart partial join is refused here, not later as "orphan screens"."""
+        words = _aoi(["A", "A"], ["tA", "tA"], ["one", "two"]).assign(page=["p1", "p2"])
+        fixations = _fix(["r1", "r1"], ["r1_A", "r1_A"], ["tA", "tA"]).assign(
+            page=["p1", "p3"]
+        )
+        with pytest.raises(StimulusJoinError, match="1 of 2 reading screens") as err:
+            sps.load_scanpath_data(
+                words=words,
+                fixations=fixations,
+                word_schema={
+                    **_EDGE_SCHEMA,
+                    "trial": "trial",
+                    "text_id": "text",
+                    "screen_id": "page",
+                },
+                fix_schema={**_FIX_SCHEMA, "text_id": "text", "screen_id": "page"},
+            )
+        assert "multipart dataset needs boxes for every screen" in str(err.value)
+        assert "orphan" not in str(err.value)
+
+
+class TestInternalColumns:
+    def test_base_trial_id_is_written_on_fixations_only(self):
+        repeated = _aoi(["a", "a"], ["a", "a"], ["x", "y"]).assign(
+            subj=["r1", "r1"], TRIAL_INDEX=[1, 2]
+        )
+        w = normalize_words(
+            repeated, {**_EDGE_SCHEMA, "trial": "trial", "participant": "subj"}
+        )
+        assert set(w["trial_id"]) == {"a", "a_r2"}
+        assert data_module.BASE_TRIAL_ID not in w.columns
+        f = normalize_fixations(
+            _fix(["r1", "r1"], ["a", "a"], ["a", "a"], TRIAL_INDEX=[1, 2]),
+            _FIX_SCHEMA,
+        )
+        assert set(f[data_module.BASE_TRIAL_ID]) == {"a"}
+
+    def test_exports_and_chips_leave_them_out(self):
+        import io
+        import zipfile
+
+        from scanpath_studio import controls, export
+
+        w, f = sps.load_scanpath_data(
+            words=_text_words(), fixations=_reader_fixations()
+        )
+        assert data_module.AOI_TRIAL_ID in w.columns
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            export._write_table(zf, "words.csv", w, "csv")
+        with zipfile.ZipFile(buf) as zf:
+            header = zf.read("words.csv").decode().splitlines()[0].split(",")
+        assert not set(header) & data_module.INTERNAL_COLUMNS
+        trial_level = controls._trial_level_columns(w, f)
+        assert data_module.AOI_TRIAL_ID in trial_level  # constant per trial …
+        options = controls._chip_field_options(w, f, trial_level)
+        assert not set(options) & data_module.INTERNAL_COLUMNS  # … yet never offered

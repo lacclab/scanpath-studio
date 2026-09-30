@@ -8,6 +8,7 @@ import html
 import json
 import os
 import pickle
+import warnings
 import zlib
 from collections.abc import Callable, Hashable
 from dataclasses import dataclass, replace
@@ -153,9 +154,11 @@ from scanpath_studio.controls import (
 from scanpath_studio.data import (
     READING_MEASURE_FIELDS,
     READING_MEASURE_KEYS,
+    StimulusJoinWarning,
     aggregate_char_boxes,
     compute_word_metrics,
     derive_trial_index,
+    drop_internal_columns,
     empty_fixations_frame,
     empty_words_frame,
     filter_to_keys,
@@ -9531,7 +9534,8 @@ def _render_raw_table(df: pd.DataFrame, caption: str | None = None) -> None:
     local path. Bulk export is the supported way out, and it strips those at its
     single chokepoint (``export.strip_local_paths``).
     """
-    st.dataframe(df, hide_index=True, width="stretch", lazy=True)
+    # DATA-49: bookkeeping columns (`data.INTERNAL_COLUMNS`) are not data.
+    st.dataframe(drop_internal_columns(df), hide_index=True, width="stretch", lazy=True)
     if caption:
         st.caption(caption)
 
@@ -10858,6 +10862,36 @@ def _remap_proposed(schema: dict | None, frame_columns, canon: dict) -> dict:
     return proposed
 
 
+#: DATA-49 — what a ✅ Save changes' stimulus join warned about (some readings
+#: found no word boxes), shown under the success line on the screen the save
+#: returns to. Not a `_remap_*` key: those are cleared when the save ends.
+STIMULUS_JOIN_NOTICE_KEY = "_stimulus_join_notice"
+
+
+def _harmonize_noting_join(
+    words: pd.DataFrame, fixations: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """``harmonize_frames``, keeping its ``StimulusJoinWarning`` for the page.
+
+    ✅ Save changes runs in an ``on_click``, where a warning only reaches the
+    server's terminal; this parks its text under ``STIMULUS_JOIN_NOTICE_KEY``
+    instead (DATA-49). Any other warning is re-raised as it was."""
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = harmonize_frames(words, fixations)
+    notices = []
+    for record in caught:
+        if issubclass(record.category, StimulusJoinWarning):
+            notices.append(str(record.message))
+        else:
+            warnings.warn_explicit(
+                record.message, record.category, record.filename, record.lineno
+            )
+    if notices:
+        st.session_state[STIMULUS_JOIN_NOTICE_KEY] = notices
+    return result
+
+
 def _apply_remap() -> None:
     """Re-derive the active stored dataset's frames under the edited mapping and
     overwrite the entry in place (the "Apply remapping" button's ``on_click``).
@@ -10867,6 +10901,7 @@ def _apply_remap() -> None:
     re-normalizes via ``data.remap_normalized_frame`` and recomputes the
     composite trial components. ``app.main``'s stored-dataset branch then
     re-publishes the new frames + mapping on the rerun this callback triggers."""
+    st.session_state.pop(STIMULUS_JOIN_NOTICE_KEY, None)
     active = _active_stored_dataset()
     if active is None:
         return
@@ -10928,14 +10963,14 @@ def _apply_remap() -> None:
                 other = new_entry.get("fixations")
                 if not isinstance(other, pd.DataFrame) or other.empty:
                     other = empty_fixations_frame()
-                fresh, other = harmonize_frames(fresh, other)
+                fresh, other = _harmonize_noting_join(fresh, other)
                 new_entry["words"], new_entry["fixations"] = fresh, other
             else:
                 fresh = normalize_fixations(raw, schema)
                 other = new_entry.get("words")
                 if not isinstance(other, pd.DataFrame) or other.empty:
                     other = empty_words_frame()
-                other, fresh = harmonize_frames(other, fresh)
+                other, fresh = _harmonize_noting_join(other, fresh)
                 new_entry["words"], new_entry["fixations"] = other, fresh
             harmonized = True
         except Exception as exc:
@@ -10973,7 +11008,7 @@ def _apply_remap() -> None:
         fixations = new_entry.get("fixations")
         has_fixations = isinstance(fixations, pd.DataFrame) and not fixations.empty
         try:
-            words, fixations = harmonize_frames(
+            words, fixations = _harmonize_noting_join(
                 before, fixations if has_fixations else empty_fixations_frame()
             )
         except Exception as exc:
@@ -11290,7 +11325,8 @@ def _render_remap_fields(
         frame = stored.get(table_key)
         if frame is None or getattr(frame, "empty", True):
             continue
-        frames[table_key] = frame
+        # DATA-49: bookkeeping columns are never a field to map.
+        frames[table_key] = drop_internal_columns(frame)
         specs_by_table[table_key] = specs
         prefixes[table_key] = f"remap_{name}_{table_key}"
         proposals[table_key] = _remap_proposed(

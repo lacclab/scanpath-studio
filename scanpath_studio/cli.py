@@ -3050,9 +3050,12 @@ def analyze(argv: list[str]) -> None:
     # stands unless preprocessing actually ran.
     if not qa.empty:
         tables["cleaning_qa"] = qa
+    from .data import drop_internal_columns
+
     destination = Path(args.output_dir)
     destination.mkdir(parents=True, exist_ok=True)
     for name, table in tables.items():
+        table = drop_internal_columns(table)
         table.to_csv(destination / f"{name}.csv", index=False)
     config = {
         "short_policy": policy,

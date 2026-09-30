@@ -122,11 +122,14 @@ Headless, it is `--text-metadata FILE` on `scanpath-studio render` and
   repeated reading, whose trial ID ends in `_r2`) by the trial ID it had before
   that suffix, then by its **Text ID**, for example when the trial ID includes
   the reader. A Text ID that the words table gives to more than one of its
-  trials is not used. If no reading finds any boxes, the add-dataset screen
+  trials is not used. When a reading's trial ID matches a words trial of a
+  different text than its own Text ID (trial IDs that are presentation order,
+  say), the Text ID wins. If no reading finds any boxes, the add-dataset screen
   stops with a message (the Python API and CLI raise the same error) rather
-  than adding a dataset with no word boxes. When some readings find none, the
-  screen, the API and the CLI warn with the counts. When it works, the screen
-  says how the words attached.
+  than adding a dataset with no word boxes; a multi-screen dataset stops the
+  same way when any screen a reader looked at has no boxes. When some readings
+  find none, the screen, the API and the CLI warn with the counts. When it
+  works, the screen says how the words attached.
 - **Text ID falls back to the trial ID** when it isn't mapped. A repeated
   reading takes its first reading's trial ID (without the `_r2`), so per-text
   grouping counts a re-reading as the same text.

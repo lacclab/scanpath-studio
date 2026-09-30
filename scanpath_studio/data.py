@@ -3095,44 +3095,83 @@ SYNTHETIC_PARTICIPANT = "(all)"
 #: (DATA-49), as the wizard names them.
 STIMULUS_JOIN_LABELS = {"trial_id": "trial ID", "text_id": "Text ID"}
 #: The mapped trial id a repeated reading had before
-#: `_disambiguate_repeated_readings` suffixed it with `_r2`, `_r3` …, written
-#: only when a suffix was given. The stimulus join reads it so a repeat finds
-#: the boxes of what it re-read (BUG-57, DATA-49).
-BASE_TRIAL_ID = "base_trial_id"
+#: `_disambiguate_repeated_readings` suffixed it with `_r2`, `_r3` … — on the
+#: fixations only, and only when a suffix was given. The stimulus join reads it
+#: so a repeat finds the boxes of what it re-read (BUG-57, DATA-49).
+BASE_TRIAL_ID = "_base_trial_id"
+#: On a broadcast words copy: the AOI table's own trial id it was copied from
+#: (the reading supplies `trial_id`). ✏️ Edit dataset keeps one copy per value
+#: of it to get the stimulus table back (`remap_normalized_frame`).
+AOI_TRIAL_ID = "_aoi_trial_id"
+#: Bookkeeping columns the pipeline needs and the user never sees: kept in the
+#: frames and the recovery cache, dropped from exports and the Data page's
+#: tables (`drop_internal_columns`), and never offered as a field — their
+#: leading underscore is what the field listers skip.
+INTERNAL_COLUMNS = frozenset({STIMULUS_WORDS_FLAG, BASE_TRIAL_ID, AOI_TRIAL_ID})
 #: Scratch column the stimulus broadcast merges through.
 _STIMULUS_KEY = "_stimulus_key"
 
 
+def drop_internal_columns(frame: pd.DataFrame) -> pd.DataFrame:
+    """``frame`` without :data:`INTERNAL_COLUMNS` (the same object if none)."""
+    present = [c for c in INTERNAL_COLUMNS if c in frame.columns]
+    return frame.drop(columns=present) if present else frame
+
+
 class StimulusJoinError(ValueError):
-    """A stimulus-level AOI table that no reading in the fixations can use.
+    """A stimulus-level AOI table that the readings in the fixations can't use.
 
     Raised by :func:`broadcast_stimulus_words` — so by ``harmonize_frames`` and
     every loader built on it — instead of returning a dataset with no word
-    boxes: the add-dataset wizard and ✏️ Edit dataset block on it, the headless
-    API raises it, and the CLI prints it (DATA-49)."""
+    boxes (or, on a multipart dataset, with screens that have none): the
+    add-dataset wizard and ✏️ Edit dataset block on it, the headless API raises
+    it, and the CLI prints it (DATA-49)."""
+
+
+class StimulusJoinWarning(UserWarning):
+    """Some readings found no stimulus-level word boxes (DATA-49); the rest did.
+
+    A ``UserWarning``, like the normalizers' load warnings, so the API and the
+    CLI see it; its own class so ✏️ Edit dataset can catch it during a save and
+    show it on the page."""
+
+
+def _count(n: int, singular: str, plural: str) -> str:
+    return f"{n:,} {singular if n == 1 else plural}"
 
 
 @dataclass(frozen=True)
 class StimulusJoin:
     """How a stimulus-level AOI table attached to the readings (DATA-49).
 
-    A *reading* is one ``(participant_id, trial_id[, screen_id])`` of the
-    fixations. Each reading takes the boxes of the AOI table's trial it is
-    matched to by the first of these that finds one: its own trial id, the
-    trial id it had before a repeated-reading ``_r2`` suffix
-    (``base_trial_id``), or its Text ID. ``by_trial`` readings were matched the
-    first two ways, ``by_text`` the third. ``ambiguous_texts`` are Text IDs the
-    AOI table gives to more than one of its trials, which match no reading."""
+    A *reading* is one ``(participant_id, trial_id)`` of the fixations — one
+    ``(participant_id, trial_id, screen_id)`` on a multipart dataset, where the
+    counts are of *reading screens*. Each takes the boxes of the AOI table's
+    trial it is matched to by the first of these that finds one: its own trial
+    id, the trial id it had before a repeat's ``_r2`` suffix
+    (``_base_trial_id``), or its Text ID. ``by_trial`` were matched the first
+    two ways, ``by_text`` the third — ``redirected`` of those because the trial
+    id pointed at an AOI trial of a *different* text than the reading's own
+    Text ID. ``ambiguous_texts`` are Text IDs the AOI table gives to more than
+    one of its trials; ``ambiguous_readings`` of the unmatched readings name
+    one of them."""
 
     readings: int
     by_trial: int
     by_text: int
     ambiguous_texts: tuple[str, ...] = ()
+    ambiguous_readings: int = 0
+    redirected: int = 0
+    multipart: bool = False
 
     @property
     def matched(self) -> int:
-        """Readings that got word boxes."""
+        """Readings (reading screens) that got word boxes."""
         return self.by_trial + self.by_text
+
+    @property
+    def unmatched(self) -> int:
+        return self.readings - self.matched
 
     @property
     def key(self) -> str | None:
@@ -3151,39 +3190,85 @@ class StimulusJoin:
             return f"trial ID ({self.by_trial:,}) and by Text ID ({self.by_text:,})"
         return STIMULUS_JOIN_LABELS.get(self.key or "", "")
 
-    def _ambiguity(self) -> str:
-        if not self.ambiguous_texts:
-            return ""
-        shown = ", ".join(repr(t) for t in self.ambiguous_texts[:3])
-        more = len(self.ambiguous_texts) - 3
-        tail = f" and {more:,} more" if more > 0 else ""
+    def _unit(self, n: int) -> str:
         return (
-            f" Text ID {shown}{tail} names more than one of the AOI table's "
-            "trials, so it cannot pick one set of boxes for a reading."
+            _count(n, "reading screen", "reading screens")
+            if self.multipart
+            else _count(n, "reading", "readings")
+        )
+
+    def _why_unmatched(self) -> str:
+        """Why the unmatched readings found nothing, split by the reason."""
+        parts = []
+        plain = self.unmatched - self.ambiguous_readings
+        if plain:
+            verb = "shares" if plain == 1 else "share"
+            parts.append(
+                f" {self._unit(plain)} {verb} neither a trial ID nor a Text ID "
+                "with the AOI table."
+            )
+        if self.ambiguous_readings:
+            shown = ", ".join(repr(t) for t in self.ambiguous_texts[:3])
+            more = len(self.ambiguous_texts) - 3
+            if more > 0:
+                shown += f" and {more:,} more"
+            texts = (
+                "that Text ID" if len(self.ambiguous_texts) == 1 else "those Text IDs"
+            )
+            verb = "names" if self.ambiguous_readings == 1 else "name"
+            parts.append(
+                f" {self._unit(self.ambiguous_readings)} {verb} a Text ID the AOI "
+                f"table gives to more than one of its trials ({shown}), so "
+                f"{texts} cannot pick one set of boxes."
+            )
+        return "".join(parts)
+
+    def _redirect_note(self) -> str:
+        if not self.redirected:
+            return ""
+        verb = "matches" if self.redirected == 1 else "match"
+        return (
+            f" {self._unit(self.redirected)} whose trial ID {verb} an AOI trial "
+            "of another text use their own Text ID's boxes instead."
         )
 
     def describe(self) -> str:
         """One sentence for the wizard and the log: the route and its coverage."""
-        if self.key is None:
+        if self.key is None or (self.multipart and self.unmatched):
             return self.problem()
-        lead = f"Words attach to readings by {self.label}"
-        if self.matched == self.readings:
-            return f"{lead}: all {self.readings:,} readings have word boxes."
+        unit = "reading screens" if self.multipart else "readings"
+        lead = f"Words attach to {unit} by {self.label}"
+        if not self.unmatched:
+            return f"{lead}: all {self.readings:,} {unit} have word boxes." + (
+                self._redirect_note()
+            )
         return (
-            f"{lead}: {self.matched:,} of {self.readings:,} readings have word "
-            f"boxes. The other {self.readings - self.matched:,} share neither a "
-            f"trial ID nor a Text ID with the AOI table.{self._ambiguity()}"
+            f"{lead}: {self.matched:,} of {self._unit(self.readings)} have word "
+            f"boxes.{self._why_unmatched()}{self._redirect_note()}"
         )
 
     def problem(self) -> str:
-        """Why nothing joined, and what to map instead."""
+        """Why the join is refused, and what to map instead."""
+        advice = (
+            " Map Text ID (`text_id`) in both tables to the column naming the "
+            "text each row belongs to, or give the AOI table the fixations' own "
+            "trial IDs."
+        )
+        if self.matched:
+            # Only a multipart dataset refuses a partial join: every screen a
+            # reading has fixations on needs its boxes (`validate_matching_parts`).
+            return (
+                "The AOI table has no Participant ID, so its word boxes are shared "
+                f"by every reading of a text, but only {self.matched:,} of "
+                f"{self._unit(self.readings)} find theirs, and a multipart dataset "
+                "needs boxes for every screen it has fixations on."
+                f"{self._why_unmatched()}{advice}"
+            )
         return (
             "The AOI table has no Participant ID, so its word boxes are shared by "
-            f"every reading of a text, but none of the {self.readings:,} readings "
-            "in the fixations shares a trial ID or a Text ID with it: the dataset "
-            f"would have no word boxes.{self._ambiguity()} Map Text ID (`text_id`) "
-            "in both tables to the column naming the text each row belongs to, "
-            "or give the AOI table the fixations' own trial IDs."
+            f"every reading of a text, but none of the {self._unit(self.readings)} "
+            "in the fixations finds them: the dataset would have no word boxes."
+            f"{self._why_unmatched()}{advice}"
         )
 
 
@@ -3194,17 +3279,23 @@ def _as_key(values: pd.Series) -> pd.Series:
 
 
 def _lookup(
-    readings: pd.DataFrame, keys: pd.Series, table: pd.DataFrame, screen: list
+    readings: pd.DataFrame,
+    keys: pd.Series,
+    table: pd.DataFrame,
+    screen: list,
+    value: str = _STIMULUS_KEY,
 ) -> np.ndarray:
-    """For each reading, the AOI table's trial whose key equals ``keys``.
+    """For each reading, ``table[value]`` where ``table["_key"]`` equals ``keys``.
 
-    ``table`` holds ``_key`` (unique with ``screen``) and ``_STIMULUS_KEY``;
-    a left merge keeps the readings' order, so the result lines up with it."""
+    ``table`` is unique on ``_key`` + ``screen``; a left merge keeps the
+    readings' order, so the result lines up with them (missing = no match)."""
     probe = pd.DataFrame(
         {"_key": keys.to_numpy(), **{c: readings[c].to_numpy() for c in screen}}
     )
-    hits = probe.merge(table, on=["_key", *screen], how="left")
-    return hits[_STIMULUS_KEY].to_numpy()
+    hits = probe.merge(
+        table[["_key", *screen, value]], on=["_key", *screen], how="left"
+    )
+    return hits[value].to_numpy()
 
 
 def _plan_stimulus_join(
@@ -3214,9 +3305,10 @@ def _plan_stimulus_join(
 
     Each reading's ``_STIMULUS_KEY`` is the AOI table trial whose boxes it
     takes (missing when none): its exact trial id, else its unsuffixed one,
-    else its Text ID's one trial. Vectorised over *distinct* keys (one
-    ``drop_duplicates`` per frame and one merge per route), so it costs the same
-    on a million-row corpus as the broadcast it plans."""
+    else its Text ID's one trial — and its Text ID's trial over the trial-id
+    match when that match is an AOI trial of another text. Vectorised over
+    *distinct* keys (one ``drop_duplicates`` per frame and one merge per
+    route), so it costs the same on a million-row corpus as the broadcast."""
     screen = [SCREEN_ID] * (
         SCREEN_ID in words.columns and SCREEN_ID in fixations.columns
     )
@@ -3227,10 +3319,12 @@ def _plan_stimulus_join(
     )
     readings = fixations[reading_key + extra].drop_duplicates(reading_key)
     readings = readings.reset_index(drop=True)
-    trials = words[["trial_id", *screen]].dropna().drop_duplicates()
+    trials = words[["trial_id", *screen, *["text_id"] * has_text]]
+    trials = trials.dropna(subset=["trial_id", *screen]).drop_duplicates(
+        ["trial_id", *screen]
+    )
     trials = trials.assign(_key=_as_key(trials["trial_id"]))
     trials[_STIMULUS_KEY] = trials["_key"]
-    trials = trials.drop(columns=["trial_id"])
 
     stimulus = _lookup(readings, _as_key(readings["trial_id"]), trials, screen)
     if BASE_TRIAL_ID in readings.columns:
@@ -3238,9 +3332,10 @@ def _plan_stimulus_join(
         # its boxes (BUG-57): try the id it was recorded under.
         base = _lookup(readings, _as_key(readings[BASE_TRIAL_ID]), trials, screen)
         stimulus = np.where(pd.isna(stimulus), base, stimulus)
-    by_trial = int(pd.notna(stimulus).sum())
 
     ambiguous: tuple[str, ...] = ()
+    ambiguous_readings = redirected = 0
+    by_text_route = np.zeros(len(readings), dtype=bool)
     if has_text:
         text_key = ["text_id", *screen]
         # A Text ID stands in for the trial only where it names one set of
@@ -3258,14 +3353,44 @@ def _plan_stimulus_join(
                 _STIMULUS_KEY: _as_key(texts["trial_id"]).to_numpy(),
             }
         )
-        by_text_id = _lookup(readings, _as_key(readings["text_id"]), texts, screen)
+        reading_text = _as_key(readings["text_id"])
+        by_text_id = _lookup(readings, reading_text, texts, screen)
+        # The text is the stimulus' identity: a trial-id match that lands on
+        # an AOI trial of another text than the reading's own (trial ids that
+        # are presentation order, say) gives way to the Text ID's trial.
+        matched_text = _lookup(
+            readings,
+            pd.Series(stimulus),
+            trials.assign(_text=_as_key(trials["text_id"])),
+            screen,
+            value="_text",
+        )
+        conflict = (
+            pd.notna(stimulus)
+            & pd.notna(matched_text)
+            & reading_text.notna().to_numpy()
+            & (matched_text != reading_text.to_numpy())
+            & pd.notna(by_text_id)
+            & (by_text_id != stimulus)
+        )
+        redirected = int(conflict.sum())
+        stimulus = np.where(conflict, by_text_id, stimulus)
+        by_text_route = conflict | (pd.isna(stimulus) & pd.notna(by_text_id))
         stimulus = np.where(pd.isna(stimulus), by_text_id, stimulus)
+        if ambiguous:
+            ambiguous_readings = int(
+                (pd.isna(stimulus) & reading_text.isin(ambiguous).to_numpy()).sum()
+            )
     matched = int(pd.notna(stimulus).sum())
+    by_text = int(by_text_route.sum())
     join = StimulusJoin(
         readings=len(readings),
-        by_trial=by_trial,
-        by_text=matched - by_trial,
+        by_trial=matched - by_text,
+        by_text=by_text,
         ambiguous_texts=ambiguous,
+        ambiguous_readings=ambiguous_readings,
+        redirected=redirected,
+        multipart=bool(screen),
     )
     readings[_STIMULUS_KEY] = stimulus
     return join, readings, reading_key
@@ -3303,23 +3428,26 @@ def _broadcast_stimulus_words(
             words["participant_id"] = SYNTHETIC_PARTICIPANT
         return words, None
     join, readings, reading_key = _plan_stimulus_join(words, fixations)
-    if join.key is None:
+    # A multipart dataset needs boxes for every screen it has fixations on
+    # (`validate_matching_parts` would reject it a step later as "orphan
+    # screens"), so a partial join is refused here, with the reasons.
+    if join.key is None or (join.multipart and join.unmatched):
         raise StimulusJoinError(join.problem())
-    if join.matched < join.readings:
+    if join.unmatched or join.redirected:
         # The API and the CLI have no page to put this on, and a script would
-        # otherwise get readings with no boxes without a word: the same
-        # `UserWarning` the normalizers raise (the wizard shows it too).
-        warnings.warn(join.describe(), UserWarning, stacklevel=4)
+        # otherwise get readings with no (or other) boxes without a word.
+        warnings.warn(join.describe(), StimulusJoinWarning, stacklevel=4)
     else:
         _LOGGER.info(join.describe())
     screen = reading_key[2:]
     on = [_STIMULUS_KEY, *screen]
     # The AOI table supplies the boxes (and its own Text ID); the reading
     # supplies its identity — the AOI table's trial id is the stimulus', not
-    # the reading's.
-    stimulus = words.drop(columns=[STIMULUS_WORDS_FLAG, "participant_id"]).rename(
-        columns={"trial_id": _STIMULUS_KEY}
-    )
+    # the reading's, and it stays on each copy as `_aoi_trial_id`.
+    stimulus = words.drop(
+        columns=[c for c in (STIMULUS_WORDS_FLAG, AOI_TRIAL_ID) if c in words]
+        + ["participant_id"]
+    ).rename(columns={"trial_id": _STIMULUS_KEY})
     stimulus = stimulus.dropna(subset=on)
     stimulus[_STIMULUS_KEY] = stimulus[_STIMULUS_KEY].astype(str)
     pairs = readings[[*reading_key, _STIMULUS_KEY]].dropna(subset=on)
@@ -3327,7 +3455,9 @@ def _broadcast_stimulus_words(
         participant_id=pairs["participant_id"].astype(str),
         trial_id=pairs["trial_id"].astype(str),
     )
-    out = stimulus.merge(pairs, on=on, how="inner").drop(columns=[_STIMULUS_KEY])
+    out = stimulus.merge(pairs, on=on, how="inner").rename(
+        columns={_STIMULUS_KEY: AOI_TRIAL_ID}
+    )
     if "unique_trial_id" in out.columns:
         # The reading's id *is* its unique trial id (BUG-58).
         out["unique_trial_id"] = out["trial_id"]
@@ -3344,17 +3474,21 @@ def broadcast_stimulus_words(
     such words carry the ``_stimulus_words`` flag; this gives each reading —
     each ``(participant_id, trial_id[, screen_id])`` of the fixations — the
     boxes of the AOI table's trial it belongs to, stamped with that reading's
-    own ids, so downstream (participant, trial) filtering works unchanged.
-    Words for texts nobody read are dropped.
+    own ids (the AOI trial it came from kept as ``_aoi_trial_id``), so
+    downstream (participant, trial) filtering works unchanged. Words for texts
+    nobody read are dropped.
 
     DATA-49: one rule, per reading, whatever the trial ids look like. A reading
     takes the boxes of the first AOI trial it finds by its own trial id (ids
     shared across readers), by the id it had before a repeat's ``_r2`` suffix
-    (``base_trial_id``, BUG-57), or by its **Text ID** (trial ids that embed the
-    reader) — never through a Text ID the AOI table gives to several trials.
-    When no reading finds any it raises :class:`StimulusJoinError` rather than
-    return no boxes, and when only some do it warns (``UserWarning``). One
-    vectorised merge — it runs on million-row corpora.
+    (``_base_trial_id``, BUG-57), or by its **Text ID** (trial ids that embed
+    the reader) — never through a Text ID the AOI table gives to several
+    trials, and by its Text ID over a trial id that names another text's AOI
+    trial. When no reading finds any — or, on a multipart dataset, when any
+    reading screen finds none — it raises :class:`StimulusJoinError` rather than
+    return a dataset without them, and when only some do it warns
+    (:class:`StimulusJoinWarning`). One vectorised merge — it runs on
+    million-row corpora.
 
     No-op for ordinary per-participant word tables. With no fixations to
     broadcast across (a words-only dataset) the rows get the synthetic reader."""
@@ -3652,6 +3786,8 @@ def _disambiguate_repeated_readings(
     df: pd.DataFrame,
     source: pd.DataFrame,
     trial_col: str,
+    *,
+    record_base: bool = False,
 ) -> pd.DataFrame:
     """Suffix `trial_id` with `_r2`, `_r3` … when a participant read the same
     paragraph more than once.
@@ -3695,7 +3831,7 @@ def _disambiguate_repeated_readings(
     df["trial_id"] = [
         tid if r == 1 else f"{tid}_r{r}" for tid, r in zip(base.to_numpy(), rank)
     ]
-    if (rank > 1).any():
+    if record_base and (rank > 1).any():
         # What the reading was recorded under, so a table keyed by the stimulus
         # still finds a repeat's boxes (BUG-57 / DATA-49's trial join).
         df[BASE_TRIAL_ID] = base
@@ -4279,7 +4415,9 @@ def normalize_fixations(
         # The id before any repeat suffix names the text that was read.
         unsuffixed = df["trial_id"]
         if schema.get("participant"):
-            df = _disambiguate_repeated_readings(df, fixations, trial_col)
+            df = _disambiguate_repeated_readings(
+                df, fixations, trial_col, record_base=True
+            )
         if "unique_trial_id" in fixations.columns:
             # The mapped id *is* the unique trial id (BUG-58) — never the raw
             # column's own values, which the trial picker would otherwise key
@@ -4405,47 +4543,7 @@ def empty_fixations_frame() -> pd.DataFrame:
 
 
 # Identity columns recomputed (not carried) by a remap — see remap_normalized_frame.
-_REMAP_DERIVED_IDS = (
-    "unique_trial_id",
-    "unique_text_id",
-    "unique_paragraph_id",
-    BASE_TRIAL_ID,
-)
-
-
-def _stimulus_copy_keys(frame: pd.DataFrame) -> list[str]:
-    """What one copy of a stored, already-broadcast AOI table is keyed by.
-
-    ``broadcast_stimulus_words`` gave every reading its own copy of its text's
-    boxes, stamped with the reading's ids. Joined by trial id, the readings of
-    one stimulus share its trial id, so a copy is one reader's rows of a trial.
-    Joined by Text ID (DATA-49), each reading has its *own* trial id, so the
-    stimulus is the text: a copy is one reading's rows of it. The text is the
-    key when a text spans several trial ids and every copy of it holds the same
-    boxes — which a coarser Text ID over genuinely different trials (an article
-    over its paragraphs) never does."""
-    screen = [SCREEN_ID] * (SCREEN_ID in frame.columns)
-    by_trial = ["trial_id", *screen]
-    if "text_id" not in frame.columns:
-        return by_trial
-    by_text = ["text_id", *screen]
-    groups = [frame[c] for c in by_text]
-    if not (
-        frame["trial_id"].groupby(groups, dropna=False, sort=False).nunique() > 1
-    ).any():
-        return by_trial
-    content = [
-        c for c in ("word_id", "x", "y", "width", "height", "text") if c in frame
-    ]
-    signature = pd.util.hash_pandas_object(frame[content], index=False).astype("int64")
-    copies = signature.groupby(
-        [frame["participant_id"], frame["trial_id"], *groups],
-        dropna=False,
-        sort=False,
-    ).agg(["sum", "size"])
-    per_text = copies.groupby(level=list(range(2, 2 + len(by_text))), dropna=False)
-    same = (per_text["sum"].nunique() == 1) & (per_text["size"].nunique() == 1)
-    return by_text if bool(same.all()) else by_trial
+_REMAP_DERIVED_IDS = ("unique_trial_id", "unique_text_id", "unique_paragraph_id")
 
 
 def remap_normalized_frame(
@@ -4489,10 +4587,14 @@ def remap_normalized_frame(
     AOIs sharing a word id, or ids that do not parse as numbers and all fold to
     NaN."""
     referenced = _schema_source_columns(schema)
+    derived = list(_REMAP_DERIVED_IDS)
+    if trial_mapping_columns(schema.get("trial") or []) != ["trial_id"]:
+        # A repeat's recorded id belongs to the trial mapping that suffixed it:
+        # kept while the Trial ID stays the stored `trial_id` (the editor's own
+        # proposal), re-derived by the disambiguation under any other pick.
+        derived.append(BASE_TRIAL_ID)
     working = frame.drop(
-        columns=[
-            c for c in _REMAP_DERIVED_IDS if c in frame.columns and c not in referenced
-        ]
+        columns=[c for c in derived if c in frame.columns and c not in referenced]
     )
     if (
         kind == "words"
@@ -4501,16 +4603,30 @@ def remap_normalized_frame(
         and "trial_id" in working.columns
         and not working.empty
     ):
-        copy_keys = _stimulus_copy_keys(working)
-        # One reading's copy: a reader, and — joined by text, where each reading
-        # has its own trial id — that reading's trial.
-        reading = working["participant_id"].astype(str)
-        if copy_keys[0] == "text_id":
-            reading = reading + "\x1f" + working["trial_id"].astype(str)
+        if AOI_TRIAL_ID in working.columns:
+            # Broadcast here (DATA-49): each copy names the AOI trial it came
+            # from, whichever route it took — so one reading's copy of each AOI
+            # trial, stamped back with that trial's own id, *is* the stimulus
+            # table again. No guessing from content, no suffixed repeats left.
+            copy_keys = [AOI_TRIAL_ID, *[SCREEN_ID] * (SCREEN_ID in working.columns)]
+            reading = (
+                working["participant_id"].astype(str)
+                + "\x1f"
+                + working["trial_id"].astype(str)
+            )
+        else:
+            # Stored before the provenance column: joined by trial id, so the
+            # readers of a stimulus share its trial id.
+            copy_keys = [c for c in ("trial_id", SCREEN_ID) if c in working.columns]
+            reading = working["participant_id"].astype(str)
         first = reading.groupby(
             [working[c] for c in copy_keys], dropna=False, sort=False
         ).transform("first")
         working = working[reading == first]
+        if AOI_TRIAL_ID in working.columns:
+            working = working.assign(trial_id=working[AOI_TRIAL_ID]).drop(
+                columns=[AOI_TRIAL_ID]
+            )
     keep = set(working.columns)
     if kind == "words":
         result = normalize_words(working, schema, keep_columns=keep)

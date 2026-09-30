@@ -180,7 +180,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Check the column mapping",
-                "✏️ **Edit** a dataset's row to open its setup screen — the "
+                "**⋯ → Edit setup** on a dataset's row opens its setup screen — the "
                 "add screen's numbered parts, for a dataset that already "
                 "exists. Part **1 · Data tables & column mapping** decides what "
                 "every measure downstream is computed from. Rows marked ✨ were "

@@ -1466,9 +1466,11 @@ def _dataset_dir_input(
 # falling back to the demo corpus and the app stays usable.
 _UNAVAILABLE_KEY = "_dataset_unavailable"
 #: UX-174: whether this run is showing the demo *in place of* the selected
-#: corpus. Set by `_render_dataset_unavailable` on every run it reaches (the note
-#: above is gone by the time the dataset table draws), and read by the table so
-#: the demo's rows are never counted as that corpus' "loaded" figures.
+#: corpus. Cleared at the start of every full run and set with the note above
+#: (which is consumed before the dataset table draws), so it describes this run
+#: on every path, early returns included; a fragment rerun of the table reads
+#: the last full run's answer. The table reads it so the demo's rows are never
+#: counted as that corpus' "loaded" figures.
 _PLACEHOLDER_SHOWN_KEY = "_dataset_placeholder_shown"
 
 
@@ -1483,6 +1485,7 @@ def _note_dataset_unavailable(
     key_prefix: str = "",
 ) -> None:
     """Record that ``label`` couldn't be loaded, for the main-area empty state."""
+    st.session_state[_PLACEHOLDER_SHOWN_KEY] = True
     st.session_state[_UNAVAILABLE_KEY] = dict(
         label=label,
         reason=reason,
@@ -1530,7 +1533,6 @@ def _render_dataset_unavailable() -> None:
     what's on screen meanwhile.
     """
     note = st.session_state.pop(_UNAVAILABLE_KEY, None)
-    st.session_state[_PLACEHOLDER_SHOWN_KEY] = bool(note)
     if not note:
         return
     download = note["download"]
@@ -2344,7 +2346,7 @@ PUBLIC_DATASET_REGISTRY: dict = {
 
 #: The same presentation metadata for the sources that are **not** registry
 #: entries — the packaged demo, the synthetic trial, the authoring canvas — so
-#: the dataset table's ℹ️ dialog can answer the same questions about every row.
+#: the dataset table's **Details** dialog can answer the same questions about every row.
 #: Uploads are absent on purpose: nothing here knows anything about them that
 #: their own row does not already show.
 _BUILTIN_DATASET_ABOUT: dict[str, dict] = {
@@ -2431,7 +2433,7 @@ def dataset_about(token: str, registry: dict | None = None) -> dict:
 
     One lookup for both halves of the catalogue — a public corpus' registry
     entry and the packaged sources' table above — so neither the row nor the
-    ℹ️ dialog has to care which kind of row it was opened from. ``language``
+    **Details** dialog has to care which kind of row it was opened from. ``language``
     and ``link`` become cells; ``description`` and ``geometry`` are the two
     sentences the dialog shows. Returns ``{}`` for an upload, which is the
     honest answer: nothing here knows anything about it that its own row does
@@ -2496,7 +2498,7 @@ def _benchmark_registry_entries() -> dict:
             size=_benchmark_size_caption(entry),
             description=_benchmark_description(entry, harmonised_overlap=short != name),
             # R34's badge, resolved once here rather than only inside the loader,
-            # so the dataset table's ℹ️ dialog can show it without opening the
+            # so the dataset table's **Details** dialog can show it without opening the
             # corpus.
             geometry=geometry_badge(entry),
             link="https://github.com/EyeBench/EyeGenBench",
@@ -4181,9 +4183,9 @@ _DATASET_KIND_ICONS = {
 DATASET_ALIASES_KEY = "_dataset_display_aliases"
 HIDDEN_DATASETS_KEY = "_hidden_dataset_tokens"
 PENDING_RENAME_KEY = "_dataset_pending_rename"
-#: DATA-35 — the row whose ℹ️ About dialog is open. Same arm-then-read shape as
-#: the rename and delete flags above: a table callback sets it, the next run
-#: opens the dialog.
+#: DATA-35 — the row whose **Details** dialog (UX-174; was ℹ️ About) is open.
+#: Same arm-then-read shape as the rename and delete flags above: a table
+#: callback sets it, the next run opens the dialog.
 PENDING_ABOUT_KEY = "_dataset_pending_about"
 
 
@@ -4563,7 +4565,7 @@ def _render_delete_confirmation(host, tokens: list, uploaded: set[str]) -> None:
 
     Deleting an upload drops its frames, its mapping and its annotations from
     the session with no undo, and the button that starts it is one cell away
-    from ✏️ Edit in a table row — so the click arms this, and this asks.
+    from Edit setup in a row's ⋯ menu — so the click arms this, and this asks.
 
     **UX-79** made it a modal rather than a block under the table: the question
     is raised by a click *in* the table, and on a long list of datasets a
@@ -4692,7 +4694,7 @@ def _render_dataset_about_body(
     token: str, *, registry: dict, description: str | None = None
 ) -> bool:
     """The description / coordinate-provenance / published-figures prose for one
-    dataset — everything the row's ℹ️ About dialog shows, minus its own chrome.
+    dataset — the prose half of the row's **Details** dialog, minus its chrome.
 
     Shared with the ❔ About popover on the 🗂️ Data page (below), so the two
     never drift apart. Returns whether it drew anything, so a caller can skip
@@ -5154,12 +5156,17 @@ def _dataset_table_rows(
     # it — deleted, renamed, or a public corpus whose location was unset.
     forget_dataset_counts(keep={t for t in entries if t != UPLOAD_CHOICE})
     # The open corpus is not on disk and the demo is standing in for it: its
-    # frames are the demo's, so they are not counted for it — and whatever was
-    # remembered under its name may have been counted the same way before this
-    # guard existed, so it is dropped rather than shown as "loaded".
+    # frames are the demo's, so they are not counted for it. An entry
+    # remembered under its name *from these very frames* (counted that way
+    # before this guard existed) is dropped; counts remembered from a load of
+    # the real corpus have other fingerprints and are kept.
     placeholder = bool(st.session_state.get(_PLACEHOLDER_SHOWN_KEY))
     if placeholder and active:
-        _counts_store().pop(active, None)
+        store = _counts_store()
+        entry = store.get(active)
+        stand_in = [frame_fingerprint(f) for f in (words, fixations, raw_gaze)]
+        if isinstance(entry, dict) and entry.get("key") == stand_in:
+            store.pop(active, None)
     rows: list[DatasetRow] = []
     for token in entries:
         if token in (UPLOAD_CHOICE, AUTHOR_CHOICE):
@@ -5487,6 +5494,9 @@ def _render_dataset_table_row(grid, row: DatasetRow, fields: Sequence[str]) -> N
         on_change="rerun",
         help=f"Edit setup, rename or remove {row.name}.",
     )
+    # The items are drawn on every run, closed or not: a fragment rerun does
+    # not see the menu's open state in time to draw them on the opening click.
+    # The state is tracked only so an action can close its menu.
     menu.button(
         "Edit setup",
         icon=ICONS["edit"],
@@ -7319,6 +7329,7 @@ def _run_app() -> None:
     # entries before anything fingerprints a frame, so a frame rebuilt this run
     # is hashed afresh and last run's frames stop being kept alive.
     reset_fingerprint_memo()
+    st.session_state[_PLACEHOLDER_SHOWN_KEY] = False
     # Start capturing log records into the in-app debug buffer before any data
     # or plot work runs, so the debug panel (?debug=1) sees this run's logs.
     install_log_capture()
@@ -8621,7 +8632,7 @@ def _run_app() -> None:
             # section *above* this heading: a second subheader, the description,
             # the corpus home link, the coordinate-provenance sentence and a
             # six-row published-vs-loaded table, all standing between the user
-            # and the counts they came for. The row's own ℹ️ About button still
+            # and the counts they came for. The row's own **Details** button still
             # opens the whole thing as a dialog, for this dataset and every
             # other — that is the place detail belongs.
             st.subheader(f"{ICONS['search']} What's in the `{dataset_label}` dataset")

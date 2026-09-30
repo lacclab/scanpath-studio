@@ -1026,6 +1026,38 @@ class TestDatasetTable:
         assert at.session_state[DATASET_EDITOR_OPEN_KEY] is True
         assert at.session_state["data_source_choice"] == self.NAME
 
+    def test_a_long_list_gets_a_search_and_a_short_one_does_not(self):
+        import pandas as pd
+
+        from scanpath_studio import api
+        from scanpath_studio.app import _DATASET_SEARCH_KEY
+        from scanpath_studio.data import load_sample_data
+
+        at = self._at()
+        assert not [t for t in at.text_input if t.key == _DATASET_SEARCH_KEY]
+
+        words, fixations = api.load_scanpath_data(*load_sample_data())
+        entry = {
+            "words": words,
+            "fixations": fixations,
+            "raw_gaze": pd.DataFrame(),
+            "filter_fields": [],
+            "composite_trial_columns": [],
+        }
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["_datasets"] = {f"Study {i}": dict(entry) for i in range(9)}
+        at.session_state["data_source_choice"] = "Study 0"
+        # Seeded before the run rather than typed between runs: AppTest drops a
+        # value set on a widget inside a fragment (the table is one) before the
+        # next run reads it — the browser keeps it, as it does every widget's.
+        at.session_state[_DATASET_SEARCH_KEY] = "study 3"
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert [t for t in at.text_input if t.key == _DATASET_SEARCH_KEY]
+        shown = {b.key for b in at.button if str(b.key).startswith("dataset_open_")}
+        assert shown == {f"dataset_open_{self._slug('Study 3')}"}
+
     def test_a_corpus_the_demo_stands_in_for_keeps_its_published_counts(
         self, monkeypatch
     ):

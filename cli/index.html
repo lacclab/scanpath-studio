@@ -2205,7 +2205,7 @@ B's frames directly.</p>
 </tr>
 <tr>
 <td>draw the raw gaze</td>
-<td><code>--raw-gaze PATH…</code> (or <code>--sample-raw-gaze</code> with <code>--sample</code>), <code>--raw-gaze-schema JSON</code>, <code>--raw-gaze-color</code>, <code>--raw-gaze-marker-size</code>, <code>--raw-gaze-opacity</code></td>
+<td><code>--raw-gaze PATH…</code> (or <code>--sample-raw-gaze</code> with <code>--sample</code>), <code>--raw-gaze-schema JSON</code>, <code>--raw-gaze-color</code>, <code>--raw-gaze-marker-size</code>, <code>--raw-gaze-opacity</code>; <code>--no-raw-gaze</code> loads the table but hides the layer</td>
 </tr>
 <tr>
 <td>size the figure</td>
@@ -2230,9 +2230,16 @@ ignore it with a warning.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_2_2_Adv_r0<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>--sample-raw-gaze<span class="w"> </span>--raw-gaze-opacity<span class="w"> </span><span class="m">0</span>.4<span class="w"> </span>-o<span class="w"> </span>raw_gaze.html
 </code></pre></div>
+<p>On its own, with no other input, <code>--raw-gaze</code> is the dataset: <code>--list-trials</code>
+lists its trials and <code>render</code> draws the chosen trial's samples as recorded.
+No fixations are detected from them, so <code>--animate</code> and <code>--compare-with</code> exit
+with that reason instead.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--raw-gaze<span class="w"> </span>gaze_samples.csv<span class="w"> </span>--list-trials
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--raw-gaze<span class="w"> </span>gaze_samples.csv<span class="w"> </span>-t<span class="w"> </span>t3<span class="w"> </span>-o<span class="w"> </span>samples.png
+</code></pre></div>
 <h2 id="analyze">Analyze<a class="headerlink" href="#analyze" title="Permanent link">&para;</a></h2>
 <p>The <code>analyze</code> command writes the full tabular family without opening the app:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>scanpath-studio<span class="w"> </span>analyze<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv<span class="w"> </span>--output-dir<span class="w"> </span>analysis
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>scanpath-studio<span class="w"> </span>analyze<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv<span class="w"> </span>--output-dir<span class="w"> </span>analysis
 </code></pre></div>
 <p>This writes fixation, saccade, word, sentence, trial, reader, character and
 cleaning-QA tables as CSV, plus <code>run_config.json</code>. It takes the same <code>--words</code> / <code>--fixations</code>
@@ -2326,7 +2333,7 @@ keep <code>excluded</code> / <code>excluded_reason</code>:</p>
 <p><code>scanpath-studio corpus</code> goes the other way: it reads a tidy CSV you already
 have and renders a styled corpus figure
 (<a href="../api/#scanpath_studio.api.plot_corpus_figure"><code>api.plot_corpus_figure</code></a>):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>scanpath-studio<span class="w"> </span>corpus<span class="w"> </span>--input<span class="w"> </span>profile.csv<span class="w"> </span>--kind<span class="w"> </span>profile<span class="w"> </span>--output<span class="w"> </span>profile.svg
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>scanpath-studio<span class="w"> </span>corpus<span class="w"> </span>--input<span class="w"> </span>profile.csv<span class="w"> </span>--kind<span class="w"> </span>profile<span class="w"> </span>--output<span class="w"> </span>profile.svg
 </code></pre></div>
 <p><strong>Options</strong></p>
 <table>
@@ -2398,10 +2405,10 @@ or <strong>Export → Export bundle</strong> for many figures.</p>
 <p>A local or desktop run caches your session on your own machine — uploaded
 datasets, column mappings, view settings, and annotations — so a refresh or a
 restart resumes where you left off. <code>cache</code> shows what is stored and removes it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
-<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
-<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the stored session</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the stored session</span>
 </code></pre></div>
 <p>The same information is at the foot of the <strong>🗂️ Data</strong> page, under <strong>Saved on
 this computer</strong>. A running app writes a new copy at its next change, so clear
@@ -3034,7 +3041,13 @@ with the default and help <code>--help</code> prints.</p>
 <td><code>--raw-gaze</code></td>
 <td><code>PATH [PATH ...]</code></td>
 <td>—</td>
-<td>Raw (sample-level) gaze table(s) to draw under the fixations, columns auto-detected like <code>--fixations</code> (same formats; several paths or a quoted glob concatenate). Static figures only.</td>
+<td>Raw (sample-level) gaze table(s) to draw under the fixations, columns auto-detected like <code>--fixations</code> (same formats; several paths or a quoted glob concatenate). Static figures only. On its own (no other input) it is the dataset: its trials are listed and drawn as recorded — no fixations are detected from the samples.</td>
+</tr>
+<tr>
+<td><code>--no-raw-gaze</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Load the <code>--raw-gaze</code> table but hide its layer — the app's 🔵 Raw gaze switch turned off. With raw gaze as the only input the figure then draws no gaze.</td>
 </tr>
 <tr>
 <td><code>--sample-raw-gaze</code></td>
@@ -3329,7 +3342,7 @@ with the default and help <code>--help</code> prints.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 30, 2026 16:31:24 UTC">September 30, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 30, 2026 21:52:31 UTC">September 30, 2026</span>
   </span>
 
     

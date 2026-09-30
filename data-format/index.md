@@ -17,6 +17,8 @@ Scanpath Studio reads up to three tables — **words / areas-of-interest**, **fi
 
 Either main table may be omitted — the missing layer is skipped, and a words-only table still draws a heatmap from its pre-aggregated reading measures.
 
+Raw gaze can be the only table, too. Its samples are drawn as recorded, and for a dataset with no fixations the 🔵 **Raw gaze** layer is on by default. Nothing is derived from the samples: no fixations are detected from them, so the fixation and saccade layers, the animated replay and Compare need a fixations table, and Corpus Analysis needs an AOI report that carries reading measures.
+
 ## Participant metadata
 
 Attach a table of **one row per reader** — native language, age, a comprehension score, a group label. When you upload your own data it is one of the **Metadata** uploaders in part 2 of the setup wizard; for the demo, a public corpus, or a dataset you added earlier, the same uploader is on 🗂️ **Data → ✏️ Edit dataset** under **Metadata → Participants**. Its columns then behave like fields in the data: they filter trials (the filter funnel's *By reader* section), show up as chips above the plot, sort the trial picker, group cohorts in Corpus Analysis, appear in the dataset's inspection tables, and travel with exports and saved sessions.

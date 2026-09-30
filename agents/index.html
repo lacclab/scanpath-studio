@@ -2195,7 +2195,11 @@ here, so both frames come back under one synthetic reader: <code>list_trials</co
 <p>A raw-gaze table is loaded with <code>load_raw_gaze(path_or_frame)</code> (columns
 auto-detected; <code>raw_gaze_schema=</code> overrides), or <code>load_sample_raw_gaze()</code> for
 the demo's. Passing it as <code>plot_scanpath(raw_gaze=…)</code> filters it to the trial
-and switches the layer on.</p>
+and switches the layer on. It can be the only table: pass <code>None</code> for the words
+and fixations (<code>sps.list_trials(raw_gaze=gaze)</code>,
+<code>sps.plot_scanpath(raw_gaze=gaze, trial="t3")</code>) and the samples are drawn as
+recorded. No fixations are detected from them, so <code>animate_scanpath</code> raises
+<code>ValueError</code> for a trial without fixations.</p>
 <p>For a multipart parent, inspect <code>sps.list_parts(words, fixations, pid, tid)</code>,
 pass <code>screen="…"</code> to <code>plot_scanpath</code> / <code>animate_scanpath</code>, or call
 <code>sps.render_parent_trial(...)</code> for an ordered mapping of per-screen figures.
@@ -2434,7 +2438,7 @@ what the replay does — the reading time over <code>playback_speed</code> — u
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 26, 2026 20:40:10 UTC">September 26, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 30, 2026 21:52:31 UTC">September 30, 2026</span>
   </span>
 
     

@@ -221,22 +221,22 @@ OneStop's presentation monitor was 2560×1440 (Dell U2715H) — the citation liv
 ### scanpath_studio.api.list_trials
 
 ```
-list_trials(words: DataFrame, fixations: DataFrame) -> DataFrame
+list_trials(words: DataFrame | None = None, fixations: DataFrame | None = None, *, raw_gaze: DataFrame | None = None) -> DataFrame
 ```
 
 Plottable `(participant_id, trial_id)` combos.
 
-Combos present in both frames when both are loaded; for single-report datasets (words-only or fixations-only), combos from whichever frame has data.
+Combos present in both frames when both are loaded; for single-report datasets (words-only or fixations-only), combos from whichever frame has data. `raw_gaze` (a frame from load_raw_gaze) adds the trials that only its samples cover — every trial, for a dataset recorded as raw gaze alone (pass `None` for `words` and `fixations` then).
 
 ### scanpath_studio.api.list_parts
 
 ```
-list_parts(words: DataFrame, fixations: DataFrame, participant: str | None = None, trial: str | None = None) -> DataFrame
+list_parts(words: DataFrame | None, fixations: DataFrame | None, participant: str | None = None, trial: str | None = None, *, raw_gaze: DataFrame | None = None) -> DataFrame
 ```
 
 Ordered screens in multipart data, optionally narrowed to one parent.
 
-Single-screen data returns an empty table.
+Single-screen data returns an empty table. A trial recorded as raw gaze alone takes its screens from `raw_gaze` (its `screen_id`), decided per trial — so a samples-only trial keeps its screens in a dataset whose other trials have fixations.
 
 ### scanpath_studio.api.compute_word_metrics
 
@@ -287,12 +287,12 @@ Exportable one-row-per-reader reading summary.
 ### scanpath_studio.api.plot_scanpath
 
 ```
-plot_scanpath(words: DataFrame, fixations: DataFrame, participant: str | None = None, trial: str | None = None, *, screen: str | None = None, canvas_size: tuple[int, int] | None = None, base_font_size: int = 16, font_family: str = FONT_FAMILY, raw_gaze: DataFrame | None = None, drift_correction: str | None = None, drift_connectors: bool = False, fix_index_range: tuple[int, int] | None = None, illustration: bool = False, illustration_label: str = 'auto', title: str = '', caption: str = '', **figure_overrides) -> Figure
+plot_scanpath(words: DataFrame | None = None, fixations: DataFrame | None = None, participant: str | None = None, trial: str | None = None, *, screen: str | None = None, canvas_size: tuple[int, int] | None = None, base_font_size: int = 16, font_family: str = FONT_FAMILY, raw_gaze: DataFrame | None = None, drift_correction: str | None = None, drift_connectors: bool = False, fix_index_range: tuple[int, int] | None = None, illustration: bool = False, illustration_label: str = 'auto', title: str = '', caption: str = '', **figure_overrides) -> Figure
 ```
 
 Build the canonical scanpath figure for one trial.
 
-`words` / `fixations` are normalized frames from load_scanpath_data. `participant` / `trial` may be omitted when the frames contain exactly one combo. `canvas_size` is the monitor size in px; by default it is estimated from the data extents — pass the real monitor resolution (e.g. `(2560, 1440)` for OneStop) to keep coordinates true to scale. For a multipart trial, `screen` selects one child screen; omitting it selects the first recorded screen and never concatenates coordinate spaces. `raw_gaze` is a frame from load_raw_gaze, filtered to the selected trial.
+`words` / `fixations` are normalized frames from load_scanpath_data. `participant` / `trial` may be omitted when the frames contain exactly one combo. `canvas_size` is the monitor size in px; by default it is estimated from the data extents — pass the real monitor resolution (e.g. `(2560, 1440)` for OneStop) to keep coordinates true to scale. For a multipart trial, `screen` selects one child screen; omitting it selects the first recorded screen and never concatenates coordinate spaces. `raw_gaze` is a frame from load_raw_gaze, filtered to the selected trial and drawn as recorded. It can be the only table: for a dataset recorded as raw gaze alone pass `None` for `words` and `fixations` (`plot_scanpath(raw_gaze=samples, trial=…)`) — the trial is looked up in the samples, the canvas is estimated from their extent, and the figure is the samples alone. Nothing is derived from them: no fixations are detected, so the fixation, saccade and heatmap layers stay empty.
 
 `drift_correction` / `drift_connectors` are experimental: without `SCANPATH_EXPERIMENTAL=1` any `drift_correction` other than `None` / `"off"` raises `ValueError`.
 
@@ -305,7 +305,7 @@ Remaining keywords override the app's defaults and are forwarded to `plots.make_
 ### scanpath_studio.api.animate_scanpath
 
 ```
-animate_scanpath(words: DataFrame, fixations: DataFrame, participant: str | None = None, trial: str | None = None, *, screen: str | None = None, canvas_size: tuple[int, int] | None = None, base_font_size: int = 16, font_family: str = FONT_FAMILY, playback_speed: float = 1.0, autoplay: bool = True, fix_index_range: tuple[int, int] | None = None, fix_index_range_b: tuple[int, int] | None = None, illustration_label: str = 'auto', title: str = '', caption: str = '', trial_b: tuple[str, str] | None = None, dataset_b: str | None = None, setup: SetupSnapshot | None = None, setup_b: SetupSnapshot | None = None, **animation_overrides) -> Figure
+animate_scanpath(words: DataFrame | None = None, fixations: DataFrame | None = None, participant: str | None = None, trial: str | None = None, *, screen: str | None = None, canvas_size: tuple[int, int] | None = None, base_font_size: int = 16, font_family: str = FONT_FAMILY, playback_speed: float = 1.0, autoplay: bool = True, fix_index_range: tuple[int, int] | None = None, fix_index_range_b: tuple[int, int] | None = None, illustration_label: str = 'auto', title: str = '', caption: str = '', trial_b: tuple[str, str] | None = None, dataset_b: str | None = None, setup: SetupSnapshot | None = None, setup_b: SetupSnapshot | None = None, **animation_overrides) -> Figure
 ```
 
 Build the animated scanpath replay for one trial.
@@ -325,6 +325,8 @@ CMP-24: in a co-animation `fix_index_range` windows A only (the app's rule — A
 The animation builder accepts a subset of the static figure's options (`show_words`, `show_word_labels`, `show_saccades`, `show_order`, styling, and second-scanpath overlays) — see `figure_options("animation")`; an unsupported key raises a `ValueError` naming the valid ones. The shared options default to the same values as plot_scanpath (`CANONICAL_FIGURE_DEFAULTS`), so the replay matches the static figure. `palette=` works here too; the colours it implies that the animation doesn't support are dropped rather than raising, since the caller named a look, not those individual keys.
 
 `title` / `caption` — same as plot_scanpath.
+
+The replay is made of fixations, so a trial without any — one recorded as raw gaze alone, or a words-only one — raises `ValueError` rather than returning an empty replay, and `raw_gaze=` is refused: the replay draws no raw-gaze layer, and nothing detects fixations from samples. Draw samples with plot_scanpath`(raw_gaze=…)`.
 
 ### scanpath_studio.api.compare_scanpaths
 
@@ -416,7 +418,7 @@ print(sps.figure_code(participant="l7_1090", trial="l7_1090_2_1_1_Ele_r0",
                       show_heatmap=False, flavor="cli"))
 ```
 
-`source` names how the data is loaded — `"demo"`, `"synthetic"`, `"files"`, `"potec"`, `"onestop"`, `"multipleye"`, `"benchmark"`, `"author"`, or `"unknown"` for data a snippet can't name — with `source_options` carrying that loader's arguments (`{"root": …}`, `{"words": [...], "fixations": [...]}`, and so on). With `show_raw_gaze=True` the raw-gaze table is read too: the demo's own, or the path(s) given as `source_options["raw_gaze"]` (plus an optional `"raw_gaze_schema"`) — load_raw_gaze in the Python form, `--raw-gaze` in the CLI one.
+`source` names how the data is loaded — `"demo"`, `"synthetic"`, `"files"`, `"potec"`, `"onestop"`, `"multipleye"`, `"benchmark"`, `"author"`, or `"unknown"` for data a snippet can't name — with `source_options` carrying that loader's arguments (`{"root": …}`, `{"words": [...], "fixations": [...]}`, and so on). With `show_raw_gaze=True` the raw-gaze table is read too: the demo's own, or the path(s) given as `source_options["raw_gaze"]` (plus an optional `"raw_gaze_schema"`) — load_raw_gaze in the Python form, `--raw-gaze` in the CLI one. `source="raw_gaze"` is a dataset recorded as raw gaze alone: the samples at `source_options["raw_gaze"]` are the data, and `plot_scanpath` is handed `None` for the words and fixations.
 
 `compare_dataset` names the corpus scanpath B was loaded from when it is a *second* one. B's participant id belongs to that corpus rather than the one the snippet loads, so both forms then load B's own tables and name B in them — `words_b=` / `fixations_b=` / `dataset_b=`, and `--compare-words` / `--compare-fixations` beside `--compare-with` — from the placeholder paths `B_WORDS` / `B_FIXATIONS`, which you point at its files. `compare_canvas` is B's screen, `(width, height)`, when you know it: written as `setup_b=` and `--compare-canvas`, which a co-animation across datasets needs.
 

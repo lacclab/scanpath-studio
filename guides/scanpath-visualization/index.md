@@ -25,7 +25,7 @@ The **🎛️ Plot controls** rail beside the plot starts with the **🎬 Animat
 | ↗️ Saccades        | Saccades                | movement direction, reading type, regressions and return sweeps                                                                           |
 | 📄 Stimulus        | Text, Word boxes, Image | verify stimulus geometry and fixation-to-word alignment; compare against the original display; text font, text colour and plot background |
 | 🔥 Heatmap         | Heatmap                 | spatial concentration by fixation count or duration                                                                                       |
-| 🔵 Raw gaze        | Raw gaze                | millisecond-level gaze samples                                                                                                            |
+| 🔵 Raw gaze        | Raw gaze                | gaze samples as recorded; on by default for a dataset with no fixations                                                                   |
 | 🧹 Filter          | —                       | thin what is drawn inside this one reading (fixations and saccades together)                                                              |
 | 📐 Figure & canvas | —                       | monitor framing, colour bars, axes, title and labels                                                                                      |
 

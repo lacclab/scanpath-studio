@@ -14,7 +14,7 @@ Return sweep : A saccade down to a later line — normally from the end of one l
 
 Scanpath : One reading's fixations in order, with the saccades between them.
 
-Raw gaze : The tracker's sample-by-sample gaze positions, from before fixations were detected. An optional third table, drawn under the fixations.
+Raw gaze : The tracker's sample-by-sample gaze positions, from before fixations were detected. An optional third table, drawn under the fixations — or a dataset's only table, drawn as recorded. Scanpath Studio detects no fixations from it.
 
 Run, pass : Consecutive fixations on one word form a run; a word's first run is its first pass, its second run its second pass ([`assign.runs`](https://lacclab.github.io/scanpath-studio/computations/#assign-runs)).
 

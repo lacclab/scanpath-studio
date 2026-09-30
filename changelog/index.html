@@ -1943,6 +1943,7 @@ behind each line, and the releases before 0.28.0, are in
 <li>Long 'Extra fields to keep' chip lists wrap onto more rows instead of scrolling sideways out of sight. (UX-148)</li>
 <li>Two trial filters over columns that read the same, such as <code>TRIAL_INDEX</code> and <code>trial_index</code>, no longer share a title: the second names its column, as the chip editor already did. (UX-149)</li>
 <li>Narrowing the trial pool no longer switches the design preset to 🛠️ Custom, and a trial with no fixations no longer clears the fixation hover fields you picked. (VIZ-44)</li>
+<li>A dataset recorded as raw gaze alone now opens showing its samples: the Raw gaze layer is on by default when a dataset has no fixations, samples-only trials are pickable, the chips count gaze samples instead of showing zero reading time and fixations, no "derived from raw gaze" Illustration label appears, Animate and Compare fall back to the static figure with the reason, the Export bundle draws the samples and can include them as a table, and <code>render --raw-gaze</code> and <code>plot_scanpath(raw_gaze=…)</code> accept raw gaze as the only input. (VIZ-45)</li>
 </ul>
 <h2 id="0320-2026-09-30">0.32.0 — 2026-09-30<a class="headerlink" href="#0320-2026-09-30" title="Permanent link">&para;</a></h2>
 <p><strong>Added</strong></p>

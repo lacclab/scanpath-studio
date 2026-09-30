@@ -131,6 +131,7 @@ from scanpath_studio.controls import (
     column_mapping_ui,
     has_active_trial_filters,
     read_trial_filters,
+    unique_field_labels,
     viz_settings_from_state,
 )
 from scanpath_studio.data import (
@@ -176,6 +177,7 @@ from scanpath_studio.data import (
     repair_stranded_stimulus_words,
     reset_fingerprint_memo,
     resolve_stimulus_image_paths,
+    text_ids,
     trial_identity_warning,
     trial_keys,
     trial_mapping_columns,
@@ -547,8 +549,16 @@ def _filter_diagnosis_steps(trial_filters: dict) -> list:
             )
         )
     keys_by_col = trial_filters.get("metadata_keys") or {}
+    # UX-149: `TRIAL_INDEX` and `trial_index` must not both read "Trial index".
+    names = unique_field_labels(
+        [
+            *(trial_filters.get("metadata") or {}),
+            *(trial_filters.get("ranges") or {}),
+        ],
+        lambda c: c.replace("_", " ").capitalize(),
+    )
     for col, allowed in (trial_filters.get("metadata") or {}).items():
-        label = f"{col.replace('_', ' ').capitalize()} = {', '.join(sorted(map(str, allowed))[:4])}"
+        label = f"{names[col]} = {', '.join(sorted(map(str, allowed))[:4])}"
         if len(allowed) > 4:
             label += ", …"
         steps.append(
@@ -563,8 +573,7 @@ def _filter_diagnosis_steps(trial_filters: dict) -> list:
     for col, bounds in (trial_filters.get("ranges") or {}).items():
         steps.append(
             (
-                f"{col.replace('_', ' ').capitalize()} between "
-                f"{bounds[0]:g} and {bounds[1]:g}",
+                f"{names[col]} between {bounds[0]:g} and {bounds[1]:g}",
                 lambda w, f, c=col, b=bounds: filter_trials(w, f, ranges={c: b}),
                 (keys_by_col.get(col, f"filter_{col}_range"),),
             )
@@ -2122,10 +2131,10 @@ _BUILTIN_DATASET_ABOUT: dict[str, dict] = {
         # them, so regenerating the subset fails a test rather than quietly
         # leaving a stale number in the table.
         published_counts={
-            "Participants": 3,
+            "Participants": 2,
             "Texts": 12,
-            "Trials": 36,
-            "Words": 3922,
+            "Trials": 24,
+            "Words": 2614,
             "Fixations": 3209,
             "Gaze points": 2233,
         },
@@ -4150,7 +4159,7 @@ def _dataset_counts(
 ) -> dict:
     """Cheap headline counts for every field in the dataset summary row.
 
-    Two ``nunique`` calls and two lengths — UX-54 asked for "measurements that
+    A few distinct-id unions and lengths — UX-54 asked for "measurements that
     are easy to calculate", and anything needing the measures pipeline would make
     *listing* the datasets as expensive as opening them. Cached on the frames'
     fingerprints (``key``), since this runs for every listed dataset on every
@@ -4163,11 +4172,6 @@ def _dataset_counts(
     exactly *one* entry, and every dataset after the first was served the first
     one's counts. UX-54 r2 had hidden it by counting only the open dataset.
     """
-
-    def _n_unique(frame, column):
-        if frame is None or frame.empty or column not in frame.columns:
-            return None
-        return int(frame[column].nunique())
 
     words = _words if _words is not None else pd.DataFrame()
     fixations = _fixations if _fixations is not None else pd.DataFrame()
@@ -4184,7 +4188,6 @@ def _dataset_counts(
             values.update(frame[column].dropna().astype(str).tolist())
         return len(values) if found else None
 
-    text_column = "unique_text_id" if "unique_text_id" in words else "text_id"
     # BUG-79: a count must not take the page down. `part_catalog` validates as
     # it counts and raises on screen metadata that disagrees across tables —
     # which is worth reporting where the figure is built, not by blanking the
@@ -4208,7 +4211,8 @@ def _dataset_counts(
     )
     return {
         "Participants": _union_unique("participant_id"),
-        "Texts": _n_unique(words, text_column),
+        # DATA-50: from every table that names a text, not the words alone.
+        "Texts": len(text_ids(words, fixations, raw_gaze)) or None,
         "Trials": trials,
         "Screens": screens,
         "Words": len(words) or None,

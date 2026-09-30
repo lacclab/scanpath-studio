@@ -170,6 +170,7 @@ from scanpath_studio.data import (
     propose_word_schema,
     read_tables,
     remap_normalized_frame,
+    text_ids,
     trial_keys,
     trial_mapping_columns,
     validate_fix_schema,
@@ -9911,8 +9912,8 @@ def _dataset_statistics(
     if "participant_id" in _raw_gaze.columns:
         participant_ids |= set(_raw_gaze["participant_id"].unique())
         trial_ids |= trial_keys(_raw_gaze)
-    text_col = "unique_text_id" if "unique_text_id" in _words.columns else "text_id"
-    text_ids = set(_words[text_col].unique()) if text_col in _words.columns else set()
+    # DATA-50: texts from every table that names one, not the words alone.
+    texts = text_ids(_words, _fixations, _raw_gaze)
 
     trial_source = _fixations if not _fixations.empty else _words
     trials_per_participant = (
@@ -9951,7 +9952,7 @@ def _dataset_statistics(
 
     return {
         "n_participants": len(participant_ids),
-        "n_texts": len(text_ids),
+        "n_texts": len(texts),
         "n_trials": len(trial_ids),
         "n_fixations": len(_fixations),
         "n_words": len(_words),

@@ -811,11 +811,8 @@ def load_text_metadata(
 
 
 def load_sample_data() -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Return the bundled OneStop demo, normalized and ready to plot.
-
-    Three readers' word boxes ship with the package but only two of them have
-    fixations, so [`list_trials`][scanpath_studio.api.list_trials] reports the two
-    plottable readers."""
+    """Return the bundled OneStop demo, normalized and ready to plot: two
+    readers, twelve paragraphs each, every one of them with fixations."""
     return load_scanpath_data(*_data.load_sample_data())
 
 

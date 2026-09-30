@@ -29,6 +29,7 @@ from scanpath_studio.data import (
     normalize_words,
     propose_fix_schema,
     propose_word_schema,
+    text_ids,
 )
 from scanpath_studio.synthetic import load_synthetic_data
 
@@ -199,7 +200,7 @@ class TestTheLookup:
         """`dataset_about` hands out the entry's own figures; a caller that
         edited them in place would be editing the catalogue for the session."""
         app.dataset_about(DEMO_CHOICE)["published_counts"]["Participants"] = 999
-        assert app.published_dataset_counts(DEMO_CHOICE)["Participants"] == 3
+        assert app.published_dataset_counts(DEMO_CHOICE)["Participants"] == 2
 
 
 class TestPreparedBenchmarkCorpora:
@@ -264,6 +265,43 @@ class TestTrialsAreTrialsNotTrialIds:
         assert _measure(words, fixations, key=("gap",))["Trials"] == 5
 
 
+class TestTextsAreCountedFromEveryTable:
+    """DATA-50: the Texts figure read the words table only, so a fixations-only
+    dataset whose fixations name twelve texts said there were none."""
+
+    fixations = pd.DataFrame(
+        {
+            "participant_id": ["p1", "p1", "p2"],
+            "trial_id": ["t1", "t2", "t1"],
+            "text_id": ["a", "b", "a"],
+            "x": [1.0, 2.0, 3.0],
+        }
+    )
+
+    def test_a_fixations_only_dataset_counts_its_texts(self):
+        counts = _measure(pd.DataFrame(), self.fixations, key=("fix-only",))
+        assert counts["Texts"] == 2
+
+    def test_texts_from_several_tables_are_one_union(self):
+        words = pd.DataFrame({"participant_id": ["p1"], "text_id": ["c"]})
+        counts = _measure(words, self.fixations, key=("union",))
+        assert counts["Texts"] == 3
+
+    def test_the_stats_tab_counts_the_same_way(self):
+        from scanpath_studio import tabs
+
+        empty_words = pd.DataFrame(columns=["participant_id", "trial_id"])
+        stats = tabs._dataset_statistics(
+            empty_words, self.fixations, pd.DataFrame(), ("stats-fix-only",)
+        )
+        assert stats["n_texts"] == 2
+
+    def test_unique_text_id_wins_over_text_id_everywhere(self):
+        """One id space: a frame carrying only `text_id` is not mixed in."""
+        words = pd.DataFrame({"unique_text_id": ["u1", "u2"], "text_id": ["1", "2"]})
+        assert text_ids(words, self.fixations, None) == {"u1", "u2"}
+
+
 @pytest.mark.parametrize("token", [DEMO_CHOICE, SYNTHETIC_CHOICE])
 def test_the_packaged_sources_publish_figures(token):
     assert app.published_dataset_counts(token)
@@ -306,7 +344,7 @@ class TestTheTableItself:
     def test_the_open_dataset_shows_what_it_loaded(self, table):
         row = table.set_index("Dataset").loc["Bundled Demo"]
         assert row["Counts"] == "Loaded"
-        assert row["Participants"] == 3
+        assert row["Participants"] == 2
 
     def test_a_source_that_publishes_nothing_stays_blank(self, table):
         """MultiplEYE reads whatever session folders are on this machine, so no

@@ -4388,6 +4388,26 @@ def trial_keys(frame: pd.DataFrame) -> set:
     }
 
 
+def text_ids(*frames: pd.DataFrame | None) -> set[str]:
+    """The distinct text ids across every frame that carries one (DATA-50).
+
+    ``unique_text_id`` when any frame has it, else ``text_id`` — one id space,
+    never a union of the two. Counting the words table alone said **0 texts**
+    for a fixations-only dataset whose fixations name twelve.
+    """
+    present = [f for f in frames if f is not None and not f.empty]
+    column = (
+        "unique_text_id"
+        if any("unique_text_id" in f.columns for f in present)
+        else "text_id"
+    )
+    found: set[str] = set()
+    for frame in present:
+        if column in frame.columns:
+            found.update(str(v) for v in frame[column].dropna().unique())
+    return found
+
+
 def filter_frame_to_keys(frame: pd.DataFrame, keys: set) -> pd.DataFrame:
     """Keep only rows whose ``(participant_id, trial_id)`` is in ``keys``.
 

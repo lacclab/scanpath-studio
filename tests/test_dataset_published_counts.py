@@ -29,6 +29,7 @@ from scanpath_studio.data import (
     normalize_words,
     propose_fix_schema,
     propose_word_schema,
+    text_ids,
 )
 from scanpath_studio.synthetic import load_synthetic_data
 
@@ -262,6 +263,43 @@ class TestTrialsAreTrialsNotTrialIds:
             ~((fixations["participant_id"] == "r2") & (fixations["trial_id"] == "b2"))
         ]
         assert _measure(words, fixations, key=("gap",))["Trials"] == 5
+
+
+class TestTextsAreCountedFromEveryTable:
+    """DATA-50: the Texts figure read the words table only, so a fixations-only
+    dataset whose fixations name twelve texts said there were none."""
+
+    fixations = pd.DataFrame(
+        {
+            "participant_id": ["p1", "p1", "p2"],
+            "trial_id": ["t1", "t2", "t1"],
+            "text_id": ["a", "b", "a"],
+            "x": [1.0, 2.0, 3.0],
+        }
+    )
+
+    def test_a_fixations_only_dataset_counts_its_texts(self):
+        counts = _measure(pd.DataFrame(), self.fixations, key=("fix-only",))
+        assert counts["Texts"] == 2
+
+    def test_texts_from_several_tables_are_one_union(self):
+        words = pd.DataFrame({"participant_id": ["p1"], "text_id": ["c"]})
+        counts = _measure(words, self.fixations, key=("union",))
+        assert counts["Texts"] == 3
+
+    def test_the_stats_tab_counts_the_same_way(self):
+        from scanpath_studio import tabs
+
+        empty_words = pd.DataFrame(columns=["participant_id", "trial_id"])
+        stats = tabs._dataset_statistics(
+            empty_words, self.fixations, pd.DataFrame(), ("stats-fix-only",)
+        )
+        assert stats["n_texts"] == 2
+
+    def test_unique_text_id_wins_over_text_id_everywhere(self):
+        """One id space: a frame carrying only `text_id` is not mixed in."""
+        words = pd.DataFrame({"unique_text_id": ["u1", "u2"], "text_id": ["1", "2"]})
+        assert text_ids(words, self.fixations, None) == {"u1", "u2"}
 
 
 @pytest.mark.parametrize("token", [DEMO_CHOICE, SYNTHETIC_CHOICE])

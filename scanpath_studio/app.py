@@ -1192,6 +1192,48 @@ _UNAVAILABLE_KEY = "_dataset_unavailable"
 #: the last full run's answer. The table reads it so the demo's rows are never
 #: counted as that corpus' "loaded" figures.
 _PLACEHOLDER_SHOWN_KEY = "_dataset_placeholder_shown"
+#: DATA-48 — the corpus the bundled demo last stood in for. While it does, that
+#: corpus' annotations are filed under the demo's name: the trials on screen are
+#: the demo's, so a star made on them is the demo's, and must not wait under a
+#: corpus whose own trials (once it is set up) merely share their ids.
+_ANNOTATIONS_STANDIN_KEY = "_annotations_standin_for"
+
+
+def annotations_owner(dataset: str) -> str:
+    """The dataset whose annotations ``dataset``'s screen shows (DATA-48)."""
+    if st.session_state.get(_ANNOTATIONS_STANDIN_KEY) == dataset:
+        return DEMO_CHOICE
+    return dataset
+
+
+def _annotations_dataset(token: str) -> str:
+    """The dataset the annotation store belongs to now, else ``token``."""
+    import scanpath_studio.annotations as _annotations
+
+    return _annotations.current_dataset(st.session_state) or token
+
+
+def _file_annotations_under_shown_dataset(dataset: str) -> None:
+    """After the load: point the annotation store at what is actually shown.
+
+    ``annotations.activate_dataset`` runs before the load, when nobody knows
+    yet whether ``dataset`` is on disk; the loader then reports the demo
+    standing in (:data:`_PLACEHOLDER_SHOWN_KEY`). Remembering which corpus it
+    stood in for lets the next run's first activation pick the demo straight
+    away — one swap, not a swap and back on every run.
+    """
+    import scanpath_studio.annotations as _annotations
+
+    if st.session_state.get(_PLACEHOLDER_SHOWN_KEY):
+        st.session_state[_ANNOTATIONS_STANDIN_KEY] = dataset
+        _annotations.activate_dataset(st.session_state, DEMO_CHOICE, adopt=False)
+    elif st.session_state.get(_ANNOTATIONS_STANDIN_KEY) == dataset:
+        st.session_state.pop(_ANNOTATIONS_STANDIN_KEY, None)
+        _annotations.activate_dataset(st.session_state, dataset, adopt=False)
+    # Only now is it known which dataset is shown, so only now may it adopt an
+    # old cache's unassigned entries — which are on a built-in or public
+    # corpus' trials, since every restored upload was already asked for its own.
+    _annotations.adopt_unassigned(st.session_state)
 
 
 def _note_dataset_unavailable(
@@ -3437,6 +3479,32 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
 # -----------------------------------------------------------------------------
 
 
+#: Every built-in token :func:`resolve_data_source` can put in the picker,
+#: whatever this run's gates — the ones a user's dataset may never be named
+#: (:func:`reserved_source_names`). A name that shadows one gives the picker a
+#: duplicate option, hijacks the built-in's load branch, and (DATA-47/48) shares
+#: its metadata tables and annotations.
+BUILTIN_SOURCE_CHOICES = (
+    ONESTOP_CHOICE,
+    MULTIPLEYE_BUNDLE_CHOICE,
+    DEMO_CHOICE,
+    MANUAL_SAMPLE_CHOICE,
+    SYNTHETIC_CHOICE,
+    AUTHOR_CHOICE,
+    UPLOAD_CHOICE,
+    PUBLIC_DATASETS_CHOICE,
+)
+
+
+def reserved_source_names() -> frozenset[str]:
+    """Every built-in data-source label: the fixed tokens and every corpus."""
+    return (
+        frozenset(BUILTIN_SOURCE_CHOICES)
+        | frozenset(PUBLIC_DATASET_REGISTRY)
+        | frozenset(public_dataset_registry())
+    )
+
+
 def resolve_data_source(host=None) -> str:
     """Resolve the active data source (renders no picker widget — UX-25).
 
@@ -3723,6 +3791,12 @@ def _save_authored_dataset(name_key: str) -> None:
         requested += " (authored)"
     name = _safe_dataset_name(requested)
     st.session_state.setdefault("_datasets", {})[name] = payload
+    # DATA-48: the draft's annotations were made on the scanpath being saved,
+    # so they become the saved dataset's. The name is safe, so it holds none.
+    if st.session_state.get("data_source_choice") == AUTHOR_CHOICE:
+        import scanpath_studio.annotations as _annotations
+
+        _annotations.rename_dataset(st.session_state, AUTHOR_CHOICE, name)
     st.session_state["_pending_source_choice"] = name
     st.session_state["main_nav"] = _VIEW_SCANPATH
     st.session_state["setup_complete"] = True
@@ -4191,7 +4265,7 @@ def _delete_confirmation_dialog(
     owned = token in uploaded
     if owned:
         # BUG-95: said "and annotations" while removing none. The count is the
-        # annotations on its trials that no other added dataset shares.
+        # dataset's own annotations, which since DATA-48 it alone holds.
         from scanpath_studio.wizard import upload_annotations
 
         count = len(upload_annotations(token))
@@ -4251,8 +4325,8 @@ def _delete_confirmation_dialog(
 def _render_delete_confirmation(host, tokens: list, uploaded: set[str]) -> None:
     """The confirm step between ✕ Delete and the dataset actually going away.
 
-    Deleting an upload drops its frames, its mapping and the annotations on its
-    trials (BUG-95) from the session with no undo, and the button that starts it sits on a row that
+    Deleting an upload drops its frames, its mapping and its annotations
+    (BUG-95, DATA-48) from the session with no undo, and the button that starts it sits on a row that
     opens the dataset when clicked anywhere else — so the click arms this, and
     this asks.
 
@@ -7313,13 +7387,20 @@ def _run_app() -> None:
     # the dataset table uses, not `data_choice` — every public corpus loads
     # through one category token, and they must not share a table. The add
     # wizard's dataset has no name yet, so it gets the pending slot.
+    # DATA-48 — and so do the annotations, swapped by the same key.
+    import scanpath_studio.annotations as _annotations
     from scanpath_studio import metadata as _metadata
 
-    _metadata.activate_dataset(
-        st.session_state,
+    _dataset_owner = (
         _metadata.PENDING_DATASET
         if data_choice == UPLOAD_CHOICE
-        else str(st.session_state.get("data_source_choice") or data_choice),
+        else str(st.session_state.get("data_source_choice") or data_choice)
+    )
+    _metadata.activate_dataset(st.session_state, _dataset_owner)
+    # Adoption of an old cache's unassigned entries waits for the load, which
+    # says what is really shown (`_file_annotations_under_shown_dataset`).
+    _annotations.activate_dataset(
+        st.session_state, annotations_owner(_dataset_owner), adopt=False
     )
     # UX-166: on the Data page the dataset card sits above the table.
     data_page_slot = setup_source_slot.empty()
@@ -7641,6 +7722,8 @@ def _run_app() -> None:
             options_host=source_options_slot,
             location_host=data_location_slot,
         )
+        # DATA-48: the demo may have stood in for a corpus that isn't here.
+        _file_annotations_under_shown_dataset(_dataset_owner)
         if dataset_card is not None and len(dataset_card.steps) == 3:
             if st.session_state.get(_UNAVAILABLE_KEY):
                 # UX-166: the corpus isn't here, so the rows just read are the
@@ -8187,7 +8270,12 @@ def _run_app() -> None:
                     fixations_filtered,
                     raw_gaze_filtered,
                     annotation_trials=_annotation_trials(combos_all),
-                    dataset_name=_dataset_display_name(active_token),
+                    # DATA-48: the dataset whose annotations these are — the
+                    # demo's while it stands in for a missing corpus, as in
+                    # the Export bundle.
+                    dataset_name=_dataset_display_name(
+                        _annotations_dataset(active_token)
+                    ),
                 )
     elif active_view == _VIEW_CORPUS:
         with view_area:

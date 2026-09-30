@@ -144,6 +144,7 @@ from scanpath_studio.data import (
     TRIAL_IDENTITY_SAMPLE,
     WORD_OPTIONAL_FIELDS,
     ReadPlan,
+    StimulusJoin,
     clear_frame_cache,
     compute_canvas_size,
     count_trials,
@@ -158,7 +159,7 @@ from scanpath_studio.data import (
     filter_trials,
     frame_cache,
     frame_fingerprint,
-    harmonize_frames,
+    harmonize_frames_with_join,
     infer_raw_gaze_schema,
     load_onestop_server_bundle,
     load_sample_data,
@@ -237,6 +238,7 @@ from scanpath_studio.styles import get_app_css
 from scanpath_studio.tabs import (
     EDITOR_NAME_FIELD_KEY,
     EDITOR_PENDING_NAME_KEY,
+    STIMULUS_JOIN_NOTICE_KEY,
     _build_figure_settings,
     _render_column_mapping_section,
     dataset_editor_is_dirty,
@@ -2714,6 +2716,12 @@ def _schema_key(schema: dict | None) -> tuple | None:
     )
 
 
+#: How the last normalized pair's stimulus-level AOI table attached to its
+#: readings (a ``data.StimulusJoin``, or ``None``), written by `_normalize_pair`
+#: for the add-dataset wizard (DATA-49). Scratch state, not wire format.
+STIMULUS_JOIN_KEY = "_stimulus_join"
+
+
 def _normalize_pair_uncached(
     _words_df: pd.DataFrame,
     _word_schema: dict | None,
@@ -2722,8 +2730,12 @@ def _normalize_pair_uncached(
     cache_key,
     _keep_words: set | None = None,
     _keep_fix: set | None = None,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame, StimulusJoin | None]:
     """Pure normalize + harmonize, cached on a cheap fingerprint of the inputs.
+
+    Also returns how a stimulus-level AOI table attached to the readings
+    (the one ``data.harmonize_frames_with_join`` made, DATA-49) — ``None`` for a per-reader one —
+    which ``_normalize_pair`` publishes for the add-dataset wizard to state.
 
     ``cache_key`` carries a ``frame_fingerprint`` + schema signature + the
     keep-column selection, so a trial change (which re-runs the script but feeds
@@ -2760,9 +2772,13 @@ def _normalize_pair_uncached(
             else empty_fixations_frame()
         )
         progress.report(2, 3, detail="cross-checks")
-        result = harmonize_frames(words_norm, fixations_norm)
+        # The join the fixups actually made, after BUG-59's zero padding — never
+        # a plan of the frames before it, which can disagree.
+        words_norm, fixations_norm, join = harmonize_frames_with_join(
+            words_norm, fixations_norm
+        )
         progress.report(3, 3)
-        return result
+        return words_norm, fixations_norm, join
 
 
 def _normalize_pair(
@@ -2815,7 +2831,7 @@ def _normalize_pair(
     with loading.spinner(
         f"Normalizing {len(words_df):,} word rows and {len(fixations_df):,} fixations…"
     ):
-        return frame_cache(
+        words_norm, fixations_norm, join = frame_cache(
             "normalized_pair",
             cache_key,
             lambda: _normalize_pair_uncached(
@@ -2828,6 +2844,11 @@ def _normalize_pair(
                 _keep_fix=keep_fix,
             ),
         )
+    # DATA-49: which key a stimulus-level AOI table joined through, for the
+    # add-dataset wizard to say — bookkeeping like `_composite_trial_columns`
+    # above, written on a cache hit too so it always describes this pair.
+    st.session_state[STIMULUS_JOIN_KEY] = join
+    return words_norm, fixations_norm
 
 
 def _reset_active_mapping() -> None:
@@ -7693,12 +7714,17 @@ def _run_app() -> None:
         # UX-107 — ✅ Save changes closes the editor, so its success line
         # belongs here, on the screen it returns to.
         saved = st.session_state.pop("_remap_applied", None)
+        join_notices = st.session_state.pop(STIMULUS_JOIN_NOTICE_KEY, None)
         if saved:
             dataset_table_slot.success(
                 f"**{_dataset_display_name(str(saved))}** updated — mapping, "
                 "recording setup and any table you added are saved.",
                 icon=ICONS["success"],
             )
+            # DATA-49: a save whose word boxes reached only some readings says
+            # so here — its warning was raised inside the button's callback.
+            for notice in join_notices or []:
+                dataset_table_slot.warning(notice, icon=ICONS["warning"])
         # Rendered *inside* the slot rather than handed it: the table is a
         # fragment, and a fragment rerun may only draw widgets into its own
         # containers.

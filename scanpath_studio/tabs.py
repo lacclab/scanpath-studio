@@ -8,6 +8,7 @@ import html
 import json
 import os
 import pickle
+import warnings
 import zlib
 from collections.abc import Callable, Hashable
 from dataclasses import dataclass, replace
@@ -154,9 +155,11 @@ from scanpath_studio.controls import (
 from scanpath_studio.data import (
     READING_MEASURE_FIELDS,
     READING_MEASURE_KEYS,
+    StimulusJoinWarning,
     aggregate_char_boxes,
     compute_word_metrics,
     derive_trial_index,
+    drop_internal_columns,
     empty_fixations_frame,
     empty_words_frame,
     filter_to_keys,
@@ -170,9 +173,11 @@ from scanpath_studio.data import (
     propose_word_schema,
     read_tables,
     remap_normalized_frame,
+    repeat_bases,
     text_ids,
     trial_keys,
     trial_mapping_columns,
+    user_columns,
     validate_fix_schema,
     validate_raw_gaze_schema,
     validate_word_schema,
@@ -2716,7 +2721,7 @@ def _detect_span_columns(trial_words: pd.DataFrame) -> list[str]:
     """
     detected = [
         c
-        for c in trial_words.columns
+        for c in user_columns(trial_words)
         if any(h in c.lower() for h in _SPAN_NAME_HINTS)
         and _is_boolish(trial_words[c])
         and bool(trial_words[c].fillna(False).astype(bool).any())
@@ -2742,7 +2747,7 @@ def _detect_question_columns(trial_words: pd.DataFrame) -> list[str]:
     render as a bogus "Response time ms: 120" line.
     """
     out = []
-    for c in trial_words.columns:
+    for c in user_columns(trial_words):
         lc = c.lower()
         if c == "comprehension_questions":
             continue  # structured JSON, rendered by _render_comprehension_questions
@@ -2829,7 +2834,7 @@ def _stimulus_field_candidates(
     picked timing column is a legitimate thing to want on screen.
     """
     spans, qa = [], []
-    for col in trial_words.columns:
+    for col in user_columns(trial_words):
         if col in _STIMULUS_FIELD_EXCLUDE:
             continue
         series = trial_words[col]
@@ -9455,7 +9460,7 @@ def _generation_column_options(fixations: pd.DataFrame) -> list:
         "sample",
     )
     cols = []
-    for c in fixations.columns:
+    for c in user_columns(fixations):
         if c in _GEN_COL_EXCLUDE:
             continue
         try:
@@ -9867,7 +9872,8 @@ def _render_raw_table(df: pd.DataFrame, caption: str | None = None) -> None:
     local path. Bulk export is the supported way out, and it strips those at its
     single chokepoint (``export.strip_local_paths``).
     """
-    st.dataframe(df, hide_index=True, width="stretch", lazy=True)
+    # DATA-49: bookkeeping columns (`data.INTERNAL_COLUMNS`) are not data.
+    st.dataframe(drop_internal_columns(df), hide_index=True, width="stretch", lazy=True)
     if caption:
         st.caption(caption)
 
@@ -11197,6 +11203,36 @@ def _remap_proposed(schema: dict | None, frame_columns, canon: dict) -> dict:
     return proposed
 
 
+#: DATA-49 — what a ✅ Save changes' stimulus join warned about (some readings
+#: found no word boxes), shown under the success line on the screen the save
+#: returns to. Not a `_remap_*` key: those are cleared when the save ends.
+STIMULUS_JOIN_NOTICE_KEY = "_stimulus_join_notice"
+
+
+def _harmonize_noting_join(
+    words: pd.DataFrame, fixations: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """``harmonize_frames``, keeping its ``StimulusJoinWarning`` for the page.
+
+    ✅ Save changes runs in an ``on_click``, where a warning only reaches the
+    server's terminal; this parks its text under ``STIMULUS_JOIN_NOTICE_KEY``
+    instead (DATA-49). Any other warning is re-raised as it was."""
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = harmonize_frames(words, fixations)
+    notices = []
+    for record in caught:
+        if issubclass(record.category, StimulusJoinWarning):
+            notices.append(str(record.message))
+        else:
+            warnings.warn_explicit(
+                record.message, record.category, record.filename, record.lineno
+            )
+    if notices:
+        st.session_state[STIMULUS_JOIN_NOTICE_KEY] = notices
+    return result
+
+
 def _apply_remap() -> None:
     """Re-derive the active stored dataset's frames under the edited mapping and
     overwrite the entry in place (the "Apply remapping" button's ``on_click``).
@@ -11206,6 +11242,7 @@ def _apply_remap() -> None:
     re-normalizes via ``data.remap_normalized_frame`` and recomputes the
     composite trial components. ``app.main``'s stored-dataset branch then
     re-publishes the new frames + mapping on the rerun this callback triggers."""
+    st.session_state.pop(STIMULUS_JOIN_NOTICE_KEY, None)
     active = _active_stored_dataset()
     if active is None:
         return
@@ -11237,12 +11274,18 @@ def _apply_remap() -> None:
 
     new_entry = dict(stored)
     new_schemas = dict(stored.get("schemas") or {})
+    # DATA-49 — which stored trial ids are repeats of which, so a dataset
+    # stored before the join recorded provenance folds a repeat's copy of the
+    # boxes back into the trial it copied (`data.repeat_bases`).
+    repeat_of = repeat_bases(stored.get("fixations"))
     for table_key in ("words", "fixations", "raw_gaze"):
         frame = stored.get(table_key)
         if frame is None or frame.empty or table_key not in pending:
             continue
         schema = pending[table_key]
-        new_entry[table_key] = remap_normalized_frame(frame, schema, kind=table_key)
+        new_entry[table_key] = remap_normalized_frame(
+            frame, schema, kind=table_key, repeat_of=repeat_of
+        )
         new_schemas[table_key] = schema
     # …then the added ones, which are *raw*: they take the same normalization
     # the add-dataset screen runs, and then `harmonize_frames` — the
@@ -11267,14 +11310,14 @@ def _apply_remap() -> None:
                 other = new_entry.get("fixations")
                 if not isinstance(other, pd.DataFrame) or other.empty:
                     other = empty_fixations_frame()
-                fresh, other = harmonize_frames(fresh, other)
+                fresh, other = _harmonize_noting_join(fresh, other)
                 new_entry["words"], new_entry["fixations"] = fresh, other
             else:
                 fresh = normalize_fixations(raw, schema)
                 other = new_entry.get("words")
                 if not isinstance(other, pd.DataFrame) or other.empty:
                     other = empty_words_frame()
-                other, fresh = harmonize_frames(other, fresh)
+                other, fresh = _harmonize_noting_join(other, fresh)
                 new_entry["words"], new_entry["fixations"] = other, fresh
             harmonized = True
         except Exception as exc:
@@ -11312,7 +11355,7 @@ def _apply_remap() -> None:
         fixations = new_entry.get("fixations")
         has_fixations = isinstance(fixations, pd.DataFrame) and not fixations.empty
         try:
-            words, fixations = harmonize_frames(
+            words, fixations = _harmonize_noting_join(
                 before, fixations if has_fixations else empty_fixations_frame()
             )
         except Exception as exc:
@@ -11325,19 +11368,9 @@ def _apply_remap() -> None:
                 "words": [mapping_failure_problem(exc)]
             }
             return
-        if words.empty:
-            # The broadcast keeps only trials some reader has fixations for.
-            # Import drops the rest too, but here the stored boxes would be
-            # overwritten by nothing — refuse rather than lose them.
-            st.session_state["_remap_problems"] = {
-                "words": [
-                    "No AOI row matches a trial in the fixations under this "
-                    "mapping, so saving would leave the dataset with no word "
-                    "boxes. Check the Trial ID (and Screen) picks for both "
-                    "tables."
-                ]
-            }
-            return
+        # A stimulus-level table no reading can use never gets here: the
+        # broadcast raises `StimulusJoinError` above (DATA-49), so the stored
+        # boxes are never overwritten by nothing.
         new_entry["words"] = words
         if has_fixations:
             new_entry["fixations"] = fixations
@@ -11639,7 +11672,8 @@ def _render_remap_fields(
         frame = stored.get(table_key)
         if frame is None or getattr(frame, "empty", True):
             continue
-        frames[table_key] = frame
+        # DATA-49: bookkeeping columns are never a field to map.
+        frames[table_key] = drop_internal_columns(frame)
         specs_by_table[table_key] = specs
         prefixes[table_key] = f"remap_{name}_{table_key}"
         proposals[table_key] = _remap_proposed(

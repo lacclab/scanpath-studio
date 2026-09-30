@@ -52,7 +52,7 @@ from .constants import (
     UNIFORM_COLOR_FIELD,
     drift_correction_enabled,
 )
-from .data import compute_word_metrics
+from .data import compute_word_metrics, drop_internal_columns
 from .export_status import ExportStage, StatusCallback, emit_status
 from .fields import panel_field
 from .measures import assign_fixations_to_words, enrich_fixations
@@ -615,7 +615,8 @@ def strip_local_paths(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _write_table(zf: zipfile.ZipFile, path: str, df: pd.DataFrame, fmt: str) -> int:
-    df = strip_local_paths(df)
+    # DATA-49: the pipeline's bookkeeping columns stay out of what is shared.
+    df = strip_local_paths(drop_internal_columns(df))
     if fmt == "parquet":
         buf = io.BytesIO()
         df.to_parquet(buf, index=False)

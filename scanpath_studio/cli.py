@@ -171,7 +171,18 @@ def _load_error_message(exc: Exception, *, schema_flags: bool = True) -> str:
     ``--word-schema`` / ``--fix-schema`` form. ``schema_flags=False`` is for the
     second comparison dataset, which has no mapping flag of its own."""
     from .api import SchemaError
+    from .data import StimulusJoinError
 
+    if isinstance(exc, StimulusJoinError):
+        # DATA-49: the fix is a mapping, and here a mapping is a flag.
+        message = str(exc).replace("`", "'")
+        if not schema_flags:
+            return message
+        return (
+            f"{message}\nOn the command line, map it with --word-schema and "
+            "--fix-schema: each takes that table's full mapping as JSON (or a "
+            'path to a .json file), with "text_id" naming its text column.'
+        )
     if not isinstance(exc, SchemaError):
         return str(exc)
     flag = _SCHEMA_FLAGS.get(exc.param)
@@ -3125,9 +3136,12 @@ def analyze(argv: list[str]) -> None:
     # stands unless preprocessing actually ran.
     if not qa.empty:
         tables["cleaning_qa"] = qa
+    from .data import drop_internal_columns
+
     destination = Path(args.output_dir)
     destination.mkdir(parents=True, exist_ok=True)
     for name, table in tables.items():
+        table = drop_internal_columns(table)
         table.to_csv(destination / f"{name}.csv", index=False)
     config = {
         "short_policy": policy,

@@ -44,7 +44,7 @@ names; everything downstream assumes them.
 
 | Column | Meaning |
 |--------|---------|
-| `participant_id` | Reader id (string). Optional in the source: a stimulus-level word table with no reader column is broadcast across the readers found in the fixations. |
+| `participant_id` | Reader id (string). Optional in the source: a stimulus-level word table with no reader column is broadcast onto every reading in the fixations, matched by trial id or else by `text_id`; `load_scanpath_data` raises a `ValueError` when neither matches. |
 | `trial_id` | Trial id; with `participant_id` it names one reading. **Required.** |
 | `screen_id`, `screen_index` | Optional child screen and 1-based order inside a multipart logical trial. Map in both reports. |
 | `text_id` | Which text/passage the row belongs to (plus `unique_text_id` when the source has a corpus-wide id). |

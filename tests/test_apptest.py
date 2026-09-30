@@ -3119,6 +3119,96 @@ class TestSetupWizard:
         warn_text = " ".join(e.value for e in at.warning)
         assert "No trial ids are shared" in warn_text, warn_text
 
+    @staticmethod
+    def _text_level_upload(monkeypatch, *, text_ids=("1_1_Ele", "1_2_Adv")):
+        """DATA-49's repro: fixations whose trial id embeds the reader, plus a
+        text-level AOI table keyed by `unique_paragraph_id` with no reader."""
+        import pandas as pd
+
+        from scanpath_studio import app
+
+        raw_words = pd.DataFrame(
+            {
+                "unique_paragraph_id": ["1_1_Ele", "1_1_Ele", "1_2_Adv"],
+                "IA_ID": [1, 2, 1],
+                "IA_LABEL": ["Hello", "world", "Bye"],
+                "IA_LEFT": [0, 50, 0],
+                "IA_RIGHT": [40, 90, 60],
+                "IA_TOP": [0, 0, 0],
+                "IA_BOTTOM": [20, 20, 20],
+            }
+        )
+        raw_fix = pd.DataFrame(
+            {
+                "participant_id": ["l37", "l37", "l42", "l42"],
+                "unique_trial_id": [
+                    "l37_1129_1_1_Ele_r0",
+                    "l37_1129_1_2_Adv_r0",
+                    "l42_1129_1_1_Ele_r0",
+                    "l42_1129_1_2_Adv_r0",
+                ],
+                "unique_paragraph_id": [*text_ids, *text_ids],
+                "CURRENT_FIX_X": [5.0, 5.0, 5.0, 5.0],
+                "CURRENT_FIX_Y": [5.0, 5.0, 5.0, 5.0],
+                "CURRENT_FIX_DURATION": [100, 120, 90, 110],
+            }
+        )
+        monkeypatch.setattr(
+            app,
+            "_read_uploaded_frame",
+            lambda **kw: (
+                raw_words
+                if kw["state_prefix"] == "col_map_words"
+                else raw_fix
+                if kw["state_prefix"] == "col_map_fix"
+                else pd.DataFrame()
+            ),
+        )
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # The repro's mapping: the fixations keyed by their own per-reader
+        # trial id and reader, the AOI table by its text alone. (Auto-detection
+        # proposes the one column both tables share for both.)
+        at.multiselect(key="col_map_fix_trial").set_value(["unique_trial_id"])
+        at.multiselect(key="col_map_fix_participant").set_value(["participant_id"])
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        return at
+
+    def test_a_text_level_aoi_table_attaches_by_text_id(self, monkeypatch):
+        """DATA-49: the wizard says which join it used, and the per-reader trial
+        ids no longer read as a mapping error."""
+        at = self._text_level_upload(monkeypatch)
+        captions = " ".join(e.value for e in at.caption)
+        assert "Words attach to readings by Text ID" in captions, captions
+        assert "all 4 readings have word boxes" in captions, captions
+        warn_text = " ".join(e.value for e in at.warning)
+        assert "No trial ids are shared" not in warn_text, warn_text
+        assert not [e.value for e in at.error]
+        payload = at.session_state["_wizard_finalize_payload"]
+        assert len(payload["words"]) == 6  # 3 boxes x 2 readers
+        assert set(payload["words"]["trial_id"]) == set(
+            payload["fixations"]["trial_id"]
+        )
+
+    def test_a_partial_join_is_a_warning_not_the_green_caption(self, monkeypatch):
+        """DATA-49 round 4: a join worth acting on is never shown as success."""
+        at = self._text_level_upload(monkeypatch, text_ids=("1_1_Ele", "nope"))
+        warn_text = " ".join(e.value for e in at.warning)
+        assert "2 of 4 readings have word boxes" in warn_text, warn_text
+        captions = " ".join(e.value for e in at.caption)
+        assert "Words attach to readings" not in captions, captions
+
+    def test_an_aoi_table_nothing_joins_blocks_the_add(self, monkeypatch):
+        """DATA-49: no shared trial id and no shared Text ID stops the wizard
+        with a message, instead of adding a dataset with no AOIs."""
+        at = self._text_level_upload(monkeypatch, text_ids=("x", "y"))
+        errors = " ".join(e.value for e in at.error)
+        assert "Text ID" in errors and "no word boxes" in errors, errors
+        assert "_wizard_finalize_payload" not in at.session_state
+
     def test_raw_gaze_only_incomplete_mapping_blocks_finalize(self, monkeypatch):
         """Bug fix: a raw-gaze-only upload with an unmappable trial id must block
         finalize (raw-gaze problems are folded in) instead of storing an empty

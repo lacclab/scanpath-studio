@@ -55,7 +55,13 @@ from .constants import (
     palette_settings,
     upload_limit_mb,
 )
-from .data import READING_MEASURE_FIELDS, READING_MEASURE_KEYS, frame_fingerprint
+from .data import (
+    INTERNAL_COLUMNS,
+    READING_MEASURE_FIELDS,
+    READING_MEASURE_KEYS,
+    frame_fingerprint,
+    user_columns,
+)
 from .export import (
     DEFAULT_CAPTION_PATTERN,
     DEFAULT_TITLE_PATTERN,
@@ -2103,7 +2109,8 @@ WORD_FIELD_SPECS: list[dict] = [
         "label": "Text ID",
         "required": False,
         "help": "Groups words by the text/passage they belong to, for filtering "
-        "and selection; falls back to the trial id.",
+        "and selection; falls back to the trial id (a repeated reading's without "
+        "its _r2 suffix).",
     },
     {
         "key": "line",
@@ -2664,7 +2671,7 @@ def column_mapping_ui(
     # remap editor has no raw file to ask, and offers only what survived the
     # original import by design) — fall back to the parsed frame there.
     full_header = st.session_state.get(f"{state_key_prefix}_header")
-    options = list(full_header) if full_header else list(df.columns)
+    options = list(full_header) if full_header else user_columns(df)
     expanded = bool(expand_on_problem and problems)
     # UX-53 field colour: which rows *must* be filled, and whether the user has
     # already tried to add the dataset (before that, empty is not an error).
@@ -3233,7 +3240,7 @@ def hover_field_options(
             "saccade_amplitude",
         ]
     )
-    available = list(frame.columns)
+    available = user_columns(frame)
     if words and {"x", "y", "height"} <= set(frame.columns):
         available.append("line_idx")  # geometry-derived in plots._add_word_label_trace
     result: list[str] = []
@@ -7010,7 +7017,7 @@ def _chip_field_options(words, fixations, trial_level: set) -> list[str]:
         add("participant_id")
     add(next((c for c in _CHIP_TEXT_ID_COLS if c in words.columns), ""))
     for c in list(words.columns) + list(fixations.columns):
-        if c in trial_level:
+        if c in trial_level and c not in INTERNAL_COLUMNS:
             add(c)
     # DATA-20: participant-grain metadata is constant within a trial by
     # construction, so it belongs in this list on exactly the same terms as a

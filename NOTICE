@@ -22,3 +22,27 @@ Vertical drift-correction algorithms (scanpath_studio/alignment.py)
   https://creativecommons.org/licenses/by/4.0/). The code here is adapted and
   modified (returning line assignments and adding DataFrame plumbing) and is
   distributed under that license's attribution terms.
+
+Bundled demo corpus (scanpath_studio/sample_data/)
+
+  The demo tables and stimulus images are a small subset of OneStop Eye
+  Movements (3 participants x 2 articles), with the corpus's own linguistic
+  annotations:
+
+    Berzak, Y., Malmaud, J., Shubi, O., Meiri, Y., Lion, E., & Levy, R. (2025).
+    OneStop: A 360-Participant English Eye Tracking Dataset with Different
+    Reading Regimes. Scientific Data. https://doi.org/10.1038/s41597-025-06272-2
+    https://github.com/lacclab/OneStop-Eye-Movements
+
+  - The eye-tracking data (fixations.*, raw_gaze.* — synthesized from those
+    fixations — and the interest-area measures in ia.*) are released under the
+    Creative Commons Attribution 4.0 International License,
+    https://creativecommons.org/licenses/by/4.0/.
+  - The textual materials — the passage words, titles and questions in ia.*,
+    the passage text in images/manifest.csv, and the rendered passage images
+    in images/*.png — come from OneStopQA and are provided under the Creative
+    Commons Attribution-ShareAlike 4.0 International License,
+    https://github.com/berzak/onestop-qa/blob/master/LICENSE.md.
+
+  These files are distributed under their own licenses, not under the MIT
+  License that covers the Scanpath Studio code.

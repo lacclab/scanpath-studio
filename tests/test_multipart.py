@@ -397,3 +397,106 @@ def test_ux47_screen_steps_live_in_a_railbtn_cluster():
     assert 'trail.button(\n        "▶"' in source
     # ...and the shared rule must actually match that key.
     assert '[class*="st-key-railbtn_"] {' in get_app_css()
+
+
+def test_a_stamped_screen_order_survives_a_mapping_that_does_not_name_it():
+    """BUG-79: UX-88 took `screen_index` out of the mapping, trusting the corpora
+    that stamp it onto their frames — but normalization rebuilt the frame from
+    the mapping, so the stamp was dropped and order re-derived from row order.
+    MultiplEYE's per-reader question order then disagreed between the tables and
+    the 🗂️ Data page crashed. A schema without `screen_index` must keep it."""
+    from scanpath_studio.data import normalize_words, propose_word_schema
+
+    words, _ = make_multipart_synthetic_data()
+    # Rows in the *reverse* of the recorded screen order: row order is what
+    # the stamp has to beat.
+    stamped = words.assign(
+        screen_index=words[SCREEN_ID].map({"intro": 1, "question": 2})
+    ).iloc[::-1]
+    schema = propose_word_schema(stamped)
+    schema.pop("screen_index", None)
+    out = normalize_words(stamped, schema)
+    order = out.drop_duplicates(SCREEN_ID).set_index(SCREEN_ID)["screen_index"]
+    assert order.to_dict() == {"intro": 1, "question": 2}
+
+
+def test_an_unmapped_screen_index_column_does_not_make_a_table_multipart():
+    """DATA-59: with no screen field mapped, a raw `screen_index` column must not
+    ride through BUG-79's stamp path — it derived a `screen_id` from it, so an
+    AOI table stayed multipart after its screen fields were cleared, and the
+    pair was refused ("Multipart identity is present in only one report")."""
+    from scanpath_studio.data import normalize_fixations, normalize_words
+    from scanpath_studio.multipart import has_screen_identity, validate_matching_parts
+
+    words = pd.DataFrame(
+        {
+            "participant_id": ["p1", "p1"],
+            "trial_id": ["t1", "t1"],
+            "word_id": [0, 1],
+            "text": ["a", "b"],
+            "x": [0, 10],
+            "y": [0, 0],
+            "width": [10, 10],
+            "height": [10, 10],
+            "screen_index": [1, 1],
+        }
+    )
+    fixations = pd.DataFrame(
+        {
+            "participant_id": ["p1"],
+            "trial_id": ["t1"],
+            "x": [5.0],
+            "y": [5.0],
+            "duration_ms": [100],
+        }
+    )
+    word_schema = {
+        "participant": "participant_id",
+        "trial": "trial_id",
+        "word_id": "word_id",
+        "text": "text",
+        "x": "x",
+        "y": "y",
+        "width": "width",
+        "height": "height",
+    }
+    fix_schema = {
+        "participant": "participant_id",
+        "trial": "trial_id",
+        "x": "x",
+        "y": "y",
+        "duration": "duration_ms",
+    }
+    out_words = normalize_words(words, word_schema)
+    assert not has_screen_identity(out_words)
+    validate_matching_parts(out_words, normalize_fixations(fixations, fix_schema))
+
+
+def test_a_co_animation_draws_one_screen_of_a_multipart_second_reading():
+    """BUG-85: `trial_b=` cut B to one trial but kept every screen of it, so a
+    multipart B drew all its screens as one trail in A's coordinates — each
+    screen is its own coordinate space. B keeps its first recorded screen, as A
+    does without `screen=` and as the app's B navigator starts; B frames cut to
+    another screen with `extract_part` pick that one instead."""
+    words, fixations = make_multipart_synthetic_data()
+    pid, tid = "synthetic", "multipart_demo"
+
+    def trace_b(fig):
+        (trace,) = [trace for trace in fig.data if trace.name == "Scanpath B"]
+        return trace
+
+    first = api.animate_scanpath(
+        words, fixations, pid, tid, screen="question", trial_b=(pid, tid)
+    )
+    assert len(trace_b(first).x) == MULTIPART_EXPECTED["fixations_per_screen"][0]
+
+    chosen = api.animate_scanpath(
+        words,
+        fixations,
+        pid,
+        tid,
+        screen="question",
+        words_b=extract_part(words, pid, tid, "question"),
+        fixations_b=extract_part(fixations, pid, tid, "question"),
+    )
+    assert len(trace_b(chosen).x) == MULTIPART_EXPECTED["fixations_per_screen"][1]

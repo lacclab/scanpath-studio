@@ -1,9 +1,11 @@
 # Data format
 
 Scanpath Studio reads up to three tables — **words / areas-of-interest**,
-**fixations**, and (optionally) **raw gaze** — as **CSV, TSV, Parquet, or
-Feather**. Columns are auto-detected from common EyeLink, Gazepoint, and
-snake-case conventions; the app's **Column mapping** panel (and the
+**fixations**, and (optionally) **raw gaze** — as **CSV, TSV, TXT, Parquet,
+Feather, or Excel**, or a `.zip` of any of them. Columns are auto-detected from
+common EyeLink, Gazepoint, Tobii, SMI, Pupil Labs, and snake-case conventions;
+the app's **Column
+mapping** panel (and the
 `word_schema` / `fix_schema` arguments of
 [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data]) override
 any guess.
@@ -12,24 +14,32 @@ any guess.
 
 | Table | Holds | Key columns (auto-detected) |
 |-------|-------|-----------------------------|
-| **Words / IA** | one row per word / interest area, with its on-screen box | participant id, trial id, word id, word text, and the box as **edges** (`IA_LEFT/RIGHT/TOP/BOTTOM`) **or** origin+size (`x/y/width/height`) |
-| **Fixations** | one row per fixation | participant id, trial id, duration (ms); optionally x/y, timestamp, fixation id, word/IA id |
+| **Words / IA** | one row per word / interest area, with its on-screen box | trial id, word id, and the box as **edges** (`IA_LEFT/RIGHT/TOP/BOTTOM`) **or** origin+size (`x/y/width/height`); optionally participant id and word text |
+| **Fixations** | one row per fixation | trial id, duration (ms), and x/y or a word/IA id; optionally participant id, timestamp, fixation id |
 | **Raw gaze** *(optional)* | one row per gaze sample | participant id, trial id, x, y, timestamp |
 | **Participant metadata** *(optional)* | one row per reader | participant id, plus anything you know about them |
-| **Trial metadata** *(optional)* | one row per reading | trial id (optionally participant id too), plus anything you know about that reading |
+| **Trial metadata** *(optional)* | one row per trial | trial id, plus anything you know about that trial |
+| **Text metadata** *(optional)* | one row per text | text id, plus anything you know about that text |
 
-Either main table may be omitted for single-report datasets — the missing layer
-is simply skipped. A words-only table still draws a heatmap from its
-pre-aggregated reading measures, and a dataset added with only one of the two can
-gain the other later on 🗂️ **Data → ✏️ Edit dataset**, without being added again.
+**Units.** Durations and timestamps are read in milliseconds. A column whose
+header names another unit — `[s]`, `[μs]`, `[ns]`, as Tobii and Pupil Labs Neon
+write — is converted, and so are the vendor columns documented in seconds
+(Gazepoint `FPOGD` / `FPOGS`, Pupil Labs Core `start_timestamp`). Positions must
+be **pixels**: screen fractions (Gazepoint `FPOGX` / `FPOGY`, Pupil Labs Core
+`norm_pos_x` / `norm_pos_y`) are flagged with a warning but not converted, since
+the load does not know the screen size — multiply them by the screen width and
+height in pixels first.
+
+Either main table may be omitted — the missing layer is skipped, and a
+words-only table still draws a heatmap from its pre-aggregated reading measures.
 
 ## Participant metadata
 
 Attach a table of **one row per reader** — native language, age, a
 comprehension score, a group label. When you upload your own data it is one of
-the uploaders in part 1 of the setup wizard; for the demo, a public corpus, or a
-dataset you added earlier, the same panel is on 🗂️ **Data → ✏️ Edit dataset**
-under **👤 Participant metadata**. Its columns then behave like fields in the
+the **Metadata** uploaders in part 2 of the setup wizard; for the demo, a public
+corpus, or a dataset you added earlier, the same uploader is on 🗂️ **Data → ✏️ Edit dataset**
+under **Metadata → Participants**. Its columns then behave like fields in the
 data: they filter trials (the filter funnel's *By reader* section), show up as
 chips above the plot, sort the trial picker, group cohorts in Corpus Analysis,
 appear in the dataset's inspection tables, and travel with exports and saved
@@ -43,10 +53,8 @@ p02,English,31,0.91
 
 Three rules are worth knowing:
 
-- **The table is never copied onto your fixations.** It stays its own table, and
-  a reader attribute stays distinguishable from a per-fixation measurement — on
-  the way in, in the exported bundle (`metadata/participants.csv`), and
-  everywhere in between.
+- **The table is never copied onto your fixations.** It stays its own table and
+  is exported separately (`metadata/participants.csv`).
 - **Nothing is guessed.** The join is reported before anything uses it: readers
   in your data with no row, rows describing readers you did not load, and
   duplicate rows. Duplicates that *disagree* are dropped and named rather than
@@ -59,12 +67,12 @@ and [`load_participant_metadata()`](api.md) in the Python API.
 
 ## Trial metadata
 
-The same idea one grain down: a table of **one row per reading** — a list
+The same idea one grain down: a table of **one row per trial** — a list
 name, a presentation order, a per-trial comprehension score, whatever your
 design recorded about the trial rather than about the reader. It attaches
-beside the participant table — in part 1 of the add-dataset wizard, and on
-🗂️ **Data → ✏️ Edit dataset** under 🗂️ **Trial metadata** for a dataset that is
-already loaded — and its columns behave like fields in the data in the same
+beside the participant table — under **Metadata** in part 2 of the add-dataset
+wizard, and on 🗂️ **Data → ✏️ Edit dataset** under **Metadata → Trials** for a
+dataset that is already loaded — and its columns behave like fields in the data in the same
 way: they filter trials, show up as chips above the plot, sort the trial picker,
 appear in the inspection tables, and travel with exports
 (`metadata/trials.csv`) and saved sessions.
@@ -75,24 +83,36 @@ t01,A,1,1
 t02,A,2,0
 ```
 
-**The key is your call, and it decides what a row means.** Keyed by trial id
-alone, a row describes a *text*, and every reader's reading of it inherits that
-row — right for a design where the trial id names the material. Add a
-participant column (the *Reader column* picker, `--trial-metadata-reader-column`
-on the CLI) and a row describes **one reading**, which is what you need as soon
-as the same reader reads the same text twice. Nothing in a file says which of
-the two you meant, so this is never guessed: the picker starts at *(none)*.
+**The key decides what a row means.** Keyed by trial id alone, a row describes
+a *text*, and every reader's reading of it inherits that row — right for a design
+where the trial id names the material. The app always keys the table this way:
+its **Trial ID column** picker takes one column, or several to build the id the
+way the data's own Trial ID mapping does. Keyed by reader **and** trial, a row
+describes **one reading**, which is what you need as soon as the same reader
+reads the same text twice — and that table attaches headlessly only, with
+`--trial-metadata-reader-column` on the CLI or `participant_column=` in the
+Python API.
 
-Everything else matches the participant table — the join is reported before it
-is used, duplicate rows that disagree are dropped and named rather than
-resolved, and the table is never copied onto your fixations.
+Join reporting and duplicate handling are as for the participant table.
 
 Headless, it is `--trial-metadata FILE` on `scanpath-studio render` and
 [`load_trial_metadata()`](api.md) in the Python API.
 
-## Flexible loading
+## Text metadata
 
-The loader bends to fit real corpora:
+The third grain: a table of **one row per text** — a genre, a difficulty rating,
+a stimulus-level comprehension score. It attaches beside the other two (under
+**Metadata → Texts** in the wizard and on ✏️ **Edit dataset**), keyed by text id
+alone — never by reader, since a text is a stimulus rather than something one
+reader owns — and, like the trial table, the id may be built from several
+columns. Its columns behave like fields in the data in the same way, travel with
+exports (`metadata/texts.csv`) and saved sessions, and follow the same join
+rules.
+
+Headless, it is `--text-metadata FILE` on `scanpath-studio render` and
+[`load_text_metadata()`](api.md) in the Python API.
+
+## Flexible loading
 
 - **Many files per table** — pass several paths or a glob; they're concatenated,
   each row tagged with its `source_file` (e.g. one file per participant or text).
@@ -106,8 +126,9 @@ The loader bends to fit real corpora:
 
 ## Multipart logical trials
 
-A logical `(participant_id, trial_id)` may contain several ordered screens. Map
-these optional fields in both words and fixations:
+A logical `(participant_id, trial_id)` may contain several ordered screens.
+These optional columns are auto-detected by name in both tables (headlessly they
+are also `word_schema` / `fix_schema` keys):
 
 | Canonical field | Meaning |
 | --- | --- |
@@ -130,8 +151,9 @@ stored on the parent trial or the current screen. Bulk output uses deterministic
 `screens/screen-001-<id>/` folders.
 
 If source reports have arbitrary page markers instead of mappable screen
-columns, pass a nested manifest to the Python API or CLI. Selectors are exact and
-must cover every row in the declared parent:
+columns, pass a nested manifest (`trial_parts_manifest=` in
+`load_scanpath_data`, `--trial-parts-manifest` on the CLI). Selectors are exact
+and must cover every row in the declared parent:
 
 ```json
 {
@@ -152,48 +174,8 @@ must cover every row in the declared parent:
 }
 ```
 
-Legacy data without screen identity keeps its original two-column trial key and
-behavior.
-
 ## Reading measures
 
-If your data carries only raw fixations, the app computes the canonical per-word
-measures itself — **FFD**, **FPRT** (gaze duration), **RPD** (go-past),
-**TFD** (dwell), initial landing position/distance, second-pass and
-single-fixation duration, plus skips and regression counts, following Rayner (1998) and
-Inhoff & Radach (1998). Pre-aggregated EyeLink `IA_*` columns, when present, take
-precedence. Areas of interest come **directly from your word boxes** — they are
-not computed; only the fixation→word assignment is derived (bounding-box
-containment with a small nearest-word fallback).
-
-## Optional preprocessing and derived tables
-
-!!! note "Not in the app in this release (PRE-22)"
-
-    The **Preprocessing** panel is held back from the app's 🗂️ Data page for
-    this release and returns in the next one. Nothing about the pipeline
-    changed: `api.preprocess_data`, `scanpath-studio analyze` and the tables
-    below are shipped and supported as before, and setting
-    `SCANPATH_EXPERIMENTAL=1` brings the panel back for a local session.
-
-The **Preprocessing** panel is off by default. When disabled, it returns the
-normalized fixation table unchanged. When enabled, it can soft-mark
-blink-adjacent or short fixations as `excluded`, merge short-and-close
-fixations while retaining `original_duration_ms`, and materialize run/pass
-columns. Rows are never silently deleted; `excluded_reason` and the per-trial
-Cleaning QA table preserve the provenance.
-
-Sentence IDs are accepted from the dataset or inferred at sentence-final
-punctuation. The derived family includes sentence measures, first-class
-saccades (pixels and optional degrees of visual angle), trial/reader summaries,
-and a character grid with letter-based landing/launch positions. Trial text is
-also auto-tagged `right_to_left` for Hebrew/Arabic-majority content; an explicit
-column takes precedence.
-
-## Setup wizard & saved setups
-
-Uploading through the app's **➕ Add data** wizard walks you through naming the
-dataset, the experimental setup (monitor resolution keeps everything
-true-to-scale), upload, and column mapping. You can **download a setup** (the
-column mapping as JSON) and **restore** it later on similar data to skip the
-manual mapping. Finished uploads become first-class, switchable data sources.
+Per-word measures missing from your data are computed from the fixations;
+imported EyeLink `IA_*` columns take precedence. Definitions are in
+[Computations & methodology](computations.md).

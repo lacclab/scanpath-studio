@@ -22,7 +22,7 @@ docs at <https://lacclab.github.io/OneStop-Eye-Movements/>), shipped under
 ```text
 scanpath_studio/
 ├─ app.py            entry point: page config, data load, trial filters, dispatch to the three views + the 💾 Session dialog (`_session_dialog`), and the 🗂️ Data page's two screens (📂 Available datasets / ✏️ Edit dataset, DATA-35)
-├─ url_state.py      deep links + plot-config save/restore (versioned via `PLOT_CONFIG_SCHEMA` + `_migrate_plot_config` — ENG-11) + Share link (`_build_share_query`, whose `include_participant=` / `include_trial=` are the DATA-16/S3 seam for withholding trial identity from a link) + the Share subtab's EXP-7 code-snippet block (`_snippet_source` maps the loaded corpus to a `code_snippet.SnippetSource`; `_render_code_snippet_body` draws it) + the `main_nav` view helpers (`_active_view`/`_go_corpus`/`_go_scanpath`) the top nav reconciles against (split from app.py)
+├─ url_state.py      deep links + plot-config save/restore (versioned via `PLOT_CONFIG_SCHEMA` + `_migrate_plot_config` — ENG-11) + Share link (`_build_share_query`, whose `include_participant=` / `include_trial=` are the DATA-16/S3 seam for withholding trial identity from a link) + the Share subtab's EXP-7 code-snippet block (`_snippet_source` maps the loaded corpus to a `code_snippet.SnippetSource`; `_render_code_snippet_body` draws it) + the `_go_scanpath` / `_go_data` view helpers, which request a view by writing `main_nav` for `menu.render_nav` to reconcile (split from app.py)
 ├─ menu.py          UX-38 → UX-100: what replaced the sidebar. `render_nav` draws Streamlit's native `st.navigation(position="top")` — three **views** (🗺️ Scanpath · 📊 Corpus Analysis · 🗂️ Data) plus the **action** entries (💾 Session and ❓ Help's Tutorials / FAQ / About), which arm a dialog and bounce the router back so the modal opens over the current view — and returns the active view. `render_top_menu` is left with the title row and the main-area `notices` slot; ⚙️ Configure and 🧹 Preprocessing became sections of the Data page (DATA-26), and 💾 Session's four blocks are `app._session_dialog`. Nothing in the app writes to `st.sidebar`
 ├─ session_keys.py   the session-state keys / URL params that are a wire format (share links + saved configs), as constants + frozen groupings — pinned by tests/test_session_key_contract.py so a rename fails a test instead of a user's old link (ENG-6)
 ├─ wizard.py         the Upload / Add-dataset wizard — guided data-setup flow (split from app.py)
@@ -30,16 +30,18 @@ scanpath_studio/
 ├─ experimental_setup.py  pure display-geometry conversions + `SetupSnapshot` — one dataset's screen/typography with a per-group `Provenance` (measured/estimated/assumed/skipped)
 ├─ compare_source.py  CMP-8: the *second* dataset a comparison draws scanpath B from — a widget-free readiness gate + loader (`secondary_dataset_options` / `load_secondary_dataset` → `SecondaryDataset`)
 ├─ tabs.py           tab implementations (Scanpath Visualization [Annotations + Stimulus & Context + Comparisons (trials matching the selected trial on a chosen field; NLD scoring for same-text sets) + optional Line assignment + Export + Share subtabs — all top-level, no nesting; Export folds in current-figure + bundle export], Corpus Analysis [Per text · Per sentence · Per reader · Groups (one cohort, or two behind a Compare toggle) subtabs — the question-oriented analysis sections, AN-1..28], and the inspection/metadata panels rendered on the 🗂️ Data page)
-├─ aggregation.py    pure corpus-level aggregation helpers for the Corpus Analysis sections (measure registry + per-reader/cohort word profiles, word-vs-feature, rates, reader distributions/summary/landing, group masks + difference/effect-size; plus the legacy trial-index/fixation-index trends)
+├─ aggregation.py    pure corpus-level aggregation helpers for the Corpus Analysis sections (measure registry + per-reader/cohort word profiles, word-vs-feature, rates, reader distributions/summary/landing, group masks + difference/effect-size; plus the trial-index trend)
 ├─ controls.py       the Scanpath rail's plot controls (quick views + palette, then one-line sections — 👁️ Fixations / ↗️ Saccades / 📄 Stimulus / 🔥 Heatmap / 🔵 Raw gaze (UX-86 dissolved 🔥 Overlays), each `switch + ▾ popover` (UX-80); then one 🧹 Filter for the whole figure (UX-72, fixations + saccades) and 📐 Figure & canvas, grouped into 🖥️ Screen & framing / 📊 Axes & grid / 🏷️ Title & labels — 🔤 Text & fonts moved to 📄 Stimulus → Text and the physical geometry to the Data page's Recording setup, UX-81) + column-mapping override UI + trial-filter panel
 ├─ data.py           schema inference, normalization, filtering (incl. condition/annotation trial filters), sample loaders
 ├─ multipart.py      ordered child-screen identity + validation, nested manifest assignment, per-screen extraction/catalogue/canvas helpers
 ├─ datasets.py       public-corpus ownership (PoTeC, MultiplEYE, OneStop), including server-bundle discovery, feeding the app + headless API. MultiplEYE models one reading of a stimulus as one trial whose `screen_id`s are the reading pages **and** the comprehension-question screens (DATA-24)
-├─ eyegenbench.py    DATA-27: reads a locally prepared bundle of the harmonised public corpora (built by `scripts/prepare_eyegenbench.py` from the EyeGenBench pipeline), each one its own top-level data source. Read the bundle's manifest for what is actually there rather than assuming a count — see `docs/benchmark-corpora.md`
+├─ eyegenbench.py    DATA-27: reads a locally prepared bundle of the harmonised public corpora (built by `scripts/prepare_eyegenbench.py` from the EyeGenBench pipeline), each one its own top-level data source once added. **The app no longer discovers them** (DATA-55): `app.added_benchmark_datasets` is the only way in and is empty until DATA-56's add-from-a-folder flow, and an added corpus is also behind `SCANPATH_EXPERIMENTAL=1` (`constants.benchmark_corpora_enabled`). Read the bundle's manifest for what is actually there rather than assuming a count — see `docs/benchmark-corpora.md`
 ├─ eyegenbench_geometry.py  recovers word boxes for those corpora, which the harmonised output discards, in four labelled fidelity tiers (`resolve_geometry`)
 ├─ fields.py         the `label | field` row primitive shared by the plot rail, the wizard and the Scanpath subtabs — its own module because `controls` cannot supply it to the panels that import `controls`
-├─ html_embed.py     same-origin HTML iframe helper shared by plots, tours and Share (`st.iframe`, not the deprecated components embed)
+├─ html_embed.py     same-origin HTML iframe helper shared by plots, tours and Share (`st.iframe`, not the deprecated components embed) + ENG-64's `plotlyjs_script`/`plotlyjs_src`: the figure iframes load the installed plotly's own `plotly.min.js` from the app's server, not cdn.plot.ly
 ├─ easter_egg.py     UX-39: triple-click the title, googly eyes. Browser-only on purpose — no session key, no rerun, nothing to expose on the other three surfaces
+├─ progress.py       UX-165: a Streamlit-free progress hook — loaders and builders `report()` counts, the orchestrator `step_to()`s; a no-op without a task, and the cancel checkpoint (`Cancelled`) with one
+├─ loading.py        UX-165: loading cards drawn hidden by the script thread and revealed + refreshed by a timer thread (the `st.spinner` pattern); `card()` for a region, `Page` for the page skeleton + dataset card, `run_scope()` around each run, Cancel buttons that restore the previous choice
 ├─ measures.py       canonical reading measures (FFD, FPRT, RPD, TFD, regressions), run materialization, and geometry helpers
 ├─ preprocessing.py  optional soft-exclusion/merge pipeline + pass, sentence, saccade, character, RTL, QA, and sensitivity tables. PRE-22 holds the **app panel** back from this release (`constants.preprocessing_enabled`, the `SCANPATH_EXPERIMENTAL=1` gate); the API, `analyze` and this module are shipped and unchanged
 ├─ authoring.py      deterministic text/word layout + stable hand-authored fixation reducers and versioned JSON round-trip
@@ -48,8 +50,8 @@ scanpath_studio/
 ├─ alignment.py      vertical drift-correction: native port of the ten Carr et al. (2021) line-assignment algorithms (PRE-3). Not exposed by default — PRE-21 gates it (and similarity.py) behind SCANPATH_EXPERIMENTAL=1
 ├─ similarity.py     scanpath similarity metrics (NLD etc.) scoring the Comparisons subtab
 ├─ metadata.py       DATA-20 §1: keyed, entity-level metadata tables — `ParticipantMetadata` (validated frame + `MetadataField` registry + `JoinReport`), built by `build_participant_metadata`. Three narrow consumers, and the table is **never** broadcast onto words/fixations: `participants_matching` turns a participant-grain constraint into reader ids for the existing participant filter, `project` left-joins chosen columns onto a *small* frame (the per-trial `combos`), `to_payload`/`from_payload` round-trip it through save & restore
-├─ computations.py   VAL-5: the computation register — 64 `Computation` entries (formula, units, grouping keys, missing behaviour, precedence, code link, tests, consumers, verification tier + status) covering everything that derives or semantically changes a user-visible value. Generates `docs/computations.md` (`python -m scanpath_studio.computations`); `tests/test_computations.py` pins it against `aggregation.MEASURES`, `alignment.ALGORITHMS` and the similarity metric so the catalogue cannot drift from the code
-├─ model_scanpaths.py synthetic "model-generated" scanpaths over a real text's word boxes (Comparisons placeholder data)
+├─ computations.py   VAL-5: the computation register — 66 `Computation` entries (formula, units, grouping keys, missing behaviour, precedence, code link, tests, consumers, verification tier + status) covering everything that derives or semantically changes a user-visible value. Generates `docs/computations.md` (`python -m scanpath_studio.computations`); `tests/test_computations.py` pins it against `aggregation.MEASURES`, `alignment.ALGORITHMS` and the similarity metric so the catalogue cannot drift from the code
+├─ model_scanpaths.py synthetic "model-generated" scanpaths over a real text's word boxes (`generate_model_scanpaths`, no product caller today) + `_ordered_word_rows`, the word ordering `alignment.py` reuses
 ├─ plots.py          `FigureSettings` is the shared render contract used by UI, API, export, scanpath, animation, and comparison builders; also owns the Plotly builders, render helpers, and separable-layer export
 ├─ code_snippet.py   EXP-7: the API / CLI code that reproduces the figure on screen — a pure serializer over the same settings dict the builders consume (published as a `FigureState` by `tabs._publish_snippet_state`), diffed against `api.figure_options(kind)` so only the non-defaults are written. `_CLI_EMITTERS` is the `render` flag subset; anything outside it is *named* in `ReproductionCode.cli_unsupported`, never dropped
 ├─ export.py         configurable bulk-export module (PNG/SVG/JSON/CSV/Parquet/mega-table; VIZ-5 separable per-layer files via `plots.split_scanpath_layers`)
@@ -58,13 +60,13 @@ scanpath_studio/
 ├─ tour.py           first-visit/setup guides plus the independent task-tutorial registry, navigation, availability and progress
 ├─ debug_log.py      in-app debug log + state inspector (logging/print only reach the server terminal)
 ├─ annotations.py    per-trial favorites/tags/notes (session state) + JSON import/export
-├─ persistence.py    ENG-26 on-device recovery cache (localhost/desktop only): uploaded datasets as Parquet + a JSON manifest of mappings/settings/annotations, restored on the next session. ENG-30 exposed it — `cache_status`/`clear_local_state`/`set_persistence_paused` back the "🗄️ Recovery cache" menu panel (`app._render_recovery_cache_panel`), `scanpath-studio cache`, `run --no-persist`, and `api.cache_status`/`clear_cache`
+├─ persistence.py    ENG-26 on-device recovery cache (localhost/desktop only): uploaded datasets as Parquet + a JSON manifest of mappings/settings/annotations, restored on the next session. ENG-30 exposed it — `cache_status`/`clear_local_state`/`set_persistence_paused` back the 💾 Session dialog's "🗄️ Automatic recovery" block (`app._render_recovery_cache_panel`), `scanpath-studio cache`, `run --no-persist`, and `api.cache_status`/`clear_cache`
 ├─ synthetic.py      hand-built ground-truth trial (shared by tests + the "Synthetic test trial" data source)
 ├─ utils.py          trial-combo construction, trial-selection UI, comparison helpers
 ├─ constants.py      palette, defaults, citation metadata
 ├─ styles.py         injected CSS
-├─ api.py            headless public API (load/normalize, plot_scanpath, animate_scanpath, save_figure, figure_code)
-├─ cli.py            console entry: `run` launches the app, `render` builds figures headless via api.py
+├─ api.py            headless public API (load/normalize, plot_scanpath, animate_scanpath, compare_scanpaths, save_figure, figure_code, cache_status/clear_cache)
+├─ cli.py            console entry: `run` launches the app; `render` builds figures headless via api.py, `analyze` writes the tabular family, `corpus` renders a corpus figure from a tidy CSV, `cache` inspects/clears the recovery cache
 ├─ __main__.py       `python -m scanpath_studio` → cli.main
 ├─ __init__.py       exposes __version__, main(), and lazy re-exports of the api.py surface
 ├─ onestop_shard.py  one-shot prep: shard the ~15 GB OneStop lacclab CSVs into per-pid Parquet
@@ -117,7 +119,11 @@ the words table take precedence over computed ones.
 AOIs (word interest areas) are **not computed** by the app — they come directly
 from the data's word bounding boxes, supplied either as `(x, y, width, height)`
 or as EyeLink's `(IA_LEFT, IA_RIGHT, IA_TOP, IA_BOTTOM)` (which `normalize_words`
-converts to `x/y/width/height`). The only thing derived from geometry is the
+converts to `x/y/width/height`), and they are used **exactly as given**:
+`measures.word_box_bounds` is the one accessor and returns `x .. x + width`
+unmodified (BUG-83 — on a tiling corpus such as the OneStop demo each box carries
+the space after its word, and a fixation there belongs to that word, as in
+EyeLink's report). The only thing derived from geometry is the
 **fixation→word assignment** in `measures.assign_fixations_to_words`: bounding-box
 containment, then nearest word-center within 50 px
 (`measures.LINE_MISREGISTRATION_PX`), else `word_id = NaN`. That
@@ -142,12 +148,16 @@ reader ids → the existing `participants` filter slot), and the only join is
 reader rows that *disagree* are dropped and reported, never resolved by taking
 the first.
 
+**The tables belong to a dataset (DATA-47)**, like every other table: the
+session keys hold the selected dataset's, `metadata.activate_dataset` swaps
+them when the selection changes, and the recovery cache stores them per dataset.
+
 ### Trial annotations & filtering
 
 `annotations.py` keeps parent-trial and optional screen-scoped favorites / tags /
 notes in session state (keyed by `(participant_id, trial_id)` or
 `(participant_id, trial_id, screen_id)`), with a pure serialize/deserialize core
-and JSON download/restore in the 💾 Save & restore menu panel. `controls.render_trial_filters` (read back via
+and JSON download/restore in the 💾 Session dialog's ⬇️ JSON backup block. `controls.render_trial_filters` (read back via
 `controls.read_trial_filters`) +
 `data.filter_trials` / `data.filter_to_keys` narrow the trial pool by condition
 (Hunting/Gathering via `question_preview`, difficulty, repeated reading,
@@ -165,7 +175,9 @@ Not every ID has an issue, deliberately: `CHANGELOG.md` allocates the IDs and
 carries the write-up for finished work, and an issue is opened when the item
 needs the **Review** gate, is blocked on the user (`waiting-on-you`), or is
 carried across sessions. So take a new ID's number from all three registries —
-the changelog, `gh issue list`, and `tracker/data.js` — never GitHub alone.
+the changelog, `gh issue list`, and `tracker/data.js` — never GitHub alone, and
+since `main` became protected, **check the open PRs too**: an ID sitting in an
+unmerged branch's changelog is in none of the three.
 
 Status (`Backlog · Planned · In progress · On hold · Review`) and priority live
 in the board's single-select columns, and kind is the native issue type
@@ -187,24 +199,30 @@ issue, and if the server or page regrows a way to write.
 ## Build / Lint / Test
 
 ```bash
-# Install in editable mode
-pip install -e ".[test]"
+# Install in editable mode — the test + lint extras give CI's toolchain
+# (pandas 3, ruff pinned in `lint`); a bare `pytest`/`ruff` on PATH may be
+# another interpreter and another version.
+pip install -e ".[test,lint]"                # or: uv sync --extra test --extra lint
 
-# Run app
-streamlit run streamlit_app.py
-uv run streamlit run streamlit_app.py
+# Run app — bind to loopback: ENG-56/ENG-66 turn the recovery cache and local
+# folder access off on a server other machines can reach, and a bare
+# `streamlit run` listens on every interface.
+streamlit run streamlit_app.py --server.address 127.0.0.1
+uv run streamlit run streamlit_app.py --server.address 127.0.0.1
+scanpath-studio                              # binds 127.0.0.1 itself
 
-# Tests
-pytest                              # run the full suite
+# Tests (in that environment — e.g. prefix with `uv run --extra test`)
+pytest -n auto                      # run the full suite (CI runs it this way)
 pytest tests/test_measures.py       # one file
 pytest --cov                        # coverage; config + floor in pyproject.toml
 
 # Lint
-ruff check --exclude other_vis .
-ruff check --select I --fix --exclude other_vis .
-ruff format --exclude other_vis .
+ruff check .
+ruff check --select I --fix .
+ruff format .
 
-# Regenerate bundled sample data (needs the full OneStop CSVs under sample_data/OneStop/)
+# Regenerate bundled sample data (needs the full OneStop CSVs under
+# scanpath_studio/OneStop/, or pass --source-dir)
 python -m scanpath_studio.update_sample_data
 
 # Standalone desktop bundle (ENG-15; needs `pip install . pyinstaller` — non-editable)
@@ -215,12 +233,16 @@ python desktop/smoke_test.py     # signature + selfcheck + server-boot smoke tes
 # Docs site (MkDocs Material; API autodoc via mkdocstrings from docstrings)
 pip install -e ".[docs]"
 mkdocs serve                 # local preview
-mkdocs build --strict        # CI gate (.github/workflows/docs.yml → GitHub Pages)
+mkdocs build --strict        # CI gate: every PR (ci.yml) and the deploy (docs.yml)
+uv run --with playwright python scripts/capture_docs_screenshots.py  # re-capture app screenshots
 ```
 
 User-facing docs live in `docs/` and publish to
 <https://lacclab.github.io/scanpath-studio/>. The Python API reference is
-generated from the `api.py` docstrings, so keep those current.
+generated from the `api.py` docstrings, so keep those current. The gallery,
+printed example output, CLI and figure-option references, in-app tutorial steps,
+and the Cite / Changelog pages are generated at build time by `exec="true"`
+fences calling `scripts/docs_support.py` — see CONTRIBUTING.md → *Docs site*.
 
 CI on GitHub Actions runs pytest on Python 3.11/3.12/3.13/3.14 plus ruff
 lint+format checks on every pull request, and one `pytest --cov` leg that fails
@@ -247,11 +269,16 @@ omitted from the measurement: they walk corpora that cannot exist in CI.
 - Centralized palette / sizing in `constants.py`. Marker sizes come from
   `plots._compute_marker_sizes` so single-trial and comparison figures render
   identically.
+- Icons drawn as chrome (labels, `icon=`, headings, alerts) come from
+  `constants.ICONS` — Material Symbols, keyed by concept (UX-138); inside raw
+  HTML use `constants.icon_html`. Never a literal emoji or `:material/…:` there
+  (`tests/test_icons.py`). Prose — help text, tour bodies, docstrings, `cli.py`,
+  `docs/` — keeps its emoji ("the 🗂️ **Data** page").
 
 ## Testing patterns
 
-- `tests/conftest.py` exposes `sample_words_df`, `sample_fixations_df`,
-  `normalized_words_df`, `normalized_fixations_df`, `sample_raw_gaze_df`.
+- `tests/conftest.py` exposes `sample_words_df`, `normalized_words_df`,
+  `normalized_fixations_df`, `sample_raw_gaze_df`.
 - `tests/test_measures.py` covers FFD, FPRT, RPD, TFD, skip, regressions on a
   synthetic 4-word layout.
 - `tests/synthetic_data.py` is a fully-specified 6-word / 2-line trial with
@@ -326,7 +353,9 @@ link / CLI / API silently can't be shared, scripted, or rendered headlessly.
    truth; `pyproject.toml` reads it dynamically (`[tool.setuptools.dynamic]`).
 3. Bump `version` + `date-released` in `CITATION.cff` to match
    (`tests/test_citation.py` enforces version parity).
-4. Commit; tag with `v<version>`; push the tag.
+4. Commit on a branch and land it through a PR — `main` is protected. Once it
+   has merged, tag the merge commit on `main` with `v<version>` and push the
+   tag (`publish.yml` refuses a tag that does not match `__version__`, ENG-62).
 5. The `Publish to PyPI` GitHub Actions workflow builds the wheel + sdist and
    publishes via PyPI Trusted Publishing (requires `pypi` environment set up
    on GitHub with the project name `scanpath-studio`).

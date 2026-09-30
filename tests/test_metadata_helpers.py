@@ -199,31 +199,3 @@ class TestThePayloadRoundTrip:
         assert to_payload(None) is None
         assert from_payload(None) is None
         assert from_payload({}) is None
-
-
-class TestRejoin:
-    """Re-deriving the report against a different pool — what happens when the
-    trial filters narrow what is loaded after a table was attached."""
-
-    def test_narrowing_the_pool_moves_rows_to_not_in_the_data(self):
-        table = md.build_text_metadata(
-            pd.DataFrame({"text_id": ["x1", "x2"], "genre": ["news", "opinion"]}),
-            "text_id",
-            keys={"x1", "x2"},
-        )
-        assert set(table.report.matched) == {"x1", "x2"}
-
-        narrowed = md.rejoin_texts(table, {"x1"})
-        assert set(narrowed.report.matched) == {"x1"}
-        assert set(narrowed.report.only_in_table) == {"x2"}
-        # The frame itself is untouched — rejoin re-reports, it does not filter.
-        assert narrowed.names == table.names
-
-    def test_a_key_with_no_row_is_reported_as_only_in_data(self):
-        table = md.build_text_metadata(
-            pd.DataFrame({"text_id": ["x1"], "genre": ["news"]}),
-            "text_id",
-            keys={"x1"},
-        )
-        widened = md.rejoin_texts(table, {"x1", "x9"})
-        assert set(widened.report.only_in_data) == {"x9"}

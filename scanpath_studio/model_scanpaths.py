@@ -194,9 +194,9 @@ def generate_model_scanpath(
         return _empty_fix_frame()
     n_words = len(ordered)
 
-    # BUG-11: generate inside the corrected boxes, so a model scanpath lands on
-    # the glyphs rather than half a character to their right.
-    x_box, y_box, x_right, y_bottom = word_box_bounds(ordered, layout=words)
+    # Generate inside the experiment's own boxes (BUG-83), so a model fixation
+    # is assigned to the word it was generated for.
+    x_box, y_box, x_right, y_bottom = word_box_bounds(ordered)
     w_box = x_right - x_box
     h_box = y_bottom - y_box
     if "text" in ordered.columns:

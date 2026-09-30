@@ -149,3 +149,18 @@ class TestBundledSample:
         assert box["x"] <= first["x"] <= box["x"] + box["width"]
         assert box["y"] <= first["y"] <= box["y"] + box["height"]
         assert float(first["word_id"]) == 0.0
+
+
+class TestTheShiftIsLoggedQuietly:
+    """BUG-76: the demo trips the shift on every load, and at WARNING it was the
+    first thing `render --sample` and `load_sample_data()` printed."""
+
+    def test_it_is_info_not_a_warning(self, caplog):
+        import logging
+
+        with caplog.at_level(logging.INFO, logger="scanpath_studio"):
+            correct_word_id_offset(_words(5), _fixations([1, 2, 3, 4, 5]))
+        records = [r for r in caplog.records if "numbered from 1" in r.getMessage()]
+        assert [r.levelno for r in records] == [logging.INFO]
+        # User-facing text, so no internal tracker id in it.
+        assert "BUG-8" not in records[0].getMessage()

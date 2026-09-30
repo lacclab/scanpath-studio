@@ -61,7 +61,9 @@ one carrying the private key), right-click → **Export** → save as
 
 **App Store Connect → Users and Access → Integrations → App Store Connect API →
 Team Keys → +**. Name it something like `notarization-ci`, access role
-**Developer**.
+**Developer**. On a new membership the tab first shows **Request Access** —
+the Account Holder (you, on an Individual membership) accepts the API terms
+once, and the **+** appears.
 
 !!! warning "It must be a *Team* key"
     Apple's documentation states that Individual keys "aren't able to use

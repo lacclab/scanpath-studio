@@ -8,7 +8,6 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
 
 EXPORTER_VERSION = "exp6-v1"
 
@@ -134,8 +133,8 @@ def emit_status(
     return status
 
 
-def static_export_signature(
-    fig: Any,
+def export_signature(
+    content: str,
     *,
     fmt: str,
     width: int,
@@ -143,7 +142,12 @@ def static_export_signature(
     scale: float,
     exporter_version: str = EXPORTER_VERSION,
 ) -> str:
-    """Hash every output-affecting input for safe static-byte reuse."""
+    """Hash every output-affecting input for safe export-byte reuse.
+
+    ``content`` identifies what is drawn. It used to be the figure's JSON, which
+    costs 12 s to write for a 2,000-frame replay on every rerun; the animation
+    export passes its replay's inputs instead (PERF-16, `tabs._ReplayView`).
+    """
     if int(width) <= 0 or int(height) <= 0:
         raise ValueError("export width and height must be positive")
     if not math.isfinite(float(scale)) or float(scale) <= 0:
@@ -158,5 +162,5 @@ def static_export_signature(
     ):
         digest.update(value.encode("utf-8"))
         digest.update(b"\0")
-    digest.update(fig.to_json().encode("utf-8"))
+    digest.update(content.encode("utf-8"))
     return digest.hexdigest()

@@ -2,12 +2,11 @@
 
 Standalone builds of Scanpath Studio for **Windows / macOS / Linux** — no
 Python toolchain, no terminal. The app starts a local server and opens in your
-default browser. Everything runs on your machine — **no data leaves it**, which
-makes the desktop build the right choice for private eye-tracking corpora.
+default browser. Everything runs on your machine.
 
 Builds are attached to every
-[GitHub release](https://github.com/lacclab/scanpath-studio/releases) from
-**v0.25.0** on (earlier releases predate the desktop build).
+[GitHub release](https://github.com/lacclab/scanpath-studio/releases)
+(120–190 MB download).
 
 !!! warning "Windows and Linux builds are unsigned"
     They are not code-signed, so Windows SmartScreen warns on first launch — the
@@ -18,9 +17,8 @@ Builds are attached to every
 
 === "macOS (Apple silicon)"
 
-    1. Download `ScanpathStudio-macos-arm64.dmg` from the
-       [latest release](https://github.com/lacclab/scanpath-studio/releases/latest)
-       (≈145 MB; ≈340 MB once installed).
+    1. Download [`ScanpathStudio-macos-arm64.dmg`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-macos-arm64.dmg)
+       from the [latest release](https://github.com/lacclab/scanpath-studio/releases/latest).
     2. Double-click the `.dmg`, then drag **Scanpath Studio** onto the
        **Applications** shortcut beside it.
     3. Open it from Applications (or Launchpad). The first time, macOS confirms
@@ -56,9 +54,8 @@ Builds are attached to every
 
 === "Windows"
 
-    1. Download `ScanpathStudio-windows-x86_64.zip` from the
-       [latest release](https://github.com/lacclab/scanpath-studio/releases/latest)
-       (≈190 MB; ≈500 MB unpacked).
+    1. Download [`ScanpathStudio-windows-x86_64.zip`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip)
+       from the [latest release](https://github.com/lacclab/scanpath-studio/releases/latest).
     2. Right-click → **Extract All**, open the extracted `ScanpathStudio` folder.
     3. Double-click **`ScanpathStudio.exe`**. On first launch SmartScreen will
        warn — click **More info → Run anyway**.
@@ -67,20 +64,18 @@ Builds are attached to every
 
 === "Linux"
 
-    1. Download `ScanpathStudio-linux-x86_64.tar.gz` from the
-       [latest release](https://github.com/lacclab/scanpath-studio/releases/latest)
-       (≈190 MB; ≈500 MB unpacked).
-    2. `tar -xzf ScanpathStudio-linux-x86_64.tar.gz` (the tarball preserves the
-       executable bit — that's why it isn't a zip).
+    1. Download [`ScanpathStudio-linux-x86_64.tar.gz`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-linux-x86_64.tar.gz)
+       from the [latest release](https://github.com/lacclab/scanpath-studio/releases/latest).
+    2. `tar -xzf ScanpathStudio-linux-x86_64.tar.gz`.
     3. Run `./ScanpathStudio/ScanpathStudio` — from a terminal, or double-click
        in a file manager that executes binaries. The terminal window *is* the
        server — close it, or press ++ctrl+c++, to quit.
 
 ## Good to know
 
-- **Static image / video export needs a Chrome/Chromium on the machine** —
-  same as the pip install; interactive HTML export always works. Details in
-  [Export & troubleshooting](export-troubleshooting.md).
+- **PDF, video and the bundles' images (the export bundle's and the Compare
+  pair bundle's) need Chrome, Chromium or Edge installed on the machine**; the
+  current figure's PNG, SVG and HTML always work.
 - **Where the macOS log goes.** The macOS app has no console window, so it
   writes its server log to
   `~/Library/Logs/Scanpath Studio/scanpath-studio.log` — open it from
@@ -90,14 +85,8 @@ Builds are attached to every
   `SCANPATH_DESKTOP_PORT` pins the server port (default: a free one),
   `SCANPATH_DESKTOP_NO_BROWSER=1` skips opening the browser,
   `SCANPATH_DESKTOP_IDLE_EXIT_S` sets how many seconds to wait after the last
-  tab closes before quitting (`0` keeps it running; honoured everywhere, but
-  only the macOS app quits this way by default), and
-  `SCANPATH_DESKTOP_NO_LOG_FILE=1` keeps output on stdout instead of the log
-  file.
-- **Building it yourself / how it's put together:** the launcher, PyInstaller
-  spec, smoke test, and CI matrix live in
-  [`desktop/`](https://github.com/lacclab/scanpath-studio/tree/main/desktop),
-  with the design rationale in the
-  [ENG-15 ADR](https://github.com/lacclab/scanpath-studio/blob/main/plans/eng-15-desktop-app.md)
-  and the signing pipeline in the
-  [ENG-21 ADR](https://github.com/lacclab/scanpath-studio/blob/main/plans/eng-21-signing-notarization.md).
+  tab closes before quitting (`0` keeps it running; only the macOS app quits
+  this way by default), and `SCANPATH_DESKTOP_NO_LOG_FILE=1` keeps output on
+  stdout instead of the log file.
+- **Building it yourself:** see
+  [`desktop/`](https://github.com/lacclab/scanpath-studio/tree/main/desktop).

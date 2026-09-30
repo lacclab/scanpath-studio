@@ -5,15 +5,21 @@ from your own experiment.
 
 ## Choose a source
 
-- **Bundled demo:** immediate, small, and suitable for learning the interface.
+- **Bundled Demo:** immediate, small, and suitable for learning the interface.
+- **Synthetic sample:** an editable, manually authored six-word scanpath.
 - **Public corpus:** choose the corpus and local data directory; download when
-  prompted. Corpora prepared from a local benchmark bundle appear here too, one
-  entry each — see [Harmonised benchmark corpora](../benchmark-corpora.md).
-- **➕ Add dataset:** upload or select your own files and map their columns
-  (🗂️ **Data → 📂 Available datasets**).
-- **✏️ Author a scanpath:** sketch a trial from text, with no files at all.
+  prompted.
+- **+ → Import files:** upload or select your own files and map their columns.
+  Also available through **🗂️ Data → ➕ Add dataset**.
+- **+ → Create manually:** sketch a trial from text, with no files at all.
+  Also available through **🗂️ Data → Create manual scanpath**.
 
-Run locally or use the desktop app for sensitive participant data.
+While a dataset opens, the page shows a skeleton of the view with the steps of
+the load — reading the files, normalizing them, building the trial list — each
+ticked off with its time. **Back to *dataset*** stops the load and reopens the
+dataset you had before, and a notice offers **Try again**. Opening a dataset
+again skips reading its files — they stay cached until the app restarts — so
+it's quicker the second time.
 
 ## What your data needs
 
@@ -26,47 +32,60 @@ The default workflow uses two tables:
 
 Participant ID, text ID, fixation timestamps, raw gaze, conditions, questions,
 and precomputed reading measures are optional but enable more features. Accepted
-files are CSV, TSV, Parquet, and Feather. See [Data format](../data-format.md)
-for canonical fields.
+files are CSV, TSV and tab-separated TXT, Parquet, Feather, Excel (`.xlsx` and
+the older `.xls`), and a `.zip` wrapping any of them. A text file's delimiter
+(comma, semicolon, tab or pipe) is read off its header line, a file that is not
+UTF-8 is read as Windows text, and an `.xls` that is really tab-separated text —
+EyeLink Data Viewer's "Excel" export — is read as text. See [Data format](../data-format.md) for
+canonical fields and units.
 
 ## Use the setup wizard
 
-The wizard is **two parts**, in the only order they can happen in — there is
-nothing to map until a file has been read — with the dataset's name above both
-and **✅ Add dataset** at the foot. Everything in part 2 is on one screen, so the
-whole mapping is visible at once.
+The wizard is **three numbered parts** on one screen, with **⬇️ Save setup** and
+**✅ Add dataset** at the foot.
 
-**1. Upload data files.** Add the word/IA and fixation files; several files per
-table are allowed. Raw gaze goes here too, as do two optional keyed tables —
-**one row per reader** (native language, age, comprehension score) and **one row
-per reading** (list name, presentation order, a per-trial score) — see
-[Participant metadata](../data-format.md#participant-metadata) and
-[Trial metadata](../data-format.md#trial-metadata); the same attach-and-report UI
-is on the 🗂️ **Data** page for datasets that don't come through this wizard. A summary card names the columns that were auto-detected and
-the ones still missing — it is a report, not a shortcut: detection matches column
-*names*, so part 2 is where you confirm it picked the right ones. *Restore a
-saved setup* lives behind a popover here.
+**1. Dataset name** — what the dataset is called in 📂 **Available datasets**.
 
-**2. Map data fields**, in sections:
+**2. Upload data tables.** One row per table — **Fixations**, **AOIs** (the
+words / interest areas) and **Raw gaze** — with the table's uploader on the left
+and its column mapping beside it; upload at least one. Fixations and AOIs take
+several files each if your export is split (one per participant, say); raw gaze
+takes one. Each row's pickers are
+pre-filled from the column names, and the tint says which were auto-detected:
+detection matches *names*, so this is where you confirm it picked the right
+columns.
 
-1. **Trials & readers** — one block per table, its identity line first (trial,
-   screen, reader, text, word and the table's own id) and its own fields under
-   it: x/y/timestamp/duration for fixations, the word box and line index for the
-   AOI table, then whether that table has one row per **character** rather than
-   per word. Pick several columns to build a composite trial ID when one is not
-   unique enough. The readout below the pickers is the fastest sanity check:
-   *N trials · N readers · N texts*.
-2. **Raw gaze** — the gaze-sample table's own columns; shown only if you
-   uploaded one.
-3. **Recording setup** — see below.
-4. **Extra fields** — keep any condition or analysis fields you will need later,
-   and choose which become trial filters.
+- The first line of each row is its **identity** — trial, screen, reader, text,
+  word and the table's own id. Pick several columns to build a composite trial
+  ID when one is not unique enough; the trial count under each picker is the
+  fastest sanity check, and a warning appears when the two tables share no
+  trial — or share trials but no reader.
+- The second line is the table's own **fields**: x/y, timestamp and duration for
+  fixations; the word box (edges or origin + size) and line index for the AOI
+  table, plus whether it has one row per **character** rather than per word.
+- Under each table, **Extra fields to keep** lists every column the mapping
+  does not use — recognised measures and conditions come pre-ticked — and
+  whatever you keep is there later to filter, sort or colour by; the rest is
+  dropped at normalization.
+- **Derive columns from the filename** sits at the top once a table is in, for
+  ids that live only in the file name.
+- Below the three tables, under **Metadata**, are three optional keyed tables:
+  **one row per reader** (native language, age, comprehension score), **one row
+  per trial** (list name, presentation order) and **one row per text** — see [Participant metadata](../data-format.md#participant-metadata)
+  and [Trial metadata](../data-format.md#trial-metadata). The same
+  attach-and-report UI is on 🗂️ **Data → ✏️ Edit dataset** for datasets that do
+  not come through this wizard.
+
+↩️ **Restore a saved setup** is a popover beside this part's title.
+
+**3. Recording setup** — the screen the data was recorded on; see below.
 
 The wizard objects only once you press **✅ Add dataset**, and then about
-everything at once rather than one field at a time.
-
-After loading, open the 🗂️ **Data** page and confirm that both tables share the
-expected trials and coordinate range.
+everything at once rather than one field at a time: a required field left empty
+turns red in place. Rows it cannot use are named directly above the button —
+cells in a mapped number column that don't parse, rows with no trial or reader
+id, positions that are screen fractions rather than pixels — together with what
+the load does with them.
 
 📂 **Available datasets** lists the same headline fields shown in the active
 dataset summary — participants, texts, trials, fixations, words, gaze points and
@@ -76,59 +95,48 @@ was mapped — the same field grid the wizard draws, and, for a dataset added wi
 only one of the two main tables, an uploader for the other one. Adding the
 missing half there normalizes it and joins it to what is already loaded, so a
 fixations-only dataset can gain its word boxes (or an AOI-only one its
-fixations) without being added again. Uploaded data is renamed or deleted in the session; packaged and
-public sources keep their stable identifiers and are renamed for display or
-hidden for this session.
+fixations) without being added again.
 
-A public corpus arrives with its own published figures, so a row you have never
-opened is not a blank one. The **Counts** column says which you are reading —
-*Published* is a claim about the corpus, *Loaded* a fact about this session — and
-ℹ️ **About** names where each published figure came from, setting the two side by
-side once the dataset is open. Loading **less** than a corpus publishes is the
-ordinary case (one OneStop regime, one MultiplEYE session folder) and is not
-flagged; loading **more** is, because only a wrong published figure explains it.
+<figure class="sps-screenshot" markdown>
+![The Data page: the available datasets, and the counts and tables of the open one](../assets/screenshots/data-page.webp)
+</figure>
+
+For a public corpus you haven't opened, the **Counts** column shows its
+*Published* figures; once loaded it shows *Loaded* ones. ℹ️ **About** names the
+source of each published figure.
 
 ### The recording setup asks how you know
 
 **Recording setup** describes the screen the data was **recorded** on — not the
-screen you are reading this on. It has **no defaults**: a wrong monitor size
-silently rescales every figure, so the app will not guess one for you. Each of
+screen you are reading this on. Nothing is preselected: a wrong monitor size
+silently rescales every figure. Each of
 the three groups — *Screen*, *Physical size & viewing distance*, and *Reading
-text size* — asks how you know the value:
+text size* — asks how you know the value, with choices of its own:
 
-| Choice | Recorded as | Use when |
+| Group | Choice | Recorded as |
 | --- | --- | --- |
-| *I know these* | `measured` | You have the real numbers. |
-| *Estimate from my data* | `estimated` | You don't. Derived from the extent of your word boxes and fixations — always available, always succeeds, and reported as a **lower bound**, since text rarely fills the whole screen. |
-| *Use a named default* | `assumed` | A typical lab value is good enough for what you are doing. |
-| *Skip* | `skipped` | Only on **physical size & viewing distance**, when you don't need visual-angle units. |
+| Screen | *I know the resolution* | `measured` |
+| | *Estimate from my data* — derived from the extent of your word boxes and fixations; always available, always succeeds, and reported as a **lower bound**, since text rarely fills the whole screen | `estimated` |
+| | *Use a common default (2560×1440)* | `assumed` |
+| Physical size & viewing distance | *I know them* | `measured` |
+| | *Use typical lab values (597 mm / 800 mm)* | `assumed` |
+| | *Skip — I don't need visual-angle units* | `skipped` |
+| Reading text size | *Scale to the word boxes* or *I know the stimulus font* | `measured` |
+| | *Use a default (16 px)* | `assumed` |
 
-**Add dataset** stays disabled until all three are answered. Nothing derived from
-a skipped group is shown: with no physical width there is no honest pixels-per-
-degree or point-to-pixel conversion, so those are hidden rather than computed from
-a default.
+**Add dataset** stays disabled until all three are answered. Values derived
+from a skipped group (pixels per degree, point-to-pixel conversion) are hidden
+rather than computed from a default.
 
-The answer travels with the dataset. It appears in the review table beside
-**✅ Add dataset** and under 🗂️ **Data → ✏️ Edit dataset → Recording setup**,
-rides a share link as `setup_prov`, and is written into the saved-setup JSON and
-into `plot_config.json` in a bulk export — so a figure set records that its
-monitor size was assumed, and whoever opens your link can tell your measurements
-from the app's guesses.
+The answer travels with the dataset — on share links, in the saved-setup JSON
+and in a bulk export's `plot_config.json` — so readers can tell measured values
+from assumed ones.
 
 Answers are remembered across datasets in a session as **pre-filled values with
 the choice reset**: quick for a second export from the same lab, while still
 making you assert that the setup applies to this dataset too.
 
-## Derived and preserved fields
-
-When x/y fixations and word boxes are available, the app can assign fixations to
-words and compute standard per-word reading measures. Recognized precomputed
-EyeLink IA measures take precedence. Fields not mapped or explicitly retained
-may be dropped during normalization.
-
 ## Reuse the setup
 
-Download the setup JSON from the wizard and restore it for the next export from
-the same pipeline. If a mapping was wrong, edit it under
-🗂️ **Data → ✏️ Edit dataset → Column mapping** or reload the files when a
-required column was not retained.
+✏️ **Edit dataset** can offer only the columns kept at import; to map a
+dropped column, add the files again.

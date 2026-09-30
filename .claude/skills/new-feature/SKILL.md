@@ -17,10 +17,14 @@ just the UI. Follow the matching recipe, then close out with the checklist.
 1. Compute it in `measures.compute_per_word_measures` per trial.
 2. Add it to `WORD_OPTIONAL_FIELDS` in `data.py` if it can come
    pre-computed from EyeLink IA columns.
-3. Surface it in `controls.color_field_options` (if useful for coloring)
+3. Add a `computations.py` register entry (VAL-5) — formula, unit, grouping
+   keys, missing behaviour and precedence — and regenerate
+   `docs/computations.md` (`python -m scanpath_studio.computations`). A
+   `MEASURES` entry with no register row fails `tests/test_computations.py`.
+4. Surface it in `controls.color_field_options` (if useful for coloring)
    and register it in `aggregation.MEASURES` (feeds the measure pickers via
    `aggregation.available_measures`).
-4. Add a test under `tests/test_measures.py`.
+5. Add a test under `tests/test_measures.py`.
 
 **New figure type**
 1. Add a `make_*_figure` function in `plots.py` using the helpers
@@ -57,15 +61,18 @@ Optional passthrough columns go through the `WORD_OPTIONAL_FIELDS` /
 
 - [ ] All four surfaces wired (or explicitly agreed out of scope with the user)
 - [ ] Tests added (`tests/`), suite passes: `pytest -n auto`
-- [ ] `ruff check --exclude other_vis .` + `ruff format --exclude other_vis .`
-- [ ] One-line entry under `[Unreleased]` in `CHANGELOG.md`
+- [ ] `ruff check .` + `ruff format .`
+- [ ] Two-tier entry under `[Unreleased]` in `CHANGELOG.md` — a
+      `- **Bold lead** (ID)` headline plus a short `### Details` paragraph
+      (`CLAUDE.md` → *Before every commit*)
 - [ ] Docs page updated if user-visible behavior changed (`docs/`)
 - [ ] Tracker item updated → `Review` (use the `track` skill)
 
 ## Gotchas
 
-- The spatial plot must stay on `tabs._render_true_scale_chart` — never
-  switch it to `st.plotly_chart`.
+- The spatial plot must stay on `tabs._render_true_scale_chart` (the cached
+  replay on its two halves, `_true_scale_plot_html` + `_render_true_scale_plot`
+  — PERF-16) — never switch it to `st.plotly_chart`.
 - Verify behavior headlessly with
   `AppTest.from_file("streamlit_app.py")`; the live preview is slow. If a
   code change doesn't show in a running server, restart it — Streamlit

@@ -44,6 +44,10 @@ LABEL_GAP = "xsmall"
 #: punctuation.
 _MD_MARKS = re.compile(r"\*\*|`")
 _WHITESPACE_RUN = re.compile(r"\s+")
+#: A `constants.ICONS` shortcode (UX-138) — in the label, or in a gate reason
+#: folded into the help: drawn as the glyph in the visible title, but a
+#: tooltip is plain text and would spell it out.
+_ICON_CODE = re.compile(r":material/[a-z0-9_]+:\s*")
 
 
 def plain(text: str) -> str:
@@ -87,13 +91,29 @@ def row_label(host, label: str, help: str | None, *, emphasis: bool = False) -> 
             unsafe_allow_html=True,
         )
         return
-    tip = html.escape(f"{text} — {plain(help)}", quote=True)
+    tip = _ICON_CODE.sub("", f"{text} — {plain(help)}")
+    tip = html.escape(tip, quote=True)
     host.markdown(
         f'<span class="sps-fhelp" data-tip="{tip}" aria-label="{tip}">'
         f'<span class="sps-flabel sps-flabel-help{emph}">{html.escape(text)}</span>'
         "</span>",
         unsafe_allow_html=True,
     )
+
+
+#: Widget kinds that take a ``wrap=`` argument (ENG-49). Streamlit 1.63 resolves
+#: ``wrap=None`` to **no** wrapping for a control "directly placed in a column"
+#: — which is exactly what :func:`labeled` does — so on the upgrade every
+#: multiselect, segmented control and pill row in the app would silently turn
+#: from a block that grows taller into a strip that scrolls sideways. That is a
+#: reasonable default for a wide page and a poor one here: the rail is ~28rem
+#: with a title column in front of the field, and these particular controls are
+#: read at a glance (*which* participants the pool is filtered to, *which*
+#: layout is selected), so a selection that scrolls out of sight is worse than a
+#: row that grows. The pre-1.63 behaviour is therefore kept **explicitly** at
+#: this one chokepoint rather than inherited — a caller that wants the new look
+#: passes ``wrap=False`` itself, and dropping this set adopts it everywhere.
+WRAPPING_KINDS = frozenset({"multiselect", "segmented_control", "pills"})
 
 
 def labeled(
@@ -132,6 +152,8 @@ def labeled(
         [label_width, 1.0 - label_width], gap=LABEL_GAP, vertical_alignment=align
     )
     row_label(label_col, display if display is not None else label, help)
+    if kind in WRAPPING_KINDS:
+        kwargs.setdefault("wrap", True)
     return getattr(field_col, kind)(
         label, help=help, label_visibility="collapsed", **kwargs
     )

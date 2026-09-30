@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 
 PACKAGE_NAME = "scanpath_studio"
 
@@ -59,6 +60,37 @@ def multipleye_upload_enabled() -> bool:
     every upload goes through Generic. Scope is the **app** only;
     `datasets.multipleye_frames_from_uploads`/`load_multipleye_uploads` are
     untouched and still callable directly.
+    """
+    return experimental_features_enabled()
+
+
+def multipleye_enabled() -> bool:
+    """Whether the MultiplEYE corpus is offered, this release (DATA-54).
+
+    Held back for the beta: its data is not openly available yet, and the loader
+    was built and tested on one sample (Zurich Chinese). Off, the entry leaves
+    the public-dataset registry — so the data picker, the 🗂️ Data page, Compare's
+    second dataset and share links all stop offering it — and `render`'s
+    ``--source multipleye`` / ``--export`` / ``--no-question-screens`` flags are
+    hidden from ``--help``. Like PRE-22's gate, this hides rather than breaks:
+    those flags still parse, and `datasets.load_multipleye` is untouched, so a
+    script that already uses them keeps working.
+    """
+    return experimental_features_enabled()
+
+
+def benchmark_corpora_enabled() -> bool:
+    """Whether the harmonised benchmark corpora are offered, this release
+    (DATA-54, DATA-55).
+
+    A bundle can only be built with the EyeGenBench pipeline, which is not public
+    yet, and the corpora are unfinished work — the picker marks each one (WIP).
+    The app no longer discovers them at all (DATA-55: a corpus is listed only
+    once someone adds it, and the flow that adds one is DATA-56). Off, this also
+    keeps an added corpus out of `app.public_dataset_registry`, and hides
+    `render`'s ``--eyegenbench`` / ``--eyegenbench-dataset`` flags from
+    ``--help``. Hidden, not removed: those flags still parse, and
+    `eyegenbench.load_eyegenbench` is untouched.
     """
     return experimental_features_enabled()
 
@@ -141,7 +173,6 @@ DEFAULT_FIXATION_COLORSCALE = "Viridis"
 DEFAULT_HEATMAP_COLORSCALE = "Viridis"
 
 DEFAULT_MARKER_SIZE_RANGE = (8, 24)
-DEFAULT_PAGE_SIZE = 1000
 DEFAULT_ORDER_FONT_COLOR = "#111111"
 
 WORD_BOX_COLOR = "#6c757d"
@@ -167,6 +198,15 @@ def compare_palette_color(idx: int) -> str:
     (``plots._comparison_scanpath_style``), so the swatch shown in the controls can
     never drift from what's drawn (CMP-3)."""
     return COMPARISON_PALETTE[idx % len(COMPARISON_PALETTE)]
+
+
+#: Each comparison scanpath's default marker alpha, shared the same way: the
+#: rail seeds ``cmp{idx}_opacity`` from it (``controls._seed_compare_styles``)
+#: and the builder falls back to it (``plots._comparison_scanpath_style``).
+#: CMP-20: the builder's own 1.0 was what every headless ``compare_scanpaths`` /
+#: ``render --compare-with`` drew, so the default comparison differed from the
+#: app's. 0.7 matches the single-trial default, so overlaps show through.
+COMPARE_FIXATION_OPACITY = 0.7
 
 
 # Saccade line styles offered in the plot rail. Maps the friendly UI label to the
@@ -436,12 +476,74 @@ APP_THEME_DARK = {
 #: answers for the memory-capped hosted demo.
 UPLOAD_MAX_SIZE_MB = 5000
 
+#: ENG-68: a deployment's own, lower per-file ceiling, in MB — set on the hosted
+#: demo (its Community Cloud secrets, which Streamlit loads into the environment
+#: at startup) so a visitor cannot send a multi-GB file at a ~1 GB container,
+#: while every other install keeps :data:`UPLOAD_MAX_SIZE_MB`.
+UPLOAD_LIMIT_ENV = "SCANPATH_MAX_UPLOAD_MB"
+
+
+#: The file types every table upload box accepts (``zip`` wraps any of the
+#: others; ``txt`` is a tab-separated report; ``xls`` is a legacy workbook or
+#: EyeLink Data Viewer's text-in-an-``.xls`` export, DATA-53 / BUG-55).
+UPLOAD_FILE_TYPES = ("csv", "tsv", "txt", "parquet", "feather", "zip", "xlsx", "xls")
+
+
+def configured_upload_limit_mb() -> int | None:
+    """``SCANPATH_MAX_UPLOAD_MB`` as a positive whole number of MB, else ``None``.
+
+    The raw deployment setting, before it meets the server's own limit — what
+    ``scanpath-studio run`` hands the server (ENG-68).
+    """
+    raw = os.environ.get(UPLOAD_LIMIT_ENV, "").strip()
+    try:
+        limit = int(raw)
+    except ValueError:
+        return None
+    return limit if limit > 0 else None
+
+
+def upload_limit_mb() -> int | None:
+    """The per-file cap every ``st.file_uploader`` passes as ``max_upload_size``.
+
+    ``None`` — the server's own ``server.maxUploadSize`` — unless
+    ``SCANPATH_MAX_UPLOAD_MB`` sets one, which is held to the server's limit so
+    the browser never accepts a file the server then refuses. Read at call
+    time, like the other deployment switches, so tests can toggle it.
+
+    The per-widget cap is checked **in the browser**: Streamlit's upload route
+    only enforces ``server.maxUploadSize``, which cannot change once the server
+    runs. ``scanpath-studio run`` therefore passes the cap to the server too;
+    on Community Cloud, where secrets load after the server config, a scripted
+    client can still send up to the config file's limit.
+    """
+    limit = configured_upload_limit_mb()
+    if limit is None:
+        return None
+    try:
+        import streamlit as st
+
+        server = int(st.get_option("server.maxUploadSize"))
+    except Exception:
+        server = UPLOAD_MAX_SIZE_MB
+    return min(limit, server)
+
+
+def upload_limit_label() -> str:
+    """The per-file limit in force, as Streamlit writes it (``5GB``, ``200MB``)."""
+    mb = upload_limit_mb() or UPLOAD_MAX_SIZE_MB
+    return f"{mb // 1000}GB" if mb >= 1000 and mb % 1000 == 0 else f"{mb}MB"
+
+
 CITATION = {
     "authors": (
         "Omer Shubi, Keren Gruteke Klein, Maya Grossman, Ella Lion, Deborah N. Jakobi, "
         "David R. Reich, Lena Jäger, Yevgeni Berzak"
     ),
     "title": "Scanpath Studio",
+    # ENG-75: the Zenodo *concept* DOI — resolves to the latest archived
+    # release. Kept equal to CITATION.cff's `doi` by tests/test_citation.py.
+    "doi": "10.5281/zenodo.22933884",
     "url": "https://github.com/lacclab/scanpath-studio",
     "docs_url": "https://lacclab.github.io/scanpath-studio/",
     "lab_url": "https://lacclab.github.io/",
@@ -460,6 +562,7 @@ CITATION = {
 # cycle (app.py re-imports them for its own use and for tests).
 UPLOAD_CHOICE = "Upload tables"
 AUTHOR_CHOICE = "Author a scanpath"
+MANUAL_SAMPLE_CHOICE = "Synthetic sample"
 DEMO_CHOICE = "Bundled Demo"
 SYNTHETIC_CHOICE = "Synthetic test trial"
 PUBLIC_DATASETS_CHOICE = "Public datasets"
@@ -467,18 +570,11 @@ POTEC_DEFAULT_DIR = "data/PoTeC"
 EYEGENBENCH_DEFAULT_DIR = "data/EyeGenBench"
 # DATA-27 (Task 11R): every prepared benchmark corpus is its own top-level entry
 # in the flat data-source picker, exactly like PoTeC / MultiplEYE / OneStop —
-# there is no "EyeGenBench" source fronting them. Two consequences live in these
-# constants:
-#
-# 1. **"EyeGenBench" is provenance, not a source.** It names the pipeline that
-#    harmonises the corpora and is being extracted into its own repository, so
-#    it appears in descriptions and help strings only — never in an entry label.
-# 2. A corpus entry's label is built from its manifest name (`app.py`), so the
-#    only fixed label here is the **bootstrap** entry: when zero corpora are
-#    discovered there is nowhere to type the bundle path, so exactly one
-#    placeholder entry renders the directory input + prep instructions. It
-#    disappears as soon as a corpus is discoverable.
-BENCHMARK_SETUP_CHOICE = "Harmonised benchmark corpora — set up a local bundle"
+# there is no "EyeGenBench" source fronting them. **"EyeGenBench" is provenance,
+# not a source**: it names the pipeline that harmonises the corpora and is being
+# extracted into its own repository, so it appears in descriptions and help
+# strings only — never in an entry label, which is built from the corpus'
+# manifest name (`app.py`).
 # The suffix that distinguishes a harmonised corpus from a *native* entry for the
 # same corpus (PoTeC, OneStop ship both ways). Applied by property — the
 # harmonised copy is re-derived and its geometry may be weaker — never by vendor
@@ -579,12 +675,10 @@ ONESTOP_CHOICE = "OneStop server bundle"
 ONESTOP_PUBLIC_CHOICE = "OneStop — 360-participant English corpus"
 ONESTOP_PUBLIC_DEFAULT_DIR = "data/OneStop"
 # Default folder for the lacclab OneStop variant (a lab-processed local export;
-# superset schema, no download). Path-editable on the 🗂️ Data page and overridable via
-# the `ONESTOP_LACCLAB_DIR` env var — never the *only* option, just the default.
-ONESTOP_LACCLAB_DEFAULT_DIR = (
-    "/Users/shubi/Library/CloudStorage/OneDrive-Technion/In-lab Experiments/"
-    "OneStopGaze L1 English/Reports/lacclab"
-)
+# superset schema, no download). Blank: ENG-60 — it was one maintainer's own
+# OneDrive path, prefilled into the Data directory box for every user who picked
+# the option. Set `ONESTOP_LACCLAB_DIR`, or type the path on the 🗂️ Data page.
+ONESTOP_LACCLAB_DEFAULT_DIR = ""
 ONESTOP_REGIME_LABELS = {
     "ordinary": "Ordinary reading",
     "information_seeking": "Information seeking",
@@ -627,7 +721,7 @@ _VIEW_DATA = "Data"
 # UX-65 turned Help into a nav *section* of dialog-openers, and UX-100 turned
 # Session back into a popover on the title row. The strings survive only as
 # values a pre-UX-100 recovery cache can still hold in `main_nav`, which
-# `url_state._active_view` resolves back to the Scanpath view.
+# `menu.render_nav` ignores (it is not a page) and overwrites with the active view.
 _VIEW_SESSION = "Session"
 _VIEW_HELP = "Help"
 _MAIN_TAB_LABELS = [_VIEW_SCANPATH, _VIEW_CORPUS, _VIEW_DATA]
@@ -709,7 +803,9 @@ FOCUS_MAPPING_KEY = "_focus_column_mapping"
 # shrink: two datasets under comparison are told apart by that label. What gave
 # way is the scrubber (5.0 → 3.6) and the filters, which became one icon in the
 # actions cluster rather than a labelled **More** button of their own.
-SELECTOR_ROW_GRID = [2.9, 2.8, 4.0, 2.2]
+# UX-143: the first track also holds +; borrow from the scrubber to keep the
+# dataset name readable. The same track boundaries apply to the related rows.
+SELECTOR_ROW_GRID = [3.6, 2.8, 3.3, 2.2]
 
 #: The pre-UX-64 three-track shape, for the rows that still have three things
 #: on them — the multipart screen navigator and compare mode's own picker rows.
@@ -748,3 +844,168 @@ TRIAL_IDENTITY_FULL_KEY = "_trial_identity_full_scan"
 #: was just chosen. The value says which flow asked, so the modal's "go back"
 #: button can name the right screen: ``"add"`` or ``"edit"``.
 TRIAL_IDENTITY_CHECK_KEY = "_trial_identity_check_after"
+
+
+# --- UX-138 · the icon vocabulary ---------------------------------------------
+# One Material Symbols (Rounded) icon per *concept* the app draws as chrome — a
+# nav entry, a rail section, a subtab, a button, an alert — so the same idea
+# looks the same everywhere and swapping one is a one-line change. Streamlit
+# renders the shortcode in markdown and in every ``icon=`` parameter.
+#
+# Keyed by meaning, not by the emoji it replaced: 👁️ used to stand for the
+# Scanpath preset, the Fixations layer *and* a data preview, and those are three
+# entries here. Prose keeps its emoji — help text, tour bodies, docstrings,
+# ``cli.py`` and ``docs/`` still write "the 🗂️ **Data** page" — and so do the
+# places a shortcode cannot reach: selectbox options and dataframe cells are
+# plain text (the trial-picker ★ 🏷️ 📝 markers, the dataset-kind tags), and
+# Plotly text is baked into every export (▶ Play, the marker-shape previews).
+# The typographic glyphs on buttons (◀ ▶ ⇅ ✕ ⬇ ↗) stay as they are too.
+ICONS: dict[str, str] = {
+    # Navigation and dialogs. `app` is the welcome tour's; the favicon itself
+    # stays 👀 — see `app.set_page_config`'s call site.
+    "app": ":material/visibility:",
+    "view_scanpath": ":material/route:",
+    "view_corpus": ":material/bar_chart:",
+    "view_data": ":material/database:",
+    "session": ":material/save:",
+    "help": ":material/help:",
+    "tutorials": ":material/explore:",
+    "faq": ":material/quiz:",
+    "about": ":material/info:",
+    "course": ":material/school:",
+    # Plot rail: design presets, layer sections and figure groups.
+    "preset_scanpath": ":material/timeline:",
+    "preset_custom": ":material/build:",
+    "illustration": ":material/draw:",
+    "fixations": ":material/blur_on:",
+    "saccades": ":material/arrow_outward:",
+    "stimulus": ":material/article:",
+    "heatmap": ":material/local_fire_department:",
+    "raw_gaze": ":material/grain:",
+    "plot_filter": ":material/cleaning_services:",
+    "figure": ":material/aspect_ratio:",
+    "screen": ":material/desktop_windows:",
+    "axes": ":material/grid_on:",
+    "labels": ":material/title:",
+    "designs": ":material/palette:",
+    "plot_controls": ":material/tune:",
+    "animate": ":material/movie:",
+    "compare": ":material/compare:",
+    # Scanpath subtabs, the trial row and the welcome tour's stops.
+    "annotations": ":material/edit_note:",
+    "comparisons": ":material/difference:",
+    "line_assignment": ":material/format_line_spacing:",
+    "export": ":material/file_export:",
+    "share": ":material/share:",
+    "favorite": ":material/star:",
+    "trial_filter": ":material/filter_alt:",
+    "pick_trial": ":material/my_location:",
+    "chips": ":material/label:",
+    "panels": ":material/tab:",
+    "views": ":material/dashboard:",
+    "nav": ":material/explore:",
+    "preview": ":material/visibility:",
+    "python": ":material/code:",
+    "cli": ":material/terminal:",
+    # Generic actions.
+    "save": ":material/save:",
+    "download": ":material/download:",
+    "upload": ":material/upload:",
+    "delete": ":material/delete:",
+    "reset": ":material/restart_alt:",
+    "undo": ":material/undo:",
+    "edit": ":material/edit:",
+    "add": ":material/add:",
+    "confirm": ":material/check:",
+    "settings": ":material/settings:",
+    "search": ":material/search:",
+    "refresh": ":material/refresh:",
+    "rename": ":material/drive_file_rename_outline:",
+    "close": ":material/close:",
+    "open": ":material/open_in_new:",
+    "mute": ":material/notifications_off:",
+    # Session dialog.
+    "recovery": ":material/history:",
+    "debug": ":material/bug_report:",
+    # Data page and the add-dataset wizard.
+    "datasets": ":material/folder_open:",
+    "folder": ":material/folder_open:",
+    "demo": ":material/science:",
+    "author": ":material/draw:",
+    "data_mapping": ":material/assignment:",
+    "docs": ":material/menu_book:",
+    "auto_detected": ":material/auto_awesome:",
+    "stats": ":material/query_stats:",
+    "derived_tables": ":material/calculate:",
+    # Dataset and reader metrics (ENG-36's `st.metric` rows).
+    "participants": ":material/group:",
+    "texts": ":material/article:",
+    "trials": ":material/list_alt:",
+    "words": ":material/abc:",
+    "gaze_points": ":material/scatter_plot:",
+    "screens": ":material/view_carousel:",
+    "reading_speed": ":material/speed:",
+    "fixation_duration": ":material/timer:",
+    "regressions": ":material/keyboard_backspace:",
+    "skip_rate": ":material/fast_forward:",
+    "saccade_amplitude": ":material/arrow_range:",
+    # Setup-step badges (`wizard_shell.StepStatus`).
+    "step_done": ":material/check_circle:",
+    "step_action": ":material/error:",
+    "step_todo": ":material/radio_button_unchecked:",
+    "step_optional": ":material/remove:",
+    # Geometry provenance of a dataset's word boxes.
+    "geometry_real": ":material/verified:",
+    "geometry_reconstructed": ":material/build:",
+    "geometry_synthesized": ":material/science:",
+    # Alerts, toasts and inline status.
+    "warning": ":material/warning:",
+    "error": ":material/block:",
+    "success": ":material/check_circle:",
+    "info": ":material/info:",
+    "tip": ":material/lightbulb:",
+    "participant": ":material/person:",
+    "trial_metadata": ":material/table:",
+    "text_metadata": ":material/article:",
+    # About dialog.
+    "code": ":material/code:",
+    "doi": ":material/bookmark:",
+    "ai": ":material/smart_toy:",
+    "missing_bundle": ":material/inventory_2:",
+}
+
+
+def icon_html(concept: str) -> str:
+    """``ICONS[concept]`` for raw HTML, where a ``:material/…:`` shortcode is inert.
+
+    A ``<span>`` in the Material Symbols font Streamlit already ships, so the
+    ligature — the icon's snake-case name — draws as the same glyph the
+    shortcode renders. Styled by ``.sps-icon`` in ``styles.py``.
+    """
+    return icons_to_html(ICONS[concept])
+
+
+_SHORTCODE = re.compile(r":material/([a-z0-9_]+):")
+
+
+def icons_to_html(text: str) -> str:
+    """``text`` with every ``:material/…:`` shortcode drawn as :func:`icon_html` does.
+
+    For a label that arrives as markdown (``ICONS[…]`` and all) but is written
+    into a raw HTML block — a line starting ``<div`` — where Streamlit leaves
+    the shortcode as literal text.
+    """
+    return _SHORTCODE.sub(r'<span class="sps-icon" aria-hidden="true">\1</span>', text)
+
+
+#: The Scanpath view's subtab labels. Named because the set is no longer fixed:
+#: PRE-21 offers Line assignment only while drift correction is exposed, so the
+#: tabs are built as a list and mapped back by label. They live here rather than
+#: in `tabs` because the tutorial steps in `tour` open a subtab by its label too,
+#: and `tests/conftest.py` imports them rather than repeating the strings.
+SUBTAB_ANNOTATIONS = f"{ICONS['annotations']} Annotations"
+SUBTAB_STIMULUS = f"{ICONS['stimulus']} Stimulus & Context"
+SUBTAB_COMPARISONS = f"{ICONS['comparisons']} Comparisons"
+SUBTAB_LINE_ASSIGNMENT = f"{ICONS['line_assignment']} Line assignment"
+SUBTAB_EXPORT = f"{ICONS['export']} Export"
+SUBTAB_SHARE = f"{ICONS['share']} Share"

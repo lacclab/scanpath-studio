@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+from . import progress
 from .annotations import get_entry
 from .constants import SELECTOR_ROW_GRID, SELECTOR_ROW_TRIO
 from .data import frame_fingerprint
@@ -77,12 +78,14 @@ def build_combo_options_for(
     )
 
 
-@st.cache_data(show_spinner="Building trial list…")
+# UX-166: the dataset card lists this step.
+@st.cache_data(show_spinner=False)
 def _build_combo_options_cached(
     _fixations: pd.DataFrame,
     composite_cols: tuple[str, ...],
     cache_key,
 ) -> tuple[pd.DataFrame, list[str], dict[str, tuple[str, str]]]:
+    progress.report()  # a miss: real work, so a gated card over it may show
     fixations = _fixations
     trial_col = (
         "unique_trial_id" if "unique_trial_id" in fixations.columns else "trial_id"
@@ -195,6 +198,10 @@ def extract_trial(frame: pd.DataFrame, participant_id, trial_id) -> pd.DataFrame
 # computed per-trial stats, reader/text properties, and any trial-level column
 # the dataset carries. Pure and frame-driven, so they're testable without the UI.
 TRIAL_SORT_DEFAULT = "Trial ID"
+#: UX-171: the order the trials appear in the data — the picker's default when
+#: the combos carry it. ``Trial ID`` (sorted by id, so ``1, 10, 100, 2`` for
+#: numeric ids) stays in the menu as a choice.
+TRIAL_SORT_DATA_ORDER = "Data order"
 # Computed stat label → (frame it needs, how to aggregate it per trial).
 # "fixations" / "words" name which frame the aggregation runs on.
 _TRIAL_SORT_STATS = {
@@ -525,7 +532,7 @@ def trial_sort_keys(
         and "_data_order" in combos.columns
     ):
         deduped = combos.drop_duplicates(subset=[trial_field])
-        keys["Data order"] = pd.Series(
+        keys[TRIAL_SORT_DATA_ORDER] = pd.Series(
             deduped["_data_order"].to_numpy(),
             index=deduped[trial_field].astype(str).to_numpy(),
         )
@@ -636,10 +643,16 @@ def _render_trial_sort_popover(
     keys = trial_sort_keys(combos, trial_field, words=words, fixations=fixations)
     if not keys:
         return None, False, TRIAL_SORT_DEFAULT
-    options = [TRIAL_SORT_DEFAULT, *keys]
+    # UX-171: data order leads and is the default; Trial ID follows it.
+    default = TRIAL_SORT_DATA_ORDER if TRIAL_SORT_DATA_ORDER in keys else None
+    options = [
+        *([default] if default else []),
+        TRIAL_SORT_DEFAULT,
+        *(k for k in keys if k != default),
+    ]
     state_key = f"{key_prefix}_trial_sort"
     if st.session_state.get(state_key) not in options:
-        st.session_state[state_key] = TRIAL_SORT_DEFAULT
+        st.session_state[state_key] = options[0]
     with host.popover("⇅", width="content", help="Sort the trial list"):
         choice = labeled(
             st,
@@ -705,8 +718,8 @@ def step_within(options: list[str], state_key: str, delta: int) -> int | None:
 
     Clamped to the ends, and clamped *independently* of any other picker — the
     linked step is "advance both", not "keep them aligned": the two pools have
-    different sizes (B excludes A, and a cross-dataset B is another corpus
-    entirely), so their indices carry no shared meaning.
+    different sizes (B has its own filters, and a cross-dataset B is another
+    corpus entirely), so their indices carry no shared meaning.
 
     Returns the new index, or ``None`` when there was nothing to step.
     """
@@ -744,9 +757,9 @@ def step_linked_compare(delta: int) -> None:
 
     Written as an *identity* rather than an index or a label, because both are
     unstable across this step: ``build_comparison_options`` builds B's pool
-    relative to A (📄 same-text first, then 👤 same-participant, A itself
-    excluded), so once A moves, B's list is re-ordered *and* re-labelled — the
-    same trial can gain or lose its 📄 marker. Parking the identity in the same
+    relative to A (📄 same-text first, then 👤 same-participant), so once A
+    moves, B's list is re-ordered *and* re-labelled — the same trial can gain or
+    lose its 📄 marker. Parking the identity in the same
     pending slot the ``?compare=`` deep link uses lets the rebuilt picker re-find
     the trial the user was actually looking at.
     """
@@ -825,7 +838,10 @@ def _select_trial_none_mode(
     # Save-&-restore code seeds it (`_restore_selection`). The slider mirrors it
     # and ◀ ▶ step it; all stay in sync via the trial id.
     current_label = st.session_state.get(trial_id_key) if trial_id_key else None
-    if current_label not in trial_options:
+    # Seeded rather than chosen: re-seeded to the *sorted* list's first trial
+    # once the ⇅ order is known (UX-171 — data order's first, not the id's).
+    seeded = current_label not in trial_options
+    if seeded:
         current_label = trial_options[0]
         if trial_id_key:
             st.session_state[trial_id_key] = current_label
@@ -905,13 +921,22 @@ def _select_trial_none_mode(
                 trial_options, sort_key, descending=sort_desc
             )
             idx_of = {opt: i for i, opt in enumerate(trial_options)}
-            lookup = sort_key.to_dict()
-            sort_values.update(
-                {opt: format_sort_value(lookup.get(opt)) for opt in trial_options}
-            )
-            picker_label = (
-                f"**Select Trial**  ·  by {sort_choice} {'↓' if sort_desc else '↑'}"
-            )
+            # UX-171: data order is the default and its values are bare ranks,
+            # so it carries no per-option value and names itself only reversed.
+            if sort_choice != TRIAL_SORT_DATA_ORDER:
+                lookup = sort_key.to_dict()
+                sort_values.update(
+                    {opt: format_sort_value(lookup.get(opt)) for opt in trial_options}
+                )
+            if sort_choice != TRIAL_SORT_DATA_ORDER or sort_desc:
+                picker_label = (
+                    f"**Select Trial**  ·  by {sort_choice} {'↓' if sort_desc else '↑'}"
+                )
+            if seeded:
+                current_label = trial_options[0]
+                if trial_id_key:
+                    st.session_state[trial_id_key] = current_label
+                st.session_state[slider_key] = current_label
         current_idx = trial_options.index(current_label)
     else:
         # A one-trial pool has no slider (`st.select_slider` throws on a single
@@ -939,6 +964,12 @@ def _select_trial_none_mode(
         picker_label,
         options=trial_options,
         key=trial_id_key,
+        # BUG-80: the picker renders only on the Scanpath view, and Streamlit
+        # drops an unrendered widget's key at the end of the run — so a trip to
+        # Corpus Analysis or 🗂️ Data came back on trial 1 (and, in Compare,
+        # left A and B on different texts). A value the pool no longer holds is
+        # still reset above, before this renders.
+        persist_state="session",
         format_func=_option_label,
         help="Click this dropdown, then type to narrow the list. "
         "★ favorite · 🏷️ tagged · 📝 has notes. When a sort key is active, each "
@@ -951,6 +982,7 @@ def _select_trial_none_mode(
                 "Trial",
                 options=trial_options,
                 key=slider_key,
+                persist_state="session",
                 on_change=_on_trial_slider,
                 help=f"Scrub through the {n_trials} trials (index/total · id, "
                 "plus the sort value when one is active); the dropdown jumps to "
@@ -1101,51 +1133,6 @@ def compute_trial_stats(
     )
 
 
-def gather_trial_metadata(
-    trial_words: pd.DataFrame, trial_fixations: pd.DataFrame, fields: Iterable[str]
-) -> pd.DataFrame:
-    """Gather metadata for selected fields from words and fixations."""
-    rows = []
-    for field in fields:
-        if field in trial_words.columns:
-            series = pd.Series(trial_words[field])
-        elif field in trial_fixations.columns:
-            series = pd.Series(trial_fixations[field])
-        else:
-            continue
-
-        cleaned = series.dropna()
-        if cleaned.empty:
-            value = "—"
-        else:
-            unique_values = cleaned.unique()
-            if len(unique_values) == 1:
-                value = unique_values[0]
-            else:
-                numeric_series = pd.to_numeric(cleaned, errors="coerce")
-                numeric_values = numeric_series.dropna()
-                is_numeric = (
-                    not pd.api.types.is_bool_dtype(cleaned)
-                    and (
-                        pd.api.types.is_numeric_dtype(cleaned)
-                        or len(numeric_values) == len(cleaned)
-                    )
-                    and not numeric_values.empty
-                )
-                if is_numeric:
-                    value = f"mean={numeric_values.mean():.2f}, std={numeric_values.std():.2f}"
-                else:
-                    modes = cleaned.mode(dropna=True)
-                    mode_value = modes.iloc[0] if not modes.empty else "—"
-                    value = f"{mode_value} (mode, {len(unique_values)} unique)"
-        rows.append({"Field": field, "Value": value})
-
-    df = pd.DataFrame(rows)
-    if not df.empty:
-        df["Value"] = df["Value"].astype(str)
-    return df
-
-
 def safe_summary(series: pd.Series) -> dict:
     """Compute summary statistics for a series, handling empty data."""
     if series.empty:
@@ -1237,6 +1224,7 @@ def build_comparison_options(
     primary_text: str | None,
     *,
     cross_dataset: bool = False,
+    include_primary: bool = True,
 ) -> list[tuple[str, str, str, str]]:
     """Build a prioritized list of comparison-trial options.
 
@@ -1256,15 +1244,23 @@ def build_comparison_options(
     coincidentally identical ``(participant, trial)`` is a real candidate rather
     than the trial being compared. 📄 survives — a text id that matches across
     corpora is exactly the pairing this feature exists for.
+
+    ``include_primary`` (CMP-22) keeps the selected trial itself in the pool, so
+    B's picker lists every trial A's does and the two position readouts agree.
+    It is only a *candidate*: the picker defaults B to the first trial that is
+    not A. Pass ``False`` to ask "is there anything else to compare with?" —
+    the question the Compare gate asks.
     """
     text_field = "unique_text_id" if "unique_text_id" in combos.columns else "text_id"
     uniq = combos.drop_duplicates(subset=["participant_id", "trial_id"])
 
     rows: list[dict] = []
     for row in uniq.itertuples():
-        if not cross_dataset and (row.participant_id, row.trial_id) == (
-            primary_participant,
-            primary_trial,
+        if (
+            not include_primary
+            and not cross_dataset
+            and (row.participant_id, row.trial_id)
+            == (primary_participant, primary_trial)
         ):
             continue
         text_id = getattr(row, text_field, "")
@@ -1341,6 +1337,26 @@ def qualify_for_compare(frame: pd.DataFrame, dataset: str) -> pd.DataFrame:
         dataset + COMPARE_DATASET_SEP + out["participant_id"].astype(str)
     )
     return out
+
+
+def separate_self_compare(frame: pd.DataFrame, participant: str) -> pd.DataFrame:
+    """A copy of B's single-trial ``frame`` renamed apart from A's (CMP-22).
+
+    B may now be A's own trial. `plots.make_comparison_figure` slices its merged
+    frame by ``(participant_id, trial_id)``, so two copies of one trial would hand
+    *each* side both copies (and a duplicated index the word-line clustering
+    rejects). Giving B's copy `self_compare_participant`'s id keeps the halves
+    apart — the same trick `qualify_for_compare` plays across corpora, and just
+    as figure-only: labels, lookups, exports and links keep the real id.
+    """
+    if frame.empty:
+        return frame
+    return frame.assign(participant_id=self_compare_participant(participant))
+
+
+def self_compare_participant(participant: str) -> str:
+    """The id `separate_self_compare` gives B's copy of ``participant``."""
+    return f"{participant}{COMPARE_DATASET_SEP}B"
 
 
 def qualified_participant(dataset: str, participant: str) -> str:

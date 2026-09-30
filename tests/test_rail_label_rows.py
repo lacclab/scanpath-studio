@@ -281,12 +281,11 @@ class TestTheRealRail:
         labels = " ".join(_label_markup(at))
         assert labels, "no UX-51 row labels rendered anywhere in the rail"
         for title in (
-            "Color fixations by",
+            "Marker",
             "Drift correction",
-            "Marker shape",
             "Fixation index",
             "Direction arrows",
-            "Show color bars",
+            "Color bar",
         ):
             assert f">{title}</span>" in labels, f"{title} lost its label column"
         # …carrying the control's help as the title's own tooltip.

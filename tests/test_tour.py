@@ -381,7 +381,7 @@ def _surface_open_probe_app():
 def _use_case_tutorial_app():
     import streamlit as st
 
-    from scanpath_studio.constants import _VIEW_CORPUS
+    from scanpath_studio.constants import _VIEW_CORPUS, SUBTAB_ANNOTATIONS
     from scanpath_studio.tour import _start_use_case, render_use_case_tutorial
 
     st.session_state.setdefault(
@@ -395,17 +395,36 @@ def _use_case_tutorial_app():
         },
     )
     st.session_state.setdefault("main_nav", _VIEW_CORPUS)
-    st.session_state.setdefault("single_subtab", "📝 Annotations")
+    st.session_state.setdefault("single_subtab", SUBTAB_ANNOTATIONS)
     if not st.session_state.get("_tutorial_armed_once"):
         st.session_state["_tutorial_armed_once"] = True
         _start_use_case("filter_annotate")
     render_use_case_tutorial()
 
 
-def _tutorial_library_optout_app():
-    """Mirrors app.main's ordering: serve the chooser early, render its button late.
+def _choose_help_entry(at, entry: str) -> None:
+    """Pick a ❓ Help nav entry the way ``menu.render_nav`` does, then rerun.
 
-    The chooser is a dialog off the ❓ Help menu group (the menu bar made the old
+    An action entry only arms its dialog (``menu._arm_help_action``); the next
+    run's early ``maybe_show_*`` call serves it. The arming writes through
+    ``st.session_state``, which outside a script run is not this AppTest's
+    state — so point it at the right one.
+    """
+    from unittest.mock import patch
+
+    import streamlit as st
+
+    from scanpath_studio import menu
+
+    with patch.object(st, "session_state", at.session_state):
+        menu._arm_help_action(entry)
+    at.run()
+
+
+def _tutorial_library_optout_app():
+    """Mirrors app.main's ordering: serve the chooser early, stash its context late.
+
+    The chooser is a dialog off the ❓ Help nav entry (the menu bar made the old
     nested ``🧭 Tutorials`` popover a popover-inside-a-popover), armed the same
     way as the FAQ — see ``tour.maybe_show_tutorial_library``.
     """
@@ -413,12 +432,12 @@ def _tutorial_library_optout_app():
 
     from scanpath_studio.tour import (
         maybe_show_tutorial_library,
-        render_tutorial_library,
+        stash_tutorial_context,
     )
 
     st.session_state["tour_dont_show"] = True
     maybe_show_tutorial_library()
-    render_tutorial_library(
+    stash_tutorial_context(
         {
             "n_trials": 2,
             "has_words": True,
@@ -524,9 +543,9 @@ class TestUseCaseTutorials:
     def test_library_remains_available_after_welcome_opt_out(self):
         at = AppTest.from_function(_tutorial_library_optout_app).run()
         assert not at.exception, at.exception
-        # Opening the chooser is a click on the ❓ Help menu button, which arms
-        # the dialog the next run serves.
-        at.button(key="tutorial_library_open").click().run()
+        # Opening the chooser is picking ❓ Help → Tutorials in the nav, which
+        # arms the dialog the next run serves.
+        _choose_help_entry(at, "help_tutorials")
         assert not at.exception, at.exception
         keys = {button.key for button in at.button if button.key}
         assert "tutorial_start_load_inspect" in keys
@@ -539,54 +558,32 @@ class TestUseCaseTutorials:
 
 
 def _faq_app():
-    """Mirrors app.main's ordering: serve the dialog early, render the button late.
+    """Mirrors app.main: the dialog is served early, once the nav has armed it.
 
-    The button only arms the dialog (``on_click``) so the modal doesn't wait on
-    the heavy data/plot work it renders after — see ``tour.maybe_show_faq``.
+    The ❓ Help → FAQ entry only arms the dialog, so the modal doesn't wait on
+    the heavy data/plot work after it — see ``tour.maybe_show_faq``.
     """
-    from scanpath_studio.tour import maybe_show_faq, render_faq_button
+    from scanpath_studio.tour import maybe_show_faq
 
     maybe_show_faq()
-    render_faq_button()
 
 
 class TestFaq:
     """The in-app FAQ dialog (UX-15) and its links out to the docs site."""
 
-    def test_button_opens_a_dialog_with_every_item(self):
+    def test_help_entry_opens_a_dialog_with_every_item(self):
         # PRE-21: the set is conditional — a gated feature's entry is only
         # offered when that feature is. `faq_items()` is the resolved list.
         from scanpath_studio.tour import faq_items
 
         at = AppTest.from_function(_faq_app)
         at.run()
-        assert any(b.key == "faq_open" for b in at.button)
         assert not at.error
+        assert not at.expander, "the dialog opened before anything armed it"
 
-        at.button(key="faq_open").click().run()
+        _choose_help_entry(at, "help_faq")
         assert not at.error
         assert len(at.expander) == len(faq_items())
-
-    def test_button_only_arms_the_dialog(self):
-        """The click must set a flag, not open the dialog from its return value.
-
-        The button renders at the bottom of ``app.main``; opening the dialog
-        there made it wait out the whole rerun (~10 s of plot embeds). Rendering
-        the button *alone* must therefore produce no dialog — the early
-        ``maybe_show_faq`` call is what serves it.
-        """
-
-        def _button_only():
-            from scanpath_studio.tour import render_faq_button
-
-            render_faq_button()
-
-        at = AppTest.from_function(_button_only)
-        at.run()
-        at.button(key="faq_open").click().run()
-        assert not at.error
-        assert not at.expander, "the button opened the dialog itself"
-        assert at.session_state["_faq_dialog_requested"] is True
 
     def test_docs_links_point_at_the_published_pages(self):
         """The FAQ is the app's help-context route into the docs — if these
@@ -605,6 +602,26 @@ class TestFaq:
         for question, answer in faq_items():
             assert question.endswith(("?", ".")), f"not a question: {question!r}"
             assert len(answer) <= 480, f"FAQ answer too long: {question!r}"
+
+    def test_no_entry_is_for_someone_editing_the_code(self):
+        """BUG-85: docs/faq.md dropped "I edited the code and nothing changed?"
+        for the beta — it is contributor material, and CONTRIBUTING.md keeps
+        it — and this dialog follows that page."""
+        from scanpath_studio.tour import faq_items
+
+        text = " ".join(f"{question} {answer}" for question, answer in faq_items())
+        assert "edited the code" not in text.lower()
+        assert "Restart the server" not in text
+
+    def test_the_export_answer_works_in_the_desktop_app_too(self):
+        """BUG-85: the desktop bundle has no `plotly_get_chrome`, and no Python to
+        run it from; what it can use is an installed Chrome, Chromium or Edge."""
+        from scanpath_studio.tour import faq_items
+
+        (answer,) = [answer for question, answer in faq_items() if "HTML" in question]
+        for browser in ("Chrome", "Chromium", "Edge"):
+            assert browser in answer
+        assert "pip install" in answer
 
 
 def _keys_built_inside_a_popover() -> set[str]:
@@ -715,6 +732,50 @@ class TestSpotlightSelectorsResolve:
             "these use-case tutorial steps point at containers that no longer "
             f"exist: {missing}"
         )
+
+    def test_every_step_names_a_real_subtab(self):
+        """BUG-77: two steps wrote ``subtab="Export"`` while the tab is labelled
+        "📤 Export", so no tab opened, the card claimed it had, and the spotlight
+        aimed at a panel that never rendered. The selector test above cannot see
+        this — the container exists, just never on screen."""
+        from scanpath_studio import tabs
+        from scanpath_studio.tour import TUTORIALS
+
+        scanpath = {
+            tabs.SUBTAB_ANNOTATIONS,
+            tabs.SUBTAB_STIMULUS,
+            tabs.SUBTAB_COMPARISONS,
+            tabs.SUBTAB_LINE_ASSIGNMENT,
+            tabs.SUBTAB_EXPORT,
+            tabs.SUBTAB_SHARE,
+        }
+        steps = [step for tutorial in TUTORIALS for step in tutorial.steps]
+        assert {s.subtab for s in steps if s.subtab} <= scanpath
+        assert {s.corpus_subtab for s in steps if s.corpus_subtab} <= set(
+            tabs.CORPUS_SUBTABS
+        )
+
+    def test_the_data_page_draws_the_datasets_table_the_tutorial_points_at(self):
+        """BUG-77: "Load and verify a dataset" opened the Data page and outlined
+        the data-source picker — which only Scanpath and Corpus Analysis draw."""
+        from pathlib import Path
+
+        from streamlit.testing.v1 import AppTest
+
+        from scanpath_studio.constants import _VIEW_DATA
+
+        app_script = Path(__file__).resolve().parent.parent / "streamlit_app.py"
+        at = AppTest.from_file(str(app_script), default_timeout=60)
+        at.session_state["main_nav"] = _VIEW_DATA
+        at.run()
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+        def keys(node):
+            yield getattr(node, "key", None)
+            for child in getattr(node, "children", {}).values():
+                yield from keys(child)
+
+        assert "tutorial_available_datasets" in set(keys(at.main))
 
     def test_no_two_steps_spotlight_the_same_area(self):
         """UX-34: two steps sharing a selector lit up both areas at once.
@@ -894,31 +955,29 @@ class TestSpotlightSelectorsResolve:
         assert '[class*="_cell_confirm"] button {' in css
         assert '[class*="_confirm"] button {' not in css
 
-    def test_subtabs_use_a_second_plot_width_row(self):
-        """UX-43: open subtab content cannot contribute to the rail-row height."""
+    def test_subtabs_stay_in_the_plot_column(self):
+        """UX-173: a tall rail cannot push the panels away from a short plot."""
         import inspect
 
         from scanpath_studio.tabs import render_single_trial_tab
 
         source = inspect.getsource(render_single_trial_tab)
         assert 'plot_col, rail_col = st.columns([4, 1], gap="large")' in source
-        assert 'subtabs_col, _ = st.columns([4, 1], gap="large")' in source
-        assert 'subtabs_slot = subtabs_col.container(key="tour_grp_subtabs")' in source
+        assert 'subtabs_col, _ = st.columns([4, 1], gap="large")' not in source
+        assert '        subtabs_slot = st.container(key="tour_grp_subtabs")' in source
         assert "with subtabs_slot:" in source
 
-    def test_visualization_rail_has_responsive_independent_scroll(self):
-        """UX-43: desktop scrolls the rail; narrow layouts return to page flow."""
+    def test_visualization_rail_uses_page_flow(self):
+        """UX-173: controls are neither capped at plot height nor faded out."""
         from scanpath_studio.styles import get_app_css
 
         css = get_app_css()
         assert ".st-key-scanpath_rail {" in css
-        assert '[data-testid="stColumn"]:has(.st-key-scanpath_rail) {' in css
-        assert "position: absolute;" in css
-        assert "height: 100%;" in css
-        assert "max-height: 100%;" in css
-        assert "overflow-y: auto;" in css
-        assert "@media (max-width: 900px)" in css
-        assert "overflow-y: visible;" in css
+        rail_rule = css.split(".st-key-scanpath_rail {", 1)[1].split("}", 1)[0]
+        assert "height:" not in rail_rule
+        assert "overflow" not in rail_rule
+        assert "mask-image" not in rail_rule
+        assert '[data-testid="stColumn"]:has(.st-key-scanpath_rail)' not in css
 
     def test_plot_rail_uses_one_compact_control_header(self):
         """UX-44: modes and visualization settings share one rail heading."""
@@ -930,7 +989,9 @@ class TestSpotlightSelectorsResolve:
         tab_source = inspect.getsource(render_single_trial_tab)
         control_source = inspect.getsource(controls.render_plot_controls)
 
-        assert 'st.markdown("## 🎛️ Plot controls")' in tab_source
+        assert (
+            "st.markdown(f\"## {ICONS['plot_controls']} Plot controls\")" in tab_source
+        )
         assert 'st.markdown("## 🎛️ View modes")' not in tab_source
         assert 'st.markdown("## 🎨 Visualization")' not in tab_source
         assert "sps-control-label" in control_source
@@ -957,8 +1018,9 @@ class TestSpotlightSelectorsResolve:
         control_source = inspect.getsource(controls.render_plot_controls)
         canvas_source = inspect.getsource(app.render_canvas_controls)
 
-        assert '"📐 **Figure & canvas**"' in control_source
-        assert "render_text=show_labels" in control_source
+        assert "f\"{ICONS['figure']} **Figure & canvas**\"" in control_source
+        # UX-163: the typography draws always, greyed while Text is off.
+        assert "text_disabled=not show_labels" in control_source
         assert "display = host if bare else host.expander" in canvas_source
         assert 'viz.expander("🖥️ Canvas & text"' not in control_source
         assert 'viz.expander("📐 Figure & axes"' not in control_source
@@ -989,8 +1051,8 @@ class TestSpotlightSelectorsResolve:
 
         control_source = inspect.getsource(controls.render_plot_controls)
 
-        assert '"👁️ **Fixations**"' in control_source
-        assert 'f"🧹 **Filter**{' in control_source
+        assert "f\"{ICONS['fixations']} **Fixations**\"" in control_source
+        assert "f\"{ICONS['plot_filter']} **Filter**{" in control_source
         assert "Reset settings" not in control_source
 
     def test_reset_closes_the_rail_below_every_control_it_resets(self):
@@ -1016,7 +1078,9 @@ class TestSpotlightSelectorsResolve:
         from scanpath_studio.tabs import render_single_trial_tab
 
         tab_source = inspect.getsource(render_single_trial_tab)
-        assert 'st.markdown("## 🎛️ Plot controls")' in tab_source
+        assert (
+            "st.markdown(f\"## {ICONS['plot_controls']} Plot controls\")" in tab_source
+        )
         assert 'with st.container(key="plot_reset_footer"):' in tab_source
         assert "render_viz_reset(st)" in tab_source
         # No second column in the heading row, and no reset above the controls.

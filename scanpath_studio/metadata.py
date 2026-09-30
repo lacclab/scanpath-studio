@@ -47,13 +47,20 @@ Later grains (stimulus, screen, word, fixation) add rows to the same registry;
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 import pandas as pd
 
-from .data import stable_id, trial_id_series, trial_mapping_columns
+from .data import (
+    stable_id,
+    trial_id_series,
+    trial_mapping_columns,
+    zero_padding_map,
+)
+from .session_keys import COMPARE_SOURCE_STATE_KEY
 
 # Source columns that plausibly hold the reader id, most explicit first. Shares
 # the spirit of `data.pick_column`'s candidate lists: first hit wins, and the
@@ -379,6 +386,20 @@ class TextMetadata:
         return self.frame.set_index("text_id")[name]
 
 
+def _rows_with_ids(frame: pd.DataFrame, columns) -> pd.DataFrame:
+    """A copy of ``frame`` without the rows that have no value in an id column.
+
+    A blank row — the one Excel leaves at the end of a sheet — became a phantom
+    reader named "nan": under pandas 3 a missing id stays NaN through
+    ``stable_id``, and the ``!= ""`` test that used to drop it let NaN
+    through (BUG-60). A composite id with a missing part raised in the join
+    instead. Such a row describes no one, so it goes.
+    """
+    ids = frame[list(columns)]
+    missing = ids.isna() | ids.apply(lambda c: c.astype(str).str.strip() == "")
+    return frame.loc[~missing.any(axis=1)].copy()
+
+
 def active_trials() -> TrialMetadata | None:
     """The trial table attached to this session, or ``None`` (DATA-29)."""
     try:
@@ -461,7 +482,9 @@ def build_trial_metadata(
     if participant_column and participant_column not in frame.columns:
         participant_column = None
 
-    work = frame.copy()
+    work = _rows_with_ids(
+        frame, [*trial_cols, *([participant_column] if participant_column else [])]
+    )
     # `trial_id_series` — not a plain `.astype(str)` — so this table's own
     # trial id is spelled the same way `data.normalize_*` spells the app's: a
     # blank cell anywhere else in *this* file's trial-id column is enough to
@@ -470,10 +493,8 @@ def build_trial_metadata(
     # this) — and a composite id is built the identical way (joined with "_",
     # each part through `stable_id` first).
     work["trial_id"] = trial_id_series(work, trial_column)
-    work = work[work["trial_id"] != ""]
     if participant_column:
         work["participant_id"] = stable_id(work[participant_column])
-        work = work[work["participant_id"] != ""]
     reserved = {
         *trial_cols,
         str(participant_column) if participant_column else "",
@@ -798,11 +819,10 @@ def build_text_metadata(
     ):
         return empty
 
-    work = frame.copy()
+    work = _rows_with_ids(frame, text_cols)
     # See the matching comment in `build_trial_metadata` — the same "one
     # blank cell spells the id two ways" hazard applies to a text id.
     work["text_id"] = trial_id_series(work, text_column)
-    work = work[work["text_id"] != ""]
     reserved = {*text_cols, "text_id", *_BOOKKEEPING_COLUMNS}
     value_columns = [
         str(column) for column in frame.columns if str(column) not in reserved
@@ -857,28 +877,6 @@ def build_text_metadata(
             conflicting=tuple(sorted(conflicting_set)),
         )
     return TextMetadata(clean, tuple(fields), source_name, label, report)
-
-
-def rejoin_texts(metadata: TextMetadata, keys: Iterable) -> TextMetadata:
-    """Recompute the join report against a (possibly new) text list."""
-    data_ids = {str(tid) for tid in keys}
-    usable_ids = set(metadata.frame["text_id"]) if not metadata.frame.empty else set()
-    # Conflicting ids are *in the table* but carry no values — not matched,
-    # not "only in data" either (same rule as `rejoin`).
-    table_ids = usable_ids | set(metadata.report.conflicting)
-    return TextMetadata(
-        metadata.frame,
-        metadata.fields,
-        metadata.source_name,
-        metadata.text_column,
-        JoinReport(
-            matched=tuple(sorted(usable_ids & data_ids)),
-            only_in_table=tuple(sorted(table_ids - data_ids)),
-            only_in_data=tuple(sorted(data_ids - table_ids)),
-            duplicated=metadata.report.duplicated,
-            conflicting=metadata.report.conflicting,
-        ),
-    )
 
 
 def texts_matching(
@@ -1107,11 +1105,12 @@ def build_participant_metadata(
             pd.DataFrame(columns=["participant_id"]), (), source_name, str(id_column)
         )
 
-    work = frame.copy()
+    work = _rows_with_ids(frame, [id_column])
     # See the matching comment in `build_trial_metadata` — the same "one blank
     # cell spells the id two ways" hazard applies to a reader id.
     work["participant_id"] = stable_id(work[id_column])
-    work = work[work["participant_id"] != ""]
+    if participants is not None:
+        work["participant_id"] = _match_padding(work["participant_id"], participants)
     value_columns = [
         str(column)
         for column in frame.columns
@@ -1173,11 +1172,28 @@ def build_participant_metadata(
     )
 
 
+def _match_padding(ids: pd.Series, participants: Iterable) -> pd.Series:
+    """``ids`` spelled the data's way when only zero-padding differs (BUG-59).
+
+    A metadata CSV reads a reader ``007`` as the number 7 while the data kept
+    "007", and the table then joined to no one; ``data.zero_padding_map``
+    decides, and refuses whenever the match is not unambiguous.
+    """
+    mapping = zero_padding_map(ids.unique(), {str(pid) for pid in participants})
+    return ids.replace(mapping) if mapping else ids
+
+
 def rejoin(
     metadata: ParticipantMetadata, participants: Iterable
 ) -> ParticipantMetadata:
     """Recompute the join report against a (possibly new) participant list."""
     data_ids = {str(pid) for pid in participants}
+    if not metadata.frame.empty:
+        renamed = _match_padding(metadata.frame["participant_id"], data_ids)
+        if not renamed.equals(metadata.frame["participant_id"]):
+            metadata = replace(
+                metadata, frame=metadata.frame.assign(participant_id=renamed)
+            )
     usable_ids = (
         set(metadata.frame["participant_id"]) if not metadata.frame.empty else set()
     )
@@ -1313,11 +1329,8 @@ def bounds_for(
 
 
 # -----------------------------------------------------------------------------
-# Serialization — 💾 Save & restore (the JSON config) and the payload
-# NOT the ENG-26 on-device recovery cache: that stores uploaded *datasets*, and
-# wiring the participant table into it is a separate piece of work. An attached
-# table therefore survives a save/restore round trip but not a recovery-cache
-# restore. Also the payload
+# Serialization — 💾 Save & restore (the JSON config), the ENG-26 on-device
+# recovery cache (DATA-38, see `session_payloads` below), and the payload
 # `api`/`cli` hand in. Records rather than a pickled frame, so it round-trips
 # through JSON like every other saved setting.
 # -----------------------------------------------------------------------------
@@ -1345,3 +1358,469 @@ def from_payload(payload: dict | None) -> ParticipantMetadata | None:
         "participant_id",
         source_name=str(payload.get("source_name") or "participant metadata"),
     )
+
+
+# -----------------------------------------------------------------------------
+# DATA-38 — attached tables in the ENG-26 on-device recovery cache, and DATA-47 —
+# the tables belong to a dataset.
+#
+# The session keys above hold the tables of the *selected* dataset only — the
+# one every consumer (filters, chips, sort, inspection, export) reads through
+# `active()` / `active_trials()` / `active_texts()`. Every other dataset's
+# tables wait in a per-dataset store, and `activate_dataset` swaps them in and
+# out when the selection changes. They used to be one slot per grain for the
+# whole session, so a new dataset opened with the last one's tables, attaching a
+# table to dataset B replaced dataset A's, and detaching it anywhere removed it
+# everywhere. The cache writes the store, keyed by dataset.
+# -----------------------------------------------------------------------------
+
+#: What a grain's ``*_FILE_SESSION_KEY`` holds when its table came back from the
+#: recovery cache or a saved config, rather than from a file in the uploader.
+#: The metadata sections read an empty uploader as "the user just removed the
+#: file" and detach on sight (UX-115) — and a restored table has no file in the
+#: uploader, so without this marker the first visit to the 🗂️ Data page would
+#: detach exactly what the restore brought back.
+RESTORED_FILE_SIGNATURE = "restored"
+
+#: ``(grain, table key, raw key, file key, to_payload, from_payload)`` per grain.
+_GRAINS = (
+    (
+        GRAIN_PARTICIPANT,
+        SESSION_KEY,
+        RAW_SESSION_KEY,
+        FILE_SESSION_KEY,
+        to_payload,
+        from_payload,
+    ),
+    (
+        "trial",
+        TRIAL_SESSION_KEY,
+        TRIAL_RAW_SESSION_KEY,
+        TRIAL_FILE_SESSION_KEY,
+        trial_to_payload,
+        trial_from_payload,
+    ),
+    (
+        "text",
+        TEXT_SESSION_KEY,
+        TEXT_RAW_SESSION_KEY,
+        TEXT_FILE_SESSION_KEY,
+        text_to_payload,
+        text_from_payload,
+    ),
+)
+_GRAIN_KEYS = {grain: (key, raw, file) for grain, key, raw, file, *_ in _GRAINS}
+
+
+#: The payloads' row lists — `to_payload` says ``records``, the other two ``rows``.
+_ROW_KEYS = ("records", "rows")
+
+
+def session_payloads(session) -> dict[str, dict]:
+    """Every attached table as its save & restore payload, keyed by grain.
+
+    Each carries its frame's ``columns`` too: the cache writes its manifest with
+    sorted keys, which would otherwise hand the rows back alphabetised and
+    reorder the table's fields everywhere they are listed.
+    """
+    payloads = {}
+    for grain, key, _raw, _file, dump, _load in _GRAINS:
+        attached = session.get(key)
+        payload = dump(attached)
+        if payload is not None:
+            payloads[grain] = {**payload, "columns": list(attached.frame.columns)}
+    return payloads
+
+
+def _in_column_order(payload):
+    """``payload`` with each row's keys back in its ``columns`` order."""
+    columns = payload.get("columns") if isinstance(payload, dict) else None
+    if not columns:
+        return payload
+    ordered = dict(payload)
+    for rows_key in _ROW_KEYS:
+        rows = payload.get(rows_key)
+        if isinstance(rows, list):
+            ordered[rows_key] = [
+                {column: row[column] for column in columns if column in row}
+                for row in rows
+                if isinstance(row, dict)
+            ]
+    return ordered
+
+
+def session_signature(session) -> list:
+    """A cheap content fingerprint of the attached tables.
+
+    For the recovery cache's every-rerun "did anything change" check. Object
+    identity will not do: the tables are rebuilt on every render of the Data
+    page, and the participant one is re-joined on every run, so a new object
+    arrives when nothing changed. The frames are small (one row per reader,
+    trial or text), so hashing their content is cheap.
+    """
+    signature = []
+    for grain, key, *_ in _GRAINS:
+        attached = session.get(key)
+        frame = getattr(attached, "frame", None)
+        if not isinstance(frame, pd.DataFrame) or frame.empty:
+            continue
+        try:
+            # Row hashes in row order — a sum would miss a reordered table.
+            cells = pd.util.hash_pandas_object(frame, index=False).to_numpy().tobytes()
+        except (TypeError, ValueError):  # unhashable cells — hash their text
+            cells = frame.to_csv(index=False).encode("utf-8")
+        digest = hashlib.sha256(cells).hexdigest()
+        signature.append(
+            [
+                grain,
+                str(getattr(attached, "source_name", "")),
+                list(frame.columns),
+                digest,
+            ]
+        )
+    return signature
+
+
+def grain_keys(grain: str) -> tuple[str, str, str]:
+    """``(table key, raw key, file key)`` in session state for ``grain``."""
+    return _GRAIN_KEYS[grain]
+
+
+def mark_restored(session, grain: str, attached) -> None:
+    """Attach ``attached`` as a table with no live upload behind it.
+
+    Shared by the recovery cache and 💾 Save & restore, which both hand back a
+    table the uploader never saw — see :data:`RESTORED_FILE_SIGNATURE`.
+    """
+    key, raw, file = _GRAIN_KEYS[grain]
+    session[key] = attached
+    session[raw] = attached.frame
+    session[file] = RESTORED_FILE_SIGNATURE
+
+
+def is_restored(session, grain: str) -> bool:
+    """Whether ``grain``'s attached table came back without a file behind it."""
+    return session.get(_GRAIN_KEYS[grain][2]) == RESTORED_FILE_SIGNATURE
+
+
+def restore_payloads(session, payloads) -> int:
+    """Re-attach the tables :func:`session_payloads` wrote; how many landed.
+
+    A grain already attached in this session keeps its own table — the same
+    "never overwrite what is already seeded" rule the rest of the restore
+    follows — and a payload that no longer builds is skipped, not raised: a
+    stale cache must never stop the app opening.
+    """
+    if not isinstance(payloads, dict):
+        return 0
+    restored = 0
+    for grain, key, _raw, _file, _dump, load in _GRAINS:
+        if session.get(key) is not None:
+            continue
+        try:
+            attached = load(_in_column_order(payloads.get(grain)))
+        except (ValueError, TypeError, KeyError):
+            attached = None
+        if attached is None:
+            continue
+        mark_restored(session, grain, attached)
+        restored += 1
+    return restored
+
+
+#: DATA-47 — every dataset's tables but the selected one's, as the payloads
+#: :func:`session_payloads` builds: ``{dataset: {grain: payload}}``. Payloads
+#: rather than table objects so the cache can write them as they are.
+DATASET_STORE_KEY = "_metadata_by_dataset"
+#: Which dataset the session keys' tables belong to right now.
+OWNER_KEY = "_metadata_owner"
+#: Bumped on every change to the store — the cache's cheap "did it change" test,
+#: since hashing every stored table on every rerun would not be cheap.
+STORE_REVISION_KEY = "_metadata_store_revision"
+#: The add-dataset wizard's dataset, before it has a name. Never cached.
+PENDING_DATASET = "\x00pending"
+
+
+def _widget_keys(grain: str) -> tuple[str, ...]:
+    """The UI state of ``grain``'s section that describes one dataset's table.
+
+    The uploader above all: a swap that left it holding the last dataset's file
+    would read that file as a new upload and attach it to the dataset just
+    opened. The display name, the id-column and keep-fields picks go with it,
+    so the next dataset's table starts from its own auto-detect.
+    """
+    return (
+        f"_{grain}_metadata_name",
+        f"{grain}_metadata_upload",
+        f"{grain}_metadata_id_column",
+        f"{grain}_metadata_keep_fields",
+    )
+
+
+def clear_active(session) -> None:
+    """Detach the selected dataset's tables from the session keys — all grains."""
+    for grain, key, raw, file, *_ in _GRAINS:
+        for name in (key, raw, file, *_widget_keys(grain)):
+            session.pop(name, None)
+
+
+def _store(session) -> dict:
+    store = session.get(DATASET_STORE_KEY)
+    return dict(store) if isinstance(store, dict) else {}
+
+
+def _set_store(session, store: dict) -> None:
+    session[DATASET_STORE_KEY] = store
+    session[STORE_REVISION_KEY] = int(session.get(STORE_REVISION_KEY) or 0) + 1
+
+
+def stash_active(session) -> None:
+    """File the session keys' tables under the dataset they belong to."""
+    owner = session.get(OWNER_KEY)
+    if owner is None:
+        return
+    store = _store(session)
+    payloads = session_payloads(session)
+    if payloads:
+        if store.get(owner) == payloads:
+            return  # unchanged since it was restored — nothing for the cache to do
+        store[owner] = payloads
+    elif owner not in store:
+        return
+    else:
+        store.pop(owner)
+    _set_store(session, store)
+
+
+def activate_dataset(session, dataset: str) -> bool:
+    """Make ``dataset``'s tables the attached ones; whether anything moved.
+
+    Called by ``app.main`` on every run with the selected dataset. When the
+    selection changed, the outgoing dataset's tables are filed away, the session
+    keys are cleared — widgets included, see :func:`_widget_keys` — and the
+    incoming dataset's are restored (marked restored, since no uploader holds
+    their file). A session whose tables have no owner yet (its first run) adopts
+    whatever is attached for ``dataset`` rather than clearing it.
+    """
+    dataset = str(dataset)
+    owner = session.get(OWNER_KEY)
+    if owner == dataset:
+        return False
+    if owner is not None:
+        stash_active(session)
+        clear_active(session)
+    session[OWNER_KEY] = dataset
+    restore_payloads(session, _store(session).get(dataset))
+    return True
+
+
+#: CMP-8's key prefix for scanpath B's filters, and the picker's "same dataset"
+#: answer (``compare_source.THIS_DATASET`` — not imported: `compare_source`
+#: imports `app`, which imports this).
+_COMPARE_PREFIX = "cmp"
+_COMPARE_SAME_DATASET = "This dataset"
+_BUILT_KEY = "_metadata_built_for_compare"
+
+
+#: EXP-22 — the table each grain is named by in a title / caption pattern:
+#: ``{trials.font_size}`` is the trial table's ``font_size``.
+PATTERN_TABLE_NAMES = {
+    GRAIN_PARTICIPANT: "participants",
+    GRAIN_TRIAL: "trials",
+    GRAIN_TEXT: "texts",
+}
+
+
+def pattern_rows(
+    participant, trial, text_id=None, *, prefix: str = ""
+) -> dict[str, dict[str, object]]:
+    """This trial's row of every attached metadata table (EXP-22).
+
+    ``{"participants": {...}, "trials": {...}, "texts": {...}}`` — only the
+    tables that are attached, each with every registered field (a reader, trial
+    or text the table does not mention gets ``None`` values, so the field still
+    exists and a pattern naming it still validates). What
+    ``export.table_pattern_fields`` turns into ``{trials.font_size}``.
+    """
+    rows: dict[str, dict[str, object]] = {}
+    table = attached_for(GRAIN_PARTICIPANT, prefix)
+    if table is not None:
+        found = table.values_for(participant) if participant is not None else {}
+        rows["participants"] = {name: found.get(name) for name in table.names}
+    table = attached_for(GRAIN_TRIAL, prefix)
+    if table is not None:
+        found: dict = {}
+        if trial is not None and not table.frame.empty:
+            match = table.frame["trial_id"] == str(trial)
+            if table.keyed_by_participant:
+                match &= table.frame["participant_id"] == str(participant)
+            hit = table.frame[match]
+            if not hit.empty:
+                found = hit.iloc[0].to_dict()
+        rows["trials"] = {name: found.get(name) for name in table.names}
+    table = attached_for(GRAIN_TEXT, prefix)
+    if table is not None:
+        found = table.values_for(text_id) if text_id is not None else {}
+        rows["texts"] = {name: found.get(name) for name in table.names}
+    return rows
+
+
+def attached_for(grain: str, prefix: str = ""):
+    """The table ``grain``'s filters under key ``prefix`` narrow by (DATA-47).
+
+    The main pool's filters read the selected dataset's table. Compare mode's
+    scanpath B (the ``cmp`` prefix) can come from another dataset, and then its
+    filters must read *that* dataset's own table — which waits in the store —
+    not A's. Built from the stored payload once per store revision.
+    """
+    try:
+        import streamlit as st
+
+        session = st.session_state
+        live = session.get(_GRAIN_KEYS[grain][0])
+    except Exception:  # no script run context (API, CLI, plain import)
+        return None
+    if prefix != _COMPARE_PREFIX:
+        return live
+    other = session.get(COMPARE_SOURCE_STATE_KEY)
+    if (
+        not other
+        or other == _COMPARE_SAME_DATASET
+        or str(other) == session.get(OWNER_KEY)
+    ):
+        return live
+    payload = (_store(session).get(str(other)) or {}).get(grain)
+    if not isinstance(payload, dict):
+        return None
+    revision = session.get(STORE_REVISION_KEY)
+    built = session.get(_BUILT_KEY)
+    cache_key = (str(other), grain, revision)
+    if not isinstance(built, dict) or cache_key not in built:
+        load = next(entry[-1] for entry in _GRAINS if entry[0] == grain)
+        try:
+            table = load(_in_column_order(payload))
+        except (ValueError, TypeError, KeyError):
+            table = None
+        kept = {
+            k: v
+            for k, v in (built or {}).items()
+            if isinstance(k, tuple) and k[-1] == revision
+        }
+        session[_BUILT_KEY] = built = {**kept, cache_key: table}
+    return built[cache_key]
+
+
+def begin_pending_dataset(session) -> None:
+    """Start the add-dataset wizard's dataset with no tables of its own."""
+    store = _store(session)
+    if PENDING_DATASET in store:
+        store.pop(PENDING_DATASET)
+        _set_store(session, store)
+
+
+def adopt_pending_dataset(session, dataset: str) -> None:
+    """✅ Add dataset: the wizard's tables become ``dataset``'s.
+
+    The session keys already hold them (the deferred join has just attached
+    them), so this only renames who owns them — the next run's
+    :func:`activate_dataset` then sees nothing to swap.
+    """
+    begin_pending_dataset(session)
+    session[OWNER_KEY] = str(dataset)
+
+
+def forget_dataset(session, dataset: str) -> None:
+    """A removed dataset's tables go with it."""
+    dataset = str(dataset)
+    store = _store(session)
+    if dataset in store:
+        store.pop(dataset)
+        _set_store(session, store)
+    if session.get(OWNER_KEY) == dataset:
+        clear_active(session)
+        session.pop(OWNER_KEY, None)
+
+
+def rename_dataset(session, old: str, new: str) -> None:
+    """A renamed dataset keeps its tables."""
+    old, new = str(old), str(new)
+    store = _store(session)
+    if old in store:
+        _set_store(session, {(new if k == old else k): v for k, v in store.items()})
+    if session.get(OWNER_KEY) == old:
+        session[OWNER_KEY] = new
+
+
+def dataset_payloads(session) -> dict[str, dict]:
+    """Every dataset's tables, the selected one's live: ``{dataset: {grain: …}}``.
+
+    What the recovery cache writes. The add-dataset wizard's unnamed dataset is
+    left out — it is not a dataset yet, and a restart discards the wizard.
+    """
+    store = _store(session)
+    owner = session.get(OWNER_KEY)
+    if owner is not None:
+        live = session_payloads(session)
+        if live:
+            store[owner] = live
+        else:
+            store.pop(owner, None)
+    store.pop(PENDING_DATASET, None)
+    return {name: payloads for name, payloads in store.items() if payloads}
+
+
+def store_signature(session) -> list:
+    """A cheap fingerprint of every dataset's tables, for the cache (DATA-47).
+
+    The live tables by content (:func:`session_signature` — they are rebuilt on
+    every render), the rest by the store's revision counter. Empty when nothing
+    is attached anywhere, which is what tells the cache to delete its file.
+    """
+    live = session_signature(session)
+    # Deliberately not `dataset_payloads`, which serializes the live tables: this
+    # runs on every rerun, and the live half is already covered by `live`.
+    owner = session.get(OWNER_KEY)
+    stored = any(
+        tables
+        for name, tables in _store(session).items()
+        if name not in (owner, PENDING_DATASET)
+    )
+    if not live and not stored:
+        return []
+    return [
+        ["store", int(session.get(STORE_REVISION_KEY) or 0)],
+        ["owner", str(session.get(OWNER_KEY))],
+        *live,
+    ]
+
+
+def restore_dataset_payloads(session, payloads) -> int:
+    """Put the tables :func:`dataset_payloads` wrote back in the store; how many.
+
+    A dataset this session already holds tables for keeps its own. The selected
+    dataset's go straight onto the session keys, grain by grain — one already
+    attached is kept, like the rest of the restore's ``setdefault`` — and the
+    others wait in the store for :func:`activate_dataset`.
+    """
+    datasets = payloads.get("datasets") if isinstance(payloads, dict) else None
+    if not isinstance(datasets, dict):
+        return 0
+    store = _store(session)
+    owner = session.get(OWNER_KEY)
+    restored = 0
+    changed = False
+    for name, tables in datasets.items():
+        name = str(name)
+        if not isinstance(tables, dict) or name == PENDING_DATASET or name in store:
+            continue
+        store[name] = tables
+        changed = True
+        if name == owner:
+            restored += restore_payloads(session, tables)
+        else:
+            restored += sum(
+                1 for grain, *_ in _GRAINS if isinstance(tables.get(grain), dict)
+            )
+    if changed:
+        _set_store(session, store)
+    return restored

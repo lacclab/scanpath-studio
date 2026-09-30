@@ -7,24 +7,25 @@ input=$(cat)
 f=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty' 2>/dev/null)
 
 case "$f" in
-  */other_vis/*) exit 0 ;;
   *.py) ;;
   *) exit 0 ;;
 esac
 
 [ -f "$f" ] || exit 0
 
-# Use the ruff pinned in pyproject's `lint` extra, not whatever is on PATH
-# (ENG-48). This matters more than it looks: ruff 0.16 enables ~413 rules by
-# default where 0.14 enables a handful, so a stale PATH ruff passes edits at
-# the keyboard that CI's pinned ruff then rejects — which is exactly how five
-# findings accumulated on main while every local run looked clean.
-[ -n "$CLAUDE_PROJECT_DIR" ] && cd "$CLAUDE_PROJECT_DIR" 2>/dev/null
-if command -v uv >/dev/null 2>&1 && uv run --extra lint ruff --version >/dev/null 2>&1; then
-  run_ruff() { uv run --extra lint ruff "$@"; }
+# Run the ruff pinned in the edited checkout's own pyproject `lint` extra, not
+# whatever is on PATH (ENG-48, ENG-69): ruff 0.16 enables ~413 rules where 0.14
+# enables a handful, so a stale PATH ruff passes edits that CI's pinned ruff
+# rejects. `uvx` runs the pin in its own cached tool environment, so the hook
+# never syncs a project venv or writes a lock file — a worktree's edit must not
+# touch the main checkout's environment.
+root=$(git -C "$(dirname "$f")" rev-parse --show-toplevel 2>/dev/null)
+pin=$(grep -oE '"ruff==[0-9][0-9.]*"' "${root:-.}/pyproject.toml" 2>/dev/null | head -1 | tr -d '"')
+if [ -n "$pin" ] && command -v uvx >/dev/null 2>&1 && uvx --quiet --from "$pin" ruff --version >/dev/null 2>&1; then
+  run_ruff() { uvx --quiet --from "$pin" ruff "$@"; }
 elif command -v ruff >/dev/null 2>&1; then
   # Fall back rather than block an edit, but say so: findings may be missing.
-  echo "ruff-on-edit: using PATH ruff ($(ruff --version)); the pinned version is authoritative." >&2
+  echo "ruff-on-edit: using PATH ruff ($(ruff --version)); the pinned ${pin:-version} is authoritative." >&2
   run_ruff() { ruff "$@"; }
 else
   exit 0

@@ -1,4 +1,4 @@
-# Export & troubleshooting
+# Export troubleshooting
 
 ## Figure formats
 
@@ -6,40 +6,51 @@
 |--------|-----|---------------|
 | **HTML** | `save_figure(fig, "x.html")` / `render -o x.html` | No — browser-free (`fig.to_html`) |
 | **PNG / SVG / PDF** | `save_figure(fig, "x.png")` / `render -o x.png` | **Yes** — via Kaleido |
-| **GIF / MP4** | `animation_export.export_animation(anim, "x.mp4")` | **Yes** (Kaleido) — ffmpeg is bundled |
+| **GIF / MP4** | `animation_export.export_animation(anim, fmt="mp4")` → bytes (see [below](#mp4-gif)) | **Yes** (Kaleido) — ffmpeg is bundled |
 
-## Kaleido needs a Chrome/Chromium binary
+In the app, **Export → Current figure** saves PNG and SVG in your browser from
+the figure on screen, as the plot's camera button does, so those two need no
+Chrome there. Its PDF, the GIF/MP4 replay, and the images in the export bundle
+and the Compare pair bundle still go through Kaleido.
+
+## Kaleido needs Chrome, Chromium or Edge
 
 Static image export (PNG/SVG/PDF) and rasterized animation (GIF/MP4) render
 through [Kaleido](https://github.com/plotly/Kaleido) v1, which drives a headless
-Chrome. `pip install` does **not** install Chrome — run this once:
+browser. It finds an installed Google Chrome, Chromium or Microsoft Edge by
+itself, in the desktop app and in a `pip` install alike, so installing one of
+them is enough. A `pip` install can instead download a copy for Kaleido, once:
 
 ```bash
-kaleido_get_chrome        # or: plotly_get_chrome -y
+plotly_get_chrome -y
 ```
 
-(From Python: `import kaleido; kaleido.get_chrome_sync()`.) On **Streamlit
-Community Cloud** the repo-root `packages.txt` installs `chromium` automatically.
-If Chrome is unavailable, fall back to **HTML** export (it's browser-free) — the
-in-app export buttons pre-flight for Chrome and point you here when it's missing.
+(From Python: `import kaleido; kaleido.get_chrome_sync()`.) Without a browser,
+use **HTML** export; the export panel says so when it finds none.
 
 ## MP4 / GIF
 
+`export_animation` takes the replay figure and returns the encoded bytes; the
+format is keyword-only. The clip lasts what the replay does — the reading time
+over the playback speed — unless you pass `frame_duration_ms`:
+
+```python
+from pathlib import Path
+
+import scanpath_studio as sps
+from scanpath_studio.animation_export import export_animation
+
+words, fixations = sps.load_sample_data()
+anim = sps.animate_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele_r0")
+clip = export_animation(anim, fmt="mp4")  # or "gif"
+Path("replay.mp4").write_bytes(clip)
+```
+
 - **GIF** is encoded by Pillow; **MP4** uses the ffmpeg binary bundled by the
   `imageio[ffmpeg]` dependency — no system ffmpeg needed.
-- If `export_animation` raises, you most likely installed `imageio` without the
-  `[ffmpeg]` extra, or Chrome is missing for the per-frame render.
+- If `export_animation` raises, Chrome is usually missing (see above).
 - The CLI's `--animate` writes **interactive HTML** only; use the Python API for
   GIF/MP4.
-
-## Complete tabular export
-
-In **Export → Export bundle**, select **Full measure family** to add saccades,
-sentence measures, trial and reader summaries, character grids, cleaning QA,
-and `run_config.json` alongside the existing fixation and word-measure files.
-The zip contains both per-trial files and concatenated `aggregate/all_*` files.
-The run configuration records preprocessing and visualization settings so the
-numbers can be reproduced later.
 
 ## Common issues
 
@@ -62,7 +73,3 @@ numbers can be reproduced later.
     visualization rail, or `canvas_size=(W, H)` in the API) — e.g.
     `(2560, 1440)` for OneStop.
 
-??? question "OneStop server data"
-    Pointing the app at a full OneStop export uses `$ONESTOP_DATA_DIR`; see
-    [AGENTS.md](https://github.com/lacclab/scanpath-studio/blob/main/AGENTS.md)
-    for the sharding/loader details.

@@ -51,7 +51,9 @@ from a headless script.
    `latexmk -pdf sn-article.tex` in `../overleaf/` and report any errors.
 6. **Interface figures** (only when asked for them, or for `all`): these need
    the app up. Start it — `uv run streamlit run streamlit_app.py --server.port
-   8599`, or the `scanpath` entry in `.claude/launch.json` — then run
+   8599 --server.address 127.0.0.1` (the port the script expects), or the
+   `scanpath-studio` entry in `.claude/launch.json`, which serves on 8511, so
+   then set `PAPER_APP_URL=http://localhost:8511` — then run
    `PAPER_FIGURES_DIR=../overleaf/figures uv run --with playwright python
    paper/paper_ui_screenshots.py`. Playwright's Chromium must be installed
    (`playwright install chromium`, or set `PAPER_CHROME`). The script leaves

@@ -1,6 +1,9 @@
 include README.md
 include LICENSE
+include NOTICE
 recursive-include scanpath_studio/sample_data *.csv
 recursive-include scanpath_studio/sample_data *.parquet
-recursive-include scanpath_studio/sample_data *.feather
 recursive-include scanpath_studio/sample_data *.png
+# ENG-61: the suite needs the whole repository (streamlit_app.py, docs/,
+# CITATION.cff, tracker/), so a partial copy in the sdist could never run.
+prune tests

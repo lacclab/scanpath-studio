@@ -1,0 +1,22 @@
+# External-link check for the docs (ENG-79) — run weekly by
+# .github/workflows/links.yml, or locally with `lychee --config lychee.toml
+# 'docs/**/*.md' README.md CONTRIBUTING.md`.
+
+max_retries = 3
+timeout = 20
+# 429 is a rate limit, not a dead link.
+accept = ["200..=299", "429"]
+
+exclude = [
+  # Local servers the docs tell you to open.
+  '^https?://(localhost|127\.0\.0\.1)',
+  # The docs site itself: `mkdocs build --strict` checks every internal link.
+  '^https://lacclab\.github\.io/scanpath-studio',
+  # Links GitHub serves only to a signed-in browser.
+  '^https://github\.com/lacclab/scanpath-studio/(edit|issues/new)',
+  # The hosted demo sleeps and wakes for a browser only.
+  '^https://scanpath-studio\.streamlit\.app',
+  # Publishers answer a DOI's redirect with 403 to anything that is not a
+  # browser; the DOIs themselves are stable identifiers.
+  '^https://doi\.org/',
+]

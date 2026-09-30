@@ -16,14 +16,24 @@ import argparse
 import json
 import os
 import re
+import shlex
 import sys
+from dataclasses import replace
 from importlib import resources
 from pathlib import Path
 
 import pandas as pd
 
 from . import __version__
-from .code_snippet import SnippetSource
+from .code_snippet import (
+    SOURCE_AUTHOR,
+    SOURCE_DEMO,
+    SOURCE_MULTIPLEYE,
+    SOURCE_ONESTOP,
+    SOURCE_POTEC,
+    SnippetSource,
+    source_canvas,
+)
 from .constants import (
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_SYMBOL,
@@ -38,7 +48,10 @@ from .constants import (
     SACCADE_DASH_OPTIONS,
     SACCADE_WIDTH_BOUNDS,
     UNIFORM_COLOR_FIELD,
+    benchmark_corpora_enabled,
     drift_correction_enabled,
+    multipleye_enabled,
+    palette_settings,
 )
 
 
@@ -59,6 +72,124 @@ def _drift_algorithm(value: str) -> str:
             f"unknown algorithm {value!r}; choose one of {', '.join(ALGORITHMS)}."
         )
     return name
+
+
+def _colorscale_name(value: str) -> str:
+    """Validate ``--heatmap-colorscale`` / ``--fixation-colorscale`` (EXP-13).
+
+    An argparse ``type=`` like :func:`_drift_algorithm`: a name Plotly doesn't
+    know otherwise surfaced as a ``PlotlyError`` traceback from deep inside the
+    builder, after the data had already loaded."""
+    import difflib
+
+    from plotly.colors import get_colorscale, named_colorscales
+    from plotly.exceptions import PlotlyError
+
+    try:
+        get_colorscale(str(value))
+    except PlotlyError:
+        names = named_colorscales()
+        close = difflib.get_close_matches(str(value).lower(), names, n=3, cutoff=0.6)
+        hint = f" Closest: {', '.join(close)}." if close else ""
+        raise argparse.ArgumentTypeError(
+            f"unknown colorscale {value!r}.{hint} Any Plotly named colorscale "
+            "works, e.g. Viridis, Greens, Blues, Cividis; append _r to reverse one."
+        )
+    return str(value)
+
+
+#: The API keyword each schema flag stands for (EXP-13; the raw-gaze one EXP-20).
+_SCHEMA_FLAGS = {
+    "word_schema": "--word-schema",
+    "fix_schema": "--fix-schema",
+    "raw_gaze_schema": "--raw-gaze-schema",
+}
+
+
+def _add_schema_flags(group) -> None:
+    """``--word-schema`` / ``--fix-schema`` on ``render`` and ``analyze``."""
+    for flag, table in (("--word-schema", "--words"), ("--fix-schema", "--fixations")):
+        group.add_argument(
+            flag,
+            metavar="JSON",
+            help=f"Column mapping for the {table} table, replacing auto-detection: "
+            "a JSON object (or a path to a .json file holding one) from each "
+            'field to a column name, e.g. \'{"trial": "TRIAL_INDEX", '
+            '"word_id": "IA_ID", ...}\' — the same dict '
+            "api.load_scanpath_data takes. Needed only when a column isn't "
+            "recognised; the error then prints a mapping to start from.",
+        )
+
+
+def _parse_schema_arg(value: str | None, flag: str) -> dict | None:
+    """``--word-schema`` / ``--fix-schema`` → the mapping dict (EXP-13).
+
+    Inline JSON when it starts with ``{``, a path to a ``.json`` file otherwise,
+    so a mapping too long for a shell line can live next to the data."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text.startswith("{"):
+        try:
+            text = Path(text).expanduser().read_text(encoding="utf-8")
+        except OSError as exc:
+            raise SystemExit(
+                f"{flag}: {value!r} is neither a JSON object nor a readable file "
+                f"({exc.strerror or exc})."
+            )
+    try:
+        mapping = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(
+            f"{flag}: not valid JSON ({exc.msg}, line {exc.lineno} column "
+            f'{exc.colno}). Expected an object such as \'{{"trial": "TRIAL_INDEX"}}\'.'
+        )
+
+    def is_column(item) -> bool:
+        return item is None or isinstance(item, str)
+
+    if not isinstance(mapping, dict) or not all(
+        isinstance(key, str)
+        and (
+            is_column(column)
+            or (isinstance(column, list) and all(isinstance(c, str) for c in column))
+        )
+        for key, column in mapping.items()
+    ):
+        raise SystemExit(
+            f"{flag} expects a JSON object from each field to a column name (a "
+            "list of names for a composite id, or null to leave a field unmapped)."
+        )
+    return mapping
+
+
+def _load_error_message(exc: Exception, *, schema_flags: bool = True) -> str:
+    """A load failure as the command line should say it (EXP-13).
+
+    A :class:`api.SchemaError` ends with the API's "pass ``word_schema={…}``"
+    hint, which a shell user has no way to act on; this swaps it for the
+    ``--word-schema`` / ``--fix-schema`` form. ``schema_flags=False`` is for the
+    second comparison dataset, which has no mapping flag of its own."""
+    from .api import SchemaError
+
+    if not isinstance(exc, SchemaError):
+        return str(exc)
+    flag = _SCHEMA_FLAGS.get(exc.param)
+    if flag is None or not schema_flags:
+        return (
+            f"{exc.detail}\nThis table's columns have to be auto-detected here — "
+            "rename them, or build the figure in Python, where "
+            f"api.load_scanpath_data takes {exc.param}=."
+        )
+    detail = exc.detail.replace(exc.param, flag)
+    if exc.mapping is None:
+        return f"{detail}\nCorrect the column names in {flag}, or drop it to use auto-detection."
+    example = json.dumps(exc.mapping)
+    return (
+        f"{detail}\nTo map the columns yourself, pass the full mapping as JSON — it "
+        "replaces auto-detection, so it needs every required key:\n"
+        f"  {flag} {shlex.quote(example)}\n(or a path to a .json file holding it)."
+    )
 
 
 def _theme_cli_flags() -> list[str]:
@@ -85,12 +216,61 @@ def _max_upload_cli_flags(extra_args) -> list[str]:
     ``server.maxUploadSize`` and rejected any table over 200 MB — which is a
     normal size for a real fixation report. An explicit ``--server.*`` flag from
     the caller still wins.
+
+    ENG-68: a deployment's own ``SCANPATH_MAX_UPLOAD_MB``, when lower, is
+    passed to the server as well, so the cap the upload boxes show is one the
+    server enforces rather than only the browser.
     """
-    from .constants import UPLOAD_MAX_SIZE_MB
+    from .constants import UPLOAD_MAX_SIZE_MB, configured_upload_limit_mb
 
     if any(str(arg).startswith("--server.maxUploadSize") for arg in extra_args):
         return []
-    return [f"--server.maxUploadSize={UPLOAD_MAX_SIZE_MB}"]
+    limit = min(configured_upload_limit_mb() or UPLOAD_MAX_SIZE_MB, UPLOAD_MAX_SIZE_MB)
+    return [f"--server.maxUploadSize={limit}"]
+
+
+#: Where ``scanpath-studio`` listens unless told otherwise (ENG-55).
+LOOPBACK_ADDRESS = "127.0.0.1"
+
+
+def _configured_server_address() -> str | None:
+    """``server.address`` from a ``config.toml`` that ``streamlit run`` reads.
+
+    Read here with ``tomllib`` rather than through ``streamlit.config``, whose
+    parse is cached: parsing once now and again (with the flags) at launch makes
+    Streamlit log that the ``[server]`` section changed and must be restarted."""
+    import tomllib
+
+    from streamlit import config as st_config
+
+    for path in st_config.get_config_files("config.toml"):
+        try:
+            with open(path, "rb") as handle:
+                address = (tomllib.load(handle).get("server") or {}).get("address")
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+        if address:
+            return str(address)
+    return None
+
+
+def _bind_cli_flags(extra_args) -> list[str]:
+    """Bind to loopback unless the caller chose an address (ENG-55).
+
+    Streamlit's own default is every interface (``0.0.0.0``), and the app has
+    no login: a local run on a campus or café network served the loaded corpus
+    — and the on-device recovery cache — to anyone who could reach the port.
+    The desktop launcher already bound loopback (S1); every other launch now
+    does too. An address the user set anywhere Streamlit reads one — a
+    ``--server.address`` flag, ``STREAMLIT_SERVER_ADDRESS``, or a
+    ``config.toml`` — wins, so serving on a network stays one flag away."""
+    if any(str(arg).startswith("--server.address") for arg in extra_args):
+        return []
+    if os.environ.get("STREAMLIT_SERVER_ADDRESS"):
+        return []
+    if _configured_server_address() is not None:
+        return []
+    return [f"--server.address={LOOPBACK_ADDRESS}"]
 
 
 def launch_app(extra_args: list[str]) -> None:
@@ -133,6 +313,7 @@ def launch_app(extra_args: list[str]) -> None:
             *theme_args,
             *stats_args,
             *_max_upload_cli_flags(extra_args),
+            *_bind_cli_flags(extra_args),
             *extra_args,
         ]
         sys.exit(stcli.main())
@@ -154,7 +335,9 @@ def _render_parser() -> argparse.ArgumentParser:
     src.add_argument(
         "--sample",
         action="store_true",
-        help="Use the bundled 3-participant OneStop demo data.",
+        help="Use the bundled OneStop demo: word boxes for 3 readers, "
+        "fixations — so trials to render — for 2 of them (--list-trials shows "
+        "which).",
     )
     src.add_argument(
         "--authoring",
@@ -165,16 +348,18 @@ def _render_parser() -> argparse.ArgumentParser:
         "--words",
         metavar="PATH",
         nargs="+",
-        help="Words/IA table(s) (csv/tsv/parquet/feather). Multiple paths or a "
-        "quoted glob pattern concatenate multi-file datasets.",
+        help="Words/IA table(s) (csv/tsv/txt/tab/parquet/feather/xlsx/xls, or a .zip of them); columns are "
+        "auto-detected from EyeLink, Gazepoint, Tobii, SMI, Pupil Labs and "
+        "snake_case names. Multiple paths or a quoted glob pattern concatenate "
+        "multi-file datasets.",
     )
     src.add_argument(
         "--fixations",
         metavar="PATH",
         nargs="+",
-        help="Fixations table(s) (csv/tsv/parquet/feather). Multiple paths or "
-        "a quoted glob pattern concatenate multi-file datasets (e.g. one file "
-        "per participant).",
+        help="Fixations table(s) (csv/tsv/txt/tab/parquet/feather/xlsx/xls, or a .zip of them), auto-detected like "
+        "--words. Multiple paths or a quoted glob pattern concatenate "
+        "multi-file datasets (e.g. one file per participant).",
     )
     src.add_argument(
         "--image-root",
@@ -196,6 +381,7 @@ def _render_parser() -> argparse.ArgumentParser:
         "inside each logical trial. Use with --words/--fixations when the source "
         "tables have no explicit screen columns.",
     )
+    _add_schema_flags(src)
     src.add_argument(
         "--potec",
         metavar="DIR",
@@ -204,17 +390,26 @@ def _render_parser() -> argparse.ArgumentParser:
         "75 reader ids (sparse within 0–105; --list-trials shows them), trials "
         "are text ids (b0–b5, p0–p5).",
     )
+
+    # DATA-55: the harmonised benchmark corpora are held back from the beta, the
+    # same way DATA-54 holds back MultiplEYE's flags below: they still parse and
+    # work, but `--help` (and the generated CLI reference) doesn't list them.
+    def benchmark_help(text: str) -> str:
+        return text if benchmark_corpora_enabled() else argparse.SUPPRESS
+
     src.add_argument(
         "--eyegenbench",
         metavar="DIR",
-        help="EyeGenBench bundle directory (built by "
-        "scripts/prepare_eyegenbench.py). Pick the corpus with "
-        "--eyegenbench-dataset.",
+        help=benchmark_help(
+            "EyeGenBench bundle directory (built by "
+            "scripts/prepare_eyegenbench.py). Pick the corpus with "
+            "--eyegenbench-dataset."
+        ),
     )
     src.add_argument(
         "--eyegenbench-dataset",
         metavar="NAME",
-        help="Which EyeGenBench corpus to render, e.g. PoTeC.",
+        help=benchmark_help("Which EyeGenBench corpus to render, e.g. PoTeC."),
     )
     src.add_argument(
         "--onestop",
@@ -260,28 +455,41 @@ def _render_parser() -> argparse.ArgumentParser:
         help="OneStop source variant for --onestop: 'public' (OSF download) or "
         "'lacclab' (a local lab-processed export; no download).",
     )
+
+    # DATA-54: MultiplEYE is held back from the beta. Its flags still parse and
+    # work, so a script that already uses them keeps running (PRE-22's rule), but
+    # `--help` — and the docs' reference, generated from it — don't list them.
+    def mpe_help(text: str) -> str:
+        return text if multipleye_enabled() else argparse.SUPPRESS
+
     src.add_argument(
         "--source",
         metavar="NAME",
         choices=["multipleye"],
-        help="Load a native server-bundle corpus from its RAW export instead of "
-        "raw words/fixations tables. Currently only 'multipleye' — pair with "
-        "--export DIR. Renders through the same native loader (correct word "
-        "boxes/text/page layout, 1920x1080 monitor) as the interactive viewer.",
+        help=mpe_help(
+            "Load a native server-bundle corpus from its RAW export instead of "
+            "raw words/fixations tables. Currently only 'multipleye' — pair with "
+            "--export DIR. Renders through the same native loader (correct word "
+            "boxes/text/page layout, 1920x1080 monitor) as the interactive viewer."
+        ),
     )
     src.add_argument(
         "--export",
         metavar="DIR",
-        help="Raw export root for --source (e.g. a MultiplEYE_*_* export dir with "
-        "per-session scanpaths/ subfolders). Defaults to $MULTIPLEYE_DATA_DIR "
-        "for --source multipleye.",
+        help=mpe_help(
+            "Raw export root for --source (e.g. a MultiplEYE_*_* export dir with "
+            "per-session scanpaths/ subfolders). Defaults to $MULTIPLEYE_DATA_DIR "
+            "for --source multipleye."
+        ),
     )
     src.add_argument(
         "--no-question-screens",
         action="store_true",
-        help="--source multipleye: load the reading pages only, leaving out the "
-        "comprehension-question screens (they are included by default, as "
-        "screens of the same trial).",
+        help=mpe_help(
+            "--source multipleye: load the reading pages only, leaving out the "
+            "comprehension-question screens (they are included by default, as "
+            "screens of the same trial)."
+        ),
     )
 
     src.add_argument(
@@ -461,7 +669,9 @@ def _render_parser() -> argparse.ArgumentParser:
         action="append",
         help="Override a reading-type colour, e.g. --saccade-type-color "
         "regression=#000000 (repeatable; classes: forward, skip, refixation, "
-        "return_sweep, regression). Implies --saccade-color-by-type.",
+        "return_sweep, regression). Implies --saccade-color-by-type, unless "
+        "--saccade-color-by-direction is given — then it recolours that two-way "
+        "split (its forward and regression colours).",
     )
     viz.add_argument(
         "--no-saccade-type-legend",
@@ -477,7 +687,9 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar="START:END",
         help="VIZ-7: draw only fixations START through END of the trial "
         "(1-based, both inclusive), e.g. --fix-index-range 1:40. Honoured by "
-        "--animate too, which then replays only that window.",
+        "--animate too, which then replays only that window, and by "
+        "--compare-with, which windows both scanpaths (unless "
+        "--compare-fix-index-range gives B its own).",
     )
     viz.add_argument(
         "--highlight-column",
@@ -562,7 +774,7 @@ def _render_parser() -> argparse.ArgumentParser:
             default=None,
             help="Correct vertical drift before plotting (PRE-3): snap each "
             "fixation to its assigned text line and colour the fixations by "
-            "line, exactly like the app's Fixations ⚙️ → Drift correction. "
+            "line, exactly like the app's 👁️ Fixations ▾ → Drift correction. "
             f"ALGORITHM is one of: {', '.join(ALGORITHMS)} "
             "(default: no correction). Static figures only — not honored with "
             "--animate.",
@@ -587,9 +799,10 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--color-by",
         metavar="FIELD",
-        help=f"Fixation color field, e.g. duration_ms or gpt2_surprisal "
-        f"(default: {UNIFORM_COLOR_FIELD} — one flat colour, since marker size "
-        f"already shows duration).",
+        help=f"Fixation color field, e.g. duration_ms or gpt2_surprisal, or "
+        f"'line' to colour each fixation by its text line (same as "
+        f"--color-by-line; default: {UNIFORM_COLOR_FIELD} — one flat colour, "
+        f"since marker size already shows duration).",
     )
     viz.add_argument(
         "--fixation-color",
@@ -622,6 +835,7 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--heatmap-colorscale",
         metavar="NAME",
+        type=_colorscale_name,
         help="Heatmap colorscale, e.g. Greens (default: the app's default).",
     )
     viz.add_argument(
@@ -634,6 +848,7 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--fixation-colorscale",
         metavar="NAME",
+        type=_colorscale_name,
         help="Fixation-marker colorscale, e.g. Blues (default: the app's default).",
     )
     viz.add_argument(
@@ -692,6 +907,186 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar="O",
         help="Stimulus-image opacity 0.1–1.0 (default: 1.0 = opaque). Lower it to "
         "dim a busy image so the fixations / saccades / word boxes read over it.",
+    )
+    # EXP-20 — a flag for every figure option `render` could not say before, so
+    # the command the Share subtab prints (`code_snippet._CLI_EMITTERS`) draws
+    # the figure rather than naming what it left out. Each is spelled after its
+    # figure option and takes that option's own value; `_DIRECT_OPTION_FLAGS` /
+    # `_SWITCH_OPTION_FLAGS` below hand them to the builder.
+    viz.add_argument(
+        "--fixation-opacity",
+        type=float,
+        metavar="O",
+        help="Fixation marker opacity, 0.1–1.0 (default: 0.7, so overlapping "
+        "fixations show through).",
+    )
+    viz.add_argument(
+        "--hollow-fixations",
+        action="store_true",
+        help="Draw the fixations as outlines instead of filled markers.",
+    )
+    viz.add_argument(
+        "--color-by-line",
+        action="store_true",
+        help="Colour each fixation by the text line it lands on (lines inferred "
+        "from the word boxes); overrides --color-by. Same as --color-by line.",
+    )
+    viz.add_argument(
+        "--fixation-color-range",
+        nargs=2,
+        type=float,
+        metavar=("LO", "HI"),
+        help="Pin the --color-by colour scale to LO..HI instead of the trial's "
+        "own range, so several figures share one scale.",
+    )
+    viz.add_argument(
+        "--heatmap-range",
+        nargs=2,
+        type=float,
+        metavar=("LO", "HI"),
+        help="Pin the heatmap's colour scale to LO..HI instead of the trial's "
+        "own range.",
+    )
+    viz.add_argument(
+        "--order-font-size",
+        type=int,
+        metavar="PX",
+        help="Fixation index label size (default: 10).",
+    )
+    viz.add_argument(
+        "--order-font-color",
+        metavar="COLOR",
+        help="Fixation index label colour (default: #111111).",
+    )
+    viz.add_argument(
+        "--text-color",
+        metavar="COLOR",
+        help="Reading-text colour (default: #000000).",
+    )
+    viz.add_argument(
+        "--highlight-text-color",
+        metavar="COLOR",
+        help="Colour of the --highlight-column words under --critical-span-style "
+        "mark-text (default: #D55E00).",
+    )
+    viz.add_argument(
+        "--span-border-color",
+        metavar="COLOR",
+        help="Box colour under --critical-span-style mark-border (default: #000000).",
+    )
+    viz.add_argument(
+        "--background-color",
+        metavar="COLOR",
+        help="Plot background colour (default: #ffffff).",
+    )
+    viz.add_argument(
+        "--line-spacing",
+        type=float,
+        metavar="N",
+        help="Line slots each word box stands for, which sizes the reading text "
+        "(default: 3 — OneStop's one blank line above and below).",
+    )
+    viz.add_argument(
+        "--no-scale-text-to-boxes",
+        dest="scale_text_to_boxes",
+        action="store_false",
+        help="Draw the reading text at --font-size instead of sizing it from the "
+        "word boxes.",
+    )
+    viz.add_argument(
+        "--word-hover-measure",
+        metavar="FIELD",
+        help="The reading measure a word's hover shows (default: "
+        "total_fixation_duration_ms; '' for none).",
+    )
+    viz.add_argument(
+        "--word-heatmap-col",
+        metavar="COLUMN",
+        help="For a words-only dataset (no fixations): tint each word box by this "
+        "numeric words column — e.g. gpt2_surprisal — instead of its dwell time.",
+    )
+    viz.add_argument(
+        "--word-heatmap-title",
+        metavar="TEXT",
+        help="Colour-bar title for --word-heatmap-col (default: Value).",
+    )
+    viz.add_argument(
+        "--x-field",
+        metavar="FIELD",
+        help="Fixation column on the x axis (default: x). A non-spatial one "
+        "draws a chart of the fixations instead of the scanpath.",
+    )
+    viz.add_argument(
+        "--y-field",
+        metavar="FIELD",
+        help="Fixation column on the y axis (default: y).",
+    )
+    viz.add_argument(
+        "--no-full-monitor",
+        dest="fit_to_monitor",
+        action="store_false",
+        help="Frame the axes on the data instead of the whole --canvas monitor.",
+    )
+    viz.add_argument(
+        "--colorbars",
+        dest="show_colorbars",
+        action="store_true",
+        help="Draw the colour bars for --color-by and the heatmap.",
+    )
+    viz.add_argument(
+        "--colorbar-orientation",
+        choices=["vertical", "horizontal"],
+        help="With --colorbars: beside the plot (vertical, default) or below it.",
+    )
+    viz.add_argument(
+        "--colorbar-tickangle",
+        type=int,
+        metavar="DEG",
+        help="With --colorbars: tick-label angle, -90–90 (default: 0).",
+    )
+    viz.add_argument(
+        "--colorbar-tickfont-size",
+        type=int,
+        metavar="PX",
+        help="With --colorbars: tick-label size (default: 12).",
+    )
+    viz.add_argument(
+        "--raw-gaze",
+        metavar="PATH",
+        nargs="+",
+        help="Raw (sample-level) gaze table(s) to draw under the fixations, "
+        "columns auto-detected like --fixations (same formats; several "
+        "paths or a quoted glob concatenate). Static figures only.",
+    )
+    viz.add_argument(
+        "--sample-raw-gaze",
+        action="store_true",
+        help="With --sample: draw the bundled demo's raw gaze (synthesized, for "
+        "one trial — the one the app overlays it on).",
+    )
+    viz.add_argument(
+        "--raw-gaze-schema",
+        metavar="JSON",
+        help="Column mapping for the --raw-gaze table, replacing auto-detection "
+        "(same shape as --fix-schema); needed only when a column isn't "
+        "recognised.",
+    )
+    viz.add_argument(
+        "--raw-gaze-color",
+        metavar="COLOR",
+        help="Raw-gaze sample colour (default: #888888).",
+    )
+    viz.add_argument(
+        "--raw-gaze-marker-size",
+        type=float,
+        metavar="PX",
+        help="Raw-gaze sample size, 1–12 (default: 4).",
+    )
+    viz.add_argument(
+        "--raw-gaze-opacity",
+        type=float,
+        metavar="O",
+        help="Raw-gaze sample opacity, 0.1–1.0 (default: 0.6).",
     )
     viz.add_argument(
         "--width",
@@ -820,9 +1215,10 @@ def _render_parser() -> argparse.ArgumentParser:
         choices=["overlay", "side-by-side", "stacked"],
         default="overlay",
         help="How the two scanpaths are arranged (default: overlay). Across two "
-        "datasets, overlay needs both to have been recorded on the same known "
-        "screen — otherwise it is refused rather than silently split, so pass "
-        "side-by-side or stacked for a mismatched pair.",
+        "datasets, overlay needs both canvases to be the same size — two "
+        "different canvases are refused rather than silently split, so pass "
+        "side-by-side or stacked for them. Matching canvases that a dataset "
+        "never recorded still overlay, with a warning.",
     )
     cmp_group.add_argument(
         "--compare-stimulus",
@@ -846,6 +1242,72 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar="TEXT",
         help="Trace label for the SECOND scanpath, replacing the composed "
         "default. Requires --label-a.",
+    )
+    cmp_group.add_argument(
+        "--compare-legend",
+        dest="show_legend",
+        action="store_true",
+        help="Draw a legend naming the two scanpaths (the app's A/B legend). "
+        "Applies to the --animate co-animation too.",
+    )
+    # EXP-20. Named after `compare_scanpaths`'s `style_a` / `style_b`, like the
+    # `--label-a` / `--label-b` pair above.
+    for side, which in (("a", "FIRST"), ("b", "SECOND")):
+        cmp_group.add_argument(
+            f"--style-{side}",
+            dest=f"style_{side}",
+            action="append",
+            metavar="SPEC",
+            help=f"Styling for the {which} scanpath, repeatable: KEY=VALUE[,...] "
+            "with KEY one of fix_color / saccade_color (#RRGGBB), saccade_style "
+            f"({'|'.join(SACCADE_DASH_OPTIONS.values())}), saccade_width (px), "
+            "marker_size_range (MIN:MAX), opacity (0.1–1), hollow (true|false) — "
+            f"e.g. --style-{side} fix_color=#D55E00,opacity=0.5.",
+        )
+    # CMP-24: scanpath B's own filters — the app's "· B" blocks under 🧹 Filter.
+    # A's are the ordinary --fixation-flag / --saccade-classes /
+    # --fix-index-range, which on their own filter both scanpaths.
+    cmp_group.add_argument(
+        "--compare-fixation-flag",
+        dest="compare_fixation_flags",
+        action="append",
+        metavar="SPEC",
+        help="Fixation classification for the SECOND scanpath only, repeatable; "
+        "same SPEC as --fixation-flag, e.g. --compare-fixation-flag "
+        "short=discard,threshold_ms=80. Replaces --fixation-flag for B.",
+    )
+    cmp_group.add_argument(
+        "--compare-saccade-classes",
+        dest="compare_saccade_classes",
+        metavar="CLASSES",
+        help="The reading classes the SECOND scanpath draws, comma-separated "
+        "(same names as --saccade-classes). Replaces --saccade-classes for B. "
+        "Not with --animate, which draws every class.",
+    )
+    cmp_group.add_argument(
+        "--compare-fix-index-range",
+        dest="compare_fix_index_range",
+        metavar="START:END",
+        help="Draw only fixations START through END of the SECOND scanpath "
+        "(1-based, inclusive). Replaces --fix-index-range for B.",
+    )
+    cmp_group.add_argument(
+        "--stimulus-image-b",
+        metavar="PATH",
+        help="The SECOND scanpath's stimulus image, for a side-by-side or stacked "
+        "comparison across two datasets (each panel draws its own page). Sized "
+        "and placed like --stimulus-image.",
+    )
+    cmp_group.add_argument(
+        "--stimulus-image-size-b",
+        metavar="WxH",
+        help="Size of --stimulus-image-b in px (default: the PNG's own size, "
+        "else --compare-canvas, else --canvas).",
+    )
+    cmp_group.add_argument(
+        "--stimulus-image-origin-b",
+        metavar="X,Y",
+        help="Top-left of --stimulus-image-b in the second screen's px (default: 0,0).",
     )
     cmp_group.add_argument(
         "--compare-words",
@@ -872,41 +1334,110 @@ def _render_parser() -> argparse.ArgumentParser:
         "--compare-canvas",
         metavar="WxH",
         help="Second dataset's monitor size in px, e.g. 1680x1050. Read off its "
-        "data when omitted. Overlay compares this against --canvas.",
+        "data when omitted. An overlay, or an --animate co-animation, compares "
+        "this against --canvas.",
     )
-    # These two are accepted and recorded on the setup snapshots but are not read
-    # by the current render path: CMP-11 shipped as a gate, not a rescaling, so
-    # nothing converts to degrees. They exist because SetupSnapshot is on the CLI
-    # surface now and a half-populated one is worse than a complete one.
-    cmp_group.add_argument(
-        "--monitor-mm",
-        type=float,
-        default=None,
-        metavar="MM",
-        help="Physical width of the FIRST dataset's monitor, in millimetres.",
-    )
-    cmp_group.add_argument(
-        "--viewing-distance",
-        type=float,
-        default=None,
-        metavar="MM",
-        help="Eye-to-screen distance for the FIRST dataset, in millimetres.",
-    )
-    cmp_group.add_argument(
-        "--compare-monitor-mm",
-        type=float,
-        default=None,
-        metavar="MM",
-        help="Physical width of the SECOND dataset's monitor, in millimetres.",
-    )
-    cmp_group.add_argument(
-        "--compare-viewing-distance",
-        type=float,
-        default=None,
-        metavar="MM",
-        help="Eye-to-screen distance for the SECOND dataset, in millimetres.",
-    )
+    # BUG-85 removed --monitor-mm / --viewing-distance and their --compare-*
+    # twins: they were recorded on the setup snapshots and read by nothing —
+    # CMP-11 is a gate on pixels, not a rescaling, so no figure used them.
     return parser
+
+
+#: EXP-20 — flags whose value *is* the figure option's value, each named after
+#: the option (`--fixation-opacity` → `fixation_opacity`), so they reach the
+#: builder unchanged whenever given.
+_DIRECT_OPTION_FLAGS = (
+    "fixation_opacity",
+    "order_font_size",
+    "order_font_color",
+    "text_color",
+    "highlight_text_color",
+    "span_border_color",
+    "background_color",
+    "line_spacing",
+    "word_hover_measure",
+    "x_field",
+    "y_field",
+    "colorbar_tickangle",
+    "colorbar_tickfont_size",
+    "raw_gaze_color",
+    "raw_gaze_marker_size",
+    "raw_gaze_opacity",
+    "word_heatmap_col",
+    "word_heatmap_title",
+)
+
+#: The direct options whose ``None`` is a choice, written ``''`` on the command
+#: line (`code_snippet._optional_valued`).
+_NONE_WHEN_EMPTY = frozenset(
+    {"word_hover_measure", "word_heatmap_col", "word_heatmap_title"}
+)
+
+#: …and the switches, as ``option → the value the flag sets``. Passed only when
+#: flipped, so a bare `render` keeps handing the builder its own defaults.
+_SWITCH_OPTION_FLAGS = {
+    "hollow_fixations": True,
+    "color_by_line": True,
+    "show_colorbars": True,
+    "scale_text_to_boxes": False,
+    "fit_to_monitor": False,
+}
+
+#: The keys `--style-a` / `--style-b` take, each with its value parser.
+_STYLE_KEYS = (
+    "fix_color",
+    "saccade_color",
+    "saccade_style",
+    "saccade_width",
+    "marker_size_range",
+    "opacity",
+    "hollow",
+)
+
+
+def _parse_style_spec(specs: list[str] | None, flag: str) -> dict | None:
+    """``["fix_color=#aa0000,opacity=0.5"]`` → ``compare_scanpaths``'s style dict.
+
+    The inverse of `code_snippet._style_spec`. Colours are ``#RRGGBB`` only —
+    the value is split on commas, so a CSS ``rgb(…)`` could never arrive whole —
+    and every value is checked here rather than left to fail inside the builder.
+    """
+    if not specs:
+        return None
+    dashes = tuple(SACCADE_DASH_OPTIONS.values())
+    style: dict = {}
+    for spec in specs:
+        for option in (part.strip() for part in spec.split(",") if part.strip()):
+            name, sep, raw = option.partition("=")
+            name, raw = name.strip(), raw.strip()
+            try:
+                if not sep or name not in _STYLE_KEYS:
+                    raise ValueError
+                if name in ("fix_color", "saccade_color"):
+                    if not re.fullmatch(r"#[0-9A-Fa-f]{6}", raw):
+                        raise ValueError
+                    style[name] = raw
+                elif name == "saccade_style":
+                    if raw not in dashes:
+                        raise ValueError
+                    style[name] = raw
+                elif name == "marker_size_range":
+                    lo, hi = (int(part) for part in raw.split(":"))
+                    style[name] = (min(lo, hi), max(lo, hi))
+                elif name == "hollow":
+                    if raw.lower() not in ("1", "0", "true", "false", "yes", "no"):
+                        raise ValueError
+                    style[name] = raw.lower() in ("1", "true", "yes")
+                else:  # saccade_width, opacity
+                    style[name] = float(raw)
+            except ValueError:
+                raise SystemExit(
+                    f"{flag}: can't read {option!r}. Expected KEY=VALUE with KEY "
+                    f"one of {', '.join(_STYLE_KEYS)} — colours as #RRGGBB, "
+                    f"saccade_style one of {', '.join(dashes)}, marker_size_range "
+                    "as MIN:MAX, hollow as true/false."
+                )
+    return style
 
 
 def _compare_labels(args) -> tuple[str, str] | None:
@@ -951,20 +1482,24 @@ def _compare_second_dataset(api, args, words, fixations):
             True,
         )
     except (ValueError, FileNotFoundError, OSError) as exc:
-        raise SystemExit(f"--compare-words/--compare-fixations: {exc}")
+        raise SystemExit(
+            "--compare-words/--compare-fixations: "
+            + _load_error_message(exc, schema_flags=False)
+        )
 
 
 def _compare_animation_frames(api, args, words, fixations, canvas) -> dict:
-    """B's single-trial frames for a dual co-animation, gated like the overlay.
+    """`animate_scanpath`'s keywords for scanpath B of a dual co-animation.
 
-    A co-animation draws both readings on one clock in one coordinate space —
-    i.e. an overlay — so it is refused for two different screens on exactly the
-    same terms `compare_scanpaths` refuses `layout="overlay"`, rather than
-    quietly replaying scanpath A alone (which is what happened before CMP-9
-    reached this branch at all).
+    B's single-trial frames and, when they come from a second dataset, that
+    dataset's name and whatever screens the flags state. A co-animation draws
+    both readings on one clock in one coordinate space — an overlay — so the API
+    refuses two different screens on exactly the terms `compare_scanpaths`
+    refuses ``layout="overlay"``, reading a screen the flags don't state off its
+    data (CMP-21). This used to check only when ``--compare-canvas`` was given,
+    and co-animated without looking otherwise.
     """
-    from .experimental_setup import setups_comparable
-    from .utils import extract_trial, qualify_for_compare
+    from .utils import extract_trial
 
     participant_b, trial_b = _parse_compare_with(args.compare_with)
     words_b, fixations_b, cross_dataset = _compare_second_dataset(
@@ -977,69 +1512,61 @@ def _compare_animation_frames(api, args, words, fixations, canvas) -> dict:
             f"No fixations for the compared scanpath participant={participant_b!r}, "
             f"trial={trial_b!r}. Use --list-trials to see the available pairs."
         )
+    frames = {"words_b": trial_words_b, "fixations_b": trial_fix_b}
     if cross_dataset:
-        setup_a = _compare_setup_snapshot(
-            canvas, args.monitor_mm, args.viewing_distance
+        frames.update(
+            dataset_b=args.compare_dataset_name,
+            setup=_compare_setup_snapshot(canvas),
+            setup_b=_compare_setup_snapshot(_parse_canvas(args.compare_canvas)),
         )
-        setup_b = _compare_setup_snapshot(
-            _parse_canvas(args.compare_canvas),
-            args.compare_monitor_mm,
-            args.compare_viewing_distance,
+    return frames
+
+
+def _inferred_screen_hint(args, canvas: tuple | None) -> str:
+    """The flag that states a screen a refusal only read off the data (CMP-21).
+
+    `setups_comparable` says the readings were *recorded* on different screens,
+    but a screen no flag gives is the extent of that trial's data — rarely the
+    whole display — so `render` names the flag that states it.
+    """
+    a_inferred, b_inferred = canvas is None, args.compare_canvas is None
+    if a_inferred and b_inferred:
+        return (
+            " Neither screen was stated, so both were read off the data, which "
+            "rarely spans the whole screen; if they were shown on one, state it "
+            "with --canvas and --compare-canvas."
         )
-        if setup_a is not None and setup_b is not None:
-            comparable, note = setups_comparable(setup_a, setup_b)
-            if not comparable:
-                raise SystemExit(
-                    f"{note} An animated comparison replays both readings on one "
-                    f"clock in one coordinate space, so it needs the same screen. "
-                    f"Drop --animate to compare them as separate panels."
-                )
-            if note:
-                # Allowed, but the matching canvas is a shared default rather than
-                # a recorded screen. Same stream as the other render warnings.
-                print(f"Warning: {note}", file=sys.stderr)
-        trial_words_b = qualify_for_compare(trial_words_b, args.compare_dataset_name)
-        trial_fix_b = qualify_for_compare(trial_fix_b, args.compare_dataset_name)
-    return {"words_b": trial_words_b, "fixations_b": trial_fix_b}
+    if b_inferred:
+        return (
+            " The second dataset's screen was read off its data, which rarely "
+            "spans the whole screen; if both were shown on one, state it with "
+            "--compare-canvas."
+        )
+    if a_inferred:
+        return (
+            " The first dataset's screen was read off its data, which rarely "
+            "spans the whole screen; if both were shown on one, state it with "
+            "--canvas."
+        )
+    return ""
 
 
-def _compare_setup_snapshot(
-    canvas: tuple | None,
-    monitor_mm: float | None,
-    viewing_distance: float | None,
-):
-    """A `SetupSnapshot` from the CLI's geometry flags, or ``None`` if silent.
+def _compare_setup_snapshot(canvas: tuple | None):
+    """A `SetupSnapshot` for a canvas the caller stated, or ``None`` if silent.
 
-    ``None`` lets `api.compare_scanpaths` infer the screen from the data, which
-    is the right default — inventing a canvas here would be a claim the caller
-    never made.
+    ``None`` lets `api.compare_scanpaths` and `api.animate_scanpath` infer the
+    screen from the data, which is the right default — inventing a canvas here
+    would be a claim the caller never made. A stated canvas is a known screen:
+    ``MEASURED``.
     """
     from .experimental_setup import Provenance, SetupSnapshot
 
-    if canvas is None and monitor_mm is None and viewing_distance is None:
+    if canvas is None:
         return None
-    fields: dict = {}
-    if canvas is not None:
-        fields.update(canvas_width=int(canvas[0]), canvas_height=int(canvas[1]))
-    if monitor_mm is not None:
-        fields["monitor_width_mm"] = float(monitor_mm)
-    if viewing_distance is not None:
-        fields["viewing_distance_mm"] = float(viewing_distance)
     return SetupSnapshot(
-        **fields,
-        # No canvas given means the snapshot carries the *default* one, so it must
-        # say ASSUMED — `setups_comparable` treats that as "screen unknown" and
-        # refuses the overlay. Reporting ESTIMATED here let `--monitor-mm 520`
-        # alone launder a default 2560x1440 into a screen the caller never stated,
-        # and it would then compare equal to a real 2560x1440.
-        screen_provenance=(
-            Provenance.MEASURED if canvas is not None else Provenance.ASSUMED
-        ),
-        geometry_provenance=(
-            Provenance.MEASURED
-            if (monitor_mm is not None and viewing_distance is not None)
-            else Provenance.ASSUMED
-        ),
+        canvas_width=int(canvas[0]),
+        canvas_height=int(canvas[1]),
+        screen_provenance=Provenance.MEASURED,
     )
 
 
@@ -1065,6 +1592,18 @@ def _parse_canvas(value: str | None) -> tuple | None:
     if w <= 0 or h <= 0:
         raise SystemExit(f"--canvas dimensions must be positive, got {value!r}")
     return (w, h)
+
+
+def _parse_saccade_classes_arg(value: str, flag: str) -> list[str]:
+    """A ``--saccade-classes``-style list → the classes in canonical order (VIZ-31)."""
+    names = [p.strip() for p in value.split(",") if p.strip()]
+    unknown = [n for n in names if n not in SACCADE_CLASS_ORDER]
+    if unknown or not names:
+        raise SystemExit(
+            f"{flag} expects a comma-separated subset of "
+            f"{', '.join(SACCADE_CLASS_ORDER)}; got {value!r}."
+        )
+    return [cls for cls in SACCADE_CLASS_ORDER if cls in set(names)]
 
 
 def _parse_fix_index_range(value: str | None) -> tuple | None:
@@ -1199,7 +1738,9 @@ def _snippet_source_from_args(args) -> SnippetSource:
     return cs.SnippetSource(kind=cs.SOURCE_DEMO, label="Bundled Demo")
 
 
-def _print_reproduction_code(api, args, overrides: dict, canvas, participant, trial):
+def _print_reproduction_code(
+    api, args, overrides: dict, canvas, participant, trial, *, raw_gaze: bool = False
+):
     """EXP-7: print the snippet that rebuilds the figure this invocation renders.
 
     Built from ``overrides`` — the very dict handed to the builder a few lines
@@ -1218,6 +1759,10 @@ def _print_reproduction_code(api, args, overrides: dict, canvas, participant, tr
         else "static"
     )
     settings = {**api.figure_options(kind), **api._expand_palette(dict(overrides))}
+    # EXP-20: `plot_scanpath` turns the raw-gaze layer on for the frame it is
+    # handed, so the flag never reaches `overrides`; the snippet reads it here.
+    if raw_gaze and kind == "static":
+        settings["show_raw_gaze"] = True
     # These two are passed to `animate_scanpath` beside the overrides rather
     # than through them, so they never reached `settings` — a straight silent
     # drop of two real `figure_options("animation")` keys.
@@ -1228,6 +1773,14 @@ def _print_reproduction_code(api, args, overrides: dict, canvas, participant, tr
         ):
             if value is not None:
                 settings[name] = value
+        # EXP-20: the co-animation's B-side keywords ride `anim_kwargs`, not
+        # `overrides`, for the same reason — so a printed recipe for `--animate
+        # --compare-with … --label-a …` quietly lost its labels and stimulus.
+        if args.compare_with is not None:
+            settings["compare_stimulus"] = args.compare_stimulus
+            labels = _compare_labels(args)
+            if labels is not None:
+                settings["label_a"], settings["label_b"] = labels
     compare = None
     if args.compare_with is not None:
         compare_participant, compare_trial = _parse_compare_with(args.compare_with)
@@ -1290,12 +1843,6 @@ def _print_reproduction_code(api, args, overrides: dict, canvas, participant, tr
     # named, never dropped — the same rule `cli_unsupported` applies in the other
     # direction. Translating a command into a notebook cell has to be honest
     # about the parts of the command that didn't come along.
-    if args.monitor_mm is not None or args.viewing_distance is not None:
-        caveats.append(
-            "--monitor-mm / --viewing-distance describe the recording setup; "
-            "the snippet has no field for them. Build an "
-            "experimental_setup.SetupSnapshot and pass it as `setup=`."
-        )
     if args.image_root:
         caveats.append(
             "--image-root / --image-pattern resolve one stimulus image per row; "
@@ -1307,8 +1854,17 @@ def _print_reproduction_code(api, args, overrides: dict, canvas, participant, tr
             f"--screen-transition {args.screen_transition} only affects the "
             "--all-screens metadata, which the single-figure snippet omits."
         )
+    source = _snippet_source_from_args(args)
+    if args.raw_gaze:
+        # EXP-20: the raw-gaze table is part of the data half — the snippet's
+        # loader reads it beside the corpus, under the same mapping.
+        extra = {"raw_gaze": list(args.raw_gaze)}
+        schema = _parse_schema_arg(args.raw_gaze_schema, "--raw-gaze-schema")
+        if schema is not None:
+            extra["raw_gaze_schema"] = schema
+        source = replace(source, options={**source.options, **extra})
     code = cs.reproduction_code(
-        _snippet_source_from_args(args),
+        source,
         state,
         explicit=bool(args.print_code_explicit),
         output=args.output or "scanpath.png",
@@ -1471,16 +2027,68 @@ def render(argv: list[str]) -> None:
         )
         != 1
     ):
+        # Only the inputs `--help` lists: the DATA-54/55 held-back sources still
+        # count towards the guard, but the message doesn't advertise them.
+        inputs = ["--sample", "--authoring PATH", "--potec DIR"]
+        if benchmark_corpora_enabled():
+            inputs.append("--eyegenbench DIR --eyegenbench-dataset NAME")
+        inputs.append("--onestop DIR")
+        if multipleye_enabled():
+            inputs.append("--source NAME [--export DIR]")
         raise SystemExit(
-            "Provide exactly one input: --sample, --authoring PATH, --potec DIR, "
-            "--eyegenbench DIR --eyegenbench-dataset NAME, --onestop DIR, "
-            "--source NAME [--export DIR], or your own tables (--words and/or "
-            "--fixations; one of them is enough for single-report datasets)."
+            f"Provide exactly one input: {', '.join(inputs)}, or your own tables "
+            "(--words and/or --fixations; one of them is enough for "
+            "single-report datasets)."
         )
     if not (args.list_trials or args.list_parts) and not args.output:
         raise SystemExit("Missing -o/--output (or use --list-trials/--list-parts).")
     if args.trial_parts_manifest and not (args.words or args.fixations):
         raise SystemExit("--trial-parts-manifest requires --words and/or --fixations.")
+    # EXP-13: a mapping describes one of *your* tables, so it needs that table.
+    if args.word_schema is not None and not args.words:
+        raise SystemExit("--word-schema maps the --words table; pass --words too.")
+    if args.fix_schema is not None and not args.fixations:
+        raise SystemExit(
+            "--fix-schema maps the --fixations table; pass --fixations too."
+        )
+    word_schema = _parse_schema_arg(args.word_schema, "--word-schema")
+    fix_schema = _parse_schema_arg(args.fix_schema, "--fix-schema")
+    # EXP-20: raw gaze is a third table, from a file or — for the demo — the
+    # bundled one. Checked before the load, like the two schemas above.
+    if args.sample_raw_gaze and not args.sample:
+        raise SystemExit(
+            "--sample-raw-gaze draws the bundled demo's raw gaze; it needs "
+            "--sample. Pass your own table with --raw-gaze PATH."
+        )
+    if args.sample_raw_gaze and args.raw_gaze:
+        raise SystemExit("Pass --raw-gaze PATH or --sample-raw-gaze, not both.")
+    if args.raw_gaze_schema is not None and not args.raw_gaze:
+        raise SystemExit(
+            "--raw-gaze-schema maps the --raw-gaze table; pass --raw-gaze too."
+        )
+    raw_gaze_schema = _parse_schema_arg(args.raw_gaze_schema, "--raw-gaze-schema")
+    # EXP-20: these describe the second scanpath of a comparison, so on their
+    # own there is nothing for them to style — refused, like a lone --label-a.
+    compare_only = [
+        flag
+        for flag, given in (
+            ("--compare-legend", args.show_legend),
+            ("--style-a", args.style_a),
+            ("--style-b", args.style_b),
+            ("--stimulus-image-b", args.stimulus_image_b),
+            ("--stimulus-image-size-b", args.stimulus_image_size_b),
+            ("--stimulus-image-origin-b", args.stimulus_image_origin_b),
+            ("--compare-fixation-flag", args.compare_fixation_flags),
+            ("--compare-saccade-classes", args.compare_saccade_classes),
+            ("--compare-fix-index-range", args.compare_fix_index_range),
+        )
+        if given
+    ]
+    if compare_only and args.compare_with is None:
+        raise SystemExit(
+            f"{', '.join(compare_only)} style a comparison of two scanpaths; "
+            "pass --compare-with PARTICIPANT:TRIAL too."
+        )
     # A comparison is one figure of two readings; --all-screens writes one figure
     # per child screen of a multipart trial. There is no defined pairing between
     # the two, and without this guard the compare branch left `figures` unbound
@@ -1499,6 +2107,22 @@ def render(argv: list[str]) -> None:
             "--label-a and --label-b go together: `compare_scanpaths` takes the "
             "two trace labels as a pair, so naming one side would leave the "
             "other undefined."
+        )
+    # ENG-53: each panel of a split layout draws its own reading's stimulus, so
+    # there is no shared set of word boxes to pick from — the builder ignores
+    # the choice there. Say so, rather than letting the docs' old "side by side,
+    # showing only B's word boxes" example quietly draw both.
+    if (
+        args.compare_with is not None
+        and not args.animate
+        and args.compare_layout != "overlay"
+        and args.compare_stimulus != "both"
+    ):
+        print(
+            f"Warning: --compare-stimulus {args.compare_stimulus} only applies to "
+            f"--compare-layout overlay; each {args.compare_layout} panel draws its "
+            "own reading's stimulus. Ignoring it.",
+            file=sys.stderr,
         )
     if args.label_a is not None and args.compare_with is None:
         raise SystemExit(
@@ -1526,16 +2150,17 @@ def render(argv: list[str]) -> None:
 
     from . import api
 
+    # Each fixed-screen source's monitor is `code_snippet.source_canvas`, the
+    # table `api.figure_code` reads too, so both flavours of a recipe agree.
     if args.sample:
         words, fixations = api.load_sample_data()
-        # OneStop monitor — cited in eyegenbench_geometry.DISPLAY_SPECS["onestop"].
-        canvas = canvas or (2560, 1440)
+        canvas = canvas or source_canvas(SOURCE_DEMO)
     elif args.authoring:
         try:
             words, fixations = api.load_authored_scanpath(args.authoring)
         except (ValueError, OSError) as exc:
             raise SystemExit(str(exc)) from exc
-        canvas = canvas or (1200, 800)
+        canvas = canvas or source_canvas(SOURCE_AUTHOR)
     elif args.potec:
         from .datasets import load_potec
 
@@ -1551,7 +2176,7 @@ def render(argv: list[str]) -> None:
             )
         except (ValueError, FileNotFoundError, OSError) as exc:
             raise SystemExit(str(exc))
-        canvas = canvas or (1680, 1050)  # PoTeC monitor (DELL P2210)
+        canvas = canvas or source_canvas(SOURCE_POTEC)
     elif args.eyegenbench:
         if not args.eyegenbench_dataset:
             parser.error("--eyegenbench requires --eyegenbench-dataset NAME")
@@ -1586,12 +2211,8 @@ def render(argv: list[str]) -> None:
             )
         except (ValueError, FileNotFoundError, OSError) as exc:
             raise SystemExit(str(exc))
-        # OneStop monitor (Dell U2715H) — cited once in
-        # eyegenbench_geometry.DISPLAY_SPECS["onestop"] (Berzak et al. 2025).
-        canvas = canvas or (2560, 1440)
+        canvas = canvas or source_canvas(SOURCE_ONESTOP)
     elif args.source == "multipleye":
-        from .datasets import MULTIPLEYE_MONITOR
-
         try:
             words, fixations, args.participant, args.trial = _load_multipleye_render(
                 args.export,
@@ -1604,7 +2225,7 @@ def render(argv: list[str]) -> None:
             raise SystemExit(str(exc))
         # Same authoritative monitor the viewer's MultiplEYE bundle source snaps
         # to — coords are offset onto the centered stimulus on the real screen.
-        canvas = canvas or MULTIPLEYE_MONITOR
+        canvas = canvas or source_canvas(SOURCE_MULTIPLEYE)
     else:
         manifest = None
         if args.trial_parts_manifest:
@@ -1614,13 +2235,21 @@ def render(argv: list[str]) -> None:
                 )
             except (OSError, json.JSONDecodeError) as exc:
                 raise SystemExit(f"Could not read trial-parts manifest: {exc}") from exc
-        words, fixations = api.load_scanpath_data(
-            args.words,
-            args.fixations,
-            image_root=args.image_root,
-            image_pattern=args.image_pattern,
-            trial_parts_manifest=manifest,
-        )
+        # EXP-13: the one input branch that had no guard, so a missing file or
+        # an unrecognised column ended the run in a traceback — whose hint
+        # named a `word_schema=` argument the command line could not pass.
+        try:
+            words, fixations = api.load_scanpath_data(
+                args.words,
+                args.fixations,
+                word_schema=word_schema,
+                fix_schema=fix_schema,
+                image_root=args.image_root,
+                image_pattern=args.image_pattern,
+                trial_parts_manifest=manifest,
+            )
+        except (ValueError, OSError) as exc:
+            raise SystemExit(_load_error_message(exc)) from exc
 
     if args.image_root and not (args.words or args.fixations):
         from .data import resolve_stimulus_image_paths
@@ -1761,6 +2390,17 @@ def render(argv: list[str]) -> None:
             print(parts.to_string(index=False))
         return
 
+    raw_gaze = None
+    if args.raw_gaze or args.sample_raw_gaze:
+        try:
+            raw_gaze = (
+                api.load_sample_raw_gaze()
+                if args.sample_raw_gaze
+                else api.load_raw_gaze(args.raw_gaze, raw_gaze_schema=raw_gaze_schema)
+            )
+        except (ValueError, OSError) as exc:
+            raise SystemExit("--raw-gaze: " + _load_error_message(exc)) from exc
+
     try:
         # A given -p/-t must match exactly (mistyped ids are errors, never
         # silently swapped for another trial); only genuinely unspecified
@@ -1840,12 +2480,25 @@ def render(argv: list[str]) -> None:
     # split wins if both are given (it's the more specific request).
     if args.saccade_color_by_direction:
         overrides["saccade_color_mode"] = "Forward / regression"
-    if args.saccade_color_by_type or args.saccade_type_colors:
+    # EXP-20: a class colour beside --saccade-color-by-direction recolours the
+    # two-way split rather than overriding the mode the user asked for, so the
+    # fold's own colours have a flag too.
+    if args.saccade_color_by_type or (
+        args.saccade_type_colors and not args.saccade_color_by_direction
+    ):
         overrides["saccade_color_mode"] = "By type"
     if not args.saccade_type_legend:
         overrides["saccade_type_legend"] = False
     if args.saccade_type_colors:
-        class_colors = dict(SACCADE_CLASS_COLORS)
+        # Over the palette's class colours when one is named: the explicit dict
+        # wins over `--palette` wholesale in `api._expand_palette`, so starting
+        # from the stock set would put back every class the flags left alone —
+        # and a printed recipe restates only the classes the palette got wrong.
+        class_colors = dict(
+            palette_settings(args.palette)["saccade_class_colors"]
+            if args.palette
+            else SACCADE_CLASS_COLORS
+        )
         for pair in args.saccade_type_colors:
             cls_name, _, color = pair.partition("=")
             cls_name = cls_name.strip()
@@ -1871,24 +2524,16 @@ def render(argv: list[str]) -> None:
     # "only the regressions, in one colour" is as valid as "all of them, coloured
     # by type" — so it is its own flag rather than a mode.
     if args.saccade_classes:
-        names = [p.strip() for p in args.saccade_classes.split(",") if p.strip()]
-        unknown = [n for n in names if n not in SACCADE_CLASS_ORDER]
-        if unknown or not names:
-            raise SystemExit(
-                f"--saccade-classes expects a comma-separated subset of "
-                f"{', '.join(SACCADE_CLASS_ORDER)}; got "
-                f"{args.saccade_classes!r}."
-            )
-        overrides["saccade_classes"] = [
-            cls for cls in SACCADE_CLASS_ORDER if cls in set(names)
-        ]
+        overrides["saccade_classes"] = _parse_saccade_classes_arg(
+            args.saccade_classes, "--saccade-classes"
+        )
     # VIZ-9: linear-reading mode.
     if args.saccade_arcs:
         overrides["saccade_render_mode"] = "Arc"
     if args.snap_fixations:
         overrides["fixation_snap_to_word"] = True
     if args.illustration:
-        overrides.update(
+        preset = dict(
             show_words=False,
             show_word_labels=True,
             show_fixations=True,
@@ -1902,6 +2547,19 @@ def render(argv: list[str]) -> None:
             fixation_snap_to_word=True,
             fixation_opacity=1.0,
         )
+        # BUG-85 review: an explicit flag wins over the preset, as it does over
+        # `plot_scanpath(illustration=True, …)` — the preset used to overwrite
+        # `--color-by`, `--no-labels` and the rest set above. The layer switches
+        # always sit in `overrides`, so they count only when moved off default.
+        stated = {
+            key
+            for key in preset
+            if key in overrides
+            and (
+                not key.startswith("show_") or overrides[key] != parser.get_default(key)
+            )
+        }
+        overrides.update({k: v for k, v in preset.items() if k not in stated})
     # VIZ-4: image stimulus background. make_scanpath_figure only draws the image
     # when a size is known, so default to the PNG's own pixel size, then the
     # canvas.
@@ -1919,6 +2577,73 @@ def render(argv: list[str]) -> None:
         ) or (0.0, 0.0)
     if args.stimulus_image_opacity is not None:
         overrides["background_image_opacity"] = args.stimulus_image_opacity
+    # EXP-20: the rest of the figure options. After `--illustration` on purpose,
+    # so an explicit flag wins over the preset — the order `plot_scanpath`'s own
+    # `illustration=True` applies them in.
+    for key in _DIRECT_OPTION_FLAGS:
+        value = getattr(args, key)
+        if value is not None:
+            # `--word-hover-measure ''` is the real request "no measure on
+            # hover", the option's own `None` — the `--highlight-column ''` rule.
+            overrides[key] = None if value == "" and key in _NONE_WHEN_EMPTY else value
+    for key, flipped in _SWITCH_OPTION_FLAGS.items():
+        if getattr(args, key) == flipped:
+            overrides[key] = flipped
+    if args.fixation_color_range:
+        overrides["fixation_color_range"] = tuple(args.fixation_color_range)
+    if args.heatmap_range:
+        overrides["heatmap_range"] = tuple(args.heatmap_range)
+    if args.colorbar_orientation:
+        overrides["colorbar_orientation"] = args.colorbar_orientation.capitalize()
+    if args.compare_with is not None:
+        if args.show_legend:
+            overrides["show_legend"] = True
+        for side in ("a", "b"):
+            style = _parse_style_spec(getattr(args, f"style_{side}"), f"--style-{side}")
+            if style:
+                overrides[f"style_{side}"] = style
+        # CMP-24: B's own filters. A comparison reads them off B's style; the
+        # co-animation takes B's flags as a setting and draws every class.
+        b_flags = (
+            _parse_fixation_flags(args.compare_fixation_flags)
+            if args.compare_fixation_flags
+            else None
+        )
+        b_classes = (
+            _parse_saccade_classes_arg(
+                args.compare_saccade_classes, "--compare-saccade-classes"
+            )
+            if args.compare_saccade_classes
+            else None
+        )
+        if args.animate:
+            if b_classes is not None:
+                raise SystemExit(
+                    "--compare-saccade-classes filters a comparison figure; the "
+                    "--animate co-animation has no saccade-class filter."
+                )
+            if b_flags is not None:
+                overrides["fixation_flags_b"] = b_flags
+        elif b_flags is not None or b_classes is not None:
+            style_b = dict(overrides.get("style_b") or {})
+            if b_flags is not None:
+                style_b["fixation_flags"] = b_flags
+            if b_classes is not None:
+                style_b["saccade_classes"] = b_classes
+            overrides["style_b"] = style_b
+        if args.stimulus_image_b:
+            from .plots import _png_pixel_size
+
+            overrides["background_image_b"] = args.stimulus_image_b
+            overrides["background_image_size_b"] = (
+                _parse_canvas(args.stimulus_image_size_b)
+                or _png_pixel_size(args.stimulus_image_b)
+                or _parse_canvas(args.compare_canvas)
+                or canvas
+            )
+            overrides["background_image_origin_b"] = _parse_xy(
+                args.stimulus_image_origin_b
+            ) or (0.0, 0.0)
 
     common = dict(
         canvas_size=canvas,
@@ -1928,48 +2653,41 @@ def render(argv: list[str]) -> None:
         caption=args.caption or "",
     )
     if args.print_code:
-        _print_reproduction_code(api, args, overrides, canvas, participant, trial)
+        _print_reproduction_code(
+            api,
+            args,
+            overrides,
+            canvas,
+            participant,
+            trial,
+            raw_gaze=raw_gaze is not None,
+        )
     try:
         if args.animate:
-            # The animation builder supports a subset of the static layers;
-            # warn (rather than silently ignore) flags it can't honor.
-            anim_keys = (
-                "show_words",
-                "show_word_labels",
-                "show_saccades",
-                "show_order",
-            )
-            # Saccade styling is honored by the animation builder too.
-            saccade_keys = ("saccade_color", "saccade_style", "saccade_width")
-            static_defaults = {
-                "show_fixations": True,
-                "show_heatmap": True,
-                "show_saccade_arrows": False,
+            # EXP-10: which options the replay takes is `figure_options
+            # ("animation")` — the set `animate_scanpath` validates against and
+            # the snippet serializer diffs against. A hand-kept list here drifted
+            # from it twice over: `--fixation-symbol` / `--fixation-color` /
+            # `--palette` were dropped without a word, and `--color-by` /
+            # `--marker-size-range` / `--fixation-colorscale` were refused as
+            # unsupported though the builder honours them — so an animation
+            # snippet copied from the app drew a different figure. `palette` is
+            # not an option but `animate_scanpath` expands it, keeping only the
+            # colours the replay can draw.
+            animation_options = api.figure_options("animation")
+            anim_kwargs = {
+                key: value
+                for key, value in overrides.items()
+                if key in animation_options or key == "palette"
             }
+            # `overrides` always carries the seven layer toggles, so a key the
+            # replay can't take is only worth a warning when it was moved off
+            # the static figure's default — `--no-heatmap`, not the bare run.
+            static_defaults = api.figure_options("static")
             ignored = [
                 key
-                for key, default in static_defaults.items()
-                if overrides[key] != default
-            ] + [
-                key
-                for key in (
-                    "color_by",
-                    "heatmap_metric",
-                    "heatmap_colorscale",
-                    "heatmap_norm",
-                    "fixation_colorscale",
-                    "marker_size_range",
-                    "saccade_color_mode",
-                    "saccade_class_colors",
-                    "saccade_classes",
-                    "saccade_render_mode",
-                    "fixation_snap_to_word",
-                    # VIZ-23 gave the replay `highlight_column`, but only as the
-                    # text-marking channel — there is no border-overlay style
-                    # there, so the *style* flag has nothing to select.
-                    "critical_span_style",
-                )
-                if key in overrides
+                for key, value in overrides.items()
+                if key not in anim_kwargs and value != static_defaults.get(key)
             ]
             # PRE-3 drift correction is a plot_scanpath-only parameter (the
             # animation builder has no line-snapping path), so name it here too.
@@ -1977,49 +2695,15 @@ def render(argv: list[str]) -> None:
                 ignored.append("drift_correction")
             if args.drift_connectors:
                 ignored.append("drift_connectors")
+            # Raw gaze is a `plot_scanpath` frame; the replay draws none.
+            if raw_gaze is not None:
+                ignored.append("raw_gaze")
             if ignored:
                 print(
                     f"Warning: not supported with --animate, ignoring: "
                     f"{', '.join(sorted(ignored))}",
                     file=sys.stderr,
                 )
-            anim_kwargs = {k: overrides[k] for k in anim_keys}
-            anim_kwargs.update(
-                {k: overrides[k] for k in saccade_keys if k in overrides}
-            )
-            # VIZ-4: the stimulus-image background is honoured by the animation too.
-            image_keys = (
-                "background_image",
-                "background_image_size",
-                "background_image_origin",
-                "background_image_opacity",
-            )
-            anim_kwargs.update({k: overrides[k] for k in image_keys if k in overrides})
-            anim_kwargs.update(
-                {
-                    k: overrides[k]
-                    for k in ("show_coordinate_grid", "coordinate_grid_spacing")
-                    if k in overrides
-                }
-            )
-            anim_kwargs.update(
-                {
-                    k: overrides[k]
-                    for k in ("word_hover_fields", "fixation_hover_fields")
-                    if k in overrides
-                }
-            )
-            # VIZ-23 brought these two across to the replay: `highlight_column`
-            # marks the critical span's *text* (there is no border style there,
-            # which is why `critical_span_style` stays in `ignored`), and the
-            # PRE-2 flags discard or overlay-mark the classified fixations.
-            anim_kwargs.update(
-                {
-                    k: overrides[k]
-                    for k in ("highlight_column", "fixation_flags")
-                    if k in overrides
-                }
-            )
             # CMP-9/CMP-11: `--animate --compare-with` is the *dual* co-animation
             # the app renders when both modes are on — both readings on one clock.
             # That is an overlay, so it needs one coordinate space, and it is gated
@@ -2037,6 +2721,11 @@ def render(argv: list[str]) -> None:
                 labels = _compare_labels(args)
                 if labels is not None:
                     anim_kwargs["label_a"], anim_kwargs["label_b"] = labels
+                # CMP-24: B's own window.
+                if args.compare_fix_index_range:
+                    anim_kwargs["fix_index_range_b"] = _parse_fix_index_range(
+                        args.compare_fix_index_range
+                    )
             animation_options = dict(
                 playback_speed=args.playback_speed,
                 autoplay=args.autoplay,
@@ -2060,14 +2749,28 @@ def render(argv: list[str]) -> None:
                 )
                 fig = next(iter(figures.values()))
             else:
-                fig = api.animate_scanpath(
-                    words,
-                    fixations,
-                    participant,
-                    trial,
-                    screen=args.screen,
-                    **animation_options,
-                )
+                from .experimental_setup import IncomparableScreensError
+
+                try:
+                    fig = api.animate_scanpath(
+                        words,
+                        fixations,
+                        participant,
+                        trial,
+                        screen=args.screen,
+                        **animation_options,
+                    )
+                except IncomparableScreensError as exc:
+                    # CMP-21: the API's way out is Python. BUG-85: dropping
+                    # --animate alone lands on the default overlay, refused on
+                    # the same terms — so this names the layout flag too.
+                    raise SystemExit(
+                        f"{exc.reason} An animated comparison replays both "
+                        "readings on one clock in one coordinate space, so it "
+                        "needs one screen too. Drop --animate and pass "
+                        "--compare-layout side-by-side (or stacked) to compare "
+                        "them in separate panels." + _inferred_screen_hint(args, canvas)
+                    ) from None
         elif args.compare_with is not None:
             # `is not None`, not truthiness: `--compare-with ""` is a malformed
             # request, and falling through here would silently render an ordinary
@@ -2076,39 +2779,61 @@ def render(argv: list[str]) -> None:
             # animate/static branches rather than an option on one of them: the
             # comparison builder takes neither `--animate`'s playback settings
             # nor the static path's per-layer extras.
+            from .experimental_setup import IncomparableScreensError
+
             compare_participant, compare_trial = _parse_compare_with(args.compare_with)
             loaded_b, loaded_fix_b, cross_dataset = _compare_second_dataset(
                 api, args, words, fixations
             )
+            if raw_gaze is not None:
+                print(
+                    "Warning: --raw-gaze draws on the single-trial figure only; "
+                    "a comparison has no raw-gaze layer. Ignoring it.",
+                    file=sys.stderr,
+                )
             # None keeps `compare_scanpaths` on its same-dataset path, which is
             # what skips the namespacing.
             words_b = loaded_b if cross_dataset else None
             fixations_b = loaded_fix_b if cross_dataset else None
-            fig = api.compare_scanpaths(
-                words,
-                fixations,
-                (participant, trial),
-                (compare_participant, compare_trial),
-                words_b=words_b,
-                fixations_b=fixations_b,
-                dataset_b=args.compare_dataset_name,
-                layout=args.compare_layout,
-                compare_stimulus=args.compare_stimulus,
-                labels=_compare_labels(args),
-                setup=_compare_setup_snapshot(
-                    canvas, args.monitor_mm, args.viewing_distance
-                ),
-                setup_b=_compare_setup_snapshot(
-                    _parse_canvas(args.compare_canvas),
-                    args.compare_monitor_mm,
-                    args.compare_viewing_distance,
-                ),
-                drift_correction=args.drift_correction,
-                **overrides,
-                **common,  # carries canvas_size / fonts / title / caption
-            )
+            try:
+                fig = api.compare_scanpaths(
+                    words,
+                    fixations,
+                    (participant, trial),
+                    (compare_participant, compare_trial),
+                    words_b=words_b,
+                    fixations_b=fixations_b,
+                    dataset_b=args.compare_dataset_name,
+                    layout=args.compare_layout,
+                    compare_stimulus=args.compare_stimulus,
+                    labels=_compare_labels(args),
+                    setup=_compare_setup_snapshot(canvas),
+                    setup_b=_compare_setup_snapshot(_parse_canvas(args.compare_canvas)),
+                    drift_correction=args.drift_correction,
+                    # EXP-11: a builder parameter, like the drift correction
+                    # beside it, so it has to be named here — it is not in
+                    # `overrides`. Left out, a windowed comparison drew both
+                    # whole trials while the `--print-code` recipe said otherwise.
+                    fix_index_range=_parse_fix_index_range(args.fix_index_range),
+                    # CMP-24: B's own window, when given.
+                    fix_index_range_b=_parse_fix_index_range(
+                        args.compare_fix_index_range
+                    ),
+                    **overrides,
+                    **common,  # carries canvas_size / fonts / title / caption
+                )
+            except IncomparableScreensError as exc:
+                # BUG-85: the API's way out is Python (`layout='side_by_side'`),
+                # which this used to print verbatim to someone at a shell.
+                raise SystemExit(
+                    f"{exc.reason} So no overlay was drawn; pass --compare-layout "
+                    "side-by-side (or stacked) to compare them in separate panels, "
+                    "each drawn to its own screen."
+                    + _inferred_screen_hint(args, canvas)
+                ) from None
         else:
             static_options = dict(
+                raw_gaze=raw_gaze,
                 drift_correction=args.drift_correction,
                 drift_connectors=args.drift_connectors,
                 # VIZ-7's fixation-index window is a `plot_scanpath` parameter
@@ -2199,30 +2924,75 @@ def render(argv: list[str]) -> None:
         )
 
 
-def analyze(argv: list[str]) -> None:
-    """Preprocess data and export the complete EXP-3 analysis family."""
+def _analyze_parser() -> argparse.ArgumentParser:
+    """The `analyze` parser — its own function so the docs' CLI reference is
+    generated from it rather than restated (ENG-79)."""
     parser = argparse.ArgumentParser(
         prog="scanpath-studio analyze",
         description="Write fixation, saccade, word, sentence, trial, reader, "
         "character, and cleaning-QA tables without launching the app.",
     )
-    parser.add_argument("--words", nargs="+", required=True)
-    parser.add_argument("--fixations", nargs="+", required=True)
+    parser.add_argument(
+        "--words", nargs="+", required=True, help="Words/IA table(s), as for render."
+    )
+    parser.add_argument(
+        "--fixations",
+        nargs="+",
+        required=True,
+        help="Fixations table(s), as for render.",
+    )
     parser.add_argument(
         "--trial-parts-manifest",
         help="JSON manifest assigning source rows to ordered screens.",
     )
-    parser.add_argument("--output-dir", required=True)
+    parser.add_argument(
+        "--output-dir",
+        required=True,
+        help="Folder for the CSV tables and run_config.json (created if missing).",
+    )
     parser.add_argument(
         "--short-policy",
         choices=["off", "merge", "merge-then-discard", "discard"],
         default="off",
+        help="Fixations shorter than --short-threshold-ms: merge folds each "
+        "into its nearer neighbour within --merge-distance-chars (a short last "
+        "fixation that cannot merge is excluded); merge-then-discard also "
+        "excludes every other one that cannot merge; discard excludes them "
+        "all. Excluded rows are marked, never dropped (default: off).",
     )
-    parser.add_argument("--short-threshold-ms", type=float, default=80.0)
-    parser.add_argument("--merge-distance-chars", type=float, default=1.0)
-    parser.add_argument("--discard-blink-adjacent", action="store_true")
-    parser.add_argument("--pixels-per-degree", type=float)
-    args = parser.parse_args(argv)
+    parser.add_argument(
+        "--short-threshold-ms",
+        type=float,
+        default=80.0,
+        help="What counts as a short fixation, in ms (default: 80).",
+    )
+    parser.add_argument(
+        "--merge-distance-chars",
+        type=float,
+        default=1.0,
+        help="How close, in character widths, a neighbour must be for a short "
+        "fixation to merge into it (default: 1.0).",
+    )
+    parser.add_argument(
+        "--discard-blink-adjacent",
+        action="store_true",
+        help="Exclude blinks and the fixations either side of one.",
+    )
+    parser.add_argument(
+        "--pixels-per-degree",
+        type=float,
+        help="Screen pixels per degree of visual angle; adds degree-valued "
+        "amplitudes to the saccade table.",
+    )
+    _add_schema_flags(parser)
+    return parser
+
+
+def analyze(argv: list[str]) -> None:
+    """Preprocess data and export the complete EXP-3 analysis family."""
+    args = _analyze_parser().parse_args(argv)
+    word_schema = _parse_schema_arg(args.word_schema, "--word-schema")
+    fix_schema = _parse_schema_arg(args.fix_schema, "--fix-schema")
 
     from . import api
 
@@ -2234,11 +3004,16 @@ def analyze(argv: list[str]) -> None:
             )
         except (OSError, json.JSONDecodeError) as exc:
             raise SystemExit(f"Could not read trial-parts manifest: {exc}") from exc
-    words, fixations = api.load_scanpath_data(
-        args.words,
-        args.fixations,
-        trial_parts_manifest=manifest,
-    )
+    try:
+        words, fixations = api.load_scanpath_data(
+            args.words,
+            args.fixations,
+            word_schema=word_schema,
+            fix_schema=fix_schema,
+            trial_parts_manifest=manifest,
+        )
+    except (ValueError, OSError) as exc:
+        raise SystemExit(_load_error_message(exc)) from exc
     policy = {
         "off": "Off",
         "merge": "Merge",
@@ -2257,7 +3032,13 @@ def analyze(argv: list[str]) -> None:
     tables = api.analysis_tables(
         words, fixations, pixels_per_degree=args.pixels_per_degree
     )
-    tables["cleaning_qa"] = qa
+    # EXP-16: with preprocessing off `preprocess_data` returns an empty report,
+    # and writing it over the family's own one left `cleaning_qa.csv` a single
+    # newline that `pd.read_csv` refuses. The family's report is the per-trial
+    # "nothing excluded, policy Off" table the export bundle writes, so it
+    # stands unless preprocessing actually ran.
+    if not qa.empty:
+        tables["cleaning_qa"] = qa
     destination = Path(args.output_dir)
     destination.mkdir(parents=True, exist_ok=True)
     for name, table in tables.items():
@@ -2275,42 +3056,88 @@ def analyze(argv: list[str]) -> None:
     print(f"Wrote {len(tables)} tables + run_config.json to {destination}")
 
 
+def _corpus_parser() -> argparse.ArgumentParser:
+    """The `corpus` parser (see `_analyze_parser`)."""
+    parser = argparse.ArgumentParser(
+        prog="scanpath-studio corpus",
+        description="Render a styled corpus figure from a tidy CSV you already "
+        "have (api.plot_corpus_figure).",
+    )
+    parser.add_argument(
+        "--input",
+        required=True,
+        help="The CSV. profile reads word_id plus the value column (and "
+        "optional lo / hi), distribution the value column, difference word_id "
+        "and diff.",
+    )
+    parser.add_argument(
+        "--kind",
+        choices=["profile", "distribution", "difference"],
+        required=True,
+        help="A per-word profile, a distribution, or a difference profile.",
+    )
+    parser.add_argument(
+        "--output",
+        required=True,
+        help="Output file; any extension save_figure writes (.html, .png, .svg, .pdf).",
+    )
+    parser.add_argument(
+        "--measure-label",
+        default="Value",
+        help="Axis / legend label for the value (default: Value).",
+    )
+    parser.add_argument(
+        "--series-col",
+        default="series",
+        help="Column naming the overlaid series, when present (default: series).",
+    )
+    parser.add_argument(
+        "--value-col",
+        default="value",
+        help="The value column (default: value).",
+    )
+    parser.add_argument(
+        "--primary-color",
+        default="#1f77b4",
+        help="First series colour (default: #1f77b4).",
+    )
+    parser.add_argument(
+        "--secondary-color",
+        default="#e45756",
+        help="Second series colour (default: #e45756).",
+    )
+    return parser
+
+
 def corpus(argv: list[str]) -> None:
     """Render a styled corpus figure from a tidy CSV (AN-29)."""
-    parser = argparse.ArgumentParser(prog="scanpath-studio corpus")
-    parser.add_argument("--input", required=True)
-    parser.add_argument(
-        "--kind", choices=["profile", "distribution", "difference"], required=True
-    )
-    parser.add_argument("--output", required=True)
-    parser.add_argument("--measure-label", default="Value")
-    parser.add_argument("--series-col", default="series")
-    parser.add_argument("--value-col", default="value")
-    parser.add_argument("--primary-color", default="#1f77b4")
-    parser.add_argument("--secondary-color", default="#e45756")
-    args = parser.parse_args(argv)
+    args = _corpus_parser().parse_args(argv)
     from . import api
 
-    data = pd.read_csv(args.input)
-    fig = api.plot_corpus_figure(
-        data,
-        kind=args.kind,
-        measure_label=args.measure_label,
-        series_col=args.series_col,
-        value_col=args.value_col,
-        colors=(args.primary_color, args.secondary_color),
-    )
-    out = api.save_figure(fig, args.output)
+    # EXP-13: each of these ended in a traceback — a missing or unparseable
+    # --input, a table without the columns --kind reads, an output extension
+    # save_figure doesn't write.
+    try:
+        data = pd.read_csv(args.input)
+    except (OSError, ValueError) as exc:
+        raise SystemExit(f"--input: could not read {args.input!r}: {exc}") from exc
+    try:
+        fig = api.plot_corpus_figure(
+            data,
+            kind=args.kind,
+            measure_label=args.measure_label,
+            series_col=args.series_col,
+            value_col=args.value_col,
+            colors=(args.primary_color, args.secondary_color),
+        )
+        out = api.save_figure(fig, args.output)
+    except (ValueError, RuntimeError, OSError) as exc:
+        raise SystemExit(str(exc)) from exc
     print(f"Wrote {out}")
 
 
-def cache(argv: list[str]) -> None:
-    """Inspect or clear the on-device recovery cache (ENG-30).
-
-    The terminal counterpart of the app's 🗄️ Recovery cache panel, so the
-    storage a local run creates can be found, measured and deleted without
-    launching the app (or after closing it).
-    """
+def _cache_parser() -> argparse.ArgumentParser:
+    """The `cache` parser (see `_analyze_parser`)."""
     parser = argparse.ArgumentParser(
         prog="scanpath-studio cache",
         description="Show what a local run has stored on this computer "
@@ -2325,7 +3152,18 @@ def cache(argv: list[str]) -> None:
     parser.add_argument(
         "--clear", action="store_true", help="delete the stored session"
     )
-    args = parser.parse_args(argv)
+    return parser
+
+
+def cache(argv: list[str]) -> None:
+    """Inspect or clear the on-device recovery cache (ENG-30).
+
+    The terminal counterpart of the app's 💾 Session → 🗄️ Automatic recovery
+    block, so the
+    storage a local run creates can be found, measured and deleted without
+    launching the app (or after closing it).
+    """
+    args = _cache_parser().parse_args(argv)
     from .persistence import PERSIST_ENV_VAR, cache_status, clear_local_state
     from .persistence import human_size as _human_size
 
@@ -2370,6 +3208,8 @@ def cache(argv: list[str]) -> None:
     print(
         f"         {rows} · {status['annotations']} annotated "
         f"trial(s) · {status['designs']} saved design(s) · "
+        # DATA-38 — the attached metadata tables, the panel's own count.
+        f"{status.get('metadata', 0)} metadata table(s) · "
         f"{status['settings']} setting(s)"
     )
     print(f"Size:    {_human_size(status['bytes'])}")
@@ -2392,8 +3232,35 @@ usage:
   scanpath-studio cache …          show / clear the on-device recovery cache
   scanpath-studio --version        print the version
 
-Unrecognized arguments are forwarded to `streamlit run` (e.g.
-`scanpath-studio --server.port 8502`)."""
+Unrecognized flags are forwarded to `streamlit run` (e.g.
+`scanpath-studio --server.port 8502`); an unknown command word is an error.
+The app listens on this computer only; `--server.address 0.0.0.0` serves it
+on your network (it has no login) with local folder access off, unless
+SCANPATH_LOCAL_FS=1."""
+
+
+#: The subcommands `main` dispatches, for the did-you-mean below.
+_COMMANDS = ("run", "render", "analyze", "corpus", "cache")
+
+
+def _refuse_unknown_command(word: str) -> None:
+    """ENG-54: a mistyped subcommand is an error, not a Streamlit argument.
+
+    Everything unrecognised is forwarded to ``streamlit run`` so bare Streamlit
+    flags keep working — but a bare *word* was forwarded too, so
+    ``scanpath-studio rendr --sample`` reached Streamlit as a script argument
+    and died on "No such option: --sample" (or, with no flags, quietly launched
+    the app). Only a word is refused: a leading ``-`` is a Streamlit flag, and a
+    ``.py`` path is left to Streamlit as before."""
+    import difflib
+
+    close = difflib.get_close_matches(word, _COMMANDS, n=1, cutoff=0.6)
+    hint = f" — did you mean {close[0]!r}?" if close else "."
+    raise SystemExit(
+        f"scanpath-studio: unknown command {word!r}{hint} Commands: "
+        f"{', '.join(_COMMANDS)}; `scanpath-studio --help` lists them. "
+        "Streamlit flags (starting with --) still launch the app."
+    )
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -2414,6 +3281,8 @@ def main(argv: list[str] | None = None) -> None:
         print(_HELP)
     elif argv[0] in ("-V", "--version"):
         print(__version__)
+    elif not argv[0].startswith("-") and not argv[0].endswith(".py"):
+        _refuse_unknown_command(argv[0])
     else:
         # Backward compatibility: bare streamlit flags launch the app.
         launch_app(argv)

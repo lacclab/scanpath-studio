@@ -454,10 +454,9 @@ class TestBulkExportFlow:
         monkeypatch.setattr(tabs, "bulk_export", capturing)
 
         at = _boot(subtab=SUBTAB_EXPORT)
-        # Nothing to download yet. (This used to also see the Session panel's
-        # "⬇ Download backup"; UX-100 moved that into the 💾 Session dialog, so
-        # it only renders while the modal is open.)
-        assert self._download_labels(at) == [], (
+        # No zip to download yet. The Current figure's "⬇ Download PNG" is always
+        # there since UX-150 (it renders on click), so look for the zip by label.
+        assert "Download zip" not in self._download_labels(at), (
             "the zip download button must only appear after a build"
         )
 
@@ -473,8 +472,9 @@ class TestBulkExportFlow:
         at.pills(key="bulk_export_figfmts").set_value([])
         at.pills(key="bulk_export_tabular").set_value(["Fixations"])
         # Word boxes on, so the figure settings threaded into the export are
-        # demonstrably the live ones rather than a default snapshot.
-        at.toggle(key="global_show_words").set_value(True)
+        # demonstrably the live ones rather than a default snapshot. (UX-163: a
+        # `Word boxes | ☑ Show` checkbox row, no longer a toggle.)
+        at.checkbox(key="global_show_words").set_value(True)
         at.run(timeout=60)
         _clean(at, "after choosing export artifacts:")
 
@@ -569,7 +569,7 @@ class TestBulkExportFlow:
 
 @pytest.mark.timeout(180)
 class TestRecoveryCachePanelFlow:
-    """ENG-30 — the sidebar 🗄️ Recovery cache panel is the on-device cache's
+    """ENG-30 — the 💾 Session → Automatic recovery panel is the on-device cache's
     only user-visible surface, so it has to report the real store and its two
     controls have to reach ``persistence`` (pause saving, forget what's saved).
     """
@@ -664,6 +664,45 @@ class TestRecoveryCachePanelFlow:
         _clean(at, "after changing the cleared session:")
         assert manifest.is_file()
 
+    def test_an_attached_metadata_table_survives_a_refresh(self, tmp_path, monkeypatch):
+        """DATA-38 — the reported bug end to end: attach a table, refresh, and
+        its field is still in the filter funnel. A fresh ``AppTest`` is a fresh
+        browser session on the same machine, which is what a refresh is."""
+        from scanpath_studio import metadata as md
+
+        monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
+        monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
+        at = AppTest.from_file(APP_SCRIPT)
+        at.run(timeout=90)
+        _clean(at, "first session:")
+        readers = list(at.multiselect(key="filter_participants").options)
+        languages = ["Hebrew"] + ["English"] * (len(readers) - 1)
+        attached = md.build_participant_metadata(
+            pd.DataFrame({"participant_id": readers, "native_language": languages}),
+            "participant_id",
+            source_name="readers.csv",
+            participants=readers,
+        )
+        # As the uploader leaves it: the table, its raw frame, the file's id.
+        at.session_state[md.SESSION_KEY] = attached
+        at.session_state[md.RAW_SESSION_KEY] = attached.frame
+        at.session_state[md.FILE_SESSION_KEY] = "readers-file-id"
+        at.run(timeout=90)
+        _clean(at, "after attaching:")
+
+        refreshed = AppTest.from_file(APP_SCRIPT)
+        refreshed.run(timeout=90)
+        _clean(refreshed, "after the refresh:")
+        assert refreshed.session_state[md.SESSION_KEY].names == ("native_language",)
+        refreshed.session_state["filter_meta_native_language"] = ["Hebrew"]
+        refreshed.run(timeout=90)
+        _clean(refreshed, "filtering on the restored field:")
+        assert refreshed.session_state["_trial_filters"]["participants"] == [readers[0]]
+        # And visiting the Data page — whose uploader is empty now — keeps it.
+        _rerun(refreshed, view=VIEW_DATA)
+        _clean(refreshed, "on the Data page:")
+        assert md.SESSION_KEY in refreshed.session_state
+
     def test_panel_says_nothing_is_stored_on_a_hosted_deployment(self, monkeypatch):
         # No override and no loopback URL under AppTest == the hosted case.
         monkeypatch.delenv("SCANPATH_STUDIO_PERSIST", raising=False)
@@ -677,6 +716,140 @@ class TestRecoveryCachePanelFlow:
         assert "Not available here." in captions
 
 
+class TestAddDatasetMenu:
+    """UX-143: creation actions and placeholders cannot become real sources."""
+
+    @pytest.mark.parametrize("source", [AUTHOR_CHOICE, "Synthetic sample"])
+    def test_authoring_cancel_and_save_dataset(self, source):
+        at = _boot(synthetic=True)
+
+        def _open_editor():
+            if source == AUTHOR_CHOICE:
+                at.button(key="add_manual_dataset_btn").click().run(timeout=60)
+            else:
+                at.selectbox(key="data_source_picker").select(source).run(timeout=60)
+                at.session_state["_author_editing"] = source  # the Edit button
+                at.run(timeout=60)
+
+        _open_editor()
+        at.button(key="cancel_authoring").click().run(timeout=60)
+        _clean(at)
+        # Cancelling the sample's editor returns to the sample, not the old source.
+        assert at.session_state["data_source_choice"] == (
+            SYNTHETIC_SOURCE if source == AUTHOR_CHOICE else source
+        )
+        assert not any(t.key == "author_text" for t in at.text_area)
+        _open_editor()
+        at.text_input(key=f"author_dataset_name_{source}").set_value("My example").run(
+            timeout=60
+        )
+        at.button(key="save_authored_dataset").click().run(timeout=60)
+        _clean(at)
+        assert at.session_state["data_source_choice"] == "My example"
+        saved = at.session_state["_datasets"]["My example"]
+        assert not saved["words"].empty
+        assert not saved["fixations"].empty
+        assert saved["authoring"]
+        assert at.selectbox(key="data_source_picker").value == "My example"
+        assert not any(t.key == "author_text" for t in at.text_area)
+        _rerun(at, view=VIEW_DATA)
+        tables = [d.value for d in at.dataframe if "Dataset" in d.value.columns]
+        assert "My example" in tables[0]["Dataset"].tolist()
+
+    def test_editable_sample_and_manual_draft_are_independent(self):
+        from scanpath_studio.constants import MANUAL_SAMPLE_CHOICE
+
+        at = _boot(synthetic=True)
+        at.selectbox(key="data_source_picker").select(MANUAL_SAMPLE_CHOICE).run(
+            timeout=60
+        )
+        _clean(at)
+        # Picking the sample *shows* it; only its Edit button opens the editor.
+        assert at.session_state["data_source_choice"] == MANUAL_SAMPLE_CHOICE
+        assert not any(t.key == "author_text" for t in at.text_area)
+        assert not any(b.key == "cancel_authoring" for b in at.button)
+        assert any(s.label.startswith("**Select Trial**") for s in at.selectbox)
+        at.session_state["_author_editing"] = MANUAL_SAMPLE_CHOICE
+        at.run(timeout=60)
+        _clean(at)
+        assert at.text_area(key="author_text").value == "The cat sat\non the mat."
+        assert not any("Plot controls" in h.value for h in at.subheader)
+        assert not any(s.label.startswith("**Select Trial**") for s in at.selectbox)
+        at.text_area(key="author_text").set_value("An edited example.").run(timeout=60)
+        _rerun(at, view=VIEW_DATA)
+        at.button(key="create_manual_scanpath_btn").click().run(timeout=60)
+        _clean(at)
+        assert at.text_area(key="author_text").value != "An edited example."
+        _rerun(at, view=VIEW_DATA)
+        _clean(at)
+        tables = [d.value for d in at.dataframe if "Dataset" in d.value.columns]
+        assert tables
+        assert "My scanpath" not in tables[0]["Dataset"].tolist()
+        assert MANUAL_SAMPLE_CHOICE in tables[0]["Dataset"].tolist()
+        at.button(key="create_manual_scanpath_btn").click().run(timeout=60)
+        _clean(at)
+        assert at.session_state["main_nav"] == _VIEW_SCANPATH
+        _rerun(at, view="Corpus Analysis")
+        at.selectbox(key="data_source_picker").select(MANUAL_SAMPLE_CHOICE).run(
+            timeout=60
+        )
+        _clean(at)
+        assert not any(t.key == "author_text" for t in at.text_area)
+        at.session_state["_author_editing"] = MANUAL_SAMPLE_CHOICE
+        at.run(timeout=60)
+        _clean(at)
+        assert at.text_area(key="author_text").value == "An edited example."
+
+    def test_manual_action_opens_the_editor_and_keeps_the_draft(self):
+        at = _boot(synthetic=True)
+        assert AUTHOR_CHOICE not in at.session_state["_data_source_entries"]
+        at.button(key="add_manual_dataset_btn").click().run(timeout=60)
+        _clean(at)
+        assert at.session_state["data_source_choice"] == AUTHOR_CHOICE
+        assert not any("Plot controls" in h.value for h in at.subheader)
+        assert not any(s.label.startswith("**Select Trial**") for s in at.selectbox)
+        at.text_area(key="author_text").set_value("A small manual trial.").run(
+            timeout=60
+        )
+        _rerun(at, view="Corpus Analysis")
+        at.selectbox(key="data_source_picker").select("Bundled Demo").run(timeout=60)
+        at.button(key="add_manual_dataset_btn").click().run(timeout=60)
+        _clean(at)
+        assert at.text_area(key="author_text").value == "A small manual trial."
+        assert len(at.session_state["_authored_events_frame"]) == 4
+
+    def test_import_action_opens_the_existing_wizard(self):
+        at = _boot(synthetic=True)
+        at.button(key="import_dataset_btn").click().run(timeout=60)
+        _clean(at)
+        assert at.session_state["_show_upload_wizard"] is True
+        assert at.session_state["main_nav"] == VIEW_DATA
+        assert at.session_state["_prev_source"] == SYNTHETIC_SOURCE
+        assert at.button(key="cancel_add_data")
+        assert at.get("file_uploader")
+
+    def test_coming_soon_leaves_the_current_dataset_and_trial_selected(self):
+        from scanpath_studio import app
+
+        at = _boot()
+        trial = next(s for s in at.selectbox if s.label.startswith("**Select Trial**"))
+        trial.select_index(2).run(timeout=60)
+        before_trial = at.selectbox(key=trial.key).value
+        before_source = at.session_state["data_source_choice"]
+        picker = at.selectbox(key="data_source_picker")
+        assert "More coming soon!" in picker.options
+        picker.select(app._MORE_DATASETS_PLACEHOLDER).run(timeout=60)
+        _clean(at)
+        assert at.session_state["data_source_choice"] == before_source
+        assert at.selectbox(key="data_source_picker").value == before_source
+        assert at.selectbox(key=trial.key).value == before_trial
+        assert (
+            app._MORE_DATASETS_PLACEHOLDER
+            not in at.session_state["_data_source_entries"]
+        )
+
+
+@pytest.mark.timeout(180)
 class TestAuthoringEditorFlow:
     """BUG-19 — the ✏️ Author a scanpath grid, driven the way a browser drives it.
 
@@ -811,6 +984,34 @@ class TestCrossDatasetCompareFlow:
         # §5.3: resolved for this render, but the user's stored choice stands so
         # a same-dataset pair gets Overlay straight back.
         assert at.session_state["single_compare_layout"] == "Overlay"
+        # BUG-85: the gate's reason no longer carries the app's fallback, so the
+        # app says it where it resolves Overlay away — once.
+        captions = " ".join(str(caption.value) for caption in at.caption)
+        assert captions.count("They are shown side by side instead.") == 1
+
+    def test_an_animated_pair_on_two_screens_says_it_shows_one_scanpath(self):
+        """UX-144: the co-replay has no split layout and shows A alone, so its
+        warning must not borrow the static figure's "shown side by side
+        instead". It used to trim that off the gate's reason; BUG-85 took it out
+        of the reason, so nothing is left here to trim — or to forget to."""
+        from scanpath_studio.compare_source import COMPARE_SOURCE_KEY
+
+        at = _boot()
+        at.session_state["single_compare_toggle"] = True
+        at.session_state["single_animate"] = True
+        at.session_state[COMPARE_SOURCE_KEY] = SYNTHETIC_SOURCE
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        (warning,) = [
+            str(w.value) for w in at.warning if "animated comparison" in str(w.value)
+        ]
+        assert warning.endswith("Showing only the first scanpath.")
+        assert "side by side" not in warning
+        # And 🔗 Share's snippet reproduces what is drawn — A alone — rather than
+        # a co-animation (`trial_b=` / `--compare-with`) the app just refused.
+        state = at.session_state["_snippet_state"]
+        assert state.kind == "animation"
+        assert state.compare is None
 
     def test_bs_filters_do_not_disturb_the_main_pool(self):
         from scanpath_studio.compare_source import COMPARE_SOURCE_KEY

@@ -37,7 +37,7 @@ from types import MappingProxyType
 # ---------------------------------------------------------------------------
 # Visualization settings — the `global_*` keys the plot rail's widgets own.
 # Every one of these round-trips through BOTH the share link and the saved
-# config (or, below the divider, through the saved config only).
+# config (the recording setup below the divider only since EXP-19).
 # ---------------------------------------------------------------------------
 GLOBAL_SHOW_WORDS = "global_show_words"
 GLOBAL_SHOW_LABELS = "global_show_labels"
@@ -127,22 +127,15 @@ GLOBAL_COORDINATE_GRID_SPACING = "global_coordinate_grid_spacing"
 GLOBAL_SHOW_TITLE_CAPTION = "global_show_title_caption"
 GLOBAL_TITLE_PATTERN = "global_title_pattern"
 GLOBAL_CAPTION_PATTERN = "global_caption_pattern"
-
-# --- Saved-config-only settings (no share-link param) ----------------------
-GLOBAL_BASE_FONT_SIZE = "global_base_font_size"
-GLOBAL_CANVAS_WIDTH = "global_canvas_width"
-GLOBAL_CANVAS_HEIGHT = "global_canvas_height"
-GLOBAL_MONITOR_WIDTH_MM = "global_monitor_width_mm"
-GLOBAL_VIEWING_DISTANCE_MM = "global_viewing_distance_mm"
-GLOBAL_DISPLAY_DPI = "global_display_dpi"
-GLOBAL_STIMULUS_FONT_PT = "global_stimulus_font_pt"
-GLOBAL_USE_STIMULUS_FONT_PT = "global_use_stimulus_font_pt"
+# EXP-18: settings that change the figure and used to travel in the saved config
+# only — colour-bar styling, the span border colour, the PRE-2 fixation flags
+# (one mode/threshold/symbol/colour group per category; `oob` and `blink` have no
+# threshold — geometry and blink tests, not durations) — plus Compare's A/B
+# legend and the replay speed, which travelled in neither.
 GLOBAL_COLORBAR_ORIENTATION = "global_colorbar_orientation"
 GLOBAL_COLORBAR_TICKANGLE = "global_colorbar_tickangle"
 GLOBAL_COLORBAR_TICKFONT_SIZE = "global_colorbar_tickfont_size"
 GLOBAL_SPAN_BORDER_COLOR = "global_span_border_color"
-# PRE-2 fixation classification: one (mode, threshold, symbol, colour) group per
-# category. `oob` has no threshold — it is a geometry test, not a duration one.
 GLOBAL_FIXCLASS_SHORT_MODE = "global_fixclass_short_mode"
 GLOBAL_FIXCLASS_SHORT_THRESHOLD_MS = "global_fixclass_short_threshold_ms"
 GLOBAL_FIXCLASS_SHORT_SYMBOL = "global_fixclass_short_symbol"
@@ -154,6 +147,23 @@ GLOBAL_FIXCLASS_LONG_COLOR = "global_fixclass_long_color"
 GLOBAL_FIXCLASS_OOB_MODE = "global_fixclass_oob_mode"
 GLOBAL_FIXCLASS_OOB_SYMBOL = "global_fixclass_oob_symbol"
 GLOBAL_FIXCLASS_OOB_COLOR = "global_fixclass_oob_color"
+GLOBAL_FIXCLASS_BLINK_MODE = "global_fixclass_blink_mode"
+GLOBAL_FIXCLASS_BLINK_SYMBOL = "global_fixclass_blink_symbol"
+GLOBAL_FIXCLASS_BLINK_COLOR = "global_fixclass_blink_color"
+GLOBAL_SHOW_COMPARE_LEGEND = "global_show_compare_legend"
+
+# --- The recording setup ----------------------------------------------------
+# Saved-config-only until EXP-19 put every one of them on the link too — each
+# emitted only when it differs from what the recipient's own session would
+# resolve for the same source (see `URL_OPTIONAL_PARAMS`).
+GLOBAL_BASE_FONT_SIZE = "global_base_font_size"
+GLOBAL_CANVAS_WIDTH = "global_canvas_width"
+GLOBAL_CANVAS_HEIGHT = "global_canvas_height"
+GLOBAL_MONITOR_WIDTH_MM = "global_monitor_width_mm"
+GLOBAL_VIEWING_DISTANCE_MM = "global_viewing_distance_mm"
+GLOBAL_DISPLAY_DPI = "global_display_dpi"
+GLOBAL_STIMULUS_FONT_PT = "global_stimulus_font_pt"
+GLOBAL_USE_STIMULUS_FONT_PT = "global_use_stimulus_font_pt"
 
 # --- Trial-picker keys a link / config seeds (utils.select_trial owns them) --
 # `_SELECTION_PREFIXES` in url_state is ("single",); these are that prefix's
@@ -163,6 +173,9 @@ SINGLE_TRIAL_ID = "single_trial_id"
 SINGLE_PARTICIPANT = "single_participant"
 SINGLE_SLIDER = "single_slider"
 SINGLE_ANIMATE = "single_animate"
+#: The ⚙ Playback replay speed (EXP-18 put it on the link). Mode-local, like
+#: `single_animate`, which is why it is `single_*` rather than `global_*`.
+SINGLE_PLAYBACK_SPEED = "single_playback_speed"
 #: VIZ-7 — the fixation-index window. Wire format since UX-135 gave it a
 #: `?fix_range=lo,hi` param; the widget itself predates it.
 SINGLE_FIX_RANGE = "single_fix_range"
@@ -210,6 +223,62 @@ CMP_OPACITY = "cmp{idx}_opacity"
 # UX-31: the A/B legend label override ("" = the auto "participant · trial").
 CMP_LABEL_PATTERN = "cmp{idx}_label_pattern"
 
+# --- CMP-24: scanpath B's own filters in Compare ----------------------------
+# A's filters are the rail's ordinary ones (`global_fixclass_*`,
+# `global_saccade_classes`, `single_fix_range`), which is what makes a filter set
+# on one trial still apply once a second is brought in. Only B has keys of its
+# own — B-only on purpose rather than `cmp{idx}_*` templates, since a `cmp0_*`
+# copy would hand A a second, competing filter. B's Highlight marker and colour
+# are A's: what B chooses is *which* fixations, not how a flag is drawn.
+CMP_B_FIXCLASS_SHORT_MODE = "cmp1_fixclass_short_mode"
+CMP_B_FIXCLASS_SHORT_THRESHOLD_MS = "cmp1_fixclass_short_threshold_ms"
+CMP_B_FIXCLASS_LONG_MODE = "cmp1_fixclass_long_mode"
+CMP_B_FIXCLASS_LONG_THRESHOLD_MS = "cmp1_fixclass_long_threshold_ms"
+CMP_B_FIXCLASS_OOB_MODE = "cmp1_fixclass_oob_mode"
+CMP_B_FIXCLASS_BLINK_MODE = "cmp1_fixclass_blink_mode"
+CMP_B_SACCADE_CLASSES = "cmp1_saccade_classes"
+#: B's fixation-index window — VIZ-7's slider, for the second scanpath.
+SINGLE_COMPARE_FIX_RANGE = "single_compare_fix_range"
+#: …on the wire. Optional, like A's `fix_range`: an untouched window is the
+#: trial's own full range, not a setting.
+COMPARE_FIX_RANGE_PARAM = "cmp_b_fix_range"
+#: The B filter keys a saved config's second `compare` entry restores.
+COMPARE_B_FILTER_STATE_KEYS = frozenset(
+    {
+        CMP_B_FIXCLASS_SHORT_MODE,
+        CMP_B_FIXCLASS_SHORT_THRESHOLD_MS,
+        CMP_B_FIXCLASS_LONG_MODE,
+        CMP_B_FIXCLASS_LONG_THRESHOLD_MS,
+        CMP_B_FIXCLASS_OOB_MODE,
+        CMP_B_FIXCLASS_BLINK_MODE,
+        CMP_B_SACCADE_CLASSES,
+    }
+)
+
+#: EXP-19 — the link's spelling of the same styles: ``cmp_a_<field>`` for the
+#: first scanpath (``cmp0_*``) and ``cmp_b_<field>`` for the second (``cmp1_*``),
+#: ``<field>`` being the saved config's own name for it. The letters rather than
+#: the index because that is what every other surface calls the two scanpaths —
+#: ``style_a`` / ``style_b``, ``--label-a`` / ``--label-b``, ``cmp_stimulus=A|B``.
+COMPARE_STYLE_SIDES = (("a", 0), ("b", 1))
+
+
+def _compare_style_params(*fields: str) -> dict[str, str]:
+    """``{"cmp_a_<field>": "cmp0_<field>", "cmp_b_<field>": "cmp1_<field>"}``."""
+    return {
+        f"cmp_{side}_{name}": f"cmp{idx}_{name}"
+        for side, idx in COMPARE_STYLE_SIDES
+        for name in fields
+    }
+
+
+#: EXP-19 — where a deep link parks the recording-setup keys it seeded, and the
+#: source it resolved to (`url_state.scope_link_setup`), so that source's own
+#: monitor / typeface snap (`app.seed_canvas_state`) leaves them alone on the
+#: recipient's first run instead of overwriting the sender's values with the
+#: corpus defaults. A one-shot handoff, not a setting.
+LINK_SETUP_STATE_KEY = "_link_setup_keys"
+
 # ---------------------------------------------------------------------------
 # URL query-parameter names that are NOT viz settings — the selection half of a
 # deep link, plus one legacy alias kept alive for old links.
@@ -229,8 +298,8 @@ PARAM_HIDE_FIXATION_NUMBERS = "hide_fixation_numbers"
 #
 # `?source=corpus` says the data source is one entry of
 # `app.public_dataset_registry()` — the built-in public corpora **and** each
-# corpus discovered in the local harmonised bundle, which is a catalogue that
-# varies per machine and so cannot have one `?source=` token each. `?corpus=`
+# harmonised benchmark corpus the user added, which is a catalogue that varies
+# per machine and so cannot have one `?source=` token each. `?corpus=`
 # names which, by a slug of the entry's *stable identifier* (a prepared corpus'
 # manifest name, a built-in's registry `short`) — never of its display label,
 # which is copy and will be reworded.
@@ -327,6 +396,12 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         "coordinate_grid_auto": GLOBAL_COORDINATE_GRID_AUTO,
         "preproc_enabled": GLOBAL_PREPROC_ENABLED,
         "preproc_blink_adjacent": GLOBAL_PREPROC_BLINK_ADJACENT,
+        "show_stimulus_image": GLOBAL_SHOW_STIMULUS_IMAGE,
+        "fit_to_monitor": GLOBAL_FIT_TO_MONITOR,
+        "show_compare_legend": GLOBAL_SHOW_COMPARE_LEGEND,
+        # EXP-19.
+        "use_stimulus_font_pt": GLOBAL_USE_STIMULUS_FONT_PT,
+        **_compare_style_params("hollow"),
     }
 )
 
@@ -376,6 +451,31 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
         # layout nor the stimulus source restores the wrong figure.
         COMPARE_LAYOUT_PARAM: SINGLE_COMPARE_LAYOUT,
         COMPARE_STIMULUS_PARAM: SINGLE_COMPARE_STIMULUS,
+        # EXP-18.
+        "colorbar_orientation": GLOBAL_COLORBAR_ORIENTATION,
+        "span_border_color": GLOBAL_SPAN_BORDER_COLOR,
+        "fixclass_short_mode": GLOBAL_FIXCLASS_SHORT_MODE,
+        "fixclass_short_symbol": GLOBAL_FIXCLASS_SHORT_SYMBOL,
+        "fixclass_short_color": GLOBAL_FIXCLASS_SHORT_COLOR,
+        "fixclass_long_mode": GLOBAL_FIXCLASS_LONG_MODE,
+        "fixclass_long_symbol": GLOBAL_FIXCLASS_LONG_SYMBOL,
+        "fixclass_long_color": GLOBAL_FIXCLASS_LONG_COLOR,
+        "fixclass_oob_mode": GLOBAL_FIXCLASS_OOB_MODE,
+        "fixclass_oob_symbol": GLOBAL_FIXCLASS_OOB_SYMBOL,
+        "fixclass_oob_color": GLOBAL_FIXCLASS_OOB_COLOR,
+        "fixclass_blink_mode": GLOBAL_FIXCLASS_BLINK_MODE,
+        "fixclass_blink_symbol": GLOBAL_FIXCLASS_BLINK_SYMBOL,
+        "fixclass_blink_color": GLOBAL_FIXCLASS_BLINK_COLOR,
+        # EXP-19.
+        **_compare_style_params(
+            "fix_color", "saccade_color", "saccade_style", "label_pattern"
+        ),
+        # CMP-24.
+        "cmp_b_saccade_classes": CMP_B_SACCADE_CLASSES,
+        "cmp_b_fixclass_short_mode": CMP_B_FIXCLASS_SHORT_MODE,
+        "cmp_b_fixclass_long_mode": CMP_B_FIXCLASS_LONG_MODE,
+        "cmp_b_fixclass_oob_mode": CMP_B_FIXCLASS_OOB_MODE,
+        "cmp_b_fixclass_blink_mode": CMP_B_FIXCLASS_BLINK_MODE,
     }
 )
 
@@ -385,6 +485,18 @@ SHARE_INT_PARAMS: Mapping[str, str] = MappingProxyType(
         "order_font_size": GLOBAL_ORDER_FONT_SIZE,
         "anim_grid_step_ms": GLOBAL_ANIM_GRID_STEP_MS,
         "anim_max_frames": GLOBAL_ANIM_MAX_FRAMES,
+        # EXP-18.
+        "colorbar_tickangle": GLOBAL_COLORBAR_TICKANGLE,
+        "colorbar_tickfont_size": GLOBAL_COLORBAR_TICKFONT_SIZE,
+        "fixclass_short_threshold_ms": GLOBAL_FIXCLASS_SHORT_THRESHOLD_MS,
+        "fixclass_long_threshold_ms": GLOBAL_FIXCLASS_LONG_THRESHOLD_MS,
+        # EXP-19.
+        "canvas_width": GLOBAL_CANVAS_WIDTH,
+        "canvas_height": GLOBAL_CANVAS_HEIGHT,
+        "base_font_size": GLOBAL_BASE_FONT_SIZE,
+        # CMP-24.
+        "cmp_b_fixclass_short_threshold_ms": CMP_B_FIXCLASS_SHORT_THRESHOLD_MS,
+        "cmp_b_fixclass_long_threshold_ms": CMP_B_FIXCLASS_LONG_THRESHOLD_MS,
     }
 )
 
@@ -404,6 +516,14 @@ SHARE_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
         "coordinate_grid_spacing": GLOBAL_COORDINATE_GRID_SPACING,
         "raw_gaze_marker_size": GLOBAL_RAW_GAZE_MARKER_SIZE,
         "raw_gaze_opacity": GLOBAL_RAW_GAZE_OPACITY,
+        # EXP-18.
+        "playback_speed": SINGLE_PLAYBACK_SPEED,
+        # EXP-19.
+        "monitor_width_mm": GLOBAL_MONITOR_WIDTH_MM,
+        "viewing_distance_mm": GLOBAL_VIEWING_DISTANCE_MM,
+        "display_dpi": GLOBAL_DISPLAY_DPI,
+        "stimulus_font_pt": GLOBAL_STIMULUS_FONT_PT,
+        **_compare_style_params("saccade_width", "opacity"),
     }
 )
 
@@ -416,6 +536,10 @@ SHARE_INT_RANGE_PARAMS: Mapping[str, str] = MappingProxyType(
         # range, so an untouched one is not a setting and must not be stamped
         # onto every link.
         FIX_RANGE_PARAM: SINGLE_FIX_RANGE,
+        # EXP-19.
+        **_compare_style_params("marker_size_range"),
+        # CMP-24 — B's window; optional on the same terms as A's.
+        COMPARE_FIX_RANGE_PARAM: SINGLE_COMPARE_FIX_RANGE,
     }
 )
 
@@ -476,6 +600,53 @@ URL_SELECTION_PARAMS = frozenset(
     }
 )
 
+# EXP-19 — the settings that used to travel in the saved config only, by what
+# they describe. Both groups ride the link only when they differ from what the
+# recipient's own session would resolve for the same source and trial (so a link
+# does not stamp the demo's 2560x1440 onto itself, and does not override a
+# corpus' declared monitor with a copy of that same monitor), and the compare
+# styles only alongside a `compare=` — they restore nothing without one.
+SETUP_PARAMS: Mapping[str, str] = MappingProxyType(
+    {
+        "canvas_width": GLOBAL_CANVAS_WIDTH,
+        "canvas_height": GLOBAL_CANVAS_HEIGHT,
+        "base_font_size": GLOBAL_BASE_FONT_SIZE,
+        "monitor_width_mm": GLOBAL_MONITOR_WIDTH_MM,
+        "viewing_distance_mm": GLOBAL_VIEWING_DISTANCE_MM,
+        "display_dpi": GLOBAL_DISPLAY_DPI,
+        "stimulus_font_pt": GLOBAL_STIMULUS_FONT_PT,
+        "use_stimulus_font_pt": GLOBAL_USE_STIMULUS_FONT_PT,
+    }
+)
+#: CMP-24 — B's filters travel on the terms of B's styles: only beside a
+#: `compare=`, and only when they differ from a fresh session's.
+COMPARE_B_FILTER_PARAMS: Mapping[str, str] = MappingProxyType(
+    {
+        "cmp_b_saccade_classes": CMP_B_SACCADE_CLASSES,
+        "cmp_b_fixclass_short_mode": CMP_B_FIXCLASS_SHORT_MODE,
+        "cmp_b_fixclass_short_threshold_ms": CMP_B_FIXCLASS_SHORT_THRESHOLD_MS,
+        "cmp_b_fixclass_long_mode": CMP_B_FIXCLASS_LONG_MODE,
+        "cmp_b_fixclass_long_threshold_ms": CMP_B_FIXCLASS_LONG_THRESHOLD_MS,
+        "cmp_b_fixclass_oob_mode": CMP_B_FIXCLASS_OOB_MODE,
+        "cmp_b_fixclass_blink_mode": CMP_B_FIXCLASS_BLINK_MODE,
+    }
+)
+COMPARE_STYLE_PARAMS: Mapping[str, str] = MappingProxyType(
+    {
+        **_compare_style_params(
+            "fix_color",
+            "saccade_color",
+            "saccade_style",
+            "saccade_width",
+            "marker_size_range",
+            "hollow",
+            "opacity",
+            "label_pattern",
+        ),
+        **COMPARE_B_FILTER_PARAMS,
+    }
+)
+
 # Session keys `app.main`'s `?source=` dispatch writes when a link names a data
 # source. Separate from `URL_SEEDED_STATE_KEYS` because they are seeded there,
 # after `_apply_url_preset` has returned the token — see PARAM_CORPUS above.
@@ -487,7 +658,9 @@ URL_SOURCE_STATE_KEYS = frozenset({DATA_SOURCE_CHOICE, PUBLIC_DATASET_CHOICE})
 # setup, and an absent badge is the honest outcome there: emitting
 # "assumed,assumed,assumed" would manufacture a claim the sender never made.
 # `corpus` is absent for every source that is not a public corpus, and for the
-# one public corpus that still travels under its own older token.
+# one public corpus that still travels under its own older token. EXP-19's two
+# groups are here because they are emitted only when they differ from the
+# recipient's own defaults — see `SETUP_PARAMS` above.
 URL_OPTIONAL_PARAMS = frozenset(
     {
         SETUP_PROVENANCE_PARAM,
@@ -495,6 +668,9 @@ URL_OPTIONAL_PARAMS = frozenset(
         COMPARE_SOURCE_PARAM,
         PARAM_CORPUS,
         FIX_RANGE_PARAM,
+        COMPARE_FIX_RANGE_PARAM,
+        *SETUP_PARAMS,
+        *COMPARE_STYLE_PARAMS,
     }
 )
 
@@ -528,6 +704,27 @@ URL_BOUNDED_STATE_KEYS = frozenset(
         GLOBAL_PREPROC_SHORT_THRESHOLD_MS,
         GLOBAL_PREPROC_MERGE_DISTANCE_CHARS,
         GLOBAL_COORDINATE_GRID_SPACING,
+        GLOBAL_RAW_GAZE_MARKER_SIZE,
+        GLOBAL_RAW_GAZE_OPACITY,
+        GLOBAL_COLORBAR_TICKANGLE,
+        GLOBAL_COLORBAR_TICKFONT_SIZE,
+        GLOBAL_FIXCLASS_SHORT_THRESHOLD_MS,
+        GLOBAL_FIXCLASS_LONG_THRESHOLD_MS,
+        CMP_B_FIXCLASS_SHORT_THRESHOLD_MS,
+        CMP_B_FIXCLASS_LONG_THRESHOLD_MS,
+        # EXP-19 — every numeric one of the two new groups.
+        GLOBAL_CANVAS_WIDTH,
+        GLOBAL_CANVAS_HEIGHT,
+        GLOBAL_BASE_FONT_SIZE,
+        GLOBAL_MONITOR_WIDTH_MM,
+        GLOBAL_VIEWING_DISTANCE_MM,
+        GLOBAL_DISPLAY_DPI,
+        GLOBAL_STIMULUS_FONT_PT,
+        *(
+            template.format(idx=idx)
+            for template in (CMP_SACCADE_WIDTH, CMP_MARKER_SIZE_RANGE, CMP_OPACITY)
+            for _side, idx in COMPARE_STYLE_SIDES
+        ),
     }
 )
 
@@ -552,6 +749,8 @@ URL_SEEDED_STATE_KEYS = frozenset(
         ONESTOP_PARTS,
         DEEPLINK_PARTICIPANT,
         GLOBAL_ADVANCED,
+        # EXP-19 — the one-shot "leave these alone" handoff to the source snap.
+        LINK_SETUP_STATE_KEY,
     }
 )
 
@@ -685,10 +884,20 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_FIXCLASS_OOB_MODE,
         GLOBAL_FIXCLASS_OOB_SYMBOL,
         GLOBAL_FIXCLASS_OOB_COLOR,
+        # BUG-72: the fourth category, always written, until now never read back.
+        GLOBAL_FIXCLASS_BLINK_MODE,
+        GLOBAL_FIXCLASS_BLINK_SYMBOL,
+        GLOBAL_FIXCLASS_BLINK_COLOR,
+        # compare_view (BUG-72) — a `global_*` key, unlike the view's other two.
+        GLOBAL_SHOW_COMPARE_LEGEND,
         # labels
         GLOBAL_SHOW_TITLE_CAPTION,
         GLOBAL_TITLE_PATTERN,
         GLOBAL_CAPTION_PATTERN,
+        # raw_gaze (VIZ-43)
+        GLOBAL_RAW_GAZE_COLOR,
+        GLOBAL_RAW_GAZE_MARKER_SIZE,
+        GLOBAL_RAW_GAZE_OPACITY,
     }
 )
 
@@ -706,6 +915,10 @@ PLOT_CONFIG_OTHER_STATE_KEYS = frozenset(
         # in `PLOT_CONFIG_STATE_KEYS`.
         SINGLE_COMPARE_LAYOUT,
         SINGLE_COMPARE_STIMULUS,
+        # BUG-72 — the replay speed, restored from the config's `animation`.
+        SINGLE_PLAYBACK_SPEED,
+        # CMP-24 — B's filters, from the config's second `compare` entry.
+        *COMPARE_B_FILTER_STATE_KEYS,
     }
 )
 

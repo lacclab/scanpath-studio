@@ -26,6 +26,9 @@ from time import perf_counter
 from typing import Any
 
 import streamlit as st
+from streamlit.runtime.scriptrunner import StopException
+
+from .constants import ICONS
 
 # Keep the buffer small: it lives in session_state and is re-rendered every run.
 _MAX_RECORDS = 500
@@ -197,7 +200,17 @@ class _SessionStateHandler(logging.Handler):
                     "count": 1,
                 }
             )
-        except Exception:  # pragma: no cover - logging must never crash callers
+        except (Exception, StopException):
+            # UX-166: an abandoned run's session state raises StopException on
+            # any access. Escaping here, it threw away the finished result of
+            # every cached build that logs through `timed()` — the log line comes
+            # after the value is computed. A stop stays requested, so the run
+            # still stops at its next yield point; logging must never crash its
+            # caller. RerunException is deliberately NOT caught here: unlike a
+            # stop, `ScriptRequests.on_scriptrunner_yield` *consumes* a rerun
+            # request as it hands it over, so swallowing it here — if `emit` is
+            # the first checkpoint after the request — would discard the rerun
+            # itself (reachable with `runner.fastReruns = false`).
             pass
 
 
@@ -282,7 +295,7 @@ def render_debug_toggle(host=None) -> None:
     """
     st.session_state[_DEBUG_TOGGLE_KEY] = bool(st.session_state.get(DEBUG_STATE_KEY))
     (host if host is not None else st).toggle(
-        "🐛 Debug mode",
+        f"{ICONS['debug']} Debug mode",
         key=_DEBUG_TOGGLE_KEY,
         on_change=_mirror_debug_toggle,
         help="Add a 🐛 Debug panel to the Session menu: the captured log, a "
@@ -411,7 +424,7 @@ def render_debug_panel(host=None) -> None:
             "state": snapshot,
         }
         st.download_button(
-            "⬇️ Download logs (JSON)",
+            f"{ICONS['download']} Download logs (JSON)",
             data=json.dumps(export, indent=2, default=str),
             file_name="scanpath_studio_debug.json",
             mime="application/json",

@@ -42,8 +42,9 @@ never hash a multi-million-row frame per rerun.
    separators (never one-trace-per-saccade); no per-row Python loops adding
    traces/shapes for data-sized collections.
 8. **`@st.fragment`** — flag any introduction of it on the main render path;
-   the app deliberately avoids it (except the tour) — reruns must stay whole-app
-   so the settings→figure dataflow stays consistent.
+   the app deliberately avoids it (except the tour's panels and the 🗂️ Data
+   page's `app.render_dataset_table`) — reruns must stay whole-app so the
+   settings→figure dataflow stays consistent.
 
 ## Report
 

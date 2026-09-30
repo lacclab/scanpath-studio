@@ -16,6 +16,7 @@ import pytest
 
 from scanpath_studio import controls
 from scanpath_studio import menu as menu_mod
+from scanpath_studio.constants import ICONS
 from scanpath_studio.wizard import _SCREEN_KNOW, _SETUP_MODE_KEYS
 from tests.conftest import (
     APP_SCRIPT,
@@ -25,6 +26,7 @@ from tests.conftest import (
     SUBTAB_LINE_ASSIGNMENT,
     _write_benchmark_corpus,
     _write_benchmark_manifest,
+    add_benchmark_corpora,
     answer_setup_step,
     open_data_view,
     pin_data_view,
@@ -175,10 +177,10 @@ class TestAppLaunches:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         body = " ".join(m.value for m in at.markdown)
         for expected in (
-            "#### 🗄️ Automatic recovery",
-            "#### ⬇️ JSON backup",
-            "#### ♻️ Reset",
-            "#### 🐛 Debug tools",
+            f"#### {ICONS['recovery']} Automatic recovery",
+            f"#### {ICONS['download']} JSON backup",
+            f"#### {ICONS['reset']} Reset",
+            f"#### {ICONS['debug']} Debug tools",
         ):
             assert expected in body, f"{expected} missing from the Session dialog"
         # Neither group is a popover any more — not the merged one UX-38 made,
@@ -200,8 +202,8 @@ class TestAppLaunches:
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         body = " ".join(m.value for m in at.markdown)
-        assert "#### 🗄️ Automatic recovery" not in body
-        assert "#### ⬇️ JSON backup" not in body
+        assert f"#### {ICONS['recovery']} Automatic recovery" not in body
+        assert f"#### {ICONS['download']} JSON backup" not in body
 
     def test_debug_mode_survives_the_dialog_closing(self):
         """UX-100: the 🐛 Debug gate is not the toggle's own widget key.
@@ -340,8 +342,9 @@ class TestAppLaunches:
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
-        radios = {r.key: r.value for r in at.radio if r.key}
-        assert radios.get("global_fixclass_oob_mode") == "Highlight", (
+        # UX-162: the class modes are selectboxes in the 🧹 Filter table now.
+        modes = {w.key: w.value for w in at.selectbox if w.key}
+        assert modes.get("global_fixclass_oob_mode") == "Highlight", (
             "restored fixation-classification value was overridden by an inline default"
         )
 
@@ -599,8 +602,8 @@ class TestDataInspectionTab:
         # screen's numbered parts, so its headings are `.sps-wiz-part` markdown.
         subheaders = [s.value for s in at.subheader]
         for section in (
-            "📂 Available datasets",
-            "🔎 What's in the `Synthetic test trial` dataset",
+            f"{ICONS['datasets']} Available datasets",
+            f"{ICONS['search']} What's in the `Synthetic test trial` dataset",
         ):
             assert section in subheaders, f"missing stage {section}: {subheaders}"
         parts = " ".join(
@@ -619,7 +622,7 @@ class TestDataInspectionTab:
         assert not any("Raw data" in label for label in folded), folded
         assert not any("Summary statistics" in label for label in folded), folded
         tab_labels = [t.label for t in at.tabs]
-        for tab in ("📊 Stats", "Fixations", "AOIs", "Raw gaze"):
+        for tab in (f"{ICONS['stats']} Stats", "Fixations", "AOIs", "Raw gaze"):
             assert tab in tab_labels, f"missing tab {tab}: {tab_labels}"
         # The counts are the section's opening answer, so they kept no heading.
         assert "Dataset statistics" not in subheaders
@@ -661,7 +664,7 @@ class TestDataInspectionTab:
         # Top-level navigation is Streamlit's own top nav — `st.navigation(
         # position="top")` — not a sidebar radio, and not the single toggling
         # header button it replaced. `main_nav` survives as the mirror every
-        # other reader (the tour, persistence, `_active_view`) still consults.
+        # other reader (the tour, persistence) still consults.
         # Data Inspection and Share are subtabs of the Scanpath view.
         from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_SCANPATH
 
@@ -675,7 +678,7 @@ class TestDataInspectionTab:
         # The router lands on the default page, and `main_nav` mirrors it.
         assert at.session_state["main_nav"] == _VIEW_SCANPATH
 
-        # A view *requested* by writing `main_nav` (what `_go_corpus` and the
+        # A view *requested* by writing `main_nav` (what `url_state._go_scanpath` and the
         # tour do from `on_click` callbacks, where `st.switch_page` is illegal)
         # is honoured: `render_nav` reconciles the router to it.
         at.session_state["main_nav"] = _VIEW_CORPUS
@@ -1341,7 +1344,7 @@ class TestUnmappedRawDataView:
         _write_benchmark_manifest(
             root, [{"name": "Provo", "language": "en", "monitor": [1600, 900]}]
         )
-        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(root))
+        add_benchmark_corpora(monkeypatch, root)
 
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.benchmark_corpus_label("Provo")
@@ -1432,7 +1435,7 @@ class TestUnmappedRawDataView:
                 },
             ],
         )
-        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(root))
+        add_benchmark_corpora(monkeypatch, root)
 
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.benchmark_corpus_label("Provo")
@@ -1533,7 +1536,7 @@ class TestUnmappedRawDataView:
                 },
             ],
         )
-        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(root))
+        add_benchmark_corpora(monkeypatch, root)
 
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.benchmark_corpus_label("PoTeC")
@@ -1592,7 +1595,7 @@ class TestUnmappedRawDataView:
                 {"name": "Provo", "language": "en", "monitor": [1920, 1080]},
             ],
         )
-        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(root))
+        add_benchmark_corpora(monkeypatch, root)
 
         potec = app.benchmark_corpus_label("PoTeC")
         provo = app.benchmark_corpus_label("Provo")
@@ -1614,15 +1617,16 @@ class TestUnmappedRawDataView:
         # fixations side, and what matters is the *value*: unresolved, each
         # falls back to `(none)` and every reader collapses into one synthetic
         # id, with no error anywhere to say so.
+        # Read the keys one by one: Streamlit 1.64 stopped forwarding the
+        # private `filtered_state` attribute through `AppTest.session_state`.
         assert {
-            k: v
-            for k, v in at.session_state.filtered_state.items()
-            if k
-            in (
+            k: at.session_state[k]
+            for k in (
                 "col_map_fix_participant",
                 "col_map_fix_fixation_id",
                 "col_map_fix_word_id",
             )
+            if k in at.session_state
         } == {
             "col_map_fix_participant": "unique_participant_id",
             "col_map_fix_fixation_id": "fix_index",
@@ -1651,145 +1655,30 @@ class TestUnmappedRawDataView:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state["filter_text_id"] == ["PoTeC_a"]
 
-    def test_a_bundle_at_a_non_default_path_becomes_reachable_and_stays(
+    def test_a_stale_corpus_label_lands_on_a_corpus_not_on_the_demo(
         self, monkeypatch, tmp_path
     ):
-        """R39 end to end: type a path, pick the corpus, keep it.
+        """N2: healing a stale *corpus* label.
 
-        The bootstrap entry exists for exactly one job — a bundle that is *not*
-        at `EYEGENBENCH_DEFAULT_DIR` must be reachable, since discovery reads a
-        directory the user can change at runtime and an undiscovered bundle
-        yields no entries and so nowhere to type its path. The first cut of the
-        entry shipped non-functional and passed its test anyway, because the
-        test asserted the directory input *existed* and never typed into it
-        (C1): the typed path survived exactly one run. Discovery then succeeded,
-        the placeholder dropped out of the registry, the healing step sent the
-        user to the bundled demo, the demo renders no directory input — so
-        Streamlit dropped the `eyegenbench_dir` key at end of run and the next
-        run rediscovered nothing. The corpora flickered in for one rerun,
-        forever.
-
-        So this drives the whole flow: type → the corpus appears → **select
-        it** → it is still selected, still loaded, and still there after a
-        detour to another source. Everything before the last step passes on the
-        bug in at least one of its halves; the run *after* each selection is
-        what fails on it.
+        The selected corpus can stop existing without anything going wrong — a
+        restored session names a corpus that is no longer added. The generic
+        healing would send it to `entries[0]`, the bundled demo, when an added
+        corpus was right there.
         """
         from scanpath_studio import app
-        from scanpath_studio.constants import AUTHOR_CHOICE
 
         monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
-        # The premise: the app's default location is empty and the bundle is
-        # somewhere else entirely. Nothing is discoverable until it is typed in.
-        default_dir = tmp_path / "default-location"
-        default_dir.mkdir()
-        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(default_dir))
-        root = tmp_path / "elsewhere" / "bundle"
+        root = tmp_path / "bundle"
         _write_benchmark_corpus(root, "Provo", paragraphs=("Provo_a", "Provo_b"))
         _write_benchmark_manifest(
             root, [{"name": "Provo", "language": "en", "monitor": [1600, 900]}]
         )
-        label = app.benchmark_corpus_label("Provo")
+        add_benchmark_corpora(monkeypatch, root)
 
         at = _make_apptest()
-        at.session_state["data_source_choice"] = app.BENCHMARK_SETUP_CHOICE
-        at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
-        picker = next(s for s in at.selectbox if s.key == "data_source_picker")
-        assert "🌐 Harmonised benchmark corpora — set up (WIP)" in picker.options
-        # The *marked* form, deliberately: asserting "🌐 Provo" is absent would
-        # now pass whether or not the corpus is listed, since a listed one reads
-        # "🌐 Provo (WIP)".
-        assert "🌐 Provo (WIP)" not in picker.options
-
-        # 1. The user types the bundle's real path into the placeholder's input.
-        dir_inputs = [t for t in at.text_input if t.key == "eyegenbench_dir"]
-        assert dir_inputs, "expected the bundle directory input"
-        dir_inputs[0].set_value(str(root)).run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        picker = next(s for s in at.selectbox if s.key == "data_source_picker")
-        assert "🌐 Provo (WIP)" in picker.options, "the corpus must appear once found"
-        # The placeholder disappears *because it succeeded*, so healing must not
-        # bounce the user out to the demo — that answers "here is my bundle"
-        # with somewhere else entirely, and (the demo drawing no directory
-        # input) throws the bundle location away on the way out.
-        assert at.session_state["data_source_choice"] == label
-
-        # 2. The user picks the corpus in the picker, through the real widget.
-        picker.set_value(label).run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-
-        # 3. The run after the selection — the one that used to lose the path.
-        at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert at.session_state["eyegenbench_dir"] == str(root)
-        assert at.session_state["data_source_choice"] == label
-        picker = next(s for s in at.selectbox if s.key == "data_source_picker")
-        assert "🌐 Provo (WIP)" in picker.options
-        # The placeholder is offered only while nothing is discovered, and the
-        # options are checked rather than `public_dataset_registry()` because
-        # the bundle's location lives in *this app run's* session state — a
-        # registry built out here, outside the run, cannot see it.
-        assert not any("set up" in option for option in picker.options)
-        # …and the corpus is genuinely loaded, not merely named in the picker.
-        text_ms = next(m for m in at.multiselect if m.key == "filter_text_id")
-        assert set(text_ms.options) == {"Provo_a", "Provo_b"}
-
-        # 4. A detour to another source and back. The directory input renders
-        # only while a benchmark corpus is selected, so this is the run on which
-        # Streamlit drops an ordinary widget key — `persist_state="session"` on
-        # the shared `_dataset_dir_input` is what keeps the bundle findable.
-        picker.set_value(AUTHOR_CHOICE).run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert not [t for t in at.text_input if t.key == "eyegenbench_dir"], (
-            "premise: another source renders no bundle directory input"
-        )
-        picker = next(s for s in at.selectbox if s.key == "data_source_picker")
-        assert "🌐 Provo (WIP)" in picker.options, "the bundle location must survive"
-        picker.set_value(label).run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert at.session_state["data_source_choice"] == label
-        text_ms = next(m for m in at.multiselect if m.key == "filter_text_id")
-        assert set(text_ms.options) == {"Provo_a", "Provo_b"}
-
-    def test_repointing_the_bundle_lands_on_a_corpus_not_on_the_demo(
-        self, monkeypatch, tmp_path
-    ):
-        """N2: healing a stale *corpus* label, not just the placeholder.
-
-        The selected corpus can stop existing without anything going wrong —
-        the user points the directory input at a second bundle, or rebuilds one
-        without that corpus. The selection is then invalid and the generic
-        healing sends it to `entries[0]`, the bundled demo. That is the same
-        non-answer C1's second half exists to prevent: the user asked for a
-        different bundle and got the demo, when a prepared corpus from the
-        bundle they just named was right there.
-        """
-        from scanpath_studio import app
-
-        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
-        first = tmp_path / "first-bundle"
-        _write_benchmark_corpus(first, "PoTeC", paragraphs=("PoTeC_a", "PoTeC_b"))
-        _write_benchmark_manifest(
-            first, [{"name": "PoTeC", "language": "de", "monitor": [1680, 1050]}]
-        )
-        second = tmp_path / "second-bundle"
-        _write_benchmark_corpus(second, "Provo", paragraphs=("Provo_a", "Provo_b"))
-        _write_benchmark_manifest(
-            second, [{"name": "Provo", "language": "en", "monitor": [1600, 900]}]
-        )
-        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(first))
-
-        at = _make_apptest()
+        # "PoTeC — harmonised…" names a corpus that isn't added.
         at.session_state["data_source_choice"] = app.benchmark_corpus_label("PoTeC")
         at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-
-        # Repoint at the other bundle: "PoTeC — harmonised…" is now a label for
-        # a corpus that isn't there.
-        dir_input = next(t for t in at.text_input if t.key == "eyegenbench_dir")
-        dir_input.set_value(str(second)).run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state["data_source_choice"] == app.benchmark_corpus_label(
             "Provo"
@@ -1828,7 +1717,7 @@ class TestUnmappedRawDataView:
         headless_reader_count = headless_fixations["participant_id"].nunique()
         assert headless_reader_count == 3
 
-        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(root))
+        add_benchmark_corpora(monkeypatch, root)
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.benchmark_corpus_label("BSC")
         at.run(timeout=60)
@@ -2532,6 +2421,81 @@ class TestSetupWizard:
         assert entry["schemas"]["words"]["text"] == "difficulty_level"
         assert list(entry["words"]["text"]) == ["Adv", "Adv", "Ele", "Ele"]
 
+    def test_saving_a_text_level_aoi_table_keeps_every_trials_boxes(self, monkeypatch):
+        """DATA-39 — an AOI table with no participant column (one row per word
+        per *text*) is broadcast onto the readers at import. ✅ Save changes on
+        the ✏️ Edit dataset screen — what attaching a metadata table there asks
+        for — used to re-derive it onto the ``""`` placeholder reader and never
+        broadcast it back, so every trial lost its word boxes and its text."""
+        import pandas as pd
+
+        from scanpath_studio import app
+        from scanpath_studio.constants import DATASET_EDITOR_OPEN_KEY
+        from scanpath_studio.utils import extract_trial
+
+        raw_words = pd.DataFrame(
+            {
+                "trial_id": ["t1", "t1"],
+                "word_id": [1, 2],
+                "IA_LEFT": [0, 10],
+                "IA_RIGHT": [10, 20],
+                "IA_TOP": [0, 0],
+                "IA_BOTTOM": [10, 10],
+                "IA_LABEL": ["a", "b"],
+            }
+        )
+        raw_fix = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1", "p2"],
+                "trial_id": ["t1", "t1", "t1"],
+                "CURRENT_FIX_X": [5.0, 15.0, 5.0],
+                "CURRENT_FIX_Y": [5.0, 5.0, 5.0],
+                "CURRENT_FIX_DURATION": [100, 120, 90],
+            }
+        )
+        monkeypatch.setattr(
+            app,
+            "_read_uploaded_frame",
+            lambda **kw: (
+                raw_words
+                if kw["state_prefix"] == "col_map_words"
+                else raw_fix
+                if kw["state_prefix"] == "col_map_fix"
+                else pd.DataFrame()
+            ),
+        )
+
+        def boxes_per_trial(entry):
+            words, fixations = entry["words"], entry["fixations"]
+            pairs = fixations[["participant_id", "trial_id"]].drop_duplicates()
+            return {
+                (p, t): sorted(extract_trial(words, p, t)["text"])
+                for p, t in pairs.itertuples(index=False)
+            }
+
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        answer_setup_step(at)
+        at.run(timeout=60)
+        next(b for b in at.button if b.key == "wizard_finalize").click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        name = at.session_state["data_source_choice"]
+        before = boxes_per_trial(at.session_state["_datasets"][name])
+        assert before and all(v == ["a", "b"] for v in before.values()), before
+
+        at.session_state[DATASET_EDITOR_OPEN_KEY] = name
+        pin_data_view(at)
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        next(b for b in at.button if b.key == f"remap_apply_{name}").click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+        entry = at.session_state["_datasets"][name]
+        assert boxes_per_trial(entry) == before
+        assert "_stimulus_words" not in entry["words"].columns
+
     def test_per_table_trial_pickers_and_setup_step(self, monkeypatch):
         """Group A + C: a Trial ID picker per table (UX-53 r13 dropped the
         unified picker and its toggle) and the inline Experimental Setup
@@ -2936,12 +2900,21 @@ class TestCorpusAnalysisTab:
     (Per text / Per reader / Groups). Generations moved to the Scanpath view's
     Comparisons subtab (ENG-8)."""
 
-    def test_analysis_sections_render(self):
+    @pytest.mark.parametrize(
+        ("subtab", "view_key"),
+        [
+            ("Per text", "ptext_view"),
+            ("Per reader", "prdr_view"),
+            ("Groups", "pgrp_view"),
+        ],
+    )
+    def test_analysis_sections_render(self, subtab, view_key):
         # Demo source: several participants / trials / texts, so every section
-        # has data. AppTest renders all st.tabs bodies, so one run exercises the
-        # default view of each section.
+        # has data. PERF-9 made the subtabs lazy — only the open one runs — so
+        # each section is opened by name through the keyed tab bar.
         at = _make_apptest()
         at.session_state["main_nav"] = "Corpus Analysis"
+        at.session_state["corpus_subtab"] = subtab
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
@@ -2949,12 +2922,49 @@ class TestCorpusAnalysisTab:
         # The Groups tab defaults to a single group (compare toggle off), so its
         # single-group view selector (pgrp_view) is present; cmp_view appears only
         # when 'Compare a second group' is on (see test_each_analysis_view_renders).
-        for view_key in ("ptext_view", "prdr_view", "pgrp_view"):
-            assert view_key in keys, f"{view_key} view selector not found"
+        assert view_key in keys, f"{view_key} view selector not found"
         # BUG-26: the Screen picker is offered only by a multipart corpus. The
         # demo has no `screen_id`, so it must not appear — and its absence is
         # what pins that every single-screen dataset is untouched by the fix.
         assert "ptext_screen" not in keys
+
+    def test_data_without_ia_columns_still_gets_measures(self):
+        """BUG-78: only an IA export ships per-word measures, and the subtabs
+        read them off the words frame — so boxes + fixations alone (the synthetic
+        trial, a Tobii/SMI upload) got "No aggregatable measures"."""
+        at = _make_apptest(synthetic=True)
+        at.session_state["main_nav"] = "Corpus Analysis"
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert not [i for i in at.info if "No aggregatable measures" in i.value]
+        picker = next(s for s in at.selectbox if s.key == "ptext_measure")
+        assert len(picker.options) >= 10, picker.options
+
+    def test_only_the_open_subtab_runs(self, monkeypatch):
+        """PERF-9: the hidden Per sentence table ran on every Corpus rerun."""
+        from scanpath_studio import tabs
+
+        calls = []
+        real = tabs._render_per_sentence_tab
+        monkeypatch.setattr(
+            tabs,
+            "_render_per_sentence_tab",
+            lambda *a, **k: calls.append(1) or real(*a, **k),
+        )
+        at = _make_apptest()
+        at.session_state["main_nav"] = "Corpus Analysis"
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert calls == [], "Per sentence ran while Per text was open"
+        # A fresh app per tab: AppTest's router does not follow the app's own
+        # `st.switch_page`, so a second run would land back on Scanpath.
+        at = _make_apptest()
+        at.session_state["main_nav"] = "Corpus Analysis"
+        at.session_state["corpus_subtab"] = "Per sentence"
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert calls, "Per sentence never ran once opened"
+        assert "sentence_measure" in {s.key for s in at.selectbox}
 
     @pytest.mark.parametrize(
         ("view_key", "view"),
@@ -2983,6 +2993,10 @@ class TestCorpusAnalysisTab:
         # The two-group comparison views live behind the Groups 'Compare a second
         # group' toggle; the single-group views show with it off.
         at.session_state["groups_compare"] = view_key == "cmp_view"
+        at.session_state["corpus_subtab"] = {
+            "ptext_view": "Per text",
+            "prdr_view": "Per reader",
+        }.get(view_key, "Groups")
         at.session_state[view_key] = view
         at.run(timeout=60)
         assert not at.exception, f"{view_key}={view!r}: {at.exception}"
@@ -2996,6 +3010,7 @@ class TestCorpusAnalysisTab:
         # (compare off) and two-group (compare on) cases of the Groups tab.
         single = _make_apptest()
         single.session_state["main_nav"] = "Corpus Analysis"
+        single.session_state["corpus_subtab"] = "Groups"
         single.session_state["pgrp_mode"] = "Independent filter sets"
         single.run(timeout=60)
         assert not single.exception, f"Streamlit exceptions: {single.exception}"
@@ -3003,6 +3018,7 @@ class TestCorpusAnalysisTab:
 
         compare = _make_apptest()
         compare.session_state["main_nav"] = "Corpus Analysis"
+        compare.session_state["corpus_subtab"] = "Groups"
         compare.session_state["groups_compare"] = True
         compare.session_state["cmp_mode"] = "Independent filter sets"
         compare.run(timeout=60)
@@ -3336,6 +3352,52 @@ class TestGenericFilenamePowers:
         # …and the character-AOI aggregation toggle renders for the words table.
         assert "wizard_aggregate_char_boxes" in {t.key for t in at.toggle}
 
+    def test_the_filename_derive_control_sits_above_the_table_rows(self, monkeypatch):
+        """UX-123 keeps "Derive columns from the filename" the first control of
+        the upload part — reserved before the Fixations/AOI rows, filled in once
+        their uploads have run. `scanpath_studio/CLAUDE.md` had drifted to say
+        it sat *below* them (BUG-85); this pins what the note now says."""
+        import pandas as pd
+
+        from scanpath_studio import app
+
+        fix = pd.DataFrame(
+            {
+                "onset": [1, 2],
+                "duration": [10, 10],
+                "location_x": [1.0, 2.0],
+                "location_y": [1.0, 1.0],
+                "source_file": ["p1_t1_scan", "p1_t1_scan"],
+            }
+        )
+        monkeypatch.setattr(
+            app,
+            "_read_uploaded_frame",
+            lambda **kw: fix if kw["state_prefix"] == "col_map_fix" else pd.DataFrame(),
+        )
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.session_state["_show_upload_wizard"] = True
+        at.session_state["setup_complete"] = False
+        at.session_state["wizard_dataset_format"] = "Generic"
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+        def keys_in_screen_order(node):
+            key = getattr(node, "key", None)
+            if key:
+                yield key
+            children = getattr(node, "children", None) or {}
+            for index in sorted(children):
+                yield from keys_in_screen_order(children[index])
+
+        keys = list(keys_in_screen_order(at.main))
+        fixation_rows = [
+            i for i, key in enumerate(keys) if key.startswith("col_map_fix_")
+        ]
+        assert fixation_rows, "the Fixations row rendered no field pickers"
+        assert keys.index("wizard_filename_split") < fixation_rows[0]
+
     def test_aggregate_toggle_finalizes_word_boxes(self, monkeypatch):
         # End-to-end: a char-level words upload + the aggregate toggle → the
         # stored dataset holds one box per word (4 char rows → 2 word boxes).
@@ -3490,14 +3552,25 @@ class TestFigureAndCanvasSubGroups:
         control_source = inspect.getsource(controls.render_plot_controls)
         canvas_source = inspect.getsource(app.render_canvas_controls)
 
-        assert '_rail_subsection(figure_grp, "🖥️ Screen & framing")' in control_source
-        assert '_rail_subsection(figure_grp, "📊 Axes & grid")' in control_source
-        assert '_rail_subsection(figure_grp, "🏷️ Title & labels")' in control_source
+        assert (
+            "_rail_subsection(figure_grp, f\"{ICONS['screen']} Screen & framing\")"
+            in control_source
+        )
+        assert (
+            "_rail_subsection(figure_grp, f\"{ICONS['axes']} Axes & grid\")"
+            in control_source
+        )
+        assert (
+            "_rail_subsection(figure_grp, f\"{ICONS['labels']} Title & labels\")"
+            in control_source
+        )
         # The typography half is drawn into the Stimulus section instead.
         assert "text_host" in canvas_source
         assert '_rail_subsection(stim_grp, "🔤 Text")' not in control_source
-        # The framing toggle leads the screen block.
-        assert 'screen_group.toggle(\n        "**Show full monitor**"' in control_source
+        # The framing switch leads the screen block (UX-164: a `Frame | ☑
+        # Whole monitor` row).
+        assert 'key="global_fit_to_monitor"' in control_source
+        assert "with screen_group, _popover_rows(" in control_source
         # …and the old flat captions are gone.
         assert 'figure_grp.caption("**Canvas & text**")' not in control_source
         assert 'figure_grp.caption("**Axes & labels**")' not in control_source
@@ -3534,7 +3607,7 @@ class TestResetSettings:
         # itself happens on the confirm click, one run later.
         confirm = [b for b in at.button if b.key == "reset_viz_confirm"]
         assert confirm, "Reset confirmation button not rendered"
-        assert confirm[0].label == "♻️ Reset it"
+        assert confirm[0].label == f"{ICONS['reset']} Reset it"
         at = confirm[0].click().run(timeout=30)
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
@@ -3927,3 +4000,105 @@ class TestRecordingSetupGate(TestSetupWizard):
         from scanpath_studio.experimental_setup import SetupSnapshot
 
         assert SetupSnapshot.from_dict(entry["setup"]).px_per_degree is None
+
+    def test_the_estimate_survives_an_untouched_save_changes(self, monkeypatch):
+        """DATA-46 — the wizard estimated from the raw upload, whose `IA_LEFT` /
+        `CURRENT_FIX_X` it cannot read, so an EyeLink export's "estimate" was the
+        2560 × 1440 default; ✏️ Edit dataset then estimated for real from the
+        stored frames, and ✅ Save changes with nothing touched wrote that over
+        the saved screen."""
+        from scanpath_studio.constants import DATASET_EDITOR_OPEN_KEY
+        from scanpath_studio.data import compute_canvas_size
+
+        app = self._inject(monkeypatch)
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.session_state[_SETUP_MODE_KEYS["screen"]] = "Estimate from my data"
+        at.session_state[_SETUP_MODE_KEYS["geometry"]] = (
+            "Skip — I don't need visual-angle units"
+        )
+        at.session_state[_SETUP_MODE_KEYS["text"]] = "Use a default (16 px)"
+        at.run(timeout=60)
+        next(b for b in at.button if b.key == "wizard_finalize").click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        name = at.session_state["data_source_choice"]
+        entry = at.session_state["_datasets"][name]
+        # The estimate is the data's own extent, not the default screen.
+        saved = (entry["setup"]["canvas_width"], entry["setup"]["canvas_height"])
+        assert saved == compute_canvas_size(entry["words"], entry["fixations"])
+        assert saved != (2560, 1440)
+
+        # Make the stored data disagree with the saved estimate, as data edited
+        # since the dataset was added would: the editor must still keep it.
+        stored = dict(entry["setup"])
+        stored["canvas_width"], stored["canvas_height"] = 3000, 2000
+        at.session_state["_datasets"][name] = {**entry, "setup": stored}
+
+        at.session_state[DATASET_EDITOR_OPEN_KEY] = name
+        pin_data_view(at)
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # The fresh estimate is offered, not applied.
+        assert any(b.key == f"edit_{name}_setup_reestimate_btn" for b in at.button)
+        next(b for b in at.button if b.key == f"remap_apply_{name}").click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        setup = at.session_state["_datasets"][name]["setup"]
+        assert (setup["canvas_width"], setup["canvas_height"]) == (3000, 2000)
+        assert setup["provenance"]["screen"] == "estimated"
+
+
+class TestMetadataBelongsToItsDataset:
+    """DATA-47 through ``app.main`` — a table attached to one dataset stays
+    with it: the add wizard starts without it, another dataset does not see it,
+    and it is back when its own dataset is selected again."""
+
+    @staticmethod
+    def _attached(at):
+        from scanpath_studio import metadata as md
+
+        try:
+            return at.session_state[md.SESSION_KEY]
+        except (KeyError, AttributeError):
+            return None
+
+    def test_a_table_stays_with_the_dataset_it_was_attached_to(self):
+        import pandas as pd
+
+        from scanpath_studio import app
+        from scanpath_studio import metadata as md
+
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=60)
+        at.session_state[md.SESSION_KEY] = md.build_participant_metadata(
+            pd.DataFrame({"participant_id": ["p1"], "age": [30]}),
+            "participant_id",
+            source_name="synthetic-readers.csv",
+        )
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state[md.OWNER_KEY] == SYNTHETIC_SOURCE
+
+        # ➕ Add dataset: the new dataset has no tables of its own yet.
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert self._attached(at) is None
+
+        # Another dataset does not see it …
+        at.session_state["_show_upload_wizard"] = False
+        at.session_state["setup_complete"] = True
+        at.session_state["_pending_source_choice"] = app.DEMO_CHOICE
+        at.run(timeout=120)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state[md.OWNER_KEY] == app.DEMO_CHOICE
+        assert self._attached(at) is None
+
+        # … and its own dataset has it back.
+        at.session_state["_pending_source_choice"] = SYNTHETIC_SOURCE
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        attached = self._attached(at)
+        assert attached is not None
+        assert attached.source_name == "synthetic-readers.csv"

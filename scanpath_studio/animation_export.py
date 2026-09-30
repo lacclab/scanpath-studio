@@ -13,9 +13,11 @@ How it stays faithful to what the user sees on screen:
 * **Same frames.** Each ``go.Frame`` is applied onto a frameless copy of the base
   figure and rendered to PNG, so word boxes, true-to-scale labels, saccades,
   order numbers and the orange current-fixation highlight all match the live view.
-* **Same clock.** The on-screen Play button advances every frame at one average
-  duration (``plots._anim_timeline``); we reproduce that exactly, so the clip's
+* **Same clock.** The on-screen replay takes ``reading span / playback speed``
+  (BUG-93's wall-clock player); the clip spreads that over its frames, so its
   runtime equals the playback time quoted on screen (``animation_playback_ms``).
+  A replay faster than the format can show drops frames to stay on time, as the
+  player does between display ticks (:func:`clip_frame_count`).
 * **Same readout.** The slider's "Elapsed: X.Xs" value is re-drawn as a static
   annotation per frame, since the interactive slider can't survive rasterization.
 
@@ -29,7 +31,8 @@ browser renders each frame in a fraction of a second.
 from __future__ import annotations
 
 import io
-from collections.abc import Callable
+import threading
+from collections.abc import Callable, Iterable
 from time import perf_counter
 
 import numpy as np
@@ -39,6 +42,21 @@ from .export_status import ExportStage, StatusCallback, emit_status
 
 # The interactive formats live elsewhere; these are the rasterized clip formats.
 VIDEO_FORMATS: tuple[str, ...] = ("gif", "mp4")
+
+# SEC1 (BUG-74): a GIF's cost grows with its raster pixels — every frame is
+# decoded, palette-quantized and written whole (``disposal=2`` stores full frames,
+# not deltas), and the finished file is held in memory for the download. The
+# encoder streams since BUG-74, so a frame no longer costs its decoded size for the
+# whole encode, but the rendered PNGs and the output still scale with
+# frames × width × height × scale². So a GIF over this budget is refused before
+# Kaleido starts. A server other machines can reach gets the lower figure: it is
+# shared, and one visitor's 2000-frame, 2× clip is everyone's outage. Locally the
+# budget only catches the absurd — the rail's own ceiling (2000 frames at 2× of a
+# display-capped figure, ~6 Gpx) fits under it. MP4 is not budgeted: its frames go
+# straight through ffmpeg and H.264 keeps the file small, which is also why the
+# refusal points at it.
+GIF_PIXEL_BUDGET_LOCAL = 8_000_000_000
+GIF_PIXEL_BUDGET_HOSTED = 800_000_000
 
 _MIME = {"gif": "image/gif", "mp4": "video/mp4"}
 
@@ -50,16 +68,28 @@ _STATIC_TOP_MARGIN_PX = 28
 
 # Floor on a GIF frame delay: the format stores delays in centiseconds and many
 # viewers silently promote sub-20 ms delays to ~100 ms, so clamp here to keep
-# fast playback honest. MP4 has no such quirk.
+# fast playback honest. MP4 has no such quirk. A replay whose frames are shorter
+# than this renders fewer of them instead (`clip_frame_count`).
 _GIF_MIN_FRAME_MS = 20
-# MP4 plays at one constant rate, but animation frames have durations spanning
-# ~16 ms (fast/×8 playback) to several hundred ms (slow/×0.25, or downsampled long
-# trials). We encode at a fixed, universally-playable rate and hold each animation
-# frame for the right number of video frames (repeats compress to ~nothing in
-# H.264), so the clip's runtime tracks the on-screen Play across that whole range.
+# MP4 plays at one constant rate, but animation frames last anything from a few
+# ms (fast playback on a fine grid) to several hundred (×0.25, or a downsampled
+# long trial). We encode at a fixed, universally-playable rate and hold each
+# animation frame for the right number of video frames (repeats compress to
+# ~nothing in H.264); frames shorter than one video frame are dropped first
+# (`clip_frame_count`), so the clip's runtime tracks the replay across the range.
 _MP4_FPS = 60.0
 
 ProgressCallback = Callable[[int, int], None]
+
+# Kaleido's warm server (`start_sync_server` → `calc_fig_sync` → `stop_sync_server`)
+# is one process-wide singleton whose task and result queues are unlocked: two
+# renders overlapping on it can each collect the other's bytes, and one's stop can
+# strand the other. Every warm-server span in the app holds this lock for its whole
+# start → render → stop, so overlapping exports queue instead. Two sessions on one
+# server could always overlap; since UX-150 one session can too, because the
+# current-figure download renders on a worker thread while the script thread is
+# free to start a bundle. Re-entrant in case a span ever opens inside another.
+KALEIDO_LOCK = threading.RLock()
 
 
 class AnimationExportError(RuntimeError):
@@ -70,13 +100,25 @@ class AnimationExportError(RuntimeError):
     """
 
 
+class AnimationBudgetError(AnimationExportError):
+    """The requested GIF is over this server's pixel budget (SEC1 / BUG-74).
+
+    Raised before anything is rendered. A subclass so a caller that already
+    handles :class:`AnimationExportError` keeps working, and one that wants to can
+    tell "too big" apart from "Chrome is missing" — the message says what to change,
+    and the browser-install hint would be the wrong advice.
+    """
+
+
 # Actionable remediation when Kaleido can't find a Chrome/Chromium binary — the
 # usual cause of a failed GIF/MP4 (or static PNG/SVG/PDF) export (ENG-10).
+# BUG-85: worded for both installs. The frozen desktop bundle has no
+# `kaleido_get_chrome` / `plotly_get_chrome` and no Python prompt, but
+# `chromium_browser_path` finds an installed Chrome, Chromium or Edge there too.
 CHROME_INSTALL_HINT = (
-    "No Chrome/Chromium was found for image export. Install one with "
-    "`kaleido_get_chrome` (or `plotly_get_chrome -y`) in this environment, or from "
-    "Python run `import kaleido; kaleido.get_chrome_sync()`. The **HTML** export "
-    "needs no browser."
+    "Image export needs Chrome, Chromium or Edge, and none was found. Install one "
+    "of them and try again — a pip install can instead run `plotly_get_chrome -y`. "
+    "The **HTML** export needs no browser."
 )
 
 
@@ -140,21 +182,99 @@ def _static_base(fig: go.Figure) -> go.Figure:
     clear array layout properties (passing ``None`` is a no-op and ``[]`` doesn't
     truncate the existing entries), so we assign the attributes directly. The
     reserved control band is then reclaimed so the clip isn't topped by an empty
-    strip; a slim margin remains for the "Elapsed" annotation.
+    strip; a slim margin remains for the "Elapsed" annotation. The replay's clock
+    on ``layout.meta`` (BUG-93) goes too — only the live player reads it, and it
+    would otherwise ride into every frame Kaleido renders.
     """
     base = go.Figure(fig)
     base.frames = ()
     base.layout.updatemenus = []
     base.layout.sliders = []
-    height = int(fig.layout.height or 600)
+    base.layout.meta = None
     base.update_layout(
         margin=dict(l=0, r=0, t=_STATIC_TOP_MARGIN_PX, b=0),
-        height=max(
-            height - (_CONTROL_BAND_PX - _STATIC_TOP_MARGIN_PX),
-            _STATIC_TOP_MARGIN_PX + 1,
-        ),
+        height=_static_height(fig),
     )
     return base
+
+
+def _static_height(fig: go.Figure) -> int:
+    """The rasterized clip's height: the figure's, less the reclaimed control band.
+
+    Its own function so the pixel budget can size a clip without deep-copying
+    the figure (and every one of its frames) the way :func:`_static_base` must.
+    """
+    height = int(fig.layout.height or 600)
+    return max(
+        height - (_CONTROL_BAND_PX - _STATIC_TOP_MARGIN_PX), _STATIC_TOP_MARGIN_PX + 1
+    )
+
+
+def _served_to_other_machines() -> bool:
+    """Whether this export runs inside a Streamlit server others can reach.
+
+    Outside a Streamlit runtime (a script, the CLI) the caller is on their own
+    machine. Inside one, the answer is the server's own bind address — never the
+    URL the browser reports, which the browser controls (see
+    ``persistence.server_bound_to_loopback``).
+    """
+    try:
+        from streamlit import runtime
+    except Exception:  # pragma: no cover - streamlit is a hard dependency
+        return False
+    if not runtime.exists():
+        return False
+    from .persistence import server_bound_to_loopback
+
+    return not server_bound_to_loopback()
+
+
+def check_gif_budget(
+    n_frames: int, width: int, height: int, scale: float, *, budget: int | None = None
+) -> None:
+    """Refuse a GIF whose frames would exceed the pixel budget (SEC1 / BUG-74).
+
+    ``width``/``height`` are the clip's pixels at 1×; Kaleido multiplies both by
+    ``scale``. ``budget`` defaults to :data:`GIF_PIXEL_BUDGET_HOSTED` inside a
+    server other machines can reach and :data:`GIF_PIXEL_BUDGET_LOCAL` anywhere
+    else. Raises :class:`AnimationBudgetError` naming the ways back under — MP4,
+    fewer frames, a lower resolution — with the frame count that would fit at
+    this scale, so the message is something to act on.
+    """
+    shared = budget is None and _served_to_other_machines()
+    if budget is None:
+        budget = GIF_PIXEL_BUDGET_HOSTED if shared else GIF_PIXEL_BUDGET_LOCAL
+    per_frame = max(round(width * scale), 1) * max(round(height * scale), 1)
+    total = int(n_frames) * per_frame
+    if total <= budget:
+        return
+    fits = int(budget) // per_frame
+    shorter = f"cap it at {fits} frames or fewer, " if fits >= 1 else ""
+    raise AnimationBudgetError(
+        f"a {n_frames}-frame GIF at {width}×{height} px and {scale:g}× comes to "
+        f"{total / 1e6:,.0f} megapixels of frames, over the "
+        f"{budget / 1e6:,.0f}-megapixel limit for one GIF"
+        f"{' on this shared server' if shared else ''}. Export **MP4** instead — "
+        f"its frames stream straight to the encoder and the file stays small — or "
+        f"{shorter}or lower the resolution."
+    )
+
+
+def clip_frame_count(
+    n_frames: int, frame_duration_ms: float, fmt: str, max_frames: int | None = None
+) -> int:
+    """How many of a replay's ``n_frames`` a ``fmt`` clip renders.
+
+    A frame shorter than the format can hold — one video frame at ``_MP4_FPS``,
+    or ``_GIF_MIN_FRAME_MS`` for a GIF — would be held that long anyway and
+    stretch the clip, so a fast replay keeps only as many frames as fit its
+    runtime, each held a little longer (BUG-93). ``max_frames`` caps it further.
+    Never fewer than two, so the clip still ends on the whole scanpath.
+    """
+    shortest = _GIF_MIN_FRAME_MS if fmt.lower() == "gif" else 1000.0 / _MP4_FPS
+    fits = int(n_frames * frame_duration_ms / shortest + 1e-9)
+    count = min(n_frames, max(2, fits))
+    return min(count, max_frames) if max_frames else count
 
 
 def _select_frames(n: int, max_frames: int | None) -> list[int]:
@@ -213,63 +333,64 @@ def render_png_frames(
     browser_path = chromium_browser_path()
     if browser_path is None:
         raise AnimationExportError(CHROME_INSTALL_HINT)
-    try:
-        kaleido.start_sync_server(path=browser_path, silence_warnings=True)
-    except Exception:
-        cold_fallback = True
+    with KALEIDO_LOCK:
+        try:
+            kaleido.start_sync_server(path=browser_path, silence_warnings=True)
+        except Exception:
+            cold_fallback = True
 
-    pngs: list[bytes] = []
-    try:
-        for done, k in enumerate(indices, start=1):
-            frame = frames[k]
-            for data_obj, trace_idx in zip(frame.data, frame.traces):
-                base.data[trace_idx].update(data_obj)
-            if elapsed is not None:
-                base.update_layout(
-                    annotations=[
-                        dict(
-                            text=f"Elapsed: {elapsed[k]}",
-                            x=0.99,
-                            y=1.0,
-                            xref="paper",
-                            yref="paper",
-                            xanchor="right",
-                            yanchor="bottom",
-                            showarrow=False,
-                            font=dict(size=14, color="#444"),
+        pngs: list[bytes] = []
+        try:
+            for done, k in enumerate(indices, start=1):
+                frame = frames[k]
+                for data_obj, trace_idx in zip(frame.data, frame.traces):
+                    base.data[trace_idx].update(data_obj)
+                if elapsed is not None:
+                    base.update_layout(
+                        annotations=[
+                            dict(
+                                text=f"Elapsed: {elapsed[k]}",
+                                x=0.99,
+                                y=1.0,
+                                xref="paper",
+                                yref="paper",
+                                xanchor="right",
+                                yanchor="bottom",
+                                showarrow=False,
+                                font=dict(size=14, color="#444"),
+                            )
+                        ]
+                    )
+                try:
+                    if cold_fallback:
+                        png = base.to_image(
+                            format="png", width=width, height=height, scale=scale
                         )
-                    ]
-                )
-            try:
-                if cold_fallback:
-                    png = base.to_image(
-                        format="png", width=width, height=height, scale=scale
-                    )
-                else:
-                    png = kaleido.calc_fig_sync(
-                        base,
-                        opts={
-                            "format": "png",
-                            "width": width,
-                            "height": height,
-                            "scale": scale,
-                        },
-                    )
-            except Exception as exc:
-                raise AnimationExportError(
-                    CHROME_INSTALL_HINT
-                    if not chrome_available()
-                    else f"Rendering frame {k + 1}/{len(frames)} failed: {exc}."
-                ) from exc
-            pngs.append(bytes(png))
-            if progress_callback is not None:
-                progress_callback(done, len(indices))
-    finally:
-        if not cold_fallback:
-            try:
-                kaleido.stop_sync_server(silence_warnings=True)
-            except Exception:  # pragma: no cover - best-effort teardown
-                pass
+                    else:
+                        png = kaleido.calc_fig_sync(
+                            base,
+                            opts={
+                                "format": "png",
+                                "width": width,
+                                "height": height,
+                                "scale": scale,
+                            },
+                        )
+                except Exception as exc:
+                    raise AnimationExportError(
+                        CHROME_INSTALL_HINT
+                        if not chrome_available()
+                        else f"Rendering frame {k + 1}/{len(frames)} failed: {exc}."
+                    ) from exc
+                pngs.append(bytes(png))
+                if progress_callback is not None:
+                    progress_callback(done, len(indices))
+        finally:
+            if not cold_fallback:
+                try:
+                    kaleido.stop_sync_server(silence_warnings=True)
+                except Exception:  # pragma: no cover - best-effort teardown
+                    pass
 
     return pngs, (width, height)
 
@@ -280,34 +401,78 @@ def _load_rgb_frames(pngs: list[bytes]) -> list[np.ndarray]:
     return [np.asarray(Image.open(io.BytesIO(b)).convert("RGB")) for b in pngs]
 
 
-def encode_gif(pngs: list[bytes], frame_duration_ms: float, *, loop: int = 0) -> bytes:
-    """Encode PNG frames into an animated GIF with a uniform per-frame delay."""
-    from PIL import Image
+def encode_gif(
+    pngs: Iterable[bytes], frame_duration_ms: float, *, loop: int = 0
+) -> bytes:
+    """Encode PNG frames into an animated GIF with a uniform per-frame delay.
 
-    if not pngs:
-        raise AnimationExportError("No frames to encode.")
-    imgs = [Image.open(io.BytesIO(b)).convert("RGB") for b in pngs]
-    duration = max(round(frame_duration_ms), _GIF_MIN_FRAME_MS)
+    **Streams** (SEC1 / BUG-74): each PNG is decoded, quantized to a 256-colour
+    palette and written before the next is read, so memory holds one decoded frame
+    and one palette frame, not the whole clip. Pillow's ``save(save_all=True)``
+    cannot do that — it keeps every normalized frame until the end to diff them —
+    and handing it the decoded list on top cost ~10 MB per frame at 2× (measured
+    ~4.6 GB for the default 250-frame cap at a large figure). The bytes written
+    are Pillow's own multi-frame layout for this input: the global header comes
+    from frame one, every later frame carries its own palette, each is stored
+    whole (``disposal=2`` with no transparency never crops to a delta), and a frame
+    identical to the one before it is folded into it with the durations summed —
+    which is why this holds one frame back before writing it.
+
+    GIF stores delays in whole centiseconds and Pillow truncates the rest, so each
+    frame's delay is rounded against the running total instead: the clip keeps
+    its length rather than losing up to 10 ms a frame (BUG-93).
+    """
+    from PIL import GifImagePlugin, Image, ImageChops
+
+    duration = max(frame_duration_ms, _GIF_MIN_FRAME_MS)
     buf = io.BytesIO()
-    imgs[0].save(
-        buf,
-        format="GIF",
-        save_all=True,
-        append_images=imgs[1:],
-        duration=duration,
-        loop=loop,
-        disposal=2,
-        optimize=True,
-    )
+    pending: Image.Image | None = None
+    pending_ms = 0
+    wrote_header = False
+    written_cs = 0
+
+    def _flush() -> None:
+        nonlocal wrote_header
+        info = {"duration": pending_ms, "disposal": 2, "loop": loop, "optimize": True}
+        if not wrote_header:
+            # `getheader` also normalizes the palette in place, so the frame and
+            # the global colour table it writes agree.
+            header, _used = GifImagePlugin.getheader(pending, info=dict(info))
+            buf.write(b"".join(header))
+            wrote_header = True
+        else:
+            info["include_color_table"] = True
+        buf.write(b"".join(GifImagePlugin.getdata(pending, (0, 0), **info)))
+
+    for i, png in enumerate(pngs):
+        total_cs = round((i + 1) * duration / 10)
+        delay_ms = 10 * (total_cs - written_cs)
+        written_cs = total_cs
+        with Image.open(io.BytesIO(png)) as decoded:
+            frame = decoded.convert("RGB").convert("P", palette=Image.Palette.ADAPTIVE)
+        if pending is not None:
+            same = pending.getpalette() == frame.getpalette() and (
+                ImageChops.subtract_modulo(frame, pending).getbbox() is None
+            )
+            if same:
+                pending_ms += delay_ms
+                continue
+            _flush()
+        pending, pending_ms = frame, delay_ms
+    if pending is None:
+        raise AnimationExportError("No frames to encode.")
+    _flush()
+    buf.write(b";")
     return buf.getvalue()
 
 
 def encode_mp4(pngs: list[bytes], frame_duration_ms: float) -> bytes:
-    """Encode PNG frames into an H.264 MP4 whose runtime matches the on-screen Play.
+    """Encode PNG frames into an H.264 MP4 whose runtime matches the on-screen replay.
 
-    The on-screen Play shows every frame for ``frame_duration_ms``. An MP4 plays at
-    one constant rate, so we encode at a fixed 60 fps and hold each animation frame
-    for ``round(frame_duration_ms / (1000/60))`` video frames (at least one). That
+    Every frame is held for ``frame_duration_ms``. An MP4 plays at one constant
+    rate, so we encode at a fixed 60 fps and hold each animation frame for
+    ``round(frame_duration_ms / (1000/60))`` video frames (at least one — a caller
+    with shorter frames renders fewer of them, see :func:`clip_frame_count`). That
     reproduces durations from ~16 ms to several hundred ms accurately — the repeated
     frames are identical, so H.264 compresses them to near-nothing. Frames stream
     through the writer one at a time (repeats reuse the same array), so memory stays
@@ -379,7 +544,7 @@ def export_animation(
     fig: go.Figure,
     *,
     fmt: str,
-    frame_duration_ms: float,
+    frame_duration_ms: float | None = None,
     scale: float = 1.0,
     show_elapsed: bool = True,
     max_frames: int | None = None,
@@ -391,9 +556,10 @@ def export_animation(
     Args:
         fig: the figure from :func:`make_scanpath_animation` (must have ``.frames``).
         fmt: ``"gif"`` or ``"mp4"``.
-        frame_duration_ms: uniform per-frame duration — pass the same average the
-            tab quotes (``animation_playback_ms(...) / n_frames``) so the clip's
-            runtime matches the on-screen Play.
+        frame_duration_ms: uniform per-frame duration. By default the replay's
+            own (:func:`plots.animation_clip_frame_ms`), so the clip lasts what
+            the on-screen replay does — ``reading span / playback speed``.
+            Required for a figure :func:`make_scanpath_animation` didn't build.
         scale: Kaleido render scale (1.0 = on-screen px; <1 is faster/smaller,
             >1 is crisper/larger).
         show_elapsed: draw the "Elapsed: X.Xs" readout in the top margin.
@@ -403,7 +569,10 @@ def export_animation(
         progress_callback: ``(done, total)`` after each rendered frame.
 
     Raises:
-        ValueError: unknown ``fmt``.
+        ValueError: unknown ``fmt``, or no ``frame_duration_ms`` for a figure that
+            carries no replay clock.
+        AnimationBudgetError: a GIF over :func:`check_gif_budget`'s pixel budget,
+            raised before any frame is rendered.
         AnimationExportError: rendering or encoding failed.
     """
     started = perf_counter()
@@ -413,8 +582,20 @@ def export_animation(
             f"Unsupported format {fmt!r}; expected one of {VIDEO_FORMATS}."
         )
 
+    if frame_duration_ms is None:
+        from .plots import animation_clip_frame_ms
+
+        frame_duration_ms = animation_clip_frame_ms(fig)
+        if frame_duration_ms is None:
+            raise ValueError(
+                "This figure carries no replay clock (it wasn't built by "
+                "make_scanpath_animation); pass frame_duration_ms."
+            )
+
     n_total = len(fig.frames or ())
-    indices = _select_frames(n_total, max_frames)
+    indices = _select_frames(
+        n_total, clip_frame_count(n_total, frame_duration_ms, fmt, max_frames)
+    )
     # Preserve total runtime when downsampling: fewer frames, each held longer.
     effective_duration = frame_duration_ms
     if indices and len(indices) < n_total:
@@ -427,6 +608,11 @@ def export_animation(
         started_at=started,
     )
     try:
+        if fmt == "gif" and indices:
+            # SEC1: refuse before Chrome starts, not after the frames are made.
+            check_gif_budget(
+                len(indices), int(fig.layout.width or 900), _static_height(fig), scale
+            )
         emit_status(
             status_callback,
             ExportStage.STARTING_RENDERER,

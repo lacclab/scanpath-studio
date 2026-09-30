@@ -161,6 +161,8 @@ def quiet_chart(monkeypatch):
     """Swallow the true-scale HTML embed, so the two render helpers can be called
     outside a running Streamlit script."""
     monkeypatch.setattr(tabs, "_render_true_scale_chart", lambda *a, **k: None)
+    # The replay embeds its cached markup directly (PERF-16).
+    monkeypatch.setattr(tabs, "_render_true_scale_plot", lambda *a, **k: None)
 
 
 # -----------------------------------------------------------------------------
@@ -236,16 +238,21 @@ def _animate(viz: dict, monkeypatch, *, drift_corrected: bool = False, dual=Fals
     # Reach for the module the builder lives in, not the (possibly already
     # patched) name in ``tabs`` — otherwise a second call inside one test spies
     # on the first spy and both dicts fill up.
-    real = plots.make_scanpath_animation
+    real = plots.build_scanpath_replay
 
-    def spy(words, fixations, **kwargs):
-        seen.update(vars(kwargs["settings"]))
+    def spy(words, fixations, settings, fixations_b, words_b, anim_key):
+        kwargs = {"settings": settings, "fixations_b": fixations_b, "words_b": words_b}
+        seen.update(vars(settings))
         seen.update(kwargs)
         seen["_fixations"] = fixations
         return real(words, fixations, **kwargs)
 
-    monkeypatch.setattr(tabs, "make_scanpath_animation", spy)
-    fig, *_ = tabs._build_and_render_animation(
+    # PERF-13 caches the build, so spy on the cached wrapper (bypassing the
+    # cache): a builder spy would see nothing on a hit from an earlier test.
+    # PERF-16's view cache sits in front of it, so empty that too.
+    monkeypatch.setattr(tabs, "_cached_scanpath_animation", spy)
+    tabs._cached_replay_view.clear()
+    frames = (
         _trial(_words(), "A"),
         _trial(_fixations(), "A"),
         _trial(_words(), "B") if dual else None,
@@ -254,12 +261,16 @@ def _animate(viz: dict, monkeypatch, *, drift_corrected: bool = False, dual=Fals
         "t1",
         "B" if dual else None,
         "t1" if dual else None,
+    )
+    plan = tabs._plan_replay(
+        *frames,
         settings=_figure_settings(viz),
         viz_settings=viz,
         playback_speed=1.0,
         drift_corrected=drift_corrected,
     )
-    return fig, seen
+    view, *_ = tabs._build_and_render_animation(*frames, viz_settings=viz, plan=plan)
+    return view.figure(), seen
 
 
 @pytest.mark.usefixtures("quiet_chart")
@@ -593,14 +604,6 @@ streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 AppTest = streamlit_testing.AppTest
 
 
-def _fixation_ys(frame: pd.DataFrame, participant: str) -> np.ndarray:
-    return (
-        _trial(frame, participant)
-        .sort_values("order_in_trial")["y"]
-        .to_numpy(dtype=float)
-    )
-
-
 class TestDriftCorrectionReachesEveryPath:
     """The hoist: ``alignment.correct`` runs once, above the render-mode split.
 
@@ -614,15 +617,20 @@ class TestDriftCorrectionReachesEveryPath:
     def _spy(monkeypatch) -> dict:
         seen: dict[str, list] = {"static": [], "anim": [], "compare": []}
         real_static = tabs._cached_scanpath_figure
-        real_anim = plots.make_scanpath_animation
+        real_anim = plots.build_scanpath_replay
         real_compare = plots.make_comparison_figure
 
         def static(words, fixations, settings, raw_gaze, fig_key):
             seen["static"].append((words, fixations))
             return real_static(words, fixations, settings, raw_gaze, fig_key)
 
-        def anim(words, fixations, **kwargs):
-            flattened = {**vars(kwargs["settings"]), **kwargs}
+        def anim(words, fixations, settings, fixations_b, words_b, anim_key):
+            kwargs = {
+                "settings": settings,
+                "fixations_b": fixations_b,
+                "words_b": words_b,
+            }
+            flattened = {**vars(settings), **kwargs}
             seen["anim"].append((words, fixations, flattened))
             return real_anim(words, fixations, **kwargs)
 
@@ -631,7 +639,9 @@ class TestDriftCorrectionReachesEveryPath:
             return real_compare(words, fixations, trial_a, trial_b, **kwargs)
 
         monkeypatch.setattr(tabs, "_cached_scanpath_figure", static)
-        monkeypatch.setattr(tabs, "make_scanpath_animation", anim)
+        monkeypatch.setattr(tabs, "_cached_scanpath_animation", anim)
+        # A PERF-16 view hit would never reach the spied replay cache.
+        tabs._cached_replay_view.clear()
         monkeypatch.setattr(tabs, "make_comparison_figure", compare)
         return seen
 

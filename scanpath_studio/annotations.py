@@ -18,6 +18,7 @@ import json
 
 import streamlit as st
 
+from .constants import ICONS
 from .fields import PANEL_LABEL_W, panel_field, row_label
 
 ANNOTATIONS_STATE_KEY = "trial_annotations"
@@ -269,7 +270,9 @@ def render_trial_annotations(
     st.session_state.setdefault(tags_key, list(entry["tags"]))
     st.session_state.setdefault(note_key, entry["note"])
 
-    label = "📝 Annotations" + (" ⭐" if entry["star"] else "")
+    label = f"{ICONS['annotations']} Annotations" + (
+        f" {ICONS['favorite']}" if entry["star"] else ""
+    )
     if entry["tags"]:
         label += f" · {', '.join(entry['tags'])}"
     container = st.container() if bare else st.expander(label, expanded=False)
@@ -282,8 +285,8 @@ def render_trial_annotations(
         star = panel_field(
             st,
             "checkbox",
-            "⭐ Favorite (star this trial)",
-            display="⭐ Favorite",
+            f"{ICONS['favorite']} Favorite (star this trial)",
+            display=f"{ICONS['favorite']} Favorite",
             key=star_key,
             help="Mark this trial as a favorite.",
             on_change=_save_star_callback,
@@ -303,12 +306,17 @@ def render_trial_annotations(
             vertical_alignment="center",
         )
         row_label(label_col, "Tags", tags_help)
+        # ENG-49: built directly in a column, so it does not go through
+        # `fields.labeled` and needs its own `wrap` — a trial's tags are the
+        # thing this row exists to show, and 1.63 would otherwise scroll all
+        # but the first one or two out of sight.
         tags = tags_col.multiselect(
             "Tags",
             options=options,
             key=tags_key,
             help=tags_help,
             label_visibility="collapsed",
+            wrap=True,
         )
         add_col.text_input(
             "Add a tag",

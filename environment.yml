@@ -1,3 +1,6 @@
+# The Streamlit Community Cloud demo installs from this file (it finds it
+# before any other dependency file). It installs the app alone; the test and
+# lint tools are extras — `pip install -e ".[test]"` in a dev environment.
 name: scanpath-studio
 channels:
   - conda-forge
@@ -5,4 +8,4 @@ dependencies:
   - python>=3.11
   - pip
   - pip:
-      - -e .[test]
+      - -e .

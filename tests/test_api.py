@@ -2,8 +2,6 @@
 
 import dataclasses
 import inspect
-import re
-from pathlib import Path
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -124,24 +122,31 @@ def test_words_schema_error_names_field_candidates_and_columns():
     assert "Trial ID (word_schema key 'trial'): no column matched" in message
     assert "Looked for: unique_trial_id, trial_id" in message
     assert "Word/IA ID (word_schema key 'word_id')" in message
-    # The either/or box requirement names which keys each convention still needs
-    # (`start_x` already resolved `left`, so only right/top/bottom are missing).
+    # The either/or box requirement names which keys each convention still needs.
+    # `start_x` is a literal `left` candidate (exact pass) *and*, since it is
+    # the only column carrying the whole token "x", the DATA-25 second pass
+    # also hands it to `x` — one column resolving two canonical fields, same
+    # as `top_left_x` already could. So only y/width/height and
+    # right/top/bottom are left missing from either convention.
     assert (
         "need either (x, y, width, height) or (left, right, top, bottom) — "
-        "(x, y, width, height) is missing x, y, width, height; "
+        "(x, y, width, height) is missing y, width, height; "
         "(left, right, top, bottom) is missing right, top, bottom." in message
     )
     # What auto-detection *did* find, and the table it was looking at.
-    assert "Fields that did resolve: text='word', left='start_x'" in message
+    assert (
+        "Fields that did resolve: text='word', x='start_x', left='start_x'" in message
+    )
     assert (
         "Columns present in the words/IA table (4): subject, para, word, start_x"
         in message
     )
-    # A copy-pasteable override that keeps the columns already resolved.
+    # A copy-pasteable override that keeps the columns already resolved — the
+    # x/y/width/height convention is suggested since it now has fewer gaps.
     assert (
         "word_schema={'trial': '<column>', 'word_id': '<column>', "
-        "'left': 'start_x', 'right': '<column>', 'top': '<column>', "
-        "'bottom': '<column>'}" in message
+        "'x': 'start_x', 'y': '<column>', 'width': '<column>', "
+        "'height': '<column>'}" in message
     )
     assert "api.propose_schema(df, 'words')" in message
 
@@ -256,7 +261,11 @@ def test_explicit_schema_error_points_at_the_mapping_not_at_detection():
 def test_propose_schema_is_the_documented_repair_path():
     """The mapping the error points at actually loads the renamed table."""
     words_raw, fix_raw = data_module.load_sample_data()
-    renamed = words_raw.rename(columns={"IA_ID": "aoi_number"})
+    # Renamed to something with no candidate token at all (not "aoi_number" —
+    # DATA-25's second pass would now auto-detect that one via the whole
+    # token "aoi", which is itself a WORD_ID_CANDIDATES entry; see
+    # TestPickColumnPrefixSuffixSecondPass in test_data.py).
+    renamed = words_raw.rename(columns={"IA_ID": "internal_id"})
     # `IA_ID` was the only Word/IA ID candidate present, so detection now fails…
     with pytest.raises(ValueError, match="missing Word/IA ID"):
         sps.load_scanpath_data(words=renamed, fixations=fix_raw)
@@ -265,7 +274,7 @@ def test_propose_schema_is_the_documented_repair_path():
     assert schema["word_id"] is None
     assert schema["trial"] == "unique_trial_id"
     assert schema["left"] == "IA_LEFT"
-    schema["word_id"] = "aoi_number"
+    schema["word_id"] = "internal_id"
     words, fixations = sps.load_scanpath_data(
         words=renamed, fixations=fix_raw, word_schema=schema
     )
@@ -610,31 +619,14 @@ def test_figure_settings_validate_and_override_without_mutating():
         settings.with_overrides(show_saccade=True)
 
 
-def test_agent_guide_option_tables_match_the_code():
-    """docs/agents.md documents every option and default — keep it honest."""
-    guide = (Path(__file__).resolve().parents[1] / "docs" / "agents.md").read_text(
-        encoding="utf-8"
-    )
-    section = guide.split("## Every figure option", 1)[1].split(
-        "## Reading measures", 1
-    )[0]
-    rows = re.findall(r"^\| `(\w+)` \| `(.+?)` \| (yes|no) \|$", section, re.MULTILINE)
-    assert rows, "no option table found in docs/agents.md"
-
-    static = api.figure_options()
+def test_the_animation_builder_takes_the_two_scanpath_options():
+    """The co-animation's overlay extras are animation-only options. (The docs'
+    option table is generated from `figure_options()` since ENG-79, so it needs
+    no test of its own; see tests/test_docs_support.py.)"""
+    static = set(api.figure_options())
     animation = set(api.figure_options("animation"))
-    documented = {name: (default, anim) for name, default, anim in rows}
-    assert len(documented) == len(rows)  # no duplicated row
-    assert set(documented) == set(static)
-    for name, (default, anim) in documented.items():
-        assert default == repr(static[name]), name
-        assert anim == ("yes" if name in animation else "no"), name
-    # The two-scanpath overlay extras named in the prose are animation-only.
-    # (A subset check, not equality: the animation builder also carries
-    # replay-only knobs the tables deliberately don't document — the prose sends
-    # the reader to figure_options("animation") for those.)
     assert {"words_b", "fixations_b", "label_a", "label_b", "show_legend"} <= (
-        animation - set(static)
+        animation - static
     )
 
 
@@ -819,24 +811,31 @@ def test_animate_scanpath_returns_frames(sample):
     assert list(trail.y) == list(trial_fixations["y"])
 
 
-def test_animate_scanpath_autoplay_saves_kickoff(sample, tmp_path):
-    # VIZ-10: autoplay on (default) → the saved HTML auto-starts the replay.
+def test_animate_scanpath_autoplay_saves_the_player(sample, tmp_path):
+    # BUG-93: the saved HTML replays on the wall-clock player, and VIZ-10's
+    # autoplay (on by default) is the flag that player reads on load.
     words, fixations = sample
     pid, tid = sps.list_trials(words, fixations).iloc[0]
     fig = sps.animate_scanpath(words, fixations, pid, tid, canvas_size=(2560, 1440))
-    out = sps.save_figure(fig, tmp_path / "auto.html")
-    assert "Plotly.animate" in out.read_text(encoding="utf-8")
+    html = sps.save_figure(fig, tmp_path / "auto.html").read_text(encoding="utf-8")
+    assert "plotly_buttonclicked" in html  # the player, taking over ▶ Play
+    assert '"scanpath_autoplay":true' in html
+    # Plotly's own auto_play stays off: it would run at its default frame time.
+    assert "Plotly.animate('" not in html
 
 
 def test_animate_scanpath_no_autoplay_saves_paused(sample, tmp_path):
-    # VIZ-10: autoplay=False → no kickoff, and the HTML is written paused.
+    # VIZ-10: autoplay=False → the HTML opens paused; the player is still there,
+    # because ▶ Play needs its clock either way (BUG-93).
     words, fixations = sample
     pid, tid = sps.list_trials(words, fixations).iloc[0]
     fig = sps.animate_scanpath(
         words, fixations, pid, tid, canvas_size=(2560, 1440), autoplay=False
     )
     html = sps.save_figure(fig, tmp_path / "paused.html").read_text(encoding="utf-8")
-    assert "Plotly.animate" not in html
+    assert "plotly_buttonclicked" in html
+    assert '"scanpath_autoplay":false' in html
+    assert "Plotly.animate('" not in html
 
 
 def test_compute_word_metrics_matches_the_hand_traced_trial():
@@ -946,3 +945,114 @@ def test_save_figure_layers_one_file_per_layer(sample, tmp_path, monkeypatch):
     for layer, path in written.items():
         assert path.name == f"{layer}.svg"
         assert path.is_file()
+
+
+# ---------------------------------------------------------------------------
+# EXP-17 — an option naming a column that isn't there raises
+# ---------------------------------------------------------------------------
+_EXP17_TRIAL = ("l37_1129", "l37_1129_2_1_1_Ele_r0")
+
+
+@pytest.mark.parametrize("builder", ["plot_scanpath", "animate_scanpath"])
+def test_a_misspelled_color_by_column_raises_with_the_closest(builder):
+    """The builder looks the column up and draws a flat colour when it is not
+    there, so `color_by="duraton_ms"` rendered without a word."""
+    words, fixations = api.load_sample_data()
+    with pytest.raises(ValueError, match="duraton_ms.*Closest: 'duration_ms'"):
+        getattr(api, builder)(words, fixations, *_EXP17_TRIAL, color_by="duraton_ms")
+
+
+def test_a_misspelled_highlight_column_raises():
+    words, fixations = api.load_sample_data()
+    with pytest.raises(ValueError, match="highlight_column='is_in_aspn'.*is_in_aspan"):
+        api.plot_scanpath(
+            words, fixations, *_EXP17_TRIAL, highlight_column="is_in_aspn"
+        )
+
+
+def test_a_comparison_checks_the_column_across_both_readings():
+    words, fixations = api.load_sample_data()
+    with pytest.raises(ValueError, match="color_by='nosuch'"):
+        api.compare_scanpaths(
+            words,
+            fixations,
+            _EXP17_TRIAL,
+            ("l7_1090", "l7_1090_2_1_1_Ele_r0"),
+            color_by="nosuch",
+        )
+
+
+def test_the_synthetic_color_by_values_and_the_default_span_are_accepted():
+    """`uniform` / `line` are not columns, and the default `is_in_aspan` span
+    column is skipped quietly on data that has none — only a *named* column
+    that is missing is an error."""
+    words, fixations = api.load_sample_data()
+    for value in ("(uniform)", "line", "duration_ms"):
+        api.plot_scanpath(words, fixations, *_EXP17_TRIAL, color_by=value)
+    api.plot_scanpath(words.drop(columns=["is_in_aspan"]), fixations, *_EXP17_TRIAL)
+    api.plot_scanpath(words, fixations, *_EXP17_TRIAL, highlight_column=None)
+
+
+@pytest.mark.parametrize("builder", ["plot_scanpath", "animate_scanpath"])
+def test_color_by_line_draws_what_color_by_line_true_draws(builder):
+    """BUG-85: `"line"` is the app's own spelling of colouring by text line —
+    the *Color fixations by* select offers it and a share link carries
+    `color_by=line` — and the API accepted it (the EXP-17 message even
+    recommended it), but only `color_by_line=True` reached the builders' line
+    branch, so `color_by="line"` drew one flat colour."""
+    words, fixations = api.load_sample_data()
+    build = getattr(api, builder)
+    by_value = build(words, fixations, *_EXP17_TRIAL, color_by="line")
+    by_flag = build(words, fixations, *_EXP17_TRIAL, color_by_line=True)
+    names = [trace.name for trace in by_value.data]
+    assert names == [trace.name for trace in by_flag.data]
+    assert "line: Line 1" in names
+
+
+# ---------------------------------------------------------------------------
+# ENG-54 — what the docs say is importable from the package root is
+# ---------------------------------------------------------------------------
+def test_every_documented_api_function_is_importable_from_the_root():
+    """docs/api.md: "All functions below are importable from `scanpath_studio`"
+    — `eyegenbench_datasets` was listed there and was not."""
+    import re
+    from pathlib import Path
+
+    import scanpath_studio as sps
+
+    page = Path(__file__).resolve().parents[1] / "docs" / "api.md"
+    documented = re.findall(
+        r"^::: scanpath_studio\.\w+\.(\w+)$",
+        page.read_text(encoding="utf-8"),
+        re.MULTILINE,
+    )
+    assert documented
+    missing = [name for name in documented if not hasattr(sps, name)]
+    assert missing == []
+
+
+@pytest.mark.parametrize(
+    "name", ["eyegenbench_datasets", "load_text_metadata", "propose_schema"]
+)
+def test_the_headless_helpers_are_root_exports(name):
+    import scanpath_studio as sps
+
+    assert name in sps.__all__
+    assert callable(getattr(sps, name))
+
+
+def test_a_failed_layer_export_leaves_no_empty_folder(tmp_path, monkeypatch):
+    """With no Chrome, Kaleido fails on the first layer — and the folder the
+    call had just created stayed behind, empty."""
+    words, fixations = api.load_sample_data()
+    fig = api.plot_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele_r0")
+
+    def no_chrome(*_args, **_kwargs):
+        raise RuntimeError("Static .png export failed: no Chrome")
+
+    monkeypatch.setattr(api, "save_figure", no_chrome)
+    target = tmp_path / "nested" / "out_layers"
+    with pytest.raises(RuntimeError, match="no Chrome"):
+        api.save_figure_layers(fig, target, fmt="png")
+    assert not target.exists()
+    assert not (tmp_path / "nested").exists()

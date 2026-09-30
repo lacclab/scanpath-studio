@@ -43,10 +43,14 @@ def _solid_frames(n: int) -> list[bytes]:
 
 
 def _mp4_frame_count(data: bytes) -> int:
-    path = tempfile.mktemp(suffix=".mp4")
-    with open(path, "wb") as fh:
-        fh.write(data)
+    # `mkstemp`, not `mktemp`: the latter only reserves a *name* and leaves a
+    # window in which anything else can create that path first, which is why it
+    # is deprecated. `mkstemp` creates the file atomically, 0600, and hands back
+    # an already-open descriptor.
+    fd, path = tempfile.mkstemp(suffix=".mp4")
     try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
         return sum(1 for _ in iio.imiter(path))
     finally:
         os.unlink(path)
@@ -108,6 +112,8 @@ class TestStaticBase:
         # Top margin trimmed to the slim static band, height reduced to match.
         assert base.layout.margin.t == ae._STATIC_TOP_MARGIN_PX
         assert int(base.layout.height) < int(anim_fig.layout.height)
+        # BUG-93: the replay's clock is for the live player, not every raster.
+        assert base.layout.meta is None
 
     def test_does_not_mutate_original(self, anim_fig):
         n_frames = len(anim_fig.frames)
@@ -117,6 +123,7 @@ class TestStaticBase:
         assert len(anim_fig.frames) == n_frames
         assert len(anim_fig.layout.updatemenus) == 1
         assert len(anim_fig.layout.sliders) == 1
+        assert anim_fig.layout.meta["scanpath_frame_times_ms"]
 
 
 class TestElapsedLabels:
@@ -141,6 +148,119 @@ class TestEncodeGif:
     def test_empty_raises(self):
         with pytest.raises(AnimationExportError):
             encode_gif([], 100.0)
+
+    def test_streams_instead_of_decoding_every_frame_up_front(self):
+        # SEC1 / BUG-74: the old encoder decoded the whole clip into a list of RGB
+        # images before writing one byte — ~10 MB a frame at 2×, ~4.6 GB for a
+        # capped hosted export. Count the live decoded images while the encoder
+        # pulls frames: streaming keeps a constant handful, not one per frame.
+        import gc
+
+        def live_images() -> int:
+            return sum(isinstance(o, Image.Image) for o in gc.get_objects())
+
+        baseline = live_images()
+        seen: list[int] = []
+
+        def frames():
+            for png in _solid_frames(24):
+                seen.append(live_images() - baseline)
+                yield png
+
+        encode_gif(frames(), 50.0)
+        assert max(seen) <= 4, seen
+
+    def test_bytes_match_pillows_own_multiframe_writer(self):
+        # Streaming must not change the file: same header, palettes, delays and
+        # loop as `save(save_all=True)`, including folding a run of identical
+        # frames into one longer frame.
+        frames = _solid_frames(5)
+        frames = frames[:3] + [frames[2], frames[2]] + frames[3:]
+        imgs = [Image.open(io.BytesIO(b)).convert("RGB") for b in frames]
+        reference = io.BytesIO()
+        imgs[0].save(
+            reference,
+            format="GIF",
+            save_all=True,
+            append_images=imgs[1:],
+            duration=100,
+            loop=0,
+            disposal=2,
+            optimize=True,
+        )
+        data = encode_gif(frames, 100.0)
+        assert data == reference.getvalue()
+        img = Image.open(io.BytesIO(data))
+        assert img.n_frames == 5
+        durations = []
+        for i in range(img.n_frames):
+            img.seek(i)
+            durations.append(img.info["duration"])
+        assert durations == [100, 100, 300, 100, 100]
+
+    @pytest.mark.parametrize("frame_ms", [26.667, 37.5, 97.6, 136.1])
+    def test_delays_add_up_to_the_clip(self, frame_ms):
+        # BUG-93: GIF stores whole centiseconds and Pillow truncates the rest, so
+        # a 26.7 ms frame was written as 20 ms and the clip ran 25 % fast. Each
+        # delay is rounded against the running total instead.
+        data = encode_gif(_solid_frames(30), frame_ms)
+        img = Image.open(io.BytesIO(data))
+        delays = []
+        for i in range(img.n_frames):
+            img.seek(i)
+            delays.append(img.info["duration"])
+        assert sum(delays) == pytest.approx(30 * frame_ms, abs=10)
+        assert min(delays) >= 20
+
+
+class TestGifPixelBudget:
+    """SEC1 / BUG-74: a GIF too large for this server is refused up front."""
+
+    def test_under_budget_passes(self):
+        ae.check_gif_budget(250, 960, 524, 2.0, budget=ae.GIF_PIXEL_BUDGET_HOSTED)
+
+    def test_over_budget_names_the_ways_back(self):
+        with pytest.raises(ae.AnimationBudgetError) as err:
+            ae.check_gif_budget(2000, 960, 524, 2.0, budget=ae.GIF_PIXEL_BUDGET_HOSTED)
+        message = str(err.value)
+        assert "MP4" in message
+        # 800 Mpx / (1920 × 1048 px) — the frame count that would fit at 2×.
+        assert "397 frames" in message
+        assert isinstance(err.value, AnimationExportError)
+
+    def test_hosted_servers_get_the_lower_budget(self, monkeypatch):
+        n, w, h, scale = 1000, 960, 600, 2.0  # 2.3 Gpx: fine locally, not shared
+        monkeypatch.setattr(ae, "_served_to_other_machines", lambda: False)
+        ae.check_gif_budget(n, w, h, scale)
+        monkeypatch.setattr(ae, "_served_to_other_machines", lambda: True)
+        with pytest.raises(ae.AnimationBudgetError, match="shared server"):
+            ae.check_gif_budget(n, w, h, scale)
+
+    def test_a_script_is_not_a_shared_server(self):
+        # No Streamlit runtime → the caller's own machine, whatever the options.
+        assert ae._served_to_other_machines() is False
+
+    def test_export_refuses_before_rendering(self, monkeypatch, anim_fig):
+        monkeypatch.setattr(ae, "_served_to_other_machines", lambda: True)
+        monkeypatch.setattr(ae, "GIF_PIXEL_BUDGET_HOSTED", 1)
+
+        def must_not_render(*args, **kwargs):
+            pytest.fail("an over-budget GIF must be refused before Kaleido starts")
+
+        monkeypatch.setattr(ae, "render_png_frames", must_not_render)
+        with pytest.raises(ae.AnimationBudgetError):
+            export_animation(anim_fig, fmt="gif", frame_duration_ms=40.0)
+
+    def test_mp4_is_not_budgeted(self, monkeypatch, anim_fig):
+        monkeypatch.setattr(ae, "_served_to_other_machines", lambda: True)
+        monkeypatch.setattr(ae, "GIF_PIXEL_BUDGET_HOSTED", 1)
+        monkeypatch.setattr(
+            ae,
+            "render_png_frames",
+            lambda fig, **kw: ([_png((1, 2, 3))] * len(kw["frame_indices"]), (48, 32)),
+        )
+        monkeypatch.setattr(ae, "encode_mp4", lambda pngs, dur: b"ftyp-stub")
+        assert export_animation(anim_fig, fmt="mp4", frame_duration_ms=40.0)
 
 
 class TestEncodeMp4:
@@ -175,6 +295,19 @@ class TestExportAnimationValidation:
     def test_no_frames_raises_export_error(self):
         with pytest.raises(AnimationExportError):
             export_animation(go.Figure(), fmt="mp4", frame_duration_ms=50.0)
+
+
+def test_the_missing_browser_hint_works_in_the_desktop_app_too():
+    """BUG-85: the hint's fixes were `kaleido_get_chrome`, `plotly_get_chrome`
+    and a Python one-liner — none of which exists in the frozen desktop bundle.
+    What both installs can do is install a browser `chromium_browser_path`
+    finds; the one command it keeps is labelled as the pip install's."""
+    hint = ae.CHROME_INSTALL_HINT
+    for browser in ("Chrome", "Chromium", "Edge"):
+        assert browser in hint
+    assert "kaleido_get_chrome" not in hint
+    assert "get_chrome_sync" not in hint
+    assert "pip install" in hint
 
 
 class TestDownsampleDurationPreserved:
@@ -225,6 +358,63 @@ class TestDownsampleDurationPreserved:
         export_animation(anim_fig, fmt="mp4", frame_duration_ms=33.0)
         assert captured["n"] == n
         assert captured["dur"] == pytest.approx(33.0)
+
+
+class TestRealTimeClip:
+    """BUG-93: a clip lasts what the on-screen replay lasts — the reading span
+    over the speed — however fast that replay is."""
+
+    def _capture(self, monkeypatch, fmt):
+        captured = {}
+
+        def fake_render(
+            fig, *, scale, show_elapsed, frame_indices, progress_callback=None
+        ):
+            captured["indices"] = list(frame_indices)
+            return [_png((0, 0, 0))] * len(frame_indices), (48, 32)
+
+        def fake_encode(pngs, duration_ms, **kwargs):
+            captured["n"] = len(pngs)
+            captured["dur"] = duration_ms
+            return b"stub"
+
+        monkeypatch.setattr(ae, "render_png_frames", fake_render)
+        monkeypatch.setattr(ae, f"encode_{fmt}", fake_encode)
+        return captured
+
+    @pytest.mark.parametrize("fmt", ["gif", "mp4"])
+    def test_the_frame_time_defaults_to_the_replays_own(
+        self, monkeypatch, anim_fig, normalized_fixations_df, fmt
+    ):
+        captured = self._capture(monkeypatch, fmt)
+        export_animation(anim_fig, fmt=fmt)
+        _span, playback_ms = animation_playback_ms([normalized_fixations_df], 1.0)
+        assert captured["n"] == len(anim_fig.frames)
+        assert captured["n"] * captured["dur"] == pytest.approx(playback_ms)
+
+    def test_a_figure_without_a_replay_clock_needs_a_frame_time(self, anim_fig):
+        bare = go.Figure(anim_fig)
+        bare.layout.meta = None
+        with pytest.raises(ValueError, match="frame_duration_ms"):
+            export_animation(bare, fmt="mp4")
+
+    @pytest.mark.parametrize(("fmt", "shortest_ms"), [("mp4", _MP4_DT_MS), ("gif", 20)])
+    def test_a_replay_faster_than_the_format_drops_frames(
+        self, monkeypatch, anim_fig, fmt, shortest_ms
+    ):
+        # A 5 ms frame is shorter than one 60 fps video frame, and than the
+        # shortest delay GIF viewers honour. Holding every frame that long would
+        # stretch the clip; dropping frames keeps it on time — what the player
+        # does between display ticks.
+        captured = self._capture(monkeypatch, fmt)
+        n = len(anim_fig.frames)
+        export_animation(anim_fig, fmt=fmt, frame_duration_ms=5.0)
+        assert captured["n"] < n
+        assert captured["dur"] >= shortest_ms - 1e-9
+        assert captured["n"] * captured["dur"] == pytest.approx(n * 5.0)
+        # The clip still opens on the first fixation and ends on the whole path.
+        assert captured["indices"][0] == 0
+        assert captured["indices"][-1] == n - 1
 
 
 class TestEndToEnd:

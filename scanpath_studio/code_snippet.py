@@ -20,16 +20,18 @@ returns every figure keyword → its *effective* default. :func:`figure_kwargs`
 diffs the live settings against it; ``explicit=True`` emits the full form
 instead.
 
-The two back ends are not symmetric, and the asymmetry is the point: the Python
-API takes every figure keyword, while the CLI exposes a curated subset of flags.
-:data:`_CLI_EMITTERS` is that subset spelled out, and anything a snippet needs
-but the CLI cannot say comes back in
-:attr:`ReproductionCode.cli_unsupported` — a live audit of the four-surface rule
-rather than a silent drop.
+The two back ends are not symmetric: the Python API takes every figure keyword
+as itself, while the CLI spells each one as a flag in its own vocabulary.
+:data:`_CLI_EMITTERS` is that mapping spelled out, and anything a snippet needs
+but the CLI cannot say comes back in :attr:`ReproductionCode.cli_unsupported` —
+a live audit of the four-surface rule rather than a silent drop. Since EXP-20
+every figure option has a flag, so the list is empty unless an option is added
+without one, which `tests/test_render_every_option.py` refuses.
 """
 
 from __future__ import annotations
 
+import json
 import shlex
 from dataclasses import dataclass, field
 from typing import Any
@@ -39,6 +41,14 @@ from typing import Any
 #: it is derived from state that *is* on the wire, so it carries no contract of
 #: its own and is deliberately absent from ``session_keys``.
 SNIPPET_STATE_KEY = "_snippet_state"
+
+#: How to get the package the snippets import. Shown *above* both flavours in
+#: the app (`url_state._render_code_snippet_body`) rather than baked into
+#: :func:`python_snippet` / :func:`cli_snippet`: a snippet pulled through
+#: ``api.figure_code`` is being composed by something that already has the
+#: package installed, so the line is presentation for the reader who is about to
+#: paste this into a fresh notebook or shell, not part of the recipe.
+INSTALL_COMMAND = "pip install scanpath-studio"
 
 #: The figure kinds a snippet can reproduce, matching ``api.figure_options``.
 KINDS = ("static", "animation", "comparison")
@@ -92,6 +102,44 @@ class SnippetSource:
     #: Loader options this source needs that ``render`` has no flag for, folded
     #: into :attr:`ReproductionCode.cli_unsupported` beside the figure ones.
     cli_unsupported: tuple[str, ...] = ()
+
+
+#: The file a snippet saves to when the caller names none, per figure kind. An
+#: animation is interactive HTML — `render --animate` refuses anything else —
+#: while the static and comparison figures raster. EXP-14: `api.figure_code`
+#: used `scanpath.png` for every kind, so its animation command exited on its
+#: first line. The Share subtab keeps its own copy (`url_state._SNIPPET_OUTPUT`).
+DEFAULT_OUTPUT = {
+    "static": "scanpath.png",
+    "comparison": "comparison.png",
+    "animation": "scanpath.html",
+}
+
+
+def source_canvas(kind: str) -> tuple[int, int] | None:
+    """The screen ``render`` assumes for a source when ``--canvas`` is omitted.
+
+    EXP-14: one table for both surfaces. `render --sample` drew the demo at its
+    real 2560×1440 monitor while the Python snippet ``api.figure_code`` wrote
+    for the same request estimated 960×480 from the data extents, so the two
+    flavours of one recipe produced different figures. ``None`` means the
+    screen is read off the data (or, for a benchmark corpus, its manifest)."""
+    if kind in (SOURCE_DEMO, SOURCE_ONESTOP):
+        # OneStop's Dell U2715H — cited in eyegenbench_geometry.DISPLAY_SPECS
+        # ["onestop"] (Berzak et al. 2025); the demo is a subset of OneStop.
+        from .constants import DEFAULT_FIGURE_SIZE
+
+        return tuple(DEFAULT_FIGURE_SIZE)
+    if kind == SOURCE_POTEC:
+        return (1680, 1050)  # PoTeC monitor (DELL P2210)
+    if kind == SOURCE_AUTHOR:
+        return (1200, 800)
+    if kind == SOURCE_MULTIPLEYE:
+        # Coordinates are offset onto the centred stimulus on the real screen.
+        from .datasets import MULTIPLEYE_MONITOR
+
+        return tuple(MULTIPLEYE_MONITOR)
+    return None
 
 
 def _root(source: SnippetSource, fallback: str) -> str:
@@ -290,6 +338,9 @@ class FigureState:
     title: str = ""
     caption: str = ""
     fix_index_range: tuple[int, int] | None = None
+    #: CMP-24 — scanpath B's own window (``compare_scanpaths`` /
+    #: ``animate_scanpath``'s ``fix_index_range_b``); only beside a ``compare``.
+    fix_index_range_b: tuple[int, int] | None = None
     illustration_label: str = "auto"
     drift_correction: str | None = None
     drift_connectors: bool = False
@@ -329,10 +380,9 @@ _DERIVED_SETTINGS = frozenset(
         "connector_y",
         "show_connectors",
         "illustration_reasons",
-        "word_heatmap_col",
-        "word_heatmap_title",
-        # Needs a third frame (`raw_gaze=`), not a keyword — reported as a
-        # caveat by `reproduction_code` instead of emitted as a lie.
+        # Needs a third frame (`raw_gaze=`), not a keyword: the layer is drawn
+        # for the frame it is handed, so both snippets load that table instead
+        # (`draws_raw_gaze`) — `show_raw_gaze=True` alone would draw nothing.
         "show_raw_gaze",
     }
 )
@@ -377,6 +427,20 @@ def figure_kwargs(
         if key in _DERIVED_SETTINGS:
             continue
         value = settings[key]
+        if key == "fixation_flags_b" and _same_flags(
+            value, settings.get("fixation_flags")
+        ):
+            continue  # CMP-24: B inheriting A's flags is the builder's default
+        if key in _COMPARE_STYLE_SIDES:
+            value = _drop_inherited_filters(value, settings)
+            # The rail always builds a complete style dict, so the one an
+            # untouched Compare carries is not a choice anyone made — only
+            # what it changes is (EXP-20).
+            value = compare_style_delta(
+                value,
+                _COMPARE_STYLE_SIDES[key],
+                settings.get("marker_size_range", defaults.get("marker_size_range")),
+            )
         # A frame-valued option (`words_b`) is data, not a setting: its repr is
         # meaningless in another process. `state_caveats` names it instead.
         if hasattr(value, "to_dict") and hasattr(value, "columns"):
@@ -386,6 +450,82 @@ def figure_kwargs(
         if explicit or _comparable(value) != _comparable(default):
             out[key] = value
     return out
+
+
+#: The per-scanpath style options → which scanpath each styles.
+_COMPARE_STYLE_SIDES = {"style_a": 0, "style_b": 1}
+
+
+def _active_flags(flags) -> dict:
+    """The part of a fixation-flags dict that draws anything: each category not
+    *Off*, with the threshold short/long use. Two dicts with the same active
+    part filter identically (CMP-24)."""
+    out = {}
+    for category, spec in (flags or {}).items():
+        if not isinstance(spec, dict) or str(spec.get("mode") or "Off") == "Off":
+            continue
+        entry = {"mode": spec.get("mode")}
+        if category in ("short", "long") and spec.get("threshold_ms") is not None:
+            entry["threshold_ms"] = float(spec["threshold_ms"])
+        out[category] = entry
+    return out
+
+
+def _same_flags(a, b) -> bool:
+    return _active_flags(a) == _active_flags(b)
+
+
+def _visible_classes(classes) -> frozenset | None:
+    from .constants import SACCADE_CLASS_ORDER
+
+    if not classes or set(classes) >= set(SACCADE_CLASS_ORDER):
+        return None
+    return frozenset(classes)
+
+
+def _drop_inherited_filters(style, settings: dict):
+    """A per-scanpath style without the filters it merely repeats (CMP-24).
+
+    The rail hands B its whole filter set every run; where it equals the
+    figure's own ``fixation_flags`` / ``saccade_classes`` the builder draws B the
+    same without it, so a snippet should not restate it."""
+    if not isinstance(style, dict):
+        return style
+    style = dict(style)
+    if "fixation_flags" in style and _same_flags(
+        style["fixation_flags"], settings.get("fixation_flags")
+    ):
+        style.pop("fixation_flags")
+    if "saccade_classes" in style and _visible_classes(
+        style["saccade_classes"]
+    ) == _visible_classes(settings.get("saccade_classes")):
+        style.pop("saccade_classes")
+    return style
+
+
+def compare_style_delta(style, idx: int, marker_size_range) -> dict | None:
+    """What a per-scanpath style changes, or ``None`` when it changes nothing.
+
+    Measured against the style the comparison builder would draw *without* it
+    (`plots._comparison_scanpath_style`), whose marker range is the figure's own
+    ``marker_size_range`` — so a scanpath at the stock range under a changed
+    global one still says so. Values the builder drops (``None`` / ``""`` /
+    ``False``) are dropped here too, which is what keeps the reduced dict
+    drawing exactly the same figure as the full one."""
+    if not isinstance(style, dict) or not style:
+        return None
+    from .plots import _comparison_scanpath_style
+
+    msr = tuple(marker_size_range) if marker_size_range else None
+    kwargs = {} if msr is None else {"default_marker_size_range": msr}
+    base = _comparison_scanpath_style(idx, None, **kwargs)
+    drawn = _comparison_scanpath_style(idx, style, **kwargs)
+    delta = {
+        key: drawn[key]
+        for key in drawn
+        if _comparable(drawn[key]) != _comparable(base.get(key))
+    }
+    return delta or None
 
 
 # ---------------------------------------------------------------------------
@@ -403,6 +543,25 @@ def _flag_when(flag: str, wanted) -> Any:
 def _valued(flag: str) -> Any:
     def emit(value):
         return [] if value is None else [flag, str(value)]
+
+    return emit
+
+
+def _int_valued(flag: str) -> Any:
+    """A ``type=int`` flag: ``12.0`` from a settings dict would be refused."""
+
+    def emit(value):
+        return [] if value is None else [flag, str(int(value))]
+
+    return emit
+
+
+def _optional_valued(flag: str) -> Any:
+    """A flag whose ``None`` is a real choice, spelled as an empty value — the
+    ``--highlight-column ''`` rule, not the absence of the flag."""
+
+    def emit(value):
+        return [flag, "" if value is None else str(value)]
 
     return emit
 
@@ -433,11 +592,12 @@ def _highlight_column(value):
     return ["--highlight-column", "" if value is None else str(value)]
 
 
-def _fixation_flags(value):
+def _fixation_flags(value, flag: str = "--fixation-flag"):
     """The PRE-2 classification dict → one ``--fixation-flag`` per category.
 
     Only categories that are actually doing something are written: an *Off*
     category is the default, and the builder reads a missing one the same way.
+    ``flag`` is ``--compare-fixation-flag`` for scanpath B's own (CMP-24).
     """
     argv: list[str] = []
     for category, spec in (value or {}).items():
@@ -455,8 +615,15 @@ def _fixation_flags(value):
             parts.append(f"symbol={spec['symbol']}")
         if spec.get("color"):
             parts.append(f"color={spec['color']}")
-        argv += ["--fixation-flag", ",".join(parts)]
+        argv += [flag, ",".join(parts)]
     return argv
+
+
+def _compare_fixation_flags(value):
+    """B's flags (CMP-24). An all-*Off* set still has to be said when A's are
+    on, or B would inherit them — so it is spelled as one explicit *off*."""
+    argv = _fixation_flags(value, "--compare-fixation-flag")
+    return argv or ["--compare-fixation-flag", "short=off"]
 
 
 def _heatmap_metric(value):
@@ -473,17 +640,124 @@ def _saccade_color_mode(value):
     return []
 
 
-def _saccade_class_colors(value):
+def _saccade_class_colors(value, baseline: dict | None = None):
+    """One ``--saccade-type-color`` per class colour that differs from
+    ``baseline`` — the stock classes, or the colours a named ``--palette`` has
+    just written (so a stock colour it moved is moved back)."""
     if not isinstance(value, dict):
         return []
     from .constants import SACCADE_CLASS_COLORS, SACCADE_CLASS_EDITABLE
 
+    reference = baseline if isinstance(baseline, dict) else SACCADE_CLASS_COLORS
     argv = []
     for name in SACCADE_CLASS_EDITABLE:
         color = value.get(name)
-        if color and color != SACCADE_CLASS_COLORS.get(name):
+        if color and str(color).lower() != str(reference.get(name, "")).lower():
             argv += ["--saccade-type-color", f"{name}={color}"]
     return argv
+
+
+def _effective_color(key: str, value):
+    """``saccade_class_colors=None`` means the stock class colours, so compare
+    it as those — otherwise the default palette would read as a change."""
+    if key == "saccade_class_colors" and value is None:
+        from .constants import SACCADE_CLASS_COLORS
+
+        return dict(SACCADE_CLASS_COLORS)
+    return value
+
+
+def _palette_colors(name: str) -> dict:
+    """The figure keywords palette ``name`` writes, as `api` expands them."""
+    from . import api
+
+    return api._expand_palette({"palette": name})
+
+
+def _classes_coloured(settings: dict) -> bool:
+    """Whether the reading-class colours are drawn at all. In *Uniform* they are
+    not, so they can be neither a reason to name a palette nor a flag to emit."""
+    return settings.get("saccade_color_mode") in ("By type", "Forward / regression")
+
+
+def _flag_can_override(key: str, settings: dict) -> bool:
+    """Whether ``render`` can restate ``key`` after a ``--palette``.
+
+    `--saccade-type-color` restates class colours in either coloured mode: it
+    implies By type on its own, and recolours the two-way fold beside
+    `--saccade-color-by-direction` (EXP-20; before that it switched the fold to
+    the five-way split, so the fold's colours had no flag at all)."""
+    if key == "saccade_class_colors":
+        return _classes_coloured(settings)
+    return key in _CLI_EMITTERS
+
+
+def _matching_palette(settings: dict, kind: str) -> tuple[str | None, dict]:
+    """The ``--palette`` a CLI snippet can name instead of spelling it out.
+
+    EXP-12. A palette writes eight colours at once. Spelled key by key, three of
+    them (`text_color`, `highlight_text_color`, `background_color`) have no
+    `render` flag and were named unsupported, and the class colours became five
+    ``--saccade-type-color`` flags — which switch saccades to *By type*, so any
+    palette choice produced a command drawing a different figure. A palette
+    matches when every colour it writes that this kind draws either equals the
+    figure's or has a flag to restate it; one that explains none (the default
+    palette on a stock figure) is not named at all.
+
+    EXP-20 gave every colour a flag, which turned "can be restated" from rare
+    into always — and exposed that a restatement is not free: a colour the
+    figure still has at its *default* is one `figure_kwargs` never writes, so
+    naming a palette that moves it costs a flag to move it back
+    (`_restate_against_palette`). Before this, a figure whose text colour merely
+    happened to equal *Print / greyscale*'s was reproduced in greyscale. The
+    palette named is the one whose colours save the most flags net of those.
+
+    Returns ``(name, colours)`` — the colours the named palette supplies — or
+    ``(None, {})``."""
+    from . import api
+    from .constants import PALETTES
+
+    defaults = api.figure_options(kind)
+    best: tuple[str | None, dict] = (None, {})
+    best_score = 0
+    for name in PALETTES:
+        colors = {k: v for k, v in _palette_colors(name).items() if k in defaults}
+        score = 0
+        for key, value in colors.items():
+            if key == "saccade_class_colors" and not _classes_coloured(settings):
+                continue
+            current = _effective_color(key, settings.get(key, defaults[key]))
+            default = _effective_color(key, defaults[key])
+            at_default = _comparable(current) == _comparable(default)
+            if _comparable(current) == _comparable(value):
+                score += int(not at_default)
+            elif not _flag_can_override(key, settings):
+                break
+            elif at_default:
+                score -= 1  # the palette moved it; a flag has to move it back
+        else:
+            if score > best_score:
+                best, best_score = (name, colors), score
+    return best
+
+
+def _restate_against_palette(
+    kwargs: dict, settings: dict, kind: str, palette_colors: dict
+) -> dict:
+    """The figure keywords to write after ``--palette``: the colours it got right
+    dropped, and every one it got wrong restated — a colour still at its default
+    included, which `figure_kwargs` would not otherwise write (EXP-20)."""
+    from . import api
+
+    defaults = api.figure_options(kind)
+    out = dict(kwargs)
+    for key, value in palette_colors.items():
+        current = _effective_color(key, settings.get(key, defaults.get(key)))
+        if _comparable(current) == _comparable(value):
+            out.pop(key, None)
+        else:
+            out[key] = current
+    return out
 
 
 def _marker_size_range(value):
@@ -498,7 +772,79 @@ def _pair(flag: str, sep: str) -> Any:
         if not value:
             return []
         first, second = value
-        return [flag, f"{_num(first)}{sep}{_num(second)}"]
+        text = f"{_num(first)}{sep}{_num(second)}"
+        # A leading minus reads to argparse as another flag (`-5,3` is not a
+        # negative *number*), so a negative origin is glued to its flag.
+        return [f"{flag}={text}"] if text.startswith("-") else [flag, text]
+
+    return emit
+
+
+def _two_numbers(flag: str) -> Any:
+    """A ``nargs=2`` flag (`--fixation-color-range LO HI`)."""
+
+    def emit(value):
+        if not value:
+            return []
+        lo, hi = value
+        return [flag, _num(lo), _num(hi)]
+
+    return emit
+
+
+def _lowercase(flag: str) -> Any:
+    """A choice the CLI spells in lower case (`--compare-stimulus b`)."""
+
+    def emit(value):
+        return [] if value is None else [flag, str(value).lower()]
+
+    return emit
+
+
+#: The order `--style-a` / `--style-b` write their keys in — `cli._STYLE_KEYS`.
+_STYLE_SPEC_KEYS = (
+    "fix_color",
+    "saccade_color",
+    "saccade_style",
+    "saccade_width",
+    "marker_size_range",
+    "opacity",
+    "hollow",
+)
+
+
+def _style_spec(flag: str) -> Any:
+    """A per-scanpath style (already reduced to what it changes) → one
+    ``--style-a KEY=VALUE,…`` — the spec `cli._parse_style_spec` reads back."""
+
+    def emit(value):
+        if not isinstance(value, dict) or not value:
+            return []
+        filters: list[str] = []
+        if flag == "--style-b":
+            # CMP-24: B's filters have flags of their own, not style keys.
+            if "fixation_flags" in value:
+                filters += _compare_fixation_flags(value["fixation_flags"])
+            if "saccade_classes" in value:
+                filters += _comma_list("--compare-saccade-classes")(
+                    value["saccade_classes"]
+                )
+        parts = []
+        for key in _STYLE_SPEC_KEYS:
+            if key not in value:
+                continue
+            item = value[key]
+            if key == "marker_size_range":
+                lo, hi = item
+                text = f"{int(lo)}:{int(hi)}"
+            elif key == "hollow":
+                text = "true" if item else "false"
+            elif isinstance(item, (int, float)):
+                text = _num(item)
+            else:
+                text = str(item)
+            parts.append(f"{key}={text}")
+        return ([flag, ",".join(parts)] if parts else []) + filters
 
     return emit
 
@@ -567,13 +913,60 @@ _CLI_EMITTERS: dict[str, Any] = {
     "background_image_origin": _pair("--stimulus-image-origin", ","),
     "background_image_opacity": _valued("--stimulus-image-opacity"),
     "anim_grid_step_ms": _valued("--anim-grid-step-ms"),
-    "anim_max_frames": _valued("--anim-max-frames"),
+    "anim_max_frames": _int_valued("--anim-max-frames"),
+    # EXP-20 — every figure option `render` could not say before. Each flag is
+    # spelled after its option; `tests/test_code_snippet.py` fails on an option
+    # with no row here, so a new one cannot quietly fall back to being "named".
+    "fixation_opacity": _valued("--fixation-opacity"),
+    "hollow_fixations": _flag_when("--hollow-fixations", True),
+    "color_by_line": _flag_when("--color-by-line", True),
+    "fixation_color_range": _two_numbers("--fixation-color-range"),
+    "heatmap_range": _two_numbers("--heatmap-range"),
+    "order_font_size": _int_valued("--order-font-size"),
+    "order_font_color": _valued("--order-font-color"),
+    "text_color": _valued("--text-color"),
+    "highlight_text_color": _valued("--highlight-text-color"),
+    "span_border_color": _valued("--span-border-color"),
+    "background_color": _valued("--background-color"),
+    "line_spacing": _valued("--line-spacing"),
+    "scale_text_to_boxes": _flag_when("--no-scale-text-to-boxes", False),
+    "word_hover_measure": _optional_valued("--word-hover-measure"),
+    "x_field": _valued("--x-field"),
+    "y_field": _valued("--y-field"),
+    # Was `_CLI_IMPLICIT` ("fitting to the canvas is what `--canvas` means") —
+    # true only while the figure *was* fitted; one that wasn't reproduced
+    # framed on the monitor anyway.
+    "fit_to_monitor": _flag_when("--no-full-monitor", False),
+    "show_colorbars": _flag_when("--colorbars", True),
+    "colorbar_orientation": _mapped(
+        "--colorbar-orientation", {"Vertical": "vertical", "Horizontal": "horizontal"}
+    ),
+    "colorbar_tickangle": _int_valued("--colorbar-tickangle"),
+    "colorbar_tickfont_size": _int_valued("--colorbar-tickfont-size"),
+    "raw_gaze_color": _valued("--raw-gaze-color"),
+    "raw_gaze_marker_size": _valued("--raw-gaze-marker-size"),
+    "raw_gaze_opacity": _valued("--raw-gaze-opacity"),
+    "word_heatmap_col": _valued("--word-heatmap-col"),
+    "word_heatmap_title": _valued("--word-heatmap-title"),
+    # The comparison's (and the co-animation's) own options.
+    "show_legend": _flag_when("--compare-legend", True),
+    "compare_stimulus": _lowercase("--compare-stimulus"),
+    "style_a": _style_spec("--style-a"),
+    "style_b": _style_spec("--style-b"),
+    # CMP-24 — the co-animation's B flags.
+    "fixation_flags_b": _compare_fixation_flags,
+    "background_image_b": _valued("--stimulus-image-b"),
+    "background_image_size_b": _pair("--stimulus-image-size-b", "x"),
+    "background_image_origin_b": _pair("--stimulus-image-origin-b", ","),
 }
 
-#: Settings the ``render`` parser can't express *and* that a snippet should not
-#: complain about, because the CLI reaches the same figure another way. The
-#: canvas is `--canvas`, and fitting to it is what `--canvas` means.
-_CLI_IMPLICIT = frozenset({"fit_to_monitor"})
+#: Options that only mean something beside a second scanpath, and whose `render`
+#: flag is refused without `--compare-with`. A *single* replay carries them too —
+#: the animation builder takes them and ignores them — so there they are left
+#: off the command rather than written into one `render` would reject.
+_COMPARE_ONLY_SETTINGS = frozenset(
+    {"show_legend", "label_a", "label_b", "compare_stimulus", "fixation_flags_b"}
+)
 
 
 # ---------------------------------------------------------------------------
@@ -642,6 +1035,10 @@ def _call_kwargs(state: FigureState, *, explicit: bool) -> list[tuple[str, Any]]
             # no such keyword — see CLAUDE.md's render-path table.
             if state.drift_connectors and state.kind == "static":
                 out.append(("drift_connectors", True))
+    # CMP-24 — B's own window, on both builders that draw a B.
+    if state.fix_index_range_b and state.compare is not None:
+        lo, hi = state.fix_index_range_b
+        out.append(("fix_index_range_b", (int(lo), int(hi))))
     # The disclosure is a rail choice, not a derived value: `illustration_reasons`
     # (what the app resolved it to) is in `_DERIVED_SETTINGS`, so without the
     # *label mode* the snippet would silently re-derive at "auto" and disagree
@@ -664,6 +1061,53 @@ def _non_default_font(name: str) -> bool:
     return str(name) != FONT_FAMILY
 
 
+#: What a snippet names for a raw-gaze table it can't name — one that was
+#: uploaded into the app, like `_IMAGE_PLACEHOLDER` for an uploaded image.
+_RAW_GAZE_PLACEHOLDER = "raw_gaze.csv"
+
+
+def draws_raw_gaze(state: FigureState) -> bool:
+    """Whether the figure on screen draws a raw-gaze layer (EXP-20).
+
+    Only the single-trial builder has one (`raw_gaze=` is a `plot_scanpath`
+    frame), so a replay or a comparison that carries the switch draws none, and
+    its snippet has nothing to load."""
+    return state.kind == "static" and bool(state.settings.get("show_raw_gaze"))
+
+
+def _raw_gaze_paths(source: SnippetSource) -> list[str] | None:
+    paths = source.options.get("raw_gaze")
+    if not paths:
+        return None
+    return [str(paths)] if isinstance(paths, str) else [str(p) for p in paths]
+
+
+def _raw_gaze_named(source: SnippetSource) -> bool:
+    """A table the snippet can name: given as a path, or the demo's own."""
+    return _raw_gaze_paths(source) is not None or source.kind == SOURCE_DEMO
+
+
+def _raw_gaze_python(source: SnippetSource) -> str:
+    paths = _raw_gaze_paths(source)
+    if paths is None and source.kind == SOURCE_DEMO:
+        return "raw_gaze = sps.load_sample_raw_gaze()"
+    target = _py(_one_or_list(paths or [_RAW_GAZE_PLACEHOLDER]))
+    schema = source.options.get("raw_gaze_schema")
+    extra = f", raw_gaze_schema={_py(schema)}" if schema else ""
+    return f"raw_gaze = sps.load_raw_gaze({target}{extra})"
+
+
+def _raw_gaze_cli(source: SnippetSource) -> list[str]:
+    paths = _raw_gaze_paths(source)
+    if paths is None and source.kind == SOURCE_DEMO:
+        return ["--sample-raw-gaze"]
+    argv = ["--raw-gaze", *(paths or [_RAW_GAZE_PLACEHOLDER])]
+    schema = source.options.get("raw_gaze_schema")
+    if schema:
+        argv += ["--raw-gaze-schema", json.dumps(schema, separators=(",", ":"))]
+    return argv
+
+
 def python_snippet(
     source: SnippetSource,
     state: FigureState,
@@ -682,17 +1126,46 @@ def python_snippet(
     loader, _ = _SOURCE_WRITERS.get(source.kind, _SOURCE_WRITERS[SOURCE_UNKNOWN])
     lines = ["import scanpath_studio as sps", ""]
     lines += loader(source)
+    if draws_raw_gaze(state):
+        lines.append(_raw_gaze_python(source))
     lines.append("")
 
     func = _API_FUNCTION[state.kind]
+    participant, trial = _py(state.participant), _py(state.trial)
+    if not (state.participant and state.trial):
+        # EXP-14: an unnamed trial is `render`'s "first available" — so the
+        # Python half picks that same one rather than quoting `participant=''`,
+        # which matches no trial and raised on the snippet's first run.
+        lines.append("trials = sps.list_trials(words, fixations)")
+        for column, value in (
+            ("participant_id", state.participant),
+            ("trial_id", state.trial),
+        ):
+            if value:
+                lines.append(f"trials = trials[trials[{column!r}] == {_py(value)}]")
+        lines += ["participant, trial = trials.iloc[0]", ""]
+        participant, trial = "participant", "trial"
     args = ["words", "fixations"]
     if state.kind == "comparison":
         compare = state.compare or CompareTarget()
-        args.append(f"({_py(state.participant)}, {_py(state.trial)})")
+        args.append(f"({participant}, {trial})")
         args.append(f"({_py(compare.participant)}, {_py(compare.trial)})")
     else:
-        args.append(f"participant={_py(state.participant)}")
-        args.append(f"trial={_py(state.trial)}")
+        args.append(f"participant={participant}")
+        args.append(f"trial={trial}")
+        # BUG-85: a co-animation names B the way `compare_scanpaths` does. Not
+        # for a second dataset's reader, though — `trial_b=` alone would look
+        # that id up in this corpus; the caveat below says to load B's first.
+        compare = state.compare
+        if (
+            state.kind == "animation"
+            and compare is not None
+            and compare.trial
+            and not compare.dataset
+        ):
+            args.append(f"trial_b=({_py(compare.participant)}, {_py(compare.trial)})")
+    if draws_raw_gaze(state):
+        args.append("raw_gaze=raw_gaze")
 
     call = [f"fig = sps.{func}("]
     call += [f"    {arg}," for arg in args]
@@ -780,6 +1253,15 @@ def cli_snippet(
             argv += ["--playback-speed", _num(state.playback_speed)]
         if not state.autoplay:
             argv.append("--no-autoplay")
+        # EXP-20: CMP-11's two-reading replay. `render --animate --compare-with`
+        # draws it, and the replay's B-side options (`--compare-stimulus`, the
+        # labels, the legend) are refused without it — so the CLI form names B,
+        # where the Python one has to leave B's frames to the caller.
+        if state.compare is not None and state.compare.trial:
+            argv += [
+                "--compare-with",
+                f"{state.compare.participant}:{state.compare.trial}",
+            ]
     else:
         if state.drift_correction:
             # PRE-21 gates both flags behind SCANPATH_EXPERIMENTAL=1, so
@@ -804,6 +1286,11 @@ def cli_snippet(
     if state.fix_index_range:
         lo, hi = state.fix_index_range
         argv += ["--fix-index-range", f"{int(lo)}:{int(hi)}"]
+    if state.fix_index_range_b and state.compare is not None:
+        lo, hi = state.fix_index_range_b
+        argv += ["--compare-fix-index-range", f"{int(lo)}:{int(hi)}"]
+    if draws_raw_gaze(state):
+        argv += _raw_gaze_cli(source)
     if state.kind == "comparison":
         compare = state.compare or CompareTarget()
         argv += ["--compare-with", f"{compare.participant}:{compare.trial}"]
@@ -817,13 +1304,30 @@ def cli_snippet(
             label_a, label_b = compare.labels
             argv += ["--label-a", str(label_a), "--label-b", str(label_b)]
 
-    for key, value in figure_kwargs(
-        state.settings, state.kind, explicit=explicit
-    ).items():
+    palette, palette_colors = _matching_palette(state.settings, state.kind)
+    kwargs = figure_kwargs(state.settings, state.kind, explicit=explicit)
+    if palette:
+        argv += ["--palette", palette]
+        kwargs = _restate_against_palette(
+            kwargs, state.settings, state.kind, palette_colors
+        )
+    for key, value in kwargs.items():
+        # EXP-12: never emit class colours the figure isn't drawing —
+        # `--saccade-type-color` implies By type, so emitting them into a
+        # Uniform figure switched its saccades to the five-way split.
+        if key == "saccade_class_colors":
+            if _classes_coloured(state.settings):
+                argv += _saccade_class_colors(
+                    value, palette_colors.get("saccade_class_colors")
+                )
+            continue
+        if key in _COMPARE_ONLY_SETTINGS and (
+            state.kind == "animation" and state.compare is None
+        ):
+            continue  # a single replay takes these and draws nothing with them
         emit = _CLI_EMITTERS.get(key)
         if emit is None:
-            if key not in _CLI_IMPLICIT:
-                unsupported.append(key)
+            unsupported.append(key)
             continue
         argv += emit(value)
 
@@ -914,13 +1418,16 @@ def state_caveats(source: SnippetSource, state: FigureState) -> list[str]:
     notes = []
     if source.note:
         notes.append(source.note)
-    if state.settings.get("show_raw_gaze"):
+    if draws_raw_gaze(state) and not _raw_gaze_named(source):
         notes.append(
-            "The raw-gaze layer is drawn from a third table, so it needs a "
-            "`raw_gaze=` frame (`data.normalize_raw_gaze`) rather than an "
-            "option — the snippet leaves it off."
+            "The raw gaze was loaded into the app, so the snippet can't name the "
+            f"file it came from and loads `{_RAW_GAZE_PLACEHOLDER}` instead — "
+            "point it at your own table."
         )
-    if _is_data_uri(state.settings.get("background_image")):
+    if any(
+        _is_data_uri(state.settings.get(key))
+        for key in ("background_image", "background_image_b")
+    ):
         notes.append(
             "The stimulus image was uploaded into the app, so the snippet "
             f"names `{_IMAGE_PLACEHOLDER}` instead — point it at your own file."
@@ -931,30 +1438,46 @@ def state_caveats(source: SnippetSource, state: FigureState) -> list[str]:
             "`compare_scanpaths` compares whole trials, so slice each side to "
             "its screen first (`multipart.extract_part`) and pass those frames."
         )
-    # CMP-11: Animate + Compare is *one* figure with two readings on one clock,
-    # so `kind` is "animation" and B rides along in `compare`. B's frames are
-    # frames, not keywords — `animate_scanpath` takes them as `words_b=` /
-    # `fixations_b=` — so, like the raw-gaze layer, they are a caveat rather
-    # than something the snippet can quote.
-    compare = state.compare
-    if state.kind == "animation" and compare is not None:
+    # BUG-85: B has its own screen navigator in the app, which a `FigureState`
+    # does not carry, and `animate_scanpath` draws B at its first screen.
+    if state.kind == "animation" and state.compare is not None and state.screen:
         notes.append(
-            "This is a two-reading animation. B's frames are frames rather than "
-            f"options, so pass `{compare.participant}` / `{compare.trial}`'s "
-            "rows as `words_b=` / `fixations_b=` (`--compare-with` plus "
-            "`--animate` on the CLI) — the snippet replays A alone."
+            f"This is screen `{state.screen}` of a multipart trial, and "
+            "`animate_scanpath` draws B at its first screen — as `render` does, "
+            "which has no flag for B's. To replay the screen shown for B, cut "
+            "its frames with `multipart.extract_part` and pass them as "
+            "`words_b=` / `fixations_b=`."
         )
+    # CMP-11: Animate + Compare is *one* figure with two readings on one clock,
+    # so `kind` is "animation" and B rides along in `compare`. Since BUG-85 the
+    # Python form names B with `trial_b=`, as `compare_scanpaths` does — all but
+    # a second dataset's reader, whose frames the snippet cannot load (below).
+    compare = state.compare
     # CMP-8: scanpath B can come from a *second* dataset, and its participant id
     # is that corpus's own — writing it against the loaded corpus would name a
     # reader who isn't in it. Both surfaces have the seam (`words_b=` /
     # `--compare-words`); the snippet can't fill it in, so it says whose it is.
     if compare is not None and compare.dataset:
-        notes.append(
+        note = (
             f"Scanpath B comes from a second dataset (`{compare.dataset}`), so "
             f"`{compare.participant}` is that corpus's reader, not this one's. "
             "Load it too and pass it as `words_b=` / `fixations_b=` "
             "(`--compare-words` / `--compare-fixations` on the CLI)."
         )
+        if state.kind == "animation":
+            # CMP-21: with `dataset_b=`, `animate_scanpath` checks the two screens
+            # as the app did before drawing this — and a screen nobody states is
+            # read off that trial's data, which rarely matches, so B's is named.
+            note += (
+                " In Python, name the reading with "
+                f"`trial_b=({_py(compare.participant)}, {_py(compare.trial)})` and "
+                f"its dataset with `dataset_b={_py(compare.dataset)}`. A "
+                "co-animation needs both readings on one screen, so state B's "
+                "too, as `setup_b=` (`--compare-canvas` on the CLI): one read off "
+                "B's data rarely matches. Until then the Python snippet replays A "
+                "alone."
+            )
+        notes.append(note)
     if state.kind == "comparison" and str(state.illustration_label).lower() != "auto":
         notes.append(
             "`compare_scanpaths` has no `illustration_label` parameter, so the "

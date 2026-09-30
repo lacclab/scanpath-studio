@@ -9,6 +9,11 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+# Least privilege by default; the `release` job below raises its own to
+# `contents: write`, which is the only thing here that writes.
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build on ${{ matrix.os }}
@@ -34,10 +39,10 @@ jobs:
       APP: dist/ScanpathStudio.app
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -45,7 +50,7 @@ jobs:
       # A regular (non-editable) install: PyInstaller's collect_* helpers need
       # a real installed package tree, not an editable finder.
       - name: Install package + PyInstaller
-        run: pip install . pyinstaller==6.22.2
+        run: pip install . pyinstaller==6.22.3
 
       # ENG-21. Everything below degrades to an unsigned build when the Apple
       # secrets are absent — a fork running workflow_dispatch has none, and must
@@ -222,7 +227,7 @@ jobs:
         shell: pwsh
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.archive }}
           path: ${{ matrix.archive }}
@@ -245,10 +250,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Download all archives
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           merge-multiple: true
 

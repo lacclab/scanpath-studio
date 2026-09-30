@@ -88,6 +88,52 @@ class TestSameDataset:
         )
         assert fig.data
 
+    @pytest.mark.parametrize("layout", ["overlay", "side_by_side"])
+    def test_a_trial_compared_with_itself_draws_each_side_once(self, layout):
+        """CMP-22: the figure slices by (participant, trial), so two copies of one
+        trial must be renamed apart or each side draws both copies. Same fixation
+        count as p1-vs-p2 (three each) means one copy per side."""
+        words, fixations = _pair()
+
+        def points(trial_b):
+            fig = api.compare_scanpaths(
+                words,
+                fixations,
+                ("p1", "t1"),
+                trial_b,
+                layout=layout,
+                canvas_size=(1920, 1080),
+            )
+            return sum(0 if t.x is None else len(t.x) for t in fig.data)
+
+        assert points(("p1", "t1")) == points(("p2", "t2"))
+
+    @pytest.mark.parametrize("layout", ["side_by_side", "stacked"])
+    @pytest.mark.parametrize("show_legend", [True, False])
+    def test_split_panel_titles_follow_the_legend_toggle(self, layout, show_legend):
+        """BUG-90: with the legend off the top margin is 0, which clipped the
+        upper panel's title while the lower one still showed. Both or neither."""
+        words, fixations = _pair()
+        fig = api.compare_scanpaths(
+            words,
+            fixations,
+            ("p1", "t1"),
+            ("p2", "t2"),
+            layout=layout,
+            show_legend=show_legend,
+            canvas_size=(1920, 1080),
+        )
+        assert len(fig.layout.annotations) == (2 if show_legend else 0)
+
+    def test_the_renamed_copy_never_reaches_a_label(self):
+        """The rename is for slicing the figure; the legend names the real id."""
+        words, fixations = _pair()
+        fig = api.compare_scanpaths(
+            words, fixations, ("p1", "t1"), ("p1", "t1"), canvas_size=(1920, 1080)
+        )
+        names = {t.name for t in fig.data if t.name}
+        assert names and not any("· B" in name for name in names), names
+
     def test_hyphenated_layout_is_accepted(self):
         """`--compare-layout side-by-side` and the API must agree on one name."""
         words, fixations = _pair()
@@ -176,7 +222,39 @@ class TestCrossDataset:
                 setup=_measured(1920, 1080),
                 setup_b=_measured(1680, 1050),
             )
-        assert "1680" in str(excinfo.value)
+        message = str(excinfo.value)
+        assert "1680" in message
+        # BUG-85: it says what this surface does — nothing was drawn — and how
+        # to ask for the split here, not the app's "shown side by side instead".
+        assert "side by side instead" not in message
+        assert "layout='side_by_side'" in message
+        # The surface-neutral reason rides along, so `render` can word the same
+        # refusal in its own flags rather than echo Python syntax.
+        reason = excinfo.value.reason
+        assert "1680" in reason and reason in message
+        assert "layout=" not in reason
+        # Both screens were stated, so there is nothing to say about inferring.
+        assert "read off" not in message
+
+    def test_an_unstated_screen_names_the_parameter_that_states_it(self):
+        """CMP-21: the reason says "recorded on different screens", but B's was
+        only the extent of its data (400x300 here), so the refusal says so and
+        names ``setup_b=``."""
+        with pytest.raises(ValueError) as excinfo:
+            api.compare_scanpaths(
+                _words("p1", "t1"),
+                _fixations("p1", "t1"),
+                ("p1", "t1"),
+                ("p1", "t1"),
+                words_b=_words("p1", "t1"),
+                fixations_b=_fixations("p1", "t1", y=300.0),
+                dataset_b="PoTeC",
+                canvas_size=(1920, 1080),
+            )
+        message = str(excinfo.value)
+        assert "400x300" in message
+        assert "B's screen was read off its data" in message
+        assert "setup_b=" in message
 
     def test_a_split_layout_is_allowed_on_two_screens(self):
         fig = api.compare_scanpaths(
@@ -289,3 +367,229 @@ class TestDualCoAnimationAcceptsCompareStimulus:
             compare_stimulus="b",
         )
         assert fig.frames
+
+
+class TestCoAnimationDrawsOneSecondReading:
+    """BUG-85: `animate_scanpath` drew whatever B frames it was handed.
+
+    `compare_scanpaths` takes B's *corpus* plus a `trial_b` pair, so frames
+    passed the same way to the co-animation drew every fixation in them — 3,209
+    on the demo, where B's trial has 89. `trial_b` now picks the reading, as it
+    does there, and B frames holding several trials refuse rather than guess.
+    """
+
+    _A = ("l37_1129", "l37_1129_2_1_1_Ele_r0")
+    _B = ("l37_1129", "l37_1129_2_1_2_Ele_r0")
+
+    @staticmethod
+    def _trace_b(fig):
+        (trace,) = [trace for trace in fig.data if trace.name == "Scanpath B"]
+        return trace
+
+    def test_trial_b_picks_one_reading_out_of_the_corpus(self):
+        from scanpath_studio.utils import extract_trial
+
+        words, fixations = api.load_sample_data()
+        expected = len(extract_trial(fixations, *self._B))
+        fig = api.animate_scanpath(words, fixations, *self._A, trial_b=self._B)
+        assert len(self._trace_b(fig).x) == expected
+
+    def test_trial_b_is_looked_up_in_bs_own_frames(self):
+        """A second dataset's reader is found in *its* frames, never in A's."""
+        words, fixations = _pair()
+        fig = api.animate_scanpath(
+            words,
+            fixations,
+            "p1",
+            "t1",
+            canvas_size=(1920, 1080),
+            words_b=pd.concat(
+                [_words("p9", "t9"), _words("p8", "t8")], ignore_index=True
+            ),
+            fixations_b=pd.concat(
+                [_fixations("p9", "t9", y=300.0), _fixations("p8", "t8", y=500.0)],
+                ignore_index=True,
+            ),
+            trial_b=("p9", "t9"),
+        )
+        trace = self._trace_b(fig)
+        assert len(trace.y) == 3
+        # The replay's first frame holds each not-yet-reached fixation as None.
+        assert {round(float(y)) for y in trace.y if y is not None} == {300}
+
+    def test_an_in_place_edit_between_calls_still_finds_bs_reading(self):
+        """B must be sliced fresh, as A is. Through `utils.extract_trial`'s
+        position cache — keyed by the frame's identity, which an in-place edit
+        keeps — a second call after `sort_values(inplace=True)` returned the
+        same *positions*: as many rows, from somebody else's trials."""
+        words, fixations = api.load_sample_data()
+        fixations = fixations.copy()
+        api._second_reading(words, fixations, None, None, self._B)
+        fixations.sort_values(
+            ["participant_id", "trial_id"], ascending=False, inplace=True
+        )
+        _, fix_b = api._second_reading(words, fixations, None, None, self._B)
+        assert set(zip(fix_b["participant_id"], fix_b["trial_id"])) == {self._B}
+
+    def test_b_frames_holding_several_trials_ask_for_trial_b(self):
+        words, fixations = api.load_sample_data()
+        with pytest.raises(ValueError, match=r"trial_b="):
+            api.animate_scanpath(
+                words, fixations, *self._A, words_b=words, fixations_b=fixations
+            )
+
+    def test_a_trial_b_with_no_fixations_raises(self):
+        words, fixations = api.load_sample_data()
+        with pytest.raises(ValueError, match="No fixations for the second scanpath"):
+            api.animate_scanpath(
+                words, fixations, *self._A, trial_b=("nobody", "nothing")
+            )
+
+    def test_one_trials_frames_still_need_no_trial_b(self):
+        """The shape every existing caller passes — `render` slices B first."""
+        words, fixations = _pair()
+        fig = api.animate_scanpath(
+            words,
+            fixations,
+            "p1",
+            "t1",
+            canvas_size=(1920, 1080),
+            words_b=_words("p2", "t2", x0=400.0),
+            fixations_b=_fixations("p2", "t2", y=300.0),
+        )
+        assert len(self._trace_b(fig).x) == 3
+
+
+class TestCoAnimationAcrossTwoDatasets:
+    """CMP-21: a co-animation draws both readings in A's coordinates — an
+    overlay on one clock — so a reading from another dataset is held to the
+    overlay's screen gate. The API checked nothing, and `render` checked only
+    when `--compare-canvas` stated B's screen."""
+
+    @staticmethod
+    def _animate(**kwargs):
+        return api.animate_scanpath(
+            _words("p1", "t1"),
+            _fixations("p1", "t1", y=70.0),
+            "p1",
+            "t1",
+            words_b=_words("p9", "t9"),
+            fixations_b=_fixations("p9", "t9", y=300.0),
+            **kwargs,
+        )
+
+    @staticmethod
+    def _points_b(fig) -> int:
+        return len(TestCoAnimationDrawsOneSecondReading._trace_b(fig).x)
+
+    def test_two_different_stated_screens_raise(self):
+        from scanpath_studio.experimental_setup import IncomparableScreensError
+
+        with pytest.raises(IncomparableScreensError) as excinfo:
+            self._animate(
+                dataset_b="PoTeC",
+                setup=_measured(1920, 1080),
+                setup_b=_measured(1680, 1050),
+            )
+        message = str(excinfo.value)
+        assert "1680" in message
+        assert "compare_scanpaths(layout='side_by_side')" in message
+        # The surface-neutral reason rides along, for `render` to reword.
+        assert excinfo.value.reason in message
+        assert "layout=" not in excinfo.value.reason
+
+    def test_a_screen_nobody_stated_is_read_off_the_data(self):
+        """The gap itself: B's screen is inferred, as the static overlay infers
+        it (400x300 for these frames), never assumed to be A's."""
+        from scanpath_studio.experimental_setup import IncomparableScreensError
+
+        with pytest.raises(IncomparableScreensError, match="400x300") as excinfo:
+            self._animate(dataset_b="PoTeC", canvas_size=(1920, 1080))
+        # …and the refusal says the screen was inferred, and how to state it.
+        message = str(excinfo.value)
+        assert "B's screen was read off its data" in message
+        assert "setup_b=" in message
+
+    def test_dataset_b_names_bs_readers(self):
+        """`dataset_b` prefixes B's participant ids, as `compare_scanpaths` and
+        the app's co-animation do, so a hover says whose reader it is."""
+        fig = self._animate(
+            dataset_b="PoTeC",
+            setup=_measured(),
+            setup_b=_measured(),
+            fixation_hover_fields=("participant_id",),
+        )
+        trace = TestCoAnimationDrawsOneSecondReading._trace_b(fig)
+        assert {row[0] for row in trace.customdata} == {"PoTeC · p9"}
+
+    def test_setup_b_alone_declares_a_second_dataset(self):
+        from scanpath_studio.experimental_setup import IncomparableScreensError
+
+        with pytest.raises(IncomparableScreensError):
+            self._animate(setup=_measured(1920, 1080), setup_b=_measured(1680, 1050))
+
+    def test_one_screen_draws_the_co_animation(self):
+        fig = self._animate(dataset_b="PoTeC", setup=_measured(), setup_b=_measured())
+        assert self._points_b(fig) == 3
+
+    def test_a_match_on_an_unrecorded_screen_draws_with_a_warning(self, caplog):
+        assumed = SetupSnapshot(
+            canvas_width=1920,
+            canvas_height=1080,
+            screen_provenance=Provenance.ASSUMED,
+        )
+        with caplog.at_level("WARNING", logger="scanpath_studio.api"):
+            fig = self._animate(dataset_b="PoTeC", setup=_measured(), setup_b=assumed)
+        assert self._points_b(fig) == 3
+        assert any("animate_scanpath" in r.getMessage() for r in caplog.records)
+
+    def test_b_frames_without_either_are_not_checked(self):
+        """How `render --compare-with` alone passes a reading of A's own
+        dataset: two readings of one corpus can span different extents, so
+        inferring a canvas from each would refuse pairs that shared a screen."""
+        fig = self._animate(canvas_size=(1920, 1080))
+        assert self._points_b(fig) == 3
+
+    def test_dataset_b_without_bs_frames_is_an_error(self):
+        words, fixations = _pair()
+        with pytest.raises(ValueError, match="words_b"):
+            api.animate_scanpath(
+                words, fixations, "p1", "t1", trial_b=("p2", "t2"), dataset_b="PoTeC"
+            )
+
+    def test_setup_draws_the_replay_on_as_screen(self):
+        """`setup` covers A's canvas as it does in `compare_scanpaths`, so the
+        replay is drawn on the screen the gate compared."""
+        fig = api.animate_scanpath(
+            _words("p1", "t1"),
+            _fixations("p1", "t1"),
+            "p1",
+            "t1",
+            setup=_measured(1234, 777),
+        )
+        assert tuple(fig.layout.xaxis.range) == (0, 1234)
+        assert tuple(fig.layout.yaxis.range) == (777, 0)
+
+
+@pytest.mark.parametrize("layout", ["overlay", "side_by_side", "stacked"])
+def test_the_default_comparison_draws_the_apps_marker_opacity(monkeypatch, layout):
+    """CMP-20: the app seeds each scanpath's `cmp{idx}_opacity` at 0.7, while
+    the builder's own fallback — all a headless caller ever got — was 1.0. Both
+    now read one constant, so the default figures agree."""
+    from scanpath_studio import controls
+
+    seeded: dict = {}
+    monkeypatch.setattr(
+        controls, "_pin", lambda key, default: seeded.setdefault(key, default)
+    )
+    controls._seed_compare_styles()
+
+    words = pd.concat([_words("p1", "t1"), _words("p2", "t1")], ignore_index=True)
+    fixations = pd.concat(
+        [_fixations("p1", "t1"), _fixations("p2", "t1")], ignore_index=True
+    )
+    fig = api.compare_scanpaths(
+        words, fixations, ("p1", "t1"), ("p2", "t1"), layout=layout
+    )
+    opacities = [t.marker.opacity for t in fig.data if t.mode and "markers" in t.mode]
+    assert opacities == [seeded["cmp0_opacity"], seeded["cmp1_opacity"]]

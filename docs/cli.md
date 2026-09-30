@@ -11,7 +11,24 @@ scanpath-studio --server.port 8600
 scanpath-studio --no-persist          # don't cache the session on this computer
 ```
 
-Additional launch flags are forwarded to Streamlit.
+The app listens on this computer only (`127.0.0.1`). It has no login, so
+serving it to other machines is a deliberate step — pass
+`--server.address 0.0.0.0` (or set `server.address` in a Streamlit
+`config.toml`, or `STREAMLIT_SERVER_ADDRESS`), and only on a network you trust:
+
+```bash
+scanpath-studio --server.address 0.0.0.0
+```
+
+Served on a network, the app also turns off everything that reads or writes the
+server's own folders — the data-location box, the 📁 folder picker, ⬇ Download
+for the public corpora and stimulus-image folders — since any visitor could use
+them. On a lab server you trust, turn them back on with `SCANPATH_LOCAL_FS=1`
+(`SCANPATH_LOCAL_FS=1 scanpath-studio --server.address 0.0.0.0`).
+
+Additional launch flags are forwarded to Streamlit. A word that is not one of
+the commands (`run`, `render`, `analyze`, `corpus`, `cache`) is an error that
+names the closest one, rather than an argument handed to Streamlit.
 
 ## Render
 
@@ -42,6 +59,26 @@ scanpath-studio render --words ia.csv --fixations fix.csv \
 HTML is interactive and browser-free. PNG, SVG, and PDF require
 Chrome/Chromium (`plotly_get_chrome -y`).
 
+### When a column isn't recognised
+
+Column names are auto-detected (EyeLink, Tobii, SMI, Pupil Labs, Gazepoint and
+snake_case spellings). When one isn't, `render` stops and prints which field it
+could not find, the names it looked for, the columns your table has, and a
+mapping to start from. Pass that mapping back as JSON — inline, or as a path to
+a `.json` file — with `--word-schema` (the `--words` table) and/or
+`--fix-schema` (the `--fixations` table). `analyze` takes the same two flags.
+
+```bash
+scanpath-studio render --words ia.csv --fixations fix.csv \
+  --word-schema '{"trial": "TRIAL_LABEL", "word_id": "IA_ID", "text": "IA_LABEL",
+                  "left": "IA_LEFT", "right": "IA_RIGHT", "top": "IA_TOP", "bottom": "IA_BOTTOM"}' \
+  --fix-schema fix_schema.json -o scanpath.html
+```
+
+A mapping replaces auto-detection for that table, so it has to name every
+required field, not only the one that failed. It is the same dict
+`load_scanpath_data(word_schema=…, fix_schema=…)` takes in Python.
+
 ## Public corpora
 
 A public corpus loads headlessly the same way the app loads it — no export step
@@ -49,26 +86,15 @@ in between:
 
 ```bash
 # PoTeC, downloaded on first use
-scanpath-studio render --potec ./potec -p 12 -t b0 -o potec.html
+scanpath-studio render --potec ./potec --list-trials
 
 # OneStop, choosing the variant, regime and part
 scanpath-studio render --onestop ./onestop --onestop-variant public \
   --onestop-regime ordinary --onestop-part Paragraph --list-trials
-
-# One corpus out of a prepared harmonised bundle
-scanpath-studio render --eyegenbench ./data/EyeGenBench \
-  --eyegenbench-dataset Provo -p 1 -t 1 -o provo.svg
-
-# MultiplEYE, from its raw export
-scanpath-studio render --source multipleye --export ./multipleye_session \
-  --list-trials
 ```
 
-`--eyegenbench-dataset` names one of the thirty-one
-[harmonised benchmark corpora](benchmark-corpora.md) in a bundle you prepared
-locally; `--no-question-screens` drops MultiplEYE's comprehension screens. The
-Python API takes the same corpora through the loaders re-exported at the package
-root (`load_potec`, `load_onestop`, `load_multipleye`, `load_eyegenbench`).
+The Python API takes the same corpora through `load_potec` and
+`load_onestop`.
 
 ## Compare two scanpaths
 
@@ -76,17 +102,22 @@ root (`load_potec`, `load_onestop`, `load_multipleye`, `load_eyegenbench`).
 first — the headless form of the app's **Compare** mode.
 
 ```bash
-# Two readings from the same dataset
-scanpath-studio render --sample -p p1 -t t1 \
-  --compare-with p2:t5 -o compare.html
+# Two readers of the same paragraph, overlaid
+scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 -o compare.html
 
-# Side by side, showing only B's word boxes and text
-scanpath-studio render --sample -p p1 -t t1 \
-  --compare-with p2:t5 \
-  --compare-layout side-by-side --compare-stimulus b -o compare.svg
+# The same overlay, drawing only B's word boxes and text
+scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 --compare-stimulus b \
+  -o compare_b.html
+
+# Side by side — each panel draws its own reading's stimulus
+scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 \
+  --compare-layout side-by-side -o compare.svg
 
 # B from a second dataset
-scanpath-studio render --potec ./potec -p 12 -t b0 \
+scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
   --compare-with p1:t1 \
   --compare-words other/ia.csv --compare-fixations other/fix.csv \
   --compare-dataset-name "Our lab" \
@@ -100,91 +131,84 @@ scanpath-studio render --potec ./potec -p 12 -t b0 \
 | arrange the panels | `--compare-layout {overlay,side-by-side,stacked}` (default `overlay`) |
 | whose stimulus an overlay draws | `--compare-stimulus {both,a,b}` (default `both`) |
 | name the two traces | `--label-a TEXT --label-b TEXT` (both or neither) |
+| style each scanpath | `--style-a SPEC`, `--style-b SPEC` (below) |
+| the A/B legend | `--compare-legend` |
+| B's own stimulus page (split layouts) | `--stimulus-image-b PATH`, with `--stimulus-image-size-b WxH` / `--stimulus-image-origin-b X,Y` |
 | B from another dataset | `--compare-words PATH… --compare-fixations PATH…` |
 | name that dataset | `--compare-dataset-name NAME` |
 | declare the screens | `--canvas WxH`, `--compare-canvas WxH` |
 | co-animate both readings | add `--animate` (HTML output) |
 
-`--label-a` / `--label-b` replace the composed trace labels — the CLI form of the
-app's per-scanpath label pattern. They go together, because `compare_scanpaths`
-takes the pair or neither, and they apply to the co-animation below just as they
-do to the static comparison.
+`--label-a` / `--label-b` also label the `--animate` co-animation.
+
+`--style-a` / `--style-b` are the app's per-scanpath styling (the Compare rows
+under 👁️ Fixations and ↗️ Saccades), `compare_scanpaths`'s `style_a` / `style_b`:
+a comma-separated `KEY=VALUE` list, repeatable, with `fix_color` and
+`saccade_color` (`#RRGGBB`), `saccade_style` (`solid`, `dash`, `dot`,
+`dashdot`), `saccade_width` (px), `marker_size_range` (`MIN:MAX`), `opacity`
+(0.1–1) and `hollow` (`true` / `false`). A key left out keeps that scanpath's
+default.
+
+```bash
+scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 --compare-legend \
+  --style-a fix_color=#D55E00,opacity=0.5 --style-b saccade_style=dash \
+  -o compare_styled.html
+```
 
 `--animate --compare-with` replays **both** readings on one clock, the same dual
-co-animation the app renders with Animate and Compare both on. That is an
-overlay, so it needs one shared screen on the same terms as `--compare-layout
-overlay`. `--compare-with` cannot be combined with `--all-screens`: a comparison
+co-animation the app renders with Animate and Compare both on.
+`--compare-with` cannot be combined with `--all-screens`: a comparison
 is a single figure of two readings, so render one screen at a time with
 `--screen`.
 
-**Overlay across two datasets requires matching canvases.** Overlaying pools both
-readings into one set of pixel coordinates, so `--compare-layout overlay` on two
-different screens **fails** rather than quietly falling back:
-
-```console
-$ scanpath-studio render … --canvas 2560x1440 --compare-canvas 1680x1050
-These readings were recorded on different screens — 2560x1440 and 1680x1050. …
-Pass layout='side_by_side' (or 'stacked') to compare them anyway, each panel
-drawn to its own screen.
-```
-
-The app resolves that case to Side by side because a user can see what they got;
-a script cannot, so the CLI refuses instead of returning a differently-shaped
-figure. Nothing is ever rescaled to force an overlay.
-
-Matching canvases that neither dataset actually *recorded* (most public corpora
-report a default) still overlay — you get a warning on stderr rather than an
-error, since the app can't prove the two displays matched but you usually can.
+**Overlay across two datasets requires matching canvases.** On two different
+canvases `--compare-layout overlay` fails rather than falling back, and so does
+`--animate`, which replays both readings in one coordinate space; pass
+`--compare-layout side-by-side` or `stacked`, without `--animate`. Without
+`--compare-canvas` the second dataset's screen is read off its data, as A's is
+when neither `--canvas` nor a built-in source gives one. That extent rarely
+spans the whole screen, so state both screens when you know them. Nothing is
+rescaled.
 
 A second dataset is loaded from **files only**. Any corpus reachable from Python
 can still be scanpath B via
 [`compare_scanpaths`](api.md#scanpath_studio.api.compare_scanpaths), which takes
 B's frames directly.
 
-`--monitor-mm` / `--viewing-distance` (and their `--compare-*` twins) record
-physical display geometry on each side's setup. Nothing in the comparison reads
-them today — the overlay rule is about pixels, not degrees — but they complete
-the recorded setup.
-
 ## Common options
 
 | Goal | Option |
 | --- | --- |
-| hide a layer | `--no-words`, `--no-labels`, `--no-fixations`, `--no-saccades`, `--no-heatmap` |
-| animate | `--animate` and optionally `--playback-speed X` |
+| hide a layer | `--no-words`, `--no-labels`, `--no-fixations`, `--no-order`, `--no-saccades`, `--no-heatmap` |
+| animate | `--animate` and optionally `--playback-speed X`; every styling flag the replay can draw (`api.figure_options("animation")`) is honoured, and the rest are named in a warning |
 | set display geometry | `--canvas WIDTHxHEIGHT` |
-| show monitor-pixel axes | `--coordinate-grid` and optionally `--coordinate-grid-spacing PX` |
 | color fixations | `--color-by FIELD` |
-| draw only part of a trial | `--fix-index-range START:END` (1-based, both inclusive; honoured by `--animate` too) |
-| mark the critical span | `--highlight-column COLUMN` (`''` for none) with `--critical-span-style mark-text\|mark-border\|none` |
-| flag short / long / off-text / blink fixations | `--fixation-flag CATEGORY=MODE[,threshold_ms=N][,symbol=S][,color=#RRGGBB]`, repeatable |
-| classify saccades | `--saccade-color-by-type` |
-| correct vertical drift (needs `SCANPATH_EXPERIMENTAL=1`) | `--drift-correction ALGORITHM` |
+| draw only part of a trial | `--fix-index-range START:END` (1-based, both inclusive; honoured by `--animate` and `--compare-with` too) |
 | add the stimulus image | `--stimulus-image PATH` |
 | resolve per-trial images | `--image-root DIR --image-pattern '{text_id}.png'` |
-| use Gaussian duration mass | `--heatmap-style 'Duration mass' --duration-mass-sigma 1.0` |
-| mark a schematic | `--illustration` or `--illustration-label MODE` |
-| render an authored trial | `--authoring PATH` |
-| select or inspect a child screen | `--screen ID`, `--list-parts` |
-| render every ordered screen | `--all-screens`, optionally `--screen-transition instant|recorded` |
+| use Gaussian duration mass | `--heatmap-style duration-mass --duration-mass-sigma 1.0` |
 | map arbitrary source rows to screens | `--trial-parts-manifest manifest.json` |
-| attach participant metadata | `--participant-metadata readers.csv` |
-| attach trial metadata | `--trial-metadata readings.csv`, `--trial-metadata-reader-column` to key it by reader **and** trial |
 | export editable layers | `--separable-layers` |
-| style the fixations | `--fixation-color`, `--fixation-symbol`, `--fixation-colorscale`, `--marker-size-range` |
-| style the saccades | `--saccade-style`, `--saccade-width`, `--saccade-arcs`, `--saccade-arrows`, `--saccade-classes` |
-| pick a palette | `--palette` |
+| draw the raw gaze | `--raw-gaze PATH…` (or `--sample-raw-gaze` with `--sample`), `--raw-gaze-schema JSON`, `--raw-gaze-color`, `--raw-gaze-marker-size`, `--raw-gaze-opacity` |
 | size the figure | `--width`, `--height`, `--scale` |
 | title and caption it | `--title`, `--caption` |
-| tune the heatmap | `--heatmap-metric`, `--heatmap-colorscale`, `--heatmap-norm` |
 | print the equivalent Python | `--print-code python` (or `cli` / `both`, plus `--print-code-explicit`) |
 
-Use the installed command as the authoritative full reference:
+The [figure options table](api.md#figure-options) gives every figure option's
+flag.
+
+Raw gaze is a third table rather than an option: `--raw-gaze` reads it (columns
+auto-detected like `--fixations`) and draws the plotted trial's samples under the
+fixations. It is a single-trial layer, so `--animate` and `--compare-with`
+ignore it with a warning.
 
 ```bash
-scanpath-studio --help
-scanpath-studio render --help
+scanpath-studio render --sample -p l37_1129 -t l37_1129_2_2_2_Adv_r0 \
+  --sample-raw-gaze --raw-gaze-opacity 0.4 -o raw_gaze.html
 ```
+
+## Analyze
 
 The `analyze` command writes the full tabular family without opening the app:
 
@@ -192,17 +216,46 @@ The `analyze` command writes the full tabular family without opening the app:
 scanpath-studio analyze --words ia.csv --fixations fixations.csv --output-dir analysis
 ```
 
-This creates word, sentence, saccade, trial, reader, character, cleaning-QA,
-and run-configuration files. `scanpath-studio corpus` produces a tidy
-corpus-analysis table for scripting. The `render` command still renders one
-trial per invocation; use the [Python batch pattern](automation.md#batch-pattern)
+This writes fixation, saccade, word, sentence, trial, reader, character and
+cleaning-QA tables as CSV, plus `run_config.json`. It takes the same `--words` / `--fixations`
+(several paths each), `--trial-parts-manifest`, `--word-schema` and
+`--fix-schema` as `render`, plus the optional preprocessing stage
+([`api.preprocess_data`](api.md#scanpath_studio.api.preprocess_data)), which is
+off unless a flag below turns it on and never deletes a row — excluded fixations
+keep `excluded` / `excluded_reason`:
+
+```python exec="true"
+from docs_support import cli_reference
+
+print(cli_reference("analyze"))
+```
+
+The preprocessing settings and `--pixels-per-degree` are recorded in
+`run_config.json`.
+
+## Corpus figures
+
+`scanpath-studio corpus` goes the other way: it reads a tidy CSV you already
+have and renders a styled corpus figure
+([`api.plot_corpus_figure`](api.md#scanpath_studio.api.plot_corpus_figure)):
+
+```bash
+scanpath-studio corpus --input profile.csv --kind profile --output profile.svg
+```
+
+```python exec="true"
+from docs_support import cli_reference
+
+print(cli_reference("corpus"))
+```
+
+## Many trials
+
+The `render` command renders one trial per invocation; use the [Python batch pattern](automation.md#batch-pattern)
 or **Export → Export bundle** for many figures.
 
 `--all-screens` is the multipart exception: it writes one deterministic
-`__screen-001-<id>` file per screen of the selected parent trial. The recorded
-transition option stores the observed parent-clock gap in animation metadata;
-it does not invent a visual saccade between screens. The same manifest flag is
-accepted by `analyze`.
+`__screen-001-<id>` file per screen of the selected parent trial.
 
 ## Recovery cache
 
@@ -223,3 +276,32 @@ app. `SCANPATH_STUDIO_PERSIST=0` turns caching
 off permanently, `--no-persist` for one launch, and `SCANPATH_STUDIO_STATE_DIR`
 moves the folder. Hosted deployments never cache. See
 [Privacy](privacy.md#what-happens-to-a-file-you-upload).
+
+## Full reference
+
+Generated from the parsers the commands themselves use, so every flag is here
+with the default and help `--help` prints.
+
+```python exec="true"
+from docs_support import cli_help
+
+print(cli_help())
+```
+
+??? note "`render` — every flag"
+
+    ```python exec="true"
+    from docs_support import cli_reference
+
+    print(cli_reference("render"))
+    ```
+
+??? note "`cache` — every flag"
+
+    ```python exec="true"
+    from docs_support import cli_reference
+
+    print(cli_reference("cache"))
+    ```
+
+`analyze` and `corpus` are listed in full in their own sections above.

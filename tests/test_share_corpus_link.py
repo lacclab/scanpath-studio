@@ -30,11 +30,11 @@ from urllib.parse import parse_qs
 
 import pytest
 
-from scanpath_studio.constants import BENCHMARK_SETUP_CHOICE
 from tests.conftest import (
     APP_SCRIPT,
     _write_benchmark_corpus,
     _write_benchmark_manifest,
+    add_benchmark_corpora,
 )
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
@@ -116,17 +116,8 @@ _REAL_MANIFEST_CORPORA = (
 
 
 def _pin_bundle(monkeypatch, root) -> None:
-    """Make ``root`` the only prepared bundle this process can see.
-
-    Every module binds ``EYEGENBENCH_DEFAULT_DIR`` separately (see the session
-    fixture in `tests/conftest.py`, which pins them all at an empty directory),
-    so all three have to be repointed or discovery answers differently depending
-    on which one asked.
-    """
-    from scanpath_studio import app, compare_source, constants
-
-    for module in (constants, app, compare_source):
-        monkeypatch.setattr(module, "EYEGENBENCH_DEFAULT_DIR", str(root))
+    """Add every corpus in ``root``, and only those (`add_benchmark_corpora`)."""
+    add_benchmark_corpora(monkeypatch, root)
 
 
 def _hide_builtin_corpus_data(monkeypatch, tmp_path) -> None:
@@ -257,9 +248,7 @@ class TestSlugs:
         _pin_bundle(monkeypatch, root)
 
         registry = app.public_dataset_registry()
-        nameable = {
-            label for label, spec in registry.items() if not spec.get("setup_only")
-        }
+        nameable = set(registry)
         # Premise: the catalogue under test really is the whole real one.
         assert len(nameable) >= len(_REAL_MANIFEST_CORPORA)
         assert set(registry_corpus_slugs()) == nameable, (
@@ -267,24 +256,6 @@ class TestSlugs:
             "entries would answer to, so these are the colliding ones: "
             f"{sorted(nameable - set(registry_corpus_slugs()))}"
         )
-
-    def test_the_bootstrap_placeholder_is_not_a_corpus(self, tmp_path, monkeypatch):
-        """With zero corpora discovered the registry offers one placeholder that
-        carries the bundle-directory input. It is not a corpus, so it gets no
-        slug — there is nothing for a link to reopen."""
-        from scanpath_studio import app
-        from scanpath_studio.constants import BENCHMARK_SETUP_CHOICE
-        from scanpath_studio.url_state import corpus_slug, registry_corpus_slugs
-
-        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
-        _pin_bundle(monkeypatch, tmp_path / "absent")
-
-        registry = app.public_dataset_registry()
-        assert BENCHMARK_SETUP_CHOICE in registry  # premise: it is offered
-        assert (
-            corpus_slug(BENCHMARK_SETUP_CHOICE, registry[BENCHMARK_SETUP_CHOICE]) == ""
-        )
-        assert BENCHMARK_SETUP_CHOICE not in registry_corpus_slugs()
 
     def test_an_unknown_slug_resolves_to_nothing(self, bundle):
         from scanpath_studio.url_state import corpus_choice_for_slug
@@ -663,12 +634,9 @@ class TestRoundTripThroughTheApp:
             "the recipient was not told which corpus the link named: "
             f"{[w.value for w in at.warning]}"
         )
-        # …and the remedy names something the recipient can actually click. The
-        # bundle-directory input renders *inside* a benchmark corpus entry, so
-        # "point the data directory at it" is only reachable after picking one in
-        # Data source — with no bundle at all, the setup placeholder.
-        assert "Data source" in named[0], named
-        assert BENCHMARK_SETUP_CHOICE in named[0], named
+        # …and names no remedy: the app neither discovers corpora nor, until
+        # DATA-56, adds one, so there is nothing it could tell the user to click.
+        assert "Data directory" not in named[0], named
 
     def test_a_corpus_link_is_not_silent_when_public_datasets_are_off(
         self, bundle, monkeypatch

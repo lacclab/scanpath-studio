@@ -4,6 +4,13 @@ on:
   pull_request:
     branches: [main]
 
+# Least privilege for the default GITHUB_TOKEN: every job here checks out,
+# installs and runs pytest/ruff — none of them write anything back. Declared at
+# the top so a job added later inherits read-only rather than the repository
+# default, which is what `actions/missing-workflow-permissions` flags.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -18,15 +25,15 @@ jobs:
         python-version: ["3.11", "3.12", "3.13", "3.14"]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
           cache-dependency-glob: pyproject.toml
@@ -47,15 +54,15 @@ jobs:
     name: Coverage
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
           cache-dependency-glob: pyproject.toml
@@ -66,7 +73,9 @@ jobs:
       # One leg only: the number does not vary by interpreter, and --cov costs
       # tracing overhead on top of the matrix above. The floor lives in
       # pyproject.toml ([tool.coverage.report] fail_under), so this step and a
-      # local `pytest --cov` gate on the same value.
+      # local `pytest --cov` gate on the same value. So does the measurement
+      # core: `[tool.coverage.run] core = "sysmon"` is what keeps this leg near
+      # the plain ones on 3.12 instead of 2.7x slower (ENG-81).
       - name: Run pytest with coverage
         run: pytest -q -n auto --cov
 
@@ -83,10 +92,10 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -96,10 +105,42 @@ jobs:
       # new rules — and bump the `lint` extra in pyproject.toml with it, so a
       # local `ruff check` is the same ruff CI runs.
       - name: Install ruff
-        run: pip install ruff==0.16.3
+        run: pip install ruff==0.16.8
 
       - name: ruff check
-        run: ruff check --exclude other_vis .
+        run: ruff check .
 
       - name: ruff format check
-        run: ruff format --check --exclude other_vis .
+        run: ruff format --check .
+
+  docs:
+    # The docs build runs code — the gallery's figures, the printed examples,
+    # the CLI and figure-option references are generated from the package at
+    # build time (ENG-78, ENG-79) — so a change that breaks them has to fail
+    # here, not after the merge in docs.yml's deploy.
+    name: Docs build
+    runs-on: ubuntu-latest
+    env:
+      DISABLE_MKDOCS_2_WARNING: "true"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The revision-date plugin reads each page's history.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+
+      - name: Install package + docs deps
+        run: uv pip install --system -e ".[docs]"
+
+      - name: Build (strict)
+        run: mkdocs build --strict

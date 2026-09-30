@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
@@ -98,20 +98,6 @@ SETUP_GROUP_LABELS: dict[str, str] = {
     "geometry": "Physical size & viewing distance",
     "text": "Reading text size",
 }
-
-
-@dataclass(frozen=True)
-class SetupAnswer:
-    """One group's answer in the wizard's Recording-setup step.
-
-    ``choice`` is the radio label the user picked, kept verbatim so the review
-    table can echo the wording they chose rather than a reconstruction of it.
-    """
-
-    group: str
-    choice: str
-    provenance: Provenance
-    values: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -194,12 +180,6 @@ class SetupSnapshot:
     def is_answered(self) -> bool:
         """Every group carries a real provenance (the wizard's Add-dataset gate)."""
         return all(isinstance(p, Provenance) for p in self.provenance.values())
-
-    def with_provenance(self, **groups: Provenance) -> SetupSnapshot:
-        """Copy with one or more groups' provenance replaced."""
-        return replace(
-            self, **{f"{group}_provenance": p for group, p in groups.items()}
-        )
 
     # -- serialization ---------------------------------------------------------
 
@@ -289,6 +269,22 @@ def _coerce_provenance(value: Any) -> Provenance | None:
         return None
 
 
+class IncomparableScreensError(ValueError):
+    """An overlay was asked of two readings recorded on different screens.
+
+    Raised by `api.compare_scanpaths`, which draws nothing rather than switch
+    layout behind a script's back, and by `api.animate_scanpath` for a
+    co-animation of two datasets, which is an overlay on one clock (CMP-21).
+    ``reason`` is `setups_comparable`'s surface-neutral sentence, so a caller
+    can word the way out in its own terms — `render` names ``--compare-layout``
+    rather than echo the Python keyword.
+    """
+
+    def __init__(self, message: str, *, reason: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
 #: Provenance values that mean "we know what screen this was" — the corpus said
 #: so, or it was inferred from the data. `ASSUMED` is excluded on purpose: it
 #: means a named default was taken, and two datasets that both defaulted are two
@@ -314,9 +310,14 @@ def setups_comparable(a: SetupSnapshot, b: SetupSnapshot) -> tuple[bool, str]:
       defaults. The overlay is drawn and ``caution`` is surfaced beside it.
     * ``(True, "")`` — the canvases match and both sides know their screen.
 
-    ``note`` is a complete user-facing sentence in both non-empty cases. The app,
-    the CLI and :func:`api.compare_scanpaths` print it verbatim rather than
-    composing their own wording, so the explanation cannot drift across surfaces.
+    ``note`` is a complete user-facing sentence in both non-empty cases, and the
+    app, the CLI, :func:`api.compare_scanpaths` and :func:`api.animate_scanpath`
+    all quote it whole, so the explanation cannot drift across surfaces. A
+    refusal says only *why*: what happens next differs by surface — the app
+    falls back to side by side, the API raises :class:`IncomparableScreensError`,
+    ``render`` exits naming its own flag — so each caller appends that itself
+    (BUG-85; the reason used to end "so they are shown side by side instead",
+    which was false on two of three).
 
     **Only the canvas is a hard gate.** An unrecorded screen warns rather than
     refuses — settled 2026-08-12 on the case that motivated it: two OneStop
@@ -344,7 +345,7 @@ def setups_comparable(a: SetupSnapshot, b: SetupSnapshot) -> tuple[bool, str]:
             f"These readings were recorded on different screens — "
             f"{a.canvas_width}x{a.canvas_height} and "
             f"{b.canvas_width}x{b.canvas_height}. Overlaying them would pool two "
-            f"unrelated pixel spaces, so they are shown side by side instead."
+            f"unrelated pixel spaces."
         )
     unknown = [
         name

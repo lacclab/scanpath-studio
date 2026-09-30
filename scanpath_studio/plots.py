@@ -15,9 +15,11 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
+from . import progress
 from .constants import (
     CANVAS_PAD_FRACTION,
     CANVAS_PAD_MIN_PX,
+    COMPARE_FIXATION_OPACITY,
     COMPARISON_PALETTE,
     CURRENT_FIX_COLOR,
     CURRENT_FIX_OUTLINE,
@@ -117,6 +119,9 @@ class FigureSettings:
     background_color: str | None = None
     color_by_line: bool = False
     fixation_flags: dict | None = None
+    #: CMP-24: scanpath B's own flags in a co-animation (Animate + Compare);
+    #: ``None`` gives B the same ``fixation_flags`` as A.
+    fixation_flags_b: dict | None = None
     span_border_color: str = "#000000"
     colorbar_orientation: str = "Vertical"
     colorbar_tickangle: int = 0
@@ -543,6 +548,17 @@ _LEGEND_RESERVE_PX = 60
 # Top reserve for the overlay-comparison figure's title + A/B legend (same idea
 # as _LEGEND_RESERVE_PX, but the title needs a touch more room).
 _OVERLAY_TOP_PX = 64
+#: UX-172: the Compare A/B legend is the only thing naming the two readings, so
+#: it reads larger than the figure's body text (overlay, split and co-animation).
+_COMPARE_LEGEND_FONT_SCALE = 1.3
+
+
+def _compare_legend_font(base_font_size, font_family=None) -> dict:
+    """The A/B legend's font in every Compare figure (UX-172)."""
+    font = {"size": round(float(base_font_size or 16) * _COMPARE_LEGEND_FONT_SCALE)}
+    if font_family:
+        font["family"] = font_family
+    return font
 
 
 # A horizontal colorbar sits below the plot, so it reserves bottom (not right).
@@ -1013,14 +1029,16 @@ def _snap_fixations_to_words(
         wid = pd.to_numeric(
             assign_fixations_to_words(out, words)["word_id"], errors="coerce"
         )
-    # BUG-11: the *corrected* box centre is the glyph centre. The raw box carries
-    # the inter-word space as trailing padding, so its centre sits half a
-    # character to the right — visibly off-centre once a fixation snaps to it.
-    from .measures import word_box_bounds
+    # Snap above the word's *glyphs*, where its label is drawn — not the middle
+    # of its interest area. A tiling box carries the following space as its last
+    # cell, so the box centre sits half a character right of the text, visibly
+    # off-centre once a fixation snaps to it. Render-only: which word a fixation
+    # belongs to is still `assign_fixations_to_words`, against the raw boxes.
+    from .measures import word_glyph_span
 
-    wx0, wy0, wx1, _ = word_box_bounds(words)
-    cx_by_id = dict(zip(words["word_id"], (wx0 + wx1) / 2.0))
-    top_by_id = dict(zip(words["word_id"], wy0))
+    start, run = word_glyph_span(words)
+    cx_by_id = dict(zip(words["word_id"], start + run / 2.0))
+    top_by_id = dict(zip(words["word_id"], pd.to_numeric(words["y"], errors="coerce")))
     snap_x = wid.map(cx_by_id)
     snap_y = wid.map(top_by_id)
     out[x_field] = snap_x.where(snap_x.notna(), out[x_field])
@@ -1142,11 +1160,12 @@ def _saccade_arrow_markers(
 def build_word_boxes(words: pd.DataFrame, color: str = WORD_BOX_COLOR) -> list:
     """Rectangles for the word interest areas.
 
-    BUG-11: drawn from ``measures.word_box_bounds``, so what's on screen is
-    exactly what ``assign_fixations_to_words`` assigns against. The word *labels*
-    keep the original frame — ``x`` still means "where the glyphs start", which is
-    what keeps the true-to-scale text on top of the stimulus image. For a
-    glyph-tight corpus the correction is zero.
+    Drawn from ``measures.word_box_bounds`` — the experiment's own rectangles
+    (BUG-83) — so what's on screen is exactly what ``assign_fixations_to_words``
+    assigns against. On a tiling corpus each outline therefore runs on across
+    the space after its word, while the word *label* sits on the glyphs
+    (``measures.word_glyph_span``), which is what keeps the true-to-scale text on
+    top of the stimulus image.
     """
     from .measures import word_box_bounds
 
@@ -1207,10 +1226,9 @@ def build_critical_span_overlay(
     line_ids = (y_sorted.diff().fillna(0) > typical_h * 0.5).cumsum()
     span["_line_id"] = line_ids.reindex(span.index)
 
-    # BUG-11: `span` is a subset, so detection runs on the full `words` frame.
     from .measures import word_box_bounds
 
-    span_x0, _, span_x1, _ = word_box_bounds(span, layout=words)
+    span_x0, _, span_x1, _ = word_box_bounds(span)
     span["_box_x0"], span["_box_x1"] = span_x0, span_x1
 
     shapes = []
@@ -1435,7 +1453,7 @@ def _add_word_label_trace(
         ]
     else:
         label_color = text_color
-    # BUG-30 — the label is **centred in the box as drawn**, so whatever room the
+    # BUG-30 — the label is **centred on its word's glyphs**, so whatever room the
     # text does not fill splits evenly instead of piling up on one side.
     #
     # It used to anchor at the box's leading edge (raw `x` for LTR, `x + width`
@@ -1444,18 +1462,18 @@ def _add_word_label_trace(
     # back on a short word, all showed up as a gap on the *trailing* side and none
     # on the leading one — "no space from the left side of the AOI".
     #
-    # The box is `measures.word_box_bounds`, not the raw frame, which is what
-    # makes this a no-op where it should be one: a tiling corpus' box carries the
-    # following space as trailing padding and BUG-11 pulls every edge back half a
-    # space, so its centre already *is* the glyph run's centre (checked on the
-    # bundled demo: 415.0 against a glyph centre of 416.3 for the first word).
-    # Where the boxes hug the glyphs the centre is the box's own, and the padding
-    # lands half on each side — which is the reported ask, as a rendering.
+    # Centred on the word's *glyph run* (`measures.word_glyph_span`), not on its
+    # interest area. Where the boxes hug the glyphs the two are the same, and the
+    # padding lands half on each side — which is the reported ask, as a
+    # rendering. A tiling corpus' box carries the following space as its last
+    # cell (BUG-83 keeps it there, as the experiment defined it), so its centre
+    # sits half a space right of the text; centring the label there would draw
+    # every word off the stimulus image and off the fixations that read it.
     #
     # Centring also retires the LTR/RTL anchor split: centred text is centred in
     # either direction. The Unicode direction isolates stay — they are about
     # *shaping* mixed Hebrew/Arabic + punctuation, not about placement.
-    from .measures import word_box_bounds
+    from .measures import word_glyph_span
     from .preprocessing import detect_right_to_left
 
     rtl = words.get("right_to_left")
@@ -1463,8 +1481,8 @@ def _add_word_label_trace(
         rtl = words["text"].astype(str).map(detect_right_to_left)
     else:
         rtl = rtl.fillna(False).astype(bool)
-    box_x0, _box_y0, box_x1, _box_y1 = word_box_bounds(words)
-    label_x = (box_x0 + box_x1) / 2.0
+    glyph_start, glyph_run = word_glyph_span(words)
+    label_x = glyph_start + glyph_run / 2.0
     label_text = [
         f"\u2067{value}\u2069" if is_rtl else value
         for value, is_rtl in zip(words["text"].astype(str), rtl)
@@ -1742,22 +1760,7 @@ def _add_saccade_layer(
             fixations, x_field, y_field, arch_frac
         )
         if amx and keep is not None and saccade_classes is not None:
-            # An arrowhead belongs to the saccade leaving fixation `aseg[j]` in
-            # time order, which is exactly how `_saccade_segments_by_class` keys
-            # a segment — so the filter drops arrows for hidden saccades instead
-            # of leaving them floating over nothing.
-            ordered_cls = saccade_classes.reindex(
-                fixations.sort_values("timestamp_ms").index
-            ).tolist()
-            mask = [
-                (
-                    "other"
-                    if i >= len(ordered_cls) or pd.isna(ordered_cls[i])
-                    else ordered_cls[i]
-                )
-                in keep
-                for i in aseg
-            ]
+            mask = _arrow_class_mask(fixations, saccade_classes, keep, aseg)
             amx = [v for v, m in zip(amx, mask) if m]
             amy = [v for v, m in zip(amy, mask) if m]
             aang = [v for v, m in zip(aang, mask) if m]
@@ -1963,7 +1966,10 @@ def _render_scanpath_figure(
     text_color = settings.text_color
     highlight_text_color = settings.highlight_text_color
     background_color = settings.background_color
-    color_by_line = settings.color_by_line
+    # BUG-85: `color_by="line"` is the rail's own spelling of this (its "line"
+    # option, a share link's `color_by=line`), so it colours by line from the
+    # API and CLI too rather than falling through to a missing column.
+    color_by_line = settings.color_by_line or settings.color_by == "line"
     fixation_flags = settings.fixation_flags
     span_border_color = settings.span_border_color
     colorbar_orientation = settings.colorbar_orientation
@@ -2715,13 +2721,14 @@ def _add_word_level_heatmap(
         if weights is not None
         else None
     )
-    # BUG-11: bin against the corrected boxes, so a fixation in the space before a
-    # word counts towards that word — the same boundary the heatmap then draws.
-    from .measures import word_box_bounds
+    # Bin against the experiment's boxes (BUG-83) with the assignment's own
+    # containment rule — the same boundary it uses and the heatmap then draws,
+    # and half-open, so a fixation on a shared edge counts towards one word.
+    from .measures import word_box_bounds, word_box_contains
 
     word_values = []
     for wx0, wy0, wx1, wy1 in zip(*word_box_bounds(words)):
-        in_word = (fx >= wx0) & (fx <= wx1) & (fy >= wy0) & (fy <= wy1)
+        in_word = word_box_contains(fx, fy, wx0, wy0, wx1, wy1)
         val = (
             float(np.nansum(w_arr[in_word]))
             if w_arr is not None
@@ -2793,8 +2800,8 @@ def _draw_word_value_heatmap(
 
     # Nonzero test on the RAW values (a word with no dwell stays uncoloured); the
     # colour position then maps through the chosen normalization (VIZ-3). Boxes
-    # come from word_box_bounds (BUG-11) so the tinted rects sit exactly on the
-    # outlines build_word_boxes draws.
+    # come from word_box_bounds so the tinted rects sit exactly on the outlines
+    # build_word_boxes draws.
     boxes = zip(*word_box_bounds(words))
     nonzero_rows = [(box, v) for box, v in zip(boxes, word_values) if v > 0]
     if not nonzero_rows:
@@ -3050,10 +3057,10 @@ def _add_interpolated_heatmap(
 # Scanpath animation — one or two scanpaths on a shared real reading-time clock
 # =============================================================================
 
-# Floor on per-frame duration: ~one 60 fps display frame. Browsers can't redraw
-# faster than this, so it's the lowest value at which the quoted playback time
-# (n_frames * avg) still matches the observed runtime — going lower would just
-# make the quote understate reality. Also keeps the briefest gaps perceptible.
+# Floor on the ▶ Play button's own per-frame duration: ~one 60 fps display frame.
+# That duration only drives Plotly's frame queue, which is what a figure plays on
+# where the wall-clock player isn't embedded (`fig.show()`); every HTML surface
+# replays on `animation_player_post_script` instead (BUG-93).
 _ANIM_MIN_FRAME_MS = 16
 # VIZ-11: animation frames sit on a UNIFORM time grid (one every
 # _ANIM_GRID_STEP_MS of reading) rather than one per fixation onset, so the
@@ -3120,17 +3127,29 @@ def _scanpath_anim_specs(entries, marker_size_range):
     return specs
 
 
-def _anim_timeline(specs, playback_speed, *, grid_step_ms=None, max_frames=None):
+def _anim_frame_duration_ms(frame_step_ms: float, playback_speed: float) -> int:
+    """▶ Play's own per-frame duration: one grid step at the playback speed.
+
+    Floored at ``_ANIM_MIN_FRAME_MS``. The only part of a replay the speed
+    changes besides ``layout.meta`` — which is what lets `set_replay_clock`
+    re-time a built replay (PERF-15)."""
+    return int(max(frame_step_ms / max(playback_speed, 1e-6), _ANIM_MIN_FRAME_MS))
+
+
+def _anim_timeline(specs, *, grid_step_ms=None, max_frames=None):
     """Uniform time-grid frame timeline across all scanpaths (VIZ-11).
 
-    Returns ``(frame_times, frame_duration_ms, reading_span_ms)``. Frames are
+    Returns ``(frame_times, frame_step_ms, reading_span_ms)``. Frames are
     emitted on a **uniform time grid** — one every ``step`` ms, where ``step`` is
     ``grid_step_ms`` unless that would exceed ``max_frames`` frames (then it
     coarsens) — so the slider scrubs linearly through reading time no matter how
     fixations cluster or how many scanpaths overlay (the union of onset sets is
-    meaningless for >1 reader). Each frame lasts a uniform
-    ``step / playback_speed`` (floored at ``_ANIM_MIN_FRAME_MS``), so the Play
-    button's runtime is ``≈ reading_span_ms / playback_speed``. Frame *content* is
+    meaningless for >1 reader). ``frame_step_ms`` is that exact step (``0.0`` with
+    no frames). None of it depends on the playback speed: ▶ Play's own per-frame
+    duration is :func:`_anim_frame_duration_ms` of the step, used only where the
+    wall-clock player isn't embedded, and the player shows frame k once
+    ``frame_times[k] / playback_speed`` has elapsed, so a replay takes
+    ``reading_span_ms / playback_speed`` (BUG-93). Frame *content* is
     unchanged — every fixation whose onset ≤ t shows at time t. All readings are
     rebased to t=0; ``reading_span_ms`` is the longest reading's span. Returns an
     empty grid when there is nothing to animate.
@@ -3143,7 +3162,7 @@ def _anim_timeline(specs, playback_speed, *, grid_step_ms=None, max_frames=None)
     cap = int(max_frames if max_frames else _ANIM_MAX_FRAMES)
     reading_span_ms = max((s["end"] for s in specs), default=0.0)
     if not specs or reading_span_ms <= 0:
-        return [], _ANIM_MIN_FRAME_MS, reading_span_ms
+        return [], 0.0, reading_span_ms
     step = max(step_pref, reading_span_ms / max(cap, 1))
     frame_times = [
         min(k * step, reading_span_ms) for k in range(int(reading_span_ms // step) + 1)
@@ -3151,8 +3170,7 @@ def _anim_timeline(specs, playback_speed, *, grid_step_ms=None, max_frames=None)
     # Land the final frame exactly on the reading end so it reveals everything.
     if frame_times[-1] < reading_span_ms:
         frame_times.append(reading_span_ms)
-    frame_duration_ms = int(max(step / max(playback_speed, 1e-6), _ANIM_MIN_FRAME_MS))
-    return frame_times, frame_duration_ms, reading_span_ms
+    return frame_times, step, reading_span_ms
 
 
 def _revealed_xy(all_x, all_y, kk):
@@ -3209,11 +3227,11 @@ def animation_playback_ms(
 ):
     """Reading span and *actual* animation runtime for the given scanpath(s).
 
-    Returns ``(reading_span_ms, playback_ms)``. ``playback_ms`` is the real
-    runtime the Play button produces: Play advances every frame at the average
-    frame duration, so the total is ``n_frames * avg`` — quoting that in the side
-    panel makes the stated playback time match what the user actually observes.
-    Both 0 when there are no fixations.
+    Returns ``(reading_span_ms, playback_ms)``. ``playback_ms`` is what the replay
+    takes: the wall-clock player (:func:`animation_player_post_script`) reaches the
+    last frame once ``reading_span_ms / playback_speed`` has elapsed, so that is
+    the time the side panel quotes and a GIF/MP4 lasts (BUG-93). Both 0 when there
+    are no fixations.
     """
     summary = animation_timeline_summary(
         fixations_list, playback_speed, grid_step_ms=grid_step_ms, max_frames=max_frames
@@ -3238,8 +3256,8 @@ def animation_timeline_summary(
     specs = _scanpath_anim_specs(
         [(f, None, None) for f in fixations_list], DEFAULT_MARKER_SIZE_RANGE
     )
-    frame_times, frame_duration_ms, reading_span_ms = _anim_timeline(
-        specs, playback_speed, grid_step_ms=grid_step_ms, max_frames=max_frames
+    frame_times, frame_step_ms, reading_span_ms = _anim_timeline(
+        specs, grid_step_ms=grid_step_ms, max_frames=max_frames
     )
     n_frames = len(frame_times)
     step = (frame_times[1] - frame_times[0]) if n_frames > 1 else float(reading_span_ms)
@@ -3248,99 +3266,226 @@ def animation_timeline_summary(
         "step_ms": float(step),
         "requested_step_ms": requested,
         "coarsened": bool(n_frames > 1 and step > requested + 1e-6),
-        "frame_duration_ms": int(frame_duration_ms),
+        "frame_duration_ms": _anim_frame_duration_ms(frame_step_ms, playback_speed),
         "reading_span_ms": float(reading_span_ms),
-        "playback_ms": float(n_frames * frame_duration_ms),
+        "playback_ms": float(reading_span_ms) / max(playback_speed, 1e-6),
     }
 
 
-# VIZ-10 — autoplay. The animation is built with the Play button paused (so it can
-# start at the *configured* speed rather than Plotly's default frame duration). To
-# autoplay on load we emit a tiny client-side kick-off that calls `Plotly.animate`
-# with the SAME per-frame duration as the Play button. The autoplay intent + that
-# duration ride on `fig.layout.meta` so every HTML-embedding surface
-# (`tabs._render_true_scale_chart`, `api.save_figure`) can honor it uniformly.
+# BUG-93 — the replay's clock. Plotly's own ▶ Play steps a frame on the first
+# display tick *after* its duration and restarts the next frame's clock from
+# there, so every hold rounds up to whole ticks and the rounding accumulates: on
+# a 60 Hz screen a 40 ms frame lasts 50 ms, and a 20.8 s reading replayed in 26 s.
+# No duration can fix that from here — the tick is the viewer's. So every HTML
+# surface (`tabs._true_scale_plot_html`, `tabs._animation_html`,
+# `api.save_figure`) embeds a small player that shows whichever frame the wall
+# clock has reached, reading the frame times, the speed and VIZ-10's autoplay
+# intent off `fig.layout.meta`, where `make_scanpath_animation` stamps them.
 _AUTOPLAY_META_FLAG = "scanpath_autoplay"
-_AUTOPLAY_META_DURATION = "scanpath_frame_duration_ms"
+_REPLAY_META_TIMES = "scanpath_frame_times_ms"
+_REPLAY_META_SPEED = "scanpath_playback_speed"
+
+# `{plot_id}` stays literal: plotly.py substitutes it (a plain `str.replace`, so
+# the braces need no escaping) and runs the script in a `.then()` after `newPlot`.
+_REPLAY_PLAYER_JS = """(function () {
+  var gd = document.getElementById('{plot_id}');
+  if (!gd) { return; }
+  var tries = 0;
+  // Frames live on gd._transitionData._frames (gd.frames is undefined) and are
+  // attached after newPlot resolves, so wait for them rather than a fixed delay.
+  (function init() {
+    var meta = gd.layout && gd.layout.meta;
+    var td = gd._transitionData;
+    if (typeof Plotly === 'undefined' || !gd.on || !meta ||
+        !(td && td._frames && td._frames.length)) {
+      if (++tries < 200) { setTimeout(init, 50); }
+      return;
+    }
+    run(meta);
+  })();
+
+  function run(meta) {
+    var times = meta.scanpath_frame_times_ms;
+    var speed = meta.scanpath_playback_speed;
+    if (!times || !times.length || !(speed > 0)) { return; }
+    var last = times.length - 1;
+    var jump = {mode: 'immediate', frame: {duration: 0, redraw: false},
+                transition: {duration: 0}};
+    var shown = 0, raf = null, t0 = 0, resume = false;
+
+    function frameAt(ms) {  // the last frame whose reading time has been reached
+      var lo = 0, hi = last;
+      while (lo < hi) {
+        var mid = (lo + hi + 1) >> 1;
+        if (times[mid] <= ms) { lo = mid; } else { hi = mid - 1; }
+      }
+      return lo;
+    }
+    function show(k) {
+      shown = k;
+      Plotly.animate(gd, [String(k)], jump);
+    }
+    // A late tick skips frames rather than falling behind the clock.
+    function tick() {
+      if (!gd.isConnected) { raf = null; leave(); return; }
+      var k = frameAt((performance.now() - t0) * speed);
+      if (k !== shown) { show(k); }
+      raf = k < last ? requestAnimationFrame(tick) : null;
+    }
+    function stop() {
+      if (raf !== null) { cancelAnimationFrame(raf); raf = null; }
+    }
+    function play() {
+      if (raf !== null) { return; }  // already playing: keep the clock
+      show(shown < last ? shown : 0);  // at the end, Play starts over
+      t0 = performance.now() - times[shown] / speed;
+      raf = requestAnimationFrame(tick);
+    }
+
+    // Whatever put a frame on screen — this clock, the slider, Restart — Play
+    // resumes from it.
+    gd.on('plotly_animatingframe', function (e) {
+      var k = parseInt(e && e.name, 10);
+      if (k >= 0 && k <= last) { shown = k; }
+    });
+    gd.on('plotly_buttonclicked', function (e) {
+      if (e && e.button && e.button.name === 'play') { play(); } else { stop(); }
+    });
+    gd.on('plotly_sliderstart', stop);
+    gd.on('plotly_sliderchange', function (e) { if (e && e.interaction) { stop(); } });
+    // A background tab gets no ticks; carry on from the same frame on return.
+    function onVisibility() {
+      if (!gd.isConnected) { stop(); leave(); return; }
+      if (document.hidden) { resume = raf !== null; stop(); }
+      else if (resume) { resume = false; play(); }
+    }
+    // A page that swaps content without reloading (the docs site) can drop the
+    // plot; let go of the document then, so the plot can be collected.
+    function leave() {
+      document.removeEventListener('visibilitychange', onVisibility);
+    }
+    document.addEventListener('visibilitychange', onVisibility);
+
+    // Plotly still draws the ▶ Play button; this clock takes over what it does.
+    var edit = {};
+    (gd.layout.updatemenus || []).forEach(function (menu, i) {
+      (menu.buttons || []).forEach(function (button, j) {
+        if (button.name === 'play') {
+          edit['updatemenus[' + i + '].buttons[' + j + '].execute'] = false;
+        }
+      });
+    });
+    Promise.resolve(Plotly.relayout(gd, edit)).then(function () {
+      if (meta.scanpath_autoplay) { play(); }
+    });
+  }
+})();"""
 
 
-def animation_autoplay_frame_duration(fig) -> int | None:
-    """The per-frame duration (ms) for an autoplay kickoff, or ``None``.
+def animation_player_post_script(fig) -> str | None:
+    """The replay player for an animated scanpath, or ``None`` if there is none.
 
-    Returns ``None`` for a static figure, an animation built with
-    ``autoplay=False``, or one with no frames — i.e. whenever nothing should
-    auto-start. Reads the marker :func:`make_scanpath_animation` stamps on
-    ``fig.layout.meta``."""
+    Pass it to ``fig.to_html(post_script=…)`` / ``write_html(post_script=…)``
+    (with ``auto_play=False``) for any figure :func:`make_scanpath_animation`
+    built — or its ``to_dict()``; ``None`` — for a static figure, or a replay
+    with no frames — is what those calls take for "no script" (BUG-93).
+
+    The player keeps the replay on the wall clock: at every display tick it
+    shows the last frame whose reading time ``elapsed × playback_speed`` has
+    reached, so a replay takes ``reading span / playback_speed`` exactly — a slow
+    tick skips frames instead of pushing every later one back — and a background
+    tab pauses it. It takes the ▶ Play button over (the button's own command is
+    switched off with ``execute: false``, Plotly's hook for exactly this, and the
+    click still arrives as ``plotly_buttonclicked``); Pause, Restart and the time
+    slider keep their own commands, and any of them stops the clock. VIZ-10's
+    autoplay starts it on load, from the first frame.
+
+    It **polls** for Plotly and the figure's frames before starting. Two things
+    made a one-shot kick-off silently never fire (VIZ-10), both confirmed
+    against a live Plotly build: frames live on ``gd._transitionData._frames``,
+    **not** ``gd.frames`` (``undefined``), and the library can arrive late (CDN
+    latency, the true-scale iframe mount) and attaches its frames only after
+    ``newPlot`` resolves. Polling every 50 ms (capped at ~10 s) covers all of it,
+    on the live embed and saved HTML alike.
+
+    Without the script — ``fig.show()``, or a plain ``write_html`` — the figure
+    still plays on Plotly's own queue, at the frame duration the ▶ Play button
+    carries.
+    """
+    if isinstance(fig, dict):  # a figure's `to_dict()`
+        meta = (fig.get("layout") or {}).get("meta")
+    else:
+        meta = getattr(fig.layout, "meta", None)
+    if not isinstance(meta, dict) or not meta.get(_REPLAY_META_TIMES):
+        return None
+    return _REPLAY_PLAYER_JS
+
+
+def animation_clip_frame_ms(fig) -> float | None:
+    """How long a GIF/MP4 of ``fig`` holds each frame to last as long as its replay.
+
+    The replay takes ``reading span / playback_speed`` — its last frame's
+    reading time over the speed stamped on ``layout.meta`` — and a clip spreads
+    that evenly over the frames (BUG-93). ``None`` for a figure
+    :func:`make_scanpath_animation` didn't build."""
     meta = getattr(fig.layout, "meta", None)
-    if not isinstance(meta, dict) or not meta.get(_AUTOPLAY_META_FLAG):
+    if not isinstance(meta, dict):
         return None
-    try:
-        return int(meta.get(_AUTOPLAY_META_DURATION))
-    except (TypeError, ValueError):
+    times = meta.get(_REPLAY_META_TIMES)
+    speed = meta.get(_REPLAY_META_SPEED)
+    if not times or not speed or speed <= 0:
         return None
+    return float(times[-1]) / float(speed) / len(times)
 
 
-def animation_autoplay_post_script(frame_duration_ms: int) -> str:
-    """A Plotly ``post_script`` snippet that auto-starts the replay on load.
+def _replay_clock_meta(frame_times, playback_speed: float, autoplay: bool) -> dict:
+    """The replay's ``layout.meta``: the clock the player reads, and autoplay."""
+    return {
+        _AUTOPLAY_META_FLAG: bool(autoplay and frame_times),
+        _REPLAY_META_TIMES: frame_times,
+        _REPLAY_META_SPEED: float(playback_speed),
+    }
 
-    Passed to ``fig.to_html(post_script=…)`` / ``write_html(post_script=…)``,
-    which substitutes ``{plot_id}`` with the real graph-div id. Uses the same
-    ``redraw=False`` + zero-transition options as the Play button
-    (:func:`_animation_play_buttons`) so the auto-started replay runs at the
-    configured playback speed, not Plotly's default.
 
-    The kickoff **polls** until the plot is genuinely ready, then plays from the
-    first frame. Two things made the old one-shot version silently never start
-    (VIZ-10), both confirmed against a live Plotly build:
+def set_replay_clock(
+    fig: go.Figure, frame_step_ms: float, *, playback_speed: float, autoplay: bool
+) -> None:
+    """Re-time a replay in place: a new playback speed and autoplay, same frames.
 
-    * Frames live on ``gd._transitionData._frames``, **not** ``gd.frames`` (which
-      is ``undefined``). The old guard tested ``gd.frames.length`` and so always
-      bailed before it ever called ``animate``.
-    * The Plotly library loads from the CDN and attaches its frames
-      asynchronously (an ``addFrames`` in a ``.then()`` after ``newPlot``
-      resolves), so any fixed delay races the mount.
-
-    Polling every 50 ms (capped ~10 s) for ``Plotly`` **and** the real frame list
-    handles CDN latency, the async attach, and the true-scale iframe/transform
-    mount, on the live embed and saved HTML alike. ``fromcurrent:false`` starts a
-    clean 0→end run — a freshly loaded ``auto_play=False`` plot has no "current"
-    frame, so a ``fromcurrent:true`` kick can no-op — at the same ``redraw:false``
-    / zero-transition speed as the ▶ Play button."""
-    dur = int(max(frame_duration_ms, _ANIM_MIN_FRAME_MS))
-    # `{plot_id}` is left literal for Plotly to replace; the duration is spliced
-    # in via concatenation so the surrounding JS braces need no escaping.
-    return (
-        "(function(){"
-        "var gd=document.getElementById('{plot_id}');"
-        "if(!gd){return;}"
-        "var n=0;"
-        "(function kick(){"
-        "var td=gd._transitionData;"
-        "var frames=(td&&td._frames)||gd.frames;"
-        "if(typeof Plotly!=='undefined'&&frames&&frames.length){"
-        "Plotly.animate(gd,null,{frame:{duration:"
-        + str(dur)
-        + ",redraw:false},fromcurrent:false,transition:{duration:0}});"
-        "return;}"
-        "if(++n<200){setTimeout(kick,50);}"
-        "})();"
-        "})();"
-    )
+    PERF-15: the frames depend on neither (BUG-93), only ▶ Play's own frame
+    duration and the clock on ``layout.meta`` do, so the app builds a replay once
+    and stamps these onto the copy each cache hit returns. ``frame_step_ms`` is
+    the exact grid step :func:`build_scanpath_replay` returned with the figure —
+    the rounded frame times on ``layout.meta`` could truncate Play's duration to
+    a different whole millisecond. The result is byte-identical to building the
+    replay at that speed and autoplay. Only the clock's keys change: anything
+    else on ``layout.meta`` (the Illustration label's) stays where it is.
+    """
+    meta = fig.layout.meta if isinstance(fig.layout.meta, dict) else {}
+    times = list(meta.get(_REPLAY_META_TIMES) or [])
+    if times:
+        fig.layout.updatemenus = _animation_play_buttons(
+            _anim_frame_duration_ms(frame_step_ms, playback_speed)
+        )
+    fig.layout.meta = {**meta, **_replay_clock_meta(times, playback_speed, autoplay)}
 
 
 def _animation_play_buttons(frame_duration):
     """Play / Pause / Restart buttons.
 
-    Play uses ``redraw=False``: every animated trace is full length with
+    Each carries a ``name`` the replay player looks for: on every HTML surface
+    :func:`animation_player_post_script` takes ▶ Play over and runs the frames on
+    the wall clock (BUG-93), so Play's own ``frame_duration`` drives only a
+    figure shown without it (``fig.show()``).
+
+    Frames step with ``redraw=False``: every animated trace is full length with
     not-yet-reached fixations masked to ``None`` (see :func:`_revealed_xy`), so
     advancing a frame only changes point positions — Plotly updates just those
     few traces instead of redrawing the whole figure (the static word boxes +
     labels) every frame. A full redraw of the scanpath figure costs ~50 ms, which
-    on a long trial dwarfed the per-frame budget and made the replay run far
-    slower than its quoted time; skipping it lets the replay actually hit
-    ``n_frames * frame_duration``. Transitions are 0 so frames snap into place
-    (no tweening), and the constant array length means a new fixation/number
-    appears on its mark instead of gliding in from the corner.
+    on a long trial dwarfed the per-frame budget. Transitions are 0 so frames snap
+    into place (no tweening), and the constant array length means a new
+    fixation/number appears on its mark instead of gliding in from the corner.
     """
     return [
         dict(
@@ -3357,6 +3502,7 @@ def _animation_play_buttons(frame_duration):
             buttons=[
                 dict(
                     label="▶ Play",
+                    name="play",
                     method="animate",
                     args=[
                         None,
@@ -3369,6 +3515,7 @@ def _animation_play_buttons(frame_duration):
                 ),
                 dict(
                     label="⏸ Pause",
+                    name="pause",
                     method="animate",
                     args=[
                         [None],
@@ -3381,6 +3528,7 @@ def _animation_play_buttons(frame_duration):
                 ),
                 dict(
                     label="⟲ Restart",
+                    name="restart",
                     method="animate",
                     args=[
                         ["0"],
@@ -3455,18 +3603,22 @@ def _render_scanpath_animation(
     settings: FigureSettings,
     fixations_b: pd.DataFrame | None = None,
     words_b: pd.DataFrame | None = None,
-) -> go.Figure:
+) -> tuple[go.Figure, float]:
     """Frame-by-frame scanpath replay on a real reading-time clock.
+
+    Returns the figure and the exact grid step its frames sit on, which
+    :func:`set_replay_clock` needs to re-time it (PERF-15).
 
     Pass ``fixations_b`` (and optionally ``words_b``) to overlay a SECOND
     scanpath animated on the same clock. Every scanpath is rebased to its first
     fixation's ``timestamp_ms``, so they share *real reading time* including the
     saccade/blink gaps between fixations; a frame is emitted at every fixation
     onset across all scanpaths, and the shorter reading finishes first and holds
-    while the longer keeps going. The Play button advances frames at the average
-    frame duration, so the whole replay takes ``reading_span / playback_speed``
-    — exactly what :func:`animation_playback_ms` reports (and the side panel
-    quotes), so the stated time matches the observed runtime.
+    while the longer keeps going. The wall-clock player every HTML surface embeds
+    (:func:`animation_player_post_script`) shows each frame once its reading time
+    over ``playback_speed`` has elapsed, so the whole replay takes
+    ``reading_span / playback_speed`` — exactly what
+    :func:`animation_playback_ms` reports (and the side panel quotes).
 
     With two scanpaths the trails take the two comparison colours, order numbers
     are tinted per-scanpath, and an optional A/B legend (``show_legend``) names
@@ -3495,11 +3647,10 @@ def _render_scanpath_animation(
       classification: *Discard* drops those fixations from the replay entirely,
       *Highlight* overlays them in their flag marker as the replay reaches them.
 
-    With ``autoplay`` (default on, VIZ-10) the returned figure is stamped so any
-    HTML-embedding surface auto-starts the replay on load *at the configured
-    playback speed* — see :func:`animation_autoplay_frame_duration` /
-    :func:`animation_autoplay_post_script`. The figure itself is always built
-    paused; autoplay is a kick-off layered on top by the embedder.
+    ``layout.meta`` carries the replay's clock (each frame's reading time and the
+    speed) and, with ``autoplay`` (default on, VIZ-10), the intent to start on
+    load *at the configured playback speed*; the player reads both. The figure
+    itself is always built paused — autoplay is the embedder's to start.
     """
     canvas_width = settings.canvas_width
     canvas_height = settings.canvas_height
@@ -3515,10 +3666,12 @@ def _render_scanpath_animation(
     order_font_size = settings.order_font_size
     order_font_color = settings.order_font_color
     color_by = settings.color_by
-    color_by_line = settings.color_by_line
+    # BUG-85: as in `make_scanpath_figure` — "line" is colour-by-line.
+    color_by_line = settings.color_by_line or color_by == "line"
     fixation_colorscale = settings.fixation_colorscale
     fixation_color_range = settings.fixation_color_range
     fixation_flags = settings.fixation_flags
+    fixation_flags_b = settings.fixation_flags_b
     show_colorbars = settings.show_colorbars
     colorbar_orientation = settings.colorbar_orientation
     colorbar_tickangle = settings.colorbar_tickangle
@@ -3621,10 +3774,13 @@ def _render_scanpath_animation(
         words,
         words_b if (words_b is not None and not words_b.empty) else words,
     ]
+    # CMP-24: B carries its own flags when it was given any.
+    flags_b = flags if fixation_flags_b is None else (fixation_flags_b or {})
+    entry_flags = [flags, flags_b]
     if flags:
         fixations = _discard_flagged_fixations(fixations, entry_words[0], flags)
-        if fixations_b is not None:
-            fixations_b = _discard_flagged_fixations(fixations_b, entry_words[1], flags)
+    if flags_b and fixations_b is not None:
+        fixations_b = _discard_flagged_fixations(fixations_b, entry_words[1], flags_b)
 
     entries = [
         (fixations, COMPARISON_PALETTE[0], label_a),
@@ -3634,13 +3790,14 @@ def _render_scanpath_animation(
     # The words frame each surviving scanpath is flagged against (the highlight
     # overlay's out-of-bounds test). `_scanpath_anim_specs` skips empty
     # scanpaths, so apply the same skip rule here to stay aligned with `specs`.
-    surviving_words = [
-        w
-        for (fix_df, _color, _label), w in zip(entries, entry_words)
+    surviving = [
+        (w, f)
+        for (fix_df, _color, _label), w, f in zip(entries, entry_words, entry_flags)
         if fix_df is not None and not fix_df.empty
     ]
-    for spec, spec_words in zip(specs, surviving_words):
+    for spec, (spec_words, spec_flags) in zip(specs, surviving):
         spec["words"] = spec_words
+        spec["flags"] = spec_flags
     dual = len(specs) > 1
     if not dual and specs:
         # A lone scanpath always wears the canonical single-replay colour,
@@ -3889,10 +4046,11 @@ def _render_scanpath_animation(
         # every animated trace — fixations that aren't flagged are masked out
         # permanently, the rest un-mask as the replay reaches them.
         s["flag_overlays"] = []
-        if flags:
-            overlay_masks = _fixation_flag_masks(ordered, s["words"], flags)
+        s_flags = s.get("flags", flags)
+        if s_flags:
+            overlay_masks = _fixation_flag_masks(ordered, s["words"], s_flags)
             for category in _FIX_FLAG_CATEGORIES:
-                spec_flags = flags.get(category, {})
+                spec_flags = s_flags.get(category, {})
                 if spec_flags.get("mode") != "Highlight":
                     continue
                 hit = overlay_masks[category].to_numpy()
@@ -3966,15 +4124,18 @@ def _render_scanpath_animation(
             )
         )
 
-    frame_times, frame_duration, reading_span_ms = _anim_timeline(
+    frame_times, frame_step_ms, reading_span_ms = _anim_timeline(
         specs,
-        playback_speed,
         grid_step_ms=anim_grid_step_ms,
         max_frames=anim_max_frames,
     )
 
     frames = []
+    n_frames = len(frame_times)
     for k, t in enumerate(frame_times):
+        # UX-169: the card's "120 of 361 frames" — and a cancel checkpoint, so an
+        # abandoned build stops within a frame. A no-op outside a card.
+        progress.report(k + 1, n_frames, unit="frames")
         traces_in_frame = []
         traces_idx_in_frame = []
         for s in specs:
@@ -4089,7 +4250,11 @@ def _render_scanpath_animation(
     sliders = (
         _animation_time_slider(frame_times, reading_span_ms) if frame_times else []
     )
-    updatemenus = _animation_play_buttons(frame_duration) if frame_times else []
+    updatemenus = (
+        _animation_play_buttons(_anim_frame_duration_ms(frame_step_ms, playback_speed))
+        if frame_times
+        else []
+    )
 
     # fitted_w / fitted_h were computed up front (so the label scale matched).
     # ALL transport controls (play/pause/restart buttons + the time slider with
@@ -4191,16 +4356,17 @@ def _render_scanpath_animation(
             bordercolor="#cccccc",
             borderwidth=1,
         )
+        if dual:
+            layout["legend"]["font"] = _compare_legend_font(base_font_size, font_family)
     fig.update_layout(**layout)
-    # VIZ-10: carry the autoplay intent + the resolved per-frame duration so any
-    # HTML-embedding surface can kick off `Plotly.animate` at the CONFIGURED speed
-    # on load (Plotly's own `auto_play` ignores frame_duration). No frames → the
-    # marker stays off, so `animation_autoplay_frame_duration` returns None.
-    fig.layout.meta = {
-        _AUTOPLAY_META_FLAG: bool(autoplay and frame_times),
-        _AUTOPLAY_META_DURATION: int(frame_duration),
-    }
-    return fig
+    # BUG-93: the replay's clock — each frame's reading time and the speed — for
+    # the wall-clock player every HTML surface embeds, plus VIZ-10's autoplay
+    # intent, which that player reads on load (Plotly's own `auto_play` ignores
+    # the frame duration). No frames → no times, so no player and no autoplay.
+    fig.layout.meta = _replay_clock_meta(
+        [round(float(t), 3) for t in frame_times], playback_speed, autoplay
+    )
+    return fig, frame_step_ms
 
 
 def _resolve_trial_display_name(
@@ -4245,13 +4411,67 @@ def _comparison_scanpath_style(
         "saccade_width": DEFAULT_SACCADE_WIDTH,
         "marker_size_range": default_marker_size_range,
         "hollow": False,
-        "opacity": 1.0,
+        "opacity": COMPARE_FIXATION_OPACITY,
     }
     if override:
         # Drop falsy values (None / "") so a blank colour can't override the
-        # palette default and reach Plotly as a dark/None marker colour.
-        base.update({k: v for k, v in override.items() if v})
+        # palette default and reach Plotly as a dark/None marker colour. The
+        # per-scanpath filters (CMP-24) are the exception: an empty one is a
+        # real answer — "no filter on this scanpath" — not a missing colour.
+        base.update(
+            {
+                k: v
+                for k, v in override.items()
+                if v or (k in COMPARE_FILTER_STYLE_KEYS and v is not None)
+            }
+        )
     return base
+
+
+#: CMP-24: the style keys that carry a scanpath's own *filters* rather than its
+#: look. A comparison draws each reading under its own — the figure-level
+#: ``fixation_flags`` / ``saccade_classes`` apply to a scanpath whose style names
+#: none, so one setting filters both and a style entry overrides it per side.
+COMPARE_FILTER_STYLE_KEYS = frozenset({"fixation_flags", "saccade_classes"})
+
+
+def _visible_saccade_classes(classes: Iterable[str] | None) -> set[str] | None:
+    """The saccade classes to draw, ``None`` meaning all (VIZ-31's rule: an empty
+    or complete list is no filter)."""
+    if not classes or set(classes) >= set(SACCADE_CLASS_ORDER):
+        return None
+    return set(classes)
+
+
+def _comparison_filters(style: dict, settings: FigureSettings) -> dict:
+    """One scanpath's filters (CMP-24): its style's own, else the figure's."""
+    return dict(
+        fixation_flags=style.get("fixation_flags", settings.fixation_flags),
+        saccade_classes=style.get("saccade_classes", settings.saccade_classes),
+    )
+
+
+def _arrow_class_mask(
+    fixations: pd.DataFrame, saccade_classes: pd.Series, keep: set, aseg: list
+) -> list[bool]:
+    """Which arrowheads belong to a visible saccade class (VIZ-31).
+
+    An arrowhead belongs to the saccade leaving fixation ``aseg[j]`` in time
+    order, which is exactly how ``_saccade_segments_by_class`` keys a segment —
+    so the filter drops arrows for hidden saccades instead of leaving them
+    floating over nothing."""
+    ordered_cls = saccade_classes.reindex(
+        fixations.sort_values("timestamp_ms").index
+    ).tolist()
+    return [
+        (
+            "other"
+            if i >= len(ordered_cls) or pd.isna(ordered_cls[i])
+            else ordered_cls[i]
+        )
+        in keep
+        for i in aseg
+    ]
 
 
 def _add_comparison_fixation_trace(
@@ -4276,6 +4496,9 @@ def _add_comparison_fixation_trace(
     fixation_hover_fields: Sequence[str] | None = None,
     row: int | None = None,
     col: int | None = None,
+    trial_words: pd.DataFrame | None = None,
+    fixation_flags: dict | None = None,
+    saccade_classes: Iterable[str] | None = None,
 ) -> None:
     """Add one scanpath's saccades + fixation markers to a comparison figure.
 
@@ -4302,9 +4525,26 @@ def _add_comparison_fixation_trace(
     independent and keep their own toggles, so a lines-only comparison is still
     reachable. This is what makes a comparison *heatmap* readable: the whole
     point of the split word boxes is lost under two full sets of markers.
+
+    CMP-24: ``fixation_flags`` and ``saccade_classes`` are *this* scanpath's
+    filters, applied as the static figure applies them — *Discard* drops markers
+    and their index labels (the saccades still bridge across them), *Highlight*
+    overlays its marker, and hidden saccade classes lose their line and arrow.
+    Both need ``trial_words`` for the geometry they classify against.
     """
     if trial_fix.empty:
         return
+    words_for_flags = trial_words if trial_words is not None else pd.DataFrame()
+    keep = _visible_saccade_classes(saccade_classes)
+    class_series = None
+    if keep is not None and (show_saccades or show_saccade_arrows):
+        existing = trial_fix.get("saccade_class")
+        if existing is not None:
+            class_series = existing
+        else:
+            from .measures import classify_saccades
+
+            class_series = classify_saccades(trial_fix, words_for_flags)
     fix_color = style["fix_color"]
     saccade_color = style["saccade_color"]
     saccade_style = style.get("saccade_style", "solid")
@@ -4320,7 +4560,17 @@ def _add_comparison_fixation_trace(
     # it once so the segments and the arrowheads can never disagree (BUG-9).
     arch_frac: float | None = None
     if show_saccades and len(trial_fix) > 1:
-        sx, sy = _saccade_segments(trial_fix, "x", "y", arch_frac)
+        if class_series is not None:
+            segs = _saccade_segments_by_class(
+                trial_fix, "x", "y", class_series, arch_frac
+            )
+            sx, sy = [], []
+            for cls_name, (cx, cy) in segs.items():
+                if cls_name in keep:
+                    sx.extend(cx)
+                    sy.extend(cy)
+        else:
+            sx, sy = _saccade_segments(trial_fix, "x", "y", arch_frac)
         if sx:
             _add(
                 go.Scatter(
@@ -4337,7 +4587,12 @@ def _add_comparison_fixation_trace(
                 )
             )
     if show_saccade_arrows and len(trial_fix) > 1:
-        amx, amy, aang = _saccade_arrow_markers(trial_fix, "x", "y", arch_frac)
+        amx, amy, aang, aseg = _saccade_arrow_rows(trial_fix, "x", "y", arch_frac)
+        if amx and class_series is not None:
+            mask = _arrow_class_mask(trial_fix, class_series, keep, aseg)
+            amx = [v for v, m in zip(amx, mask) if m]
+            amy = [v for v, m in zip(amy, mask) if m]
+            aang = [v for v, m in zip(aang, mask) if m]
         if amx:
             _add(
                 go.Scatter(
@@ -4361,6 +4616,17 @@ def _add_comparison_fixation_trace(
     if not show_fixations:
         return
 
+    # Only the categories doing something: the rail always sends all four, so
+    # an untouched set must cost nothing (the classification scans the boxes).
+    flags = {
+        cat: spec
+        for cat, spec in (fixation_flags or {}).items()
+        if isinstance(spec, dict) and str(spec.get("mode") or "Off") != "Off"
+    }
+    if flags:
+        trial_fix = _discard_flagged_fixations(trial_fix, words_for_flags, flags)
+        if trial_fix.empty:
+            return
     sizes = _compute_marker_sizes(trial_fix["duration_ms"], style["marker_size_range"])
     # Metric colouring ("Color fixations by") when a numeric column is chosen:
     # colour the FILL by the metric (shared colorscale/range across both
@@ -4435,6 +4701,36 @@ def _add_comparison_fixation_trace(
             customdata=customdata,
         )
     )
+    if flags:
+        overlay = _fixation_flag_masks(trial_fix, words_for_flags, flags)
+        for cat in _FIX_FLAG_CATEGORIES:
+            spec = flags.get(cat, {})
+            if spec.get("mode") != "Highlight" or cat not in overlay:
+                continue
+            hits = trial_fix[overlay[cat]]
+            if hits.empty:
+                continue
+            name = _FIX_FLAG_LABELS[cat]
+            _add(
+                go.Scatter(
+                    x=hits["x"],
+                    y=hits["y"],
+                    mode="markers",
+                    marker=dict(
+                        symbol=spec.get("symbol") or "x",
+                        size=13,
+                        color=spec.get("color") or OUT_OF_TEXT_COLOR,
+                        line=dict(color=fix_color, width=1.5),
+                    ),
+                    name=f"{display_name} · {name}",
+                    legendgroup=display_name,
+                    showlegend=show_legend,
+                    hovertemplate=(
+                        f"{display_name} · {name} fixation<br>"
+                        "x %{x:.0f}, y %{y:.0f}<extra></extra>"
+                    ),
+                )
+            )
 
 
 def _comparison_metric_colorbar(
@@ -4768,25 +5064,28 @@ def _make_split_comparison_figure(
         else ([], 0.0, 1.0, "")
     )
 
+    # The panel names are the split layouts' A/B legend, so they follow its
+    # toggle (BUG-90): with it off the top margin is 0, which clipped the upper
+    # title off the canvas while the lower one, sitting in the gap between the
+    # panels, still showed.
+    subplot_titles = (
+        [trial_specs[0]["display_name"], trial_specs[1]["display_name"]]
+        if show_legend
+        else None
+    )
     if is_stacked:
         fig = make_subplots(
             rows=2,
             cols=1,
             vertical_spacing=0.08,
-            subplot_titles=[
-                trial_specs[0]["display_name"],
-                trial_specs[1]["display_name"],
-            ],
+            subplot_titles=subplot_titles,
         )
     else:
         fig = make_subplots(
             rows=1,
             cols=2,
             horizontal_spacing=0.04,
-            subplot_titles=[
-                trial_specs[0]["display_name"],
-                trial_specs[1]["display_name"],
-            ],
+            subplot_titles=subplot_titles,
         )
 
     all_shapes: list = []
@@ -4883,6 +5182,8 @@ def _make_split_comparison_figure(
             fixation_hover_fields=fixation_hover_fields,
             row=row,
             col=col,
+            trial_words=spec["trial_words"],
+            **_comparison_filters(spec["style"], settings),
         )
 
         panel_fits.append(
@@ -4999,10 +5300,17 @@ def _make_split_comparison_figure(
         margin=dict(
             l=grid_left,
             r=0,
-            t=24 if show_legend else 0,
+            t=(_compare_legend_font(base_font_size)["size"] + 14) if show_legend else 0,
             b=bottom_px + grid_bottom,
         ),
-        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.05,
+            xanchor="right",
+            x=1,
+            font=_compare_legend_font(base_font_size, font_family),
+        ),
         template="plotly_white",
         plot_bgcolor=background_color,
         paper_bgcolor=background_color,
@@ -5249,6 +5557,8 @@ def _render_comparison_figure(
             colorbar_style=cb_style,
             fixation_symbol=fixation_symbol,
             fixation_hover_fields=fixation_hover_fields,
+            trial_words=spec["trial_words"],
+            **_comparison_filters(spec["style"], settings),
         )
         if show_words and draws_stimulus[_idx]:
             existing = list(fig.layout.shapes) if fig.layout.shapes else []
@@ -5345,7 +5655,14 @@ def _render_comparison_figure(
         margin=dict(l=grid_left, r=0, t=top_px, b=bottom_px + grid_bottom),
         xaxis=xaxis,
         yaxis=yaxis,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+            font=_compare_legend_font(base_font_size, font_family),
+        ),
         template="plotly_white",
         plot_bgcolor=background_color,
         paper_bgcolor=background_color,
@@ -5356,164 +5673,8 @@ def _render_comparison_figure(
 
 
 # =============================================================================
-# Reading-research figures: per-word bar, fixation-duration histogram
+# Line figures: metric convergence, trial-index trend
 # =============================================================================
-
-
-def make_word_measure_bar_figure(
-    words: pd.DataFrame,
-    *,
-    measure: str,
-    canvas_width: int,
-    base_font_size: int,
-    font_family: str,
-    height: int = 360,
-) -> go.Figure:
-    """Vertical bar plot of a per-word measure, with word text on the x-axis."""
-    fig = go.Figure()
-    font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
-    if words.empty or measure not in words.columns:
-        fig.update_layout(
-            template="plotly_white",
-            font=font_settings,
-            title=f"No data for '{measure}'",
-            height=height,
-        )
-        return fig
-    ordered = words.sort_values(["line_idx", "word_id"]).reset_index(drop=True)
-    labels = [
-        f"{int(wid)}: {txt}" if pd.notna(wid) else str(txt)
-        for wid, txt in zip(ordered["word_id"], ordered.get("text", ordered["word_id"]))
-    ]
-    values = pd.to_numeric(ordered[measure], errors="coerce")
-    fig.add_trace(
-        go.Bar(
-            x=labels,
-            y=values,
-            marker=dict(
-                color=values,
-                colorscale=DEFAULT_HEATMAP_COLORSCALE,
-                showscale=True,
-                colorbar=dict(title=measure.replace("_", " ").title()),
-            ),
-            hovertemplate="%{x}<br>" + measure + ": %{y}<extra></extra>",
-        )
-    )
-    mean_value = float(values.dropna().mean()) if values.dropna().size else None
-    if mean_value is not None:
-        fig.add_hline(
-            y=mean_value,
-            line=dict(color=COMPARISON_PALETTE[1], width=2, dash="dot"),
-            annotation_text=f"mean {mean_value:.2f}",
-            annotation_position="top right",
-        )
-    fig.update_layout(
-        height=height,
-        width=canvas_width,
-        autosize=False,
-        margin=dict(l=40, r=10, t=40, b=80),
-        template="plotly_white",
-        font=font_settings,
-        xaxis=dict(title="Word", tickangle=-45, automargin=True),
-        yaxis=dict(title=measure.replace("_", " ").title()),
-        title=f"Per-word {measure.replace('_', ' ')}",
-    )
-    return fig
-
-
-def make_fixation_duration_histogram(
-    fixations: pd.DataFrame,
-    *,
-    canvas_width: int,
-    base_font_size: int,
-    font_family: str,
-    bins: int = 30,
-    overlay_words: pd.DataFrame | None = None,
-    height: int = 320,
-) -> go.Figure:
-    """Histogram of fixation durations, optionally with overlaid summary stats."""
-    fig = go.Figure()
-    font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
-    if fixations.empty:
-        fig.update_layout(
-            template="plotly_white",
-            font=font_settings,
-            title="Fixation duration distribution (no data)",
-            height=height,
-        )
-        return fig
-    durations = pd.to_numeric(fixations["duration_ms"], errors="coerce").dropna()
-
-    # Pre-bin server-side and draw bars instead of go.Histogram, which would
-    # serialize *every* raw value to the browser — prohibitive for millions of
-    # fixations. All series share one set of bin edges so the overlays align.
-    series_list = [("All fixations", durations.to_numpy(), COMPARISON_PALETTE[0], 1.0)]
-    if overlay_words is not None and not overlay_words.empty:
-        for name, col in (
-            ("FFD", "first_fixation_ms"),
-            ("FPRT", "first_pass_gaze_duration_ms"),
-            ("TFD", "total_fixation_duration_ms"),
-        ):
-            if col in overlay_words.columns:
-                vals = pd.to_numeric(overlay_words[col], errors="coerce").dropna()
-                if not vals.empty:
-                    series_list.append((name, vals.to_numpy(), None, 0.4))
-
-    all_vals = np.concatenate([arr for _, arr, _, _ in series_list])
-    lo = float(all_vals.min()) if all_vals.size else 0.0
-    hi = float(all_vals.max()) if all_vals.size else 1.0
-    if hi <= lo:
-        hi = lo + 1.0
-    edges = np.linspace(lo, hi, bins + 1)
-    centers = (edges[:-1] + edges[1:]) / 2.0
-    bar_width = float(edges[1] - edges[0])
-
-    for name, arr, color, opacity in series_list:
-        counts, _ = np.histogram(arr, bins=edges)
-        marker = (
-            dict(color=color, line=dict(color="white", width=0.5))
-            if color is not None
-            else None
-        )
-        fig.add_trace(
-            go.Bar(
-                x=centers,
-                y=counts,
-                width=bar_width,
-                name=name,
-                opacity=opacity,
-                marker=marker,
-            )
-        )
-
-    mean_ms = float(durations.mean()) if len(durations) else 0.0
-    median_ms = float(durations.median()) if len(durations) else 0.0
-    fig.add_vline(
-        x=mean_ms,
-        line=dict(color=COMPARISON_PALETTE[1], width=2, dash="dash"),
-        annotation_text=f"mean {mean_ms:.0f} ms",
-        annotation_position="top right",
-    )
-    fig.add_vline(
-        x=median_ms,
-        line=dict(color=SACCADE_COLOR, width=2, dash="dot"),
-        annotation_text=f"median {median_ms:.0f} ms",
-        annotation_position="top left",
-    )
-    fig.update_layout(
-        height=height,
-        width=canvas_width,
-        autosize=False,
-        margin=dict(l=40, r=10, t=40, b=40),
-        template="plotly_white",
-        font=font_settings,
-        xaxis=dict(title="Duration (ms)"),
-        yaxis=dict(title="Count"),
-        barmode="overlay",
-        title="Fixation duration distribution",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-    )
-    return fig
 
 
 def make_metric_convergence_figure(
@@ -5596,9 +5757,8 @@ def make_trend_figure(
     """Line+marker trend of ``value`` vs ``x_col`` with a ±SEM shaded band.
 
     ``df`` has columns ``[x_col, "value", "sem"]`` (see
-    ``aggregation.metric_by_trial_index`` / ``metric_by_fixation_index``). Used
-    by the Aggregated Views subtab for the trial-index and within-trial
-    fixation-index trends.
+    ``aggregation.metric_by_trial_index``). Used by the Per reader and Groups
+    subtabs for the trial-index trend.
     """
     fig = go.Figure()
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
@@ -5652,72 +5812,6 @@ def make_trend_figure(
     return fig
 
 
-def make_aggregated_histogram(
-    groups: dict,
-    *,
-    metric_label: str,
-    canvas_width: int,
-    base_font_size: int,
-    font_family: str,
-    bins: int = 30,
-    height: int = 360,
-) -> go.Figure:
-    """Overlaid binned histograms — one series per group.
-
-    ``groups`` maps a label → a 1-D array of metric values. All series share one
-    set of bin edges so they line up; binning is server-side (counts only) so a
-    corpus of millions of fixations doesn't serialize every raw value. Used by
-    the Aggregated Views subtab's distribution plot.
-    """
-    fig = go.Figure()
-    font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
-    arrays = [(str(name), np.asarray(arr)) for name, arr in groups.items() if len(arr)]
-    if not arrays:
-        fig.update_layout(
-            template="plotly_white",
-            font=font_settings,
-            title=f"{metric_label} distribution (no data)",
-            height=height,
-        )
-        return fig
-    all_vals = np.concatenate([arr for _, arr in arrays])
-    lo, hi = float(all_vals.min()), float(all_vals.max())
-    if hi <= lo:
-        hi = lo + 1.0
-    edges = np.linspace(lo, hi, bins + 1)
-    centers = (edges[:-1] + edges[1:]) / 2.0
-    bar_width = float(edges[1] - edges[0])
-    single = len(arrays) == 1
-    for i, (name, arr) in enumerate(arrays):
-        counts, _ = np.histogram(arr, bins=edges)
-        color = _QUALITATIVE_PALETTE[i % len(_QUALITATIVE_PALETTE)]
-        fig.add_trace(
-            go.Bar(
-                x=centers,
-                y=counts,
-                width=bar_width,
-                name=name,
-                opacity=0.95 if single else 0.55,
-                marker=dict(color=color, line=dict(color="white", width=0.4)),
-            )
-        )
-    fig.update_layout(
-        height=height,
-        width=canvas_width,
-        autosize=False,
-        margin=dict(l=50, r=10, t=40, b=45),
-        template="plotly_white",
-        font=font_settings,
-        xaxis=dict(title=metric_label),
-        yaxis=dict(title="Count"),
-        barmode="overlay",
-        title=f"{metric_label} distribution",
-        showlegend=not single,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-    )
-    return fig
-
-
 # =============================================================================
 # Analysis section figures (AN-1 … AN-22)
 # =============================================================================
@@ -5725,7 +5819,7 @@ def make_aggregated_histogram(
 # Builders for the question-oriented Corpus Analysis subtabs. Each takes a tidy
 # frame from ``aggregation.py`` plus the usual ``canvas_width`` / ``base_font_size``
 # / ``font_family`` and returns a ``go.Figure``. Empty input → a "(no data)"
-# placeholder, matching ``make_trend_figure`` / ``make_aggregated_histogram``.
+# placeholder, matching ``make_trend_figure``.
 
 _DIVERGING_COLORSCALE = "RdBu"
 
@@ -6410,7 +6504,12 @@ def make_landing_curve_figure(
     as_fraction: bool = True,
     height: int = 360,
 ) -> go.Figure:
-    """Preferred-viewing-location curve — landing-position histogram (AN-12)."""
+    """Preferred-viewing-location curve — landing-position histogram (AN-12).
+
+    ``values`` come from ``aggregation.landing_positions``: fractions of the
+    experiment's word box, unclipped (BUG-83), so a landing assigned from beside
+    the box shows as a bar outside 0–1 instead of a spike on the edge.
+    """
     arr = np.asarray(values, dtype="float64")
     arr = arr[~np.isnan(arr)]
     if arr.size == 0:
@@ -6431,7 +6530,7 @@ def make_landing_curve_figure(
         )
     )
     x_title = (
-        "Landing position within word (0 = start, 1 = end)"
+        "Landing position within the word's interest area (0 = start, 1 = end)"
         if as_fraction
         else "Landing distance from word start (px)"
     )
@@ -6555,6 +6654,8 @@ STATIC_FIGURE_OPTIONS = _setting_names(
         # stimulus?" question to answer. The *animation* builder does read it (a
         # dual co-animation takes `words_b`), so it is NOT excluded there.
         "compare_stimulus",
+        # CMP-24 — B's flags in a co-animation; one trial has no B.
+        "fixation_flags_b",
     }
 )
 #: What `make_comparison_figure` accepts (CMP-9). Only the animation-only fields
@@ -6570,6 +6671,8 @@ COMPARISON_FIGURE_OPTIONS = _setting_names(
         "autoplay",
         "anim_grid_step_ms",
         "anim_max_frames",
+        # CMP-24 — a comparison reads B's filters off `style_b` instead.
+        "fixation_flags_b",
     }
 )
 ANIMATION_FIGURE_OPTIONS = _setting_names(
@@ -6644,6 +6747,31 @@ def make_scanpath_animation(
     **overrides: Any,
 ) -> go.Figure:
     """Build an animated replay from the shared rendering settings."""
+    fig, _frame_step_ms = build_scanpath_replay(
+        words,
+        fixations,
+        settings=settings,
+        fixations_b=fixations_b,
+        words_b=words_b,
+        **overrides,
+    )
+    return fig
+
+
+def build_scanpath_replay(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    *,
+    settings: FigureSettings | Mapping[str, Any] | None = None,
+    fixations_b: pd.DataFrame | None = None,
+    words_b: pd.DataFrame | None = None,
+    **overrides: Any,
+) -> tuple[go.Figure, float]:
+    """:func:`make_scanpath_animation`, returning the grid step with the figure.
+
+    ``(figure, frame_step_ms)``: pass the step to :func:`set_replay_clock` to
+    re-time the replay at another speed or autoplay without rebuilding a frame
+    (PERF-15)."""
     resolved = _resolve_figure_settings(
         settings,
         overrides,

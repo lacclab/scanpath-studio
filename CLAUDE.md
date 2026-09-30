@@ -12,8 +12,8 @@ you work under `scanpath_studio/`); contributor setup is in
 
 ## Before every commit / push
 
-- **Run ruff first — always.** `ruff check --exclude other_vis .` and
-  `ruff format --exclude other_vis .`. CI's Lint job gates on **both**, so a
+- **Run ruff first — always.** `ruff check .` and
+  `ruff format .`. CI's Lint job gates on **both**, so a
   missed format fails the build. Don't skip it, even for "docs-only" changes.
 - **Update `CHANGELOG.md` as you go, in the two-tier shape** (ENG-34, `[Unreleased]`
   onwards only — already-released sections keep their old one-paragraph-per-item
@@ -49,7 +49,9 @@ you work under `scanpath_studio/`); contributor setup is in
 - Prefer headless `AppTest.from_file("streamlit_app.py")` for verifying behavior;
   the live preview is slow to spin up.
 - **The spatial plot must stay on `tabs._render_true_scale_chart`** (never
-  `st.plotly_chart`), and deep-link / restore relies on the `global_*` /
+  `st.plotly_chart`; the cached replay uses its two halves,
+  `_true_scale_plot_html` + `_render_true_scale_plot` — PERF-16), and
+  deep-link / restore relies on the `global_*` /
   `single_*` / `filter_*` widget keys — don't rename them. More in
   `scanpath_studio/CLAUDE.md → Gotchas`.
 
@@ -91,6 +93,23 @@ you work under `scanpath_studio/`); contributor setup is in
   ```bash
   grep -oh "\bDATA-[0-9]*\b" CHANGELOG.md tracker/data.js docs/*.md scanpath_studio/*.py | sort -u -V | tail -3
   ```
+
+  **Three registries stopped being enough once `main` became protected.** An ID
+  that lives in an *unmerged branch* is invisible to all three — it is in that
+  branch's `CHANGELOG.md`, not main's, and it has no issue yet — so the command
+  above can hand you a number another open PR already spent, while you are
+  following this rule to the letter. It happened on 2026-09-15 in both
+  directions at once: `ENG-48` existed only on `eng-21-macos-signing`, so every
+  registry reported `ENG-47` as the maximum, and `ENG-46` was on GitHub and
+  nowhere else. So **also check the open PRs** before taking a number:
+
+  ```bash
+  gh pr list --state open --json number,headRefName,title
+  gh pr diff <n> -- CHANGELOG.md | grep -oE "\b[A-Z]+-[0-9]+\b" | sort -u -V | tail
+  ```
+
+  And when another session or person is working right now, just ask which IDs
+  they have allocated — that is what actually resolved it, faster than any search.
 
   Never reuse or renumber an ID. GitHub's own `#N` is an implementation detail;
   cite the tracker ID in commits and prose, and the `#N` alongside it when a
@@ -170,8 +189,8 @@ See *Releasing* in `@AGENTS.md`: bump `__version__` in
 ## Repo automation (`.claude/`)
 
 - **Skills** — `/release`, `/track`, `/new-feature`, `/preflight`,
-  `/paper-figs` package the workflows above; invoke them instead of
-  re-deriving the steps.
+  `/paper-figs` and `/gazegenie` package the workflows above; invoke them
+  instead of re-deriving the steps.
 - **Hook** — every edited `.py` file is auto-run through `ruff format` +
   `ruff check` (`.claude/hooks/ruff-on-edit.sh`); fix what it reports
   immediately rather than batching.

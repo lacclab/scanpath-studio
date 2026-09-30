@@ -52,11 +52,15 @@ def add_text_direction(words: pd.DataFrame) -> pd.DataFrame:
         # on an ordinary upload it was the single slowest step of the load
         # (measured 18.3s -> 0.30s on 144k words), all of it *after* the wizard
         # had already said "Dataset added" — so it read as the app hanging.
+        # `dropna` (BUG-53): a frame that did not come through `normalize_words`
+        # can still carry a missing word, and `" ".join` raises on the float.
         out["right_to_left"] = out.groupby(keys, sort=False)["text"].transform(
-            lambda values: detect_right_to_left(" ".join(values.astype(str)))
+            lambda values: detect_right_to_left(" ".join(values.dropna().astype(str)))
         )
     else:
-        out["right_to_left"] = detect_right_to_left(" ".join(out["text"].astype(str)))
+        out["right_to_left"] = detect_right_to_left(
+            " ".join(out["text"].dropna().astype(str))
+        )
     return out
 
 

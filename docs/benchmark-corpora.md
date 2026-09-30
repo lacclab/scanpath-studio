@@ -1,5 +1,15 @@
 # Harmonised benchmark corpora
 
+> **Not on the docs site (ENG-80), and not in the app for now (DATA-55).** A
+> bundle can only be built with the EyeGenBench pipeline, which is not public
+> yet, so this page is kept in the repository for the people who can build one
+> rather than published. The app no longer discovers these corpora — it used to
+> list every one in a bundle it found on disk, which put data in the picker that
+> nobody had chosen — and the flow that will add them (choose a folder, scan it,
+> pick the corpora) is DATA-56. Until then, load them with `load_eyegenbench` or
+> `render --eyegenbench` (the CLI section below); the in-app sections describe
+> the per-corpus integration that flow will feed, which the app keeps for it.
+
 Thirty-one public eye-tracking-while-reading corpora, re-derived into one common
 schema by the [EyeGenBench](https://github.com/EyeBench/EyeGenBench) pipeline,
 prepared into a local bundle and offered in Scanpath Studio. They are what makes
@@ -42,24 +52,30 @@ recovery below possible: it reads the raw files the pipeline downloaded.
    scope it — several of these corpora are large (ChineseReading is 1,718
    readers).
 
+On a server other machines can reach (the hosted demo, or
+`--server.address 0.0.0.0`) there is no *Data directory* box to set: the app
+reads the bundle from the server's configured data location
+(`SCANPATH_DATA_ROOT`, else the default above), unless it was started with
+`SCANPATH_LOCAL_FS=1`. See [Launch](cli.md#launch).
+
 A caption under the picker states the corpus's geometry provenance, and the
 description carries its licence and citation. If the bundle isn't where you
 pointed, the app says so and keeps the bundled demo loaded rather than failing.
 
-With **no** corpora discovered the picker offers a single entry,
-*🌐 Harmonised benchmark corpora — set up (WIP)*, which exists only to carry the
-directory input; it disappears as soon as a bundle is found. As with every
-public corpus, `SCANPATH_PUBLIC_DATASETS=0` hides them all.
+As with every public corpus, `SCANPATH_PUBLIC_DATASETS=0` hides them all, and
+while the corpora are unfinished `SCANPATH_EXPERIMENTAL=1` is needed as well.
 
 Two corpora ship **both** natively and harmonised — PoTeC and OneStop — and both
 entries are kept on purpose. The harmonised copy is labelled
 *(harmonised benchmark)* in the picker (so: *PoTeC (harmonised benchmark) (WIP)*
 beside the native *PoTeC*). They are not interchangeable: the
-benchmark discards screen geometry, so the harmonised OneStop's word boxes are
-a *reconstruction* of the corpus's published layout rather than the measured
-coordinates the publisher's release carries — same screen (2560×1440), boxes
-placed by a wrapping model instead of by EyeLink. Pick the publisher's release
-to study that corpus; pick the harmonised one to compare it with the other 30.
+benchmark discards screen geometry, so the harmonised copy's word boxes are
+*recovered* during preparation (see
+[Where the word boxes come from](#where-the-word-boxes-come-from)) — for OneStop,
+parsed back out of the raw EyeLink export for all but six of its 345 texts,
+which fall back to a reconstructed layout — and its trials follow the
+benchmark's model, not the publisher's release. Pick the publisher's release to
+study that corpus; pick the harmonised one to compare it with the other 30.
 
 ## The catalogue
 
@@ -99,9 +115,9 @@ renders them as names (`de` → German).
 | MECOL2W1 | `en` | 542 | 12 | 1,221,387 | synthesized | — |
 | MECOL2W2 | `en` | 659 | 12 | 1,406,213 | synthesized | — |
 | OASSTETC | `en` | 24 | 656 | 51,841 | synthesized | — |
-| OneStop | `en` | 360 | 345 | 2,259,082 | reconstructed | 2560×1440 |
+| OneStop | `en` | 360 | 345 | 2,259,082 | real | 2560×1440 |
 | PoTeC | `de` | 75 | 12 | 404,420 | real | 1680×1050 |
-| Provo | `en` | 84 | 55 | 219,556 | reconstructed | 1600×900 |
+| Provo | `en` | 84 | 55 | 219,556 | real | 1600×900 |
 | PSC2 | `de` | 149 | 144 | 71,830 | synthesized | — |
 | PSR | `fa` | 60 | 99 | 107,821 | reconstructed | 1024×768 |
 | RaCCooNS | `nl` | 37 | 6,506 | 108,933 | reconstructed | 1920×1080 |
@@ -153,16 +169,16 @@ Studio recovers it during preparation. Recovery has four tiers, first hit wins:
 1. **Measured boxes carried on the corpus's own text table** — some corpora
    (verified: PoTeC) ship EyeLink's coordinates there directly.
 2. **Measured boxes parsed out of the raw EyeLink export** the pipeline
-   downloaded (`CURRENT_FIX_INTEREST_AREA_DATA`). This is why the raw downloads
-   are kept.
+   downloaded (OneStop's `CURRENT_FIX_INTEREST_AREA_DATA`, Provo's `IA_LEFT` /
+   `IA_TOP` / `IA_RIGHT` / `IA_BOTTOM`). This is why the raw downloads are kept.
 3. **A layout reconstructed from the corpus's published display parameters** —
    screen size, font size, character width, line pitch and margin, taken from
    what the corpus documents.
 4. **A synthesized layout on generic defaults**, when nothing is published.
 
 The first two collapse into `geometry_source: real` in the manifest, the third
-into `reconstructed`, the fourth into `synthesized`. Today's catalogue: **1 real**
-(PoTeC), **20 reconstructed**, **10 synthesized**.
+into `reconstructed`, the fourth into `synthesized`. Today's catalogue: **3 real**
+(OneStop, PoTeC, Provo), **18 reconstructed**, **10 synthesized**.
 
 Tier 3 requires a **published** parameter, not a plausible one. A corpus whose
 screen was never documented at corpus level stays `synthesized` even when a
@@ -178,8 +194,8 @@ silent-reading collection under `PSC2`.
 
 Real boxes only exist for interest areas somebody actually fixated, so gaps
 inside an otherwise-measured paragraph are interpolated from their neighbours and
-the fraction is reported (`interpolated_fraction`; 0.16% on PoTeC, zero
-everywhere else).
+the fraction is reported (`interpolated_fraction`; 2.4% on OneStop, 0.16% on
+PoTeC, zero everywhere else).
 
 Two consequences worth understanding before you publish a figure:
 
@@ -188,13 +204,15 @@ per paragraph and summarised per corpus, so a corpus labelled `real` may hold
 paragraphs that fell back to a reconstructed layout — a paragraph nobody fixated
 at all contributes no measured box. The app therefore never prints a bare
 "✅ Real" when coverage is partial; it prints *measured word boxes for N of M
-texts; the rest fall back to reconstructed layout*. The distinction matters: on
-measured geometry you can trust absolute positions (where on the screen a reader
-looked, how far a saccade travelled in pixels); on a reconstructed or synthesized
-layout you can trust reading order and relative structure, but the coordinates
-are a plausible rendering of the text, not the one the reader saw. PoTeC is
-uniformly measured (no text falls back), so the qualifier does not currently fire
-for any corpus in the catalogue.
+texts; the rest fall back to reconstructed layout*. Either way a fixation's
+position is derived from its word box, not recorded gaze: x is the box's left
+edge plus the corpus's landing fraction of its width (clipped to 0–1, 0.5 when
+missing), y is the box centre unless the corpus recorded a y on measured
+geometry, and a fixation outside every box is dropped. On a reconstructed or
+synthesized layout the boxes themselves are a plausible rendering of the text,
+not the one the reader saw. PoTeC and
+Provo are uniformly measured (no text falls back); OneStop is not — six of its
+345 texts have no measured boxes — so its caption carries the qualifier.
 
 **A corpus with no documented screen declares no monitor at all.** Ten of the
 thirty-one document no display, and the fallback layout is drawn on a generic
@@ -203,9 +221,9 @@ a made-up geometry as a measurement, so the app declines: those entries carry no
 monitor, and the canvas falls back to the data's own extents. `eyegenbench.declared_monitor`
 is the single implementation of that rule, read by **both** the app and
 `render --eyegenbench`, so a corpus renders at the same scale whichever surface
-you ask. `geometry_source` and `monitor_source` move together across all 30 rows:
+you ask. `geometry_source` and `monitor_source` move together across all 31 rows:
 a corpus with a documented screen is the same corpus whose layout could be
-reconstructed from it.
+reconstructed (or measured) on it.
 
 ## Preparing a bundle
 
@@ -238,9 +256,9 @@ Two things that surprise people:
   directory.
 - **The corpus set is large, and the script guards on free space.** Before each
   corpus it checks for 15 GB free and stops the whole sweep if there is less,
-  rather than filling the disk. Rerunning after freeing space picks up where it
-  left off: each corpus's manifest entry is written as soon as its three Parquet
-  files are on disk, so an interrupted run leaves a valid, smaller bundle.
+  rather than filling the disk. An interrupted run leaves a valid, smaller
+  bundle: each corpus's manifest entry is written as soon as its three Parquet
+  files are on disk.
 
 One corpus at a time is prepared and recorded, and a corpus that fails is skipped
 with its reason printed rather than taking the sweep down.
@@ -264,8 +282,8 @@ OneStops apart. If two entries would ever claim one slug, the link scheme
 **refuses** it on both sides rather than guessing which corpus you meant.
 
 A recipient without that corpus prepared is the common case, not an edge case:
-the link says which corpus it names, tells them how to point at a bundle, and
-leaves their data source exactly where it was. The bundle *directory* never
+the link says which corpus it names and leaves their data source exactly where
+it was. The bundle *directory* never
 travels on the link — it is a local path, and it is the sender's.
 
 **CLI.**
@@ -305,10 +323,9 @@ fixation rows.
 ## Caveats
 
 - **Check the geometry tier before you make a claim about positions.** Most of
-  the catalogue is reconstructed or synthesized. Reading order, fixation
-  durations and word-level measures are the corpus's own data; pixel coordinates
-  on a non-`real` corpus are a rendering.
-- **Licences are mostly unstated.** Twenty-four corpora record
+  the catalogue is reconstructed or synthesized, and pixel coordinates on a
+  non-`real` corpus are a rendering.
+- **Licences are mostly unstated.** Twenty-five corpora record
   *unknown — consult the corpus*. Check the publisher's terms before
   redistributing data or figures.
 - **Word boxes are laid out monospaced** on most reconstructed and synthesized

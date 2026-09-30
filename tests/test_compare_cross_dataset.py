@@ -277,6 +277,14 @@ def _overlay_gate_app():
         comparable, reason = _compare_setups(meta, words, fixations, 1920, 1080)
         layout = "overlay" if comparable else "side_by_side"
         st.session_state[f"_gate_{name}"] = (comparable, reason, layout)
+    # B from another dataset that reports no screen at all (BUG-85).
+    st.session_state["_gate_no_screen"] = _compare_setups(
+        {"dataset": "PoTeC", "setup": None, "words": words},
+        words,
+        fixations,
+        1920,
+        1080,
+    )
 
 
 class TestOverlayGate:
@@ -326,6 +334,15 @@ class TestOverlayGate:
         assert comparable is True
         assert layout == "overlay"
         assert note, "an unrecorded screen must still be disclosed"
+
+    def test_a_dataset_that_reports_no_screen_is_refused_with_the_reason_only(self):
+        """BUG-85: this reason ended "They are shown side by side instead." — the
+        static figure's fallback — so the animated warning, which shows only A,
+        quoted a layout it never drew. The fallback is the caller's to say."""
+        comparable, reason = self._run().session_state["_gate_no_screen"]
+        assert comparable is False
+        assert "does not report a screen" in reason
+        assert "side by side" not in reason
 
 
 class TestCompareStimulusSource:
@@ -471,6 +488,49 @@ class TestPairExportBundle:
         # in the exported table — the ids themselves are the corpus' own.
         assert set(fixations["dataset"]) == {"(this dataset)", "PoTeC"}
         assert set(fixations["participant_id"]) == {"p1"}
+
+
+class TestSelfComparisonBundle:
+    def test_each_scanpaths_rows_say_which_they_are(self):
+        """CMP-22: B can be A's own trial, whose rows then match A's on every
+        other column — participant, trial and `dataset` alike. The `scanpath`
+        column is what tells the two halves of the pair's tables apart."""
+        import io
+        import zipfile
+
+        from scanpath_studio.export import ComparisonSide, ExportOptions, pair_export
+
+        def side():
+            return ComparisonSide(
+                participant="p1",
+                trial="t1",
+                words=_words("p1", "t1"),
+                fixations=_fixations("p1", "t1"),
+            )
+
+        data = pair_export(
+            None,  # no figure — Kaleido isn't available in CI
+            side(),
+            side(),
+            canvas_width=1000,
+            canvas_height=800,
+            x_field="x",
+            y_field="y",
+            settings={},
+            options=ExportOptions(
+                include_fixations=True, include_measures=True, table_format="csv"
+            ),
+        )
+        folder = "p1__t1__vs__p1__t1"
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            fixations = pd.read_csv(io.BytesIO(zf.read(f"{folder}/fixations.csv")))
+            measures = pd.read_csv(io.BytesIO(zf.read(f"{folder}/measures.csv")))
+
+        assert fixations["scanpath"].value_counts().to_dict() == {
+            "A": len(_fixations("p1", "t1")),
+            "B": len(_fixations("p1", "t1")),
+        }
+        assert set(measures["scanpath"]) == {"A", "B"}
 
 
 class TestRestoredSetupCannotInventAMonitor:
@@ -707,10 +767,6 @@ class TestResolveCompareSource:
     ``app.main`` reads A's: from session state, ahead of the widgets that write
     them (which now render inside the row's own 🔎 popover).
     """
-
-    @staticmethod
-    def _resolve(app_test_state, *, ready=True):
-        return tabs._resolve_compare_source({"PoTeC": ready}, {"PoTeC": "needs setup"})
 
     def test_this_dataset_resolves_to_no_source(self, monkeypatch):
         import streamlit as st

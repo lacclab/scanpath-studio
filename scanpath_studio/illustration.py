@@ -14,8 +14,16 @@ def illustration_reasons(
     full_fixation_range: Sequence[int] | None = None,
     synthetic: bool = False,
     raw_gaze_only: bool = False,
+    fixation_flags_b: dict | None = None,
+    fix_index_range_b: Sequence[int] | None = None,
+    full_fixation_range_b: Sequence[int] | None = None,
 ) -> list[str]:
-    """Return visible, substantive transformations; ignore cosmetic styling."""
+    """Return visible, substantive transformations; ignore cosmetic styling.
+
+    CMP-24: in Compare, scanpath B has filters of its own —
+    ``fixation_flags_b`` and a window ``fix_index_range_b`` against B's
+    ``full_fixation_range_b`` — and either one alters the figure as much as A's
+    does, so it discloses the same way."""
     reasons: list[str] = []
     if settings.get("fixation_snap_to_word"):
         reasons.append("fixations snapped to words")
@@ -24,13 +32,20 @@ def illustration_reasons(
     algorithm = settings.get("align_algorithm", "Off")
     if algorithm and algorithm != "Off":
         reasons.append(f"drift correction: {algorithm}")
-    flags = settings.get("fixation_flags") or {}
-    if any((value or {}).get("mode") == "Discard" for value in flags.values()):
+    flag_sets = [settings.get("fixation_flags") or {}, fixation_flags_b or {}]
+    if any(
+        (value or {}).get("mode") == "Discard"
+        for flags in flag_sets
+        for value in flags.values()
+    ):
         reasons.append("flagged fixations hidden")
-    if (
-        fix_index_range is not None
-        and full_fixation_range is not None
-        and tuple(fix_index_range) != tuple(full_fixation_range)
+    windows = [
+        (fix_index_range, full_fixation_range),
+        (fix_index_range_b, full_fixation_range_b),
+    ]
+    if any(
+        window is not None and full is not None and tuple(window) != tuple(full)
+        for window, full in windows
     ):
         reasons.append("fixation subset")
     source_name = str(data_source or "").lower()

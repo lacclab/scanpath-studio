@@ -14,7 +14,6 @@ avoids an app⇄wizard import cycle.
 
 from __future__ import annotations
 
-import html
 import json
 import re
 from typing import NamedTuple
@@ -27,22 +26,24 @@ from .constants import (
     _VIEW_DATA,
     DEMO_CHOICE,
     FONT_FAMILY,
+    ICONS,
     ONESTOP_CHOICE,
     PUBLIC_DATASETS_CHOICE,
     SYNTHETIC_CHOICE,
     TRIAL_IDENTITY_CHECK_KEY,
     UPLOAD_CHOICE,
-    UPLOAD_MAX_SIZE_MB,
     WIZARD_LEAVE_KEY,
     multipleye_upload_enabled,
+    upload_limit_label,
+    upload_limit_mb,
 )
 from .controls import (
     ADD_ATTEMPTED_KEY,
     FIX_FIELD_SPECS,
-    NONE_OPTION,
     RAW_GAZE_FIELD_SPECS,
     TOUCHED_FIELDS_KEY,
     WORD_FIELD_SPECS,
+    claim_mapping,
     column_mapping_ui,
     inline_field_label,
     mark_missing_cells,
@@ -53,6 +54,7 @@ from .data import (
     SOURCE_FILE_COLUMN,
     WORD_OPTIONAL_FIELDS,
     aggregate_char_boxes,
+    canvas_geometry_frames,
     categorize_columns,
     compute_canvas_size,
     compute_keep_columns,
@@ -60,7 +62,9 @@ from .data import (
     empty_fixations_frame,
     empty_words_frame,
     extract_columns_from_source_file,
+    frame_cache,
     frame_fingerprint,
+    normalization_issues,
     normalize_raw_gaze,
     pick_column,
     propose_fix_schema,
@@ -69,6 +73,7 @@ from .data import (
     source_file_regex_collisions,
     split_source_file,
     trial_id_series,
+    trial_keys,
     trial_mapping_columns,
     validate_fix_schema,
     validate_raw_gaze_schema,
@@ -110,9 +115,24 @@ class _UploadResult(NamedTuple):
     problems: list
 
 
+#: BUG-32: the dataset the wizard's `col_map_*` mapping describes. The 🗂️ Data
+#: page maps a built-in source under the same keys, keyed by its source, so
+#: this identity is what tells the two apart when the headers match: a pick
+#: made here never carries back into the demo or a public corpus, and theirs
+#: never into a new upload. One constant serves every add-dataset session,
+#: because entering the wizard resets its mapping anyway.
+WIZARD_MAPPING_DATASET = "add-dataset wizard"
+_WIZARD_MAPPING_PREFIXES = ("col_map_words", "col_map_fix", "col_map_raw_gaze")
+
+
 def _reset_wizard_widgets() -> None:
     """Clear the wizard's per-table mapping + keep-field widgets so 'Add data'
     starts a fresh dataset."""
+    # BUG-32: from here these keys describe the dataset being added. Its first
+    # upload keeps a setup restored before it; ✕ Cancel leaves nothing the demo
+    # would adopt as its own.
+    for prefix in _WIZARD_MAPPING_PREFIXES:
+        claim_mapping(prefix, WIZARD_MAPPING_DATASET)
     for key in [
         k
         for k in list(st.session_state.keys())
@@ -163,7 +183,7 @@ def _reset_wizard_widgets() -> None:
         "_wizard_problems_last",
     ):
         st.session_state.pop(key, None)
-    # Re-seed the accordion on the next entry instead of opening wherever the
+    # Clear the steps' open flags so the next entry does not open wherever the
     # previous dataset was left.
     wizard_shell.reset_accordion()
 
@@ -284,15 +304,21 @@ def _finalize_wizard_dataset() -> None:
     ds_name = _safe_dataset_name(st.session_state.get("wizard_dataset_name"))
     store = st.session_state.setdefault("_datasets", {})
     store[ds_name] = payload
+    # DATA-47: the tables just attached are this dataset's, not a session-wide
+    # slot — hand them over before the switch, so the next run has nothing to
+    # swap (and so the dataset this wizard was opened over keeps its own).
+    from scanpath_studio import metadata as _metadata
+
+    _metadata.adopt_pending_dataset(st.session_state, ds_name)
     # Apply the source switch through the plain pending key that
     # resolve_data_source consumes before the radio instantiates, and
     # leave the wizard.
     st.session_state["_pending_source_choice"] = ds_name
     st.session_state["_show_upload_wizard"] = False
     st.session_state["setup_complete"] = True
-    # Flag the transition so main() paints a "loading" bridge over the wizard
-    # while the new dataset's first figure builds — otherwise the wizard lingers
-    # on screen (stale DOM) for the seconds the heavy first render takes.
+    # Flag the transition so main() shows the dataset card at once (UX-166)
+    # rather than after its usual delay — otherwise the closed wizard is all the
+    # user sees (stale DOM) for the seconds the heavy first render takes.
     st.session_state["_wizard_finalizing"] = True
     # …and ask for VAL-7's Trial ID verdict on the dataset this just created.
     # It runs as part of the load that is about to happen (`main` already
@@ -321,6 +347,10 @@ def _remove_dataset(name: str) -> None:
     """
     store = st.session_state.get("_datasets", {})
     store.pop(name, None)
+    # DATA-47 — its metadata tables go with it.
+    from scanpath_studio import metadata as _metadata
+
+    _metadata.forget_dataset(st.session_state, name)
     if st.session_state.get("data_source_choice") == name:
         st.session_state["_pending_source_choice"] = DEMO_CHOICE
     app.clear_computation_cache()
@@ -357,6 +387,10 @@ def rename_dataset(old: str, new: str) -> str | None:
         st.session_state["_prev_source"] = name
     if st.session_state.get(COMPARE_SOURCE_STATE_KEY) == old:
         st.session_state[COMPARE_SOURCE_STATE_KEY] = name
+    # DATA-47 — and its metadata tables, which are keyed by the name too.
+    from scanpath_studio import metadata as _metadata
+
+    _metadata.rename_dataset(st.session_state, old, name)
     rename_cached_dataset(st.session_state, old, name)
     return name
 
@@ -409,11 +443,11 @@ def _leave_prompt_dialog(destination: str) -> None:
     st.warning(
         f"**Leave setup and go to {destination}?** This dataset isn't added yet "
         "— the files you uploaded won't be kept.",
-        icon="⚠️",
+        icon=ICONS["warning"],
     )
     stay_col, leave_col = st.columns(2)
     if stay_col.button(
-        "↩️ Keep setting up",
+        f"{ICONS['undo']} Keep setting up",
         key="wizard_leave_stay",
         width="stretch",
         type="primary",
@@ -421,7 +455,7 @@ def _leave_prompt_dialog(destination: str) -> None:
         app.stay_in_wizard()
         st.rerun(scope="app")
     if leave_col.button(
-        "🗑️ Discard and leave",
+        f"{ICONS['delete']} Discard and leave",
         key="wizard_leave_discard",
         width="stretch",
     ):
@@ -444,6 +478,11 @@ def _enter_add_data_wizard() -> None:
     )
     st.session_state["_show_upload_wizard"] = True
     st.session_state["setup_complete"] = False
+    # DATA-47: a new dataset starts with no metadata tables — not the ones of
+    # the dataset the wizard was opened over, and not a previous attempt's.
+    from scanpath_studio import metadata as _metadata
+
+    _metadata.begin_pending_dataset(st.session_state)
     # DATA-26: the wizard is the 🗂️ Data page's add-a-dataset mode, so take the
     # user there. Written as a *request* (`menu.render_nav` reconciles it on the
     # next run) rather than a `switch_to_view` — this is an `on_click` callback,
@@ -481,6 +520,7 @@ def _map_section(
         header=False,
         columns_per_row=per_row,
         stack_labels=stacked,
+        dataset=WIZARD_MAPPING_DATASET,
     )
 
 
@@ -599,6 +639,30 @@ def _c_aggregate_char_boxes(_raw, _schema, fingerprint: tuple, key: tuple):
     return aggregate_char_boxes(_raw, _schema)
 
 
+def _readers_do_not_line_up(words: pd.DataFrame, fixations: pd.DataFrame) -> bool:
+    """Whether the normalized tables share trial ids but no (participant, trial)
+    pair — the reader half of the join is what failed (BUG-59)."""
+    if words.empty or fixations.empty:
+        return False
+
+    def check() -> bool:
+        if not set(words["trial_id"]) & set(fixations["trial_id"]):
+            return False  # the trial-id warning already says so
+        return not trial_keys(words) & trial_keys(fixations)
+
+    key = (frame_fingerprint(words), frame_fingerprint(fixations))
+    return frame_cache("wizard_readers_line_up", key, check)
+
+
+@st.cache_data(show_spinner=False)
+def _c_normalization_issues(
+    _raw, _schema, fingerprint: tuple, key: tuple, table: str
+) -> list:
+    return normalization_issues(
+        _raw, _schema, table=table, fixations=table == "Fixations"
+    )
+
+
 def _schema_key(schema: dict | None) -> tuple:
     """A hashable, order-stable projection of a mapping dict for cache keys."""
     if not schema:
@@ -608,6 +672,31 @@ def _schema_key(schema: dict | None) -> tuple:
             (k, tuple(v) if isinstance(v, (list, tuple)) else v)
             for k, v in schema.items()
         )
+    )
+
+
+#: The mapping fields the screen estimate reads — its cache keys on these alone,
+#: so an unrelated pick (the trial id, a kept field) does not re-estimate.
+_WORD_GEOMETRY_FIELDS = ("left", "right", "top", "bottom", "x", "y", "width", "height")
+_FIX_GEOMETRY_FIELDS = ("x", "y")
+
+
+def _geometry_key(schema: dict | None, fields: tuple) -> tuple:
+    return _schema_key({k: (schema or {}).get(k) for k in fields} if schema else None)
+
+
+@st.cache_data(show_spinner=False)
+def _c_estimate_canvas(
+    _words, _word_schema, _fix, _fix_schema, fingerprints: tuple, keys: tuple
+) -> tuple[int, int]:
+    """DATA-46 — the screen estimate from the mapped geometry of a raw upload.
+
+    Cached like the other `_c_*` helpers: the wizard reruns on every keystroke,
+    and a text-typed coordinate column makes the conversion slow. Returns the
+    size alone — returning the projected frames would copy them on every hit.
+    """
+    return compute_canvas_size(
+        *canvas_geometry_frames(_words, _word_schema, _fix, _fix_schema)
     )
 
 
@@ -940,7 +1029,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
         )
 
     if another_col.button(
-        "➕ Another",
+        f"{ICONS['add']} Another",
         key="wizard_filename_another",
         width="stretch",
         help="Add another mapping line — for when identity has to be pulled "
@@ -1144,7 +1233,7 @@ def _wizard_trial_step(
         counts_str = ", ".join(f"{k}: **{len(v):,}**" for k, v in present.items())
         if not set.intersection(*values):
             counts_host.warning(
-                f"⚠️ No trial ids are shared across tables — {counts_str}. Check "
+                f"{ICONS['warning']} No trial ids are shared across tables — {counts_str}. Check "
                 "the trial-id mapping lines up (try *Different trial-id columns "
                 "per table*)."
             )
@@ -1448,15 +1537,13 @@ def _wizard_table_keep_picker(
         "as an info chip. Anything left out here is dropped when the "
         "dataset is added.",
     )
-    picker_col, all_col, none_col = host.columns(
-        [0.72, 0.14, 0.14], gap="small", vertical_alignment="bottom"
-    )
-    if all_col.button("Select all", key=f"{key}_all", width="stretch"):
-        st.session_state[key] = list(opts)
-    if none_col.button("None", key=f"{key}_none", width="stretch"):
-        st.session_state[key] = []
+    # ENG-49: the bulk-select buttons that used to take 28% of this row are
+    # gone — Streamlit 1.63 puts "Select all" inside the dropdown itself
+    # (`select_all`, on by default under 1000 options) and has always drawn a ✕
+    # to clear, so the pair had become a second copy of controls the widget now
+    # carries. The picker gets the whole row back.
     chosen = set(
-        picker_col.multiselect(
+        host.multiselect(
             f"Extra fields to keep — {noun}",
             options=opts,
             format_func=lambda s: labels.get(s, s),
@@ -1479,8 +1566,9 @@ def _wizard_restore_config(host) -> None:
         "Restore a saved setup (optional)",
         type=["json"],
         key="wizard_config_restore",
-        help="Re-apply a column mapping + field choices you exported earlier "
-        "(from the 💾 Session panel).",
+        help="Re-apply a column mapping + field choices you saved earlier "
+        "(⬇️ Save setup at the foot of this page, or a 💾 Session JSON backup).",
+        max_upload_size=upload_limit_mb(),
     )
     if uploaded is None:
         return
@@ -1498,7 +1586,11 @@ def _wizard_restore_config(host) -> None:
         # render, so their keys exist — setdefault would no-op and the restore
         # would silently fail. This step runs before the widgets re-instantiate
         # this pass, so writing the keys is safe, and it reruns afterwards.
-        _seed_column_mapping(config.get("column_mapping"), overwrite=True)
+        _seed_column_mapping(
+            config.get("column_mapping"),
+            overwrite=True,
+            dataset=WIZARD_MAPPING_DATASET,
+        )
         # Remember the restored config's provenance so the caller can show which
         # dataset (and when) it was exported from, below the upload box (9.1).
         st.session_state["_wizard_restored_meta"] = {
@@ -1563,7 +1655,7 @@ def _wizard_restore_config(host) -> None:
                         restored.setdefault(key, canvas[source])
             st.session_state["_wizard_restored_setup"] = restored
             st.session_state.pop("_wizard_setup_restored_applied", None)
-        st.toast("Restored the saved mapping — review it below.", icon="✅")
+        st.toast("Restored the saved mapping — review it below.", icon=ICONS["success"])
         st.rerun()
 
 
@@ -1699,14 +1791,14 @@ def _render_setup_download(host) -> None:
         # footer now uses — "Download setup (JSON)" wrapped to two, making the
         # pair 55 px and 40 px tall side by side. What it saves and how to load
         # it back is on the tooltip, where the sentence was already.
-        "⬇️ Save setup",
+        f"{ICONS['download']} Save setup",
         data=json.dumps(_wizard_setup_config(), indent=2),
         file_name="scanpath_studio_setup.json",
         mime="application/json",
         key="wizard_setup_download",
         width="stretch",
         help="Save this column mapping to re-use on similar data — restore it "
-        "from *Restore a saved setup* at the top of Column mapping.",
+        "from *↩️ Restore a saved setup* beside *Upload data tables*.",
     )
 
 
@@ -1748,7 +1840,7 @@ def _wizard_footer(host, *, disabled: bool, help_text: str, on_click=None) -> No
     )
     _render_setup_download(save_col)
     add_col.button(
-        "✅ Add dataset",
+        f"{ICONS['confirm']} Add dataset",
         type="primary",
         key="wizard_finalize",
         disabled=disabled,
@@ -1867,8 +1959,14 @@ def _wizard_setup_step(
     key_prefix: str = "wizard",
     initial: SetupSnapshot | None = None,
     publish: bool = True,
+    estimate=None,
 ) -> SetupSnapshot:
     """Render the three Recording-setup groups and resolve them to a snapshot.
+
+    ``estimate`` (DATA-46) is a zero-argument callable giving the *Estimate from
+    my data* size; when it is ``None``, ``words_raw`` / ``fix_raw`` must already
+    carry canonical coordinates (the editor's stored frames) and are measured
+    directly. Either way it is called only when that answer is chosen.
 
     Writes the resolved values into the existing ``global_*`` wire-format keys
     (unchanged — the *values* were always wire format; only the provenance is
@@ -1924,7 +2022,6 @@ def _wizard_setup_step(
         label="Screen",
         key_prefix=key_prefix,
     )
-    est_w, est_h = compute_canvas_size(words_raw, fix_raw)
     canvas_w = (
         initial.canvas_width if initial is not None else _recalled("canvas_width", 2560)
     )
@@ -1950,12 +2047,44 @@ def _wizard_setup_step(
             key=f"{key_prefix}_setup_screen_h",
         )
     elif screen_mode == _SCREEN_ESTIMATE:
-        canvas_w, canvas_h = est_w, est_h
-        screen_host.info(
-            f"Estimated **{est_w} × {est_h} px** from the extent of your word "
-            "boxes and fixations. This is a **lower bound** — text rarely fills "
-            "the whole screen, so the real monitor was probably larger."
+        est_w, est_h = (
+            estimate()
+            if estimate is not None
+            else compute_canvas_size(words_raw, fix_raw)
         )
+        # DATA-46: on ✏️ Edit dataset, a screen that was *saved* as an estimate
+        # keeps the size it was saved with. Re-estimating on every open meant a
+        # ✅ Save changes with nothing touched rewrote the canvas of every figure
+        # from this dataset — the editor must not change what the user did not.
+        # A fresh estimate is still one click away, and says what it would be.
+        reestimate_key = f"{key_prefix}_setup_reestimate"
+        keep_saved = (
+            initial is not None
+            and initial.screen_provenance is Provenance.ESTIMATED
+            and not st.session_state.get(reestimate_key)
+        )
+        if keep_saved:
+            canvas_w, canvas_h = int(initial.canvas_width), int(initial.canvas_height)
+            screen_host.info(
+                f"Estimated **{canvas_w} × {canvas_h} px** when this dataset was "
+                "added — a **lower bound** from the extent of its word boxes and "
+                "fixations."
+            )
+            if (est_w, est_h) != (canvas_w, canvas_h):
+                screen_host.button(
+                    f"↻ Use the current estimate ({est_w} × {est_h} px)",
+                    key=f"{key_prefix}_setup_reestimate_btn",
+                    on_click=lambda: st.session_state.__setitem__(reestimate_key, True),
+                    help="Re-estimate the screen from this dataset's data as it "
+                    "is stored now. Nothing changes until you save.",
+                )
+        else:
+            canvas_w, canvas_h = est_w, est_h
+            screen_host.info(
+                f"Estimated **{est_w} × {est_h} px** from the extent of your word "
+                "boxes and fixations. This is a **lower bound** — text rarely fills "
+                "the whole screen, so the real monitor was probably larger."
+            )
     elif screen_mode == _SCREEN_DEFAULT:
         canvas_w, canvas_h = 2560, 1440
         screen_host.caption("Recorded as **assumed** — a common 1440p monitor.")
@@ -2327,7 +2456,9 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
 
     if fix_df.empty:
         if active:
-            body.info("⬆️ Upload MultiplEYE scanpath / fixation CSVs to begin.")
+            body.info(
+                f"{ICONS['upload']} Upload MultiplEYE scanpath / fixation CSVs to begin."
+            )
         return _UploadResult(
             empty_words_frame(),
             empty_fixations_frame(),
@@ -2476,7 +2607,7 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
             ).to_dict(),
         }
         body.button(
-            "✅ Add dataset",
+            f"{ICONS['confirm']} Add dataset",
             type="primary",
             key="wizard_finalize",
             on_click=_finalize_wizard_dataset,
@@ -2527,28 +2658,6 @@ _RAW_GAZE_ROW2_W = (0.155, 0.2817, 0.2817, 0.2816)
 #: every other table's row 1, one wide cell for the id-column + keep-fields
 #: picker stack (there is nothing to split across several picker cells here).
 _META_ROW_W = (0.155, 0.845)
-
-
-def _hover_note(host, label: str, note: str, *, link: str = "") -> None:
-    """A short label whose explanation is only on hover (UX-53 round 3).
-
-    The wizard's prose was the bulk of its length, and most of it is read once
-    and never again. This keeps a scannable anchor on the page and puts the
-    sentences behind the same `.sps-fhelp` tooltip the rail's labels use — a CSS
-    one (120 ms), not the browser's native `title=`, which waits about a second
-    and so is unusable for text people actually need.
-    """
-    tail = (
-        f' <a href="{html.escape(link, quote=True)}" target="_blank">↗</a>'
-        if link
-        else ""
-    )
-    host.markdown(
-        f'<div class="sps-wiz-note"><span class="sps-fhelp" '
-        f'data-tip="{html.escape(note, quote=True)}">{html.escape(label)}</span>'
-        f"{tail}</div>",
-        unsafe_allow_html=True,
-    )
 
 
 def _mark_add_attempted() -> None:
@@ -2657,31 +2766,6 @@ def _wizard_statuses() -> dict[str, wizard_shell.StepStatus]:
     return statuses
 
 
-def _mapping_label(mapping) -> str | None:
-    """A human-readable column name for a mapping value (str | list | None)."""
-    if not mapping or mapping == NONE_OPTION:
-        return None
-    if isinstance(mapping, (list, tuple)):
-        return " + ".join(str(c) for c in mapping) or None
-    return str(mapping)
-
-
-def _setup_group_value(snapshot: SetupSnapshot, group: str) -> str:
-    """The value column for one setup group in the review table."""
-    if group == "screen":
-        return f"{snapshot.canvas_width} × {snapshot.canvas_height} px"
-    if group == "geometry":
-        if snapshot.geometry_provenance is Provenance.SKIPPED:
-            return "—"
-        return (
-            f"{snapshot.monitor_width_mm:.0f} mm wide, "
-            f"{snapshot.viewing_distance_mm:.0f} mm away"
-        )
-    if snapshot.scale_text_to_boxes:
-        return "scaled to word boxes"
-    return f"{snapshot.base_font_size} px · {snapshot.font_family}"
-
-
 def _render_data_setup(active: bool) -> _UploadResult:
     """The Add-dataset wizard: seven steps in an accordion (DATA-22).
 
@@ -2730,7 +2814,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # here (🧭 guide · 📖 docs) — a popover, not a dialog, since it is a
         # two-item chooser with no modal weight to it (matches #UX-65's nav
         # Help, minus the "arm-then-bounce" dance that menu entries need).
-        with help_col.popover("❓ Help", width="stretch"):
+        with help_col.popover(f"{ICONS['help']} Help", width="stretch"):
             render_wizard_guide_button(st)
             # A real `link_button`, not an in-app navigation: it opens in a new
             # tab and so cannot lose an in-progress upload the way switching
@@ -2739,10 +2823,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 # UX-66 r2: named for what it *is* rather than for the page it
                 # opens — "Data guide" reads like one more wizard step on a row
                 # of wizard controls, which is the one thing it is not.
-                "📖 More documentation ↗",
-                "https://lacclab.github.io/scanpath-studio/bring-your-own-data/",
-                help="What your export needs, worked EyeLink and plain-CSV "
-                "examples, and what each failure symptom means.",
+                f"{ICONS['docs']} More documentation ↗",
+                "https://lacclab.github.io/scanpath-studio/guides/loading-data/",
+                help="What your export needs, how this wizard maps it, and the "
+                "recording setup it asks for.",
                 width="stretch",
             )
         # The way out, on the row that stays on screen.
@@ -2778,10 +2862,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # path through it.
         body = st.container()
     else:
-        panel = st.expander("📋 Data & mapping", expanded=False)
+        panel = st.expander(f"{ICONS['data_mapping']} Data & mapping", expanded=False)
         body = panel
         if panel.button(
-            "⚙️ Change dataset / mapping",
+            f"{ICONS['settings']} Change dataset / mapping",
             key="wizard_reconfigure",
             help="Re-open the setup wizard.",
         ):
@@ -2815,7 +2899,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # two stages, since every table now uploads *inside* stage 3 too;
         # what actually matters is that a restored setup is visible before
         # the wizard is filled in, and stage 2 is the first thing on screen.
-        restore_box = host.popover("↩️ Restore a saved setup (optional)")
+        restore_box = host.popover(f"{ICONS['undo']} Restore a saved setup (optional)")
         _wizard_restore_config(restore_box)
         _render_restored_config_caption(restore_box)
 
@@ -2888,13 +2972,13 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # three tables below say the same thing at their own titles' hover, this
         # is just the nudge to open with.
         intro.caption(
-            "⬆️ Upload at least one of **Fixations**, **Words / IA**, or "
+            f"{ICONS['upload']} Upload at least one of **Fixations**, **Words / IA**, or "
             "**Raw gaze** below to get started."
         )
         app_url = str(getattr(st.context, "url", "") or "")
         if not is_loopback_url(app_url):
             intro.markdown(
-                "💡 **Working with a large dataset?** It's faster — and keeps your "
+                f"{ICONS['tip']} **Working with a large dataset?** It's faster — and keeps your "
                 "data on your own machine — to run Scanpath Studio locally:\n\n"
                 "```bash\npip install scanpath-studio\nscanpath-studio\n```"
             )
@@ -2906,7 +2990,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # tooltip and the uploader's own accessible help.
     _upload_types_note = (
         ", ".join(t.upper() for t in app._UPLOAD_TYPES)
-        + f" — up to {UPLOAD_MAX_SIZE_MB // 1000}GB per file."
+        + f" — up to {upload_limit_label()} per file."
     )
 
     def upload_box(
@@ -2957,7 +3041,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 # UX-119: icon-only trigger (no "Preview" label) — way smaller,
                 # matching the rail's other icon-only popovers (⇅, ✏️).
                 preview = stats.popover(
-                    "👁️", width="content", help="Preview — first rows"
+                    ICONS["preview"], width="content", help="Preview — first rows"
                 )
                 preview.caption("First rows:")
                 preview.dataframe(frame.head(), width="stretch", hide_index=True)
@@ -3191,7 +3275,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # still benefits from the reminder that each is optional on its own
         # but at least one is required.
         derive_host.caption(
-            "⬆️ Upload at least one of **Fixations**, **Words / IA**, or "
+            f"{ICONS['upload']} Upload at least one of **Fixations**, **Words / IA**, or "
             "**Raw gaze** below to get started."
         )
         raw_words, raw_fix, raw_gaze = _wizard_filename_derive(
@@ -3567,8 +3651,29 @@ def _render_data_setup(active: bool) -> _UploadResult:
         s_setup.caption(
             "✓ Pre-answered from the restored setup file — review it below."
         )
+
+    # DATA-46: the estimate needs canonical coordinates, and nothing is
+    # normalized yet — project the mapped geometry columns rather than hand over
+    # the raw upload, whose `IA_LEFT` / `CURRENT_FIX_X` it cannot read.
+    def _estimate() -> tuple[int, int]:
+        words = raw_words if has_words else None
+        fixations = raw_fix if has_fix else None
+        return _c_estimate_canvas(
+            words,
+            word_schema if has_words else None,
+            fixations,
+            fix_schema if has_fix else None,
+            (frame_fingerprint(words), frame_fingerprint(fixations)),
+            (
+                _geometry_key(
+                    word_schema if has_words else None, _WORD_GEOMETRY_FIELDS
+                ),
+                _geometry_key(fix_schema if has_fix else None, _FIX_GEOMETRY_FIELDS),
+            ),
+        )
+
     setup_snapshot = _wizard_setup_step(
-        s_setup, raw_words, raw_fix, has_boxes=has_words
+        s_setup, raw_words, raw_fix, has_boxes=has_words, estimate=_estimate
     )
 
     # The foot of the wizard: what is still missing, then the button. UX-53 put
@@ -3713,6 +3818,40 @@ def _render_data_setup(active: bool) -> _UploadResult:
         )
         st.session_state["_composite_trial_columns"] = (
             rg_trial_cols if len(rg_trial_cols) > 1 else None
+        )
+
+    if active:
+        # BUG-54 / BUG-56: a complete mapping can still meet rows it cannot
+        # use — a numeric column that did not parse (a decimal-comma export, a
+        # text column picked as a coordinate), a row with no trial id. The load
+        # carries on without them, so say which and what was done, where the
+        # other blockers are: directly above ✅ Add dataset.
+        tables = (
+            ("Words/IA", raw_words, word_schema, has_words),
+            ("Fixations", raw_fix, fix_schema, has_fix),
+        )
+        for table, raw, schema, present in tables:
+            if not present:
+                continue
+            for line in _c_normalization_issues(
+                raw, schema, frame_fingerprint(raw), _schema_key(schema), table
+            ):
+                s6.warning(f"{ICONS['warning']} {line}")
+
+    if (
+        active
+        and has_words
+        and has_fix
+        and _readers_do_not_line_up(words_norm, fixations_norm)
+    ):
+        # BUG-59: the trial-id check above compares trial ids alone, so a pair
+        # of tables that share every trial but spell the readers differently
+        # passed it — and every scanpath then drew over no text.
+        s6.warning(
+            f"{ICONS['warning']} The two tables share trial ids but no reader: no fixation's "
+            "participant + trial has word boxes, so every scanpath would be "
+            "drawn without its text. Check that **Participant ID** names the "
+            "same readers, spelled the same way, in both tables."
         )
 
     raw_gaze_norm = pd.DataFrame()

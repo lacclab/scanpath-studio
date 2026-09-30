@@ -38,7 +38,7 @@ from dataclasses import dataclass, field
 #: Bumped when an entry's *meaning* changes (a formula, a unit, a default), not
 #: when prose is edited. Exported alongside results so a bundle can name the
 #: methodology it was produced under.
-REGISTER_VERSION = "1"
+REGISTER_VERSION = "2"
 
 CATEGORY_IMPORTED = "Imported / precomputed"
 CATEGORY_NORMALIZATION = "Normalization / inference"
@@ -111,6 +111,15 @@ _CLI = "CLI"
 _EXPORT = "Export"
 _CORPUS = "Corpus Analysis"
 _INSPECT = "Data Inspection"
+# Surfaces held back from the app this release behind `SCANPATH_EXPERIMENTAL=1`,
+# named as such so the register does not advertise a panel a user cannot open.
+_UI_PREPROCESSING = (
+    "UI (Preprocessing panel, only with SCANPATH_EXPERIMENTAL=1 — PRE-22)"
+)
+_INSPECT_DERIVED = (
+    "Data Inspection (derived tables, only with SCANPATH_EXPERIMENTAL=1 — UX-126)"
+)
+_API_EXPERIMENTAL = "API (raises unless SCANPATH_EXPERIMENTAL=1 — PRE-21)"
 
 
 REGISTER: tuple[Computation, ...] = (
@@ -269,9 +278,14 @@ REGISTER: tuple[Computation, ...] = (
         category=CATEGORY_ASSIGNMENT,
         summary="The single highest-risk step: which word a fixation counts for.",
         formula=(
-            "1. Bounding-box containment against the trial's word boxes, using "
-            "the BUG-11 corrected edges (`word_box_bounds`), so a fixation in the "
-            "whitespace *before* a word is credited to that word. "
+            "1. Bounding-box containment against the trial's word boxes — the "
+            "experiment's own rectangles (`geom.word_box_bounds`), so on a "
+            "tiling corpus a fixation on the space *after* a word is credited to "
+            "that word, as EyeLink's interest-area report credits it. Boxes are "
+            "half-open, `x0 ≤ x < x1` and `y0 ≤ y < y1` "
+            "(`measures.word_box_contains`), so a point on an edge two boxes "
+            "share goes to the one that starts there — the next word, the line "
+            "below — as EyeLink assigns it. "
             "2. Otherwise the nearest word **center** within "
             "`LINE_MISREGISTRATION_PX` = 50 px. "
             "3. Otherwise `word_id = NaN` (out of text)."
@@ -280,7 +294,15 @@ REGISTER: tuple[Computation, ...] = (
         output="word_id",
         grouping="(participant_id, trial_id[, screen_id]) — never across screens",
         missing="Unassignable fixations keep NaN and are excluded from word measures.",
-        precedence="An imported `word_id` is kept unless `overwrite=True`.",
+        precedence=(
+            "An imported `word_id` is kept unless `overwrite=True` — so on the "
+            "bundled demo, whose fixation report carries EyeLink's "
+            "`CURRENT_FIX_INTEREST_AREA_ID`, the reading measures follow "
+            "EyeLink's assignment and geometry only fills the fixations it left "
+            "blank. #BUG-83: geometry now agrees with that column on all 3,208 "
+            "of the demo's EyeLink-assigned fixations (BUG-11's half-space "
+            "shift: 92.6%; closed containment on the shared edges: 99.1%)."
+        ),
         tiers="A, C",
         status=STATUS_PARTIAL,
         reference=(
@@ -296,7 +318,13 @@ REGISTER: tuple[Computation, ...] = (
         name="Out-of-text flag",
         category=CATEGORY_ASSIGNMENT,
         summary="Whether a fixation landed on any word of the stimulus.",
-        formula="`word_id` is not NaN after `assign.fixation_to_word`.",
+        formula=(
+            "The fixation falls inside some word box (`word_box_bounds`, tested "
+            "half-open by `word_box_contains`, as `assign.fixation_to_word` "
+            "tests it). Box containment only — a fixation the 50 px "
+            "nearest-centre fallback of `assign.fixation_to_word` gives a word "
+            "still counts as out-of-text."
+        ),
         code="scanpath_studio/measures.py:fixation_in_text_mask",
         output="bool mask",
         tiers="A, C",
@@ -365,9 +393,11 @@ REGISTER: tuple[Computation, ...] = (
         category=CATEGORY_ASSIGNMENT,
         summary="Label each outgoing saccade by its reading role (VIZ-8).",
         formula=(
-            "Forward within a line, return sweep (large leftward drop to the "
-            "next line), within-line regression, or between-line regression, "
-            "from the assigned line and word order."
+            "From the word and text line of the two fixations, in this order: "
+            "refixation (same word), regression (up to an earlier line, or back "
+            "within a line), return sweep (down to a later line), forward (the "
+            "next word on the line), skip (two or more words ahead on the line); "
+            "`other` when either fixation has no assigned word."
         ),
         code="scanpath_studio/measures.py:classify_saccades",
         output="saccade_type",
@@ -384,13 +414,22 @@ REGISTER: tuple[Computation, ...] = (
         id="measure.ffd",
         name="First fixation duration (FFD)",
         category=CATEGORY_MEASURE,
-        summary="Duration of the first fixation on a word during first pass.",
-        formula="Duration of the first fixation of the word's first-pass run.",
+        summary="Duration of the first fixation on a word.",
+        formula=(
+            "Duration of the word's first fixation, whenever it comes — as "
+            "EyeLink's `IA_FIRST_FIXATION_DURATION`, so a computed and an "
+            "imported value mean the same. Not conditioned on first pass: a word "
+            "first reached by a regression has an FFD and `skip_flag = True`; "
+            "filter on `skip_flag` for first-pass-only analyses."
+        ),
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="first_fixation_ms",
         unit="ms",
         grouping="(participant, trial, word)",
-        missing="Skipped word ⇒ NaN, not 0.",
+        missing=(
+            "Never fixated ⇒ NaN, not 0 — an imported 0 on a word with no "
+            "fixations is blanked too (BUG-63)."
+        ),
         precedence="A precomputed `IA_FIRST_FIXATION_DURATION` wins.",
         tiers="A, D",
         status=STATUS_PARTIAL,
@@ -405,13 +444,16 @@ REGISTER: tuple[Computation, ...] = (
         summary="Sum of first-pass fixations on a word.",
         formula=(
             "Sum of every fixation in the word's **first** run, i.e. before the "
-            "gaze leaves the word for the first time."
+            "gaze leaves the word for the first time — whenever that run starts "
+            "(EyeLink's `IA_FIRST_RUN_DWELL_TIME`; not conditioned on first pass, "
+            "as `measure.ffd`). A fixation outside every word ends the run "
+            "(BUG-66), as it does for `measure.second_pass`."
         ),
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="first_pass_gaze_duration_ms",
         unit="ms",
         grouping="(participant, trial, word)",
-        missing="Skipped word ⇒ NaN.",
+        missing="Never fixated ⇒ NaN (an imported 0 is blanked, BUG-63).",
         precedence="A precomputed IA gaze duration wins.",
         tiers="A, D",
         status=STATUS_PARTIAL,
@@ -425,15 +467,18 @@ REGISTER: tuple[Computation, ...] = (
         category=CATEGORY_MEASURE,
         summary="First entry to the word until the gaze passes it to the right.",
         formula=(
-            "Total time from the first first-pass fixation on the word until the "
-            "first fixation on a **later** word — including any regressions to "
-            "earlier words in between."
+            "Total time from the word's first fixation until the first fixation "
+            "on a **later** word — every fixation in between, including a first "
+            "visit to an earlier, skipped word during the regression (BUG-61). "
+            "Matches EyeLink's `IA_REGRESSION_PATH_DURATION` on 1779 of the "
+            "bundled demo's 1780 fixated words. Fixations outside every word "
+            "neither extend nor close the window."
         ),
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="regression_path_duration_ms",
         unit="ms",
         grouping="(participant, trial, word)",
-        missing="Skipped word ⇒ NaN.",
+        missing="Never fixated ⇒ NaN (an imported 0 is blanked, BUG-63).",
         tiers="A",
         status=STATUS_PARTIAL,
         reference=(
@@ -496,8 +541,10 @@ REGISTER: tuple[Computation, ...] = (
         summary="Whether a word was returned to, or left backwards.",
         formula=(
             "`regression_in_flag` — some later fixation lands on this word after "
-            "the gaze had moved past it. `regression_out_flag` — a fixation on "
-            "this word is followed by a fixation on an earlier word."
+            "the gaze had moved past it. `regression_out_flag` — a regression "
+            "to an earlier word is made from this word during first pass, before "
+            "the eyes first leave it forwards (EyeLink's `IA_REGRESSION_OUT`, "
+            "BUG-64); a regression from it later in the trial does not count."
         ),
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="regression_in_flag, regression_out_flag",
@@ -516,14 +563,19 @@ REGISTER: tuple[Computation, ...] = (
         formula=(
             "`char_width = geom.word_char_advance`; "
             "`offset = first_fix_x − word.x` (LTR) or "
-            "`word.x + width − first_fix_x` (RTL); "
+            "`word.x + n·advance − first_fix_x` (RTL, BUG-27); "
             "`landing_position = offset / char_width + 1` — so the first letter "
-            "starts at 1 and its centre is 1.5."
+            "starts at 1 and its centre is 1.5. Unclipped: on a tiling corpus "
+            "the box's last cell is the space after the word, which belongs to "
+            "it (#BUG-83), so a first fixation there reads `n + 1` to `n + 2`."
         ),
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="initial_landing_position",
         unit="letters",
-        missing="No first-pass fixation, zero width, or no text ⇒ NaN.",
+        missing=(
+            "Never fixated, zero width, or no text ⇒ NaN. Measured from the "
+            "word's first fixation, first pass or not (as `measure.ffd`)."
+        ),
         precedence=(
             "VAL-5: the scale is `geom.word_char_advance`, not the local "
             "`width / len(text)` this used before — on a tiling corpus that "
@@ -544,7 +596,12 @@ REGISTER: tuple[Computation, ...] = (
         name="Centred landing distance",
         category=CATEGORY_MEASURE,
         summary="Landing position relative to the word's centre.",
-        formula="`landing_position − (len(text) + 1) / 2`.",
+        formula=(
+            "`landing_position − (1 + len(text) / 2)` — the glyphs span "
+            "`[1, n + 1)`, so that is the word's centre (BUG-65). The centre of "
+            "the *letters*, not of the box: a tiling box's trailing space "
+            "(#BUG-83) would move it half a letter right."
+        ),
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="initial_landing_distance",
         unit="letters (0 = word centre, negative = left of centre)",
@@ -563,7 +620,11 @@ REGISTER: tuple[Computation, ...] = (
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="second_pass_duration_ms",
         unit="ms",
-        missing="Fewer than two passes ⇒ 0.",
+        missing=(
+            "Fewer than two runs ⇒ 0 — an imported blank "
+            "`IA_SECOND_RUN_DWELL_TIME` is filled with 0 too, so the mean means "
+            "the same whichever source the value came from."
+        ),
         tiers="A",
         status=STATUS_PARTIAL,
         consumers=(_UI, _API, _EXPORT, _CORPUS),
@@ -578,7 +639,7 @@ REGISTER: tuple[Computation, ...] = (
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="single_fixation_duration_ms",
         unit="ms",
-        missing="Multi-fixation or skipped first pass ⇒ NaN.",
+        missing="A first run of more than one fixation, or never fixated ⇒ NaN.",
         tiers="A",
         status=STATUS_PARTIAL,
         reference="Rayner (1998).",
@@ -590,10 +651,14 @@ REGISTER: tuple[Computation, ...] = (
         name="Regressions into word",
         category=CATEGORY_MEASURE,
         summary="How many times the gaze came back to this word.",
-        formula="Number of runs on the word after the first.",
+        formula=(
+            "Number of regressions into the word — entries from a later word "
+            "(EyeLink's `IA_REGRESSION_IN_COUNT`). A re-entry from an *earlier* "
+            "word is a new run but not a regression in."
+        ),
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="number_of_regressions_in",
-        missing="Never revisited ⇒ 0.",
+        missing="Never regressed into ⇒ 0.",
         tiers="A",
         status=STATUS_PARTIAL,
         consumers=(_UI, _API, _EXPORT, _CORPUS),
@@ -694,7 +759,7 @@ REGISTER: tuple[Computation, ...] = (
         tiers="A, C",
         status=STATUS_PARTIAL,
         reference="A common cleaning step; thresholds are the user's choice.",
-        consumers=(_UI, _API, _EXPORT),
+        consumers=(_UI_PREPROCESSING, _API, _CLI, _EXPORT),
         tests=("tests/test_preprocessing.py",),
     ),
     Computation(
@@ -708,7 +773,7 @@ REGISTER: tuple[Computation, ...] = (
         missing="Soft: excluded rows are reported, not deleted from the source.",
         tiers="C",
         status=STATUS_PARTIAL,
-        consumers=(_UI, _API, _EXPORT),
+        consumers=(_UI_PREPROCESSING, _API, _CLI, _EXPORT),
         tests=("tests/test_preprocessing.py",),
     ),
     Computation(
@@ -721,7 +786,7 @@ REGISTER: tuple[Computation, ...] = (
         missing="No blink column ⇒ the option has no effect.",
         tiers="C",
         status=STATUS_PARTIAL,
-        consumers=(_UI, _API, _EXPORT),
+        consumers=(_UI_PREPROCESSING, _API, _CLI, _EXPORT),
         tests=("tests/test_preprocessing.py",),
     ),
     Computation(
@@ -734,7 +799,7 @@ REGISTER: tuple[Computation, ...] = (
         output="Cleaning QA table",
         tiers="C",
         status=STATUS_PARTIAL,
-        consumers=(_UI, _EXPORT, _INSPECT),
+        consumers=(_UI_PREPROCESSING, _API, _CLI, _EXPORT, _INSPECT_DERIVED),
         tests=("tests/test_preprocessing.py",),
     ),
     Computation(
@@ -753,7 +818,7 @@ REGISTER: tuple[Computation, ...] = (
         missing="Sentence inference is textual, not annotated — approximate.",
         tiers="C",
         status=STATUS_PARTIAL,
-        consumers=(_UI, _API, _EXPORT, _INSPECT),
+        consumers=(_CORPUS, _API, _CLI, _EXPORT, _INSPECT_DERIVED),
         tests=("tests/test_preprocessing.py",),
     ),
     Computation(
@@ -771,7 +836,7 @@ REGISTER: tuple[Computation, ...] = (
         missing="Assumed geometry ⇒ the degree columns inherit that assumption.",
         tiers="C",
         status=STATUS_PARTIAL,
-        consumers=(_UI, _API, _EXPORT, _INSPECT),
+        consumers=(_API, _CLI, _EXPORT, _INSPECT_DERIVED),
         tests=("tests/test_preprocessing.py",),
     ),
     Computation(
@@ -794,7 +859,7 @@ REGISTER: tuple[Computation, ...] = (
         ),
         tiers="A, C",
         status=STATUS_CONVENTION,
-        consumers=(_UI, _EXPORT, _INSPECT),
+        consumers=(_API, _CLI, _EXPORT, _INSPECT_DERIVED),
         tests=("tests/test_preprocessing.py",),
     ),
     Computation(
@@ -814,12 +879,18 @@ REGISTER: tuple[Computation, ...] = (
         id="pre.sensitivity",
         name="Measure sensitivity",
         category=CATEGORY_PREPROCESSING,
-        summary="How much a measure moves under different cleaning settings.",
-        formula="The measure is recomputed per setting and compared to baseline.",
+        summary="How much the word measures move under different line assignments.",
+        formula=(
+            "Each trial's fixations are line-assigned by every method in "
+            "`methods` (default `attach`, `slice`, `consensus`), FFD / FPRT / "
+            "RPD / TFD are recomputed per method, and each word's spread (max − "
+            "min across methods) is reported beside a per-trial correction "
+            "report (PRE-18)."
+        ),
         code="scanpath_studio/preprocessing.py:measure_sensitivity",
         tiers="C",
         status=STATUS_PARTIAL,
-        consumers=(_UI, _API),
+        consumers=(_API_EXPERIMENTAL,),
         tests=("tests/test_preprocessing.py",),
     ),
     Computation(
@@ -1039,19 +1110,28 @@ REGISTER: tuple[Computation, ...] = (
         category=CATEGORY_AGGREGATION,
         summary="Distribution of initial landing positions by word length.",
         formula=(
-            "Histogram of the landing position as a *fraction* of the word's "
-            "glyph run — `(first_fix_x − word.x) / (len(text) × "
-            "geom.word_char_advance)`, so 0 is the first glyph's left edge and 1 "
-            "the last glyph's right edge — binned per word length."
+            "Histogram of the landing position as a *fraction of the word's "
+            "interest area* — `(first_fix_x − word.x) / width` over the "
+            "experiment's own box, i.e. `(measure.landing_position − 1)` over "
+            "the box's `width / geom.word_char_advance` character cells (RTL "
+            "counted from where the glyphs end, as the letter position is). "
+            "Unclipped — binned per word length."
         ),
         code="scanpath_studio/aggregation.py:landing_positions",
-        unit="fraction of the word (0–1), or px with `as_fraction=False`",
+        unit=(
+            "fraction of the interest area (0–1 for a landing inside the box), "
+            "or px with `as_fraction=False`"
+        ),
         precedence=(
-            "#BUG-27: measured from the word's `x` and its glyph run, not from "
-            "the `geom.word_box_bounds` AOI edge and the padded `width` — those "
-            "put 0 half an inter-word space before the word and 1 half a space "
-            "after it, so this disagreed with `measure.landing_position` on the "
-            "same landing."
+            "#BUG-83: on a glyph-tight corpus the box is the glyph run, so 0 is "
+            "the first letter's edge and 1 the last's. On a tiling corpus the "
+            "box's last cell is the space after the word, so the glyphs fill "
+            "`[0, n / (n + 1))` and a landing on that space reads just below 1 "
+            "— it used to be clipped onto exactly 1.0, where 15% of the demo's "
+            "landings piled up. A first fixation assigned from outside the box "
+            "(the nearest-word fallback) reads below 0 or above 1 rather than "
+            "being clipped onto an edge. #BUG-27 put the origin at the word's "
+            "`x` and the scale on `geom.word_char_advance`."
         ),
         tiers="C",
         status=STATUS_PARTIAL,
@@ -1161,21 +1241,26 @@ REGISTER: tuple[Computation, ...] = (
     ),
     Computation(
         id="geom.word_box_bounds",
-        name="Corrected word-box edges",
+        name="Word interest-area edges",
         category=CATEGORY_GEOMETRY,
-        summary="Where one word's box ends and the next begins (BUG-11).",
+        summary="Where one word's interest area ends and the next begins.",
         formula=(
-            "The inter-word gap is split so the whitespace before a word belongs "
-            "to that word, rather than extending the previous box across it."
+            "`x .. x + width` by `y .. y + height` — the experiment's own "
+            "rectangles, unmodified. On a tiling corpus each box includes the "
+            "space after its word."
         ),
         code="scanpath_studio/measures.py:word_box_bounds",
         unit="px",
         precedence=(
-            "Used by `assign.fixation_to_word` and by `agg.word_rates`' left "
-            "edge — the boundary *between* words. A position *inside* a word "
-            "goes through `geom.word_char_advance` instead, whose origin is the "
-            "word's `x` (its first glyph); the two are half an advance apart by "
-            "construction, which is what #BUG-27 settled."
+            "The boundary *between* words, for everything that tests a point "
+            "against a box or draws one: `assign.fixation_to_word`, "
+            "`assign.in_text`, the drawn outlines, the word heatmaps, the "
+            "critical-span frame, drift correction and the model scanpaths. A "
+            "position *inside* a word goes through `geom.word_char_advance` "
+            "instead, and the drawn label through `geom.word_glyph_span`. "
+            "#BUG-83 reverted BUG-11, which pulled every tiling boundary back "
+            "half a space to mid-whitespace and so disagreed with EyeLink's own "
+            "interest-area assignment on 7.4% of the demo's fixations."
         ),
         tiers="A, C",
         status=STATUS_PARTIAL,
@@ -1191,11 +1276,16 @@ REGISTER: tuple[Computation, ...] = (
             "Median of `width / (len(text) + 1)` across one trial's words — the "
             "advance — reported only when the boxes are consistently that wide "
             "**and** actually tile (no gaps). Anything else ⇒ `0.0`, i.e. "
-            "'these AOIs are glyph-tight, don't touch them'."
+            "'these AOIs are glyph-tight — each box is its glyph run'."
         ),
         code="scanpath_studio/measures.py:word_box_space_px",
         unit="px",
-        missing="No usable words ⇒ 0.0 (no correction), never a guess.",
+        missing="No usable words ⇒ 0.0 (glyph-tight), never a guess.",
+        precedence=(
+            "Never moves a box edge (#BUG-83); it only tells "
+            "`geom.word_char_advance` and `geom.word_glyph_span` how many "
+            "character cells a box holds."
+        ),
         tiers="A, C",
         status=STATUS_VERIFIED,
         consumers=(_UI, _API, _EXPORT),
@@ -1225,6 +1315,31 @@ REGISTER: tuple[Computation, ...] = (
         status=STATUS_VERIFIED,
         consumers=(_UI, _API, _EXPORT, _CORPUS),
         tests=("tests/test_measures.py",),
+    ),
+    Computation(
+        id="geom.word_glyph_span",
+        name="Where a word's glyphs are",
+        category=CATEGORY_GEOMETRY,
+        summary="The glyph run inside a word's box — where its label is drawn.",
+        formula=(
+            "Starts at `x` and runs `len(text) × geom.word_char_advance`: the "
+            "whole box on a glyph-tight corpus, one advance short of it on a "
+            "tiling one. No `text` ⇒ the box width."
+        ),
+        code="scanpath_studio/measures.py:word_glyph_span",
+        unit="px",
+        precedence=(
+            "Rendering, not an interest area: the word label is centred on it "
+            "(BUG-30), the linear-reading schematic snaps a fixation above its "
+            "centre, and `agg.landing_curve` mirrors an RTL landing across it. "
+            "#BUG-83 keeps the label here while the drawn box grew to the "
+            "experiment's — centring in a tiling box would draw the text half a "
+            "space right of the stimulus image and the fixations."
+        ),
+        tiers="A",
+        status=STATUS_VERIFIED,
+        consumers=(_UI, _API, _CLI, _EXPORT, _CORPUS),
+        tests=("tests/test_word_box_geometry.py",),
     ),
     # ------------------------------------------------------------------
     # Display / export transformations
@@ -1272,8 +1387,11 @@ REGISTER: tuple[Computation, ...] = (
         category=CATEGORY_DISPLAY,
         summary="One line of text fills its share of the recorded line pitch.",
         formula=(
-            "Text is drawn at `1/line_spacing` of the word-box height the data "
-            "already encodes, so the stimulus keeps the geometry it was read at."
+            "A word label's font is `1/line_spacing` of the line pitch (the median "
+            "line-to-line distance of the word boxes), capped so the words fit "
+            "their box widths (`plots._width_fit_font`; the smaller wins), in "
+            "data pixels converted at the figure's display scale. The figure is "
+            "drawn at its exact pixel size and scaled as one block."
         ),
         code="scanpath_studio/tabs.py:_render_true_scale_chart",
         precedence=(
@@ -1291,16 +1409,25 @@ REGISTER: tuple[Computation, ...] = (
         category=CATEGORY_DISPLAY,
         summary="How recorded time maps to playback time.",
         formula=(
-            "Frames follow `fix.rebased_onsets`, scaled by the playback speed. "
-            "A multipart replay changes screen at the boundary and draws no "
-            "connector across canvases."
+            "Frames sit on a uniform reading-time grid over `fix.rebased_onsets`; "
+            "the frame at reading time t is on screen once t / playback speed of "
+            "wall time has passed, so a replay lasts reading span / speed. The "
+            "player keeps that clock itself, skipping frames a display is too "
+            "slow to show, and a GIF/MP4 lasts the same. A multipart replay "
+            "changes screen at the boundary and draws no connector across "
+            "canvases."
         ),
         code="scanpath_studio/plots.py:make_scanpath_animation",
         unit="ms (recorded) → ms (playback)",
+        precedence=(
+            "Plotly's own frame queue is never the clock: it rounds every frame "
+            "up to whole display ticks and the error accumulates (BUG-93). "
+            "Without the player (`fig.show()`) the figure falls back to it."
+        ),
         tiers="C, D",
         status=STATUS_CONVENTION,
         consumers=(_UI, _API, _CLI, _EXPORT),
-        tests=("tests/test_animation_export.py",),
+        tests=("tests/test_replay_player.py", "tests/test_animation_export.py"),
     ),
     Computation(
         id="disp.illustration",
@@ -1326,6 +1453,12 @@ BY_ID = {entry.id: entry for entry in REGISTER}
 def entries_in(category: str) -> tuple[Computation, ...]:
     """Every register entry in one category, in declaration order."""
     return tuple(entry for entry in REGISTER if entry.category == category)
+
+
+def anchor(entry_id: str) -> str:
+    """The page anchor of one entry — its id, so a link to ``measure.ffd``
+    survives any rewording of the entry's name (``#measure-ffd``)."""
+    return entry_id.replace(".", "-").replace("_", "-")
 
 
 def to_markdown() -> str:
@@ -1365,7 +1498,8 @@ def to_markdown() -> str:
         '!!! note "Tier B is largely absent, on purpose"',
         "",
         "    Comparing against an independent implementation is "
-        "[VAL-4](https://github.com/lacclab/scanpath-studio), which is on hold. "
+        "[VAL-4](https://github.com/lacclab/scanpath-studio/issues/130), which is "
+        "on hold. "
         "Scientific measures therefore read *Partially verified* even where "
         "their hand oracle is exact. The one real exception is the drift-"
         "correction port, which was written against a published reference.",
@@ -1377,8 +1511,8 @@ def to_markdown() -> str:
     ]
     for entry in REGISTER:
         lines.append(
-            f"| `{entry.id}` | {entry.name} | {entry.category} | "
-            f"{entry.unit or '—'} | {entry.status} |"
+            f"| [`{entry.id}`](#{anchor(entry.id)}) | {entry.name} | "
+            f"{entry.category} | {entry.unit or '—'} | {entry.status} |"
         )
     lines.append("")
     for category in CATEGORIES:
@@ -1388,7 +1522,7 @@ def to_markdown() -> str:
         lines += [f"## {category}", ""]
         for entry in entries:
             lines += [
-                f"### `{entry.id}` — {entry.name}",
+                f"### `{entry.id}` — {entry.name} {{ #{anchor(entry.id)} }}",
                 "",
                 entry.summary,
                 "",

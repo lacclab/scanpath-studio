@@ -73,11 +73,8 @@ def _assign_word_ids_single(
     fx = pd.to_numeric(fix_chunk["x"], errors="coerce").to_numpy(dtype=float)
     fy = pd.to_numeric(fix_chunk["y"], errors="coerce").to_numpy(dtype=float)
 
-    in_box = (
-        (fx[:, None] >= wx0[None, :])
-        & (fx[:, None] <= wx1[None, :])
-        & (fy[:, None] >= wy0[None, :])
-        & (fy[:, None] <= wy1[None, :])
+    in_box = word_box_contains(
+        fx[:, None], fy[:, None], wx0[None, :], wy0[None, :], wx1[None, :], wy1[None, :]
     )
     word_idx = np.where(in_box.any(axis=1), in_box.argmax(axis=1), -1)
 
@@ -95,30 +92,31 @@ def _assign_word_ids_single(
     return np.where(word_idx >= 0, wids[np.clip(word_idx, 0, None)], np.nan)
 
 
-# --- BUG-11 · word-box boundaries that sit mid-space ------------------------
-# An interest-area boundary should fall in the MIDDLE of the whitespace between
-# two words. In some corpora it doesn't. Interest areas are defined by the
-# *experiment*, not by the tracker — EyeLink Data Viewer just measures against
-# whatever rectangles the IAS file gives it — and a stimulus generator that
-# tiles a monospaced line hands every box the whole following inter-word space
-# as trailing padding. The boxes then tile with no gaps, but every boundary sits
-# a half-space too far right, and a fixation landing in the space *before* a
-# word is credited to the previous word. On the bundled demo every box is
-# exactly ``(n_chars + 1) × advance`` px wide and starts at the word's first
-# glyph (checked against the corpus's own stimulus images: per line the ink
-# starts within 3 px of the first box's left edge and stops ~1 advance short of
-# the last box's right edge).
+# --- Tiling layouts: boxes that carry the following space --------------------
+# Interest areas are defined by the *experiment*, not by the tracker — EyeLink
+# Data Viewer just measures against whatever rectangles the IAS file gives it —
+# and a stimulus generator that tiles a monospaced line hands every box the
+# whole following inter-word space as trailing padding. On the bundled demo
+# every box is exactly ``(n_chars + 1) × advance`` px wide and starts at the
+# word's first glyph (checked against the corpus's own stimulus images: per line
+# the ink starts within 3 px of the first box's left edge and stops ~1 advance
+# short of the last box's right edge), so a fixation on the space after a word
+# belongs to that word, as it does in EyeLink's own reports.
 #
-# The correction has to be conditional: glyph-tight AOIs (PoTeC, MultiplEYE)
-# leave real gaps between boxes and are already centred by construction, so
-# shifting them would introduce the very error this fixes. `word_box_space_px`
-# therefore only reports a padding width when the layout actually looks like
-# "tiling boxes with one trailing space", and returns 0.0 otherwise.
+# **The boxes are used exactly as the experiment defined them** (BUG-83).
+# BUG-11 used to pull every tiling boundary back half a space, to the middle of
+# the whitespace. It reassigned 7.4% of the demo's fixations relative to
+# EyeLink's own interest-area assignment, which is the one the corpus' IA_*
+# measures were computed from, so it was reverted: a reading measure has to be
+# computed against the interest areas the study reported.
 #
-# Only the BOUNDARY moves. ``x`` keeps meaning "where the glyphs start", so the
-# true-to-scale word labels and the stimulus-image alignment (BUG-3 / VIZ-4) are
-# untouched — the labels are drawn from the original frame, the boundaries from
-# the recentred one.
+# What the layout's shape is still needed for is *inside* a word. A tiling box
+# is one advance wider than its glyph run, so `word_char_advance` divides by
+# ``len(text) + 1`` there (BUG-27), and `word_glyph_span` says where the letters
+# actually are — the drawn word labels sit on the glyph run (BUG-30), not in the
+# middle of a box whose right-hand cell is a space. `word_box_space_px` only
+# reports a padding width when the layout really looks like "tiling boxes with
+# one trailing space"; glyph-tight AOIs (PoTeC, MultiplEYE) read 0.0.
 _TILING_GAP_TOL_PX = 1.0
 # Box widths are integers in the exports, so `(n_chars + 1) × advance` is only
 # met to within a pixel of rounding; and a stray token (a stripped-out glyph, a
@@ -150,7 +148,11 @@ def word_box_space_px(words: pd.DataFrame) -> float:
     Non-zero only for a monospaced, *tiling* layout whose boxes are consistently
     ``(n_chars + 1)`` advances wide — the shape that carries the whole space as
     trailing padding. Anything else (glyph-tight AOIs, proportional fonts,
-    missing text) reports 0.0, i.e. "don't touch this layout".
+    missing text) reports 0.0, i.e. "every box is its glyph run".
+
+    It never moves a box edge (BUG-83): it only tells the within-word accessors
+    — :func:`word_char_advance` and :func:`word_glyph_span` — how many character
+    cells a box holds.
     """
     needed = {"x", "width", "text"}
     if words is None or words.empty or not needed <= set(words.columns):
@@ -186,23 +188,23 @@ def word_box_space_px(words: pd.DataFrame) -> float:
 
 def word_box_bounds(
     words: pd.DataFrame,
-    *,
-    layout: pd.DataFrame | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """``(x0, y0, x1, y1)`` AOI edges with the mid-space correction applied.
+    """``(x0, y0, x1, y1)`` interest-area edges, exactly as the data defines them.
 
     **The** accessor for word-box geometry: anything that tests a point against a
-    box, draws one, or measures a position within one goes through here, so the
-    boundary is in one place instead of re-derived per call site. Pure — it reads
-    ``x``/``y``/``width``/``height`` and returns arrays, never a shifted frame, so
-    it cannot be applied twice by accident (the failure mode that made the first
-    pass at BUG-11 fragile). For a glyph-tight corpus the correction is zero and
-    these are the raw edges.
+    box or draws one goes through here — fixation→word assignment, the in-text
+    flag, the drawn outlines, the word heatmaps, the critical-span frame, drift
+    correction and the model scanpaths — so there is one definition of where a
+    word's interest area is. It is ``x .. x + width`` by ``y .. y + height``,
+    the experiment's own rectangles (BUG-83). On a tiling corpus that includes
+    the space after the word, which is what EyeLink's reports assume.
 
-    Pass ``layout`` when ``words`` is a *subset* of a trial (a highlighted span,
-    the words that got any dwell): tiling is a property of the whole line, and a
-    subset has holes in it, so detection has to run on the full frame or it reads
-    the holes as glyph-tight gaps and silently declines to correct.
+    Pure: it reads ``x``/``y``/``width``/``height`` and returns arrays.
+
+    **Not** the frame for a position *inside* a word: a tiling box's right-hand
+    cell is a space, so letters are counted from ``x`` in
+    :func:`word_char_advance` units, and :func:`word_glyph_span` says where the
+    glyphs are.
     """
     if words is None or words.empty:
         # A column-less empty frame is a legitimate "no words" input.
@@ -212,8 +214,29 @@ def word_box_bounds(
     y = pd.to_numeric(words["y"], errors="coerce").to_numpy(dtype=float)
     w = pd.to_numeric(words["width"], errors="coerce").to_numpy(dtype=float)
     h = pd.to_numeric(words["height"], errors="coerce").to_numpy(dtype=float)
-    x0 = x - word_box_space_px(words if layout is None else layout) / 2.0
-    return x0, y, x0 + w, y + h
+    return x, y, x + w, y + h
+
+
+def word_box_contains(
+    px: np.ndarray,
+    py: np.ndarray,
+    x0: np.ndarray,
+    y0: np.ndarray,
+    x1: np.ndarray,
+    y1: np.ndarray,
+) -> np.ndarray:
+    """Is each point inside each box? **The** containment rule, broadcasting.
+
+    Half-open — ``x0 <= x < x1`` and ``y0 <= y < y1`` — so a box ``width`` px
+    wide holds exactly ``width`` pixel columns, and a point on the edge two
+    tiling boxes share belongs to the box that *starts* there: the word to the
+    right, the line below. That is how EyeLink assigned every such fixation in
+    the bundled demo (30 of them, all integer coordinates on a shared edge),
+    where a closed test handed each to the earlier box instead (BUG-83).
+    Assignment, the out-of-text flag and the word heatmap all test with this,
+    so a fixation is counted towards exactly one word.
+    """
+    return (px >= x0) & (px < x1) & (py >= y0) & (py < y1)
 
 
 def word_char_advance(
@@ -228,26 +251,25 @@ def word_char_advance(
     letters (initial landing position, a saccade's launch/landing letter), the
     way :func:`word_box_bounds` is the accessor for the boundary between words.
 
-    VAL-5 found the two disagreeing. The boundary had been corrected for BUG-11's
-    trailing inter-word padding while the letter scale had not: ``width /
-    len(text)`` divides a box that is ``len(text) + 1`` advances wide by
-    ``len(text)``, so on a tiling corpus every letter was reported ~``(n+1)/n``
-    too wide and every landing position that far into the word. The fix is the
-    same detection, applied to the denominator — ``width / (len(text) + 1)`` for
-    a tiling layout, ``width / len(text)`` for a glyph-tight one.
+    ``width / len(text)`` is wrong on a tiling corpus (BUG-27, found by VAL-5):
+    it divides a box that is ``len(text) + 1`` advances wide by ``len(text)``,
+    so every letter was reported ~``(n+1)/n`` too wide and every landing
+    position that far into the word. The fix is :func:`word_box_space_px`'s
+    detection applied to the denominator — ``width / (len(text) + 1)`` for a
+    tiling layout, ``width / len(text)`` for a glyph-tight one.
 
-    The *origin* of a within-word position stays the word's ``x`` (where the
-    glyphs start), not the corrected boundary: half an inter-word space to the
-    left of the first glyph is where the AOI begins, not where the word does.
-    With the advance fixed, ``x`` and the corrected boundary are one advance/2
-    apart by construction, so the two accessors describe one consistent geometry.
+    The *origin* of a within-word position is the word's ``x``, which on every
+    layout this app recognises is both where the box starts and where the first
+    glyph does. On a tiling box the last cell, ``[x + n × advance, x + width)``,
+    is the space after the word — letter ``n + 1`` of the interest area.
 
-    ``layout`` has the same meaning as in :func:`word_box_bounds`: pass the full
-    trial when ``words`` is a subset, since tiling is a property of the line.
+    Pass ``layout`` — the full trial — when ``words`` is a *subset* (a
+    highlighted span, one word): tiling is a property of the whole line, and a
+    subset's holes read as glyph-tight gaps.
 
     ``chars`` lets a caller that already counted the characters hand them in —
     ``.astype(str).str.len()`` is a Python-level pass over the frame, and
-    ``aggregation._glyph_span`` needs the same counts for the glyph run.
+    :func:`word_glyph_span` needs the same counts for the glyph run.
     """
     if words is None or words.empty or not {"width", "text"} <= set(words.columns):
         # NaN, never `np.empty` — that returns *uninitialized* floats, and a
@@ -265,20 +287,33 @@ def word_char_counts(words: pd.DataFrame) -> np.ndarray:
     return words["text"].astype(str).str.len().clip(lower=1).to_numpy(dtype=float)
 
 
-def recentre_word_boxes(words: pd.DataFrame) -> pd.DataFrame:
-    """The :func:`word_box_bounds` correction as a frame, for row-wise consumers.
+def word_glyph_span(
+    words: pd.DataFrame, *, layout: pd.DataFrame | None = None
+) -> tuple[np.ndarray, np.ndarray]:
+    """``(start, run)`` — where each word's glyphs begin, and how wide they are.
 
-    Returns ``words`` unchanged (the same object) for layouts
-    :func:`word_box_space_px` doesn't recognise, so the common case costs one
-    check and no copy. Prefer :func:`word_box_bounds` — this shifts ``x``, so a
-    frame that has been through it must not go through it again.
+    A rendering accessor, not an interest area: the drawn word label is centred
+    on ``start + run / 2`` (BUG-30), and a fixation snapped to its word in the
+    linear-reading schematic lands there too. On a glyph-tight layout the run is
+    the whole box; on a tiling one it is ``len(text)`` :func:`word_char_advance`
+    units, one advance short of the box, whose last cell is the space after the
+    word. Centring a label in that box would draw the text half a space right of
+    where the stimulus had it, and off the fixations that read it.
+
+    Falls back to the box ``width`` for a frame with no ``text`` column, where
+    there are no letters to count. ``layout`` is as for
+    :func:`word_char_advance`.
     """
-    space = word_box_space_px(words)
-    if space <= 0:
-        return words
-    out = words.copy()
-    out["x"] = pd.to_numeric(out["x"], errors="coerce") - space / 2.0
-    return out
+    if words is None or words.empty:
+        empty = np.empty(0, dtype=float)
+        return empty, empty.copy()
+    start = pd.to_numeric(words["x"], errors="coerce").to_numpy(dtype=float)
+    width = pd.to_numeric(words["width"], errors="coerce").to_numpy(dtype=float)
+    if "text" not in words.columns:
+        return start, width
+    chars = word_char_counts(words)
+    run = word_char_advance(words, layout=layout, chars=chars) * chars
+    return start, np.where(np.isfinite(run) & (run > 0), run, width)
 
 
 def assign_fixations_to_words(
@@ -297,9 +332,10 @@ def assign_fixations_to_words(
     If `overwrite=False` and the fixations already carry word_id values, those
     are kept; only NaN rows get re-assigned.
 
-    Box edges come from :func:`word_box_bounds` (BUG-11), so a fixation in the
-    whitespace *before* a word is credited to that word rather than the previous
-    one.
+    Box edges come from :func:`word_box_bounds` — the experiment's own
+    rectangles (BUG-83) — so on a tiling corpus a fixation on the space after a
+    word is credited to that word, exactly as EyeLink's interest-area report
+    credits it.
     """
     if fixations.empty or words.empty:
         return fixations
@@ -573,11 +609,8 @@ def _in_any_box(fix_chunk: pd.DataFrame, word_chunk: pd.DataFrame) -> np.ndarray
     x0, y0, x1, y1 = word_box_bounds(word_chunk)
     fx = pd.to_numeric(fix_chunk["x"], errors="coerce").to_numpy(dtype=float)
     fy = pd.to_numeric(fix_chunk["y"], errors="coerce").to_numpy(dtype=float)
-    inside = (
-        (fx[:, None] >= x0[None, :])
-        & (fx[:, None] <= x1[None, :])
-        & (fy[:, None] >= y0[None, :])
-        & (fy[:, None] <= y1[None, :])
+    inside = word_box_contains(
+        fx[:, None], fy[:, None], x0[None, :], y0[None, :], x1[None, :], y1[None, :]
     )
     return inside.any(axis=1)
 
@@ -725,6 +758,19 @@ def compute_per_word_measures(
         )
     )
 
+    # PERF-12: each trial's word rows, found once. The landing measures below
+    # used to locate a fixated word by masking the *whole* words frame — one
+    # full-frame comparison per fixated word, per identity column — which made
+    # this function quadratic in corpus size (1.7 s on the demo, 22 s at 8×).
+    word_num = pd.to_numeric(words["word_id"], errors="coerce").to_numpy(dtype=float)
+    identity_cols = grouping_columns(enriched) if not enriched.empty else []
+    word_rows: dict[tuple, np.ndarray] = {}
+    if identity_cols and set(identity_cols) <= set(words.columns):
+        grouped = words.groupby(identity_cols, sort=False).indices
+        word_rows = {
+            (k if isinstance(k, tuple) else (k,)): v for k, v in grouped.items()
+        }
+
     analysis_fixations = enriched
     if "excluded" in enriched.columns:
         analysis_fixations = enriched[~enriched["excluded"].fillna(False).astype(bool)]
@@ -732,12 +778,20 @@ def compute_per_word_measures(
         per_word_rows = []
         # Group fixations by trial to walk them in temporal order.
         trial_keys = grouping_columns(analysis_fixations)
-        for group_key, fix_chunk in analysis_fixations.dropna(
-            subset=["word_id"]
-        ).groupby(trial_keys, sort=False):
+        for group_key, trial_chunk in analysis_fixations.groupby(
+            trial_keys, sort=False
+        ):
             values = group_key if isinstance(group_key, tuple) else (group_key,)
             identity = dict(zip(trial_keys, values))
-            fix_chunk = fix_chunk.sort_values("timestamp_ms")
+            # BUG-66: the walk below sees the off-text fixations too — one lands
+            # between two runs, so it must end the first of them, exactly as
+            # `materialize_runs` numbers `word_run` (and so second-pass). Walking
+            # only the in-text rows glued the two runs into one first pass, and a
+            # word's first + second pass then added up to more than its total.
+            trial_chunk = trial_chunk.sort_values("timestamp_ms")
+            fix_chunk = trial_chunk.dropna(subset=["word_id"])
+            if fix_chunk.empty:
+                continue
             # Total / n / first-fixation are per-word aggregations
             grp = fix_chunk.groupby("word_id")
             tot = grp["duration_ms"].sum()
@@ -760,94 +814,101 @@ def compute_per_word_measures(
                 .size()
             )
 
-            # First-pass gaze: walk the trial in order, accumulate runs.
-            first_pass_gaze: dict[float, float] = {}
+            # One walk of the trial in time order. The definitions are EyeLink's
+            # IA_* ones, so a computed measure means the same as an imported one
+            # (imported values take precedence, and the two must not disagree
+            # about what a column is): validated against the bundled OneStop IA
+            # report, which EyeLink Data Viewer produced from these fixations.
+            first_run: dict[float, float] = {}  # IA_FIRST_RUN_DWELL_TIME
+            first_pass: set = set()  # not IA_SKIP
             regression_path: dict[float, float] = {}
             regression_in: set = set()
             regression_out: set = set()
             regression_in_count: dict[float, int] = {}
 
             running_max = -np.inf
-            current_run_word: float | None = None
-            current_run_duration: float = 0.0
-            # For regression-path: from first entry into a word until first
-            # fixation past it, sum all durations.
-            first_entry_seen: set = set()
-            rp_open_for: dict[float, float] = {}
+            run_word: float | None = None
+            run_duration = 0.0
+            seen: set = set()
+            go_past_open: dict[float, float] = {}
+            left_forward: set = set()
 
             prev_word: float | None = None
-            for row in fix_chunk.itertuples():
-                w = float(row.word_id)
+            for row in trial_chunk.itertuples():
                 dur = float(row.duration_ms)
+                if pd.isna(row.word_id):
+                    # Outside every box: ends the current run (BUG-66), but
+                    # opens, extends and closes no go-past window.
+                    if run_word is not None:
+                        first_run.setdefault(run_word, run_duration)
+                    run_word = None
+                    continue
+                w = float(row.word_id)
 
-                # First-pass gaze duration: continuous run on this word
-                # starting from first entry, ending the first time we leave.
-                if w not in first_pass_gaze:
-                    if current_run_word == w:
-                        current_run_duration += dur
+                # First run: the word's first unbroken stretch of fixations,
+                # whenever it begins (as IA_FIRST_RUN_DWELL_TIME).
+                if run_word == w:
+                    run_duration += dur
+                else:
+                    if run_word is not None:
+                        first_run.setdefault(run_word, run_duration)
+                    run_word = w if w not in first_run else None
+                    run_duration = dur
+
+                # BUG-62: first pass means entered *before any later word was
+                # fixated*. A word first reached by a regression was skipped,
+                # which is what IA_SKIP says and what `skip_flag` must say.
+                if w not in seen and w > running_max:
+                    first_pass.add(w)
+
+                # BUG-61: go-past (regression-path) time runs from the word's
+                # first fixation until the first fixation on a later word, and
+                # EVERY fixation in between counts — a first visit to a skipped
+                # earlier word during the regression included. Adding only
+                # revisits dropped those, so RPD always came out short.
+                for k in go_past_open:
+                    if w <= k:
+                        go_past_open[k] += dur
+                if w not in seen:
+                    go_past_open[w] = dur
+                for k in [k for k in go_past_open if w > k]:
+                    regression_path[k] = go_past_open.pop(k)
+                seen.add(w)
+
+                if prev_word is not None and w != prev_word:
+                    if w < prev_word:
+                        regression_in.add(w)
+                        regression_in_count[w] = regression_in_count.get(w, 0) + 1
+                        # BUG-64: a regression *out* is a first-pass event
+                        # (IA_REGRESSION_OUT) — made from a word read in first
+                        # pass, before the eyes first left it forwards — not a
+                        # regression from it at any later time.
+                        if prev_word in first_pass and prev_word not in left_forward:
+                            regression_out.add(prev_word)
                     else:
-                        if current_run_word is not None:
-                            first_pass_gaze.setdefault(
-                                current_run_word, current_run_duration
-                            )
-                        current_run_word = w
-                        current_run_duration = dur
-                else:
-                    # Already past first pass; reset run tracker.
-                    if (
-                        current_run_word is not None
-                        and current_run_word not in first_pass_gaze
-                    ):
-                        first_pass_gaze.setdefault(
-                            current_run_word, current_run_duration
-                        )
-                    current_run_word = None
-                    current_run_duration = 0.0
-
-                # Regression-path: from the first entry into a word, sum
-                # durations until the next fixation lands on a strictly later
-                # word.
-                if w not in first_entry_seen:
-                    first_entry_seen.add(w)
-                    rp_open_for[w] = dur
-                else:
-                    for k in list(rp_open_for.keys()):
-                        if w <= k:
-                            # Still within or back-tracking; keep accumulating.
-                            rp_open_for[k] += dur
-                # Close any open RP windows for words we've now moved past.
-                for k in list(rp_open_for.keys()):
-                    if w > k and k != w:
-                        regression_path.setdefault(k, rp_open_for.pop(k))
-
-                # Regression-in: stepping back to an earlier word counts the
-                # destination as receiving an in-regression.
-                if prev_word is not None and w < prev_word:
-                    regression_in.add(w)
-                    regression_out.add(prev_word)
-                    regression_in_count[w] = regression_in_count.get(w, 0) + 1
+                        left_forward.add(prev_word)
 
                 running_max = max(running_max, w)
                 prev_word = w
 
-            # Flush remaining first-pass run
-            if current_run_word is not None and current_run_word not in first_pass_gaze:
-                first_pass_gaze[current_run_word] = current_run_duration
-            # Flush remaining regression-path windows (reader never moved past)
-            for k, v in rp_open_for.items():
-                regression_path.setdefault(k, v)
+            if run_word is not None:
+                first_run.setdefault(run_word, run_duration)
+            # Windows still open at the end: the reader never moved past them.
+            regression_path.update(go_past_open)
 
+            trial_rows = word_rows.get(tuple(values))
+            first_row: dict[float, int] = {}
+            if trial_rows is not None:
+                for pos in trial_rows:
+                    first_row.setdefault(word_num[pos], pos)
             for w in tot.index:
-                word_mask = pd.to_numeric(words["word_id"], errors="coerce") == w
-                for column, value in identity.items():
-                    word_mask &= words[column] == value
-                trial_word = words[word_mask]
                 landing_position = landing_distance = np.nan
-                if not trial_word.empty:
-                    target = trial_word.iloc[0]
+                pos = first_row.get(float(w))
+                if pos is not None:
+                    target = words.iloc[pos]
                     text_len = max(len(str(target.get("text", ""))), 1)
                     width = float(pd.to_numeric(target.get("width"), errors="coerce"))
-                    char_width = float(char_advance.loc[trial_word.index[0]])
+                    char_width = float(char_advance.iloc[pos])
                     if np.isfinite(char_width) and char_width > 0 and width > 0:
                         rtl = bool(target.get("right_to_left", False))
                         # BUG-27: RTL counts from where the glyphs *end*
@@ -863,22 +924,28 @@ def compute_per_word_measures(
                             if rtl
                             else float(ffx.loc[w]) - float(target.get("x"))
                         )
+                        # Unclipped. The glyphs span [1, n + 1); on a tiling
+                        # corpus the box's last cell, [n + 1, n + 2), is the
+                        # space after the word, which belongs to it (BUG-83), so
+                        # a first fixation there reads letter n + 1 — the AOI's
+                        # own last cell — rather than being folded onto letter n.
                         landing_position = offset / char_width + 1.0
-                        landing_distance = landing_position - (text_len + 1) / 2.0
+                        # BUG-65: the word's centre is its glyphs' centre,
+                        # 1 + n / 2 — not (n + 1) / 2, which read every landing
+                        # half a letter right of centre, and not the box's
+                        # centre, which on a tiling box sits half a space
+                        # further right again.
+                        landing_distance = landing_position - (1.0 + text_len / 2.0)
                 per_word_rows.append(
                     dict(
                         **identity,
                         word_id=w,
                         _first_fixation_ms=float(ffd.loc[w]),
-                        _first_pass_gaze_ms=float(first_pass_gaze.get(w, np.nan)),
-                        _regression_path_ms=float(
-                            regression_path.get(w, np.nan)
-                            if w in first_entry_seen
-                            else np.nan
-                        ),
+                        _first_pass_gaze_ms=float(first_run.get(w, np.nan)),
+                        _regression_path_ms=float(regression_path.get(w, np.nan)),
                         _total_fixation_ms=float(tot.loc[w]),
                         _n_fixations=int(n.loc[w]),
-                        _skip_flag=bool(np.isnan(first_pass_gaze.get(w, np.nan))),
+                        _skip_flag=w not in first_pass,
                         _regression_in_flag=w in regression_in,
                         _regression_out_flag=w in regression_out,
                         _first_fix_x=float(ffx.loc[w]),
@@ -939,6 +1006,30 @@ def compute_per_word_measures(
         else:
             out[dst] = out[src]
         out = out.drop(columns=src)
+
+    # BUG-63: a word nobody fixated has no first fixation, first pass or go-past
+    # time — but an imported IA report may say `0` rather than leave the cell
+    # empty (the bundled OneStop one does, for every such word), and a 0 wins the
+    # precedence above. Every mean then counted skipped words as 0-ms fixations.
+    # Total time stays 0 on purpose: the word was read past and got no time.
+    if "n_fixations" in out.columns:
+        unfixated = pd.to_numeric(out["n_fixations"], errors="coerce").eq(0)
+        for col in (
+            "first_fixation_ms",
+            "first_pass_gaze_duration_ms",
+            "regression_path_duration_ms",
+            "single_fixation_duration_ms",
+        ):
+            if col in out.columns and unfixated.any():
+                out[col] = pd.to_numeric(out[col], errors="coerce").mask(unfixated)
+        # The mirror image for second pass, whose rule is "fewer than two runs
+        # ⇒ 0": an imported IA_SECOND_RUN_DWELL_TIME leaves those cells empty,
+        # so its mean covered only re-read words while the computed one covered
+        # every word — one measure, two meanings, depending on the upload.
+        if "second_pass_duration_ms" in out.columns:
+            known = pd.to_numeric(out["n_fixations"], errors="coerce").notna()
+            second = pd.to_numeric(out["second_pass_duration_ms"], errors="coerce")
+            out["second_pass_duration_ms"] = second.mask(known & second.isna(), 0.0)
 
     # Canonical aliases used elsewhere in the app
     if (

@@ -44,13 +44,12 @@ Mechanics worth knowing before editing:
   same-origin script (``_tour_optout_script``); ``tour_opted_out()`` reads it.
   The replay button ignores the opt-out entirely, so the tour is never lost.
 - **The FAQ (UX-15)** is the other half of the ❓ Help menu group: a short
-  ``st.dialog`` of recurring questions (``render_faq_button``), deliberately
-  kept to a handful of answers with the complete version on the docs site
-  (``docs/faq.md``). It is armed exactly like the tour — the button's
-  ``on_click`` sets a request flag that ``maybe_show_faq`` serves early in
-  ``main()`` — because the button renders at the *bottom* of ``main()``:
-  opening the dialog from its return value made the modal wait out the whole
-  rerun (~10 s of plot embeds) before appearing.
+  ``st.dialog`` of recurring questions (``_faq_dialog``), deliberately kept to a
+  handful of answers with the complete version on the docs site
+  (``docs/faq.md``). It is armed exactly like the tour — the ❓ Help nav entry
+  (``menu._arm_help_action``) calls ``_arm_faq``, which sets a request flag that
+  ``maybe_show_faq`` serves early in ``main()``, so the modal never waits out the
+  rest of the rerun (~10 s of plot embeds) before appearing.
 """
 
 from __future__ import annotations
@@ -67,6 +66,11 @@ from .constants import (
     _VIEW_DATA,
     _VIEW_SCANPATH,
     CITATION,
+    ICONS,
+    SUBTAB_ANNOTATIONS,
+    SUBTAB_COMPARISONS,
+    SUBTAB_EXPORT,
+    SUBTAB_SHARE,
     drift_correction_enabled,
     preprocessing_enabled,
     similarity_enabled,
@@ -107,6 +111,10 @@ class TutorialStep:
     selector: str
     view: str = _VIEW_SCANPATH
     subtab: str | None = None
+    #: PERF-9 made the Corpus Analysis subtabs lazy (only the open one renders),
+    #: so a step aimed at a control inside one has to open it, as ``subtab``
+    #: does for the Scanpath view. A label from ``tabs.CORPUS_SUBTABS``.
+    corpus_subtab: str | None = None
     #: DATA-35 — the step's target lives on the 🗂️ Data page's **✏️ Edit dataset**
     #: screen rather than its overview, so opening the view is not enough: the
     #: editor has to be raised too, or the spotlight aims at a hidden container.
@@ -167,7 +175,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "Everything about the dataset lives on the 🗂️ **Data** page, in the "
                 "order the pipeline uses it. Start at **📂 Available datasets** — "
                 "click a name to open it, or ➕ **Add dataset** for your own tables.",
-                ".st-key-tour_grp_data_source",
+                ".st-key-tutorial_available_datasets",
                 view=_VIEW_DATA,
             ),
             TutorialStep(
@@ -236,7 +244,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Review one trial at a time",
-                "One picker for every dataset: the **Trial id** dropdown, a scrubbing "
+                "One picker for every dataset: the **Select Trial** dropdown, a scrubbing "
                 "slider showing *index / total*, and ◀ ▶ to step through the pool "
                 "you just narrowed.",
                 ".st-key-tour_grp_trial_picker",
@@ -254,14 +262,14 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "Star, tag, or note the parent trial. Multipart data can instead attach "
                 "a separate annotation to the active screen.",
                 ".st-key-tutorial_annotations",
-                subtab="📝 Annotations",
+                subtab=SUBTAB_ANNOTATIONS,
             ),
             TutorialStep(
                 "Export the marked result",
                 "Open **Export** and choose the filtered scope and tabular files. "
                 "Screen identity is retained in multipart exports.",
                 ".st-key-tutorial_export",
-                subtab="Export",
+                subtab=SUBTAB_EXPORT,
             ),
         ),
     ),
@@ -292,7 +300,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "Open **Export** for PNG/SVG/HTML or bulk output. Include the plot config "
                 "when the figure must be reproducible later.",
                 ".st-key-tutorial_export",
-                subtab="Export",
+                subtab=SUBTAB_EXPORT,
             ),
             TutorialStep(
                 "Keep the figure reproducible",
@@ -300,7 +308,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "**Session** saves it (with your annotations) as JSON. Either one "
                 "reproduces this figure later — the PNG on its own does not.",
                 ".st-key-tutorial_share",
-                subtab="🔗 Share",
+                subtab=SUBTAB_SHARE,
                 optional=True,
             ),
         ),
@@ -325,12 +333,12 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Compare like with like",
-                "Open **🔬 Comparisons** and pick the column that separates the "
-                "readings — participant, session, condition. You get the other "
-                "readings of *this* text at the same scale, so the grid compares "
-                "like with like." + _SIMILARITY_SENTENCE,
+                "Open **🔬 Comparisons** and set **Match field** to the text id: "
+                "the grid shows the other trials that share this trial's value in "
+                "that field — here, the other readings of *this* text — at the same "
+                "scale, so it compares like with like." + _SIMILARITY_SENTENCE,
                 ".st-key-tutorial_comparisons",
-                subtab="🔬 Comparisons",
+                subtab=SUBTAB_COMPARISONS,
             ),
         ),
     ),
@@ -360,10 +368,10 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Pick the question, not the chart",
-                "Three subtabs, three shapes of question. **Per text** — one text, many "
-                "readers. **Per reader** — one reader, all their trials. **Groups** — a "
-                "cohort, or two compared. Our worked question is *did this reader speed "
-                "up over the experiment?*, so open **Per reader**.",
+                "Four subtabs, four shapes of question: **Per text** (one text, many "
+                "readers), **Per sentence**, **Per reader** (one reader, all their "
+                "trials) and **Groups** (a cohort, or two compared). Our question — "
+                "*did this reader speed up over the experiment?* — is **Per reader**.",
                 ".st-key-tutorial_corpus_subtabs",
                 view=_VIEW_CORPUS,
             ),
@@ -374,6 +382,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "experiment on one axis, rather than a single trial's dynamics.",
                 ".st-key-tutorial_per_reader_view",
                 view=_VIEW_CORPUS,
+                corpus_subtab="Per reader",
             ),
             TutorialStep(
                 "Read average fixation duration across the experiment",
@@ -390,6 +399,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "reader unusual, or is the whole cohort like this? Read the sample size "
                 "with the effect, never the plotted mean on its own.",
                 ".st-key-tutorial_per_reader_view",
+                corpus_subtab="Per reader",
                 view=_VIEW_CORPUS,
                 optional=True,
             ),
@@ -422,33 +432,33 @@ def steps_of(tutorial: TutorialDefinition) -> tuple[TutorialStep, ...]:
 # should take well under a minute.
 _STEPS = [
     (
-        "👀 Welcome to Scanpath Studio",
+        f"{ICONS['app']} Welcome to Scanpath Studio",
         "Visualize **eye movements in reading** — scanpaths drawn true-to-scale "
         "over the text. A demo dataset is loaded; this tour takes under a minute.",
     ),
     (
-        "📂 Data",
+        f"{ICONS['datasets']} Data",
         "Use the demo, or **upload your own** fixations / word tables "
         "(CSV / TSV / Parquet). Columns auto-detect — remap any field in the wizard.",
     ),
     (
-        "🔍 Filter trials",
+        f"{ICONS['trial_filter']} Filter trials",
         "Narrow trials by participant or condition. Each tab has its own trial picker.",
     ),
     (
-        "🎛️ Plot controls",
+        f"{ICONS['plot_controls']} Plot controls",
         "Toggle and style every layer — fixations, saccades, heatmap, word boxes, "
         "text. **📐 Figure & canvas → 🖥️ Screen & geometry** sets your monitor so "
         "it stays true-to-scale.",
     ),
     (
-        "🗂 Three views",
+        f"{ICONS['views']} Three views",
         "**Scanpath** (tick *Animate* to replay) · **Corpus Analysis** · "
         "**Data** (set up and inspect the dataset). Bulk export is the "
         "**Export** subtab in Scanpath.",
     ),
     (
-        "📝 Annotate & save",
+        f"{ICONS['annotations']} Annotate & save",
         "Star, tag, and note trials, then filter to them. **💾 Session** "
         "saves the whole setup + annotations to JSON. Replay this via "
         "**Tutorials → Welcome tour**. 👀",
@@ -541,19 +551,6 @@ def _dismissed_tutorial_ids() -> set[str]:
     return st.session_state["_tutorial_dismissed_ids"]
 
 
-def tutorial_opted_out(tutorial_id: str) -> bool:
-    """True when ``tutorial_id`` was marked "don't auto-show" (UX-85).
-
-    Nothing in the 🧭 Tutorials library auto-opens itself today — only the
-    welcome card and the wizard guide do, each with their own mechanism — so
-    this is the opt-out for whichever ones start doing that (the wizard guide
-    included, once it reads this too) rather than something with an effect
-    yet on every tutorial. It never hides a tutorial from the chooser, only
-    stops it greeting you — the same "gone, not away" rule #UX-12 set.
-    """
-    return tutorial_id in _dismissed_tutorial_ids()
-
-
 def _tutorial_optout_script(dismissed: set[str]) -> str:
     """A same-origin script writing (or clearing) the dismissed-id cookie."""
     if dismissed:
@@ -611,7 +608,7 @@ def _render_tutorial_optout(tutorial_id: str, host, *, key_suffix: str = "") -> 
     ):
         st.session_state[key] = shared_truth
     checked = host.checkbox(
-        "🔕 Don't auto-show this one",
+        f"{ICONS['mute']} Don't auto-show this one",
         key=key,
         help="Stops this tutorial from offering itself automatically. It "
         "stays listed here, and Start / Resume work exactly the same.",
@@ -728,62 +725,66 @@ def _tour_dialog() -> None:
 _SPOTLIGHT_STEPS = [
     {
         "selector": None,
-        "title": "👀 Welcome to Scanpath Studio",
+        "title": f"{ICONS['app']} Welcome to Scanpath Studio",
         "body": "Visualize **eye movements in reading** — scanpaths drawn "
         "true-to-scale over the text. A demo dataset is loaded; **Next** for a "
         "quick tour.",
     },
     {
         "selector": ".st-key-tour_grp_plot",
-        "title": "🗺️ The scanpath",
-        "body": "This is the main plot. Each dot is a **fixation**, sized by "
+        "title": f"{ICONS['view_scanpath']} The scanpath",
+        "body": "This is the main plot. Each circle is a **fixation**, sized by "
         "duration; the lines are **saccades** between them.",
     },
     {
         "selector": ".st-key-tour_grp_data_source",
-        "title": "📂 Available datasets",
+        "title": f"{ICONS['datasets']} Available datasets",
         "body": "Your **data source** (demo or your own upload) sits at the left "
         "of the control line. Every dataset is listed on the 🗂️ **Data** page — "
         "click a name there to open it, ➕ **Add dataset** for your own.",
     },
-    # UX-34: narrowing comes before picking, both on screen (the Filter-by row
-    # sits above the picker) and in the workflow, so the spotlight now walks them
-    # top-to-bottom instead of jumping down to the picker and back up. Each step
+    # Picking comes before narrowing: the picker is the control a new reader
+    # reaches for first, and narrowing only means something once they have seen
+    # the pool it narrows. (UX-34 walked them the other way round, top-to-bottom
+    # by screen position; the workflow order reads better in the tour.) Each step
     # targets its own container — they used to share one wrapper, so both lit up
     # the whole block.
     {
-        "selector": ".st-key-tour_grp_narrow_by",
-        "popover": FUNNEL_TRIGGER,
-        "title": "🔍 Narrow the pool",
-        "body": "The funnel beside the trial picker — opened behind this card — "
-        "holds every way to narrow the pool: the text and participant pickers "
-        "first (*All texts* / *All participants*), then condition and "
-        "annotation filters (favorites, tags).",
-    },
-    {
         "selector": ".st-key-tour_grp_trial_picker",
-        "title": "🎯 Pick a trial",
+        "title": f"{ICONS['pick_trial']} Pick a trial",
         "body": "Step through trials with the selector and ◀ ▶, or scrub the "
         "slider — it shows the trial's position and id.",
     },
     {
+        "selector": ".st-key-tour_grp_narrow_by",
+        "popover": FUNNEL_TRIGGER,
+        "title": f"{ICONS['trial_filter']} Narrow the pool",
+        # The icon, not the word: the trigger beside the picker is Streamlit's
+        # Material funnel (`tabs._FILTER_ICON`), and "the funnel" sent readers
+        # hunting for an emoji the app never draws.
+        "body": f"{ICONS['trial_filter']} beside the trial picker — opened for you "
+        "here — holds every way to narrow the pool: the text and participant "
+        "pickers first (*All texts* / *All participants*), then condition and "
+        "annotation filters (favorites, tags).",
+    },
+    {
         "selector": ".st-key-tour_grp_chips",
-        "title": "🏷️ Trial at a glance",
+        "title": f"{ICONS['chips']} Trial at a glance",
         "body": "These chips show the trial's **identity, conditions, and summary "
         "stats**. Choose which fields appear — and drag to reorder — with "
         "**✏️ Edit chips** at the right of the strip.",
     },
     {
         "selector": ".st-key-tour_grp_view_modes",
-        "title": "🎬 Animate & compare",
+        "title": f"{ICONS['animate']} Animate & compare",
         "body": "**Animate** replays the trial fixation by fixation, and "
         "**Compare** adds a second scanpath beside it — from this dataset or, "
-        "via **Compare with**, from another one. Each has a ⚙ popover for its "
-        "settings.",
+        "via **Compare with**, from another one. The ▾ beside each toggle "
+        "opens its settings.",
     },
     {
         "selector": ".st-key-tour_grp_viz_controls",
-        "title": "🎛️ Plot controls",
+        "title": f"{ICONS['plot_controls']} Plot controls",
         "body": "Toggle and style every layer — fixations, saccades, heatmap, word "
         "boxes, text. **Design presets** jump between Scanpath, Heatmap, "
         "Illustration and your last custom tuning — and 💾 keeps the ones you "
@@ -791,7 +792,7 @@ _SPOTLIGHT_STEPS = [
     },
     {
         "selector": ".st-key-tour_grp_subtabs",
-        "title": "📑 Per-trial panels",
+        "title": f"{ICONS['panels']} Per-trial panels",
         "body": "Below the plot: **📝 Annotations**, **📄 Stimulus & Context**, "
         "**🔬 Comparisons**, **📤 Export** (this trial or bulk), and "
         "**🔗 Share** a deep link.",
@@ -803,11 +804,12 @@ _SPOTLIGHT_STEPS = [
         # (`tests/test_tour.py` now catches that) — and its two subjects are
         # nav entries themselves, which makes this the same target.
         "selector": NAV_SELECTOR,
-        "title": "🧭 The nav",
-        "body": "**📊 Corpus Analysis** aggregates across readers and texts; "
-        "**🗂️ Data** sets one up. **💾 Session** (backups, the on-device cache) "
-        "and **❓ Help** open over your work rather than taking you anywhere — "
-        "this tour included, under **Tutorials**. 👀",
+        "title": f"{ICONS['nav']} The nav",
+        "body": "**🗺️ Scanpath** is what you see now. "
+        "**📊 Corpus Analysis** aggregates across readers and texts; "
+        "**🗂️ Data** sets one up. **💾 Session** and **❓ Help** open over your "
+        "work rather than navigating away — replay this tour under "
+        "**Tutorials**. 👀",
     },
 ]
 
@@ -1316,22 +1318,6 @@ def maybe_show_welcome_tour() -> None:
     _start_tour()
 
 
-def render_tour_replay_button(host=None) -> None:
-    """Compatibility button that replays the welcome tour from step one.
-
-    Deliberately ignores the UX-12 opt-out — "don't show this again" means "stop
-    greeting me", not "take the tutorial away". The card's checkbox renders
-    pre-ticked on a replay so the choice can be reversed from the same place.
-    """
-    (host if host is not None else st).button(
-        "🎓 Welcome tour",
-        key="tour_replay",
-        width="stretch",
-        help="Replay the quick intro tour.",
-        on_click=_arm_tour,
-    )
-
-
 # -----------------------------------------------------------------------------
 # Use-case tutorials (UX-40)
 # -----------------------------------------------------------------------------
@@ -1424,7 +1410,7 @@ def _start_use_case(tutorial_id: str, *, restart: bool = False) -> None:
         return
     st.session_state["tutorial_return"] = {
         "main_nav": st.session_state.get("main_nav", _VIEW_SCANPATH),
-        "single_subtab": st.session_state.get("single_subtab", "📝 Annotations"),
+        "single_subtab": st.session_state.get("single_subtab", SUBTAB_ANNOTATIONS),
     }
     if restart:
         _tutorial_progress()[tutorial_id] = 0
@@ -1475,6 +1461,8 @@ def _open_tutorial_surface(step: TutorialStep) -> None:
     st.session_state["main_nav"] = step.view
     if step.subtab is not None:
         st.session_state["single_subtab"] = step.subtab
+    if step.corpus_subtab is not None:
+        st.session_state["corpus_subtab"] = step.corpus_subtab
     # DATA-35: the Data page's two screens. A step that points into the editor
     # opens it; one that points at the overview closes it, so walking back up a
     # tutorial does not leave the editor covering the table the previous step
@@ -1511,14 +1499,20 @@ def _tutorial_surface_is_open(step: TutorialStep) -> bool:
         st.session_state.get(DATASET_EDITOR_OPEN_KEY)
     ) != bool(step.dataset_editor):
         return False
+    if (
+        step.corpus_subtab is not None
+        and st.session_state.get("corpus_subtab", "Per text") != step.corpus_subtab
+    ):
+        return False
     return (
         step.subtab is None
-        or st.session_state.get("single_subtab", "📝 Annotations") == step.subtab
+        or st.session_state.get("single_subtab", SUBTAB_ANNOTATIONS) == step.subtab
     )
 
 
 def _arm_tutorial_library() -> None:
-    """``on_click`` callback for the Tutorials button: request the dialog."""
+    """Request the tutorial chooser. Called by the ❓ Help nav entry
+    (``menu._arm_help_action``)."""
     st.session_state["_tutorial_library_requested"] = True
 
 
@@ -1542,25 +1536,7 @@ def stash_tutorial_context(context: dict[str, object]) -> None:
     st.session_state["_tutorial_context"] = dict(context)
 
 
-def render_tutorial_library(context: dict[str, object], *, host=None) -> None:
-    """Button in the ❓ Help menu popover that opens the tutorial chooser.
-
-    A dialog rather than the nested ``🧭 Tutorials`` popover it used to be: the
-    Help group is itself a popover now, and Streamlit nests no popover in a
-    popover. The chooser is a modal-shaped thing anyway — pick an outcome, start,
-    and the tutorial takes over the page.
-    """
-    stash_tutorial_context(context)
-    (host if host is not None else st).button(
-        "🧭 Tutorials",
-        key="tutorial_library_open",
-        width="stretch",
-        help="Welcome and task-oriented walkthroughs.",
-        on_click=_arm_tutorial_library,
-    )
-
-
-@st.dialog("🧭 Tutorials", width="large")
+@st.dialog(f"{ICONS['tutorials']} Tutorials", width="large")
 def _tutorial_library_dialog() -> None:
     """The chooser: outcome, prerequisites, time, and progress per tutorial."""
     from scanpath_studio.menu import close_open_popovers
@@ -1634,7 +1610,7 @@ def _tutorial_library_dialog() -> None:
             _start_use_case(tutorial.id, restart=True)
             st.rerun(scope="app")
         if not available:
-            card.caption(f"⚠️ Unavailable — {reason.lower()}")
+            card.caption(f"{ICONS['warning']} Unavailable — {reason.lower()}")
         _render_tutorial_optout(tutorial.id, card)
 
 
@@ -1841,19 +1817,14 @@ _FAQ_ITEMS = [
         "included in that file.",
     ),
     (
-        "PNG / SVG / PDF export fails but HTML works.",
-        "Static image export goes through Kaleido, which drives a headless "
-        "Chrome that `pip install` doesn't provide. Run `plotly_get_chrome -y` "
-        "once. **HTML** export is browser-free and always available.",
-    ),
-    (
-        "I edited the code (or a setting looks stale) and nothing changed.",
-        "Streamlit doesn't reload already-imported modules on a rerun, and "
-        "`st.cache_data` doesn't hash the helpers a cached loader calls — a "
-        "rerun or **Clear cache** isn't enough after editing code. Restart the "
-        "server process. This is a different cache from the menu bar's "
-        "**💾 Session → Automatic recovery** panel, which stores your data and settings, "
-        "not code.",
+        "PDF or video export fails but HTML works.",
+        "The current figure's **PNG** and **SVG** are saved by your browser from "
+        "the plot on screen, so they always work. **PDF**, **GIF**/**MP4** and "
+        "the images in the export and Compare bundles go through Kaleido, which "
+        "drives a headless "
+        "Chrome, Chromium or Edge — install one of them (in a pip install, "
+        "`plotly_get_chrome -y` also works). **HTML** export is browser-free and "
+        "always available.",
     ),
     (
         "How do I cite Scanpath Studio?",
@@ -1884,7 +1855,7 @@ def faq_items() -> list:
     return items
 
 
-@st.dialog("❓ Frequently asked questions", width="large")
+@st.dialog(f"{ICONS['faq']} Frequently asked questions", width="large")
 def _faq_dialog() -> None:
     """The in-app FAQ: short answers in expanders + links to the full docs.
 
@@ -1909,28 +1880,28 @@ def _faq_dialog() -> None:
     st.divider()
     docs_col, tutorials_col, close_col = st.columns(3)
     docs_col.link_button(
-        "📚 Full FAQ ↗",
+        f"{ICONS['docs']} Full FAQ ↗",
         DOCS_FAQ_URL,
         width="stretch",
         help="Every question, with the long answers. Opens in a new tab.",
     )
     tutorials_col.link_button(
-        "🎓 Tutorials ↗",
+        f"{ICONS['course']} Tutorials ↗",
         DOCS_TUTORIALS_URL,
         width="stretch",
-        help="Task-by-task walkthroughs: load your own data, compare two "
-        "readers, make a paper figure, run it headless. Opens in a new tab.",
+        help="Task-by-task walkthroughs: data collection, data filtering, "
+        "exporting figures, corpus analysis. Opens in a new tab.",
     )
     if close_col.button("✓ Close", key="faq_close", width="stretch", type="primary"):
         _close_dialog_clientside()
 
 
 def _arm_faq() -> None:
-    """``on_click`` callback for the FAQ button: request the dialog.
+    """Request the FAQ dialog. Called by the ❓ Help nav entry
+    (``menu._arm_help_action``).
 
-    Dialogs can't be opened from a callback, so this only sets a flag that
-    :func:`maybe_show_faq` — called early in ``main()`` — serves. Callbacks run
-    *before* the rerun, so the request is picked up within the same run.
+    Dialogs can't be opened from there, so this only sets a flag that
+    :func:`maybe_show_faq` — called early in ``main()`` — serves.
     """
     st.session_state["_faq_dialog_requested"] = True
 
@@ -1947,23 +1918,6 @@ def maybe_show_faq() -> None:
     """
     if st.session_state.pop("_faq_dialog_requested", False):
         _faq_dialog()
-
-
-def render_faq_button(host=None) -> None:
-    """Button in the ❓ Help menu popover that opens the in-app FAQ dialog.
-
-    Sits next to :func:`render_tour_replay_button` and is armed the same way: an
-    ``on_click`` callback sets a request flag that the early
-    :func:`maybe_show_faq` call serves, so the modal doesn't wait on the heavy
-    data / plot work this button renders after.
-    """
-    (host if host is not None else st).button(
-        "❓ FAQ",
-        key="faq_open",
-        width="stretch",
-        help="Short answers to common questions, plus a link to the full docs.",
-        on_click=_arm_faq,
-    )
 
 
 # -----------------------------------------------------------------------------
@@ -2051,11 +2005,11 @@ def _render_wizard_guide_optout() -> None:
 # needed; finer targets reuse existing widget keys.
 _WIZARD_GUIDE_STEPS = [
     {
-        "title": "📂 Set up your dataset",
+        "title": f"{ICONS['datasets']} Set up your dataset",
         "body": (
-            "Turn your eye-tracking tables into an interactive dataset in four "
-            "steps: name it, upload the files, say which columns mean what "
-            "(and which extras to keep), and describe the recording setup. "
+            "Turn your eye-tracking tables into an interactive dataset in three "
+            "parts: name it, upload and map each table (and pick which extras "
+            "to keep), and describe the recording setup. "
             "Follow along with **Next**, or **Skip** to dive in."
         ),
         "selector": "",
@@ -2064,8 +2018,8 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": "1 · Dataset name",
         "body": (
-            "Name it — this is what shows up in the Data source list, so you "
-            "can switch back to it later."
+            "Name it — this is what shows up in **📂 Available datasets** and "
+            "the dataset picker, so you can switch back to it later."
         ),
         "selector": ".st-key-wiz_part_name",
         "step_id": "name",
@@ -2252,7 +2206,7 @@ def maybe_show_wizard_guide() -> None:
 def render_wizard_guide_button(host) -> None:
     """A button inside the wizard that (re)opens the setup guide from step 1."""
     host.button(
-        "❓ Show setup guide",
+        f"{ICONS['help']} Show setup guide",
         key="wizard_guide_replay",
         help="Walk through the dataset setup, step by step.",
         on_click=_arm_wizard_guide,

@@ -28,13 +28,22 @@ permissions:
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
+    env:
+      # Link-preview cards (the Material social plugin, ENG-79) — rendered for
+      # the published site only.
+      SOCIAL_CARDS: "true"
+      # Material and a plugin both print a banner about MkDocs 2.0; the site
+      # stays on MkDocs 1.x (Material caps it), so the notice is noise here.
+      DISABLE_MKDOCS_2_WARNING: "true"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+      - name: Install Cairo (social cards)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libcairo2
       - name: Install (package + docs + test extras)
         # The test extras are here for the coverage report published alongside
         # the site (ENG-37) — see "Coverage report" below.
@@ -50,12 +59,25 @@ jobs:
       # `gh-deploy --dirty` below is what preserves these extra files: gh-deploy
       # always rebuilds, and without `--dirty` it clears `site/` first (there is
       # no `--no-build`).
+      #
+      # ENG-62: the report is a by-product of this job, not its gate. It used to
+      # run the whole suite *before* deploying with the coverage floor enforced,
+      # so one flaky AppTest (ENG-50) or a coverage dip silently stopped the
+      # docs from publishing — 10 of 12 pushes to main, the v0.30.0 release
+      # included. The PR's CI already gates on both; here the floor is off and a
+      # failing run still ships the site (with whatever report it produced).
       - name: Coverage report
+        continue-on-error: true
+        run: pytest -q -n auto --cov --cov-fail-under=0 --cov-report=html:site/coverage --cov-report=json
+      - name: Coverage badge
+        if: always()
         run: |
-          pytest -q -n auto --cov --cov-report=html:site/coverage --cov-report=json
           python - <<'PY'
           import json, pathlib
-          total = json.load(open("coverage.json"))["totals"]["percent_covered"]
+          report = pathlib.Path("coverage.json")
+          if not report.is_file():
+              raise SystemExit(0)  # no report this run: keep the last badge
+          total = json.load(report.open())["totals"]["percent_covered"]
           colour = (
               "brightgreen" if total >= 90
               else "green" if total >= 80
@@ -76,4 +98,5 @@ jobs:
           PY
 
       - name: Deploy to GitHub Pages
+        if: always()
         run: mkdocs gh-deploy --dirty --force

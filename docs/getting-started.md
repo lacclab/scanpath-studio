@@ -1,8 +1,5 @@
 # Getting started
 
-This page gets you from installation to one exported scanpath. It uses the
-bundled sample, so no data preparation is required.
-
 ## 1. Choose how to run it { #install }
 
 === "Try online"
@@ -22,52 +19,38 @@ bundled sample, so no data preparation is required.
 
 === "Desktop app"
 
-    Download the build for your operating system from the
-    [latest release](https://github.com/lacclab/scanpath-studio/releases/latest)
-    and launch Scanpath Studio — no Python needed. On macOS that is a signed,
-    Apple-notarized `.dmg` you drag to Applications; on Windows and Linux an
-    archive you unpack, and those are still unsigned, so see the
-    [desktop notes](desktop.md) for the extra first-launch click.
+    Download the build for your operating system —
+    [macOS (Apple silicon)](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-macos-arm64.dmg) ·
+    [Windows](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip) ·
+    [Linux](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-linux-x86_64.tar.gz) —
+    and launch Scanpath Studio. On macOS that is a `.dmg` you drag to
+    Applications; on Windows and Linux an archive you unpack. See the
+    [desktop notes](desktop.md) for the first-launch steps.
 
 ## 2. Make the first plot
 
-1. Keep **Bundled demo** as the data source.
+1. Keep **Bundled Demo** as the data source.
 2. Keep the default participant and trial.
 3. Use the layer controls beside the plot to show or hide text, fixations,
-   saccades, word boxes, and the heatmap.
+   saccades, bounding boxes, and the heatmap.
 4. Turn on **Animate** to replay the trial.
-5. Open **Export → Current figure** and download HTML. HTML works without
-   extra software; PNG, SVG, PDF, GIF, and MP4 require Chrome/Chromium.
+5. Open **Export → Current figure** and download HTML. HTML needs nothing
+   else, nor do a still figure's PNG and SVG; PDF, GIF and MP4 need Chrome,
+   Chromium or Edge.
 
-That is the default workflow. You can now follow a tutorial for
-[data collection](tutorials/data-collection.md),
-[data filtering](tutorials/data-filtering.md),
-[figure export](tutorials/exporting-figures.md), or
-[corpus analysis](tutorials/corpus-analysis.md).
+Next, pick a [tutorial](tutorials/index.md).
 
 ## 3. Load your data
 
-Open 🗂️ **Data**, select **➕ Add dataset**, and work down the two-part wizard:
-
-1. name the dataset;
-2. **Upload data files** — a words/IA table and a fixations table, plus, if you
-   have them, raw gaze and a one-row-per-reader participant table;
-3. **Map data fields** — check the proposed trial and reader identity, the
-   fixation features, the recording setup (monitor size and viewing distance),
-   and any extra fields;
-4. select **✅ Add dataset**.
-
-The dataset then appears under 📂 **Available datasets**, and ✏️ **Edit dataset**
-reopens everything above at any time.
-
-See [Loading public and own data](guides/loading-data.md) for accepted formats,
-manual mapping, and common checks, and
-[Harmonised benchmark corpora](benchmark-corpora.md) for the thirty-one public
-corpora that need no upload.
+Click **+** beside **Select Dataset**, choose **Import files**, upload your fixation and words/IA
+tables, check the proposed column mapping, answer **Recording setup**, then
+select **✅ Add dataset**. See
+[Loading public and own data](guides/loading-data.md) for accepted formats,
+manual mapping, and common checks. **🗂️ Data → ➕ Add dataset** opens the same wizard.
 
 ## Author a scanpath without files
 
-Choose **✏️ Author a scanpath** as the data source when you want to sketch a
+Choose **+ → Create manually** beside **Select Dataset** when you want to sketch a
 trial from text instead of uploading tables. Enter the stimulus, inspect the
 generated word boxes, then edit the scanpath in either place:
 
@@ -78,31 +61,17 @@ generated word boxes, then edit the scanpath in either place:
 
 The editor starts with one centred fixation per word. X/Y is the authoritative
 location; **Target word** is optional metadata for reading measures, so a
-fixation may sit between or outside words. Download the authoring JSON to reopen
-the same layout later, render it with `scanpath-studio render --authoring`, or
-load it with `scanpath_studio.load_authored_scanpath`.
+fixation may sit between or outside words. Enter a **Dataset name** and choose
+**Save dataset** to add it to the dataset list and open its regular visualization.
+**Cancel** returns to the previous dataset without adding one.
 
-## Static export setup
-
-If HTML exports but static images do not, install the browser used by Plotly:
-
-```bash
-plotly_get_chrome -y
-```
-
-More fixes are in [Export troubleshooting](export-troubleshooting.md).
+For a ready-made example, choose **Synthetic sample** in the dataset picker:
+a manually authored six-word example that opens like any other dataset. To
+change its text, fixation positions, or timing, press **Edit** on its row in
+**🗂️ Data → Available datasets**; its draft is separate from your own scanpath.
+You can also start a scanpath from **🗂️ Data → Create manual scanpath**.
 
 ## Run from source
 
-Contributors can install the repository directly:
-
-```bash
-git clone https://github.com/lacclab/scanpath-studio.git
-cd scanpath-studio
-pip install -e ".[test,docs]"
-streamlit run streamlit_app.py
-```
-
-Development commands belong in the
-[contributor guide](https://github.com/lacclab/scanpath-studio/blob/main/CONTRIBUTING.md),
-not in the user workflow.
+To run from a source checkout, see the
+[contributor guide](https://github.com/lacclab/scanpath-studio/blob/main/CONTRIBUTING.md).

@@ -7,17 +7,13 @@ This directory contains the test suite for the scanpath visualization Streamlit 
 ### Install test dependencies
 
 ```bash
-# Using conda/mamba (recommended)
-conda env create -f environment.yml
+# Using conda/mamba: environment.yml installs the app; add the test extras
+conda env create -f environment.yml   # or: mamba env create -f environment.yml
 conda activate scanpath-studio
-# or with mamba (faster)
-mamba env create -f environment.yml
-mamba activate scanpath-studio
-
-# Using pip (alternative)
-pip install -r requirements.txt
-# Or install in development mode with test dependencies:
 pip install -e ".[test]"
+
+# Using pip or uv: development mode with test dependencies
+pip install -e ".[test]"              # or: uv sync --extra test
 ```
 
 ### Run all tests
@@ -56,8 +52,8 @@ pytest tests/test_data.py::TestNormalizeWords::test_normalize_words_with_box_coo
 Roughly one `test_<module>.py` per `scanpath_studio/` module, plus
 cross-cutting files. The load-bearing ones:
 
-- `conftest.py` — shared fixtures: `sample_words_df`, `sample_fixations_df`,
-  `sample_raw_gaze_df`, `normalized_words_df`, `normalized_fixations_df`,
+- `conftest.py` — shared fixtures: `sample_words_df`, `sample_raw_gaze_df`,
+  `normalized_words_df`, `normalized_fixations_df`,
   `synthetic_words_df`, `synthetic_fixations_df`.
 - `synthetic_data.py` — the hand-traced 6-word / 2-line ground-truth trial
   with exact `EXPECTED` values (shared with `scanpath_studio/synthetic.py`);
@@ -66,7 +62,7 @@ cross-cutting files. The load-bearing ones:
 - `test_measures.py`, `test_data.py`, `test_plots.py`, `test_aggregation.py`,
   `test_alignment.py`, `test_similarity.py` — the pure computation +
   figure-builder core.
-- `test_apptest.py`, `test_apptest_flows.py`, and ~15 more `AppTest`-based
+- `test_apptest.py`, `test_apptest_flows.py`, and ~48 more `AppTest`-based
   files — boot the whole app headless via
   `streamlit.testing.v1.AppTest.from_file("streamlit_app.py")` and drive
   widgets. This is the house-preferred way to test app behavior (see

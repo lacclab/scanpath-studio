@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 import streamlit as st
 
+from . import progress
 from .constants import (
     DEMO_CHOICE,
     EYEGENBENCH_DEFAULT_DIR,
@@ -243,17 +244,12 @@ def secondary_dataset_options(
     options.append((SYNTHETIC_CHOICE, True, ""))
     if app.public_datasets_enabled():
         options.extend(
-            (label, *_public_ready(label))
-            for label, spec in app.public_dataset_registry().items()
-            # The bootstrap entry (offered only while no benchmark corpus is
-            # discovered) is a place to type a directory, not a dataset — there
-            # is nothing to compare against.
-            if not spec.get("setup_only")
+            (label, *_public_ready(label)) for label in app.public_dataset_registry()
         )
     return [option for option in options if option[0] != exclude]
 
 
-@st.cache_data(show_spinner="Loading comparison dataset…")
+@st.cache_data(show_spinner=False)  # UX-168: B's dataset card covers this.
 def _load_public_frames(
     label: str, root: str, options: tuple
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -282,17 +278,20 @@ def _load_public_frames(
     return datasets.load_multipleye(root, fixation_source=kwargs["fixation_source"])
 
 
-@st.cache_data(show_spinner="Loading comparison dataset…")
+@st.cache_data(show_spinner=False)  # UX-168: B's dataset card covers this.
 def _load_builtin_frames(name: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Normalized frames for the bundled demo / synthetic trial.
 
     Both are small and packaged, so caching the *normalized* result here is the
     whole cost — the raw loaders they call are already cached themselves.
+    Normalizing reports nothing on this path, so it reports once, first thing:
+    only a miss gets here, and B's gated card waits for a report (UX-166).
     """
     from scanpath_studio import api
     from scanpath_studio.data import load_sample_data
     from scanpath_studio.synthetic import load_synthetic_data
 
+    progress.report()
     raw = load_sample_data() if name == DEMO_CHOICE else load_synthetic_data()
     return api.load_scanpath_data(raw[0], raw[1])
 

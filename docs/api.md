@@ -10,13 +10,25 @@ load data → list trials → plot or measure → save
 import scanpath_studio as sps
 
 words, fixations = sps.load_scanpath_data("ia.csv", "fixations.csv")
-fig = sps.plot_scanpath(words, fixations, participant_id="p1", trial_id="t3")
+fig = sps.plot_scanpath(words, fixations, participant="p1", trial="t3")
 sps.save_figure(fig, "scanpath.html")
 ```
 
-All functions below are importable from `scanpath_studio`. Plotting functions
-accept the same canonical visualization keywords, so a script can reproduce the
-app's default view and change only the needed layers.
+All functions below are importable from `scanpath_studio`. The
+[figure options](#figure-options) table lists every figure keyword.
+
+On the bundled demo, the first steps print this (run when the docs are built):
+
+```python exec="true" source="above" result="text" session="api"
+import scanpath_studio as sps  # markdown-exec: hide
+
+words, fixations = sps.load_sample_data()
+print(sps.list_trials(words, fixations).head(3))
+
+measures = sps.compute_word_metrics(words, fixations)
+columns = ["word_id", "text", "first_fixation_ms", "total_fixation_duration_ms"]
+print(measures[columns].head(3))
+```
 
 ## Load
 
@@ -24,9 +36,17 @@ app's default view and change only the needed layers.
 
 ::: scanpath_studio.api.load_sample_data
 
+::: scanpath_studio.api.load_raw_gaze
+
+::: scanpath_studio.api.load_sample_raw_gaze
+
 ::: scanpath_studio.api.load_participant_metadata
 
 ::: scanpath_studio.api.load_trial_metadata
+
+::: scanpath_studio.api.load_text_metadata
+
+::: scanpath_studio.api.propose_schema
 
 ::: scanpath_studio.api.build_authored_scanpath
 
@@ -35,12 +55,6 @@ app's default view and change only the needed layers.
 ::: scanpath_studio.datasets.load_potec
 
 ::: scanpath_studio.datasets.load_onestop
-
-::: scanpath_studio.datasets.load_multipleye
-
-::: scanpath_studio.eyegenbench.load_eyegenbench
-
-::: scanpath_studio.eyegenbench.eyegenbench_datasets
 
 ## Inspect and measure
 
@@ -58,8 +72,6 @@ app's default view and change only the needed layers.
 
 ::: scanpath_studio.api.reader_summary
 
-::: scanpath_studio.api.alignment_sensitivity
-
 ## Plot
 
 ::: scanpath_studio.api.plot_scanpath
@@ -75,16 +87,16 @@ app's default view and change only the needed layers.
 ## Reproduce a figure in code
 
 The app's 🔗 **Share** subtab shows the API or CLI code that rebuilds the figure
-currently on screen — copy it into a notebook or a terminal and the same plot
-comes back, ready to run over a batch of trials. `figure_code` is the headless
+currently on screen — paste it into a notebook or terminal to get the same
+figure. `figure_code` is the headless
 form of that block, and `render --print-code` prints it for an invocation you
 already have.
 
-```python
+```python exec="true" source="above" result="python" session="api"
 print(
     sps.figure_code(
-        participant="l7_101",
-        trial="1_Adv_1",
+        participant="l7_1090",
+        trial="l7_1090_2_1_1_Ele_r0",
         show_heatmap=False,
         color_by="duration_ms",
     )
@@ -95,6 +107,19 @@ print(
 
 ::: scanpath_studio.api.figure_options
 
+## Figure options
+
+Every keyword the figure builders take, with the default it renders with, the
+`render` flag that sets it on the command line, and which builders accept it:
+`plot` is `plot_scanpath`, `animate` is `animate_scanpath`, `compare` is
+`compare_scanpaths`.
+
+```python exec="true"
+from docs_support import figure_options_table
+
+print(figure_options_table())
+```
+
 ## Save
 
 ::: scanpath_studio.api.save_figure
@@ -103,15 +128,11 @@ print(
 
 ## Recovery cache
 
-The app caches a local session on the machine it runs on (see
-[Privacy](privacy.md#what-happens-to-a-file-you-upload)). These inspect and
-remove that store from a script; `scanpath-studio cache` is the CLI equivalent.
-
 ::: scanpath_studio.api.cache_status
 
 ::: scanpath_studio.api.clear_cache
 
-For a batch loop and surface choice, start at
-[Automation & reference](automation.md). GIF and MP4 export uses
+For a batch loop, see [Automation](automation.md#batch-pattern). GIF and MP4
+export uses
 `scanpath_studio.animation_export.export_animation` and requires Kaleido plus
 Chrome/Chromium.

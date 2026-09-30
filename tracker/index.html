@@ -461,7 +461,13 @@
   });
 
   /* ---------- tiny markdown ---------- */
-  const esc = s => s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  // Quotes too, not just &<>: `esc` is used inside double-quoted attributes
+  // (`data-owner="${esc(key)}"`, `title="Claimed by ${esc(owner)}"`), where a
+  // bare `"` closes the attribute early and whatever follows is parsed as
+  // markup. Escaping quotes is a no-op for the text-content uses.
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
   const ID_RE = /\b([A-Z]{2,4}-\d+[a-z]?)\b/g;
 
   function inline(src) {

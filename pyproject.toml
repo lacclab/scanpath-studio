@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=69.0", "wheel"]
+requires = ["setuptools>=77.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -18,11 +18,11 @@ authors = [
     { name = "Lena Jäger" },
     { name = "Yevgeni Berzak" },
 ]
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE", "NOTICE"]
 keywords = ["eye-tracking", "scanpath", "visualization", "streamlit", "reading", "psycholinguistics"]
 classifiers = [
     "Development Status :: 4 - Beta",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
@@ -34,16 +34,16 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Visualization",
 ]
 dependencies = [
-    "streamlit>=1.62.0",
-    "pandas>=2.3.3",
-    "plotly>=6.5.2",
-    "numpy>=2.4.1",
+    "streamlit>=1.64.0",
+    "pandas>=3.0",
+    "plotly>=7.1",
+    "numpy>=2.4",
     # Effect-size + significance tests for the group-comparison analysis views
     # (AN-21: Welch t-test, Mann–Whitney U). BSD-3, MIT-compatible — see the
     # PRE-0 ADR, which also earmarks scipy for the PRE-3 drift-correction port.
-    "scipy>=1.13",
-    "pyarrow>=23.0.0",
-    "kaleido>=1.2.0",
+    "scipy>=1.17",
+    "pyarrow>=25.0",
+    "kaleido>=1.4",
     # Optional Streamlit runtime dep: enables fast event-based file-watching
     # (hot reload) for `streamlit run`. Not imported by app code — Streamlit
     # auto-detects it and falls back to polling (+ an "install Watchdog" log) if
@@ -53,13 +53,15 @@ dependencies = [
     "streamlit-sortables>=0.3.1",
     # Rasterized animation export (GIF/MP4): Pillow encodes GIF; imageio's ffmpeg
     # extra bundles an ffmpeg binary for MP4 (no system package needed).
-    "pillow>=10.0",
-    "imageio[ffmpeg]>=2.34",
+    "pillow>=12.3",
+    "imageio[ffmpeg]>=2.37",
     # pandas' .xlsx engine. Not optional in practice: the upload path reads
     # spreadsheets (`data._read_one`) and MultiplEYE's comprehension-questions
     # workbook is a shipped enrichment, so without it an upload raises and the
     # questions column silently never appears (#BUG-41).
     "openpyxl>=3.1.5",
+    # The legacy Excel 97–2003 (.xls) engine, for the same readers (#DATA-53).
+    "xlrd>=2.0.2",
 ]
 
 [project.optional-dependencies]
@@ -76,12 +78,21 @@ test = [
 # unpinned ruff means a local run and CI can disagree — a new release lands new
 # rules and reds a branch that changed nothing. Bump both together.
 lint = [
-    "ruff==0.16.3",
+    "ruff==0.16.8",
 ]
 # Build the documentation site (MkDocs Material + API autodoc from docstrings).
+# Material caps MkDocs below 2.0, which has no plugin system; every plugin here
+# except git-revision-date and llmstxt is one Zensical also runs (ENG-79).
 docs = [
-    "mkdocs-material>=9.5",
-    "mkdocstrings[python]>=0.26",
+    # `imaging` is the social-card renderer, switched on in CI only (mkdocs.yml).
+    "mkdocs-material[imaging]>=9.7.7",
+    "mkdocstrings[python]>=1.0.6",
+    # Executes the pages' `exec="true"` fences: the gallery, the printed
+    # outputs, the generated references (ENG-78, ENG-79).
+    "markdown-exec>=1.12.3",
+    "mkdocs-redirects>=1.2.3",
+    "mkdocs-git-revision-date-localized-plugin>=1.6.0",
+    "mkdocs-llmstxt>=0.5.0",
 ]
 
 [project.urls]
@@ -102,7 +113,11 @@ package-dir = {"" = "."}
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["scanpath_studio"]
+# ENG-61: the data folders (assets/, sample_data/, sample_data/images/) have no
+# __init__.py, so they are namespace packages setuptools only ships when they
+# are *listed* — `include = ["scanpath_studio"]` left them in the wheel by a
+# deprecated leniency the build warned will end.
+include = ["scanpath_studio", "scanpath_studio.*"]
 
 [tool.setuptools.package-data]
 "scanpath_studio" = [
@@ -112,29 +127,24 @@ include = ["scanpath_studio"]
     "assets/*.png",
     "sample_data/*.csv",
     "sample_data/*.parquet",
-    "sample_data/*.feather",
     "sample_data/images/*.png",
     "sample_data/images/*.csv",
 ]
 
-[tool.ruff]
-# Vendored third-party visualisations; not ours to restyle.
-extend-exclude = ["other_vis"]
-
 [tool.ruff.lint]
 # WHY THIS SECTION EXISTS. The repo had no ruff config at all, so `ruff check`
 # ran on whatever that release happened to enable by default. Ruff 0.16 expanded
-# that default from a handful of rules to 413, and CI — which installs ruff
-# unpinned — went from green to 1,678 errors overnight without a line of our
+# that default from a handful of rules to 413, and CI — which then installed
+# ruff unpinned — went from green to 1,678 errors overnight without a line of our
 # code changing. Those rules are adopted rather than reverted; what follows is
 # the short list we decline, each with its reason.
 #
 # Deliberately no `select`: ruff's default set is what we run, and naming whole
 # families instead would enable far more than the default (selecting `S` alone
 # turns on S101 and flags all 4,734 asserts in the test suite). The residual
-# risk is that a future ruff moves the default again — the cheap guard against
-# that is pinning ruff's version in `.github/workflows/ci.yml`, which currently
-# installs it unpinned.
+# risk is that a future ruff moves the default again — the guard against that
+# is the pinned version (`ruff==0.16.8` in `.github/workflows/ci.yml` and in the
+# `lint` extra above), so a new default arrives only with a deliberate bump.
 #
 # These three are named explicitly because the codebase carries `# noqa`
 # directives for them and 0.16 does NOT enable them by default. Leaving them to
@@ -228,6 +238,14 @@ omit = [
     "scanpath_studio/onestop_shard.py",
     "scanpath_studio/update_sample_data.py",
 ]
+# Measure with `sys.monitoring` (PEP 669) rather than `sys.settrace`. Coverage.py
+# only makes it the default from Python 3.14, and on the 3.12 the Coverage job
+# and the docs deploy run, the settrace core made the suite 2.7x slower than the
+# plain test legs: 25 min against 9 (ENG-81). Line coverage is identical. Needs
+# coverage ≥ 7.9 for the setting. On 3.11, which has no `sys.monitoring`, it
+# warns once and falls back to the old core. Branch coverage under sysmon needs
+# 3.14, so switching `branch` on means moving the Coverage job to 3.14 too.
+core = "sysmon"
 
 [tool.coverage.report]
 # A floor, not a target: it fails the build when a change drops coverage

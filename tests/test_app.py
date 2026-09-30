@@ -1,7 +1,7 @@
 """Tests for app.py utility functions."""
 
 import json
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlsplit
 
 import pandas as pd
 import pytest
@@ -18,9 +18,8 @@ from scanpath_studio.app import (
 )
 from scanpath_studio.data import compute_canvas_size
 
-# Imported from their real home (utils); app.py no longer re-exports these
-# test-only helpers.
-from scanpath_studio.utils import compute_trial_stats, gather_trial_metadata
+# Imported from its real home (utils); app.py does not re-export it.
+from scanpath_studio.utils import compute_trial_stats
 
 
 class TestBuildComboOptions:
@@ -126,51 +125,6 @@ class TestComputeTrialStats:
         assert stats["total_reading_time_ms"] == 0
 
 
-class TestGatherTrialMetadata:
-    """Tests for gather_trial_metadata function."""
-
-    def test_gather_trial_metadata_single_value(
-        self, normalized_words_df, normalized_fixations_df
-    ):
-        normalized_words_df["difficulty_level"] = ["Adv", "Adv", "Adv"]
-        metadata = gather_trial_metadata(
-            normalized_words_df, normalized_fixations_df, ["difficulty_level"]
-        )
-        assert len(metadata) == 1
-        assert metadata.iloc[0]["Field"] == "difficulty_level"
-        assert "Adv" in str(metadata.iloc[0]["Value"])
-
-    def test_gather_trial_metadata_numeric(
-        self, normalized_words_df, normalized_fixations_df
-    ):
-        normalized_fixations_df["duration_ms"] = [200, 250, 180]
-        metadata = gather_trial_metadata(
-            normalized_words_df, normalized_fixations_df, ["duration_ms"]
-        )
-        assert len(metadata) == 1
-        assert "mean" in str(metadata.iloc[0]["Value"]).lower()
-
-    def test_gather_trial_metadata_missing_field(
-        self, normalized_words_df, normalized_fixations_df
-    ):
-        metadata = gather_trial_metadata(
-            normalized_words_df, normalized_fixations_df, ["nonexistent_field"]
-        )
-        assert len(metadata) == 0
-
-    def test_gather_trial_metadata_multiple_fields(
-        self, normalized_words_df, normalized_fixations_df
-    ):
-        normalized_words_df["difficulty_level"] = ["Adv", "Adv", "Adv"]
-        normalized_fixations_df["pass_index"] = [1, 1, 1]
-        metadata = gather_trial_metadata(
-            normalized_words_df,
-            normalized_fixations_df,
-            ["difficulty_level", "pass_index"],
-        )
-        assert len(metadata) == 2
-
-
 class TestBuildComparisonOptions:
     """Tests for _build_comparison_options function."""
 
@@ -182,7 +136,9 @@ class TestBuildComparisonOptions:
                 "text_id": ["para1", "para1", "para1"],
             }
         )
-        options = _build_comparison_options(combos, "Text", "p1", "t1", "para1")
+        options = _build_comparison_options(
+            combos, "Text", "p1", "t1", "para1", include_primary=False
+        )
         # (participant, trial, label, markers). p1/t2 is same participant AND same
         # text → both markers, sorts first; p2/t1 is same text only → 📄.
         assert [(o[0], o[1]) for o in options] == [("p1", "t2"), ("p2", "t1")]
@@ -198,7 +154,9 @@ class TestBuildComparisonOptions:
                 "text_id": ["para1", "para1", "para2"],
             }
         )
-        options = _build_comparison_options(combos, "Participant", "p1", "t1", "para1")
+        options = _build_comparison_options(
+            combos, "Participant", "p1", "t1", "para1", include_primary=False
+        )
         # Same-text (📄) trial leads, then the different-text one (no marker).
         assert [(o[0], o[1]) for o in options] == [("p2", "t1"), ("p3", "t1")]
         assert options[0][3] == "📄"
@@ -212,9 +170,11 @@ class TestBuildComparisonOptions:
                 "text_id": ["para1", "para2"],
             }
         )
-        options = _build_comparison_options(combos, "None", "p1", "t1", None)
+        options = _build_comparison_options(
+            combos, "None", "p1", "t1", None, include_primary=False
+        )
         assert len(options) > 0
-        # Should not include the primary trial
+        # Asked for "anything else", the primary trial is left out
         assert not any(opt[0] == "p1" and opt[1] == "t1" for opt in options)
 
     def test_build_comparison_options_with_unique_text_id(self):
@@ -594,7 +554,11 @@ class TestStimulusFontInstallHint:
     def test_other_named_font_links_to_google_fonts(self):
         name, url = app_module._stimulus_font_install_hint("'Courier Prime', monospace")
         assert name == "Courier Prime"
-        assert "fonts.google.com" in url and "Courier+Prime" in url
+        # The *host*, not a substring: "fonts.google.com" anywhere in the
+        # string would also be satisfied by `evil.com/?x=fonts.google.com`,
+        # so the substring form asserted less than it looked like it did.
+        assert urlsplit(url).hostname == "fonts.google.com"
+        assert "Courier+Prime" in url
 
     def test_no_hint_for_generic_or_missing(self):
         # A bare CSS generic has nothing to install; None stays None.
@@ -624,6 +588,30 @@ class TestResolveDataDir:
     def test_absolute_path_used_verbatim(self, tmp_path):
         p = str(tmp_path)
         assert app_module._resolve_data_dir(p) == p
+
+    def test_an_installed_copy_anchors_to_a_user_data_home(self, monkeypatch, tmp_path):
+        """ENG-59: installed, the folder above the package is `site-packages`,
+        so ⬇ Download wrote corpora into the environment. A source checkout is
+        recognised by the `pyproject.toml` beside the package."""
+        package = tmp_path / "site-packages" / "scanpath_studio"
+        package.mkdir(parents=True)
+        monkeypatch.setattr(app_module, "__file__", str(package / "app.py"))
+        monkeypatch.setenv("SCANPATH_STUDIO_DATA_HOME", str(tmp_path / "home"))
+        assert app_module._resolve_data_dir("data/OneStop") == str(
+            (tmp_path / "home" / "data/OneStop").resolve()
+        )
+        monkeypatch.delenv("SCANPATH_STUDIO_DATA_HOME")
+        monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
+        if app_module.os.name != "nt":
+            assert app_module._project_root() == tmp_path / "xdg" / "scanpath-studio"
+        assert "site-packages" not in str(app_module._project_root())
+
+    def test_a_source_checkout_still_anchors_to_the_repo(self):
+        from pathlib import Path
+
+        repo = Path(app_module.__file__).resolve().parent.parent
+        assert (repo / "pyproject.toml").is_file()
+        assert app_module._project_root() == repo
 
     def test_blank_stays_blank(self):
         assert app_module._resolve_data_dir("") == ""
@@ -665,3 +653,43 @@ class TestForceLtrLocaleScript:
 
         source = inspect.getsource(app_module.configure_page)
         assert "embed_html_iframe(_FORCE_LTR_LOCALE_SCRIPT, height=0)" in source
+
+
+class TestNormalizePairUncachedReportsItsParts:
+    """UX-166 fix-round-1 (T5-3, spec gap): the spec's step table names
+    normalization's three parts (words, fixations, cross-checks) so a
+    cancelled normalization has a checkpoint partway through instead of only
+    at the very end — on a real corpus this stage alone is a ~20 s wait."""
+
+    def _schemas_and_frames(self):
+        from scanpath_studio import data as data_module
+        from tests.synthetic_data import make_synthetic_fixations, make_synthetic_words
+
+        words = make_synthetic_words()
+        fixations = make_synthetic_fixations()
+        word_schema = data_module.propose_word_schema(words)
+        fix_schema = data_module.propose_fix_schema(fixations)
+        return words, word_schema, fixations, fix_schema
+
+    def test_the_final_snapshot_is_done_equals_total_equals_three(self):
+        from scanpath_studio import progress
+
+        words, word_schema, fixations, fix_schema = self._schemas_and_frames()
+        with progress.task(("t", "normalize-parts"), title="Normalizing") as task:
+            app_module._normalize_pair_uncached(
+                words, word_schema, fixations, fix_schema, ("k", 1)
+            )
+        snap = task.snapshot()
+        assert snap.done == snap.total == 3
+
+    def test_cancelling_first_raises_cancelled(self):
+        from scanpath_studio import progress
+
+        words, word_schema, fixations, fix_schema = self._schemas_and_frames()
+        key = ("t", "normalize-parts-cancel")
+        with progress.task(key, title="Normalizing"):
+            progress.cancel(key)
+            with pytest.raises(progress.Cancelled):
+                app_module._normalize_pair_uncached(
+                    words, word_schema, fixations, fix_schema, ("k", 2)
+                )

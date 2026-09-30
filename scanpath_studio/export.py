@@ -31,7 +31,7 @@ import io
 import json
 import re
 import zipfile
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import PurePosixPath
@@ -46,6 +46,7 @@ from .constants import (
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_LINE_SPACING,
     DEFAULT_PALETTE,
+    ICONS,
     SACCADE_CLASS_ORDER,
     UNIFORM_COLOR_FIELD,
     drift_correction_enabled,
@@ -253,6 +254,105 @@ def _settings_summary(settings: dict) -> str:
 #: draws two readings into one frame. Each gains an ``_a`` / ``_b`` variant.
 PAIRED_PATTERN_FIELDS = ("dataset_name", "participant_id", "trial_id", "text_id")
 
+#: EXP-22 — the tables a pattern can name a field of, as ``{table.field}``, and
+#: the heading each gets in the *Available fields* list. The metadata tables
+#: plus the two data tables' saved fields; a qualified name is what tells two
+#: tables' ``font_size`` apart, and what keeps them out of the plain list.
+TABLE_PATTERN_LABELS = {
+    "participants": "Participants table",
+    "trials": "Trials table",
+    "texts": "Texts table",
+    "fixations": "Fixations table",
+    "words": "AOI table",
+}
+
+#: Columns a data table always carries or the app derives — the trial's own
+#: identity, geometry and timing, which the plain fields already cover or which
+#: are not one value per trial. What is left is what the user kept.
+_CORE_TABLE_COLUMNS = frozenset(
+    {
+        "participant_id",
+        "trial_id",
+        "text_id",
+        "paragraph_id",
+        "unique_trial_id",
+        "unique_text_id",
+        "unique_paragraph_id",
+        "word_id",
+        "text",
+        "line_idx",
+        "x",
+        "y",
+        "width",
+        "height",
+        "screen_id",
+        "screen_index",
+        "canvas_width",
+        "canvas_height",
+        "screen_timestamp_ms",
+        "screen_fixation_id",
+        "duration_ms",
+        "timestamp_ms",
+        "fixation_id",
+        "order_in_trial",
+        "pass_index",
+        "saccade_type",
+        "saccade_amplitude",
+        "eye",
+        "source_file",
+        "TRIAL_INDEX",
+        "trial_index",
+    }
+)
+
+
+def _saved_table_fields(frame: pd.DataFrame | None) -> dict:
+    """A data table's saved fields that hold one value for the whole trial.
+
+    A field that varies within the trial (a word's surprisal, a fixation's
+    pupil size) has no single value to put in a title, so it is not offered."""
+    out: dict = {}
+    if frame is None or getattr(frame, "empty", True):
+        return out
+    for column in frame.columns:
+        name = str(column)
+        if name.startswith("_") or name in _CORE_TABLE_COLUMNS:
+            continue
+        values = frame[column].dropna()
+        if values.empty:
+            continue
+        try:
+            distinct = values.unique()
+        except TypeError:  # unhashable cells (lists, dicts)
+            continue
+        if len(distinct) != 1 or isinstance(distinct[0], (list, dict, set, tuple)):
+            continue
+        out[name] = distinct[0]
+    return out
+
+
+def table_pattern_fields(
+    trial_words: pd.DataFrame | None,
+    trial_fixations: pd.DataFrame | None,
+    metadata_rows: dict | None = None,
+) -> dict[str, dict]:
+    """``{table: {"table.field": value}}`` for one trial (EXP-22).
+
+    ``metadata_rows`` is this trial's row of each attached metadata table
+    (``metadata.pattern_rows``); the fixations and AOI tables contribute their
+    saved fields that are constant within the trial. Grouped by table so the
+    *Available fields* list can head each group; :func:`pattern_fields`
+    flattens it."""
+    tables: dict[str, dict] = {}
+    for table, row in (metadata_rows or {}).items():
+        if row:
+            tables[table] = {f"{table}.{name}": value for name, value in row.items()}
+    for table, frame in (("fixations", trial_fixations), ("words", trial_words)):
+        saved = _saved_table_fields(frame)
+        if saved:
+            tables[table] = {f"{table}.{name}": value for name, value in saved.items()}
+    return tables
+
 
 def pattern_fields(
     participant: str,
@@ -263,6 +363,7 @@ def pattern_fields(
     combo_row: dict | None = None,
     dataset_name: str = "",
     compare_row: dict | None = None,
+    metadata_rows: dict | None = None,
 ) -> dict:
     """Every value a filename / title / caption pattern can substitute.
 
@@ -283,8 +384,17 @@ def pattern_fields(
     there is no second reading) so that a pattern written in compare mode still
     validates and renders on a single-trial figure instead of erroring on a
     surface the author cannot see.
+
+    EXP-22: every attached metadata table's fields and each data table's saved
+    fields join as ``{table.field}`` (:func:`table_pattern_fields`) — qualified,
+    so a trial table's ``font_size`` and a recorded ``font_size`` are both
+    reachable, and none of the plain names above changes.
     """
     fields: dict = dict(combo_row or {})
+    for table in table_pattern_fields(
+        trial_words, trial_fixations, metadata_rows
+    ).values():
+        fields.update(table)
     fields.update(
         participant_id=participant,
         trial_id=trial,
@@ -518,45 +628,51 @@ def _figure_renderer(enabled: bool):
     latency. Falls back to per-call ``to_image`` if the warm server can't start
     (or no figures were requested), so behavior is unchanged when Kaleido/Chrome
     is unavailable — the per-trial failure is still surfaced as an export error.
+
+    ``enabled`` also holds ``animation_export.KALEIDO_LOCK`` until the server has
+    stopped, since that server is one per process (UX-150).
     """
-    server = None
-    if enabled:
-        try:
-            import kaleido
+    from .animation_export import KALEIDO_LOCK
 
-            from .animation_export import chromium_browser_path
-
-            browser_path = chromium_browser_path()
-            if browser_path is not None:
-                kaleido.start_sync_server(path=browser_path, silence_warnings=True)
-                server = kaleido
-        except Exception:
-            server = None
-
-    def render(fig, fmt: str, width: int, height: int, scale: int) -> bytes:
-        if server is not None:
-            data = server.calc_fig_sync(
-                fig,
-                opts={
-                    "format": fmt,
-                    "width": int(width),
-                    "height": int(height),
-                    "scale": scale,
-                },
-            )
-            return bytes(data)
-        return fig.to_image(
-            format=fmt, width=int(width), height=int(height), scale=scale
-        )
-
-    try:
-        yield render
-    finally:
-        if server is not None:
+    with KALEIDO_LOCK if enabled else nullcontext():
+        server = None
+        if enabled:
             try:
-                server.stop_sync_server(silence_warnings=True)
-            except Exception:  # pragma: no cover - best-effort teardown
-                pass
+                import kaleido
+
+                from .animation_export import chromium_browser_path
+
+                browser_path = chromium_browser_path()
+                if browser_path is not None:
+                    kaleido.start_sync_server(path=browser_path, silence_warnings=True)
+                    server = kaleido
+            except Exception:
+                server = None
+
+        def render(fig, fmt: str, width: int, height: int, scale: int) -> bytes:
+            if server is not None:
+                data = server.calc_fig_sync(
+                    fig,
+                    opts={
+                        "format": fmt,
+                        "width": int(width),
+                        "height": int(height),
+                        "scale": scale,
+                    },
+                )
+                return bytes(data)
+            return fig.to_image(
+                format=fmt, width=int(width), height=int(height), scale=scale
+            )
+
+        try:
+            yield render
+        finally:
+            if server is not None:
+                try:
+                    server.stop_sync_server(silence_warnings=True)
+                except Exception:  # pragma: no cover - best-effort teardown
+                    pass
 
 
 def render_static_figure_bytes(
@@ -1168,7 +1284,7 @@ def render_export_options(
         # Kaleido/Chrome, unlike the browser-free HTML the user chose), so warn.
         if separable_layers and not (include_png or include_svg or include_pdf):
             st.caption(
-                "⚠️ Separable layers export as **SVG** (a static vector needing "
+                f"{ICONS['warning']} Separable layers export as **SVG** (a static vector needing "
                 "Chrome/Kaleido) — HTML figures can't be split. Pick SVG/PDF/PNG "
                 "above to choose the layer format."
             )
@@ -1225,8 +1341,7 @@ def render_export_options(
         if title_pattern or caption_pattern:
             st.caption(
                 "Title & caption on the figure — set on the Scanpath rail's "
-                "**📐 Figure & canvas** → *Title & caption on the figure*, and "
-                "applied here too."
+                "**📐 Figure & canvas** → *Title & caption*, and applied here too."
             )
 
     return ExportOptions(
@@ -1334,11 +1449,13 @@ class ComparisonSide:
     def slug(self) -> str:
         return f"{_safe_id(self.participant)}__{_safe_id(self.trial)}"
 
-    def stamped(self) -> tuple[pd.DataFrame, pd.DataFrame]:
+    def stamped(self, side: str | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Both frames with a ``dataset`` column, so the pair's tables are readable.
 
         Two corpora can hold the same ``(participant_id, trial_id)``; without
         this column the rows in ``fixations.csv`` would be indistinguishable.
+        ``side`` (CMP-22) also stamps a ``scanpath`` column, ``"A"`` or ``"B"``:
+        B can now be A's own trial, whose rows match A's on every other column.
         """
         label = self.dataset or "(this dataset)"
         out = []
@@ -1348,6 +1465,8 @@ class ComparisonSide:
                 continue
             stamped = frame.copy()
             stamped["dataset"] = label
+            if side is not None:
+                stamped["scanpath"] = side
             out.append(stamped)
         return out[0], out[1]
 
@@ -1423,8 +1542,8 @@ def pair_export(
                 )
             zf.writestr(f"{folder}/figure.{fmt}", data)
 
-        words_a, fix_a = side_a.stamped()
-        words_b, fix_b = side_b.stamped()
+        words_a, fix_a = side_a.stamped("A")
+        words_b, fix_b = side_b.stamped("B")
         for fmt in options.table_formats():
             if options.include_fixations:
                 _write_table(
@@ -1435,8 +1554,11 @@ def pair_export(
                 )
             if options.include_measures:
                 measures = [
-                    compute_word_metrics(words, fixations)
-                    for words, fixations in ((words_a, fix_a), (words_b, fix_b))
+                    compute_word_metrics(words, fixations).assign(scanpath=side)
+                    for side, words, fixations in (
+                        ("A", words_a, fix_a),
+                        ("B", words_b, fix_b),
+                    )
                     if words is not None and not words.empty
                 ]
                 if measures:
@@ -1581,8 +1703,13 @@ def bulk_export(
     raw_gaze: pd.DataFrame | None = None,
     progress_callback=None,
     status_callback: StatusCallback | None = None,
+    metadata_rows_for=None,
 ) -> tuple[bytes, ExportProgress]:
     """Build a zip archive of selected artifacts and return its bytes.
+
+    ``metadata_rows_for(participant, trial, text_id)`` (EXP-22) returns a
+    trial's metadata-table rows for ``{table.field}`` patterns — the app passes
+    ``metadata.pattern_rows``; headless callers have no attached tables.
 
     progress_callback (if given) is invoked with an ExportProgress after every
     trial so the UI can update a progress bar.
@@ -1629,6 +1756,7 @@ def bulk_export(
         "",
         f"Authors: {CITATION['authors']}",
         f"Tool: {CITATION['title']}",
+        f"DOI: https://doi.org/{CITATION['doi']}",
         "",
         "## Layout",
         "- `per_trial/<participant>__<trial>/` holds artifacts for each trial.",
@@ -1746,6 +1874,13 @@ def bulk_export(
                 settings,
                 combo_row=combo._asdict(),
                 dataset_name=options.dataset_name,
+                metadata_rows=(
+                    metadata_rows_for(
+                        participant, trial, combo._asdict().get("text_id")
+                    )
+                    if metadata_rows_for is not None
+                    else None
+                ),
             )
 
             def _path(artifact: str, ext: str, _f=fields, _slug=screen_slug) -> str:
@@ -1976,7 +2111,11 @@ def bulk_export(
 
     if options.include_mega_table and (mega_fixations or mega_measures):
         for fmt in options.table_formats():
-            if mega_fixations:
+            # EXP-15: the full family writes its own, word-enriched
+            # `all_fixations` below — the same rule the per-trial `fixations`
+            # file follows above. Writing both put two members with one name in
+            # the zip, and a reader keeps only one of them, silently.
+            if mega_fixations and not options.include_analysis_family:
                 progress.bytes_written += _write_table(
                     zf,
                     f"aggregate/all_fixations.{fmt}",

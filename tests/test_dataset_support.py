@@ -5,6 +5,7 @@ fixations, and the PoTeC loader."""
 import io
 import json
 import zipfile
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -13,6 +14,7 @@ import pytest
 import scanpath_studio as sps
 from scanpath_studio import data as data_module
 from scanpath_studio import datasets as datasets_module
+from scanpath_studio import progress
 from scanpath_studio.plots import make_scanpath_figure
 
 # ---------------------------------------------------------------------------
@@ -331,6 +333,47 @@ def test_stimulus_words_without_fixations_get_synthetic_participant(stimulus_wor
     assert data_module.STIMULUS_WORDS_FLAG not in words.columns
 
 
+def test_a_repeated_reading_gets_the_stimulus_words_too(stimulus_words_df):
+    """BUG-57: the second reading's id is `t1_r2`, which a table keyed by the
+    text alone never has — the broadcast found no boxes for it."""
+    fixations = pd.DataFrame(
+        {
+            "reader_id": [7, 7, 7, 7],
+            "text_id": ["t1", "t1", "t1", "t1"],
+            "TRIAL_INDEX": [1, 1, 3, 3],
+            "fixation_duration": [180, 220, 150, 200],
+            "x": [140.0, 240.0, 140.0, 240.0],
+            "y": [75.0] * 4,
+        }
+    )
+    words, fixations = sps.load_scanpath_data(
+        words=stimulus_words_df, fixations=fixations
+    )
+    assert set(fixations["trial_id"]) == {"t1", "t1_r2"}
+    for trial in ("t1", "t1_r2"):
+        boxes = words[(words["participant_id"] == "7") & (words["trial_id"] == trial)]
+        assert boxes["text"].tolist() == ["Hello", "world"], trial
+
+
+def test_a_trial_named_like_a_repeat_keeps_its_own_words(stimulus_words_df):
+    """The fallback only applies when the exact id has no boxes."""
+    words_df = pd.concat(
+        [stimulus_words_df, stimulus_words_df.assign(text_id="t1_r2", word="Other")]
+    )
+    fixations = pd.DataFrame(
+        {
+            "reader_id": [7, 7],
+            "text_id": ["t1", "t1_r2"],
+            "fixation_duration": [180, 220],
+            "x": [140.0, 140.0],
+            "y": [75.0, 75.0],
+        }
+    )
+    words, _ = sps.load_scanpath_data(words=words_df, fixations=fixations)
+    own = words[words["trial_id"] == "t1_r2"]
+    assert set(own["text"]) == {"Other"}
+
+
 def test_aoi_fixations_without_words_raise_on_plot(aoi_fixations_df):
     words, fixations = sps.load_scanpath_data(fixations=aoi_fixations_df)
     assert fixations["x"].isna().all()
@@ -496,6 +539,72 @@ def test_load_potec_unknown_text(potec_root):
 def test_load_potec_missing_data_message(tmp_path):
     with pytest.raises(FileNotFoundError, match="download=True"):
         datasets_module.load_potec(tmp_path, texts=["b0"])
+
+
+def test_potec_reports_each_fixation_file(potec_root, monkeypatch):
+    """UX-166: `_potec_fixations` reports each file read, so a card can say
+    "1 of 2 files" while loading. Fix-round-1 (Minor #8) also pins the FULL
+    call sequence via a spy on `progress.report` — not just the final
+    snapshot, since a cancel checkpoint needs the intermediate reports to
+    actually have happened, in order, one per file. The first, "0 of 2", comes
+    before any file is read (see the next test)."""
+    from scanpath_studio.datasets import potec_raw_frames
+
+    calls = []
+    real_report = progress.report
+
+    def spy(done=None, total=None, *, unit="", detail=None):
+        calls.append((done, total, unit))
+        return real_report(done, total, unit=unit, detail=detail)
+
+    monkeypatch.setattr(progress, "report", spy)
+    with progress.task(("t", "potec"), title="Loading PoTeC") as task:
+        potec_raw_frames(potec_root, texts=["b0"])
+    assert calls == [(0, 2, "files"), (1, 2, "files"), (2, 2, "files")]
+    snap = task.snapshot()
+    assert (snap.done, snap.total, snap.unit) == (2, 2, "files")
+
+
+def _state_of_the_active_task() -> tuple:
+    task = progress.active()
+    snap = task.snapshot()
+    return (task.worked, snap.done, snap.total, snap.unit)
+
+
+def test_a_potec_load_has_reported_before_its_first_fixation_file(
+    potec_root, monkeypatch
+):
+    """UX-166: a gated card shows once its task reports, and a loop that reports
+    only *after* each file hides its first file — for OneStop, a whole report —
+    behind the delay. So a reader reports "0 of N" before it reads anything."""
+    seen = []
+    real_read = datasets_module._read_potec_tsv
+
+    def _read(path):
+        if "eyetracking_data" in Path(path).parts:
+            seen.append(_state_of_the_active_task())
+        return real_read(path)
+
+    monkeypatch.setattr(datasets_module, "_read_potec_tsv", _read)
+    with progress.task(("t", "potec-first"), title="Loading PoTeC"):
+        datasets_module.potec_raw_frames(potec_root, texts=["b0"])
+    assert seen[0] == (True, 0, 2, "files")
+
+
+def test_a_onestop_load_has_reported_before_its_first_report(
+    onestop_offline, tmp_path, monkeypatch
+):
+    seen = []
+    real_read = datasets_module._read_onestop_part
+
+    def _read(*args, **kwargs):
+        seen.append(_state_of_the_active_task())
+        return real_read(*args, **kwargs)
+
+    monkeypatch.setattr(datasets_module, "_read_onestop_part", _read)
+    with progress.task(("t", "onestop-first"), title="Loading OneStop"):
+        datasets_module.onestop_raw_frames(tmp_path, regime="ordinary", download=True)
+    assert seen[0] == (True, 0, 2, "reports")
 
 
 def test_potec_present(tmp_path):
@@ -676,9 +785,15 @@ def test_download_onestop_atomic_and_skips_existing(monkeypatch, tmp_path):
     reports already on disk on a re-run."""
     calls = []
 
-    class _FakeResp:
+    class _FakeResp(io.BytesIO):
+        """UX-168: `download_onestop` now reads in chunks (`.read1(size)`), so
+        this has to behave like a real response body — `io.BytesIO` does —
+        rather than returning the whole payload on every call. No declared
+        Content-Length, same as before this fake grew one."""
+
         def __init__(self, data):
-            self._data = data
+            super().__init__(data)
+            self.headers = {}
 
         def __enter__(self):
             return self
@@ -686,10 +801,7 @@ def test_download_onestop_atomic_and_skips_existing(monkeypatch, tmp_path):
         def __exit__(self, *a):
             return False
 
-        def read(self):
-            return self._data
-
-    def fake_urlopen(url):
+    def fake_urlopen(url, timeout=None):
         calls.append(url)
         return _FakeResp(_zip_bytes("x.csv", b"a\n1\n"))
 
@@ -1241,6 +1353,23 @@ def test_multipleye_raw_frames_auto_detect_path(multipleye_root):
     assert set(words["participant_id"]) == {"001_ZH_CH_1_ET1"}  # broadcast worked
     assert set(words["trial_id"]) == {"Lit_Demo_1"}
     assert set(words["screen_id"]) == {"page_1", "page_2"}
+
+
+def test_a_multipleye_load_reports_before_its_first_file(multipleye_root, monkeypatch):
+    """UX-166: "0 of N files" first, so a gated card is armed before the first
+    file is read — then one report per file, as before."""
+    calls = []
+    real_report = progress.report
+
+    def spy(done=None, total=None, *, unit="", detail=None):
+        calls.append((done, total, unit))
+        return real_report(done, total, unit=unit, detail=detail)
+
+    monkeypatch.setattr(progress, "report", spy)
+    with progress.task(("t", "multipleye-first"), title="Loading MultiplEYE"):
+        datasets_module.multipleye_raw_frames(multipleye_root)
+    files = calls[-1][1]
+    assert calls == [(index, files, "files") for index in range(files + 1)]
 
 
 def test_multipleye_inventory(multipleye_root):

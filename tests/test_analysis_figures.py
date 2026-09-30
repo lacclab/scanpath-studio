@@ -24,7 +24,6 @@ from scanpath_studio.aggregation import (
     cohort_word_profile,
     ensure_fixation_enrichment,
     group_word_difference,
-    grouped_metric_values,
     landing_positions,
     metric_by_trial_index,
     paired_group_summary,
@@ -40,6 +39,7 @@ from scanpath_studio.aggregation import (
 )
 from scanpath_studio.constants import DEFAULT_MARKER_SIZE_RANGE
 from scanpath_studio.data import (
+    correct_word_id_offset,
     derive_trial_index,
     infer_fix_schema,
     infer_word_schema,
@@ -87,8 +87,8 @@ def demo():
     )
 
 
-class TestLegacyTrendFigures:
-    """The trial-index / fixation-index trends (``metric_by_*_index``)."""
+class TestTrendFigures:
+    """The trial-index trend (``metric_by_trial_index``)."""
 
     def test_trend_figure_band_and_line(self, demo):
         fx = demo.fixations.assign(trial_index=derive_trial_index(demo.fixations))
@@ -130,26 +130,6 @@ class TestLegacyTrendFigures:
             fig.add_scatter(x=grp["trial_index"], y=grp["value"], mode="lines")
         # Band + cohort line + one faint line per reader.
         assert len(fig.data) == 2 + len(readers)
-
-    def test_aggregated_histogram_shares_bin_edges(self, demo):
-        groups, dropped = grouped_metric_values(
-            demo.fixations, "duration_ms", "difficulty_level"
-        )
-        assert dropped == 0 and set(groups) == {"Adv", "Ele"}
-        fig = plots.make_aggregated_histogram(
-            groups, metric_label="Fixation duration (ms)", bins=25, **_FW
-        )
-        assert [t.type for t in fig.data] == ["bar", "bar"]
-        assert [t.name for t in fig.data] == ["Adv", "Ele"]
-        # One shared set of bin centres, so the overlaid series line up.
-        np.testing.assert_array_equal(fig.data[0].x, fig.data[1].x)
-        assert len(fig.data[0].x) == 25
-        # Binning is server-side: every value lands in a bin, none are dropped.
-        for trace, name in zip(fig.data, ("Adv", "Ele")):
-            assert int(np.sum(trace.y)) == groups[name].size
-        assert fig.layout.barmode == "overlay"
-        assert fig.layout.xaxis.title.text == "Fixation duration (ms)"
-        assert fig.layout.yaxis.title.text == "Count"
 
 
 class TestPerTextFigures:
@@ -392,10 +372,15 @@ class TestPerReaderFigures:
         assert fig.layout.yaxis2.tickformat == ".0%"
 
     def test_landing_curve(self, demo):
-        vals = landing_positions(
-            demo.words, demo.fixations, participant_id=demo.participant
-        )
-        assert vals.size and ((vals >= 0) & (vals <= 1)).all()
+        # `demo` skips `harmonize_frames`, so its fixation ids are still the raw
+        # 1-based ones (BUG-8) and point at the *next* word — which the old clip
+        # onto [0, 1] hid. Correct them the way every real load does.
+        fixations = correct_word_id_offset(demo.words, demo.fixations)
+        vals = landing_positions(demo.words, fixations, participant_id=demo.participant)
+        # Unclipped (BUG-83): the fractions are over the experiment's box, so
+        # nearly all sit inside [0, 1] on their own, and none is folded onto 1.0.
+        assert vals.size and ((vals >= 0) & (vals <= 1)).mean() > 0.99
+        assert (vals == 1.0).mean() < 0.01
         fig = plots.make_landing_curve_figure(vals, **_FW)
         assert [t.type for t in fig.data] == ["histogram"]
         assert len(fig.data[0].x) == vals.size
@@ -505,7 +490,6 @@ class TestNoDataFallbacks:
             plots.make_trend_figure(
                 empty, x_col="trial_index", y_label="y", title="Trend", **_FW
             ),
-            plots.make_aggregated_histogram({}, metric_label="m", **_FW),
             plots.make_small_multiples_figure(empty, measure_label="m", **_FW),
             plots.make_word_matrix_heatmap(
                 empty, row_col="participant_id", measure_label="m", **_FW

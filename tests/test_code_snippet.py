@@ -14,7 +14,7 @@ import shlex
 
 import pytest
 
-from scanpath_studio import api, cli
+from scanpath_studio import api, cli, url_state
 from scanpath_studio import code_snippet as cs
 from tests.conftest import APP_SCRIPT
 
@@ -92,12 +92,53 @@ def test_an_uploaded_stimulus_image_becomes_a_placeholder():
     assert any("stimulus image" in note for note in code.caveats)
 
 
-def test_raw_gaze_is_reported_rather_than_faked():
-    """It needs a third frame, not a keyword — so it is a caveat, not a kwarg."""
+def test_the_demos_raw_gaze_is_loaded_not_faked():
+    """EXP-20: raw gaze is a third *frame*, not a keyword — so the snippet
+    loads the table and hands it over, rather than writing `show_raw_gaze=`
+    (which draws nothing without one) or leaving the layer off."""
     state = _state(figure={"show_raw_gaze": True})
     code = cs.reproduction_code(DEMO, state)
     assert "show_raw_gaze" not in code.python
-    assert any("raw-gaze" in note for note in code.caveats)
+    assert "raw_gaze = sps.load_sample_raw_gaze()" in code.python
+    assert "    raw_gaze=raw_gaze," in code.python
+    assert "--sample-raw-gaze" in code.cli
+    assert not code.caveats and not code.cli_unsupported
+
+
+def test_a_raw_gaze_file_is_named_in_both_forms():
+    source = cs.SnippetSource(
+        kind=cs.SOURCE_FILES,
+        options={
+            "words": ["w.csv"],
+            "fixations": ["f.csv"],
+            "raw_gaze": ["gaze.csv"],
+            "raw_gaze_schema": {"trial": "TRIAL", "x": "X", "y": "Y"},
+        },
+    )
+    code = cs.reproduction_code(source, _state(figure={"show_raw_gaze": True}))
+    assert "sps.load_raw_gaze('gaze.csv', raw_gaze_schema=" in code.python
+    flat = code.cli.replace(" \\\n ", " ")
+    assert "--raw-gaze gaze.csv" in flat
+    assert "--raw-gaze-schema" in flat
+    assert not code.caveats
+
+
+def test_an_uploaded_raw_gaze_table_is_a_placeholder_and_a_caveat():
+    source = cs.SnippetSource(kind=cs.SOURCE_UNKNOWN)
+    code = cs.reproduction_code(source, _state(figure={"show_raw_gaze": True}))
+    assert "sps.load_raw_gaze('raw_gaze.csv')" in code.python
+    assert "--raw-gaze raw_gaze.csv" in code.cli
+    assert any("raw gaze" in note for note in code.caveats)
+
+
+@pytest.mark.parametrize("kind", ["animation", "comparison"])
+def test_a_figure_without_a_raw_gaze_layer_loads_none(kind):
+    """Only the single-trial builder draws raw gaze; the rail greys the switch
+    in the other two modes, so the figure on screen has no layer to rebuild."""
+    code = cs.reproduction_code(DEMO, _state(kind, figure={"show_raw_gaze": True}))
+    assert "raw_gaze" not in code.python
+    assert "raw-gaze" not in code.cli
+    assert not any("raw gaze" in note for note in code.caveats)
 
 
 def test_an_uploaded_dataset_says_it_cannot_name_the_files():
@@ -107,7 +148,10 @@ def test_an_uploaded_dataset_says_it_cannot_name_the_files():
     assert "load_scanpath_data" in code.python
 
 
-def test_settings_with_no_render_flag_are_named_not_dropped():
+def test_settings_with_no_render_flag_are_named_not_dropped(monkeypatch):
+    """EXP-20 left no figure option without a flag, so the mechanism is driven
+    by taking one away — it is what a future option without a flag hits."""
+    monkeypatch.delitem(cs._CLI_EMITTERS, "fixation_color_range")
     state = _state(figure={"fixation_color_range": (1.0, 5.0)})
     code = cs.reproduction_code(DEMO, state)
     assert "fixation_color_range=(1.0, 5.0)" in code.python
@@ -324,7 +368,6 @@ def test_every_cli_emitter_names_a_real_figure_option():
     # real option with a real flag, and it exists only in the animation set.
     valid = set().union(*(api.figure_options(kind) for kind in cs.KINDS))
     assert set(cs._CLI_EMITTERS) <= valid
-    assert cs._CLI_IMPLICIT <= valid
 
 
 def test_every_render_flag_for_a_published_option_has_an_emitter():
@@ -340,7 +383,7 @@ def test_every_render_flag_for_a_published_option_has_an_emitter():
     by_hand = {"compare_stimulus", "layout", "trial_labels"}
     for kind in cs.KINDS:
         for key in api.figure_options(kind):
-            if key in cs._DERIVED_SETTINGS or key in cs._CLI_IMPLICIT:
+            if key in cs._DERIVED_SETTINGS:
                 continue
             if key in by_hand:
                 continue
@@ -519,6 +562,44 @@ def test_the_cli_snippet_parses_and_runs(tmp_path, demo_trial):
     assert out.exists() and out.stat().st_size > 0
 
 
+def test_an_animation_cli_snippet_replays_the_same_figure(
+    tmp_path, monkeypatch, demo_trial
+):
+    """EXP-10: the snippet emitted every animation option it was given, but
+    `render --animate` forwarded a hand-kept subset of them — so the marker
+    shape and flat colour were dropped and `--color-by` was refused. Executed,
+    the command has to hand the replay what the snippet names."""
+    _words, _fixations, participant, trial = demo_trial
+    changed = {
+        "fixation_symbol": "diamond",
+        "fixation_color": "#aa0000",
+        "color_by": "duration_ms",
+        "fixation_colorscale": "Blues",
+        "marker_size_range": (4, 12),
+    }
+    state = cs.FigureState(
+        kind="animation",
+        settings={**api.figure_options("animation"), **changed},
+        participant=participant,
+        trial=trial,
+    )
+    command, unsupported = cs.cli_snippet(
+        DEMO, state, output=str(tmp_path / "anim.html")
+    )
+    assert not unsupported
+    seen: dict = {}
+    real = api.animate_scanpath
+
+    def spy(*args, **kwargs):
+        seen.update(kwargs)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(api, "animate_scanpath", spy)
+    cli.main(shlex.split(command.replace(" \\\n", " "))[1:])
+    for key, value in changed.items():
+        assert cs._comparable(seen.get(key)) == cs._comparable(value), key
+
+
 def test_the_cli_prints_the_recipe_for_its_own_invocation(tmp_path, capsys):
     out = tmp_path / "printed.html"
     cli.main(
@@ -546,10 +627,54 @@ def test_the_cli_prints_the_recipe_for_its_own_invocation(tmp_path, capsys):
 # The headless API
 # ---------------------------------------------------------------------------
 def test_figure_code_matches_the_module_it_wraps():
+    # EXP-14: `figure_code` fills in the demo's own monitor, the canvas `render
+    # --sample` assumes, so the module call it is compared with names it too.
     python = api.figure_code(participant="p1", trial="t1", show_heatmap=False)
     assert python == cs.python_snippet(
-        DEMO, _state(figure={"show_heatmap": False}), output="scanpath.png"
+        DEMO,
+        _state(figure={"show_heatmap": False}, canvas=(2560, 1440)),
+        output="scanpath.png",
     )
+
+
+def test_figure_code_with_no_trial_draws_what_render_draws(tmp_path, monkeypatch):
+    """EXP-14: with no ids the Python half quoted `participant=''` (no such
+    trial — it raised) and no canvas (960×480 estimated from the data), while
+    the CLI half rendered the first trial at 2560×1440. Both halves now draw
+    the same figure."""
+    figures: list = []
+
+    def capture(fig, path, **_kwargs):
+        figures.append(fig)
+        return path
+
+    monkeypatch.setattr(api, "save_figure", capture)
+    python = api.figure_code(show_heatmap=False)
+    exec(compile(python, "<snippet>", "exec"), {})  # noqa: S102
+    command = api.figure_code(show_heatmap=False, flavor="cli", output="x.html")
+    cli.main(shlex.split(command.replace(" \\\n", " "))[1:])
+    python_fig, cli_fig = figures
+    assert _figure_fingerprint(python_fig) == _figure_fingerprint(cli_fig)
+    assert python_fig.layout.width == cli_fig.layout.width
+
+
+def test_figure_code_names_a_trial_half_given(monkeypatch):
+    python = api.figure_code(participant="l7_1090")
+    assert "trials['participant_id'] == 'l7_1090'" in python
+    monkeypatch.setattr(api, "save_figure", lambda fig, path, **kwargs: path)
+    namespace: dict = {}
+    exec(compile(python, "<snippet>", "exec"), namespace)  # noqa: S102
+    assert namespace["participant"] == "l7_1090"
+
+
+def test_figure_code_writes_an_animation_to_html(tmp_path, monkeypatch):
+    """`render --animate` refuses anything but HTML, and `figure_code` wrote
+    `scanpath.png` for every kind."""
+    command = api.figure_code(kind="animation", flavor="cli")
+    assert command.rstrip().endswith("-o scanpath.html")
+    monkeypatch.chdir(tmp_path)
+    cli.main(shlex.split(command.replace(" \\\n", " "))[1:])
+    assert (tmp_path / "scanpath.html").is_file()
 
 
 def test_figure_code_flavours():
@@ -575,6 +700,109 @@ def test_a_palette_is_expanded_not_named():
     code = api.figure_code(palette="Print / greyscale")
     assert "palette=" not in code
     assert "saccade_color=" in code
+
+
+def _rendered_figures(monkeypatch, argv_list) -> list:
+    """Run each ``render`` argv with `save_figure` capturing the figure."""
+    figures: list = []
+
+    def capture(fig, path, **_kwargs):
+        figures.append(fig)
+        return path
+
+    monkeypatch.setattr(api, "save_figure", capture)
+    for argv in argv_list:
+        cli.main(argv)
+    return figures
+
+
+@pytest.mark.parametrize("palette", ["Print / greyscale", "High contrast"])
+def test_a_palette_choice_reproduces_through_the_cli(
+    tmp_path, monkeypatch, capsys, palette
+):
+    """EXP-12: a palette rewrites the five class colours, and the CLI form
+    spelled them as `--saccade-type-color` flags — which imply *By type*, so
+    every palette choice printed a command that recoloured saccades by type
+    (and named `text_color` / `highlight_text_color` unsupported). The CLI form
+    names the palette instead, and executed it draws the same figure."""
+    original = [
+        "render",
+        "--sample",
+        "--palette",
+        palette,
+        "--print-code",
+        "cli",
+        "-o",
+        str(tmp_path / "a.html"),
+    ]
+    _rendered_figures(monkeypatch, [original])
+    printed = capsys.readouterr().out
+    assert "--saccade-type-color" not in printed
+    assert "No `render` flag" not in printed
+    assert shlex.quote(palette) in printed
+    replay = shlex.split(printed.strip().replace(" \\\n", " "))[1:]
+    first, second = _rendered_figures(
+        monkeypatch, [original[:-4] + original[-2:], replay]
+    )
+    assert _figure_fingerprint(first) == _figure_fingerprint(second)
+
+
+def test_class_colours_a_uniform_figure_does_not_draw_are_not_emitted():
+    """`--saccade-type-color` switches the mode, so it must never carry colours
+    the figure is not drawing."""
+    from scanpath_studio.constants import palette_settings
+
+    colors = palette_settings("High contrast")["saccade_class_colors"]
+    colors["regression"] = "#abcdef"  # no palette matches this set
+    state = _state(figure={"saccade_class_colors": colors})
+    command, unsupported = cs.cli_snippet(DEMO, state)
+    assert "--saccade-type-color" not in command
+    assert "saccade_class_colors" not in unsupported
+
+
+def test_two_way_class_colours_reach_the_cli_beside_the_fold(tmp_path, monkeypatch):
+    """The two-way fold draws the forward and regression colours, and
+    `--saccade-type-color` used to switch it to the five-way split — so those
+    two colours had no flag and were named instead. Beside
+    `--saccade-color-by-direction` the flag now recolours the fold (EXP-20)."""
+    colors = {"regression": "#abcdef", "forward": "#123456"}
+    state = _state(
+        figure={
+            "saccade_color_mode": "Forward / regression",
+            "saccade_class_colors": colors,
+        }
+    )
+    command, unsupported = cs.cli_snippet(
+        DEMO, state, output=str(tmp_path / "fold.html")
+    )
+    assert "--saccade-color-by-direction" in command
+    assert "--saccade-type-color 'regression=#abcdef'" in command
+    assert "saccade_class_colors" not in unsupported
+    seen: dict = {}
+    real = api.plot_scanpath
+
+    def spy(*args, **kwargs):
+        seen.update(kwargs)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(api, "plot_scanpath", spy)
+    monkeypatch.setattr(api, "save_figure", lambda fig, path, **kwargs: path)
+    words, fixations = api.load_sample_data()
+    row = api.list_trials(words, fixations).iloc[0]
+    argv = shlex.split(command.replace(" \\\n", " "))[1:]
+    argv[argv.index("-p") + 1] = str(row["participant_id"])
+    argv[argv.index("-t") + 1] = str(row["trial_id"])
+    cli.main(argv)
+    assert seen["saccade_color_mode"] == "Forward / regression"
+    for name, color in colors.items():
+        assert seen["saccade_class_colors"][name] == color
+
+
+def test_a_stock_figure_names_no_palette():
+    command, _ = cs.cli_snippet(DEMO, _state())
+    assert "--palette" not in command
+    by_type = _state(figure={"saccade_color_mode": "By type"})
+    assert "--palette" not in cs.cli_snippet(DEMO, by_type)[0]
 
 
 # ---------------------------------------------------------------------------
@@ -632,14 +860,20 @@ def test_the_panel_switches_flavour():
     at = _panel(
         **{
             cs.SNIPPET_STATE_KEY: state,
-            "snippet_flavor": "⌨️ CLI",
+            "snippet_flavor": url_state._SNIPPET_FLAVORS[1],
         }
     )
     assert at.code[0].language == "bash"
-    assert at.code[0].value.startswith("scanpath-studio render")
+    # The install line leads the block so the whole thing pastes into a fresh
+    # shell; the command itself follows it.
+    block = at.code[0].value
+    assert block.startswith(f"{cs.INSTALL_COMMAND}\n\n")
+    assert block.split("\n\n", 1)[1].startswith("scanpath-studio render")
 
 
-def test_the_panel_names_what_the_cli_cannot_say():
+def test_the_panel_names_what_the_cli_cannot_say(monkeypatch):
+    # EXP-20 gave every option a flag; the caption is for the next one without.
+    monkeypatch.delitem(cs._CLI_EMITTERS, "fixation_color_range")
     state = cs.FigureState(
         kind="static",
         settings={
@@ -649,7 +883,9 @@ def test_the_panel_names_what_the_cli_cannot_say():
         participant="p1",
         trial="t1",
     )
-    at = _panel(**{cs.SNIPPET_STATE_KEY: state, "snippet_flavor": "⌨️ CLI"})
+    at = _panel(
+        **{cs.SNIPPET_STATE_KEY: state, "snippet_flavor": url_state._SNIPPET_FLAVORS[1]}
+    )
     copy = " ".join(element.value for element in at.caption)
     assert "fixation_color_range" in copy
 
@@ -952,15 +1188,68 @@ def test_the_raster_geometry_reaches_both_flavours():
     assert "--width 1600" in code.cli and "--scale 3" in code.cli
 
 
-def test_a_dual_animation_says_where_scanpath_b_goes():
+def test_a_dual_animation_names_scanpath_b_in_both_forms():
     """CMP-11: Animate + Compare is one figure with two readings, so `kind` is
-    "animation" and B rides in `compare`. B's frames are frames, not options."""
+    "animation" and B rides in `compare`. BUG-85 gave `animate_scanpath` the
+    `trial_b=` pair `compare_scanpaths` takes, so the Python form names B too
+    instead of replaying A alone."""
     state = _state(
         kind="animation",
         compare=cs.CompareTarget(participant="p2", trial="t2"),
     )
+    code = cs.reproduction_code(DEMO, state)
+    assert "trial_b=('p2', 't2')" in code.python
+    assert "--compare-with p2:t2" in code.cli
+    assert not any("replays A alone" in note for note in code.caveats)
+
+
+def test_a_cross_dataset_dual_animation_leaves_bs_frames_to_the_caller():
+    """B's reader belongs to its own corpus, which the snippet cannot load — and
+    `trial_b=` alone would look that id up in A's corpus, so it is not written."""
+    state = _state(
+        kind="animation",
+        compare=cs.CompareTarget(participant="p2", trial="t2", dataset="PoTeC"),
+    )
+    code = cs.reproduction_code(DEMO, state)
+    assert "trial_b=" not in code.python
+    notes = " ".join(code.caveats)
+    assert "words_b=" in notes and "trial_b=('p2', 't2')" in notes
+
+
+def test_a_multipart_dual_animation_says_which_screen_b_is_drawn_at():
+    """`animate_scanpath` draws B at its first recorded screen, and the snippet
+    cannot know which one the app's own B navigator shows — so it says how to
+    pick another rather than quietly drawing a different page."""
+    state = _state(
+        kind="animation",
+        screen="question",
+        compare=cs.CompareTarget(participant="p2", trial="t2"),
+    )
     notes = " ".join(cs.reproduction_code(DEMO, state).caveats)
-    assert "words_b=" in notes and "p2" in notes
+    assert "first screen" in notes and "extract_part" in notes
+
+
+def test_a_dual_animation_snippet_rebuilds_the_two_reading_replay(demo_trial):
+    """Run the printed recipe: the `trial_b=` it names draws exactly the second
+    reading `animate_scanpath` draws for that pair."""
+    words, fixations, participant, trial = demo_trial
+    combos = api.list_trials(words, fixations)
+    other = combos[combos["trial_id"] != trial].iloc[0]
+    trial_b = (str(other["participant_id"]), str(other["trial_id"]))
+    state = cs.FigureState(
+        kind="animation",
+        settings=api.figure_options("animation"),
+        participant=participant,
+        trial=trial,
+        canvas=(2560, 1440),
+        compare=cs.CompareTarget(participant=trial_b[0], trial=trial_b[1]),
+    )
+    namespace: dict = {}
+    exec(compile(cs.python_snippet(DEMO, state), "<snippet>", "exec"), namespace)  # noqa: S102
+    expected = api.animate_scanpath(
+        words, fixations, participant, trial, canvas_size=(2560, 1440), trial_b=trial_b
+    )
+    assert _figure_fingerprint(namespace["fig"]) == _figure_fingerprint(expected)
 
 
 def test_the_illustration_disclosure_choice_reaches_both_snippets():
@@ -991,6 +1280,21 @@ def test_a_cross_dataset_comparison_says_whose_reader_b_is():
     assert not any(
         "second dataset" in n for n in cs.reproduction_code(DEMO, same).caveats
     )
+
+
+def test_a_second_datasets_co_animation_note_names_its_screen_too():
+    """CMP-21: with `dataset_b=` the co-animation checks the two screens, and a
+    screen nobody states is read off that trial's data — so the note on how to
+    finish the snippet names B's screen too, or following it gets the figure
+    refused."""
+    state = _state(
+        kind="animation",
+        canvas=(2560, 1440),
+        compare=cs.CompareTarget(participant="reader_07", trial="t9", dataset="PoTeC"),
+    )
+    notes = " ".join(cs.reproduction_code(DEMO, state).caveats)
+    assert "dataset_b='PoTeC'" in notes
+    assert "setup_b=" in notes and "--compare-canvas" in notes
 
 
 # ---------------------------------------------------------------------------
@@ -1089,11 +1393,33 @@ def test_the_co_animations_labels_are_no_longer_cli_unsupported():
     `label_a` / `label_b` as loose keywords, and `render` had no flag for
     either — so an animation snippet dropped them *and* warned about them.
     One flag pair now serves the comparison and the co-animation alike."""
-    state = _state("animation", figure={"label_a": "A", "label_b": "B"})
+    state = _state(
+        "animation",
+        figure={"label_a": "A", "label_b": "B"},
+        compare=cs.CompareTarget(participant="p2", trial="t2"),
+    )
     code = cs.reproduction_code(DEMO, state)
-    assert "--label-a A" in code.cli.replace(" \\\n ", " ")
-    assert "--label-b B" in code.cli.replace(" \\\n ", " ")
+    flat = code.cli.replace(" \\\n ", " ")
+    assert "--label-a A" in flat
+    assert "--label-b B" in flat
+    # EXP-20: `render` refuses the labels without the second reading, so the
+    # command names it — before, the pair was written and the copy then failed.
+    assert "--compare-with p2:t2" in flat
     assert not code.cli_unsupported
+
+
+def test_a_single_replay_writes_no_second_scanpath_flags():
+    """A one-reading replay still carries the A/B legend switch and the default
+    labels (the builder takes them and ignores them); writing them would hand
+    `render` flags it refuses without `--compare-with`."""
+    state = _state(
+        "animation",
+        figure={"show_legend": True, "label_a": "A", "compare_stimulus": "b"},
+    )
+    for explicit in (False, True):
+        command = cs.reproduction_code(DEMO, state, explicit=explicit).cli
+        for flag in ("--compare-legend", "--label-a", "--compare-stimulus"):
+            assert flag not in command, (flag, explicit)
 
 
 def test_render_takes_the_label_flags_it_is_handed():

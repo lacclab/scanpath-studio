@@ -201,7 +201,9 @@ DEEPLINK_PARTICIPANT = "_deeplink_participant"
 GLOBAL_ADVANCED = "global_advanced"
 # The per-trial annotation store; owned by annotations.py (pinned equal to it by
 # the contract test). Schema 2–3 configs carried it; since UX-179 (schema 4) it
-# travels in its own file (🗂️ Data → Annotations) and the recovery cache.
+# travels in its own file (🗂️ Data → Annotations) and the recovery cache. Since
+# DATA-48 it holds the selected dataset's store only; the others wait under
+# `annotations.DATASET_STORE_KEY`, which is not wire format (never in a link).
 TRIAL_ANNOTATIONS = "trial_annotations"
 # VIZ-39 — the user's saved design library, one of the keys the on-device
 # recovery cache writes to its manifest, so the designs survive closing the

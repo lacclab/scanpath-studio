@@ -155,10 +155,10 @@ class TestPerTextFigures:
     def test_small_multiples_reports_the_panel_cap(self, demo):
         per = per_reader_word_measure(demo.words, demo.text_col, demo.text_id, _TFD)
         fig = plots.make_small_multiples_figure(
-            per, measure_label=_TFD.axis_label, max_panels=2, **_FW
+            per, measure_label=_TFD.axis_label, max_panels=1, **_FW
         )
-        assert len(fig.data) == 2  # no cohort overlay → one trace per panel
-        assert f"showing 2 of {len(demo.readers)} readers" in fig.layout.title.text
+        assert len(fig.data) == 1  # no cohort overlay → one trace per panel
+        assert f"showing 1 of {len(demo.readers)} readers" in fig.layout.title.text
 
     def test_word_matrix_heatmap(self, demo):
         per = per_reader_word_measure(demo.words, demo.text_col, demo.text_id, _TFD)

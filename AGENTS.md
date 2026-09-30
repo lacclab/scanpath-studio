@@ -9,7 +9,7 @@ visualization. Targeted at reading-research / NLP audiences. Distributed as the
 PyPI package `scanpath-studio`; deployable to Streamlit Community
 Cloud via `streamlit_app.py` at the repo root.
 
-Demo corpus: 3 participants × 2 articles × {Adv, Ele} from **OneStop Eye
+Demo corpus: 2 participants × 2 articles × {Adv, Ele} from **OneStop Eye
 Movements** (Berzak, Malmaud, Shubi, Meiri, Lion, Levy, *Scientific Data* 2025;
 [doi:10.1038/s41597-025-06272-2](https://doi.org/10.1038/s41597-025-06272-2);
 docs at <https://lacclab.github.io/OneStop-Eye-Movements/>), shipped under
@@ -165,7 +165,12 @@ them when the selection changes, and the recovery cache stores them per dataset.
 
 `annotations.py` keeps parent-trial and optional screen-scoped favorites / tags /
 notes in session state (keyed by `(participant_id, trial_id)` or
-`(participant_id, trial_id, screen_id)`), with a pure serialize/deserialize core
+`(participant_id, trial_id, screen_id)`) — **one store per dataset (DATA-48)**,
+swapped by `annotations.activate_dataset` exactly as DATA-47 swaps the metadata
+tables, so two datasets that reuse ids never share a star (import the module as
+`import scanpath_studio.annotations as …` — `from scanpath_studio import
+annotations` can bind the package's `__future__` feature instead) — with a pure
+serialize/deserialize core
 and JSON export/import per dataset on 🗂️ Data → Annotations (the Export bundle can carry the same `annotations.json`, UX-179). `controls.render_trial_filters` (read back via
 `controls.read_trial_filters`) +
 `data.filter_trials` / `data.filter_to_keys` narrow the trial pool by condition

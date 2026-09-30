@@ -1747,8 +1747,49 @@ def _capture_quick_view_state() -> dict[str, object]:
     return state
 
 
+#: VIZ-44 — `global_*` keys that *mirror* a setting rather than hold one, so
+#: they are left out of the drift check below. The highlight-span pair is
+#: re-derived from `global_critical_span_style` on every run the Stimulus
+#: popover draws, and each `__num*` key is the typed box beside a slider,
+#: registered the first time its popover renders — neither is anything the user
+#: set apart from the canonical key, which the check does compare.
+_DRIFT_MIRROR_KEYS = frozenset(
+    {"global_highlight_span_on", "global_highlight_span_mode"}
+)
+_NUMERIC_TWIN_SUFFIXES = ("__num", "__num_lo", "__num_hi")
+_ABSENT = object()
+
+
+def _is_drift_mirror(key: str) -> bool:
+    return key in _DRIFT_MIRROR_KEYS or key.endswith(_NUMERIC_TWIN_SUFFIXES)
+
+
+def _design_drifted(applied: dict, current: dict) -> bool:
+    """Whether the plot settings moved off the design that was applied (VIZ-44).
+
+    Every design key counts — a named view resets *all* of them to the widget
+    defaults, so changing any plot control is a departure from it — except the
+    mirrors above. A key present on only one side is compared against its
+    widget default: a control registered late (its popover opened after the
+    baseline was taken) at its default value has not been changed, while a key
+    with no default (an explicit colour range, VIZ-46) appearing *has*.
+    """
+    for key in applied.keys() | current.keys():
+        if _is_drift_mirror(key):
+            continue
+        default = _VIZ_WIDGET_DEFAULTS.get(key, _ABSENT)
+        if applied.get(key, default) != current.get(key, default):
+            return True
+    return False
+
+
 def _sync_quick_view_state() -> str:
-    """Keep the design-preset highlight in step with manual plot-control edits."""
+    """Keep the design-preset highlight in step with manual plot-control edits.
+
+    Only a change to a plot setting drops the highlight to 🛠️ Custom; see
+    `_design_drifted` for what is not one (VIZ-44 — narrowing the trial pool
+    used to flip it).
+    """
     ss = st.session_state
     selected = ss.get(_QUICK_VIEW_SELECTION_KEY)
     # VIZ-39: a `design:<name>` selection is valid while that design still
@@ -1759,7 +1800,7 @@ def _sync_quick_view_state() -> str:
         if not isinstance(applied, dict):
             ss[_QUICK_VIEW_APPLIED_STATE] = _capture_quick_view_state()
             return str(selected)
-        if _capture_quick_view_state() != applied:
+        if _design_drifted(applied, _capture_quick_view_state()):
             ss[_QUICK_VIEW_SELECTION_KEY] = _CUSTOM_VIEW
             ss[_QUICK_VIEW_CUSTOM_STATE] = _capture_quick_view_state()
             ss.pop(_QUICK_VIEW_APPLIED_STATE, None)
@@ -1790,7 +1831,7 @@ def _sync_quick_view_state() -> str:
     if not isinstance(applied, dict):
         ss[_QUICK_VIEW_APPLIED_STATE] = _capture_quick_view_state()
         return str(selected)
-    if isinstance(applied, dict) and _capture_quick_view_state() != applied:
+    if _design_drifted(applied, _capture_quick_view_state()):
         ss[_QUICK_VIEW_SELECTION_KEY] = _CUSTOM_VIEW
         ss[_QUICK_VIEW_CUSTOM_STATE] = _capture_quick_view_state()
         ss.pop(_QUICK_VIEW_APPLIED_STATE, None)
@@ -3138,8 +3179,14 @@ def color_field_options(trial_fixations: pd.DataFrame) -> list[str]:
 def hover_field_options(
     frame: pd.DataFrame | None, *, words: bool = False
 ) -> list[str]:
-    """Scalar columns that can be added to a VIZ-26 hover tooltip."""
-    if frame is None or frame.empty:
+    """Scalar columns that can be added to a VIZ-26 hover tooltip.
+
+    Read off the columns, never the rows: a trial with no fixations still has
+    the dataset's columns, and answering ``[]`` for it made `_seed_viz_state`
+    drop the user's hover picks as stale the moment a filter landed on one
+    (VIZ-44), for good.
+    """
+    if frame is None:
         return []
     preferred = (
         [
@@ -6931,6 +6978,28 @@ CHIP_FIELD_LABELS = {
 }
 
 
+def unique_field_labels(columns, label_of) -> dict[str, str]:
+    """``{column: label}`` with every label distinct, in ``columns``' order.
+
+    Two columns can humanize to the same text — two text-id columns both read
+    "Text", OneStop's ``TRIAL_INDEX`` and ``trial_index`` both "Trial index" —
+    so the first keeps its label and each later one adds its column name:
+    "Trial index (trial_index)". The ✏️ chip editor needs this to stay
+    invertible; the trial filters use it (UX-149) so two sliders over different
+    columns never carry the same title.
+    """
+    labels: dict[str, str] = {}
+    taken: set[str] = set()
+    for column in columns:
+        if column in labels:
+            continue
+        base = label_of(column)
+        label = base if base not in taken else f"{base} ({column})"
+        taken.add(label)
+        labels[column] = label
+    return labels
+
+
 def _chip_option_label(col: str) -> str:
     """Display label for a chip-field option (identity / virtual / humanized)."""
     if col in SUMMARY_CHIP_FIELDS:
@@ -6994,13 +7063,8 @@ def render_trial_chip_picker(
 
     # Display labels must be unique to stay invertible: some fields humanize to the
     # same text (e.g. two text-id columns both read "Text"), so disambiguate.
-    label_to_key: dict[str, str] = {}
-    key_to_label: dict[str, str] = {}
-    for key in available:
-        base = _chip_option_label(key)
-        label = base if base not in label_to_key else f"{base} ({key})"
-        label_to_key[label] = key
-        key_to_label[key] = label
+    key_to_label = unique_field_labels(available, _chip_option_label)
+    label_to_key = {label: key for key, label in key_to_label.items()}
 
     # Current selection/order, pruned to what's available + seeded once.
     if "trial_chip_fields" in st.session_state:
@@ -7770,6 +7834,30 @@ def render_narrow_by(
         )
 
 
+def _trial_filter_label(col: str) -> str:
+    """A trial filter's title before `unique_field_labels` disambiguates it."""
+    spec = _FILTER_FIELD_LABELS.get(col, {})
+    return spec.get("label", col.replace("_", " ").strip().title())
+
+
+def trial_filter_labels(
+    words: pd.DataFrame, fixations: pd.DataFrame, numeric_fields: dict | None = None
+) -> dict[str, str]:
+    """``{column: title}`` for the trial-filter panel's data-column filters.
+
+    UX-149: one label namespace across the range sliders and the multiselects,
+    so the demo's `TRIAL_INDEX` and `trial_index` don't render two sliders both
+    titled "Trial Index" — the ✏️ chip editor's rule (`unique_field_labels`).
+    """
+    if numeric_fields is None:
+        numeric_fields = _numeric_filter_fields(words, fixations)
+    columns = [
+        *numeric_fields,
+        *(c for c in _filter_fields_for(words, fixations) if c not in numeric_fields),
+    ]
+    return unique_field_labels(columns, _trial_filter_label)
+
+
 def render_trial_filters(
     words: pd.DataFrame, fixations: pd.DataFrame, *, host, prefix: str = ""
 ) -> dict:
@@ -7801,9 +7889,9 @@ def render_trial_filters(
     # of a multiselect over its distinct floats. Rendered first, as extra rows
     # among the categorical ones rather than in a section of their own.
     numeric_fields = _numeric_filter_fields(words, fixations)
+    labels = trial_filter_labels(words, fixations, numeric_fields)
     for col, (frame, lo, hi) in numeric_fields.items():
-        spec = _FILTER_FIELD_LABELS.get(col, {})
-        label = spec.get("label", col.replace("_", " ").strip().title())
+        label = labels[col]
         _seed_range_widget(col, lo, hi, prefix=prefix)
         host.slider(
             label,
@@ -7830,7 +7918,7 @@ def render_trial_filters(
         if col not in frame.columns:
             continue
         spec = _FILTER_FIELD_LABELS.get(col, {})
-        label = spec.get("label", col.replace("_", " ").strip().title())
+        label = labels[col]
         if pd.api.types.is_bool_dtype(frame[col]):
             _bool_metadata_filter(
                 label,
@@ -7877,7 +7965,9 @@ def render_trial_filters(
         key=f"{prefix}filter_favorites",
         on_change=_apply,
     )
-    tags = known_tags()
+    # DATA-48: the tags of the dataset this pool comes from — compare mode's B
+    # (the `cmp` prefix) may be another dataset, with tags of its own.
+    tags = known_tags(prefix)
     if tags:
         _seed_filter_widget(f"{prefix}filter_req_tags", tags, [], prefix=prefix)
         _labeled(

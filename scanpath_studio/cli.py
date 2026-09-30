@@ -346,9 +346,8 @@ def _render_parser() -> argparse.ArgumentParser:
     src.add_argument(
         "--sample",
         action="store_true",
-        help="Use the bundled OneStop demo: word boxes for 3 readers, "
-        "fixations — so trials to render — for 2 of them (--list-trials shows "
-        "which).",
+        help="Use the bundled OneStop demo: 2 readers, 12 paragraphs each "
+        "(--list-trials shows them).",
     )
     src.add_argument(
         "--authoring",
@@ -1795,6 +1794,7 @@ def _print_reproduction_code(
     compare = None
     if args.compare_with is not None:
         compare_participant, compare_trial = _parse_compare_with(args.compare_with)
+        second = bool(args.compare_words or args.compare_fixations)
         compare = cs.CompareTarget(
             participant=compare_participant,
             trial=compare_trial,
@@ -1804,11 +1804,12 @@ def _print_reproduction_code(
             # CMP-8: B came from a second corpus exactly when its own frames
             # were given, so B's ids are that corpus's — the same caveat the
             # app's Share panel raises.
-            dataset=(
-                str(args.compare_dataset_name or "Dataset B")
-                if (args.compare_words or args.compare_fixations)
-                else ""
-            ),
+            dataset=(str(args.compare_dataset_name or "Dataset B") if second else ""),
+            # EXP-21: the tables and screen this invocation read B from, so the
+            # printed recipe loads the same B rather than placeholders.
+            canvas=_parse_canvas(args.compare_canvas) if second else None,
+            words=tuple(args.compare_words or ()) if second else (),
+            fixations=tuple(args.compare_fixations or ()) if second else (),
         )
     state = cs.FigureState(
         kind=kind,

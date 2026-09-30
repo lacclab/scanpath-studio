@@ -657,6 +657,188 @@ class TestCorpusGroupingByAReaderAttribute:
         ]
 
 
+class TestCorpusGroupingByTrialAndTextAttributes:
+    """AN-31: Groups splits and filters by the trial and text tables too.
+
+    The same translation as the reader grain, one and two grains over — a trial
+    field resolves to ``(participant_id, trial_id)`` readings and a text field to
+    text ids, the way the Scanpath trial filters narrow — so each still arrives
+    at `aggregation.group_mask` as a spec over columns the frames already have,
+    and neither table is ever joined onto them.
+    """
+
+    #: Two readers, each reading two trials; trial t1 is text A, t2 text B.
+    FIX = pd.DataFrame(
+        {
+            "participant_id": ["p1", "p1", "p2", "p2"],
+            "trial_id": ["t1", "t2", "t1", "t2"],
+            "text_id": ["A", "B", "A", "B"],
+            "duration_ms": [1.0, 2.0, 3.0, 4.0],
+        }
+    )
+
+    @staticmethod
+    def _attach(monkeypatch, *, participants=None, trials=None, texts=None):
+        monkeypatch.setattr(md, "active", lambda: participants)
+        monkeypatch.setattr(md, "active_trials", lambda: trials)
+        monkeypatch.setattr(md, "active_texts", lambda: texts)
+
+    @staticmethod
+    def _trials(**kwargs):
+        frame = pd.DataFrame(
+            {"trial_id": ["t1", "t2"], "qa_condition": ["easy", "hard"]}
+        )
+        return md.build_trial_metadata(
+            frame, "trial_id", source_name="trials.csv", **kwargs
+        )
+
+    @staticmethod
+    def _texts():
+        frame = pd.DataFrame({"text_id": ["A", "B"], "genre": ["news", "fiction"]})
+        return md.build_text_metadata(
+            frame, "text_id", source_name="texts.csv", keys={"A", "B"}
+        )
+
+    def test_a_trial_field_becomes_every_reading_of_that_trial(self, monkeypatch):
+        from scanpath_studio import aggregation, tabs
+
+        self._attach(monkeypatch, trials=self._trials())
+        spec = tabs._group_spec("trialmeta:qa_condition", ["easy"], self.FIX, self.FIX)
+        assert spec == {("participant_id", "trial_id"): [("p1", "t1"), ("p2", "t1")]}
+        selected = aggregation.apply_group(self.FIX, spec)
+        assert selected["duration_ms"].tolist() == [1.0, 3.0]
+        assert "qa_condition" not in selected.columns
+
+    def test_a_reader_paired_trial_table_keeps_to_its_reading(self, monkeypatch):
+        """The headless-only kind (DATA-29): a row describes one reading."""
+        from scanpath_studio import aggregation, tabs
+
+        frame = pd.DataFrame(
+            {
+                "reader": ["p1", "p2"],
+                "trial_id": ["t1", "t2"],
+                "qa_condition": ["easy", "easy"],
+            }
+        )
+        paired = md.build_trial_metadata(
+            frame, "trial_id", participant_column="reader", source_name="trials.csv"
+        )
+        self._attach(monkeypatch, trials=paired)
+        spec = tabs._group_spec("trialmeta:qa_condition", ["easy"], self.FIX, self.FIX)
+        selected = aggregation.apply_group(self.FIX, spec)
+        assert selected["duration_ms"].tolist() == [1.0, 4.0]
+
+    def test_a_text_field_becomes_text_ids_on_the_by_text_column(self, monkeypatch):
+        from scanpath_studio import aggregation, tabs
+
+        self._attach(monkeypatch, texts=self._texts())
+        spec = tabs._group_spec("textmeta:genre", ["fiction"], self.FIX, self.FIX)
+        assert spec == {"text_id": ["B"]}
+        assert aggregation.apply_group(self.FIX, spec)["duration_ms"].tolist() == [
+            2.0,
+            4.0,
+        ]
+        # `unique_text_id` wins where the frames carry it, as in the filters.
+        uniq = self.FIX.assign(unique_text_id=["uA", "uB", "uA", "uB"])
+        assert tabs._group_text_column(uniq, uniq) == "unique_text_id"
+
+    def test_an_unmatched_or_detached_field_selects_nothing(self, monkeypatch):
+        from scanpath_studio import aggregation, tabs
+
+        self._attach(monkeypatch, trials=self._trials(), texts=self._texts())
+        for col in ("trialmeta:qa_condition", "textmeta:genre"):
+            spec = tabs._group_spec(col, ["Klingon"], self.FIX, self.FIX)
+            assert aggregation.apply_group(self.FIX, spec).empty, col
+        self._attach(monkeypatch)  # every table detached mid-run
+        for col in ("trialmeta:qa_condition", "textmeta:genre"):
+            spec = tabs._group_spec(col, ["easy"], self.FIX, self.FIX)
+            assert aggregation.apply_group(self.FIX, spec).empty, col
+
+    def test_it_combines_with_a_reader_field_and_a_frame_column(self, monkeypatch):
+        """A filter set ANDs its constraints, whichever table each came from."""
+        from scanpath_studio import aggregation, tabs
+
+        readers = md.build_participant_metadata(
+            pd.DataFrame({"participant_id": ["p1", "p2"], "l1": ["Hebrew", "English"]}),
+            "participant_id",
+            participants=["p1", "p2"],
+        )
+        self._attach(
+            monkeypatch,
+            participants=readers,
+            trials=self._trials(),
+            texts=self._texts(),
+        )
+        spec: dict = {}
+        for col, values in (
+            ("meta:l1", ["English"]),
+            ("trialmeta:qa_condition", ["easy", "hard"]),
+            ("textmeta:genre", ["news"]),
+            ("text_id", ["A", "B"]),  # an explicit *Texts* pick, intersected
+        ):
+            for column, allowed in tabs._group_spec(
+                col, values, self.FIX, self.FIX
+            ).items():
+                tabs._merge_spec(spec, column, allowed)
+        assert spec["text_id"] == ["A"]
+        assert aggregation.apply_group(self.FIX, spec)["duration_ms"].tolist() == [3.0]
+
+        # Two trial constraints that share no reading intersect to nothing,
+        # never to `[]` (which `group_mask` would read as "everyone").
+        tabs._merge_spec(spec, ("participant_id", "trial_id"), [("p9", "t9")])
+        assert aggregation.apply_group(self.FIX, spec).empty
+
+    def test_the_picker_offers_every_grain_and_marks_each(self, monkeypatch):
+        from scanpath_studio import tabs
+
+        readers = md.build_participant_metadata(
+            pd.DataFrame({"participant_id": ["p1", "p2"], "l1": ["Hebrew", "English"]}),
+            "participant_id",
+            participants=["p1", "p2"],
+        )
+        self._attach(
+            monkeypatch,
+            participants=readers,
+            trials=self._trials(),
+            texts=self._texts(),
+        )
+        assert tabs._metadata_group_fields() == [
+            "meta:l1",
+            "trialmeta:qa_condition",
+            "textmeta:genre",
+        ]
+        assert tabs._pretty_col("trialmeta:qa_condition") == "📋 Qa condition"
+        assert tabs._pretty_col("textmeta:genre") == "📄 Genre"
+        assert tabs._both_frame_values(None, None, "textmeta:genre") == [
+            "fiction",
+            "news",
+        ]
+        assert tabs._both_frame_values(None, None, "trialmeta:qa_condition") == [
+            "easy",
+            "hard",
+        ]
+
+    def test_a_trial_cohort_raises_no_word_only_warning(self):
+        """Both key columns are on the fixation table, so nothing is missing."""
+        from scanpath_studio import tabs
+
+        class _Host:
+            def __init__(self):
+                self.warned: list = []
+
+            def warning(self, body):
+                self.warned.append(body)
+
+        host = _Host()
+        pairs = {("participant_id", "trial_id"): [("p1", "t1")]}
+        tabs._warn_word_only_group_fields(host, self.FIX, pairs)
+        assert host.warned == []
+        tabs._warn_word_only_group_fields(
+            host, self.FIX.drop(columns="trial_id"), pairs
+        )
+        assert host.warned and "Participant × Trial Id" in host.warned[0]
+
+
 class TestTheExportOptOut:
     """Milestone 10 — per-field control over what leaves in the bundle."""
 
@@ -796,6 +978,63 @@ class TestGroupingEndToEnd:
         # here: `pin_view` is a one-shot request, and re-pinning it to stay on
         # the Corpus view discards a pending `set_value`. What the selection
         # *does* is covered above, on the pure translation.)
+
+    @pytest.mark.timeout(240)
+    @pytest.mark.parametrize("grain", ["trial", "text"])
+    def test_a_trial_or_text_attribute_splits_the_cohort(self, grain):
+        """AN-31, end to end on the demo: the field is offered, and picking it
+        narrows the cohort to exactly the rows the table describes. The
+        selection is seeded into session state alongside the view request, in
+        the one run, rather than through a `set_value` a re-pin would discard.
+        """
+        from streamlit.testing.v1 import AppTest
+
+        from scanpath_studio import api
+        from scanpath_studio.constants import _VIEW_CORPUS
+        from tests.conftest import APP_SCRIPT, pin_view
+
+        _words, fixations = api.load_sample_data()
+        if grain == "trial":
+            ids = sorted(fixations["trial_id"].astype(str).unique())
+            column, field, option = "trial_id", "qa_condition", "trialmeta:qa_condition"
+        else:
+            ids = sorted(fixations["unique_text_id"].astype(str).unique())
+            column, field, option = "unique_text_id", "genre", "textmeta:genre"
+        values = ["x" if i % 2 == 0 else "y" for i in range(len(ids))]
+        frame = pd.DataFrame({column: ids, field: values})
+        expected = int(fixations[column].astype(str).isin(ids[0::2]).sum())
+        assert 0 < expected < len(fixations)
+
+        at = AppTest.from_file(APP_SCRIPT)
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        if grain == "trial":
+            at.session_state[md.TRIAL_SESSION_KEY] = md.build_trial_metadata(
+                frame, column, source_name="trials.csv"
+            )
+            at.session_state[md.TRIAL_RAW_SESSION_KEY] = frame
+        else:
+            at.session_state[md.TEXT_SESSION_KEY] = md.build_text_metadata(
+                frame, column, source_name="texts.csv", keys=set(ids)
+            )
+            at.session_state[md.TEXT_RAW_SESSION_KEY] = frame
+        pin_view(at, _VIEW_CORPUS)
+        at.session_state["corpus_subtab"] = "Groups"
+        at.session_state["pgrp_field"] = option
+        at.session_state["pgrp_g"] = ["x"]
+        at.run(timeout=120)
+        assert not at.exception, at.exception
+
+        offered = {
+            label
+            for picker in at.selectbox
+            if picker.key == "pgrp_field"
+            for label in picker.options
+        }
+        mark = "📋" if grain == "trial" else "📄"
+        assert f"{mark} {md.field_label(field)}" in offered, sorted(offered)
+        captions = [c.value for c in at.caption if "fixations in scope" in c.value]
+        assert captions and f"{expected} fixations in scope" in captions[0], captions
 
 
 class TestTheWizardStep:

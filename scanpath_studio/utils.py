@@ -9,7 +9,7 @@ import pandas as pd
 import streamlit as st
 
 from . import progress
-from .annotations import get_entry
+from .annotations import get_entry, store_for_prefix
 from .constants import SELECTOR_ROW_GRID, SELECTOR_ROW_TRIO
 from .data import frame_fingerprint
 from .fields import labeled
@@ -22,12 +22,17 @@ TAGGED_MARKER = "🏷️"
 NOTE_MARKER = "📝"
 
 
-def annotation_markers(participant_id, trial_id) -> str:
+def annotation_markers(participant_id, trial_id, *, store=None) -> str:
     """Composable annotation markers (★ favorite · 🏷️ tagged · 📝 noted) for a
-    trial, or ``""`` when it carries no annotations. Reads the session store."""
+    trial, or ``""`` when it carries no annotations. Reads the session store —
+    the open dataset's — or ``store``, another dataset's (DATA-48)."""
     if participant_id is None or trial_id is None:
         return ""
-    entry = get_entry(str(participant_id), str(trial_id))
+    entry = (
+        get_entry(str(participant_id), str(trial_id))
+        if store is None
+        else store.get((str(participant_id), str(trial_id))) or {}
+    )
     marks = ""
     if entry.get("star"):
         marks += FAVORITE_MARKER
@@ -1238,9 +1243,11 @@ def build_comparison_options(
 
     ``cross_dataset`` (CMP-8 §5.1) says ``combos`` describes a *different*
     dataset, and degrades the three id-based signals that would otherwise lie:
-    two corpora do not share readers, so 👤 never fires; the annotation store is
-    keyed on the **active** dataset's ids, so a foreign trial must not inherit
-    another reader's ★; and the primary trial is not in this pool, so a
+    two corpora do not share readers, so 👤 never fires; a foreign trial's ★ /
+    🏷️ / 📝 are read from *its* dataset's annotations, never the active
+    dataset's, whose matching-looking ids name other trials (DATA-48 — they
+    were dropped altogether before annotations were per dataset); and the
+    primary trial is not in this pool, so a
     coincidentally identical ``(participant, trial)`` is a real candidate rather
     than the trial being compared. 📄 survives — a text id that matches across
     corpora is exactly the pairing this feature exists for.
@@ -1254,6 +1261,7 @@ def build_comparison_options(
     text_field = "unique_text_id" if "unique_text_id" in combos.columns else "text_id"
     uniq = combos.drop_duplicates(subset=["participant_id", "trial_id"])
 
+    foreign_store = store_for_prefix("cmp") if cross_dataset else None
     rows: list[dict] = []
     for row in uniq.itertuples():
         if (
@@ -1271,11 +1279,7 @@ def build_comparison_options(
         markers = (
             (SAME_TEXT_MARKER if same_text else "")
             + (SAME_PARTICIPANT_MARKER if same_participant else "")
-            + (
-                ""
-                if cross_dataset
-                else annotation_markers(row.participant_id, row.trial_id)
-            )
+            + annotation_markers(row.participant_id, row.trial_id, store=foreign_store)
         )
         rows.append(
             {

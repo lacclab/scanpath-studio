@@ -138,6 +138,34 @@ class TestPickColumnPrefixSuffixSecondPass:
         )
         assert pick_column(df, ["word_id", "IA_ID", "aoi"]) is None
 
+    def test_aoi_id_beside_the_aoi_edges_is_the_word_id(self):
+        """DATA-60: all five columns carry the token ``aoi``, but only
+        ``AOI_ID`` is spelled entirely in the word-id list's own words."""
+        df = pd.DataFrame(
+            {
+                c: [1]
+                for c in (
+                    "participant_id",
+                    "trial_id",
+                    "AOI_ID",
+                    "AOI_LABEL",
+                    "AOI_LEFT",
+                    "AOI_RIGHT",
+                    "AOI_TOP",
+                    "AOI_BOTTOM",
+                )
+            }
+        )
+        schema = propose_word_schema(df)
+        assert schema["word_id"] == "AOI_ID"
+        assert schema["text"] == "AOI_LABEL"
+        assert (schema["left"], schema["bottom"]) == ("AOI_LEFT", "AOI_BOTTOM")
+
+    def test_the_narrowing_still_needs_exactly_one_column(self):
+        # Two columns spelled in the list's words stay ambiguous.
+        df = pd.DataFrame({"AOI_ID": [1], "WORD_AOI_ID": [2], "AOI_LEFT": [3]})
+        assert pick_column(df, ["word_id", "IA_ID", "aoi"]) is None
+
 
 class TestBoxEdgesResolveAsOneSet:
     """DATA-57: the four edges are picked as a set sharing one affix, so an AOI

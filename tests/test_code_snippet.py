@@ -1203,17 +1203,204 @@ def test_a_dual_animation_names_scanpath_b_in_both_forms():
     assert not any("replays A alone" in note for note in code.caveats)
 
 
-def test_a_cross_dataset_dual_animation_leaves_bs_frames_to_the_caller():
-    """B's reader belongs to its own corpus, which the snippet cannot load — and
-    `trial_b=` alone would look that id up in A's corpus, so it is not written."""
+def _one_line(command: str) -> str:
+    return " ".join(command.replace(" \\\n", " ").split())
+
+
+@pytest.mark.parametrize("kind", ["comparison", "animation"])
+def test_a_second_datasets_b_is_named_in_its_own_tables(kind):
+    """EXP-21: both halves load B's tables and name B in them. The CLI half used
+    to write `--compare-with` alone, which looks B's reader up in A's corpus —
+    an error, or somebody else's reading where the ids collide."""
     state = _state(
-        kind="animation",
+        kind=kind,
         compare=cs.CompareTarget(participant="p2", trial="t2", dataset="PoTeC"),
     )
     code = cs.reproduction_code(DEMO, state)
-    assert "trial_b=" not in code.python
+    assert "sps.load_scanpath_data(\n    'B_WORDS',\n    'B_FIXATIONS',\n)" in (
+        code.python
+    )
+    for keyword in ("words_b=words_b", "fixations_b=fixations_b", "dataset_b='PoTeC'"):
+        assert keyword in code.python, keyword
+    assert "('p2', 't2')" in code.python
+    cli_line = _one_line(code.cli)
+    assert "--compare-with p2:t2 --compare-words B_WORDS" in cli_line
+    assert "--compare-fixations B_FIXATIONS --compare-dataset-name PoTeC" in cli_line
+    # No screen stated, so neither half invents one.
+    assert "setup_b" not in code.python and "--compare-canvas" not in cli_line
     notes = " ".join(code.caveats)
-    assert "words_b=" in notes and "trial_b=('p2', 't2')" in notes
+    assert "`B_WORDS` / `B_FIXATIONS`" in notes
+    assert "replays A alone" not in notes
+
+
+def test_a_same_dataset_b_loads_nothing_extra():
+    for kind in ("comparison", "animation"):
+        code = cs.reproduction_code(
+            DEMO,
+            _state(kind=kind, compare=cs.CompareTarget(participant="p2", trial="t2")),
+        )
+        assert "words_b" not in code.python, kind
+        assert "--compare-words" not in code.cli, kind
+
+
+@pytest.mark.parametrize("kind", ["comparison", "animation"])
+def test_a_known_screen_for_b_is_stated_in_both_halves(kind):
+    state = _state(
+        kind=kind,
+        canvas=(2560, 1440),
+        compare=cs.CompareTarget(
+            participant="p2", trial="t2", dataset="PoTeC", canvas=(1680, 1050)
+        ),
+    )
+    code = cs.reproduction_code(DEMO, state)
+    assert (
+        "from scanpath_studio.experimental_setup import Provenance, SetupSnapshot"
+        in (code.python)
+    )
+    assert "canvas_width=1680" in code.python and "setup_b=setup_b" in code.python
+    assert "--compare-canvas 1680x1050" in _one_line(code.cli)
+    # The co-animation note asks for B's screen only while it is unknown.
+    assert not any("setup_b=" in note for note in code.caveats)
+
+
+@pytest.mark.parametrize("kind", ["comparison", "animation"])
+def test_render_accepts_a_second_datasets_command_line(kind, capsys):
+    """Parse the emitted command with `render`'s own parser, B-side options and
+    all — `--compare-stimulus`, the labels and the legend are refused without
+    `--compare-with`, which the second dataset's flags ride beside."""
+    state = _state(
+        kind=kind,
+        canvas=(2560, 1440),
+        figure={"show_legend": True} if kind == "animation" else {},
+        compare=cs.CompareTarget(
+            participant="p2",
+            trial="t2",
+            dataset="PoTeC",
+            compare_stimulus="b",
+            labels=("Reader A", "Reader B"),
+            canvas=(1680, 1050),
+        ),
+    )
+    if kind == "animation":
+        state.settings.update(
+            compare_stimulus="b", label_a="Reader A", label_b="Reader B"
+        )
+    command = cs.reproduction_code(DEMO, state, explicit=True).cli
+    argv = shlex.split(command.replace(" \\\n", " "))[2:]
+    args = cli._render_parser().parse_args(argv)
+    assert args.compare_with == "p2:t2"
+    assert args.compare_words == ["B_WORDS"]
+    assert args.compare_fixations == ["B_FIXATIONS"]
+    assert args.compare_dataset_name == "PoTeC"
+    assert args.compare_canvas == "1680x1050"
+    assert args.compare_stimulus == "b"
+    assert (args.label_a, args.label_b) == ("Reader A", "Reader B")
+    if kind == "animation":
+        assert args.animate and args.show_legend
+
+
+@pytest.fixture()
+def second_dataset_tables():
+    """The bundled demo's own tables, loaded as though they were B's corpus."""
+    from pathlib import Path
+
+    sample = Path(cs.__file__).parent / "sample_data"
+    return str(sample / "ia.parquet"), str(sample / "fixations.parquet")
+
+
+@pytest.mark.parametrize("kind", ["comparison", "animation"])
+def test_both_halves_of_a_second_datasets_snippet_draw_one_figure(
+    kind, demo_trial, second_dataset_tables, tmp_path, monkeypatch
+):
+    """Point the placeholders at a real second dataset and run both recipes:
+    they draw the same figure, with B read from B's tables."""
+    words, fixations, participant, trial = demo_trial
+    combos = api.list_trials(words, fixations)
+    other = combos[combos["trial_id"] != trial].iloc[0]
+    b_words, b_fixations = second_dataset_tables
+    state = cs.FigureState(
+        kind=kind,
+        settings=api.figure_options(kind),
+        participant=participant,
+        trial=trial,
+        canvas=(2560, 1440),
+        compare=cs.CompareTarget(
+            participant=str(other["participant_id"]),
+            trial=str(other["trial_id"]),
+            layout="side_by_side",
+            dataset="Copy",
+            canvas=(2560, 1440),
+        ),
+    )
+    output = str(tmp_path / "figure.html")
+    code = cs.reproduction_code(DEMO, state, output=output)
+    figures: list = []
+    monkeypatch.setattr(api, "save_figure", lambda fig, path, **_: figures.append(fig))
+    python = code.python.replace("'B_WORDS'", repr(b_words)).replace(
+        "'B_FIXATIONS'", repr(b_fixations)
+    )
+    exec(compile(python, "<snippet>", "exec"), {})  # noqa: S102
+    swap = {"B_WORDS": b_words, "B_FIXATIONS": b_fixations}
+    argv = [swap.get(t, t) for t in shlex.split(code.cli.replace(" \\\n", " "))]
+    cli.main(argv[1:])
+    python_fig, cli_fig = figures
+    assert _figure_fingerprint(python_fig) == _figure_fingerprint(cli_fig)
+    if kind == "comparison":
+        # B is the second dataset's reader: its trace names that dataset.
+        assert any("Copy" in str(trace.name) for trace in cli_fig.data)
+
+
+def test_print_code_names_the_second_dataset_it_was_given(
+    demo_trial, second_dataset_tables, tmp_path, capsys
+):
+    """`render --print-code` knows B's tables and screen, so its recipe loads
+    them rather than the placeholders."""
+    _words, _fixations, participant, trial = demo_trial
+    b_words, b_fixations = second_dataset_tables
+    cli.main(
+        [
+            "render",
+            "--sample",
+            "-p",
+            participant,
+            "-t",
+            trial,
+            "--compare-with",
+            f"{participant}:{trial}",
+            "--compare-words",
+            b_words,
+            "--compare-fixations",
+            b_fixations,
+            "--compare-canvas",
+            "2560x1440",
+            "--compare-layout",
+            "side-by-side",
+            "--print-code",
+            "both",
+            "-o",
+            str(tmp_path / "cmp.html"),
+        ]
+    )
+    printed = capsys.readouterr().out
+    assert "B_WORDS" not in printed and "B_FIXATIONS" not in printed
+    assert f"--compare-words {b_words}" in _one_line(printed)
+    assert repr(b_fixations) in printed
+    assert "--compare-canvas 2560x1440" in _one_line(printed)
+    assert "canvas_width=2560" in printed
+
+
+def test_figure_code_takes_bs_screen():
+    out = api.figure_code(
+        kind="animation",
+        participant="p1",
+        trial="t1",
+        compare=("p2", "t2"),
+        compare_dataset="PoTeC",
+        compare_canvas=(1680, 1050),
+        flavor="both",
+    )
+    assert "setup_b=setup_b" in out
+    assert "--compare-canvas 1680x1050" in _one_line(out)
 
 
 def test_a_multipart_dual_animation_says_which_screen_b_is_drawn_at():
@@ -1292,8 +1479,9 @@ def test_a_second_datasets_co_animation_note_names_its_screen_too():
         canvas=(2560, 1440),
         compare=cs.CompareTarget(participant="reader_07", trial="t9", dataset="PoTeC"),
     )
-    notes = " ".join(cs.reproduction_code(DEMO, state).caveats)
-    assert "dataset_b='PoTeC'" in notes
+    code = cs.reproduction_code(DEMO, state)
+    assert "dataset_b='PoTeC'" in code.python
+    notes = " ".join(code.caveats)
     assert "setup_b=" in notes and "--compare-canvas" in notes
 
 

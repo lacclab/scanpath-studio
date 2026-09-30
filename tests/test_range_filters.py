@@ -279,3 +279,34 @@ class TestTheBundledDemoOffersOne:
         low, high, _ = bounds
         assert isinstance(low, int) and isinstance(high, int)
         assert low < high
+
+    def test_its_two_trial_index_sliders_have_different_titles(self):
+        """UX-149: `TRIAL_INDEX` and `trial_index` both humanize to "Trial
+        Index"; the later one names its column, as the ✏️ chip editor does.
+        `trial_index` is not a default filter field, so it is offered the way
+        an upload offers it: picked in the wizard."""
+        words, fixations = self._demo_frames()
+        st.session_state["wizard_filter_fields"] = ["TRIAL_INDEX", "trial_index"]
+        labels = controls.trial_filter_labels(words, fixations)
+        assert {"TRIAL_INDEX", "trial_index"} <= set(labels)
+        assert len(set(labels.values())) == len(labels)
+        assert labels["TRIAL_INDEX"] == "Trial Index"
+        assert labels["trial_index"] == "Trial Index (trial_index)"
+
+
+class TestUniqueFieldLabels:
+    """The one disambiguation rule the chip editor and the filters share."""
+
+    def test_the_first_keeps_its_label_and_later_ones_name_their_column(self):
+        labels = controls.unique_field_labels(
+            ["TRIAL_INDEX", "trial_index", "other"],
+            lambda c: c.replace("_", " ").capitalize(),
+        )
+        assert labels == {
+            "TRIAL_INDEX": "Trial index",
+            "trial_index": "Trial index (trial_index)",
+            "other": "Other",
+        }
+
+    def test_a_repeated_column_keeps_its_first_label(self):
+        assert controls.unique_field_labels(["a", "a"], str.upper) == {"a": "A"}

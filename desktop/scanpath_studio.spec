@@ -3,8 +3,8 @@
 # Build (from the repo root, in an env with the package + pyinstaller installed):
 #   pyinstaller --clean --noconfirm desktop/scanpath_studio.spec
 # Output: dist/ScanpathStudio/ on Linux/Windows; dist/ScanpathStudio.app on macOS
-# (onedir either way — see plans/eng-15-desktop-app.md for the onedir-vs-onefile
-# rationale). Verify with desktop/smoke_test.py.
+# (onedir either way — the ENG-15 design note linked from desktop/README.md has
+# the onedir-vs-onefile rationale). Verify with desktop/smoke_test.py.
 #
 # Signing (macOS, ENG-21): set SCANPATH_CODESIGN_IDENTITY to a "Developer ID
 # Application: …" identity and PyInstaller signs every collected binary

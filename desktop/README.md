@@ -1,7 +1,7 @@
 # Desktop build (ENG-15, signed under ENG-21)
 
 Standalone per-OS bundles of the app (PyInstaller onedir + the system default
-browser). Design + rationale: [`plans/eng-15-desktop-app.md`](../plans/eng-15-desktop-app.md)
+browser). Design + rationale: [`plans/eng-15-desktop-app.md`](https://github.com/lacclab/scanpath-studio/blob/v0.31.2/plans/eng-15-desktop-app.md) (at `v0.31.2`)
 and [`plans/eng-21-signing-notarization.md`](../plans/eng-21-signing-notarization.md).
 
 ```bash

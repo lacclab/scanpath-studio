@@ -5,7 +5,7 @@
 ## Context
 
 ENG-15 shipped the standalone desktop bundles, and deliberately deferred code
-signing ([`plans/eng-15-desktop-app.md`](eng-15-desktop-app.md) → *Follow-ups*).
+signing ([`plans/eng-15-desktop-app.md`](https://github.com/lacclab/scanpath-studio/blob/v0.31.2/plans/eng-15-desktop-app.md) at `v0.31.2` → *Follow-ups*).
 The cost of that deferral falls entirely on the audience the desktop build
 exists for — reading researchers without a Python toolchain — and it has grown
 since v0.25.0:

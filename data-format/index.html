@@ -2075,9 +2075,19 @@ and must cover every row in the declared parent:</p>
 <a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="p">}</span>
 </code></pre></div>
 <h2 id="reading-measures">Reading measures<a class="headerlink" href="#reading-measures" title="Permanent link">&para;</a></h2>
-<p>Per-word measures missing from your data are computed from the fixations;
-imported EyeLink <code>IA_*</code> columns take precedence. Definitions are in
-<a href="../computations/">Computations &amp; methodology</a>.</p>
+<p>The per-<abbr title="Area of interest: here, a word's bounding box">AOI</abbr> reading measures — <abbr title="Total fixation duration: every fixation on a word, rereadings included">TFD</abbr>, <abbr title="First fixation duration: how long the first fixation on a word lasted">FFD</abbr>, first-pass time (<abbr title="First-pass reading time (gaze duration): the fixations on a word from the first one until the eyes first leave it">FPRT</abbr>), regression
+path (<abbr title="Regression-path duration (go-past time): from the first fixation on a word until the eyes move on to a later word">RPD</abbr>), second-pass and single-fixation duration, fixation count, skip,
+regressions in / out and their count, landing position and distance — are
+fields of the <strong><abbr title="Area of interest: here, a word's bounding box">AOI</abbr> table</strong>. Map them under <strong>Reading measures</strong> (two lines
+under the word box) when you add a dataset, or later on ✏️ Edit dataset. An
+EyeLink interest-area report maps them automatically from its <code>IA_*</code> names
+(<code>IA_DWELL_TIME</code>, <code>IA_FIRST_FIXATION_DURATION</code>, <code>IA_FIRST_RUN_DWELL_TIME</code>,
+<code>IA_REGRESSION_PATH_DURATION</code>, …); every one is optional.</p>
+<p>The <strong>Corpus Analysis</strong> page shows only the measures you mapped — it computes
+none of its own, and without any it says so. Elsewhere (the word hover,
+exports, the API's word-metrics tables) a measure missing from your data is
+still computed from the fixations, with an imported one taking precedence.
+Definitions are in <a href="../computations/">Computations &amp; methodology</a>.</p>
 
 
 
@@ -2098,7 +2108,7 @@ imported EyeLink <code>IA_*</code> columns take precedence. Definitions are in
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 25, 2026 10:03:20 UTC">September 25, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 30, 2026 08:52:24 UTC">September 30, 2026</span>
   </span>
 
     

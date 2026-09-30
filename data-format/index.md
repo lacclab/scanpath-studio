@@ -103,4 +103,6 @@ If source reports have arbitrary page markers instead of mappable screen columns
 
 ## Reading measures
 
-Per-word measures missing from your data are computed from the fixations; imported EyeLink `IA_*` columns take precedence. Definitions are in [Computations & methodology](https://lacclab.github.io/scanpath-studio/computations/index.md).
+The per-AOI reading measures — TFD, FFD, first-pass time (FPRT), regression path (RPD), second-pass and single-fixation duration, fixation count, skip, regressions in / out and their count, landing position and distance — are fields of the **AOI table**. Map them under **Reading measures** (two lines under the word box) when you add a dataset, or later on ✏️ Edit dataset. An EyeLink interest-area report maps them automatically from its `IA_*` names (`IA_DWELL_TIME`, `IA_FIRST_FIXATION_DURATION`, `IA_FIRST_RUN_DWELL_TIME`, `IA_REGRESSION_PATH_DURATION`, …); every one is optional.
+
+The **Corpus Analysis** page shows only the measures you mapped — it computes none of its own, and without any it says so. Elsewhere (the word hover, exports, the API's word-metrics tables) a measure missing from your data is still computed from the fixations, with an imported one taking precedence. Definitions are in [Computations & methodology](https://lacclab.github.io/scanpath-studio/computations/index.md).

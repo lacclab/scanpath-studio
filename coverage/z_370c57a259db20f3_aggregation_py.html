@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for scanpath_studio/aggregation.py: 95%</title>
+    <title>Coverage for scanpath_studio/aggregation.py: 96%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_4667309f.css" type="text/css">
     <script src="coverage_html_cb_15cffcd0.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>scanpath_studio<span class="sep">/</span>aggregation.py</b>:
-            <span class="pc_cov">95%</span>
+            <span class="pc_cov">96%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">624 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">595<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">29<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">597<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">27<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">4<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_alignment_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-09-30 08:26 +0000
+            created at 2026-09-30 09:06 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -1379,8 +1379,8 @@
     <p class="run"><span class="n"><a id="t1297" href="#t1297">1297</a></span><span class="t">        <span class="nam">width</span> <span class="op">=</span> <span class="nam">pd</span><span class="op">.</span><span class="nam">to_numeric</span><span class="op">(</span><span class="nam">merged</span><span class="op">[</span><span class="str">&quot;width&quot;</span><span class="op">]</span><span class="op">,</span> <span class="nam">errors</span><span class="op">=</span><span class="str">&quot;coerce&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1298" href="#t1298">1298</a></span><span class="t">        <span class="nam">dist</span> <span class="op">=</span> <span class="nam">pd</span><span class="op">.</span><span class="nam">to_numeric</span><span class="op">(</span><span class="nam">merged</span><span class="op">[</span><span class="str">&quot;_fx&quot;</span><span class="op">]</span><span class="op">,</span> <span class="nam">errors</span><span class="op">=</span><span class="str">&quot;coerce&quot;</span><span class="op">)</span> <span class="op">-</span> <span class="nam">left</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1299" href="#t1299">1299</a></span><span class="t">        <span class="key">if</span> <span class="str">&quot;right_to_left&quot;</span> <span class="key">in</span> <span class="nam">merged</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t1300" href="#t1300">1300</a></span><span class="t">            <span class="nam">rtl</span> <span class="op">=</span> <span class="nam">merged</span><span class="op">[</span><span class="str">&quot;right_to_left&quot;</span><span class="op">]</span><span class="op">.</span><span class="nam">fillna</span><span class="op">(</span><span class="key">False</span><span class="op">)</span><span class="op">.</span><span class="nam">astype</span><span class="op">(</span><span class="nam">bool</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t1301" href="#t1301">1301</a></span><span class="t">            <span class="nam">dist</span> <span class="op">=</span> <span class="nam">dist</span><span class="op">.</span><span class="nam">where</span><span class="op">(</span><span class="op">~</span><span class="nam">rtl</span><span class="op">,</span> <span class="nam">run</span> <span class="op">-</span> <span class="nam">dist</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t1300" href="#t1300">1300</a></span><span class="t">            <span class="nam">rtl</span> <span class="op">=</span> <span class="nam">merged</span><span class="op">[</span><span class="str">&quot;right_to_left&quot;</span><span class="op">]</span><span class="op">.</span><span class="nam">fillna</span><span class="op">(</span><span class="key">False</span><span class="op">)</span><span class="op">.</span><span class="nam">astype</span><span class="op">(</span><span class="nam">bool</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t1301" href="#t1301">1301</a></span><span class="t">            <span class="nam">dist</span> <span class="op">=</span> <span class="nam">dist</span><span class="op">.</span><span class="nam">where</span><span class="op">(</span><span class="op">~</span><span class="nam">rtl</span><span class="op">,</span> <span class="nam">run</span> <span class="op">-</span> <span class="nam">dist</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1302" href="#t1302">1302</a></span><span class="t">        <span class="nam">ok</span> <span class="op">=</span> <span class="nam">dist</span><span class="op">.</span><span class="nam">notna</span><span class="op">(</span><span class="op">)</span> <span class="op">&amp;</span> <span class="nam">width</span><span class="op">.</span><span class="nam">notna</span><span class="op">(</span><span class="op">)</span> <span class="op">&amp;</span> <span class="op">(</span><span class="nam">width</span> <span class="op">&gt;</span> <span class="num">0</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1303" href="#t1303">1303</a></span><span class="t">        <span class="nam">dist</span><span class="op">,</span> <span class="nam">width</span> <span class="op">=</span> <span class="nam">dist</span><span class="op">[</span><span class="nam">ok</span><span class="op">]</span><span class="op">,</span> <span class="nam">width</span><span class="op">[</span><span class="nam">ok</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1304" href="#t1304">1304</a></span><span class="t">    <span class="key">else</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
@@ -1648,7 +1648,7 @@
             <a class="nav" href="z_370c57a259db20f3_alignment_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-09-30 08:26 +0000
+            created at 2026-09-30 09:06 +0000
         </p>
     </div>
 </footer>

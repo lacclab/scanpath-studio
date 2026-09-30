@@ -590,19 +590,22 @@ _LAYER_OFF_REASON: list[str] = []
 
 
 @contextmanager
-def _layer_off(label: str, *, off: bool):
+def _layer_off(label: str, *, off: bool, reason: str | None = None):
     """Grey every rail control rendered inside, while ``off``.
 
     ``label`` names the layer's toggle, so the reason reads as an instruction
     ("Turn **👁️ Fixations** on…") rather than a bare refusal. Nested use pushes
     onto a stack, so an inner block that greys for its own reason wins.
+    ``reason`` replaces that instruction when switching the layer on would not
+    help — VIZ-45's trial with no fixations for the layer to draw.
     """
     if not off:
         yield
         return
     _LAYER_OFF_REASON.append(
-        f"{ICONS['warning']} **{label}** is off — turn the layer on to change this. "
-        "Your settings are kept either way."
+        reason
+        or f"{ICONS['warning']} **{label}** is off — turn the layer on to change "
+        "this. Your settings are kept either way."
     )
     try:
         st.caption(_LAYER_OFF_REASON[-1])
@@ -4765,6 +4768,7 @@ def render_plot_controls(
     canvas_renderer=None,
     slots: dict | None = None,
     has_fixations: bool = True,
+    has_words: bool = True,
 ) -> dict:
     """Render the visualization controls and return the resolved settings dict.
 
@@ -4978,14 +4982,15 @@ def render_plot_controls(
         animating, comparing, in_animation=False, in_compare=True
     )
     # VIZ-45: a trial with no fixations (raw gaze only, or words only) has
-    # nothing for these two layers to draw, and the samples are never turned
-    # into fixations — so the switches grey with that reason, keeping their
-    # values for the next trial that has fixations.
+    # nothing for the fixation-built controls to act on — Fixations, Saccades,
+    # the Filter and its index window — and the samples are never turned into
+    # fixations, so they grey with that reason, keeping their values for the
+    # next trial that has fixations.
     no_fixations_note = (
         ""
         if has_fixations
         else f"{ICONS['warning']} This trial has no fixations, so there is nothing "
-        "for this layer to draw. Gaze samples are not turned into fixations; "
+        "here to draw or filter. Gaze samples are not turned into fixations; "
         f"they draw as recorded under {ICONS['raw_gaze']} **Raw gaze**."
     )
     show_fix, fix_grp = _rail_section(
@@ -5034,14 +5039,23 @@ def render_plot_controls(
     # on the row the way Fixations/Saccades do. `_mode_gate` is called again
     # (cheaply) where each layer's style popover needs its own `reason` text.
     heat_disabled, heat_reason = _mode_gate(animating, comparing, in_animation=False)
+    # VIZ-45: the heatmap draws from fixations or from the word boxes' own
+    # measures, so only a trial with neither has nothing for it.
+    heat_nothing = not has_fixations and not has_words
+    heat_nothing_note = (
+        f"{ICONS['warning']} This trial has no fixations and no word boxes, so "
+        "there is nothing for the heatmap to draw. Gaze samples are not turned "
+        f"into fixations; they draw as recorded under {ICONS['raw_gaze']} "
+        "**Raw gaze**."
+    )
     show_heatmap, heatmap_grp = _rail_section(
         viz,
         f"{ICONS['heatmap']} **Heatmap**",
         slug="heatmap",
         key="global_show_heatmap",
         persist_state="session",
-        disabled=heat_disabled,
-        note=heat_reason,
+        disabled=heat_disabled or heat_nothing,
+        note=heat_nothing_note if heat_nothing else heat_reason,
     )
     raw_disabled, raw_reason = _mode_gate(animating, comparing, **_static_only)
     show_raw_gaze, raw_gaze_grp = _rail_section(
@@ -5072,6 +5086,7 @@ def render_plot_controls(
         viz,
         f"{ICONS['plot_filter']} **Filter**{_plot_filter_badge()}",
         slug="filter",
+        note=no_fixations_note,
     )
     # Sub-slots up front so each block below renders into the right half of the
     # section from wherever it sits in this file (the same trick the sections
@@ -5109,7 +5124,9 @@ def render_plot_controls(
     with (
         fix_grp,
         _layer_off(
-            f"{ICONS['fixations']} Fixations", off=not (show_fix or fix_off_disabled)
+            f"{ICONS['fixations']} Fixations",
+            off=not (show_fix or fix_off_disabled) or not has_fixations,
+            reason=no_fixations_note or None,
         ),
         _popover_rows("fix"),
     ):
@@ -5477,7 +5494,9 @@ def render_plot_controls(
             note=_flag_reason,
         ),
         _layer_off(
-            f"{ICONS['fixations']} Fixations", off=not (show_fix or fix_off_disabled)
+            f"{ICONS['fixations']} Fixations",
+            off=not (show_fix or fix_off_disabled) or not has_fixations,
+            reason=no_fixations_note or None,
         ),
         _popover_rows("filter_fix"),
     ):
@@ -5493,7 +5512,11 @@ def render_plot_controls(
     # `label | ☑ Show` row.
     with (
         sac_grp,
-        _layer_off(f"{ICONS['saccades']} Saccades", off=not show_saccades),
+        _layer_off(
+            f"{ICONS['saccades']} Saccades",
+            off=not show_saccades or not has_fixations,
+            reason=no_fixations_note or None,
+        ),
         _popover_rows("sac"),
     ):
         # VIZ-8 / VIZ-19: uniform colour, the two-way forward-vs-regression
@@ -5680,7 +5703,11 @@ def render_plot_controls(
             f"{ICONS['saccades']} Saccades{ab}{_saccade_filter_badge()}",
             note=_cls_reason,
         ),
-        _layer_off(f"{ICONS['saccades']} Saccades", off=not show_saccades),
+        _layer_off(
+            f"{ICONS['saccades']} Saccades",
+            off=not show_saccades or not has_fixations,
+            reason=no_fixations_note or None,
+        ),
         _popover_rows("filter_sac"),
     ):
         _labeled(
@@ -5977,7 +6004,11 @@ def render_plot_controls(
     # *Color* group: what is mapped and its colorscale, the scaling, the range.
     with (
         heatmap_grp,
-        _layer_off(f"{ICONS['heatmap']} Heatmap", off=not show_heatmap),
+        _layer_off(
+            f"{ICONS['heatmap']} Heatmap",
+            off=not show_heatmap or heat_nothing,
+            reason=heat_nothing_note if heat_nothing else None,
+        ),
         _popover_rows("heatmap"),
     ):
         # A selectbox now rather than a radio: three long options do not fit

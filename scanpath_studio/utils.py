@@ -105,14 +105,17 @@ def _combo_source_with_raw_gaze(
     progress.report()
     from .data import trial_keys
 
-    extra_keys = trial_keys(_raw_gaze) - trial_keys(_primary)
-    if not extra_keys:
-        return None
+    # One deduplication per table, on the identity columns only; every key
+    # set below comes off those small frames rather than another pass over
+    # every sample (PERF: three full scans at 5M samples was ~0.8 s a miss).
     wanted = [*_COMBO_ID_COLUMNS, *composite_cols]
     primary_cols = [c for c in dict.fromkeys(wanted) if c in _primary.columns]
     rows = _primary[primary_cols].drop_duplicates()
     raw_cols = [c for c in dict.fromkeys(wanted) if c in _raw_gaze.columns]
     raw_rows = _raw_gaze[raw_cols].drop_duplicates()
+    extra_keys = trial_keys(raw_rows) - trial_keys(rows)
+    if not extra_keys:
+        return None
     index = pd.MultiIndex.from_arrays(
         [raw_rows["participant_id"].astype(str), raw_rows["trial_id"].astype(str)]
     )

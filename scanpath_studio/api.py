@@ -1121,7 +1121,9 @@ def list_trials(
         combos = words[cols].drop_duplicates().merge(fixations[cols].drop_duplicates())
     if raw_gaze is not None and not raw_gaze.empty:
         _require_normalized(raw_gaze, "raw_gaze")
-        known = _data.trial_keys(combos)
+        # Only trials *neither* table covers: a trial the words∩fixations rule
+        # left out on purpose (words for it but no fixations, say) stays out.
+        known = _data.trial_keys(words) | _data.trial_keys(fixations)
         samples = raw_gaze[cols].drop_duplicates()
         extra = samples[
             [
@@ -1138,14 +1140,22 @@ def list_parts(
     fixations: pd.DataFrame | None,
     participant: str | None = None,
     trial: str | None = None,
+    *,
+    raw_gaze: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Ordered screens in multipart data, optionally narrowed to one parent.
 
-    Single-screen data returns an empty table.
+    Single-screen data returns an empty table. For a dataset recorded as raw
+    gaze alone (``None`` for ``words`` and ``fixations``), the screens are the
+    ones ``raw_gaze`` carries a ``screen_id`` for.
     """
     words = _optional_frame(words, "words")
     fixations = _optional_frame(fixations, "fixations")
-    catalog = part_catalog(words, fixations)
+    catalog = (
+        part_catalog(_require_normalized(raw_gaze, "raw_gaze"))
+        if words.empty and fixations.empty and raw_gaze is not None
+        else part_catalog(words, fixations)
+    )
     if participant is not None:
         catalog = catalog[catalog["participant_id"].astype(str) == str(participant)]
     if trial is not None:
@@ -1272,6 +1282,17 @@ def _select_part(
         words, fixations, participant, trial, raw_gaze=raw_gaze
     )
     catalog = part_catalog(trial_words, trial_fixations)
+    if (
+        catalog.empty
+        and trial_words.empty
+        and trial_fixations.empty
+        and raw_gaze is not None
+        and SCREEN_ID in raw_gaze.columns
+    ):
+        # VIZ-45: a trial recorded as raw gaze alone takes its screens from the
+        # samples, so one screen's coordinate space is drawn at a time — as for
+        # words and fixations — rather than every screen stacked into one.
+        catalog = part_catalog(_data.filter_raw_gaze(raw_gaze, [pid], [tid]))
     if catalog.empty:
         if screen is not None:
             raise ValueError("screen= was supplied for a single-screen trial.")
@@ -2095,8 +2116,9 @@ def render_parent_trial(
     """
     if transition_mode not in {"instant", "recorded"}:
         raise ValueError("transition_mode must be 'instant' or 'recorded'.")
-    pid, tid = _resolve_trial(words, fixations, participant, trial)
-    catalog = list_parts(words, fixations, pid, tid)
+    raw_gaze = options.get("raw_gaze")
+    pid, tid = _resolve_trial(words, fixations, participant, trial, raw_gaze=raw_gaze)
+    catalog = list_parts(words, fixations, pid, tid, raw_gaze=raw_gaze)
     if catalog.empty:
         renderer = animate_scanpath if animate else plot_scanpath
         return {"screen-1": renderer(words, fixations, pid, tid, **options)}

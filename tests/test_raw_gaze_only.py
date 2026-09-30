@@ -211,7 +211,9 @@ class TestRawGazeDefault:
 
     def test_a_link_that_named_the_layer_wins(self):
         session = {LAYER: False}
-        seed_raw_gaze_default(session, self.RAW, samples_only=True, from_link=True)
+        seed_raw_gaze_default(
+            session, self.RAW, samples_only=True, link_names_layer=True
+        )
         assert session[LAYER] is False
 
     def test_a_named_preset_or_reset_decides_again(self):
@@ -232,10 +234,50 @@ class TestRawGazeDefault:
     def test_a_link_value_is_not_stashed_as_the_users(self):
         """The link overwrote nothing, so leaving has nothing to put back."""
         session = {LAYER: False}
-        seed_raw_gaze_default(session, self.RAW, samples_only=True, from_link=True)
+        seed_raw_gaze_default(
+            session, self.RAW, samples_only=True, link_names_layer=True
+        )
         assert RAW_GAZE_SNAP_RESTORE_KEY not in session
         seed_raw_gaze_default(session, self.DEMO, samples_only=False)
         assert session[LAYER] is False
+
+    def test_a_link_on_leaving_drops_an_old_stash_rather_than_writing_it(self):
+        """Relaunch + link: the recovery cache still holds a stash from a
+        raw-gaze visit, and a link with `show_raw_gaze=1` opens a fixation
+        dataset — the link's value stands, the stash goes."""
+        session = {
+            LAYER: True,  # seeded by the link
+            RAW_GAZE_SNAP_RESTORE_KEY: {"value": False},  # from the cache
+            RAW_GAZE_SEEDED_FOR_KEY: "Gaze\x1fNone",
+        }
+        seed_raw_gaze_default(
+            session, self.DEMO, samples_only=False, link_names_layer=True
+        )
+        assert session[LAYER] is True
+        assert RAW_GAZE_SNAP_RESTORE_KEY not in session
+
+    def test_a_link_belongs_to_the_dataset_it_was_opened_on(self):
+        asked = []
+
+        def link() -> bool:
+            asked.append(1)
+            return True
+
+        session = {LAYER: False}  # the link said 0
+        seed_raw_gaze_default(
+            session, self.RAW, samples_only=True, link_names_layer=link
+        )
+        assert session[LAYER] is False
+        # The user opens another raw-gaze-only dataset of their own.
+        seed_raw_gaze_default(
+            session, ("Other gaze", None), samples_only=True, link_names_layer=link
+        )
+        assert session[LAYER] is True
+        # And the link is asked once, not on every decision or rerun.
+        seed_raw_gaze_default(
+            session, ("Other gaze", None), samples_only=True, link_names_layer=link
+        )
+        assert len(asked) == 1
 
 
 # -----------------------------------------------------------------------------
@@ -612,3 +654,118 @@ class TestScanpathView:
         text = " ".join(i.value for i in at.info)
         assert "this dataset has no AOI table" in text
         assert "Raw gaze samples carry no reading measures" in text
+
+    def test_the_heatmap_greys_only_with_neither_fixations_nor_words(self, raw_gaze):
+        """No fixations and no words: nothing for the heatmap to draw. Words
+        alone keep it live — it draws from the word boxes' own measures."""
+        at = self._open(raw_gaze, demo_first=False)
+        assert at.toggle(key="global_show_heatmap").disabled
+        words, _ = api.load_scanpath_data(*sps.load_sample_data())
+        pid, tid = _key(raw_gaze)
+        trial_words = words[
+            (words["participant_id"] == pid) & (words["trial_id"] == tid)
+        ]
+        at = self._open(raw_gaze, words=trial_words, demo_first=False)
+        assert not at.toggle(key="global_show_heatmap").disabled
+        assert at.toggle(key="global_show_fix").disabled
+
+
+# -----------------------------------------------------------------------------
+# Review round 2 — list_trials, multipart samples, the layer switched off
+# -----------------------------------------------------------------------------
+
+
+def test_list_trials_adds_only_trials_neither_table_covers(raw_gaze):
+    """A trial the words∩fixations rule leaves out on purpose stays out when
+    its samples are passed too — only a trial *neither* table has is added."""
+    words, fixations = api.load_scanpath_data(*sps.load_sample_data())
+    pid, tid = _key(raw_gaze)
+    words = words[~((words["participant_id"] == pid) & (words["trial_id"] == tid))]
+    without = sps.list_trials(words, fixations)
+    assert len(sps.list_trials(words, fixations, raw_gaze=raw_gaze)) == len(without)
+    extra = raw_gaze.assign(trial_id="samples_only", unique_trial_id="samples_only")
+    assert len(sps.list_trials(words, fixations, raw_gaze=extra)) == len(without) + 1
+
+
+@pytest.fixture(scope="module")
+def two_screen_raw_gaze(raw_gaze) -> pd.DataFrame:
+    half = len(raw_gaze) // 2
+    screens = ["s1"] * half + ["s2"] * (len(raw_gaze) - half)
+    return raw_gaze.assign(screen_id=screens)
+
+
+def test_multipart_samples_draw_one_screen_at_a_time(two_screen_raw_gaze):
+    pid, tid = _key(two_screen_raw_gaze)
+    parts = sps.list_parts(None, None, pid, tid, raw_gaze=two_screen_raw_gaze)
+    assert list(parts["screen_id"]) == ["s1", "s2"]
+    first = sps.plot_scanpath(raw_gaze=two_screen_raw_gaze)
+    second = sps.plot_scanpath(raw_gaze=two_screen_raw_gaze, screen="s2")
+    n_first = int((two_screen_raw_gaze["screen_id"] == "s1").sum())
+    assert len(first.data[0].x) == n_first
+    assert len(second.data[0].x) == len(two_screen_raw_gaze) - n_first
+    with pytest.raises(ValueError, match="Unknown screen"):
+        sps.plot_scanpath(raw_gaze=two_screen_raw_gaze, screen="s9")
+
+
+def test_render_lists_the_screens_of_multipart_samples(
+    two_screen_raw_gaze, tmp_path, capsys
+):
+    path = tmp_path / "gaze.csv"
+    two_screen_raw_gaze.to_csv(path, index=False)
+    cli.main(
+        [
+            "render",
+            "--raw-gaze",
+            str(path),
+            "--raw-gaze-schema",
+            '{"participant": "participant_id", "trial": "trial_id", '
+            '"screen_id": "screen_id", "x": "x", "y": "y", '
+            '"timestamp": "timestamp_ms"}',
+            "--list-parts",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert "s1" in out and "s2" in out
+
+
+def test_the_layer_switched_off_is_written_out(raw_gaze, tmp_path):
+    """`plot_scanpath` turns the layer on for the frame it is handed, so on a
+    samples-only source *off* must be written, in both flavours."""
+    state = cs.FigureState(
+        kind="static",
+        settings={**api.figure_options("static"), "show_raw_gaze": False},
+        participant=_key(raw_gaze)[0],
+        trial=_key(raw_gaze)[1],
+    )
+    source = cs.SnippetSource(
+        kind=cs.SOURCE_RAW_GAZE, options={"raw_gaze": [SAMPLE_RAW_GAZE]}
+    )
+    code = cs.reproduction_code(source, state)
+    assert "show_raw_gaze=False" in code.python
+    assert "--no-raw-gaze" in code.cli
+    assert not code.cli_unsupported
+    # …and both draw no samples.
+    assert not sps.plot_scanpath(raw_gaze=raw_gaze, show_raw_gaze=False).data
+    out = tmp_path / "off.html"
+    cli.main(["render", "--raw-gaze", SAMPLE_RAW_GAZE, "--no-raw-gaze", "-o", str(out)])
+    assert '"name":"Raw gaze"' not in out.read_text(encoding="utf-8").replace(" ", "")
+
+
+def test_render_joins_metadata_against_the_samples(raw_gaze, tmp_path, capsys):
+    """With raw gaze as the only input the metadata tables join against its
+    readers and trials, not against the empty fixations."""
+    pid, _ = _key(raw_gaze)
+    readers = tmp_path / "readers.csv"
+    readers.write_text(f"participant_id,age\n{pid},30\n", encoding="utf-8")
+    cli.main(
+        [
+            "render",
+            "--raw-gaze",
+            SAMPLE_RAW_GAZE,
+            "--participant-metadata",
+            str(readers),
+            "--list-trials",
+        ]
+    )
+    err = capsys.readouterr().err
+    assert "for 1 reader(s)" in err, err

@@ -741,6 +741,9 @@ DATASET_DESCRIPTIONS_KEY = "_dataset_descriptions"
 #: above (`persistence`, `controls` and `app` all read them).
 RAW_GAZE_SEEDED_FOR_KEY = "_raw_gaze_seeded_for"
 RAW_GAZE_SNAP_RESTORE_KEY = "_raw_gaze_snap_restore"
+#: …and the dataset an open deep link's `show_raw_gaze` belongs to — the first
+#: one decided while the link was on the URL. Session-only: a link is a visit.
+RAW_GAZE_LINK_FOR_KEY = "_raw_gaze_link_for"
 
 #: DATA-35 — "the ✏️ Edit dataset screen is open". The Data page is two screens
 #: now: the **overview** (the dataset table + what's in the open dataset) and the

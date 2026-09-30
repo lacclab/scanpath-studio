@@ -5170,7 +5170,13 @@ def render_single_trial_tab(
     parent_raw_gaze = pd.DataFrame()
     if raw_gaze is not None and not raw_gaze.empty:
         parent_raw_gaze = extract_trial(raw_gaze, selected_participant, selected_trial)
-    screens = _part_catalog_for_display(parent_words, parent_fixations)
+    screens = (
+        # VIZ-45: a trial recorded as raw gaze alone takes its screens from its
+        # samples, so each screen draws in its own coordinate space.
+        part_catalog(parent_raw_gaze)
+        if parent_words.empty and parent_fixations.empty
+        else _part_catalog_for_display(parent_words, parent_fixations)
+    )
     with screen_slot:
         selected_screen = _render_screen_navigator(screens)
     if selected_screen is not None:
@@ -5730,6 +5736,7 @@ def render_single_trial_tab(
             has_raw_gaze=has_raw_gaze,
             has_stimulus_image=has_stimulus_image,
             has_fixations=trial_has_fixations,
+            has_words=not trial_words.empty,
             words=words_filtered,
             # The selected trial's fixations size the VIZ-7 fixation-index window
             # slider (its max is this trial's fixation count).
@@ -6752,7 +6759,7 @@ def _render_bulk_export(
         frame_fingerprint(active_combos),
         frame_fingerprint(active_words),
         frame_fingerprint(active_fix),
-        frame_fingerprint(raw_gaze),
+        frame_fingerprint(active_raw_gaze),
         int(canvas_width),
         int(canvas_height),
         int(base_font_size),

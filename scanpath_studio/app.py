@@ -100,6 +100,7 @@ from scanpath_studio.constants import (
     ONESTOP_VARIANT_LABELS,
     POTEC_DEFAULT_DIR,
     PUBLIC_DATASETS_CHOICE,
+    RAW_GAZE_LINK_FOR_KEY,
     RAW_GAZE_SEEDED_FOR_KEY,
     RAW_GAZE_SNAP_RESTORE_KEY,
     SYNTHETIC_CHOICE,
@@ -2337,8 +2338,69 @@ _FONT_SNAP_RESTORE_KEY = "_font_snap_restore"
 _RAW_GAZE_LAYER_KEY = "global_show_raw_gaze"
 
 
+def _hashable(value):
+    """``value`` as a hashable, order-free key part (sets and dicts sorted)."""
+    if isinstance(value, dict):
+        return tuple(sorted(((str(k), _hashable(v)) for k, v in value.items())))
+    if isinstance(value, (set, frozenset)):
+        return tuple(sorted((_hashable(v) for v in value), key=repr))
+    if isinstance(value, (list, tuple)):
+        return tuple(_hashable(v) for v in value)
+    return value
+
+
+def _narrowed_raw_gaze(
+    raw_gaze: pd.DataFrame,
+    *,
+    participants,
+    metadata,
+    ranges,
+    trial_keys,
+) -> pd.DataFrame:
+    """The samples table narrowed by the trial filters that apply to it (VIZ-45).
+
+    The participant filter always, the condition filters only when the caller
+    passes them (a raw-gaze-only dataset), and the trial-metadata keys. With no
+    filter set it is ``raw_gaze`` itself; otherwise it is built once per filter
+    change in a `frame_cache` and the same object is handed back on every rerun
+    after that, rather than re-masking every sample each time."""
+    if raw_gaze is None or raw_gaze.empty:
+        return raw_gaze
+    if participants is None and not metadata and not ranges and trial_keys is None:
+        return raw_gaze
+
+    def _build() -> pd.DataFrame:
+        _, narrowed = filter_trials(
+            _EMPTY_WORDS,
+            raw_gaze,
+            participants=participants,
+            metadata=metadata,
+            ranges=ranges,
+        )
+        if trial_keys is not None:
+            narrowed = filter_frame_to_keys(narrowed, trial_keys)
+        return narrowed
+
+    key = (
+        frame_fingerprint(raw_gaze),
+        _hashable(participants),
+        _hashable(metadata or {}),
+        _hashable(ranges or {}),
+        _hashable(trial_keys),
+    )
+    return frame_cache("raw_gaze_narrowed", key, _build)
+
+
+#: The words frame `filter_trials` is handed beside the samples — built once.
+_EMPTY_WORDS = empty_words_frame()
+
+
 def seed_raw_gaze_default(
-    session, source_key: tuple, *, samples_only: bool, from_link: bool = False
+    session,
+    source_key: tuple,
+    *,
+    samples_only: bool,
+    link_names_layer: Callable[[], bool] | bool = False,
 ) -> None:
     """Turn the 🔵 Raw gaze layer on for a dataset whose only gaze is samples.
 
@@ -2354,8 +2416,15 @@ def seed_raw_gaze_default(
     stays open, because nothing decides again until the dataset changes. The
     value it overwrote is kept and put back on the way out, so the fixation
     dataset opened next keeps whatever the user had there rather than inheriting
-    the raw-gaze one's. A share link that named the layer (``from_link``) is the
-    sender's explicit choice and is left alone, like its canvas.
+    the raw-gaze one's.
+
+    A share link that named the layer (``link_names_layer``, a callable so it
+    is asked only when a decision is due) is the sender's explicit choice **for
+    the dataset it was opened on** — the first one decided while the link is on
+    the URL (`constants.RAW_GAZE_LINK_FOR_KEY`). There the link's value stands:
+    nothing is stashed, and a stash an earlier visit left (the recovery cache
+    keeps it) is dropped rather than written back over the link. Another
+    raw-gaze-only dataset the user opens afterwards gets its own default.
 
     A built-in design preset or *Reset* forgets the decision
     (`controls._forget_raw_gaze_default`), so they come back to the dataset's
@@ -2366,17 +2435,25 @@ def seed_raw_gaze_default(
     token = "\x1f".join(str(part) for part in source_key)
     if session.get(RAW_GAZE_SEEDED_FOR_KEY) == token:
         return
-    if samples_only:
-        if not from_link:
-            if RAW_GAZE_SNAP_RESTORE_KEY not in session:
-                # Stashed on the first of a run of raw-gaze datasets only, so
-                # raw-gaze → raw-gaze → fixations restores the pre-raw-gaze
-                # value. `None` = absent: leaving restores the factory default.
-                session[RAW_GAZE_SNAP_RESTORE_KEY] = {
-                    "value": session.get(_RAW_GAZE_LAYER_KEY)
-                }
-            session[_RAW_GAZE_LAYER_KEY] = True
-        # A link's value overwrote nothing, so there is nothing to put back.
+    link_for = session.get(RAW_GAZE_LINK_FOR_KEY)
+    if link_for is None and (
+        link_names_layer() if callable(link_names_layer) else link_names_layer
+    ):
+        link_for = session[RAW_GAZE_LINK_FOR_KEY] = token
+    from_link = link_for == token
+    if from_link:
+        # The link's value overwrote nothing, and a stash from before the link
+        # must not overwrite it either.
+        session.pop(RAW_GAZE_SNAP_RESTORE_KEY, None)
+    elif samples_only:
+        if RAW_GAZE_SNAP_RESTORE_KEY not in session:
+            # Stashed on the first of a run of raw-gaze datasets only, so
+            # raw-gaze → raw-gaze → fixations restores the pre-raw-gaze value.
+            # `None` = absent: leaving restores the factory default.
+            session[RAW_GAZE_SNAP_RESTORE_KEY] = {
+                "value": session.get(_RAW_GAZE_LAYER_KEY)
+            }
+        session[_RAW_GAZE_LAYER_KEY] = True
     else:
         stashed = session.get(RAW_GAZE_SNAP_RESTORE_KEY)
         if isinstance(stashed, dict):
@@ -7943,18 +8020,16 @@ def _run_app() -> None:
     # they name *their* columns, and a raw-gaze column of the same name (a
     # `text_id` that merely mirrors the trial id) means something else.
     samples_only_dataset = words_all.empty and fixations_all.empty
-    if not raw_gaze_df.empty:
-        _, raw_gaze_df = filter_trials(
-            empty_words_frame(),
-            raw_gaze_df,
-            participants=trial_filters["participants"],
-            metadata=trial_filters["metadata"] if samples_only_dataset else None,
-            ranges=trial_filters.get("ranges") if samples_only_dataset else None,
-        )
     trialmeta_keys = trial_filters.get("trial_keys")
+    raw_gaze_df = _narrowed_raw_gaze(
+        raw_gaze_df,
+        participants=trial_filters["participants"],
+        metadata=trial_filters["metadata"] if samples_only_dataset else None,
+        ranges=trial_filters.get("ranges") if samples_only_dataset else None,
+        trial_keys=trialmeta_keys,
+    )
     if trialmeta_keys is not None:
         words_df, fixations_df = filter_to_keys(words_df, fixations_df, trialmeta_keys)
-        raw_gaze_df = filter_frame_to_keys(raw_gaze_df, trialmeta_keys)
     # BUG-12: the raw-gaze samples table has to travel through the same
     # annotation filter as words + fixations, or a sample row for an unstarred
     # trial survives "⭐ Favorites only" — which also kept the all-three-empty
@@ -8074,7 +8149,7 @@ def _run_app() -> None:
         st.session_state,
         raw_gaze_source_key,
         samples_only=fixations_all.empty and not raw_gaze_all.empty,
-        from_link=link_sets(_RAW_GAZE_LAYER_KEY),
+        link_names_layer=lambda: link_sets(_RAW_GAZE_LAYER_KEY),
     )
     # VIZ-31: the monitor/font/background panel moved out of the sidebar into the
     # Scanpath rail, so it is *resolved* here (no widgets) and *rendered* later,

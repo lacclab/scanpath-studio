@@ -1098,6 +1098,20 @@ def _passes_raw_gaze(source: SnippetSource, state: FigureState) -> bool:
     )
 
 
+def _raw_gaze_layer_off(source: SnippetSource, state: FigureState) -> bool:
+    """A raw-gaze-only figure with the layer switched off (VIZ-45).
+
+    `plot_scanpath` turns the layer on for the frame it is handed, and on a
+    samples-only source the frame is always handed (it is the data), so *off*
+    has to be written out — ``show_raw_gaze=False`` / ``--no-raw-gaze`` — or
+    the recipe would draw the samples the figure on screen does not."""
+    return (
+        source.kind == SOURCE_RAW_GAZE
+        and state.kind == "static"
+        and not state.settings.get("show_raw_gaze", True)
+    )
+
+
 def _raw_gaze_paths(source: SnippetSource) -> list[str] | None:
     paths = source.options.get("raw_gaze")
     if not paths:
@@ -1194,6 +1208,8 @@ def python_snippet(
             args.append(f"trial_b=({_py(compare.participant)}, {_py(compare.trial)})")
     if _passes_raw_gaze(source, state):
         args.append("raw_gaze=raw_gaze")
+    if _raw_gaze_layer_off(source, state):
+        args.append("show_raw_gaze=False")
 
     call = [f"fig = sps.{func}("]
     call += [f"    {arg}," for arg in args]
@@ -1320,6 +1336,8 @@ def cli_snippet(
     # A raw-gaze-only source's input flags *are* its --raw-gaze (VIZ-45).
     if draws_raw_gaze(state) and source.kind != SOURCE_RAW_GAZE:
         argv += _raw_gaze_cli(source)
+    if _raw_gaze_layer_off(source, state):
+        argv.append("--no-raw-gaze")
     if state.kind == "comparison":
         compare = state.compare or CompareTarget()
         argv += ["--compare-with", f"{compare.participant}:{compare.trial}"]

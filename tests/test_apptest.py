@@ -1428,6 +1428,66 @@ class TestDatasetRename:
         assert _session[annotations_mod.ANNOTATIONS_STATE_KEY] == {}
         assert app.annotations_owner(corpus) == corpus
 
+    def test_a_missing_corpus_opened_first_leaves_old_entries_to_the_demo(
+        self, _session
+    ):
+        """An old cache's unassigned entries are adopted only once the load has
+        said what is shown: a corpus that isn't there is shown as the demo, so
+        the demo takes them, not the corpus' name."""
+        import scanpath_studio.annotations as annotations_mod
+        from scanpath_studio import app
+
+        corpus = "Some corpus"
+        annotations_mod.restore_payload(
+            _session, [{"participant_id": "p1", "trial_id": "t1", "star": True}]
+        )
+        # `app.main`'s order: activate before the load, without adopting …
+        annotations_mod.activate_dataset(
+            _session, app.annotations_owner(corpus), adopt=False
+        )
+        # … then the loader reports the stand-in.
+        _session[app._PLACEHOLDER_SHOWN_KEY] = True
+        app._file_annotations_under_shown_dataset(corpus)
+        assert _session[annotations_mod.OWNER_KEY] == app.DEMO_CHOICE
+        assert set(_session[annotations_mod.ANNOTATIONS_STATE_KEY]) == {("p1", "t1")}
+        assert annotations_mod.store_for(_session, corpus) == {}
+        assert app._annotations_dataset(corpus) == app.DEMO_CHOICE
+
+    def test_a_refused_annotation_rename_leaves_the_dataset_as_it_was(
+        self, _session, monkeypatch
+    ):
+        """DATA-48: the annotations move first; if their rename is refused the
+        frames are not re-keyed either, so nothing is stranded."""
+        import scanpath_studio.annotations as annotations_mod
+        from scanpath_studio import wizard
+
+        self._store(_session, self.NAME)
+        monkeypatch.setattr(annotations_mod, "rename_dataset", lambda *a: False)
+        assert wizard.rename_dataset(self.NAME, "Pilot") is None
+        assert list(_session["_datasets"]) == [self.NAME]
+
+    def test_saving_an_authored_draft_takes_its_annotations(self, _session):
+        """DATA-48: the draft's annotations were made on the scanpath being
+        saved, so they move to the saved dataset's name."""
+        import scanpath_studio.annotations as annotations_mod
+        from scanpath_studio import app
+
+        _session["data_source_choice"] = app.AUTHOR_CHOICE
+        annotations_mod.activate_dataset(_session, app.AUTHOR_CHOICE)
+        _session[annotations_mod.ANNOTATIONS_STATE_KEY][("p1", "t1")] = {
+            "star": True,
+            "tags": [],
+            "note": "",
+        }
+        _session["_author_save_payload"] = {"words": None}
+        _session["author_save_name"] = "My reading"
+        app._save_authored_dataset("author_save_name")
+        assert "My reading" in _session["_datasets"]
+        assert _session[annotations_mod.OWNER_KEY] == "My reading"
+        assert not annotations_mod.activate_dataset(_session, "My reading")
+        assert set(_session[annotations_mod.ANNOTATIONS_STATE_KEY]) == {("p1", "t1")}
+        assert annotations_mod.store_for(_session, app.AUTHOR_CHOICE) == {}
+
     def test_rename_is_a_field_on_the_editor_and_nowhere_else(self):
         """UX-178: one rename — ✏️ Edit dataset's **Name** — and no rename
         button on the rows or beside the heading."""

@@ -417,6 +417,14 @@ def rename_dataset(old: str, new: str) -> str | None:
     name = _safe_dataset_name(new, exclude=old)
     if name == old:
         return None
+    # DATA-48: the annotations move first, and refuse a name that already
+    # holds a store. `_safe_dataset_name` never picks one, so this is a guard:
+    # if it ever did, renaming the frames without the annotations would strand
+    # them under the old name.
+    import scanpath_studio.annotations as _annotations
+
+    if not _annotations.rename_dataset(st.session_state, old, name):
+        return None
     st.session_state["_datasets"] = {
         (name if key == old else key): value for key, value in store.items()
     }
@@ -431,13 +439,11 @@ def rename_dataset(old: str, new: str) -> str | None:
     if old in descriptions:
         descriptions[name] = descriptions.pop(old)
         st.session_state[DATASET_DESCRIPTIONS_KEY] = descriptions
-    # DATA-47 — and its metadata tables, which are keyed by the name too, and
-    # (DATA-48) its annotations.
-    import scanpath_studio.annotations as _annotations
+    # DATA-47 — and its metadata tables, which are keyed by the name too (the
+    # annotations moved above).
     from scanpath_studio import metadata as _metadata
 
     _metadata.rename_dataset(st.session_state, old, name)
-    _annotations.rename_dataset(st.session_state, old, name)
     rename_cached_dataset(st.session_state, old, name)
     return name
 

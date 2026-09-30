@@ -467,6 +467,59 @@ class TestCachePayload:
         assert set(_live(session)) == {("p1", "t1")}
         assert "unassigned" not in annotations_mod.cache_payload(session)
 
+    @staticmethod
+    def _restored_with_upload() -> dict:
+        """A pre-DATA-48 cache restored beside upload ``U``, whose trials do
+        not include the old star — so it is the demo's (or a corpus')."""
+        import pandas as pd
+
+        session: dict = {
+            "_datasets": {
+                "U": {
+                    "fixations": pd.DataFrame(
+                        {"participant_id": ["p2"], "trial_id": ["t2"]}
+                    ),
+                    "words": pd.DataFrame(),
+                }
+            }
+        }
+        legacy = [{"participant_id": "p1", "trial_id": "t1", "star": True}]
+        annotations_mod.restore_payload(session, legacy)
+        return session
+
+    def test_an_upload_opened_first_does_not_swallow_unassigned_entries(self):
+        """Every restored upload was asked in the claim pass; one opened first
+        must not take the entries it said no to."""
+        session = self._restored_with_upload()
+        annotations_mod.activate_dataset(session, "U")
+        assert _live(session) == {}
+        assert annotations_mod.cache_payload(session)["unassigned"]
+        annotations_mod.activate_dataset(session, "Bundled Demo")
+        assert set(_live(session)) == {("p1", "t1")}
+        assert annotations_mod.store_for(session, "U") == {}
+
+    def test_after_the_add_wizard_the_new_upload_does_not_take_them(self):
+        """A `?source=upload` first run, then ✅ Add dataset: the new upload is
+        an upload too, so the entries wait for the first built-in or corpus."""
+        session = self._restored_with_upload()
+        annotations_mod.activate_dataset(session, annotations_mod.PENDING_DATASET)
+        session["_datasets"]["New"] = session["_datasets"]["U"]
+        annotations_mod.adopt_pending_dataset(session, "New")
+        assert not annotations_mod.activate_dataset(session, "New")
+        assert _live(session) == {}
+        annotations_mod.activate_dataset(session, "Bundled Demo")
+        assert set(_live(session)) == {("p1", "t1")}
+
+    def test_adoption_can_wait_for_the_load(self):
+        """`app.main` activates with ``adopt=False`` and adopts once the load
+        says which dataset is shown."""
+        session = self._restored_with_upload()
+        annotations_mod.activate_dataset(session, "Some corpus", adopt=False)
+        assert _live(session) == {}
+        assert annotations_mod.adopt_unassigned(session) == 1
+        assert set(_live(session)) == {("p1", "t1")}
+        assert annotations_mod.adopt_unassigned(session) == 0
+
     def test_the_migration_gives_an_entry_to_the_uploads_whose_trials_have_it(self):
         """Old entries go by trial membership: to every upload that has the
         trial, and only the unclaimed rest to the first dataset opened."""

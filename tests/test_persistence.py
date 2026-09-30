@@ -140,11 +140,13 @@ def test_round_trip_datasets_settings_mappings_and_annotations(tmp_path):
     assert restored["global_show_heatmap"] is False
     assert restored["global_word_hover_fields"] == ["text", "surprisal"]
     assert restored["col_map_fix_x"] == "gaze_x"
-    # DATA-48: the store named no dataset, so it waits for the first one opened
-    # (`app.main` activates the restored selection right after the restore).
+    # DATA-48: the store named no dataset and the upload has no such trial, so
+    # the entry waits for the first built-in or corpus opened — not the upload.
     import scanpath_studio.annotations as annotations_mod
 
     annotations_mod.activate_dataset(restored, restored["data_source_choice"])
+    assert restored["trial_annotations"] == {}
+    annotations_mod.activate_dataset(restored, "Bundled Demo")
     assert restored["trial_annotations"][("p1", "t1")]["note"] == "check"
 
 

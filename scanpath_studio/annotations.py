@@ -300,18 +300,22 @@ def _reseed_editors_in(session) -> None:
         del session[key]
 
 
-def activate_dataset(session, dataset: str) -> bool:
+def activate_dataset(session, dataset: str, *, adopt: bool = True) -> bool:
     """Make ``dataset``'s annotations the session store; whether it changed.
 
     Called by ``app.main`` on every run with the dataset on screen. When that
     changed, the outgoing dataset's store is filed away and the incoming one's
     comes back. A store with no owner yet (entries put there before the first
-    run) and the :data:`UNASSIGNED_KEY` pool go to the first **real** dataset
-    activated — never to the add wizard's, which is not cached.
+    run) joins the :data:`UNASSIGNED_KEY` pool, which :func:`adopt_unassigned`
+    hands on. ``app.main`` passes ``adopt=False`` and adopts only
+    once the load has said which dataset is really shown (a missing corpus is
+    shown as the demo); the default adopts here, for callers with no load.
     """
     dataset = str(dataset)
     owner = session.get(OWNER_KEY)
     if owner == dataset:
+        if adopt:
+            adopt_unassigned(session)
         return False
     store = _stored(session)
     live = _live(session)
@@ -322,17 +326,39 @@ def activate_dataset(session, dataset: str) -> bool:
         store[str(owner)] = live
     else:
         store.pop(str(owner), None)
-    incoming = store.pop(dataset, None) or {}
-    if dataset != PENDING_DATASET and unassigned:
-        # The dataset's own entry wins a collision with an adopted one.
-        incoming, unassigned = {**unassigned, **incoming}, {}
-    session[ANNOTATIONS_STATE_KEY] = incoming
+    session[ANNOTATIONS_STATE_KEY] = store.pop(dataset, None) or {}
     session[DATASET_STORE_KEY] = store
     _set_unassigned(session, unassigned)
     session[OWNER_KEY] = dataset
     _bump(session)
     _reseed_editors_in(session)
+    if adopt:
+        adopt_unassigned(session)
     return True
+
+
+def adopt_unassigned(session) -> int:
+    """Give the :data:`UNASSIGNED_KEY` pool to the dataset on screen; how many.
+
+    The pool holds a pre-DATA-48 cache's entries that no restored upload's
+    trials claimed (:func:`restore_payload`) — so they are on trials of a
+    built-in or public corpus, and only such a dataset may adopt them. Never
+    an upload (each was asked in the claim pass, and said no), and never the
+    add wizard's unnamed dataset, which is not cached. The dataset's own entry
+    wins a collision with an adopted one.
+    """
+    pool = _unassigned(session)
+    owner = session.get(OWNER_KEY)
+    if not pool or owner is None or owner == PENDING_DATASET:
+        return 0
+    uploads = session.get("_datasets")
+    if isinstance(uploads, dict) and owner in uploads:
+        return 0
+    session[ANNOTATIONS_STATE_KEY] = {**pool, **_live(session)}
+    session.pop(UNASSIGNED_KEY, None)
+    _bump(session)
+    _reseed_editors_in(session)
+    return len(pool)
 
 
 def begin_pending_dataset(session) -> None:

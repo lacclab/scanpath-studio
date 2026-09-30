@@ -1206,6 +1206,13 @@ def annotations_owner(dataset: str) -> str:
     return dataset
 
 
+def _annotations_dataset(token: str) -> str:
+    """The dataset the annotation store belongs to now, else ``token``."""
+    import scanpath_studio.annotations as _annotations
+
+    return _annotations.current_dataset(st.session_state) or token
+
+
 def _file_annotations_under_shown_dataset(dataset: str) -> None:
     """After the load: point the annotation store at what is actually shown.
 
@@ -1219,10 +1226,14 @@ def _file_annotations_under_shown_dataset(dataset: str) -> None:
 
     if st.session_state.get(_PLACEHOLDER_SHOWN_KEY):
         st.session_state[_ANNOTATIONS_STANDIN_KEY] = dataset
-        _annotations.activate_dataset(st.session_state, DEMO_CHOICE)
+        _annotations.activate_dataset(st.session_state, DEMO_CHOICE, adopt=False)
     elif st.session_state.get(_ANNOTATIONS_STANDIN_KEY) == dataset:
         st.session_state.pop(_ANNOTATIONS_STANDIN_KEY, None)
-        _annotations.activate_dataset(st.session_state, dataset)
+        _annotations.activate_dataset(st.session_state, dataset, adopt=False)
+    # Only now is it known which dataset is shown, so only now may it adopt an
+    # old cache's unassigned entries — which are on a built-in or public
+    # corpus' trials, since every restored upload was already asked for its own.
+    _annotations.adopt_unassigned(st.session_state)
 
 
 def _note_dataset_unavailable(
@@ -3780,6 +3791,12 @@ def _save_authored_dataset(name_key: str) -> None:
         requested += " (authored)"
     name = _safe_dataset_name(requested)
     st.session_state.setdefault("_datasets", {})[name] = payload
+    # DATA-48: the draft's annotations were made on the scanpath being saved,
+    # so they become the saved dataset's. The name is safe, so it holds none.
+    if st.session_state.get("data_source_choice") == AUTHOR_CHOICE:
+        import scanpath_studio.annotations as _annotations
+
+        _annotations.rename_dataset(st.session_state, AUTHOR_CHOICE, name)
     st.session_state["_pending_source_choice"] = name
     st.session_state["main_nav"] = _VIEW_SCANPATH
     st.session_state["setup_complete"] = True
@@ -7380,7 +7397,11 @@ def _run_app() -> None:
         else str(st.session_state.get("data_source_choice") or data_choice)
     )
     _metadata.activate_dataset(st.session_state, _dataset_owner)
-    _annotations.activate_dataset(st.session_state, annotations_owner(_dataset_owner))
+    # Adoption of an old cache's unassigned entries waits for the load, which
+    # says what is really shown (`_file_annotations_under_shown_dataset`).
+    _annotations.activate_dataset(
+        st.session_state, annotations_owner(_dataset_owner), adopt=False
+    )
     # UX-166: on the Data page the dataset card sits above the table.
     data_page_slot = setup_source_slot.empty()
     # UX-54: the page lists every dataset as a *table* — one row each, sortable,
@@ -8249,7 +8270,12 @@ def _run_app() -> None:
                     fixations_filtered,
                     raw_gaze_filtered,
                     annotation_trials=_annotation_trials(combos_all),
-                    dataset_name=_dataset_display_name(active_token),
+                    # DATA-48: the dataset whose annotations these are — the
+                    # demo's while it stands in for a missing corpus, as in
+                    # the Export bundle.
+                    dataset_name=_dataset_display_name(
+                        _annotations_dataset(active_token)
+                    ),
                 )
     elif active_view == _VIEW_CORPUS:
         with view_area:

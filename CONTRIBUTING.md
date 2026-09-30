@@ -153,7 +153,8 @@ Common to both:
   `CHANGELOG.md` (where most are allocated), `gh issue list --state all --search
   "[DATA-"`, and the **open PRs**, whose unmerged changelogs the other two
   cannot see
-  (`gh pr list --state open`, then `gh pr diff <n> -- CHANGELOG.md`) — as
+  (`gh pr list --state open`, then each PR's `CHANGELOG.md` hunk of
+  `gh pr diff <n>` — the command is in `CLAUDE.md`; `gh pr diff` takes no path) — as
   `CLAUDE.md` → *Tracking work* spells out. Two people reaching for a number at
   the same moment will still collide: check again after creating, and renumber
   **your own** item if it does.

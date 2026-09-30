@@ -108,8 +108,14 @@ you work under `scanpath_studio/`); contributor setup is in
 
   ```bash
   gh pr list --state open --json number,headRefName,title
-  gh pr diff <n> -- CHANGELOG.md | grep -oE "\b[A-Z]+-[0-9]+\b" | sort -u -V | tail
+  gh pr diff <n> | awk '/^diff --git a\/CHANGELOG.md/{f=1;next} /^diff --git/{f=0} f' \
+    | grep -oE "\b[A-Z]+-[0-9]+\b" | sort -u -V | tail
   ```
+
+  `gh pr diff` takes the PR and nothing else — `gh pr diff <n> -- CHANGELOG.md`
+  errors out on stderr and prints nothing, so a pipe after it reports "no IDs"
+  every time (ENG-83). The `awk` keeps only the `CHANGELOG.md` hunk of the whole
+  diff. Run it once per open PR.
 
   And when another session or person is working right now, just ask which IDs
   they have allocated — that is what actually resolved it, faster than any search.

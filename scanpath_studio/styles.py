@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+from scanpath_studio.constants import (
+    SELECTOR_ROW_FLOOR_CAPS,
+    SELECTOR_ROW_FLOORS_REM,
+)
+
 
 def get_app_css() -> str:
     """Return custom CSS to reduce whitespace and disable animations."""
-    return """
+    css = """
     <style>
     /* Force LTR regardless of the browser's own OS/locale default direction.
        Every plot, coordinate, and reading-order concept in this app is
@@ -964,6 +969,70 @@ def get_app_css() -> str:
        gone as of UX-27 — it was the reason the pencil landed 9.6px short of the
        other two rows' right edges.) */
     .st-key-railbtn_chip_trail { margin-top: 0.1rem; }
+    /* UX-181: the floors under the `SELECTOR_ROW_GRID` tracks
+       (`SELECTOR_ROW_FLOORS_REM`). A row of this grid is a column row whose
+       last column holds a `railbtn_*` cluster directly (◀ ▶ ⇅ 🔎 on the trial
+       rows, ◀ ▶ on the screen navigator, ✏️ on the chip strip). The nested
+       `_step` / `_sort` containers don't count.
+       - Every column gets `min-width: 0` first. Otherwise a column's automatic
+         minimum is its content, and A's dataset cell (dropdown + "+") stopped
+         at a different width than B's, so the two rows drifted apart.
+       - Then each track gets the same floor on every row: the dataset track on
+         any row of three or four columns, the trial track on four-column rows
+         only (on a three-column row the second column is trial + scrubber
+         merged), and the actions track wherever it is. A column holding its
+         floor leaves the rest of the shrinking to the columns beside it, so
+         the tracks still share their edges.
+       - Streamlit's column row wraps, so a floor wider than the column's share
+         would push it onto a line of its own. The row is kept on one line
+         instead, above the 640px width where Streamlit stacks columns on
+         purpose.
+       On the column rules, `:where()` keeps the row match at zero specificity,
+       so each floor outranks the `min-width: 0`. The `nowrap` rule keeps its
+       specificity, since it has to outrank Streamlit's own `flex-wrap`. */
+    @media (min-width: 640px) {
+        [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]
+            > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]
+            > [class*="st-key-railbtn_"]) {
+            flex-wrap: nowrap;
+        }
+        :where([data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]
+            > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]
+            > [class*="st-key-railbtn_"])) > [data-testid="stColumn"] {
+            min-width: 0;
+        }
+        :where([data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]
+            > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]
+            > [class*="st-key-railbtn_"])):has(> [data-testid="stColumn"]:nth-child(3))
+            > [data-testid="stColumn"]:first-child {
+            min-width: __SELECTOR_FLOOR_0__;
+        }
+        :where([data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]
+            > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]
+            > [class*="st-key-railbtn_"])):has(> [data-testid="stColumn"]:nth-child(4))
+            > [data-testid="stColumn"]:nth-child(2) {
+            min-width: __SELECTOR_FLOOR_1__;
+        }
+        [data-testid="stColumn"]:has(> [data-testid="stVerticalBlock"]
+            > [data-testid="stLayoutWrapper"] > [class*="st-key-railbtn_"]) {
+            min-width: __SELECTOR_FLOOR_3__;
+        }
+    }
+    /* UX-181: a slider's end labels stay on one line. The trial scrubber's
+       labels are `1/24 · <trial id>`, and a long id used to wrap onto a second
+       line under the slider, where the chip strip below covered it. Each label
+       takes at most half the bar and ellipsises past that. The thumb's own
+       value above the track still shows the full id, and so does the
+       dropdown. */
+    [data-testid="stSliderTickBar"] > [data-testid="stMarkdownContainer"] {
+        min-width: 0;
+        max-width: 50%;
+    }
+    [data-testid="stSliderTickBar"] > [data-testid="stMarkdownContainer"] p {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
     /* UX-9: the number box paired with each slider (`<key>__num`, `__num_lo`,
        `__num_hi`) exists for typing an *exact* value — the slider beside it
        already handles stepping. It holds a number, not a sentence, so drop the
@@ -2058,6 +2127,24 @@ def get_app_css() -> str:
     }
     </style>
     """
+    for i in (0, 1, 3):
+        css = css.replace(f"__SELECTOR_FLOOR_{i}__", selector_track_floor(i))
+    return css
+
+
+def selector_track_floor(index: int) -> str:
+    """The CSS `min-width` of one `SELECTOR_ROW_GRID` track (UX-181).
+
+    Shared by the app's rule and the loading skeleton's grid, so the skeleton
+    draws the row the page is about to show.
+    """
+    floor = SELECTOR_ROW_FLOORS_REM[index]
+    cap = SELECTOR_ROW_FLOOR_CAPS[index]
+    if floor is None:
+        return "0"
+    if cap is None:
+        return f"{floor}rem"
+    return f"min({floor}rem, {cap}%)"
 
 
 def mapping_menu_css() -> str:

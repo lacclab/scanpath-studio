@@ -47,6 +47,7 @@ from streamlit.runtime.scriptrunner import (
 from scanpath_studio import progress
 from scanpath_studio.constants import SELECTOR_ROW_GRID, icon_html
 from scanpath_studio.progress import Snapshot
+from scanpath_studio.styles import selector_track_floor
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -219,8 +220,20 @@ def size_box_html(width: int, height: int, *, card_key: str) -> str:
     )
 
 
+def selector_row_tracks() -> str:
+    """The skeleton's `grid-template-columns` for the selector row.
+
+    Each track takes the real row's weight and the floor `styles.py` gives it
+    (UX-181), so the skeleton draws the row the page is about to show.
+    """
+    return " ".join(
+        f"minmax({selector_track_floor(i)}, {w}fr)"
+        for i, w in enumerate(SELECTOR_ROW_GRID)
+    )
+
+
 def _scanpath_skeleton(plot_height: int) -> str:
-    tracks = " ".join(f"{w}fr" for w in SELECTOR_ROW_GRID)
+    tracks = selector_row_tracks()
     fields = '<div class="sps-sk sps-sk-field"></div>' * len(SELECTOR_ROW_GRID)
     chips = '<div class="sps-sk sps-sk-chip"></div>' * 4
     rail = '<div class="sps-sk sps-sk-row"></div>' * 9

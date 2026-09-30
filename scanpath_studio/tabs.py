@@ -10994,8 +10994,8 @@ def _apply_remap() -> None:
                 "words": [
                     "No AOI row matches a trial in the fixations under this "
                     "mapping, so saving would leave the dataset with no word "
-                    "boxes. Check the Trial ID (and Screen) picks for both "
-                    "tables."
+                    "boxes. Check the Trial ID, Text ID (and Screen) picks for "
+                    "both tables."
                 ]
             }
             return

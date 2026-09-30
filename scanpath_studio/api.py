@@ -578,14 +578,17 @@ def load_scanpath_data(
     that ship only one report: the
     missing side comes back as an empty canonical frame and the plots simply
     skip that layer. Words without a participant column (stimulus-level AoIs)
-    are broadcast across the participants found in the fixations, and
-    fixations without x/y but with a word/AoI ID are placed at word-box
-    centers.
+    are copied onto every reading in the fixations — matched by trial id when
+    the two tables share them, else by ``text_id`` (trial ids that embed the
+    reader, a repeated reading's ``_r2``) — and fixations without x/y but with
+    a word/AoI ID are placed at word-box centers.
 
     Returns the normalized ``(words, fixations)`` frames the plotting
     functions expect. Raises ``ValueError`` if a required field can't be found —
     the message names the canonical field, the column names auto-detection
-    looked for, and the columns the table actually has.
+    looked for, and the columns the table actually has — and
+    ``data.StimulusJoinError`` (a ``ValueError``) when a stimulus-level words
+    table shares neither a trial id nor a ``text_id`` with any reading.
     """
     if words is None and fixations is None:
         raise ValueError("Provide at least one of words= or fixations=.")

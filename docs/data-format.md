@@ -117,7 +117,13 @@ Headless, it is `--text-metadata FILE` on `scanpath-studio render` and
 - **Many files per table** — pass several paths or a glob; they're concatenated,
   each row tagged with its `source_file` (e.g. one file per participant or text).
 - **Stimulus-level word boxes** — a words table with no participant column is
-  broadcast across every participant found in the fixations.
+  one set of boxes per text, and every reading in the fixations gets a copy of
+  its text's boxes. A reading finds them by its trial ID when the words table
+  uses the fixations' own trial IDs, and by **Text ID** otherwise, for example
+  when the trial ID includes the reader or a repeated reading's `_r2`. If
+  neither matches any reading, the add-dataset screen stops with a message
+  (the Python API and CLI raise the same error) rather than adding a dataset
+  with no word boxes. When it works, the screen says which one it used.
 - **AoI-only fixations** — fixations with a word/IA id but no x/y are placed at
   the matching word-box centers.
 - **Composite trial ids** — when no single column identifies a trial, map *Trial

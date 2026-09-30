@@ -1260,14 +1260,18 @@ def _wizard_trial_step(
     has_fix,
     *,
     cells=None,
-    extras_host=None,
-) -> None:
+) -> str | None:
     """Trial-identifier wizard step: one picker per table (UX-53 r13), plus the
     per-table trial-count check that flags mismatches. Mutates ``word_schema`` /
     ``fix_schema`` in place. ``cells`` are the row containers the caller built —
-    each table's count is a caption inside its own cell (UX-67 r2), and
-    ``extras_host`` is left with the one thing that is not a count: the warning
-    that the two tables' trial ids do not line up at all."""
+    each table's count is a caption inside its own cell (UX-67 r2).
+
+    Returns the one thing that is not a count — the warning that the two
+    tables' trial ids do not line up at all — for the caller to draw once the
+    Participant ID is mapped too: an AOI table with no Participant ID is
+    stimulus-level and attaches by Text ID when the trial ids differ, and the
+    wizard states that join (or refuses it) above Add dataset instead (DATA-49).
+    """
     # Core tables present (raw-gaze keeps its own mapping in its own step).
     core = [f for f, present in ((raw_fix, has_fix), (raw_words, has_words)) if present]
     common_cols = [c for c in core[0].columns if all(c in f.columns for f in core)]
@@ -1312,17 +1316,17 @@ def _wizard_trial_step(
         cell.caption(f"~{len(values):,} trials")
     # Only a real problem still gets a box, and it renders where UX-67 put the
     # blockers: directly above **Add dataset**.
-    counts_host = extras_host if extras_host is not None else body
     present = {k: v for k, v in sets.items() if v is not None}
     if len(present) > 1:
         values = list(present.values())
         counts_str = ", ".join(f"{k}: **{len(v):,}**" for k, v in present.items())
         if not set.intersection(*values):
-            counts_host.warning(
+            return (
                 f"{ICONS['warning']} No trial ids are shared across tables — {counts_str}. Check "
                 "the trial-id mapping lines up (try *Different trial-id columns "
                 "per table*)."
             )
+    return None
 
 
 @st.cache_data(show_spinner="Counting…")
@@ -3408,7 +3412,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         id_extras = counts_host
         # Row 1, in the order the request pins: Trial ID · Screen ID ·
         # Participant ID · Text ID · Word/IA ID · Fixation ID-or-Word text.
-        _wizard_trial_step(
+        disjoint_trials = _wizard_trial_step(
             s2,
             raw_words,
             raw_fix,
@@ -3419,7 +3423,6 @@ def _render_data_setup(active: bool) -> _UploadResult:
             has_words,
             has_fix,
             cells=_cells_for(0),
-            extras_host=id_extras,
         )
         # Screen ID (DATA-21 multipart) — a simple per-table field, not a
         # composite like Trial/Participant/Text, so it goes straight through
@@ -3482,6 +3485,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
             cells=_cells_for(3),
             extras_host=id_extras,
         )
+        # DATA-49: an AOI table with no Participant ID is stimulus-level and
+        # attaches by Text ID when the trial ids differ, so disjoint trial ids
+        # are no mapping error there: the join is stated (or refused) above
+        # Add dataset instead.
+        if disjoint_trials and word_schema.get("participant"):
+            id_extras.warning(disjoint_trials)
         # Word/IA ID — the fixations table's own `word_id` says which AOI a
         # fixation hit; the AOI table's is which AOI a row *is*. Different
         # columns, same slot: both tables read it as identity now.
@@ -3969,6 +3978,19 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 raw, schema, frame_fingerprint(raw), _schema_key(schema), table
             ):
                 s6.warning(f"{ICONS['warning']} {line}")
+
+    # DATA-49: an AOI table with no Participant ID is shared by the readings
+    # of its texts, so say which key attached it — the trial ID or the Text
+    # ID — and how many readings got boxes. A join that reaches none never
+    # gets here: `_normalize_pair` raised, and the error above blocks the add.
+    join = (
+        st.session_state.get(app.STIMULUS_JOIN_KEY) if has_words and has_fix else None
+    )
+    if active and join is not None:
+        if join.matched == join.readings:
+            s6.caption(f"{ICONS['confirm']} {join.describe()}")
+        else:
+            s6.warning(f"{ICONS['warning']} {join.describe()}")
 
     if (
         active

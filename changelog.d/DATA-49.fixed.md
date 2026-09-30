@@ -1,0 +1,1 @@
+A word table with no participant column now attaches to every reading of its text by Text ID when the trial IDs include the reader or a repeat suffix, the add-dataset screen says which ID it matched on, and it stops with a message instead of adding a dataset with no word boxes when neither ID matches.

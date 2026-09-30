@@ -224,15 +224,22 @@ REGISTER: tuple[Computation, ...] = (
         category=CATEGORY_NORMALIZATION,
         summary="Share one stimulus' word boxes across every reader of it.",
         formula=(
-            "Words with no participant column are replicated once per "
-            "participant found in the fixations for the same text."
+            "Words with no participant column are copied once per reading "
+            "(participant × trial [× screen]) in the fixations, stamped with "
+            "that reading's ids. A reading takes the boxes that share its trial "
+            "ID, or else its Text ID, whichever reaches more readings (the "
+            "trial ID on a tie). A Text ID the words give to more than one "
+            "trial is not used (DATA-49)."
         ),
-        code="scanpath_studio/data.py:harmonize_frames",
-        missing="No fixations for a text ⇒ its words are not broadcast.",
+        code="scanpath_studio/data.py:broadcast_stimulus_words",
+        missing=(
+            "No fixations for a text ⇒ its words are not broadcast. No reading "
+            "reached by either key ⇒ StimulusJoinError, never an empty table."
+        ),
         tiers="C",
         status=STATUS_PARTIAL,
         consumers=(_UI, _API, _CLI),
-        tests=("tests/test_data.py",),
+        tests=("tests/test_stimulus_join.py", "tests/test_dataset_support.py"),
     ),
     Computation(
         id="norm.aoi_center_placement",

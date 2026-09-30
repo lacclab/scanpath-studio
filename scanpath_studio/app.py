@@ -140,6 +140,7 @@ from scanpath_studio.data import (
     TRIAL_IDENTITY_SAMPLE,
     WORD_OPTIONAL_FIELDS,
     ReadPlan,
+    StimulusJoin,
     clear_frame_cache,
     compute_canvas_size,
     count_trials,
@@ -165,6 +166,7 @@ from scanpath_studio.data import (
     normalize_words,
     onestop_data_dir,
     onestop_full_bundle_exists,
+    plan_stimulus_join,
     plan_table_read,
     preprocess_fixation_stage,
     propose_fix_schema,
@@ -2513,6 +2515,12 @@ def _schema_key(schema: dict | None) -> tuple | None:
     )
 
 
+#: How the last normalized pair's stimulus-level AOI table attached to its
+#: readings (a ``data.StimulusJoin``, or ``None``), written by `_normalize_pair`
+#: for the add-dataset wizard (DATA-49). Scratch state, not wire format.
+STIMULUS_JOIN_KEY = "_stimulus_join"
+
+
 def _normalize_pair_uncached(
     _words_df: pd.DataFrame,
     _word_schema: dict | None,
@@ -2521,8 +2529,12 @@ def _normalize_pair_uncached(
     cache_key,
     _keep_words: set | None = None,
     _keep_fix: set | None = None,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame, StimulusJoin | None]:
     """Pure normalize + harmonize, cached on a cheap fingerprint of the inputs.
+
+    Also returns how a stimulus-level AOI table attached to the readings
+    (``data.plan_stimulus_join``, DATA-49) — ``None`` for a per-reader one —
+    which ``_normalize_pair`` publishes for the add-dataset wizard to state.
 
     ``cache_key`` carries a ``frame_fingerprint`` + schema signature + the
     keep-column selection, so a trial change (which re-runs the script but feeds
@@ -2559,9 +2571,10 @@ def _normalize_pair_uncached(
             else empty_fixations_frame()
         )
         progress.report(2, 3, detail="cross-checks")
-        result = harmonize_frames(words_norm, fixations_norm)
+        join = plan_stimulus_join(words_norm, fixations_norm)
+        words_norm, fixations_norm = harmonize_frames(words_norm, fixations_norm)
         progress.report(3, 3)
-        return result
+        return words_norm, fixations_norm, join
 
 
 def _normalize_pair(
@@ -2614,7 +2627,7 @@ def _normalize_pair(
     with loading.spinner(
         f"Normalizing {len(words_df):,} word rows and {len(fixations_df):,} fixations…"
     ):
-        return frame_cache(
+        words_norm, fixations_norm, join = frame_cache(
             "normalized_pair",
             cache_key,
             lambda: _normalize_pair_uncached(
@@ -2627,6 +2640,11 @@ def _normalize_pair(
                 _keep_fix=keep_fix,
             ),
         )
+    # DATA-49: which key a stimulus-level AOI table joined through, for the
+    # add-dataset wizard to say — bookkeeping like `_composite_trial_columns`
+    # above, written on a cache hit too so it always describes this pair.
+    st.session_state[STIMULUS_JOIN_KEY] = join
+    return words_norm, fixations_norm
 
 
 def _reset_active_mapping() -> None:

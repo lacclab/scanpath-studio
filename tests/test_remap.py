@@ -509,16 +509,32 @@ class TestStimulusLevelWordsRemap:
         assert len(saved["words"]) == len(doubled)
 
     def test_a_mapping_that_matches_no_trial_is_refused_not_saved(self):
-        """The broadcast keeps only trials someone read; a Trial pick that
-        matches none would otherwise overwrite the boxes with nothing."""
+        """The broadcast keeps only texts someone read; a Trial *and* Text pick
+        that match none would otherwise overwrite the boxes with nothing."""
+        words, fixations = self._stored()
+        words = words.assign(item=["zz"] * len(words))
+        entry, pending = self._entry_and_pending(words, fixations)
+        pending["words"] = {**pending["words"], "trial": "item", "text_id": "item"}
+        problems, saved = self._apply(entry, pending)
+        assert problems and "words" in problems
+        assert "Text ID" in problems["words"][0]
+        assert saved is entry
+        assert self._boxes(saved["words"]) == self._boxes(words)
+
+    def test_a_trial_pick_that_matches_nothing_still_saves_by_text(self):
+        """DATA-49: the Text ID is the join a stimulus-level table falls back
+        to, so a Trial pick the fixations do not share loses no boxes while
+        the Text ID still names each reading's text."""
+        from scanpath_studio.utils import extract_trial
+
         words, fixations = self._stored()
         words = words.assign(item=["zz"] * len(words))
         entry, pending = self._entry_and_pending(words, fixations)
         pending["words"] = {**pending["words"], "trial": "item"}
         problems, saved = self._apply(entry, pending)
-        assert problems and "words" in problems
-        assert saved is entry
-        assert self._boxes(saved["words"]) == self._boxes(words)
+        assert not problems
+        for reader, trial in (("p1", "t1"), ("p2", "t1"), ("p2", "t2")):
+            assert not extract_trial(saved["words"], reader, trial).empty
 
     # -- datasets the bug already saved --------------------------------------
 

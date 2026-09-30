@@ -11,7 +11,7 @@ scanpath-studio
 
 Requires Python 3.11–3.14 and opens the app at <http://localhost:8501>.
 
-Download the archive for your operating system — [Windows](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip) · [macOS (Apple silicon)](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-macos-arm64.tar.gz) · [Linux](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-linux-x86_64.tar.gz) — unpack it, and launch Scanpath Studio. See the [desktop notes](https://lacclab.github.io/scanpath-studio/desktop/index.md) if your OS blocks the unsigned build.
+Download the build for your operating system — [macOS (Apple silicon)](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-macos-arm64.dmg) · [Windows](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip) · [Linux](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-linux-x86_64.tar.gz) — and launch Scanpath Studio. On macOS that is a `.dmg` you drag to Applications; on Windows and Linux an archive you unpack. See the [desktop notes](https://lacclab.github.io/scanpath-studio/desktop/index.md) for the first-launch steps.
 
 ## 2. Make the first plot
 

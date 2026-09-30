@@ -180,9 +180,9 @@ arranged on the **[Scanpath Studio board](https://github.com/orgs/lacclab/projec
 `[VIZ-37] <title>`: the stable tracker IDs are cited throughout these docs, the
 `plans/` notes and the git history, so they outlive GitHub's own numbering.
 
-Not every ID has an issue, deliberately: `CHANGELOG.md` allocates the IDs and
-carries the write-up for finished work, and an issue is opened when the item
-needs the **Review** gate, is blocked on the user (`waiting-on-you`), or is
+Not every ID has an issue, deliberately: the changelog allocates the IDs — its
+unreleased entries are files in `changelog.d/` (ENG-86) — and an issue is
+opened when the item needs the **Review** gate, is blocked on the user (`waiting-on-you`), or is
 carried across sessions. So take a new ID's number from both registries —
 the changelog and `gh issue list` — never GitHub alone, and since `main` became
 protected, **check the open PRs too**: an ID sitting in an unmerged branch's
@@ -354,8 +354,9 @@ link / CLI / API silently can't be shared, scripted, or rendered headlessly.
 
 ## Releasing
 
-1. Roll the `[Unreleased]` `CHANGELOG.md` notes into a `v<version>` section
-   (keep them concise).
+1. `python scripts/changelog_fragments.py release <version>` writes the
+   `changelog.d/` fragments into a `CHANGELOG.md` section and deletes them
+   (ENG-86).
 2. Bump `__version__` in `scanpath_studio/__init__.py` — the single source of
    truth; `pyproject.toml` reads it dynamically (`[tool.setuptools.dynamic]`).
 3. Bump `version` + `date-released` in `CITATION.cff` to match

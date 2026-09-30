@@ -18,6 +18,8 @@ import re
 import unicodedata
 from pathlib import Path
 
+import changelog_fragments
+
 ROOT = Path(__file__).resolve().parent.parent
 REPO_URL = "https://github.com/lacclab/scanpath-studio"
 BLOB_URL = f"{REPO_URL}/blob/main/"
@@ -141,7 +143,8 @@ def _link_target(path: str) -> str:
 
 #: The first release written in the two-tier shape (ENG-34): a short headline
 #: list per group, the longer notes under ``### Details``. Sections before it
-#: are one long paragraph per item; they stay in the repository file.
+#: are one long paragraph per item; they stay in the repository file. From
+#: ENG-86 on a release is the headline list alone.
 CHANGELOG_SINCE = "0.28.0"
 
 
@@ -157,6 +160,10 @@ def changelog() -> str:
     # The file's own title and preamble ("documented in this file") are the
     # repository's; the page has its own.
     start = next(i for i, line in enumerate(lines) if line.startswith("## "))
+    # Unreleased entries are fragments until a release writes them in (ENG-86).
+    fragments, _ = changelog_fragments.load()
+    unreleased = changelog_fragments.render(fragments)
+    lines[start:start] = ["## Unreleased", "", *unreleased.splitlines(), ""]
     out: list[str] = []
     in_details = done = False
     for line in lines[start:]:

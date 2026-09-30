@@ -285,6 +285,6 @@ ruff format .
 mkdocs build --strict          # if you added or edited a docs page
 ```
 
-Add a line under `[Unreleased]` in `CHANGELOG.md`, and see
+Add a changelog entry as a file in `changelog.d/` (its README says how), and see
 [Contributing](https://github.com/lacclab/scanpath-studio/blob/main/CONTRIBUTING.md)
 for the rest of the development setup.

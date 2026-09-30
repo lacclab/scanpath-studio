@@ -62,9 +62,8 @@ Optional passthrough columns go through the `WORD_OPTIONAL_FIELDS` /
 - [ ] All four surfaces wired (or explicitly agreed out of scope with the user)
 - [ ] Tests added (`tests/`), suite passes: `pytest -n auto`
 - [ ] `ruff check .` + `ruff format .`
-- [ ] Two-tier entry under `[Unreleased]` in `CHANGELOG.md` — a
-      `- **Bold lead** (ID)` headline plus a short `### Details` paragraph
-      (`CLAUDE.md` → *Before every commit*)
+- [ ] A changelog fragment, `changelog.d/<ID>.<group>.md`, one line of plain
+      text — never an edit to `CHANGELOG.md` (`changelog.d/README.md`)
 - [ ] Docs page updated if user-visible behavior changed (`docs/`)
 - [ ] Tracker item updated → `Review` (use the `track` skill)
 

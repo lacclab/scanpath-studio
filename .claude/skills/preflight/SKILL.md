@@ -22,11 +22,11 @@ output). Fix trivial failures (formatting) directly; report anything else.
    you may first run the affected test files for fast feedback, but the full
    suite is the gate.
 4. **Changelog** — `git diff` + `git status` to see the pending work; if it
-   is user-visible or a bug fix, `CHANGELOG.md` must have a matching entry
-   under `[Unreleased]` in the two-tier shape — a `- **Bold lead** (ID)`
-   headline under Added / Changed / Fixed, plus a short paragraph under the
-   matching `#### <Group>` in `### Details` (`CLAUDE.md` → *Before every
-   commit*). If missing, draft both halves and add them.
+   is user-visible or a bug fix, it needs a fragment
+   `changelog.d/<ID>.<group>.md` holding one line of plain text
+   (`changelog.d/README.md`). If missing, write it. `CHANGELOG.md` itself must
+   **not** be in the diff — only a release edits it (ENG-86). Then
+   `python scripts/changelog_fragments.py check`.
 5. **Issue** — if the pending work corresponds to a GitHub issue
    (`gh issue list`), check its board Status and body write-up are current.
    Finished work goes to Status **Review** with the review ask in its

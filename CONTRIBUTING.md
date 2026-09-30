@@ -100,11 +100,10 @@ CI (`.github/workflows/ci.yml`) runs the same checks on every pull request to
 `main`, across Python 3.11/3.12/3.13/3.14. See [AGENTS.md](AGENTS.md) and the package
 [CLAUDE.md](scanpath_studio/CLAUDE.md) for an architectural overview.
 
-Add a concise entry to the `[Unreleased]` section of
-[`CHANGELOG.md`](CHANGELOG.md), in its two-tier shape (ENG-34): a headline
-`- **Bold lead** (ID)` line under Added / Changed / Fixed, plus a one-paragraph
-`### Details` entry under the matching `#### <Group>` heading — not a per-tweak
-log.
+Add a changelog entry as a file in [`changelog.d/`](changelog.d/README.md),
+named `<ID>.<group>.md` (e.g. `VIZ-47.fixed.md`) and holding one line of plain
+text. Don't edit `CHANGELOG.md` itself: the release writes the fragments into it,
+so parallel PRs never conflict over it (ENG-86).
 
 If you add a user-facing feature, expose it on **every** surface — not just
 visually, but also the deep link / Share, the CLI, and the headless API. See
@@ -155,11 +154,11 @@ Common to both:
   cannot conflict at all — which was most of what this section used to be about.
   What still needs care is the **ID**: a new item takes the next free number in
   its `area:*` prefix, and most IDs live in only one place. Check all three —
-  `CHANGELOG.md` (where most are allocated), `gh issue list --state all --search
-  "[DATA-"`, and the **open PRs**, whose unmerged changelogs the other two
-  cannot see
-  (`gh pr list --state open`, then each PR's `CHANGELOG.md` hunk of
-  `gh pr diff <n>` — the command is in `CLAUDE.md`; `gh pr diff` takes no path) — as
+  the changelog (`CHANGELOG.md` and the file names in `changelog.d/`, where most
+  are allocated), `gh issue list --state all --search "[DATA-"`, and the **open
+  PRs**, whose unmerged fragments the other two cannot see
+  (`gh pr list --state open`, then the `changelog.d/` files in each
+  `gh pr diff <n> --name-only`) — as
   `CLAUDE.md` → *Tracking work* spells out. Two people reaching for a number at
   the same moment will still collide: check again after creating, and renumber
   **your own** item if it does.
@@ -175,7 +174,7 @@ Only when several sessions share one checkout:
 - **`git add <file>` takes the whole file**, including whatever the other session
   wrote into it since you last looked — and `git pull` will not save you, because
   their edits are not on a remote, they are already in your working tree.
-  `CHANGELOG.md` is the one everyone touches. Stage
+  Stage
   selectively and **read `git diff --cached` before committing**: it is the only
   view that shows what your commit will actually contain. To take one hunk of a
   shared file non-interactively, `git diff -- <file>`, keep the hunk you want
@@ -249,8 +248,9 @@ The version lives in **one** place — `__version__` in
 
 ## Releasing
 
-1. Roll the `[Unreleased]` notes into a new version section in
-   [`CHANGELOG.md`](CHANGELOG.md).
+1. Write the unreleased fragments into a new version section of
+   [`CHANGELOG.md`](CHANGELOG.md):
+   `python scripts/changelog_fragments.py release X.Y.Z` (it deletes them).
 2. Bump `__version__` in `scanpath_studio/__init__.py`.
 3. Bump `version` + `date-released` in [`CITATION.cff`](CITATION.cff) to match
    (`tests/test_citation.py` enforces version parity, so a mismatch fails CI).

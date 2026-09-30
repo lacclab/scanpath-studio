@@ -156,7 +156,7 @@ from scanpath_studio.data import (
     filter_trials,
     frame_cache,
     frame_fingerprint,
-    harmonize_frames,
+    harmonize_frames_with_join,
     infer_raw_gaze_schema,
     load_onestop_server_bundle,
     load_sample_data,
@@ -166,7 +166,6 @@ from scanpath_studio.data import (
     normalize_words,
     onestop_data_dir,
     onestop_full_bundle_exists,
-    plan_stimulus_join,
     plan_table_read,
     preprocess_fixation_stage,
     propose_fix_schema,
@@ -2533,7 +2532,7 @@ def _normalize_pair_uncached(
     """Pure normalize + harmonize, cached on a cheap fingerprint of the inputs.
 
     Also returns how a stimulus-level AOI table attached to the readings
-    (``data.plan_stimulus_join``, DATA-49) — ``None`` for a per-reader one —
+    (the one ``data.harmonize_frames_with_join`` made, DATA-49) — ``None`` for a per-reader one —
     which ``_normalize_pair`` publishes for the add-dataset wizard to state.
 
     ``cache_key`` carries a ``frame_fingerprint`` + schema signature + the
@@ -2571,8 +2570,11 @@ def _normalize_pair_uncached(
             else empty_fixations_frame()
         )
         progress.report(2, 3, detail="cross-checks")
-        join = plan_stimulus_join(words_norm, fixations_norm)
-        words_norm, fixations_norm = harmonize_frames(words_norm, fixations_norm)
+        # The join the fixups actually made, after BUG-59's zero padding — never
+        # a plan of the frames before it, which can disagree.
+        words_norm, fixations_norm, join = harmonize_frames_with_join(
+            words_norm, fixations_norm
+        )
         progress.report(3, 3)
         return words_norm, fixations_norm, join
 

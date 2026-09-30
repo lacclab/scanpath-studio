@@ -10986,19 +10986,9 @@ def _apply_remap() -> None:
                 "words": [mapping_failure_problem(exc)]
             }
             return
-        if words.empty:
-            # The broadcast keeps only trials some reader has fixations for.
-            # Import drops the rest too, but here the stored boxes would be
-            # overwritten by nothing — refuse rather than lose them.
-            st.session_state["_remap_problems"] = {
-                "words": [
-                    "No AOI row matches a trial in the fixations under this "
-                    "mapping, so saving would leave the dataset with no word "
-                    "boxes. Check the Trial ID, Text ID (and Screen) picks for "
-                    "both tables."
-                ]
-            }
-            return
+        # A stimulus-level table no reading can use never gets here: the
+        # broadcast raises `StimulusJoinError` above (DATA-49), so the stored
+        # boxes are never overwritten by nothing.
         new_entry["words"] = words
         if has_fixations:
             new_entry["fixations"] = fixations

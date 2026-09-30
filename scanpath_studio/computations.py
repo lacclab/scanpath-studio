@@ -226,15 +226,16 @@ REGISTER: tuple[Computation, ...] = (
         formula=(
             "Words with no participant column are copied once per reading "
             "(participant × trial [× screen]) in the fixations, stamped with "
-            "that reading's ids. A reading takes the boxes that share its trial "
-            "ID, or else its Text ID, whichever reaches more readings (the "
-            "trial ID on a tie). A Text ID the words give to more than one "
-            "trial is not used (DATA-49)."
+            "that reading's ids. Per reading, the boxes are those of the first "
+            "words trial found by its trial ID, then its trial ID before a "
+            "repeat's _r2 suffix, then its Text ID. A Text ID the words give to "
+            "more than one trial is not used (DATA-49)."
         ),
         code="scanpath_studio/data.py:broadcast_stimulus_words",
         missing=(
-            "No fixations for a text ⇒ its words are not broadcast. No reading "
-            "reached by either key ⇒ StimulusJoinError, never an empty table."
+            "No fixations for a text ⇒ its words are not broadcast. Some "
+            "readings unmatched ⇒ UserWarning with the counts; none matched ⇒ "
+            "StimulusJoinError, never an empty table."
         ),
         tiers="C",
         status=STATUS_PARTIAL,

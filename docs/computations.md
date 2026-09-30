@@ -176,11 +176,11 @@ Read EyeLink's string booleans as booleans (BUG-7).
 
 Share one stimulus' word boxes across every reader of it.
 
-**Formula.** Words with no participant column are copied once per reading (participant × trial [× screen]) in the fixations, stamped with that reading's ids. A reading takes the boxes that share its trial ID, or else its Text ID, whichever reaches more readings (the trial ID on a tie). A Text ID the words give to more than one trial is not used (DATA-49).
+**Formula.** Words with no participant column are copied once per reading (participant × trial [× screen]) in the fixations, stamped with that reading's ids. Per reading, the boxes are those of the first words trial found by its trial ID, then its trial ID before a repeat's _r2 suffix, then its Text ID. A Text ID the words give to more than one trial is not used (DATA-49).
 
 | | |
 | --- | --- |
-| **Missing & edge cases** | No fixations for a text ⇒ its words are not broadcast. No reading reached by either key ⇒ StimulusJoinError, never an empty table. |
+| **Missing & edge cases** | No fixations for a text ⇒ its words are not broadcast. Some readings unmatched ⇒ UserWarning with the counts; none matched ⇒ StimulusJoinError, never an empty table. |
 | **Code** | `scanpath_studio/data.py:broadcast_stimulus_words` |
 | **Consumers** | UI, API, CLI |
 | **Tests** | `tests/test_stimulus_join.py`, `tests/test_dataset_support.py` |

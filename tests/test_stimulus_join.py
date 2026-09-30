@@ -177,9 +177,10 @@ class TestSharedAndRepeatedIds:
                 "world",
             ]
 
-    def test_a_repeated_reading_joins_by_its_text(self):
-        """BUG-57 falls out of the general join: the `_r2` reading's Text ID is
-        the id it was suffixed from, so no suffix rule is needed."""
+    def test_a_repeated_reading_joins_by_the_id_it_was_recorded_under(self):
+        """BUG-57 falls out of the general join: `_disambiguate_repeated_readings`
+        records the id it suffixed (`base_trial_id`), so the `_r2` reading finds
+        its boxes by trial id, and its fallback Text ID is the unsuffixed id."""
         fixations = pd.DataFrame(
             {
                 "reader_id": [7, 7, 7, 7],
@@ -204,7 +205,9 @@ class TestSharedAndRepeatedIds:
         words_norm = normalize_words(
             self._words(), data_module.propose_word_schema(self._words())
         )
-        assert plan_stimulus_join(words_norm, fix_norm).key == "text_id"
+        assert set(fix_norm[data_module.BASE_TRIAL_ID]) == {"t1"}
+        join = plan_stimulus_join(words_norm, fix_norm)
+        assert (join.key, join.matched, join.readings) == ("trial_id", 2, 2)
         words, _ = sps.load_scanpath_data(
             words=self._words(), fixations=fixations, fix_schema=fix_schema
         )
@@ -396,8 +399,9 @@ class TestMultipart:
 
 def test_the_join_is_one_merge_at_corpus_scale():
     """The join runs on ~1M-row corpora: planned over distinct keys and done
-    as one merge, so 100k fixations over 2,000 readings stay well under a
-    second (a per-reading Python loop took tens of seconds here)."""
+    as one merge. 100k fixations over 2,000 readings take a fraction of a
+    second; the 5 s bound only catches a per-reading Python loop coming back
+    (tens of seconds here) without flaking on a slow CI runner."""
     import time
 
     n_texts, n_readers, n_words = 40, 50, 100
@@ -424,3 +428,224 @@ def test_the_join_is_one_merge_at_corpus_scale():
     elapsed = time.perf_counter() - start
     assert len(out) == n_texts * n_readers * n_words
     assert elapsed < 5.0, elapsed
+
+
+def _boxes(words: pd.DataFrame, reader: str, trial: str) -> list:
+    return extract_trial(words, reader, trial)["text"].tolist()
+
+
+_EDGE_SCHEMA = {
+    "word_id": "wid",
+    "text": "label",
+    "left": "L",
+    "right": "R",
+    "top": "T",
+    "bottom": "B",
+}
+_FIX_SCHEMA = {
+    "participant": "subj",
+    "trial": "trial",
+    "x": "fx",
+    "y": "fy",
+    "duration": "dur",
+}
+
+
+def _aoi(trials, texts, labels) -> pd.DataFrame:
+    """One box per AOI-table trial."""
+    n = len(trials)
+    return pd.DataFrame(
+        {
+            "trial": trials,
+            "text": texts,
+            "wid": [0] * n,
+            "label": labels,
+            "L": [0.0] * n,
+            "R": [40.0] * n,
+            "T": [0.0] * n,
+            "B": [20.0] * n,
+        }
+    )
+
+
+def _fix(subjects, trials, texts, **extra) -> pd.DataFrame:
+    n = len(subjects)
+    return pd.DataFrame(
+        {
+            "subj": subjects,
+            "trial": trials,
+            "text": texts,
+            "fx": [10.0] * n,
+            "fy": [5.0] * n,
+            "dur": [100] * n,
+            **extra,
+        }
+    )
+
+
+class TestPerReadingRule:
+    """DATA-49 review: the key is chosen per reading — its exact trial id, then
+    the id it had before a repeat's `_r2`, then its unambiguous Text ID."""
+
+    def test_each_reading_uses_its_own_route(self):
+        """One reading matches only by trial id, the others only by Text ID; a
+        dataset-wide key would have left the first without boxes."""
+        words = _aoi(["A", "B", "C"], ["tA", "tB", "tC"], ["a", "b", "c"])
+        fixations = _fix(
+            ["p1", "p1", "p2", "p3"], ["A", "q1", "q2", "q3"], ["xx", "tB", "tB", "tC"]
+        )
+        w, _ = sps.load_scanpath_data(
+            words=words,
+            fixations=fixations,
+            word_schema={**_EDGE_SCHEMA, "trial": "trial", "text_id": "text"},
+            fix_schema={**_FIX_SCHEMA, "text_id": "text"},
+        )
+        assert _boxes(w, "p1", "A") == ["a"]
+        assert _boxes(w, "p1", "q1") == ["b"]
+        assert _boxes(w, "p2", "q2") == ["b"]
+        assert _boxes(w, "p3", "q3") == ["c"]
+
+    def test_the_mixed_route_is_described(self):
+        words = normalize_words(
+            _aoi(["A", "B"], ["tA", "tB"], ["a", "b"]),
+            {**_EDGE_SCHEMA, "trial": "trial", "text_id": "text"},
+        )
+        fixations = normalize_fixations(
+            _fix(["p1", "p2"], ["A", "q2"], ["tA", "tB"]),
+            {**_FIX_SCHEMA, "text_id": "text"},
+        )
+        join = plan_stimulus_join(words, fixations)
+        assert (join.key, join.by_trial, join.by_text) == ("mixed", 1, 1)
+        assert "trial ID (1) and by Text ID (1)" in join.describe()
+        assert "all 2 readings have word boxes" in join.describe()
+
+    def test_a_repeat_keeps_its_boxes_under_a_coarser_text_id(self):
+        """Trial = paragraph, Text ID = article (two paragraphs per article):
+        the article is ambiguous, and the `_r2` repeat of a paragraph must
+        still find its paragraph's boxes (the old BUG-57 suffix fallback did)."""
+        words = _aoi(["a1p1", "a1p2"], ["a1", "a1"], ["first", "second"])
+        fixations = _fix(
+            ["r1", "r1", "r1"],
+            ["a1p1", "a1p2", "a1p1"],
+            ["a1", "a1", "a1"],
+            TRIAL_INDEX=[1, 2, 3],
+        )
+        w, f = sps.load_scanpath_data(
+            words=words,
+            fixations=fixations,
+            word_schema={**_EDGE_SCHEMA, "trial": "trial", "text_id": "text"},
+            fix_schema={**_FIX_SCHEMA, "text_id": "text"},
+        )
+        assert set(f["trial_id"]) == {"a1p1", "a1p2", "a1p1_r2"}
+        assert _boxes(w, "r1", "a1p1") == ["first"]
+        assert _boxes(w, "r1", "a1p1_r2") == ["first"]
+        assert _boxes(w, "r1", "a1p2") == ["second"]
+        # The bookkeeping column stays on the fixations, never on the words.
+        assert data_module.BASE_TRIAL_ID not in w.columns
+
+    def test_only_the_ambiguous_texts_are_left_out(self):
+        """One text id over two AOI trials disables that text, not the Text ID
+        join for every text; the warning names it."""
+        words = _aoi(["T1", "T2", "T3"], ["X", "X", "Y"], ["x1", "x2", "y"])
+        fixations = _fix(["r1", "r2"], ["r1_Y", "r2_X"], ["Y", "X"])
+        with pytest.warns(UserWarning, match="'X'"):
+            w, _ = sps.load_scanpath_data(
+                words=words,
+                fixations=fixations,
+                word_schema={**_EDGE_SCHEMA, "trial": "trial", "text_id": "text"},
+                fix_schema={**_FIX_SCHEMA, "text_id": "text"},
+            )
+        assert _boxes(w, "r1", "r1_Y") == ["y"]
+        assert _boxes(w, "r2", "r2_X") == []
+
+
+class TestZeroPadding:
+    """BUG-59's zero-padding reconciliation runs before the join, and the join
+    the wizard reports is the one that ran (DATA-49 review)."""
+
+    def test_the_reported_join_is_the_one_made_after_padding(self):
+        words = normalize_words(
+            _aoi(["7"], ["7"], ["seven"]), {**_EDGE_SCHEMA, "trial": "trial"}
+        )
+        fixations = normalize_fixations(_fix(["p1"], ["007"], ["007"]), _FIX_SCHEMA)
+        w, _f, join = data_module.harmonize_frames_with_join(words, fixations)
+        assert join is not None and join.matched == join.readings == 1
+        assert _boxes(w, "p1", "007") == ["seven"]
+
+    def test_the_wizards_cached_normalization_reports_it_too(self):
+        from scanpath_studio import app
+
+        words = _aoi(["7"], ["7"], ["seven"])
+        fixations = _fix(["p1"], ["007"], ["007"])
+        w, _f, join = app._normalize_pair_uncached(
+            words,
+            {**_EDGE_SCHEMA, "trial": "trial"},
+            fixations,
+            _FIX_SCHEMA,
+            ("zero-padding", 1),
+        )
+        assert join.matched == join.readings == 1
+        assert _boxes(w, "p1", "007") == ["seven"]
+
+    def test_a_zero_padded_text_id_is_reconciled(self):
+        words = _aoi(["stim"], ["7"], ["seven"])
+        fixations = _fix(["p1"], ["p1_stim"], ["007"])
+        w, _ = sps.load_scanpath_data(
+            words=words,
+            fixations=fixations,
+            word_schema={**_EDGE_SCHEMA, "trial": "trial", "text_id": "text"},
+            fix_schema={**_FIX_SCHEMA, "text_id": "text"},
+        )
+        assert _boxes(w, "p1", "p1_stim") == ["seven"]
+
+
+class TestHeadlessSurfaces:
+    def test_a_partial_join_warns_api_callers(self):
+        fixations = _reader_fixations()
+        fixations.loc[fixations["participant_id"] == "l42", "unique_paragraph_id"] = (
+            "unknown"
+        )
+        with pytest.warns(UserWarning, match="2 of 4 readings have word boxes"):
+            sps.load_scanpath_data(words=_text_words(), fixations=fixations)
+
+    def _run_cli(self, tmp_path, fixations):
+        import subprocess
+        import sys
+
+        words_path = tmp_path / "words.csv"
+        fix_path = tmp_path / "fix.csv"
+        _text_words().to_csv(words_path, index=False)
+        fixations.to_csv(fix_path, index=False)
+        return subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "scanpath_studio",
+                "render",
+                "--words",
+                str(words_path),
+                "--fixations",
+                str(fix_path),
+                "--list-trials",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+
+    def test_the_cli_prints_a_partial_join(self, tmp_path):
+        fixations = _reader_fixations()
+        fixations.loc[fixations["participant_id"] == "l42", "unique_paragraph_id"] = (
+            "unknown"
+        )
+        result = self._run_cli(tmp_path, fixations)
+        assert result.returncode == 0, result.stderr
+        assert "2 of 4 readings have word boxes" in result.stderr
+
+    def test_the_cli_refusal_names_the_schema_flags(self, tmp_path):
+        result = self._run_cli(
+            tmp_path, _reader_fixations().assign(unique_paragraph_id="other")
+        )
+        assert result.returncode != 0
+        assert "Text ID" in result.stderr
+        assert "--word-schema" in result.stderr and "--fix-schema" in result.stderr

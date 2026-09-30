@@ -517,9 +517,80 @@ class TestStimulusLevelWordsRemap:
         pending["words"] = {**pending["words"], "trial": "item", "text_id": "item"}
         problems, saved = self._apply(entry, pending)
         assert problems and "words" in problems
-        assert "Text ID" in problems["words"][0]
+        # Refused by the join itself (`StimulusJoinError`, via
+        # `app.mapping_failure_problem`), not by a later "no boxes" check.
+        from scanpath_studio.app import MAPPING_FAILURE_LEAD
+
+        (problem,) = problems["words"]
+        assert problem.startswith(MAPPING_FAILURE_LEAD)
+        assert "shares a trial ID or a Text ID with it" in problem
         assert saved is entry
         assert self._boxes(saved["words"]) == self._boxes(words)
+
+    def test_a_text_joined_dataset_survives_a_new_fixation_trial_pick(self):
+        """DATA-49 review: once joined by Text ID, the stored boxes carry each
+        reading's own trial id. The save must collapse them back to one copy
+        per *text*, or changing the fixations' Trial ID pick finds every text
+        naming several trials and refuses a dataset that still joins."""
+        from scanpath_studio.data import harmonize_frames
+        from scanpath_studio.tabs import (
+            _FIX_REMAP_CANON,
+            _WORD_REMAP_CANON,
+            _remap_proposed,
+        )
+        from scanpath_studio.utils import extract_trial
+
+        word_schema = {**self._WORD_SCHEMA, "trial": "text", "text_id": "text"}
+        fix_schema = {**self._FIX_SCHEMA, "text_id": "text"}
+        raw_w = pd.DataFrame(
+            {
+                "text": ["t1", "t1", "t2"],
+                "wid": [0, 1, 0],
+                "txt": ["The", "cat", "Dogs"],
+                "L": [0.0, 50.0, 0.0],
+                "R": [40.0, 90.0, 60.0],
+                "T": [0.0, 0.0, 0.0],
+                "B": [20.0, 20.0, 20.0],
+            }
+        )
+        raw_f = pd.DataFrame(
+            {
+                "subj": ["p1", "p1", "p2", "p2"],
+                "tr": ["p1_t1", "p1_t2", "p2_t1", "p2_t2"],
+                "alt": ["A1", "A2", "B1", "B2"],
+                "text": ["t1", "t2", "t1", "t2"],
+                "fx": [10.0, 20.0, 12.0, 20.0],
+                "fy": [5.0, 5.0, 5.0, 5.0],
+                "dur": [100, 150, 90, 120],
+            }
+        )
+        words, fixations = harmonize_frames(
+            normalize_words(raw_w, word_schema),
+            normalize_fixations(raw_f, fix_schema, keep_columns={"alt"}),
+        )
+        assert set(words["trial_id"]) == {"p1_t1", "p1_t2", "p2_t1", "p2_t2"}
+        entry = {
+            "words": words,
+            "fixations": fixations,
+            "raw_gaze": pd.DataFrame(),
+            "schemas": {"words": word_schema, "fixations": fix_schema},
+        }
+        pending = {
+            "words": _remap_proposed(word_schema, words.columns, _WORD_REMAP_CANON),
+            "fixations": {
+                **_remap_proposed(fix_schema, fixations.columns, _FIX_REMAP_CANON),
+                "trial": "alt",
+            },
+        }
+        problems, saved = self._apply(entry, pending)
+        assert not problems
+        for reader, trial, text in (
+            ("p1", "A1", ["The", "cat"]),
+            ("p1", "A2", ["Dogs"]),
+            ("p2", "B1", ["The", "cat"]),
+            ("p2", "B2", ["Dogs"]),
+        ):
+            assert extract_trial(saved["words"], reader, trial)["text"].tolist() == text
 
     def test_a_trial_pick_that_matches_nothing_still_saves_by_text(self):
         """DATA-49: the Text ID is the join a stimulus-level table falls back

@@ -2033,7 +2033,8 @@ WORD_FIELD_SPECS: list[dict] = [
         "label": "Text ID",
         "required": False,
         "help": "Groups words by the text/passage they belong to, for filtering "
-        "and selection; falls back to the trial id.",
+        "and selection; falls back to the trial id (a repeated reading's without "
+        "its _r2 suffix).",
     },
     {
         "key": "line",

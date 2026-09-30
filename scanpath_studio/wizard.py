@@ -3471,8 +3471,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
             "text_id",
             "Text ID",
             "texts",
-            "The text column — or several to compose an id. Leave empty to fall "
-            "back to the trial id.",
+            "The text column — or several to compose an id. An AOI table with "
+            "no Participant ID attaches to a reading by it when their trial ids "
+            "differ. Leave empty to use the trial id; a repeated reading keeps "
+            "the first reading's, without its _r2 suffix.",
             s2,
             raw_words,
             raw_fix,

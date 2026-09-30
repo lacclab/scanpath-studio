@@ -171,7 +171,18 @@ def _load_error_message(exc: Exception, *, schema_flags: bool = True) -> str:
     ``--word-schema`` / ``--fix-schema`` form. ``schema_flags=False`` is for the
     second comparison dataset, which has no mapping flag of its own."""
     from .api import SchemaError
+    from .data import StimulusJoinError
 
+    if isinstance(exc, StimulusJoinError):
+        # DATA-49: the fix is a mapping, and here a mapping is a flag.
+        message = str(exc).replace("`", "'")
+        if not schema_flags:
+            return message
+        return (
+            f"{message}\nOn the command line, map it with --word-schema and "
+            "--fix-schema: each takes that table's full mapping as JSON (or a "
+            'path to a .json file), with "text_id" naming its text column.'
+        )
     if not isinstance(exc, SchemaError):
         return str(exc)
     flag = _SCHEMA_FLAGS.get(exc.param)

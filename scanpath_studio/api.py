@@ -2419,6 +2419,7 @@ def figure_code(
     compare_layout: str = "overlay",
     compare_stimulus: str = "both",
     compare_dataset: str = "",
+    compare_canvas: tuple[int, int] | None = None,
     compare_labels: tuple[str, str] | None = None,
     canvas_size: tuple[int, int] | None = None,
     base_font_size: int = 16,
@@ -2459,8 +2460,13 @@ def figure_code(
 
     ``compare_dataset`` names the corpus scanpath B was loaded from when it is a
     *second* one. B's participant id belongs to that corpus rather than
-    the one the snippet loads, so naming it turns a snippet that would quietly
-    reference a missing reader into one that says where B comes from.
+    the one the snippet loads, so both forms then load B's own tables and name
+    B in them — ``words_b=`` / ``fixations_b=`` / ``dataset_b=``, and
+    ``--compare-words`` / ``--compare-fixations`` beside ``--compare-with`` —
+    from the placeholder paths ``B_WORDS`` / ``B_FIXATIONS``, which you point
+    at its files. ``compare_canvas`` is B's screen, ``(width, height)``, when
+    you know it: written as ``setup_b=`` and ``--compare-canvas``, which a
+    co-animation across datasets needs.
 
     ``compare_labels`` is the pair you would pass
     [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths] as ``labels=`` — the
@@ -2523,6 +2529,11 @@ def figure_code(
                 layout=compare_layout,
                 compare_stimulus=compare_stimulus,
                 dataset=str(compare_dataset),
+                canvas=(
+                    (int(compare_canvas[0]), int(compare_canvas[1]))
+                    if compare_canvas and compare_dataset
+                    else None
+                ),
                 labels=(
                     (str(compare_labels[0]), str(compare_labels[1]))
                     if compare_labels

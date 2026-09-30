@@ -292,7 +292,7 @@ def _finalize_wizard_dataset() -> None:
     A dialog body is a fragment, so an ``on_click`` inside one reruns the modal
     alone and leaves the page under it untouched; those buttons take their
     *return value* plus an explicit ``st.rerun(scope="app")`` instead. See
-    ``app._forget_cache_confirmation``, which spells the contrast out. The two
+    ``app._delete_confirmation_dialog`` (BUG-36). The two
     prescriptions are opposite and both correct; what decides is only whether
     the button sits in a dialog/fragment or on an ordinary page beside an
     uploader."""
@@ -1656,7 +1656,7 @@ def _wizard_restore_config(host) -> None:
         type=["json"],
         key="wizard_config_restore",
         help="Re-apply a column mapping + field choices you saved earlier "
-        "(⬇️ Save setup at the foot of this page, or a 💾 Session JSON backup).",
+        "(⬇️ Save setup at the foot of this page).",
         max_upload_size=upload_limit_mb(),
     )
     if uploaded is None:
@@ -1841,9 +1841,10 @@ def _wizard_setup_config() -> dict:
     from scanpath_studio import __version__
 
     return {
-        # The shared Save & restore format — this setup file can be loaded through
-        # the main "💾 Save & restore" uploader too, so it stamps the same
-        # single-source-of-truth schema version (ENG-11) rather than a literal.
+        # The settings file's format — this setup file can be loaded through
+        # 🔗 Share → File's uploader too (which applies its setup, not its
+        # mapping, since UX-179), so it stamps the same single-source-of-truth
+        # schema version (ENG-11) rather than a literal.
         "schema": PLOT_CONFIG_SCHEMA,
         "app": {"name": "Scanpath Studio", "version": __version__},
         "exported_at": datetime.now().isoformat(timespec="seconds"),

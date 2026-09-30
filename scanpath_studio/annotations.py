@@ -2,9 +2,9 @@
 
 Annotations are keyed by ``(participant_id, trial_id)`` and live in Streamlit
 session state, so they persist across reruns within a session. There is no
-backend; to keep annotations across sessions or share them, the 💾 Session
-dialog offers a JSON **download** (a portable sidecar) and **restore**
-(re-upload).
+backend; a local run keeps them in the recovery cache, and to share them 🗂️
+Data → **Annotations** exports and imports a dataset's as JSON (UX-174). The
+Scanpath view's Export bundle can include the same file (UX-179).
 
 The module is split into a *pure* core (``records_to_store`` /
 ``store_to_records`` / ``serialize`` / ``deserialize`` — no Streamlit, unit
@@ -27,7 +27,7 @@ ANNOTATIONS_STATE_KEY = "trial_annotations"
 SCHEMA_VERSION = 2
 
 # Per-trial annotation widgets use this prefix so they can be cleared on import
-# (forcing a re-seed from the freshly loaded store), e.g. by `restore_records`.
+# (forcing a re-seed from the freshly loaded store), e.g. by `forget_records`.
 _WIDGET_PREFIX = "annotrial_"
 
 # Always-available tag suggestions (users can add their own on top).
@@ -227,18 +227,8 @@ def known_tags() -> list[str]:
 
 
 def current_records() -> list[dict]:
-    """All annotations as a flat record list — for embedding in a saved config."""
+    """All annotations as a flat record list — for the Export bundle (UX-179)."""
     return store_to_records(_store())
-
-
-def restore_records(records: list[dict]) -> int:
-    """Replace the session annotation store from a record list (e.g. a restored
-    config) and clear the per-trial widget state so editors re-seed. Returns the
-    number of annotations loaded."""
-    store = records_to_store(records or [])
-    st.session_state[ANNOTATIONS_STATE_KEY] = store
-    _reseed_trial_editors()
-    return len(store)
 
 
 def forget_records(records: list[dict]) -> int:
@@ -418,11 +408,8 @@ def render_trial_annotations(
             note=note,
             screen_id=annotation_screen,
         )
-        # UX-76: no 💾 Open Session button under this. It was a shortcut to a nav
-        # entry that is one click away in the header (#UX-63), and it sat at the
-        # foot of a panel about *this trial* pointing at a session-wide one. The
-        # caption names where the annotations go instead — and no longer says
-        # "the sidebar", which has not existed since #UX-38.
+        # UX-76: no shortcut button under this — the caption names where the
+        # whole dataset's annotations are listed instead.
         st.caption(
             "Every annotation on this dataset is listed on 🗂️ **Data → "
             "Annotations**, to export, import or delete."
@@ -554,8 +541,9 @@ def render_dataset_annotations(trials, *, dataset_name: str) -> None:
     """🗂️ Data → **Annotations**: every annotation on the open dataset's trials.
 
     One table — participant, trial, favorite, tags, note — with **Export** (this
-    dataset's annotations as JSON), **Import** (the same file, or a 💾 Session
-    backup: entries on trials the dataset has are added, the rest are skipped)
+    dataset's annotations as JSON), **Import** (the same file, or the
+    ``annotations.json`` of an Export bundle: entries on trials the dataset has
+    are added, the rest are skipped)
     and **Delete**, for the rows ticked in the table. Annotations are still made
     per trial, on 🗺️ Scanpath → Annotations; this is where they are seen whole.
     """
@@ -594,7 +582,7 @@ def render_dataset_annotations(trials, *, dataset_name: str) -> None:
             max_upload_size=upload_limit_mb(),
         )
         st.caption(
-            "A file exported here, or a 💾 Session backup. Annotations on trials "
+            "A file exported here or in an Export bundle. Annotations on trials "
             "this dataset doesn't have are skipped, and an imported one replaces "
             "what its trial already had."
         )

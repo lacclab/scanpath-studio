@@ -11,12 +11,13 @@ is comes from its own bind address, never from the browser — see
 Storing a researcher's tables on their disk is invisible by nature, so the cache
 is also *inspectable*: :func:`cache_status` reports what is stored, where, how
 big it is and when it was written without importing Streamlit, and it backs the
-in-app "🗄️ Recovery cache" panel (``app._render_recovery_cache_panel``), the
-``scanpath-studio cache`` CLI subcommand and ``api.cache_status``. Saving can be
-paused for the session (:func:`set_persistence_paused`) and the stored files
-deleted (:func:`clear_local_state`). A clear initiated in the app uses
-:func:`skip_next_local_save` so the end of that rerun does not immediately
-recreate the files without changing the user's saving preference.
+in-app 🗂️ Data → *Saved on this computer* section
+(``app._render_saved_here_section``, UX-179), the ``scanpath-studio cache`` CLI
+subcommand and ``api.cache_status``. The stored files are deleted from outside
+the app — ``scanpath-studio cache --clear`` / ``api.clear_cache``, both
+:func:`clear_local_state`. Saving is paused for a session only by BUG-71's breaker
+(:func:`persistence_paused`); opting out is a launch choice
+(``run --no-persist`` / ``SCANPATH_STUDIO_PERSIST=0``).
 """
 
 from __future__ import annotations
@@ -63,7 +64,6 @@ STATE_DIR_ENV_VAR = "SCANPATH_STUDIO_STATE_DIR"
 _RESTORED_KEY = "_local_persistence_restored"
 _RESTORED_PAYLOAD_KEY = "_local_persistence_restored_payload"
 _PAUSED_KEY = "_local_persistence_paused"
-_SKIP_NEXT_SAVE_KEY = "_local_persistence_skip_next_save"
 _LAST_FINGERPRINT_KEY = "_local_persistence_fingerprint"
 _LAST_DATASET_IDENTITY_KEY = "_local_persistence_dataset_identity"
 _LAST_DATASET_ENTRIES_KEY = "_local_persistence_dataset_entries"
@@ -385,8 +385,8 @@ def _save_metadata(
     """DATA-38 — write the attached tables to :data:`METADATA_FILE` if they changed.
 
     Returns the manifest's pointer to them, or ``None`` (and removes the file)
-    when nothing is attached. The tables are the same payloads 💾 Save & restore
-    writes; the pointer is optional, so a manifest without it (every one written
+    when nothing is attached. The tables are `metadata`'s JSON payloads; the
+    pointer is optional, so a manifest without it (every one written
     before this) still restores, and the schema version does not move.
     """
     from . import metadata as metadata_mod
@@ -764,8 +764,8 @@ def restore_local_state(
     marker = root / RESTORE_MARKER_NAME
     if marker.is_file():
         # BUG-71: the last session that applied this cache never finished a run,
-        # and a restore that breaks the app breaks it before the 💾 Session
-        # dialog can offer a reset — so every launch would break again. Open
+        # and a restore that breaks the app breaks it before the Data page can
+        # offer a reset — so every launch would break again. Open
         # without it, once. The files stay, and saving is paused so this
         # session's (empty) state cannot overwrite them; the marker goes, so a
         # reload tries again — one strike, because a tab closed mid-way through a
@@ -832,7 +832,7 @@ def restored_summary(session) -> dict:
     """How much of *what* this session got back from the cache, by kind.
 
     ``{"datasets": n, "annotations": n, "designs": n, "metadata": n}`` — what
-    the 🗄️ Automatic recovery panel counts, and what a user would recognise as
+    the *Saved on this computer* section counts, and what a user would recognise as
     their last session (``metadata`` is the number of attached participant /
     trial / text tables, DATA-38). View settings are deliberately absent: they restore, but
     silently (UX-136 — see :func:`restore_state`). Empty when no restore
@@ -852,46 +852,24 @@ def restored_from_cache(session) -> bool:
 
 
 def persistence_paused(session) -> bool:
-    """Whether the user switched saving off for this session (UI opt-out)."""
+    """Whether saving is paused for this session.
+
+    Only :func:`restore_local_state`'s BUG-71 breaker sets it, after a launch
+    that never finished opening with the cache: this session then leaves the
+    stored copy untouched, and a reload tries it again.
+    """
     return bool(session.get(_PAUSED_KEY))
-
-
-def set_persistence_paused(session, paused: bool) -> None:
-    """Pause/resume saving for this session only.
-
-    Resuming clears the save fingerprint so the next run writes the current
-    session out in full, even though nothing about it changed while paused.
-    ``SCANPATH_STUDIO_PERSIST=0`` is the durable, process-wide opt-out.
-    """
-    session[_PAUSED_KEY] = bool(paused)
-    if not paused:
-        session.pop(_LAST_FINGERPRINT_KEY, None)
-
-
-def skip_next_local_save(session) -> None:
-    """Suppress exactly one end-of-run persistence write.
-
-    Clearing the recovery cache triggers a full app rerun before ``main``
-    reaches its persistence epilogue. The fresh run must not write the same
-    live session straight back to disk, but it also must not turn off automatic
-    saving. A one-shot marker expresses that distinction; the following user
-    change saves normally.
-    """
-    session[_SKIP_NEXT_SAVE_KEY] = True
 
 
 def clear_local_state(session=None, root: Path | None = None) -> bool:
     """Delete the stored cache and forget what this session had written.
 
     The in-memory datasets are deliberately left alone — this removes the copy
-    on disk, it does not close the user's work. Callers clearing it from a
-    widget-driven rerun can use :func:`skip_next_local_save` to prevent the
-    immediate epilogue write without changing the saving preference.
+    on disk, it does not close the user's work.
 
     Deleting the files is best-effort: a locked or read-only cache directory
-    must not wedge *"Clear recovery cache"* or *"Reset everything"*, which are
-    the two actions a user reaches for precisely when the session is already
-    broken. An :class:`OSError` is logged and reported as ``False``; the
+    must not wedge ``scanpath-studio cache --clear``, which a user reaches for
+    precisely when the session is already broken. An :class:`OSError` is logged and reported as ``False``; the
     in-session bookkeeping is cleared either way.
     """
     removed = True
@@ -1025,10 +1003,8 @@ def cache_status(
 def save_local_state(session, url: str) -> bool:
     # BUG-71: reaching the epilogue means this run rendered, so a restore it
     # applied is not the kind that breaks the app — before any early return, since
-    # a paused or skipped save still ran to here.
+    # a paused save still ran to here.
     _finish_restore(session)
-    if session.pop(_SKIP_NEXT_SAVE_KEY, False):
-        return False
     if not persistence_enabled(url) or persistence_paused(session):
         return False
     try:

@@ -1329,9 +1329,9 @@ def bounds_for(
 
 
 # -----------------------------------------------------------------------------
-# Serialization — 💾 Save & restore (the JSON config), the ENG-26 on-device
-# recovery cache (DATA-38, see `session_payloads` below), and the payload
-# `api`/`cli` hand in. Records rather than a pickled frame, so it round-trips
+# Serialization — the ENG-26 on-device recovery cache (DATA-38, see
+# `session_payloads` below) and the payload `api`/`cli` hand in. (The 💾 Session
+# backup carried these too until UX-179 cut the settings file to the figure.) Records rather than a pickled frame, so it round-trips
 # through JSON like every other saved setting.
 # -----------------------------------------------------------------------------
 
@@ -1489,8 +1489,8 @@ def grain_keys(grain: str) -> tuple[str, str, str]:
 def mark_restored(session, grain: str, attached) -> None:
     """Attach ``attached`` as a table with no live upload behind it.
 
-    Shared by the recovery cache and 💾 Save & restore, which both hand back a
-    table the uploader never saw — see :data:`RESTORED_FILE_SIGNATURE`.
+    The recovery cache hands back a table the uploader never saw — see
+    :data:`RESTORED_FILE_SIGNATURE`.
     """
     key, raw, file = _GRAIN_KEYS[grain]
     session[key] = attached

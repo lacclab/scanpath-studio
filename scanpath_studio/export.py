@@ -20,9 +20,10 @@ clean folder structure:
     │  │  ├─ fixations.csv (and/or .parquet)
     │  │  └─ measures.csv (and/or .parquet)
     │  ├─ ...
-    └─ aggregate/
-       ├─ all_fixations.csv (and/or .parquet)
-       └─ all_measures.csv (and/or .parquet)
+    ├─ aggregate/
+    │  ├─ all_fixations.csv (and/or .parquet)
+    │  └─ all_measures.csv (and/or .parquet)
+    └─ annotations.json          (UX-179, optional)
 """
 
 from __future__ import annotations
@@ -105,6 +106,10 @@ class ExportOptions:
     # stays interactive; handled specially in the export loop.
     include_html: bool = False
     include_plot_config: bool = True
+    # UX-179: the exported trials' annotations (favorites, tags, notes) as one
+    # `annotations.json` at the bundle root — the file 🗂️ Data → Annotations
+    # exports and imports. Off by default: notes can be personal.
+    include_annotations: bool = False
     include_fixations: bool = False
     include_measures: bool = False
     include_mega_table: bool = False
@@ -1296,6 +1301,15 @@ def render_export_options(
             key=f"{key_prefix}_cfg",
             help="Include plot settings as JSON.",
         )
+        include_annotations = panel_field(
+            st,
+            "toggle",
+            "Annotations (JSON)",
+            value=False,
+            key=f"{key_prefix}_annotations",
+            help="Include the exported trials' favorites, tags and notes as one "
+            "annotations.json — the file 🗂️ Data → Annotations imports.",
+        )
         tabular = (
             panel_field(
                 st,
@@ -1350,6 +1364,7 @@ def render_export_options(
         include_pdf=include_pdf,
         include_html=include_html,
         include_plot_config=include_plot_config,
+        include_annotations=include_annotations,
         include_fixations=include_fixations,
         include_measures=include_measures,
         include_mega_table=include_mega_table,
@@ -1704,12 +1719,18 @@ def bulk_export(
     progress_callback=None,
     status_callback: StatusCallback | None = None,
     metadata_rows_for=None,
+    annotation_records: list[dict] | None = None,
 ) -> tuple[bytes, ExportProgress]:
     """Build a zip archive of selected artifacts and return its bytes.
 
     ``metadata_rows_for(participant, trial, text_id)`` (EXP-22) returns a
     trial's metadata-table rows for ``{table.field}`` patterns — the app passes
     ``metadata.pattern_rows``; headless callers have no attached tables.
+
+    ``annotation_records`` (UX-179) are the annotations to write as
+    ``annotations.json`` when ``options.include_annotations`` is set, in
+    ``annotations.current_records()``'s shape; only those on the exported
+    trials go in. The app passes the session's; headless callers have none.
 
     progress_callback (if given) is invoked with an ExportProgress after every
     trial so the UI can update a progress bar.
@@ -1762,6 +1783,14 @@ def bulk_export(
         "- `per_trial/<participant>__<trial>/` holds artifacts for each trial.",
         "- Multipart parents add `screens/screen-001-<id>/` below that trial.",
         "- `aggregate/` holds long-form tables across every trial in this run.",
+        *(
+            [
+                "- `annotations.json` holds the favorites, tags and notes on "
+                "these trials; import it on the app's Data page → Annotations."
+            ]
+            if options.include_annotations and annotation_records
+            else []
+        ),
         "",
         "## Data dictionary",
         "Canonical column names from the visualization tool:",
@@ -2021,7 +2050,7 @@ def bulk_export(
                 )
                 # EXP-2: the title/caption are part of how the figure looked, so
                 # the manifest records them verbatim alongside the settings.
-                cfg["annotations"] = {"title": title, "caption": caption}
+                cfg["figure_text"] = {"title": title, "caption": caption}
                 data = json.dumps(cfg, indent=2).encode("utf-8")
                 zf.writestr(_path("plot_config", "json"), data)
                 progress.bytes_written += len(data)
@@ -2212,6 +2241,17 @@ def bulk_export(
                 text_metadata,
                 fmt,
             )
+    # UX-179: the exported trials' annotations, in the Data → Annotations file
+    # format, so the bundle's notes can be imported back into the app.
+    if options.include_annotations and annotation_records:
+        from .annotations import records_in, records_to_store, serialize
+
+        trials = zip(combos["participant_id"], combos["trial_id"], strict=True)
+        kept = records_in(records_to_store(annotation_records), trials)
+        if kept:
+            data = serialize(records_to_store(kept)).encode("utf-8")
+            zf.writestr("annotations.json", data)
+            progress.bytes_written += len(data)
     emit_status(
         status_callback,
         ExportStage.FINALIZING,

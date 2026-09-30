@@ -2566,7 +2566,8 @@ def cache_status() -> dict:
     ``settings``, ``bytes``, ``saved_at``, plus ``exists`` / ``readable`` for a
     missing or unreadable manifest. Delete it with
     [`clear_cache`][scanpath_studio.api.clear_cache]; the same information is in the
-    app's 💾 Session → 🗄️ Automatic recovery panel and in ``scanpath-studio cache``."""
+    app's 🗂️ Data → *Saved on this computer* section and in
+    ``scanpath-studio cache``."""
     from .persistence import cache_status as _cache_status
 
     return _cache_status(url="http://localhost")
@@ -2577,10 +2578,9 @@ def clear_cache() -> dict:
 
     Removes only the files this app wrote (``manifest.json`` and the dataset
     Parquet files); anything else in the folder is left alone. A *running* local
-    app writes its session back out at the end of its next run — turn off **Save
-    changes automatically** in its 💾 Session → 🗄️ Automatic recovery panel (the
-    panel's **Clear recovery cache** button, like this function, leaves saving on),
-    or set ``SCANPATH_STUDIO_PERSIST=0``, to stop that."""
+    app writes its session back out at the end of its next change — start it
+    with ``scanpath-studio run --no-persist`` or ``SCANPATH_STUDIO_PERSIST=0`` to
+    stop that."""
     from .persistence import clear_local_state
 
     clear_local_state()

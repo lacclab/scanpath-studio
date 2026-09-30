@@ -434,8 +434,6 @@ class TestTheSavedConfig:
             base_font_size=16,
             trial_raw_gaze=pd.DataFrame(),
             font_family="Arial",
-            annotation_records=[],
-            column_mapping={},
             data_source=None,
             app_version="test",
             exported_at="2026-09-23",

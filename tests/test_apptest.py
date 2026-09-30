@@ -24,6 +24,7 @@ from tests.conftest import (
     SUBTAB_EXPORT,
     SUBTAB_KEY,
     SUBTAB_LINE_ASSIGNMENT,
+    SUBTAB_SHARE,
     _write_benchmark_corpus,
     _write_benchmark_manifest,
     add_benchmark_corpora,
@@ -161,49 +162,21 @@ class TestAppLaunches:
         assert host.default is inspect.Parameter.empty
         assert host.kind is inspect.Parameter.KEYWORD_ONLY
 
-    def test_the_session_dialog_holds_all_four_blocks(self):
-        """UX-100: 💾 Session is a nav entry that opens a modal, like ❓ Help's.
+    def test_the_session_entry_is_gone(self):
+        """UX-179: 💾 Session is not in the nav, and no popover stands in for it.
 
-        The four blocks live in the dialog body, so they render when — and only
-        when — it has been armed. Armed the way the nav arms it
-        (`menu._arm_help_action` → `app._arm_session`), so this covers the wire
-        between the entry and the modal rather than just the modal.
+        Its blocks moved to where each is used — Debug to ❓ Help, recovery and
+        Reset to the Data page, the settings file to Share → File.
         """
-        from scanpath_studio import app
+        from scanpath_studio import menu
 
+        assert not hasattr(menu, "_ACTION_PAGES")
         at = _make_apptest()
-        at.session_state[app._SESSION_DIALOG_KEY] = True
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        body = " ".join(m.value for m in at.markdown)
-        for expected in (
-            f"#### {ICONS['recovery']} Automatic recovery",
-            f"#### {ICONS['download']} JSON backup",
-            f"#### {ICONS['reset']} Reset",
-            f"#### {ICONS['debug']} Debug tools",
-        ):
-            assert expected in body, f"{expected} missing from the Session dialog"
-        # Neither group is a popover any more — not the merged one UX-38 made,
-        # and not the two it merged.
         labels = {p.proto.popover.label for p in at.get("popover")}
         for gone in ("💾 Session", "❓ Help", "💾 Save & restore", "🗄️ Recovery cache"):
             assert gone not in labels, labels
-
-    def test_the_session_blocks_stay_out_of_the_page_until_asked_for(self):
-        """The counterpart: unarmed, none of it is on the page.
-
-        Session used to be a whole nav page (#UX-63) and then a popover, both of
-        which rendered their widgets on every run. The dialog does not, which is
-        why the two widgets in there that hold real state — the persistence
-        pause toggle and the 🐛 Debug gate — each re-seed from a durable value
-        rather than *being* it (`debug_log._DEBUG_TOGGLE_KEY`).
-        """
-        at = _make_apptest()
-        at.run(timeout=30)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        body = " ".join(m.value for m in at.markdown)
-        assert f"#### {ICONS['recovery']} Automatic recovery" not in body
-        assert f"#### {ICONS['download']} JSON backup" not in body
 
     def test_debug_mode_survives_the_dialog_closing(self):
         """UX-100: the 🐛 Debug gate is not the toggle's own widget key.
@@ -214,12 +187,11 @@ class TestAppLaunches:
         the panel rendered every run — dismissing the modal turned debug mode
         back off.
         """
-        from scanpath_studio import app
-        from scanpath_studio.debug_log import DEBUG_STATE_KEY
+        from scanpath_studio.debug_log import _DEBUG_DIALOG_KEY, DEBUG_STATE_KEY
 
         at = _make_apptest()
         at.session_state[DEBUG_STATE_KEY] = True
-        at.session_state[app._SESSION_DIALOG_KEY] = True
+        at.session_state[_DEBUG_DIALOG_KEY] = True
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # A run with the dialog closed must leave the durable gate alone.
@@ -756,6 +728,7 @@ class TestDataInspectionTab:
             "help_tutorials",
             "help_faq",
             "help_about",
+            "help_debug",
         ]
 
 
@@ -3359,25 +3332,30 @@ class TestNavRegressions:
             f"participant filter did not apply on the same run: {n_before} -> {n_after}"
         )
 
-    def test_save_restore_present_on_every_view(self):
-        # The Save & restore panel must be reachable on both top-level views
-        # (regression: it only rendered on the Scanpath view after the nav
-        # change). UX-100 moved it into the 💾 Session dialog, so the panel is
-        # reached by arming that — from whichever view is active.
-        from scanpath_studio import app
+    def test_share_offers_link_code_and_file(self):
+        """UX-179: 🔗 Share is one switch — Link · Code · File — and File holds
+        the settings file that used to be the 💾 Session dialog's JSON backup."""
+        from scanpath_studio.url_state import SHARE_SECTION_KEY, SHARE_SECTIONS
 
-        for view in ("Scanpath Visualization", "Corpus Analysis"):
-            at = _make_apptest(synthetic=True)
-            at.session_state["main_nav"] = view
-            at.session_state[app._SESSION_DIALOG_KEY] = True
-            at.run(timeout=60)
-            assert not at.exception, f"{view}: {at.exception}"
-            # Anchor on the panel's widgets, not its prose (UX-53 trimmed the
-            # copy): the config download + the restore uploader ARE the panel.
-            assert [
-                d for d in at.get("download_button") if d.key == "plot_config_download"
-            ], f"Save & restore panel missing on the {view} view"
-            assert [u for u in at.get("file_uploader") if u.key == "plot_config_upload"]
+        at = _make_apptest(synthetic=True)
+        at.session_state[SUBTAB_KEY] = SUBTAB_SHARE
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        switch = [c for c in at.get("button_group") if c.key == SHARE_SECTION_KEY]
+        assert switch, "the Link · Code · File switch is missing"
+        assert list(switch[0].options) == list(SHARE_SECTIONS)
+        # Link is the default, and only the chosen part draws.
+        assert "_share_query_current" in at.session_state
+        assert not [u for u in at.get("file_uploader") if u.key == "plot_config_upload"]
+
+        at.session_state[SUBTAB_KEY] = SUBTAB_SHARE
+        at.session_state[SHARE_SECTION_KEY] = "File"
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert [
+            d for d in at.get("download_button") if d.key == "plot_config_download"
+        ], "Share → File has no settings download"
+        assert [u for u in at.get("file_uploader") if u.key == "plot_config_upload"]
 
 
 def _mpe_upload_frames():

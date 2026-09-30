@@ -122,8 +122,10 @@ normalizes it and joins it to what is already loaded, so a fixations-only
 dataset can gain its word boxes (or an AOI-only one its fixations) without being
 added again. Its tabs hold the counts — screens, words and gaze points
 included — the raw tables, and **Annotations**: every favorite, tag and note on
-the dataset's trials, to **Export** as JSON, **Import** from such a file (or a
-💾 Session backup), or **Delete**.
+the dataset's trials, to **Export** as JSON, **Import** from such a file (or an
+Export bundle's `annotations.json`), or **Delete**. At the foot of the page,
+**Saved on this computer** reports what the recovery cache holds and the folder
+it is in.
 
 <figure class="sps-screenshot" markdown>
 ![The Data page: the available datasets, and the counts and tables of the open one](../assets/screenshots/data-page.webp)

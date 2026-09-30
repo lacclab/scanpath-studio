@@ -424,6 +424,28 @@ class TestStimulusLevelWordsRemap:
         assert not problems
         assert self._boxes(saved["words"]) == self._boxes(words)
 
+    def test_save_changes_applies_the_name_typed_on_the_editor(self):
+        """UX-178 — the editor's **Name** is applied by ✅ Save changes, after
+        the entry is saved under the name its widgets were keyed by."""
+        import streamlit as st
+
+        from scanpath_studio import tabs
+
+        words, fixations = self._stored()
+        entry, pending = self._entry_and_pending(words, fixations)
+        st.session_state.clear()
+        st.session_state["data_source_choice"] = "study"
+        st.session_state["_datasets"] = {"study": entry}
+        st.session_state["_remap_pending_schemas"] = pending
+        st.session_state[tabs.EDITOR_PENDING_NAME_KEY] = "Pilot study"
+        tabs._apply_remap()
+        assert not st.session_state.get("_remap_problems")
+        assert set(st.session_state["_datasets"]) == {"Pilot study"}
+        assert st.session_state["_pending_source_choice"] == "Pilot study"
+        assert st.session_state["_remap_applied"] == "Pilot study"
+        # The edit is over: the staged name goes with the rest of it.
+        assert tabs.EDITOR_PENDING_NAME_KEY not in st.session_state
+
     def test_a_fixations_table_added_to_a_words_only_dataset_gets_the_boxes(self):
         """UX-104 — adding the missing fixations on the edit screen harmonizes
         the added table with the words itself. Harmonizing the words against

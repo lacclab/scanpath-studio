@@ -30,6 +30,7 @@ Usage:
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import html
 import logging
 import os
@@ -55,7 +56,7 @@ if __package__ is None or __package__ == "":
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
 
-from scanpath_studio import loading, progress, wizard_shell
+from scanpath_studio import dataset_table, loading, progress, wizard_shell
 from scanpath_studio import metadata as metadata_mod
 from scanpath_studio.annotations import (
     filter_keys,
@@ -77,6 +78,7 @@ from scanpath_studio.constants import (
     DATA_PAGE_KEY,
     DATA_PAGE_OFFSCREEN_KEY,
     DATASET_COUNTS_STORE_KEY,
+    DATASET_DESCRIPTIONS_KEY,
     DATASET_EDITOR_OPEN_KEY,
     DEFAULT_BACKGROUND_COLOR,
     DEFAULT_FIGURE_SIZE,
@@ -183,6 +185,7 @@ from scanpath_studio.data import (
     validate_raw_gaze_schema,
     validate_word_schema,
 )
+from scanpath_studio.dataset_table import DATASET_COUNT_FIELDS, DatasetRow
 from scanpath_studio.datasets import (
     load_multipleye_server_bundle,
     multipleye_bundle_dir,
@@ -231,6 +234,8 @@ from scanpath_studio.persistence import (
 from scanpath_studio.session_keys import COLUMN_MAPPING_PREFIX, PARAM_CORPUS
 from scanpath_studio.styles import get_app_css
 from scanpath_studio.tabs import (
+    EDITOR_NAME_FIELD_KEY,
+    EDITOR_PENDING_NAME_KEY,
     _build_figure_settings,
     _render_column_mapping_section,
     _render_save_restore_expander,
@@ -1463,6 +1468,13 @@ def _dataset_dir_input(
 # in the main area. Kept out of the loader return value so the loaders can keep
 # falling back to the demo corpus and the app stays usable.
 _UNAVAILABLE_KEY = "_dataset_unavailable"
+#: UX-174: whether this run is showing the demo *in place of* the selected
+#: corpus. Cleared at the start of every full run and set with the note above
+#: (which is consumed before the dataset table draws), so it describes this run
+#: on every path, early returns included; a fragment rerun of the table reads
+#: the last full run's answer. The table reads it so the demo's rows are never
+#: counted as that corpus' "loaded" figures.
+_PLACEHOLDER_SHOWN_KEY = "_dataset_placeholder_shown"
 
 
 def _note_dataset_unavailable(
@@ -1476,6 +1488,7 @@ def _note_dataset_unavailable(
     key_prefix: str = "",
 ) -> None:
     """Record that ``label`` couldn't be loaded, for the main-area empty state."""
+    st.session_state[_PLACEHOLDER_SHOWN_KEY] = True
     st.session_state[_UNAVAILABLE_KEY] = dict(
         label=label,
         reason=reason,
@@ -2248,8 +2261,8 @@ PUBLIC_DATASET_REGISTRY: dict = {
         short="PoTeC",
         language="German",
         size="75 readers · 12 texts",
-        description="Potsdam Textbook Corpus — German reading of biology & "
-        "physics textbook passages (expert/novice readers).",
+        description="Potsdam Textbook Corpus — German readers, experts and "
+        "novices, reading biology and physics textbook passages.",
         link="https://github.com/DiLi-Lab/PoTeC",
         # DATA-36: what the row shows before anyone opens it.
         published_counts={
@@ -2266,10 +2279,12 @@ PUBLIC_DATASET_REGISTRY: dict = {
         ),
         # Word boxes come from the corpus' own `.ias` character files, but the
         # release discards the recorded screen (x, y) — `datasets._potec_fixations`
-        # places each fixation at the centre of the character it names.
-        geometry=f"{ICONS['geometry_reconstructed']} **Reconstructed** fixation coordinates — the release keeps "
-        "no recorded (x, y), so each fixation sits at the centre of the "
-        "character it names. The word boxes are the corpus' own `.ias` files.",
+        # places each fixation at the centre of the character it names. UX-177:
+        # the one provenance fact that changes how a figure is read, so it is
+        # the one said on the Data page.
+        reading_note="Fixation positions are reconstructed, not recorded: "
+        "PoTeC's release keeps no screen coordinates, so each fixation is drawn "
+        "at the centre of the character it landed on.",
     ),
     MULTIPLEYE_PUBLIC_CHOICE: dict(
         loader=_load_multipleye_source,
@@ -2284,8 +2299,6 @@ PUBLIC_DATASET_REGISTRY: dict = {
         # session folders are on the machine it runs on, so there is no corpus-
         # wide number that would be true of the next person's copy — the row
         # fills in the moment it is opened, which is the honest answer.
-        geometry=f"{ICONS['geometry_real']} **Real** — recorded fixation coordinates, with word boxes "
-        "aggregated from the corpus' own character AOI files.",
     ),
     ONESTOP_PUBLIC_CHOICE: dict(
         loader=_load_onestop_public_source,
@@ -2303,9 +2316,9 @@ PUBLIC_DATASET_REGISTRY: dict = {
         # figures do not count: 2 paragraphs, Advanced only, repeated in all
         # three batches. That is the whole of the gap to the 330 texts below.
         size="360 readers · 30 articles (162 paragraphs) · ~19.4k trials",
-        description="OneStop Eye Movements — English L1 reading of Guardian "
-        "articles across four regimes (ordinary / information-seeking, each also "
-        "repeated). From OSF, or a LaCC lab export.",
+        description="OneStop Eye Movements — native English speakers reading "
+        "Guardian articles, some with a question shown beforehand and some for "
+        "a second time.",
         link="https://github.com/lacclab/OneStop-Eye-Movements",
         # DATA-36. **Texts** counts one paragraph at one difficulty level: the
         # composed `unique_paragraph_id` (BUG-43) makes Advanced and Elementary
@@ -2328,23 +2341,22 @@ PUBLIC_DATASET_REGISTRY: dict = {
             "practice article (`article_id` 0), which the corpus' published "
             "30 articles / 162 paragraphs does not count."
         ),
-        geometry=f"{ICONS['geometry_real']} **Real** — recorded fixation coordinates and EyeLink's own "
-        "interest-area boxes.",
     ),
 }
 
 
 #: The same presentation metadata for the sources that are **not** registry
 #: entries — the packaged demo, the synthetic trial, the authoring canvas — so
-#: the dataset table's ℹ️ dialog can answer the same questions about every row.
+#: the Data page can answer the same questions about every dataset.
 #: Uploads are absent on purpose: nothing here knows anything about them that
 #: their own row does not already show.
 _BUILTIN_DATASET_ABOUT: dict[str, dict] = {
     DEMO_CHOICE: dict(
         language="English (L1)",
-        description="A packaged subset of OneStop Eye Movements, so the app has "
-        "something real to open with. Regenerated by "
-        "`python -m scanpath_studio.update_sample_data`.",
+        # Regenerated by `python -m scanpath_studio.update_sample_data`.
+        description="A small part of OneStop Eye Movements — native English "
+        "speakers reading Guardian articles — bundled so the app opens with "
+        "real data.",
         link="https://github.com/lacclab/OneStop-Eye-Movements",
         # DATA-36: this corpus ships *inside* the package, so its figures are
         # checked against the files themselves — the DATA-36 tests recount
@@ -2361,15 +2373,15 @@ _BUILTIN_DATASET_ABOUT: dict[str, dict] = {
         published_counts_source=(
             "Counted from the files bundled with this release of the package."
         ),
-        geometry=f"{ICONS['geometry_real']} **Real** — OneStop's recorded fixations and interest-area "
-        "boxes. The raw-gaze overlay is **synthesized**, as OneStop publishes "
-        "no raw samples.",
+        # UX-177: OneStop publishes no raw samples, so the raw-gaze layer is
+        # made up — which changes how that layer is read, so it is said.
+        reading_note="Its raw-gaze samples are synthesized: OneStop publishes "
+        "no raw gaze.",
     ),
     ONESTOP_CHOICE: dict(
         language="English (L1)",
-        description="OneStop Eye Movements, read from the lab export this "
-        "machine points `$ONESTOP_DATA_DIR` at — the same corpus as the public "
-        "source, in the lab's superset schema.",
+        description="OneStop Eye Movements — native English speakers reading "
+        "Guardian articles — read from the lab export at `$ONESTOP_DATA_DIR`.",
         link="https://github.com/lacclab/OneStop-Eye-Movements",
         # DATA-36: seeded from the *public* release, because that is the only
         # figure that can be known before the export on this machine is read.
@@ -2386,15 +2398,13 @@ _BUILTIN_DATASET_ABOUT: dict[str, dict] = {
     ),
     MANUAL_SAMPLE_CHOICE: dict(
         language="English",
-        description="An editable, manually authored scanpath. Change the text, drag "
-        "fixations, or edit their timing in the authoring editor.",
-        geometry=f"{ICONS['geometry_synthesized']} **Synthesized** — manually authored, not recorded.",
+        description="A scanpath drawn by hand over a short English text, "
+        "yours to edit.",
     ),
     SYNTHETIC_CHOICE: dict(
         language="English",
-        description="A hand-built trial with every measure traced by hand — the "
-        "fixture the test suite asserts against. Check what a measure or a plot "
-        "option does against a known answer.",
+        description="A hand-built six-word English trial whose every reading "
+        "measure is known, for checking what a measure or plot option does.",
         published_counts={
             "Participants": 1,
             "Texts": 1,
@@ -2406,14 +2416,10 @@ _BUILTIN_DATASET_ABOUT: dict[str, dict] = {
             "The fixture's own specification — six words on two lines, nine "
             "fixations, one of them out of text (`synthetic.py`)."
         ),
-        geometry=f"{ICONS['geometry_synthesized']} **Synthesized** — the layout and the fixations are both "
-        "hand-specified, not recorded.",
     ),
     AUTHOR_CHOICE: dict(
         description="Type a text and place fixations on it yourself, for "
         "figures that illustrate a pattern rather than report a recording.",
-        geometry=f"{ICONS['geometry_synthesized']} **Synthesized** — you draw it; the app lays the text out "
-        "deterministically and marks the figure as an illustration.",
     ),
 }
 
@@ -2422,10 +2428,10 @@ def dataset_about(token: str, registry: dict | None = None) -> dict:
     """What the dataset table knows about one row beyond its counts.
 
     One lookup for both halves of the catalogue — a public corpus' registry
-    entry and the packaged sources' table above — so neither the row nor the
-    ℹ️ dialog has to care which kind of row it was opened from. ``language``
-    and ``link`` become cells; ``description`` and ``geometry`` are the two
-    sentences the dialog shows. Returns ``{}`` for an upload, which is the
+    entry and the packaged sources' table above — so neither the table's row nor
+    the open dataset's section has to care which kind of dataset it is.
+    ``language`` feeds the table's filter; ``description``, ``link`` and
+    ``reading_note`` are the lines under *What's in the dataset* (UX-177). Returns ``{}`` for an upload, which is the
     honest answer: nothing here knows anything about it that its own row does
     not already show.
     """
@@ -2440,7 +2446,7 @@ def dataset_about(token: str, registry: dict | None = None) -> dict:
                 "language",
                 "description",
                 "link",
-                "geometry",
+                "reading_note",
                 # DATA-36: the published figures ride this same lookup rather
                 # than a second one, so a public corpus, a packaged source and a
                 # prepared benchmark corpus all answer for themselves the same
@@ -2488,9 +2494,8 @@ def _benchmark_registry_entries() -> dict:
             size=_benchmark_size_caption(entry),
             description=_benchmark_description(entry, harmonised_overlap=short != name),
             # R34's badge, resolved once here rather than only inside the loader,
-            # so the dataset table's ℹ️ dialog can show it without opening the
-            # corpus.
-            geometry=geometry_badge(entry),
+            # so the Data page can show it without re-reading the manifest.
+            reading_note=geometry_badge(entry),
             link="https://github.com/EyeBench/EyeGenBench",
             # DATA-36: the manifest already counts each corpus, so a prepared
             # row arrives with its figures — the same numbers `size` renders as
@@ -2545,8 +2550,8 @@ def _load_public_dataset(
 
     The corpus is chosen in the flat source picker (DATA-9) and rides
     ``public_dataset_choice``. The selected corpus' compact language · size
-    caption, one-line description, and home link render into
-    ``description_host``; the loader's source options + data-location controls
+    caption and home link render into ``description_host``, under the editable
+    description (UX-174 r2); the loader's source options + data-location controls
     render into ``options_host`` / ``location_host`` (the DATA-9 ordered group).
     Returns raw, pre-normalization frames.
     """
@@ -2560,8 +2565,6 @@ def _load_public_dataset(
     facts = " · ".join(f for f in (spec.get("language"), spec.get("size")) if f)
     if facts:
         desc.caption(facts)
-    if spec.get("description"):
-        desc.caption(spec["description"])
     if spec.get("link"):
         desc.markdown(f"[Dataset home ↗]({spec['link']})")
     return spec["loader"](options_host, location_host)
@@ -3216,7 +3219,7 @@ def _render_unmapped_view(
         for problem in rejected:
             st.error(problem, icon=ICONS["error"])
         st.caption(
-            "Change the field it names in **1 · Data tables & column mapping** above, "
+            "Change the field it names in **2 · Data tables & column mapping** above, "
             "or start again from what auto-detection proposes."
         )
         st.button(
@@ -3227,7 +3230,7 @@ def _render_unmapped_view(
     else:
         st.warning(
             "**Finish the column mapping to draw scanpaths.** Map the missing "
-            "field(s) in **1 · Data tables & column mapping** above — the raw data is "
+            "field(s) in **2 · Data tables & column mapping** above — the raw data is "
             "shown below to help you choose. "
             "Still needed:\n\n" + "\n".join(f"- {p}" for p in problems)
         )
@@ -4155,28 +4158,16 @@ def render_data_source_picker(host=None) -> None:
         )
 
 
-#: Cell text of the dataset table's action buttons. `st.column_config.ButtonColumn`
-#: takes each button's label from the cell *value*, which is what lets a row that
-#: cannot be edited or deleted (a built-in corpus) simply carry no label — and,
-#: since UX-78, what lets the **Dataset** column be both the name and the control
-#: that opens it. Icon-only (no trailing word) so the four action columns read as
-#: a compact icon strip rather than four button-sized columns — the label lives
-#: in each column's `help` tooltip instead.
-_DATASET_EDIT_LABEL = ICONS["edit"]
-_DATASET_RENAME_LABEL = ICONS["rename"]
-_DATASET_REMOVE_LABEL = ICONS["delete"]
-_DATASET_ABOUT_LABEL = ICONS["info"]
-
-#: Pixel width of an icon-only action column — just enough for one glyph and its
-#: padding, so the four actions don't eat as much of the table's width as the
-#: `"small"` preset (sized for short text, not a bare icon).
-_DATASET_ACTION_COL_WIDTH = 42
-
-#: DATA-36 — what the **Counts** cell says about the numbers beside it. A row
-#: shows either what it loaded or what its corpus publishes, and which one it is
-#: changes how to read every other cell: "Published · 360 participants" is a
-#: claim about the corpus, "Loaded · 180" a fact about this session.
-_COUNTS_BADGES = {"loaded": "Loaded", "published": "Published", "": ""}
+#: UX-174 — each dataset kind's word in the table, keyed by the picker's glyph,
+#: and the Material Symbol the table draws beside it (the picker keeps its emoji,
+#: since a selectbox option is plain text).
+_DATASET_KIND_LABELS = {"🧪": "Demo", "✏️": "Manual", "🔒": "Private", "🌐": "Public"}
+_DATASET_KIND_ICONS = {
+    "Demo": ICONS["demo"],
+    "Manual": ICONS["author"],
+    "Private": ICONS["private"],
+    "Public": ICONS["public"],
+}
 
 # Built-in and public dataset tokens are load-path identifiers, so changing
 # them would break deep links and loader dispatch. Their table rename is a
@@ -4184,16 +4175,6 @@ _COUNTS_BADGES = {"loaded": "Loaded", "published": "Published", "": ""}
 # datasets keep using the real store re-key/delete operations in `wizard.py`.
 DATASET_ALIASES_KEY = "_dataset_display_aliases"
 HIDDEN_DATASETS_KEY = "_hidden_dataset_tokens"
-PENDING_RENAME_KEY = "_dataset_pending_rename"
-#: DATA-35 — the row whose ℹ️ About dialog is open. Same arm-then-read shape as
-#: the rename and delete flags above: a table callback sets it, the next run
-#: opens the dialog.
-PENDING_ABOUT_KEY = "_dataset_pending_about"
-
-#: UX-78 — the open dataset's row tint. A Styler writes inline CSS and so cannot
-#: read the theme's variables; a translucent blue reads as "selected" on both the
-#: light and the dark grid without being opaque enough to fight the text.
-_DATASET_ACTIVE_TINT = "rgba(59, 130, 246, 0.18)"
 
 
 def _dataset_display_name(token: str, registry: dict | None = None) -> str:
@@ -4207,19 +4188,8 @@ def _dataset_display_name(token: str, registry: dict | None = None) -> str:
     return picker_name_for(token, registry) if token in registry else token
 
 
-#: The dataset table's count columns, in display order — and the only field
-#: names a catalogue entry may publish figures under (DATA-36). A typo would
-#: otherwise be dropped in silence; `tests/test_dataset_published_counts.py`
-#: checks every declaration against this tuple.
-DATASET_COUNT_FIELDS: tuple[str, ...] = (
-    "Participants",
-    "Texts",
-    "Trials",
-    "Screens",
-    "Words",
-    "Fixations",
-    "Gaze points",
-)
+# `DATASET_COUNT_FIELDS` — the table's count columns and the only names a
+# catalogue entry may publish under — lives in `dataset_table` (UX-174).
 
 
 @dataclass(frozen=True)
@@ -4283,32 +4253,6 @@ def dataset_row_counts(
     return DatasetRowCounts(measured, "loaded", differences)
 
 
-def published_comparison_rows(
-    published: Mapping[str, int], loaded: Mapping[str, int | None]
-) -> list[dict[str, str]]:
-    """The ℹ️ dialog's published-vs-loaded table, as already-formatted cells.
-
-    Formatted here rather than by a Styler because a published field can be one
-    this session did not measure — the demo publishes a gaze-point total, and a
-    session that never loaded the raw-gaze overlay has none — and a number
-    format applied to that blank is a crash in a dialog, on a path no test would
-    naturally walk. A seven-row table needs no numeric sorting.
-    """
-    rows = []
-    for field in DATASET_COUNT_FIELDS:
-        if field not in published:
-            continue
-        here = loaded.get(field)
-        rows.append(
-            {
-                "": field,
-                "Published": f"{published[field]:,}",
-                "This session": "—" if here is None else f"{here:,}",
-            }
-        )
-    return rows
-
-
 def published_dataset_counts(token: str, registry: dict | None = None) -> dict:
     """The figures this catalogue publishes for a dataset, or ``{}``.
 
@@ -4317,11 +4261,6 @@ def published_dataset_counts(token: str, registry: dict | None = None) -> dict:
     ``{}``, which is the honest answer: nothing here knows anything about it.
     """
     return dict(dataset_about(token, registry).get("published_counts") or {})
-
-
-def published_counts_source(token: str, registry: dict | None = None) -> str:
-    """Where a dataset's published figures came from, as a sentence."""
-    return str(dataset_about(token, registry).get("published_counts_source") or "")
 
 
 def benchmark_published_counts(entry) -> dict:
@@ -4535,13 +4474,28 @@ def _delete_confirmation_dialog(
     """
     owned = token in uploaded
     if owned:
-        st.warning(
-            f"Remove **{_dataset_display_name(token)}**? Its tables, column "
-            "mapping and annotations leave this session — there is no undo."
+        # BUG-95: said "and annotations" while removing none. The count is the
+        # annotations on its trials that no other added dataset shares.
+        from scanpath_studio.wizard import upload_annotations
+
+        count = len(upload_annotations(token))
+        taken = (
+            f", column mapping and its {count:,} annotation{'' if count == 1 else 's'}"
+            if count
+            else " and column mapping"
         )
+        st.warning(
+            f"Remove **{_dataset_display_name(token)}**? Its tables{taken} "
+            "leave this session — there is no undo."
+        )
+        if count:
+            st.caption(
+                "To keep a copy, **Export** from the dataset's **Annotations** "
+                "tab first."
+            )
     else:
         st.caption(
-            f"Remove **{_dataset_display_name(token)}** from Available datasets "
+            f"Remove **{_dataset_display_name(token)}** from the list of datasets "
             "for this session? The packaged or public source data is not deleted."
         )
     remaining = [entry for entry in available if entry != token]
@@ -4581,9 +4535,10 @@ def _delete_confirmation_dialog(
 def _render_delete_confirmation(host, tokens: list, uploaded: set[str]) -> None:
     """The confirm step between ✕ Delete and the dataset actually going away.
 
-    Deleting an upload drops its frames, its mapping and its annotations from
-    the session with no undo, and the button that starts it is one cell away
-    from ✏️ Edit in a table row — so the click arms this, and this asks.
+    Deleting an upload drops its frames, its mapping and the annotations on its
+    trials (BUG-95) from the session with no undo, and the button that starts it sits on a row that
+    opens the dataset when clicked anywhere else — so the click arms this, and
+    this asks.
 
     **UX-79** made it a modal rather than a block under the table: the question
     is raised by a click *in* the table, and on a long list of datasets a
@@ -4616,146 +4571,13 @@ def _unique_dataset_alias(requested: str, token: str, tokens: list[str]) -> str:
     return candidate
 
 
-def _dismiss_rename_dataset() -> None:
-    """``on_dismiss`` for the Rename dialog — see ``_dismiss_dataset_about``."""
-    st.session_state.pop(PENDING_RENAME_KEY, None)
-
-
-@st.dialog("Rename dataset", on_dismiss=_dismiss_rename_dataset)
-def _rename_dataset_dialog(
-    token: str, *, uploaded: set[str], tokens: list[str]
-) -> None:
-    """Rename any row while keeping app-owned source tokens stable."""
-    current = _dataset_display_name(token)
-    requested = st.text_input(
-        "Dataset name",
-        value=current,
-        key=f"dataset_table_rename_{token}",
-        persist_state="session",
-    )
-    apply_col, cancel_col = st.columns(2)
-    if apply_col.button(
-        "Rename",
-        key="dataset_table_rename_confirm",
-        type="primary",
-        width="stretch",
-    ):
-        requested = requested.strip()
-        if not requested:
-            st.warning("Enter a dataset name.")
-            return
-        if token in uploaded:
-            from scanpath_studio.wizard import rename_dataset
-
-            renamed = rename_dataset(token, requested)
-            final_name = renamed or token
-        else:
-            final_name = _unique_dataset_alias(requested, token, tokens)
-            aliases = dict(st.session_state.get(DATASET_ALIASES_KEY) or {})
-            aliases[token] = final_name
-            st.session_state[DATASET_ALIASES_KEY] = aliases
-        st.session_state.pop(PENDING_RENAME_KEY, None)
-        st.session_state["_dataset_table_note"] = f"Renamed to {final_name}."
-        st.rerun(scope="app")
-    if cancel_col.button("Cancel", key="dataset_table_rename_cancel", width="stretch"):
-        st.session_state.pop(PENDING_RENAME_KEY, None)
-        st.rerun(scope="app")
-
-
-def _render_published_figures(token: str, registry: dict) -> bool:
-    """The dataset's published figures, and how this session compares (DATA-36).
-
-    Nothing at all for a dataset that publishes none — an upload, or a source
-    whose contents depend on the machine it runs on. When it does publish, the
-    basis for the numbers is always shown; the side-by-side appears only once
-    the dataset has actually been loaded, since before that the row *is* the
-    published figures and the dialog would just be repeating it (DATA-35 r2).
-
-    Returns whether it drew anything, so a caller sharing this section with the
-    inline dataset-page summary can skip it entirely rather than show an empty
-    heading.
-    """
-    published = published_dataset_counts(token, registry)
-    if not published:
-        return False
-    st.markdown(f"**Published figures.** {published_counts_source(token, registry)}")
-    # No frames: this reads the remembered entry, which the table filled in for
-    # every dataset the session has held — so it answers for a corpus opened
-    # earlier as well as for the open one.
-    row = dataset_row_counts(
-        measured=remembered_dataset_counts(token, None, None, None),
-        published=published,
-    )
-    if row.source != "loaded":
-        return True
-    st.dataframe(
-        pd.DataFrame(published_comparison_rows(published, row.counts)),
-        hide_index=True,
-        width="stretch",
-    )
-    if fields := row.exceeds_published:
-        st.warning(
-            f"This session holds **more** than the published figure for "
-            f"{', '.join(fields)} — a corpus cannot be larger when loaded than "
-            "it is, so the published figure is the one to update."
-        )
-    else:
-        st.caption(
-            "Loading less than the corpus publishes is the ordinary case — one "
-            "regime, one part, one session folder, or an export that was "
-            "narrowed before it got here."
-        )
-    return True
-
-
-def _render_dataset_about_body(
-    token: str, *, registry: dict, description: str | None = None
-) -> bool:
-    """The description / coordinate-provenance / published-figures prose for one
-    dataset — everything the row's ℹ️ About dialog shows, minus its own chrome.
-
-    Shared with the ❔ About popover on the 🗂️ Data page (below), so the two
-    never drift apart. Returns whether it drew anything, so a caller can skip
-    the whole section for a dataset with nothing to say (a plain upload) rather
-    than show a heading over an empty box.
-
-    ``description`` (UX-137) replaces the registry's own text. The Data page
-    shows the opening sentence *outside* the popover, as the overview under the
-    section heading, and passes the remainder here so the popover carries the
-    rest without repeating what is already on screen. ``""`` therefore means
-    "the overview said it all", not "no description".
-    """
-    about = dataset_about(token, registry)
-    wrote = False
-    text = about.get("description") if description is None else description
-    if text:
-        st.write(text)
-        wrote = True
-    if about.get("link"):
-        # The corpus' own home page, right under the description of what it is.
-        # It used to be a **Home** column of its own in the table — a full column
-        # spent on one "Open ↗" per row, next to nothing that said what would
-        # open. Here it reads as the last line of the description.
-        st.markdown(f"[The corpus' own home page ↗]({about['link']})")
-        wrote = True
-    if about.get("geometry"):
-        # The provenance of the coordinates everything downstream is measured
-        # from — real / reconstructed / synthesized. `geometry_badge` already
-        # writes it as a sentence, so it is shown as one.
-        st.markdown(f"**Where the coordinates come from.** {about['geometry']}")
-        wrote = True
-    if _render_published_figures(token, registry):
-        wrote = True
-    return wrote
-
-
 def _overview_sentence(text: str) -> tuple[str, str]:
     """Split a dataset description into its opening sentence and the rest.
 
     UX-137: the 🗂️ Data page shows the first sentence as the overview under
-    "What's in this dataset" and hides the remainder — which is invariably the
-    technical half ("Regenerated by …", "Screen geometry: synthesized") — in the
-    ❔ popover beside it.
+    "What's in this dataset". UX-177 made every catalogue description one
+    sentence, so this only trims a prepared benchmark corpus', whose tail is
+    its geometry, license and citation.
 
     A boundary inside a `code span` does not count. Several descriptions end on
     a module path (``python -m scanpath_studio.update_sample_data``), and cutting
@@ -4778,95 +4600,195 @@ def _overview_sentence(text: str) -> tuple[str, str]:
     return body, ""
 
 
-def _render_dataset_overview(token: str, *, registry: dict) -> None:
-    """One sentence about the open dataset, with the detail behind a ❔.
+def dataset_description(token: str, registry: dict | None = None) -> tuple[str, bool]:
+    """The dataset's description, and whether the user wrote it.
 
-    Replaces the inline **ℹ️ About the `<name>` dataset** section, which opened
-    the page you visit to check your data with a heading, a description, a home
-    link, a coordinate-provenance sentence and a six-row published-vs-loaded
-    table — all above the counts that are the reason to be there. The overview
-    stays (it says what the corpus *is*, which is worth one line) and everything
-    else moved into the popover, where it costs nothing until wanted.
+    The user's own text (`DATASET_DESCRIPTIONS_KEY`, from the add wizard or
+    ✏️ Edit dataset) wins, and the catalogue's (`dataset_about`) is the
+    fallback. An empty string the user saved counts as theirs: they cleared it.
+    """
+    own = st.session_state.get(DATASET_DESCRIPTIONS_KEY) or {}
+    if token in own:
+        return str(own[token]), True
+    return str(dataset_about(token, registry).get("description") or ""), False
+
+
+def set_dataset_description(token: str, text: str) -> None:
+    """Store ``text`` as the dataset's own description."""
+    own = dict(st.session_state.get(DATASET_DESCRIPTIONS_KEY) or {})
+    own[token] = str(text or "").strip()
+    st.session_state[DATASET_DESCRIPTIONS_KEY] = own
+
+
+def _description_field_key(token: str) -> str:
+    return f"dataset_description_{_dataset_row_slug(token)}"
+
+
+def _save_description_field(token: str) -> None:
+    set_dataset_description(token, st.session_state.get(_description_field_key(token)))
+
+
+def render_description_field(host, token: str) -> None:
+    """✏️ Edit dataset's **Description** — the sentence under its name.
+
+    Saved as it changes, not by ✅ Save changes: a description re-derives
+    nothing, and a built-in dataset has no Save button to wait for.
+    """
+    key = _description_field_key(token)
+    if key not in st.session_state:
+        st.session_state[key] = dataset_description(token)[0]
+    host.text_area(
+        "Description",
+        key=key,
+        on_change=_save_description_field,
+        args=(token,),
+        placeholder="What this dataset is — the readers, the texts, the language.",
+        help="Shown under the dataset's name on the 🗂️ Data page.",
+        height=80,
+    )
+
+
+def _render_dataset_overview(token: str, *, registry: dict) -> None:
+    """The open dataset in a sentence, and its home page.
+
+    UX-177 cut this to what we stand behind and a new reader can use: the
+    description (its first sentence, unless the user wrote it), the corpus'
+    home page on the same line, and — only where it changes how a figure is
+    read — one ``reading_note`` (PoTeC's reconstructed positions, the demo's
+    synthesized raw gaze). The ❔ *About this dataset* popover it replaces
+    carried maintainer provenance: how each published figure was counted, a
+    published-vs-loaded table, and a coordinate badge for every dataset. The
+    table's Status already says whether its numbers are published or loaded.
+
+    Editing it is ✏️ **Edit dataset** on the heading's line (UX-178).
     """
     about = dataset_about(token, registry)
-    overview, rest = _overview_sentence(about.get("description") or "")
+    text, own = dataset_description(token, registry)
+    overview = text if own else _overview_sentence(text)[0]
+    line = st.container(
+        key="dataset_overview_line",
+        horizontal=True,
+        vertical_alignment="center",
+        gap="small",
+    )
+    if link := about.get("link"):
+        overview = f"{overview} [Home page ↗]({link})".strip()
     if overview:
-        st.caption(overview)
-    # Rendered into a throwaway container first: the body reports whether it had
-    # anything to say, and a ❔ that opens on an empty panel is worse than no ❔.
-    # `st.empty()` rather than a plain container — clearing a container adds a
-    # child instead of removing one.
-    probe = st.empty()
-    with probe.container():
-        has_detail = _render_dataset_about_body(
-            token, registry=registry, description=rest
-        )
-    probe.empty()
-    if not has_detail:
-        return
-    trigger, _ = st.columns([1, 3])
-    with trigger.popover(f"{ICONS['help']} About this dataset", width="stretch"):
-        _render_dataset_about_body(token, registry=registry, description=rest)
+        line.caption(overview, width="content")
+    if note := about.get("reading_note"):
+        st.caption(f"{ICONS['info']} {note}")
 
 
-def _dismiss_dataset_about() -> None:
-    """``on_dismiss`` for the About dialog — the native ✕/Escape path.
+@st.cache_data(show_spinner=False)
+def _c_annotation_trials(_combos: pd.DataFrame, key) -> frozenset[tuple[str, str]]:
+    """The ``(participant, trial)`` pairs of ``_combos``, as strings.
 
-    Without this, closing the dialog any way other than its own **Close**
-    button left `PENDING_ABOUT_KEY` armed: since ``render_dataset_table`` is an
-    ``@st.fragment``, the very next fragment rerun — triggered by *anything*,
-    not just another click on this row — read the key, found it still set, and
-    reopened the same dialog. And because only one Streamlit dialog renders at
-    a time, that reopened About then silently pre-empted whichever dialog the
-    user actually clicked next (Rename, Remove), which is what made it look
-    like "the only pop-up that opens even when others should."
+    Cached on the frame's fingerprint (``key``): the Data page asks on every
+    rerun — a row ticked in the Annotations table is one — and the answer only
+    changes with the dataset.
     """
-    st.session_state.pop(PENDING_ABOUT_KEY, None)
+    if not {"participant_id", "trial_id"} <= set(_combos.columns):
+        return frozenset()
+    pairs = _combos[["participant_id", "trial_id"]].drop_duplicates()
+    return frozenset(
+        zip(pairs["participant_id"].astype(str), pairs["trial_id"].astype(str))
+    )
 
 
-@st.dialog("About this dataset", on_dismiss=_dismiss_dataset_about)
-def _dataset_about_dialog(token: str, *, registry: dict) -> None:
-    """DATA-35 — the row's description and coordinate provenance, nothing else.
+def _annotation_trials(combos: pd.DataFrame | None) -> frozenset[tuple[str, str]]:
+    """The open dataset's ``(participant, trial)`` pairs, for its Annotations tab."""
+    if combos is None or combos.empty:
+        return frozenset()
+    return _c_annotation_trials(combos, frame_fingerprint(combos))
 
-    A dialog rather than two more columns: both are sentences, and the table
-    already carries nine numeric columns plus its actions. It deliberately
-    repeats **nothing** the row shows — the counts and the language are cells,
-    so restating them here was just noise (DATA-35 r2). What is left is the
-    prose that could never fit a cell, which is what the ask meant by "a field
-    that opens up" — plus the corpus' home link, which moved here out of a
-    column of its own so that the link sits beside the description of what it
-    leads to.
+
+def render_dataset_inspection_head(token: str) -> None:
+    """*What's in the `<name>` dataset*, with ✏️ **Edit dataset** at its end.
+
+    UX-178: the section's one action is a button of its own on the heading's
+    line, not a link-weight one beside the description, so it reads as editing
+    the whole dataset — its name, its description and its setup, all on the
+    screen it opens. It does not apply to the add-dataset wizard's pending
+    dataset or to the authoring canvas, which are not rows of the table.
     """
-    st.markdown(f"### {_dataset_display_name(token, registry)}")
-    if not _render_dataset_about_body(token, registry=registry):
-        st.caption(
-            "This is a dataset you added, so the app knows only what its own "
-            "row shows. Its column mapping and recording setup are under "
-            "✏️ Edit."
+    label = _dataset_display_name(token).replace("`", "'")
+    head = st.container(
+        key="dataset_inspection_head",
+        horizontal=True,
+        vertical_alignment="center",
+        gap="small",
+    )
+    head.subheader(
+        f"{ICONS['search']} What's in the `{label}` dataset", width="stretch"
+    )
+    if token not in (UPLOAD_CHOICE, AUTHOR_CHOICE):
+        head.button(
+            "Edit dataset",
+            icon=ICONS["edit"],
+            key="dataset_edit_btn",
+            on_click=_edit_open_dataset,
+            args=(token,),
+            help="Open the authoring editor — change the text, drag fixations, "
+            "or edit their timing."
+            if token == MANUAL_SAMPLE_CHOICE
+            else "Its name, description, column mapping, recording setup, "
+            "location and metadata tables.",
         )
-    if st.button("Close", key="dataset_about_close", width="stretch"):
-        st.session_state.pop(PENDING_ABOUT_KEY, None)
-        st.rerun(scope="app")
+    _render_dataset_overview(token, registry=public_dataset_registry())
 
 
-def _render_about_dialog(tokens: list[str], registry: dict) -> None:
-    token = st.session_state.get(PENDING_ABOUT_KEY)
-    if token is None:
+def _rename_builtin_from_field(token: str) -> None:
+    """``on_change`` of **Name** for a dataset that is not an upload.
+
+    A built-in or public source's token is a load-path identifier (deep links,
+    loader dispatch), so its name is a display alias — nothing to re-key, and
+    no ✅ Save changes on its editor to wait for.
+    """
+    requested = str(st.session_state.get(EDITOR_NAME_FIELD_KEY) or "").strip()
+    if not requested or requested == _dataset_display_name(token):
         return
-    if token not in tokens:
-        st.session_state.pop(PENDING_ABOUT_KEY, None)
-        return
-    _dataset_about_dialog(token, registry=registry)
+    tokens = list(st.session_state.get("_data_source_entries") or [])
+    final = _unique_dataset_alias(requested, token, tokens)
+    aliases = dict(st.session_state.get(DATASET_ALIASES_KEY) or {})
+    aliases[token] = final
+    st.session_state[DATASET_ALIASES_KEY] = aliases
+    st.session_state[EDITOR_NAME_FIELD_KEY] = final
 
 
-def _render_rename_dialog(tokens: list[str], uploaded: set[str]) -> None:
-    token = st.session_state.get(PENDING_RENAME_KEY)
-    if token is None:
-        return
-    if token not in tokens:
-        st.session_state.pop(PENDING_RENAME_KEY, None)
-        return
-    _rename_dataset_dialog(token, uploaded=uploaded, tokens=tokens)
+def _stage_upload_name() -> None:
+    """``on_change`` of **Name** for an upload: hold it for ✅ Save changes.
+
+    Kept in a plain ``_remap_`` key rather than read back off the widget, so it
+    survives whatever the widget's own state does between runs, and is swept
+    with the rest of the edit on Cancel or Save.
+    """
+    st.session_state[EDITOR_PENDING_NAME_KEY] = str(
+        st.session_state.get(EDITOR_NAME_FIELD_KEY) or ""
+    ).strip()
+
+
+def render_name_field(host, token: str) -> None:
+    """✏️ Edit dataset's **Name** (UX-178; renaming used to be a dialog).
+
+    An upload's name is the key its every editor widget is filed under, so it
+    is applied by ✅ Save changes with the rest of the edit (`tabs._apply_remap`)
+    and counts as an unsaved change until then. Any other dataset's name is a
+    display alias, applied as soon as the field changes.
+    """
+    uploaded = token in (st.session_state.get("_datasets") or {})
+    if EDITOR_NAME_FIELD_KEY not in st.session_state:
+        st.session_state[EDITOR_NAME_FIELD_KEY] = st.session_state.get(
+            EDITOR_PENDING_NAME_KEY
+        ) or _dataset_display_name(token)
+    host.text_input(
+        "Name",
+        key=EDITOR_NAME_FIELD_KEY,
+        on_change=_stage_upload_name if uploaded else _rename_builtin_from_field,
+        args=() if uploaded else (token,),
+        help="Saved with **✅ Save changes**."
+        if uploaded
+        else "Shown in the list of datasets and the dataset picker.",
+    )
 
 
 def _open_mapping_editor() -> None:
@@ -4898,7 +4820,7 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
         "A Trial ID that doesn't fully identify one reading concatenates several "
         "into one scanpath — which renders perfectly happily, as an ordinary "
         "scanpath with a lot of regressions. The full evidence is on the "
-        "🗂️ Data page, under **3 · Trial identity**."
+        "🗂️ Data page, under **4 · Trial identity**."
     )
     edit_col, keep_col = st.columns(2, gap="small")
     if edit_col.button(
@@ -4915,13 +4837,13 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
         key="trial_identity_alert_keep",
         width="stretch",
         help="Dismiss. Nothing changes, and the verdict stays on the 🗂️ Data "
-        "page under 3 · Trial identity.",
+        "page under 4 · Trial identity.",
     ):
         st.rerun(scope="app")
     if asked_by == "add":
         st.caption(
             "Checked automatically because the dataset was just added. It is "
-            "already in 📂 Available datasets either way."
+            "already on the 🗂️ Data page's list either way."
         )
 
 
@@ -4942,6 +4864,7 @@ def _close_dataset_editor() -> None:
     # until ✅ Save changes runs.
     for key in [k for k in st.session_state if str(k).startswith("_remap_")]:
         st.session_state.pop(key, None)
+    st.session_state.pop(EDITOR_NAME_FIELD_KEY, None)
     # DATA-46: "use the current estimate" is a choice for one editing session.
     for key in [k for k in st.session_state if str(k).endswith("_setup_reestimate")]:
         st.session_state.pop(key, None)
@@ -5052,44 +4975,50 @@ def _render_dataset_editor_bar(host, data_choice: str) -> None:
 _TABLE_NEEDS_APP_RERUN = "_dataset_table_needs_app_rerun"
 
 
-@st.fragment
-def render_dataset_table(
-    host=None,
-    *,
-    active: str | None = None,
-    words: pd.DataFrame | None = None,
-    fixations: pd.DataFrame | None = None,
-    raw_gaze: pd.DataFrame | None = None,
-) -> None:
-    """The 🗂️ Data page's dataset list, as a table (UX-54).
+#: UX-174 — the table's inspection seam: `dataset_table.row_record` per row, in
+#: list order, rewritten every time the table draws.
+DATASET_TABLE_ROWS_KEY = "_dataset_table_rows_current"
+#: ``(column, descending)`` or absent (the list's own order). Plain state, not a
+#: widget: it is written by the header buttons' callbacks.
+_DATASET_TABLE_SORT_KEY = "_dataset_table_sort"
+_DATASET_SEARCH_KEY = "dataset_table_search"
+_DATASET_KIND_FILTER_KEY = "dataset_table_kinds"
+_DATASET_LANGUAGE_FILTER_KEY = "dataset_table_languages"
+#: Search and the Kind / Language filters appear only past this many rows — on
+#: the short default list they would be controls with nothing to narrow.
+_DATASET_FILTER_MIN_ROWS = 8
+_DATASET_SORTABLE = ("Kind", "Dataset", *DATASET_COUNT_FIELDS, "Status")
+#: Cell widths, in px, shared by the header and every row so the columns line
+#: up. The name takes whatever is left (`width="stretch"`, with a CSS minimum).
+_DATASET_KIND_W = 92
+#: UX-178 — the name has a width of its own, so Status sits right after it and
+#: the free space goes between Status and the counts (`_row_gap`).
+_DATASET_NAME_W = 280
+_DATASET_COUNT_W = 96
+_DATASET_STATUS_W = 112
+_DATASET_ACTIONS_W = 40
 
-    One row per dataset — the same entries the picker offers — carrying the
-    full summary counts and the actions belonging to that dataset: **Open** it,
-    **Edit** its column mapping, **Rename** it, or **Remove** it. Sortable and
-    scrollable by virtue of being an ``st.dataframe``, which is what a column of
-    cards could not be.
 
-    **Counts are only shown for data already in memory** — the open dataset
-    (whose frames are passed in) and every stored upload. A public corpus is not
-    read until it is opened, and loading eight of them to fill a table would cost
-    minutes; those rows stay blank.
+def _dataset_row_slug(token: str) -> str:
+    """A key-safe, stable id for one dataset's row widgets.
 
-    Args:
-        host: Container to render into. Defaults to the page.
-        active: The open dataset's entry token, marked in the table.
-        words: The open dataset's word frame, for its counts.
-        fixations: Its fixation frame.
+    Tokens are display names (spaces, punctuation, em dashes), and a widget key
+    is also a CSS class, so the row's keys use a digest of the token instead —
+    the same on every run and after any sort, which is what makes a click land
+    on the dataset it was drawn for.
     """
-    # DATA-35: a row action that only opens a dialog — About, Rename, Remove —
-    # costs a *fragment* rerun, not a whole-app one. Renaming a dataset used to
-    # take two full page renders (one to open the modal, one to apply it) on a
-    # page that draws a forty-row table, the whole column mapping and three
-    # upload widgets; the first of those is now this box redrawing itself.
-    if st.session_state.pop(_TABLE_NEEDS_APP_RERUN, False):
-        st.rerun(scope="app")
+    return hashlib.sha1(token.encode("utf-8")).hexdigest()[:12]
+
+
+def _dataset_table_rows(
+    *,
+    active: str | None,
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    raw_gaze: pd.DataFrame | None,
+) -> list[DatasetRow]:
+    """One `DatasetRow` per listed dataset, in the order they are offered."""
     entries = list(st.session_state.get("_data_source_entries") or [])
-    if not entries:
-        return
     kinds = dict(st.session_state.get("_data_source_kinds") or {})
     uploaded = set(st.session_state.get("_data_source_uploaded") or [])
     stored_uploads = dict(st.session_state.get("_datasets") or {})
@@ -5097,25 +5026,28 @@ def render_dataset_table(
     # DATA-32: a dataset that has left the list takes its remembered counts with
     # it — deleted, renamed, or a public corpus whose location was unset.
     forget_dataset_counts(keep={t for t in entries if t != UPLOAD_CHOICE})
-
-    kind_labels = {
-        "🧪": "Demo",
-        "✏️": "Manual",
-        "🔒": "Private",
-        "🌐": "Public",
-    }
-    rows = []
+    # The open corpus is not on disk and the demo is standing in for it: its
+    # frames are the demo's, so they are not counted for it. An entry
+    # remembered under its name *from these very frames* (counted that way
+    # before this guard existed) is dropped; counts remembered from a load of
+    # the real corpus have other fingerprints and are kept.
+    placeholder = bool(st.session_state.get(_PLACEHOLDER_SHOWN_KEY))
+    if placeholder and active:
+        store = _counts_store()
+        entry = store.get(active)
+        stand_in = [frame_fingerprint(f) for f in (words, fixations, raw_gaze)]
+        if isinstance(entry, dict) and entry.get("key") == stand_in:
+            store.pop(active, None)
+    rows: list[DatasetRow] = []
     for token in entries:
         if token in (UPLOAD_CHOICE, AUTHOR_CHOICE):
-            continue  # creation flows have their own buttons below the table
-        own = token in uploaded
-        name = _dataset_display_name(token, registry)
+            continue  # creation flows have their own buttons by the heading
         # DATA-32: counted once per version of a dataset and remembered, so a
-        # row keeps its numbers without the frames being in memory. UX-54 r2 had
-        # narrowed this to the open dataset because counting meant *loading*;
-        # with a store that argument only applies to a corpus nobody has opened
-        # yet, and those rows are still blank rather than guessed at.
-        if token == active:
+        # row keeps its numbers without the frames being in memory. A corpus
+        # nobody has opened yet is never loaded to fill its row.
+        if token == active and placeholder:
+            frames = (None, None, None)
+        elif token == active:
             frames = (words, fixations, raw_gaze)
         elif token in stored_uploads:
             entry = stored_uploads.get(token) or {}
@@ -5127,235 +5059,390 @@ def render_dataset_table(
         else:
             frames = (None, None, None)
         about = dataset_about(token, registry)
+        measured = remembered_dataset_counts(token, *frames)
         # DATA-36: a row that has never been opened shows the figures the corpus
-        # publishes rather than nothing at all; the moment it is loaded, what
-        # loaded takes over. `Counts` says which of the two is on screen.
+        # publishes; the moment it is loaded, what loaded takes over.
         row_counts = dataset_row_counts(
-            measured=remembered_dataset_counts(token, *frames),
-            published=about.get("published_counts"),
+            measured=measured, published=about.get("published_counts")
         )
-        counts = row_counts.counts
+        kind = _DATASET_KIND_LABELS.get(kinds.get(token, ""), "")
+        if not kind and token in uploaded:
+            kind = "Private"
         rows.append(
-            {
-                # The kind leads the row: it is the one-glyph answer to "what
-                # sort of thing is this?", and reading it *before* the name is
-                # what lets the eye skip whole classes of row (the user's call —
-                # it used to sit to the right of the name).
-                "Kind": (
-                    f"{kinds[token]} {kind_labels.get(kinds[token], '')}".strip()
-                    if kinds.get(token)
-                    else ("🔒 Private" if own else "")
-                ),
-                # UX-78: the name *is* the button. `ButtonColumn` takes its label
-                # from the cell value, so the column that says which dataset a
-                # row is can also be the control that opens it — which retires
-                # both the ▶ marker column and the separate Open column. The open
-                # dataset is the coloured row instead (see the Styler below).
-                "Dataset": name,
-                # DATA-35: the one fact about a corpus that fits in a cell. The
-                # description, the coordinate provenance and the corpus' own home
-                # page are sentences or links, so they live one click away in the
-                # ℹ️ About dialog instead — the Home column was a whole column
-                # spent on an "Open ↗" that belongs with the prose describing
-                # what it opens.
-                "Language": about.get("language") or "",
-                "Counts": _COUNTS_BADGES.get(row_counts.source, "")
-                + (" ⚠️" if row_counts.exceeds_published else ""),
-                "Participants": counts.get("Participants"),
-                "Texts": counts.get("Texts"),
-                "Trials": counts.get("Trials"),
-                "Screens": counts.get("Screens"),
-                "Fixations": counts.get("Fixations"),
-                "Words": counts.get("Words"),
-                "Gaze points": counts.get("Gaze points"),
-                "About": _DATASET_ABOUT_LABEL,
-                "Edit": _DATASET_EDIT_LABEL,
-                "Rename": _DATASET_RENAME_LABEL,
-                "Remove": _DATASET_REMOVE_LABEL,
-                "_token": token,
-                "_active": token == active,
-            }
+            DatasetRow(
+                token=token,
+                name=_dataset_display_name(token, registry),
+                kind=kind,
+                language=str(about.get("language") or ""),
+                source=row_counts.source,
+                counts=dict(row_counts.counts),
+                exceeds_published=row_counts.exceeds_published,
+                active=token == active,
+                measured=bool(measured),
+                status="Needs setup" if token == active and placeholder else "",
+                order=len(rows),
+            )
         )
+    return rows
+
+
+def _open_dataset_row(token: str) -> None:
+    """UX-78 — a click anywhere on a dataset's row opens it."""
+    if token == st.session_state.get("data_source_choice"):
+        return
+    _select_dataset(token)
+    st.session_state[_TABLE_NEEDS_APP_RERUN] = True
+
+
+def _edit_open_dataset(token: str) -> None:
+    """✏️ **Edit dataset**, at the end of the open dataset's heading (UX-178).
+
+    Raises ✏️ Edit dataset on it — the description, the column mapping, the
+    recording setup, the source's options and location, the identity check and
+    the metadata tables are all on that screen. `FOCUS_MAPPING_KEY` rides along
+    for the mapping editor's "editing <name>". The manual sample has no mapping
+    to edit: its editor is the authoring canvas.
+    """
+    if token == MANUAL_SAMPLE_CHOICE:
+        _edit_manual_sample()
+        return
+    # UX-178 — the Name field is seeded on open; whatever an editor left behind
+    # without Cancel or Save (a switch of dataset, say) is not this one's name.
+    st.session_state.pop(EDITOR_NAME_FIELD_KEY, None)
+    st.session_state.pop(EDITOR_PENDING_NAME_KEY, None)
+    st.session_state[FOCUS_MAPPING_KEY] = token
+    st.session_state[DATASET_EDITOR_OPEN_KEY] = True
+
+
+def _arm_dataset_row(pending_key: str, token: str) -> None:
+    """Remove: arm the confirmation; the next run opens it.
+
+    Remove in particular only *arms* (UX-54 r2, UX-79): an upload is not
+    recoverable once dropped, so the confirmation does the work.
+    """
+    st.session_state[pending_key] = token
+
+
+def _cycle_dataset_sort(column: str) -> None:
+    current = st.session_state.get(_DATASET_TABLE_SORT_KEY)
+    current = tuple(current) if isinstance(current, tuple | list) else None
+    st.session_state[_DATASET_TABLE_SORT_KEY] = dataset_table.next_sort(current, column)
+
+
+def _render_dataset_table_tools(box, rows: list[DatasetRow]) -> list[DatasetRow]:
+    """Search and the Kind / Language filters, for a long list only.
+
+    Returns the rows they leave. Nothing is drawn until the list is long enough
+    to need narrowing, and each filter only when it has more than one value to
+    choose between.
+    """
+    if len(rows) <= _DATASET_FILTER_MIN_ROWS:
+        return rows
+    tools = box.container(
+        key="dataset_table_tools",
+        horizontal=True,
+        vertical_alignment="center",
+        gap="small",
+    )
+    query = tools.text_input(
+        "Search datasets",
+        key=_DATASET_SEARCH_KEY,
+        placeholder="Search by name",
+        icon=ICONS["search"],
+        label_visibility="collapsed",
+        width=240,
+    )
+    kinds = sorted(
+        {row.kind for row in rows if row.kind},
+        key=dataset_table.KIND_ORDER.index,
+    )
+    picked_kinds = (
+        tools.pills(
+            "Kind",
+            kinds,
+            selection_mode="multi",
+            key=_DATASET_KIND_FILTER_KEY,
+            label_visibility="collapsed",
+        )
+        if len(kinds) > 1
+        else []
+    )
+    languages = sorted({row.language for row in rows if row.language})
+    picked_languages = (
+        tools.multiselect(
+            "Language",
+            languages,
+            key=_DATASET_LANGUAGE_FILTER_KEY,
+            placeholder="Any language",
+            label_visibility="collapsed",
+            width=220,
+        )
+        if len(languages) > 1
+        else []
+    )
+    return dataset_table.filter_rows(
+        rows,
+        query=query or "",
+        kinds=picked_kinds or (),
+        languages=picked_languages or (),
+    )
+
+
+def _render_dataset_table_head(grid, sort) -> None:
+    """The header line — each sortable column's name is its sort button."""
+    head = grid.container(
+        key="dsrow_head",
+        horizontal=True,
+        vertical_alignment="center",
+        gap="small",
+        wrap=False,
+    )
+
+    def _sort_button(cell, column: str, help_text: str) -> None:
+        icon = None
+        if sort and sort[0] == column:
+            icon = ICONS["sort_desc"] if sort[1] else ICONS["sort_asc"]
+        cell.button(
+            column,
+            key=f"dataset_sort_{_field_slug(column)}",
+            type="tertiary",
+            icon=icon,
+            icon_position="right",
+            on_click=_cycle_dataset_sort,
+            args=(column,),
+            help=help_text,
+        )
+
+    _sort_button(
+        head.container(key="dsh_kind", width=_DATASET_KIND_W),
+        "Kind",
+        "Sort by kind — Demo, Manual, Private, Public.",
+    )
+    _sort_button(
+        head.container(key="dsh_name", width=_DATASET_NAME_W),
+        "Dataset",
+        "Sort by name. Click a row to open that dataset.",
+    )
+    _sort_button(
+        head.container(key="dsh_status", width=_DATASET_STATUS_W),
+        "Status",
+        " ".join(
+            f"**{label}** — {text}"
+            for label, text in dataset_table.STATUS_EXPLANATIONS.items()
+        )
+        + " **Needs setup** — its files are not on this machine, so the bundled "
+        "demo is showing in its place.",
+    )
+    head.space("stretch")
+    gaps = " ".join(
+        f"**{label}** — {dataset_table.GAP_EXPLANATIONS[label]}"
+        for label in (
+            dataset_table.NOT_LOADED,
+            dataset_table.NOT_REPORTED,
+            dataset_table.UNKNOWN,
+        )
+    )
+    for count_field in dataset_table.TABLE_COUNT_FIELDS:
+        cell = head.container(
+            key=f"dsh_{_field_slug(count_field)}",
+            width=_DATASET_COUNT_W,
+            horizontal=True,
+            horizontal_alignment="right",
+        )
+        _sort_button(
+            cell,
+            count_field,
+            f"Sort by {count_field.lower()}, largest first. Datasets without a "
+            f"count sort last either way.\n\n{gaps}",
+        )
+    # The actions column has no title: its one button says what it does. The
+    # cell is still drawn — an empty container is not — so the columns line up.
+    head.container(key="dsh_actions", width=_DATASET_ACTIONS_W).markdown(
+        '<span aria-hidden="true">&nbsp;</span>', unsafe_allow_html=True
+    )
+
+
+def _field_slug(count_field: str) -> str:
+    return count_field.lower().replace(" ", "_")
+
+
+def _dataset_count_cell_html(row: DatasetRow, count_field: str) -> str:
+    """One count cell: the grouped number, or its reason in a muted voice."""
+    value = row.value(count_field)
+    if value is not None:
+        return f'<span class="sps-ds-num">{dataset_table.format_count(value)}</span>'
+    return (
+        f'<span class="sps-ds-num sps-ds-gap">{html.escape(row.gap(count_field))}'
+        "</span>"
+    )
+
+
+def _render_dataset_table_row(grid, row: DatasetRow) -> None:
+    """One dataset's line of the table.
+
+    The whole line opens the dataset: its first child is a button stretched
+    over the row by CSS (`styles.py`, *UX-174 r2*), and the cells drawn above it
+    let a click through, except the one holding **Remove**.
+    """
+    slug = _dataset_row_slug(row.token)
+    line = grid.container(
+        # The open row's key carries `current`, which is what the tint keys on.
+        key=f"dsrow_current_{slug}" if row.active else f"dsrow_{slug}",
+        horizontal=True,
+        vertical_alignment="center",
+        gap="small",
+        wrap=False,
+    )
+    line.button(
+        f"Open {row.name}",
+        key=f"dataset_open_{slug}",
+        type="tertiary",
+        on_click=_open_dataset_row,
+        args=(row.token,),
+    )
+    kind = line.container(key=f"dsc_kind_{slug}", width=_DATASET_KIND_W)
+    if row.kind:
+        kind.markdown(f"{_DATASET_KIND_ICONS[row.kind]} {row.kind}")
+
+    name = line.container(
+        key=f"dsc_name_{slug}",
+        width=_DATASET_NAME_W,
+        horizontal=True,
+        vertical_alignment="center",
+        gap="xsmall",
+        wrap=True,
+    )
+    name.markdown(
+        f'<span class="sps-ds-name">{html.escape(row.name)}</span>',
+        unsafe_allow_html=True,
+        width="content",
+    )
+    if row.active:
+        # A word, not only a colour: the badge says it, the tint repeats it.
+        name.badge("Current", icon=ICONS["current"], color="blue")
+    if row.exceeds_published:
+        # DATA-36's discrepancy warning, kept — it is rare, and it is the one
+        # thing on a row that says a number elsewhere is wrong.
+        name.badge(
+            "More than published",
+            icon=ICONS["warning"],
+            color="orange",
+            help="This session loaded **more** than the corpus publishes for "
+            f"{', '.join(row.exceeds_published)} — a corpus cannot be larger "
+            "when loaded than it is, so the published figure is the one to fix.",
+        )
+
+    status = line.container(key=f"dsc_status_{slug}", width=_DATASET_STATUS_W)
+    if row.status:
+        # An operational state, kept apart from where the counts came from.
+        status.badge(row.status, icon=ICONS["warning"], color="orange")
+    else:
+        muted = "" if row.status_label == dataset_table.LOADED else " sps-ds-gap"
+        status.markdown(
+            f'<span class="sps-ds-status{muted}">{row.status_label}</span>',
+            unsafe_allow_html=True,
+        )
+
+    line.space("stretch")
+    for count_field in dataset_table.TABLE_COUNT_FIELDS:
+        cell = line.container(
+            key=f"dsc_{_field_slug(count_field)}_{slug}", width=_DATASET_COUNT_W
+        )
+        cell.markdown(
+            _dataset_count_cell_html(row, count_field), unsafe_allow_html=True
+        )
+
+    actions = line.container(
+        key=f"dsc_actions_{slug}",
+        width=_DATASET_ACTIONS_W,
+        horizontal=True,
+        horizontal_alignment="right",
+        vertical_alignment="center",
+    )
+    actions.button(
+        f"Remove {row.name}",
+        icon=ICONS["delete"],
+        key=f"dataset_row_remove_{slug}",
+        type="tertiary",
+        on_click=_arm_dataset_row,
+        args=(PENDING_DELETE_KEY, row.token),
+        help=f"Remove {row.name} from this session, after a confirmation.",
+    )
+
+
+@st.fragment
+def render_dataset_table(
+    host=None,
+    *,
+    active: str | None = None,
+    words: pd.DataFrame | None = None,
+    fixations: pd.DataFrame | None = None,
+    raw_gaze: pd.DataFrame | None = None,
+) -> None:
+    """📂 Available datasets — one focused row per dataset (UX-54 → UX-174).
+
+    **Kind · Dataset · Status · Participants · Texts · Trials · Fixations ·
+    Remove** (UX-178 moved Status beside the name it qualifies). A click anywhere on a row opens that dataset (UX-78); the open one
+    carries a **Current** badge and a tint, and never moves. **Status** is
+    *Loaded* / *Not loaded* — DATA-36's loaded-vs-published distinction — or an
+    operational state such as *Needs setup*. Everything else about a dataset —
+    Screens, Words and Gaze points, its description, renaming it, editing its
+    setup — is in *What's in the dataset* under the table, for the open one.
+
+    Built from widgets rather than an ``st.dataframe``: a grid cannot say *Not
+    loaded* in a numeric column without sorting it as text. Sorting is ours
+    instead (`dataset_table.sort_rows`, on the integers, missing values last),
+    so it is numeric by construction; and every control is a real button keyed
+    by its dataset, so a click after any sort acts on the row it was drawn in.
+
+    **Counts are only shown for data already in memory, remembered, or
+    published** — the open dataset (whose frames are passed in), every stored
+    upload, anything counted earlier (DATA-32), and a corpus' published figures.
+    Nothing is read from disk to fill a row.
+
+    Args:
+        host: Container to render into. Defaults to the fragment's own.
+        active: The open dataset's entry token, marked in the table.
+        words: The open dataset's word frame, for its counts.
+        fixations: Its fixation frame.
+        raw_gaze: Its raw-gaze frame.
+    """
+    # DATA-35: Remove only opens a dialog, which costs a *fragment* rerun, not a
+    # whole-app one. Opening a dataset asks for the app rerun here, because a
+    # callback may not.
+    if st.session_state.pop(_TABLE_NEEDS_APP_RERUN, False):
+        st.rerun(scope="app")
+    rows = _dataset_table_rows(
+        active=active, words=words, fixations=fixations, raw_gaze=raw_gaze
+    )
+    # Inspection seam (tests, the debug panel): what each row says, by value.
+    st.session_state[DATASET_TABLE_ROWS_KEY] = [
+        dataset_table.row_record(row) for row in rows
+    ]
     if not rows:
         return
-    frame = pd.DataFrame(rows)
-    tokens = frame.pop("_token").tolist()
-    # A blank count is still legitimate — an upload nobody has opened, a source
-    # that publishes no figures, a field that does not apply (no raw gaze).
-    # Pandas would normally upcast those columns to float (and Streamlit would
-    # display e.g. ``24.0``), so keep them as nullable integers explicitly.
-    for column in DATASET_COUNT_FIELDS:
-        frame[column] = pd.array(frame[column], dtype="Int64")
+    uploaded = set(st.session_state.get("_data_source_uploaded") or [])
+    tokens = [row.token for row in rows]
+    box = (host if host is not None else st).container(key="dataset_table")
 
-    def _clicked(state_key):
-        """The token of the row whose button was clicked, or ``None``.
-
-        ``click["row"]`` is a position in the frame handed to ``st.dataframe``,
-        not in whatever order the user sorted the columns into — the same
-        source-position semantics dataframe selections have — so this parallel
-        list stays correct under client-side sorting (the ENG-36 pattern).
-        """
-        click = st.session_state.get(state_key)
-        row = click["row"] if click else None
-        if row is not None and 0 <= row < len(tokens):
-            return tokens[row]
-        return None
-
-    def _on_open() -> None:
-        # UX-78: raised by a click on the dataset's *name*.
-        token = _clicked("dataset_table_name")
-        if token is not None:
-            _select_dataset(token)
-            st.session_state[_TABLE_NEEDS_APP_RERUN] = True
-
-    def _on_edit() -> None:
-        # DATA-35: "a screen similar to add-dataset" is now literally a screen.
-        # Edit opens the dataset and raises the ✏️ Edit dataset screen over the
-        # overview — the column mapping, the recording setup, the source's
-        # options and location, the identity check and the metadata tables are
-        # all on it. `FOCUS_MAPPING_KEY` still rides along for the mapping
-        # editor's "editing <name>" line.
-        token = _clicked("dataset_table_edit")
-        if token is not None:
-            _select_dataset(token)
-            if token == MANUAL_SAMPLE_CHOICE:
-                # The sample has no column mapping to edit — its editor is the
-                # authoring canvas, which only this button opens.
-                _edit_manual_sample()
-            else:
-                st.session_state[FOCUS_MAPPING_KEY] = token
-                st.session_state[DATASET_EDITOR_OPEN_KEY] = True
-            st.session_state[_TABLE_NEEDS_APP_RERUN] = True
-
-    def _on_delete() -> None:
-        # UX-54 r2: arm, don't delete. The click lands on a row of a table — one
-        # cell away from ✏️ Edit — and an upload is not recoverable from the
-        # session once dropped, so the button asks and the confirmation below
-        # does the work.
-        token = _clicked("dataset_table_delete")
-        if token is not None:
-            st.session_state[PENDING_DELETE_KEY] = token
-
-    def _on_rename() -> None:
-        token = _clicked("dataset_table_rename")
-        if token is not None:
-            st.session_state[PENDING_RENAME_KEY] = token
-
-    def _on_about() -> None:
-        token = _clicked("dataset_table_about")
-        if token is not None:
-            st.session_state[PENDING_ABOUT_KEY] = token
-
-    box = host if host is not None else st
-    # UX-78: the open dataset is a tinted row rather than a ▶ in a column of its
-    # own. A Styler is the only per-row colour `st.dataframe` takes, and it is
-    # applied to the whole row so the tint reads as "this one" rather than as a
-    # highlighted cell. The colour is `color-mix`-free on purpose — a Styler
-    # emits inline CSS, which cannot see the theme's variables — so it is a
-    # translucent accent that sits legibly on both the light and the dark grid.
-    active_row = next((i for i, row in enumerate(rows) if row["_active"]), None)
-    frame = frame.drop(columns=["_active"])
-    # A Styler is required for the active-row tint; the underlying nullable
-    # integer dtypes remain intact for numeric display and sorting.
-    display = frame.style
-    if active_row is not None:
-        display = display.apply(
-            lambda row: (
-                [
-                    f"background-color: {_DATASET_ACTIVE_TINT}"
-                    if row.name == active_row
-                    else ""
-                ]
-                * len(row)
-            ),
-            axis=1,
-        )
-    box.dataframe(
-        display,
-        width="stretch",
-        hide_index=True,
-        column_config={
-            "Kind": st.column_config.TextColumn("Kind", width="small"),
-            "Dataset": st.column_config.ButtonColumn(
-                "Dataset",
-                width="medium",
-                type="tertiary",
-                help="Open this dataset.",
-                on_click=_on_open,
-                key="dataset_table_name",
-            ),
-            "Language": st.column_config.TextColumn("Language", width="small"),
-            "Counts": st.column_config.TextColumn(
-                # The ❔ is in the label because a `help=` on a dataframe column
-                # is a hover-only tooltip with nothing on screen to say it is
-                # there — and this header is the one that needs the explanation
-                # (Loaded vs Published is not guessable from the word "Counts").
-                "Counts ❔",
-                width="small",
-                help="Where the numbers to the right come from. **Loaded** — "
-                "counted from the rows this session holds. **Published** — the "
-                "figures this corpus states for itself, shown until it is "
-                "opened; ℹ️ About says where they came from. A ⚠️ means this "
-                "session loaded *more* than was published, so the published "
-                "figure is the one to fix.",
-            ),
-            "Participants": st.column_config.NumberColumn(
-                "Participants", width="small", format="%d"
-            ),
-            "Texts": st.column_config.NumberColumn("Texts", width="small", format="%d"),
-            "Trials": st.column_config.NumberColumn(
-                "Trials", width="small", format="%d"
-            ),
-            "Screens": st.column_config.NumberColumn(
-                "Screens", width="small", format="%d"
-            ),
-            "Fixations": st.column_config.NumberColumn(
-                "Fixations", width="small", format="%d"
-            ),
-            "Words": st.column_config.NumberColumn("Words", width="small", format="%d"),
-            "Gaze points": st.column_config.NumberColumn(
-                "Gaze points", width="small", format="%d"
-            ),
-            # The four action columns carry their names. They used to be headed
-            # by a blank cell, on the reasoning that the glyph in the row says
-            # what it does — which reads as four unlabelled columns of icons the
-            # first time you meet the table.
-            "About": st.column_config.ButtonColumn(
-                "About",
-                type="tertiary",
-                width=_DATASET_ACTION_COL_WIDTH,
-                help="What this dataset is, and where its coordinates come from.",
-                on_click=_on_about,
-                key="dataset_table_about",
-            ),
-            "Edit": st.column_config.ButtonColumn(
-                "Edit",
-                type="tertiary",
-                width=_DATASET_ACTION_COL_WIDTH,
-                help="Open it and edit its column mapping and recording setup.",
-                on_click=_on_edit,
-                key="dataset_table_edit",
-            ),
-            "Rename": st.column_config.ButtonColumn(
-                "Rename",
-                type="tertiary",
-                width=_DATASET_ACTION_COL_WIDTH,
-                help="Rename this dataset.",
-                on_click=_on_rename,
-                key="dataset_table_rename",
-            ),
-            "Remove": st.column_config.ButtonColumn(
-                "Remove",
-                type="tertiary",
-                width=_DATASET_ACTION_COL_WIDTH,
-                help="Remove this dataset from the session.",
-                on_click=_on_delete,
-                key="dataset_table_delete",
-            ),
-        },
+    shown = _render_dataset_table_tools(box, rows)
+    sort = st.session_state.get(_DATASET_TABLE_SORT_KEY)
+    if not (
+        isinstance(sort, tuple | list)
+        and len(sort) == 2
+        and sort[0] in _DATASET_SORTABLE
+    ):
+        sort = None
+    grid = box.container(key="dataset_table_grid")
+    _render_dataset_table_head(grid, sort)
+    ordered = dataset_table.sort_rows(
+        shown, sort[0] if sort else None, descending=bool(sort and sort[1])
     )
-    _render_about_dialog(tokens, registry)
-    _render_rename_dialog(tokens, uploaded)
+    for row in ordered:
+        _render_dataset_table_row(grid, row)
+    if not ordered:
+        box.caption("No dataset matches the search and filters.")
+
     _render_delete_confirmation(box, tokens, uploaded)
     if note := st.session_state.pop("_dataset_table_note", None):
         box.success(note)
@@ -7074,6 +7161,7 @@ def _run_app() -> None:
     # entries before anything fingerprints a frame, so a frame rebuilt this run
     # is hashed afresh and last run's frames stop being kept alive.
     reset_fingerprint_memo()
+    st.session_state[_PLACEHOLDER_SHOWN_KEY] = False
     # Start capturing log records into the in-app debug buffer before any data
     # or plot work runs, so the debug panel (?debug=1) sees this run's logs.
     install_log_capture()
@@ -7400,18 +7488,11 @@ def _run_app() -> None:
     editor_page = setup_page.container(
         key=DATA_EDITOR_KEY if editing else DATA_EDITOR_OFFSCREEN_KEY
     )
+    # UX-177 — the page title, then the table of datasets straight under it:
+    # no "Available datasets" subheading and no rule between the two, since the
+    # page is about nothing else until *What's in the dataset* below.
     if data_view and not wizard_owns_page:
         overview_page.header("Data Management")
-        # UX-52 — peer sections, one heading level, one divider between each.
-        overview_page.divider()
-        # UX-77: the section lists every dataset (#UX-54 made it a table), so it
-        # is named for that rather than for the one *source* it used to pick.
-        # DATA-35 moved ➕ Add dataset off the heading's line and under the
-        # table, on the user's call: it is the action you reach for *after*
-        # reading the list and not finding what you wanted, so it belongs at the
-        # end of the list rather than above it. Its slot is reserved beside the
-        # table below; the button itself is filled once `data_choice` is known.
-        overview_page.subheader(f"{ICONS['datasets']} Available datasets")
     setup_source_slot = overview_page.container()
     # The editor's own header bar — the ✏️ Edit dataset screen's title and its
     # way back, filled below once the dataset's display name is known.
@@ -7426,10 +7507,12 @@ def _run_app() -> None:
     # below draws one headline into each of the slots reserved here; the
     # registry, the numbering and the hover note are `wizard_shell.EDITOR_STEPS`.
     #
-    # Part 1 opens above the description because everything down to the metadata
-    # tables belongs to it — where the files are, how their columns map, and what
-    # is attached to them — exactly as the add screen's part 2 holds every upload
-    # and every mapping row.
+    # Part 2 (Data tables & column mapping) opens above the public loader's
+    # captions because everything down to the metadata tables belongs to it —
+    # where the files are, how their columns map, and what is attached to them
+    # — exactly as the add screen's part 2 holds every upload and mapping row.
+    # UX-178 — part 1 is the add screen's: Name & description.
+    editor_part_name_slot = editor_page.container()
     editor_part_data_slot = editor_page.container()
     description_slot = editor_page.container()
     source_options_slot = editor_page.container()
@@ -7489,7 +7572,7 @@ def _run_app() -> None:
     # local filesystem; preprocessing is behind PRE-22's flag), and a screen
     # reading 1 · 2 · 3 · 5 looks like a section that failed to render rather
     # than one that does not apply here.
-    _editor_shown = {"edit_data", "edit_setup", "edit_identity"}
+    _editor_shown = {"edit_name", "edit_data", "edit_setup", "edit_identity"}
     if local_filesystem_enabled():
         _editor_shown.add("edit_stimulus")
     if preprocessing_enabled():
@@ -7540,6 +7623,14 @@ def _run_app() -> None:
     # source picker it used to aim at is not on this page (only Scanpath and
     # Corpus Analysis draw one), so the step outlined nothing.
     dataset_table_slot = setup_source_slot.container(key="tutorial_available_datasets")
+    # UX-174 r2 → UX-177 — the two ways to make a dataset are one **+ Add
+    # dataset** menu (the Scanpath picker's + with its name spelled out), under
+    # the list it adds to. Filled once `data_choice` is known.
+    add_dataset_slot = (
+        setup_source_slot.container(key="data_page_add")
+        if data_view and not wizard_owns_page
+        else None
+    )
     # UX-166: this run's page — the slot the skeleton and the dataset card draw
     # into while a load is slow: the view area's first child on Scanpath and
     # Corpus Analysis; on the Data page, the slot above the table, or the one
@@ -7559,35 +7650,47 @@ def _run_app() -> None:
         else "scanpath",
         plot_height=loading.recorded_plot_height("single", 480),
     )
-    # DATA-35: under the table, not on the heading's line. Left-aligned in a
-    # narrow column so a stretched button doesn't run the width of the page.
-    add_dataset_slot = None
-    if data_view and not wizard_owns_page:
-        add_dataset_slot = setup_source_slot.container(horizontal=True)
     if data_view and add_dataset_slot is not None and data_choice != UPLOAD_CHOICE:
         # UX-64 took ➕ Add data off the Scanpath row and made this page the only
-        # way in — so the way in has to *be* here. Without this button
+        # way in — so the way in has to *be* here. Without this menu
         # `_enter_add_data_wizard` would have no trigger at all and uploading
-        # would be unreachable. An `on_click` callback, not an inline handler:
-        # it reassigns `data_source_choice`, which only lands before the widgets
-        # instantiate. UX-77 put it on the section heading's line; DATA-35 moved
-        # it under the table.
-        add_dataset_slot.button(
-            f"{ICONS['add']} Add dataset",
-            key="add_data_btn",
-            on_click=_enter_add_data_wizard,
-            help="Upload your own eye-tracking tables.",
-            width="content",
-            type="primary",
-        )
-        add_dataset_slot.button(
-            "Create manual scanpath",
-            icon=ICONS["author"],
-            key="create_manual_scanpath_btn",
-            on_click=_enter_manual_dataset,
-        )
+        # would be unreachable. `on_click` callbacks, not inline handlers: they
+        # reassign `data_source_choice`, which only lands before the widgets
+        # instantiate.
+        with add_dataset_slot.popover(
+            "Add dataset", icon=ICONS["add"], type="primary", key="data_add_menu"
+        ):
+            st.button(
+                "Create manually",
+                icon=ICONS["author"],
+                key="create_manual_scanpath_btn",
+                on_click=_enter_manual_dataset,
+                help="Write a text and place its fixations by hand. Saved "
+                "scanpaths are listed below like any other dataset.",
+                width="stretch",
+            )
+            st.button(
+                "Import files",
+                icon=ICONS["upload"],
+                key="add_data_btn",
+                on_click=_enter_add_data_wizard,
+                help="Add your fixation and word/AOI tables with the setup wizard.",
+                width="stretch",
+            )
+    # UX-178 — part 1's headline on every run, like the other parts (the editor
+    # is built hidden); its two fields only while it is open, since they are
+    # seeded from whichever dataset is open and must not outlive it.
+    editor_name_body = (
+        _editor_part(editor_part_name_slot, "edit_name") if data_view else None
+    )
     if data_view and editing:
         _render_dataset_editor_bar(editor_head_slot, data_choice)
+        # UX-174 r2 — the description is edited here, with the rest of the
+        # dataset, at the top of part 1 (the add screen asks for it beside the
+        # name). The public loader's own caption lands under it, in this slot.
+        editing_token = str(st.session_state.get("data_source_choice") or data_choice)
+        render_name_field(editor_name_body, editing_token)
+        render_description_field(editor_name_body, editing_token)
     # PRE-22: the section is held back from this release — heading, caption and
     # controls all come from behind the same gate, so the page has no gap where
     # a hidden stage used to be.
@@ -7646,17 +7749,20 @@ def _run_app() -> None:
                 "recording setup and any table you added are saved.",
                 icon=ICONS["success"],
             )
-        render_dataset_table(
-            host=dataset_table_slot,
-            # Public corpora load through the historical category token,
-            # while the table rows use concrete registry labels. Preserve
-            # that concrete canonical selection so the active row and its
-            # remembered counts are keyed to the row the user can revisit.
-            active=str(st.session_state.get("data_source_choice") or data_choice),
-            words=words,
-            fixations=fixations,
-            raw_gaze=raw_gaze,
-        )
+        # Rendered *inside* the slot rather than handed it: the table is a
+        # fragment, and a fragment rerun may only draw widgets into its own
+        # containers.
+        with dataset_table_slot:
+            render_dataset_table(
+                # Public corpora load through the historical category token,
+                # while the table rows use concrete registry labels. Preserve
+                # that concrete canonical selection so the active row and its
+                # remembered counts are keyed to the row the user can revisit.
+                active=str(st.session_state.get("data_source_choice") or data_choice),
+                words=words,
+                fixations=fixations,
+                raw_gaze=raw_gaze,
+            )
 
     # (DATA-9's ordered source-config group — description · options · data
     # location · column mapping — is now the top of the Data page reserved
@@ -8355,17 +8461,14 @@ def _run_app() -> None:
             active_token = str(
                 st.session_state.get("data_source_choice") or data_choice
             )
-            dataset_label = _dataset_display_name(active_token).replace("`", "'")
             # UX-137 — the open dataset's own prose is one sentence under the
             # heading, with the rest behind a ❔. It used to be a full ℹ️ About
             # section *above* this heading: a second subheader, the description,
             # the corpus home link, the coordinate-provenance sentence and a
             # six-row published-vs-loaded table, all standing between the user
-            # and the counts they came for. The row's own ℹ️ About button still
-            # opens the whole thing as a dialog, for this dataset and every
-            # other — that is the place detail belongs.
-            st.subheader(f"{ICONS['search']} What's in the `{dataset_label}` dataset")
-            _render_dataset_overview(active_token, registry=public_dataset_registry())
+            # and the counts they came for. UX-174 r2 put Rename on the heading
+            # and Edit on the description line, off the table's rows.
+            render_dataset_inspection_head(active_token)
             # Keyed wrapper → the stable `.st-key-…` selector the "Load and
             # verify a dataset" tutorial spotlights (it kept its name across the
             # move off the Scanpath subtab bar).
@@ -8374,6 +8477,8 @@ def _run_app() -> None:
                     words_filtered,
                     fixations_filtered,
                     raw_gaze_filtered,
+                    annotation_trials=_annotation_trials(combos_all),
+                    dataset_name=_dataset_display_name(active_token),
                 )
     elif active_view == _VIEW_CORPUS:
         with view_area:

@@ -173,16 +173,16 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             TutorialStep(
                 "Choose the data source",
                 "Everything about the dataset lives on the 🗂️ **Data** page, in the "
-                "order the pipeline uses it. Start at **📂 Available datasets** — "
-                "click a name to open it, or ➕ **Add dataset** for your own tables.",
+                "order the pipeline uses it. Start at the list of datasets — "
+                "click a row to open it, or **+ Add dataset** for your own tables.",
                 ".st-key-tutorial_available_datasets",
                 view=_VIEW_DATA,
             ),
             TutorialStep(
                 "Check the column mapping",
-                "✏️ **Edit** a dataset's row to open its setup screen — the "
-                "add screen's numbered parts, for a dataset that already "
-                "exists. Part **1 · Data tables & column mapping** decides what "
+                "**Edit**, beside the dataset's description, opens its setup "
+                "screen — the add screen's parts, for a dataset that exists. "
+                "Part **2 · Data tables & column mapping** decides what "
                 "every measure downstream is computed from. Rows marked ✨ were "
                 "auto-detected; override any that guessed wrong.",
                 ".st-key-tutorial_column_mapping",
@@ -193,13 +193,14 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "Verify what was parsed",
                 "**🔎 What's in the selected dataset** opens on 📊 Stats — the "
                 "counts and their spread, the quickest check that the mapping "
-                "worked. The six raw tables are the tabs beside it.",
+                "worked. The six raw tables and its annotations are the tabs "
+                "beside it.",
                 ".st-key-tutorial_data_inspection",
                 view=_VIEW_DATA,
             ),
             TutorialStep(
                 "Check one trial id is one reading",
-                "Part **3 · Trial identity** checks the whole dataset, before any "
+                "Part **4 · Trial identity** checks the whole dataset, before any "
                 "filtering, and says so either way. A warning here means the "
                 "Trial ID above is missing a column — several readings are being "
                 "drawn as one scanpath, which renders happily as a reading with a "
@@ -738,10 +739,10 @@ _SPOTLIGHT_STEPS = [
     },
     {
         "selector": ".st-key-tour_grp_data_source",
-        "title": f"{ICONS['datasets']} Available datasets",
+        "title": f"{ICONS['datasets']} Your datasets",
         "body": "Your **data source** (demo or your own upload) sits at the left "
         "of the control line. Every dataset is listed on the 🗂️ **Data** page — "
-        "click a name there to open it, ➕ **Add dataset** for your own.",
+        "click a row there to open it, **+ Add dataset** for your own.",
     },
     # Picking comes before narrowing: the picker is the control a new reader
     # reaches for first, and narrowing only means something once they have seen
@@ -1784,7 +1785,7 @@ DOCS_FAQ_URL = f"{CITATION['docs_url']}faq/"
 _FAQ_ITEMS = [
     (
         "A column was mapped to the wrong field. Where do I fix it?",
-        "🗂️ **Data → ✏️ Edit → 1 · Data tables & column mapping** — an "
+        "🗂️ **Data → ✏️ Edit dataset → 2 · Data tables & column mapping** — an "
         "editable form that "
         "re-derives everything in place, no re-upload. It can only offer columns "
         "that survived the import; anything dropped needs a re-upload.",
@@ -2016,10 +2017,11 @@ _WIZARD_GUIDE_STEPS = [
         "step_id": None,
     },
     {
-        "title": "1 · Dataset name",
+        "title": "1 · Name & description",
         "body": (
-            "Name it — this is what shows up in **📂 Available datasets** and "
-            "the dataset picker, so you can switch back to it later."
+            "Name it — this is what shows up on the 🗂️ **Data** page and in the "
+            "dataset picker, so you can switch back to it later. A description "
+            "is optional."
         ),
         "selector": ".st-key-wiz_part_name",
         "step_id": "name",

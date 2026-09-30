@@ -899,8 +899,9 @@ class TestTheWizardStep:
         # The participant table stays up beside the uploads — it is an
         # upload, so it belongs with them, under no heading of its own (r6).
         assert [s.number for s in wizard_shell.STEPS] == [1, 2, 3]
+        # UX-174 r2 renamed part 1 when it gained the Description field.
         assert [s.title for s in wizard_shell.STEPS] == [
-            "Dataset name",
+            "Name & description",
             "Upload data tables",
             "Recording setup",
         ]

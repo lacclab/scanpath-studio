@@ -136,6 +136,173 @@ def get_app_css() -> str:
     .st-key-data_overview_offscreen { display: none !important; }
     .st-key-data_dataset_editor_offscreen { display: none !important; }
 
+    /* UX-174 — 📂 Available datasets as a focused table, built from keyed
+       containers (`app.render_dataset_table`): `dsrow_head` + one
+       `dsrow_<slug>` line per dataset (`dsrow_current_<slug>` for the open
+       one), each cell a fixed-width `dsc_<column>_<slug>` / `dsh_<column>` box
+       so the columns line up down the list. The grid scrolls sideways on its
+       own when it is wider than the page, with the name held in view. */
+    .st-key-dataset_table_grid {
+        overflow-x: auto;
+        gap: 0 !important;
+    }
+    .st-key-dataset_table_grid > div { margin-bottom: 0 !important; }
+    .st-key-dataset_table_grid [class*="st-key-dsrow_"] {
+        min-width: max-content;
+        padding: 0.45rem 0.5rem;
+        border-bottom: 1px solid var(--sps-border);
+    }
+    .st-key-dataset_table_grid .st-key-dsrow_head {
+        padding-top: 0.1rem;
+        padding-bottom: 0.1rem;
+        border-bottom-color: rgba(128, 128, 128, 0.45);
+    }
+    /* The open dataset: a tint *and* the Current badge — never colour alone. */
+    .st-key-dataset_table_grid [class*="st-key-dsrow_current_"] {
+        background: var(--sps-accent-soft);
+    }
+    /* A keyed container's class sits on its inner block; the flex item that
+       takes the width is the `stLayoutWrapper` around it — so the cell rules
+       below select that wrapper, by what it holds. Every cell but the name
+       keeps its width; the name gives way first, down to its minimum, and past
+       that the grid scrolls instead. */
+    [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_"]),
+    [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsh_"]) {
+        flex-shrink: 0 !important;
+    }
+    [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_name_"]),
+    [data-testid="stLayoutWrapper"]:has(> .st-key-dsh_name) {
+        flex-shrink: 1 !important;
+        min-width: 15rem;
+        position: sticky;
+        left: 0;
+        z-index: 1;
+    }
+    [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_name_"]) {
+        background: var(--sps-page-bg);
+    }
+    /* Opaque (it scrolls over the counts), in the open row's tint. */
+    [class*="st-key-dsrow_current_"] > [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_name_"]) {
+        background:
+            linear-gradient(var(--sps-accent-soft), var(--sps-accent-soft)),
+            var(--sps-page-bg);
+    }
+    /* UX-174 r2 — the whole row opens its dataset. Its first child is the
+       row's own button, stretched over the row; every cell is drawn above it
+       and lets a click fall through to it, except the one holding Remove. The
+       button's label ("Open <name>") is for screen readers — the name is
+       drawn in its cell. */
+    .st-key-dataset_table_grid [class*="st-key-dsrow_"] { position: relative; }
+    [class*="st-key-dsrow_"] > [class*="st-key-dataset_open_"] {
+        position: absolute !important;
+        inset: 0;
+        width: auto !important;
+        margin: 0 !important;
+        z-index: 0;
+    }
+    [class*="st-key-dataset_open_"] .stButton,
+    [class*="st-key-dataset_open_"] button {
+        width: 100%;
+        height: 100%;
+    }
+    [class*="st-key-dataset_open_"] button {
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        cursor: pointer;
+    }
+    [class*="st-key-dataset_open_"] button [data-testid="stMarkdownContainer"] {
+        position: absolute !important; width: 1px; height: 1px;
+        overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+    }
+    [class*="st-key-dsrow_current_"] > [class*="st-key-dataset_open_"] button {
+        cursor: default;
+    }
+    [class*="st-key-dsrow_"] > [data-testid="stLayoutWrapper"] {
+        position: relative;
+        z-index: 1;
+        pointer-events: none;
+    }
+    [class*="st-key-dsrow_"] > [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_name_"]) {
+        position: sticky;
+    }
+    [class*="st-key-dsrow_"] > [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_actions_"]),
+    [class*="st-key-dsc_name_"] [data-testid="stTooltipHoverTarget"] {
+        pointer-events: auto;
+    }
+    .st-key-dataset_table_grid [class*="st-key-dsrow_"]:not(.st-key-dsrow_head):not([class*="st-key-dsrow_current_"]):hover,
+    .st-key-dataset_table_grid [class*="st-key-dsrow_"]:not(.st-key-dsrow_head):not([class*="st-key-dsrow_current_"]):hover > [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_name_"]) {
+        background:
+            linear-gradient(var(--sps-hover-soft), var(--sps-hover-soft)),
+            var(--sps-page-bg);
+    }
+    .st-key-dataset_table_grid [class*="st-key-dsrow_"]:has([class*="st-key-dataset_open_"] button:focus-visible) {
+        outline: 2px solid var(--sps-accent);
+        outline-offset: -2px;
+    }
+    .sps-ds-name { font-weight: 600; }
+    /* Streamlit pulls each block up by a negative bottom margin and gives a
+       paragraph its own, which in one-line cells puts their text at different
+       heights. */
+    [class*="st-key-dsc_"] [data-testid="stMarkdownContainer"] { margin-bottom: 0 !important; }
+    [class*="st-key-dsc_"] [data-testid="stMarkdownContainer"] p { margin: 0; }
+    [class*="st-key-dsc_"] > div { margin-bottom: 0 !important; }
+    .st-key-dataset_table_grid [class*="st-key-dsrow_"]:not(.st-key-dsrow_head) {
+        min-height: 2.75rem;
+    }
+    .sps-ds-num {
+        display: block;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+    .sps-ds-gap { opacity: 0.6; font-size: 0.85rem; }
+    .sps-ds-status { white-space: nowrap; font-size: 0.9rem; }
+    /* Header labels are sort buttons; keep them quiet and on one line. */
+    .st-key-dsrow_head button {
+        padding: 0 !important;
+        min-height: 0;
+        font-size: 0.875rem;
+    }
+    .st-key-dsrow_head button p { white-space: nowrap; font-size: 0.875rem; }
+    /* Remove is its icon; the label names the dataset for screen readers. */
+    [class*="st-key-dataset_row_remove_"] button {
+        padding: 0 0.35rem !important;
+        min-height: 0;
+    }
+    [class*="st-key-dataset_row_remove_"] button [data-testid="stMarkdownContainer"] {
+        position: absolute !important; width: 1px; height: 1px;
+        overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+    }
+    .st-key-dataset_table_grid [class*="st-key-dataset_row_remove_"] button:focus-visible,
+    .st-key-dsrow_head button:focus-visible {
+        outline: 2px solid var(--sps-accent);
+        outline-offset: 2px;
+        border-radius: 0.25rem;
+    }
+    /* Phone width: the name, its Current badge, the key count and Remove.
+       Everything else is in *What's in the dataset*, once it is open. */
+    @media (max-width: 640px) {
+        [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_"]):not(:has(> [class*="st-key-dsc_name_"])):not(:has(> [class*="st-key-dsc_participants_"])):not(:has(> [class*="st-key-dsc_actions_"])),
+        [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsh_"]):not(:has(> .st-key-dsh_name)):not(:has(> .st-key-dsh_participants)):not(:has(> .st-key-dsh_actions)) {
+            display: none !important;
+        }
+        [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_name_"]),
+        [data-testid="stLayoutWrapper"]:has(> .st-key-dsh_name) {
+            min-width: 0;
+        }
+        [class*="st-key-dsrow_"] > [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_name_"]),
+        [class*="st-key-dsrow_"] > [data-testid="stLayoutWrapper"]:has(> .st-key-dsh_name) {
+            position: relative;
+        }
+        .st-key-dataset_table_grid [class*="st-key-dsrow_"] { min-width: 0; }
+        [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_participants_"]),
+        [data-testid="stLayoutWrapper"]:has(> .st-key-dsh_participants) {
+            width: auto !important;
+            min-width: 3.5rem;
+        }
+    }
+
     /* === The 💾 Session dialog ==============================================
        UX-100 — Session is a modal opened from the nav, not a page, so the
        off-screen twin the page needed to keep its widgets executing is gone
@@ -370,6 +537,8 @@ def get_app_css() -> str:
         --sps-accent-soft: rgba(31, 119, 180, 0.10);
         --sps-accent-border: rgba(31, 119, 180, 0.22);
         --sps-border: rgba(128, 128, 128, 0.22);
+        /* UX-174 r2 — a row under the pointer (the dataset table). */
+        --sps-hover-soft: rgba(128, 128, 128, 0.08);
         --sps-code-fg: #15639c;
         --sps-shadow-hover: 0 6px 18px rgba(31, 119, 180, 0.16);
         /* UX-145 — the page background, for the few surfaces that must be

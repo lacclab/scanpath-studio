@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from scanpath_studio import annotations as annotations_mod
 from scanpath_studio.annotations import (
     deserialize,
     is_empty_entry,
@@ -132,3 +133,71 @@ def test_select_keys_filters():
     assert ("p", "exc") not in select_keys(store, keys, excluded_tags=["To exclude"])
     # No filters -> everything passes.
     assert select_keys(store, keys) == keys
+
+
+# --- 🗂️ Data → Annotations (UX-174 r2) ---------------------------------------
+
+
+def _store_of_two_datasets():
+    return {
+        ("p1", "t1"): {"star": True, "tags": ["Review"], "note": ""},
+        ("p1", "t1", "s2"): {"star": False, "tags": [], "note": "Screen two."},
+        ("p9", "t9"): {"star": True, "tags": [], "note": "Another dataset."},
+    }
+
+
+def test_records_in_keeps_this_datasets_trials_and_their_screens():
+    records = annotations_mod.records_in(_store_of_two_datasets(), {("p1", "t1")})
+    assert [(r["participant_id"], r["trial_id"]) for r in records] == [
+        ("p1", "t1"),
+        ("p1", "t1"),
+    ]
+    assert {r.get("screen_id") for r in records} == {None, "s2"}
+
+
+def test_merge_records_adds_matches_replaces_and_skips_the_rest():
+    store = _store_of_two_datasets()
+    applied, skipped = annotations_mod.merge_records(
+        store,
+        [
+            {"participant_id": "p1", "trial_id": "t1", "note": "Newer."},
+            {"participant_id": "p1", "trial_id": "t2", "star": True},
+            {"participant_id": "elsewhere", "trial_id": "t1", "star": True},
+        ],
+        {("p1", "t1"), ("p1", "t2")},
+    )
+    assert (applied, skipped) == (2, 1)
+    assert store[("p1", "t1")] == {"star": False, "tags": [], "note": "Newer."}
+    assert store[("p1", "t2")]["star"] is True
+    assert ("elsewhere", "t1") not in store
+
+
+def test_drop_records_removes_exactly_the_named_entries():
+    store = _store_of_two_datasets()
+    removed = annotations_mod.drop_records(
+        store,
+        [{"participant_id": "p1", "trial_id": "t1", "screen_id": "s2"}],
+    )
+    assert removed == 1
+    assert set(store) == {("p1", "t1"), ("p9", "t9")}
+
+
+def test_forget_records_drops_them_from_the_session_store():
+    import streamlit as st
+
+    st.session_state.clear()
+    st.session_state[annotations_mod.ANNOTATIONS_STATE_KEY] = {
+        ("p1", "t1"): {"star": True, "tags": [], "note": ""},
+        ("p2", "t2"): {"star": True, "tags": [], "note": ""},
+    }
+    st.session_state["annotrial_star_p1__t1__parent"] = True
+    removed = annotations_mod.forget_records(
+        [{"participant_id": "p1", "trial_id": "t1"}]
+    )
+    assert removed == 1
+    assert set(st.session_state[annotations_mod.ANNOTATIONS_STATE_KEY]) == {
+        ("p2", "t2")
+    }
+    # The trial editors re-seed from the store instead of writing it back.
+    assert "annotrial_star_p1__t1__parent" not in st.session_state
+    st.session_state.clear()

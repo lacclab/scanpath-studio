@@ -24,14 +24,15 @@ AppTest = streamlit_testing.AppTest
 
 
 class TestTheStepRegistry:
-    def test_the_first_two_parts_mirror_the_add_screens(self):
-        """Editing a dataset's tables is the same question as uploading them,
-        and Recording setup is literally the same renderer."""
+    def test_the_first_three_parts_mirror_the_add_screens(self):
+        """Naming it (UX-178) and editing its tables are the add screen's first
+        two questions, and Recording setup is literally the same renderer."""
         from scanpath_studio.wizard_shell import EDITOR_STEPS, STEPS_BY_ID
 
         ids = [s.id for s in EDITOR_STEPS]
-        assert ids[:2] == ["edit_data", "edit_setup"]
+        assert ids[:3] == ["edit_name", "edit_data", "edit_setup"]
         titles = {s.id: s.title for s in EDITOR_STEPS}
+        assert titles["edit_name"] == STEPS_BY_ID["name"].title
         assert titles["edit_setup"] == STEPS_BY_ID["setup"].title
 
     def test_editor_ids_cannot_collide_with_the_wizards(self):
@@ -48,7 +49,7 @@ class TestTheStepRegistry:
         from scanpath_studio.wizard_shell import EDITOR_STEPS, numbered
 
         every = numbered(EDITOR_STEPS, {s.id for s in EDITOR_STEPS})
-        assert [every[s.id].number for s in EDITOR_STEPS] == [1, 2, 3, 4, 5]
+        assert [every[s.id].number for s in EDITOR_STEPS] == [1, 2, 3, 4, 5, 6]
 
         # Stimulus images need a local filesystem and preprocessing is behind
         # PRE-22's flag; a screen reading 1 · 2 · 3 · 5 looks like a section that
@@ -136,15 +137,17 @@ class TestThePageItDraws:
     def test_the_editor_sections_render_as_numbered_parts(self):
         at = self._data_page()
         parts = self._parts(at)
-        # Tables & mapping · Recording setup · Trial identity, plus Stimulus
-        # images wherever a local filesystem is allowed.
-        assert len(parts) >= 3
+        # Name & description (UX-178) · Tables & mapping · Recording setup ·
+        # Trial identity, plus Stimulus images wherever a local filesystem is
+        # allowed.
+        assert len(parts) >= 4
         numbers = [
             body.split('class="sps-wiz-part-n">')[1].split("<")[0] for body in parts
         ]
         assert numbers == [str(i + 1) for i in range(len(parts))]
-        assert "Recording setup" in parts[1]
-        assert "Trial identity" in parts[2]
+        assert "Name &amp; description" in parts[0] or "Name & description" in parts[0]
+        assert "Recording setup" in parts[2]
+        assert "Trial identity" in parts[3]
 
     def test_the_old_subheaders_are_gone(self):
         """Only the overview screen keeps `st.subheader` sections; every heading

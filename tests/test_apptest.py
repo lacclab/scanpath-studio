@@ -601,11 +601,10 @@ class TestDataInspectionTab:
         # subheaders, and every section of the ✏️ Edit screen is one of the add
         # screen's numbered parts, so its headings are `.sps-wiz-part` markdown.
         subheaders = [s.value for s in at.subheader]
-        for section in (
-            f"{ICONS['datasets']} Available datasets",
-            f"{ICONS['search']} What's in the `Synthetic test trial` dataset",
-        ):
-            assert section in subheaders, f"missing stage {section}: {subheaders}"
+        # UX-177: the list of datasets opens the page with no heading of its own.
+        assert f"{ICONS['datasets']} Available datasets" not in subheaders
+        section = f"{ICONS['search']} What's in the `Synthetic test trial` dataset"
+        assert section in subheaders, f"missing stage {section}: {subheaders}"
         parts = " ".join(
             str(m.value)
             for m in at.markdown
@@ -899,12 +898,29 @@ class TestDatasetTable:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         return at
 
-    def _table(self, at):
-        for element in at.dataframe:
-            frame = element.value
-            if frame is not None and "Dataset" in getattr(frame, "columns", []):
-                return frame
-        raise AssertionError("dataset table not rendered on the Data page")
+    @staticmethod
+    def _table(at):
+        """The table's rows, by value — `app.DATASET_TABLE_ROWS_KEY`'s records."""
+        import pandas as pd
+
+        from scanpath_studio.app import DATASET_TABLE_ROWS_KEY
+
+        records = at.session_state[DATASET_TABLE_ROWS_KEY]
+        assert records, "dataset table not rendered on the Data page"
+        return pd.DataFrame(records)
+
+    @staticmethod
+    def _click(at, key):
+        """Click a table button and run, on the Data page (see `pin_view`)."""
+        at.button(key=key).click()
+        pin_data_view(at)
+        at.run(timeout=90)
+
+    @staticmethod
+    def _slug(token):
+        from scanpath_studio.app import _dataset_row_slug
+
+        return _dataset_row_slug(token)
 
     def test_the_table_lists_datasets_with_counts_and_row_actions(self):
         at = self._at()
@@ -914,85 +930,317 @@ class TestDatasetTable:
         # Counts come from the frames already in memory, not from a reload.
         assert int(row["Participants"].iloc[0]) > 0
         assert int(row["Fixations"].iloc[0]) > 0
-        for column in (
-            "Participants",
-            "Texts",
-            "Trials",
-            "Screens",
-            "Fixations",
-            "Words",
-            "Gaze points",
-        ):
-            assert str(frame[column].dtype) == "Int64", (
-                f"{column} should stay integer even when unopened datasets are blank"
-            )
-        assert row["Kind"].iloc[0] == "🔒 Private"
-        for icon, word in {
-            "🧪": "Demo",
-            "✏️": "Manual",
-            "🔒": "Private",
-            "🌐": "Public",
-        }.items():
-            matching = frame[frame["Kind"].astype(str).str.startswith(icon)]
-            if not matching.empty:
-                assert matching["Kind"].astype(str).str.contains(word).all()
-        # DATA-35: every row carries every action. Edit used to be an upload's
-        # alone, back when it only opened the mapping editor a stored upload
-        # has; it now opens the Edit dataset screen, which every source has.
-        for column in ("About", "Edit", "Rename", "Remove"):
-            assert row[column].iloc[0], f"{column} missing from an upload's row"
+        assert row["Kind"].iloc[0] == "Private"
+        assert set(frame["Kind"]) <= {"Demo", "Manual", "Private", "Public", ""}
+        # UX-174 r2: every row carries the same two controls, keyed by its
+        # dataset — the row-wide button that opens it, and Remove. Details and
+        # the ⋯ menu are gone: rename and edit live on the open dataset's
+        # section, under the table.
+        keys = {b.key for b in at.button}
+        for token in frame["_token"]:
+            slug = self._slug(token)
+            for prefix in ("dataset_open_", "dataset_row_remove_"):
+                assert f"{prefix}{slug}" in keys, f"{prefix} missing for {token}"
+            for gone in (
+                "dataset_details_",
+                "dataset_row_edit_",
+                "dataset_row_rename_",
+            ):
+                assert f"{gone}{slug}" not in keys
+        assert not [k for k in keys if "rename" in str(k)]
+        assert "dataset_edit_btn" in keys
+        # The open dataset has been counted from its rows; the rest have not.
+        status = frame.set_index("_token")["Status"]
+        assert status[self.NAME] == "Loaded"
+        assert set(status) <= {"Loaded", "Not loaded", "Needs setup"}
         demo = frame[frame["Dataset"].str.contains("demo", case=False)]
         if not demo.empty:
-            for column in ("About", "Edit", "Rename", "Remove"):
-                assert demo[column].iloc[0], f"{column} missing from the demo's row"
-            # DATA-35's language cell: the demo is a OneStop subset, so it knows
-            # its language. Its **home link** used to be a column here too; it
-            # moved into the ℹ️ About body, which is asserted below.
+            # DATA-35's language: the demo is a OneStop subset, so it knows its
+            # language — still on the record, for the Language filter.
             assert demo["Language"].iloc[0]
-            assert "Home" not in frame.columns
+        # Both ways to make a dataset are in the + Add dataset menu.
+        assert "create_manual_scanpath_btn" in keys
+        assert "add_data_btn" in keys
 
-    def test_about_body_carries_the_home_link(self):
-        """The corpus home link moved out of the table into ℹ️ About.
+    def test_no_cell_ever_reads_none_or_nan(self):
+        from scanpath_studio.app import DATASET_TABLE_ROWS_KEY
 
-        A column of "Open ↗" cells next to nothing saying what opens was the
-        thing being paid for; the link belongs with the description of the
-        corpus it leads to. Checked at the source level for the same reason
-        `test_delete_is_wired_to_the_remover` is: what matters is that the body
-        still writes it somewhere, not how Streamlit lays it out.
-        """
-        import inspect
+        at = self._at()
+        for record in at.session_state[DATASET_TABLE_ROWS_KEY]:
+            for field, cell in record["_cells"].items():
+                assert cell and cell not in {"None", "nan", "NaN", "<NA>"}, (
+                    record["Dataset"],
+                    field,
+                    cell,
+                )
+                if record[field] is None:
+                    assert cell != "0", "a missing count must not read as zero"
 
-        from scanpath_studio.app import _render_dataset_about_body
+    def test_clicking_a_name_opens_it_and_moves_current_without_reordering(self):
+        at = self._at()
+        before = self._table(at)
+        order = list(before["_token"])
+        other = next(t for t in order if t != self.NAME)
+        self._click(at, f"dataset_open_{self._slug(other)}")
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["data_source_choice"] == other
+        after = self._table(at)
+        assert list(after["_token"]) == order
+        assert after.set_index("_token").loc[other, "_active"]
+        assert not after.set_index("_token").loc[self.NAME, "_active"]
 
-        source = inspect.getsource(_render_dataset_about_body)
-        assert 'about.get("link")' in source
-        assert "about['link']" in source
+    def test_a_sorted_table_opens_the_row_that_was_clicked(self):
+        """The row controls are keyed by dataset, so a sort cannot shift them."""
+        from scanpath_studio.app import _DATASET_TABLE_SORT_KEY
+
+        at = self._at()
+        self._click(at, "dataset_sort_participants")
+        assert at.session_state[_DATASET_TABLE_SORT_KEY] == ("Participants", True)
+        frame = self._table(at)
+        target = frame["_token"].iloc[-1]
+        self._click(at, f"dataset_open_{self._slug(target)}")
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["data_source_choice"] == target
+
+    def test_the_remove_confirmation_counts_the_annotations_it_takes(self):
+        """BUG-95: it used to promise the annotations left, whatever the count
+        — including when they did not."""
+        from scanpath_studio.annotations import ANNOTATIONS_STATE_KEY
+        from scanpath_studio.app import PENDING_DELETE_KEY
+
+        at = self._at()
+        rows = at.session_state["_datasets"][self.NAME]["fixations"]
+        trial_col = "unique_trial_id" if "unique_trial_id" in rows else "trial_id"
+        pid, tid = (
+            str(v) for v in rows[["participant_id", trial_col]].iloc[0].tolist()
+        )
+        at.session_state[ANNOTATIONS_STATE_KEY] = {
+            (pid, tid): {"star": True, "tags": [], "note": ""}
+        }
+        at.session_state[PENDING_DELETE_KEY] = self.NAME
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        asks = [w.value for w in at.warning if "Remove" in str(w.value)]
+        assert asks and "its 1 annotation leave" in asks[0]
+
+    def test_an_uploads_new_name_is_applied_by_save_changes(self):
+        """UX-178: renaming is the editor's **Name** field. An upload's editor
+        widgets are keyed by its name, so the rename waits for ✅ Save changes —
+        and until then it is an unsaved change, which ✕ Cancel asks about."""
+        from scanpath_studio.tabs import EDITOR_NAME_FIELD_KEY
+
+        at = self._at()
+        self._click(at, "dataset_edit_btn")
+        field = next(t for t in at.text_input if t.key == EDITOR_NAME_FIELD_KEY)
+        assert field.value == self.NAME
+        field.input("Pilot study")
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert self.NAME in at.session_state["_datasets"]  # not yet
+        assert at.session_state["_remap_pending_name"] == "Pilot study"
+        assert at.session_state["_remap_dirty"] is True
+        # ✅ Save changes applying it is `tests/test_remap.py`'s — this
+        # fixture's upload has no saved mapping for Save to validate.
+
+    def test_a_built_in_datasets_name_is_an_alias_set_at_once(self):
+        from scanpath_studio.app import DATASET_ALIASES_KEY
+        from scanpath_studio.constants import DEMO_CHOICE
+        from scanpath_studio.tabs import EDITOR_NAME_FIELD_KEY
+
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["data_source_choice"] = DEMO_CHOICE
+        pin_data_view(at)
+        at.run(timeout=90)
+        self._click(at, "dataset_edit_btn")
+        field = next(t for t in at.text_input if t.key == EDITOR_NAME_FIELD_KEY)
+        field.input("Demo, renamed")
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state[DATASET_ALIASES_KEY][DEMO_CHOICE] == "Demo, renamed"
+        # The source's token — its load path and share-link identity — stays.
+        assert at.session_state["data_source_choice"] == DEMO_CHOICE
+
+    def test_remove_arms_the_confirmation_for_its_own_row(self):
+        from scanpath_studio.app import PENDING_DELETE_KEY
+
+        at = self._at()
+        self._click(at, "dataset_sort_dataset")
+        self._click(at, f"dataset_row_remove_{self._slug(self.NAME)}")
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # Armed, not removed: UX-79's confirmation still stands between the two.
+        assert at.session_state[PENDING_DELETE_KEY] == self.NAME
+        assert self.NAME in at.session_state["_datasets"]
+
+    def test_edit_beside_the_description_opens_the_editor(self):
+        from scanpath_studio.app import DATASET_EDITOR_OPEN_KEY
+
+        at = self._at()
+        self._click(at, "dataset_edit_btn")
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state[DATASET_EDITOR_OPEN_KEY] is True
+        assert at.session_state["data_source_choice"] == self.NAME
+        # UX-174 r2 — the description is edited on this screen.
+        from scanpath_studio.app import _description_field_key
+
+        assert [t for t in at.text_area if t.key == _description_field_key(self.NAME)]
+
+    def test_a_description_written_on_the_editor_is_the_datasets_own(self):
+        """Typed on ✏️ Edit dataset and stored in the descriptions dict the
+        recovery cache persists — not on the upload's entry, whose every
+        non-frame field is part of the cache's dataset identity."""
+        from scanpath_studio.app import _description_field_key
+
+        at = self._at()
+        self._click(at, "dataset_edit_btn")
+        field = next(
+            t for t in at.text_area if t.key == _description_field_key(self.NAME)
+        )
+        field.input("Twelve readers, two texts. A pilot.")
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        from scanpath_studio.constants import DATASET_DESCRIPTIONS_KEY
+
+        own = at.session_state[DATASET_DESCRIPTIONS_KEY]
+        assert own[self.NAME] == "Twelve readers, two texts. A pilot."
+        assert "description" not in at.session_state["_datasets"][self.NAME]
+
+    def test_the_annotations_tab_lists_only_this_datasets_trials(self):
+        from scanpath_studio.annotations import ANNOTATIONS_STATE_KEY
+
+        at = self._at()
+        rows = at.session_state["_datasets"][self.NAME]["fixations"]
+        # The trial picker's id — the one an annotation is keyed by.
+        trial_col = "unique_trial_id" if "unique_trial_id" in rows else "trial_id"
+        pid, tid = (
+            str(v) for v in rows[["participant_id", trial_col]].iloc[0].tolist()
+        )
+        at.session_state[ANNOTATIONS_STATE_KEY] = {
+            (pid, tid): {"star": True, "tags": ["Review"], "note": "Mine."},
+            ("nobody", "nothing"): {"star": True, "tags": [], "note": "Not here."},
+        }
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        tables = [
+            d.value
+            for d in at.dataframe
+            if "Note" in getattr(d.value, "columns", [])
+            and "Favorite" in d.value.columns
+        ]
+        assert len(tables) == 1
+        assert list(tables[0]["Note"]) == ["Mine."]
+
+    def test_a_long_list_gets_a_search_and_a_short_one_does_not(self):
+        import pandas as pd
+
+        from scanpath_studio import api
+        from scanpath_studio.app import _DATASET_SEARCH_KEY
+        from scanpath_studio.data import load_sample_data
+
+        at = self._at()
+        assert not [t for t in at.text_input if t.key == _DATASET_SEARCH_KEY]
+
+        words, fixations = api.load_scanpath_data(*load_sample_data())
+        entry = {
+            "words": words,
+            "fixations": fixations,
+            "raw_gaze": pd.DataFrame(),
+            "filter_fields": [],
+            "composite_trial_columns": [],
+        }
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["_datasets"] = {f"Study {i}": dict(entry) for i in range(9)}
+        at.session_state["data_source_choice"] = "Study 0"
+        # Seeded before the run rather than typed between runs: AppTest drops a
+        # value set on a widget inside a fragment (the table is one) before the
+        # next run reads it — the browser keeps it, as it does every widget's.
+        at.session_state[_DATASET_SEARCH_KEY] = "study 3"
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert [t for t in at.text_input if t.key == _DATASET_SEARCH_KEY]
+        shown = {b.key for b in at.button if str(b.key).startswith("dataset_open_")}
+        assert shown == {f"dataset_open_{self._slug('Study 3')}"}
+
+    def test_a_corpus_the_demo_stands_in_for_keeps_its_published_counts(
+        self, monkeypatch
+    ):
+        """PoTeC picked but not on disk: the loader shows the bundled demo in its
+        place (UX-7(b)), and the table used to count those demo rows as PoTeC's
+        *loaded* figures — and remember them. The row keeps its published
+        figures instead, with *Needs setup* as a state of its own."""
+        from scanpath_studio import datasets
+
+        monkeypatch.setattr(datasets, "potec_present", lambda root: False)
+        token = "PoTeC — Potsdam Textbook Corpus"
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["data_source_choice"] = token
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        row = self._table(at).set_index("_token").loc[token]
+        assert row["_active"]
+        assert row["Counts"] == "Published"
+        assert row["Status"] == "Needs setup"
+        assert row["Participants"] == 75
+
+    def test_the_open_dataset_says_one_sentence_and_its_home_page(self):
+        """UX-177: no *About this dataset* popover — the description, the home
+        page on its line, and a note only where it changes how a figure is
+        read (PoTeC's positions are reconstructed)."""
+        from scanpath_studio import datasets
+
+        token = "PoTeC — Potsdam Textbook Corpus"
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["data_source_choice"] = token
+        pin_data_view(at)
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(datasets, "potec_present", lambda root: False)
+            at.run(timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        captions = [str(c.value) for c in at.caption]
+        assert any(
+            "[Home page ↗](https://github.com/DiLi-Lab/PoTeC)" in c for c in captions
+        )
+        assert any("reconstructed, not recorded" in c for c in captions)
+        # What the old popover's body wrote (its own label is not in the tree).
+        tree = str(at._tree)
+        assert "Published figures" not in tree
+        assert "Where the coordinates come from" not in tree
 
     def test_delete_is_wired_to_the_remover(self):
         """Regression: UX-64 dropped the ➕ popover that held *Remove a dataset*,
         leaving `wizard._remove_dataset` with **no caller at all** — deleting an
         upload was unreachable until this table's ✕ put it back.
 
-        AppTest cannot click a `ButtonColumn` cell, and the remover itself is
-        covered by `tests/test_wizard_helpers.py`; what is untested without this
-        is that anything still calls it. That is a source-level fact, so it is
-        checked as one."""
+        The ⋯ → Remove click that arms the confirmation is driven for real in
+        `test_remove_arms_the_confirmation_for_its_own_row`; the confirmation's
+        own button is inside an ``st.dialog``, which AppTest does not run, and
+        the remover itself is covered by `tests/test_wizard_helpers.py`. What
+        is left untested is that the dialog still calls it — a source-level
+        fact, so it is checked as one."""
         import inspect
-
-        from scanpath_studio.app import (
-            _delete_confirmation_dialog,
-            _render_delete_confirmation,
-            render_dataset_table,
-        )
 
         # UX-54 r2 put a confirmation between the two: the table's ✕ arms the
         # pending token, and the confirm button is what calls the remover. UX-79
         # then made that confirmation a modal, so the chain is one link longer —
         # the invariant this test exists for is unchanged: something still calls
         # the remover.
+        from scanpath_studio.app import (
+            _delete_confirmation_dialog,
+            _render_dataset_table_row,
+            _render_delete_confirmation,
+            render_dataset_table,
+        )
+
         table_source = inspect.getsource(render_dataset_table)
-        assert '_clicked("dataset_table_delete")' in table_source
-        assert "PENDING_DELETE_KEY" in table_source
+        assert "_render_delete_confirmation(" in table_source
+        row_source = inspect.getsource(_render_dataset_table_row)
+        assert "args=(PENDING_DELETE_KEY, row.token)" in row_source
         gate_source = inspect.getsource(_render_delete_confirmation)
         assert "_delete_confirmation_dialog(" in gate_source
         dialog_source = inspect.getsource(_delete_confirmation_dialog)
@@ -1009,9 +1257,8 @@ class TestDatasetRename:
     the whole of that, and it touches only session state — so it is exercised
     directly rather than through a 90-second AppTest boot.
 
-    The rename now lives in exactly **one** place: the row's ✏️ Rename in
-    📂 Available datasets. The duplicate inline popover inside "What's in this
-    dataset" is gone; the last two tests pin both halves of that.
+    The rename lives in exactly **one** place: UX-178's **Name** field on
+    ✏️ Edit dataset (a row's menu before UX-174 r2, then a heading button).
     """
 
     NAME = "My corpus"
@@ -1070,6 +1317,71 @@ class TestDatasetRename:
 
         assert _session[COMPARE_SOURCE_STATE_KEY] == "Renamed corpus"
 
+    def test_the_description_follows_the_rename_and_leaves_with_the_dataset(
+        self, _session
+    ):
+        from scanpath_studio import persistence, wizard
+        from scanpath_studio.constants import DATASET_DESCRIPTIONS_KEY
+
+        self._store(_session, self.NAME)
+        _session[DATASET_DESCRIPTIONS_KEY] = {self.NAME: "A pilot."}
+        wizard.rename_dataset(self.NAME, "Pilot")
+        assert _session[DATASET_DESCRIPTIONS_KEY] == {"Pilot": "A pilot."}
+        wizard._remove_dataset("Pilot")
+        assert _session[DATASET_DESCRIPTIONS_KEY] == {}
+        # Persisted as a session key, so it survives a restart without making
+        # the recovery cache rewrite any stored frames.
+        assert DATASET_DESCRIPTIONS_KEY in persistence._SESSION_KEYS
+
+    def test_removing_an_upload_takes_its_trials_annotations(self, _session):
+        """BUG-95: the confirmation said the annotations leave with the upload,
+        and none did. Those on its own trials go; one on a trial another added
+        dataset also has is that dataset's too, and stays."""
+        import pandas as pd
+
+        from scanpath_studio import wizard
+        from scanpath_studio.annotations import ANNOTATIONS_STATE_KEY
+
+        def frames(*pairs):
+            return {
+                "fixations": pd.DataFrame(
+                    {
+                        "participant_id": [p for p, _ in pairs],
+                        "trial_id": [t for _, t in pairs],
+                    }
+                ),
+                "words": pd.DataFrame(),
+            }
+
+        _session["_datasets"] = {
+            self.NAME: frames(("p1", "t1"), ("p1", "t2")),
+            "Other": frames(("p1", "t2")),
+        }
+        _session["data_source_choice"] = "Other"
+        note = {"star": False, "tags": [], "note": "n"}
+        _session[ANNOTATIONS_STATE_KEY] = {
+            ("p1", "t1"): dict(note),
+            ("p1", "t1", "s2"): dict(note),
+            ("p1", "t2"): dict(note),
+            ("p9", "t9"): dict(note),
+        }
+        assert len(wizard.upload_annotations(self.NAME)) == 2
+        wizard._remove_dataset(self.NAME)
+        assert set(_session[ANNOTATIONS_STATE_KEY]) == {("p1", "t2"), ("p9", "t9")}
+
+    def test_a_words_only_upload_is_read_from_its_words(self, _session):
+        import pandas as pd
+
+        from scanpath_studio import wizard
+
+        entry = {
+            "fixations": pd.DataFrame(),
+            "words": pd.DataFrame(
+                {"participant_id": [1, 1], "unique_trial_id": ["a", "a"]}
+            ),
+        }
+        assert wizard._upload_trials(entry) == {("1", "a")}
+
     def test_a_built_in_source_label_cannot_be_shadowed(self, _session):
         """A stored dataset named exactly like a built-in source would put a
         duplicate option in the picker and hijack that source's load branch."""
@@ -1082,34 +1394,9 @@ class TestDatasetRename:
         assert DEMO_CHOICE not in _session["_datasets"]
         assert f"{DEMO_CHOICE} (uploaded)" in _session["_datasets"]
 
-    def test_the_row_dialog_is_the_one_way_in(self):
-        """The table's ✏️ Rename arms a pending token that opens the dialog, and
-        the dialog is what calls the renamer.
-
-        Source-level for the same reason ``test_delete_is_wired_to_the_remover``
-        is: AppTest cannot click a ``ButtonColumn`` cell, and a dialog rendered
-        from inside an ``@st.fragment`` does not take AppTest clicks either.
-        What must not silently break is the chain."""
-        import inspect
-
-        from scanpath_studio.app import (
-            _rename_dataset_dialog,
-            _render_rename_dialog,
-            render_dataset_table,
-        )
-
-        assert '_clicked("dataset_table_rename")' in inspect.getsource(
-            render_dataset_table
-        )
-        assert "_rename_dataset_dialog(" in inspect.getsource(_render_rename_dialog)
-        dialog_source = inspect.getsource(_rename_dataset_dialog)
-        assert "from scanpath_studio.wizard import rename_dataset" in dialog_source
-        assert "rename_dataset(token, requested)" in dialog_source
-
-    def test_the_inspection_section_carries_no_rename_of_its_own(self):
-        """ "What's in this dataset" used to repeat the rename as a
-        ``Dataset: <name>`` line with its own ✏️ Rename popover, one section
-        below the table that already offers it."""
+    def test_rename_is_a_field_on_the_editor_and_nowhere_else(self):
+        """UX-178: one rename — ✏️ Edit dataset's **Name** — and no rename
+        button on the rows or beside the heading."""
         import pandas as pd
 
         from scanpath_studio import api
@@ -1130,10 +1417,7 @@ class TestDatasetRename:
         pin_data_view(at)
         at.run(timeout=90)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert not [
-            t for t in at.text_input if str(t.key).startswith("dataset_rename_")
-        ]
-        assert not [b for b in at.button if str(b.key).startswith("dataset_rename_")]
+        assert not [b.key for b in at.button if "rename" in str(b.key)]
 
 
 @pytest.mark.timeout(90)

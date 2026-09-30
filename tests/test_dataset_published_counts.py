@@ -194,101 +194,12 @@ class TestCheckingThePublishedFigures:
         assert row.exceeds_published == ()
 
 
-class TestTheSideBySide:
-    """The ℹ️ dialog's published-vs-loaded table."""
-
-    def test_lists_every_published_field_in_column_order(self):
-        rows = app.published_comparison_rows(
-            {"Trials": 900, "Participants": 75}, {"Participants": 75, "Trials": 900}
-        )
-        assert [row[""] for row in rows] == ["Participants", "Trials"]
-
-    def test_thousands_are_grouped(self):
-        rows = app.published_comparison_rows({"Fixations": 404420}, {"Fixations": 1000})
-        assert rows[0]["Published"] == "404,420"
-        assert rows[0]["This session"] == "1,000"
-
-    def test_a_field_this_session_never_measured_reads_as_blank(self):
-        """The demo publishes a gaze-point total; a session that never loaded
-        the raw-gaze overlay has none, and formatting that blank as a number is
-        a crash inside a dialog."""
-        rows = app.published_comparison_rows(
-            {"Gaze points": 2233}, {"Gaze points": None}
-        )
-        assert rows[0]["This session"] == "—"
-
+class TestTheLookup:
     def test_the_catalogue_cannot_be_edited_through_the_lookup(self):
         """`dataset_about` hands out the entry's own figures; a caller that
         edited them in place would be editing the catalogue for the session."""
         app.dataset_about(DEMO_CHOICE)["published_counts"]["Participants"] = 999
         assert app.published_dataset_counts(DEMO_CHOICE)["Participants"] == 3
-
-
-class _Recorder:
-    """A stand-in for `streamlit` that records what a section rendered.
-
-    The ℹ️ About dialog cannot be driven through `AppTest` — a `st.dialog` body
-    does not run in it — and the branch that matters most (the load that
-    contradicts a published figure) would otherwise ship unexercised.
-    """
-
-    def __init__(self, session_state: dict | None = None) -> None:
-        self.session_state = session_state if session_state is not None else {}
-        self.calls: list[tuple[str, object]] = []
-
-    def __getattr__(self, name: str):
-        def record(value=None, *args, **kwargs):
-            self.calls.append((name, value))
-
-        return record
-
-    def said(self, kind: str) -> list:
-        return [value for name, value in self.calls if name == kind]
-
-
-class TestTheDialogSection:
-    """`_render_published_figures` — the three states it can be in."""
-
-    token = "PoTeC — Potsdam Textbook Corpus"
-
-    def _render(self, loaded: dict | None) -> _Recorder:
-        from unittest.mock import patch
-
-        state = {}
-        if loaded is not None:
-            state[app.DATASET_COUNTS_STORE_KEY] = {
-                self.token: {"key": ["a", "b", "c"], "counts": loaded}
-            }
-        recorder = _Recorder(state)
-        with patch.object(app, "st", recorder):
-            app._render_published_figures(self.token, app.PUBLIC_DATASET_REGISTRY)
-        return recorder
-
-    def test_says_nothing_for_a_dataset_that_publishes_nothing(self):
-        from unittest.mock import patch
-
-        recorder = _Recorder()
-        with patch.object(app, "st", recorder):
-            app._render_published_figures("nobody", {})
-        assert recorder.calls == []
-
-    def test_names_the_basis_before_the_dataset_is_opened(self):
-        recorder = self._render(loaded=None)
-        assert any("Published figures" in str(v) for v in recorder.said("markdown"))
-        assert recorder.said("dataframe") == []  # the row already *is* the figures
-
-    def test_sets_the_two_side_by_side_once_it_is_loaded(self):
-        recorder = self._render(loaded={"Participants": 75, "Trials": 900})
-        assert len(recorder.said("dataframe")) == 1
-        assert recorder.said("warning") == []
-        assert any("Loading less" in str(v) for v in recorder.said("caption"))
-
-    def test_a_load_bigger_than_the_published_figure_says_so(self):
-        recorder = self._render(loaded={"Participants": 80})
-        warnings = recorder.said("warning")
-        assert len(warnings) == 1
-        assert "Participants" in str(warnings[0])
-        assert recorder.said("caption") == []
 
 
 class TestPreparedBenchmarkCorpora:
@@ -371,11 +282,9 @@ class TestTheTableItself:
 
     @staticmethod
     def _table(at) -> pd.DataFrame:
-        for element in at.dataframe:
-            frame = getattr(element.value, "data", element.value)
-            if "Dataset" in getattr(frame, "columns", []):
-                return frame
-        raise AssertionError("the dataset table did not render")
+        records = at.session_state[app.DATASET_TABLE_ROWS_KEY]
+        assert records, "the dataset table did not render"
+        return pd.DataFrame(records)
 
     @pytest.fixture(scope="class")
     def table(self) -> pd.DataFrame:
@@ -405,3 +314,33 @@ class TestTheTableItself:
         row = table.set_index("Dataset").loc["MultiplEYE"]
         assert row["Counts"] == ""
         assert pd.isna(row["Participants"])
+        # UX-174: and the cell says why, rather than showing a blank or a 0.
+        assert row["_cells"]["Participants"] == "Not loaded"
+
+
+class TestWhatTheDataPageSays:
+    """UX-177: one sentence per dataset, a note only where it matters."""
+
+    def _catalogue(self):
+        registry = app.public_dataset_registry()
+        return list(registry) + list(app._BUILTIN_DATASET_ABOUT), registry
+
+    def test_every_description_is_one_sentence(self):
+        tokens, registry = self._catalogue()
+        for token in tokens:
+            text = app.dataset_about(token, registry).get("description") or ""
+            assert app._overview_sentence(text)[1] == "", (token, text)
+
+    def test_no_coordinate_badge_is_left_in_the_catalogue(self):
+        tokens, registry = self._catalogue()
+        for token in tokens:
+            assert "geometry" not in app.dataset_about(token, registry)
+
+    def test_only_the_datasets_whose_figures_read_differently_carry_a_note(self):
+        tokens, registry = self._catalogue()
+        noted = {
+            token
+            for token in tokens
+            if app.dataset_about(token, registry).get("reading_note")
+        }
+        assert noted == {"PoTeC — Potsdam Textbook Corpus", DEMO_CHOICE}

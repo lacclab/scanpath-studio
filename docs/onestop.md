@@ -28,8 +28,9 @@ paragraphs, each in an Advanced and an Elementary version).
 ## Loading it
 
 OneStop is exposed as a **Public dataset**. In the app, open 🗂️ **Data**, click
-**OneStop** in **📂 Available datasets**, then **✏️ Edit** it; its **Options** pick a
-**Variant**, a **Reading regime**, and one or more **Parts**:
+**OneStop** in the list of datasets, then choose **Edit dataset**; its
+**Options** pick a **Variant**, a **Reading regime**, and one or more
+**Parts**:
 
 **Variant**
 
@@ -71,7 +72,7 @@ its own trial (the part is folded into the trial id, e.g. `Paragraph::1` vs
 regime-split; the other parts come from the all-regimes full release, so they
 are not narrowed to the chosen regime: they hold every regime's trials.
 
-The **✏️ Edit** screen's data-location part lists the **Expected files** and
+The ✏️ **Edit dataset** screen's data-location part lists the **Expected files** and
 shows whether they're already present (until they are, the app shows the bundled
 demo, with a **⬇ Download now** panel). For the Public variant, if they're
 present the corpus loads with no network access; if not, click **⬇ Download** to

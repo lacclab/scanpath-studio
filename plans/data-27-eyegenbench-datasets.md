@@ -1,7 +1,7 @@
 # DATA-27 · EyeGenBench: load all 39 benchmark corpora as one built-in source
 
 > **Status: design, 2026-08-14** — spec for the
-> [improvements tracker](../tracker/index.html) → **DATA-27** ("Load every
+> [issue #105](https://github.com/lacclab/scanpath-studio/issues/105) → **DATA-27** ("Load every
 > EyeGenBench dataset into the app"). Consumes
 > [EyeBench/EyeGenBench](https://github.com/EyeBench/EyeGenBench) as an offline
 > preprocessing step; adds a fourth built-in corpus source alongside OneStop,

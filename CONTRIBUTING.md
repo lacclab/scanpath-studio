@@ -29,9 +29,9 @@ gh issue list                       # what's open
 gh project item-list 5 --owner lacclab   # the board, with Status and Priority
 ```
 
-Everything closed before 2026-08-20 is in the in-repo `tracker/` archive
-instead — see [*Before you open a PR*](#before-you-open-a-pr) below for how to
-read it.
+Everything closed before 2026-08-20 was in the in-repo `tracker/` archive,
+removed on 2026-09-30; it is still at the `v0.31.2` tag
+([`tracker/`](https://github.com/lacclab/scanpath-studio/tree/v0.31.2/tracker)).
 
 If you use an AI coding assistant, it picks the project's conventions up on its
 own: [`CLAUDE.md`](CLAUDE.md) (working agreements) imports
@@ -112,15 +112,9 @@ body current; the conventions — the `[VIZ-37]` title format, the four-section
 body, and the rule that **closing an issue is the maintainer's sign-off**, not
 yours — are in `CLAUDE.md` → *Tracking work*.
 
-The in-repo tracker that preceded this (`tracker/`) is a read-only archive of
-everything closed before 2026-08-20, with the full write-ups. Read it with
-`python3 tracker/server.py` — it opens at <http://127.0.0.1:8765/tracker/> — and
-don't edit it. On Windows run `python tracker\server.py` (or double-click
-`tracker\start.bat`); `python3` there is normally the Microsoft Store alias,
-which prints *"Python was not found"* and exits without starting anything, and
-`start.command` is a zsh script. If the port is already taken, another person or
-editor session owns that server — start yours on a different port (`--port` for
-the archive, `--server.port` for Streamlit) rather than killing theirs.
+If Streamlit's port is already taken, another person or editor session owns
+that server — start yours on a different one (`--server.port`) rather than
+killing theirs.
 
 ## Working together
 
@@ -155,10 +149,10 @@ Common to both:
   assignees and write-ups live on GitHub now, so two people moving two issues
   cannot conflict at all — which was most of what this section used to be about.
   What still needs care is the **ID**: a new item takes the next free number in
-  its `area:*` prefix, and most IDs live in only one place. Check all four —
+  its `area:*` prefix, and most IDs live in only one place. Check all three —
   `CHANGELOG.md` (where most are allocated), `gh issue list --state all --search
-  "[DATA-"`, the archive's `tracker/data.js`, and the **open PRs**, whose
-  unmerged changelogs the other three cannot see
+  "[DATA-"`, and the **open PRs**, whose unmerged changelogs the other two
+  cannot see
   (`gh pr list --state open`, then each PR's `CHANGELOG.md` hunk of
   `gh pr diff <n>` — the command is in `CLAUDE.md`; `gh pr diff` takes no path) — as
   `CLAUDE.md` → *Tracking work* spells out. Two people reaching for a number at

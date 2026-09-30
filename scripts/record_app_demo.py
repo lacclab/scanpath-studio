@@ -153,7 +153,10 @@ class Screencast:
         self.cdp.send("Page.screencastFrameAck", {"sessionId": event["sessionId"]})
         path = self.frames / f"{len(self.times):05d}.png"
         path.write_bytes(base64.b64decode(event["data"]))
-        self.times.append(event["metadata"].get("timestamp") or time.time())
+        stamp = event["metadata"].get("timestamp") or time.time()
+        # Chrome occasionally stamps a frame a few ms before its predecessor,
+        # which would be a negative duration in the ffconcat listing.
+        self.times.append(max(stamp, self.times[-1]) if self.times else stamp)
 
     def start(self) -> None:
         self.cdp.send(

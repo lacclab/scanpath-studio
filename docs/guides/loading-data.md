@@ -93,7 +93,8 @@ participants, texts, trials and fixations, and its **Status**. Click anywhere on
 a row to open that dataset. The open one is marked **Current** and tinted, and
 the list does not reorder when you switch. Click a column heading to sort by it;
 datasets without that count sort last. The bin at the end of a row removes that
-dataset, after a confirmation. Past eight datasets, a search box and Kind /
+dataset, after a confirmation; a dataset you added takes the annotations on its
+trials with it. Past eight datasets, a search box and Kind /
 Language filters appear. **+ Add dataset**, above the list, imports your own
 files or starts a scanpath by hand.
 

@@ -241,6 +241,17 @@ def restore_records(records: list[dict]) -> int:
     return len(store)
 
 
+def forget_records(records: list[dict]) -> int:
+    """Drop ``records`` from the session store; the trial editors re-seed.
+
+    Returns how many entries were removed.
+    """
+    removed = drop_records(_store(), records)
+    if removed:
+        _reseed_trial_editors()
+    return removed
+
+
 def _reseed_trial_editors() -> None:
     """Drop the per-trial editors' widget state, so they re-seed from the store."""
     for key in [

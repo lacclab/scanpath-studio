@@ -1003,6 +1003,28 @@ class TestDatasetTable:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state["data_source_choice"] == target
 
+    def test_the_remove_confirmation_counts_the_annotations_it_takes(self):
+        """BUG-95: it used to promise the annotations left, whatever the count
+        — including when they did not."""
+        from scanpath_studio.annotations import ANNOTATIONS_STATE_KEY
+        from scanpath_studio.app import PENDING_DELETE_KEY
+
+        at = self._at()
+        rows = at.session_state["_datasets"][self.NAME]["fixations"]
+        trial_col = "unique_trial_id" if "unique_trial_id" in rows else "trial_id"
+        pid, tid = (
+            str(v) for v in rows[["participant_id", trial_col]].iloc[0].tolist()
+        )
+        at.session_state[ANNOTATIONS_STATE_KEY] = {
+            (pid, tid): {"star": True, "tags": [], "note": ""}
+        }
+        at.session_state[PENDING_DELETE_KEY] = self.NAME
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        asks = [w.value for w in at.warning if "Remove" in str(w.value)]
+        assert asks and "its 1 annotation leave" in asks[0]
+
     def test_rename_on_the_heading_arms_the_open_datasets_dialog(self):
         from scanpath_studio.app import PENDING_RENAME_KEY
 
@@ -1274,6 +1296,55 @@ class TestDatasetRename:
         # Persisted as a session key, so it survives a restart without making
         # the recovery cache rewrite any stored frames.
         assert DATASET_DESCRIPTIONS_KEY in persistence._SESSION_KEYS
+
+    def test_removing_an_upload_takes_its_trials_annotations(self, _session):
+        """BUG-95: the confirmation said the annotations leave with the upload,
+        and none did. Those on its own trials go; one on a trial another added
+        dataset also has is that dataset's too, and stays."""
+        import pandas as pd
+
+        from scanpath_studio import wizard
+        from scanpath_studio.annotations import ANNOTATIONS_STATE_KEY
+
+        def frames(*pairs):
+            return {
+                "fixations": pd.DataFrame(
+                    {
+                        "participant_id": [p for p, _ in pairs],
+                        "trial_id": [t for _, t in pairs],
+                    }
+                ),
+                "words": pd.DataFrame(),
+            }
+
+        _session["_datasets"] = {
+            self.NAME: frames(("p1", "t1"), ("p1", "t2")),
+            "Other": frames(("p1", "t2")),
+        }
+        _session["data_source_choice"] = "Other"
+        note = {"star": False, "tags": [], "note": "n"}
+        _session[ANNOTATIONS_STATE_KEY] = {
+            ("p1", "t1"): dict(note),
+            ("p1", "t1", "s2"): dict(note),
+            ("p1", "t2"): dict(note),
+            ("p9", "t9"): dict(note),
+        }
+        assert len(wizard.upload_annotations(self.NAME)) == 2
+        wizard._remove_dataset(self.NAME)
+        assert set(_session[ANNOTATIONS_STATE_KEY]) == {("p1", "t2"), ("p9", "t9")}
+
+    def test_a_words_only_upload_is_read_from_its_words(self, _session):
+        import pandas as pd
+
+        from scanpath_studio import wizard
+
+        entry = {
+            "fixations": pd.DataFrame(),
+            "words": pd.DataFrame(
+                {"participant_id": [1, 1], "unique_trial_id": ["a", "a"]}
+            ),
+        }
+        assert wizard._upload_trials(entry) == {("1", "a")}
 
     def test_a_built_in_source_label_cannot_be_shadowed(self, _session):
         """A stored dataset named exactly like a built-in source would put a

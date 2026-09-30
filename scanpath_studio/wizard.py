@@ -343,10 +343,53 @@ def _finalize_wizard_dataset() -> None:
     st.session_state[TRIAL_IDENTITY_CHECK_KEY] = "add"
 
 
+def _upload_trials(entry) -> frozenset[tuple[str, str]]:
+    """An upload's ``(participant, trial)`` pairs, as annotations are keyed.
+
+    The trial picker's ids: `utils.build_combo_options` lists the fixation
+    table's trials under ``unique_trial_id`` when there is one, else
+    ``trial_id``. A table without fixations is read from its words instead.
+    """
+    for key in ("fixations", "words"):
+        frame = entry.get(key) if isinstance(entry, dict) else None
+        if not isinstance(frame, pd.DataFrame) or frame.empty:
+            continue
+        trial_col = "unique_trial_id" if "unique_trial_id" in frame else "trial_id"
+        if {"participant_id", trial_col} <= set(frame.columns):
+            pairs = frame[["participant_id", trial_col]].drop_duplicates()
+            return frozenset(
+                zip(pairs["participant_id"].astype(str), pairs[trial_col].astype(str))
+            )
+    return frozenset()
+
+
+def upload_annotations(name: str) -> list[dict]:
+    """The annotations removing upload ``name`` takes with it (BUG-95).
+
+    Those on its trials — except a trial another added dataset also has: the
+    session keeps one annotation store keyed by participant and trial, so an
+    annotation on a shared trial is that dataset's too, and stays. A public
+    corpus is not in memory to ask, which is why the removal confirmation says
+    how many will go rather than only that they will.
+    """
+    from scanpath_studio import annotations
+
+    store = st.session_state.get("_datasets", {})
+    others = frozenset().union(
+        *(_upload_trials(entry) for key, entry in store.items() if key != name)
+    )
+    return annotations.records_in(
+        st.session_state.get(annotations.ANNOTATIONS_STATE_KEY) or {},
+        _upload_trials(store.get(name)) - others,
+    )
+
+
 def _remove_dataset(name: str) -> None:
     """Remove a previously added dataset (the ✕ button's ``on_click`` callback).
 
-    Pops it from the ``_datasets`` store and, if it was the selected source,
+    Pops it from the ``_datasets`` store — with its description, its metadata
+    tables and the annotations on its trials (`upload_annotations`) — and, if
+    it was the selected source,
     switches back to the bundled demo via ``_pending_source_choice`` (applied
     before the radio re-instantiates, like the wizard finalize/cancel switch).
 
@@ -359,6 +402,11 @@ def _remove_dataset(name: str) -> None:
     recomputed on the next rerun from frames that are still loaded, which is the
     same lossless trade the 🧹 button makes.
     """
+    # BUG-95 — its annotations go with it, as the confirmation says. Read
+    # before the entry leaves: the trials are taken from its frames.
+    from scanpath_studio import annotations
+
+    annotations.forget_records(upload_annotations(name))
     store = st.session_state.get("_datasets", {})
     store.pop(name, None)
     # UX-174 r2 — and its description, so a new dataset of that name starts

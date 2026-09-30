@@ -4513,10 +4513,25 @@ def _delete_confirmation_dialog(
     """
     owned = token in uploaded
     if owned:
-        st.warning(
-            f"Remove **{_dataset_display_name(token)}**? Its tables, column "
-            "mapping and annotations leave this session — there is no undo."
+        # BUG-95: said "and annotations" while removing none. The count is the
+        # annotations on its trials that no other added dataset shares.
+        from scanpath_studio.wizard import upload_annotations
+
+        count = len(upload_annotations(token))
+        taken = (
+            f", column mapping and its {count:,} annotation{'' if count == 1 else 's'}"
+            if count
+            else " and column mapping"
         )
+        st.warning(
+            f"Remove **{_dataset_display_name(token)}**? Its tables{taken} "
+            "leave this session — there is no undo."
+        )
+        if count:
+            st.caption(
+                "To keep a copy, **Export** from the dataset's **Annotations** "
+                "tab first."
+            )
     else:
         st.caption(
             f"Remove **{_dataset_display_name(token)}** from Available datasets "
@@ -4559,8 +4574,8 @@ def _delete_confirmation_dialog(
 def _render_delete_confirmation(host, tokens: list, uploaded: set[str]) -> None:
     """The confirm step between ✕ Delete and the dataset actually going away.
 
-    Deleting an upload drops its frames, its mapping and its annotations from
-    the session with no undo, and the button that starts it sits on a row that
+    Deleting an upload drops its frames, its mapping and the annotations on its
+    trials (BUG-95) from the session with no undo, and the button that starts it sits on a row that
     opens the dataset when clicked anywhere else — so the click arms this, and
     this asks.
 

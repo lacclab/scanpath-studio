@@ -180,3 +180,24 @@ def test_drop_records_removes_exactly_the_named_entries():
     )
     assert removed == 1
     assert set(store) == {("p1", "t1"), ("p9", "t9")}
+
+
+def test_forget_records_drops_them_from_the_session_store():
+    import streamlit as st
+
+    st.session_state.clear()
+    st.session_state[annotations_mod.ANNOTATIONS_STATE_KEY] = {
+        ("p1", "t1"): {"star": True, "tags": [], "note": ""},
+        ("p2", "t2"): {"star": True, "tags": [], "note": ""},
+    }
+    st.session_state["annotrial_star_p1__t1__parent"] = True
+    removed = annotations_mod.forget_records(
+        [{"participant_id": "p1", "trial_id": "t1"}]
+    )
+    assert removed == 1
+    assert set(st.session_state[annotations_mod.ANNOTATIONS_STATE_KEY]) == {
+        ("p2", "t2")
+    }
+    # The trial editors re-seed from the store instead of writing it back.
+    assert "annotrial_star_p1__t1__parent" not in st.session_state
+    st.session_state.clear()

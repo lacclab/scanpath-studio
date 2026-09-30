@@ -1,7 +1,7 @@
 # Desktop build (ENG-15)
 
 Standalone per-OS bundles of the app (PyInstaller onedir + the system default
-browser). Design + rationale: [`plans/eng-15-desktop-app.md`](../plans/eng-15-desktop-app.md).
+browser). Design + rationale: [`plans/eng-15-desktop-app.md`](https://github.com/lacclab/scanpath-studio/blob/v0.31.2/plans/eng-15-desktop-app.md) (at `v0.31.2`).
 
 ```bash
 pip install . pyinstaller                             # non-editable install

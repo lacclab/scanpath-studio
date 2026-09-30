@@ -1,7 +1,7 @@
 # Desktop build (ENG-15, signed under ENG-21)
 
-Standalone per-OS bundles of the app (PyInstaller onedir + the system default
-browser). Design + rationale: [`plans/eng-15-desktop-app.md`](https://github.com/lacclab/scanpath-studio/blob/v0.31.2/plans/eng-15-desktop-app.md) (at `v0.31.2`)
+Standalone per-OS bundles of the app (PyInstaller onedir + a Chromium app
+window, or the default browser without one — ENG-85). Design + rationale: [`plans/eng-15-desktop-app.md`](https://github.com/lacclab/scanpath-studio/blob/v0.31.2/plans/eng-15-desktop-app.md) (at `v0.31.2`)
 and [`plans/eng-21-signing-notarization.md`](../plans/eng-21-signing-notarization.md).
 
 ```bash
@@ -17,9 +17,11 @@ path-based default that picked the folder would test an artifact that is never
 released.
 
 - `launcher.py` — frozen entry point: Streamlit server on a free port, branded
-  theme, opens the browser after the health check; `--selfcheck` for CI. In the
+  theme, opens the app after the health check — `--app=<url>` in Chrome / Edge /
+  Brave / Chromium when installed, else `webbrowser.open` (ENG-85;
+  `SCANPATH_DESKTOP_BROWSER=default` forces the tab); `--selfcheck` for CI. In the
   macOS `.app` it also redirects output to `~/Library/Logs/Scanpath Studio/` and
-  quits once the last browser tab has been closed for `IDLE_EXIT_GRACE_S`
+  quits once the last app window or tab has been closed for `IDLE_EXIT_GRACE_S`
   (150s — just past Streamlit's own two-minute session-retention window), since
   a bundle with no Cocoa run loop cannot answer Cmd-Q.
 - `scanpath_studio.spec` — the PyInstaller build definition.

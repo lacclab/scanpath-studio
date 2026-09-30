@@ -2,12 +2,17 @@
 
 PyInstaller freezes this script (see ``scanpath_studio.spec``) into the
 standalone Scanpath Studio app: it starts the Streamlit server on a free
-localhost port with the branded theme, then opens the user's default browser
-once the server answers its health check.
+localhost port with the branded theme, then — once the server answers its
+health check — opens it in its own window through Chrome / Edge / Brave /
+Chromium's app mode, or in a tab of the default browser when none is
+installed (ENG-85).
 
 Environment overrides (used by the smoke test, handy for debugging):
     SCANPATH_DESKTOP_PORT         fixed port instead of a free one
     SCANPATH_DESKTOP_NO_BROWSER   set to 1/true/yes to skip opening the browser
+    SCANPATH_DESKTOP_BROWSER      "app" (default): its own window when a
+                                  Chromium-family browser is installed;
+                                  "default": a tab in the default browser
     SCANPATH_DESKTOP_NO_LOG_FILE  set to 1/true/yes to keep output on stdout
                                   instead of redirecting it to the log file
     SCANPATH_DESKTOP_IDLE_EXIT_S  seconds with no browser session before the
@@ -23,7 +28,9 @@ from __future__ import annotations
 
 import math
 import os
+import shutil
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -49,7 +56,7 @@ LOG_MAX_BYTES = 5 * 1024 * 1024
 # A .app has no Cocoa run loop, so it cannot answer Cmd-Q or Dock → Quit (those
 # are Apple Events needing a handler) — the user would get "not responding" and
 # Force Quit. Instead the server quits itself once the last browser session has
-# been gone this long, which makes closing the tab the quit gesture.
+# been gone this long, which makes closing the app window (or tab) the quit gesture.
 #
 # The number is Streamlit's, not ours: a disconnected session stays restorable
 # in `MemorySessionStorage` for `ttl_seconds = 2 * 60`, so any grace shorter than
@@ -203,7 +210,7 @@ def _watch_for_idle_exit(grace_s: float) -> None:
         if idle_since is None:
             idle_since = now
         elif now - idle_since >= grace_s:
-            print("Last browser tab closed; shutting down.")
+            print("Last app window closed; shutting down.")
             try:
                 sys.stdout.flush()
             except (AttributeError, OSError, ValueError):
@@ -252,6 +259,124 @@ def _wait_for_server(url: str, timeout_s: float = HEALTH_TIMEOUT_S) -> bool:
     return False
 
 
+def _browser_mode() -> str:
+    """``SCANPATH_DESKTOP_BROWSER``: ``app`` (the default) or ``default``."""
+    raw = os.environ.get("SCANPATH_DESKTOP_BROWSER", "").strip().lower()
+    if raw in ("", "app"):
+        return "app"
+    if raw in ("default", "tab"):
+        return "default"
+    print(
+        f"Ignoring invalid SCANPATH_DESKTOP_BROWSER={raw!r} "
+        f"(want 'app' or 'default'); opening an app window."
+    )
+    return "app"
+
+
+def _app_browser_candidates() -> list[Path]:
+    """Where a Chromium-family browser's executable lives on this OS, in order.
+
+    Chrome, Edge, Brave and Chromium all take ``--app=<url>``; Safari and Firefox
+    have no equivalent. The order is a preference, not the user's default
+    browser — macOS and Windows keep that behind APIs a frozen Python cannot
+    reach cheaply, and any of these gives the same window.
+    """
+    if sys.platform == "darwin":
+        apps = [
+            ("Google Chrome", "Google Chrome"),
+            ("Microsoft Edge", "Microsoft Edge"),
+            ("Brave Browser", "Brave Browser"),
+            ("Chromium", "Chromium"),
+        ]
+        roots = [Path("/Applications"), Path.home() / "Applications"]
+        return [
+            root / f"{bundle}.app" / "Contents" / "MacOS" / exe
+            for bundle, exe in apps
+            for root in roots
+        ]
+    if sys.platform.startswith("win"):
+        rel = [
+            Path("Google/Chrome/Application/chrome.exe"),
+            # Ships with every Windows 10/11, so the app window is the norm there.
+            Path("Microsoft/Edge/Application/msedge.exe"),
+            Path("BraveSoftware/Brave-Browser/Application/brave.exe"),
+        ]
+        roots = [
+            os.environ.get(var)
+            for var in ("PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA")
+        ]
+        return [Path(root) / path for path in rel for root in roots if root]
+    names = [
+        "google-chrome",
+        "google-chrome-stable",
+        "microsoft-edge",
+        "brave-browser",
+        "chromium",
+        "chromium-browser",
+    ]
+    return [Path(found) for name in names if (found := shutil.which(name))]
+
+
+def _find_app_browser() -> Path | None:
+    for path in _app_browser_candidates():
+        if path.is_file():
+            return path
+    return None
+
+
+def _open_app_window(browser: Path, url: str) -> bool:
+    """Open ``url`` as a Chromium app window (no tabs, no address bar).
+
+    Detached into its own session, so the browser outlives this process —
+    the quit watcher's ``os._exit`` must not take the user's browser with it.
+    If the browser is already running, the process started here hands the
+    window to it and exits, which is what Chromium's singleton does anyway.
+    """
+    kwargs: dict = {
+        "stdin": subprocess.DEVNULL,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+    }
+    if sys.platform.startswith("win"):
+        kwargs["creationflags"] = subprocess.DETACHED_PROCESS
+    else:
+        kwargs["start_new_session"] = True
+    try:
+        subprocess.Popen([str(browser), f"--app={url}"], **kwargs)
+    except OSError as exc:
+        print(f"Could not start {browser} ({exc}); opening a browser tab instead.")
+        return False
+    _bring_to_front(browser)
+    return True
+
+
+def _bring_to_front(browser: Path) -> None:
+    """Activate the browser on macOS so the new window is not buried.
+
+    A running browser takes the window from the process started above, but macOS
+    leaves that browser wherever it was — often behind the other windows, where a
+    window with no tabs and no Dock icon of its own is hard to find. Activating
+    the ``.app`` puts its newest window, the app window, in front. Best effort:
+    the window is already open whether or not this works.
+    """
+    if sys.platform != "darwin":
+        return
+    bundle = next((p for p in browser.parents if p.suffix == ".app"), None)
+    if bundle is None:
+        return
+    try:
+        subprocess.run(
+            ["open", "-a", str(bundle)],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
 def _open_browser_when_ready(port: int) -> None:
     url = f"http://127.0.0.1:{port}"
     if not _wait_for_server(f"{url}/_stcore/health"):
@@ -260,6 +385,13 @@ def _open_browser_when_ready(port: int) -> None:
             f"still starting, open {url} yourself."
         )
         return
+    # ENG-85: its own window, like a desktop app, when a browser that can do it
+    # is installed; a tab in the default browser otherwise.
+    if _browser_mode() == "app":
+        browser = _find_app_browser()
+        if browser is not None and _open_app_window(browser, url):
+            print(f"Opened an app window with {browser}")
+            return
     # A failed open is worth saying out loud rather than discarding: in the .app
     # there is no console, so a user who never gets a tab sees an app that looks
     # like it did nothing — and since the quit watcher arms only after a first
@@ -330,7 +462,7 @@ def main() -> None:
 
     print(f"Scanpath Studio starting on http://127.0.0.1:{port}")
     if grace_s > 0:
-        print(f"Close the browser tab to quit (the server stops {grace_s:.0f}s later).")
+        print(f"Close the app window to quit (the server stops {grace_s:.0f}s later).")
     else:
         print("Close this window (or press Ctrl+C) to quit.")
     if log_path is not None:

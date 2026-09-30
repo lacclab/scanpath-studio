@@ -194,6 +194,7 @@ from scanpath_studio.debug_log import (
     debug_enabled,
     install_log_capture,
     log_state_change,
+    maybe_show_debug,
     seed_debug_mode,
     timed,
 )
@@ -213,11 +214,8 @@ from scanpath_studio.menu import (
 )
 from scanpath_studio.multipart import SCREEN_ID, extract_part, part_catalog
 from scanpath_studio.persistence import (
-    CACHE_DIR_NAME,
     PERSIST_ENV_VAR,
-    STATE_DIR_ENV_VAR,
     cache_status,
-    clear_local_state,
     consume_restore_skipped,
     human_size,
     is_loopback_url,
@@ -228,8 +226,6 @@ from scanpath_studio.persistence import (
     restored_summary,
     save_local_state,
     server_bound_to_loopback,
-    set_persistence_paused,
-    skip_next_local_save,
 )
 from scanpath_studio.session_keys import COLUMN_MAPPING_PREFIX, PARAM_CORPUS
 from scanpath_studio.styles import get_app_css
@@ -238,12 +234,12 @@ from scanpath_studio.tabs import (
     EDITOR_PENDING_NAME_KEY,
     _build_figure_settings,
     _render_column_mapping_section,
-    _render_save_restore_expander,
     dataset_editor_is_dirty,
     render_corpus_analysis_tab,
     render_data_inspection_tab,
     render_dataset_editor_footer,
     render_participant_metadata_section,
+    render_settings_file,
     render_single_trial_tab,
     render_text_metadata_section,
     render_trial_identity_section,
@@ -499,9 +495,8 @@ def _render_about_panel(host=None) -> None:
     README.
 
     ``host`` is ``menu.TopMenu.title`` — the left side of the row the settings
-    triggers share. The container is still created, and deliberately: ❓ Help and
-    💾 Session are laid out against it (see ``menu.render_top_menu``), and it is
-    where anything page-level would go.
+    triggers share. The container is still created, and deliberately: it is
+    where anything page-level would go (see ``menu.render_top_menu``).
     """
     (host if host is not None else st).container(key="about_header")
 
@@ -682,89 +677,8 @@ def _render_empty_after_filtering(
         )
 
 
-def _forget_recovery_cache() -> None:
-    """Delete the on-device copy without changing automatic saving.
-
-    The confirmation triggers a full rerun, whose normal epilogue would write
-    the still-open session straight back to disk. Suppress only that one write;
-    the user's saving toggle is left exactly as it was and later changes save
-    normally.
-    """
-    clear_local_state(st.session_state)
-    skip_next_local_save(st.session_state)
-    st.session_state["_recovery_cache_forgotten"] = True
-
-
-#: BUG-36 — the Clear recovery cache button's confirmation flag.
-_FORGET_CACHE_PENDING_KEY = "_forget_cache_pending"
-
-
-def _reopen_session_dialog() -> None:
-    """Whole-app rerun that leaves the 💾 Session modal open behind it (UX-100).
-
-    An `st.rerun(scope="app")` closes the dialog it is called from — right, when
-    the answer was *reset everything*, and wrong for a confirm/cancel pair that
-    the user expects to land back on the panel that asked. Re-arming before the
-    rerun is what puts it back. Never call it from ``_reset_everything``'s path:
-    that one clears session state, so there is no session left to show.
-    """
-    st.session_state[_SESSION_DIALOG_KEY] = True
-    st.rerun(scope="app")
-
-
-def _forget_cache_confirmation(host) -> None:
-    """The "are you sure" row — BUG-36. Drawn by ``_render_recovery_cache_panel``.
-
-    **UX-100 unwrapped it from an ``st.dialog``.** The panel it belongs to is
-    itself the 💾 Session modal now, and Streamlit allows no dialog inside a
-    dialog — so the question is asked in place, right under the button that
-    raised it, which on a panel this short is where it reads best anyway.
-
-    Handled by each button's *return value*, not ``on_click`` — a dialog body is
-    a fragment, and an ``on_click`` inside one reruns only the fragment (see
-    ``_delete_confirmation_dialog``, which learned that as BUG-36).
-
-    **This is the inverse of the wizard's rule, and that is the trap.**
-    ``wizard._finalize_wizard_dataset`` requires an ``on_click`` for the opposite
-    reason: a real ``st.file_uploader`` on the same screen swallows an inline
-    ``if st.button():`` handler. Both are true, and the deciding factor is only
-    *where the button sits* — inside a dialog or fragment, use the return value
-    plus an explicit ``st.rerun(scope="app")``; on an ordinary page beside an
-    uploader, use ``on_click``. Carrying the wizard's lesson into a dialog is
-    what wrote BUG-36 three times and BUG-49 once: the callback mutates the state
-    correctly, the modal reruns alone, and the *next* click is what finally acts
-    on it — so the screen appears to respond to the wrong button.
-    """
-    host.warning(
-        "Delete the recovery copy from this computer? Your open session and "
-        "automatic-saving setting stay unchanged.",
-        icon=ICONS["warning"],
-    )
-    yes, no = host.columns(2)
-    if yes.button(
-        f"{ICONS['delete']} Clear cache",
-        key="forget_cache_confirm",
-        type="primary",
-        width="stretch",
-    ):
-        _forget_recovery_cache()
-        st.session_state.pop(_FORGET_CACHE_PENDING_KEY, None)
-        _reopen_session_dialog()
-    if no.button("Keep it", key="forget_cache_cancel", width="stretch"):
-        st.session_state.pop(_FORGET_CACHE_PENDING_KEY, None)
-        _reopen_session_dialog()
-
-
-def _toggle_recovery_saving() -> None:
-    """Mirror the panel's saving toggle into the persistence pause flag."""
-    set_persistence_paused(
-        st.session_state, not bool(st.session_state.get("persist_local_saving", True))
-    )
-    st.session_state.pop("_recovery_cache_forgotten", None)
-
-
 #: UX-136 — the kinds `persistence.restored_summary` counts, in the order the
-#: 🗄️ Automatic recovery panel lists them, with their singular/plural nouns.
+#: *Saved on this computer* section lists them, with their singular/plural nouns.
 #: DATA-38 added the attached metadata tables.
 _RESTORED_KIND_NOUNS = (
     ("datasets", "dataset", "datasets"),
@@ -795,286 +709,89 @@ def _restored_recap(session=None) -> str:
     return f"{', '.join(parts[:-1])} and {parts[-1]}"
 
 
-def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
-    """Render the "🗄️ Recovery cache" menu panel (ENG-30).
+def _render_saved_here_section(app_url: str, host) -> None:
+    """🗂️ Data → **Saved on this computer** (UX-179; ENG-30 underneath).
 
-    Show the current store, its saving toggle and its clear action. On a hosted
-    deployment, explain only that automatic recovery is unavailable.
+    The foot of the Data page's overview, and a read-out only: what the
+    recovery cache holds and the folder it is in. It was the retired 💾 Session
+    dialog's first block; it lives here because its count is "datasets **you
+    added**", which is the table above it.
 
-    ``slot`` is the 🗄️ Recovery cache block of the 💾 Session popover ``main``
-    reserves on the top menu bar (UX-38), so the panel can render *after* this run's ``save_local_state`` and
-    still sit in its own menu group. ``cache_status`` re-reads the manifest each
-    run (a few ``stat`` calls plus a small JSON) rather than being cached — a
-    status panel that lags the thing it reports is worse than no panel.
+    UX-179 left it no controls. The *Save changes automatically* toggle, *Clear
+    recovery cache* and *Reset everything* are gone: opting out is a launch
+    choice (``run --no-persist`` / ``SCANPATH_STUDIO_PERSIST=0``, in the FAQ),
+    and clearing is ``scanpath-studio cache --clear`` or ``api.clear_cache``.
+    The one in-session pause left is BUG-71's, after a restore that crashed,
+    which the section names.
 
-    Renders **bare** into ``slot``: the popover trigger is the disclosure, so
-    the old ``expander("🗄️ Recovery cache")`` would only repeat the label (and a
-    popover nests no expander anyway). See :mod:`scanpath_studio.menu`.
+    Drawn *after* this run's ``save_local_state`` (``main``'s
+    ``_finish_page``), so the status line reports the write that just happened.
+    ``cache_status`` re-reads the manifest each run — a few ``stat`` calls and a
+    small JSON — rather than being cached: a status line that lags what it
+    reports is worse than none.
     """
-    container = slot if slot is not None else st.container()
     status = cache_status(url=app_url)
-    with container:
-        if not status["enabled"]:
-            st.caption(
-                "**Not available here.** This deployment keeps your work in "
-                "memory only — closing or refreshing the tab loses the datasets "
-                "you uploaded, their column mappings and your annotations. Use "
-                "the JSON backup below to keep your settings and annotations; "
-                "it does not include the dataset files themselves."
+    host.divider()
+    host.subheader(f"{ICONS['recovery']} Saved on this computer")
+    if not status["enabled"]:
+        host.caption(
+            "**Not available here.** This deployment keeps your work in memory "
+            "only — closing or refreshing the tab loses the datasets you "
+            "uploaded, their column mappings and your annotations. Export the "
+            "annotations from **Annotations** above, and the figure's settings "
+            "from 🗺️ Scanpath → 🔗 Share → **File**."
+            + (
+                f" Turned off by `{PERSIST_ENV_VAR}=0`."
+                if status["override"] == "off"
+                else ""
             )
-            if status["override"] == "off":
-                st.caption(f"Turned off by `{PERSIST_ENV_VAR}=0`.")
-            return
-
-        # UX-99: say what this panel *is* before showing its status line — the
-        # old panel opened straight into "Saved: 0 datasets · 5.9 KB" and left
-        # both questions to a tooltip full of environment variables. This round
-        # cut that line to one sentence and moved the rest of the prose (what
-        # the counts cover, the folder, the environment overrides) into the
-        # ❔ **What's saved, and where** popover at the foot of the panel, which
-        # is where a reader goes only once.
-        st.caption(
-            "Saved on **this computer** as you work, and reopened next time. "
-            "Nothing is uploaded anywhere."
         )
+        return
 
-        if restored_from_cache(st.session_state):
-            st.success("Recovered when the app opened.", icon=ICONS["recovery"])
-        if status["exists"] and status["readable"]:
-            n_sets = len(status["datasets"])
-            # "datasets **you added**", not "datasets": only an upload is copied
-            # here, so the count reads 0 while the bundled demo or a public
-            # corpus is open — which looked like a bug until the line said which
-            # datasets it was counting. The popover below has the full reason.
-            st.markdown(
-                f"**Saved here:** {n_sets} dataset{'s' if n_sets != 1 else ''} "
-                f"you added · {status['annotations']} annotation"
-                f"{'s' if status['annotations'] != 1 else ''} · "
-                f"{status['designs']} design"
-                f"{'s' if status['designs'] != 1 else ''} · "
-                # DATA-38 — named only when there are any, so the common
-                # line keeps its length.
-                + (
-                    f"{status['metadata']} metadata table"
-                    f"{'s' if status['metadata'] != 1 else ''} · "
-                    if status.get("metadata")
-                    else ""
-                )
-                + f"{human_size(status['bytes'])}"
-            )
-        elif status["exists"]:
-            st.warning(
-                "The stored session can't be read (written by a different "
-                "version, or incomplete). It is ignored; saving over it is "
-                "safe.",
-                icon=ICONS["warning"],
-            )
-        elif st.session_state.get("_recovery_cache_forgotten"):
-            st.caption("Cleared. Nothing is stored on this computer.")
-        else:
-            st.caption("Nothing saved yet. The first change creates the cache.")
-
-        # Seed rather than pass `value=`: the Forget callback writes this key via
-        # the session-state API, and a widget carrying both logs Streamlit's
-        # "default value but also had its value set via the Session State API"
-        # warning on every run (same fix as the 0.27.1 restored-value pass).
-        st.session_state.setdefault(
-            "persist_local_saving", not persistence_paused(st.session_state)
-        )
-        st.toggle(
-            "Save changes automatically",
-            key="persist_local_saving",
-            on_change=_toggle_recovery_saving,
-            help="On: your work is written to the folder below as you go, so a "
-            "refresh, a crash or a restart picks up where you left off. Off: "
-            "this session stays in memory only and closing the tab loses it. "
-            "Turning it off does not delete what is already saved — use "
-            "**Clear recovery cache** for that.",
-        )
-        if st.button(
-            f"{ICONS['delete']} Clear recovery cache",
-            key="forget_recovery_cache_btn",
-            width="stretch",
-            disabled=not status["exists"],
-            help="Delete the saved copy from this computer. What you have open "
-            "right now is untouched, and saving stays on unless you turn the "
-            "toggle above off.",
-        ):
-            st.session_state[_FORGET_CACHE_PENDING_KEY] = True
-        if st.session_state.get(_FORGET_CACHE_PENDING_KEY):
-            # Right under the button that raised it — see the function's own
-            # note on why this is no longer a modal of its own.
-            _forget_cache_confirmation(container)
-        _render_recovery_details(container, status)
-
-
-def _render_recovery_details(host, status: dict) -> None:
-    """The ❔ popover holding 🗄️ Automatic recovery's fine print.
-
-    Three questions that each need a sentence and are each asked once: *which*
-    datasets the count covers, where the folder is (and what the ``v1`` in its
-    name means), and how to set the whole thing from the environment. They used
-    to be three inline captions under the Clear button, which made a wall of
-    environment variables the last thing on a panel about saving.
-
-    A popover rather than an expander so opening it doesn't reflow the modal, and
-    a popover nests fine inside a dialog (only popover-in-popover and
-    dialog-in-dialog are refused).
-    """
-    with host.popover(f"{ICONS['help']} What's saved, and where", width="stretch"):
-        st.markdown(
-            "**Which datasets.** Only the datasets **you added** are copied "
-            "here. The bundled demo and the public corpora are reloaded from "
-            "their own source instead, so they are never stored — which is why "
-            "the count can read 0 while a dataset is open. Your settings, "
-            "designs, annotations and attached metadata tables are saved "
-            "either way, which is what the size covers."
-        )
-        st.markdown(f"**Where.** `{status['directory']}`")
-        if str(status["directory"]).endswith(CACHE_DIR_NAME):
-            st.caption(
-                f"`{CACHE_DIR_NAME}` is the *cache format's* version, not the "
-                "app's — it stays the same across app updates, and a future "
-                "format change starts a new folder beside this one rather than "
-                "overwriting a session the new code could not read."
-            )
-        st.markdown(
-            "**From outside the app.** Start it with "
-            f"`{PERSIST_ENV_VAR}=0` to never save, or "
-            f"`{STATE_DIR_ENV_VAR}=/your/folder` to save somewhere else. "
-            "`scanpath-studio cache` reports the same details from a terminal."
-        )
-
-
-_RESET_EVERYTHING_PENDING_KEY = "_reset_everything_pending"
-
-
-def _reset_everything() -> None:
-    """Remove all user-owned session state and restart on the bundled demo."""
-    clear_local_state(st.session_state)
-    st.query_params.clear()
-    st.session_state.clear()
-
-
-def _reset_everything_confirmation(host) -> None:
-    """The "are you sure" row for ♻️ Reset everything.
-
-    Inline rather than an ``st.dialog`` for the same reason as
-    :func:`_forget_cache_confirmation`: it is raised from inside the 💾 Session
-    modal, and Streamlit allows no dialog inside a dialog (UX-100).
-    """
-    host.warning(
-        "Remove uploaded datasets, annotations, mappings and settings, then "
-        "return to the bundled demo?",
-        icon=ICONS["warning"],
+    host.caption(
+        "Saved as you work, and reopened next time. Nothing is uploaded anywhere."
     )
-    yes, no = host.columns(2)
-    if yes.button(
-        f"{ICONS['reset']} Reset everything",
-        key="reset_everything_confirm",
-        type="primary",
-        width="stretch",
-    ):
-        _reset_everything()
-        st.rerun(scope="app")
-    if no.button("Cancel", key="reset_everything_cancel", width="stretch"):
-        st.session_state.pop(_RESET_EVERYTHING_PENDING_KEY, None)
-        _reopen_session_dialog()
-
-
-def _render_reset_everything_panel(*, slot=None) -> None:
-    """Render Session's always-reachable full reset action."""
-    container = slot if slot is not None else st.container()
-    if container.button(
-        f"{ICONS['reset']} Reset everything",
-        key="session_reset_everything",
-        width="stretch",
-        help="Remove uploaded datasets and all session settings, then return to "
-        "the bundled demo.",
-    ):
-        st.session_state[_RESET_EVERYTHING_PENDING_KEY] = True
-    if st.session_state.get(_RESET_EVERYTHING_PENDING_KEY):
-        _reset_everything_confirmation(container)
-
-
-#: UX-100 — the 💾 Session nav entry's request flag. Same arm-then-serve shape as
-#: ❓ Help's three entries: a nav selection cannot open a dialog itself (the
-#: router reruns), so `menu._arm_help_action` sets this and `main` serves it.
-_SESSION_DIALOG_KEY = "_session_dialog_requested"
-
-
-def _arm_session() -> None:
-    """Request the 💾 Session dialog. Called by the nav entry (``menu.py``)."""
-    st.session_state[_SESSION_DIALOG_KEY] = True
-
-
-@st.dialog(f"{ICONS['session']} Session", width="large")
-def _session_dialog(app_url: str, backup_renderer=None) -> None:
-    """The 💾 Session modal: what this session is holding, and how to keep it.
-
-    Four blocks, in the order UX-96 settled on. Recovery and a JSON backup are
-    deliberately separate and deliberately in that order: recovery contains the
-    local dataset tables and happens automatically, while the portable JSON is
-    user-triggered and intentionally omits those tables — a distinction that is
-    the panel's hierarchy rather than a tooltip-only caveat.
-
-    ``backup_renderer`` fills the ⬇️ JSON backup block. It is a closure rather
-    than data because the panel needs the live figure settings and trial
-    selection, which only exist near the end of ``main`` — and ``main`` returns
-    early on every path where the dataset can't be drawn (the wizard mid-flight,
-    a rejected mapping, an empty pool). Those paths pass ``None``, and the block
-    says why rather than rendering an empty heading, which is what BUG-28 saw.
-
-    **A dialog body is a fragment.** It runs only while the modal is open, so
-    every widget in here either re-seeds from a durable value each render (the
-    persistence pause toggle, the 🐛 Debug gate) or holds nothing worth keeping.
-    An interaction in here reruns *this*, not ``main`` — hence the explicit
-    ``st.rerun(scope="app")`` after a restored backup, and the two inline
-    confirmations (Streamlit allows no dialog inside a dialog).
-    """
-    from scanpath_studio.debug_log import (
-        debug_enabled,
-        render_debug_panel,
-        render_debug_toggle,
-    )
-
-    recovery = st.container(key="session_auto_recovery")
-    recovery.markdown(f"#### {ICONS['recovery']} Automatic recovery")
-    _render_recovery_cache_panel(app_url, slot=recovery.container())
-
-    backup = st.container(key="session_json_backup")
-    backup.markdown(f"#### {ICONS['download']} JSON backup")
-    if backup_renderer is not None:
-        backup_renderer(backup.container())
+    if restored_from_cache(st.session_state):
+        host.success("Recovered when the app opened.", icon=ICONS["recovery"])
+    if status["exists"] and status["readable"]:
+        n_sets = len(status["datasets"])
+        # "datasets **you added**", not "datasets": only an upload is copied
+        # here — the bundled demo and the public corpora reload from their own
+        # source — so the count reads 0 while one of those is open, which looked
+        # like a bug until the line said which datasets it was counting.
+        host.markdown(
+            f"**Saved here:** {n_sets} dataset{'s' if n_sets != 1 else ''} "
+            f"you added · {status['annotations']} annotation"
+            f"{'s' if status['annotations'] != 1 else ''} · "
+            f"{status['designs']} design"
+            f"{'s' if status['designs'] != 1 else ''} · "
+            # DATA-38 — named only when there are any, so the common line keeps
+            # its length.
+            + (
+                f"{status['metadata']} metadata table"
+                f"{'s' if status['metadata'] != 1 else ''} · "
+                if status.get("metadata")
+                else ""
+            )
+            + f"{human_size(status['bytes'])}"
+        )
+    elif status["exists"]:
+        host.warning(
+            "The stored session can't be read (written by a different version, "
+            "or incomplete). It is ignored; saving over it is safe.",
+            icon=ICONS["warning"],
+        )
     else:
-        backup.caption(
-            "Available once a dataset is loaded and drawable — a backup records "
-            "the figure's settings and your annotations, and there is no figure "
-            "to record yet."
+        host.caption("Nothing saved yet. The first change creates the cache.")
+    host.markdown(f"**Folder:** `{status['directory']}`")
+    if persistence_paused(st.session_state):
+        # BUG-71 — the only pause left: the last launch never finished opening
+        # with this cache, so this session neither restored nor overwrites it.
+        host.caption(
+            "Saving is paused for this session, so the copy above stays as it "
+            "was. Reload to try restoring it again, or delete it with "
+            "`scanpath-studio cache --clear`."
         )
-
-    reset = st.container(key="session_reset")
-    reset.markdown(f"#### {ICONS['reset']} Reset")
-    _render_reset_everything_panel(slot=reset.container())
-
-    debug_tools = st.container(key="session_debug_tools")
-    debug_tools.markdown(f"#### {ICONS['debug']} Debug tools")
-    render_debug_toggle(debug_tools.container())
-    if debug_enabled():
-        render_debug_panel(debug_tools.container())
-
-
-def maybe_show_session(app_url: str, backup_renderer=None) -> None:
-    """Open the 💾 Session dialog if the nav entry armed it.
-
-    Unlike ``maybe_show_about`` this is served **late**, at whichever point of
-    ``main`` the backup renderer exists — the panel reports what this run just
-    persisted and offers a backup of the live figure, neither of which is known
-    early. Exactly one call runs per script run (each early return has its own),
-    which is what keeps the widgets inside single widgets.
-    """
-    if st.session_state.pop(_SESSION_DIALOG_KEY, False):
-        _session_dialog(app_url, backup_renderer)
 
 
 def _arm_about() -> None:
@@ -2971,8 +2688,7 @@ def reset_column_mapping() -> None:
         del st.session_state[key]
 
 
-#: Label + tooltip of the "known-good state" button, shared by the off-page
-#: signpost and the 💾 Session menu so the two read as the same action.
+#: Label + tooltip of the off-page signpost's "known-good state" button.
 DEMO_RESET_LABEL = f"{ICONS['demo']} Load the bundled demo"
 DEMO_RESET_HELP = (
     "Switches to the demo corpus and re-detects its column mapping. Your "
@@ -4059,8 +3775,8 @@ def discard_and_leave_wizard() -> None:
 
     **BUG-36 follow-up:** that assumption breaks for ✕ Cancel, whose prompt
     always names 🗂️ Data as the destination regardless of where the nav
-    actually is — click Session, click Keep setting up, then Cancel, and the
-    nav is still genuinely on Session throughout; closing the wizard alone
+    actually is — click Corpus Analysis, click Keep setting up, then Cancel, and
+    the nav is still genuinely on Corpus Analysis throughout; closing the wizard alone
     left it there instead of on Data as promised. Requesting the recorded
     destination through the same ``main_nav`` seam :func:`url_state._go_data`
     and friends use is a no-op for the nav-triggered case (the router is
@@ -4905,7 +4621,7 @@ def _leave_dataset_editor_dialog() -> None:
     Leave popped the editor's open flag and then sat there with the modal still
     up, and the next click ("Keep editing") ran the whole-app rerun that finally
     acted on it. The screen therefore left on *Keep editing* and did nothing on
-    *Leave*. Same lesson as ``_forget_cache_confirmation``.
+    *Leave*. Same lesson as ``_delete_confirmation_dialog``.
     """
     st.caption(
         "Changes you have already saved are kept. Anything edited since — the "
@@ -6339,7 +6055,7 @@ def render_canvas_controls(
     # Reading text is true-to-scale by default: it auto-sizes to the word boxes
     # (text height = box_height / line_spacing) and scales with the figure, so it
     # always fills the real line slot. Untick to fall back to a fixed font size.
-    # Keyed (+ seeded) so the Save & restore panel can capture/reapply them.
+    # Keyed (+ seeded) so the settings file can capture/reapply them.
     scale_text_to_boxes = field(
         text,
         "checkbox",
@@ -7153,8 +6869,8 @@ def _run_app() -> None:
        filter that empties the pool.
     5. The active view: 🗺️ Scanpath or 📊 Corpus Analysis inside the view
        area, or the Data page's slots filled.
-    6. The epilogue: the JSON backup, the recovery-cache save, and the
-       💾 Session dialog.
+    6. The epilogue: the recovery-cache save, then the Data page's *Saved on
+       this computer* section.
     """
     configure_page()
     # PERF-3: the cache-key memo is scoped to ONE script run — drop last run's
@@ -7216,8 +6932,8 @@ def _run_app() -> None:
         # after the user cleared the cache by hand. Naming the counts is what
         # makes the claim checkable against the panel it points at.
         st.toast(
-            f"Recovered {_restored_recap()} from this computer — see 💾 Session "
-            "→ Automatic recovery.",
+            f"Recovered {_restored_recap()} from this computer — see 🗂️ Data → "
+            "Saved on this computer.",
             icon=ICONS["recovery"],
         )
     elif consume_restore_skipped(st.session_state):
@@ -7226,8 +6942,8 @@ def _run_app() -> None:
         st.toast(
             "Your last session didn't finish opening, so it wasn't restored this "
             "time. It is still saved on this computer and saving is paused, so it "
-            "stays that way: reload to try again, or clear it in 💾 Session → "
-            "Automatic recovery.",
+            "stays that way: reload to try again, or delete it with "
+            "`scanpath-studio cache --clear`.",
             icon=ICONS["warning"],
             duration="long",
         )
@@ -7311,9 +7027,7 @@ def _run_app() -> None:
     # `st.navigation` draws into, and has to be there when it renders.
     render_app_logo()
     # Active top-level view, resolved BEFORE `render_top_menu` so the BUG-31
-    # wizard hold-override below can land before that call rather than after it
-    # (see the note there — it used to also gate the 💾 Session *page*, which
-    # UX-100 turned back into a popover).
+    # wizard hold-override below can land before that call rather than after it.
     active_view = render_nav()
 
     # BUG-31 — navigating away mid-wizard used to land the user on the *half-built*
@@ -7337,13 +7051,8 @@ def _run_app() -> None:
     # sit on the view the user picked while the page under it asks the question,
     # and *Discard* then needs no navigation at all — the router is already there.
     #
-    # BUG-36 follow-up: this block used to run *after* `render_top_menu`, so
-    # choosing "Keep setting up" correctly held the `if/elif` dispatch below on
-    # Data but did nothing for the 💾 Session *page*, which `render_top_menu`
-    # drew itself from the *raw* nav click, earlier in the run. Resolving the
-    # override here and handing it in as `active_view=` closed that gap.
-    # UX-100 retired that page — Session is a popover, which never becomes the
-    # active view — but the ordering still matters for the dispatch below.
+    # BUG-36 follow-up: resolved here, before `render_top_menu`, and handed in
+    # as `active_view=`, so everything drawn after it agrees on the view.
     if st.session_state.get("_show_upload_wizard"):
         if (
             active_view != _VIEW_DATA
@@ -7354,30 +7063,25 @@ def _run_app() -> None:
             st.session_state.pop(WIZARD_LEAVE_KEY, None)
         active_view = _VIEW_DATA
 
-    menu = render_top_menu(show_debug=debug_enabled(), active_view=active_view)
+    menu = render_top_menu(active_view=active_view)
     _render_about_panel(menu.title)
     _render_cancelled_load_notice(menu.notices)
 
-    def _fill_recovery_cache_panel(backup_renderer=None) -> None:
-        """Serve the 💾 Session dialog, once, on whichever path we leave by.
+    def _finish_page() -> None:
+        """The run's last UI, once, on whichever path ``main`` leaves by.
 
-        The name is the panel it used to fill; UX-100 turned that panel into the
-        modal that now holds all four blocks. The *timing* is unchanged and is
-        the reason this is a closure rather than one call in the epilogue:
-        🗄️ Automatic recovery reports what **this run** just persisted, so it has
-        to come after `save_local_state` — which the early returns never reach.
-        Each of them calls this instead, and the epilogue calls it for the
-        ordinary path, so exactly one runs per script run. That is what keeps the
-        widgets inside single widgets.
+        🗂️ Data → *Saved on this computer* reports what **this run** just
+        persisted, so it has to come after `save_local_state` — which the early
+        returns never reach. Each of them calls this instead, and the epilogue
+        calls it for the ordinary path, so exactly one runs per script run.
+        That is what keeps its widgets single.
 
-        BUG-28 is the reason ``backup_renderer`` is optional: `main` returns
-        early on every path where the dataset can't be drawn — the wizard
-        mid-flight, a mapping that is incomplete or rejected, an empty pool — and
-        those are exactly the states someone opens Session *in*. They get the
-        recovery cache, the reset and the debug tools; only the JSON backup,
-        which needs a figure to describe, says why it is not there.
+        The section is drawn only while the overview is on screen: not on the
+        other views, not under ✏️ Edit dataset, and not while the add-dataset
+        wizard owns the page.
         """
-        maybe_show_session(app_url, backup_renderer)
+        if data_view and not editing and not wizard_owns_page:
+            _render_saved_here_section(app_url, saved_here_slot)
 
     # First-visit welcome tour. After the URL presets, so embeds and
     # deep-linked sessions can suppress it — but BEFORE the heavy data/plot
@@ -7408,10 +7112,11 @@ def _run_app() -> None:
         maybe_show_faq()
         maybe_show_about()
         maybe_show_tutorial_library()
+        # UX-179 — ❓ Help → Debug, served early like its siblings.
+        maybe_show_debug()
 
-    # `active_view` was already resolved above, before `render_top_menu` drew
-    # its Session-page panel from it (including the BUG-31 wizard hold-override
-    # — see the note there); the dispatch below reuses the same value.
+    # `active_view` was already resolved above (including the BUG-31 wizard
+    # hold-override — see the note there); the dispatch below reuses it.
 
     # UX-166 — the Scanpath and Corpus views render inside one reserved area.
     # Its first child is the page slot: `loading.Page` fills it with a skeleton
@@ -7533,6 +7238,10 @@ def _run_app() -> None:
     # wrong. DATA-35 kept that order across the split: the counts are the
     # overview's second half, and the mapping opens the editor.
     setup_body_slot = overview_page.container()
+    # UX-179 — *Saved on this computer*, the overview's last section: the
+    # recovery cache and the two ways to throw work away. Filled by
+    # `_finish_page`, after this run's `save_local_state`.
+    saved_here_slot = overview_page.container(key="data_saved_here")
     # Keyed → the stable `.st-key-…` selectors the "Load and verify a dataset"
     # tutorial spotlights (UX-40), alongside `tutorial_data_inspection` above.
     column_mapping_slot = editor_page.container(key="tutorial_column_mapping")
@@ -7835,7 +7544,7 @@ def _run_app() -> None:
         mapping_problems = setup.problems
         if wizard_active:
             _render_offpage_setup_notice(data_view)
-            _fill_recovery_cache_panel()
+            _finish_page()
             _end_loading(showing_dataset=False)
             return
     elif data_choice == MANUAL_SAMPLE_CHOICE and not _authoring_editor_open(
@@ -7851,7 +7560,7 @@ def _run_app() -> None:
             words_df, fixations_df = _render_authoring_source()
         if active_view == _VIEW_SCANPATH:
             # The authoring canvas is this screen's visualization.
-            _fill_recovery_cache_panel()
+            _finish_page()
             _end_loading()
             return
         raw_words_df, raw_fixations_df = words_df, fixations_df
@@ -7974,7 +7683,7 @@ def _run_app() -> None:
         with unmapped_slot:
             _render_unmapped_view(raw_words_df, raw_fixations_df, mapping_problems)
         _render_offpage_setup_notice(data_view)
-        _fill_recovery_cache_panel()
+        _finish_page()
         _render_datasets_table(None, None, None)
         _end_loading()
         return
@@ -8226,7 +7935,7 @@ def _run_app() -> None:
     # filters removed everything.
     if words_filtered.empty and fixations_filtered.empty and raw_gaze_filtered.empty:
         _render_empty_after_filtering(words_all, fixations_all, trial_filters)
-        _fill_recovery_cache_panel()
+        _finish_page()
         _render_datasets_table(words_all, fixations_all, raw_gaze_df)
         _end_loading()
         return
@@ -8266,10 +7975,10 @@ def _run_app() -> None:
     # it is applied here — see url_state.request_trial (ENG-36).
     _apply_pending_trial_selection(combos)
 
-    # Restore settings + annotations from an uploaded config JSON BEFORE the
-    # rail widgets render, so they pick up the saved values (see
-    # _apply_url_preset for the same preset-then-render mechanism). The uploader
-    # lives in the "💾 Save & restore" panel below; its file persists across reruns.
+    # Restore settings from an uploaded settings file BEFORE the rail widgets
+    # render, so they pick up the saved values (see _apply_url_preset for the
+    # same preset-then-render mechanism). The uploader is 🔗 Share → File's; its
+    # file persists across reruns.
     _apply_uploaded_plot_config(combos, fixations_filtered)
 
     # Canvas and visualization controls (the Scanpath rail). For a raw-gaze-only dataset,
@@ -8350,8 +8059,8 @@ def _run_app() -> None:
     # own tab. Raw Data + Data Statistics are merged into Data Inspection.
     # Dispatch the active view (top nav). Only one view body renders per run
     # — the keyed nav widget persists the selection across reruns, so no JS hack
-    # is needed (unlike st.tabs). render_single_trial_tab writes _share_selection
-    # and fills the Save & restore slot when it's the active view.
+    # is needed (unlike st.tabs). render_single_trial_tab writes _share_selection,
+    # which 🔗 Share → File reads for the trial it records.
     # UX-37: the three things a log reader wants to correlate a slow rerun with
     # — which view, which trial, how narrow the pool is. One line each, only on
     # change (see `log_state_change`).
@@ -8502,10 +8211,54 @@ def _run_app() -> None:
                 )
     else:
         # The Scanpath view renders the viz controls itself (right rail) and
-        # writes the global_* keys; re-read them below so Save & restore captures
-        # any edits the user just made in the rail. Data Inspection + Share are
-        # subtabs of this view now — passed in as renderers so the page owns its
-        # subtab bar (Data Inspection renders inline; Share builds the deep link).
+        # writes the global_* keys. Share is a subtab of this view — passed in as
+        # a renderer so the page owns its subtab bar — and its File section
+        # re-reads those keys when it draws, which is after the rail has.
+
+        def _render_share_settings_file() -> None:
+            """🔗 Share → File (UX-179): the settings file of the figure on screen.
+
+            Resolved only when the File section is drawn — the trial from
+            ``_share_selection`` (written by the Scanpath view before its
+            subtabs), the figure settings from the rail's live keys.
+            """
+            live = viz_settings_from_state(
+                fixations_filtered, base_font_size, words=words_filtered
+            )
+            selection = st.session_state.get("_share_selection") or {}
+            pid = str(selection.get("participant_id") or "")
+            trial = str(selection.get("trial_id") or "")
+            screen = selection.get("screen_id")
+            # The trial first (position-indexed), then its screen: `extract_part`
+            # compares strings row by row, which over a whole sample-level
+            # raw-gaze frame is seconds per call.
+            trial_raw_gaze = (
+                extract_trial(raw_gaze_filtered, pid, trial)
+                if pid and trial and not raw_gaze_filtered.empty
+                else pd.DataFrame()
+            )
+            if screen is not None and SCREEN_ID in trial_raw_gaze.columns:
+                trial_raw_gaze = extract_part(trial_raw_gaze, pid, trial, screen)
+            figure_settings = _build_figure_settings(live, not trial_raw_gaze.empty)
+            figure_settings["raw_gaze"] = (
+                trial_raw_gaze if not trial_raw_gaze.empty else None
+            )
+            figure_settings["line_spacing"] = line_spacing
+            figure_settings["scale_text_to_boxes"] = scale_text_to_boxes
+            render_settings_file(
+                pid,
+                trial,
+                canvas_width,
+                canvas_height,
+                live["x_field"],
+                live["y_field"],
+                figure_settings,
+                live,
+                base_font_size,
+                trial_raw_gaze,
+                font_family=font_family,
+            )
+
         with view_area:
             render_single_trial_tab(
                 words_filtered,
@@ -8521,7 +8274,11 @@ def _run_app() -> None:
                 combos_all=combos_all,
                 words_all=words_all,
                 fixations_all=fixations_all,
-                share_renderer=lambda: _render_share_body(data_choice),
+                share_renderer=lambda visible: _render_share_body(
+                    data_choice,
+                    settings_file=_render_share_settings_file,
+                    visible=visible,
+                ),
                 data_source_renderer=render_data_source_picker,
                 canvas_renderer=canvas_renderer,
             )
@@ -8529,76 +8286,6 @@ def _run_app() -> None:
     # UX-166: a view that never reached a slow region (no trial selected, an
     # empty view) still takes the skeleton down.
     loading.release_page()
-
-    # Re-resolve viz settings from session_state AFTER the dispatch so the Save &
-    # restore panel reflects any edits made in the Scanpath rail this run (the
-    # widgets there write the global_* keys during render).
-    viz_settings = viz_settings_from_state(
-        fixations_filtered, base_font_size, words=words_filtered
-    )
-
-    # Save & restore (plot config + annotations) renders on EVERY view so it stays
-    # reachable when a non-Scanpath view is active (it's a menu panel). The
-    # trial selection comes from _share_selection (written by the Scanpath view;
-    # blank before any trial has been resolved this session).
-    _sr_sel = st.session_state.get("_share_selection") or {}
-    _sr_pid = str(_sr_sel.get("participant_id") or "")
-    _sr_trial = str(_sr_sel.get("trial_id") or "")
-    _sr_screen = _sr_sel.get("screen_id")
-    _sr_raw_gaze = (
-        (
-            extract_part(raw_gaze_filtered, _sr_pid, _sr_trial, _sr_screen)
-            if _sr_screen is not None and SCREEN_ID in raw_gaze_filtered.columns
-            else extract_trial(raw_gaze_filtered, _sr_pid, _sr_trial)
-        )
-        if _sr_pid and _sr_trial and not raw_gaze_filtered.empty
-        else pd.DataFrame()
-    )
-    _sr_figure_settings = _build_figure_settings(viz_settings, not _sr_raw_gaze.empty)
-    _sr_figure_settings["raw_gaze"] = _sr_raw_gaze if not _sr_raw_gaze.empty else None
-    _sr_figure_settings["line_spacing"] = line_spacing
-    _sr_figure_settings["scale_text_to_boxes"] = scale_text_to_boxes
-
-    def _render_session_backup_block(slot) -> None:
-        """The ⬇️ JSON backup block of the 💾 Session dialog (UX-100).
-
-        A closure, because the panel needs the live trial selection and figure
-        settings resolved just above — and the dialog is served a few lines
-        below, after `save_local_state`, so 🗄️ Automatic recovery can report the
-        write that just happened rather than the previous run's. This single
-        panel merges the former Plot-configuration and Annotations panels; it is
-        a session-wide feature, not part of any one source's setup.
-        """
-        _render_save_restore_expander(
-            _sr_pid,
-            _sr_trial,
-            canvas_width,
-            canvas_height,
-            viz_settings["x_field"],
-            viz_settings["y_field"],
-            _sr_figure_settings,
-            viz_settings,
-            base_font_size,
-            _sr_raw_gaze,
-            font_family=font_family,
-            slot=slot,
-        )
-        # A dialog body is a fragment: uploading a backup in here reruns the
-        # dialog, not `main`, and `_apply_uploaded_plot_config` runs in `main`.
-        # So a file the app has not applied yet asks for a whole-app rerun —
-        # which is also what closes the modal onto the restored figure. The
-        # applied-signature marker is the importer's own (it dedupes by
-        # `(name, size)`), so this cannot loop.
-        pending = st.session_state.get("plot_config_upload")
-        if pending is not None and st.session_state.get("_plot_config_last_import") != (
-            pending.name,
-            pending.size,
-        ):
-            st.rerun(scope="app")
-
-    # Share now lives in the Scanpath view's "🔗 Share" subtab (rendered via the
-    # share_renderer passed into render_single_trial_tab), so it builds its deep
-    # link from the resolved trial + live viz settings right where it's shown.
 
     # UX-65 — ❓ Help is a *menu* in the nav now, not a page of buttons: each
     # entry arms the same dialog its button used to (menu._arm_help_action), and
@@ -8611,15 +8298,12 @@ def _run_app() -> None:
     stash_tutorial_context(
         build_tutorial_context(words_filtered, fixations_filtered, combos)
     )
-    # UX-100: the 🐛 Debug toggle and panel moved inside the Session dialog with
-    # the rest of the group (`_session_dialog`), so there is nothing to fill here.
-
     # Persist after all view/menu widgets have written their current values.
     # The helper fingerprints the session and is a no-op on unchanged reruns.
     save_local_state(st.session_state, app_url)
-    # …then serve 💾 Session, if the nav asked for it, so 🗄️ Automatic recovery
-    # reports the write that just happened rather than the previous run's.
-    _fill_recovery_cache_panel(_render_session_backup_block)
+    # …then draw *Saved on this computer*, so it reports the write that just
+    # happened rather than the previous run's.
+    _finish_page()
 
 
 if __name__ == "__main__":

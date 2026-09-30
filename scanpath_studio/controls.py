@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import json
 import math
 from collections.abc import Callable
 from contextlib import contextmanager
@@ -1124,6 +1125,111 @@ def delete_design_preset(name: str) -> None:
         st.session_state.pop(_DESIGN_EDIT_KEY, None)
 
 
+#: UX-179 — the saved-design file: `{"kind": DESIGNS_FILE_KIND, "designs": {…}}`.
+#: The retired 💾 Session backup was the only portable copy of the library; this
+#: is its own file now, written by *Export* and read by *Import* in My designs.
+DESIGNS_FILE_KIND = "scanpath_studio_designs"
+DESIGNS_FILE_SCHEMA = 1
+_DESIGN_IMPORT_KEY = "design_import_upload"
+_DESIGN_IMPORT_NOTE_KEY = "_design_import_note"
+
+
+def designs_to_json(designs: dict[str, dict]) -> str:
+    """Serialize a design library to the Export file (pure — no Streamlit)."""
+    from scanpath_studio import __version__
+
+    return json.dumps(
+        {
+            "kind": DESIGNS_FILE_KIND,
+            "schema": DESIGNS_FILE_SCHEMA,
+            "app": {"name": "Scanpath Studio", "version": __version__},
+            "designs": {name: dict(values) for name, values in designs.items()},
+        },
+        indent=2,
+    )
+
+
+def designs_from_json(text: str) -> dict[str, dict]:
+    """Parse an Export file into ``{name: settings}`` (pure — no Streamlit).
+
+    Keeps only what a design can hold — the keys :func:`_is_design_key` names,
+    as `_apply_view_preset` applies them — and gives a name that collides with a
+    built-in the same ``" (mine)"`` suffix :func:`save_design_preset` does.
+    Raises ``ValueError`` for anything that is not a designs file.
+    """
+    data = json.loads(text)
+    if not isinstance(data, dict) or data.get("kind") != DESIGNS_FILE_KIND:
+        raise ValueError("not a Scanpath Studio designs file")
+    raw = data.get("designs")
+    if not isinstance(raw, dict):
+        raise ValueError("the file holds no designs")
+    designs: dict[str, dict] = {}
+    for name, values in raw.items():
+        clean = " ".join(str(name).split())[:60]
+        if not clean or not isinstance(values, dict):
+            continue
+        if clean in _VIEW_PRESETS:
+            clean = f"{clean} (mine)"
+        designs[clean] = {
+            str(key): value for key, value in values.items() if _is_design_key(key)
+        }
+    return designs
+
+
+def _import_designs() -> None:
+    """``on_change`` of the Import uploader: merge the file into the library.
+
+    A design with the same name is **replaced** — the file is the newer copy
+    of it — and every other design the user has stays.
+    """
+    uploaded = st.session_state.get(_DESIGN_IMPORT_KEY)
+    if uploaded is None:
+        return
+    try:
+        incoming = designs_from_json(uploaded.getvalue().decode("utf-8"))
+    except (ValueError, UnicodeDecodeError) as exc:
+        st.session_state[_DESIGN_IMPORT_NOTE_KEY] = f"error:Couldn't import it: {exc}."
+        return
+    st.session_state[DESIGN_PRESETS_KEY] = {**design_presets(), **incoming}
+    count = len(incoming)
+    st.session_state[_DESIGN_IMPORT_NOTE_KEY] = (
+        f"Imported {count} design{'' if count == 1 else 's'}."
+    )
+
+
+def _render_design_file_row(host, saved: dict[str, dict]) -> None:
+    """*Export* / *Import* under the design list (UX-179)."""
+    note = st.session_state.pop(_DESIGN_IMPORT_NOTE_KEY, None)
+    if note and note.startswith("error:"):
+        host.error(note.removeprefix("error:"), icon=ICONS["error"])
+    elif note:
+        host.success(note, icon=ICONS["confirm"])
+    row = host.container(horizontal=True, gap="small", key="design_file_row")
+    row.download_button(
+        "Export",
+        icon=ICONS["download"],
+        data=designs_to_json(saved),
+        file_name="scanpath_studio_designs.json",
+        mime="application/json",
+        key="design_export",
+        disabled=not saved,
+        help="Download your saved designs as a JSON file, to use on another "
+        "computer or share.",
+    )
+    with row.popover("Import", icon=ICONS["upload"]):
+        st.file_uploader(
+            "Designs file (JSON)",
+            type=["json"],
+            key=_DESIGN_IMPORT_KEY,
+            on_change=_import_designs,
+            max_upload_size=upload_limit_mb(),
+        )
+        st.caption(
+            "A file exported here. A design with the same name as one of yours "
+            "replaces it; the rest are added."
+        )
+
+
 def _toggle_design_editor(name: str) -> None:
     """✏️ opens the inline editor for one design, and closes any other."""
     current = st.session_state.get(_DESIGN_EDIT_KEY)
@@ -1347,6 +1453,9 @@ def _is_design_key(key: object) -> bool:
 def _render_saved_designs(host) -> None:
     """The user's own designs: save, apply, rename, delete (VIZ-39).
 
+    Its foot is *Export* / *Import* (UX-179): the library's portable file,
+    which used to ride in the 💾 Session backup.
+
     The list is an expander, because it grows and the rail is narrow — and
     because it is the *built-ins* above that should stay one click away. The 💾
     button is drawn **into the expander's own title bar** (`.st-key-design_shell`
@@ -1411,6 +1520,7 @@ def _render_saved_designs(host) -> None:
                 on_click=_ask_delete_design,
                 args=(name,),
             )
+        _render_design_file_row(st, saved)
     if shell.button(
         "",
         icon=ICONS["save"],

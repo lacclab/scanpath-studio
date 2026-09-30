@@ -298,8 +298,6 @@ def _saved_grid_app():
         base_font_size=14,
         trial_raw_gaze=pd.DataFrame(),
         font_family="Arial",
-        annotation_records=[],
-        column_mapping={},
         data_source="demo",
         app_version="0.0.0",
         exported_at="2026-08-11T00:00:00",

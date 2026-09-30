@@ -23,8 +23,6 @@ from scanpath_studio.persistence import (
     restored_summary,
     save_local_state,
     save_state,
-    set_persistence_paused,
-    skip_next_local_save,
 )
 from scanpath_studio.session_keys import DESIGN_PRESETS
 
@@ -261,7 +259,8 @@ def test_cache_status_flags_an_unreadable_manifest(tmp_path):
     assert newer["exists"] and not newer["readable"] and newer["schema"] == 99
 
 
-def test_pausing_stops_saving_and_resuming_writes_again(tmp_path, monkeypatch):
+def test_a_paused_session_does_not_save(tmp_path, monkeypatch):
+    """BUG-71's pause — the only one left since UX-179 removed the toggle."""
     import scanpath_studio.persistence as module
 
     monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
@@ -269,13 +268,10 @@ def test_pausing_stops_saving_and_resuming_writes_again(tmp_path, monkeypatch):
     session = {"_datasets": {"Corpus": _dataset()}}
 
     assert save_local_state(session, "http://localhost:8501")
-    set_persistence_paused(session, True)
+    session[module._PAUSED_KEY] = True
     assert persistence_paused(session)
     session["global_show_heatmap"] = False  # a change that would otherwise save
     assert not save_local_state(session, "http://localhost:8501")
-
-    set_persistence_paused(session, False)
-    assert save_local_state(session, "http://localhost:8501")
 
 
 def test_clear_local_state_deletes_files_and_session_bookkeeping(tmp_path, monkeypatch):
@@ -318,22 +314,6 @@ def test_clear_local_state_survives_an_undeletable_cache(tmp_path, monkeypatch):
     assert clear_local_state(session) is False
     assert module._LAST_FINGERPRINT_KEY not in session
     assert session["_datasets"]
-
-
-def test_clear_can_skip_one_rewrite_without_pausing_future_saves(tmp_path, monkeypatch):
-    monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
-    monkeypatch.setattr(persistence, "state_directory", lambda *a, **k: tmp_path)
-    session = {"_datasets": {"Corpus": _dataset()}}
-    assert save_local_state(session, "http://localhost:8501")
-
-    clear_local_state(session)
-    skip_next_local_save(session)
-
-    assert not save_local_state(session, "http://localhost:8501")
-    assert not (tmp_path / "manifest.json").exists()
-    assert not persistence_paused(session)
-    session["global_show_heatmap"] = True
-    assert save_local_state(session, "http://localhost:8501")
 
 
 def test_restored_flag_marks_only_a_session_that_got_data_back(tmp_path):
@@ -701,7 +681,7 @@ class TestRememberedDatasetCounts:
 
 class TestTheRecoveryToastPhrase:
     """UX-136 — the toast names what came back, so the claim can be checked
-    against the 🗄️ Automatic recovery panel it points at."""
+    against the *Saved on this computer* section it points at."""
 
     @staticmethod
     def _recap(**counts):

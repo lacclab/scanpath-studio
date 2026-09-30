@@ -6,9 +6,10 @@ three places that outlive the running process:
 * the **deep link / Share URL** (``url_state._URL_PRESETS`` on the read side,
   ``url_state._build_share_query`` on the write side) — links live in other
   people's bookmarks, papers, issue trackers and embedded review apps;
-* the **💾 Save & restore JSON** (written by ``tabs._build_studio_config`` /
-  ``wizard._wizard_setup_config``, read by ``url_state._restore_plot_config``) —
-  config files sit on disk for months;
+* the **settings and setup files** (🔗 Share → File, written by
+  ``tabs._build_studio_config`` and read by ``url_state._restore_plot_config``;
+  ✏️ Edit dataset → Save setup, written by ``wizard._wizard_setup_config``) —
+  files sit on disk for months;
 * the **pre-widget seeding** both of the above rely on: values are written into
   ``st.session_state`` *before* the widget exists, so the key is the only thing
   connecting the stored value to the control it drives.
@@ -198,17 +199,19 @@ ONESTOP_PARTS = "onestop_parts"
 # --- Infrastructure keys the URL / config paths read or stamp ---------------
 DEEPLINK_PARTICIPANT = "_deeplink_participant"
 GLOBAL_ADVANCED = "global_advanced"
-# Per-trial annotations travel inside the schema-2 config; the store key is
-# owned by annotations.py (pinned equal to it by the contract test).
+# The per-trial annotation store; owned by annotations.py (pinned equal to it by
+# the contract test). Schema 2–3 configs carried it; since UX-179 (schema 4) it
+# travels in its own file (🗂️ Data → Annotations) and the recovery cache.
 TRIAL_ANNOTATIONS = "trial_annotations"
-# VIZ-39 — the user's saved design library. Wire format twice over: it travels
-# in the schema-2 config under `design_presets`, and it is one of the keys the
-# on-device recovery cache writes to its manifest, so the designs survive
-# closing the app. Owned by controls.py (pinned equal to it by the contract
-# test).
+# VIZ-39 — the user's saved design library, one of the keys the on-device
+# recovery cache writes to its manifest, so the designs survive closing the
+# app. Schema 2–3 configs carried it under `design_presets`; since UX-179 it
+# has its own Export / Import on the saved-designs menu. Owned by controls.py
+# (pinned equal to it by the contract test).
 DESIGN_PRESETS = "_design_presets"
-# Saved column mapping is seeded key-by-key from the config's `column_mapping`
-# section; the prefix is the contract, the suffixes are data-dependent.
+# The column mapping is seeded key-by-key from a setup file's `column_mapping`
+# section (✏️ Edit dataset → Save setup) and stored the same way in the recovery
+# cache; the prefix is the contract, the suffixes are data-dependent.
 COLUMN_MAPPING_PREFIX = "col_map_"
 
 # --- Per-scanpath comparison styling (config `compare` list) ----------------
@@ -755,12 +758,12 @@ URL_SEEDED_STATE_KEYS = frozenset(
 )
 
 # ---------------------------------------------------------------------------
-# 💾 Save & restore
+# 🔗 Share → File (the settings file) and the Save setup file
 # ---------------------------------------------------------------------------
 # The JSON schema version stamped by both writers and understood by the reader.
 # Bumping it in url_state without registering a migration (or without updating
 # this constant) is the failure the contract test catches.
-PLOT_CONFIG_SCHEMA_VERSION = 3
+PLOT_CONFIG_SCHEMA_VERSION = 4
 
 # `cmp{idx}_*` templates the config's `compare` list restores, per entry.
 COMPARE_STATE_KEY_TEMPLATES = frozenset(
@@ -902,13 +905,11 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
 )
 
 # Non-`global_*` keys the same restore writes: the trial picker (`selection`)
-# and the annotation store (`annotations`). The `col_map_*` keys it seeds are
-# data-dependent — `COLUMN_MAPPING_PREFIX` is the contract there.
+# and the compare view's own settings.
 PLOT_CONFIG_OTHER_STATE_KEYS = frozenset(
     {
         SINGLE_SELECT_TRIAL_MODE,
         SINGLE_TRIAL_ID,
-        TRIAL_ANNOTATIONS,
         # CMP-11 — the compare view's own two settings, restored from the
         # config's `compare_view` section. They are not `global_*` keys (compare
         # mode owns them, not the rail), which is why they live here rather than

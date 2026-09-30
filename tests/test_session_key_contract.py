@@ -199,14 +199,14 @@ def test_plot_config_schema_version_pinned():
 
 
 def test_annotation_store_key_matches_annotations_module():
-    """The annotations store key travels inside every schema-2 config."""
+    """The annotations store key is the one annotations.py owns."""
     from scanpath_studio.annotations import ANNOTATIONS_STATE_KEY
 
     assert sk.TRIAL_ANNOTATIONS == ANNOTATIONS_STATE_KEY
 
 
 def test_design_presets_key_matches_controls_module():
-    """The design library travels in the config *and* the recovery cache."""
+    """The design library travels in the recovery cache."""
     from scanpath_studio.controls import DESIGN_PRESETS_KEY
     from scanpath_studio.persistence import _SESSION_KEYS
 
@@ -579,10 +579,9 @@ def test_saved_config_restore_writes_frozen_state_keys():
 
     written = set(at.session_state["_written"])
     mapping_keys = {k for k in written if k.startswith(sk.COLUMN_MAPPING_PREFIX)}
-    assert mapping_keys == {"col_map_fix_participant"}, (
-        "the saved column mapping is seeded under a different prefix — a "
-        f"restored config would stop pre-filling the mapping: {sorted(mapping_keys)}"
-    )
+    # UX-179: a settings file no longer re-maps the dataset — the mapping is
+    # ✏️ Edit dataset → Save setup's file — even when an old one carries it.
+    assert mapping_keys == set(), sorted(mapping_keys)
 
     expected = (
         sk.PLOT_CONFIG_STATE_KEYS

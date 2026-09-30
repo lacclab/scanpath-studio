@@ -41,10 +41,9 @@ Use a scanpath view to investigate surprising cases.
 
 Select **Download this table (CSV)** beside the relevant result, and note the
 trial filters and cohort definitions that produced it beside the file. Neither
-travels anywhere else: a 💾 Session → **JSON backup** keeps the figure settings,
-trial selection, column mapping, annotations and attached metadata tables, but not
-the filter selections or the Corpus Analysis choices, and a Share link carries
-neither.
+travels anywhere else: a **🔗 Share → File** settings file keeps the figure
+settings and trial selection, but not the filter selections or the Corpus
+Analysis choices, and a Share link carries neither.
 
 **Done:** you have a scoped corpus result, its contributing counts, and the table
 used for downstream statistics or reporting.

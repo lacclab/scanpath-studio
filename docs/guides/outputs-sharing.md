@@ -11,7 +11,9 @@ Open the **Export** subtab in the Scanpath view.
   heatmap, and image layers as separate files for editing, and **Tabular data →
   Full measure family** adds saccades, sentence measures, trial and reader
   summaries, character grids, cleaning QA and `run_config.json` — per trial
-  and concatenated under `aggregate/`.
+  and concatenated under `aggregate/`. **Also include → Annotations (JSON)**
+  adds `annotations.json`: the favorites, tags and notes on the exported
+  trials, which 🗂️ Data → Annotations can import.
 
 <figure class="sps-screenshot" markdown>
 ![The Export subtab: the current figure, and the bundle's trials, formats, tables and file naming](../assets/screenshots/export.webp)
@@ -29,13 +31,15 @@ MP4 use Chrome/Chromium through Kaleido. See
 
 ## Share a view
 
-The **Share** subtab creates a deep link containing the selected data source and
-visualization settings. **Refresh & Copy** rebuilds the URL from the current
-trial and settings and places it on the clipboard in one step. Below it, the
-code that reproduces the figure, in Python or as a CLI command.
+The **Share** subtab has three ways to pass the figure on — **Link**, **Code**
+and **File**. **Link** is a deep link containing the selected data source and
+visualization settings; **Refresh & Copy** rebuilds the URL from the current
+trial and settings and places it on the clipboard in one step. **Code** is the
+code that reproduces the figure, in Python or as a CLI command. **File** is a
+settings file, described below.
 
 <figure class="sps-screenshot" markdown>
-![The Share subtab: the link, and the code that reproduces the figure](../assets/screenshots/share.webp)
+![The Share subtab: the Link · Code · File switch, on Link](../assets/screenshots/share.webp)
 </figure>
 
 A link never contains an uploaded or public dataset's fixation or word tables.
@@ -52,12 +56,23 @@ unchanged.
 
 ## Back up and restore work
 
-**Session → JSON backup** downloads the view, mapping, metadata attachments and
-annotations. It is portable, but it does **not** contain uploaded dataset rows;
-load the same data before restoring it. Inspect annotations before sharing
-because notes may contain participant-related information.
+Each kind of work has its own file, downloaded where it is edited:
 
-This differs from **Automatic recovery**, which keeps dataset tables and working
-state on the current computer and restores them after a refresh or restart.
+- **🔗 Share → File** — the figure's settings and trial. *Restore settings*
+  re-applies one; settings that don't fit the loaded data are listed and
+  skipped.
+- **🗂️ Data → Annotations** — a dataset's favorites, tags and notes, with
+  *Export* and *Import*. Inspect them before sharing: notes may contain
+  participant-related information.
+- **✏️ Edit dataset → Save setup** — a dataset's column mapping and recording
+  setup, restored when you add the same kind of data again.
+- **🎨 My designs → Export** — your saved figure designs, imported on another
+  computer with *Import*.
+
+None of these files contains uploaded dataset rows; load the same data before
+restoring them. That differs from the recovery cache, which keeps dataset
+tables and working state on the current computer and restores them after a
+refresh or restart — see **Saved on this computer** at the foot of the
+🗂️ Data page.
 
 For repeatable scripted output, use [Automation](../automation.md).

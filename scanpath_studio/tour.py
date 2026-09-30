@@ -305,8 +305,8 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Keep the figure reproducible",
-                "**🔗 Share** turns the exact configuration into a link, and 💾 "
-                "**Session** saves it (with your annotations) as JSON. Either one "
+                "**🔗 Share** turns the exact configuration into a **Link**, the "
+                "**Code** that redraws it, or a settings **File**. Any of them "
                 "reproduces this figure later — the PNG on its own does not.",
                 ".st-key-tutorial_share",
                 subtab=SUBTAB_SHARE,
@@ -460,8 +460,8 @@ _STEPS = [
     ),
     (
         f"{ICONS['annotations']} Annotate & save",
-        "Star, tag, and note trials, then filter to them. **💾 Session** "
-        "saves the whole setup + annotations to JSON. Replay this via "
+        "Star, tag, and note trials, then filter to them. **🗂️ Data → "
+        "Annotations** exports them as JSON. Replay this via "
         "**Tutorials → Welcome tour**. 👀",
     ),
 ]
@@ -808,9 +808,8 @@ _SPOTLIGHT_STEPS = [
         "title": f"{ICONS['nav']} The nav",
         "body": "**🗺️ Scanpath** is what you see now. "
         "**📊 Corpus Analysis** aggregates across readers and texts; "
-        "**🗂️ Data** sets one up. **💾 Session** and **❓ Help** open over your "
-        "work rather than navigating away — replay this tour under "
-        "**Tutorials**. 👀",
+        "**🗂️ Data** sets one up. **❓ Help** opens over your work rather "
+        "than navigating away — replay this tour under **Tutorials**. 👀",
     },
 ]
 
@@ -1803,8 +1802,8 @@ _FAQ_ITEMS = [
         "Nowhere off your machine — no accounts, no database, no analytics, no "
         "upload. A local or desktop run also keeps a **recovery copy** here "
         "(added datasets, mappings, settings, annotations), so a refresh "
-        "resumes where you left off; **💾 Session → 🗄️ Automatic recovery** says "
-        "what is stored and turns it off or deletes it. Two caveats: "
+        "resumes where you left off; **🗂️ Data → Saved on this computer** says "
+        "what is stored and where. Two caveats: "
         "`streamlit run` listens on your whole network (use "
         "`--server.address=127.0.0.1`), and the online demo runs on "
         "Streamlit's server, with no recovery.",
@@ -1812,10 +1811,18 @@ _FAQ_ITEMS = [
     (
         "My uploaded data vanished after a refresh.",
         "Local and desktop runs normally recover uploaded datasets, settings and "
-        "annotations automatically. Check **💾 Session → Automatic recovery** "
-        "to see whether it is enabled and where it is saved. For a portable copy "
-        "of settings and annotations, use **JSON backup**; dataset rows are not "
-        "included in that file.",
+        "annotations automatically. Check **🗂️ Data → Saved on this computer** "
+        "to see whether it is enabled and where it is saved. For a portable "
+        "copy, export annotations from **🗂️ Data → Annotations** and the "
+        "figure's settings from **🗺️ Scanpath → 🔗 Share → File**; neither file "
+        "holds dataset rows.",
+    ),
+    (
+        "How do I turn the recovery copy off, or delete it?",
+        "Start the app with `scanpath-studio run --no-persist` (or set "
+        "`SCANPATH_STUDIO_PERSIST=0`) and nothing is saved. "
+        "`scanpath-studio cache --clear` deletes what is already stored, and "
+        "`SCANPATH_STUDIO_STATE_DIR=/your/folder` saves it somewhere else.",
     ),
     (
         "PDF or video export fails but HTML works.",

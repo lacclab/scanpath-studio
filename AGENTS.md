@@ -21,9 +21,9 @@ docs at <https://lacclab.github.io/OneStop-Eye-Movements/>), shipped under
 
 ```text
 scanpath_studio/
-├─ app.py            entry point: page config, data load, trial filters, dispatch to the three views + the 💾 Session dialog (`_session_dialog`), and the 🗂️ Data page's two screens (📂 Available datasets / ✏️ Edit dataset, DATA-35)
+├─ app.py            entry point: page config, data load, trial filters, dispatch to the three views, and the 🗂️ Data page's two screens (📂 Available datasets / ✏️ Edit dataset, DATA-35) — the overview ending in *Saved on this computer* (`_render_saved_here_section`, UX-179: what the recovery cache holds and its folder, read-only)
 ├─ url_state.py      deep links + plot-config save/restore (versioned via `PLOT_CONFIG_SCHEMA` + `_migrate_plot_config` — ENG-11) + Share link (`_build_share_query`, whose `include_participant=` / `include_trial=` are the DATA-16/S3 seam for withholding trial identity from a link) + the Share subtab's EXP-7 code-snippet block (`_snippet_source` maps the loaded corpus to a `code_snippet.SnippetSource`; `_render_code_snippet_body` draws it) + the `_go_scanpath` / `_go_data` view helpers, which request a view by writing `main_nav` for `menu.render_nav` to reconcile (split from app.py)
-├─ menu.py          UX-38 → UX-100: what replaced the sidebar. `render_nav` draws Streamlit's native `st.navigation(position="top")` — three **views** (🗺️ Scanpath · 📊 Corpus Analysis · 🗂️ Data) plus the **action** entries (💾 Session and ❓ Help's Tutorials / FAQ / About), which arm a dialog and bounce the router back so the modal opens over the current view — and returns the active view. `render_top_menu` is left with the title row and the main-area `notices` slot; ⚙️ Configure and 🧹 Preprocessing became sections of the Data page (DATA-26), and 💾 Session's four blocks are `app._session_dialog`. Nothing in the app writes to `st.sidebar`
+├─ menu.py          UX-38 → UX-100: what replaced the sidebar. `render_nav` draws Streamlit's native `st.navigation(position="top")` — three **views** (🗺️ Scanpath · 📊 Corpus Analysis · 🗂️ Data) plus ❓ Help's **action** entries (Tutorials / FAQ / About / Debug), which arm a dialog and bounce the router back so the modal opens over the current view — and returns the active view. `render_top_menu` is left with the title row and the main-area `notices` slot; ⚙️ Configure and 🧹 Preprocessing became sections of the Data page (DATA-26), and UX-179 retired the 💾 Session entry, moving its blocks to where each is used. Nothing in the app writes to `st.sidebar`
 ├─ session_keys.py   the session-state keys / URL params that are a wire format (share links + saved configs), as constants + frozen groupings — pinned by tests/test_session_key_contract.py so a rename fails a test instead of a user's old link (ENG-6)
 ├─ wizard.py         the Upload / Add-dataset wizard — guided data-setup flow (split from app.py)
 ├─ wizard_shell.py   DATA-22 + UX-53 → UX-129: the add screen's **three**-part registry (`STEPS`: name → data → setup, linear and not navigable — there is nothing to map until a file is read), drawn by `part()` as a numbered one-line headline whose explanation is hover-only. UX-135 added the ✏️ Edit dataset screen's own registry beside it (`EDITOR_STEPS` + `numbered()`, which renumbers over the parts that actually render, since two of the five are conditional). No column/frame knowledge
@@ -61,7 +61,7 @@ scanpath_studio/
 ├─ tour.py           first-visit/setup guides plus the independent task-tutorial registry, navigation, availability and progress
 ├─ debug_log.py      in-app debug log + state inspector (logging/print only reach the server terminal)
 ├─ annotations.py    per-trial favorites/tags/notes (session state) + JSON import/export
-├─ persistence.py    ENG-26 on-device recovery cache (localhost/desktop only): uploaded datasets as Parquet + a JSON manifest of mappings/settings/annotations, restored on the next session. ENG-30 exposed it — `cache_status`/`clear_local_state`/`set_persistence_paused` back the 💾 Session dialog's "🗄️ Automatic recovery" block (`app._render_recovery_cache_panel`), `scanpath-studio cache`, `run --no-persist`, and `api.cache_status`/`clear_cache`
+├─ persistence.py    ENG-26 on-device recovery cache (localhost/desktop only): uploaded datasets as Parquet + a JSON manifest of mappings/settings/annotations, restored on the next session. ENG-30 exposed it — `cache_status`/`clear_local_state` back the Data page's *Saved on this computer* section (`app._render_saved_here_section`, UX-179), `scanpath-studio cache`, `run --no-persist`, and `api.cache_status`/`clear_cache`
 ├─ synthetic.py      hand-built ground-truth trial (shared by tests + the "Synthetic test trial" data source)
 ├─ utils.py          trial-combo construction, trial-selection UI, comparison helpers
 ├─ constants.py      palette, defaults, citation metadata
@@ -166,7 +166,7 @@ them when the selection changes, and the recovery cache stores them per dataset.
 `annotations.py` keeps parent-trial and optional screen-scoped favorites / tags /
 notes in session state (keyed by `(participant_id, trial_id)` or
 `(participant_id, trial_id, screen_id)`), with a pure serialize/deserialize core
-and JSON download/restore in the 💾 Session dialog's ⬇️ JSON backup block. `controls.render_trial_filters` (read back via
+and JSON export/import per dataset on 🗂️ Data → Annotations (the Export bundle can carry the same `annotations.json`, UX-179). `controls.render_trial_filters` (read back via
 `controls.read_trial_filters`) +
 `data.filter_trials` / `data.filter_to_keys` narrow the trial pool by condition
 (Hunting/Gathering via `question_preview`, difficulty, repeated reading,

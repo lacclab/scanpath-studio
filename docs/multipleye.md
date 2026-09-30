@@ -15,8 +15,9 @@ makes.
 ## Loading it
 
 On the 🗂️ **Data** page, click **MultiplEYE** in **📂 Available datasets**, then
-**✏️ Edit** it: point *Data directory* at a session set (the *Expected files*
-panel lists the layout it looks for) and choose the **fixation source**
+choose **⋯ → Edit setup** on its row: point *Data directory* at a session set
+(the *Expected files* panel lists the layout it looks for) and choose the
+**fixation source**
 (`scanpaths` or `fixations`). The
 whole session set loads — use the **filter funnel** beside the trial picker
 (text and participant pickers, then the condition filters) to focus on specific

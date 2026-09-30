@@ -899,12 +899,29 @@ class TestDatasetTable:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         return at
 
-    def _table(self, at):
-        for element in at.dataframe:
-            frame = element.value
-            if frame is not None and "Dataset" in getattr(frame, "columns", []):
-                return frame
-        raise AssertionError("dataset table not rendered on the Data page")
+    @staticmethod
+    def _table(at):
+        """The table's rows, by value — `app.DATASET_TABLE_ROWS_KEY`'s records."""
+        import pandas as pd
+
+        from scanpath_studio.app import DATASET_TABLE_ROWS_KEY
+
+        records = at.session_state[DATASET_TABLE_ROWS_KEY]
+        assert records, "dataset table not rendered on the Data page"
+        return pd.DataFrame(records)
+
+    @staticmethod
+    def _click(at, key):
+        """Click a table button and run, on the Data page (see `pin_view`)."""
+        at.button(key=key).click()
+        pin_data_view(at)
+        at.run(timeout=90)
+
+    @staticmethod
+    def _slug(token):
+        from scanpath_studio.app import _dataset_row_slug
+
+        return _dataset_row_slug(token)
 
     def test_the_table_lists_datasets_with_counts_and_row_actions(self):
         at = self._at()
@@ -914,42 +931,122 @@ class TestDatasetTable:
         # Counts come from the frames already in memory, not from a reload.
         assert int(row["Participants"].iloc[0]) > 0
         assert int(row["Fixations"].iloc[0]) > 0
-        for column in (
-            "Participants",
-            "Texts",
-            "Trials",
-            "Screens",
-            "Fixations",
-            "Words",
-            "Gaze points",
-        ):
-            assert str(frame[column].dtype) == "Int64", (
-                f"{column} should stay integer even when unopened datasets are blank"
-            )
-        assert row["Kind"].iloc[0] == "🔒 Private"
-        for icon, word in {
-            "🧪": "Demo",
-            "✏️": "Manual",
-            "🔒": "Private",
-            "🌐": "Public",
-        }.items():
-            matching = frame[frame["Kind"].astype(str).str.startswith(icon)]
-            if not matching.empty:
-                assert matching["Kind"].astype(str).str.contains(word).all()
-        # DATA-35: every row carries every action. Edit used to be an upload's
-        # alone, back when it only opened the mapping editor a stored upload
-        # has; it now opens the Edit dataset screen, which every source has.
-        for column in ("About", "Edit", "Rename", "Remove"):
-            assert row[column].iloc[0], f"{column} missing from an upload's row"
+        assert row["Kind"].iloc[0] == "Private"
+        assert set(frame["Kind"]) <= {"Demo", "Manual", "Private", "Public", ""}
+        # UX-174: every row carries the same controls, keyed by its dataset —
+        # the name that opens it, Details, and the ⋯ menu's three actions.
+        keys = {b.key for b in at.button}
+        for token in frame["_token"]:
+            slug = self._slug(token)
+            for prefix in (
+                "dataset_open_",
+                "dataset_details_",
+                "dataset_row_edit_",
+                "dataset_row_rename_",
+                "dataset_row_remove_",
+            ):
+                assert f"{prefix}{slug}" in keys, f"{prefix} missing for {token}"
         demo = frame[frame["Dataset"].str.contains("demo", case=False)]
         if not demo.empty:
-            for column in ("About", "Edit", "Rename", "Remove"):
-                assert demo[column].iloc[0], f"{column} missing from the demo's row"
-            # DATA-35's language cell: the demo is a OneStop subset, so it knows
-            # its language. Its **home link** used to be a column here too; it
-            # moved into the ℹ️ About body, which is asserted below.
+            # DATA-35's language: the demo is a OneStop subset, so it knows its
+            # language. It is now the line under the name.
             assert demo["Language"].iloc[0]
-            assert "Home" not in frame.columns
+        # The authoring launcher is not a row; it is a button by the heading.
+        assert "create_manual_scanpath_btn" in keys
+        assert "add_data_btn" in keys
+
+    def test_no_cell_ever_reads_none_or_nan(self):
+        from scanpath_studio.app import DATASET_TABLE_ROWS_KEY
+
+        at = self._at()
+        for record in at.session_state[DATASET_TABLE_ROWS_KEY]:
+            for field, cell in record["_cells"].items():
+                assert cell and cell not in {"None", "nan", "NaN", "<NA>"}, (
+                    record["Dataset"],
+                    field,
+                    cell,
+                )
+                if record[field] is None:
+                    assert cell != "0", "a missing count must not read as zero"
+
+    def test_clicking_a_name_opens_it_and_moves_current_without_reordering(self):
+        at = self._at()
+        before = self._table(at)
+        order = list(before["_token"])
+        other = next(t for t in order if t != self.NAME)
+        self._click(at, f"dataset_open_{self._slug(other)}")
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["data_source_choice"] == other
+        after = self._table(at)
+        assert list(after["_token"]) == order
+        assert after.set_index("_token").loc[other, "_active"]
+        assert not after.set_index("_token").loc[self.NAME, "_active"]
+
+    def test_a_sorted_table_opens_the_row_that_was_clicked(self):
+        """The row controls are keyed by dataset, so a sort cannot shift them."""
+        from scanpath_studio.app import _DATASET_TABLE_SORT_KEY
+
+        at = self._at()
+        self._click(at, "dataset_sort_participants")
+        assert at.session_state[_DATASET_TABLE_SORT_KEY] == ("Participants", True)
+        frame = self._table(at)
+        target = frame["_token"].iloc[-1]
+        self._click(at, f"dataset_open_{self._slug(target)}")
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["data_source_choice"] == target
+
+    def test_details_arms_the_dialog_without_opening_the_dataset(self):
+        from scanpath_studio.app import PENDING_ABOUT_KEY
+
+        at = self._at()
+        frame = self._table(at)
+        other = next(t for t in frame["_token"] if t != self.NAME)
+        self._click(at, f"dataset_details_{self._slug(other)}")
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state[PENDING_ABOUT_KEY] == other
+        assert at.session_state["data_source_choice"] == self.NAME
+
+    def test_remove_arms_the_confirmation_for_its_own_row(self):
+        from scanpath_studio.app import PENDING_DELETE_KEY
+
+        at = self._at()
+        self._click(at, "dataset_sort_dataset")
+        self._click(at, f"dataset_row_remove_{self._slug(self.NAME)}")
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # Armed, not removed: UX-79's confirmation still stands between the two.
+        assert at.session_state[PENDING_DELETE_KEY] == self.NAME
+        assert self.NAME in at.session_state["_datasets"]
+
+    def test_edit_setup_opens_the_editor_on_its_row(self):
+        from scanpath_studio.app import DATASET_EDITOR_OPEN_KEY
+
+        at = self._at()
+        self._click(at, f"dataset_row_edit_{self._slug(self.NAME)}")
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state[DATASET_EDITOR_OPEN_KEY] is True
+        assert at.session_state["data_source_choice"] == self.NAME
+
+    def test_a_corpus_the_demo_stands_in_for_keeps_its_published_counts(
+        self, monkeypatch
+    ):
+        """PoTeC picked but not on disk: the loader shows the bundled demo in its
+        place (UX-7(b)), and the table used to count those demo rows as PoTeC's
+        *loaded* figures — and remember them. The row keeps its published
+        figures instead, with *Needs setup* as a state of its own."""
+        from scanpath_studio import datasets
+
+        monkeypatch.setattr(datasets, "potec_present", lambda root: False)
+        token = "PoTeC — Potsdam Textbook Corpus"
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["data_source_choice"] = token
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        row = self._table(at).set_index("_token").loc[token]
+        assert row["_active"]
+        assert row["Counts"] == "Published"
+        assert row["Status"] == "Needs setup"
+        assert row["Participants"] == 75
 
     def test_about_body_carries_the_home_link(self):
         """The corpus home link moved out of the table into ℹ️ About.
@@ -973,26 +1070,30 @@ class TestDatasetTable:
         leaving `wizard._remove_dataset` with **no caller at all** — deleting an
         upload was unreachable until this table's ✕ put it back.
 
-        AppTest cannot click a `ButtonColumn` cell, and the remover itself is
-        covered by `tests/test_wizard_helpers.py`; what is untested without this
-        is that anything still calls it. That is a source-level fact, so it is
-        checked as one."""
+        The ⋯ → Remove click that arms the confirmation is driven for real in
+        `test_remove_arms_the_confirmation_for_its_own_row`; the confirmation's
+        own button is inside an ``st.dialog``, which AppTest does not run, and
+        the remover itself is covered by `tests/test_wizard_helpers.py`. What
+        is left untested is that the dialog still calls it — a source-level
+        fact, so it is checked as one."""
         import inspect
-
-        from scanpath_studio.app import (
-            _delete_confirmation_dialog,
-            _render_delete_confirmation,
-            render_dataset_table,
-        )
 
         # UX-54 r2 put a confirmation between the two: the table's ✕ arms the
         # pending token, and the confirm button is what calls the remover. UX-79
         # then made that confirmation a modal, so the chain is one link longer —
         # the invariant this test exists for is unchanged: something still calls
         # the remover.
+        from scanpath_studio.app import (
+            _delete_confirmation_dialog,
+            _render_dataset_table_row,
+            _render_delete_confirmation,
+            render_dataset_table,
+        )
+
         table_source = inspect.getsource(render_dataset_table)
-        assert '_clicked("dataset_table_delete")' in table_source
-        assert "PENDING_DELETE_KEY" in table_source
+        assert "_render_delete_confirmation(" in table_source
+        row_source = inspect.getsource(_render_dataset_table_row)
+        assert "args=(PENDING_DELETE_KEY, row.token)" in row_source
         gate_source = inspect.getsource(_render_delete_confirmation)
         assert "_delete_confirmation_dialog(" in gate_source
         dialog_source = inspect.getsource(_delete_confirmation_dialog)
@@ -1083,24 +1184,25 @@ class TestDatasetRename:
         assert f"{DEMO_CHOICE} (uploaded)" in _session["_datasets"]
 
     def test_the_row_dialog_is_the_one_way_in(self):
-        """The table's ✏️ Rename arms a pending token that opens the dialog, and
+        """The row's ⋯ → Rename arms a pending token that opens the dialog, and
         the dialog is what calls the renamer.
 
         Source-level for the same reason ``test_delete_is_wired_to_the_remover``
-        is: AppTest cannot click a ``ButtonColumn`` cell, and a dialog rendered
-        from inside an ``@st.fragment`` does not take AppTest clicks either.
-        What must not silently break is the chain."""
+        is: a dialog rendered from inside an ``@st.fragment`` does not take
+        AppTest clicks. What must not silently break is the chain."""
         import inspect
 
         from scanpath_studio.app import (
             _rename_dataset_dialog,
+            _render_dataset_table_row,
             _render_rename_dialog,
             render_dataset_table,
         )
 
-        assert '_clicked("dataset_table_rename")' in inspect.getsource(
-            render_dataset_table
+        assert "args=(PENDING_RENAME_KEY, row.token)" in inspect.getsource(
+            _render_dataset_table_row
         )
+        assert "_render_rename_dialog(" in inspect.getsource(render_dataset_table)
         assert "_rename_dataset_dialog(" in inspect.getsource(_render_rename_dialog)
         dialog_source = inspect.getsource(_rename_dataset_dialog)
         assert "from scanpath_studio.wizard import rename_dataset" in dialog_source

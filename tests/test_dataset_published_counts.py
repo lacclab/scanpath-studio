@@ -371,11 +371,9 @@ class TestTheTableItself:
 
     @staticmethod
     def _table(at) -> pd.DataFrame:
-        for element in at.dataframe:
-            frame = getattr(element.value, "data", element.value)
-            if "Dataset" in getattr(frame, "columns", []):
-                return frame
-        raise AssertionError("the dataset table did not render")
+        records = at.session_state[app.DATASET_TABLE_ROWS_KEY]
+        assert records, "the dataset table did not render"
+        return pd.DataFrame(records)
 
     @pytest.fixture(scope="class")
     def table(self) -> pd.DataFrame:
@@ -405,3 +403,5 @@ class TestTheTableItself:
         row = table.set_index("Dataset").loc["MultiplEYE"]
         assert row["Counts"] == ""
         assert pd.isna(row["Participants"])
+        # UX-174: and the cell says why, rather than showing a blank or a 0.
+        assert row["_cells"]["Participants"] == "Not loaded"

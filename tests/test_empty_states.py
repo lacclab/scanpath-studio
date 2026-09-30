@@ -270,7 +270,7 @@ class TestADeadEndStillShowsTheWayOut:
         at.run()
         assert not at.exception, at.exception
         assert not [i for i in at.info if i.value.startswith("Loading")]
-        tables = [df.value for df in at.dataframe]
-        assert any("Dataset" in t.columns for t in tables), [
-            list(t.columns)[:3] for t in tables
-        ]
+        from scanpath_studio.app import DATASET_TABLE_ROWS_KEY
+
+        # UX-174: the table's rows, by value (it is no longer a dataframe).
+        assert at.session_state[DATASET_TABLE_ROWS_KEY]

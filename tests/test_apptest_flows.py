@@ -137,6 +137,13 @@ def _metric(at: AppTest, label: str) -> str | None:
     return None
 
 
+def _dataset_names(at: AppTest) -> list[str]:
+    """The names 📂 Available datasets lists (UX-174's rows seam)."""
+    from scanpath_studio.app import DATASET_TABLE_ROWS_KEY
+
+    return [row["Dataset"] for row in at.session_state[DATASET_TABLE_ROWS_KEY]]
+
+
 def _frames_with(at: AppTest, *columns: str) -> list[pd.DataFrame]:
     """Every rendered dataframe holding all of ``columns``."""
     out = []
@@ -753,8 +760,7 @@ class TestAddDatasetMenu:
         assert at.selectbox(key="data_source_picker").value == "My example"
         assert not any(t.key == "author_text" for t in at.text_area)
         _rerun(at, view=VIEW_DATA)
-        tables = [d.value for d in at.dataframe if "Dataset" in d.value.columns]
-        assert "My example" in tables[0]["Dataset"].tolist()
+        assert "My example" in _dataset_names(at)
 
     def test_editable_sample_and_manual_draft_are_independent(self):
         from scanpath_studio.constants import MANUAL_SAMPLE_CHOICE
@@ -782,10 +788,9 @@ class TestAddDatasetMenu:
         assert at.text_area(key="author_text").value != "An edited example."
         _rerun(at, view=VIEW_DATA)
         _clean(at)
-        tables = [d.value for d in at.dataframe if "Dataset" in d.value.columns]
-        assert tables
-        assert "My scanpath" not in tables[0]["Dataset"].tolist()
-        assert MANUAL_SAMPLE_CHOICE in tables[0]["Dataset"].tolist()
+        assert _dataset_names(at)
+        assert "My scanpath" not in _dataset_names(at)
+        assert MANUAL_SAMPLE_CHOICE in _dataset_names(at)
         at.button(key="create_manual_scanpath_btn").click().run(timeout=60)
         _clean(at)
         assert at.session_state["main_nav"] == _VIEW_SCANPATH

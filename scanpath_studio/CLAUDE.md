@@ -25,29 +25,48 @@ the dataset track room for the **+ → Create manually / Import files** menu.
 The dataset picker offers an editable, manually authored **Synthetic sample**
 by default and the picker-only
 **More coming soon!** placeholder. A manual draft appears as **My scanpath**
-once opened; Data Management omits that row and has a **Create manual scanpath**
-button. The sample and manual draft are separate; both share as authored scanpaths.
+once opened; Data Management omits that row and has a **Create a scanpath**
+button beside the section heading. The sample and manual draft are separate; both share as authored scanpaths.
 Picking the sample **shows** it (`_manual_sample_frames`, through the normal
-view); its authoring editor opens only from its Data-page **Edit** button, which
+view); its authoring editor opens only from its Data-page **⋯ → Edit setup**, which
 arms `_AUTHOR_EDITING_KEY` (`_authoring_editor_open`). `AUTHOR_CHOICE` is always
 an editor.
 Comparison-subtab candidates match the selected trial on
 one chosen field, keep each candidate's own stimulus and the main plot styling,
 exclude the selected trial, and show only trial IDs above their panels.
 
-Data Management renders the full inspection-summary fields as integer dataset
-counts. **DATA-36:** a row that has never been opened is no longer blank — each
+Data Management's **📂 Available datasets** is a focused table since **UX-174**
+(`app.render_dataset_table`): Kind · Dataset · Participants · Texts · Trials ·
+Fixations · Actions, with Screens / Words / Gaze points behind the *All counts*
+toggle and in **Details**. It is built from keyed containers and buttons, not an
+`st.dataframe` — a grid can't write *Not loaded* in a numeric column without
+sorting it as text, draws no second line under a name, and gives a button column
+one action. What a row says is the pure `dataset_table.DatasetRow` (a count, or
+its reason: Not loaded / Not reported / Not applicable / Unknown — never `None`
+or a stand-in 0), and `dataset_table.sort_rows` sorts on the integers with gaps
+last. Row widgets are keyed by `app._dataset_row_slug(token)` (a digest, since a
+key is also a CSS class) and take the token as a callback arg, so a click after
+any sort acts on its own row; the ⋯ menu is a state-tracked `st.popover` its
+actions close. `app.DATASET_TABLE_ROWS_KEY` holds `row_record`s for tests. The
+cell CSS in `styles.py` selects each cell's `stLayoutWrapper` via `:has()` — a
+keyed container's class sits on the inner block, not on the flex item. When the
+demo stands in for a corpus that isn't on disk (`_PLACEHOLDER_SHOWN_KEY`), the
+open row is not counted from the demo's frames, drops what it remembered, and
+shows a separate **Needs setup** status. **DATA-36:** a row that has never been
+opened is not blank — each
 catalogue entry may carry `published_counts` (keyed by `app.DATASET_COUNT_FIELDS`)
 plus a `published_counts_source` sentence, reached through the one `dataset_about`
 lookup, and the prepared benchmark corpora take theirs from the bundle manifest
 via `benchmark_published_counts`. `dataset_row_counts` resolves a row to *either*
-what loaded *or* what is published — never a mixture — and the **Counts** column
-says which; the ℹ️ About dialog sets the two side by side, flagging only the case
-where a load exceeds a published figure. **A trial is a `(participant_id, trial_id)`
+what loaded *or* what is published — never a mixture — and the line under the
+name says which (*Loaded counts* / *Published counts*); the **Details** dialog
+sets the two side by side, flagging only the case where a load exceeds a
+published figure. **A trial is a `(participant_id, trial_id)`
 pair** here and in the 🗂️ Data summary, not a distinct `trial_id`. It also
 pairs each Kind icon with its word (Demo / Manual / Private / Public),
-and gives every row Rename / Remove actions (app-owned tokens keep a display
-alias or are hidden for the session; uploads are really re-keyed/deleted). It
+and gives every row ⋯ → Edit setup / Rename / Remove (app-owned tokens keep a
+display alias or are hidden for the session; uploads are really
+re-keyed/deleted). It
 names the active dataset in the **What's in…** heading and presents mappings in
 the add-dataset field-grid grammar. The page keeps a 3rem top inset so the fixed header does not clip the
 first row, while its bottom remains flush. The

@@ -268,11 +268,15 @@ class TestTrialFiltersKeepTheDesign:
             self._run(at)
             assert at.session_state["_quick_view_selection"] == "scanpath", participant
         assert list(at.session_state["global_fixation_hover_fields"]) == hover
-        # The issue's own repro: Correct → only the correct answers.
+        # The issue's repro was Correct → only the correct answers; every
+        # trial the demo keeps is answered correctly (DATA-43), so that filter
+        # no longer draws. A condition filter with two values stands in.
         for pick_first in (True, False):
-            correct = next(m for m in at.multiselect if m.key == "filter_is_correct")
-            picked = [correct.options[0]] if pick_first else []
-            correct.set_value(picked)
+            level = next(
+                m for m in at.multiselect if m.key == "filter_difficulty_level"
+            )
+            picked = [level.options[0]] if pick_first else []
+            level.set_value(picked)
             self._run(at)
             assert at.session_state["_quick_view_selection"] == "scanpath", picked
 

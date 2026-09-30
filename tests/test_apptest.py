@@ -3070,6 +3070,14 @@ class TestSetupWizard:
             payload["fixations"]["trial_id"]
         )
 
+    def test_a_partial_join_is_a_warning_not_the_green_caption(self, monkeypatch):
+        """DATA-49 round 4: a join worth acting on is never shown as success."""
+        at = self._text_level_upload(monkeypatch, text_ids=("1_1_Ele", "nope"))
+        warn_text = " ".join(e.value for e in at.warning)
+        assert "2 of 4 readings have word boxes" in warn_text, warn_text
+        captions = " ".join(e.value for e in at.caption)
+        assert "Words attach to readings" not in captions, captions
+
     def test_an_aoi_table_nothing_joins_blocks_the_add(self, monkeypatch):
         """DATA-49: no shared trial id and no shared Text ID stops the wizard
         with a message, instead of adding a dataset with no AOIs."""

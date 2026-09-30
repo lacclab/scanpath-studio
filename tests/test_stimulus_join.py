@@ -651,29 +651,126 @@ class TestHeadlessSurfaces:
         assert "--word-schema" in result.stderr and "--fix-schema" in result.stderr
 
 
-class TestRoutesAreCrossChecked:
-    def test_a_trial_id_naming_another_texts_trial_gives_way_to_the_text_id(self):
-        """Trial ids that are presentation order: reader A's trial "1" read text
-        t5. The exact trial id would hand A text 1's boxes, so the Text ID wins
-        and the redirect is reported (DATA-49 review, F4)."""
-        words = _aoi(["1", "5"], ["t1", "t5"], ["one", "five"])
-        fixations = _fix(["A", "B"], ["1", "1"], ["t5", "t1"])
-        with pytest.warns(data_module.StimulusJoinWarning, match="another text"):
-            w, _ = sps.load_scanpath_data(
-                words=words,
-                fixations=fixations,
-                word_schema={**_EDGE_SCHEMA, "trial": "trial", "text_id": "text"},
-                fix_schema={**_FIX_SCHEMA, "text_id": "text"},
-            )
-        assert _boxes(w, "A", "1") == ["five"]
-        assert _boxes(w, "B", "1") == ["one"]
+class TestTrialIdMatchesStand:
+    """DATA-49 round 4: an exact trial-id match (or `_base_trial_id`) always
+    wins, as on main; a Text ID never moves a reading's boxes."""
+
+    _PARAGRAPHS = _aoi(
+        ["1", "2", "3", "4"], ["1", "2", "3", "4"], ["p1", "p2", "p3", "p4"]
+    )
+
+    def _load(self, words, fixations, *, word_text, fix_text):
+        return sps.load_scanpath_data(
+            words=words,
+            fixations=fixations,
+            word_schema={
+                **_EDGE_SCHEMA,
+                "trial": "trial",
+                **({"text_id": "text"} if word_text else {}),
+            },
+            fix_schema={**_FIX_SCHEMA, **({"text_id": "text"} if fix_text else {})},
+        )
+
+    def test_a_coarser_fixations_text_id_moves_no_boxes(self):
+        """Fixations map Text ID = article (1,1,2,2) over AOI paragraphs 1-4
+        with no Text ID: every paragraph keeps its own boxes."""
+        fixations = _fix(["r"] * 4, ["1", "2", "3", "4"], ["1", "1", "2", "2"])
+        w, _ = self._load(self._PARAGRAPHS, fixations, word_text=False, fix_text=True)
+        for trial in ("1", "2", "3", "4"):
+            assert _boxes(w, "r", trial) == [f"p{trial}"], trial
+
+    def test_an_aoi_only_text_id_moves_no_boxes(self):
+        """The reverse: Text ID mapped on the AOI side only."""
+        words = _aoi(
+            ["1", "2", "3", "4"], ["1", "1", "2", "2"], ["p1", "p2", "p3", "p4"]
+        )
+        fixations = _fix(["r"] * 4, ["1", "2", "3", "4"], ["x"] * 4)
+        w, _ = self._load(words, fixations, word_text=True, fix_text=False)
+        for trial in ("1", "2", "3", "4"):
+            assert _boxes(w, "r", trial) == [f"p{trial}"], trial
+
+    def test_text_ids_at_different_grains_warn_and_move_nothing(self):
+        """Both sides map a real Text ID, at different grains with overlapping
+        values: the trial-id matches stand, and the disagreement is warned about
+        with an example, never shown as a clean success."""
+        words = _aoi(
+            ["1", "2", "3", "4"], ["1", "2", "3", "4"], ["p1", "p2", "p3", "p4"]
+        )
+        words["text"] = ["t1", "t2", "t3", "t4"]
+        fixations = _fix(["r"] * 4, ["1", "2", "3", "4"], ["t1", "t1", "t2", "t2"])
+        with pytest.warns(data_module.StimulusJoinWarning, match="different Text ID"):
+            w, _ = self._load(words, fixations, word_text=True, fix_text=True)
+        for trial in ("1", "2", "3", "4"):
+            assert _boxes(w, "r", trial) == [f"p{trial}"], trial
         join = plan_stimulus_join(
             normalize_words(
                 words, {**_EDGE_SCHEMA, "trial": "trial", "text_id": "text"}
             ),
             normalize_fixations(fixations, {**_FIX_SCHEMA, "text_id": "text"}),
         )
-        assert (join.by_trial, join.by_text, join.redirected) == (1, 1, 1)
+        assert (join.by_trial, join.by_text, join.text_mismatches) == (4, 0, 3)
+        assert join.needs_warning
+        assert "'t1' against 't2'" in join.describe()
+
+    def test_presentation_order_trial_ids_keep_their_match_and_warn(self):
+        words = _aoi(["1", "5"], ["t1", "t5"], ["one", "five"])
+        fixations = _fix(["A", "B"], ["1", "1"], ["t5", "t1"])
+        with pytest.warns(data_module.StimulusJoinWarning, match="different Text ID"):
+            w, _ = self._load(words, fixations, word_text=True, fix_text=True)
+        assert _boxes(w, "A", "1") == ["one"]
+        assert _boxes(w, "B", "1") == ["one"]
+
+
+class TestMultipartScreens:
+    _WS = {**_EDGE_SCHEMA, "trial": "trial", "text_id": "text", "screen_id": "page"}
+    _FS = {**_FIX_SCHEMA, "text_id": "text", "screen_id": "page"}
+
+    def test_a_missing_screen_is_named(self):
+        words = _aoi(["A", "A"], ["tA", "tA"], ["one", "two"]).assign(page=["p1", "p2"])
+        fixations = _fix(["r1", "r1"], ["A", "A"], ["tA", "tA"]).assign(
+            page=["p1", "p9"]
+        )
+        with pytest.raises(StimulusJoinError) as err:
+            sps.load_scanpath_data(
+                words=words,
+                fixations=fixations,
+                word_schema=self._WS,
+                fix_schema=self._FS,
+            )
+        text = str(err.value)
+        assert "has no boxes for that screen ('p9')" in text
+        assert "neither a trial ID nor a Text ID" not in text
+
+    def test_blank_screens_still_pair_with_blank_screens(self):
+        words = _aoi(["A", "A"], ["tA", "tA"], ["one", "two"]).assign(page=["p1", None])
+        fixations = _fix(["r1", "r1"], ["r1_A", "r1_A"], ["tA", "tA"]).assign(
+            page=["p1", None]
+        )
+        w, _ = sps.load_scanpath_data(
+            words=words, fixations=fixations, word_schema=self._WS, fix_schema=self._FS
+        )
+        assert sorted(w["text"]) == ["one", "two"]
+
+
+class TestReservedColumns:
+    def test_an_uploaded_column_with_an_internal_name_is_ignored(self):
+        words = _aoi(["A", "B"], ["tA", "tB"], ["a", "b"]).assign(
+            _aoi_trial_id=["B", "A"]
+        )
+        fixations = _fix(["r1", "r2"], ["A", "B"], ["tA", "tB"]).assign(
+            _base_trial_id=["B", "A"]
+        )
+        with pytest.warns(UserWarning, match="reserves for its own bookkeeping"):
+            w, f = sps.load_scanpath_data(
+                words=words,
+                fixations=fixations,
+                word_schema={**_EDGE_SCHEMA, "trial": "trial", "text_id": "text"},
+                fix_schema={**_FIX_SCHEMA, "text_id": "text"},
+            )
+        assert data_module.BASE_TRIAL_ID not in f.columns
+        assert _boxes(w, "r1", "A") == ["a"]
+        assert _boxes(w, "r2", "B") == ["b"]
+        assert set(w[data_module.AOI_TRIAL_ID]) == {"A", "B"}
 
 
 class TestMessages:
@@ -765,3 +862,20 @@ class TestInternalColumns:
         assert data_module.AOI_TRIAL_ID in trial_level  # constant per trial …
         options = controls._chip_field_options(w, f, trial_level)
         assert not set(options) & data_module.INTERNAL_COLUMNS  # … yet never offered
+
+
+def test_no_field_picker_offers_an_internal_column():
+    """DATA-49 round 4: the hover pickers, the Q&A / span candidates and the
+    comparison fields all draw from `data.user_columns`."""
+    from scanpath_studio import controls, tabs
+
+    w, f = sps.load_scanpath_data(words=_text_words(), fixations=_reader_fixations())
+    f = f.assign(**{data_module.BASE_TRIAL_ID: f["trial_id"]})
+    assert data_module.AOI_TRIAL_ID in w.columns
+    internal = data_module.INTERNAL_COLUMNS
+    assert not set(controls.hover_field_options(w, words=True)) & internal
+    assert not set(controls.hover_field_options(f)) & internal
+    trial = w[w["trial_id"] == w["trial_id"].iloc[0]]
+    spans, qa = tabs._stimulus_field_candidates(trial)
+    assert not (set(spans) | set(qa)) & internal
+    assert not set(data_module.user_columns(f)) & internal

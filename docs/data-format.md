@@ -122,9 +122,11 @@ Headless, it is `--text-metadata FILE` on `scanpath-studio render` and
   repeated reading, whose trial ID ends in `_r2`) by the trial ID it had before
   that suffix, then by its **Text ID**, for example when the trial ID includes
   the reader. A Text ID that the words table gives to more than one of its
-  trials is not used. When a reading's trial ID matches a words trial of a
-  different text than its own Text ID (trial IDs that are presentation order,
-  say), the Text ID wins. If no reading finds any boxes, the add-dataset screen
+  trials is not used, and a Text ID the fixations don't map (so it is only
+  their trial ID) is never used to find boxes. A trial-ID match always stands;
+  when both tables map a Text ID and a reading's disagrees with the one on the
+  boxes its trial ID found, you get a warning naming an example. If no reading
+  finds any boxes, the add-dataset screen
   stops with a message (the Python API and CLI raise the same error) rather
   than adding a dataset with no word boxes; a multi-screen dataset stops the
   same way when any screen a reader looked at has no boxes. When some readings

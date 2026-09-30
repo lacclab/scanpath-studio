@@ -593,20 +593,19 @@ class TestStimulusLevelWordsRemap:
         ):
             assert extract_trial(saved["words"], reader, trial)["text"].tolist() == text
 
-    def test_a_trial_pick_that_matches_nothing_still_saves_by_text(self):
-        """DATA-49: the Text ID is the join a stimulus-level table falls back
-        to, so a Trial pick the fixations do not share loses no boxes while
-        the Text ID still names each reading's text."""
-        from scanpath_studio.utils import extract_trial
-
+    def test_a_trial_pick_that_matches_nothing_is_refused_without_a_text_id(self):
+        """DATA-49 round 4: with no Text ID mapped on the fixations, their
+        ``text_id`` is only their own trial id, which names no text — so it
+        cannot stand in for a Trial pick the fixations do not share, and the
+        save is refused rather than guessed. (With a real Text ID it saves:
+        ``TestStimulusProvenanceOnRemap``.)"""
         words, fixations = self._stored()
         words = words.assign(item=["zz"] * len(words))
         entry, pending = self._entry_and_pending(words, fixations)
         pending["words"] = {**pending["words"], "trial": "item"}
         problems, saved = self._apply(entry, pending)
-        assert not problems
-        for reader, trial in (("p1", "t1"), ("p2", "t1"), ("p2", "t2")):
-            assert not extract_trial(saved["words"], reader, trial).empty
+        assert problems and "words" in problems
+        assert saved is entry
 
     # -- datasets the bug already saved --------------------------------------
 
@@ -1001,3 +1000,118 @@ class TestStimulusProvenanceOnRemap:
         assert not problems
         notices = st.session_state.get(tabs.STIMULUS_JOIN_NOTICE_KEY)
         assert notices and "1 of 2 readings have word boxes" in notices[0]
+
+
+class TestLegacyStoredRepeats:
+    """DATA-49 round 4: a dataset stored before the join recorded provenance
+    (v0.32.0 — no `_aoi_trial_id`, no `_base_trial_id`) with a repeated
+    reading. Its repeat's copy of the boxes carries the `_r2` id; the save
+    must fold it back into the trial it copied, or it becomes a phantom AOI
+    trial that makes its text ambiguous for good — and a later save that
+    re-joins by Text ID then leaves 3 of 4 readings without boxes."""
+
+    def test_two_saves_keep_every_readings_boxes(self):
+        from scanpath_studio.data import AOI_TRIAL_ID, BASE_TRIAL_ID, harmonize_frames
+        from scanpath_studio.tabs import (
+            _FIX_REMAP_CANON,
+            _WORD_REMAP_CANON,
+            _remap_proposed,
+        )
+        from scanpath_studio.utils import extract_trial
+
+        word_schema = {
+            "trial": "tr",
+            "word_id": "wid",
+            "text": "txt",
+            "left": "L",
+            "right": "R",
+            "top": "T",
+            "bottom": "B",
+        }
+        fix_schema = {
+            "participant": "subj",
+            "trial": "tr",
+            "text_id": "tx",
+            "x": "fx",
+            "y": "fy",
+            "duration": "dur",
+        }
+        raw_w = pd.DataFrame(
+            {
+                "tr": ["a", "a", "b"],
+                "wid": [0, 1, 0],
+                "txt": ["The", "cat", "Dogs"],
+                "L": [0.0, 50.0, 0.0],
+                "R": [40.0, 90.0, 60.0],
+                "T": [0.0, 0.0, 0.0],
+                "B": [20.0, 20.0, 20.0],
+            }
+        )
+        raw_f = pd.DataFrame(
+            {
+                "subj": ["r1", "r1", "r1", "r2"],
+                "tr": ["a", "b", "a", "a"],
+                "tx": ["a", "b", "a", "a"],
+                "alt": ["A1", "A2", "A3", "B1"],
+                "TRIAL_INDEX": [1, 2, 3, 1],
+                "fx": [10.0] * 4,
+                "fy": [5.0] * 4,
+                "dur": [100] * 4,
+            }
+        )
+        words, fixations = harmonize_frames(
+            normalize_words(raw_w, word_schema),
+            normalize_fixations(raw_f, fix_schema, keep_columns={"TRIAL_INDEX", "alt"}),
+        )
+        # What v0.32.0 stored: no provenance columns.
+        words = words.drop(columns=[AOI_TRIAL_ID])
+        fixations = fixations.drop(columns=[BASE_TRIAL_ID])
+        assert set(zip(words["participant_id"], words["trial_id"])) == {
+            ("r1", "a"),
+            ("r1", "a_r2"),
+            ("r1", "b"),
+            ("r2", "a"),
+        }
+        entry = {
+            "words": words,
+            "fixations": fixations,
+            "raw_gaze": pd.DataFrame(),
+            "schemas": {"words": word_schema, "fixations": fix_schema},
+        }
+        cat, dogs = ["The", "cat"], ["Dogs"]
+        saves = (
+            (
+                None,
+                {
+                    ("r1", "a"): cat,
+                    ("r1", "a_r2"): cat,
+                    ("r1", "b"): dogs,
+                    ("r2", "a"): cat,
+                },
+            ),
+            (
+                "alt",
+                {
+                    ("r1", "A1"): cat,
+                    ("r1", "A3"): cat,
+                    ("r1", "A2"): dogs,
+                    ("r2", "B1"): cat,
+                },
+            ),
+        )
+        for fix_pick, expected in saves:
+            pending = {
+                "words": _remap_proposed(
+                    word_schema, entry["words"].columns, _WORD_REMAP_CANON
+                ),
+                "fixations": _remap_proposed(
+                    fix_schema, entry["fixations"].columns, _FIX_REMAP_CANON
+                ),
+            }
+            if fix_pick:
+                pending["fixations"] = {**pending["fixations"], "trial": fix_pick}
+            problems, entry = TestStimulusLevelWordsRemap._apply(entry, pending)
+            assert not problems
+            for (reader, trial), text in expected.items():
+                got = extract_trial(entry["words"], reader, trial)["text"].tolist()
+                assert got == text, (fix_pick, reader, trial, got)

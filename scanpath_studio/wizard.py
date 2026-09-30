@@ -3989,10 +3989,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
         st.session_state.get(app.STIMULUS_JOIN_KEY) if has_words and has_fix else None
     )
     if active and join is not None:
-        if join.matched == join.readings:
-            s6.caption(f"{ICONS['confirm']} {join.describe()}")
-        else:
+        # Anything worth acting on — readings without boxes, Text IDs that
+        # disagree with their boxes' — is a warning, never the green caption.
+        if join.needs_warning:
             s6.warning(f"{ICONS['warning']} {join.describe()}")
+        else:
+            s6.caption(f"{ICONS['confirm']} {join.describe()}")
 
     if (
         active

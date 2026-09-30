@@ -228,9 +228,10 @@ REGISTER: tuple[Computation, ...] = (
             "(participant × trial [× screen]) in the fixations, stamped with "
             "that reading's ids. Per reading, the boxes are those of the first "
             "words trial found by its trial ID, then its trial ID before a "
-            "repeat's _r2 suffix, then its Text ID — the Text ID's trial when "
-            "the trial-ID match is a trial of another text. A Text ID the words "
-            "give to more than one trial is not used (DATA-49)."
+            "repeat's _r2 suffix, then its Text ID (only a Text ID the fixations "
+            "map, and never one the words give to more than one trial). A "
+            "trial-ID match always stands; mapped Text IDs that disagree with "
+            "it are warned about (DATA-49)."
         ),
         code="scanpath_studio/data.py:broadcast_stimulus_words",
         missing=(

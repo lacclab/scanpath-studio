@@ -172,8 +172,10 @@ from scanpath_studio.data import (
     propose_word_schema,
     read_tables,
     remap_normalized_frame,
+    repeat_bases,
     trial_keys,
     trial_mapping_columns,
+    user_columns,
     validate_fix_schema,
     validate_raw_gaze_schema,
     validate_word_schema,
@@ -2712,7 +2714,7 @@ def _detect_span_columns(trial_words: pd.DataFrame) -> list[str]:
     """
     detected = [
         c
-        for c in trial_words.columns
+        for c in user_columns(trial_words)
         if any(h in c.lower() for h in _SPAN_NAME_HINTS)
         and _is_boolish(trial_words[c])
         and bool(trial_words[c].fillna(False).astype(bool).any())
@@ -2738,7 +2740,7 @@ def _detect_question_columns(trial_words: pd.DataFrame) -> list[str]:
     render as a bogus "Response time ms: 120" line.
     """
     out = []
-    for c in trial_words.columns:
+    for c in user_columns(trial_words):
         lc = c.lower()
         if c == "comprehension_questions":
             continue  # structured JSON, rendered by _render_comprehension_questions
@@ -2825,7 +2827,7 @@ def _stimulus_field_candidates(
     picked timing column is a legitimate thing to want on screen.
     """
     spans, qa = [], []
-    for col in trial_words.columns:
+    for col in user_columns(trial_words):
         if col in _STIMULUS_FIELD_EXCLUDE:
             continue
         series = trial_words[col]
@@ -9122,7 +9124,7 @@ def _generation_column_options(fixations: pd.DataFrame) -> list:
         "sample",
     )
     cols = []
-    for c in fixations.columns:
+    for c in user_columns(fixations):
         if c in _GEN_COL_EXCLUDE:
             continue
         try:
@@ -10933,12 +10935,18 @@ def _apply_remap() -> None:
 
     new_entry = dict(stored)
     new_schemas = dict(stored.get("schemas") or {})
+    # DATA-49 — which stored trial ids are repeats of which, so a dataset
+    # stored before the join recorded provenance folds a repeat's copy of the
+    # boxes back into the trial it copied (`data.repeat_bases`).
+    repeat_of = repeat_bases(stored.get("fixations"))
     for table_key in ("words", "fixations", "raw_gaze"):
         frame = stored.get(table_key)
         if frame is None or frame.empty or table_key not in pending:
             continue
         schema = pending[table_key]
-        new_entry[table_key] = remap_normalized_frame(frame, schema, kind=table_key)
+        new_entry[table_key] = remap_normalized_frame(
+            frame, schema, kind=table_key, repeat_of=repeat_of
+        )
         new_schemas[table_key] = schema
     # …then the added ones, which are *raw*: they take the same normalization
     # the add-dataset screen runs, and then `harmonize_frames` — the

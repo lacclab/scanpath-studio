@@ -30,16 +30,16 @@ Scanpath Studio works on a pair of tables — **word interest areas** (one row p
 
 **Words / IA** — after `load_scanpath_data`:
 
-| Column                      | Meaning                                                                                                                                               |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `participant_id`            | Reader id (string). Optional in the source: a stimulus-level word table with no reader column is broadcast across the readers found in the fixations. |
-| `trial_id`                  | Trial id; with `participant_id` it names one reading. **Required.**                                                                                   |
-| `screen_id`, `screen_index` | Optional child screen and 1-based order inside a multipart logical trial. Map in both reports.                                                        |
-| `text_id`                   | Which text/passage the row belongs to (plus `unique_text_id` when the source has a corpus-wide id).                                                   |
-| `word_id`                   | Word index within the trial. **Required** — it is the join key to fixations.                                                                          |
-| `text`                      | The word itself (what gets drawn in the boxes).                                                                                                       |
-| `x`, `y`, `width`, `height` | Word bounding box in screen px, origin top-left. **Required** (or supply `left`/`right`/`top`/`bottom`, which are converted).                         |
-| `line_idx`                  | Source line number, when the export has one. Often constant — the plots derive visual lines from box `y` instead.                                     |
+| Column                      | Meaning                                                                                                                                                                                                                                                    |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `participant_id`            | Reader id (string). Optional in the source: a stimulus-level word table with no reader column is broadcast onto every reading in the fixations, matched by trial id or else by `text_id`; `load_scanpath_data` raises a `ValueError` when neither matches. |
+| `trial_id`                  | Trial id; with `participant_id` it names one reading. **Required.**                                                                                                                                                                                        |
+| `screen_id`, `screen_index` | Optional child screen and 1-based order inside a multipart logical trial. Map in both reports.                                                                                                                                                             |
+| `text_id`                   | Which text/passage the row belongs to (plus `unique_text_id` when the source has a corpus-wide id).                                                                                                                                                        |
+| `word_id`                   | Word index within the trial. **Required** — it is the join key to fixations.                                                                                                                                                                               |
+| `text`                      | The word itself (what gets drawn in the boxes).                                                                                                                                                                                                            |
+| `x`, `y`, `width`, `height` | Word bounding box in screen px, origin top-left. **Required** (or supply `left`/`right`/`top`/`bottom`, which are converted).                                                                                                                              |
+| `line_idx`                  | Source line number, when the export has one. Often constant — the plots derive visual lines from box `y` instead.                                                                                                                                          |
 
 Pre-aggregated EyeLink IA measures (`IA_FIRST_FIXATION_DURATION` → `first_fixation_ms`, …) and linguistic features (`gpt2_surprisal`, `wordfreq_frequency`, `universal_pos`, …) are carried through under their canonical / original names when present.
 

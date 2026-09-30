@@ -2666,13 +2666,20 @@ mapped directly in each schema. Either table may be omitted for datasets
 that ship only one report: the
 missing side comes back as an empty canonical frame and the plots simply
 skip that layer. Words without a participant column (stimulus-level AoIs)
-are broadcast across the participants found in the fixations, and
-fixations without x/y but with a word/AoI ID are placed at word-box
-centers.</p>
+are copied onto every reading in the fixations — each reading matched by
+its trial id, else the trial id it had before a repeat's <code>_r2</code> suffix,
+else its <code>text_id</code> (trial ids that embed the reader), with a
+<code>data.StimulusJoinWarning</code> (a <code>UserWarning</code>) when some readings match
+none — and fixations without x/y but with a word/AoI ID are placed at
+word-box centers. Columns named in <code>data.INTERNAL_COLUMNS</code> are the
+pipeline's bookkeeping (<code>data.drop_internal_columns</code> removes them).</p>
 <p>Returns the normalized <code>(words, fixations)</code> frames the plotting
 functions expect. Raises <code>ValueError</code> if a required field can't be found —
 the message names the canonical field, the column names auto-detection
-looked for, and the columns the table actually has.</p>
+looked for, and the columns the table actually has — and
+<code>data.StimulusJoinError</code> (a <code>ValueError</code>) when a stimulus-level words
+table shares neither a trial id nor a <code>text_id</code> with any reading (or,
+multipart, with every screen a reading has fixations on).</p>
 
 
     </div>

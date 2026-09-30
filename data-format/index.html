@@ -2007,7 +2007,26 @@ rules.</p>
 <li><strong>Many files per table</strong> — pass several paths or a glob; they're concatenated,
   each row tagged with its <code>source_file</code> (e.g. one file per participant or text).</li>
 <li><strong>Stimulus-level word boxes</strong> — a words table with no participant column is
-  broadcast across every participant found in the fixations.</li>
+  one set of boxes per text, and every reading in the fixations gets a copy of
+  its text's boxes. Each reading finds them by its own trial ID, then (for a
+  repeated reading, whose trial ID ends in <code>_r2</code>) by the trial ID it had before
+  that suffix, then by its <strong>Text ID</strong>, for example when the trial ID includes
+  the reader. A Text ID that the words table gives to more than one of its
+  trials is not used. The Text ID route needs a Text ID mapped for the
+  fixations (auto-detected or picked, even when its values equal the trial
+  IDs); without one, their Text ID is only a copy of the trial ID and is never
+  used to find boxes. A trial-ID match always stands;
+  when both tables map a Text ID and a reading's disagrees with the one on the
+  boxes its trial ID found, you get a warning naming an example. If no reading
+  finds any boxes, the add-dataset screen
+  stops with a message (the Python API and CLI raise the same error) rather
+  than adding a dataset with no word boxes; a multi-screen dataset stops the
+  same way when any screen a reader looked at has no boxes. When some readings
+  find none, the screen, the API and the CLI warn with the counts. When it
+  works, the screen says how the words attached.</li>
+<li><strong>Text ID falls back to the trial ID</strong> when it isn't mapped. A repeated
+  reading takes its first reading's trial ID (without the <code>_r2</code>), so per-text
+  grouping counts a re-reading as the same text.</li>
 <li><strong>AoI-only fixations</strong> — fixations with a word/<abbr title="Interest area: EyeLink's name for an AOI">IA</abbr> id but no x/y are placed at
   the matching word-box centers.</li>
 <li><strong>Composite trial ids</strong> — when no single column identifies a trial, map <em>Trial
@@ -2113,7 +2132,7 @@ Definitions are in <a href="../computations/">Computations &amp; methodology</a>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 30, 2026 21:52:31 UTC">September 30, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 30, 2026 21:57:21 UTC">September 30, 2026</span>
   </span>
 
     

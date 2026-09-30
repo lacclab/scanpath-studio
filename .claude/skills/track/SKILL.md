@@ -38,8 +38,13 @@ implementing).
   grep -oh "\bDATA-[0-9]*\b" CHANGELOG.md tracker/data.js docs/*.md scanpath_studio/*.py | sort -u -V | tail -3
   gh issue list --state all --limit 200 --search "[DATA-" --json title
   gh pr list --state open --json number,headRefName,title
-  gh pr diff <n> -- CHANGELOG.md | grep -oE "\b[A-Z]+-[0-9]+\b" | sort -u -V | tail
+  gh pr diff <n> | awk '/^diff --git a\/CHANGELOG.md/{f=1;next} /^diff --git/{f=0} f' \
+    | grep -oE "\b[A-Z]+-[0-9]+\b" | sort -u -V | tail
   ```
+
+  `gh pr diff` takes no path argument — with one it prints nothing and the
+  check silently finds no IDs — so the `awk` cuts the `CHANGELOG.md` hunk out of
+  the whole diff (ENG-83). Run it for each open PR.
 
   When another session or person is working right now, ask which IDs they have
   allocated — that settles it faster than any search.

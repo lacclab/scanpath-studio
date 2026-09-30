@@ -1152,8 +1152,8 @@ def designs_to_json(designs: dict[str, dict]) -> str:
 def designs_from_json(text: str) -> dict[str, dict]:
     """Parse an Export file into ``{name: settings}`` (pure — no Streamlit).
 
-    Keeps only what a design can hold — ``global_*`` plot settings, as
-    `_apply_view_preset` applies — and gives a name that collides with a
+    Keeps only what a design can hold — the keys :func:`_is_design_key` names,
+    as `_apply_view_preset` applies them — and gives a name that collides with a
     built-in the same ``" (mine)"`` suffix :func:`save_design_preset` does.
     Raises ``ValueError`` for anything that is not a designs file.
     """
@@ -1171,9 +1171,7 @@ def designs_from_json(text: str) -> dict[str, dict]:
         if clean in _VIEW_PRESETS:
             clean = f"{clean} (mine)"
         designs[clean] = {
-            str(key): value
-            for key, value in values.items()
-            if _is_restorable_global(key)
+            str(key): value for key, value in values.items() if _is_design_key(key)
         }
     return designs
 

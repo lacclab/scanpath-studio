@@ -292,7 +292,7 @@ def _finalize_wizard_dataset() -> None:
     A dialog body is a fragment, so an ``on_click`` inside one reruns the modal
     alone and leaves the page under it untouched; those buttons take their
     *return value* plus an explicit ``st.rerun(scope="app")`` instead. See
-    ``app._forget_cache_confirmation``, which spells the contrast out. The two
+    ``app._delete_confirmation_dialog`` (BUG-36). The two
     prescriptions are opposite and both correct; what decides is only whether
     the button sits in a dialog/fragment or on an ordinary page beside an
     uploader."""

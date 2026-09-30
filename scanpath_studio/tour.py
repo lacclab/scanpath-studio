@@ -1803,8 +1803,8 @@ _FAQ_ITEMS = [
         "Nowhere off your machine — no accounts, no database, no analytics, no "
         "upload. A local or desktop run also keeps a **recovery copy** here "
         "(added datasets, mappings, settings, annotations), so a refresh "
-        "resumes where you left off; **💾 Session → 🗄️ Automatic recovery** says "
-        "what is stored and turns it off or deletes it. Two caveats: "
+        "resumes where you left off; **🗂️ Data → Saved on this computer** says "
+        "what is stored and deletes it. Two caveats: "
         "`streamlit run` listens on your whole network (use "
         "`--server.address=127.0.0.1`), and the online demo runs on "
         "Streamlit's server, with no recovery.",
@@ -1812,10 +1812,11 @@ _FAQ_ITEMS = [
     (
         "My uploaded data vanished after a refresh.",
         "Local and desktop runs normally recover uploaded datasets, settings and "
-        "annotations automatically. Check **💾 Session → Automatic recovery** "
-        "to see whether it is enabled and where it is saved. For a portable copy "
-        "of settings and annotations, use **JSON backup**; dataset rows are not "
-        "included in that file.",
+        "annotations automatically. Check **🗂️ Data → Saved on this computer** "
+        "to see whether it is enabled and where it is saved. For a portable "
+        "copy, export annotations from **🗂️ Data → Annotations** and the "
+        "figure's settings from **🗺️ Scanpath → 🔗 Share → File**; neither file "
+        "holds dataset rows.",
     ),
     (
         "PDF or video export fails but HTML works.",

@@ -37,7 +37,6 @@ from tests.conftest import (
     SUBTAB_EXPORT,
     SUBTAB_KEY,
     VIEW_DATA,
-    arm_session_dialog,
     pin_view,
 )
 
@@ -576,14 +575,14 @@ class TestBulkExportFlow:
 
 @pytest.mark.timeout(180)
 class TestRecoveryCachePanelFlow:
-    """ENG-30 — the 💾 Session → Automatic recovery panel is the on-device cache's
-    only user-visible surface, so it has to report the real store and its two
-    controls have to reach ``persistence`` (pause saving, forget what's saved).
+    """ENG-30 → UX-179 — 🗂️ Data → *Saved on this computer* is the on-device
+    cache's only user-visible surface, so it has to report the real store and
+    its Clear action has to reach ``persistence``.
     """
 
     @staticmethod
     def _boot_local(tmp_path, monkeypatch) -> AppTest:
-        """Boot with persistence forced on and pointed at a throwaway folder.
+        """Boot on the Data page with persistence on, in a throwaway folder.
 
         ``st.context.url`` is empty under AppTest, so the loopback check would
         otherwise report a hosted deployment; the env override is the supported
@@ -594,82 +593,58 @@ class TestRecoveryCachePanelFlow:
         monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
-        # UX-100: the panel is in the 💾 Session modal. Armed before every run,
-        # because AppTest replays the whole script instead of rerunning the
-        # dialog fragment the way a browser does — see `arm_session_dialog`.
-        arm_session_dialog(at)
-        at.run(timeout=60)
-        return at
+        # The confirmation popovers are lazy (`on_change="rerun"`), so their
+        # buttons exist only while open — open both, as a click would.
+        at.session_state["saved_here_clear_popover"] = True
+        at.session_state["saved_here_reset_popover"] = True
+        return _rerun(at, view=VIEW_DATA)
 
-    def test_panel_reports_the_store_and_its_controls_drive_persistence(
-        self, tmp_path, monkeypatch
-    ):
+    def test_panel_reports_the_store_and_clear_empties_it(self, tmp_path, monkeypatch):
         from scanpath_studio import persistence
 
         at = self._boot_local(tmp_path, monkeypatch)
         _clean(at, "cache panel:")
+        body = " ".join(str(m.value) for m in at.markdown)
+        assert "**Saved here:**" in body
 
         # Working in the app writes the cache — the panel's own claim.
         manifest = tmp_path / "manifest.json"
         assert manifest.is_file()
         assert persistence.cache_status(tmp_path)["settings"] > 0
+        # UX-179: no in-app saving toggle; opting out is `--no-persist`.
+        assert not [t for t in at.toggle if t.key == "persist_local_saving"]
 
-        toggles = [t for t in at.toggle if t.key == "persist_local_saving"]
-        assert toggles, "the saving toggle is missing from the panel"
-        assert toggles[0].value is True
-
-        # Off → the pause flag is set and the next run writes nothing new.
-        written = manifest.stat().st_mtime_ns
-        arm_session_dialog(at)
-        at = toggles[0].set_value(False).run(timeout=60)
-        _clean(at, "after pausing:")
-        # AppTest's session-state proxy has no .get, so read the flag directly.
-        assert at.session_state["_local_persistence_paused"] is True
-        at.session_state["global_show_heatmap"] = not bool(
-            at.session_state["global_show_heatmap"]
-        )
-        arm_session_dialog(at)
-        at = at.run(timeout=60)
-        assert manifest.stat().st_mtime_ns == written
-
-        # Resume, then clear while saving is ON — the reported bug was that this
-        # action silently changed the preference to off.
-        toggle = next(t for t in at.toggle if t.key == "persist_local_saving")
-        arm_session_dialog(at)
-        at = toggle.set_value(True).run(timeout=60)
-        _clean(at, "after resuming:")
-        assert at.session_state["_local_persistence_paused"] is False
-
-        forget = [b for b in at.button if "Clear recovery cache" in str(b.label)]
-        assert forget, "the Forget button is missing from the panel"
-        arm_session_dialog(at)
-        at = forget[0].click().run(timeout=60)
-        _clean(at, "after clicking forget:")
-
-        # BUG-36: the click only arms a confirmation; the delete itself happens
-        # on the confirm click, one run later. UX-100 made that confirmation an
-        # inline row under the button rather than a modal of its own — the panel
-        # *is* a modal now, and Streamlit allows no dialog inside a dialog.
+        # The popover's confirm button does the delete (its `on_click` runs
+        # before the rerun, which `skip_next_local_save` keeps from rewriting).
         confirm = [b for b in at.button if b.key == "forget_cache_confirm"]
-        assert confirm, "the Forget confirmation button is missing"
-        arm_session_dialog(at)
-        at = confirm[0].click().run(timeout=60)
-        _clean(at, "after confirming forget:")
+        assert confirm, "the Clear confirmation button is missing"
+        confirm[0].click()
+        at = _rerun(at, view=VIEW_DATA)
+        _clean(at, "after confirming clear:")
         assert not manifest.exists()
         assert not persistence.cache_status(tmp_path)["exists"]
-        saving = [t for t in at.toggle if t.key == "persist_local_saving"]
-        assert saving and saving[0].value is True
-        assert at.session_state["_local_persistence_paused"] is False
+        # …and the confirm closed its own popover.
+        assert at.session_state["saved_here_clear_popover"] is False
+        captions = " ".join(str(c.value) for c in at.caption)
+        assert "Cleared. Nothing is stored on this computer." in captions
 
-        # Only the immediate rewrite is skipped. The next real change resumes
-        # normal recovery saving without another toggle click.
+        # Only the immediate rewrite is skipped: the next real change saves.
         at.session_state["global_show_heatmap"] = not bool(
             at.session_state["global_show_heatmap"]
         )
-        arm_session_dialog(at)
-        at = at.run(timeout=60)
+        at = _rerun(at, view=VIEW_DATA)
         _clean(at, "after changing the cleared session:")
         assert manifest.is_file()
+
+    def test_the_section_is_only_on_the_data_page(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
+        monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
+        at.session_state["saved_here_clear_popover"] = True
+        at.run(timeout=60)
+        _clean(at, "Scanpath view:")
+        assert not [b for b in at.button if b.key == "forget_cache_confirm"]
 
     def test_an_attached_metadata_table_survives_a_refresh(self, tmp_path, monkeypatch):
         """DATA-38 — the reported bug end to end: attach a table, refresh, and
@@ -715,12 +690,14 @@ class TestRecoveryCachePanelFlow:
         monkeypatch.delenv("SCANPATH_STUDIO_PERSIST", raising=False)
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
-        arm_session_dialog(at)
-        at.run(timeout=60)
+        at.session_state["saved_here_reset_popover"] = True
+        at = _rerun(at, view=VIEW_DATA)
         _clean(at, "hosted cache panel:")
-        assert not [t for t in at.toggle if t.key == "persist_local_saving"]
         captions = " ".join(str(c.value) for c in at.caption)
         assert "Not available here." in captions
+        # …and nothing to clear, but Reset still works on the in-memory session.
+        assert not [b for b in at.button if b.key == "forget_cache_confirm"]
+        assert [b for b in at.button if b.key == "reset_everything_confirm"]
 
 
 class TestAddDatasetMenu:

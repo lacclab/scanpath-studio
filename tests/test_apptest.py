@@ -176,12 +176,10 @@ class TestAppLaunches:
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         body = " ".join(m.value for m in at.markdown)
-        for expected in (
-            f"#### {ICONS['recovery']} Automatic recovery",
-            f"#### {ICONS['download']} JSON backup",
-            f"#### {ICONS['reset']} Reset",
-        ):
-            assert expected in body, f"{expected} missing from the Session dialog"
+        assert f"#### {ICONS['download']} JSON backup" in body
+        # UX-179 moved the rest out: recovery + reset to the Data page, Debug
+        # to ❓ Help.
+        assert f"#### {ICONS['recovery']} Automatic recovery" not in body
         # Neither group is a popover any more — not the merged one UX-38 made,
         # and not the two it merged.
         labels = {p.proto.popover.label for p in at.get("popover")}
@@ -201,7 +199,6 @@ class TestAppLaunches:
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         body = " ".join(m.value for m in at.markdown)
-        assert f"#### {ICONS['recovery']} Automatic recovery" not in body
         assert f"#### {ICONS['download']} JSON backup" not in body
 
     def test_debug_mode_survives_the_dialog_closing(self):

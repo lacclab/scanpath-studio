@@ -3158,9 +3158,8 @@ def _cache_parser() -> argparse.ArgumentParser:
 def cache(argv: list[str]) -> None:
     """Inspect or clear the on-device recovery cache (ENG-30).
 
-    The terminal counterpart of the app's 💾 Session → 🗄️ Automatic recovery
-    block, so the
-    storage a local run creates can be found, measured and deleted without
+    The terminal counterpart of the app's 🗂️ Data → *Saved on this computer*
+    section, so the storage a local run creates can be found, measured and deleted without
     launching the app (or after closing it).
     """
     args = _cache_parser().parse_args(argv)

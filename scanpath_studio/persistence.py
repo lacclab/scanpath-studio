@@ -11,12 +11,14 @@ is comes from its own bind address, never from the browser — see
 Storing a researcher's tables on their disk is invisible by nature, so the cache
 is also *inspectable*: :func:`cache_status` reports what is stored, where, how
 big it is and when it was written without importing Streamlit, and it backs the
-in-app "🗄️ Recovery cache" panel (``app._render_recovery_cache_panel``), the
-``scanpath-studio cache`` CLI subcommand and ``api.cache_status``. Saving can be
-paused for the session (:func:`set_persistence_paused`) and the stored files
-deleted (:func:`clear_local_state`). A clear initiated in the app uses
+in-app 🗂️ Data → *Saved on this computer* section
+(``app._render_saved_here_section``, UX-179), the ``scanpath-studio cache`` CLI
+subcommand and ``api.cache_status``. The stored files can be deleted
+(:func:`clear_local_state`); a clear initiated in the app uses
 :func:`skip_next_local_save` so the end of that rerun does not immediately
-recreate the files without changing the user's saving preference.
+recreate them. Saving is paused for a session only by BUG-71's breaker
+(:func:`persistence_paused`); opting out is a launch choice
+(``run --no-persist`` / ``SCANPATH_STUDIO_PERSIST=0``).
 """
 
 from __future__ import annotations
@@ -832,7 +834,7 @@ def restored_summary(session) -> dict:
     """How much of *what* this session got back from the cache, by kind.
 
     ``{"datasets": n, "annotations": n, "designs": n, "metadata": n}`` — what
-    the 🗄️ Automatic recovery panel counts, and what a user would recognise as
+    the *Saved on this computer* section counts, and what a user would recognise as
     their last session (``metadata`` is the number of attached participant /
     trial / text tables, DATA-38). View settings are deliberately absent: they restore, but
     silently (UX-136 — see :func:`restore_state`). Empty when no restore
@@ -852,20 +854,13 @@ def restored_from_cache(session) -> bool:
 
 
 def persistence_paused(session) -> bool:
-    """Whether the user switched saving off for this session (UI opt-out)."""
-    return bool(session.get(_PAUSED_KEY))
+    """Whether saving is paused for this session.
 
-
-def set_persistence_paused(session, paused: bool) -> None:
-    """Pause/resume saving for this session only.
-
-    Resuming clears the save fingerprint so the next run writes the current
-    session out in full, even though nothing about it changed while paused.
-    ``SCANPATH_STUDIO_PERSIST=0`` is the durable, process-wide opt-out.
+    Only :func:`restore_local_state`'s BUG-71 breaker sets it, after a launch
+    that never finished opening with the cache: this session then leaves the
+    stored copy untouched, and a reload tries it again.
     """
-    session[_PAUSED_KEY] = bool(paused)
-    if not paused:
-        session.pop(_LAST_FINGERPRINT_KEY, None)
+    return bool(session.get(_PAUSED_KEY))
 
 
 def skip_next_local_save(session) -> None:

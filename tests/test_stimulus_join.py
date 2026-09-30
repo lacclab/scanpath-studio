@@ -753,14 +753,23 @@ class TestMultipartScreens:
 
 
 class TestReservedColumns:
-    def test_an_uploaded_column_with_an_internal_name_is_ignored(self):
+    def test_an_uploaded_column_with_an_internal_name_is_ignored(self, caplog):
+        """Dropped before anything reads it, and quietly: the names are the
+        pipeline's own, so the usual source is a table it wrote, re-loaded."""
+        import logging
+        import warnings
+
         words = _aoi(["A", "B"], ["tA", "tB"], ["a", "b"]).assign(
             _aoi_trial_id=["B", "A"]
         )
         fixations = _fix(["r1", "r2"], ["A", "B"], ["tA", "tB"]).assign(
             _base_trial_id=["B", "A"]
         )
-        with pytest.warns(UserWarning, match="reserves for its own bookkeeping"):
+        with (
+            warnings.catch_warnings(),
+            caplog.at_level(logging.INFO, "scanpath_studio.data"),
+        ):
+            warnings.simplefilter("error", UserWarning)
             w, f = sps.load_scanpath_data(
                 words=words,
                 fixations=fixations,
@@ -771,6 +780,22 @@ class TestReservedColumns:
         assert _boxes(w, "r1", "A") == ["a"]
         assert _boxes(w, "r2", "B") == ["b"]
         assert set(w[data_module.AOI_TRIAL_ID]) == {"A", "B"}
+        assert "Scanpath Studio's own bookkeeping" in caplog.text
+
+    def test_re_loading_a_table_the_api_wrote_is_silent(self, tmp_path):
+        import warnings
+
+        w, f = sps.load_scanpath_data(
+            words=_text_words(), fixations=_reader_fixations()
+        )
+        w.to_csv(tmp_path / "w.csv", index=False)
+        f.to_csv(tmp_path / "f.csv", index=False)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", UserWarning)
+            again, _ = sps.load_scanpath_data(
+                words=tmp_path / "w.csv", fixations=tmp_path / "f.csv"
+            )
+        assert not again.empty
 
 
 class TestMessages:

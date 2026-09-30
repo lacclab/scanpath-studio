@@ -4446,26 +4446,26 @@ def _text_id_mapped_flag(
 def _drop_reserved_columns(
     raw: pd.DataFrame, schema: dict, *, table: str
 ) -> pd.DataFrame:
-    """Drop incoming columns named like :data:`INTERNAL_COLUMNS`, with a warning.
+    """Drop incoming columns named like :data:`INTERNAL_COLUMNS`, quietly.
 
     The pipeline reads those names as its own bookkeeping — a join route, the
-    stimulus flag, the Edit-dataset collapse key — so a user's column that
-    happens to carry one must not reach any of them (DATA-49). One the mapping
-    names is the user's data and is left alone."""
+    stimulus flag, the Edit-dataset collapse key — so an incoming column that
+    carries one must not reach any of them (DATA-49); normalization rebuilds
+    them. The names are the pipeline's own, so the usual source is a table
+    Scanpath Studio wrote being loaded again, a normal round-trip: logged at
+    INFO, not warned about. One the mapping names is the user's data and is
+    left alone."""
     referenced = _schema_source_columns(schema)
     clash = sorted(
         c for c in INTERNAL_COLUMNS if c in raw.columns and c not in referenced
     )
     if not clash:
         return raw
-    warnings.warn(
-        f"{table}: {', '.join(repr(c) for c in clash)} "
-        f"{'is a name' if len(clash) == 1 else 'are names'} Scanpath Studio "
-        "reserves for its own bookkeeping, so the column was ignored and "
-        "rebuilt. That is expected when re-loading a table Scanpath Studio "
-        "wrote; rename a column of your own to keep it.",
-        UserWarning,
-        stacklevel=3,
+    _LOGGER.info(
+        "%s: dropped %s, Scanpath Studio's own bookkeeping column(s); they are "
+        "rebuilt on load.",
+        table,
+        ", ".join(repr(c) for c in clash),
     )
     return raw.drop(columns=clash)
 

@@ -2958,6 +2958,8 @@ class TestSetupWizard:
         )
         assert any("difficulty_level" in o for o in keep_ms.options)
         assert any("junk_col" in o for o in keep_ms.options)
+        # UX-148: the chips wrap rather than scroll one row sideways.
+        assert keep_ms.proto.wrap is True
         # The fixation extras / noise flag are no longer mapping selectboxes.
         sel_keys = {s.key for s in at.selectbox if s.key}
         for gone in ("col_map_fix_noise_flag", "col_map_fix_pass_index"):

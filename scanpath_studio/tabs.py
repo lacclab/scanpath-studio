@@ -11082,6 +11082,14 @@ def _apply_remap() -> None:
             }
         )
     st.session_state["_datasets"][name] = new_entry
+    # UX-178 — and the name typed at the top of the screen. Applied last, after
+    # the entry is saved under the name its widgets were keyed by: every editor
+    # key carries the dataset's name, so renaming mid-edit would orphan them.
+    requested = str(st.session_state.get(EDITOR_PENDING_NAME_KEY) or "").strip()
+    if requested and requested != name:
+        from scanpath_studio.wizard import rename_dataset
+
+        name = rename_dataset(name, requested) or name
     st.session_state["_remap_applied"] = name
     # Saving *is* the moment the Trial ID mapping is decided, so ask for VAL-7's
     # verdict on the frames this just re-derived. `app.main` computes the report
@@ -11100,6 +11108,7 @@ def _apply_remap() -> None:
     for key in [k for k in st.session_state if str(k).startswith("_remap_")]:
         if key != "_remap_applied":
             st.session_state.pop(key, None)
+    st.session_state.pop(EDITOR_NAME_FIELD_KEY, None)
     # DATA-46 — and the "use the current estimate" choice, which belongs to it.
     for key in [k for k in st.session_state if str(k).endswith("_setup_reestimate")]:
         st.session_state.pop(key, None)
@@ -11552,7 +11561,10 @@ def _render_remap_editor(
     baseline = st.session_state.get(_REMAP_BASELINE_KEY)
     if baseline is None:
         st.session_state[_REMAP_BASELINE_KEY] = baseline = signature
-    st.session_state[_REMAP_DIRTY_KEY] = bool(added) or signature != baseline
+    renamed = str(st.session_state.get(EDITOR_PENDING_NAME_KEY) or name).strip()
+    st.session_state[_REMAP_DIRTY_KEY] = (
+        bool(added) or signature != baseline or (bool(renamed) and renamed != name)
+    )
 
     dropped = stored.get("dropped_columns") or {}
     flat = sorted({c for cols in dropped.values() for c in (cols or [])})
@@ -11583,6 +11595,11 @@ def _render_remap_editor(
 #: *means* "just opened") and compared on every render after.
 _REMAP_BASELINE_KEY = "_remap_baseline"
 _REMAP_DIRTY_KEY = "_remap_dirty"
+#: UX-178 — ✏️ Edit dataset's **Name** field, swept with the rest of the edit on
+#: Cancel and on ✅ Save changes.
+EDITOR_NAME_FIELD_KEY = "dataset_editor_name"
+#: …and the name it holds for an upload, until ✅ Save changes applies it.
+EDITOR_PENDING_NAME_KEY = "_remap_pending_name"
 
 
 def _editor_signature(pending: dict, setup_payload: dict) -> str:
@@ -12229,9 +12246,8 @@ def render_data_inspection_tab(
     "the answer stays open, the appendix folds". This round unfolded the raw
     tables again (the user's call): the appendix *is* the section's job on the
     page you open to check your data, and a collapsed expander over a tab bar
-    made every table two clicks deep. The name/rename line went with it; UX-174
-    r2 put **Rename** back beside this section's heading instead
-    (`app.render_dataset_inspection_head`).
+    made every table two clicks deep. The name/rename line went with it; a
+    dataset is renamed on ✏️ Edit dataset (UX-178).
 
     Every tab body still renders on every run — tab switching is client-side, so
     no widget key is dropped, exactly as with the expanders this replaced.

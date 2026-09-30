@@ -59,9 +59,12 @@ block, not on the flex item — and an *empty* container is not rendered at all,
 so a header cell with no title still holds a `&nbsp;`. When the demo stands in
 for a corpus that isn't on disk (`_PLACEHOLDER_SHOWN_KEY`), the open row is not
 counted from the demo's frames, drops what it remembered, and shows **Needs
-setup** as its Status. Rename and edit are not on the rows: **Rename** sits
-beside the *What's in…* heading and **Edit** beside the description
-(`app.render_dataset_inspection_head`). The description is
+setup** as its Status. Rename and edit are not on the rows: **Edit dataset**
+sits at the end of the *What's in…* heading (`app.render_dataset_inspection_head`),
+and the editor's part 1 (**UX-178**, `EDITOR_STEPS` `edit_name`) holds **Name**
+and **Description**. An upload's name is applied by ✅ Save changes
+(`tabs._apply_remap`, via `EDITOR_PENDING_NAME_KEY`) because every editor
+widget key carries it; a built-in's is a display alias set on change. The description is
 `app.dataset_description` — the user's own, from
 `constants.DATASET_DESCRIPTIONS_KEY` (a recovery-cache session key; renamed and
 dropped with an upload by `wizard`), else the catalogue's — edited on ✏️ Edit

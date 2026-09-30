@@ -947,7 +947,7 @@ class TestDatasetTable:
                 "dataset_row_rename_",
             ):
                 assert f"{gone}{slug}" not in keys
-        assert "dataset_rename_btn" in keys
+        assert not [k for k in keys if "rename" in str(k)]
         assert "dataset_edit_btn" in keys
         # The open dataset has been counted from its rows; the rest have not.
         status = frame.set_index("_token")["Status"]
@@ -1024,13 +1024,44 @@ class TestDatasetTable:
         asks = [w.value for w in at.warning if "Remove" in str(w.value)]
         assert asks and "its 1 annotation leave" in asks[0]
 
-    def test_rename_on_the_heading_arms_the_open_datasets_dialog(self):
-        from scanpath_studio.app import PENDING_RENAME_KEY
+    def test_an_uploads_new_name_is_applied_by_save_changes(self):
+        """UX-178: renaming is the editor's **Name** field. An upload's editor
+        widgets are keyed by its name, so the rename waits for ✅ Save changes —
+        and until then it is an unsaved change, which ✕ Cancel asks about."""
+        from scanpath_studio.tabs import EDITOR_NAME_FIELD_KEY
 
         at = self._at()
-        self._click(at, "dataset_rename_btn")
+        self._click(at, "dataset_edit_btn")
+        field = next(t for t in at.text_input if t.key == EDITOR_NAME_FIELD_KEY)
+        assert field.value == self.NAME
+        field.input("Pilot study")
+        pin_data_view(at)
+        at.run(timeout=90)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert at.session_state[PENDING_RENAME_KEY] == self.NAME
+        assert self.NAME in at.session_state["_datasets"]  # not yet
+        assert at.session_state["_remap_pending_name"] == "Pilot study"
+        assert at.session_state["_remap_dirty"] is True
+        # ✅ Save changes applying it is `tests/test_remap.py`'s — this
+        # fixture's upload has no saved mapping for Save to validate.
+
+    def test_a_built_in_datasets_name_is_an_alias_set_at_once(self):
+        from scanpath_studio.app import DATASET_ALIASES_KEY
+        from scanpath_studio.constants import DEMO_CHOICE
+        from scanpath_studio.tabs import EDITOR_NAME_FIELD_KEY
+
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["data_source_choice"] = DEMO_CHOICE
+        pin_data_view(at)
+        at.run(timeout=90)
+        self._click(at, "dataset_edit_btn")
+        field = next(t for t in at.text_input if t.key == EDITOR_NAME_FIELD_KEY)
+        field.input("Demo, renamed")
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state[DATASET_ALIASES_KEY][DEMO_CHOICE] == "Demo, renamed"
+        # The source's token — its load path and share-link identity — stays.
+        assert at.session_state["data_source_choice"] == DEMO_CHOICE
 
     def test_remove_arms_the_confirmation_for_its_own_row(self):
         from scanpath_studio.app import PENDING_DELETE_KEY
@@ -1226,9 +1257,8 @@ class TestDatasetRename:
     the whole of that, and it touches only session state — so it is exercised
     directly rather than through a 90-second AppTest boot.
 
-    The rename lives in exactly **one** place: UX-174 r2's **Rename** beside
-    the *What's in the dataset* heading (it was the table row's before). The
-    last two tests pin both halves of that.
+    The rename lives in exactly **one** place: UX-178's **Name** field on
+    ✏️ Edit dataset (a row's menu before UX-174 r2, then a heading button).
     """
 
     NAME = "My corpus"
@@ -1364,34 +1394,9 @@ class TestDatasetRename:
         assert DEMO_CHOICE not in _session["_datasets"]
         assert f"{DEMO_CHOICE} (uploaded)" in _session["_datasets"]
 
-    def test_the_heading_button_is_the_one_way_in(self):
-        """UX-174 r2: **Rename** beside the *What's in* heading arms a pending
-        token that opens the dialog, and the dialog is what calls the renamer.
-
-        Source-level for the same reason ``test_delete_is_wired_to_the_remover``
-        is: a dialog rendered from inside an ``@st.fragment`` does not take
-        AppTest clicks. What must not silently break is the chain."""
-        import inspect
-
-        from scanpath_studio.app import (
-            _rename_dataset_dialog,
-            _render_rename_dialog,
-            render_dataset_inspection_head,
-            render_dataset_table,
-        )
-
-        assert "args=(PENDING_RENAME_KEY, token)" in inspect.getsource(
-            render_dataset_inspection_head
-        )
-        assert "_render_rename_dialog(" in inspect.getsource(render_dataset_table)
-        assert "_rename_dataset_dialog(" in inspect.getsource(_render_rename_dialog)
-        dialog_source = inspect.getsource(_rename_dataset_dialog)
-        assert "from scanpath_studio.wizard import rename_dataset" in dialog_source
-        assert "rename_dataset(token, requested)" in dialog_source
-
-    def test_rename_is_on_the_section_and_not_on_the_rows(self):
-        """One rename, for the open dataset: the heading's button, not a
-        per-row menu item, and not an inline field."""
+    def test_rename_is_a_field_on_the_editor_and_nowhere_else(self):
+        """UX-178: one rename — ✏️ Edit dataset's **Name** — and no rename
+        button on the rows or beside the heading."""
         import pandas as pd
 
         from scanpath_studio import api
@@ -1412,11 +1417,7 @@ class TestDatasetRename:
         pin_data_view(at)
         at.run(timeout=90)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert not [
-            t for t in at.text_input if str(t.key).startswith("dataset_rename_")
-        ]
-        renames = [b.key for b in at.button if "rename" in str(b.key)]
-        assert renames == ["dataset_rename_btn"]
+        assert not [b.key for b in at.button if "rename" in str(b.key)]
 
 
 @pytest.mark.timeout(90)

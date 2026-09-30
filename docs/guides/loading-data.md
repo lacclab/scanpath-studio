@@ -109,10 +109,11 @@ shows the figures it publishes. A corpus whose files are not on this machine is
 marked **Needs setup**: the bundled demo shows in its place, and is not counted
 for it.
 
-Under the list, **What's in the *dataset*** is about the open one: its name
-with **Rename**, then a one-line description with the corpus' home page and
-**Edit**, which opens ✏️ **Edit dataset** — its description, and how it was
-mapped. Where a dataset's figures read differently from a recording, a note
+Under the list, **What's in the *dataset*** is about the open one: a one-line
+description with the corpus' home page, and **Edit dataset** at the end of its
+heading. That opens ✏️ **Edit dataset**, whose first part is its **name** and
+**description** — the name of a dataset you added is saved with **✅ Save
+changes** — followed by how it was mapped. Where a dataset's figures read differently from a recording, a note
 says so: PoTeC's fixation positions are reconstructed, not recorded, and the
 bundled demo's raw gaze is synthesized. The mapping is the same
 field grid the wizard draws, and for a dataset added with only one of the two

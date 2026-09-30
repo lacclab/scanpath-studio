@@ -234,6 +234,8 @@ from scanpath_studio.persistence import (
 from scanpath_studio.session_keys import COLUMN_MAPPING_PREFIX, PARAM_CORPUS
 from scanpath_studio.styles import get_app_css
 from scanpath_studio.tabs import (
+    EDITOR_NAME_FIELD_KEY,
+    EDITOR_PENDING_NAME_KEY,
     _build_figure_settings,
     _render_column_mapping_section,
     _render_save_restore_expander,
@@ -3217,7 +3219,7 @@ def _render_unmapped_view(
         for problem in rejected:
             st.error(problem, icon=ICONS["error"])
         st.caption(
-            "Change the field it names in **1 · Data tables & column mapping** above, "
+            "Change the field it names in **2 · Data tables & column mapping** above, "
             "or start again from what auto-detection proposes."
         )
         st.button(
@@ -3228,7 +3230,7 @@ def _render_unmapped_view(
     else:
         st.warning(
             "**Finish the column mapping to draw scanpaths.** Map the missing "
-            "field(s) in **1 · Data tables & column mapping** above — the raw data is "
+            "field(s) in **2 · Data tables & column mapping** above — the raw data is "
             "shown below to help you choose. "
             "Still needed:\n\n" + "\n".join(f"- {p}" for p in problems)
         )
@@ -4173,7 +4175,6 @@ _DATASET_KIND_ICONS = {
 # datasets keep using the real store re-key/delete operations in `wizard.py`.
 DATASET_ALIASES_KEY = "_dataset_display_aliases"
 HIDDEN_DATASETS_KEY = "_hidden_dataset_tokens"
-PENDING_RENAME_KEY = "_dataset_pending_rename"
 
 
 def _dataset_display_name(token: str, registry: dict | None = None) -> str:
@@ -4570,52 +4571,6 @@ def _unique_dataset_alias(requested: str, token: str, tokens: list[str]) -> str:
     return candidate
 
 
-def _dismiss_rename_dataset() -> None:
-    """``on_dismiss`` for the Rename dialog — see ``_dismiss_dataset_about``."""
-    st.session_state.pop(PENDING_RENAME_KEY, None)
-
-
-@st.dialog("Rename dataset", on_dismiss=_dismiss_rename_dataset)
-def _rename_dataset_dialog(
-    token: str, *, uploaded: set[str], tokens: list[str]
-) -> None:
-    """Rename any row while keeping app-owned source tokens stable."""
-    current = _dataset_display_name(token)
-    requested = st.text_input(
-        "Dataset name",
-        value=current,
-        key=f"dataset_table_rename_{token}",
-        persist_state="session",
-    )
-    apply_col, cancel_col = st.columns(2)
-    if apply_col.button(
-        "Rename",
-        key="dataset_table_rename_confirm",
-        type="primary",
-        width="stretch",
-    ):
-        requested = requested.strip()
-        if not requested:
-            st.warning("Enter a dataset name.")
-            return
-        if token in uploaded:
-            from scanpath_studio.wizard import rename_dataset
-
-            renamed = rename_dataset(token, requested)
-            final_name = renamed or token
-        else:
-            final_name = _unique_dataset_alias(requested, token, tokens)
-            aliases = dict(st.session_state.get(DATASET_ALIASES_KEY) or {})
-            aliases[token] = final_name
-            st.session_state[DATASET_ALIASES_KEY] = aliases
-        st.session_state.pop(PENDING_RENAME_KEY, None)
-        st.session_state["_dataset_table_note"] = f"Renamed to {final_name}."
-        st.rerun(scope="app")
-    if cancel_col.button("Cancel", key="dataset_table_rename_cancel", width="stretch"):
-        st.session_state.pop(PENDING_RENAME_KEY, None)
-        st.rerun(scope="app")
-
-
 def _overview_sentence(text: str) -> tuple[str, str]:
     """Split a dataset description into its opening sentence and the rest.
 
@@ -4693,10 +4648,8 @@ def render_description_field(host, token: str) -> None:
     )
 
 
-def _render_dataset_overview(
-    token: str, *, registry: dict, editable: bool = True
-) -> None:
-    """The open dataset in a sentence, its home page, and ✏️ **Edit**.
+def _render_dataset_overview(token: str, *, registry: dict) -> None:
+    """The open dataset in a sentence, and its home page.
 
     UX-177 cut this to what we stand behind and a new reader can use: the
     description (its first sentence, unless the user wrote it), the corpus'
@@ -4707,9 +4660,7 @@ def _render_dataset_overview(
     published-vs-loaded table, and a coordinate badge for every dataset. The
     table's Status already says whether its numbers are published or loaded.
 
-    UX-174 r2: **Edit** opens ✏️ Edit dataset — where the description itself is
-    edited, with the rest of the dataset's setup — so it sits on the
-    description's line.
+    Editing it is ✏️ **Edit dataset** on the heading's line (UX-178).
     """
     about = dataset_about(token, registry)
     text, own = dataset_description(token, registry)
@@ -4724,22 +4675,6 @@ def _render_dataset_overview(
         overview = f"{overview} [Home page ↗]({link})".strip()
     if overview:
         line.caption(overview, width="content")
-    elif editable:
-        line.caption("No description yet.", width="content")
-    if editable:
-        line.button(
-            "Edit",
-            icon=ICONS["edit"],
-            key="dataset_edit_btn",
-            type="tertiary",
-            on_click=_edit_open_dataset,
-            args=(token,),
-            help="Open the authoring editor — change the text, drag fixations, "
-            "or edit their timing."
-            if token == MANUAL_SAMPLE_CHOICE
-            else "Open ✏️ Edit dataset — its description, column mapping, "
-            "recording setup, location and metadata tables.",
-        )
     if note := about.get("reading_note"):
         st.caption(f"{ICONS['info']} {note}")
 
@@ -4768,13 +4703,13 @@ def _annotation_trials(combos: pd.DataFrame | None) -> frozenset[tuple[str, str]
 
 
 def render_dataset_inspection_head(token: str) -> None:
-    """*What's in the `<name>` dataset*, with **Rename** beside the name.
+    """*What's in the `<name>` dataset*, with ✏️ **Edit dataset** at its end.
 
-    UX-174 r2 moved renaming, editing and inspecting off the table's rows and
-    onto this section, which is about one dataset already: the heading carries
-    **Rename**, the description line carries **Edit**. Neither applies to the
-    add-dataset wizard's pending dataset or to the authoring canvas, which are
-    not rows of the table.
+    UX-178: the section's one action is a button of its own on the heading's
+    line, not a link-weight one beside the description, so it reads as editing
+    the whole dataset — its name, its description and its setup, all on the
+    screen it opens. It does not apply to the add-dataset wizard's pending
+    dataset or to the authoring canvas, which are not rows of the table.
     """
     label = _dataset_display_name(token).replace("`", "'")
     head = st.container(
@@ -4784,32 +4719,76 @@ def render_dataset_inspection_head(token: str) -> None:
         gap="small",
     )
     head.subheader(
-        f"{ICONS['search']} What's in the `{label}` dataset", width="content"
+        f"{ICONS['search']} What's in the `{label}` dataset", width="stretch"
     )
-    editable = token not in (UPLOAD_CHOICE, AUTHOR_CHOICE)
-    if editable:
+    if token not in (UPLOAD_CHOICE, AUTHOR_CHOICE):
         head.button(
-            "Rename",
-            icon=ICONS["rename"],
-            key="dataset_rename_btn",
-            type="tertiary",
-            on_click=_arm_dataset_row,
-            args=(PENDING_RENAME_KEY, token),
-            help=f"Rename {label}.",
+            "Edit dataset",
+            icon=ICONS["edit"],
+            key="dataset_edit_btn",
+            on_click=_edit_open_dataset,
+            args=(token,),
+            help="Open the authoring editor — change the text, drag fixations, "
+            "or edit their timing."
+            if token == MANUAL_SAMPLE_CHOICE
+            else "Its name, description, column mapping, recording setup, "
+            "location and metadata tables.",
         )
-    _render_dataset_overview(
-        token, registry=public_dataset_registry(), editable=editable
+    _render_dataset_overview(token, registry=public_dataset_registry())
+
+
+def _rename_builtin_from_field(token: str) -> None:
+    """``on_change`` of **Name** for a dataset that is not an upload.
+
+    A built-in or public source's token is a load-path identifier (deep links,
+    loader dispatch), so its name is a display alias — nothing to re-key, and
+    no ✅ Save changes on its editor to wait for.
+    """
+    requested = str(st.session_state.get(EDITOR_NAME_FIELD_KEY) or "").strip()
+    if not requested or requested == _dataset_display_name(token):
+        return
+    tokens = list(st.session_state.get("_data_source_entries") or [])
+    final = _unique_dataset_alias(requested, token, tokens)
+    aliases = dict(st.session_state.get(DATASET_ALIASES_KEY) or {})
+    aliases[token] = final
+    st.session_state[DATASET_ALIASES_KEY] = aliases
+    st.session_state[EDITOR_NAME_FIELD_KEY] = final
+
+
+def _stage_upload_name() -> None:
+    """``on_change`` of **Name** for an upload: hold it for ✅ Save changes.
+
+    Kept in a plain ``_remap_`` key rather than read back off the widget, so it
+    survives whatever the widget's own state does between runs, and is swept
+    with the rest of the edit on Cancel or Save.
+    """
+    st.session_state[EDITOR_PENDING_NAME_KEY] = str(
+        st.session_state.get(EDITOR_NAME_FIELD_KEY) or ""
+    ).strip()
+
+
+def render_name_field(host, token: str) -> None:
+    """✏️ Edit dataset's **Name** (UX-178; renaming used to be a dialog).
+
+    An upload's name is the key its every editor widget is filed under, so it
+    is applied by ✅ Save changes with the rest of the edit (`tabs._apply_remap`)
+    and counts as an unsaved change until then. Any other dataset's name is a
+    display alias, applied as soon as the field changes.
+    """
+    uploaded = token in (st.session_state.get("_datasets") or {})
+    if EDITOR_NAME_FIELD_KEY not in st.session_state:
+        st.session_state[EDITOR_NAME_FIELD_KEY] = st.session_state.get(
+            EDITOR_PENDING_NAME_KEY
+        ) or _dataset_display_name(token)
+    host.text_input(
+        "Name",
+        key=EDITOR_NAME_FIELD_KEY,
+        on_change=_stage_upload_name if uploaded else _rename_builtin_from_field,
+        args=() if uploaded else (token,),
+        help="Saved with **✅ Save changes**."
+        if uploaded
+        else "Shown in the list of datasets and the dataset picker.",
     )
-
-
-def _render_rename_dialog(tokens: list[str], uploaded: set[str]) -> None:
-    token = st.session_state.get(PENDING_RENAME_KEY)
-    if token is None:
-        return
-    if token not in tokens:
-        st.session_state.pop(PENDING_RENAME_KEY, None)
-        return
-    _rename_dataset_dialog(token, uploaded=uploaded, tokens=tokens)
 
 
 def _open_mapping_editor() -> None:
@@ -4841,7 +4820,7 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
         "A Trial ID that doesn't fully identify one reading concatenates several "
         "into one scanpath — which renders perfectly happily, as an ordinary "
         "scanpath with a lot of regressions. The full evidence is on the "
-        "🗂️ Data page, under **3 · Trial identity**."
+        "🗂️ Data page, under **4 · Trial identity**."
     )
     edit_col, keep_col = st.columns(2, gap="small")
     if edit_col.button(
@@ -4858,7 +4837,7 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
         key="trial_identity_alert_keep",
         width="stretch",
         help="Dismiss. Nothing changes, and the verdict stays on the 🗂️ Data "
-        "page under 3 · Trial identity.",
+        "page under 4 · Trial identity.",
     ):
         st.rerun(scope="app")
     if asked_by == "add":
@@ -4885,6 +4864,7 @@ def _close_dataset_editor() -> None:
     # until ✅ Save changes runs.
     for key in [k for k in st.session_state if str(k).startswith("_remap_")]:
         st.session_state.pop(key, None)
+    st.session_state.pop(EDITOR_NAME_FIELD_KEY, None)
     # DATA-46: "use the current estimate" is a choice for one editing session.
     for key in [k for k in st.session_state if str(k).endswith("_setup_reestimate")]:
         st.session_state.pop(key, None)
@@ -5011,6 +4991,9 @@ _DATASET_SORTABLE = ("Kind", "Dataset", *DATASET_COUNT_FIELDS, "Status")
 #: Cell widths, in px, shared by the header and every row so the columns line
 #: up. The name takes whatever is left (`width="stretch"`, with a CSS minimum).
 _DATASET_KIND_W = 92
+#: UX-178 — the name has a width of its own, so Status sits right after it and
+#: the free space goes between Status and the counts (`_row_gap`).
+_DATASET_NAME_W = 280
 _DATASET_COUNT_W = 96
 _DATASET_STATUS_W = 112
 _DATASET_ACTIONS_W = 40
@@ -5112,7 +5095,7 @@ def _open_dataset_row(token: str) -> None:
 
 
 def _edit_open_dataset(token: str) -> None:
-    """✏️ **Edit** beside the open dataset's description (UX-174 r2).
+    """✏️ **Edit dataset**, at the end of the open dataset's heading (UX-178).
 
     Raises ✏️ Edit dataset on it — the description, the column mapping, the
     recording setup, the source's options and location, the identity check and
@@ -5123,12 +5106,16 @@ def _edit_open_dataset(token: str) -> None:
     if token == MANUAL_SAMPLE_CHOICE:
         _edit_manual_sample()
         return
+    # UX-178 — the Name field is seeded on open; whatever an editor left behind
+    # without Cancel or Save (a switch of dataset, say) is not this one's name.
+    st.session_state.pop(EDITOR_NAME_FIELD_KEY, None)
+    st.session_state.pop(EDITOR_PENDING_NAME_KEY, None)
     st.session_state[FOCUS_MAPPING_KEY] = token
     st.session_state[DATASET_EDITOR_OPEN_KEY] = True
 
 
 def _arm_dataset_row(pending_key: str, token: str) -> None:
-    """Rename / Remove: arm the dialog; the next run opens it.
+    """Remove: arm the confirmation; the next run opens it.
 
     Remove in particular only *arms* (UX-54 r2, UX-79): an upload is not
     recoverable once dropped, so the confirmation does the work.
@@ -5232,10 +5219,21 @@ def _render_dataset_table_head(grid, sort) -> None:
         "Sort by kind — Demo, Manual, Private, Public.",
     )
     _sort_button(
-        head.container(key="dsh_name", width="stretch"),
+        head.container(key="dsh_name", width=_DATASET_NAME_W),
         "Dataset",
         "Sort by name. Click a row to open that dataset.",
     )
+    _sort_button(
+        head.container(key="dsh_status", width=_DATASET_STATUS_W),
+        "Status",
+        " ".join(
+            f"**{label}** — {text}"
+            for label, text in dataset_table.STATUS_EXPLANATIONS.items()
+        )
+        + " **Needs setup** — its files are not on this machine, so the bundled "
+        "demo is showing in its place.",
+    )
+    head.space("stretch")
     gaps = " ".join(
         f"**{label}** — {dataset_table.GAP_EXPLANATIONS[label]}"
         for label in (
@@ -5257,16 +5255,6 @@ def _render_dataset_table_head(grid, sort) -> None:
             f"Sort by {count_field.lower()}, largest first. Datasets without a "
             f"count sort last either way.\n\n{gaps}",
         )
-    _sort_button(
-        head.container(key="dsh_status", width=_DATASET_STATUS_W),
-        "Status",
-        " ".join(
-            f"**{label}** — {text}"
-            for label, text in dataset_table.STATUS_EXPLANATIONS.items()
-        )
-        + " **Needs setup** — its files are not on this machine, so the bundled "
-        "demo is showing in its place.",
-    )
     # The actions column has no title: its one button says what it does. The
     # cell is still drawn — an empty container is not — so the columns line up.
     head.container(key="dsh_actions", width=_DATASET_ACTIONS_W).markdown(
@@ -5318,7 +5306,7 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
 
     name = line.container(
         key=f"dsc_name_{slug}",
-        width="stretch",
+        width=_DATASET_NAME_W,
         horizontal=True,
         vertical_alignment="center",
         gap="xsmall",
@@ -5344,14 +5332,6 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
             "when loaded than it is, so the published figure is the one to fix.",
         )
 
-    for count_field in dataset_table.TABLE_COUNT_FIELDS:
-        cell = line.container(
-            key=f"dsc_{_field_slug(count_field)}_{slug}", width=_DATASET_COUNT_W
-        )
-        cell.markdown(
-            _dataset_count_cell_html(row, count_field), unsafe_allow_html=True
-        )
-
     status = line.container(key=f"dsc_status_{slug}", width=_DATASET_STATUS_W)
     if row.status:
         # An operational state, kept apart from where the counts came from.
@@ -5361,6 +5341,15 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
         status.markdown(
             f'<span class="sps-ds-status{muted}">{row.status_label}</span>',
             unsafe_allow_html=True,
+        )
+
+    line.space("stretch")
+    for count_field in dataset_table.TABLE_COUNT_FIELDS:
+        cell = line.container(
+            key=f"dsc_{_field_slug(count_field)}_{slug}", width=_DATASET_COUNT_W
+        )
+        cell.markdown(
+            _dataset_count_cell_html(row, count_field), unsafe_allow_html=True
         )
 
     actions = line.container(
@@ -5392,8 +5381,8 @@ def render_dataset_table(
 ) -> None:
     """📂 Available datasets — one focused row per dataset (UX-54 → UX-174).
 
-    **Kind · Dataset · Participants · Texts · Trials · Fixations · Status ·
-    Remove.** A click anywhere on a row opens that dataset (UX-78); the open one
+    **Kind · Dataset · Status · Participants · Texts · Trials · Fixations ·
+    Remove** (UX-178 moved Status beside the name it qualifies). A click anywhere on a row opens that dataset (UX-78); the open one
     carries a **Current** badge and a tint, and never moves. **Status** is
     *Loaded* / *Not loaded* — DATA-36's loaded-vs-published distinction — or an
     operational state such as *Needs setup*. Everything else about a dataset —
@@ -5454,7 +5443,6 @@ def render_dataset_table(
     if not ordered:
         box.caption("No dataset matches the search and filters.")
 
-    _render_rename_dialog(tokens, uploaded)
     _render_delete_confirmation(box, tokens, uploaded)
     if note := st.session_state.pop("_dataset_table_note", None):
         box.success(note)
@@ -7519,10 +7507,12 @@ def _run_app() -> None:
     # below draws one headline into each of the slots reserved here; the
     # registry, the numbering and the hover note are `wizard_shell.EDITOR_STEPS`.
     #
-    # Part 1 opens above the description because everything down to the metadata
-    # tables belongs to it — where the files are, how their columns map, and what
-    # is attached to them — exactly as the add screen's part 2 holds every upload
-    # and every mapping row.
+    # Part 2 (Data tables & column mapping) opens above the public loader's
+    # captions because everything down to the metadata tables belongs to it —
+    # where the files are, how their columns map, and what is attached to them
+    # — exactly as the add screen's part 2 holds every upload and mapping row.
+    # UX-178 — part 1 is the add screen's: Name & description.
+    editor_part_name_slot = editor_page.container()
     editor_part_data_slot = editor_page.container()
     description_slot = editor_page.container()
     source_options_slot = editor_page.container()
@@ -7582,7 +7572,7 @@ def _run_app() -> None:
     # local filesystem; preprocessing is behind PRE-22's flag), and a screen
     # reading 1 · 2 · 3 · 5 looks like a section that failed to render rather
     # than one that does not apply here.
-    _editor_shown = {"edit_data", "edit_setup", "edit_identity"}
+    _editor_shown = {"edit_name", "edit_data", "edit_setup", "edit_identity"}
     if local_filesystem_enabled():
         _editor_shown.add("edit_stimulus")
     if preprocessing_enabled():
@@ -7687,15 +7677,20 @@ def _run_app() -> None:
                 help="Add your fixation and word/AOI tables with the setup wizard.",
                 width="stretch",
             )
+    # UX-178 — part 1's headline on every run, like the other parts (the editor
+    # is built hidden); its two fields only while it is open, since they are
+    # seeded from whichever dataset is open and must not outlive it.
+    editor_name_body = (
+        _editor_part(editor_part_name_slot, "edit_name") if data_view else None
+    )
     if data_view and editing:
         _render_dataset_editor_bar(editor_head_slot, data_choice)
         # UX-174 r2 — the description is edited here, with the rest of the
         # dataset, at the top of part 1 (the add screen asks for it beside the
         # name). The public loader's own caption lands under it, in this slot.
-        render_description_field(
-            description_slot,
-            str(st.session_state.get("data_source_choice") or data_choice),
-        )
+        editing_token = str(st.session_state.get("data_source_choice") or data_choice)
+        render_name_field(editor_name_body, editing_token)
+        render_description_field(editor_name_body, editing_token)
     # PRE-22: the section is held back from this release — heading, caption and
     # controls all come from behind the same gate, so the page has no gap where
     # a hidden stage used to be.

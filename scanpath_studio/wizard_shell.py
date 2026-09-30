@@ -119,9 +119,9 @@ STEPS_BY_ID: dict[str, WizardStep] = {s.id: s for s in STEPS}
 #: The ask was that the two screens read the same ("make it be as similar as
 #: possible to add dataset page"), so the editor uses this module's `part()`
 #: headline rather than the `st.divider()` + `st.subheader()` + `st.caption()`
-#: stack it grew section by section. The first two ids line up one-for-one with
-#: `STEPS` — an existing dataset's tables and mapping are the same question as
-#: uploading them, and its recording setup is the *same renderer* — and the rest
+#: stack it grew section by section. The first three ids line up one-for-one with
+#: `STEPS` — naming it (UX-178), its tables and mapping (the same question as
+#: uploading them), and its recording setup (the *same renderer*) — and the rest
 #: are the questions that only have an answer once the dataset exists.
 #:
 #: The ids are prefixed ``edit_`` because `part_key` makes them container keys
@@ -136,6 +136,16 @@ STEPS_BY_ID: dict[str, WizardStep] = {s.id: s for s in STEPS}
 #: screen numbered 1 · 2 · 3 · 5 reads as a missing section rather than as a
 #: hidden one. `numbered()` renumbers whatever is actually on screen.
 EDITOR_STEPS: tuple[WizardStep, ...] = (
+    # UX-178 — the add screen's part 1, for a dataset that already has a name:
+    # renaming it and its description are here, not in a dialog or on a row.
+    WizardStep(
+        "edit_name",
+        1,
+        "Name & description",
+        "What the dataset is called in the list of datasets and the picker, and "
+        "the sentence shown under its name.",
+        False,
+    ),
     WizardStep(
         "edit_data",
         1,

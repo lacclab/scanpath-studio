@@ -182,7 +182,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "Check the column mapping",
                 "**Edit**, beside the dataset's description, opens its setup "
                 "screen — the add screen's parts, for a dataset that exists. "
-                "Part **1 · Data tables & column mapping** decides what "
+                "Part **2 · Data tables & column mapping** decides what "
                 "every measure downstream is computed from. Rows marked ✨ were "
                 "auto-detected; override any that guessed wrong.",
                 ".st-key-tutorial_column_mapping",
@@ -200,7 +200,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Check one trial id is one reading",
-                "Part **3 · Trial identity** checks the whole dataset, before any "
+                "Part **4 · Trial identity** checks the whole dataset, before any "
                 "filtering, and says so either way. A warning here means the "
                 "Trial ID above is missing a column — several readings are being "
                 "drawn as one scanpath, which renders happily as a reading with a "
@@ -1785,7 +1785,7 @@ DOCS_FAQ_URL = f"{CITATION['docs_url']}faq/"
 _FAQ_ITEMS = [
     (
         "A column was mapped to the wrong field. Where do I fix it?",
-        "🗂️ **Data → ✏️ Edit → 1 · Data tables & column mapping** — an "
+        "🗂️ **Data → ✏️ Edit dataset → 2 · Data tables & column mapping** — an "
         "editable form that "
         "re-derives everything in place, no re-upload. It can only offer columns "
         "that survived the import; anything dropped needs a re-upload.",

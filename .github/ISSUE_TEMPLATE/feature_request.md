@@ -8,7 +8,7 @@ type: Feature
 <!--
 Maintainers: pick the area label and match the title prefix to it —
 UX / CMP / VIZ / DATA / PERF / AN / PRE / EXP / VAL / ENG — then take the next
-free number in that prefix, checking CHANGELOG.md, the issues and the open
+free number in that prefix, checking the changelog (and changelog.d/), the issues and the open
 PRs (CLAUDE.md → Tracking work). IDs are stable and never renumbered. Add it to the
 "Scanpath Studio" project board and set Status; switch the type to Task if it is
 a chore rather than a capability.

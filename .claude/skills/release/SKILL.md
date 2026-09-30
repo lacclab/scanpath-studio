@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Cut a release of scanpath-studio. Argument (optional): the target version
 (e.g. `1.4.0`). If omitted, propose the next version from the current
-`__version__` and the nature of the `[Unreleased]` changelog entries
+`__version__` and the nature of the unreleased entries in `changelog.d/`
 (semver: features → minor, fixes only → patch), and confirm with the user
 before proceeding.
 
@@ -26,16 +26,17 @@ like any other change, and the tag is cut on `main` *after* that PR merges.
    from an up-to-date `origin/main`. Stop and report if not.
 2. `ruff check .` and `ruff format --check .`
    must pass (CI's Lint job gates on both).
-3. `CHANGELOG.md` must have content under `[Unreleased]` — a release with an
-   empty changelog is almost always a mistake; confirm with the user if empty.
+3. `python scripts/changelog_fragments.py check` passes and `changelog.d/`
+   holds fragments — a release with none is almost always a mistake; confirm
+   with the user if empty.
 
 ## Steps
 
 1. **Branch** — `git switch -c release-v<version> origin/main`.
-2. **Changelog** — roll the `[Unreleased]` notes in `CHANGELOG.md` into a new
-   `v<version>` section dated today, keeping the two-tier shape they are
-   written in (headline list, then `### Details`); leave a fresh empty
-   `[Unreleased]` section on top.
+2. **Changelog** — `python scripts/changelog_fragments.py release <version>`
+   writes the `changelog.d/` fragments into a `## [<version>] - <today>`
+   section of `CHANGELOG.md` and deletes them (ENG-86). Read the section it
+   wrote; tidy wording there if needed.
 3. **Version bump** — set `__version__` in `scanpath_studio/__init__.py`. This
    is the single source of truth; `pyproject.toml` reads it dynamically — do
    NOT edit a version in `pyproject.toml`.
@@ -45,7 +46,7 @@ like any other change, and the tag is cut on `main` *after* that PR merges.
    version parity between `__init__.py` and `CITATION.cff`).
 6. **Full test run** — `pytest -n auto`. Stop and report failures; do not
    release a failing tree.
-7. **Commit + PR** — commit the three files with message `Release v<version>`
+7. **Commit + PR** — commit the changes (the three files plus the deleted fragments) with message `Release v<version>`
    (no AI co-author trailer — repo rule), push the branch, and open a PR to
    `main`. Wait for CI to pass and for the PR to merge; do not tag the branch.
 8. **Tag on main** — once merged: `git fetch origin`, check that

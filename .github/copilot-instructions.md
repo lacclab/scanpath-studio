@@ -27,7 +27,8 @@ Read them before changing code. The rules most worth repeating:
   links and saved configs depend on them — and keep the spatial plot on
   `tabs._render_true_scale_chart`, never `st.plotly_chart`.
 - **Every item has a stable ID** (`VIZ-37`), cited in the commit subject and a
-  two-tier `CHANGELOG.md` entry. Take the next number from `CHANGELOG.md`, the
+  changelog fragment, `changelog.d/<ID>.<group>.md` (never an edit to
+  `CHANGELOG.md`). Take the next number from the changelog, the
   GitHub issues *and* the open PRs (`CLAUDE.md` → *Tracking work*).
 - **`main` is protected** — land work through a branch and a pull request. No AI
   co-author trailers in commit messages.

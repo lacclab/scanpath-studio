@@ -15,15 +15,13 @@ you work under `scanpath_studio/`); contributor setup is in
 - **Run ruff first — always.** `ruff check .` and
   `ruff format .`. CI's Lint job gates on **both**, so a
   missed format fails the build. Don't skip it, even for "docs-only" changes.
-- **Update `CHANGELOG.md` as you go, in the two-tier shape** (ENG-34, `[Unreleased]`
-  onwards only — already-released sections keep their old one-paragraph-per-item
-  shape). Under each `[Unreleased]` group (Added / Changed / Fixed): a **headline
-  list** first — `- **Bold lead** (ID)` and nothing else, short enough to paste
-  into Slack — then a `### Details` subsection with the same Added / Changed /
-  Fixed grouping, one short paragraph per item under a matching `#### <Group>`
-  heading, anchored by the same bold lead + ID so the two halves line up. Not a
-  per-tweak log and not a design doc — if a detail needs more than a short
-  paragraph, the rest belongs in the write-up on the item's GitHub issue.
+- **Add a changelog fragment, never edit `CHANGELOG.md`** (ENG-86). Each item is
+  one file, `changelog.d/<ID>.<group>.md` (`VIZ-47.fixed.md`; several IDs join
+  with `+`), holding one line of plain text: what changed, for the user, with no
+  bullet and no ID. Groups are Keep a Changelog's (`added` / `changed` / `fixed`,
+  …). `/release` writes the fragments into `CHANGELOG.md`, so parallel PRs never
+  conflict over it. One line per item, no long form: the reasoning goes in the
+  PR description, or the issue when there is one. See `changelog.d/README.md`.
 - **Never add a `Co-Authored-By: Claude …` trailer** (or any AI co-author line)
   to commit messages.
 
@@ -63,14 +61,15 @@ you work under `scanpath_studio/`); contributor setup is in
   `gh project item-list 5 --owner lacclab`. The in-repo tracker that preceded
   them was migrated on 2026-08-20 (ENG-32) and removed on 2026-09-30 (ENG-84) —
   see *The archive* at the end of this section.
-- **Not every ID gets an issue, and that is deliberate.** `CHANGELOG.md` is where
-  IDs are allocated and where the write-up for finished work lives; an issue is
+- **Not every ID gets an issue, and that is deliberate.** The changelog (its
+  fragments in `changelog.d/`, then `CHANGELOG.md` once released) is where IDs are
+  allocated, and the PR description carries the write-up for finished work; an issue is
   opened when an item needs something an issue is *for*. Open one when the item
   reaches **Review** (the approval gate — the user's sign-off has to have
   somewhere to happen), when it is blocked on a decision only the user can make
   (`waiting-on-you`), or when it is carried across sessions and needs a place to
   hold the brief. Work that is picked up and finished inside one session, whose
-  reasoning fits in the changelog's `### Details`, does not need a second copy on
+  reasoning fits in its PR description, does not need a second copy on
   GitHub — 81 of the 93 IDs cited since v0.29.0 are exactly that, including the
   whole `UX-102`…`UX-137` run, and backfilling them would add noise, not history.
   Confirmed with the user on 2026-08-28. The rule that is **not** optional: an ID
@@ -85,12 +84,14 @@ you work under `scanpath_studio/`); contributor setup is in
   `[VIZ-37] <title>`, because the docs, the `plans/` notes and the git history
   cite items by that ID and always will. **Take the next free number by checking
   both registries**, because most IDs live in only one of them:
-  `CHANGELOG.md` (where the majority are — see the bullet above) and
+  the changelog — `CHANGELOG.md` and the unreleased file names in `changelog.d/`
+  (where the majority are — see the bullet above) — and
   `gh issue list --state all --search "[DATA-"`. Searching GitHub alone will
   hand you a number the changelog already spent:
 
   ```bash
-  grep -oh "\bDATA-[0-9]*\b" CHANGELOG.md docs/*.md scanpath_studio/*.py | sort -u -V | tail -3
+  { grep -oh "\bDATA-[0-9]*\b" CHANGELOG.md docs/*.md scanpath_studio/*.py; ls changelog.d; } \
+    | grep -oE "\bDATA-[0-9]+\b" | sort -u -V | tail -3
   ```
 
   (The pre-migration archive was the third registry until ENG-84 removed it; for
@@ -99,7 +100,7 @@ you work under `scanpath_studio/`); contributor setup is in
 
   **Two registries stopped being enough once `main` became protected.** An ID
   that lives in an *unmerged branch* is invisible to both — it is in that
-  branch's `CHANGELOG.md`, not main's, and it has no issue yet — so the command
+  branch's changelog, not main's, and it has no issue yet — so the command
   above can hand you a number another open PR already spent, while you are
   following this rule to the letter. It happened on 2026-09-15 in both
   directions at once: `ENG-48` existed only on `eng-21-macos-signing`, so every
@@ -108,14 +109,11 @@ you work under `scanpath_studio/`); contributor setup is in
 
   ```bash
   gh pr list --state open --json number,headRefName,title
-  gh pr diff <n> | awk '/^diff --git a\/CHANGELOG.md/{f=1;next} /^diff --git/{f=0} f' \
-    | grep -oE "\b[A-Z]+-[0-9]+\b" | sort -u -V | tail
+  gh pr diff <n> --name-only | grep '^changelog.d/' | grep -oE "\b[A-Z]+-[0-9]+\b"
   ```
 
-  `gh pr diff` takes the PR and nothing else — `gh pr diff <n> -- CHANGELOG.md`
-  errors out on stderr and prints nothing, so a pipe after it reports "no IDs"
-  every time (ENG-83). The `awk` keeps only the `CHANGELOG.md` hunk of the whole
-  diff. Run it once per open PR.
+  Since ENG-86 the IDs a PR takes are the names of the fragments it adds, so the
+  file list is enough. Run it once per open PR.
 
   And when another session or person is working right now, just ask which IDs
   they have allocated — that is what actually resolved it, faster than any search.

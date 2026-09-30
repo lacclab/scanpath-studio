@@ -5,8 +5,12 @@ from __future__ import annotations
 from copy import deepcopy
 
 import pandas as pd
+import pytest
 
 from scanpath_studio import controls, tabs
+from tests.conftest import APP_SCRIPT
+
+AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
 
 
 def _viz_store() -> dict:
@@ -198,3 +202,81 @@ def test_full_monitor_changes_only_framing_state_and_cache_input(monkeypatch):
     assert key_on != key_off
     assert dict(key_on)["fit_to_monitor"] is True
     assert dict(key_off)["fit_to_monitor"] is False
+
+
+# --- VIZ-44: narrowing the trial pool is not a design edit -------------------
+
+
+def test_mirror_keys_and_late_defaults_are_not_drift():
+    """What the drift check leaves out, without booting the app."""
+    applied = {"global_fixation_opacity": 0.7, "global_show_saccades": True}
+    late = {
+        **applied,
+        # A slider's typed twin and the span-highlight mirrors, registered the
+        # first time their popover draws.
+        "global_fixation_opacity__num": 0.7,
+        "global_marker_size_range__num_lo": 8,
+        "global_highlight_span_on": True,
+        "global_highlight_span_mode": "Mark text",
+        # A control registered late, at its widget default.
+        "global_saccade_width": controls._VIZ_WIDGET_DEFAULTS["global_saccade_width"],
+    }
+    assert not controls._design_drifted(applied, late)
+    assert controls._design_drifted(applied, {**late, "global_fixation_opacity": 0.4})
+    # A key with no default (an explicit colour range, VIZ-46) appearing is a
+    # choice the user made.
+    assert controls._design_drifted(
+        applied, {**applied, "global_heatmap_color_range": (0.0, 10.0)}
+    )
+
+
+def test_hover_field_options_read_the_columns_of_an_empty_trial():
+    empty = pd.DataFrame(columns=["order_in_trial", "duration_ms", "word_id", "x"])
+    assert controls.hover_field_options(empty)[:3] == [
+        "order_in_trial",
+        "duration_ms",
+        "word_id",
+    ]
+
+
+@pytest.fixture()
+def booted_app():
+    at = AppTest.from_file(APP_SCRIPT)
+    at.run(timeout=120)
+    assert not at.exception, at.exception
+    assert at.session_state["_quick_view_selection"] == "scanpath"
+    return at
+
+
+class TestTrialFiltersKeepTheDesign:
+    """Boot the real app, narrow the pool, and watch the preset highlight."""
+
+    @staticmethod
+    def _run(at) -> None:
+        at.run(timeout=120)
+        assert not at.exception, at.exception
+
+    def test_a_trial_filter_leaves_the_preset_alone(self, booted_app):
+        at = booted_app
+        hover = list(at.session_state["global_fixation_hover_fields"])
+        # The demo's l25_1042 has word boxes but no fixations, so its trial
+        # offered the hover picker nothing — which wiped the user's picks.
+        for participant in (["l37_1129"], ["l25_1042"], []):
+            box = next(m for m in at.multiselect if m.key == "filter_participants")
+            box.set_value(participant)
+            self._run(at)
+            assert at.session_state["_quick_view_selection"] == "scanpath", participant
+        assert list(at.session_state["global_fixation_hover_fields"]) == hover
+        # The issue's own repro: Correct → only the correct answers.
+        for pick_first in (True, False):
+            correct = next(m for m in at.multiselect if m.key == "filter_is_correct")
+            picked = [correct.options[0]] if pick_first else []
+            correct.set_value(picked)
+            self._run(at)
+            assert at.session_state["_quick_view_selection"] == "scanpath", picked
+
+    def test_a_preset_owned_control_still_goes_custom(self, booted_app):
+        at = booted_app
+        at.session_state["global_show_saccades"] = False
+        self._run(at)
+        assert at.session_state["_quick_view_selection"] == "custom"

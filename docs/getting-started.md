@@ -19,12 +19,13 @@
 
 === "Desktop app"
 
-    Download the archive for your operating system —
+    Download the build for your operating system —
+    [macOS (Apple silicon)](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-macos-arm64.dmg) ·
     [Windows](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip) ·
-    [macOS (Apple silicon)](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-macos-arm64.tar.gz) ·
     [Linux](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-linux-x86_64.tar.gz) —
-    unpack it, and launch Scanpath Studio. See the [desktop notes](desktop.md)
-    if your OS blocks the unsigned build.
+    and launch Scanpath Studio. On macOS that is a `.dmg` you drag to
+    Applications; on Windows and Linux an archive you unpack. See the
+    [desktop notes](desktop.md) for the first-launch steps.
 
 ## 2. Make the first plot
 

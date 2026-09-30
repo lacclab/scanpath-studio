@@ -27,7 +27,7 @@ ANNOTATIONS_STATE_KEY = "trial_annotations"
 SCHEMA_VERSION = 2
 
 # Per-trial annotation widgets use this prefix so they can be cleared on import
-# (forcing a re-seed from the freshly loaded store), e.g. by `restore_records`.
+# (forcing a re-seed from the freshly loaded store), e.g. by `forget_records`.
 _WIDGET_PREFIX = "annotrial_"
 
 # Always-available tag suggestions (users can add their own on top).
@@ -227,18 +227,8 @@ def known_tags() -> list[str]:
 
 
 def current_records() -> list[dict]:
-    """All annotations as a flat record list — for embedding in a saved config."""
+    """All annotations as a flat record list — for the Export bundle (UX-179)."""
     return store_to_records(_store())
-
-
-def restore_records(records: list[dict]) -> int:
-    """Replace the session annotation store from a record list (e.g. a restored
-    config) and clear the per-trial widget state so editors re-seed. Returns the
-    number of annotations loaded."""
-    store = records_to_store(records or [])
-    st.session_state[ANNOTATIONS_STATE_KEY] = store
-    _reseed_trial_editors()
-    return len(store)
 
 
 def forget_records(records: list[dict]) -> int:

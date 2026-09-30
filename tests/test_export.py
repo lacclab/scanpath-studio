@@ -735,3 +735,93 @@ class TestStripLocalPaths:
 
         df = pd.DataFrame({"image_path": ["stim.png"]})
         assert strip_local_paths(df)["image_path"].iloc[0] == "stim.png"
+
+
+class TestAnnotationsInTheBundle:
+    """UX-179: the Export bundle can carry the exported trials' annotations."""
+
+    RECORDS = [
+        {
+            "participant_id": "p1",
+            "trial_id": "t1",
+            "star": True,
+            "tags": [],
+            "note": "",
+        },
+        {
+            "participant_id": "zz",
+            "trial_id": "t9",
+            "star": True,
+            "tags": [],
+            "note": "",
+        },
+    ]
+
+    def _export(self, combos, words, fixations, settings, *, include: bool):
+        opts = ExportOptions(
+            include_png=False,
+            include_svg=False,
+            include_plot_config=True,
+            include_annotations=include,
+        )
+        zip_bytes, _ = bulk_export(
+            combos,
+            words,
+            fixations,
+            canvas_width=800,
+            canvas_height=400,
+            base_font_size=14,
+            font_family="monospace",
+            x_field="x",
+            y_field="y",
+            settings=settings,
+            options=opts,
+            annotation_records=self.RECORDS,
+        )
+        return zipfile.ZipFile(io.BytesIO(zip_bytes))
+
+    def test_only_the_exported_trials_annotations_go_in(
+        self, minimal_combos, minimal_words, minimal_fixations, base_settings
+    ):
+        from scanpath_studio.annotations import deserialize
+
+        with self._export(
+            minimal_combos,
+            minimal_words,
+            minimal_fixations,
+            base_settings,
+            include=True,
+        ) as zf:
+            assert "annotations.json" in zf.namelist()
+            store = deserialize(zf.read("annotations.json").decode("utf-8"))
+            assert list(store) == [("p1", "t1")]
+            assert "annotations.json" in zf.read("README.md").decode("utf-8")
+
+    def test_off_by_default_and_when_off(
+        self, minimal_combos, minimal_words, minimal_fixations, base_settings
+    ):
+        assert ExportOptions().include_annotations is False
+        with self._export(
+            minimal_combos,
+            minimal_words,
+            minimal_fixations,
+            base_settings,
+            include=False,
+        ) as zf:
+            assert "annotations.json" not in zf.namelist()
+
+    def test_the_figure_title_is_not_called_annotations(
+        self, minimal_combos, minimal_words, minimal_fixations, base_settings
+    ):
+        """`annotations` means trial annotations; the title and caption are
+        `figure_text` in each trial's plot_config.json."""
+        with self._export(
+            minimal_combos,
+            minimal_words,
+            minimal_fixations,
+            base_settings,
+            include=True,
+        ) as zf:
+            cfg = json.loads(zf.read("per_trial/p1__t1/plot_config.json"))
+            assert "annotations" not in cfg
+            assert set(cfg["figure_text"]) == {"title", "caption"}

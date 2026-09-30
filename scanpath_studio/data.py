@@ -1292,8 +1292,12 @@ def propose_word_schema(words: pd.DataFrame) -> dict[str, str | None]:
     """Return a candidate column mapping for words/IA data without erroring."""
     schema = _propose_word_schema_by_field(words)
     # AN-32: every reading measure is proposed too, from its known names.
-    for key, _col, _label, _name, _kind, candidates in READING_MEASURE_FIELDS:
-        schema[key] = pick_column(words, candidates)
+    # The app's own canonical name is a candidate too, right after EyeLink's,
+    # so a table the app itself wrote (an exported words.csv, a normalized
+    # frame handed to the API) keeps its measures instead of having the key
+    # proposed empty — which `_apply_reading_measures` reads as "absent".
+    for key, column, _label, _name, _kind, candidates in READING_MEASURE_FIELDS:
+        schema[key] = pick_column(words, (candidates[0], column, *candidates[1:]))
     if all(schema[edge] for edge in _BOX_EDGES):
         return schema
     edge_set = _pick_box_edge_set(words)
@@ -3830,15 +3834,19 @@ def categorize_columns(raw: pd.DataFrame, schema: dict, registry: list) -> dict:
     registry entries present in the frame (each ``{source, dest, category}``);
     ``unclaimed`` = everything else (offered as filter fields / extra keeps).
 
-    AN-32: a registry column the schema already maps is *mapped*, not a detected
-    extra — `IA_DWELL_TIME` mapped as TFD was also offered, pre-kept, as
+    AN-32: a registry column mapped as a *reading measure* is not also a
+    detected extra — `IA_DWELL_TIME` mapped as TFD was offered, pre-kept, as
     `total_fixation_duration_ms` — and a source the registry lists twice (a
-    compatibility alias) is detected once, under its first entry."""
+    compatibility alias) is detected once, under its first entry. Only the
+    measure mapping claims a column here: a registry column the Trial ID is
+    composed from (`repeated_reading_trial`) is still a detected trial
+    condition, which is what offers it as a trial filter."""
     mapped = {c for c in _schema_source_columns(schema) if c in raw.columns}
+    as_measure = {schema.get(key) for key in READING_MEASURE_KEYS if schema.get(key)}
     detected: list = []
     seen: set = set()
     for src, dest, _kind, category in registry:
-        if src in raw.columns and src not in mapped and src not in seen:
+        if src in raw.columns and src not in as_measure and src not in seen:
             seen.add(src)
             detected.append({"source": src, "dest": dest, "category": category})
     detected_sources = {d["source"] for d in detected}

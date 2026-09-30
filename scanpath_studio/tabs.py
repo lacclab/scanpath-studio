@@ -7533,20 +7533,31 @@ def _corpus_unavailable_notice() -> None:
     nothing for any of its sections to show. It says so, points at where the
     measures are mapped, and draws its sections greyed so what it *would* offer
     stays visible."""
+    editable = _active_stored_dataset() is not None
+    where = (
+        "Map them under **Reading measures** in this dataset's AOI table, on ✏️ "
+        "Edit dataset"
+        if editable
+        else "This dataset is built in and cannot be remapped — add your own "
+        "report with ➕ Add dataset and map them under **Reading measures** in "
+        "its AOI table"
+    )
     st.info(
         f"{ICONS['info']} **No reading measures in this dataset.** Corpus "
         "Analysis shows the per-AOI measures your report brings — FFD, TFD, "
         "first-pass time, regression path and the rest — and computes none of "
-        "its own. Map them under **Reading measures** in the AOI table, on ✏️ "
-        "Edit dataset or when you add a dataset; an EyeLink interest-area report "
+        f"its own. {where}; an EyeLink interest-area report "
         "(`IA_DWELL_TIME`, `IA_FIRST_FIXATION_DURATION`, …) maps them "
         "automatically."
     )
-    st.button(
-        f"{ICONS['edit']} Map reading measures",
-        key="corpus_map_measures",
-        on_click=_open_measure_mapping,
-    )
+    # Only where there is an editor to open: a built-in source has none, and
+    # the button would land on an ✏️ Edit dataset screen with nothing on it.
+    if editable:
+        st.button(
+            f"{ICONS['edit']} Map reading measures",
+            key="corpus_map_measures",
+            on_click=_open_measure_mapping,
+        )
     sections = "".join(
         f'<span class="sps-corpus-off-tab">{html.escape(name)}</span>'
         for name in CORPUS_SUBTABS

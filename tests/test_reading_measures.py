@@ -128,7 +128,9 @@ class TestThePages:
         assert not at.exception, at.exception
         assert any("No reading measures" in i.value for i in at.info)
         assert "ptext_measure" not in {s.key for s in at.selectbox}
-        assert "corpus_map_measures" in {b.key for b in at.button}
+        # A built-in source has no ✏️ Edit dataset to send you to.
+        assert "corpus_map_measures" not in {b.key for b in at.button}
+        assert any("built in" in i.value for i in at.info)
 
     def test_the_demo_shows_only_what_it_uploaded(self):
         from tests.test_apptest import _make_apptest
@@ -189,3 +191,33 @@ class TestTheKeepPicker:
         # A linguistic feature the Corpus page uses is still pre-kept.
         if "word_length" in words.columns:
             assert "word_length" in kept
+
+
+class TestFromTheReview:
+    """Three things the review of #259 found."""
+
+    def test_a_table_the_app_wrote_keeps_its_measures(self):
+        # A normalized frame (an exported words.csv) carries the canonical
+        # names; proposing on it must find them, not propose them empty.
+        words, _ = data.load_sample_data()
+        once = normalize_words(words, propose_word_schema(words))
+        again = normalize_words(once, propose_word_schema(once))
+        for column in (
+            "total_fixation_duration_ms",
+            "first_fixation_ms",
+            "first_pass_gaze_duration_ms",
+            "regression_path_duration_ms",
+        ):
+            assert column in again.columns, column
+
+    def test_a_trial_id_component_is_still_a_trial_condition(self):
+        raw = pd.DataFrame(
+            columns=["participant_id", "unique_paragraph_id", "repeated_reading_trial"]
+        )
+        schema = {
+            "trial": ["participant_id", "unique_paragraph_id", "repeated_reading_trial"]
+        }
+        cats = data.categorize_columns(raw, schema, data.WORD_OPTIONAL_FIELDS)
+        assert "repeated_reading_trial" in {
+            d["source"] for d in cats["detected_optional"]
+        }

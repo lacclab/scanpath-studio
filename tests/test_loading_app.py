@@ -1185,3 +1185,18 @@ def test_animate_on_a_trial_with_no_fixations_stops_the_replay_left_building():
     assert any("nothing to animate" in info.value for info in at.info)
     assert task.cancelled
     assert tabs.ANIM_TASK_KEY not in at.session_state
+
+
+def test_the_synthetic_sample_declares_its_own_canvas(at):
+    """It is drawn on the editor's canvas, not the previous source's screen."""
+    at.session_state["data_source_choice"] = app.MANUAL_SAMPLE_CHOICE
+    at.run()
+    assert not at.exception, at.exception
+    width, height = app._manual_sample_canvas()
+    assert (width, height) == (1200, 480)
+    assert app.resolve_source_monitor(app.MANUAL_SAMPLE_CHOICE, None, None) == (
+        1200,
+        480,
+        True,
+    )
+    assert at.session_state["global_canvas_width"] == 1200

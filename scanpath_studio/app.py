@@ -3937,31 +3937,48 @@ def _edit_manual_sample() -> None:
     st.session_state["main_nav"] = _VIEW_SCANPATH
 
 
-def _manual_sample_frames() -> tuple[pd.DataFrame, pd.DataFrame]:
-    """The synthetic sample's words and fixations, drawn from its draft.
+def _manual_sample_document() -> tuple[pd.DataFrame, pd.DataFrame, dict]:
+    """The synthetic sample's ``(words, events, layout)``, drawn from its draft.
 
-    Same frames the editor would produce — the seed text until it has been
-    edited, the draft afterwards — so viewing the sample never needs the editor.
+    The seed text until it has been edited, the draft afterwards — the same
+    document the editor shows, so viewing the sample never needs the editor.
     """
-    from scanpath_studio.authoring import (
-        DEFAULT_LAYOUT,
-        authored_fixations,
-        default_events,
-        layout_text,
-    )
+    from scanpath_studio.authoring import DEFAULT_LAYOUT, default_events, layout_text
 
     draft = st.session_state.get("_manual_scanpath_drafts", {}).get(
         MANUAL_SAMPLE_CHOICE
     )
     if draft is None:
-        text = _MANUAL_SAMPLE_TEXT
         layout = dict(DEFAULT_LAYOUT)
-        words = layout_text(text, **layout)
-        events = default_events(words)
-    else:
-        text, layout, events = draft
-        words = layout_text(text, **{**DEFAULT_LAYOUT, **layout})
+        words = layout_text(_MANUAL_SAMPLE_TEXT, **layout)
+        return words, default_events(words), layout
+    text, layout, events = draft
+    layout = {**DEFAULT_LAYOUT, **layout}
+    return layout_text(text, **layout), events, layout
+
+
+def _manual_sample_frames() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """The synthetic sample's words and fixations (see `_manual_sample_document`)."""
+    from scanpath_studio.authoring import authored_fixations
+
+    words, events, _layout = _manual_sample_document()
     return words, authored_fixations(words, events)
+
+
+def _manual_sample_canvas() -> tuple[int, int]:
+    """The canvas the authoring editor draws the sample on, as a figure size.
+
+    The sample declares its own screen: without it the figure inherits the
+    previous source's (the demo's 2560 × 1440) and six words sit in a corner.
+    """
+    words, _events, layout = _manual_sample_document()
+    height = 480
+    if not words.empty:
+        height = max(
+            height,
+            int(words["y"].max() + words["height"].max() + layout["margin"]),
+        )
+    return int(layout["canvas_width"]), height
 
 
 def _cancel_authoring() -> None:
@@ -5387,6 +5404,8 @@ def resolve_source_monitor(
     # `eyegenbench_geometry.DISPLAY_SPECS["onestop"]`.
     if data_choice in (ONESTOP_CHOICE, DEMO_CHOICE):
         return 2560, 1440, True
+    if data_choice == MANUAL_SAMPLE_CHOICE:
+        return (*_manual_sample_canvas(), True)
     if (monitor := _public_dataset_monitor(data_choice)) is not None:
         return monitor[0], monitor[1], True
     # A public corpus reached by its own registry *label* rather than through the

@@ -67,6 +67,11 @@ else:
 icon = [icon_path] if icon_path else None
 
 codesign_identity = os.environ.get("SCANPATH_CODESIGN_IDENTITY") or None
+# One key, com.apple.security.cs.allow-jit; why the usual others are omitted is in
+# plans/eng-21-signing-notarization.md → Entitlements. The plist carries no XML
+# comment on purpose: codesign parses it with AMFI's strict XML reader, which
+# rejects a "--" inside a comment that plutil accepts. Only a real identity
+# passes the file, so an unsigned build never exercises it.
 entitlements_file = (
     os.path.join(SPECPATH, "entitlements.plist")  # noqa: F821
     if codesign_identity

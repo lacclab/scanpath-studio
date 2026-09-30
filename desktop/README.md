@@ -24,7 +24,8 @@ released.
   a bundle with no Cocoa run loop cannot answer Cmd-Q.
 - `scanpath_studio.spec` — the PyInstaller build definition.
 - `entitlements.plist` — hardened-runtime entitlements (one key; the reasoning
-  for each omission is in the file).
+  for each omission is in `plans/eng-21-signing-notarization.md` → *Entitlements*.
+  No XML comments in it: `codesign` rejects a `--` inside one).
 - `smoke_test.py` — verifies a built bundle (used by CI and locally).
 - `make_icons.py` → `icons/` — generates the committed app icons.
 

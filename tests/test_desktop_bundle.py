@@ -6,6 +6,12 @@ this file covers what the signed bundle added.
 
 from __future__ import annotations
 
+import plistlib
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 
 from desktop import launcher, smoke_test
@@ -346,3 +352,45 @@ def test_notarization_check_passes_on_a_notarized_bundle(monkeypatch, tmp_path):
 
     monkeypatch.setattr(smoke_test.subprocess, "run", lambda *a, **k: Result())
     smoke_test._verify_notarization(tmp_path / "ScanpathStudio.app")
+
+
+ENTITLEMENTS = Path(__file__).resolve().parents[1] / "desktop" / "entitlements.plist"
+
+
+def test_entitlements_are_the_one_documented_key():
+    with ENTITLEMENTS.open("rb") as handle:
+        assert plistlib.load(handle) == {"com.apple.security.cs.allow-jit": True}
+
+
+def test_entitlements_carry_no_xml_comment():
+    # codesign parses entitlements with AMFI's strict XML reader, which rejects a
+    # "--" inside a comment that plutil and plistlib accept — the first signed
+    # CI run failed on exactly that. Keep the rationale in the spec and the plan.
+    assert "<!--" not in ENTITLEMENTS.read_text(encoding="utf-8")
+
+
+@pytest.mark.skipif(
+    sys.platform != "darwin" or shutil.which("codesign") is None,
+    reason="needs macOS codesign",
+)
+def test_codesign_accepts_the_entitlements(tmp_path):
+    # An ad-hoc signature with the entitlements goes through the same parser as
+    # the Developer ID one, which an unsigned build never passes the file to.
+    probe = tmp_path / "probe"
+    shutil.copy("/usr/bin/true", probe)
+    result = subprocess.run(
+        [
+            "codesign",
+            "--sign",
+            "-",
+            "--force",
+            "--options=runtime",
+            "--entitlements",
+            str(ENTITLEMENTS),
+            str(probe),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr

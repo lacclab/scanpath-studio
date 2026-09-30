@@ -1026,6 +1026,35 @@ class TestGroupSelection:
         assert group_mask(w, {"text_id": []}).all()
         assert group_mask(pd.DataFrame(), {"text_id": ["A"]}).empty
 
+    def test_a_composite_key_matches_the_pair_not_each_part(self):
+        """AN-31: a trial-metadata cohort is a set of (reader, trial) readings.
+
+        p1's t1 and p2's t2 must not also admit p1's t2 — which is what two
+        independent column constraints would do."""
+        w = pd.concat(
+            [
+                _tidy_words(),
+                pd.DataFrame({"participant_id": ["p1"], "trial_id": ["t2"]}),
+            ],
+            ignore_index=True,
+        )
+        pairs = {("participant_id", "trial_id"): [("p1", "t1"), ("p2", "t2")]}
+        mask = group_mask(w, pairs)
+        assert mask.sum() == 6
+        assert not mask.iloc[-1]  # p1 / t2
+        # It ANDs with ordinary columns, and compares as strings.
+        assert group_mask(w, {**pairs, "difficulty_level": ["Ele"]}).sum() == 3
+        numeric = pd.DataFrame({"participant_id": ["p1", "p1"], "trial_id": [1, 2]})
+        assert group_mask(
+            numeric, {("participant_id", "trial_id"): [("p1", "2")]}
+        ).tolist() == [
+            False,
+            True,
+        ]
+        # A frame missing a key column is not constrained by it, like a column.
+        assert group_mask(w.drop(columns=["trial_id"]), pairs).all()
+        assert group_mask(w, {("participant_id", "trial_id"): []}).all()
+
     def test_apply_group(self):
         w = _tidy_words()
         assert len(apply_group(w, {"text_id": ["A"]})) == 6

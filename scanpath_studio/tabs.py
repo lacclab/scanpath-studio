@@ -6210,6 +6210,14 @@ def render_single_trial_tab(
                 layout=str(compare_layout),
                 compare_stimulus=str(compare_stimulus),
                 dataset=str(compare_meta.get("dataset") or ""),
+                # EXP-21: B's own screen, which a second dataset's snippet
+                # states (`setup_b=` / `--compare-canvas`).
+                canvas=(
+                    tuple(compare_meta["setup"].canvas)
+                    if compare_meta.get("dataset")
+                    and compare_meta.get("setup") is not None
+                    else None
+                ),
             )
             # BUG-85: an animation names B only when it co-animates B. Where it
             # fell back to A alone (B empty, or two screens), a snippet naming B

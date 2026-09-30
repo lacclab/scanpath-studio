@@ -1741,8 +1741,49 @@ def _capture_quick_view_state() -> dict[str, object]:
     return state
 
 
+#: VIZ-44 — `global_*` keys that *mirror* a setting rather than hold one, so
+#: they are left out of the drift check below. The highlight-span pair is
+#: re-derived from `global_critical_span_style` on every run the Stimulus
+#: popover draws, and each `__num*` key is the typed box beside a slider,
+#: registered the first time its popover renders — neither is anything the user
+#: set apart from the canonical key, which the check does compare.
+_DRIFT_MIRROR_KEYS = frozenset(
+    {"global_highlight_span_on", "global_highlight_span_mode"}
+)
+_NUMERIC_TWIN_SUFFIXES = ("__num", "__num_lo", "__num_hi")
+_ABSENT = object()
+
+
+def _is_drift_mirror(key: str) -> bool:
+    return key in _DRIFT_MIRROR_KEYS or key.endswith(_NUMERIC_TWIN_SUFFIXES)
+
+
+def _design_drifted(applied: dict, current: dict) -> bool:
+    """Whether the plot settings moved off the design that was applied (VIZ-44).
+
+    Every design key counts — a named view resets *all* of them to the widget
+    defaults, so changing any plot control is a departure from it — except the
+    mirrors above. A key present on only one side is compared against its
+    widget default: a control registered late (its popover opened after the
+    baseline was taken) at its default value has not been changed, while a key
+    with no default (an explicit colour range, VIZ-46) appearing *has*.
+    """
+    for key in applied.keys() | current.keys():
+        if _is_drift_mirror(key):
+            continue
+        default = _VIZ_WIDGET_DEFAULTS.get(key, _ABSENT)
+        if applied.get(key, default) != current.get(key, default):
+            return True
+    return False
+
+
 def _sync_quick_view_state() -> str:
-    """Keep the design-preset highlight in step with manual plot-control edits."""
+    """Keep the design-preset highlight in step with manual plot-control edits.
+
+    Only a change to a plot setting drops the highlight to 🛠️ Custom; see
+    `_design_drifted` for what is not one (VIZ-44 — narrowing the trial pool
+    used to flip it).
+    """
     ss = st.session_state
     selected = ss.get(_QUICK_VIEW_SELECTION_KEY)
     # VIZ-39: a `design:<name>` selection is valid while that design still
@@ -1753,7 +1794,7 @@ def _sync_quick_view_state() -> str:
         if not isinstance(applied, dict):
             ss[_QUICK_VIEW_APPLIED_STATE] = _capture_quick_view_state()
             return str(selected)
-        if _capture_quick_view_state() != applied:
+        if _design_drifted(applied, _capture_quick_view_state()):
             ss[_QUICK_VIEW_SELECTION_KEY] = _CUSTOM_VIEW
             ss[_QUICK_VIEW_CUSTOM_STATE] = _capture_quick_view_state()
             ss.pop(_QUICK_VIEW_APPLIED_STATE, None)
@@ -1784,7 +1825,7 @@ def _sync_quick_view_state() -> str:
     if not isinstance(applied, dict):
         ss[_QUICK_VIEW_APPLIED_STATE] = _capture_quick_view_state()
         return str(selected)
-    if isinstance(applied, dict) and _capture_quick_view_state() != applied:
+    if _design_drifted(applied, _capture_quick_view_state()):
         ss[_QUICK_VIEW_SELECTION_KEY] = _CUSTOM_VIEW
         ss[_QUICK_VIEW_CUSTOM_STATE] = _capture_quick_view_state()
         ss.pop(_QUICK_VIEW_APPLIED_STATE, None)
@@ -3131,8 +3172,14 @@ def color_field_options(trial_fixations: pd.DataFrame) -> list[str]:
 def hover_field_options(
     frame: pd.DataFrame | None, *, words: bool = False
 ) -> list[str]:
-    """Scalar columns that can be added to a VIZ-26 hover tooltip."""
-    if frame is None or frame.empty:
+    """Scalar columns that can be added to a VIZ-26 hover tooltip.
+
+    Read off the columns, never the rows: a trial with no fixations still has
+    the dataset's columns, and answering ``[]`` for it made `_seed_viz_state`
+    drop the user's hover picks as stale the moment a filter landed on one
+    (VIZ-44), for good.
+    """
+    if frame is None:
         return []
     preferred = (
         [

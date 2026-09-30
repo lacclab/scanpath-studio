@@ -246,6 +246,39 @@ class TestDatasetUnavailableState:
         assert app._dataset_access_status(st, root="/here", present=True) is True
         assert app._UNAVAILABLE_KEY not in st.session_state
 
+    @pytest.mark.timeout(240)
+    def test_the_note_does_not_outlive_a_run_that_stops_at_a_mapping(self, tmp_path):
+        """BUG-96: a run that returns at the mapping-problems exit never reached
+        the panel that consumes the note, so the next run — on another dataset —
+        said PoTeC "isn't here yet" above the demo."""
+        from streamlit.testing.v1 import AppTest
+
+        from scanpath_studio import app
+        from tests.conftest import APP_SCRIPT
+
+        def missing_note(at) -> bool:
+            return any("isn't here yet" in str(m.value) for m in at.markdown)
+
+        at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
+        at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
+        at.session_state["public_dataset_choice"] = "PoTeC — Potsdam Textbook Corpus"
+        at.session_state["potec_dir"] = str(tmp_path)  # empty → not on disk
+        at.run()
+        assert not at.exception, at.exception
+        assert missing_note(at)
+        # The demo stands in for PoTeC; unmap a field it needs, and the run
+        # leaves at the mapping-problems return, before the note is shown.
+        duration = next(s for s in at.selectbox if s.key == "col_map_fix_duration")
+        duration.set_value(None)
+        at.run()
+        assert not at.exception, at.exception
+        assert not missing_note(at)
+        at.session_state["data_source_choice"] = app.DEMO_CHOICE
+        at.run()
+        assert not at.exception, at.exception
+        assert not missing_note(at)
+        assert app._UNAVAILABLE_KEY not in at.session_state
+
 
 @pytest.mark.timeout(180)
 class TestADeadEndStillShowsTheWayOut:

@@ -42,8 +42,9 @@ Move through the participant's trials with the trial picker.
 
 ## 5. Save the review
 
-Open **Session → JSON backup** and download the file. It preserves the view settings
-and annotations for later review.
+Open 🗂️ **Data → Annotations** and select **Export**. The file keeps your
+favorites, tags and notes for later review; **🔗 Share → File** keeps the view
+settings beside it.
 
 **Done:** you have checked geometry and timing, marked suspicious trials, and
 saved the review. For a formal retained/excluded pool, continue with

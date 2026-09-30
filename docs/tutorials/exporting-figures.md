@@ -48,8 +48,8 @@ saccades, heatmap, and stimulus image can be stacked in a vector editor.
 
 ## 4. Keep provenance
 
-Keep `plot_config.json` with the batch (or a **💾 Session → JSON backup** for a
-single figure), and record the package version, dataset version and any trial
+Keep `plot_config.json` with the batch (or a **🔗 Share → File** settings file
+for a single figure), and record the package version, dataset version and any trial
 filtering in the caption or analysis log — the export does not store them.
 
 **Done:** the exported files share one visual configuration and can be recreated.

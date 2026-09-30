@@ -6,8 +6,8 @@ The Scanpath view shows one selected reading on the stimulus coordinate system.
 ![The Scanpath view, its regions numbered](../assets/screenshots/scanpath-view.webp)
 </figure>
 
-1. The views — 🗺️ Scanpath, 📊 Corpus Analysis, 🗂️ Data — and the 💾 Session
-   and ❓ Help dialogs.
+1. The views — 🗺️ Scanpath, 📊 Corpus Analysis, 🗂️ Data — and the ❓ Help
+   dialogs.
 2. The dataset and trial pickers, the ⇅ sort and the filter funnel.
 3. The trial's summary chips.
 4. The figure.

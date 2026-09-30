@@ -3585,9 +3585,8 @@ def render_settings_file(
     """🗺️ Scanpath → 🔗 Share → **File**: download and restore a settings file.
 
     The file is :func:`_build_studio_config`'s — the figure's full settings and
-    trial selection, with provenance — for when a link will not do: sent to
-    someone offline, kept beside a paper, or opened on a machine that runs the
-    app at another address. The upload is *applied* in
+    trial selection, with provenance — a copy that works offline and at any
+    address, unlike a link. The upload is *applied* in
     ``url_state._apply_uploaded_plot_config``, early in the next run, before any
     widget renders; it is deduped by the file's name and size, so leaving the
     file in the uploader does not re-apply it on every rerun.
@@ -3650,12 +3649,7 @@ def render_settings_file(
         exported_at=datetime.now().isoformat(timespec="seconds"),
         compare_styles=compare_styles,
     )
-    st.caption(
-        "The figure's settings and the selected trial, as a JSON file — for when "
-        "a link won't do. Annotations are exported from 🗂️ **Data → "
-        "Annotations**, and a dataset's column mapping from ✏️ **Edit dataset → "
-        "Save setup**."
-    )
+    st.caption("This figure's settings and trial, as a JSON file.")
     st.download_button(
         "Download settings",
         icon=ICONS["download"],
@@ -4944,7 +4938,7 @@ def render_single_trial_tab(
        builds the deep link via ``share_renderer`` (passed by ``app.main``). The
        former Trial Info subtab was folded into the chips above the plot, and
        **DATA-26** moved 🔎 Data Inspection off this bar onto the 🗂️ Data page.
-       Save & restore is a popover on the top menu bar.
+       Share is **Link · Code · File** (UX-179) — File is the settings file.
 
     ``combos_all`` / ``words_all`` / ``fixations_all`` are the unfiltered frames
     the Export subtab's bulk section uses for its "whole dataset" scope; they
@@ -6549,10 +6543,6 @@ def render_single_trial_tab(
             share_renderer()
         else:
             st.caption("Sharing is unavailable in this context.")
-
-    # Save & restore (plot config + annotations) is rendered by app.main on every
-    # view (it must stay reachable when a non-Scanpath view is active), sourcing
-    # the trial selection from _share_selection.
 
 
 def _render_bulk_export(

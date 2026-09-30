@@ -6172,7 +6172,7 @@ def render_canvas_controls(
     # Reading text is true-to-scale by default: it auto-sizes to the word boxes
     # (text height = box_height / line_spacing) and scales with the figure, so it
     # always fills the real line slot. Untick to fall back to a fixed font size.
-    # Keyed (+ seeded) so the Save & restore panel can capture/reapply them.
+    # Keyed (+ seeded) so the settings file can capture/reapply them.
     scale_text_to_boxes = field(
         text,
         "checkbox",
@@ -8092,10 +8092,10 @@ def _run_app() -> None:
     # it is applied here — see url_state.request_trial (ENG-36).
     _apply_pending_trial_selection(combos)
 
-    # Restore settings + annotations from an uploaded config JSON BEFORE the
-    # rail widgets render, so they pick up the saved values (see
-    # _apply_url_preset for the same preset-then-render mechanism). The uploader
-    # lives in the "💾 Save & restore" panel below; its file persists across reruns.
+    # Restore settings from an uploaded settings file BEFORE the rail widgets
+    # render, so they pick up the saved values (see _apply_url_preset for the
+    # same preset-then-render mechanism). The uploader is 🔗 Share → File's; its
+    # file persists across reruns.
     _apply_uploaded_plot_config(combos, fixations_filtered)
 
     # Canvas and visualization controls (the Scanpath rail). For a raw-gaze-only dataset,
@@ -8176,8 +8176,8 @@ def _run_app() -> None:
     # own tab. Raw Data + Data Statistics are merged into Data Inspection.
     # Dispatch the active view (top nav). Only one view body renders per run
     # — the keyed nav widget persists the selection across reruns, so no JS hack
-    # is needed (unlike st.tabs). render_single_trial_tab writes _share_selection
-    # and fills the Save & restore slot when it's the active view.
+    # is needed (unlike st.tabs). render_single_trial_tab writes _share_selection,
+    # which 🔗 Share → File reads for the trial it records.
     # UX-37: the three things a log reader wants to correlate a slow rerun with
     # — which view, which trial, how narrow the pool is. One line each, only on
     # change (see `log_state_change`).

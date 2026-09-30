@@ -1238,9 +1238,9 @@ def sanitize_session_value(key: str, value):
     return value
 
 
-# --- Save & restore config schema versioning (ENG-11) ---------------------
+# --- Settings-file schema versioning (ENG-11) -------------------------------
 #
-# Single source of truth for the "💾 Save & restore" JSON schema version. The
+# Single source of truth for the 🔗 Share → File settings-file schema version. The
 # writer (`tabs._build_studio_config`) stamps this onto every saved config; the
 # reader (`_restore_plot_config`) upgrades an older upload to it before applying,
 # so a config saved by an earlier build keeps loading as the layout evolves.
@@ -2001,7 +2001,7 @@ def _restore_plot_config(
     # only for a full plot config. The wizard's setup file now also carries an
     # `experimental_setup` — a `SetupSnapshot`, which has no `display_dpi` /
     # `stimulus_font_pt` / `use_stimulus_font_pt` — and loading one through the
-    # main 💾 Save & restore uploader used to flip this branch on and overwrite
+    # settings-file uploader used to flip this branch on and overwrite
     # those three with the reader's own fallbacks. A section that never mentions
     # a setting must not restate it.
     full_config = isinstance(config.get("canvas_px"), dict)

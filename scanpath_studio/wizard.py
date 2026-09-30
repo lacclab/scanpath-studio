@@ -1841,9 +1841,10 @@ def _wizard_setup_config() -> dict:
     from scanpath_studio import __version__
 
     return {
-        # The shared Save & restore format — this setup file can be loaded through
-        # the main "💾 Save & restore" uploader too, so it stamps the same
-        # single-source-of-truth schema version (ENG-11) rather than a literal.
+        # The settings file's format — this setup file can be loaded through
+        # 🔗 Share → File's uploader too (which applies its setup, not its
+        # mapping, since UX-179), so it stamps the same single-source-of-truth
+        # schema version (ENG-11) rather than a literal.
         "schema": PLOT_CONFIG_SCHEMA,
         "app": {"name": "Scanpath Studio", "version": __version__},
         "exported_at": datetime.now().isoformat(timespec="seconds"),

@@ -387,8 +387,8 @@ def _save_metadata(
     """DATA-38 — write the attached tables to :data:`METADATA_FILE` if they changed.
 
     Returns the manifest's pointer to them, or ``None`` (and removes the file)
-    when nothing is attached. The tables are the same payloads 💾 Save & restore
-    writes; the pointer is optional, so a manifest without it (every one written
+    when nothing is attached. The tables are `metadata`'s JSON payloads; the
+    pointer is optional, so a manifest without it (every one written
     before this) still restores, and the schema version does not move.
     """
     from . import metadata as metadata_mod

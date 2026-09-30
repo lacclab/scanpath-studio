@@ -39,7 +39,7 @@ code that reproduces the figure, in Python or as a CLI command. **File** is a
 settings file, described below.
 
 <figure class="sps-screenshot" markdown>
-![The Share subtab: the link, and the code that reproduces the figure](../assets/screenshots/share.webp)
+![The Share subtab: the Link · Code · File switch, on Link](../assets/screenshots/share.webp)
 </figure>
 
 A link never contains an uploaded or public dataset's fixation or word tables.

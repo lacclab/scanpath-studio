@@ -4769,7 +4769,34 @@ def _chip_value_and_uniqueness(col, trial_words, trial_fixations, participant):
             value = attached_trials.values_for(participant, trial_id).get(col)
             if value is not None and not pd.isna(value):
                 return (value, True)
+    # DATA-45 — and the attached *text* table, the third grain, which this
+    # function used to skip: a text field put in the chips resolved to None and
+    # the chip silently rendered nothing. A trial reads one text, so its value
+    # is trial-level too. The id is the one the trial filters' *By text* narrow
+    # (`_trial_text_id`), which is also what `combos["text_id"]` holds.
+    attached_texts = _md.active_texts()
+    if attached_texts is not None:
+        text_id = _trial_text_id(trial_words, trial_fixations)
+        if text_id is not None:
+            value = attached_texts.values_for(text_id).get(col)
+            if value is not None and not pd.isna(value):
+                return (value, True)
     return (None, True)
+
+
+def _trial_text_id(trial_words, trial_fixations):
+    """The trial's text id, as the text table is keyed (DATA-45).
+
+    Walks the columns in `controls._text_field_and_frame`'s order —
+    ``unique_text_id`` before ``text_id``, fixations before words — so a chip
+    reads the same id the *By text* filter and `utils.build_combo_options`
+    (whose ``text_id`` copies ``unique_text_id`` when there is one) resolve.
+    """
+    for field in ("unique_text_id", "text_id"):
+        value = _first_value(field, trial_fixations, trial_words)
+        if value is not None:
+            return value
+    return None
 
 
 def _first_value(col: str, *frames):

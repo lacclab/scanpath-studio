@@ -129,3 +129,83 @@ class TestControlsAndRoundTrip:
     def test_an_empty_payload_restores_to_nothing(self):
         assert metadata.text_from_payload(None) is None
         assert metadata.text_to_payload(None) is None
+
+
+class TestChips:
+    """DATA-45: a text field put in the chips renders its value above the plot.
+
+    `tabs._chip_value_and_uniqueness` fell back to the participant and trial
+    tables but had no branch for the text table, so the value resolved to None
+    and the chip was skipped without a word.
+    """
+
+    @staticmethod
+    def _attach(monkeypatch, built):
+        from scanpath_studio import tabs
+
+        monkeypatch.setattr(tabs, "active_participant_metadata", lambda: None)
+        monkeypatch.setattr(metadata, "active_trials", lambda: None)
+        monkeypatch.setattr(metadata, "active_texts", lambda: built)
+        return tabs
+
+    def test_a_text_field_resolves_through_the_trial_s_text_id(self, monkeypatch):
+        built = metadata.build_text_metadata(_table(), "text", keys=KEYS)
+        tabs = self._attach(monkeypatch, built)
+        fixations = pd.DataFrame(
+            {"participant_id": ["p1"] * 2, "trial_id": ["t1"] * 2, "text_id": "b"}
+        )
+        value, trial_level = tabs._chip_value_and_uniqueness(
+            "genre", None, fixations, "p1"
+        )
+        assert (value, trial_level) == ("news", True)
+
+    def test_unique_text_id_wins_like_the_by_text_filter(self, monkeypatch):
+        """The id the *By text* filter and `combos["text_id"]` use."""
+        built = metadata.build_text_metadata(_table(), "text", keys=KEYS)
+        tabs = self._attach(monkeypatch, built)
+        words = pd.DataFrame({"trial_id": ["t1"], "text_id": ["1"]})
+        fixations = pd.DataFrame(
+            {"trial_id": ["t1"], "text_id": ["1"], "unique_text_id": ["a"]}
+        )
+        value, _ = tabs._chip_value_and_uniqueness("genre", words, fixations, "p1")
+        assert value == "fiction"
+
+    def test_a_recorded_column_still_wins(self, monkeypatch):
+        built = metadata.build_text_metadata(_table(), "text", keys=KEYS)
+        tabs = self._attach(monkeypatch, built)
+        fixations = pd.DataFrame({"text_id": ["b"], "genre": ["poetry"]})
+        value, _ = tabs._chip_value_and_uniqueness("genre", None, fixations, "p1")
+        assert value == "poetry"
+
+    def test_an_unlisted_text_renders_no_chip(self, monkeypatch):
+        built = metadata.build_text_metadata(_table(), "text", keys=KEYS)
+        tabs = self._attach(monkeypatch, built)
+        fixations = pd.DataFrame({"text_id": ["zzz"]})
+        chip = tabs._chip_value_and_uniqueness("genre", None, fixations, "p1")
+        assert chip == (None, True)
+
+    def test_the_chip_is_drawn_in_the_running_app(self):
+        """End to end: attach a text table to the demo, pick its field."""
+        from streamlit.testing.v1 import AppTest
+
+        from tests.conftest import APP_SCRIPT
+
+        at = AppTest.from_file(APP_SCRIPT)
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        texts = [str(t) for t in at.multiselect(key="filter_text_id").options]
+        assert texts, "the demo should offer texts to narrow by"
+        frame = pd.DataFrame({"text_id": texts, "genre": ["news"] * len(texts)})
+        at.session_state[metadata.TEXT_SESSION_KEY] = metadata.build_text_metadata(
+            frame, "text_id", source_name="texts.csv", keys=set(texts)
+        )
+        at.session_state[metadata.TEXT_RAW_SESSION_KEY] = frame
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+
+        at.session_state["trial_chip_fields"] = ["participant_id", "genre"]
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        assert "genre" in at.session_state["trial_chip_fields"]
+        strip = " ".join(m.value for m in at.markdown)
+        assert "Genre = news" in strip, strip[:400]

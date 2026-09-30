@@ -11,7 +11,8 @@ Maintainers: replace N in the title with the next free BUG number. Most IDs
 live in only one place, so check all four (CLAUDE.md → Tracking work):
 CHANGELOG.md, `gh issue list --state all --search "[BUG-"`, the pre-2026-08-20
 archive in tracker/data.js, and the open PRs' changelogs
-(`gh pr list --state open`, then `gh pr diff <n> -- CHANGELOG.md`).
+(`gh pr list --state open`, then each PR's CHANGELOG.md hunk of
+`gh pr diff <n>` — the command is in CLAUDE.md; `gh pr diff` takes no path).
 IDs are stable and never renumbered.
 Outside reporters: leave the title as-is; we will number it.
 Maintainers: add it to the "Scanpath Studio" project board and set its Status.

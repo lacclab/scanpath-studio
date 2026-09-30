@@ -2848,7 +2848,7 @@ def _render_share_link_widget(query: str) -> None:
         <style>
           .sps-share {{
             font-family: "Source Sans Pro", system-ui, sans-serif;
-            color-scheme: light dark;
+            color-scheme: light dark; color: inherit;
           }}
           .sps-share-row {{ display: flex; gap: 0.4rem; align-items: stretch; }}
           #sps-share-url {{
@@ -2871,6 +2871,16 @@ def _render_share_link_widget(query: str) -> None:
         <script>
         (function () {{
           const query = {payload};
+          // The iframe is its own document, so `inherit` yields the browser's
+          // default (dark) text on a dark Streamlit theme. Same-origin: copy the
+          // host app's actual text colour and scheme instead.
+          try {{
+            const host = window.parent.document.querySelector(".stApp") ||
+              window.parent.document.body;
+            const cs = window.parent.getComputedStyle(host);
+            document.documentElement.style.colorScheme = cs.colorScheme || "";
+            document.documentElement.style.color = cs.color;
+          }} catch (e) {{ /* cross-origin: keep the media-query fallback */ }}
           const loc = window.parent.location;
           const base = loc.origin + loc.pathname;
           const url = query ? base + "?" + query : base;

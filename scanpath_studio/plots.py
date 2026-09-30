@@ -3500,16 +3500,31 @@ def _same_value(a, b) -> bool:
                 return False
         except ValueError:  # an ndarray inside: no truth value
             pass
+        except TypeError:  # `pd.NA` against anything else: no truth value either
+            return False
         kinds = list(map(type, a))
         if kinds != list(map(type, b)):
             return False
-        if any(k in (list, tuple, dict, np.ndarray) for k in set(kinds)):
+        kind_set = set(kinds)
+        if any(k in (list, tuple, dict, np.ndarray) for k in kind_set):
             return all(_same_value(x, y) for x, y in zip(a, b))
+        # `==` holds -0.0 equal to 0.0, which JSON writes apart. Only an array
+        # holding a zero pays for the sign check.
+        if any(issubclass(k, float) for k in kind_set) and 0.0 in a:
+            return all(
+                not isinstance(x, float) or x != 0.0 or _same_sign(x, y)
+                for x, y in zip(a, b)
+            )
         return True
     try:
-        return bool(a == b)
-    except ValueError:
+        same = bool(a == b)
+    except (TypeError, ValueError):
         return False
+    return same and (not isinstance(a, float) or a != 0.0 or _same_sign(a, b))
+
+
+def _same_sign(a: float, b: float) -> bool:
+    return math.copysign(1.0, a) == math.copysign(1.0, b)
 
 
 def _frame_delta(prev, cur):
@@ -3549,8 +3564,9 @@ def pack_replay_frames(frames: Sequence[Mapping]) -> list[dict]:
     state: dict = {}
     packed = []
     for frame in frames:
-        out = {key: value for key, value in frame.items() if key != "data"}
         data = frame.get("data")
+        # A frame whose `data` is null keeps it as it was.
+        out = {k: v for k, v in frame.items() if k != "data" or data is None}
         if data is not None:
             traces = frame.get("traces")
             nodes = []
@@ -3581,12 +3597,30 @@ def replay_page(fig) -> tuple[dict, str] | None:
     player = animation_player_post_script(fig)
     if player is None:
         return None
+    if not isinstance(fig, dict) and not fig.frames:
+        return None
     fig_dict = fig if isinstance(fig, dict) else fig.to_dict()
     frames = fig_dict.get("frames") or []
     if not frames:
         return None
+    if not all(_packable(frame) for frame in frames):
+        # Frames this encoding can't address (a typed-array `traces`) travel as
+        # plotly.py writes them, still on the player.
+        return fig_dict, player
     page = {key: value for key, value in fig_dict.items() if key != "frames"}
     return page, _packed_frames_script(frames) + "\n" + player
+
+
+def _packable(frame: Mapping) -> bool:
+    """Whether `pack_replay_frames` can address ``frame``'s traces by index."""
+    data = frame.get("data")
+    traces = frame.get("traces")
+    if data is not None and not isinstance(data, (list, tuple)):
+        return False
+    return traces is None or (
+        isinstance(traces, (list, tuple))
+        and all(isinstance(i, int) and not isinstance(i, bool) for i in traces)
+    )
 
 
 def _packed_frames_script(frames: Sequence[Mapping]) -> str:

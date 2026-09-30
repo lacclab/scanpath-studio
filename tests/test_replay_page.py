@@ -19,12 +19,14 @@ from __future__ import annotations
 import copy
 import functools
 import json
+import math
 import re
 import shutil
 import subprocess
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pytest
 from plotly.io.json import to_json_plotly
 
@@ -184,6 +186,48 @@ class TestTheBrowserGetsTheSameFrames:
         ]
         decoded = _decode(_packed_frames_script(frames), tmp_path)
         assert _same(decoded["frames"], _as_written(frames))
+
+
+class TestValuesTheEncoderMustNotMisjudge:
+    """Review of #278: values whose `==` raises or lies must still be carried."""
+
+    def test_pd_na_against_none_is_carried_not_raised(self):
+        # A nullable (`Int64`) fixation column reaches a frame as `pd.NA`, where
+        # the frame before held `None`; `None != pd.NA` raises TypeError.
+        frames = [
+            {"data": [{"x": [1, None]}]},
+            {"data": [{"x": [1, pd.NA]}]},
+            {"data": [{"x": pd.NA}]},
+            {"data": [{"x": None}]},
+        ]
+        packed = pack_replay_frames(frames)
+        assert packed[1]["p"][0] is not None
+        assert packed[2]["p"][0] is not None
+        assert packed[3]["p"][0] is not None
+
+    def test_a_zero_that_changes_sign_is_carried(self):
+        frames = [
+            {"data": [{"x": [0.0, 1.0], "y": 0.0}]},
+            {"data": [{"x": [-0.0, 1.0], "y": -0.0}]},
+            {"data": [{"x": [-0.0, 1.0], "y": -0.0}]},
+        ]
+        packed = pack_replay_frames(frames)
+        changed = packed[1]["p"][0][1]
+        assert math.copysign(1.0, changed["y"][1]) == -1.0
+        assert math.copysign(1.0, changed["x"][1][0]) == -1.0
+        assert packed[2]["p"][0] is None
+
+    def test_a_null_data_key_is_kept(self):
+        packed = pack_replay_frames([{"name": "0", "data": None}])
+        assert packed == [{"name": "0", "data": None}]
+
+    def test_typed_array_traces_travel_unpacked_on_the_player(self):
+        fig_dict = _replay("single").to_dict()
+        for frame in fig_dict["frames"]:
+            frame["traces"] = {"dtype": "i1", "bdata": "AQI="}
+        figure, script = replay_page(fig_dict)
+        assert figure["frames"] is fig_dict["frames"]
+        assert script == animation_player_post_script(fig_dict)
 
 
 class TestThePageIsSmall:

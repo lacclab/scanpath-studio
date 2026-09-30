@@ -1389,6 +1389,27 @@ def get_app_css() -> str:
     [class*="st-key-wiz_map_upload_"]:has(.sps-fhelp:focus-within) {
         overflow: visible;
     }
+    /* UX-147 — a metadata row (Participants / Trials / Texts, on ➕ Add and
+       ✏️ Edit alike) is one row, so its upload column needs no overlay to
+       span the block: it is the row's own first column. Left absolute, the
+       column was only as tall as the id + keep pickers beside it, and an
+       attached file (chip + preview + row counts) outgrew it — centering then
+       pushed the title above the top edge, where `overflow: hidden` cut it
+       off. In normal flow the row grows to fit instead. `overflow-x: clip`
+       keeps UX-127's guard against the dropzone spilling sideways without
+       clipping vertically (`hidden` on one axis would force the other to
+       scroll); the column stretches so the divider still runs the row's full
+       height. */
+    [class*="st-key-wiz_map_upload_meta_"] {
+        position: static;
+        width: auto;
+        height: 100%;
+        overflow-x: clip;
+        overflow-y: visible;
+    }
+    [data-testid="stColumn"]:has([class*="st-key-wiz_map_upload_meta_"]) {
+        align-self: stretch;
+    }
     /* UX-124 — the "5GB per file • CSV, TSV, …" line `st.file_uploader`
        prints under its own dropzone doesn't fit this width; the same
        information now reaches the title's hover tooltip instead (appended to

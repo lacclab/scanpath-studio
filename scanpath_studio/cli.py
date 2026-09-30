@@ -2082,6 +2082,12 @@ def render(argv: list[str]) -> None:
         )
     if args.sample_raw_gaze and args.raw_gaze:
         raise SystemExit("Pass --raw-gaze PATH or --sample-raw-gaze, not both.")
+    if args.show_raw_gaze is False and not (args.raw_gaze or args.sample_raw_gaze):
+        print(
+            "Warning: --no-raw-gaze hides the raw-gaze layer, and no --raw-gaze "
+            "table was given; ignoring it.",
+            file=sys.stderr,
+        )
     if args.raw_gaze_schema is not None and not args.raw_gaze:
         raise SystemExit(
             "--raw-gaze-schema maps the --raw-gaze table; pass --raw-gaze too."
@@ -2463,18 +2469,25 @@ def render(argv: list[str]) -> None:
         )
     except ValueError as exc:
         raise SystemExit(str(exc))
-    if fixations.empty and raw_gaze is not None:
+    trial_fixations_missing = raw_gaze is not None and (
+        fixations.empty
+        or not (
+            (fixations["participant_id"].astype(str) == str(participant))
+            & (fixations["trial_id"].astype(str) == str(trial))
+        ).any()
+    )
+    if trial_fixations_missing:
         # VIZ-45: say it in the command's own terms before the API says it in
         # Python's. Both modes are made of fixations, and none are detected
-        # from the samples.
+        # from the samples. Decided for this trial, not the dataset.
         for flag, given in (
             ("--animate", args.animate),
             ("--compare-with", args.compare_with is not None),
         ):
             if given:
                 raise SystemExit(
-                    f"{flag} draws fixations, and this data has none — only raw "
-                    "gaze samples, which Scanpath Studio does not turn into "
+                    f"{flag} draws fixations, and this trial has none — only "
+                    "raw gaze samples, which Scanpath Studio does not turn into "
                     f"fixations. Drop {flag} to draw the samples."
                 )
     print(f"Rendering participant={participant} trial={trial}", file=sys.stderr)

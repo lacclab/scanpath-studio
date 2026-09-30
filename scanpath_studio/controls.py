@@ -34,6 +34,7 @@ from .constants import (
     ICONS,
     OUT_OF_TEXT_COLOR,
     PALETTES,
+    RAW_GAZE_LINK_FOR_KEY,
     RAW_GAZE_SEEDED_FOR_KEY,
     RAW_GAZE_SNAP_RESTORE_KEY,
     SACCADE_CLASS_COLORS,
@@ -590,7 +591,9 @@ _LAYER_OFF_REASON: list[str] = []
 
 
 @contextmanager
-def _layer_off(label: str, *, off: bool, reason: str | None = None):
+def _layer_off(
+    label: str, *, off: bool, reason: str | None = None, caption: bool = True
+):
     """Grey every rail control rendered inside, while ``off``.
 
     ``label`` names the layer's toggle, so the reason reads as an instruction
@@ -598,6 +601,8 @@ def _layer_off(label: str, *, off: bool, reason: str | None = None):
     onto a stack, so an inner block that greys for its own reason wins.
     ``reason`` replaces that instruction when switching the layer on would not
     help — VIZ-45's trial with no fixations for the layer to draw.
+    ``caption=False`` greys without writing the reason again, where the section
+    already said it once.
     """
     if not off:
         yield
@@ -608,7 +613,8 @@ def _layer_off(label: str, *, off: bool, reason: str | None = None):
         "this. Your settings are kept either way."
     )
     try:
-        st.caption(_LAYER_OFF_REASON[-1])
+        if caption:
+            st.caption(_LAYER_OFF_REASON[-1])
         yield
     finally:
         _LAYER_OFF_REASON.pop()
@@ -1313,6 +1319,9 @@ def _forget_raw_gaze_default(ss) -> None:
     just made stale) is what lets `app.seed_raw_gaze_default` apply it."""
     ss.pop(RAW_GAZE_SEEDED_FOR_KEY, None)
     ss.pop(RAW_GAZE_SNAP_RESTORE_KEY, None)
+    # …and the link's claim: both callers take the link's view params off the
+    # URL, so the dataset is decided afresh rather than left on the link's off.
+    ss.pop(RAW_GAZE_LINK_FOR_KEY, None)
 
 
 def _drop_linked_view_params() -> None:
@@ -5000,8 +5009,10 @@ def render_plot_controls(
         key="global_show_fix",
         persist_state="session",
         disabled=fix_off_disabled or not has_fixations,
-        note=no_fixations_note
-        or (
+        # No fixations: the popover body's own `_layer_off` caption says it.
+        note=""
+        if no_fixations_note
+        else (
             f"{ICONS['warning']} Fixations always draw in **Animate** mode — the "
             "replay is made of them. Your setting is kept for the static and "
             "comparison figures; the styling below still applies."
@@ -5016,7 +5027,6 @@ def render_plot_controls(
         key="global_show_saccades",
         persist_state="session",
         disabled=not has_fixations,
-        note=no_fixations_note,
     )
     # UX-128: a master switch for the section's three layers (text, boxes,
     # image), matching Fixations/Saccades. Earlier this was name-only — each
@@ -5055,7 +5065,8 @@ def render_plot_controls(
         key="global_show_heatmap",
         persist_state="session",
         disabled=heat_disabled or heat_nothing,
-        note=heat_nothing_note if heat_nothing else heat_reason,
+        # Nothing to draw: the popover body's own `_layer_off` caption says it.
+        note="" if heat_nothing else heat_reason,
     )
     raw_disabled, raw_reason = _mode_gate(animating, comparing, **_static_only)
     show_raw_gaze, raw_gaze_grp = _rail_section(
@@ -5497,6 +5508,8 @@ def render_plot_controls(
             f"{ICONS['fixations']} Fixations",
             off=not (show_fix or fix_off_disabled) or not has_fixations,
             reason=no_fixations_note or None,
+            # The 🧹 Filter section's own note already said it.
+            caption=has_fixations,
         ),
         _popover_rows("filter_fix"),
     ):
@@ -5707,6 +5720,7 @@ def render_plot_controls(
             f"{ICONS['saccades']} Saccades",
             off=not show_saccades or not has_fixations,
             reason=no_fixations_note or None,
+            caption=has_fixations,
         ),
         _popover_rows("filter_sac"),
     ):

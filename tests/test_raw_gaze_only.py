@@ -769,3 +769,107 @@ def test_render_joins_metadata_against_the_samples(raw_gaze, tmp_path, capsys):
     )
     err = capsys.readouterr().err
     assert "for 1 reader(s)" in err, err
+
+
+# -----------------------------------------------------------------------------
+# Review round 3
+# -----------------------------------------------------------------------------
+
+
+class TestLinkIsOneVisit:
+    RAW = ("Gaze", None)
+
+    def test_a_preset_after_a_link_turns_the_layer_back_on(self):
+        from scanpath_studio.controls import _forget_raw_gaze_default
+
+        session = {LAYER: False}  # the link said 0
+        seed_raw_gaze_default(
+            session, self.RAW, samples_only=True, link_names_layer=True
+        )
+        assert session[LAYER] is False
+        # A built-in quick view: writes the preset's False, drops the link
+        # params (so the link no longer names the layer), forgets the decision.
+        _forget_raw_gaze_default(session)
+        seed_raw_gaze_default(
+            session, self.RAW, samples_only=True, link_names_layer=False
+        )
+        assert session[LAYER] is True
+
+    def test_back_to_the_linked_dataset_does_not_drop_the_next_stash(self):
+        """A (linked, off) → C (raw-gaze-only) → A → D (fixations): D keeps
+        what it had before C turned the layer on."""
+        session = {LAYER: False}
+
+        def seed(name, samples_only):
+            seed_raw_gaze_default(
+                session, (name, None), samples_only=samples_only, link_names_layer=True
+            )
+
+        seed("A", True)
+        assert session[LAYER] is False
+        seed("C", True)
+        assert session[LAYER] is True
+        seed("A", True)  # an ordinary visit now — the link was spent on C
+        seed("D", False)
+        assert session[LAYER] is False
+
+
+def _words_and_samples_without_fixations(raw_gaze):
+    """The demo with the raw-gaze trial's fixations removed: that trial has
+    words and samples, and every other trial has fixations."""
+    words, fixations = api.load_scanpath_data(*sps.load_sample_data())
+    pid, tid = _key(raw_gaze)
+    fixations = fixations[
+        ~((fixations["participant_id"] == pid) & (fixations["trial_id"] == tid))
+    ]
+    return words, fixations
+
+
+def test_the_api_lists_and_draws_a_words_and_samples_trial(raw_gaze):
+    words, fixations = _words_and_samples_without_fixations(raw_gaze)
+    pid, tid = _key(raw_gaze)
+    trials = sps.list_trials(words, fixations, raw_gaze=raw_gaze)
+    assert (pid, tid) in set(trials.itertuples(index=False, name=None))
+    fig = sps.plot_scanpath(words, fixations, pid, tid, raw_gaze=raw_gaze)
+    names = [trace.name for trace in fig.data]
+    assert "Raw gaze" in names and "words" in names
+
+
+def test_list_parts_decides_per_trial(raw_gaze, two_screen_raw_gaze):
+    """In a dataset with fixations for other trials, a samples-only trial
+    keeps both of its screens headlessly, as it does in the app."""
+    words, fixations = api.load_scanpath_data(*sps.load_sample_data())
+    samples = two_screen_raw_gaze.assign(
+        trial_id="samples_only", unique_trial_id="samples_only"
+    )
+    pid = str(samples["participant_id"].iloc[0])
+    parts = sps.list_parts(words, fixations, pid, "samples_only", raw_gaze=samples)
+    assert list(parts["screen_id"]) == ["s1", "s2"]
+    second = sps.plot_scanpath(
+        words, fixations, pid, "samples_only", raw_gaze=samples, screen="s2"
+    )
+    assert len(second.data[0].x) == int((samples["screen_id"] == "s2").sum())
+
+
+def test_no_raw_gaze_without_a_table_warns(tmp_path, capsys):
+    cli.main(["render", "--sample", "--no-raw-gaze", "-o", str(tmp_path / "x.html")])
+    assert "--no-raw-gaze hides the raw-gaze layer" in capsys.readouterr().err
+
+
+@pytest.mark.timeout(240)
+class TestRound3App(TestScanpathView):
+    def test_the_app_lists_the_trial_the_api_lists(self, raw_gaze):
+        words, fixations = _words_and_samples_without_fixations(raw_gaze)
+        at = self._open(raw_gaze, words=words, fixations=fixations, demo_first=False)
+        _, tid = _key(raw_gaze)
+        options = [str(o) for o in at.selectbox(key="single_trial_id").options]
+        assert any(tid in option for option in options)
+
+    def test_the_no_fixations_note_is_said_once_per_popover(self, raw_gaze):
+        at = self._open(raw_gaze, demo_first=False)
+        captions = [c.value for c in at.caption]
+        note = [c for c in captions if "so there is nothing here to draw" in c]
+        heat = [c for c in captions if "nothing for the heatmap to draw" in c]
+        # Fixations, Saccades and Filter: one each.
+        assert len(note) == 3, note
+        assert len(heat) == 1, heat

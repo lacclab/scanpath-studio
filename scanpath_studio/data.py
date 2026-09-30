@@ -4452,12 +4452,22 @@ def raw_gaze_in_pool(
             fixations_all,
             cache_key=(frame_fingerprint(words_all), frame_fingerprint(fixations_all)),
         )
-        present = trial_keys(raw_gaze)
+        # Per raw-gaze table, not per filter change: `frame_cache` keeps one
+        # entry per slot, so toggling a filter back rebuilds this — and the
+        # samples' own keys are the one full pass worth not repeating.
+        present = _raw_gaze_trial_keys(raw_gaze, cache_key=frame_fingerprint(raw_gaze))
         pooled = trial_keys(words_pool) | trial_keys(fixations_pool)
         keep = {k for k in present if k in pooled or k not in known}
         return raw_gaze if keep == present else filter_frame_to_keys(raw_gaze, keep)
 
     return frame_cache("raw_gaze_pool", key, _build)
+
+
+@st.cache_data(show_spinner=False, max_entries=8)
+def _raw_gaze_trial_keys(_raw_gaze: pd.DataFrame, cache_key) -> set:
+    """`trial_keys` of one (narrowed) raw-gaze table, cached on its fingerprint."""
+    progress.report()
+    return trial_keys(_raw_gaze)
 
 
 @st.cache_data(show_spinner=False, max_entries=8)

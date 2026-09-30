@@ -2336,6 +2336,9 @@ _FONT_SNAP_RESTORE_KEY = "_font_snap_restore"
 #: session keys (`persistence._SESSION_KEYS`), so a relaunch onto the same
 #: dataset does not decide again over the user's own choice.
 _RAW_GAZE_LAYER_KEY = "global_show_raw_gaze"
+#: `RAW_GAZE_LINK_FOR_KEY` once the link's visit is over — not None, so the
+#: same link, still on the URL, cannot claim another dataset.
+_RAW_GAZE_LINK_SPENT = "\x00spent"
 
 
 def _hashable(value):
@@ -2440,6 +2443,11 @@ def seed_raw_gaze_default(
         link_names_layer() if callable(link_names_layer) else link_names_layer
     ):
         link_for = session[RAW_GAZE_LINK_FOR_KEY] = token
+    elif link_for is not None and link_for != token:
+        # A link is one visit: the first other dataset decided spends it, so
+        # coming back to the linked dataset later is an ordinary visit — its
+        # value would otherwise drop the stash the dataset in between made.
+        link_for = session[RAW_GAZE_LINK_FOR_KEY] = _RAW_GAZE_LINK_SPENT
     from_link = link_for == token
     if from_link:
         # The link's value overwrote nothing, and a stash from before the link

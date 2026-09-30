@@ -1121,9 +1121,12 @@ def list_trials(
         combos = words[cols].drop_duplicates().merge(fixations[cols].drop_duplicates())
     if raw_gaze is not None and not raw_gaze.empty:
         _require_normalized(raw_gaze, "raw_gaze")
-        # Only trials *neither* table covers: a trial the words∩fixations rule
-        # left out on purpose (words for it but no fixations, say) stays out.
-        known = _data.trial_keys(words) | _data.trial_keys(fixations)
+        # The app's rule (`utils.combo_source`): a trial is listed when it has
+        # fixations — or, in a dataset without any, words — or when it has raw
+        # gaze. So a trial with words and samples but no fixations is listed,
+        # while one the intersection above drops for having fixations but no
+        # words stays dropped: its samples add nothing the rule is about.
+        known = _data.trial_keys(fixations if not fixations.empty else words)
         samples = raw_gaze[cols].drop_duplicates()
         extra = samples[
             [
@@ -1145,17 +1148,25 @@ def list_parts(
 ) -> pd.DataFrame:
     """Ordered screens in multipart data, optionally narrowed to one parent.
 
-    Single-screen data returns an empty table. For a dataset recorded as raw
-    gaze alone (``None`` for ``words`` and ``fixations``), the screens are the
-    ones ``raw_gaze`` carries a ``screen_id`` for.
+    Single-screen data returns an empty table. A trial recorded as raw gaze
+    alone takes its screens from ``raw_gaze`` (its ``screen_id``), decided per
+    trial — so a samples-only trial keeps its screens in a dataset whose other
+    trials have fixations.
     """
     words = _optional_frame(words, "words")
     fixations = _optional_frame(fixations, "fixations")
-    catalog = (
-        part_catalog(_require_normalized(raw_gaze, "raw_gaze"))
-        if words.empty and fixations.empty and raw_gaze is not None
-        else part_catalog(words, fixations)
-    )
+    catalog = part_catalog(words, fixations)
+    if raw_gaze is not None and SCREEN_ID in raw_gaze.columns:
+        # Per trial, as `_select_part` and the app decide it: a trial neither
+        # words nor fixations cover takes its screens from its samples.
+        samples = part_catalog(_require_normalized(raw_gaze, "raw_gaze"))
+        covered = _data.trial_keys(words) | _data.trial_keys(fixations)
+        own = [
+            (str(p), str(t)) not in covered
+            for p, t in zip(samples["participant_id"], samples["trial_id"])
+        ]
+        if any(own):
+            catalog = pd.concat([catalog, samples[own]], ignore_index=True)
     if participant is not None:
         catalog = catalog[catalog["participant_id"].astype(str) == str(participant)]
     if trial is not None:

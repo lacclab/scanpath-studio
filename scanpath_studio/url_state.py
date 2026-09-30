@@ -2873,14 +2873,20 @@ def _render_share_link_widget(query: str) -> None:
           const query = {payload};
           // The iframe is its own document, so `inherit` yields the browser's
           // default (dark) text on a dark Streamlit theme. Same-origin: copy the
-          // host app's actual text colour and scheme instead.
-          try {{
-            const host = window.parent.document.querySelector(".stApp") ||
-              window.parent.document.body;
-            const cs = window.parent.getComputedStyle(host);
-            document.documentElement.style.colorScheme = cs.colorScheme || "";
-            document.documentElement.style.color = cs.color;
-          }} catch (e) {{ /* cross-origin: keep the media-query fallback */ }}
+          // host app's text colour and scheme. Streamlit applies its theme after
+          // first paint (and on a live theme switch), so keep it in sync.
+          function syncTheme() {{
+            try {{
+              const p = window.parent;
+              const host = p.document.querySelector(".stApp") || p.document.body;
+              const cs = p.getComputedStyle(host);
+              const root = document.documentElement.style;
+              if (root.color !== cs.color) root.color = cs.color;
+              if (root.colorScheme !== cs.colorScheme) root.colorScheme = cs.colorScheme;
+            }} catch (e) {{ /* cross-origin: keep the media-query fallback */ }}
+          }}
+          syncTheme();
+          setInterval(syncTheme, 400);
           const loc = window.parent.location;
           const base = loc.origin + loc.pathname;
           const url = query ? base + "?" + query : base;

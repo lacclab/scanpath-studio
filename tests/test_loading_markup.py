@@ -7,7 +7,7 @@ from html.parser import HTMLParser
 import pytest
 
 from scanpath_studio import loading
-from scanpath_studio.constants import SELECTOR_ROW_GRID
+from scanpath_studio.constants import SELECTOR_ROW_FLOORS_REM, SELECTOR_ROW_GRID
 from scanpath_studio.progress import Snapshot
 
 
@@ -146,8 +146,14 @@ def test_a_card_key_that_is_not_a_plain_name_is_refused():
 
 def test_the_scanpath_skeleton_follows_the_selector_grid_and_plot_height():
     html = loading.skeleton_html("scanpath", plot_height=640)
-    tracks = " ".join(f"{w}fr" for w in SELECTOR_ROW_GRID)
+    tracks = loading.selector_row_tracks()
     assert f"grid-template-columns:{tracks}" in html
+    # UX-181: each track carries the real row's floor as well as its weight;
+    # the actions track above all, whose weight is nominal.
+    assert f"minmax(0, {SELECTOR_ROW_GRID[2]}fr)" in tracks
+    assert (
+        f"minmax({SELECTOR_ROW_FLOORS_REM[3]}rem, {SELECTOR_ROW_GRID[3]}fr)" in tracks
+    )
     assert "height:640px" in html
     assert "sps-sk-scanpath" in html
     assert "sps-sk-corpus" in loading.skeleton_html("corpus")

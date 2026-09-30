@@ -813,7 +813,27 @@ FOCUS_MAPPING_KEY = "_focus_column_mapping"
 # actions cluster rather than a labelled **More** button of their own.
 # UX-143: the first track also holds +; borrow from the scrubber to keep the
 # dataset name readable. The same track boundaries apply to the related rows.
-SELECTOR_ROW_GRID = [3.6, 2.8, 3.3, 2.2]
+# UX-181: the weights now favour the scrubber, and `styles.py` puts floors
+# under the other three tracks. The actions track is a fixed width: its pills
+# are a fixed ~11.5rem, and a proportional track grew with the window and left
+# an empty gap to the left of ◀. Its weight is nominal. The dataset and trial
+# tracks shrink with the window down to a floor that still shows a name in
+# full. So a wide window gives its extra width to the scrubber, and a narrow
+# one takes it from the scrubber first. Every row of this grid gets the same
+# floors, so the rows still line up.
+SELECTOR_ROW_GRID = [2.6, 2.3, 5.1, 1.0]
+
+#: UX-181: the minimum width of each `SELECTOR_ROW_GRID` track, in rem. `None`
+#: is no floor (the scrubber). The actions floor fits ◀ ▶ ⇅ 🔎: four pills at
+#: their 2.3rem minimum plus 3px gaps. The dataset floor fits the dataset
+#: dropdown beside its + menu, and the trial floor fits a OneStop trial id.
+#: `styles.py` caps the two picker floors at a share of the row
+#: (`SELECTOR_ROW_FLOOR_CAPS`), so a narrow window still has room for the
+#: scrubber.
+SELECTOR_ROW_FLOORS_REM = (15.75, 12.5, None, 11.6)
+
+#: UX-181: the share of the row that caps each picker floor, as a percentage.
+SELECTOR_ROW_FLOOR_CAPS = (25, 20, None, None)
 
 #: The pre-UX-64 three-track shape, for the rows that still have three things
 #: on them — the multipart screen navigator and compare mode's own picker rows.

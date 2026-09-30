@@ -6924,6 +6924,28 @@ CHIP_FIELD_LABELS = {
 }
 
 
+def unique_field_labels(columns, label_of) -> dict[str, str]:
+    """``{column: label}`` with every label distinct, in ``columns``' order.
+
+    Two columns can humanize to the same text — two text-id columns both read
+    "Text", OneStop's ``TRIAL_INDEX`` and ``trial_index`` both "Trial index" —
+    so the first keeps its label and each later one adds its column name:
+    "Trial index (trial_index)". The ✏️ chip editor needs this to stay
+    invertible; the trial filters use it (UX-149) so two sliders over different
+    columns never carry the same title.
+    """
+    labels: dict[str, str] = {}
+    taken: set[str] = set()
+    for column in columns:
+        if column in labels:
+            continue
+        base = label_of(column)
+        label = base if base not in taken else f"{base} ({column})"
+        taken.add(label)
+        labels[column] = label
+    return labels
+
+
 def _chip_option_label(col: str) -> str:
     """Display label for a chip-field option (identity / virtual / humanized)."""
     if col in SUMMARY_CHIP_FIELDS:
@@ -6987,13 +7009,8 @@ def render_trial_chip_picker(
 
     # Display labels must be unique to stay invertible: some fields humanize to the
     # same text (e.g. two text-id columns both read "Text"), so disambiguate.
-    label_to_key: dict[str, str] = {}
-    key_to_label: dict[str, str] = {}
-    for key in available:
-        base = _chip_option_label(key)
-        label = base if base not in label_to_key else f"{base} ({key})"
-        label_to_key[label] = key
-        key_to_label[key] = label
+    key_to_label = unique_field_labels(available, _chip_option_label)
+    label_to_key = {label: key for key, label in key_to_label.items()}
 
     # Current selection/order, pruned to what's available + seeded once.
     if "trial_chip_fields" in st.session_state:
@@ -7763,6 +7780,30 @@ def render_narrow_by(
         )
 
 
+def _trial_filter_label(col: str) -> str:
+    """A trial filter's title before `unique_field_labels` disambiguates it."""
+    spec = _FILTER_FIELD_LABELS.get(col, {})
+    return spec.get("label", col.replace("_", " ").strip().title())
+
+
+def trial_filter_labels(
+    words: pd.DataFrame, fixations: pd.DataFrame, numeric_fields: dict | None = None
+) -> dict[str, str]:
+    """``{column: title}`` for the trial-filter panel's data-column filters.
+
+    UX-149: one label namespace across the range sliders and the multiselects,
+    so the demo's `TRIAL_INDEX` and `trial_index` don't render two sliders both
+    titled "Trial Index" — the ✏️ chip editor's rule (`unique_field_labels`).
+    """
+    if numeric_fields is None:
+        numeric_fields = _numeric_filter_fields(words, fixations)
+    columns = [
+        *numeric_fields,
+        *(c for c in _filter_fields_for(words, fixations) if c not in numeric_fields),
+    ]
+    return unique_field_labels(columns, _trial_filter_label)
+
+
 def render_trial_filters(
     words: pd.DataFrame, fixations: pd.DataFrame, *, host, prefix: str = ""
 ) -> dict:
@@ -7794,9 +7835,9 @@ def render_trial_filters(
     # of a multiselect over its distinct floats. Rendered first, as extra rows
     # among the categorical ones rather than in a section of their own.
     numeric_fields = _numeric_filter_fields(words, fixations)
+    labels = trial_filter_labels(words, fixations, numeric_fields)
     for col, (frame, lo, hi) in numeric_fields.items():
-        spec = _FILTER_FIELD_LABELS.get(col, {})
-        label = spec.get("label", col.replace("_", " ").strip().title())
+        label = labels[col]
         _seed_range_widget(col, lo, hi, prefix=prefix)
         host.slider(
             label,
@@ -7823,7 +7864,7 @@ def render_trial_filters(
         if col not in frame.columns:
             continue
         spec = _FILTER_FIELD_LABELS.get(col, {})
-        label = spec.get("label", col.replace("_", " ").strip().title())
+        label = labels[col]
         if pd.api.types.is_bool_dtype(frame[col]):
             _bool_metadata_filter(
                 label,

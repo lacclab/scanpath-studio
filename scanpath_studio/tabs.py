@@ -10766,11 +10766,14 @@ def _metadata_keep_picker(host, raw, id_columns, *, prefix: str, noun: str) -> l
     # ENG-49: the wizard's twin of this row lost its bulk-select buttons for the
     # same reason — 1.63's `select_all` lives in the dropdown and the ✕ already
     # cleared, so the pair was a second copy of the widget's own controls.
+    # UX-148: `wrap=True`, as on the wizard's pickers — in a column the chips
+    # otherwise stay on one row that scrolls sideways.
     return host.multiselect(
         f"Extra fields to keep — {noun}",
         options=options,
         key=key,
         label_visibility="collapsed",
+        wrap=True,
     )
 
 

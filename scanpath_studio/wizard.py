@@ -1631,6 +1631,8 @@ def _wizard_table_keep_picker(
     # (`select_all`, on by default under 1000 options) and has always drawn a ✕
     # to clear, so the pair had become a second copy of controls the widget now
     # carries. The picker gets the whole row back.
+    # UX-148: `wrap=True` — directly in a column, Streamlit keeps the chips on
+    # one row that scrolls sideways, which hid most of a 14-field default.
     chosen = set(
         host.multiselect(
             f"Extra fields to keep — {noun}",
@@ -1638,6 +1640,7 @@ def _wizard_table_keep_picker(
             format_func=lambda s: labels.get(s, s),
             key=key,
             label_visibility="collapsed",
+            wrap=True,
         )
     )
     warning = wide_frame_warning(len(chosen), len(raw))

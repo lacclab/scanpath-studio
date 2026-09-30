@@ -732,10 +732,20 @@ def pick_column(df: pd.DataFrame, candidates: Iterable[str]) -> str | None:
     so the second pass is accepted only when it turns up **exactly one**
     column across every candidate in the list. Two or more survivors is
     ambiguity, and ambiguity means the manual mapping step, not a guess: the
-    safety here is uniqueness, not a whitelist."""
+    safety here is uniqueness, not a whitelist.
+
+    Several survivors get one narrowing step (DATA-60) before that verdict:
+    keep only the ones spelled **entirely** in the list's own words — every
+    token of the column is a token of some candidate. An AOI export's
+    ``AOI_ID`` beside ``AOI_LEFT`` … ``AOI_BOTTOM`` is the case: all five carry
+    the word-id candidate ``aoi``, but only ``AOI_ID``'s other token (``id``,
+    from ``word_id`` / ``IA_ID``) belongs to the word-id list, while ``left``
+    does not. The same uniqueness applies to what is left: one column, or
+    none."""
     lookup: dict[str, str] = {}
     for col in df.columns:
         lookup.setdefault(_norm_col(col), col)
+    candidates = list(candidates)
     for name in candidates:
         hit = lookup.get(_norm_col(name))
         if hit is not None:
@@ -743,6 +753,9 @@ def pick_column(df: pd.DataFrame, candidates: Iterable[str]) -> str | None:
 
     normed_candidates = {_norm_col(name) for name in candidates}
     survivors = [col for col in df.columns if normed_candidates & set(_col_tokens(col))]
+    if len(survivors) > 1:
+        vocabulary = {tok for name in candidates for tok in _col_tokens(name)}
+        survivors = [col for col in survivors if set(_col_tokens(col)) <= vocabulary]
     if len(survivors) == 1:
         return survivors[0]
     return None

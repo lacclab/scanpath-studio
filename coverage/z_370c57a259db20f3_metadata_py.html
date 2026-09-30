@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for scanpath_studio/metadata.py: 92%</title>
+    <title>Coverage for scanpath_studio/metadata.py: 93%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_4667309f.css" type="text/css">
     <script src="coverage_html_cb_15cffcd0.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>scanpath_studio<span class="sep">/</span>metadata.py</b>:
-            <span class="pc_cov">92%</span>
+            <span class="pc_cov">93%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">773 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">714<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">59<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">716<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">57<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_model_scanpaths_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-09-30 15:22 +0000
+            created at 2026-09-30 16:16 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -1727,8 +1727,8 @@
     <p class="run"><span class="n"><a id="t1645" href="#t1645">1645</a></span><span class="t">    <span class="nam">rows</span><span class="op">:</span> <span class="nam">dict</span><span class="op">[</span><span class="nam">str</span><span class="op">,</span> <span class="nam">dict</span><span class="op">[</span><span class="nam">str</span><span class="op">,</span> <span class="nam">object</span><span class="op">]</span><span class="op">]</span> <span class="op">=</span> <span class="op">{</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1646" href="#t1646">1646</a></span><span class="t">    <span class="nam">table</span> <span class="op">=</span> <span class="nam">attached_for</span><span class="op">(</span><span class="nam">GRAIN_PARTICIPANT</span><span class="op">,</span> <span class="nam">prefix</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1647" href="#t1647">1647</a></span><span class="t">    <span class="key">if</span> <span class="nam">table</span> <span class="key">is</span> <span class="key">not</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t1648" href="#t1648">1648</a></span><span class="t">        <span class="nam">found</span> <span class="op">=</span> <span class="nam">table</span><span class="op">.</span><span class="nam">values_for</span><span class="op">(</span><span class="nam">participant</span><span class="op">)</span> <span class="key">if</span> <span class="nam">participant</span> <span class="key">is</span> <span class="key">not</span> <span class="key">None</span> <span class="key">else</span> <span class="op">{</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t1649" href="#t1649">1649</a></span><span class="t">        <span class="nam">rows</span><span class="op">[</span><span class="str">&quot;participants&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="op">{</span><span class="nam">name</span><span class="op">:</span> <span class="nam">found</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="nam">name</span><span class="op">)</span> <span class="key">for</span> <span class="nam">name</span> <span class="key">in</span> <span class="nam">table</span><span class="op">.</span><span class="nam">names</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t1648" href="#t1648">1648</a></span><span class="t">        <span class="nam">found</span> <span class="op">=</span> <span class="nam">table</span><span class="op">.</span><span class="nam">values_for</span><span class="op">(</span><span class="nam">participant</span><span class="op">)</span> <span class="key">if</span> <span class="nam">participant</span> <span class="key">is</span> <span class="key">not</span> <span class="key">None</span> <span class="key">else</span> <span class="op">{</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t1649" href="#t1649">1649</a></span><span class="t">        <span class="nam">rows</span><span class="op">[</span><span class="str">&quot;participants&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="op">{</span><span class="nam">name</span><span class="op">:</span> <span class="nam">found</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="nam">name</span><span class="op">)</span> <span class="key">for</span> <span class="nam">name</span> <span class="key">in</span> <span class="nam">table</span><span class="op">.</span><span class="nam">names</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1650" href="#t1650">1650</a></span><span class="t">    <span class="nam">table</span> <span class="op">=</span> <span class="nam">attached_for</span><span class="op">(</span><span class="nam">GRAIN_TRIAL</span><span class="op">,</span> <span class="nam">prefix</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1651" href="#t1651">1651</a></span><span class="t">    <span class="key">if</span> <span class="nam">table</span> <span class="key">is</span> <span class="key">not</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1652" href="#t1652">1652</a></span><span class="t">        <span class="nam">found</span><span class="op">:</span> <span class="nam">dict</span> <span class="op">=</span> <span class="op">{</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
@@ -1915,7 +1915,7 @@
             <a class="nav" href="z_370c57a259db20f3_model_scanpaths_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-09-30 15:22 +0000
+            created at 2026-09-30 16:16 +0000
         </p>
     </div>
 </footer>

@@ -1182,8 +1182,10 @@ def _dataset_dir_input(
 # UX-7(b): session slot describing a data source the user selected but that
 # isn't available locally. Written by `_dataset_access_status` (and the bundle
 # sources) on the run it happens, read + cleared by `_render_dataset_unavailable`
-# in the main area. Kept out of the loader return value so the loaders can keep
-# falling back to the demo corpus and the app stays usable.
+# in the main area — and dropped at the start of every full run (BUG-96), so a
+# run that returns early never passes it on. Kept out of the loader return
+# value so the loaders can keep falling back to the demo corpus and the app
+# stays usable.
 _UNAVAILABLE_KEY = "_dataset_unavailable"
 #: UX-174: whether this run is showing the demo *in place of* the selected
 #: corpus. Cleared at the start of every full run and set with the note above
@@ -6878,6 +6880,12 @@ def _run_app() -> None:
     # is hashed afresh and last run's frames stop being kept alive.
     reset_fingerprint_memo()
     st.session_state[_PLACEHOLDER_SHOWN_KEY] = False
+    # BUG-96: the missing-corpus note describes the run that wrote it. It is
+    # consumed later in that run, but a run that leaves before then — a mapping
+    # the demo stand-in can't satisfy, a stopped or abandoned run — used to hand
+    # it to the next run, which showed it over another dataset and hid the
+    # dataset card's row counts.
+    st.session_state.pop(_UNAVAILABLE_KEY, None)
     # Start capturing log records into the in-app debug buffer before any data
     # or plot work runs, so the debug panel (?debug=1) sees this run's logs.
     install_log_capture()

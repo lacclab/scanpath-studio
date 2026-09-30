@@ -69,16 +69,24 @@ class TestCells:
             assert dt.GAP_EXPLANATIONS[label]
 
 
-class TestSecondaryLine:
-    def test_language_then_provenance(self):
-        row = _row("PoTeC", 0, language="German", source="published")
-        assert row.secondary == "German · Published counts"
+class TestStatus:
+    def test_a_loaded_row_says_loaded(self):
+        assert _row("x", 0, source="loaded").status_label == dt.LOADED
 
-    def test_loaded(self):
-        assert _row("x", 0, source="loaded").secondary == "Loaded counts"
+    def test_published_figures_are_not_loaded(self):
+        row = _row("PoTeC", 0, source="published", counts={"Participants": 75})
+        assert row.status_label == dt.NOT_LOADED_STATUS
 
-    def test_nothing_known_says_nothing(self):
-        assert _row("x", 0).secondary == ""
+    def test_nothing_known_is_not_loaded(self):
+        assert _row("x", 0).status_label == dt.NOT_LOADED_STATUS
+
+    def test_an_operational_state_takes_its_place(self):
+        row = _row("PoTeC", 0, source="published", status="Needs setup")
+        assert row.status_label == "Needs setup"
+
+    def test_every_status_is_explained(self):
+        for label in (dt.LOADED, dt.NOT_LOADED_STATUS):
+            assert dt.STATUS_EXPLANATIONS[label]
 
 
 class TestSorting:
@@ -142,6 +150,10 @@ class TestSorting:
         opened = [replace(r, active=r.name == "OneStop") for r in rows]
         assert [r.name for r in dt.sort_rows(opened, None)] == before
 
+    def test_status_sorts_as_text(self, rows):
+        ordered = [r.status_label for r in dt.sort_rows(rows, "Status")]
+        assert ordered == sorted(ordered, key=str.casefold)
+
     def test_a_header_click_cycles_through_both_directions_then_off(self):
         state = dt.next_sort(None, "Trials")
         assert state == ("Trials", True)  # a count starts largest first
@@ -181,3 +193,4 @@ def test_the_record_keeps_values_and_cells_apart():
     assert record["_cells"]["Participants"] == "75"
     assert record["_cells"]["Screens"] == dt.NOT_REPORTED
     assert record["Counts"] == "Published"
+    assert record["Status"] == dt.NOT_LOADED_STATUS

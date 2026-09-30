@@ -15,7 +15,7 @@ makes.
 ## Loading it
 
 On the 🗂️ **Data** page, click **MultiplEYE** in **📂 Available datasets**, then
-choose **⋯ → Edit setup** on its row: point *Data directory* at a session set
+choose **Edit** beside its description: point *Data directory* at a session set
 (the *Expected files* panel lists the layout it looks for) and choose the
 **fixation source**
 (`scanpaths` or `fixations`). The

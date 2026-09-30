@@ -933,25 +933,33 @@ class TestDatasetTable:
         assert int(row["Fixations"].iloc[0]) > 0
         assert row["Kind"].iloc[0] == "Private"
         assert set(frame["Kind"]) <= {"Demo", "Manual", "Private", "Public", ""}
-        # UX-174: every row carries the same controls, keyed by its dataset —
-        # the name that opens it, Details, and the ⋯ menu's three actions.
+        # UX-174 r2: every row carries the same two controls, keyed by its
+        # dataset — the row-wide button that opens it, and Remove. Details and
+        # the ⋯ menu are gone: rename and edit live on the open dataset's
+        # section, under the table.
         keys = {b.key for b in at.button}
         for token in frame["_token"]:
             slug = self._slug(token)
-            for prefix in (
-                "dataset_open_",
+            for prefix in ("dataset_open_", "dataset_row_remove_"):
+                assert f"{prefix}{slug}" in keys, f"{prefix} missing for {token}"
+            for gone in (
                 "dataset_details_",
                 "dataset_row_edit_",
                 "dataset_row_rename_",
-                "dataset_row_remove_",
             ):
-                assert f"{prefix}{slug}" in keys, f"{prefix} missing for {token}"
+                assert f"{gone}{slug}" not in keys
+        assert "dataset_rename_btn" in keys
+        assert "dataset_edit_btn" in keys
+        # The open dataset has been counted from its rows; the rest have not.
+        status = frame.set_index("_token")["Status"]
+        assert status[self.NAME] == "Loaded"
+        assert set(status) <= {"Loaded", "Not loaded", "Needs setup"}
         demo = frame[frame["Dataset"].str.contains("demo", case=False)]
         if not demo.empty:
             # DATA-35's language: the demo is a OneStop subset, so it knows its
-            # language. It is now the line under the name.
+            # language — still on the record, for the Language filter.
             assert demo["Language"].iloc[0]
-        # The authoring launcher is not a row; it is a button by the heading.
+        # Both ways to make a dataset are in the + Add dataset menu.
         assert "create_manual_scanpath_btn" in keys
         assert "add_data_btn" in keys
 
@@ -995,16 +1003,13 @@ class TestDatasetTable:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state["data_source_choice"] == target
 
-    def test_details_arms_the_dialog_without_opening_the_dataset(self):
-        from scanpath_studio.app import PENDING_ABOUT_KEY
+    def test_rename_on_the_heading_arms_the_open_datasets_dialog(self):
+        from scanpath_studio.app import PENDING_RENAME_KEY
 
         at = self._at()
-        frame = self._table(at)
-        other = next(t for t in frame["_token"] if t != self.NAME)
-        self._click(at, f"dataset_details_{self._slug(other)}")
+        self._click(at, "dataset_rename_btn")
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert at.session_state[PENDING_ABOUT_KEY] == other
-        assert at.session_state["data_source_choice"] == self.NAME
+        assert at.session_state[PENDING_RENAME_KEY] == self.NAME
 
     def test_remove_arms_the_confirmation_for_its_own_row(self):
         from scanpath_studio.app import PENDING_DELETE_KEY
@@ -1017,14 +1022,65 @@ class TestDatasetTable:
         assert at.session_state[PENDING_DELETE_KEY] == self.NAME
         assert self.NAME in at.session_state["_datasets"]
 
-    def test_edit_setup_opens_the_editor_on_its_row(self):
+    def test_edit_beside_the_description_opens_the_editor(self):
         from scanpath_studio.app import DATASET_EDITOR_OPEN_KEY
 
         at = self._at()
-        self._click(at, f"dataset_row_edit_{self._slug(self.NAME)}")
+        self._click(at, "dataset_edit_btn")
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state[DATASET_EDITOR_OPEN_KEY] is True
         assert at.session_state["data_source_choice"] == self.NAME
+        # UX-174 r2 — the description is edited on this screen.
+        from scanpath_studio.app import _description_field_key
+
+        assert [t for t in at.text_area if t.key == _description_field_key(self.NAME)]
+
+    def test_a_description_written_on_the_editor_is_the_datasets_own(self):
+        """Typed on ✏️ Edit dataset and stored in the descriptions dict the
+        recovery cache persists — not on the upload's entry, whose every
+        non-frame field is part of the cache's dataset identity."""
+        from scanpath_studio.app import _description_field_key
+
+        at = self._at()
+        self._click(at, "dataset_edit_btn")
+        field = next(
+            t for t in at.text_area if t.key == _description_field_key(self.NAME)
+        )
+        field.input("Twelve readers, two texts. A pilot.")
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        from scanpath_studio.constants import DATASET_DESCRIPTIONS_KEY
+
+        own = at.session_state[DATASET_DESCRIPTIONS_KEY]
+        assert own[self.NAME] == "Twelve readers, two texts. A pilot."
+        assert "description" not in at.session_state["_datasets"][self.NAME]
+
+    def test_the_annotations_tab_lists_only_this_datasets_trials(self):
+        from scanpath_studio.annotations import ANNOTATIONS_STATE_KEY
+
+        at = self._at()
+        rows = at.session_state["_datasets"][self.NAME]["fixations"]
+        # The trial picker's id — the one an annotation is keyed by.
+        trial_col = "unique_trial_id" if "unique_trial_id" in rows else "trial_id"
+        pid, tid = (
+            str(v) for v in rows[["participant_id", trial_col]].iloc[0].tolist()
+        )
+        at.session_state[ANNOTATIONS_STATE_KEY] = {
+            (pid, tid): {"star": True, "tags": ["Review"], "note": "Mine."},
+            ("nobody", "nothing"): {"star": True, "tags": [], "note": "Not here."},
+        }
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        tables = [
+            d.value
+            for d in at.dataframe
+            if "Note" in getattr(d.value, "columns", [])
+            and "Favorite" in d.value.columns
+        ]
+        assert len(tables) == 1
+        assert list(tables[0]["Note"]) == ["Mine."]
 
     def test_a_long_list_gets_a_search_and_a_short_one_does_not(self):
         import pandas as pd
@@ -1142,9 +1198,9 @@ class TestDatasetRename:
     the whole of that, and it touches only session state — so it is exercised
     directly rather than through a 90-second AppTest boot.
 
-    The rename now lives in exactly **one** place: the row's ✏️ Rename in
-    📂 Available datasets. The duplicate inline popover inside "What's in this
-    dataset" is gone; the last two tests pin both halves of that.
+    The rename lives in exactly **one** place: UX-174 r2's **Rename** beside
+    the *What's in the dataset* heading (it was the table row's before). The
+    last two tests pin both halves of that.
     """
 
     NAME = "My corpus"
@@ -1203,6 +1259,22 @@ class TestDatasetRename:
 
         assert _session[COMPARE_SOURCE_STATE_KEY] == "Renamed corpus"
 
+    def test_the_description_follows_the_rename_and_leaves_with_the_dataset(
+        self, _session
+    ):
+        from scanpath_studio import persistence, wizard
+        from scanpath_studio.constants import DATASET_DESCRIPTIONS_KEY
+
+        self._store(_session, self.NAME)
+        _session[DATASET_DESCRIPTIONS_KEY] = {self.NAME: "A pilot."}
+        wizard.rename_dataset(self.NAME, "Pilot")
+        assert _session[DATASET_DESCRIPTIONS_KEY] == {"Pilot": "A pilot."}
+        wizard._remove_dataset("Pilot")
+        assert _session[DATASET_DESCRIPTIONS_KEY] == {}
+        # Persisted as a session key, so it survives a restart without making
+        # the recovery cache rewrite any stored frames.
+        assert DATASET_DESCRIPTIONS_KEY in persistence._SESSION_KEYS
+
     def test_a_built_in_source_label_cannot_be_shadowed(self, _session):
         """A stored dataset named exactly like a built-in source would put a
         duplicate option in the picker and hijack that source's load branch."""
@@ -1215,9 +1287,9 @@ class TestDatasetRename:
         assert DEMO_CHOICE not in _session["_datasets"]
         assert f"{DEMO_CHOICE} (uploaded)" in _session["_datasets"]
 
-    def test_the_row_dialog_is_the_one_way_in(self):
-        """The row's ⋯ → Rename arms a pending token that opens the dialog, and
-        the dialog is what calls the renamer.
+    def test_the_heading_button_is_the_one_way_in(self):
+        """UX-174 r2: **Rename** beside the *What's in* heading arms a pending
+        token that opens the dialog, and the dialog is what calls the renamer.
 
         Source-level for the same reason ``test_delete_is_wired_to_the_remover``
         is: a dialog rendered from inside an ``@st.fragment`` does not take
@@ -1226,13 +1298,13 @@ class TestDatasetRename:
 
         from scanpath_studio.app import (
             _rename_dataset_dialog,
-            _render_dataset_table_row,
             _render_rename_dialog,
+            render_dataset_inspection_head,
             render_dataset_table,
         )
 
-        assert "args=(PENDING_RENAME_KEY, row.token)" in inspect.getsource(
-            _render_dataset_table_row
+        assert "args=(PENDING_RENAME_KEY, token)" in inspect.getsource(
+            render_dataset_inspection_head
         )
         assert "_render_rename_dialog(" in inspect.getsource(render_dataset_table)
         assert "_rename_dataset_dialog(" in inspect.getsource(_render_rename_dialog)
@@ -1240,10 +1312,9 @@ class TestDatasetRename:
         assert "from scanpath_studio.wizard import rename_dataset" in dialog_source
         assert "rename_dataset(token, requested)" in dialog_source
 
-    def test_the_inspection_section_carries_no_rename_of_its_own(self):
-        """ "What's in this dataset" used to repeat the rename as a
-        ``Dataset: <name>`` line with its own ✏️ Rename popover, one section
-        below the table that already offers it."""
+    def test_rename_is_on_the_section_and_not_on_the_rows(self):
+        """One rename, for the open dataset: the heading's button, not a
+        per-row menu item, and not an inline field."""
         import pandas as pd
 
         from scanpath_studio import api
@@ -1267,7 +1338,8 @@ class TestDatasetRename:
         assert not [
             t for t in at.text_input if str(t.key).startswith("dataset_rename_")
         ]
-        assert not [b for b in at.button if str(b.key).startswith("dataset_rename_")]
+        renames = [b.key for b in at.button if "rename" in str(b.key)]
+        assert renames == ["dataset_rename_btn"]
 
 
 @pytest.mark.timeout(90)

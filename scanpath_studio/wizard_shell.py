@@ -106,7 +106,7 @@ class WizardStep:
 #: its own numbered stage rather than a sub-heading nested inside "Upload data
 #: tables" — all three read as one flat sequence.
 STEPS: tuple[WizardStep, ...] = (
-    WizardStep("name", 1, "Dataset name", "What to call it", True),
+    WizardStep("name", 1, "Name & description", "What to call it", True),
     WizardStep("data", 2, "Upload data tables", "The tables you exported", True),
     WizardStep("setup", 3, "Recording setup", "The screen it was recorded on", True),
 )

@@ -187,34 +187,77 @@ def get_app_css() -> str:
             linear-gradient(var(--sps-accent-soft), var(--sps-accent-soft)),
             var(--sps-page-bg);
     }
-    /* The name is a button that reads as a name: left-aligned, wrapping, in
-       the body weight — its hover underline says it can be clicked. */
+    /* UX-174 r2 — the whole row opens its dataset. Its first child is the
+       row's own button, stretched over the row; every cell is drawn above it
+       and lets a click fall through to it, except the one holding Remove. The
+       button's label ("Open <name>") is for screen readers — the name is
+       drawn in its cell. */
+    .st-key-dataset_table_grid [class*="st-key-dsrow_"] { position: relative; }
+    [class*="st-key-dsrow_"] > [class*="st-key-dataset_open_"] {
+        position: absolute !important;
+        inset: 0;
+        width: auto !important;
+        margin: 0 !important;
+        z-index: 0;
+    }
+    [class*="st-key-dataset_open_"] .stButton,
     [class*="st-key-dataset_open_"] button {
-        justify-content: flex-start;
-        text-align: left;
-        padding: 0 !important;
-        min-height: 0;
-        font-weight: 600;
+        width: 100%;
+        height: 100%;
     }
-    [class*="st-key-dataset_open_"] button p { white-space: normal; }
-    [class*="st-key-dataset_open_"] button:hover p { text-decoration: underline; }
-    /* The secondary line: the page's caption rule pulls the next block up by
-       a negative margin, which here would hang it over the row's rule. */
-    [class*="st-key-dsc_name_"] [data-testid="stCaptionContainer"] {
-        margin-bottom: 0 !important;
+    [class*="st-key-dataset_open_"] button {
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        cursor: pointer;
     }
-    [class*="st-key-dsc_name_"] [data-testid="stCaptionContainer"] p {
-        margin: 0;
+    [class*="st-key-dataset_open_"] button [data-testid="stMarkdownContainer"] {
+        position: absolute !important; width: 1px; height: 1px;
+        overflow: hidden; clip-path: inset(50%); white-space: nowrap;
     }
-    [class*="st-key-dsc_name_"] > div { margin-bottom: 0 !important; }
+    [class*="st-key-dsrow_current_"] > [class*="st-key-dataset_open_"] button {
+        cursor: default;
+    }
+    [class*="st-key-dsrow_"] > [data-testid="stLayoutWrapper"] {
+        position: relative;
+        z-index: 1;
+        pointer-events: none;
+    }
+    [class*="st-key-dsrow_"] > [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_name_"]) {
+        position: sticky;
+    }
+    [class*="st-key-dsrow_"] > [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_actions_"]),
+    [class*="st-key-dsc_name_"] [data-testid="stTooltipHoverTarget"] {
+        pointer-events: auto;
+    }
+    .st-key-dataset_table_grid [class*="st-key-dsrow_"]:not(.st-key-dsrow_head):not([class*="st-key-dsrow_current_"]):hover,
+    .st-key-dataset_table_grid [class*="st-key-dsrow_"]:not(.st-key-dsrow_head):not([class*="st-key-dsrow_current_"]):hover > [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_name_"]) {
+        background:
+            linear-gradient(var(--sps-hover-soft), var(--sps-hover-soft)),
+            var(--sps-page-bg);
+    }
+    .st-key-dataset_table_grid [class*="st-key-dsrow_"]:has([class*="st-key-dataset_open_"] button:focus-visible) {
+        outline: 2px solid var(--sps-accent);
+        outline-offset: -2px;
+    }
+    .sps-ds-name { font-weight: 600; }
+    /* Streamlit pulls each block up by a negative bottom margin and gives a
+       paragraph its own, which in one-line cells puts their text at different
+       heights. */
+    [class*="st-key-dsc_"] [data-testid="stMarkdownContainer"] { margin-bottom: 0 !important; }
+    [class*="st-key-dsc_"] [data-testid="stMarkdownContainer"] p { margin: 0; }
+    [class*="st-key-dsc_"] > div { margin-bottom: 0 !important; }
+    .st-key-dataset_table_grid [class*="st-key-dsrow_"]:not(.st-key-dsrow_head) {
+        min-height: 2.75rem;
+    }
     .sps-ds-num {
         display: block;
         text-align: right;
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
     }
-    .sps-ds-gap { opacity: 0.6; font-size: 0.85rem; cursor: help; }
-    .sps-ds-colhead { font-size: 0.875rem; opacity: 0.75; }
+    .sps-ds-gap { opacity: 0.6; font-size: 0.85rem; }
+    .sps-ds-status { white-space: nowrap; font-size: 0.9rem; }
     /* Header labels are sort buttons; keep them quiet and on one line. */
     .st-key-dsrow_head button {
         padding: 0 !important;
@@ -222,31 +265,23 @@ def get_app_css() -> str:
         font-size: 0.875rem;
     }
     .st-key-dsrow_head button p { white-space: nowrap; font-size: 0.875rem; }
-    /* The ⋯ menu trigger: its label is for screen readers only (it names the
-       dataset), the glyph is what is drawn — and no disclosure chevron. */
-    [class*="st-key-dataset_row_menu_"] button {
+    /* Remove is its icon; the label names the dataset for screen readers. */
+    [class*="st-key-dataset_row_remove_"] button {
         padding: 0 0.35rem !important;
         min-height: 0;
     }
-    [class*="st-key-dataset_row_menu_"] button [data-testid="stMarkdownContainer"] {
+    [class*="st-key-dataset_row_remove_"] button [data-testid="stMarkdownContainer"] {
         position: absolute !important; width: 1px; height: 1px;
         overflow: hidden; clip-path: inset(50%); white-space: nowrap;
     }
-    [class*="st-key-dataset_row_menu_"] button div[aria-hidden="true"] {
-        display: none;
-    }
-    [class*="st-key-dataset_details_"] button { padding: 0 0.35rem !important; min-height: 0; }
-    /* The menu reads as a list: its items start at the left edge. */
-    [class*="st-key-dataset_row_edit_"] button,
-    [class*="st-key-dataset_row_rename_"] button,
-    [class*="st-key-dataset_row_remove_"] button { justify-content: flex-start; }
-    .st-key-dataset_table_grid button:focus-visible {
+    .st-key-dataset_table_grid [class*="st-key-dataset_row_remove_"] button:focus-visible,
+    .st-key-dsrow_head button:focus-visible {
         outline: 2px solid var(--sps-accent);
         outline-offset: 2px;
         border-radius: 0.25rem;
     }
-    /* Phone width: the name, its Current badge, the key count and the actions.
-       Everything else is one click away, in Details. */
+    /* Phone width: the name, its Current badge, the key count and Remove.
+       Everything else is in *What's in the dataset*, once it is open. */
     @media (max-width: 640px) {
         [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_"]):not(:has(> [class*="st-key-dsc_name_"])):not(:has(> [class*="st-key-dsc_participants_"])):not(:has(> [class*="st-key-dsc_actions_"])),
         [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsh_"]):not(:has(> .st-key-dsh_name)):not(:has(> .st-key-dsh_participants)):not(:has(> .st-key-dsh_actions)) {
@@ -255,20 +290,16 @@ def get_app_css() -> str:
         [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_name_"]),
         [data-testid="stLayoutWrapper"]:has(> .st-key-dsh_name) {
             min-width: 0;
-            position: static;
+        }
+        [class*="st-key-dsrow_"] > [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_name_"]),
+        [class*="st-key-dsrow_"] > [data-testid="stLayoutWrapper"]:has(> .st-key-dsh_name) {
+            position: relative;
         }
         .st-key-dataset_table_grid [class*="st-key-dsrow_"] { min-width: 0; }
-        /* Icons only; the words stay in the accessibility tree. */
         [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_participants_"]),
-        [data-testid="stLayoutWrapper"]:has(> .st-key-dsh_participants),
-        [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_actions_"]),
-        [data-testid="stLayoutWrapper"]:has(> .st-key-dsh_actions) {
+        [data-testid="stLayoutWrapper"]:has(> .st-key-dsh_participants) {
             width: auto !important;
             min-width: 3.5rem;
-        }
-        [class*="st-key-dataset_details_"] button [data-testid="stMarkdownContainer"] {
-            position: absolute !important; width: 1px; height: 1px;
-            overflow: hidden; clip-path: inset(50%); white-space: nowrap;
         }
     }
 
@@ -506,6 +537,8 @@ def get_app_css() -> str:
         --sps-accent-soft: rgba(31, 119, 180, 0.10);
         --sps-accent-border: rgba(31, 119, 180, 0.22);
         --sps-border: rgba(128, 128, 128, 0.22);
+        /* UX-174 r2 — a row under the pointer (the dataset table). */
+        --sps-hover-soft: rgba(128, 128, 128, 0.08);
         --sps-code-fg: #15639c;
         --sps-shadow-hover: 0 6px 18px rgba(31, 119, 180, 0.16);
         /* UX-145 — the page background, for the few surfaces that must be

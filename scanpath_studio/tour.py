@@ -174,15 +174,15 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "Choose the data source",
                 "Everything about the dataset lives on the 🗂️ **Data** page, in the "
                 "order the pipeline uses it. Start at **📂 Available datasets** — "
-                "click a name to open it, or ➕ **Add dataset** for your own tables.",
+                "click a row to open it, or **+ Add dataset** for your own tables.",
                 ".st-key-tutorial_available_datasets",
                 view=_VIEW_DATA,
             ),
             TutorialStep(
                 "Check the column mapping",
-                "**⋯ → Edit setup** on a dataset's row opens its setup screen — the "
-                "add screen's numbered parts, for a dataset that already "
-                "exists. Part **1 · Data tables & column mapping** decides what "
+                "**Edit**, beside the dataset's description, opens its setup "
+                "screen — the add screen's parts, for a dataset that exists. "
+                "Part **1 · Data tables & column mapping** decides what "
                 "every measure downstream is computed from. Rows marked ✨ were "
                 "auto-detected; override any that guessed wrong.",
                 ".st-key-tutorial_column_mapping",
@@ -193,7 +193,8 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "Verify what was parsed",
                 "**🔎 What's in the selected dataset** opens on 📊 Stats — the "
                 "counts and their spread, the quickest check that the mapping "
-                "worked. The six raw tables are the tabs beside it.",
+                "worked. The six raw tables and its annotations are the tabs "
+                "beside it.",
                 ".st-key-tutorial_data_inspection",
                 view=_VIEW_DATA,
             ),

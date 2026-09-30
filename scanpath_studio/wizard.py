@@ -24,6 +24,7 @@ import streamlit as st
 from . import app, wizard_shell
 from .constants import (
     _VIEW_DATA,
+    DATASET_DESCRIPTIONS_KEY,
     DEMO_CHOICE,
     FONT_FAMILY,
     ICONS,
@@ -149,6 +150,7 @@ def _reset_wizard_widgets() -> None:
         del st.session_state[key]
     for key in (
         "wizard_dataset_name",
+        "wizard_dataset_description",
         "wizard_dataset_format",
         "wizard_config_restore",
         "_wizard_config_last",
@@ -306,6 +308,14 @@ def _finalize_wizard_dataset() -> None:
     participants, combos, texts = _wizard_finalize_metadata_pools(payload)
     commit_deferred_metadata(participants, combos, texts)
     ds_name = _safe_dataset_name(st.session_state.get("wizard_dataset_name"))
+    # UX-174 r2 — the sentence the 🗂️ Data page shows under its name. Kept
+    # beside the store, not in its entry (see `DATASET_DESCRIPTIONS_KEY`).
+    if description := str(
+        st.session_state.get("wizard_dataset_description") or ""
+    ).strip():
+        descriptions = dict(st.session_state.get(DATASET_DESCRIPTIONS_KEY) or {})
+        descriptions[ds_name] = description
+        st.session_state[DATASET_DESCRIPTIONS_KEY] = descriptions
     store = st.session_state.setdefault("_datasets", {})
     store[ds_name] = payload
     # DATA-47: the tables just attached are this dataset's, not a session-wide
@@ -351,6 +361,11 @@ def _remove_dataset(name: str) -> None:
     """
     store = st.session_state.get("_datasets", {})
     store.pop(name, None)
+    # UX-174 r2 — and its description, so a new dataset of that name starts
+    # without one.
+    descriptions = dict(st.session_state.get(DATASET_DESCRIPTIONS_KEY) or {})
+    if descriptions.pop(name, None) is not None:
+        st.session_state[DATASET_DESCRIPTIONS_KEY] = descriptions
     # DATA-47 — its metadata tables go with it.
     from scanpath_studio import metadata as _metadata
 
@@ -391,6 +406,11 @@ def rename_dataset(old: str, new: str) -> str | None:
         st.session_state["_prev_source"] = name
     if st.session_state.get(COMPARE_SOURCE_STATE_KEY) == old:
         st.session_state[COMPARE_SOURCE_STATE_KEY] = name
+    # UX-174 r2 — and its description.
+    descriptions = dict(st.session_state.get(DATASET_DESCRIPTIONS_KEY) or {})
+    if old in descriptions:
+        descriptions[name] = descriptions.pop(old)
+        st.session_state[DATASET_DESCRIPTIONS_KEY] = descriptions
     # DATA-47 — and its metadata tables, which are keyed by the name too.
     from scanpath_studio import metadata as _metadata
 
@@ -2719,6 +2739,15 @@ def _wizard_name_header(host, active: bool) -> None:
         # UX-113: the numbered stage heading above ("1 Dataset name") already
         # says this — the widget's own label just repeated it verbatim.
         label_visibility="collapsed",
+    )
+    # UX-174 r2 — optional, and edited later on ✏️ Edit dataset.
+    box.text_area(
+        "Description",
+        key="wizard_dataset_description",
+        placeholder="Optional — what this dataset is: the readers, the texts, "
+        "the language.",
+        help="Shown under the dataset's name on the 🗂️ Data page.",
+        height=68,
     )
 
 

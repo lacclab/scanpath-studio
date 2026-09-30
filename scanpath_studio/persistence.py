@@ -38,7 +38,7 @@ import pandas as pd
 
 from . import progress
 from .annotations import ANNOTATIONS_STATE_KEY, records_to_store, store_to_records
-from .constants import DATASET_COUNTS_STORE_KEY
+from .constants import DATASET_COUNTS_STORE_KEY, DATASET_DESCRIPTIONS_KEY
 from .session_keys import (
     COLUMN_MAPPING_PREFIX,
     DESIGN_PRESETS,
@@ -110,6 +110,10 @@ _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
     SINGLE_PLAYBACK_SPEED,
     *compare_state_keys(0),
     *compare_state_keys(1),
+    # UX-174 r2 — the descriptions the user wrote: their own words, like the
+    # design library. A plain session key so editing one never touches the
+    # stored frames (see `constants.DATASET_DESCRIPTIONS_KEY`).
+    DATASET_DESCRIPTIONS_KEY,
 }
 
 
@@ -588,6 +592,15 @@ def _restorable_session(stored: Any) -> dict:
         if not isinstance(key, str) or not (
             key in _SESSION_KEYS or key.startswith(COLUMN_MAPPING_PREFIX)
         ):
+            continue
+        if key == DATASET_DESCRIPTIONS_KEY:
+            # UX-174 r2 — ``{dataset: sentence}``; anything else is dropped.
+            if isinstance(value, dict):
+                clean[key] = {
+                    str(name): str(text)
+                    for name, text in value.items()
+                    if isinstance(text, str)
+                }
             continue
         if key == DESIGN_PRESETS:
             # The design library is the user's own work: keep every well-formed

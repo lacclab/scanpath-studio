@@ -63,7 +63,11 @@ from scanpath_studio.animation_export import (
     export_animation,
     mime_for,
 )
-from scanpath_studio.annotations import filter_keys, render_trial_annotations
+from scanpath_studio.annotations import (
+    filter_keys,
+    render_dataset_annotations,
+    render_trial_annotations,
+)
 from scanpath_studio.code_snippet import (
     SNIPPET_STATE_KEY,
     UNPUBLISHED_SETTINGS,
@@ -12157,7 +12161,7 @@ def _render_dataset_stats_tab(
     # ENG-36: icons (1.61) so the six counts are scannable rather than a row of
     # equally-weighted numbers — one glyph per *kind* of thing being counted.
     parts = part_catalog(words_filtered, fixations_filtered)
-    top_cols = st.columns(7 if not parts.empty else 6)
+    top_cols = st.columns(7)
     top_cols[0].metric(
         "Participants", f"{stats['n_participants']:,}", icon=ICONS["participants"]
     )
@@ -12175,8 +12179,17 @@ def _render_dataset_stats_tab(
         f"{stats['n_gaze']:,}" if stats["n_gaze"] else "0",
         icon=ICONS["gaze_points"],
     )
-    if not parts.empty:
-        top_cols[6].metric("Screens", f"{len(parts):,}", icon=ICONS["screens"])
+    # UX-174 r2: always shown — the dataset table no longer has a Screens
+    # column, so this is where the count lives. A dataset without multipart
+    # screens has exactly one per trial, which is what it says.
+    top_cols[6].metric(
+        "Screens",
+        f"{len(parts):,}" if not parts.empty else "1 per trial",
+        icon=ICONS["screens"],
+        help=None
+        if not parts.empty
+        else "Every trial is a single screen — this dataset has no screen ids.",
+    )
 
     # The spread behind those totals, right under them.
     _render_spread_cards(stats["stats_df"])
@@ -12198,13 +12211,19 @@ def render_data_inspection_tab(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
     raw_gaze_filtered: pd.DataFrame,
+    *,
+    annotation_trials=None,
+    dataset_name: str = "",
 ) -> None:
     """Render the *What's in this dataset* section of the 🗂️ Data page.
 
     Combines the former **Raw Data** and **Data Statistics** tabs onto **one tab
     bar**: 📊 Stats (the headline counts, the per-metric spread, the multipart
     screen catalogue and the provenance banner) followed by the six raw tables,
-    in their fixed order.
+    in their fixed order — and, UX-174 r2, **Annotations**: every annotation on
+    the dataset's trials (``annotation_trials``, its ``(participant, trial)``
+    pairs before any filtering), to export, import or delete. Without
+    ``annotation_trials`` the tab is left off.
 
     UX-52 gave the section one level of hierarchy and folded the bulk away —
     "the answer stays open, the appendix folds". This round unfolded the raw
@@ -12234,9 +12253,16 @@ def render_data_inspection_tab(
     # tab bar, so reaching one cost two clicks on the page whose job is to show
     # them; and the per-metric summary table sat behind a third expander of its
     # own, far below the counts it belongs with.
-    stats_tab, *raw_tabs = st.tabs([f"{ICONS['stats']} Stats", *RAW_DATA_TAB_LABELS])
+    labels = [f"{ICONS['stats']} Stats", *RAW_DATA_TAB_LABELS]
+    if annotation_trials is not None:
+        labels.append(f"{ICONS['annotations']} Annotations")
+    stats_tab, *raw_tabs = st.tabs(labels)
     with stats_tab:
         _render_dataset_stats_tab(stats, words_filtered, fixations_filtered)
+    if annotation_trials is not None:
+        *raw_tabs, annotations_tab = raw_tabs
+        with annotations_tab:
+            render_dataset_annotations(annotation_trials, dataset_name=dataset_name)
     _fill_raw_data_tabs(raw_tabs, words_filtered, fixations_filtered, raw_gaze_filtered)
 
     # UX-126: the whole section — including the computation that backs it — is

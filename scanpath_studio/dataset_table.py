@@ -12,10 +12,11 @@ dataset and draws it; everything that decides a cell's text lives here:
 - **Sorting on the numbers, not the text.** :func:`sort_rows` orders by the
   integer value, and a missing value sorts last in either direction, so
   formatting a cell can never turn a numeric sort into a lexical one.
-- **Provenance beside the name.** Whether a row's numbers were *loaded* (counted
-  from rows this session held) or *published* (the corpus' own figures) is the
-  row's :attr:`DatasetRow.provenance` — DATA-36's distinction, unchanged — kept
-  apart from any operational state.
+- **A status of its own.** Whether a row's numbers were *loaded* (counted from
+  rows this session held) or are the corpus' *published* figures is DATA-36's
+  distinction, unchanged; the table's **Status** column says it as *Loaded* /
+  *Not loaded* (:attr:`DatasetRow.status_label`), with an operational state
+  such as *Needs setup* taking its place when there is one.
 """
 
 from __future__ import annotations
@@ -37,9 +38,9 @@ DATASET_COUNT_FIELDS: tuple[str, ...] = (
     "Gaze points",
 )
 
-#: The four counts the table shows by default. The other three — Screens, Words
-#: and Gaze points — are in **Details** and in the table's *All counts* view.
-DEFAULT_COUNT_FIELDS: tuple[str, ...] = ("Participants", "Texts", "Trials", "Fixations")
+#: The four counts the table shows. The other three — Screens, Words and Gaze
+#: points — are in the open dataset's 📊 Stats, under the table.
+TABLE_COUNT_FIELDS: tuple[str, ...] = ("Participants", "Texts", "Trials", "Fixations")
 
 #: The one count kept on a phone-width screen, beside the name and the actions.
 KEY_COUNT_FIELD = "Participants"
@@ -49,7 +50,7 @@ NOT_REPORTED = "Not reported"
 NOT_APPLICABLE = "Not applicable"
 UNKNOWN = "Unknown"
 
-#: Each missing-value label's meaning, for its hover text and for **Details**.
+#: Each missing-value label's meaning, for its hover text.
 GAP_EXPLANATIONS: Mapping[str, str] = {
     NOT_LOADED: "Not counted yet — this dataset has not been opened in this "
     "session, and it publishes no figures of its own.",
@@ -70,10 +71,14 @@ _NOT_APPLICABLE_WHEN_LOADED: Mapping[str, str] = {
     "Gaze points": "This dataset has no raw-gaze samples.",
 }
 
-#: DATA-36's two sources, as the row's secondary line says them.
-PROVENANCE_LABELS: Mapping[str, str] = {
-    "loaded": "Loaded counts",
-    "published": "Published counts",
+LOADED = "Loaded"
+NOT_LOADED_STATUS = "Not loaded"
+
+#: What each value of the **Status** column means, for its hover text.
+STATUS_EXPLANATIONS: Mapping[str, str] = {
+    LOADED: "Opened in this session — its counts are from its own rows.",
+    NOT_LOADED_STATUS: "Not opened in this session. Any counts shown are the "
+    "figures the corpus publishes for itself.",
 }
 
 #: Kind is ordered by what a row is, not alphabetically, when it is sorted.
@@ -141,13 +146,16 @@ class DatasetRow:
         return self.gap(count_field) if value is None else format_count(value)
 
     @property
-    def provenance(self) -> str:
-        return PROVENANCE_LABELS.get(self.source, "")
+    def status_label(self) -> str:
+        """The **Status** cell: an operational state, else *Loaded* / *Not loaded*.
 
-    @property
-    def secondary(self) -> str:
-        """The line under the name: language and where the counts came from."""
-        return " · ".join(part for part in (self.language, self.provenance) if part)
+        *Loaded* is DATA-36's ``"loaded"`` source — the counts were taken from
+        rows this session held. Anything else, including a row showing the
+        corpus' published figures, is *Not loaded*.
+        """
+        if self.status:
+            return self.status
+        return LOADED if self.source == "loaded" else NOT_LOADED_STATUS
 
 
 def _text_key(row: DatasetRow, column: str) -> str | int | None:
@@ -155,6 +163,8 @@ def _text_key(row: DatasetRow, column: str) -> str | int | None:
         return row.name.casefold() or None
     if column == "Language":
         return row.language.casefold() or None
+    if column == "Status":
+        return row.status_label.casefold()
     if column == "Kind":
         return KIND_ORDER.index(row.kind) if row.kind in KIND_ORDER else None
     raise ValueError(f"not a sortable column: {column!r}")
@@ -235,7 +245,7 @@ def row_record(row: DatasetRow) -> dict:
     }
     for count_field in DATASET_COUNT_FIELDS:
         record[count_field] = row.value(count_field)
-    record["Status"] = row.status
+    record["Status"] = row.status_label
     record["_token"] = row.token
     record["_active"] = row.active
     record["_cells"] = {f: row.cell(f) for f in DATASET_COUNT_FIELDS}

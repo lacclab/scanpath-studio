@@ -10,9 +10,9 @@ from your own experiment.
 - **Public corpus:** choose the corpus and local data directory; download when
   prompted.
 - **+ → Import files:** upload or select your own files and map their columns.
-  Also available through **🗂️ Data → ➕ Add dataset**.
+  Also available through **🗂️ Data → + Add dataset → Import files**.
 - **+ → Create manually:** sketch a trial from text, with no files at all.
-  Also available through **🗂️ Data → Create a scanpath**.
+  Also available through **🗂️ Data → + Add dataset → Create manually**.
 
 While a dataset opens, the page shows a skeleton of the view with the steps of
 the load — reading the files, normalizing them, building the trial list — each
@@ -44,7 +44,8 @@ canonical fields and units.
 The wizard is **three numbered parts** on one screen, with **⬇️ Save setup** and
 **✅ Add dataset** at the foot.
 
-**1. Dataset name** — what the dataset is called in 📂 **Available datasets**.
+**1. Name & description** — what the dataset is called in 📂 **Available
+datasets**, and, if you like, a sentence about it, shown under its name.
 
 **2. Upload data tables.** One row per table — **Fixations**, **AOIs** (the
 words / interest areas) and **Raw gaze** — with the table's uploader on the left
@@ -87,41 +88,44 @@ cells in a mapped number column that don't parse, rows with no trial or reader
 id, positions that are screen fractions rather than pixels — together with what
 the load does with them.
 
-📂 **Available datasets** has one row per dataset: its kind, its name, and its
-participants, texts, trials and fixations. Click a name to open that dataset.
-The open one is marked **Current** and tinted, and the list does not reorder
-when you switch. Under each name are its language and where its numbers come
-from (see below). Click a column heading to sort by it; datasets without that
-count sort last. **All counts** adds the screens, words and gaze points columns.
-Past eight datasets, a search box and Kind / Language filters appear.
+📂 **Available datasets** has one row per dataset: its kind, its name, its
+participants, texts, trials and fixations, and its **Status**. Click anywhere on
+a row to open that dataset. The open one is marked **Current** and tinted, and
+the list does not reorder when you switch. Click a column heading to sort by it;
+datasets without that count sort last. The bin at the end of a row removes that
+dataset, after a confirmation. Past eight datasets, a search box and Kind /
+Language filters appear. **+ Add dataset**, above the list, imports your own
+files or starts a scanpath by hand.
 
 A count that is not a number says why: **Not loaded** (not opened this session,
 and nothing published), **Not reported** (the corpus publishes figures, but not
 this one), **Not applicable** (for example, no raw-gaze samples, or
 single-screen trials), or **Unknown**. A 0 always means zero was counted.
 
-**Details** shows everything about a dataset without opening it: all seven
-counts and what each missing one means, the description, the corpus' home page,
-where its coordinates come from and its published figures. The row's **⋯** menu
-has **Edit setup**, **Rename** and **Remove**. **Edit setup** opens ✏️ **Edit
-dataset**, where you change how the dataset was mapped. It is the same field
-grid the wizard draws, and for a dataset added with only one of the two main
-tables, it has an uploader for the other. Adding the missing half there
+**Status** is *Loaded* once a dataset has been opened in this session, and its
+counts are then its own. Until then it is *Not loaded*, and a public corpus
+shows the figures it publishes. A corpus whose files are not on this machine is
+marked **Needs setup**: the bundled demo shows in its place, and is not counted
+for it.
+
+Under the list, **What's in the *dataset*** is about the open one. **Rename**
+sits beside its name, and **Edit** beside its description opens ✏️ **Edit
+dataset**: its description, and how it was mapped. The mapping is the same
+field grid the wizard draws, and for a dataset added with only one of the two
+main tables, it has an uploader for the other. Adding the missing half there
 normalizes it and joins it to what is already loaded, so a fixations-only
 dataset can gain its word boxes (or an AOI-only one its fixations) without being
-added again. **➕ Add dataset** and **Create a scanpath** sit beside the
-section's heading.
+added again. Its tabs hold the counts — screens, words and gaze points
+included — the raw tables, and **Annotations**: every favorite, tag and note on
+the dataset's trials, to **Export** as JSON, **Import** from such a file (or a
+💾 Session backup), or **Delete**.
 
 <figure class="sps-screenshot" markdown>
 ![The Data page: the available datasets, and the counts and tables of the open one](../assets/screenshots/data-page.webp)
 </figure>
 
-For a public corpus you haven't opened, the line under its name says
-*Published counts* and the row shows the corpus' own figures. Once it is loaded,
-it says *Loaded counts*. **Details** names the source of each published figure,
-and warns if this session loaded more than was published. A corpus whose files
-are not on this machine is marked **Needs setup**. It keeps its published
-figures, because the bundled demo that shows in its place is not counted for it.
+If this session loaded more of a corpus than it publishes, its row says
+**More than published**: the published figure is the one to check.
 
 ### The recording setup asks how you know
 

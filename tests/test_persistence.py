@@ -124,10 +124,16 @@ def test_round_trip_datasets_settings_mappings_and_annotations(tmp_path):
         "trial_annotations": {
             ("p1", "t1"): {"star": True, "tags": ["Review"], "note": "check"}
         },
+        # UX-174 r2 — descriptions, for an upload and for a built-in alike.
+        "_dataset_descriptions": {"My corpus": "A pilot.", "Bundled Demo": ""},
     }
     assert save_state(source, tmp_path)
     restored = {}
     assert restore_state(restored, tmp_path)
+    assert restored["_dataset_descriptions"] == {
+        "My corpus": "A pilot.",
+        "Bundled Demo": "",
+    }
     pd.testing.assert_frame_equal(
         restored["_datasets"]["My corpus"]["words"],
         source["_datasets"]["My corpus"]["words"],

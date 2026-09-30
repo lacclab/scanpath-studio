@@ -733,6 +733,14 @@ _MAIN_TAB_LABELS = [_VIEW_SCANPATH, _VIEW_CORPUS, _VIEW_DATA]
 #: avoids by importing `persistence` one way).
 DATASET_COUNTS_STORE_KEY = "_dataset_counts_store"
 
+#: UX-174 r2 — ``{dataset token: description}``, every description the user
+#: wrote (on the add wizard or ✏️ Edit dataset), for any kind of dataset. One
+#: small dict persisted as a recovery-cache session key, *not* a field on an
+#: upload's ``_datasets`` entry: every non-frame field there is part of the
+#: cache's dataset identity, so editing one sentence would rewrite every
+#: upload's Parquet files. Here for the same import-cycle reason as above.
+DATASET_DESCRIPTIONS_KEY = "_dataset_descriptions"
+
 #: DATA-35 — "the ✏️ Edit dataset screen is open". The Data page is two screens
 #: now: the **overview** (the dataset table + what's in the open dataset) and the
 #: **editor** (everything that configures it — source options and location,

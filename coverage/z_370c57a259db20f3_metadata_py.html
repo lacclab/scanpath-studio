@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for scanpath_studio/metadata.py: 92%</title>
+    <title>Coverage for scanpath_studio/metadata.py: 93%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_4667309f.css" type="text/css">
     <script src="coverage_html_cb_15cffcd0.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>scanpath_studio<span class="sep">/</span>metadata.py</b>:
-            <span class="pc_cov">92%</span>
+            <span class="pc_cov">93%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">773 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">713<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">60<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">716<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">57<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_model_scanpaths_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-09-30 17:21 +0000
+            created at 2026-09-30 21:40 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -445,7 +445,7 @@
     <p class="mis show_mis"><span class="n"><a id="t363" href="#t363">363</a></span><span class="t">            <span class="key">return</span> <span class="op">{</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t364" href="#t364">364</a></span><span class="t">        <span class="nam">match</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">frame</span><span class="op">[</span><span class="nam">self</span><span class="op">.</span><span class="nam">frame</span><span class="op">[</span><span class="str">&quot;text_id&quot;</span><span class="op">]</span> <span class="op">==</span> <span class="nam">str</span><span class="op">(</span><span class="nam">text_id</span><span class="op">)</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t365" href="#t365">365</a></span><span class="t">        <span class="key">if</span> <span class="nam">match</span><span class="op">.</span><span class="nam">empty</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t366" href="#t366">366</a></span><span class="t">            <span class="key">return</span> <span class="op">{</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t366" href="#t366">366</a></span><span class="t">            <span class="key">return</span> <span class="op">{</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t367" href="#t367">367</a></span><span class="t">        <span class="nam">row</span> <span class="op">=</span> <span class="nam">match</span><span class="op">.</span><span class="nam">iloc</span><span class="op">[</span><span class="num">0</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t368" href="#t368">368</a></span><span class="t">        <span class="key">return</span> <span class="op">{</span><span class="nam">name</span><span class="op">:</span> <span class="nam">row</span><span class="op">[</span><span class="nam">name</span><span class="op">]</span> <span class="key">for</span> <span class="nam">name</span> <span class="key">in</span> <span class="nam">self</span><span class="op">.</span><span class="nam">names</span> <span class="key">if</span> <span class="nam">name</span> <span class="key">in</span> <span class="nam">match</span><span class="op">.</span><span class="nam">columns</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t369" href="#t369">369</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
@@ -694,7 +694,7 @@
     <p class="pln"><span class="n"><a id="t612" href="#t612">612</a></span><span class="t"><span class="str">    that a range narrows rather than excludes the unmeasured &#8212; UX-49).</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t613" href="#t613">613</a></span><span class="t"><span class="str">    &quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t614" href="#t614">614</a></span><span class="t">    <span class="key">if</span> <span class="nam">metadata</span> <span class="key">is</span> <span class="key">None</span> <span class="key">or</span> <span class="nam">metadata</span><span class="op">.</span><span class="nam">frame</span><span class="op">.</span><span class="nam">empty</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t615" href="#t615">615</a></span><span class="t">        <span class="key">return</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t615" href="#t615">615</a></span><span class="t">        <span class="key">return</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t616" href="#t616">616</a></span><span class="t">    <span class="nam">active_selections</span> <span class="op">=</span> <span class="op">{</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t617" href="#t617">617</a></span><span class="t">        <span class="nam">name</span><span class="op">:</span> <span class="nam">list</span><span class="op">(</span><span class="nam">values</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t618" href="#t618">618</a></span><span class="t">        <span class="key">for</span> <span class="nam">name</span><span class="op">,</span> <span class="nam">values</span> <span class="key">in</span> <span class="op">(</span><span class="nam">selections</span> <span class="key">or</span> <span class="op">{</span><span class="op">}</span><span class="op">)</span><span class="op">.</span><span class="nam">items</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -974,7 +974,7 @@
     <p class="pln"><span class="n"><a id="t892" href="#t892">892</a></span><span class="t"><span class="str">    range narrows rather than excludes the unmeasured).</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t893" href="#t893">893</a></span><span class="t"><span class="str">    &quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t894" href="#t894">894</a></span><span class="t">    <span class="key">if</span> <span class="nam">metadata</span> <span class="key">is</span> <span class="key">None</span> <span class="key">or</span> <span class="nam">metadata</span><span class="op">.</span><span class="nam">frame</span><span class="op">.</span><span class="nam">empty</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t895" href="#t895">895</a></span><span class="t">        <span class="key">return</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t895" href="#t895">895</a></span><span class="t">        <span class="key">return</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t896" href="#t896">896</a></span><span class="t">    <span class="nam">active</span> <span class="op">=</span> <span class="op">{</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t897" href="#t897">897</a></span><span class="t">        <span class="nam">name</span><span class="op">:</span> <span class="nam">list</span><span class="op">(</span><span class="nam">values</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t898" href="#t898">898</a></span><span class="t">        <span class="key">for</span> <span class="nam">name</span><span class="op">,</span> <span class="nam">values</span> <span class="key">in</span> <span class="op">(</span><span class="nam">selections</span> <span class="key">or</span> <span class="op">{</span><span class="op">}</span><span class="op">)</span><span class="op">.</span><span class="nam">items</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -1915,7 +1915,7 @@
             <a class="nav" href="z_370c57a259db20f3_model_scanpaths_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-09-30 17:21 +0000
+            created at 2026-09-30 21:40 +0000
         </p>
     </div>
 </footer>

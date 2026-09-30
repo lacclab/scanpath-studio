@@ -37,7 +37,7 @@ Headless, it is a `--participant-metadata FILE` flag on `scanpath-studio render`
 
 ## Trial metadata
 
-The same idea one grain down: a table of **one row per trial** — a list name, a presentation order, a per-trial comprehension score, whatever your design recorded about the trial rather than about the reader. It attaches beside the participant table — under **Metadata** in part 2 of the add-dataset wizard, and on 🗂️ **Data → ✏️ Edit dataset** under **Metadata → Trials** for a dataset that is already loaded — and its columns behave like fields in the data in the same way: they filter trials, show up as chips above the plot, sort the trial picker, appear in the inspection tables, and travel with exports (`metadata/trials.csv`) and saved sessions.
+The same idea one grain down: a table of **one row per trial** — a list name, a presentation order, a per-trial comprehension score, whatever your design recorded about the trial rather than about the reader. It attaches beside the participant table — under **Metadata** in part 2 of the add-dataset wizard, and on 🗂️ **Data → ✏️ Edit dataset** under **Metadata → Trials** for a dataset that is already loaded — and its columns behave like fields in the data in the same way: they filter trials, show up as chips above the plot, sort the trial picker, group cohorts in Corpus Analysis, appear in the inspection tables, and travel with exports (`metadata/trials.csv`) and saved sessions.
 
 ```
 trial_id,list_name,presentation_order,comprehension

@@ -801,15 +801,15 @@ Mean difference, Cohen's d, and a significance test (AN-21).
 
 Which rows belong to a cohort.
 
-**Formula.** A spec maps column → allowed values; the mask is the conjunction of membership tests. Two modes: split one field, or two independent filter sets.
+**Formula.** A spec maps column → allowed values; the mask is the conjunction of membership tests. Two modes: split one field, or two independent filter sets. A key may be a tuple of columns matched as one composite key: a trial-metadata field resolves to the (participant, trial) readings its rows describe, a reader field to reader ids and a text field to text ids — the tables are never joined onto the frames.
 
-|                          |                                                           |
-| ------------------------ | --------------------------------------------------------- |
-| **Missing & edge cases** | A column absent from the frame contributes no constraint. |
-| **Code**                 | `scanpath_studio/aggregation.py:group_mask`               |
-| **Consumers**            | Corpus Analysis, API                                      |
-| **Tests**                | `tests/test_aggregation.py`                               |
-| **Verification**         | tier A, C — **Verified**                                  |
+|                          |                                                                                                                                                         |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Missing & edge cases** | A column (or any column of a composite key) absent from the frame contributes no constraint; a metadata selection that matches nothing selects no rows. |
+| **Code**                 | `scanpath_studio/aggregation.py:group_mask`                                                                                                             |
+| **Consumers**            | Corpus Analysis, API                                                                                                                                    |
+| **Tests**                | `tests/test_aggregation.py`                                                                                                                             |
+| **Verification**         | tier A, C — **Verified**                                                                                                                                |
 
 ### `agg.word_profile` — Per-word cohort profile
 

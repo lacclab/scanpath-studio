@@ -1887,11 +1887,16 @@ happens when a value is missing — is listed in
 minimum-readers threshold prevents sparse word estimates from looking complete.</p>
 <p><strong>Groups</strong> defines a cohort either by splitting one field or from an independent
 filter set. With a
-<a href="../../data-format/#participant-metadata">participant metadata</a> table attached,
-its fields are offered alongside the trial conditions, marked 👤 — a reader
-attribute answers a different question from a trial condition, so the picker
-says which is which. A field with more than 60 distinct values is not offered:
-that is a range question, and the trial filters have the slider for it.</p>
+<a href="../../data-format/#participant-metadata">participant</a>,
+<a href="../../data-format/#trial-metadata">trial</a> or
+<a href="../../data-format/#text-metadata">text metadata</a> table attached, its fields are
+offered alongside the trial conditions, marked 👤 (reader), 📋 (trial) or
+📄 (text) — each answers a different question from a trial condition, so the
+picker says which is which. A reader field selects that reader's trials, a trial
+field the readings its rows describe, and a text field every reading of those
+texts; in a filter set they combine with each other and with the other pickers.
+A field with more than 60 distinct values is not offered: that is a range
+question, and the trial filters have the slider for it.</p>
 <h2 id="move-between-summary-and-evidence">Move between summary and evidence<a class="headerlink" href="#move-between-summary-and-evidence" title="Permanent link">&para;</a></h2>
 <p>Each result has a <strong>⬇ Download this table (CSV)</strong> button. When a point or group
 looks unusual, return to the Scanpath view and inspect the trials behind it.</p>
@@ -1917,7 +1922,7 @@ looks unusual, return to the Scanpath view and inspect the trials behind it.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 25, 2026 10:03:20 UTC">September 25, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 30, 2026 21:26:19 UTC">September 30, 2026</span>
   </span>
 
     

@@ -135,6 +135,7 @@ from scanpath_studio.controls import (
     _numeric_slider,
     _popover_rows,
     _sub_row,
+    _text_field_and_frame,
     column_mapping_ui,
     compare_b_filters,
     corpus_style_controls,
@@ -4769,7 +4770,34 @@ def _chip_value_and_uniqueness(col, trial_words, trial_fixations, participant):
             value = attached_trials.values_for(participant, trial_id).get(col)
             if value is not None and not pd.isna(value):
                 return (value, True)
+    # DATA-45 — and the attached *text* table, the third grain, which this
+    # function used to skip: a text field put in the chips resolved to None and
+    # the chip silently rendered nothing. A trial reads one text, so its value
+    # is trial-level too. The id is the one the trial filters' *By text* narrow
+    # (`_trial_text_id`), which is also what `combos["text_id"]` holds.
+    attached_texts = _md.active_texts()
+    if attached_texts is not None:
+        text_id = _trial_text_id(trial_words, trial_fixations)
+        if text_id is not None:
+            value = attached_texts.values_for(text_id).get(col)
+            if value is not None and not pd.isna(value):
+                return (value, True)
     return (None, True)
+
+
+def _trial_text_id(trial_words, trial_fixations):
+    """The trial's text id, as the text table is keyed (DATA-45).
+
+    Walks the columns in `controls._text_field_and_frame`'s order —
+    ``unique_text_id`` before ``text_id``, fixations before words — so a chip
+    reads the same id the *By text* filter and `utils.build_combo_options`
+    (whose ``text_id`` copies ``unique_text_id`` when there is one) resolve.
+    """
+    for field in ("unique_text_id", "text_id"):
+        value = _first_value(field, trial_fixations, trial_words)
+        if value is not None:
+            return value
+    return None
 
 
 def _first_value(col: str, *frames):
@@ -7044,6 +7072,13 @@ def _c_enrich_fix(_fix, _words, ffkey, fwkey):
     return ensure_fixation_enrichment(_fix, _words)
 
 
+@st.cache_data(show_spinner=False)
+def _c_trial_keys(_frame, fkey):
+    """`data.trial_keys`, cached per frame — a trial-metadata group (AN-31)
+    needs the loaded readings on every rerun, once per group per frame."""
+    return trial_keys(_frame)
+
+
 # --- Cross-cutting analysis controls (AN-23 … AN-27) -------------------------
 
 _AGG_OPTIONS = ["mean", "median", "sum"]
@@ -7066,20 +7101,24 @@ _GROUP_COL_LABELS = {
 def _pretty_col(col: str) -> str:
     """Friendly label for a raw column id (group-definition pickers).
 
-    A ``meta:`` option is labelled with the field's own label and marked as
-    coming from the attached participant table — the two provenances answer
-    different questions ("this trial's condition" vs "this reader's language")
-    and a picker that hid the difference would invite the wrong one.
+    A metadata option (``meta:`` / ``trialmeta:`` / ``textmeta:``) is labelled
+    with the field's own label and marked with the table it came from — the
+    provenances answer different questions ("this trial's condition" vs "this
+    reader's language" vs "this text's genre") and a picker that hid the
+    difference would invite the wrong one.
     """
-    name = _meta_field_name(col)
-    if name is not None:
+    meta = _meta_field(col)
+    if meta is not None:
         from scanpath_studio import metadata as md
 
+        grain, name = meta
         # `metadata.field_label`, not the attached table's own `field.label`:
         # a `format_func` can be called when `md.active()` is out of reach (no
         # script run — Streamlit's own widget-state bookkeeping does this), and
         # a label that changes with the caller's context is a label that flickers.
-        return f"👤 {md.field_label(name)}"
+        return f"{_META_GRAIN_MARKS[grain]} {md.field_label(name)}"
+    if isinstance(col, tuple):
+        return " × ".join(_pretty_col(part) for part in col)
     return _GROUP_COL_LABELS.get(col, str(col).replace("_", " ").strip().title())
 
 
@@ -7246,48 +7285,89 @@ _FILTER_SET_FIELDS = (
 )
 
 
-#: A group field that lives on the attached participant table rather than on the
-#: word/fixation frames (DATA-20). The prefix keeps one flat picker while making
-#: the two provenances impossible to confuse — both in the UI and in the code
-#: that has to translate one of them.
+#: A group field that lives on an attached metadata table rather than on the
+#: word/fixation frames — the participant table (DATA-20), and since AN-31 the
+#: trial (DATA-29) and text tables too. One prefix per grain keeps one flat
+#: picker while making the provenances impossible to confuse — both in the UI
+#: and in the code that has to translate one of them. The participant prefix is
+#: still the bare ``meta:`` it always was: it is the value a ``pgrp_field`` /
+#: ``cmp_field`` selectbox already holds, and each grain's own prefix mirrors
+#: its trial-filter key (``filter_meta_`` / ``filter_trialmeta_`` /
+#: ``filter_textmeta_``), so a column name shared by two tables stays two options.
 _META_FIELD_PREFIX = "meta:"
+_TRIAL_META_FIELD_PREFIX = "trialmeta:"
+_TEXT_META_FIELD_PREFIX = "textmeta:"
+_META_PREFIXES = (
+    (_metadata_mod.GRAIN_PARTICIPANT, _META_FIELD_PREFIX),
+    (_metadata_mod.GRAIN_TRIAL, _TRIAL_META_FIELD_PREFIX),
+    (_metadata_mod.GRAIN_TEXT, _TEXT_META_FIELD_PREFIX),
+)
+#: The mark `_pretty_col` puts before a metadata field — the `constants.ICONS`
+#: concept each table already has (`participant` / `trial_metadata` /
+#: `text_metadata`), as the emoji a `format_func`'s plain-text label can carry.
+_META_GRAIN_MARKS = {
+    _metadata_mod.GRAIN_PARTICIPANT: "👤",
+    _metadata_mod.GRAIN_TRIAL: "📋",
+    _metadata_mod.GRAIN_TEXT: "📄",
+}
+#: Each grain's accessor and value lister in `metadata`, looked up **by name**
+#: at call time so the attached table is always the live one.
+_META_GRAIN_API = {
+    _metadata_mod.GRAIN_PARTICIPANT: ("active", "options_for"),
+    _metadata_mod.GRAIN_TRIAL: ("active_trials", "trial_options_for"),
+    _metadata_mod.GRAIN_TEXT: ("active_texts", "text_options_for"),
+}
+#: The spec key a trial-grain cohort resolves to: one reading is a reader *and*
+#: a trial, which two independent column constraints cannot say (see
+#: `aggregation.group_mask`'s composite keys).
+_TRIAL_KEY_COLUMNS = ("participant_id", "trial_id")
 
 
-def _meta_field_name(option: str) -> str | None:
-    """The metadata field behind a picker option, or ``None`` for a real column."""
-    if isinstance(option, str) and option.startswith(_META_FIELD_PREFIX):
-        return option[len(_META_FIELD_PREFIX) :]
+def _meta_field(option) -> tuple[str, str] | None:
+    """``(grain, field)`` behind a metadata picker option, ``None`` for a column."""
+    if not isinstance(option, str):
+        return None
+    for grain, prefix in _META_PREFIXES:
+        if option.startswith(prefix):
+            return grain, option[len(prefix) :]
     return None
 
 
+def _meta_table(grain: str):
+    """The attached table of ``grain``, or ``None``."""
+    return getattr(_metadata_mod, _META_GRAIN_API[grain][0])()
+
+
+def _meta_options(grain: str, name: str) -> list[str]:
+    """Distinct values of one attached field, over the *loaded* rows only."""
+    return getattr(_metadata_mod, _META_GRAIN_API[grain][1])(_meta_table(grain), name)
+
+
 def _metadata_group_fields() -> list[str]:
-    """Prefixed picker options for the attached table's groupable fields.
+    """Prefixed picker options for the attached tables' groupable fields.
 
     Categorical fields, plus a numeric one with few enough distinct values to
     read as a category (a birth year, a session number). A wide-ranging numeric
     field is a *range* question and belongs in the trial filters, which already
-    have the slider for it.
+    have the slider for it. Reader fields first, then trial, then text — the
+    trial filters' *By reader / By trial / By text* order.
     """
-    from scanpath_studio import metadata as md
-
-    meta = md.active()
-    if meta is None or meta.frame.empty:
-        return []
     out = []
-    for field in meta.fields:
-        values = md.options_for(meta, field.name)
-        if 2 <= len(values) <= 60:
-            out.append(f"{_META_FIELD_PREFIX}{field.name}")
+    for grain, prefix in _META_PREFIXES:
+        table = _meta_table(grain)
+        if table is None or table.frame.empty:
+            continue
+        for field in table.fields:
+            if 2 <= len(_meta_options(grain, field.name)) <= 60:
+                out.append(f"{prefix}{field.name}")
     return out
 
 
 def _both_frame_values(words, fixations, col):
     """Distinct values of ``col`` — a frame column, or a metadata field."""
-    name = _meta_field_name(col)
-    if name is not None:
-        from scanpath_studio import metadata as md
-
-        return md.options_for(md.active(), name)
+    meta = _meta_field(col)
+    if meta is not None:
+        return _meta_options(*meta)
     frames = [f for f in (fixations, words) if col in getattr(f, "columns", [])]
     vals = set()
     for f in frames:
@@ -7295,7 +7375,22 @@ def _both_frame_values(words, fixations, col):
     return sorted(vals)
 
 
-def _group_spec(col: str, values) -> dict:
+def _group_text_column(words, fixations) -> str:
+    """The frame column a text-grain cohort narrows — the *By text* filter's.
+
+    `controls._text_field_and_frame`'s order (``unique_text_id`` before
+    ``text_id``), which is also the id `utils.build_combo_options` copies into
+    ``combos["text_id"]`` and so the one the text table was joined against.
+    """
+    empty = pd.DataFrame()
+    field, _frame = _text_field_and_frame(
+        words if words is not None else empty,
+        fixations if fixations is not None else empty,
+    )
+    return field or "text_id"
+
+
+def _group_spec(col: str, values, words=None, fixations=None) -> dict:
     """One ``{column: values}`` group spec — the metadata translation lives here.
 
     DATA-20's rule is that a participant-grain constraint **is** a participant
@@ -7304,6 +7399,15 @@ def _group_spec(col: str, values) -> dict:
     whose row says Hebrew, and the spec `aggregation.group_mask` sees is an
     ordinary ``participant_id`` one. Nothing downstream needs to know.
 
+    AN-31 applies the same rule one and two grains over, the way the Scanpath
+    trial filters do: a **trial** field resolves through
+    `metadata.trials_matching` to the ``(participant_id, trial_id)`` readings it
+    describes (a composite spec key — a trial-id-keyed table expands to every
+    reading of that trial, which is why the loaded keys come from ``words`` /
+    ``fixations``), and a **text** field through `metadata.texts_matching` to
+    text ids on the *By text* filter's column. Every resolution is an ordinary
+    spec entry, so it ANDs with reader-level fields and frame columns alike.
+
     An empty selection is "no constraint" and returns ``{}``, matching the frame
     branch — but a selection that matches *nobody* must return an impossible
     spec rather than ``{}``, or a group that should be empty would silently
@@ -7311,22 +7415,63 @@ def _group_spec(col: str, values) -> dict:
     """
     if not values:
         return {}
-    name = _meta_field_name(col)
-    if name is None:
+    meta = _meta_field(col)
+    if meta is None:
         return {col: values}
-    from scanpath_studio import metadata as md
-
-    ids = md.participants_matching(md.active(), {name: list(values)})
+    grain, name = meta
+    table = _meta_table(grain)
+    selection = {name: list(values)}
+    if grain == _metadata_mod.GRAIN_TRIAL:
+        column = _TRIAL_KEY_COLUMNS
+        loaded = set()
+        for frame in (words, fixations):
+            if frame is not None and not frame.empty:
+                loaded |= _c_trial_keys(frame, frame_fingerprint(frame))
+        ids = _metadata_mod.trials_matching(table, selection, keys=loaded)
+    elif grain == _metadata_mod.GRAIN_TEXT:
+        column = _group_text_column(words, fixations)
+        ids = _metadata_mod.texts_matching(table, selection)
+    else:
+        column = "participant_id"
+        ids = _metadata_mod.participants_matching(table, selection)
     if ids is None:
         # No table (detached mid-run), so the field this group was defined on no
         # longer exists. Fail *closed*: silently widening a cohort to everyone is
         # the one outcome that produces a plausible, wrong comparison.
-        return {"participant_id": [_NO_SUCH_PARTICIPANT]}
-    return {"participant_id": sorted(ids) or [_NO_SUCH_PARTICIPANT]}
+        return {column: [_no_match(column)]}
+    return {column: sorted(ids) or [_no_match(column)]}
+
+
+def _no_match(column):
+    """A value no dataset can hold in ``column`` — see `_group_spec`."""
+    if isinstance(column, tuple):
+        return tuple(_NO_SUCH_PARTICIPANT for _ in column)
+    return _NO_SUCH_PARTICIPANT
+
+
+def _merge_spec(spec: dict, column, values) -> None:
+    """Add one ``column: values`` constraint to ``spec``, intersecting a repeat.
+
+    Two metadata fields (or a metadata field and an explicit pick) can land on
+    the same column — two reader fields on ``participant_id``, a text field and
+    the *Texts* pick on the text column — so they have to intersect rather than
+    the later one overwriting the earlier. An empty intersection is the
+    impossible-id sentinel, never ``[]``: `group_mask` reads an empty value list
+    as "no constraint" and would select every row.
+    """
+    if column not in spec:
+        spec[column] = values
+        return
+
+    def _norm(value):
+        return tuple(map(str, value)) if isinstance(column, tuple) else str(value)
+
+    merged = {_norm(v) for v in spec[column]} & {_norm(v) for v in values}
+    spec[column] = sorted(merged) or [_no_match(column)]
 
 
 #: A reader id no dataset can hold, so `group_mask` selects nothing. Used when a
-#: metadata group matches no loaded reader — see `_group_spec`.
+#: metadata group matches nothing loaded — see `_group_spec`.
 _NO_SUCH_PARTICIPANT = "\x00__no_such_participant__"
 
 
@@ -7359,8 +7504,8 @@ def _render_filter_set(words, fixations, *, key, default_label):
         ("participant_id", "Participants"),
         (text_col, "Texts"),
         *[(c, _pretty_col(c)) for c in _FILTER_SET_FIELDS],
-        # DATA-20: the attached participant table's fields are offered here too,
-        # translated to reader ids by `_group_spec`.
+        # DATA-20 + AN-31: the attached reader, trial and text tables' fields
+        # are offered here too, translated to keys by `_group_spec`.
         *[(c, _pretty_col(c)) for c in _metadata_group_fields()],
     ):
         if not col:
@@ -7369,19 +7514,8 @@ def _render_filter_set(words, fixations, *, key, default_label):
         if len(opts) < 2 or len(opts) > 400:
             continue
         sel = st.multiselect(pretty, opts, key=f"{key}_{col}", placeholder="All")
-        # Two metadata fields (or a metadata field and an explicit Participants
-        # pick) both land on `participant_id`, so they have to intersect rather
-        # than the later one overwriting the earlier. An empty intersection is
-        # the impossible-id sentinel, never `[]` — `group_mask` reads an empty
-        # value list as "no constraint" and would select every row.
-        for column, values in _group_spec(col, sel).items():
-            if column in spec:
-                merged = sorted(
-                    set(map(str, spec[column])) & set(map(str, values))
-                ) or [_NO_SUCH_PARTICIPANT]
-                spec[column] = merged
-            else:
-                spec[column] = values
+        for column, values in _group_spec(col, sel, words, fixations).items():
+            _merge_spec(spec, column, values)
     return spec, (label or default_label)
 
 
@@ -7404,7 +7538,7 @@ def _render_group_definition(words, fixations, *, key, two_groups, host=None):
                 "*Independent filter sets* instead."
             )
             return (None, None, "Group A", "Group B") if two_groups else (None, "Group")
-        # Detaching the participant table removes its `meta:` options; without
+        # Detaching a metadata table removes its `meta:` options; without
         # this Streamlit falls back to the first option silently and the cohort
         # on screen changes with no notice (`controls._drop_stale`'s job).
         _drop_stale(f"{key}_field", cols)
@@ -7420,15 +7554,15 @@ def _render_group_definition(words, fixations, *, key, two_groups, host=None):
                 f"Group B — {_pretty_col(col)}", vals, default=rest[:1], key=f"{key}_b"
             )
             return (
-                _group_spec(col, a),
-                _group_spec(col, b),
+                _group_spec(col, a, words, fixations),
+                _group_spec(col, b, words, fixations),
                 _join_label(a) or "Group A",
                 _join_label(b) or "Group B",
             )
         sel = host.multiselect(
             f"{_pretty_col(col)} =", vals, default=vals[:1], key=f"{key}_g"
         )
-        return _group_spec(col, sel), (_join_label(sel) or "All")
+        return _group_spec(col, sel, words, fixations), (_join_label(sel) or "All")
     # Independent filter sets.
     if two_groups:
         c = host.columns(2)
@@ -7457,13 +7591,16 @@ def _warn_word_only_group_fields(host, fixations, *specs) -> None:
     per-fixation measure, paired bars, effect size) would then silently compare
     all-vs-all. Surfacing it beats a misleading comparison.
     """
+    present = set(getattr(fixations, "columns", []))
     missing = sorted(
         {
             col
             for spec in specs
             for col, vals in (spec or {}).items()
-            if vals and col not in getattr(fixations, "columns", [])
-        }
+            # A composite key (AN-31's trial cohort) needs all of its columns.
+            if vals and not set(col if isinstance(col, tuple) else (col,)) <= present
+        },
+        key=str,
     )
     if missing:
         host.warning(

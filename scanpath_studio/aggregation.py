@@ -1343,12 +1343,27 @@ def group_mask(frame: pd.DataFrame, spec: Mapping[str, Sequence]) -> pd.Series:
     (compared as strings). Unifies both group-definition modes: a *field split*
     is two specs over the same column with disjoint values, while *independent
     filter sets* are specs with several columns. An empty spec selects all rows.
+
+    A key may also be a **tuple of columns**, whose values are tuples: a
+    composite key the row must match as a whole (AN-31 — a trial-metadata
+    cohort is a set of ``(participant_id, trial_id)`` readings, which two
+    independent column constraints cannot express: reader p1's trial t1 and
+    reader p2's trial t2 are not p1's t2). Like a single column, a composite key
+    a frame does not fully carry constrains nothing on that frame.
     """
     if frame is None or frame.empty:
         return pd.Series([], dtype=bool)
     mask = pd.Series(True, index=frame.index)
     for col, vals in (spec or {}).items():
-        if col in frame.columns and vals:
+        if not vals:
+            continue
+        if isinstance(col, tuple):
+            if not set(col) <= set(frame.columns):
+                continue
+            allowed = {tuple(str(part) for part in v) for v in vals}
+            keys = pd.MultiIndex.from_arrays([frame[c].astype(str) for c in col])
+            mask &= keys.isin(allowed)
+        elif col in frame.columns:
             allowed = {str(v) for v in vals}
             mask &= frame[col].astype(str).isin(allowed)
     return mask

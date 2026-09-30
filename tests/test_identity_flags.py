@@ -1,4 +1,4 @@
-"""UX-173 — the identity pickers show auto-detection like every other field.
+"""UX-176 — the identity pickers show auto-detection like every other field.
 
 Trial, Participant and Text ID are multiselects (several columns can compose an
 id), so they never reached the selects' amber tint and ✨ confirm button: an

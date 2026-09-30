@@ -779,7 +779,7 @@ def _render_identity_field(
         # carries no table name (r15): the rows are now grouped *by* table and
         # each is labelled once at its head, so repeating it on all three fields
         # would say the same thing three times.
-        # UX-173: the title shares its line with the ✨ flag, as a select's
+        # UX-176: the title shares its line with the ✨ flag, as a select's
         # does, so an auto-detected id can be seen and confirmed.
         label_col, flag_col = cell.container().columns(
             _GRID_LABEL_W, gap=None, vertical_alignment="center"

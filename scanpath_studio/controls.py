@@ -2784,7 +2784,7 @@ def column_mapping_ui(
                 on_change=_mark_field_touched,
                 args=(state_key,),
             )
-            # UX-173: the same amber / ✨-confirm / green / red rule the
+            # UX-176: the same amber / ✨-confirm / green / red rule the
             # selects get (UX-90's red-when-required-and-empty included).
             state = multi_field_flag(
                 note_col,
@@ -2822,7 +2822,7 @@ def multi_field_flag(
     required: bool,
     detected_label: str = "auto-detected",
 ) -> str:
-    """The ✨ flag of a *multi-column* picker, and its tint state (UX-173).
+    """The ✨ flag of a *multi-column* picker, and its tint state (UX-176).
 
     The identity pickers (Trial / Participant / Text ID) are multiselects, so
     they never reached `_selectbox`'s amber tint and ✨ confirm button — the
@@ -2860,7 +2860,7 @@ def multi_field_flag(
 
 
 def mark_cells(cells_by_state: dict) -> None:
-    """Paint mapping cells built outside `column_mapping_ui` (UX-173) —
+    """Paint mapping cells built outside `column_mapping_ui` (UX-176) —
     ``{state: [cell_key, …]}``, the same states and `<style>` block."""
     _emit_field_tints(
         {

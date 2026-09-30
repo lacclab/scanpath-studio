@@ -407,11 +407,37 @@ def test_the_author_editor_replaces_the_view(at, monkeypatch, source):
     monkeypatch.setattr(app, "_render_authoring_source", _editor)
     monkeypatch.setattr(app, "render_single_trial_tab", _view)
     at.session_state["data_source_choice"] = source
+    if source == app.MANUAL_SAMPLE_CHOICE:
+        at.session_state["_author_editing"] = source  # armed by its Edit button
     at.run()
     assert not at.exception, at.exception
     order = [m.value for m in at.markdown]
     assert "author-editor" in order
     assert "scanpath-view-body" not in order
+
+
+def test_the_synthetic_sample_shows_its_view_until_edited(at, monkeypatch):
+    """Picking the sample shows it like any dataset; the editor is opt-in."""
+
+    def _editor():
+        import streamlit as st
+
+        st.markdown("author-editor")
+        return app._manual_sample_frames()
+
+    def _view(*_args, **_kwargs):
+        import streamlit as st
+
+        st.markdown("scanpath-view-body")
+
+    monkeypatch.setattr(app, "_render_authoring_source", _editor)
+    monkeypatch.setattr(app, "render_single_trial_tab", _view)
+    at.session_state["data_source_choice"] = app.MANUAL_SAMPLE_CHOICE
+    at.run()
+    assert not at.exception, at.exception
+    order = [m.value for m in at.markdown]
+    assert "scanpath-view-body" in order
+    assert "author-editor" not in order
 
 
 def test_a_download_takes_the_dataset_card_down_first(at, monkeypatch):
@@ -1158,3 +1184,18 @@ def test_animate_on_a_trial_with_no_fixations_stops_the_replay_left_building():
     assert any("nothing to animate" in info.value for info in at.info)
     assert task.cancelled
     assert tabs.ANIM_TASK_KEY not in at.session_state
+
+
+def test_the_synthetic_sample_declares_its_own_canvas(at):
+    """It is drawn on the editor's canvas, not the previous source's screen."""
+    at.session_state["data_source_choice"] = app.MANUAL_SAMPLE_CHOICE
+    at.run()
+    assert not at.exception, at.exception
+    width, height = app._manual_sample_canvas()
+    assert (width, height) == (1200, 480)
+    assert app.resolve_source_monitor(app.MANUAL_SAMPLE_CHOICE, None, None) == (
+        1200,
+        480,
+        True,
+    )
+    assert at.session_state["global_canvas_width"] == 1200

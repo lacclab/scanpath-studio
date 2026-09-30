@@ -177,7 +177,7 @@ ignore = [
     # each already carrying a comment saying why the failure is ignorable.
     "S110", "S112",
     # Naive local timestamps are correct here: these stamp a local recovery
-    # cache and a local tracker, both single-machine by design. Making them
+    # cache, single-machine by design. Making them
     # tz-aware would imply a portability this data does not have.
     "DTZ005", "DTZ006",
     # Fires on scripts with a shebang that are run via `python <script>`; the

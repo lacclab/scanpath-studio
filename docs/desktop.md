@@ -1,8 +1,9 @@
 # Desktop app
 
 Standalone builds of Scanpath Studio for **Windows / macOS / Linux** — no
-Python toolchain, no terminal. The app starts a local server and opens in your
-default browser. Everything runs on your machine.
+Python toolchain, no terminal. The app starts a local server and opens in its
+own window — through Chrome, Edge or Brave when one is installed, or else as a
+tab in your default browser. Everything runs on your machine.
 
 Builds are attached to every
 [GitHub release](https://github.com/lacclab/scanpath-studio/releases)
@@ -25,8 +26,11 @@ Builds are attached to every
        the app was downloaded from the Internet and says it checked it for
        malicious software — click **Open**. That prompt appears once per app,
        and every downloaded app gets it.
-    4. Your browser opens the app. **Close the browser tab to quit** — the
-       server stops a couple of minutes later. (The wait is deliberate:
+    4. The app opens in its own window, with no tabs or address bar, when
+       Chrome, Edge or Brave is installed (the window belongs to that browser:
+       find it from its Dock icon); otherwise in a tab of your default browser.
+       **Close that window or tab to quit** — the server stops a couple of
+       minutes later. (The wait is deliberate:
        Streamlit can restore a session that reconnects within two minutes, so
        quitting sooner would throw away your work after a sleep or a network
        blip.)
@@ -59,8 +63,8 @@ Builds are attached to every
     2. Right-click → **Extract All**, open the extracted `ScanpathStudio` folder.
     3. Double-click **`ScanpathStudio.exe`**. On first launch SmartScreen will
        warn — click **More info → Run anyway**.
-    4. A console window shows the server log; your browser opens the app. That
-       console window *is* the server — close it, or press ++ctrl+c++, to quit.
+    4. A console window shows the server log, and the app opens in its own Edge
+       (or Chrome / Brave) window. That console window *is* the server — close it, or press ++ctrl+c++, to quit.
 
 === "Linux"
 
@@ -81,11 +85,13 @@ Builds are attached to every
   `~/Library/Logs/Scanpath Studio/scanpath-studio.log` — open it from
   **Console.app** under *Log Reports*, or attach it to a bug report. Windows and
   Linux keep the console instead.
-- **Advanced:** four environment variables tweak the launch —
+- **Advanced:** five environment variables tweak the launch —
   `SCANPATH_DESKTOP_PORT` pins the server port (default: a free one),
   `SCANPATH_DESKTOP_NO_BROWSER=1` skips opening the browser,
+  `SCANPATH_DESKTOP_BROWSER=default` opens a tab in the default browser instead
+  of an app window,
   `SCANPATH_DESKTOP_IDLE_EXIT_S` sets how many seconds to wait after the last
-  tab closes before quitting (`0` keeps it running; only the macOS app quits
+  window closes before quitting (`0` keeps it running; only the macOS app quits
   this way by default), and `SCANPATH_DESKTOP_NO_LOG_FILE=1` keeps output on
   stdout instead of the log file.
 - **Building it yourself:** see

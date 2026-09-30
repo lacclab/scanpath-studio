@@ -47,6 +47,94 @@ def annotation_markers(participant_id, trial_id, *, store=None) -> str:
 # Trial combo building
 # -----------------------------------------------------------------------------
 
+#: The identity columns `build_combo_options` reads off a frame (besides any
+#: composite-trial components) — all `combo_source` has to carry.
+_COMBO_ID_COLUMNS = (
+    "participant_id",
+    "trial_id",
+    "unique_trial_id",
+    "unique_text_id",
+    "text_id",
+    "unique_paragraph_id",
+    "paragraph_id",
+    "TRIAL_INDEX",
+    "trial_index",
+)
+
+
+def combo_source(
+    fixations: pd.DataFrame,
+    words: pd.DataFrame,
+    raw_gaze: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    """The frame the trial picker's combos are built from.
+
+    Fixations when there are any, else words (a words-only dataset), else raw
+    gaze (a raw-gaze-only one) — and, since VIZ-45, **plus the trials only the
+    raw gaze has**. A trial recorded as samples alone is a trial: in a dataset
+    whose fixations cover other trials, or whose words table covers other
+    texts, it used to be unpickable because the picker listed the first
+    non-empty table and nothing else.
+
+    Returns the chosen frame itself whenever the raw gaze adds no trial (the
+    common case, and every dataset without raw gaze), so `build_combo_options`
+    keys its cache on the same object as before. Otherwise it returns a small
+    frame of identity rows — the chosen frame's, in their order, then the
+    raw-gaze-only trials' — which is all `build_combo_options` reads.
+    """
+    for primary in (fixations, words):
+        if primary is not None and not primary.empty:
+            break
+    else:
+        return raw_gaze if raw_gaze is not None else pd.DataFrame()
+    if raw_gaze is None or raw_gaze.empty:
+        return primary
+    composite_cols = tuple(st.session_state.get("_composite_trial_columns") or [])
+    combined = _combo_source_with_raw_gaze(
+        primary,
+        raw_gaze,
+        composite_cols,
+        cache_key=(frame_fingerprint(primary), frame_fingerprint(raw_gaze)),
+    )
+    return primary if combined is None else combined
+
+
+@st.cache_data(show_spinner=False, max_entries=16)
+def _combo_source_with_raw_gaze(
+    _primary: pd.DataFrame,
+    _raw_gaze: pd.DataFrame,
+    composite_cols: tuple[str, ...],
+    cache_key,
+) -> pd.DataFrame | None:
+    """`combo_source`'s identity rows, or ``None`` when raw gaze adds no trial."""
+    progress.report()
+    from .data import trial_keys
+
+    # One deduplication per table, on the identity columns only; every key
+    # set below comes off those small frames rather than another pass over
+    # every sample (PERF: three full scans at 5M samples was ~0.8 s a miss).
+    wanted = [*_COMBO_ID_COLUMNS, *composite_cols]
+    primary_cols = [c for c in dict.fromkeys(wanted) if c in _primary.columns]
+    rows = _primary[primary_cols].drop_duplicates()
+    raw_cols = [c for c in dict.fromkeys(wanted) if c in _raw_gaze.columns]
+    raw_rows = _raw_gaze[raw_cols].drop_duplicates()
+    extra_keys = trial_keys(raw_rows) - trial_keys(rows)
+    if not extra_keys:
+        return None
+    index = pd.MultiIndex.from_arrays(
+        [raw_rows["participant_id"].astype(str), raw_rows["trial_id"].astype(str)]
+    )
+    raw_rows = raw_rows[index.isin(extra_keys)].copy()
+    # The picker keys on the primary frame's trial and text columns; a raw-gaze
+    # row that lacks one takes its own trial id / text id, which is what those
+    # columns mean for a normalized frame (`data.normalize_raw_gaze`).
+    if "unique_trial_id" in rows.columns and "unique_trial_id" not in raw_rows:
+        raw_rows["unique_trial_id"] = raw_rows["trial_id"]
+    for text_col in ("unique_text_id", "text_id", "unique_paragraph_id"):
+        if text_col in rows.columns and text_col not in raw_rows.columns:
+            raw_rows[text_col] = raw_rows.get("text_id", raw_rows["trial_id"])
+    return pd.concat([rows, raw_rows], ignore_index=True)
+
 
 def build_combo_options(
     fixations: pd.DataFrame,

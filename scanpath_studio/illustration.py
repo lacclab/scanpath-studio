@@ -13,7 +13,6 @@ def illustration_reasons(
     fix_index_range: Sequence[int] | None = None,
     full_fixation_range: Sequence[int] | None = None,
     synthetic: bool = False,
-    raw_gaze_only: bool = False,
     fixation_flags_b: dict | None = None,
     fix_index_range_b: Sequence[int] | None = None,
     full_fixation_range_b: Sequence[int] | None = None,
@@ -23,7 +22,13 @@ def illustration_reasons(
     CMP-24: in Compare, scanpath B has filters of its own —
     ``fixation_flags_b`` and a window ``fix_index_range_b`` against B's
     ``full_fixation_range_b`` — and either one alters the figure as much as A's
-    does, so it discloses the same way."""
+    does, so it discloses the same way.
+
+    VIZ-45: raw gaze is never a reason. The samples are drawn as recorded —
+    nothing in the app derives fixations (or anything else) from them — so a
+    figure of raw gaze alone is the least transformed figure there is, and the
+    "derived from raw gaze" reason it used to carry named a derivation that
+    never happened."""
     reasons: list[str] = []
     if settings.get("fixation_snap_to_word"):
         reasons.append("fixations snapped to words")
@@ -51,8 +56,6 @@ def illustration_reasons(
     source_name = str(data_source or "").lower()
     if synthetic or "synthetic" in source_name or "author" in source_name:
         reasons.append("synthetic source")
-    if raw_gaze_only:
-        reasons.append("derived from raw gaze")
     playback_speed = settings.get("playback_speed", 1.0)
     try:
         playback_speed = float(playback_speed)

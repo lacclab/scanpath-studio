@@ -1079,36 +1079,92 @@ def plot_corpus_figure(
     raise ValueError("kind must be 'profile', 'distribution', or 'difference'.")
 
 
-def list_trials(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
+def _optional_frame(frame, label: str) -> pd.DataFrame:
+    """``frame`` checked as normalized, or the empty canonical frame for ``None``.
+
+    VIZ-45: a dataset recorded as raw gaze alone has no words or fixations
+    table, so the plotting entry points take ``None`` for either — the same
+    empty canonical frame `load_scanpath_data` returns for a table it was not
+    given."""
+    if frame is None:
+        return (
+            _data.empty_words_frame()
+            if label == "words"
+            else _data.empty_fixations_frame()
+        )
+    return _require_normalized(frame, label)
+
+
+def list_trials(
+    words: pd.DataFrame | None = None,
+    fixations: pd.DataFrame | None = None,
+    *,
+    raw_gaze: pd.DataFrame | None = None,
+) -> pd.DataFrame:
     """Plottable ``(participant_id, trial_id)`` combos.
 
     Combos present in both frames when both are loaded; for single-report
     datasets (words-only or fixations-only), combos from whichever frame has
-    data."""
-    _require_normalized(words, "words")
-    _require_normalized(fixations, "fixations")
+    data. ``raw_gaze`` (a frame from
+    [`load_raw_gaze`][scanpath_studio.api.load_raw_gaze]) adds the trials that
+    only its samples cover — every trial, for a dataset recorded as raw gaze
+    alone (pass ``None`` for ``words`` and ``fixations`` then)."""
+    words = _optional_frame(words, "words")
+    fixations = _optional_frame(fixations, "fixations")
     cols = ["participant_id", "trial_id"]
     if words.empty or fixations.empty:
         present = fixations if words.empty else words
         combos = present[cols].drop_duplicates()
     else:
         combos = words[cols].drop_duplicates().merge(fixations[cols].drop_duplicates())
+    if raw_gaze is not None and not raw_gaze.empty:
+        _require_normalized(raw_gaze, "raw_gaze")
+        # The app's rule (`utils.combo_source`): a trial is listed when it has
+        # fixations — or, in a dataset without any, words — or when it has raw
+        # gaze. So a trial with words and samples but no fixations is listed,
+        # while one the intersection above drops for having fixations but no
+        # words stays dropped: its samples add nothing the rule is about.
+        known = _data.trial_keys(fixations if not fixations.empty else words)
+        samples = raw_gaze[cols].drop_duplicates()
+        extra = samples[
+            [
+                (str(p), str(t)) not in known
+                for p, t in zip(samples["participant_id"], samples["trial_id"])
+            ]
+        ]
+        combos = pd.concat([combos, extra], ignore_index=True)
     return combos.sort_values(cols).reset_index(drop=True)
 
 
 def list_parts(
-    words: pd.DataFrame,
-    fixations: pd.DataFrame,
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
     participant: str | None = None,
     trial: str | None = None,
+    *,
+    raw_gaze: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Ordered screens in multipart data, optionally narrowed to one parent.
 
-    Single-screen data returns an empty table.
+    Single-screen data returns an empty table. A trial recorded as raw gaze
+    alone takes its screens from ``raw_gaze`` (its ``screen_id``), decided per
+    trial — so a samples-only trial keeps its screens in a dataset whose other
+    trials have fixations.
     """
-    _require_normalized(words, "words")
-    _require_normalized(fixations, "fixations")
+    words = _optional_frame(words, "words")
+    fixations = _optional_frame(fixations, "fixations")
     catalog = part_catalog(words, fixations)
+    if raw_gaze is not None and SCREEN_ID in raw_gaze.columns:
+        # Per trial, as `_select_part` and the app decide it: a trial neither
+        # words nor fixations cover takes its screens from its samples.
+        samples = part_catalog(_require_normalized(raw_gaze, "raw_gaze"))
+        covered = _data.trial_keys(words) | _data.trial_keys(fixations)
+        own = [
+            (str(p), str(t)) not in covered
+            for p, t in zip(samples["participant_id"], samples["trial_id"])
+        ]
+        if any(own):
+            catalog = pd.concat([catalog, samples[own]], ignore_index=True)
     if participant is not None:
         catalog = catalog[catalog["participant_id"].astype(str) == str(participant)]
     if trial is not None:
@@ -1123,6 +1179,7 @@ def _resolve_trial(
     trial: str | None,
     *,
     default_first: bool = False,
+    raw_gaze: pd.DataFrame | None = None,
 ) -> tuple[str, str]:
     """Resolve to one (participant_id, trial_id), validating what was given.
 
@@ -1130,8 +1187,9 @@ def _resolve_trial(
     is unknown, a few valid values and the closest spellings. An underspecified
     selection matching several trials raises too, unless ``default_first`` picks
     the first match (the CLI's behavior, mirroring the app's default selection).
+    ``raw_gaze`` makes the trials only its samples cover selectable (VIZ-45).
     """
-    combos = list_trials(words, fixations)
+    combos = list_trials(words, fixations, raw_gaze=raw_gaze)
     if combos.empty:
         raise ValueError("No (participant, trial) combo exists in the data.")
     scoped = combos
@@ -1176,7 +1234,8 @@ def _resolve_trial(
         raise ValueError(
             f"Ambiguous selection: {len(scoped)} trials match "
             f"participant={participant!r}, trial={trial!r} (first few: {preview}). "
-            f"{fix} list_trials(words, fixations) lists all {len(combos)} combos."
+            f"{fix} list_trials(words, fixations, raw_gaze=…) lists all "
+            f"{len(combos)} combos."
         )
     row = scoped.iloc[0]
     return str(row["participant_id"]), str(row["trial_id"])
@@ -1199,8 +1258,10 @@ def _select_trial(
     fixations: pd.DataFrame,
     participant: str | None,
     trial: str | None,
+    *,
+    raw_gaze: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, str, str]:
-    pid, tid = _resolve_trial(words, fixations, participant, trial)
+    pid, tid = _resolve_trial(words, fixations, participant, trial, raw_gaze=raw_gaze)
     trial_words, trial_fixations = _data.filter_data(
         words, fixations, {"participants": [pid], "trials": [tid]}
     )
@@ -1222,12 +1283,25 @@ def _select_part(
     participant: str | None,
     trial: str | None,
     screen: str | None,
+    *,
+    raw_gaze: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, str, str, str | None]:
     """Resolve one logical trial and, for multipart data, exactly one screen."""
     trial_words, trial_fixations, pid, tid = _select_trial(
-        words, fixations, participant, trial
+        words, fixations, participant, trial, raw_gaze=raw_gaze
     )
     catalog = part_catalog(trial_words, trial_fixations)
+    if (
+        catalog.empty
+        and trial_words.empty
+        and trial_fixations.empty
+        and raw_gaze is not None
+        and SCREEN_ID in raw_gaze.columns
+    ):
+        # VIZ-45: a trial recorded as raw gaze alone takes its screens from the
+        # samples, so one screen's coordinate space is drawn at a time — as for
+        # words and fixations — rather than every screen stacked into one.
+        catalog = part_catalog(_data.filter_raw_gaze(raw_gaze, [pid], [tid]))
     if catalog.empty:
         if screen is not None:
             raise ValueError("screen= was supplied for a single-screen trial.")
@@ -1503,8 +1577,8 @@ def _apply_drift_correction(
 
 
 def plot_scanpath(
-    words: pd.DataFrame,
-    fixations: pd.DataFrame,
+    words: pd.DataFrame | None = None,
+    fixations: pd.DataFrame | None = None,
     participant: str | None = None,
     trial: str | None = None,
     *,
@@ -1532,7 +1606,12 @@ def plot_scanpath(
     true to scale. For a multipart trial, ``screen`` selects one child screen; omitting
     it selects the first recorded screen and never concatenates coordinate spaces.
     ``raw_gaze`` is a frame from [`load_raw_gaze`][scanpath_studio.api.load_raw_gaze],
-    filtered to the selected trial.
+    filtered to the selected trial and drawn as recorded. It can be the only table:
+    for a dataset recorded as raw gaze alone pass ``None`` for ``words`` and
+    ``fixations`` (``plot_scanpath(raw_gaze=samples, trial=…)``) — the trial is
+    looked up in the samples, the canvas is estimated from their extent, and the
+    figure is the samples alone. Nothing is derived from them: no fixations are
+    detected, so the fixation, saccade and heatmap layers stay empty.
 
     ``drift_correction`` / ``drift_connectors`` are experimental: without
     ``SCANPATH_EXPERIMENTAL=1`` any ``drift_correction`` other than ``None`` /
@@ -1575,9 +1654,17 @@ def plot_scanpath(
     _reject_unknown_options(
         figure_overrides, _STATIC_FIGURE_PARAMS | {"palette"}, "plot_scanpath"
     )
+    words = _optional_frame(words, "words")
+    fixations = _optional_frame(fixations, "fixations")
+    if raw_gaze is not None:
+        _require_normalized(raw_gaze, "raw_gaze")
     trial_words, trial_fixations, pid, tid, selected_screen = _select_part(
-        words, fixations, participant, trial, screen
+        words, fixations, participant, trial, screen, raw_gaze=raw_gaze
     )
+    if raw_gaze is not None:
+        raw_gaze = _data.filter_raw_gaze(raw_gaze, [pid], [tid])
+        if selected_screen is not None and SCREEN_ID in raw_gaze.columns:
+            raw_gaze = extract_part(raw_gaze, pid, tid, selected_screen)
     _check_column_options(
         figure_overrides, words=trial_words, fixations=trial_fixations
     )
@@ -1593,7 +1680,14 @@ def plot_scanpath(
         if canvas_size is None:
             canvas_size = screen_canvas_size(trial_fixations)
         if canvas_size is None:
-            canvas_size = _data.compute_canvas_size(trial_words, trial_fixations)
+            # VIZ-45: a trial with no fixations is sized from its samples, as the
+            # app sizes a raw-gaze-only dataset's canvas.
+            canvas_size = _data.compute_canvas_size(
+                trial_words,
+                trial_fixations
+                if not trial_fixations.empty or raw_gaze is None
+                else raw_gaze,
+            )
     # Window first, correct second — the app's order (tabs._slice_fix_range runs
     # before alignment.correct), so a windowed correction sees only the kept
     # fixations.
@@ -1609,7 +1703,6 @@ def plot_scanpath(
             settings,
             fix_index_range=fix_index_range,
             full_fixation_range=full_fix_range,
-            raw_gaze_only=trial_fixations.empty and raw_gaze is not None,
         )
         settings["illustration_reasons"] = resolve_label_reasons(label_mode, reasons)
     # Spatial fields are explicit kwargs of make_scanpath_figure, so they can't
@@ -1625,10 +1718,6 @@ def plot_scanpath(
         figure_overrides,
     )
     if raw_gaze is not None:
-        _require_normalized(raw_gaze, "raw_gaze")
-        raw_gaze = _data.filter_raw_gaze(raw_gaze, [pid], [tid])
-        if selected_screen is not None and SCREEN_ID in raw_gaze.columns:
-            raw_gaze = extract_part(raw_gaze, pid, tid, selected_screen)
         settings.setdefault("show_raw_gaze", True)
     render_settings = FigureSettings.from_mapping(
         settings,
@@ -1650,8 +1739,8 @@ def plot_scanpath(
 
 
 def animate_scanpath(
-    words: pd.DataFrame,
-    fixations: pd.DataFrame,
+    words: pd.DataFrame | None = None,
+    fixations: pd.DataFrame | None = None,
     participant: str | None = None,
     trial: str | None = None,
     *,
@@ -1738,7 +1827,19 @@ def animate_scanpath(
 
     ``title`` / ``caption`` — same as
     [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
+
+    The replay is made of fixations, so a trial without any — one recorded as
+    raw gaze alone, or a words-only one — raises ``ValueError`` rather than
+    returning an empty replay, and ``raw_gaze=`` is refused: the replay draws no
+    raw-gaze layer, and nothing detects fixations from samples. Draw samples with
+    [`plot_scanpath`][scanpath_studio.api.plot_scanpath]`(raw_gaze=…)`.
     """
+    if "raw_gaze" in animation_overrides:
+        raise ValueError(
+            "animate_scanpath replays fixations and has no raw-gaze layer, and "
+            "Scanpath Studio does not detect fixations from gaze samples. Draw the "
+            "samples with plot_scanpath(..., raw_gaze=...) instead."
+        )
     valid = set(_ANIMATION_FIGURE_PARAMS)
     explicit = set(animation_overrides) - {"palette"}
     animation_overrides = _expand_palette(animation_overrides)
@@ -1759,9 +1860,18 @@ def animate_scanpath(
     # `plot_scanpath` and `animate_scanpath` don't render the same trial
     # differently (the app feeds both from one settings dict).
     animation_overrides = {**_animation_defaults(), **animation_overrides}
+    words = _optional_frame(words, "words")
+    fixations = _optional_frame(fixations, "fixations")
     trial_words, trial_fixations, pid, tid, _selected_screen = _select_part(
         words, fixations, participant, trial, screen
     )
+    if trial_fixations.empty:
+        raise ValueError(
+            f"participant={pid!r}, trial={tid!r} has no fixations to replay — the "
+            "replay is built from fixations. A trial recorded as raw gaze alone "
+            "can be drawn with plot_scanpath(..., raw_gaze=...); its samples are "
+            "not turned into fixations."
+        )
     _check_column_options(named, words=trial_words, fixations=trial_fixations)
     full_fix_range = None
     if not trial_fixations.empty and "order_in_trial" in trial_fixations.columns:
@@ -2015,8 +2125,9 @@ def render_parent_trial(
     """
     if transition_mode not in {"instant", "recorded"}:
         raise ValueError("transition_mode must be 'instant' or 'recorded'.")
-    pid, tid = _resolve_trial(words, fixations, participant, trial)
-    catalog = list_parts(words, fixations, pid, tid)
+    raw_gaze = options.get("raw_gaze")
+    pid, tid = _resolve_trial(words, fixations, participant, trial, raw_gaze=raw_gaze)
+    catalog = list_parts(words, fixations, pid, tid, raw_gaze=raw_gaze)
     if catalog.empty:
         renderer = animate_scanpath if animate else plot_scanpath
         return {"screen-1": renderer(words, fixations, pid, tid, **options)}
@@ -2462,7 +2573,9 @@ def figure_code(
     so on). With ``show_raw_gaze=True`` the raw-gaze table is read too: the demo's own,
     or the path(s) given as ``source_options["raw_gaze"]`` (plus an optional
     ``"raw_gaze_schema"``) — [`load_raw_gaze`][scanpath_studio.api.load_raw_gaze] in the
-    Python form, ``--raw-gaze`` in the CLI one.
+    Python form, ``--raw-gaze`` in the CLI one. ``source="raw_gaze"`` is a dataset
+    recorded as raw gaze alone: the samples at ``source_options["raw_gaze"]`` are the
+    data, and ``plot_scanpath`` is handed ``None`` for the words and fixations.
 
     ``compare_dataset`` names the corpus scanpath B was loaded from when it is a
     *second* one. B's participant id belongs to that corpus rather than

@@ -1055,7 +1055,19 @@ def _render_parser() -> argparse.ArgumentParser:
         nargs="+",
         help="Raw (sample-level) gaze table(s) to draw under the fixations, "
         "columns auto-detected like --fixations (same formats; several "
-        "paths or a quoted glob concatenate). Static figures only.",
+        "paths or a quoted glob concatenate). Static figures only. On its own "
+        "(no other input) it is the dataset: its trials are listed and drawn "
+        "as recorded — no fixations are detected from the samples.",
+    )
+    viz.add_argument(
+        "--no-raw-gaze",
+        dest="show_raw_gaze",
+        action="store_const",
+        const=False,
+        default=None,
+        help="Load the --raw-gaze table but hide its layer — the app's 🔵 Raw "
+        "gaze switch turned off. With raw gaze as the only input the figure then "
+        "draws no gaze.",
     )
     viz.add_argument(
         "--sample-raw-gaze",
@@ -1734,6 +1746,13 @@ def _snippet_source_from_args(args) -> SnippetSource:
                 "fixations": list(args.fixations or []),
             },
         )
+    if args.raw_gaze and not args.sample:
+        # VIZ-45: --raw-gaze as the only input — the samples are the dataset.
+        return cs.SnippetSource(
+            kind=cs.SOURCE_RAW_GAZE,
+            label="raw gaze",
+            options={"raw_gaze": list(args.raw_gaze)},
+        )
     return cs.SnippetSource(kind=cs.SOURCE_DEMO, label="Bundled Demo")
 
 
@@ -1761,7 +1780,7 @@ def _print_reproduction_code(
     # EXP-20: `plot_scanpath` turns the raw-gaze layer on for the frame it is
     # handed, so the flag never reaches `overrides`; the snippet reads it here.
     if raw_gaze and kind == "static":
-        settings["show_raw_gaze"] = True
+        settings["show_raw_gaze"] = args.show_raw_gaze is not False
     # These two are passed to `animate_scanpath` beside the overrides rather
     # than through them, so they never reached `settings` — a straight silent
     # drop of two real `figure_options("animation")` keys.
@@ -2014,20 +2033,21 @@ def render(argv: list[str]) -> None:
     args = parser.parse_args(argv)
     # Validate everything derivable from argv before the (possibly minutes-long
     # on full corpora) data load.
-    if (
-        sum(
-            [
-                args.sample,
-                bool(args.authoring),
-                bool(args.words or args.fixations),
-                bool(args.potec),
-                bool(args.eyegenbench),
-                bool(args.onestop),
-                bool(args.source),
-            ]
-        )
-        != 1
-    ):
+    corpus_inputs = [
+        args.sample,
+        bool(args.authoring),
+        bool(args.potec),
+        bool(args.eyegenbench),
+        bool(args.onestop),
+        bool(args.source),
+    ]
+    # VIZ-45: your own tables are words and/or fixations — or raw gaze alone,
+    # for a dataset recorded as samples only. Beside any other input,
+    # --raw-gaze stays what it always was: a layer drawn over that input.
+    own_tables = bool(args.words or args.fixations) or (
+        bool(args.raw_gaze) and not any(corpus_inputs)
+    )
+    if sum([*corpus_inputs, own_tables]) != 1:
         # Only the inputs `--help` lists: the DATA-54/55 held-back sources still
         # count towards the guard, but the message doesn't advertise them.
         inputs = ["--sample", "--authoring PATH", "--potec DIR"]
@@ -2039,7 +2059,7 @@ def render(argv: list[str]) -> None:
         raise SystemExit(
             f"Provide exactly one input: {', '.join(inputs)}, or your own tables "
             "(--words and/or --fixations; one of them is enough for "
-            "single-report datasets)."
+            "single-report datasets; --raw-gaze alone for raw gaze only)."
         )
     if not (args.list_trials or args.list_parts) and not args.output:
         raise SystemExit("Missing -o/--output (or use --list-trials/--list-parts).")
@@ -2063,6 +2083,12 @@ def render(argv: list[str]) -> None:
         )
     if args.sample_raw_gaze and args.raw_gaze:
         raise SystemExit("Pass --raw-gaze PATH or --sample-raw-gaze, not both.")
+    if args.show_raw_gaze is False and not (args.raw_gaze or args.sample_raw_gaze):
+        print(
+            "Warning: --no-raw-gaze hides the raw-gaze layer, and no --raw-gaze "
+            "table was given; ignoring it.",
+            file=sys.stderr,
+        )
     if args.raw_gaze_schema is not None and not args.raw_gaze:
         raise SystemExit(
             "--raw-gaze-schema maps the --raw-gaze table; pass --raw-gaze too."
@@ -2239,18 +2265,26 @@ def render(argv: list[str]) -> None:
         # EXP-13: the one input branch that had no guard, so a missing file or
         # an unrecognised column ended the run in a traceback — whose hint
         # named a `word_schema=` argument the command line could not pass.
-        try:
-            words, fixations = api.load_scanpath_data(
-                args.words,
-                args.fixations,
-                word_schema=word_schema,
-                fix_schema=fix_schema,
-                image_root=args.image_root,
-                image_pattern=args.image_pattern,
-                trial_parts_manifest=manifest,
-            )
-        except (ValueError, OSError) as exc:
-            raise SystemExit(_load_error_message(exc)) from exc
+        if not (args.words or args.fixations):
+            # VIZ-45: raw gaze alone. The two frames are the empty canonical
+            # ones `load_scanpath_data` returns for a table it is not given;
+            # the samples are loaded below with every other raw-gaze input.
+            from .data import empty_fixations_frame, empty_words_frame
+
+            words, fixations = empty_words_frame(), empty_fixations_frame()
+        else:
+            try:
+                words, fixations = api.load_scanpath_data(
+                    args.words,
+                    args.fixations,
+                    word_schema=word_schema,
+                    fix_schema=fix_schema,
+                    image_root=args.image_root,
+                    image_pattern=args.image_pattern,
+                    trial_parts_manifest=manifest,
+                )
+            except (ValueError, OSError) as exc:
+                raise SystemExit(_load_error_message(exc)) from exc
 
     if args.image_root and not (args.words or args.fixations):
         from .data import resolve_stimulus_image_paths
@@ -2265,13 +2299,35 @@ def render(argv: list[str]) -> None:
         except ValueError as exc:
             raise SystemExit(str(exc)) from exc
 
+    # EXP-20: raw gaze is a third table. Loaded before the metadata joins and
+    # --list-trials, so a raw-gaze-only input joins and lists its own trials
+    # (VIZ-45).
+    raw_gaze = None
+    if args.raw_gaze or args.sample_raw_gaze:
+        try:
+            raw_gaze = (
+                api.load_sample_raw_gaze()
+                if args.sample_raw_gaze
+                else api.load_raw_gaze(args.raw_gaze, raw_gaze_schema=raw_gaze_schema)
+            )
+        except (ValueError, OSError) as exc:
+            raise SystemExit("--raw-gaze: " + _load_error_message(exc)) from exc
+
+    # VIZ-45: what the metadata tables are joined against — the samples, when
+    # they are the only table, or every join would report "0 matched".
+    join_frame = (
+        raw_gaze
+        if raw_gaze is not None and fixations.empty and words.empty
+        else fixations
+    )
+
     # DATA-20: attaching a participant table headlessly is worth doing for the
     # join report alone — a mistyped id column or a cohort file from the wrong
     # study is exactly what you want to hear about before rendering 300 figures.
     if args.participant_metadata:
         try:
             attached = api.load_participant_metadata(
-                args.participant_metadata, participants=fixations
+                args.participant_metadata, participants=join_frame
             )
         except (ValueError, FileNotFoundError, OSError) as exc:
             raise SystemExit(str(exc))
@@ -2299,7 +2355,7 @@ def render(argv: list[str]) -> None:
             attached_trials = api.load_trial_metadata(
                 args.trial_metadata,
                 participant_column=args.trial_metadata_reader_column,
-                trials=fixations,
+                trials=join_frame,
             )
         except (ValueError, FileNotFoundError, OSError) as exc:
             raise SystemExit(str(exc))
@@ -2335,7 +2391,7 @@ def render(argv: list[str]) -> None:
     if args.text_metadata:
         try:
             attached_texts = api.load_text_metadata(
-                args.text_metadata, texts=words if not words.empty else fixations
+                args.text_metadata, texts=words if not words.empty else join_frame
             )
         except (ValueError, FileNotFoundError, OSError) as exc:
             raise SystemExit(str(exc))
@@ -2354,7 +2410,7 @@ def render(argv: list[str]) -> None:
                 print(f"  {len(ids)} {label}: {', '.join(ids)}", file=sys.stderr)
 
     if args.list_trials:
-        combos = api.list_trials(words, fixations)
+        combos = api.list_trials(words, fixations, raw_gaze=raw_gaze)
         if (
             args.participant_metadata
             or attached_trials is not None
@@ -2371,7 +2427,13 @@ def render(argv: list[str]) -> None:
                 # (participant_id, trial_id) — text_id isn't part of its
                 # public contract — so bring it in here, from whichever
                 # frame has it, before projecting the text table onto it.
-                source = fixations if not fixations.empty else words
+                source = (
+                    fixations
+                    if not fixations.empty
+                    else words
+                    if not words.empty
+                    else join_frame
+                )
                 if "text_id" in source.columns:
                     combos = combos.merge(
                         source[
@@ -2384,33 +2446,51 @@ def render(argv: list[str]) -> None:
         print(combos.to_string(index=False))
         return
     if args.list_parts:
-        parts = api.list_parts(words, fixations, args.participant, args.trial)
+        parts = api.list_parts(
+            words, fixations, args.participant, args.trial, raw_gaze=raw_gaze
+        )
         if parts.empty:
             print("No multipart screens (the selected data is single-screen).")
         else:
             print(parts.to_string(index=False))
         return
 
-    raw_gaze = None
-    if args.raw_gaze or args.sample_raw_gaze:
-        try:
-            raw_gaze = (
-                api.load_sample_raw_gaze()
-                if args.sample_raw_gaze
-                else api.load_raw_gaze(args.raw_gaze, raw_gaze_schema=raw_gaze_schema)
-            )
-        except (ValueError, OSError) as exc:
-            raise SystemExit("--raw-gaze: " + _load_error_message(exc)) from exc
-
     try:
         # A given -p/-t must match exactly (mistyped ids are errors, never
         # silently swapped for another trial); only genuinely unspecified
-        # parts default to the first available combo, like the app.
+        # parts default to the first available combo, like the app. VIZ-45:
+        # a trial only the raw gaze has is one of them.
         participant, trial = api._resolve_trial(
-            words, fixations, args.participant, args.trial, default_first=True
+            words,
+            fixations,
+            args.participant,
+            args.trial,
+            default_first=True,
+            raw_gaze=raw_gaze,
         )
     except ValueError as exc:
         raise SystemExit(str(exc))
+    trial_fixations_missing = raw_gaze is not None and (
+        fixations.empty
+        or not (
+            (fixations["participant_id"].astype(str) == str(participant))
+            & (fixations["trial_id"].astype(str) == str(trial))
+        ).any()
+    )
+    if trial_fixations_missing:
+        # VIZ-45: say it in the command's own terms before the API says it in
+        # Python's. Both modes are made of fixations, and none are detected
+        # from the samples. Decided for this trial, not the dataset.
+        for flag, given in (
+            ("--animate", args.animate),
+            ("--compare-with", args.compare_with is not None),
+        ):
+            if given:
+                raise SystemExit(
+                    f"{flag} draws fixations, and this trial has none — only "
+                    "raw gaze samples, which Scanpath Studio does not turn into "
+                    f"fixations. Drop {flag} to draw the samples."
+                )
     print(f"Rendering participant={participant} trial={trial}", file=sys.stderr)
 
     overrides = {
@@ -2425,6 +2505,10 @@ def render(argv: list[str]) -> None:
             "show_saccade_arrows",
         )
     }
+    # VIZ-45: only when given — `plot_scanpath` turns the layer on for the
+    # frame it is handed, and an override is the one thing that says off.
+    if args.show_raw_gaze is False:
+        overrides["show_raw_gaze"] = False
     if args.coordinate_grid or args.coordinate_grid_spacing is not None:
         overrides["show_coordinate_grid"] = True
         overrides["coordinate_grid_spacing"] = args.coordinate_grid_spacing
@@ -2820,7 +2904,8 @@ def render(argv: list[str]) -> None:
                     fix_index_range_b=_parse_fix_index_range(
                         args.compare_fix_index_range
                     ),
-                    **overrides,
+                    # A comparison has no raw-gaze layer (VIZ-45: --no-raw-gaze).
+                    **{k: v for k, v in overrides.items() if k != "show_raw_gaze"},
                     **common,  # carries canvas_size / fonts / title / caption
                 )
             except IncomparableScreensError as exc:

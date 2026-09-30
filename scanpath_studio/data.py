@@ -4440,6 +4440,79 @@ def filter_to_keys(
     return filter_frame_to_keys(words, keys), filter_frame_to_keys(fixations, keys)
 
 
+def raw_gaze_in_pool(
+    raw_gaze: pd.DataFrame,
+    words_all: pd.DataFrame,
+    fixations_all: pd.DataFrame,
+    words_pool: pd.DataFrame,
+    fixations_pool: pd.DataFrame,
+) -> pd.DataFrame:
+    """The raw-gaze rows of the trials in the current pool (VIZ-45).
+
+    A trial the words or fixations table knows is in the pool when it survived
+    the filters there, so its samples follow it. A trial **only the raw gaze
+    knows** — a raw-gaze-only dataset's every trial, or the samples-only trials
+    of a dataset that has fixations for others — has nothing there to survive,
+    and used to be dropped for it: the old narrowing kept only the participants
+    and trials the other two tables listed. Those trials stay, narrowed only by
+    what applies to the samples themselves (participant, annotations, the
+    trial-metadata keys — applied to ``raw_gaze`` before this).
+
+    ``words_all`` / ``fixations_all`` are the frames *before* the filters, which
+    is what tells "filtered out" from "never there". Returns ``raw_gaze`` itself
+    when nothing is dropped — always when the pools are those very frames (no
+    filter set), with no scan at all — and otherwise the narrowed frame from a
+    `frame_cache`, so a rerun under the same filters reuses it rather than
+    re-masking every sample.
+    """
+    if raw_gaze is None or raw_gaze.empty:
+        return pd.DataFrame()
+    if (words_all is None or words_all.empty) and (
+        fixations_all is None or fixations_all.empty
+    ):
+        return raw_gaze
+    if words_pool is words_all and fixations_pool is fixations_all:
+        # Unfiltered: every raw-gaze trial is either pooled or unknown to them.
+        return raw_gaze
+    key = tuple(
+        frame_fingerprint(frame)
+        for frame in (raw_gaze, words_all, fixations_all, words_pool, fixations_pool)
+    )
+
+    def _build() -> pd.DataFrame:
+        known = _known_trial_keys(
+            words_all,
+            fixations_all,
+            cache_key=(frame_fingerprint(words_all), frame_fingerprint(fixations_all)),
+        )
+        # Per raw-gaze table, not per filter change: `frame_cache` keeps one
+        # entry per slot, so toggling a filter back rebuilds this — and the
+        # samples' own keys are the one full pass worth not repeating.
+        present = _raw_gaze_trial_keys(raw_gaze, cache_key=frame_fingerprint(raw_gaze))
+        pooled = trial_keys(words_pool) | trial_keys(fixations_pool)
+        keep = {k for k in present if k in pooled or k not in known}
+        return raw_gaze if keep == present else filter_frame_to_keys(raw_gaze, keep)
+
+    return frame_cache("raw_gaze_pool", key, _build)
+
+
+@st.cache_data(show_spinner=False, max_entries=8)
+def _raw_gaze_trial_keys(_raw_gaze: pd.DataFrame, cache_key) -> set:
+    """`trial_keys` of one (narrowed) raw-gaze table, cached on its fingerprint."""
+    progress.report()
+    return trial_keys(_raw_gaze)
+
+
+@st.cache_data(show_spinner=False, max_entries=8)
+def _known_trial_keys(
+    _words_all: pd.DataFrame, _fixations_all: pd.DataFrame, cache_key
+) -> set:
+    """The trials the unfiltered words and fixations know, once per dataset —
+    not once per filter change (`raw_gaze_in_pool`)."""
+    progress.report()
+    return trial_keys(_words_all) | trial_keys(_fixations_all)
+
+
 # ---------------------------------------------------------------------------
 # VAL-7 — is a "trial" actually more than one reading?
 #

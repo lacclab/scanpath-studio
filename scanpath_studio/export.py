@@ -111,6 +111,9 @@ class ExportOptions:
     # exports and imports. Off by default: notes can be personal.
     include_annotations: bool = False
     include_fixations: bool = False
+    # VIZ-45: each trial's raw (sample-level) gaze as its own table, written as
+    # recorded — for a raw-gaze-only dataset it is the only recording there is.
+    include_raw_gaze: bool = False
     include_measures: bool = False
     include_mega_table: bool = False
     include_analysis_family: bool = False
@@ -163,6 +166,7 @@ class ExportOptions:
     def any_table(self) -> bool:
         return (
             self.include_fixations
+            or self.include_raw_gaze
             or self.include_measures
             or self.include_mega_table
             or self.include_analysis_family
@@ -1317,6 +1321,7 @@ def render_export_options(
                 "Tabular data",
                 options=[
                     "Fixations",
+                    "Raw gaze",
                     "Word measures",
                     "Full measure family",
                     "Mega-table",
@@ -1329,6 +1334,7 @@ def render_export_options(
             or []
         )
         include_fixations = "Fixations" in tabular
+        include_raw_gaze = "Raw gaze" in tabular
         include_measures = "Word measures" in tabular
         include_mega_table = "Mega-table" in tabular
         include_analysis_family = "Full measure family" in tabular
@@ -1366,6 +1372,7 @@ def render_export_options(
         include_plot_config=include_plot_config,
         include_annotations=include_annotations,
         include_fixations=include_fixations,
+        include_raw_gaze=include_raw_gaze,
         include_measures=include_measures,
         include_mega_table=include_mega_table,
         include_analysis_family=include_analysis_family,
@@ -1888,8 +1895,9 @@ def bulk_export(
             # builder renders from fixations alone (words optional — boxes/labels)
             # or from words alone (AOI layout), and the live view does too; so a
             # words-that-don't-join / fixations-only trial must still export
-            # instead of being skipped with "empty data" (VIZ-5).
-            if trial_words.empty and trial_fix.empty:
+            # instead of being skipped with "empty data" (VIZ-5). VIZ-45: and
+            # a trial recorded as raw gaze alone is drawn from its samples.
+            if trial_words.empty and trial_fix.empty and trial_raw_gaze.empty:
                 progress.finished_trials += 1
                 progress.errors.append(f"{slug}: empty data, skipped")
                 if progress_callback:
@@ -1983,8 +1991,13 @@ def bulk_export(
                         color_by_line=bool(settings.get("color_by_line", False))
                         or fig_fix is not trial_fix,
                     )
+                    # VIZ-45: the trial's own samples, as the live figure
+                    # gets them (the layer self-gates on `show_raw_gaze`).
                     fig = make_scanpath_figure(
-                        trial_words, fig_fix, settings=render_settings
+                        trial_words,
+                        fig_fix,
+                        settings=render_settings,
+                        raw_gaze=trial_raw_gaze if not trial_raw_gaze.empty else None,
                     )
                     # EXP-2: stamp the title/caption BEFORE measuring the output
                     # size — the bands grow the figure, and rendering at the
@@ -2108,6 +2121,10 @@ def bulk_export(
                 if options.include_fixations and not options.include_analysis_family:
                     progress.bytes_written += _write_table(
                         zf, _path("fixations", fmt), trial_fix, fmt
+                    )
+                if options.include_raw_gaze and not trial_raw_gaze.empty:
+                    progress.bytes_written += _write_table(
+                        zf, _path("raw_gaze", fmt), trial_raw_gaze, fmt
                     )
                 if options.include_measures and per_trial_measures is not None:
                     progress.bytes_written += _write_table(

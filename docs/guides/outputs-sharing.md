@@ -11,7 +11,11 @@ Open the **Export** subtab in the Scanpath view.
   heatmap, and image layers as separate files for editing, and **Tabular data →
   Full measure family** adds saccades, sentence measures, trial and reader
   summaries, character grids, cleaning QA and `run_config.json` — per trial
-  and concatenated under `aggregate/`. **Also include → Annotations (JSON)**
+  and concatenated under `aggregate/`. **Tabular data → Raw gaze** writes
+  each exported trial's gaze samples as recorded, as `raw_gaze.csv` (or
+  `.parquet`) beside its other tables; a trial with no samples gets none.
+  The bundle's figures draw the samples whenever the 🔵 **Raw gaze** layer is
+  on. **Also include → Annotations (JSON)**
   adds `annotations.json`: the favorites, tags and notes on the exported
   trials, which 🗂️ Data → Annotations can import.
 

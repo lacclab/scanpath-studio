@@ -34,6 +34,9 @@ from .constants import (
     ICONS,
     OUT_OF_TEXT_COLOR,
     PALETTES,
+    RAW_GAZE_LINK_FOR_KEY,
+    RAW_GAZE_SEEDED_FOR_KEY,
+    RAW_GAZE_SNAP_RESTORE_KEY,
     SACCADE_CLASS_COLORS,
     SACCADE_CLASS_EDITABLE,
     SACCADE_CLASS_LABELS,
@@ -588,22 +591,30 @@ _LAYER_OFF_REASON: list[str] = []
 
 
 @contextmanager
-def _layer_off(label: str, *, off: bool):
+def _layer_off(
+    label: str, *, off: bool, reason: str | None = None, caption: bool = True
+):
     """Grey every rail control rendered inside, while ``off``.
 
     ``label`` names the layer's toggle, so the reason reads as an instruction
     ("Turn **👁️ Fixations** on…") rather than a bare refusal. Nested use pushes
     onto a stack, so an inner block that greys for its own reason wins.
+    ``reason`` replaces that instruction when switching the layer on would not
+    help — VIZ-45's trial with no fixations for the layer to draw.
+    ``caption=False`` greys without writing the reason again, where the section
+    already said it once.
     """
     if not off:
         yield
         return
     _LAYER_OFF_REASON.append(
-        f"{ICONS['warning']} **{label}** is off — turn the layer on to change this. "
-        "Your settings are kept either way."
+        reason
+        or f"{ICONS['warning']} **{label}** is off — turn the layer on to change "
+        "this. Your settings are kept either way."
     )
     try:
-        st.caption(_LAYER_OFF_REASON[-1])
+        if caption:
+            st.caption(_LAYER_OFF_REASON[-1])
         yield
     finally:
         _LAYER_OFF_REASON.pop()
@@ -1298,6 +1309,21 @@ _VIEW_PRESETS: dict[str, dict[str, object]] = {
 }
 
 
+def _forget_raw_gaze_default(ss) -> None:
+    """Let the next run decide the raw-gaze layer for the open dataset again.
+
+    A named design or *Reset* puts the view back to the defaults, and on a
+    dataset whose only gaze is samples the default is **on** — a preset whose
+    name says nothing about raw gaze must not leave that dataset a blank plot.
+    Clearing the record (and the stashed pre-snap value, which the reset has
+    just made stale) is what lets `app.seed_raw_gaze_default` apply it."""
+    ss.pop(RAW_GAZE_SEEDED_FOR_KEY, None)
+    ss.pop(RAW_GAZE_SNAP_RESTORE_KEY, None)
+    # …and the link's claim: both callers take the link's view params off the
+    # URL, so the dataset is decided afresh rather than left on the link's off.
+    ss.pop(RAW_GAZE_LINK_FOR_KEY, None)
+
+
 def _drop_linked_view_params() -> None:
     """Take a deep link's view params off the URL once a design is chosen.
 
@@ -1386,6 +1412,9 @@ def _apply_view_preset(name: str) -> None:
     ss.pop("_font_seeded_for", None)
     ss.pop("_palette_picked", None)
     ss.pop(_PRE_ILLUSTRATION_STATE, None)
+    # VIZ-45 — the raw-gaze layer is dataset-dependent too. Not for a saved
+    # design above: that is the user's own record, raw-gaze switch included.
+    _forget_raw_gaze_default(ss)
 
     # A deep-link preset is applied at the top of every rerun. Once the user has
     # explicitly chosen a design preset it must not immediately put the old visual
@@ -4794,6 +4823,8 @@ def render_plot_controls(
     fix_range_fixations: pd.DataFrame | None = None,
     canvas_renderer=None,
     slots: dict | None = None,
+    has_fixations: bool = True,
+    has_words: bool = True,
 ) -> dict:
     """Render the visualization controls and return the resolved settings dict.
 
@@ -5006,18 +5037,35 @@ def render_plot_controls(
     fix_off_disabled, _fix_off_reason = _mode_gate(
         animating, comparing, in_animation=False, in_compare=True
     )
+    # VIZ-45: a trial with no fixations (raw gaze only, or words only) has
+    # nothing for the fixation-built controls to act on — Fixations, Saccades,
+    # the Filter and its index window — and the samples are never turned into
+    # fixations, so they grey with that reason, keeping their values for the
+    # next trial that has fixations.
+    no_fixations_note = (
+        ""
+        if has_fixations
+        else f"{ICONS['warning']} This trial has no fixations, so there is nothing "
+        "here to draw or filter. Gaze samples are not turned into fixations; "
+        f"they draw as recorded under {ICONS['raw_gaze']} **Raw gaze**."
+    )
     show_fix, fix_grp = _rail_section(
         viz,
         f"{ICONS['fixations']} **Fixations**",
         slug="fix",
         key="global_show_fix",
         persist_state="session",
-        disabled=fix_off_disabled,
-        note=f"{ICONS['warning']} Fixations always draw in **Animate** mode — the replay is made "
-        "of them. Your setting is kept for the static and comparison figures; "
-        "the styling below still applies."
-        if fix_off_disabled
-        else "",
+        disabled=fix_off_disabled or not has_fixations,
+        # No fixations: the popover body's own `_layer_off` caption says it.
+        note=""
+        if no_fixations_note
+        else (
+            f"{ICONS['warning']} Fixations always draw in **Animate** mode — the "
+            "replay is made of them. Your setting is kept for the static and "
+            "comparison figures; the styling below still applies."
+            if fix_off_disabled
+            else ""
+        ),
     )
     show_saccades, sac_grp = _rail_section(
         viz,
@@ -5025,6 +5073,7 @@ def render_plot_controls(
         slug="sac",
         key="global_show_saccades",
         persist_state="session",
+        disabled=not has_fixations,
     )
     # UX-128: a master switch for the section's three layers (text, boxes,
     # image), matching Fixations/Saccades. Earlier this was name-only — each
@@ -5047,14 +5096,24 @@ def render_plot_controls(
     # on the row the way Fixations/Saccades do. `_mode_gate` is called again
     # (cheaply) where each layer's style popover needs its own `reason` text.
     heat_disabled, heat_reason = _mode_gate(animating, comparing, in_animation=False)
+    # VIZ-45: the heatmap draws from fixations or from the word boxes' own
+    # measures, so only a trial with neither has nothing for it.
+    heat_nothing = not has_fixations and not has_words
+    heat_nothing_note = (
+        f"{ICONS['warning']} This trial has no fixations and no word boxes, so "
+        "there is nothing for the heatmap to draw. Gaze samples are not turned "
+        f"into fixations; they draw as recorded under {ICONS['raw_gaze']} "
+        "**Raw gaze**."
+    )
     show_heatmap, heatmap_grp = _rail_section(
         viz,
         f"{ICONS['heatmap']} **Heatmap**",
         slug="heatmap",
         key="global_show_heatmap",
         persist_state="session",
-        disabled=heat_disabled,
-        note=heat_reason,
+        disabled=heat_disabled or heat_nothing,
+        # Nothing to draw: the popover body's own `_layer_off` caption says it.
+        note="" if heat_nothing else heat_reason,
     )
     raw_disabled, raw_reason = _mode_gate(animating, comparing, **_static_only)
     show_raw_gaze, raw_gaze_grp = _rail_section(
@@ -5085,6 +5144,7 @@ def render_plot_controls(
         viz,
         f"{ICONS['plot_filter']} **Filter**{_plot_filter_badge()}",
         slug="filter",
+        note=no_fixations_note,
     )
     # Sub-slots up front so each block below renders into the right half of the
     # section from wherever it sits in this file (the same trick the sections
@@ -5122,7 +5182,9 @@ def render_plot_controls(
     with (
         fix_grp,
         _layer_off(
-            f"{ICONS['fixations']} Fixations", off=not (show_fix or fix_off_disabled)
+            f"{ICONS['fixations']} Fixations",
+            off=not (show_fix or fix_off_disabled) or not has_fixations,
+            reason=no_fixations_note or None,
         ),
         _popover_rows("fix"),
     ):
@@ -5490,7 +5552,11 @@ def render_plot_controls(
             note=_flag_reason,
         ),
         _layer_off(
-            f"{ICONS['fixations']} Fixations", off=not (show_fix or fix_off_disabled)
+            f"{ICONS['fixations']} Fixations",
+            off=not (show_fix or fix_off_disabled) or not has_fixations,
+            reason=no_fixations_note or None,
+            # The 🧹 Filter section's own note already said it.
+            caption=has_fixations,
         ),
         _popover_rows("filter_fix"),
     ):
@@ -5506,7 +5572,11 @@ def render_plot_controls(
     # `label | ☑ Show` row.
     with (
         sac_grp,
-        _layer_off(f"{ICONS['saccades']} Saccades", off=not show_saccades),
+        _layer_off(
+            f"{ICONS['saccades']} Saccades",
+            off=not show_saccades or not has_fixations,
+            reason=no_fixations_note or None,
+        ),
         _popover_rows("sac"),
     ):
         # VIZ-8 / VIZ-19: uniform colour, the two-way forward-vs-regression
@@ -5693,7 +5763,12 @@ def render_plot_controls(
             f"{ICONS['saccades']} Saccades{ab}{_saccade_filter_badge()}",
             note=_cls_reason,
         ),
-        _layer_off(f"{ICONS['saccades']} Saccades", off=not show_saccades),
+        _layer_off(
+            f"{ICONS['saccades']} Saccades",
+            off=not show_saccades or not has_fixations,
+            reason=no_fixations_note or None,
+            caption=has_fixations,
+        ),
         _popover_rows("filter_sac"),
     ):
         _labeled(
@@ -5990,7 +6065,11 @@ def render_plot_controls(
     # *Color* group: what is mapped and its colorscale, the scaling, the range.
     with (
         heatmap_grp,
-        _layer_off(f"{ICONS['heatmap']} Heatmap", off=not show_heatmap),
+        _layer_off(
+            f"{ICONS['heatmap']} Heatmap",
+            off=not show_heatmap or heat_nothing,
+            reason=heat_nothing_note if heat_nothing else None,
+        ),
         _popover_rows("heatmap"),
     ):
         # A selectbox now rather than a radio: three long options do not fit
@@ -6794,6 +6873,8 @@ def reset_viz_settings() -> None:
     st.session_state.pop("_font_seeded_for", None)
     st.session_state.pop("_palette_picked", None)
     st.session_state.pop(_PRE_ILLUSTRATION_STATE, None)
+    # VIZ-45 — and the raw-gaze layer's dataset default, the same way.
+    _forget_raw_gaze_default(st.session_state)
     for param in _sk.URL_PRESET_PARAMS:
         st.query_params.pop(param, None)
 
@@ -6857,16 +6938,25 @@ SUMMARY_CHIP_FIELDS = {
     "@word_count": "Number of words",
     "@fixation_count": "Number of fixations",
     "@in_text_fixations": "Fixations in word boxes",
+    # VIZ-45: a raw-gaze trial's own headline number. Written only for a trial
+    # that has samples (`tabs._summary_rows`), so a dataset without raw gaze
+    # never shows it.
+    "@gaze_sample_count": "Number of gaze samples",
 }
-#: …and the two of them that are shown by default. The other two are offered in
-#: *Available* like any other field. All four used to be default chips behind a
-#: **Summary stats** popover; now that they are chips on the strip itself, four
-#: of them crowd out the conditions beside them — and the two here are the ones
-#: worth a permanent chip ("how long was this reading, and how many fixations").
-#: Word count is a property of the text rather than of the reading, and the
-#: in-text count only means something when you are already chasing a geometry
-#: problem.
-_CHIP_DEFAULT_SUMMARY = ("@reading_time_s", "@fixation_count")
+#: …and the ones shown by default. The other two are offered in *Available*
+#: like any other field. All four used to be default chips behind a **Summary
+#: stats** popover; now that they are chips on the strip itself, four of them
+#: crowd out the conditions beside them — and reading time and the fixation
+#: count are the ones worth a permanent chip ("how long was this reading, and
+#: how many fixations"). Word count is a property of the text rather than of
+#: the reading, and the in-text count only means something when you are
+#: already chasing a geometry problem.
+#:
+#: VIZ-45 added the gaze-sample count. A summary chip is drawn only for a number
+#: the trial has, so a trial with fixations and no samples still shows the same
+#: two chips, and a raw-gaze-only trial — whose reading time and fixation count
+#: were never measured and are left out — shows the one count it has.
+_CHIP_DEFAULT_SUMMARY = ("@reading_time_s", "@fixation_count", "@gaze_sample_count")
 
 
 def _trial_level_columns(words: pd.DataFrame, fixations: pd.DataFrame) -> set:

@@ -31,7 +31,14 @@ def test_two_summary_fields_are_chips_by_default():
     # four computed chips crowd out the conditions beside them.
     assert "@word_count" not in shown
     assert "@in_text_fixations" not in shown
-    assert set(_CHIP_DEFAULT_SUMMARY) == {"@reading_time_s", "@fixation_count"}
+    # VIZ-45: the gaze-sample count is a default too — drawn only for a trial
+    # that has samples, so a fixation trial without them still shows two.
+    assert "@gaze_sample_count" in shown
+    assert set(_CHIP_DEFAULT_SUMMARY) == {
+        "@reading_time_s",
+        "@fixation_count",
+        "@gaze_sample_count",
+    }
 
 
 def test_every_summary_field_is_still_pickable():
@@ -59,7 +66,7 @@ def test_a_summary_field_renders_as_a_chip_not_a_popover(monkeypatch):
     monkeypatch.setattr(
         tabs,
         "_summary_rows",
-        lambda w, f: [
+        lambda w, f, g=None: [
             {"Field": "Total reading time (s)", "Value": "12.3"},
             {"Field": "Number of fixations", "Value": "154"},
         ],

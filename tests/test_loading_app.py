@@ -1181,7 +1181,8 @@ def test_animate_on_a_trial_with_no_fixations_stops_the_replay_left_building():
     at.session_state["single_animate"] = True
     at.run()
     assert not at.exception, at.exception
-    assert any("nothing to animate" in info.value for info in at.info)
+    # VIZ-45: the static figure is drawn instead, and the note says why.
+    assert any("**Animate** draws fixations" in caption.value for caption in at.caption)
     assert task.cancelled
     assert tabs.ANIM_TASK_KEY not in at.session_state
 

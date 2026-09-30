@@ -33,7 +33,9 @@ Scanpath
 
 Raw gaze
 :   The tracker's sample-by-sample gaze positions, from before fixations were
-    detected. An optional third table, drawn under the fixations.
+    detected. An optional third table, drawn under the fixations — or a
+    dataset's only table, drawn as recorded. Scanpath Studio detects no
+    fixations from it.
 
 Run, pass
 :   Consecutive fixations on one word form a run; a word's first run is its

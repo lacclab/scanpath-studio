@@ -6605,11 +6605,19 @@ def _render_bulk_export(
     # UX-179: the session's annotations, only when the bundle asks for them —
     # and in the cache key then, so a note edited after a build is not served
     # from the stale zip.
-    from scanpath_studio import annotations as _annotations_mod
+    import scanpath_studio.annotations as _annotations_mod
 
     annotation_records = (
         _annotations_mod.current_records() if options.include_annotations else None
     )
+    # DATA-48: the file names the dataset its annotations were made on, as the
+    # one 🗂️ Data → Annotations exports does.
+    annotation_owner = _annotations_mod.current_dataset(st.session_state)
+    annotation_dataset = None
+    if annotation_owner is not None:
+        from scanpath_studio.app import _dataset_display_name
+
+        annotation_dataset = _dataset_display_name(annotation_owner)
     sig = (
         frame_fingerprint(active_combos),
         frame_fingerprint(active_words),
@@ -6624,6 +6632,7 @@ def _render_bulk_export(
         json.dumps(figure_settings, sort_keys=True, default=str),
         repr(options),
         json.dumps(annotation_records, sort_keys=True, default=str),
+        annotation_dataset,
         EXPORTER_VERSION,
     )
     cache = st.session_state.get("_bulk_export_cache")
@@ -6664,6 +6673,7 @@ def _render_bulk_export(
                 # EXP-22: each trial's metadata rows, for `{table.field}`.
                 metadata_rows_for=_metadata_mod.pattern_rows,
                 annotation_records=annotation_records,
+                annotation_dataset=annotation_dataset,
                 canvas_width=canvas_width,
                 canvas_height=canvas_height,
                 base_font_size=base_font_size,

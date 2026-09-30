@@ -234,16 +234,25 @@ def _store() -> dict[Key, Entry]:
 #: entry}}``. The selected dataset is never in it.
 DATASET_STORE_KEY = "_annotations_by_dataset"
 #: Which dataset :data:`ANNOTATIONS_STATE_KEY`'s store belongs to right now.
-#: Absent until the first :func:`activate_dataset`, which then *adopts* what the
-#: store holds — see :func:`restore_payload` for why that matters.
+#: Absent until the first :func:`activate_dataset`.
 OWNER_KEY = "_annotations_owner"
+#: Entries that belong to no dataset yet — a pre-DATA-48 recovery cache's that
+#: no upload's trials claimed (:func:`restore_payload`). The first *real*
+#: dataset activated adopts them; the add wizard's never does, since nothing
+#: of it is cached and they would be lost with it.
+UNASSIGNED_KEY = "_annotations_unassigned"
+#: Bumped on every change to the stored (not live) stores — the recovery
+#: cache's cheap "did it change" test (:func:`store_signature`), the pattern
+#: of ``metadata.STORE_REVISION_KEY``: serializing every dataset's annotations
+#: on every rerun is not cheap once there are several thousand.
+STORE_REVISION_KEY = "_annotations_store_revision"
 #: The add-dataset wizard's dataset, before it has a name. The same token as
 #: ``metadata.PENDING_DATASET`` (pinned by a test; not imported, since
 #: `metadata` pulls in the data layer). Never cached.
 PENDING_DATASET = "\x00pending"
-#: CMP-8's key prefix for scanpath B's filters, and the picker's "same dataset"
-#: answer (``compare_source.THIS_DATASET`` — not imported: `compare_source`
-#: imports `app`, which imports this).
+#: CMP-8's key prefix for scanpath B's filters (``tabs._COMPARE_FILTER_PREFIX``)
+#: and the picker's "same dataset" answer (``compare_source.THIS_DATASET``).
+#: Pinned equal by a test; not imported, since both modules import this one.
 _COMPARE_PREFIX = "cmp"
 _COMPARE_SAME_DATASET = "This dataset"
 
@@ -258,12 +267,30 @@ def _live(session) -> dict[Key, Entry]:
     return dict(live) if isinstance(live, dict) else {}
 
 
+def _unassigned(session) -> dict[Key, Entry]:
+    pool = session.get(UNASSIGNED_KEY)
+    return dict(pool) if isinstance(pool, dict) else {}
+
+
+def _set_unassigned(session, pool: dict) -> None:
+    if pool:
+        session[UNASSIGNED_KEY] = pool
+    else:
+        session.pop(UNASSIGNED_KEY, None)
+
+
+def _bump(session) -> None:
+    session[STORE_REVISION_KEY] = int(session.get(STORE_REVISION_KEY) or 0) + 1
+
+
 def _reseed_editors_in(session) -> None:
     """Drop the per-trial editors' widget state from ``session``.
 
     Their keys carry the trial's ids, not the dataset's: left in place across a
     swap, the editor of a trial the next dataset shares would seed from the last
-    dataset's values and write them into the new dataset's store.
+    dataset's values and write them into the new dataset's store. Nothing typed
+    is lost by it — every editor field saves itself on change (``_save_entry``),
+    and a widget's callback runs before the run that swaps.
     """
     for key in [
         k
@@ -276,12 +303,11 @@ def _reseed_editors_in(session) -> None:
 def activate_dataset(session, dataset: str) -> bool:
     """Make ``dataset``'s annotations the session store; whether it changed.
 
-    Called by ``app.main`` on every run with the selected dataset. When the
-    selection changed, the outgoing dataset's store is filed away and the
-    incoming one's comes back. A session with no owner yet (its first run)
-    **adopts** what the store already holds for ``dataset`` — which is how a
-    store restored from a pre-DATA-48 recovery cache, whose entries name no
-    dataset, becomes the dataset the restored session opens on.
+    Called by ``app.main`` on every run with the dataset on screen. When that
+    changed, the outgoing dataset's store is filed away and the incoming one's
+    comes back. A store with no owner yet (entries put there before the first
+    run) and the :data:`UNASSIGNED_KEY` pool go to the first **real** dataset
+    activated — never to the add wizard's, which is not cached.
     """
     dataset = str(dataset)
     owner = session.get(OWNER_KEY)
@@ -289,17 +315,22 @@ def activate_dataset(session, dataset: str) -> bool:
         return False
     store = _stored(session)
     live = _live(session)
-    if owner is not None:
-        if live:
-            store[str(owner)] = live
-        else:
-            store.pop(str(owner), None)
-        live = {}
+    unassigned = _unassigned(session)
+    if owner is None:
+        unassigned = {**live, **unassigned}
+    elif live:
+        store[str(owner)] = live
+    else:
+        store.pop(str(owner), None)
     incoming = store.pop(dataset, None) or {}
-    # Adopted entries first, so the dataset's own entry wins a collision.
-    session[ANNOTATIONS_STATE_KEY] = {**live, **incoming}
+    if dataset != PENDING_DATASET and unassigned:
+        # The dataset's own entry wins a collision with an adopted one.
+        incoming, unassigned = {**unassigned, **incoming}, {}
+    session[ANNOTATIONS_STATE_KEY] = incoming
     session[DATASET_STORE_KEY] = store
+    _set_unassigned(session, unassigned)
     session[OWNER_KEY] = dataset
+    _bump(session)
     _reseed_editors_in(session)
     return True
 
@@ -309,24 +340,26 @@ def begin_pending_dataset(session) -> None:
     store = _stored(session)
     if store.pop(PENDING_DATASET, None) is not None:
         session[DATASET_STORE_KEY] = store
+        _bump(session)
 
 
 def adopt_pending_dataset(session, dataset: str) -> None:
     """✅ Add dataset: the wizard's store becomes ``dataset``'s.
 
     Only while the wizard's dataset is the selected one — relabelling another
-    dataset's store as the new one's would move its annotations.
+    dataset's store as the new one's would move its annotations — and the new
+    dataset starts clean: a stale store left under its name is dropped, not
+    merged (``wizard._safe_dataset_name`` keeps such names from being chosen).
     """
     begin_pending_dataset(session)
     if session.get(OWNER_KEY) != PENDING_DATASET:
         return
     dataset = str(dataset)
     store = _stored(session)
-    leftover = store.pop(dataset, None)
-    if leftover:
-        session[ANNOTATIONS_STATE_KEY] = {**leftover, **_live(session)}
+    if store.pop(dataset, None) is not None:
         session[DATASET_STORE_KEY] = store
     session[OWNER_KEY] = dataset
+    _bump(session)
 
 
 def forget_dataset(session, dataset: str) -> None:
@@ -339,24 +372,53 @@ def forget_dataset(session, dataset: str) -> None:
         session[ANNOTATIONS_STATE_KEY] = {}
         session.pop(OWNER_KEY, None)
         _reseed_editors_in(session)
+    _bump(session)
 
 
-def rename_dataset(session, old: str, new: str) -> None:
-    """A renamed dataset keeps its annotations."""
+def current_dataset(session) -> str | None:
+    """The dataset the session store belongs to; ``None`` before the first run
+    and while the add wizard's unnamed dataset is open."""
+    owner = session.get(OWNER_KEY)
+    return None if owner in (None, PENDING_DATASET) else str(owner)
+
+
+def dataset_names(session) -> set[str]:
+    """Every dataset name that holds (or owns) an annotation store."""
+    names = {str(name) for name, entries in _stored(session).items() if entries}
+    owner = session.get(OWNER_KEY)
+    if owner is not None:
+        names.add(str(owner))
+    names.discard(PENDING_DATASET)
+    return names
+
+
+def rename_dataset(session, old: str, new: str) -> bool:
+    """A renamed dataset keeps its annotations; whether they moved.
+
+    Refuses — changing nothing — when ``new`` already holds a store of its own,
+    which the rename would otherwise overwrite. ``wizard.rename_dataset`` never
+    asks for such a name (``_safe_dataset_name`` avoids :func:`dataset_names`).
+    """
     old, new = str(old), str(new)
+    if old == new:
+        return True
     store = _stored(session)
+    if new in store or session.get(OWNER_KEY) == new:
+        return False
     if old in store:
         session[DATASET_STORE_KEY] = {
             (new if key == old else key): value for key, value in store.items()
         }
     if session.get(OWNER_KEY) == old:
         session[OWNER_KEY] = new
+    _bump(session)
+    return True
 
 
 def store_for(session, dataset: str) -> dict[Key, Entry]:
     """``dataset``'s annotation store — the live one while it is selected."""
     dataset = str(dataset)
-    if session.get(OWNER_KEY) in (None, dataset):
+    if session.get(OWNER_KEY) == dataset:
         return _live(session)
     return dict(_stored(session).get(dataset) or {})
 
@@ -382,11 +444,31 @@ def store_for_prefix(prefix: str = "") -> dict[Key, Entry]:
     return store_for(session, str(other))
 
 
+def upload_trials(entry) -> frozenset[tuple[str, str]]:
+    """An upload's ``(participant, trial)`` pairs, as annotations are keyed.
+
+    The trial picker's ids: `utils.build_combo_options` lists the fixation
+    table's trials under ``unique_trial_id`` when there is one, else
+    ``trial_id``. A table without fixations is read from its words instead.
+    """
+    for key in ("fixations", "words"):
+        frame = entry.get(key) if isinstance(entry, dict) else None
+        if not isinstance(frame, pd.DataFrame) or frame.empty:
+            continue
+        trial_col = "unique_trial_id" if "unique_trial_id" in frame else "trial_id"
+        if {"participant_id", trial_col} <= set(frame.columns):
+            pairs = frame[["participant_id", trial_col]].drop_duplicates()
+            return frozenset(
+                zip(pairs["participant_id"].astype(str), pairs[trial_col].astype(str))
+            )
+    return frozenset()
+
+
 def dataset_records(session) -> dict[str, list[dict]]:
     """Every dataset's annotations, the selected one's live: ``{name: records}``.
 
     What the recovery cache writes. The wizard's unnamed dataset is left out,
-    and so is a store no dataset owns yet — :func:`unassigned_records`.
+    and so are entries no dataset owns yet — :func:`unassigned_records`.
     """
     stores = _stored(session)
     owner = session.get(OWNER_KEY)
@@ -401,15 +483,15 @@ def dataset_records(session) -> dict[str, list[dict]]:
 
 
 def unassigned_records(session) -> list[dict]:
-    """The session store's entries while no dataset owns it yet.
+    """Entries no dataset owns yet — cached as such, so none is lost.
 
-    Only before the first :func:`activate_dataset` — a run that returned early,
-    or a restored pre-DATA-48 store not adopted yet. Cached as such, so a save
-    in that window keeps them for whichever dataset adopts them next.
+    The :data:`UNASSIGNED_KEY` pool, plus the session store itself while no
+    dataset owns it (a run that returned before :func:`activate_dataset`).
     """
-    if session.get(OWNER_KEY) is not None:
-        return []
-    return store_to_records(_live(session))
+    pool = _unassigned(session)
+    if session.get(OWNER_KEY) is None:
+        pool = {**_live(session), **pool}
+    return store_to_records(pool)
 
 
 def cache_payload(session) -> dict:
@@ -419,6 +501,21 @@ def cache_payload(session) -> dict:
     if unassigned:
         payload["unassigned"] = unassigned
     return payload
+
+
+def store_signature(session) -> list:
+    """A cheap fingerprint of every dataset's annotations, for the cache.
+
+    The live store by content (the editor writes it directly), the rest by
+    :data:`STORE_REVISION_KEY` — ``metadata.store_signature``'s pattern — so a
+    rerun does not serialize every stored dataset's annotations.
+    """
+    return [
+        int(session.get(STORE_REVISION_KEY) or 0),
+        str(session.get(OWNER_KEY)),
+        store_to_records(_live(session)),
+        store_to_records(_unassigned(session)),
+    ]
 
 
 def _valid_records(records) -> list[dict]:
@@ -434,13 +531,18 @@ def restore_payload(session, payload) -> int:
     """Put back what :func:`cache_payload` wrote; how many annotations landed.
 
     A dataset this session already holds annotations for keeps its own — the
-    restore's ``setdefault`` rule. **The one-time migration:** a manifest
-    written before DATA-48 stored one flat list of records naming no dataset.
-    It is read as ``unassigned``, and unassigned records go into the session
-    store with no owner, so the first :func:`activate_dataset` adopts them for
-    the dataset the restored session opens on — the one the manifest had
+    restore's ``setdefault`` rule.
+
+    **The one-time migration.** A manifest written before DATA-48 stored one
+    flat list of records naming no dataset; it is read as ``unassigned``. Each
+    entry goes, first, to every upload whose trials include it — the uploads'
+    frames are back in ``_datasets`` by now (``persistence.restore_state``
+    restores them first), and an annotation on a trial only one dataset has is
+    that dataset's. An entry no upload claims (one on a built-in or public
+    corpus, which is not in memory to ask) waits in :data:`UNASSIGNED_KEY` for
+    the first real dataset the session opens — the one the manifest had
     selected, unless a link names another. Nothing is dropped, and the next save
-    writes them back under that dataset, so the conversion happens once.
+    writes everything back per dataset, so the conversion happens once.
     """
     if isinstance(payload, list):
         datasets, unassigned = {}, payload
@@ -454,26 +556,41 @@ def restore_payload(session, payload) -> int:
     owner = session.get(OWNER_KEY)
     store = _stored(session)
     restored = 0
+
+    def file_under(name: str, entries: dict) -> None:
+        nonlocal live
+        if name == owner:
+            live = {**entries, **live}
+        else:
+            store[name] = {**entries, **(store.get(name) or {})}
+
     for name, records in datasets.items():
         name = str(name)
         entries = records_to_store(_valid_records(records))
         if not entries or name == PENDING_DATASET or name in store:
             continue
-        if name == owner:
-            if live:
-                continue
-            live = entries
-        else:
-            store[name] = entries
+        if name == owner and live:
+            continue
+        file_under(name, entries)
         restored += len(entries)
-    adopted = records_to_store(_valid_records(unassigned))
-    if adopted:
-        before = len(live)
-        live = {**adopted, **live}
-        restored += len(live) - before
+
+    legacy = records_to_store(_valid_records(unassigned))
+    if legacy:
+        claimed: set[Key] = set()
+        uploads = session.get("_datasets")
+        for name, entry in (uploads if isinstance(uploads, dict) else {}).items():
+            trials = upload_trials(entry)
+            mine = {k: e for k, e in legacy.items() if _trial_of(k) in trials}
+            if mine:
+                file_under(str(name), mine)
+                claimed.update(mine)
+        rest = {k: e for k, e in legacy.items() if k not in claimed}
+        _set_unassigned(session, {**rest, **_unassigned(session)})
+        restored += len(legacy)
     session[ANNOTATIONS_STATE_KEY] = live
     if store:
         session[DATASET_STORE_KEY] = store
+    _bump(session)
     return restored
 
 
@@ -555,11 +672,12 @@ def _reseed_trial_editors() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _add_tag_callback(tags_key: str, newtag_key: str) -> None:
+def _add_tag_callback(tags_key: str, newtag_key: str, save_args: tuple) -> None:
     """on_change for the 'add tag' input: append to the multiselect's state.
 
     Runs before the next rerun, so writing the multiselect's session_state here
-    is allowed (the widget hasn't been instantiated yet that run)."""
+    is allowed (the widget hasn't been instantiated yet that run). Saves the
+    entry too, like every other editor field (see :func:`_save_entry_callback`)."""
     new_tag = str(st.session_state.get(newtag_key, "")).strip()
     if not new_tag:
         return
@@ -567,28 +685,35 @@ def _add_tag_callback(tags_key: str, newtag_key: str) -> None:
     if new_tag not in current:
         st.session_state[tags_key] = current + [new_tag]
     st.session_state[newtag_key] = ""
+    _save_entry_callback(*save_args)
 
 
-def _save_star_callback(
+def _save_entry_callback(
     participant_id: str,
     trial_id: str,
     screen_id: str | None,
     star_key: str,
+    tags_key: str,
+    note_key: str,
 ) -> None:
-    """Persist a favorite before the rerun rebuilds the trial picker.
+    """Persist the editor's fields as soon as one changes, before the rerun.
 
-    Widget callbacks run before the app body. Without this callback the picker
-    reads the previous annotation store, then ``render_trial_annotations`` saves
-    the new value later in the run — making the star marker appear one click
-    behind the checkbox.
+    Widget callbacks run before the app body. Without this the picker reads the
+    previous annotation store, then ``render_trial_annotations`` saves the new
+    value later in the run — making the star marker appear one click behind the
+    checkbox. And (DATA-48) the run that switches dataset drops the editors'
+    widget state in ``activate_dataset`` before any editor renders: a tag or a
+    note saved only by the render body would be lost with it. Saved here, it is
+    already in the outgoing dataset's store when the swap files that away.
     """
     entry = get_entry(participant_id, trial_id, screen_id)
+    state = st.session_state
     set_entry(
         participant_id,
         trial_id,
-        star=bool(st.session_state.get(star_key)),
-        tags=list(entry["tags"]),
-        note=str(entry["note"]),
+        star=bool(state[star_key]) if star_key in state else bool(entry["star"]),
+        tags=list(state[tags_key]) if tags_key in state else list(entry["tags"]),
+        note=str(state[note_key]) if note_key in state else str(entry["note"]),
         screen_id=screen_id,
     )
 
@@ -624,6 +749,14 @@ def render_trial_annotations(
     tags_key = f"{_WIDGET_PREFIX}tags_{slug}"
     note_key = f"{_WIDGET_PREFIX}note_{slug}"
     newtag_key = f"{_WIDGET_PREFIX}newtag_{slug}"
+    save_args = (
+        participant_id,
+        trial_id,
+        annotation_screen,
+        star_key,
+        tags_key,
+        note_key,
+    )
 
     # Seed widget state once from the store (re-seeds after a JSON import, which
     # clears these keys).
@@ -650,8 +783,8 @@ def render_trial_annotations(
             display=f"{ICONS['favorite']} Favorite",
             key=star_key,
             help="Mark this trial as a favorite.",
-            on_change=_save_star_callback,
-            args=(participant_id, trial_id, annotation_screen, star_key),
+            on_change=_save_entry_callback,
+            args=save_args,
         )
         # Options must include every currently-selected tag (incl. ones added
         # via the input) or st.multiselect raises.
@@ -678,13 +811,15 @@ def render_trial_annotations(
             help=tags_help,
             label_visibility="collapsed",
             wrap=True,
+            on_change=_save_entry_callback,
+            args=save_args,
         )
         add_col.text_input(
             "Add a tag",
             key=newtag_key,
             placeholder="Add a new tag",
             on_change=_add_tag_callback,
-            args=(tags_key, newtag_key),
+            args=(tags_key, newtag_key, save_args),
             label_visibility="collapsed",
         )
         # Top-aligned: the box is ~100px tall, and a centred title would float
@@ -697,6 +832,8 @@ def render_trial_annotations(
             key=note_key,
             placeholder="Researcher notes for this trial…",
             height=100,
+            on_change=_save_entry_callback,
+            args=save_args,
         )
         set_entry(
             participant_id,

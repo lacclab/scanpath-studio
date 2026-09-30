@@ -1316,21 +1316,22 @@ class TestDatasetRename:
         """BUG-95: the confirmation said the annotations leave with the upload,
         and none did. DATA-48: all of its own go — and none of another
         dataset's, even on a trial with the same ids."""
-        from scanpath_studio import annotations, wizard
+        import scanpath_studio.annotations as annotations_mod
+        from scanpath_studio import wizard
         from scanpath_studio.annotations import ANNOTATIONS_STATE_KEY
 
         self._store(_session, self.NAME, "Other")
         note = {"star": False, "tags": [], "note": "n"}
-        annotations.activate_dataset(_session, self.NAME)
+        annotations_mod.activate_dataset(_session, self.NAME)
         _session[ANNOTATIONS_STATE_KEY].update(
             {("p1", "t1"): dict(note), ("p1", "t1", "s2"): dict(note)}
         )
-        annotations.activate_dataset(_session, "Other")
+        annotations_mod.activate_dataset(_session, "Other")
         _session[ANNOTATIONS_STATE_KEY][("p1", "t1")] = dict(note)
         assert len(wizard.upload_annotations(self.NAME)) == 2
         wizard._remove_dataset(self.NAME)
         assert set(_session[ANNOTATIONS_STATE_KEY]) == {("p1", "t1")}
-        assert annotations.store_for(_session, self.NAME) == {}
+        assert annotations_mod.store_for(_session, self.NAME) == {}
 
         # Removing the *selected* upload empties the store it leaves behind.
         wizard._remove_dataset("Other")
@@ -1338,20 +1339,21 @@ class TestDatasetRename:
 
     def test_a_renamed_upload_keeps_its_annotations(self, _session):
         """DATA-48 — the store is keyed by the dataset's name, so it moves."""
-        from scanpath_studio import annotations, wizard
+        import scanpath_studio.annotations as annotations_mod
+        from scanpath_studio import wizard
         from scanpath_studio.annotations import ANNOTATIONS_STATE_KEY
 
         self._store(_session, self.NAME, "Other")
-        annotations.activate_dataset(_session, self.NAME)
+        annotations_mod.activate_dataset(_session, self.NAME)
         _session[ANNOTATIONS_STATE_KEY][("p1", "t1")] = {
             "star": True,
             "tags": [],
             "note": "",
         }
-        annotations.activate_dataset(_session, "Other")
+        annotations_mod.activate_dataset(_session, "Other")
         assert wizard.rename_dataset(self.NAME, "Pilot") == "Pilot"
-        assert annotations.store_for(_session, self.NAME) == {}
-        assert set(annotations.store_for(_session, "Pilot")) == {("p1", "t1")}
+        assert annotations_mod.store_for(_session, self.NAME) == {}
+        assert set(annotations_mod.store_for(_session, "Pilot")) == {("p1", "t1")}
 
     def test_a_built_in_source_label_cannot_be_shadowed(self, _session):
         """A stored dataset named exactly like a built-in source would put a
@@ -1364,6 +1366,67 @@ class TestDatasetRename:
 
         assert DEMO_CHOICE not in _session["_datasets"]
         assert f"{DEMO_CHOICE} (uploaded)" in _session["_datasets"]
+
+    def test_every_built_in_source_label_is_reserved(self, _session):
+        """Derived from the picker's own tokens and the corpus registry, not a
+        hand list: a new built-in must not be nameable by an upload either."""
+        from scanpath_studio import app, constants, wizard
+
+        choices = {
+            value
+            for name, value in vars(constants).items()
+            if name.endswith("_CHOICE") and isinstance(value, str)
+        }
+        labels = choices | set(app.public_dataset_registry())
+        assert labels <= app.reserved_source_names()
+        for label in sorted(labels):
+            assert wizard._safe_dataset_name(label) != label, label
+
+    def test_a_name_holding_another_datasets_annotations_is_taken(self, _session):
+        """DATA-48: a stale store under a name must never be inherited."""
+        import scanpath_studio.annotations as annotations_mod
+        from scanpath_studio import wizard
+
+        _session[annotations_mod.DATASET_STORE_KEY] = {
+            "Pilot": {("p1", "t1"): {"star": True, "tags": [], "note": ""}}
+        }
+        assert wizard._safe_dataset_name("Pilot") == "Pilot (2)"
+        self._store(_session, self.NAME)
+        assert wizard.rename_dataset(self.NAME, "Pilot") == "Pilot (2)"
+
+    def test_the_demo_standing_in_for_a_corpus_keeps_the_demos_annotations(
+        self, _session
+    ):
+        """DATA-48: when a corpus isn't on disk the demo is shown in its place,
+        so a star made there is on the demo's trials and filed as the demo's."""
+        import scanpath_studio.annotations as annotations_mod
+        from scanpath_studio import app
+
+        corpus = "Some corpus"
+        annotations_mod.activate_dataset(_session, app.DEMO_CHOICE)
+        _session[annotations_mod.ANNOTATIONS_STATE_KEY][("p1", "t1")] = {
+            "star": True,
+            "tags": [],
+            "note": "",
+        }
+        # A run opening the missing corpus: activated by its name, then the
+        # loader reports the stand-in.
+        annotations_mod.activate_dataset(_session, app.annotations_owner(corpus))
+        _session[app._PLACEHOLDER_SHOWN_KEY] = True
+        app._file_annotations_under_shown_dataset(corpus)
+        assert _session[annotations_mod.OWNER_KEY] == app.DEMO_CHOICE
+        assert set(_session[annotations_mod.ANNOTATIONS_STATE_KEY]) == {("p1", "t1")}
+        # The next run goes straight to the demo — no swap and back.
+        assert app.annotations_owner(corpus) == app.DEMO_CHOICE
+        assert not annotations_mod.activate_dataset(
+            _session, app.annotations_owner(corpus)
+        )
+        # Once the corpus is there, it gets its own (empty) store.
+        _session[app._PLACEHOLDER_SHOWN_KEY] = False
+        app._file_annotations_under_shown_dataset(corpus)
+        assert _session[annotations_mod.OWNER_KEY] == corpus
+        assert _session[annotations_mod.ANNOTATIONS_STATE_KEY] == {}
+        assert app.annotations_owner(corpus) == corpus
 
     def test_rename_is_a_field_on_the_editor_and_nowhere_else(self):
         """UX-178: one rename — ✏️ Edit dataset's **Name** — and no rename
@@ -4404,12 +4467,12 @@ class TestAnnotationsBelongToTheirDataset:
 
     @staticmethod
     def _carry(at) -> dict:
-        from scanpath_studio import annotations
+        import scanpath_studio.annotations as annotations_mod
 
         keys = (
-            annotations.ANNOTATIONS_STATE_KEY,
-            annotations.DATASET_STORE_KEY,
-            annotations.OWNER_KEY,
+            annotations_mod.ANNOTATIONS_STATE_KEY,
+            annotations_mod.DATASET_STORE_KEY,
+            annotations_mod.OWNER_KEY,
         )
         return {key: at.session_state[key] for key in keys if key in at.session_state}
 
@@ -4427,24 +4490,24 @@ class TestAnnotationsBelongToTheirDataset:
         return [c for c in at.checkbox if c.key and c.key.startswith("annotrial_star_")]
 
     def test_a_star_on_one_dataset_is_not_on_another_with_the_same_ids(self):
-        from scanpath_studio import annotations
+        import scanpath_studio.annotations as annotations_mod
         from scanpath_studio.app import DEMO_CHOICE
 
         at = self._at()
-        assert at.session_state[annotations.OWNER_KEY] == self.NAME
+        assert at.session_state[annotations_mod.OWNER_KEY] == self.NAME
         stars = self._star_boxes(at)
         assert len(stars) == 1, [c.key for c in stars]
         stars[0].check()
         at.run(timeout=120)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        store = dict(at.session_state[annotations.ANNOTATIONS_STATE_KEY])
+        store = dict(at.session_state[annotations_mod.ANNOTATIONS_STATE_KEY])
         assert len(store) == 1 and next(iter(store.values()))["star"] is True
         assert any(o.startswith("★ ") for o in self._picker_options(at))
 
         # The Bundled Demo has the same (participant, trial) ids — and no star.
         at = self._at(DEMO_CHOICE, self._carry(at))
-        assert at.session_state[annotations.OWNER_KEY] == DEMO_CHOICE
-        assert at.session_state[annotations.ANNOTATIONS_STATE_KEY] == {}
+        assert at.session_state[annotations_mod.OWNER_KEY] == DEMO_CHOICE
+        assert at.session_state[annotations_mod.ANNOTATIONS_STATE_KEY] == {}
         assert self._picker_options(at)
         assert not any(o.startswith("★ ") for o in self._picker_options(at))
         editor = self._star_boxes(at)
@@ -4452,6 +4515,6 @@ class TestAnnotationsBelongToTheirDataset:
 
         # Back on its own dataset, the star is back.
         at = self._at(self.NAME, self._carry(at))
-        assert at.session_state[annotations.OWNER_KEY] == self.NAME
-        assert dict(at.session_state[annotations.ANNOTATIONS_STATE_KEY]) == store
+        assert at.session_state[annotations_mod.OWNER_KEY] == self.NAME
+        assert dict(at.session_state[annotations_mod.ANNOTATIONS_STATE_KEY]) == store
         assert any(o.startswith("★ ") for o in self._picker_options(at))

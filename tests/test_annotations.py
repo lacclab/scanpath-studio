@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from scanpath_studio import annotations as annotations_mod
+import scanpath_studio.annotations as annotations_mod
 from scanpath_studio.annotations import (
     deserialize,
     is_empty_entry,
@@ -332,6 +332,62 @@ class TestPerDatasetStore:
         session[COMPARE_SOURCE_STATE_KEY] = "This dataset"
         assert "A tag" in annotations_mod.known_tags("cmp")
 
+    def test_compare_constants_match_their_owners(self):
+        """Not imported (both owners import this module), so pinned here."""
+        from scanpath_studio import compare_source, tabs
+
+        assert annotations_mod._COMPARE_SAME_DATASET == compare_source.THIS_DATASET
+        assert annotations_mod._COMPARE_PREFIX == tabs._COMPARE_FILTER_PREFIX
+
+    def test_rename_refuses_to_overwrite_another_datasets_store(self):
+        session: dict = {}
+        annotations_mod.activate_dataset(session, "A")
+        session[KEY][("p1", "t1")] = dict(STAR)
+        annotations_mod.activate_dataset(session, "B")
+        session[KEY][("p1", "t1")] = dict(NOTE)
+        annotations_mod.activate_dataset(session, "C")
+        assert not annotations_mod.rename_dataset(session, "A", "B")
+        assert annotations_mod.store_for(session, "A") == {("p1", "t1"): STAR}
+        assert annotations_mod.store_for(session, "B") == {("p1", "t1"): NOTE}
+        # Nor onto the selected dataset's name.
+        assert not annotations_mod.rename_dataset(session, "A", "C")
+        assert annotations_mod.dataset_names(session) == {"A", "B", "C"}
+
+    def test_a_new_dataset_starts_clean_under_a_stale_name(self):
+        """A store left under the name the wizard's dataset takes is dropped,
+        not merged into the new dataset."""
+        session: dict = {
+            annotations_mod.DATASET_STORE_KEY: {"New": {("p1", "t1"): dict(STAR)}}
+        }
+        annotations_mod.activate_dataset(session, annotations_mod.PENDING_DATASET)
+        annotations_mod.adopt_pending_dataset(session, "New")
+        assert session[annotations_mod.OWNER_KEY] == "New"
+        assert _live(session) == {}
+        assert "New" not in annotations_mod.dataset_records(session)
+
+    def test_a_note_typed_before_a_switch_is_saved_by_its_callback(self, monkeypatch):
+        """The editor's fields save on change: the switch's `activate_dataset`
+        drops their widget state before any editor renders again."""
+        from types import SimpleNamespace
+
+        session: dict = {}
+        monkeypatch.setattr(
+            annotations_mod, "st", SimpleNamespace(session_state=session)
+        )
+        annotations_mod.activate_dataset(session, "A")
+        keys = ("annotrial_star_s", "annotrial_tags_s", "annotrial_note_s")
+        session.update({keys[0]: False, keys[1]: ["Review"], keys[2]: "Typed."})
+        annotations_mod._save_entry_callback("p1", "t1", None, *keys)
+        session["annotrial_newtag_s"] = "Mine"
+        annotations_mod._add_tag_callback(
+            keys[1], "annotrial_newtag_s", ("p1", "t1", None, *keys)
+        )
+        annotations_mod.activate_dataset(session, "B")
+        assert annotations_mod.store_for(session, "A") == {
+            ("p1", "t1"): {"star": False, "tags": ["Mine", "Review"], "note": "Typed."}
+        }
+        assert not [k for k in session if str(k).startswith("annotrial_")]
+
 
 class TestCachePayload:
     """What the recovery cache writes and reads back (``persistence``)."""
@@ -388,6 +444,98 @@ class TestCachePayload:
                 ]
             }
         }
+
+    def test_the_add_wizard_never_adopts_unassigned_entries(self):
+        """A session that opens on the add wizard (a `?source=upload` link)
+        must not take an old cache's entries into its uncached store — the
+        first save would then write none of them."""
+        legacy = [{"participant_id": "p1", "trial_id": "t1", "star": True}]
+        session: dict = {}
+        annotations_mod.restore_payload(session, legacy)
+        annotations_mod.activate_dataset(session, annotations_mod.PENDING_DATASET)
+        assert _live(session) == {}
+        assert annotations_mod.cache_payload(session)["unassigned"] == [
+            {
+                "participant_id": "p1",
+                "trial_id": "t1",
+                "star": True,
+                "tags": [],
+                "note": "",
+            }
+        ]
+        annotations_mod.activate_dataset(session, "Bundled Demo")
+        assert set(_live(session)) == {("p1", "t1")}
+        assert "unassigned" not in annotations_mod.cache_payload(session)
+
+    def test_the_migration_gives_an_entry_to_the_uploads_whose_trials_have_it(self):
+        """Old entries go by trial membership: to every upload that has the
+        trial, and only the unclaimed rest to the first dataset opened."""
+        import pandas as pd
+
+        def upload(*pairs, trial_column="trial_id"):
+            return {
+                "fixations": pd.DataFrame(
+                    {
+                        "participant_id": [p for p, _ in pairs],
+                        trial_column: [t for _, t in pairs],
+                    }
+                ),
+                "words": pd.DataFrame(),
+            }
+
+        note = {"star": False, "tags": [], "note": "n"}
+        legacy = [
+            {"participant_id": "p1", "trial_id": "t1", **note},
+            {"participant_id": "p1", "trial_id": "t1", "screen_id": "s2", **note},
+            {"participant_id": "p2", "trial_id": "t2", **note},
+            {"participant_id": "p3", "trial_id": "shared", **note},
+            {"participant_id": "p9", "trial_id": "t9", **note},
+        ]
+        session: dict = {
+            "_datasets": {
+                "U1": upload(("p1", "t1"), ("p3", "shared")),
+                "U2": upload(
+                    ("p2", "t2"), ("p3", "shared"), trial_column="unique_trial_id"
+                ),
+            }
+        }
+        assert annotations_mod.restore_payload(session, legacy) == 5
+        assert set(annotations_mod.store_for(session, "U1")) == {
+            ("p1", "t1"),
+            ("p1", "t1", "s2"),
+            ("p3", "shared"),
+        }
+        assert set(annotations_mod.store_for(session, "U2")) == {
+            ("p2", "t2"),
+            ("p3", "shared"),
+        }
+        annotations_mod.activate_dataset(session, "Bundled Demo")
+        assert set(_live(session)) == {("p9", "t9")}
+        assert set(annotations_mod.dataset_records(session)) == {
+            "Bundled Demo",
+            "U1",
+            "U2",
+        }
+
+    def test_the_cache_signature_skips_stored_stores_but_sees_every_change(self):
+        session = self._two_datasets()  # B selected, A in the store
+        before = annotations_mod.store_signature(session)
+        assert not annotations_mod.activate_dataset(session, "B")
+        assert annotations_mod.store_signature(session) == before
+        # The stored store is not serialized — only its revision is there.
+        assert NOTE["note"] in str(before) and STAR["note"] not in str(before)
+        session[KEY][("p2", "t2")] = dict(STAR)  # an edit to the live store
+        edited = annotations_mod.store_signature(session)
+        assert edited != before
+        for change in (
+            lambda s: annotations_mod.activate_dataset(s, "A"),
+            lambda s: annotations_mod.rename_dataset(s, "B", "B2"),
+            lambda s: annotations_mod.forget_dataset(s, "B2"),
+            lambda s: annotations_mod.restore_payload(s, {"datasets": {}}),
+        ):
+            last = annotations_mod.store_signature(session)
+            change(session)
+            assert annotations_mod.store_signature(session) != last
 
     def test_a_dataset_this_session_already_holds_keeps_its_own(self):
         session = self._two_datasets()  # B selected, A in the store

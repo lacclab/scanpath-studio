@@ -167,7 +167,9 @@ them when the selection changes, and the recovery cache stores them per dataset.
 notes in session state (keyed by `(participant_id, trial_id)` or
 `(participant_id, trial_id, screen_id)`) — **one store per dataset (DATA-48)**,
 swapped by `annotations.activate_dataset` exactly as DATA-47 swaps the metadata
-tables, so two datasets that reuse ids never share a star — with a pure
+tables, so two datasets that reuse ids never share a star (import the module as
+`import scanpath_studio.annotations as …` — `from scanpath_studio import
+annotations` can bind the package's `__future__` feature instead) — with a pure
 serialize/deserialize core
 and JSON export/import per dataset on 🗂️ Data → Annotations (the Export bundle can carry the same `annotations.json`, UX-179). `controls.render_trial_filters` (read back via
 `controls.read_trial_filters`) +

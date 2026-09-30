@@ -37,7 +37,8 @@ from urllib.parse import urlparse
 
 import pandas as pd
 
-from . import annotations as annotations_mod
+import scanpath_studio.annotations as annotations_mod
+
 from . import progress
 from .constants import DATASET_COUNTS_STORE_KEY, DATASET_DESCRIPTIONS_KEY
 from .session_keys import (
@@ -257,7 +258,8 @@ def _state_fingerprint(
         for key, value in session.items()
         if key in _SESSION_KEYS or str(key).startswith(COLUMN_MAPPING_PREFIX)
     }
-    annotations = annotations_mod.cache_payload(session)
+    # DATA-48: the live store by content, every other dataset's by revision.
+    annotations = annotations_mod.store_signature(session)
     encoded = json.dumps(
         [datasets, values, annotations, metadata_signature],
         ensure_ascii=False,

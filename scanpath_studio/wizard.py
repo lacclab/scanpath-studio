@@ -28,11 +28,7 @@ from .constants import (
     DEMO_CHOICE,
     FONT_FAMILY,
     ICONS,
-    ONESTOP_CHOICE,
-    PUBLIC_DATASETS_CHOICE,
-    SYNTHETIC_CHOICE,
     TRIAL_IDENTITY_CHECK_KEY,
-    UPLOAD_CHOICE,
     WIZARD_LEAVE_KEY,
     multipleye_upload_enabled,
     upload_limit_label,
@@ -203,35 +199,34 @@ def _default_dataset_name() -> str:
     return f"Dataset {n}"
 
 
-# Built-in data-source labels a user dataset must not shadow (else the radio gets
-# a duplicate option and the stored entry hijacks the built-in source's branch).
-_RESERVED_SOURCE_NAMES = frozenset(
-    {
-        DEMO_CHOICE,
-        ONESTOP_CHOICE,
-        PUBLIC_DATASETS_CHOICE,
-        SYNTHETIC_CHOICE,
-        UPLOAD_CHOICE,
-    }
-)
-
-
 def _safe_dataset_name(name: str | None, *, exclude: str | None = None) -> str:
     """A non-empty dataset name that collides with neither a built-in source label
     nor an already-stored dataset (suffixed ``(2)``, ``(3)``… rather than silently
     overwriting an existing entry's frames).
 
+    Built-in labels are every token the picker can list
+    (``app.reserved_source_names`` — the demo, the samples, the server bundles
+    and every public corpus): a user dataset shadowing one gets a duplicate
+    option and hijacks the built-in's load branch. DATA-48: a name that still
+    holds another dataset's annotation store counts as taken too, so a new or
+    renamed dataset never inherits annotations that are not its own.
+
     ``exclude`` drops one stored name from the collision check — a rename (DATA-23)
     must not read the dataset being renamed as a clash with itself and turn
     "My corpus" into "My corpus (2)" on a capitalisation fix."""
+    import scanpath_studio.annotations as _annotations
+
     name = (name or "").strip() or _default_dataset_name()
-    if name in _RESERVED_SOURCE_NAMES:
+    if name in app.reserved_source_names():
         name = f"{name} (uploaded)"
     existing = {
         key: value
         for key, value in st.session_state.get("_datasets", {}).items()
         if key != exclude
     }
+    existing.update(
+        dict.fromkeys(_annotations.dataset_names(st.session_state) - {exclude} - {None})
+    )
     if name in existing:
         base, n = name, 2
         while f"{base} ({n})" in existing:
@@ -323,7 +318,7 @@ def _finalize_wizard_dataset() -> None:
     # swap (and so the dataset this wizard was opened over keeps its own).
     # DATA-48 — likewise its annotations (none yet: nothing is annotated in
     # the wizard, but the store it opened on belongs to another dataset).
-    from scanpath_studio import annotations as _annotations
+    import scanpath_studio.annotations as _annotations
     from scanpath_studio import metadata as _metadata
 
     _metadata.adopt_pending_dataset(st.session_state, ds_name)
@@ -354,9 +349,11 @@ def upload_annotations(name: str) -> list[dict]:
     is shared with another dataset that happens to reuse its trial ids — which
     is why the removal confirmation can say how many will go.
     """
-    from scanpath_studio import annotations
+    import scanpath_studio.annotations as annotations_mod
 
-    return annotations.store_to_records(annotations.store_for(st.session_state, name))
+    return annotations_mod.store_to_records(
+        annotations_mod.store_for(st.session_state, name)
+    )
 
 
 def _remove_dataset(name: str) -> None:
@@ -379,9 +376,9 @@ def _remove_dataset(name: str) -> None:
     """
     # BUG-95 — its annotations go with it, as the confirmation says (DATA-48:
     # the dataset's own store, filed under its name).
-    from scanpath_studio import annotations
+    import scanpath_studio.annotations as annotations_mod
 
-    annotations.forget_dataset(st.session_state, name)
+    annotations_mod.forget_dataset(st.session_state, name)
     store = st.session_state.get("_datasets", {})
     store.pop(name, None)
     # UX-174 r2 — and its description, so a new dataset of that name starts
@@ -436,7 +433,7 @@ def rename_dataset(old: str, new: str) -> str | None:
         st.session_state[DATASET_DESCRIPTIONS_KEY] = descriptions
     # DATA-47 — and its metadata tables, which are keyed by the name too, and
     # (DATA-48) its annotations.
-    from scanpath_studio import annotations as _annotations
+    import scanpath_studio.annotations as _annotations
     from scanpath_studio import metadata as _metadata
 
     _metadata.rename_dataset(st.session_state, old, name)
@@ -531,7 +528,7 @@ def _enter_add_data_wizard() -> None:
     # DATA-47: a new dataset starts with no metadata tables — not the ones of
     # the dataset the wizard was opened over, and not a previous attempt's —
     # and no annotations (DATA-48).
-    from scanpath_studio import annotations as _annotations
+    import scanpath_studio.annotations as _annotations
     from scanpath_studio import metadata as _metadata
 
     _metadata.begin_pending_dataset(st.session_state)

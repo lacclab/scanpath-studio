@@ -140,7 +140,88 @@ def test_round_trip_datasets_settings_mappings_and_annotations(tmp_path):
     assert restored["global_show_heatmap"] is False
     assert restored["global_word_hover_fields"] == ["text", "surprisal"]
     assert restored["col_map_fix_x"] == "gaze_x"
+    # DATA-48: the store named no dataset, so it waits for the first one opened
+    # (`app.main` activates the restored selection right after the restore).
+    import scanpath_studio.annotations as annotations_mod
+
+    annotations_mod.activate_dataset(restored, restored["data_source_choice"])
     assert restored["trial_annotations"][("p1", "t1")]["note"] == "check"
+
+
+class TestAnnotationsModuleImport:
+    """`scanpath_studio/__init__.py` has `from __future__ import annotations`,
+    so until the submodule is imported the package attribute `annotations` is
+    the `__future__` feature object: `from scanpath_studio import annotations`
+    then binds *that*, and every call on it raises AttributeError. The CLI's
+    `cache` command imports persistence alone, which is exactly that state."""
+
+    def _written_cache(self, tmp_path):
+        import scanpath_studio.annotations as annotations_mod
+
+        session: dict = {}
+        annotations_mod.activate_dataset(session, "A")
+        session[ANNOTATIONS_STATE_KEY][("p1", "t1")] = {
+            "star": True,
+            "tags": [],
+            "note": "",
+        }
+        assert save_state(session, tmp_path)
+        return tmp_path
+
+    def test_cache_status_counts_annotations_in_a_fresh_interpreter(self, tmp_path):
+        import subprocess
+        import sys
+
+        root = self._written_cache(tmp_path)
+        probe = (
+            "import json, sys; from pathlib import Path\n"
+            "from scanpath_studio.persistence import cache_status\n"
+            "s = cache_status(Path(sys.argv[1]))\n"
+            "print(json.dumps([s['readable'], s['annotations']]))\n"
+        )
+        out = subprocess.run(
+            [sys.executable, "-c", probe, str(root)],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert json.loads(out.stdout.strip().splitlines()[-1]) == [True, 1]
+
+    def test_the_cli_cache_command_reads_it_in_a_fresh_interpreter(self, tmp_path):
+        import os
+        import subprocess
+        import sys
+
+        root = self._written_cache(tmp_path)
+        out = subprocess.run(
+            [sys.executable, "-m", "scanpath_studio", "cache", "--json"],
+            capture_output=True,
+            text=True,
+            check=True,
+            env={**os.environ, persistence.STATE_DIR_ENV_VAR: str(root)},
+        )
+        status = json.loads(out.stdout[out.stdout.index("{") :])
+        assert status["readable"] is True
+        assert status["annotations"] == 1
+
+    def test_no_module_imports_the_submodule_the_fragile_way(self):
+        import re
+        from pathlib import Path
+
+        package = Path(persistence.__file__).parent
+        fragile = re.compile(
+            r"^\s*from\s+(\.|scanpath_studio)\s+import\s+[^\n]*\bannotations\b",
+            re.MULTILINE,
+        )
+        offenders = [
+            path.name
+            for path in package.glob("*.py")
+            if fragile.search(path.read_text(encoding="utf-8"))
+        ]
+        assert not offenders, (
+            f"{offenders}: use `import scanpath_studio.annotations as <alias>` "
+            "or `from .annotations import …` instead"
+        )
 
 
 class TestAnnotationsPerDataset:
@@ -150,12 +231,12 @@ class TestAnnotationsPerDataset:
     NOTE = {"star": False, "tags": [], "note": "B's note."}
 
     def test_two_datasets_with_colliding_ids_round_trip_apart(self, tmp_path):
-        from scanpath_studio import annotations
+        import scanpath_studio.annotations as annotations_mod
 
         session: dict = {"data_source_choice": "B"}
-        annotations.activate_dataset(session, "A")
+        annotations_mod.activate_dataset(session, "A")
         session[ANNOTATIONS_STATE_KEY][("p1", "t1")] = dict(self.STAR)
-        annotations.activate_dataset(session, "B")
+        annotations_mod.activate_dataset(session, "B")
         session[ANNOTATIONS_STATE_KEY][("p1", "t1")] = dict(self.NOTE)
         assert save_state(session, tmp_path)
         manifest = json.loads((tmp_path / "manifest.json").read_text("utf-8"))
@@ -165,19 +246,19 @@ class TestAnnotationsPerDataset:
         restored: dict = {}
         assert restore_state(restored, tmp_path)
         assert restored_summary(restored)["annotations"] == 2
-        annotations.activate_dataset(restored, restored["data_source_choice"])
+        annotations_mod.activate_dataset(restored, restored["data_source_choice"])
         assert restored[ANNOTATIONS_STATE_KEY] == {("p1", "t1"): self.NOTE}
-        annotations.activate_dataset(restored, "A")
+        annotations_mod.activate_dataset(restored, "A")
         assert restored[ANNOTATIONS_STATE_KEY] == {("p1", "t1"): self.STAR}
 
     def test_a_switch_is_a_change_the_cache_saves(self, tmp_path):
-        from scanpath_studio import annotations
+        import scanpath_studio.annotations as annotations_mod
 
         session: dict = {}
-        annotations.activate_dataset(session, "A")
+        annotations_mod.activate_dataset(session, "A")
         session[ANNOTATIONS_STATE_KEY][("p1", "t1")] = dict(self.STAR)
         assert save_state(session, tmp_path)
-        annotations.activate_dataset(session, "B")
+        annotations_mod.activate_dataset(session, "B")
         session[ANNOTATIONS_STATE_KEY][("p1", "t1")] = dict(self.NOTE)
         assert save_state(session, tmp_path)
         manifest = json.loads((tmp_path / "manifest.json").read_text("utf-8"))
@@ -187,7 +268,7 @@ class TestAnnotationsPerDataset:
         """The manifest's one flat list named no dataset. The session it
         restores opens on the dataset the manifest had selected, which adopts
         them; the next save writes them back under that name — once."""
-        from scanpath_studio import annotations
+        import scanpath_studio.annotations as annotations_mod
 
         legacy = {
             "schema": persistence.SCHEMA_VERSION,
@@ -210,9 +291,9 @@ class TestAnnotationsPerDataset:
         assert restore_state(session, tmp_path)
         assert restored_summary(session)["annotations"] == 1
         # `app.main` activates the selected dataset right after the restore.
-        annotations.activate_dataset(session, session["data_source_choice"])
+        annotations_mod.activate_dataset(session, session["data_source_choice"])
         assert session[ANNOTATIONS_STATE_KEY][("p1", "t1")]["note"] == "kept"
-        annotations.activate_dataset(session, "Another dataset")
+        annotations_mod.activate_dataset(session, "Another dataset")
         assert session[ANNOTATIONS_STATE_KEY] == {}
 
         assert save_state(session, tmp_path)
@@ -832,6 +913,9 @@ class TestAMalformedCacheNeverStopsTheApp:
         self._write(tmp_path, self._manifest(annotations=["x", 5, good]))
         session = {}
         assert restore_state(session, tmp_path)
+        import scanpath_studio.annotations as annotations_mod
+
+        annotations_mod.activate_dataset(session, "Bundled Demo")
         assert list(session[ANNOTATIONS_STATE_KEY]) == [("p1", "t1")]
 
         self._write(tmp_path, self._manifest(annotations={"a": 1}))

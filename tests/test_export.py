@@ -777,13 +777,14 @@ class TestAnnotationsInTheBundle:
             settings=settings,
             options=opts,
             annotation_records=self.RECORDS,
+            annotation_dataset="Pilot",
         )
         return zipfile.ZipFile(io.BytesIO(zip_bytes))
 
     def test_only_the_exported_trials_annotations_go_in(
         self, minimal_combos, minimal_words, minimal_fixations, base_settings
     ):
-        from scanpath_studio.annotations import deserialize
+        from scanpath_studio.annotations import deserialize, file_dataset
 
         with self._export(
             minimal_combos,
@@ -793,8 +794,11 @@ class TestAnnotationsInTheBundle:
             include=True,
         ) as zf:
             assert "annotations.json" in zf.namelist()
-            store = deserialize(zf.read("annotations.json").decode("utf-8"))
+            text = zf.read("annotations.json").decode("utf-8")
+            store = deserialize(text)
             assert list(store) == [("p1", "t1")]
+            # DATA-48: schema 3 names the dataset the annotations were made on.
+            assert file_dataset(text) == "Pilot"
             assert "annotations.json" in zf.read("README.md").decode("utf-8")
 
     def test_off_by_default_and_when_off(

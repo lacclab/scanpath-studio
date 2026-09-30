@@ -15,9 +15,9 @@ across a sequence of interactions instead of booting per assertion.
 
 Facts about the bundled demo used as expectations below:
 
-- 3 readers × 12 word-level trials = **36** trials in the words table; only 2 of
-  those readers have fixations, so the trial picker (built from fixations)
-  offers **24**. Half of each is ``Adv``, half ``Ele``.
+- 2 readers × 12 trials = **24**, every one with fixations, so the words table
+  and the trial picker (built from fixations) agree (DATA-43 dropped a third
+  reader who had word rows only). Half of them are ``Adv``, half ``Ele``.
 - ``universal_pos`` holds the 15 Universal-POS tags listed in ``_POS_TAGS``.
 """
 
@@ -46,9 +46,9 @@ AppTest = streamlit_testing.AppTest
 SYNTHETIC_SOURCE = "Synthetic test trial"
 
 DEMO_TRIALS_IN_PICKER = 24  # (participant, trial) pairs that have fixations
-DEMO_TRIALS_IN_WORDS = 36  # …incl. the third reader, who has word rows only
+DEMO_TRIALS_IN_WORDS = 24  # the same pairs: every demo trial has fixations
 DEMO_ADV_TRIALS_IN_PICKER = 12
-DEMO_ADV_TRIALS_IN_WORDS = 18
+DEMO_ADV_TRIALS_IN_WORDS = 12
 
 # The Universal-POS values shipped with the demo's word table. Remapping the
 # word "text" field onto that column must make every rendered word label one of

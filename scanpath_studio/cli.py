@@ -335,9 +335,8 @@ def _render_parser() -> argparse.ArgumentParser:
     src.add_argument(
         "--sample",
         action="store_true",
-        help="Use the bundled OneStop demo: word boxes for 3 readers, "
-        "fixations — so trials to render — for 2 of them (--list-trials shows "
-        "which).",
+        help="Use the bundled OneStop demo: 2 readers, 12 paragraphs each "
+        "(--list-trials shows them).",
     )
     src.add_argument(
         "--authoring",

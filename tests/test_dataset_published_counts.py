@@ -200,7 +200,7 @@ class TestTheLookup:
         """`dataset_about` hands out the entry's own figures; a caller that
         edited them in place would be editing the catalogue for the session."""
         app.dataset_about(DEMO_CHOICE)["published_counts"]["Participants"] = 999
-        assert app.published_dataset_counts(DEMO_CHOICE)["Participants"] == 3
+        assert app.published_dataset_counts(DEMO_CHOICE)["Participants"] == 2
 
 
 class TestPreparedBenchmarkCorpora:
@@ -344,7 +344,7 @@ class TestTheTableItself:
     def test_the_open_dataset_shows_what_it_loaded(self, table):
         row = table.set_index("Dataset").loc["Bundled Demo"]
         assert row["Counts"] == "Loaded"
-        assert row["Participants"] == 3
+        assert row["Participants"] == 2
 
     def test_a_source_that_publishes_nothing_stays_blank(self, table):
         """MultiplEYE reads whatever session folders are on this machine, so no

@@ -9,7 +9,7 @@ visualization. Targeted at reading-research / NLP audiences. Distributed as the
 PyPI package `scanpath-studio`; deployable to Streamlit Community
 Cloud via `streamlit_app.py` at the repo root.
 
-Demo corpus: 3 participants × 2 articles × {Adv, Ele} from **OneStop Eye
+Demo corpus: 2 participants × 2 articles × {Adv, Ele} from **OneStop Eye
 Movements** (Berzak, Malmaud, Shubi, Meiri, Lion, Levy, *Scientific Data* 2025;
 [doi:10.1038/s41597-025-06272-2](https://doi.org/10.1038/s41597-025-06272-2);
 docs at <https://lacclab.github.io/OneStop-Eye-Movements/>), shipped under

@@ -2089,10 +2089,10 @@ _BUILTIN_DATASET_ABOUT: dict[str, dict] = {
         # them, so regenerating the subset fails a test rather than quietly
         # leaving a stale number in the table.
         published_counts={
-            "Participants": 3,
+            "Participants": 2,
             "Texts": 12,
-            "Trials": 36,
-            "Words": 3922,
+            "Trials": 24,
+            "Words": 2614,
             "Fixations": 3209,
             "Gaze points": 2233,
         },

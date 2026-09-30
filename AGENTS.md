@@ -174,10 +174,10 @@ arranged on the **[Scanpath Studio board](https://github.com/orgs/lacclab/projec
 Not every ID has an issue, deliberately: `CHANGELOG.md` allocates the IDs and
 carries the write-up for finished work, and an issue is opened when the item
 needs the **Review** gate, is blocked on the user (`waiting-on-you`), or is
-carried across sessions. So take a new ID's number from all three registries —
-the changelog, `gh issue list`, and `tracker/data.js` — never GitHub alone, and
-since `main` became protected, **check the open PRs too**: an ID sitting in an
-unmerged branch's changelog is in none of the three.
+carried across sessions. So take a new ID's number from both registries —
+the changelog and `gh issue list` — never GitHub alone, and since `main` became
+protected, **check the open PRs too**: an ID sitting in an unmerged branch's
+changelog is in neither.
 
 Status (`Backlog · Planned · In progress · On hold · Review`) and priority live
 in the board's single-select columns, and kind is the native issue type
@@ -189,12 +189,10 @@ open, with everything waiting on them in a `### ⚖ Waiting on you` checklist. F
 conventions, including the four-section body shape, in `CLAUDE.md` →
 *Tracking work*.
 
-The in-repo tracker was migrated on 2026-08-20 (ENG-32) and is now a **read-only
-archive**: `tracker/data.js` + `index.html` hold the 320 items closed before the
-move with their write-ups, `python3 tracker/server.py` serves them (static, no
-write API), and `tracker/migrated.json` maps each migrated ID to its issue.
-Don't edit it — `tests/test_tracker_server.py` fails if an open item there has no
-issue, and if the server or page regrows a way to write.
+The in-repo tracker was migrated on 2026-08-20 (ENG-32) and removed on
+2026-09-30 (ENG-84). Its 320 closed items, with their write-ups, are still at the
+`v0.31.2` tag: `git show v0.31.2:tracker/data.js`, with `migrated.json` mapping
+each migrated ID to its issue.
 
 ## Build / Lint / Test
 
@@ -360,5 +358,6 @@ link / CLI / API silently can't be shared, scripted, or rendered headlessly.
    on GitHub with the project name `scanpath-studio`).
 6. The `Desktop builds` workflow (`.github/workflows/desktop.yml`) builds the
    standalone per-OS desktop bundles (`desktop/` — PyInstaller launcher + spec
-   + smoke test; design in `plans/eng-15-desktop-app.md`) and attaches them to
+   + smoke test; design in [`plans/eng-15-desktop-app.md`](https://github.com/lacclab/scanpath-studio/blob/v0.31.2/plans/eng-15-desktop-app.md) at
+   `v0.31.2`) and attaches them to
    the GitHub release for the tag.

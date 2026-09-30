@@ -1,5 +1,5 @@
 # ENG-15: standalone desktop builds (PyInstaller onedir — see
-# plans/eng-15-desktop-app.md). Runs on release tags + manual dispatch, not
+# https://github.com/lacclab/scanpath-studio/blob/v0.31.2/plans/eng-15-desktop-app.md). Runs on release tags + manual dispatch, not
 # per-PR: a 3-OS build is release infrastructure, not a PR gate.
 name: Desktop builds
 

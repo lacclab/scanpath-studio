@@ -2,17 +2,6 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "tracker-archive",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": [
-        "tracker/server.py",
-        "--port",
-        "8790",
-        "--no-open"
-      ],
-      "port": 8790
-    },
-    {
       "name": "scanpath-studio",
       "runtimeExecutable": "uv",
       "runtimeArgs": [

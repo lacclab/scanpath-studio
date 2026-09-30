@@ -8,8 +8,8 @@ description: Add or update a work item in GitHub Issues and on the Scanpath Stud
 Work lives in **GitHub Issues** on `lacclab/scanpath-studio`, arranged on the
 **[Scanpath Studio board](https://github.com/orgs/lacclab/projects/5)** (project
 5) and driven with `gh`. The in-repo tracker (`tracker/`) was migrated on
-2026-08-20 (ENG-32) and is a read-only archive of everything closed before then —
-read it, never edit it.
+2026-08-20 (ENG-32) and removed on 2026-09-30 (ENG-84); everything closed before
+the migration is still at the `v0.31.2` tag (`git show v0.31.2:tracker/data.js`).
 
 **Prefer GitHub's structured fields to labels.** Status, priority and kind are
 native fields, so they are deliberately *not* also labels — two vocabularies for
@@ -29,13 +29,13 @@ implementing).
   Prefixes: `AN` (analysis), `BUG`, `CMP` (compare mode), `DATA`, `ENG`, `EXP`
   (export), `PERF`, `PRE` (preprocessing), `UX`, `VAL`, `VIZ`. A new item takes
   the next free number in its prefix, and most IDs live in only **one** place, so
-  check all four (the procedure in `CLAUDE.md` → *Tracking work*):
+  check all three (the procedure in `CLAUDE.md` → *Tracking work*):
   `CHANGELOG.md` (where most IDs are allocated — not every ID gets an issue),
-  the issues, the pre-migration archive, and **the open PRs**, whose unmerged
-  changelogs are invisible to the other three:
+  the issues, and **the open PRs**, whose unmerged changelogs are invisible to
+  the other two:
 
   ```bash
-  grep -oh "\bDATA-[0-9]*\b" CHANGELOG.md tracker/data.js docs/*.md scanpath_studio/*.py | sort -u -V | tail -3
+  grep -oh "\bDATA-[0-9]*\b" CHANGELOG.md docs/*.md scanpath_studio/*.py | sort -u -V | tail -3
   gh issue list --state all --limit 200 --search "[DATA-" --json title
   gh pr list --state open --json number,headRefName,title
   gh pr diff <n> -- CHANGELOG.md | grep -oE "\b[A-Z]+-[0-9]+\b" | sort -u -V | tail
@@ -56,10 +56,6 @@ implementing).
   gh project item-edit --project-id <project-id> --id <item-id> \
       --field-id <status-field-id> --single-select-option-id <option-id>
   ```
-
-  Never use `tracker/to_github_issues.py --sync-board` for this: it is the
-  migration script's record, acts only on archived items, and **overwrites** the
-  live board's Status and Priority with the frozen archive's values.
 - **Priority** is the board's `Priority` column: `Urgent · High · Medium · Low`,
   Medium being the default.
 - **Kind** is the native issue type — `Bug`, `Feature` (a capability) or `Task`

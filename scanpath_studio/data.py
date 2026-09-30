@@ -1143,9 +1143,161 @@ def _affix_sibling(
     return next((col for col in words.columns if _col_tokens(col) == want), None)
 
 
+#: AN-32 — the per-AOI reading measures a dataset *brings*: the Corpus Analysis
+#: page shows these and computes none of them. Each is an optional AOI-table
+#: field, ``(schema key, canonical column, short label, full name, kind,
+#: candidates)``; the candidates lead with EyeLink Data Viewer's interest-area
+#: report names (``IA_*``), then the plain spellings other exports use. The
+#: canonical columns are ``aggregation.MEASURES``' own, so a mapped measure is
+#: the one the page's pickers offer.
+READING_MEASURE_FIELDS: tuple[tuple[str, str, str, str, str, tuple[str, ...]], ...] = (
+    (
+        "measure_tfd",
+        "total_fixation_duration_ms",
+        "TFD",
+        "Total fixation duration (dwell time), ms",
+        "numeric",
+        ("IA_DWELL_TIME", "total_fixation_duration", "TFD", "dwell_time"),
+    ),
+    (
+        "measure_ffd",
+        "first_fixation_ms",
+        "FFD",
+        "First fixation duration, ms",
+        "numeric",
+        ("IA_FIRST_FIXATION_DURATION", "first_fixation_duration", "FFD"),
+    ),
+    (
+        "measure_fprt",
+        "first_pass_gaze_duration_ms",
+        "FPRT",
+        "First-pass reading time (gaze duration), ms",
+        "numeric",
+        (
+            "IA_FIRST_RUN_DWELL_TIME",
+            "first_pass_gaze_duration",
+            "gaze_duration",
+            "FPRT",
+        ),
+    ),
+    (
+        "measure_rpd",
+        "regression_path_duration_ms",
+        "RPD",
+        "Regression-path (go-past) duration, ms",
+        "numeric",
+        ("IA_REGRESSION_PATH_DURATION", "regression_path_duration", "go_past", "RPD"),
+    ),
+    (
+        "measure_second_pass",
+        "second_pass_duration_ms",
+        "2nd pass",
+        "Second-pass duration, ms",
+        "numeric",
+        ("IA_SECOND_RUN_DWELL_TIME", "second_pass_duration"),
+    ),
+    (
+        "measure_single_fix",
+        "single_fixation_duration_ms",
+        "Single fix.",
+        "Single-fixation duration, ms",
+        "numeric",
+        ("IA_SINGLE_FIXATION_DURATION", "single_fixation_duration", "SFD"),
+    ),
+    (
+        "measure_nfix",
+        "n_fixations",
+        "Fix. count",
+        "Number of fixations on the AOI",
+        "numeric",
+        ("IA_FIXATION_COUNT", "fixation_count", "n_fixations"),
+    ),
+    (
+        "measure_skip",
+        "skip_flag",
+        "Skip",
+        "Skipped in first pass (0/1)",
+        "boolean",
+        ("IA_SKIP", "skip_flag", "skipped"),
+    ),
+    (
+        "measure_reg_in",
+        "regression_in_flag",
+        "Reg. in",
+        "Regressed into (0/1)",
+        "boolean",
+        ("IA_REGRESSION_IN", "regression_in_flag"),
+    ),
+    (
+        "measure_reg_out",
+        "regression_out_flag",
+        "Reg. out",
+        "Regressed out of (0/1)",
+        "boolean",
+        ("IA_REGRESSION_OUT", "regression_out_flag"),
+    ),
+    (
+        "measure_reg_in_count",
+        "number_of_regressions_in",
+        "Reg. in (n)",
+        "Number of regressions into the AOI",
+        "numeric",
+        ("IA_REGRESSION_IN_COUNT", "number_of_regressions_in", "regression_in_count"),
+    ),
+    (
+        "measure_landing_position",
+        "initial_landing_position",
+        "Landing pos.",
+        "Initial landing position, letters",
+        "numeric",
+        ("IA_FIRST_FIXATION_LANDING_POSITION", "initial_landing_position"),
+    ),
+    (
+        "measure_landing_distance",
+        "initial_landing_distance",
+        "Landing dist.",
+        "Centred initial landing distance, letters",
+        "numeric",
+        ("initial_landing_distance", "landing_distance"),
+    ),
+)
+READING_MEASURE_KEYS: tuple[str, ...] = tuple(f[0] for f in READING_MEASURE_FIELDS)
+
+
+def _apply_reading_measures(
+    df: pd.DataFrame, source: pd.DataFrame, schema: dict
+) -> None:
+    """Write the mapped reading measures onto ``df`` (AN-32).
+
+    A schema that names a measure key decides that measure outright: mapped, the
+    column is copied under its canonical name (and wins over the optional-field
+    passthrough); cleared, the canonical column is removed even if the
+    passthrough carried it — "this dataset has no TFD" has to stay true. A
+    schema without measure keys (a dataset stored before AN-32) is left as the
+    passthrough made it."""
+    for key, canonical, _label, _name, kind, _candidates in READING_MEASURE_FIELDS:
+        if key not in schema:
+            continue
+        column = schema.get(key)
+        if column and column in source.columns:
+            values = source[column]
+            df[canonical] = (
+                coerce_flag(values) if kind == "boolean" else _to_number(values)
+            )
+        elif canonical in df.columns:
+            del df[canonical]
+
+
 def propose_word_schema(words: pd.DataFrame) -> dict[str, str | None]:
     """Return a candidate column mapping for words/IA data without erroring."""
     schema = _propose_word_schema_by_field(words)
+    # AN-32: every reading measure is proposed too, from its known names.
+    # The app's own canonical name is a candidate too, right after EyeLink's,
+    # so a table the app itself wrote (an exported words.csv, a normalized
+    # frame handed to the API) keeps its measures instead of having the key
+    # proposed empty — which `_apply_reading_measures` reads as "absent".
+    for key, column, _label, _name, _kind, candidates in READING_MEASURE_FIELDS:
+        schema[key] = pick_column(words, (candidates[0], column, *candidates[1:]))
     if all(schema[edge] for edge in _BOX_EDGES):
         return schema
     edge_set = _pick_box_edge_set(words)
@@ -3412,8 +3564,15 @@ WORD_OPTIONAL_FIELDS = [
     ("TRIAL_DWELL_TIME", "trial_dwell_time_ms", "numeric", "measure"),
     ("TRIAL_FIXATION_COUNT", "trial_fixation_count", "numeric", "measure"),
     ("TRIAL_IA_COUNT", "trial_ia_count", "numeric", "measure"),
-    ("word_length", "word_length", "numeric", "measure"),
-    ("word_length_no_punctuation", "word_length_no_punctuation", "numeric", "measure"),
+    # A property of the word, not of the reading — and Corpus Analysis' "Word
+    # length" feature, so it stays pre-kept with the other linguistic fields.
+    ("word_length", "word_length", "numeric", "linguistic"),
+    (
+        "word_length_no_punctuation",
+        "word_length_no_punctuation",
+        "numeric",
+        "linguistic",
+    ),
     ("gpt2_surprisal", "gpt2_surprisal", "numeric", "linguistic"),
     ("wordfreq_frequency", "wordfreq_frequency", "numeric", "linguistic"),
     ("subtlex_frequency", "subtlex_frequency", "numeric", "linguistic"),
@@ -3673,13 +3832,23 @@ def categorize_columns(raw: pd.DataFrame, schema: dict, registry: list) -> dict:
 
     ``mapped`` = source columns the schema references; ``detected_optional`` =
     registry entries present in the frame (each ``{source, dest, category}``);
-    ``unclaimed`` = everything else (offered as filter fields / extra keeps)."""
+    ``unclaimed`` = everything else (offered as filter fields / extra keeps).
+
+    AN-32: a registry column mapped as a *reading measure* is not also a
+    detected extra — `IA_DWELL_TIME` mapped as TFD was offered, pre-kept, as
+    `total_fixation_duration_ms` — and a source the registry lists twice (a
+    compatibility alias) is detected once, under its first entry. Only the
+    measure mapping claims a column here: a registry column the Trial ID is
+    composed from (`repeated_reading_trial`) is still a detected trial
+    condition, which is what offers it as a trial filter."""
     mapped = {c for c in _schema_source_columns(schema) if c in raw.columns}
-    detected = [
-        {"source": src, "dest": dest, "category": category}
-        for src, dest, _kind, category in registry
-        if src in raw.columns
-    ]
+    as_measure = {schema.get(key) for key in READING_MEASURE_KEYS if schema.get(key)}
+    detected: list = []
+    seen: set = set()
+    for src, dest, _kind, category in registry:
+        if src in raw.columns and src not in as_measure and src not in seen:
+            seen.add(src)
+            detected.append({"source": src, "dest": dest, "category": category})
     detected_sources = {d["source"] for d in detected}
     unclaimed = [
         c for c in raw.columns if c not in mapped and c not in detected_sources
@@ -3833,6 +4002,9 @@ def normalize_words(
         _carry_extra_columns(
             df, words, keep_columns, _schema_source_columns(schema) | emitted
         )
+    # AN-32: after the passthrough and the extras, so the mapping has the last
+    # word on every measure it names.
+    _apply_reading_measures(df, words, schema)
 
     df = _preserve_composite_columns(df, words, schema["trial"])
     return df

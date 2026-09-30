@@ -126,6 +126,9 @@ covers setup, the checks that gate CI, and how work is tracked in
 the architectural map. To preview the docs site locally, run
 `pip install -e ".[docs]"` and then `mkdocs serve`.
 
+Taking part means following the
+[Code of Conduct](https://github.com/lacclab/scanpath-studio/blob/main/CODE_OF_CONDUCT.md).
+
 ## Citation
 
 A paper is in preparation. Until then, cite the software by its DOI,

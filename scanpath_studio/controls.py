@@ -51,7 +51,7 @@ from .constants import (
     palette_settings,
     upload_limit_mb,
 )
-from .data import frame_fingerprint
+from .data import READING_MEASURE_FIELDS, READING_MEASURE_KEYS, frame_fingerprint
 from .export import (
     DEFAULT_CAPTION_PATTERN,
     DEFAULT_TITLE_PATTERN,
@@ -1793,6 +1793,10 @@ def _default_box_format(proposed: dict[str, str | None]) -> str:
 # blocks that each restart their own numbering (e.g. a comprehension
 # question's answer blocks) ever needs it.
 _ADVANCED_MAPPING_KEYS = frozenset({"screen_id", "block"})
+#: AN-32 — the reading measures fold into a group of their own wherever every
+#: field is listed at once (the ⚙️ Configure panel), so thirteen optional
+#: fields never stretch the required ones apart.
+_MEASURE_MAPPING_KEYS = frozenset(READING_MEASURE_KEYS)
 
 #: Mapping keys that are **resolved but never rendered** (UX-53 round 3).
 #:
@@ -1898,6 +1902,18 @@ WORD_FIELD_SPECS: list[dict] = [
         "required": True,
         "help": "Bounding box per word/AOI. Edges = left/right/top/bottom (EyeLink IA_*); origin+size = x/y/width/height.",
     },
+    # AN-32: the reading measures a dataset brings, one optional field each —
+    # the Corpus Analysis page shows these and computes none. Short labels, as
+    # they share two lines; the full name and the EyeLink column are the hover.
+    *(
+        {
+            "key": key,
+            "label": label,
+            "help": f"{name}. Auto-detected from EyeLink's `{candidates[0]}`"
+            " (or a column named like it). Leave empty if your report has none.",
+        }
+        for key, _column, label, name, _kind, candidates in READING_MEASURE_FIELDS
+    ),
 ]
 
 FIX_FIELD_SPECS: list[dict] = [
@@ -2437,6 +2453,8 @@ def column_mapping_ui(
         """The container a field's row renders into (main, or Advanced)."""
         if group_advanced and field_key in _ADVANCED_MAPPING_KEYS:
             return hosts.get("advanced") or hosts["main"]
+        if group_advanced and field_key in _MEASURE_MAPPING_KEYS:
+            return hosts.get("measures") or hosts["main"]
         return hosts["main"]
 
     #: Grid cursor for `columns_per_row > 1`: the current row's columns and how
@@ -2631,7 +2649,19 @@ def column_mapping_ui(
         # (Streamlit lays containers out in creation order, and
         # `_assemble_mapping` interleaves them).
         hosts["main"] = st.container()
+        measures_slot = st.container()
         advanced_slot = st.container()
+        if group_advanced and any(
+            spec["key"] in _MEASURE_MAPPING_KEYS for spec in field_specs
+        ):
+            hosts["measures"] = measures_slot.expander(
+                f"{ICONS['settings']} Reading measures",
+                expanded=any(proposed.get(key) for key in _MEASURE_MAPPING_KEYS),
+            )
+            hosts["measures"].caption(
+                "The per-AOI measures your report already has (FFD, TFD, …). "
+                "The Corpus Analysis page shows these; it computes none."
+            )
         if group_advanced and any(
             spec["key"] in _ADVANCED_MAPPING_KEYS for spec in field_specs
         ):
@@ -2751,20 +2781,22 @@ def column_mapping_ui(
                 help=spec.get("help"),
                 label_visibility="collapsed",
                 persist_state="session",
+                on_change=_mark_field_touched,
+                args=(state_key,),
             )
-            if default and default in df.columns:
-                note_col.markdown(
-                    f'<span class="sps-map-flag sps-fhelp" '
-                    f'data-tip="{html.escape(f"{detected_label} `{default}`", quote=True)}">'
-                    f"{icon_html('auto_detected')}</span>",
-                    unsafe_allow_html=True,
-                )
-            # UX-90: the same red-when-required-and-empty rule the selectboxes
-            # get. Trial ID is the one required multiselect on the page, and it
-            # was the one required field that could be left empty through a
-            # failed add without saying so.
-            if not chosen_cols and spec["key"] in required_keys and add_attempted:
-                tint_cells.setdefault("missing", []).append(cell_key)
+            # UX-176: the same amber / ✨-confirm / green / red rule the
+            # selects get (UX-90's red-when-required-and-empty included).
+            state = multi_field_flag(
+                note_col,
+                state_key=state_key,
+                cell_key=cell_key,
+                chosen=list(chosen_cols),
+                default=proposed_default,
+                required=spec["key"] in required_keys,
+                detected_label=detected_label,
+            )
+            if state:
+                tint_cells.setdefault(state, []).append(cell_key)
             return list(chosen_cols)
 
         mapping = _assemble_mapping(
@@ -2778,6 +2810,65 @@ def column_mapping_ui(
         )
         _emit_field_tints(tint_cells)
     return mapping
+
+
+def multi_field_flag(
+    flag_host,
+    *,
+    state_key: str,
+    cell_key: str,
+    chosen: list,
+    default: list,
+    required: bool,
+    detected_label: str = "auto-detected",
+) -> str:
+    """The ✨ flag of a *multi-column* picker, and its tint state (UX-176).
+
+    The identity pickers (Trial / Participant / Text ID) are multiselects, so
+    they never reached `_selectbox`'s amber tint and ✨ confirm button — the
+    auto-detected id read exactly like one somebody had checked. This is the
+    same rule for them: the columns detection proposed, untouched, are amber
+    with a ✨ **button** that approves them; picking goes green; clearing goes
+    neutral (or red once an add is attempted, for a required one). Returns the
+    `_FIELD_TINT` state for the caller to paint (`mark_cells`)."""
+    joined = " + ".join(chosen) if chosen else None
+    proposed = " + ".join(default) if default else None
+    state, hover = _field_state(
+        chosen=joined,
+        default=proposed,
+        is_required=required,
+        attempted=bool(st.session_state.get(ADD_ATTEMPTED_KEY)),
+        touched=state_key in st.session_state.get(TOUCHED_FIELDS_KEY, ()),
+        detected_label=detected_label,
+    )
+    if state == "auto":
+        flag_host.button(
+            ICONS["auto_detected"],
+            key=f"{cell_key}_confirm",
+            help=f"{hover} — click to confirm and clear the mark.",
+            on_click=_mark_field_touched,
+            args=(state_key,),
+        )
+    elif hover:
+        flag_host.markdown(
+            f'<span class="sps-map-flag sps-fhelp" '
+            f'data-tip="{html.escape(hover, quote=True)}">'
+            f"{icon_html('auto_detected')}</span>",
+            unsafe_allow_html=True,
+        )
+    return state
+
+
+def mark_cells(cells_by_state: dict) -> None:
+    """Paint mapping cells built outside `column_mapping_ui` (UX-176) —
+    ``{state: [cell_key, …]}``, the same states and `<style>` block."""
+    _emit_field_tints(
+        {
+            state: [str(k) for k in keys]
+            for state, keys in cells_by_state.items()
+            if keys
+        }
+    )
 
 
 def mark_missing_cells(cell_keys) -> None:

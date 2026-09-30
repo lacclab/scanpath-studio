@@ -38,19 +38,23 @@ from .constants import (
     upload_limit_mb,
 )
 from .controls import (
+    _GRID_LABEL_W,
     ADD_ATTEMPTED_KEY,
     FIX_FIELD_SPECS,
     RAW_GAZE_FIELD_SPECS,
     TOUCHED_FIELDS_KEY,
     WORD_FIELD_SPECS,
+    _mark_field_touched,
     claim_mapping,
     column_mapping_ui,
     inline_field_label,
-    mark_missing_cells,
+    mark_cells,
+    multi_field_flag,
 )
 from .data import (
     FIX_OPTIONAL_FIELDS,
     PARTICIPANT_CANDIDATES,
+    READING_MEASURE_KEYS,
     SOURCE_FILE_COLUMN,
     WORD_OPTIONAL_FIELDS,
     aggregate_char_boxes,
@@ -756,7 +760,7 @@ def _render_identity_field(
     if has_words:
         tables.append(("words", "AOI", raw_words, word_schema))
 
-    missing_cells: list[str] = []
+    tinted: dict[str, list[str]] = {}
     for cell, (slug, table_label, raw, schema) in zip(cells, tables):
         key = f"col_map_{slug}_{field_key}"
         # UX-108 — the file's real header, not `raw.columns`: PERF-6 parses
@@ -775,7 +779,12 @@ def _render_identity_field(
         # carries no table name (r15): the rows are now grouped *by* table and
         # each is labelled once at its head, so repeating it on all three fields
         # would say the same thing three times.
-        inline_field_label(cell, label, f"{help_text} ({table_label} table)")
+        # UX-176: the title shares its line with the ✨ flag, as a select's
+        # does, so an auto-detected id can be seen and confirmed.
+        label_col, flag_col = cell.container().columns(
+            _GRID_LABEL_W, gap=None, vertical_alignment="center"
+        )
+        inline_field_label(label_col, label, f"{help_text} ({table_label} table)")
         # UX-91: a keyed wrapper so an empty *required* picker can be tinted the
         # red every other required field turns after a failed add. These
         # multiselects are the wizard's own — they never went through
@@ -788,12 +797,21 @@ def _render_identity_field(
             key=key,
             help=help_text,
             label_visibility="collapsed",
+            on_change=_mark_field_touched,
+            args=(key,),
         )
         schema[field_key] = _mapping(chosen)
-        if required and not chosen and st.session_state.get(ADD_ATTEMPTED_KEY):
-            missing_cells.append(cell_key)
-    if missing_cells:
-        mark_missing_cells(missing_cells)
+        state = multi_field_flag(
+            flag_col,
+            state_key=key,
+            cell_key=cell_key,
+            chosen=list(chosen),
+            default=[c for c in default_cols if c in options],
+            required=required,
+        )
+        if state:
+            tinted.setdefault(state, []).append(cell_key)
+    mark_cells(tinted)
 
 
 #: UX-113 — session key holding the *committed* filename-derive settings
@@ -1516,7 +1534,10 @@ def _wizard_table_keep_picker(
         # Trial-level conditions and detected measures/linguistic features
         # were both auto-kept before UX-114 split them into two pickers —
         # same net defaults, offered as one choice now.
-        if d["category"] in ("meta", "measure", "linguistic"):
+        # AN-32: not the leftover measures — the ones the app uses are mapped on
+        # the *Reading measures* lines above, and pre-keeping the rest (last-run
+        # dwell, trial dwell/count, …) only widened every table by default.
+        if d["category"] in ("meta", "linguistic"):
             default.append(src)
         if d["category"] == "meta":
             meta_dest_by_source[src] = d["dest"]
@@ -2649,6 +2670,14 @@ _FIX_ROW2_W = (0.155, 0.2113, 0.2113, 0.2113, 0.2113)
 #: the box gets most of the row, Line index the rest (UX-55 r3).
 _AOI_ROW2_W = (0.155, 0.678, 0.167)
 
+#: AN-32 — rows 3-4 of the AOI block: the reading measures the report brings,
+#: seven to a line under the same name column (thirteen fields on one line
+#: would leave each select a sliver). Shared with the ✏️ Edit dataset grid.
+MEASURE_ROW_W = (0.155, *([0.845 / 7] * 7))
+#: The measures, split into those two lines: durations and the count first,
+#: then the flags, the regression count and the landing measures.
+MEASURE_ROWS = (READING_MEASURE_KEYS[:7], READING_MEASURE_KEYS[7:])
+
 #: Row 2 of the Raw gaze block (UX-113): X · Y · Timestamp — no Duration, raw
 #: gaze has no such concept (unlike row 1, which reuses `_ID_ROW1_W` outright:
 #: same six identity fields, same shape as Fixations/AOI above it).
@@ -3237,6 +3266,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
         feature_rows["words"] = words_block.columns(
             _AOI_ROW2_W, gap="small", vertical_alignment="bottom"
         )
+        # AN-32: the two measure lines, reserved here so they sit under the
+        # box row and above the character-AOI toggle, whatever fills first.
+        measure_rows = [
+            words_block.columns(MEASURE_ROW_W, gap="small", vertical_alignment="bottom")
+            for _ in MEASURE_ROWS
+        ]
         extra_rows["words"] = words_block.container()
         keep_rows["words"] = words_block.container()
 
@@ -3450,6 +3485,25 @@ def _render_data_setup(active: bool) -> _UploadResult:
                     ["line"],
                 )
             )
+            # AN-32 — the reading measures, two lines named once. Each is an
+            # optional field seeded from its EyeLink name, so an IA report maps
+            # them all without a click and a report without them leaves the
+            # lines empty rather than hiding them behind a switch.
+            # No name in the row's first column: on this screen it holds the
+            # AOI uploader, centred on the whole block, and a label there
+            # printed over the file card. Each field names its measure.
+            for row, keys in zip(measure_rows, MEASURE_ROWS):
+                for cell, key in zip(row[1:], keys):
+                    word_schema.update(
+                        _map_section(
+                            raw_words,
+                            WORD_FIELD_SPECS,
+                            prop_w,
+                            "col_map_words",
+                            cell,
+                            [key],
+                        )
+                    )
             # UX-104 — line 3 of the AOI block. One row per *character* is a
             # fact about this table, so the question sits with the fields that
             # describe it, not in a later section the user reads after they

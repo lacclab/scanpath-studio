@@ -5,6 +5,11 @@ research tool; contributions, bug reports, and feature requests are welcome via
 [issues](https://github.com/lacclab/scanpath-studio/issues) and pull
 requests.
 
+Everyone taking part — in issues, pull requests, discussions or anywhere else
+the project lives — is expected to follow the
+[Code of Conduct](CODE_OF_CONDUCT.md). Security problems go through
+[SECURITY.md](SECURITY.md), not a public issue.
+
 ## Development setup
 
 ```bash
@@ -153,7 +158,8 @@ Common to both:
   `CHANGELOG.md` (where most are allocated), `gh issue list --state all --search
   "[DATA-"`, and the **open PRs**, whose unmerged changelogs the other two
   cannot see
-  (`gh pr list --state open`, then `gh pr diff <n> -- CHANGELOG.md`) — as
+  (`gh pr list --state open`, then each PR's `CHANGELOG.md` hunk of
+  `gh pr diff <n>` — the command is in `CLAUDE.md`; `gh pr diff` takes no path) — as
   `CLAUDE.md` → *Tracking work* spells out. Two people reaching for a number at
   the same moment will still collide: check again after creating, and renumber
   **your own** item if it does.

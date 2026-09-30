@@ -27,6 +27,10 @@ by default and the picker-only
 **More coming soon!** placeholder. A manual draft appears as **My scanpath**
 once opened; Data Management omits that row and has a **Create manual scanpath**
 button. The sample and manual draft are separate; both share as authored scanpaths.
+Picking the sample **shows** it (`_manual_sample_frames`, through the normal
+view); its authoring editor opens only from its Data-page **Edit** button, which
+arms `_AUTHOR_EDITING_KEY` (`_authoring_editor_open`). `AUTHOR_CHOICE` is always
+an editor.
 Comparison-subtab candidates match the selected trial on
 one chosen field, keep each candidate's own stimulus and the main plot styling,
 exclude the selected trial, and show only trial IDs above their panels.

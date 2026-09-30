@@ -65,8 +65,9 @@ fixation may sit between or outside words. Enter a **Dataset name** and choose
 **Cancel** returns to the previous dataset without adding one.
 
 For a ready-made example, choose **Synthetic sample** in the dataset picker:
-a manually authored six-word example. Its text, fixation positions, and timing
-are editable in the same editor; its draft is separate from your own scanpath.
+a manually authored six-word example that opens like any other dataset. To
+change its text, fixation positions, or timing, press **Edit** on its row in
+**🗂️ Data → Available datasets**; its draft is separate from your own scanpath.
 You can also start a scanpath from **🗂️ Data → Create manual scanpath**.
 
 ## Run from source

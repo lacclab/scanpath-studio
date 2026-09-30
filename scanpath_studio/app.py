@@ -3902,7 +3902,7 @@ def _on_data_source_pick() -> None:
         st.session_state["data_source_picker"] = st.session_state["data_source_choice"]
         return
     if picked:
-        if picked in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
+        if picked == AUTHOR_CHOICE:
             _remember_authoring_return()
         st.session_state["_pending_source_choice"] = picked
 
@@ -3913,7 +3913,63 @@ def _remember_authoring_return() -> None:
         st.session_state["_author_return_source"] = source
 
 
+#: The authoring source whose editor is open. ``AUTHOR_CHOICE`` is always an
+#: editor; the synthetic sample is a dataset that is *shown* like any other until
+#: its ✏️ Edit button arms this key. It is dropped as soon as another source is
+#: active, so coming back to the sample shows it rather than reopening the editor.
+_AUTHOR_EDITING_KEY = "_author_editing"
+
+#: The synthetic sample's stimulus until it has been edited.
+_MANUAL_SAMPLE_TEXT = "The cat sat\non the mat."
+
+
+def _authoring_editor_open(data_choice: str) -> bool:
+    """Whether ``data_choice`` renders the authoring editor instead of a view."""
+    return data_choice == AUTHOR_CHOICE or (
+        data_choice == MANUAL_SAMPLE_CHOICE
+        and st.session_state.get(_AUTHOR_EDITING_KEY) == MANUAL_SAMPLE_CHOICE
+    )
+
+
+def _edit_manual_sample() -> None:
+    """Open the authoring editor on the synthetic sample (its ✏️ Edit button)."""
+    st.session_state[_AUTHOR_EDITING_KEY] = MANUAL_SAMPLE_CHOICE
+    st.session_state["main_nav"] = _VIEW_SCANPATH
+
+
+def _manual_sample_frames() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """The synthetic sample's words and fixations, drawn from its draft.
+
+    Same frames the editor would produce — the seed text until it has been
+    edited, the draft afterwards — so viewing the sample never needs the editor.
+    """
+    from scanpath_studio.authoring import (
+        DEFAULT_LAYOUT,
+        authored_fixations,
+        default_events,
+        layout_text,
+    )
+
+    draft = st.session_state.get("_manual_scanpath_drafts", {}).get(
+        MANUAL_SAMPLE_CHOICE
+    )
+    if draft is None:
+        text = _MANUAL_SAMPLE_TEXT
+        layout = dict(DEFAULT_LAYOUT)
+        words = layout_text(text, **layout)
+        events = default_events(words)
+    else:
+        text, layout, events = draft
+        words = layout_text(text, **{**DEFAULT_LAYOUT, **layout})
+    return words, authored_fixations(words, events)
+
+
 def _cancel_authoring() -> None:
+    if st.session_state.get(_AUTHOR_EDITING_KEY) == MANUAL_SAMPLE_CHOICE:
+        # Back out of the sample's editor to the sample itself.
+        st.session_state.pop(_AUTHOR_EDITING_KEY, None)
+        st.session_state["main_nav"] = _VIEW_SCANPATH
+        return
     st.session_state["_pending_source_choice"] = st.session_state.get(
         "_author_return_source", DEMO_CHOICE
     )
@@ -4422,12 +4478,10 @@ def _select_dataset(name: str) -> None:
     wizard finalize use: ``data_source_choice`` is a widget key elsewhere, so
     this is the one way an assignment lands before the widgets instantiate.
     """
-    if name in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
+    if name == AUTHOR_CHOICE:
         _remember_authoring_return()
     st.session_state["_pending_source_choice"] = name
     st.session_state["data_source_choice"] = name
-    if name == MANUAL_SAMPLE_CHOICE:
-        st.session_state["main_nav"] = _VIEW_SCANPATH
 
 
 #: UX-54 r2 — the upload the ✕ Delete button asked about, awaiting confirmation.
@@ -5147,7 +5201,11 @@ def render_dataset_table(
         token = _clicked("dataset_table_edit")
         if token is not None:
             _select_dataset(token)
-            if token != MANUAL_SAMPLE_CHOICE:
+            if token == MANUAL_SAMPLE_CHOICE:
+                # The sample has no column mapping to edit — its editor is the
+                # authoring canvas, which only this button opens.
+                _edit_manual_sample()
+            else:
                 st.session_state[FOCUS_MAPPING_KEY] = token
                 st.session_state[DATASET_EDITOR_OPEN_KEY] = True
             st.session_state[_TABLE_NEEDS_APP_RERUN] = True
@@ -6372,7 +6430,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
             source == MANUAL_SAMPLE_CHOICE or previous is not None
         ):
             seed_text = (
-                "The cat sat\non the mat."
+                _MANUAL_SAMPLE_TEXT
                 if source == MANUAL_SAMPLE_CHOICE
                 else "Reading unfolds through a sequence of careful eye movements."
             )
@@ -6726,7 +6784,9 @@ def _activate_data_source(data_choice: str, *, preproc_host=None) -> dict:
     it was a popover on the top menu bar until the page took it).
     """
     st.session_state["_active_data_source"] = data_choice
-    if data_choice not in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
+    if st.session_state.get(_AUTHOR_EDITING_KEY) != data_choice:
+        st.session_state.pop(_AUTHOR_EDITING_KEY, None)
+    if not _authoring_editor_open(data_choice):
         st.session_state.pop("_author_editor_source", None)
     preprocessing = _preprocessing_settings(preproc_host)
     if st.session_state.get("_share_selection_source") != data_choice:
@@ -6890,7 +6950,7 @@ def _open_dataset_card(
     with no Cancel, no "last load" hint and no duration recorded — a filter
     change's re-run is not how long the dataset takes to open.
     """
-    if data_choice in (UPLOAD_CHOICE, AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
+    if data_choice == UPLOAD_CHOICE or _authoring_editor_open(data_choice):
         previous = st.session_state.pop(DATASET_TASK_KEY, None)
         if previous is not None:
             progress.cancel(tuple(previous))
@@ -7653,6 +7713,14 @@ def _run_app() -> None:
             _fill_recovery_cache_panel()
             _end_loading(showing_dataset=False)
             return
+    elif data_choice == MANUAL_SAMPLE_CHOICE and not _authoring_editor_open(
+        data_choice
+    ):
+        # The example is shown like any stored dataset; ✏️ Edit opens its editor.
+        words_df, fixations_df = _manual_sample_frames()
+        raw_words_df, raw_fixations_df = words_df, fixations_df
+        raw_gaze_df = pd.DataFrame()
+        mapping_problems = []
     elif data_choice in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
         with view_notices:
             words_df, fixations_df = _render_authoring_source()

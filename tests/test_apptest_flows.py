@@ -722,17 +722,24 @@ class TestAddDatasetMenu:
     @pytest.mark.parametrize("source", [AUTHOR_CHOICE, "Synthetic sample"])
     def test_authoring_cancel_and_save_dataset(self, source):
         at = _boot(synthetic=True)
-        if source == AUTHOR_CHOICE:
-            at.button(key="add_manual_dataset_btn").click().run(timeout=60)
-        else:
-            at.selectbox(key="data_source_picker").select(source).run(timeout=60)
+
+        def _open_editor():
+            if source == AUTHOR_CHOICE:
+                at.button(key="add_manual_dataset_btn").click().run(timeout=60)
+            else:
+                at.selectbox(key="data_source_picker").select(source).run(timeout=60)
+                at.session_state["_author_editing"] = source  # the Edit button
+                at.run(timeout=60)
+
+        _open_editor()
         at.button(key="cancel_authoring").click().run(timeout=60)
         _clean(at)
-        assert at.session_state["data_source_choice"] == SYNTHETIC_SOURCE
-        if source == AUTHOR_CHOICE:
-            at.button(key="add_manual_dataset_btn").click().run(timeout=60)
-        else:
-            at.selectbox(key="data_source_picker").select(source).run(timeout=60)
+        # Cancelling the sample's editor returns to the sample, not the old source.
+        assert at.session_state["data_source_choice"] == (
+            SYNTHETIC_SOURCE if source == AUTHOR_CHOICE else source
+        )
+        assert not any(t.key == "author_text" for t in at.text_area)
+        _open_editor()
         at.text_input(key=f"author_dataset_name_{source}").set_value("My example").run(
             timeout=60
         )
@@ -757,6 +764,14 @@ class TestAddDatasetMenu:
             timeout=60
         )
         _clean(at)
+        # Picking the sample *shows* it; only its Edit button opens the editor.
+        assert at.session_state["data_source_choice"] == MANUAL_SAMPLE_CHOICE
+        assert not any(t.key == "author_text" for t in at.text_area)
+        assert not any(b.key == "cancel_authoring" for b in at.button)
+        assert any(s.label.startswith("**Select Trial**") for s in at.selectbox)
+        at.session_state["_author_editing"] = MANUAL_SAMPLE_CHOICE
+        at.run(timeout=60)
+        _clean(at)
         assert at.text_area(key="author_text").value == "The cat sat\non the mat."
         assert not any("Plot controls" in h.value for h in at.subheader)
         assert not any(s.label.startswith("**Select Trial**") for s in at.selectbox)
@@ -778,6 +793,10 @@ class TestAddDatasetMenu:
         at.selectbox(key="data_source_picker").select(MANUAL_SAMPLE_CHOICE).run(
             timeout=60
         )
+        _clean(at)
+        assert not any(t.key == "author_text" for t in at.text_area)
+        at.session_state["_author_editing"] = MANUAL_SAMPLE_CHOICE
+        at.run(timeout=60)
         _clean(at)
         assert at.text_area(key="author_text").value == "An edited example."
 

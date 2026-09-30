@@ -17,6 +17,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
+from scanpath_studio import data
 from scanpath_studio import metadata as md
 
 
@@ -77,6 +78,26 @@ class TestIdInference:
     )
     def test_matching_ignores_case(self, infer, column):
         assert infer(pd.DataFrame({column: ["a"]})) == column
+
+    @pytest.mark.parametrize(
+        "metadata_list, data_list",
+        [
+            (md.PARTICIPANT_ID_CANDIDATES, data.PARTICIPANT_CANDIDATES),
+            (md.TRIAL_ID_CANDIDATES, data.TRIAL_CANDIDATES),
+            (md.TEXT_ID_CANDIDATES, data.TEXT_ID_CANDIDATES),
+        ],
+    )
+    def test_every_name_the_data_maps_keys_a_metadata_table(
+        self, metadata_list, data_list
+    ):
+        """DATA-44: the metadata lists drifted from `data`'s — the text list lost
+        `unique_paragraph_id`. They lead with `data`'s names, in its order."""
+        assert list(metadata_list[: len(data_list)]) == list(data_list)
+
+    def test_the_demo_text_id_keys_a_texts_table(self):
+        """DATA-44 repro: a Texts table keyed by the demo's own text id."""
+        frame = pd.DataFrame({"unique_paragraph_id": ["t1"], "topic": ["x"]})
+        assert md.infer_text_id_column(frame) == "unique_paragraph_id"
 
     @pytest.mark.parametrize(
         "infer",

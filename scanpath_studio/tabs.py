@@ -214,7 +214,6 @@ from scanpath_studio.plots import (
     add_illustration_label,
     animation_clip_frame_ms,
     animation_playback_ms,
-    animation_player_post_script,
     animation_timeline_summary,
     build_scanpath_replay,
     make_comparison_figure,
@@ -232,6 +231,7 @@ from scanpath_studio.plots import (
     make_word_matrix_heatmap,
     make_word_profile_figure,
     make_word_rate_figure,
+    replay_page,
     set_replay_clock,
 )
 from scanpath_studio.session_keys import (
@@ -852,14 +852,22 @@ def _true_scale_plot_html(
     ``figure_dict`` is ``fig.to_dict()`` when the caller already has it; it is
     serialized as is, skipping the deep copy `to_html` would make of ``fig``
     (2 s at 2,000 frames). The markup is byte-identical either way.
+
+    A replay's frames travel delta-encoded and are rebuilt in the browser
+    (PERF-17, `plots.replay_page`): a 2,001-frame replay's markup is under 1 MB
+    rather than 66 MB, and the player sees the same frames.
     """
     width = int(fig.layout.width or 900)
     height = int(fig.layout.height or 600)
     # BUG-93: an animated replay plays on the wall-clock player — Plotly's own
     # queue rounded every frame up to whole display ticks, so Fine at ×1 ran 25 %
-    # slow — which also starts it on load when autoplay is on (VIZ-10). `None` for
-    # a static figure.
-    player_script = animation_player_post_script(fig)
+    # slow — which also starts it on load when autoplay is on (VIZ-10). The
+    # script also restores the frames the page carries packed (PERF-17). `None`
+    # for a static figure.
+    page = replay_page(fig if figure_dict is None else figure_dict)
+    player_script = None
+    if page is not None:
+        figure_dict, player_script = page
     config: dict = {
         "responsive": False,
         "displaylogo": False,
@@ -1190,20 +1198,17 @@ def _animation_html(fig) -> str:
 
     It replays on the same wall-clock player as the live embed (BUG-93), which
     also autoplays it at the configured speed when asked (VIZ-10); Plotly's own
-    ``auto_play`` stays off, since it ignores ``frame_duration``. ``fig`` may
-    also be a figure's ``to_dict()`` (a replay's cached view), serialized as is.
+    ``auto_play`` stays off, since it ignores ``frame_duration``. The frames
+    travel packed and are rebuilt in the browser (PERF-17). ``fig`` may also be a
+    figure's ``to_dict()`` (a replay's cached view), serialized as is.
     """
-    as_dict = isinstance(fig, dict)
-    frames = fig.get("frames") if as_dict else fig.frames
-    options = dict(include_plotlyjs="cdn", full_html=True, validate=not as_dict)
-    if frames:
-        return pio.to_html(
-            fig,
-            auto_play=False,
-            post_script=animation_player_post_script(fig),
-            **options,
-        )
-    return pio.to_html(fig, **options)
+    options = dict(include_plotlyjs="cdn", full_html=True, auto_play=False)
+    page = replay_page(fig)
+    if page is not None:
+        # PERF-17: the frames travel packed; the script rebuilds them, then plays.
+        figure_dict, script = page
+        return pio.to_html(figure_dict, validate=False, post_script=script, **options)
+    return pio.to_html(fig, validate=not isinstance(fig, dict), **options)
 
 
 def _render_animation_export(replay: _ReplayView, *, file_stem: str) -> None:

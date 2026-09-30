@@ -105,7 +105,7 @@ def test_an_embedded_replay_carries_the_replay_player():
     import json
 
     from scanpath_studio import api
-    from scanpath_studio.plots import animation_player_post_script
+    from scanpath_studio.plots import animation_player_post_script, replay_page
 
     words, fixations = api.load_sample_data()
     pid, tid = api.list_trials(words, fixations).iloc[0]
@@ -117,7 +117,11 @@ def test_an_embedded_replay_carries_the_replay_player():
         found = re.search(r'<script type="application/json">(.*?)</script>', page)
         return json.loads(found.group(1))
 
-    assert payload(replay)["player"] == animation_player_post_script(replay)
+    # PERF-17: the spec leaves the frames out; the script ahead of the player
+    # rebuilds them (`plots.replay_page`).
+    assert payload(replay)["player"].endswith(animation_player_post_script(replay))
+    assert payload(replay)["player"] == replay_page(replay)[1]
+    assert "frames" not in payload(replay)
     assert "player" not in payload(static)
     # The page draws a figure before it is on screen, so a replay waits for ▶.
     assert replay.layout.meta["scanpath_autoplay"] is True

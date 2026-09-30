@@ -180,7 +180,6 @@ class TestAppLaunches:
             f"#### {ICONS['recovery']} Automatic recovery",
             f"#### {ICONS['download']} JSON backup",
             f"#### {ICONS['reset']} Reset",
-            f"#### {ICONS['debug']} Debug tools",
         ):
             assert expected in body, f"{expected} missing from the Session dialog"
         # Neither group is a popover any more — not the merged one UX-38 made,
@@ -214,12 +213,11 @@ class TestAppLaunches:
         the panel rendered every run — dismissing the modal turned debug mode
         back off.
         """
-        from scanpath_studio import app
-        from scanpath_studio.debug_log import DEBUG_STATE_KEY
+        from scanpath_studio.debug_log import _DEBUG_DIALOG_KEY, DEBUG_STATE_KEY
 
         at = _make_apptest()
         at.session_state[DEBUG_STATE_KEY] = True
-        at.session_state[app._SESSION_DIALOG_KEY] = True
+        at.session_state[_DEBUG_DIALOG_KEY] = True
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # A run with the dialog closed must leave the durable gate alone.
@@ -756,6 +754,7 @@ class TestDataInspectionTab:
             "help_tutorials",
             "help_faq",
             "help_about",
+            "help_debug",
         ]
 
 

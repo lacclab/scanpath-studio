@@ -239,6 +239,17 @@ def arm_session_dialog(at) -> None:
     at.session_state[app._SESSION_DIALOG_KEY] = True
 
 
+def arm_debug_dialog(at) -> None:
+    """Ask for the ❓ Help → Debug modal on the *next* run (UX-179).
+
+    Same rule as :func:`arm_session_dialog`: re-arm before every ``at.run()``
+    that should find the dialog still open.
+    """
+    from scanpath_studio import debug_log
+
+    at.session_state[debug_log._DEBUG_DIALOG_KEY] = True
+
+
 def open_data_view(at, timeout: int = 60):
     """Switch to the 🗂️ Data page and rerun, so its body renders (DATA-26)."""
     pin_data_view(at)

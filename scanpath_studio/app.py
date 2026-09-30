@@ -194,6 +194,7 @@ from scanpath_studio.debug_log import (
     debug_enabled,
     install_log_capture,
     log_state_change,
+    maybe_show_debug,
     seed_debug_mode,
     timed,
 )
@@ -1032,12 +1033,6 @@ def _session_dialog(app_url: str, backup_renderer=None) -> None:
     ``st.rerun(scope="app")`` after a restored backup, and the two inline
     confirmations (Streamlit allows no dialog inside a dialog).
     """
-    from scanpath_studio.debug_log import (
-        debug_enabled,
-        render_debug_panel,
-        render_debug_toggle,
-    )
-
     recovery = st.container(key="session_auto_recovery")
     recovery.markdown(f"#### {ICONS['recovery']} Automatic recovery")
     _render_recovery_cache_panel(app_url, slot=recovery.container())
@@ -1056,12 +1051,6 @@ def _session_dialog(app_url: str, backup_renderer=None) -> None:
     reset = st.container(key="session_reset")
     reset.markdown(f"#### {ICONS['reset']} Reset")
     _render_reset_everything_panel(slot=reset.container())
-
-    debug_tools = st.container(key="session_debug_tools")
-    debug_tools.markdown(f"#### {ICONS['debug']} Debug tools")
-    render_debug_toggle(debug_tools.container())
-    if debug_enabled():
-        render_debug_panel(debug_tools.container())
 
 
 def maybe_show_session(app_url: str, backup_renderer=None) -> None:
@@ -7354,7 +7343,7 @@ def _run_app() -> None:
             st.session_state.pop(WIZARD_LEAVE_KEY, None)
         active_view = _VIEW_DATA
 
-    menu = render_top_menu(show_debug=debug_enabled(), active_view=active_view)
+    menu = render_top_menu(active_view=active_view)
     _render_about_panel(menu.title)
     _render_cancelled_load_notice(menu.notices)
 
@@ -7408,6 +7397,8 @@ def _run_app() -> None:
         maybe_show_faq()
         maybe_show_about()
         maybe_show_tutorial_library()
+        # UX-179 — ❓ Help → Debug, served early like its siblings.
+        maybe_show_debug()
 
     # `active_view` was already resolved above, before `render_top_menu` drew
     # its Session-page panel from it (including the BUG-31 wizard hold-override

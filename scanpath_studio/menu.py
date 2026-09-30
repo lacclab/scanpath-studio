@@ -113,6 +113,10 @@ _HELP_PAGES = {
     "help_tutorials": ("Tutorials", ICONS["tutorials"], "help-tutorials"),
     "help_faq": ("FAQ", ICONS["faq"], "help-faq"),
     "help_about": ("About", ICONS["about"], "help-about"),
+    # UX-179 — the debug gate and log, which used to be the last block of the
+    # 💾 Session dialog. Help is where you go when something is wrong, and the
+    # log's use is attaching it to a bug report.
+    "help_debug": ("Debug", ICONS["debug"], "help-debug"),
 }
 
 #: The nav section heading the four entries above collapse under.
@@ -150,8 +154,6 @@ class TopMenu:
     #: The page heading's slot — the left half of the row the menu shares.
     #: ``app._render_about_panel`` fills it; see :func:`render_top_menu`.
     title: DeltaGenerator | None = None
-    #: Whether this session gets the 🐛 Debug block, resolved once by the caller.
-    show_debug: bool = False
 
 
 def close_open_popovers() -> None:
@@ -237,6 +239,10 @@ def _arm_help_action(entry: str) -> None:
         tour._arm_tutorial_library()
     elif entry == "help_faq":
         tour._arm_faq()
+    elif entry == "help_debug":
+        from scanpath_studio.debug_log import _arm_debug
+
+        _arm_debug()
     elif entry in ("help_about", "session"):
         from scanpath_studio import app
 
@@ -328,9 +334,7 @@ def render_nav() -> str:
     return active
 
 
-def render_top_menu(
-    *, show_debug: bool = False, active_view: str | None = None
-) -> TopMenu:
+def render_top_menu(*, active_view: str | None = None) -> TopMenu:
     """Draw the native top nav + the two menu pages, returning their slots.
 
     Call this once, early in ``app.main`` — before any data loading, so the
@@ -348,17 +352,13 @@ def render_top_menu(
     is its body, and what is left here is the title row and the notices strip.
 
     Args:
-        show_debug: Add the 🐛 Debug block. Only debug sessions want it
-            (``debug_log.debug_enabled``). Carried on the returned
-            :class:`TopMenu` so the dialog body does not resolve it a second
-            time.
         active_view: The entry the nav currently has selected, from
             :func:`render_nav`. Accepted so callers that already resolved the
             view do not resolve it twice.
 
     Returns:
         ``title`` — ``app._render_about_panel`` fills it — plus the main-area
-        ``notices`` strip and the debug flag.
+        ``notices`` strip.
     """
     if active_view is None:
         render_nav()
@@ -366,5 +366,4 @@ def render_top_menu(
     return TopMenu(
         notices=st.container(key=NOTICES_KEY),
         title=title_col,
-        show_debug=show_debug,
     )

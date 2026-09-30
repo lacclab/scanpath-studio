@@ -8,6 +8,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Changes not yet released are one file each in [`changelog.d/`](changelog.d/)
 (ENG-86); `scripts/changelog_fragments.py release` writes them in here.
 
+## [0.32.0] - 2026-09-30
+
+### Added
+- In Compare, each scanpath has its own filters — fixation window, short / long / off-text / blink flags and saccade types (CMP-24)
+- Column auto-detection catches a vendor prefix or suffix on a known column name (DATA-25)
+- The macOS desktop app is signed and Apple-notarized, and ships as a `.dmg` (ENG-21)
+- A Code of Conduct, linked from the README and CONTRIBUTING (ENG-82)
+- The desktop app opens in its own window, not a browser tab (ENG-85)
+- A title or caption can name a metadata table's fields, and a data table's saved fields, as `{table.field}` (EXP-22)
+- A long wait says what the app is doing: a card with the step, a count, the elapsed time and a Cancel (UX-165)
+- Cancel a dataset load, an animation build, Compare's second dataset or a download, and go back to where you were (UX-168)
+- A dataset has a description, and the Data page lists every annotation on it — to export, import or delete (UX-174)
+- Saved designs export to a file and import from one, and the Export bundle can include the exported trials' annotations (UX-179)
+
+### Changed
+- Corpus Analysis shows the reading measures your report brings and computes none; map them on the AOI table (AN-32)
+- The repository drops the pre-migration tracker archive and seven finished design plans (ENG-84)
+- Changelog entries are one file per item in `changelog.d/`, written into CHANGELOG.md at release, so parallel PRs no longer conflict; entries are one line, with no Details half (ENG-86)
+- Add a dataset beside the picker: create manually or import files, with a synthetic sample ready to explore (UX-143)
+- A dataset that takes a while to open shows a skeleton of the page and its steps, not a lone banner (UX-166)
+- Building an animation counts its frames, and the plot shows a placeholder until the browser has drawn it (UX-169)
+- The trial picker walks trials in the order the data has them; Trial ID is a choice in ⇅ (UX-171)
+- Compare's A/B legend is larger, so the two readings' names read at a glance (UX-172)
+- 📂 Available datasets is a focused table: click a row to open it; Status says whether it is loaded (UX-174)
+- The open dataset is described in one plain sentence, with its home page and a note only where a figure reads differently (UX-177)
+- Rename a dataset on ✏️ Edit dataset, opened by one Edit dataset button; Status sits beside the name (UX-178)
+- 💾 Session is gone: Debug is under ❓ Help, what's saved at the foot of 🗂️ Data, the settings file in 🔗 Share (UX-179)
+
+### Fixed
+- Choosing the Synthetic sample shows it; the editor opens from its Edit button (BUG-94)
+- Removing a dataset you added removes the annotations on its trials, as its confirmation says (BUG-95)
+- Attached participant, trial and text tables survive a refresh, and their fields stay in the filters, chips and trial sorting (DATA-38)
+- ✅ Save changes on ✏️ Edit dataset no longer strips the word boxes and text from a dataset whose AOI table has no reader column (DATA-39)
+- ✅ Save changes on ✏️ Edit dataset keeps an estimated screen, and the estimate reads the data (DATA-46)
+- Metadata tables belong to the dataset they were attached to (DATA-47)
+- AOI box columns with a prefix or suffix auto-fill even when the table carries two box encodings (DATA-57)
+- Clearing the screen fields in a mapping makes the table single-screen again (DATA-59)
+- The documented check for IDs an open PR has taken actually reads the PR's changelog (ENG-83)
+- The plot-controls rail no longer looks cut off while a figure is being drawn (UX-167)
+- Plot controls use the full right column without a separate scrollbar (UX-173)
+- A corpus that isn't on this machine no longer shows the demo's counts as its own (UX-174)
+- An auto-detected Trial, Participant or Text ID is highlighted, with a ✨ button to confirm it, like every other field (UX-176)
+- The trial slider is wider, and a long trial id under it no longer wraps behind the chips (UX-181)
+- The Share link is readable in dark mode (UX-182)
+- A saved design or Custom view carries every plot control: Compare, each scanpath's styles and filters, the fixation windows and the replay speed (VIZ-47)
+
 ## [0.31.2] - 2026-09-27
 
 ### Changed

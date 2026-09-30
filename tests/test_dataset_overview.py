@@ -79,19 +79,21 @@ class TestThePage:
     def test_the_overview_is_one_sentence_under_the_heading(self):
         at = self._data_page()
         captions = [c.value for c in at.caption]
-        overview = [c for c in captions if "packaged subset" in c]
+        overview = [c for c in captions if "OneStop Eye Movements" in c]
         assert overview, captions[:8]
-        assert overview[0].count(".") == 1, overview[0]
+        # One sentence, then the home page on the same line (UX-177).
+        text, _, link = overview[0].partition(" [Home page ↗](")
+        assert text.count(".") == 1, overview[0]
+        assert link.startswith("https://"), overview[0]
 
-    def test_the_technicalities_render_once_each(self):
-        """The ❔ body is rendered twice — once into a throwaway container to
-        find out whether it has anything to say — so the discarded copy must
-        actually be discarded."""
+    def test_the_popover_and_its_technicalities_are_gone(self):
+        """UX-177: *About this dataset* carried maintainer provenance; the
+        demo keeps only the note that changes how a figure is read."""
         at = self._data_page()
-        mds = [str(m.value) for m in at.markdown]
-        assert sum("Where the coordinates come from" in m for m in mds) == 1
-        assert sum("Published figures." in m for m in mds) == 1
-        assert sum("corpus' own home page" in m for m in mds) == 1
+        text = " ".join(str(m.value) for m in (*at.markdown, *at.caption))
+        assert "Where the coordinates come from" not in text
+        assert "Published figures." not in text
+        assert "raw-gaze samples are synthesized" in text
 
 
 class TestTheSpreadMetrics:

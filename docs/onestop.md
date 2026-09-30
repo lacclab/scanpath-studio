@@ -28,7 +28,7 @@ paragraphs, each in an Advanced and an Elementary version).
 ## Loading it
 
 OneStop is exposed as a **Public dataset**. In the app, open 🗂️ **Data**, click
-**OneStop** in **📂 Available datasets**, then choose **Edit** beside its
+**OneStop** in the list of datasets, then choose **Edit** beside its
 description; its **Options** pick a **Variant**, a **Reading regime**, and one or more
 **Parts**:
 

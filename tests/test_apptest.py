@@ -601,11 +601,10 @@ class TestDataInspectionTab:
         # subheaders, and every section of the ✏️ Edit screen is one of the add
         # screen's numbered parts, so its headings are `.sps-wiz-part` markdown.
         subheaders = [s.value for s in at.subheader]
-        for section in (
-            f"{ICONS['datasets']} Available datasets",
-            f"{ICONS['search']} What's in the `Synthetic test trial` dataset",
-        ):
-            assert section in subheaders, f"missing stage {section}: {subheaders}"
+        # UX-177: the list of datasets opens the page with no heading of its own.
+        assert f"{ICONS['datasets']} Available datasets" not in subheaders
+        section = f"{ICONS['search']} What's in the `Synthetic test trial` dataset"
+        assert section in subheaders, f"missing stage {section}: {subheaders}"
         parts = " ".join(
             str(m.value)
             for m in at.markdown
@@ -1158,22 +1157,29 @@ class TestDatasetTable:
         assert row["Status"] == "Needs setup"
         assert row["Participants"] == 75
 
-    def test_about_body_carries_the_home_link(self):
-        """The corpus home link moved out of the table into ℹ️ About.
+    def test_the_open_dataset_says_one_sentence_and_its_home_page(self):
+        """UX-177: no *About this dataset* popover — the description, the home
+        page on its line, and a note only where it changes how a figure is
+        read (PoTeC's positions are reconstructed)."""
+        from scanpath_studio import datasets
 
-        A column of "Open ↗" cells next to nothing saying what opens was the
-        thing being paid for; the link belongs with the description of the
-        corpus it leads to. Checked at the source level for the same reason
-        `test_delete_is_wired_to_the_remover` is: what matters is that the body
-        still writes it somewhere, not how Streamlit lays it out.
-        """
-        import inspect
-
-        from scanpath_studio.app import _render_dataset_about_body
-
-        source = inspect.getsource(_render_dataset_about_body)
-        assert 'about.get("link")' in source
-        assert "about['link']" in source
+        token = "PoTeC — Potsdam Textbook Corpus"
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["data_source_choice"] = token
+        pin_data_view(at)
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(datasets, "potec_present", lambda root: False)
+            at.run(timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        captions = [str(c.value) for c in at.caption]
+        assert any(
+            "[Home page ↗](https://github.com/DiLi-Lab/PoTeC)" in c for c in captions
+        )
+        assert any("reconstructed, not recorded" in c for c in captions)
+        # What the old popover's body wrote (its own label is not in the tree).
+        tree = str(at._tree)
+        assert "Published figures" not in tree
+        assert "Where the coordinates come from" not in tree
 
     def test_delete_is_wired_to_the_remover(self):
         """Regression: UX-64 dropped the ➕ popover that held *Remove a dataset*,

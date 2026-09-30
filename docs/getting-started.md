@@ -66,8 +66,8 @@ fixation may sit between or outside words. Enter a **Dataset name** and choose
 
 For a ready-made example, choose **Synthetic sample** in the dataset picker:
 a manually authored six-word example that opens like any other dataset. To
-change its text, fixation positions, or timing, open it in **🗂️ Data →
-Available datasets** and choose **Edit** beside its description; its draft is
+change its text, fixation positions, or timing, open it from the list on
+the 🗂️ **Data** page and choose **Edit** beside its description; its draft is
 separate from your own scanpath. You can also start a scanpath from **🗂️ Data →
 + Add dataset → Create manually**.
 

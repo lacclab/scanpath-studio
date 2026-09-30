@@ -12229,9 +12229,9 @@ def render_data_inspection_tab(
     "the answer stays open, the appendix folds". This round unfolded the raw
     tables again (the user's call): the appendix *is* the section's job on the
     page you open to check your data, and a collapsed expander over a tab bar
-    made every table two clicks deep. The name/rename line went with it — a
-    dataset is renamed from its row in 📂 Available datasets, and this section
-    already carries the dataset's name in its own heading.
+    made every table two clicks deep. The name/rename line went with it; UX-174
+    r2 put **Rename** back beside this section's heading instead
+    (`app.render_dataset_inspection_head`).
 
     Every tab body still renders on every run — tab switching is client-side, so
     no widget key is dropped, exactly as with the expanders this replaced.

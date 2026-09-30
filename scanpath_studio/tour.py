@@ -173,7 +173,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             TutorialStep(
                 "Choose the data source",
                 "Everything about the dataset lives on the 🗂️ **Data** page, in the "
-                "order the pipeline uses it. Start at **📂 Available datasets** — "
+                "order the pipeline uses it. Start at the list of datasets — "
                 "click a row to open it, or **+ Add dataset** for your own tables.",
                 ".st-key-tutorial_available_datasets",
                 view=_VIEW_DATA,
@@ -739,10 +739,10 @@ _SPOTLIGHT_STEPS = [
     },
     {
         "selector": ".st-key-tour_grp_data_source",
-        "title": f"{ICONS['datasets']} Available datasets",
+        "title": f"{ICONS['datasets']} Your datasets",
         "body": "Your **data source** (demo or your own upload) sits at the left "
         "of the control line. Every dataset is listed on the 🗂️ **Data** page — "
-        "click a name there to open it, ➕ **Add dataset** for your own.",
+        "click a row there to open it, **+ Add dataset** for your own.",
     },
     # Picking comes before narrowing: the picker is the control a new reader
     # reaches for first, and narrowing only means something once they have seen
@@ -2017,10 +2017,11 @@ _WIZARD_GUIDE_STEPS = [
         "step_id": None,
     },
     {
-        "title": "1 · Dataset name",
+        "title": "1 · Name & description",
         "body": (
-            "Name it — this is what shows up in **📂 Available datasets** and "
-            "the dataset picker, so you can switch back to it later."
+            "Name it — this is what shows up on the 🗂️ **Data** page and in the "
+            "dataset picker, so you can switch back to it later. A description "
+            "is optional."
         ),
         "selector": ".st-key-wiz_part_name",
         "step_id": "name",

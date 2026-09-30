@@ -88,14 +88,14 @@ cells in a mapped number column that don't parse, rows with no trial or reader
 id, positions that are screen fractions rather than pixels — together with what
 the load does with them.
 
-📂 **Available datasets** has one row per dataset: its kind, its name, its
+The 🗂️ **Data** page opens on a list with one row per dataset: its kind, its name, its
 participants, texts, trials and fixations, and its **Status**. Click anywhere on
 a row to open that dataset. The open one is marked **Current** and tinted, and
 the list does not reorder when you switch. Click a column heading to sort by it;
 datasets without that count sort last. The bin at the end of a row removes that
 dataset, after a confirmation; a dataset you added takes the annotations on its
 trials with it. Past eight datasets, a search box and Kind /
-Language filters appear. **+ Add dataset**, above the list, imports your own
+Language filters appear. **+ Add dataset**, under the list, imports your own
 files or starts a scanpath by hand.
 
 A count that is not a number says why: **Not loaded** (not opened this session,
@@ -109,9 +109,12 @@ shows the figures it publishes. A corpus whose files are not on this machine is
 marked **Needs setup**: the bundled demo shows in its place, and is not counted
 for it.
 
-Under the list, **What's in the *dataset*** is about the open one. **Rename**
-sits beside its name, and **Edit** beside its description opens ✏️ **Edit
-dataset**: its description, and how it was mapped. The mapping is the same
+Under the list, **What's in the *dataset*** is about the open one: its name
+with **Rename**, then a one-line description with the corpus' home page and
+**Edit**, which opens ✏️ **Edit dataset** — its description, and how it was
+mapped. Where a dataset's figures read differently from a recording, a note
+says so: PoTeC's fixation positions are reconstructed, not recorded, and the
+bundled demo's raw gaze is synthesized. The mapping is the same
 field grid the wizard draws, and for a dataset added with only one of the two
 main tables, it has an uploader for the other. Adding the missing half there
 normalizes it and joins it to what is already loaded, so a fixations-only

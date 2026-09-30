@@ -78,9 +78,15 @@ plus a `published_counts_source` sentence, reached through the one `dataset_abou
 lookup, and the prepared benchmark corpora take theirs from the bundle manifest
 via `benchmark_published_counts`. `dataset_row_counts` resolves a row to *either*
 what loaded *or* what is published — never a mixture — and **Status** says
-which (*Loaded* / *Not loaded*); the open dataset's ❔ *About this dataset* sets
-the two side by side, and a row whose load exceeds a published figure carries a
-**More than published** badge. **A trial is a `(participant_id, trial_id)`
+which (*Loaded* / *Not loaded*), and a row whose load exceeds a published
+figure carries a **More than published** badge. `published_counts_source` is
+catalogue documentation only since **UX-177**: the ❔ *About this dataset*
+popover that showed it (with a published-vs-loaded table and a coordinate badge
+for every dataset) is gone. Under *What's in…* there is the one-sentence
+description, its home page on the same line, and a `reading_note` only where it
+changes how a figure is read (PoTeC's reconstructed positions, the demo's
+synthesized raw gaze, a benchmark corpus' geometry badge);
+`tests/test_dataset_published_counts.py::TestWhatTheDataPageSays` pins that. **A trial is a `(participant_id, trial_id)`
 pair** here and in the 🗂️ Data summary, not a distinct `trial_id`. It also
 pairs each Kind icon with its word (Demo / Manual / Private / Public),
 and Rename / Remove keep app-owned tokens stable (a display alias, or hidden

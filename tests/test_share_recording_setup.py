@@ -584,7 +584,6 @@ def test_the_whole_app_reopens_the_senders_comparison():
     query, _caveats = sender.session_state["_share_query_current"]
     captions = " ".join(c.value for c in sender.caption)
     assert "aren't in the link" not in captions
-    assert "Session → JSON backup" not in captions
     sent_state = sender.session_state["_snippet_state"]
     assert sent_state.kind == "comparison"
 

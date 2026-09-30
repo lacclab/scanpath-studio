@@ -196,6 +196,7 @@ SUBTAB_ANNOTATIONS = tabs.SUBTAB_ANNOTATIONS
 SUBTAB_COMPARISONS = tabs.SUBTAB_COMPARISONS
 SUBTAB_LINE_ASSIGNMENT = tabs.SUBTAB_LINE_ASSIGNMENT
 SUBTAB_EXPORT = tabs.SUBTAB_EXPORT
+SUBTAB_SHARE = tabs.SUBTAB_SHARE
 
 #: DATA-26: 🔎 Data Inspection is no longer a subtab of the Scanpath view — its
 #: content is the lower half of the 🗂️ **Data** page, a third top-level view.
@@ -225,25 +226,14 @@ def pin_data_view(at) -> None:
     pin_view(at, VIEW_DATA)
 
 
-def arm_session_dialog(at) -> None:
-    """Ask for the 💾 Session modal on the *next* run (UX-100).
+def arm_debug_dialog(at) -> None:
+    """Ask for the ❓ Help → Debug modal on the *next* run (UX-179).
 
-    Call it before **every** ``at.run()`` in a flow that drives the panel, not
+    Call it before **every** ``at.run()`` in a flow that drives the dialog, not
     just the first. In a browser an interaction inside a dialog reruns only the
     dialog — a fragment — so the modal stays open on its own; ``AppTest`` has no
     fragment reruns and replays the whole script, which pops the request flag.
     Re-arming is how a test says "the user has not dismissed it yet".
-    """
-    from scanpath_studio import app
-
-    at.session_state[app._SESSION_DIALOG_KEY] = True
-
-
-def arm_debug_dialog(at) -> None:
-    """Ask for the ❓ Help → Debug modal on the *next* run (UX-179).
-
-    Same rule as :func:`arm_session_dialog`: re-arm before every ``at.run()``
-    that should find the dialog still open.
     """
     from scanpath_studio import debug_log
 

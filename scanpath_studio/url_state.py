@@ -21,7 +21,6 @@ import streamlit as st
 
 from scanpath_studio.html_embed import embed_html_iframe
 
-from .annotations import restore_records
 from .code_snippet import (
     INSTALL_COMMAND,
     SNIPPET_STATE_KEY,
@@ -1249,6 +1248,10 @@ def sanitize_session_value(key: str, value):
 #   schema 1 — the original plot-config-only format (no `schema` key at all,
 #              no annotations / provenance / text / highlighting sections).
 #   schema 2 — config + annotations + text/highlighting + provenance.
+#   schema 3 — the VIZ-34 coordinate-grid axes fields.
+#   schema 4 — UX-179: the figure only. Annotations, the column mapping, the
+#              metadata tables and the saved designs left the file (each has
+#              its own export now); the reader no longer applies them.
 #
 # **Bump `PLOT_CONFIG_SCHEMA` and register a migration in `_PLOT_CONFIG_MIGRATIONS`
 # whenever the config layout changes** (a renamed key, a moved section, a changed
@@ -1257,7 +1260,7 @@ def sanitize_session_value(key: str, value):
 # time. The field-by-field reader already tolerates *missing* sections, so a
 # migration is only needed when an old key must be *translated*, not merely when
 # new keys are added.
-PLOT_CONFIG_SCHEMA = 3
+PLOT_CONFIG_SCHEMA = 4
 
 
 def _detect_config_schema(config: dict) -> int:
@@ -1332,11 +1335,22 @@ def _migrate_config_2_to_3(config: dict) -> dict:
     return migrated
 
 
+def _migrate_config_3_to_4(config: dict) -> dict:
+    """UX-179: nothing to translate — schema 4 only *dropped* sections.
+
+    A v3 file's annotations, column mapping, metadata tables and designs are
+    simply not read any more (the reader ignores keys it does not know), so an
+    old session backup restores as the figure it described.
+    """
+    return config
+
+
 # version N -> callable that upgrades an N config to N+1. Keyed by the *source*
 # version so `_migrate_plot_config` can walk an old config forward step by step.
 _PLOT_CONFIG_MIGRATIONS = {
     1: _migrate_config_1_to_2,
     2: _migrate_config_2_to_3,
+    3: _migrate_config_3_to_4,
 }
 
 
@@ -1590,25 +1604,6 @@ class _RestoreContext:
             self.put(key, max(lo, min(float(number), hi)))
 
 
-def _attach_restored_metadata(grain: str, attached) -> None:
-    """Attach a metadata table a saved config carried (DATA-20/DATA-29/DATA-38).
-
-    Marked as restored (``metadata.mark_restored``) so the Data page does not
-    read its empty uploader as "the user removed the file" and detach it —
-    unless the uploader *does* still hold a file: then the table is attached
-    under that file's identity, as before, so the next render does not take
-    the live file for a new one and replace what this restore just announced.
-    """
-    from scanpath_studio import metadata as _metadata
-
-    if st.session_state.get(f"{grain}_metadata_upload") is None:
-        _metadata.mark_restored(st.session_state, grain, attached)
-        return
-    key, raw_key, _file_key = _metadata.grain_keys(grain)
-    st.session_state[key] = attached
-    st.session_state[raw_key] = attached.frame
-
-
 def _restore_plot_config(
     config: dict, combos: pd.DataFrame, fixations: pd.DataFrame
 ) -> tuple[int, list]:
@@ -1639,10 +1634,6 @@ def _restore_plot_config(
     # still need deterministic defaults for the newly frozen state keys, while
     # a document made entirely of wrong-typed sections must remain a true no-op.
     has_valid_plot_section = _has_plot_section(config)
-
-    # Re-apply the saved column mapping + kept-field choices (so restoring a
-    # config skips re-mapping). Seeded before the mapping widgets render.
-    _seed_column_mapping(config.get("column_mapping"))
 
     layers = section("layers")
     for cfg_key, state_key in _PLOT_CONFIG_LAYER_KEYS.items():
@@ -2300,87 +2291,13 @@ def _restore_plot_config(
         else:
             skipped.append("trial selection")
 
-    # Annotations travel with schema-2 configs (Save & restore). Only restore
-    # when the key is present, so a plot-config-only file never clears them.
-    if "annotations" in config and isinstance(config["annotations"], list):
-        n_anno = restore_records(config["annotations"])
-        restore.applied += 1
-        st.toast(
-            f"Restored {n_anno} annotation(s) from config.", icon=ICONS["annotations"]
-        )
-
-    # DATA-20 — the participant table, restored *before* the filter widgets read
-    # their keys, so a saved `filter_meta_*` selection lands on fields that
-    # already exist. Absent key = leave whatever is attached alone, the same
-    # rule the annotations above follow.
-    payload = config.get("participant_metadata")
-    if isinstance(payload, dict):
-        from scanpath_studio import metadata as _metadata
-
-        attached = _metadata.from_payload(payload)
-        if attached is not None:
-            # DATA-38: marked as restored, so the Data page's metadata section
-            # does not read its empty uploader as "detach".
-            _attach_restored_metadata("participant", attached)
-            restore.applied += 1
-            st.toast(
-                f"Restored participant metadata ({len(attached.fields)} field(s)).",
-                icon=ICONS["participant"],
-            )
-
-    # DATA-29 — the trial table, same contract and the same ordering reason.
-    trial_payload = config.get("trial_metadata")
-    if isinstance(trial_payload, dict):
-        from scanpath_studio import metadata as _metadata
-
-        attached_trials = _metadata.trial_from_payload(trial_payload)
-        if attached_trials is not None:
-            _attach_restored_metadata("trial", attached_trials)
-            restore.applied += 1
-            st.toast(
-                f"Restored trial metadata ({len(attached_trials.fields)} field(s)).",
-                icon=ICONS["trial_metadata"],
-            )
-
-    # The text table, third grain, same contract and ordering reason.
-    text_payload = config.get("text_metadata")
-    if isinstance(text_payload, dict):
-        from scanpath_studio import metadata as _metadata
-
-        attached_texts = _metadata.text_from_payload(text_payload)
-        if attached_texts is not None:
-            _attach_restored_metadata("text", attached_texts)
-            restore.applied += 1
-            st.toast(
-                f"Restored text metadata ({len(attached_texts.fields)} field(s)).",
-                icon=ICONS["text_metadata"],
-            )
-
-    # VIZ-39 — the saved-design library. Restored wholesale rather than merged:
-    # a config describes one session's designs, and silently blending two
-    # libraries would leave the user unable to say which file a design came
-    # from. Absent key = leave whatever is there, the same rule as above.
-    designs = config.get("design_presets")
-    if isinstance(designs, dict):
-        from scanpath_studio.controls import DESIGN_PRESETS_KEY
-
-        clean = {
-            str(name): dict(values)
-            for name, values in designs.items()
-            if isinstance(values, dict)
-        }
-        if clean:
-            st.session_state[DESIGN_PRESETS_KEY] = clean
-            restore.applied += 1
-            st.toast(f"Restored {len(clean)} saved design(s).", icon=ICONS["designs"])
-
     return restore.applied, skipped
 
 
 def _apply_uploaded_plot_config(combos: pd.DataFrame, fixations: pd.DataFrame) -> None:
     """Restore settings from a freshly uploaded plot-config JSON, once per file.
 
-    Reads the file captured by the 💾 Session dialog's ``plot_config_upload``
+    Reads the file captured by 🔗 Share → File's ``plot_config_upload``
     uploader (persisted in session_state across reruns) and writes the saved
     settings into session_state *before* the widgets render — the same mechanism
     as ``_apply_url_preset``. Deduped by ``(name, size)`` so manual tweaks made
@@ -3112,14 +3029,48 @@ def _render_code_snippet_body(data_choice: str) -> None:
         st.code(f"# {INSTALL_COMMAND}\n{code.python}", language="python")
 
 
-def _render_share_body(data_choice: str) -> None:
-    """Render the **Share** subtab: a deep link to the current view (data source +
-    trial + visualization settings).
+#: UX-179 — the Share subtab's three ways to pass a figure on, as the options of
+#: one switch. A segmented control rather than a nested ``st.tabs``: the app
+#: keeps one tab bar per page, and only the chosen part is drawn.
+SHARE_LINK = "Link"
+SHARE_CODE = "Code"
+SHARE_FILE = "File"
+SHARE_SECTIONS = (SHARE_LINK, SHARE_CODE, SHARE_FILE)
+SHARE_SECTION_KEY = "share_section"
 
-    Streamlit reruns after every relevant control change, so the query handed to
-    the embedded **Refresh & Copy** button already reflects the current view when
-    the user clicks it. The link always carries the selected participant, trial
-    and all shareable visualization settings."""
+
+def _render_share_body(data_choice: str, settings_file=None) -> None:
+    """Render the **Share** subtab: **Link · Code · File**, one at a time.
+
+    - **Link** — a deep link to the current view (data source + trial +
+      visualization settings). Streamlit reruns after every relevant control
+      change, so the query handed to the embedded **Refresh & Copy** button
+      already reflects the current view when the user clicks it.
+    - **Code** — EXP-7's API / CLI snippet that reproduces the figure.
+    - **File** — a settings file to download or restore (UX-179), drawn by
+      ``settings_file``: a zero-argument callable from ``app.main``, which holds
+      the resolved figure settings it writes. ``None`` where there is no figure
+      to describe, and the option says so rather than vanishing.
+    """
+    choice = (
+        st.segmented_control(
+            "Share as",
+            SHARE_SECTIONS,
+            default=SHARE_LINK,
+            key=SHARE_SECTION_KEY,
+            label_visibility="collapsed",
+        )
+        or SHARE_LINK
+    )
+    if choice == SHARE_CODE:
+        _render_code_snippet_body(data_choice)
+        return
+    if choice == SHARE_FILE:
+        if settings_file is None:
+            st.caption("A settings file needs a figure to describe.")
+        else:
+            settings_file()
+        return
     st.markdown(
         "**Share this view** — a link that reopens Scanpath Studio on the "
         "current trial with your visualization settings."
@@ -3135,8 +3086,6 @@ def _render_share_body(data_choice: str) -> None:
         "If the recipient runs Scanpath Studio at a different address or port, "
         "replace the start of the URL before opening it."
     )
-    st.divider()
-    _render_code_snippet_body(data_choice)
 
 
 # -----------------------------------------------------------------------------

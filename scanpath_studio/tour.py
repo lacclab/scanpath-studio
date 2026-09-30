@@ -305,8 +305,8 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Keep the figure reproducible",
-                "**🔗 Share** turns the exact configuration into a link, and 💾 "
-                "**Session** saves it (with your annotations) as JSON. Either one "
+                "**🔗 Share** turns the exact configuration into a **Link**, the "
+                "**Code** that redraws it, or a settings **File**. Any of them "
                 "reproduces this figure later — the PNG on its own does not.",
                 ".st-key-tutorial_share",
                 subtab=SUBTAB_SHARE,
@@ -460,8 +460,8 @@ _STEPS = [
     ),
     (
         f"{ICONS['annotations']} Annotate & save",
-        "Star, tag, and note trials, then filter to them. **💾 Session** "
-        "saves the whole setup + annotations to JSON. Replay this via "
+        "Star, tag, and note trials, then filter to them. **🗂️ Data → "
+        "Annotations** exports them as JSON. Replay this via "
         "**Tutorials → Welcome tour**. 👀",
     ),
 ]
@@ -808,9 +808,8 @@ _SPOTLIGHT_STEPS = [
         "title": f"{ICONS['nav']} The nav",
         "body": "**🗺️ Scanpath** is what you see now. "
         "**📊 Corpus Analysis** aggregates across readers and texts; "
-        "**🗂️ Data** sets one up. **💾 Session** and **❓ Help** open over your "
-        "work rather than navigating away — replay this tour under "
-        "**Tutorials**. 👀",
+        "**🗂️ Data** sets one up. **❓ Help** opens over your work rather "
+        "than navigating away — replay this tour under **Tutorials**. 👀",
     },
 ]
 

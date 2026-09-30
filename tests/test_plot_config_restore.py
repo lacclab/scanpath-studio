@@ -152,24 +152,21 @@ class TestPlotConfigRestore:
         assert ss["single_trial_id"] == "t2"
         assert ss["_skipped"] == []
 
-    def test_restores_and_translates_column_mapping(self):
-        config = _full_config()
-        config["column_mapping"] = {
-            "col_map_fix_x": "CURRENT_FIX_X",
-            "col_map_words_paragraph": "unique_paragraph_id",  # legacy key
-            "col_map_words_upload": "ignored.csv",  # uploader widget — must skip
-        }
-        ss = _run(_restore_app, _config=config).session_state
-        assert ss["col_map_fix_x"] == "CURRENT_FIX_X"
-        # A legacy *_paragraph key is translated to the current *_text_id key.
-        assert ss["col_map_words_text_id"] == "unique_paragraph_id"
-        assert "col_map_words_paragraph" not in ss
-        # Uploader-widget keys are never seeded (not JSON-restorable state).
-        assert "col_map_words_upload" not in ss
+    def test_a_settings_file_leaves_the_column_mapping_alone(self):
+        """UX-179: the mapping is ✏️ Edit dataset → Save setup's, not this file's.
 
-    def test_restores_text_highlighting_and_annotations(self):
-        # The merged "Save & restore" config (schema 2) also carries text
-        # sizing, highlighting, and annotations — all re-applied on restore.
+        An old session backup still carries one; restoring it as a settings
+        file must not re-map the open dataset under the user.
+        """
+        config = _full_config()
+        config["column_mapping"] = {"col_map_fix_x": "CURRENT_FIX_X"}
+        ss = _run(_restore_app, _config=config).session_state
+        assert "col_map_fix_x" not in ss
+
+    def test_restores_text_highlighting_but_not_annotations(self):
+        # A schema-2 file also carries text sizing and highlighting, which
+        # re-apply — and annotations, which no longer do (UX-179: they are
+        # 🗂️ Data → Annotations' own file now).
         config = dict(_full_config())
         config["schema"] = 2
         config["coloring"] = dict(
@@ -289,10 +286,7 @@ class TestPlotConfigRestore:
         assert ss["cmp1_saccade_style"] == "Solid"
         assert ss["cmp1_saccade_width"] == 1.5
         assert ss["cmp1_hollow"] is False
-        store = ss["trial_annotations"]
-        assert ("p1", "t2") in store
-        assert store[("p1", "t2")]["star"] is True
-        assert store[("p1", "t2")]["tags"] == ["Review"]
+        assert "trial_annotations" not in ss
 
     def test_invalid_fields_are_skipped_not_applied(self):
         config = {
@@ -393,8 +387,9 @@ class TestApplyUploadedPlotConfig:
 
 
 def test_build_studio_config_includes_provenance_and_round_trips():
-    """The Save & restore config builder records provenance (app version, data
-    source, column mapping) + annotations and is JSON-serializable."""
+    """The settings-file builder records provenance (app version, data source)
+    and is JSON-serializable. UX-179: it carries the figure only — no
+    annotations, column mapping, metadata tables or saved designs."""
     import json
 
     import pandas as pd
@@ -475,16 +470,6 @@ def test_build_studio_config_includes_provenance_and_round_trips():
         base_font_size=16,
         trial_raw_gaze=pd.DataFrame(),
         font_family="Courier New",
-        annotation_records=[
-            {
-                "participant_id": "p1",
-                "trial_id": "t1",
-                "star": True,
-                "tags": [],
-                "note": "",
-            }
-        ],
-        column_mapping={"col_map_fix_x": "CURRENT_FIX_X"},
         data_source="Use bundled demo",
         app_version="9.9.9",
         exported_at="2026-06-15T12:00:00",
@@ -498,7 +483,6 @@ def test_build_studio_config_includes_provenance_and_round_trips():
     assert cfg["app"] == {"name": "Scanpath Studio", "version": "9.9.9"}
     assert cfg["exported_at"] == "2026-06-15T12:00:00"
     assert cfg["data_source"] == "Use bundled demo"
-    assert cfg["column_mapping"] == {"col_map_fix_x": "CURRENT_FIX_X"}
     assert cfg["selection"] == {"participant_id": "p1", "trial_id": "t1"}
     assert cfg["coloring"]["color_by"] == "line"
     assert cfg["coloring"]["heatmap_norm"] == "Log"
@@ -526,7 +510,15 @@ def test_build_studio_config_includes_provenance_and_round_trips():
     assert cfg["compare"][0]["fix_color"] == "#111111"
     assert cfg["compare"][0]["hollow"] is True
     assert cfg["compare"][1]["saccade_style"] == "Solid"
-    assert len(cfg["annotations"]) == 1
+    for gone in (
+        "annotations",
+        "column_mapping",
+        "participant_metadata",
+        "trial_metadata",
+        "text_metadata",
+        "design_presets",
+    ):
+        assert gone not in cfg, gone
     json.dumps(cfg)  # must be JSON-serializable
 
 
@@ -684,12 +676,12 @@ class TestConfigMigration:
         assert note is not None
         assert migrated["schema"] == 1  # couldn't advance past the gap
 
-    def test_schema_constant_is_three(self):
+    def test_schema_constant_is_four(self):
         # Pin the current version so a bump is a deliberate, reviewed change that
         # forces a matching migration + this assertion to move together.
         from scanpath_studio.url_state import PLOT_CONFIG_SCHEMA
 
-        assert PLOT_CONFIG_SCHEMA == 3
+        assert PLOT_CONFIG_SCHEMA == 4
 
     def test_schema1_config_still_restores_end_to_end(self):
         # A schema-1 file (no `schema` key) applies its plot settings through the
@@ -765,8 +757,6 @@ def _build_config_app():
         base_font_size=14,
         trial_raw_gaze=pd.DataFrame(),
         font_family="Arial",
-        annotation_records=[],
-        column_mapping={},
         data_source="demo",
         app_version="0.0.0",
         exported_at="2026-09-23T00:00:00",
@@ -860,9 +850,10 @@ def test_migrating_an_annotations_only_file_adds_no_plot_section():
 
 @pytest.mark.timeout(60)
 def test_restoring_annotations_leaves_the_view_settings_alone():
-    """The 2→3 migration stamped `axes` onto every v2 file, which made the
-    reader treat notes-only JSON as a full plot config and reset the grid,
-    illustration label, preprocessing and title to their defaults."""
+    """BUG-73: the 2→3 migration stamped `axes` onto every v2 file, which made
+    the reader treat notes-only JSON as a full plot config and reset the grid,
+    illustration label, preprocessing and title to their defaults. Since UX-179
+    the notes themselves are not applied either — the file is a no-op."""
     seeded = {
         "global_show_coordinate_grid": True,
         "global_coordinate_grid_auto": False,
@@ -877,5 +868,5 @@ def test_restoring_annotations_leaves_the_view_settings_alone():
     }
     ss = _run(_restore_app, _config=config, **seeded).session_state
     assert {key: ss[key] for key in seeded} == seeded
-    assert ss["_applied"] == 1  # the annotations, and only them
-    assert len(ss["trial_annotations"]) == 1
+    assert ss["_applied"] == 0
+    assert "trial_annotations" not in ss

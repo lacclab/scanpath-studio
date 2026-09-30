@@ -3279,19 +3279,23 @@ def _build_studio_config(
     base_font_size: int,
     trial_raw_gaze: pd.DataFrame,
     font_family: str,
-    annotation_records: list,
-    column_mapping: dict,
     data_source: str | None,
     app_version: str,
     exported_at: str,
     compare_styles: list | None = None,
 ) -> dict:
-    """Build the "💾 Save & restore" JSON config dict (pure — no Streamlit).
+    """Build the 🔗 Share → **File** settings JSON (pure — no Streamlit).
 
-    Schema 2 captures the full figure configuration (layers, colouring, sizing,
-    text/highlighting, canvas, axes, trial selection), every per-trial
-    annotation, and provenance (app version, export date, data source, column
-    mapping)."""
+    The full figure configuration (layers, colouring, sizing, text and
+    highlighting, canvas, screen geometry, axes, comparison styling, trial
+    selection) plus provenance (app version, export date, data source).
+
+    **UX-179 (schema 4) took everything else out.** The file used to be the
+    💾 Session dialog's whole-session backup and also carried the annotations,
+    the column mapping and the three metadata tables. Each now has its own
+    file where it is edited — 🗂️ Data → Annotations → *Export*, ✏️ Edit dataset
+    → *Save setup*, and the tables you attached — so this one describes a
+    figure and nothing else."""
     # ENG-11: PLOT_CONFIG_SCHEMA is the single source of truth for the version;
     # bump it (+ register a migration) in url_state when this layout changes.
     from scanpath_studio.url_state import PLOT_CONFIG_SCHEMA
@@ -3307,15 +3311,14 @@ def _build_studio_config(
         return {"provenance": {g: str(p) for g, p in snapshot.provenance.items()}}
 
     return {
-        # schema 2 = config + annotations + text/highlighting + provenance;
-        # schema 1 (plot config only) still restores via the same reader.
+        # Schema 4 (UX-179) = the figure only; older files still restore
+        # through the same reader, which ignores what they carry beyond it.
         "schema": PLOT_CONFIG_SCHEMA,
         "app": {"name": "Scanpath Studio", "version": app_version},
         # When this config was saved (ISO 8601, local time) — provenance only,
-        # surfaced when restoring (💾 Session + the upload wizard's restore step).
+        # surfaced when restoring (Share → File + the upload wizard's restore step).
         "exported_at": exported_at,
         "data_source": data_source,
-        "column_mapping": column_mapping,
         "selection": {
             "participant_id": selected_participant,
             "trial_id": selected_trial,
@@ -3547,52 +3550,11 @@ def _build_studio_config(
             # BUG-72: the A/B legend, the one compare setting that is a switch.
             "legend": bool(viz_settings.get("show_compare_legend", False)),
         },
-        "annotations": annotation_records,
-        # DATA-20: the participant table travels with the saved session, so a
-        # restored config brings back the metadata *and* the filters/chips that
-        # refer to it — otherwise a restored `filter_meta_*` selection would
-        # point at fields that no longer exist. Records, not a file path: the
-        # JSON has to be portable between machines like everything else in it.
-        "participant_metadata": _participant_metadata_payload(),
-        # DATA-29: and the trial table, for exactly the same reason — a restored
-        # `filter_trialmeta_*` selection has to land on fields that exist.
-        "trial_metadata": _trial_metadata_payload(),
-        # And the text table, the third grain — same reasoning again.
-        "text_metadata": _text_metadata_payload(),
-        # VIZ-39: the user's saved designs travel with the config. A design is
-        # a named bundle of the very settings this file already carries, so a
-        # config that restored the settings but not the library would come back
-        # with the figure right and no way to get back to it.
-        "design_presets": _design_presets_payload(),
     }
 
 
-def _design_presets_payload() -> dict:
-    from scanpath_studio.controls import design_presets
-
-    return {name: dict(values) for name, values in design_presets().items()}
-
-
-def _participant_metadata_payload():
-    from scanpath_studio import metadata as md
-
-    return md.to_payload(active_participant_metadata())
-
-
-def _trial_metadata_payload():
-    from scanpath_studio import metadata as md
-
-    return md.trial_to_payload(md.active_trials())
-
-
-def _text_metadata_payload():
-    from scanpath_studio import metadata as md
-
-    return md.text_to_payload(md.active_texts())
-
-
 def _collect_column_mapping() -> dict:
-    """The column-mapping selections from session_state, for config provenance.
+    """The column-mapping selections from session_state, for a setup file.
 
     The upload boxes share the ``col_map_*`` prefix (``state_prefix="col_map_fix"``
     etc.), so their ``file_uploader`` widgets land in this sweep too. Their value
@@ -3606,7 +3568,7 @@ def _collect_column_mapping() -> dict:
     }
 
 
-def _render_save_restore_expander(
+def render_settings_file(
     selected_participant: str,
     selected_trial: str,
     canvas_width: int,
@@ -3619,33 +3581,26 @@ def _render_save_restore_expander(
     trial_raw_gaze: pd.DataFrame,
     *,
     font_family: str,
-    slot=None,
-):
-    """Render the "💾 Save & restore" menu panel (DATA-9).
+) -> None:
+    """🗺️ Scanpath → 🔗 Share → **File**: download and restore a settings file.
 
-    Merges the former Plot-configuration and Annotations panels into one: a
-    single JSON sidecar that captures the full figure configuration (layers,
-    colouring, sizing, text/highlighting, canvas, axes, trial selection) PLUS
-    every per-trial annotation, with a matching uploader to restore it all. So a
-    reviewer can save, share, and reload the exact state behind a figure. The
-    upload is *applied* in ``app._apply_uploaded_plot_config`` (it runs before
-    the widgets render). ``slot`` is the 💾 Save & restore popover ``app.main``
-    reserves on the top menu bar, so the panel is reachable from every view
-    instead of landing after whichever tab happened to render it.
+    The file is :func:`_build_studio_config`'s — the figure's full settings and
+    trial selection, with provenance — for when a link will not do: sent to
+    someone offline, kept beside a paper, or opened on a machine that runs the
+    app at another address. The upload is *applied* in
+    ``url_state._apply_uploaded_plot_config``, early in the next run, before any
+    widget renders; it is deduped by the file's name and size, so leaving the
+    file in the uploader does not re-apply it on every rerun.
 
-    Renders bare into ``slot``: the popover trigger is the disclosure, and a
-    popover nests no expander (see :mod:`scanpath_studio.menu`).
+    UX-179 moved it here from the 💾 Session dialog and cut it to the figure
+    (see :func:`_build_studio_config`). Out of a dialog, an upload reruns the
+    whole app on its own, so the old "rerun the app if the dialog holds an
+    unapplied file" step went with it.
     """
     from datetime import datetime
 
-    from scanpath_studio import __version__, annotations
+    from scanpath_studio import __version__
 
-    container = slot if slot is not None else st.container()
-    annotation_records = annotations.current_records()
-    # Provenance: which data source + how its columns were mapped +
-    # the app version + when it was exported, so a saved config records the full
-    # context behind the figure, not just the plot settings.
-    column_mapping = _collect_column_mapping()
     # Per-scanpath comparison styling (cmp{idx}_* widget keys, seeded by
     # controls._seed_compare_styles). Save the RAW values so they restore 1:1 —
     # the saccade style stays the friendly label ("Solid"), not the resolved dash.
@@ -3690,45 +3645,40 @@ def _render_save_restore_expander(
         base_font_size=base_font_size,
         trial_raw_gaze=trial_raw_gaze,
         font_family=font_family,
-        annotation_records=annotation_records,
-        column_mapping=column_mapping,
         data_source=st.session_state.get("data_source_choice"),
         app_version=__version__,
         exported_at=datetime.now().isoformat(timespec="seconds"),
         compare_styles=compare_styles,
     )
-    # (An "_open_save_restore" shortcut used to click this panel's menu trigger
-    # from here via injected JS. Its last *setter* went with the annotations
-    # panel that had it, and UX-100 removed the trigger it clicked — the panel
-    # is a dialog now, armed by `app._arm_session`, which is what any future
-    # shortcut should set.)
-    with container:
-        n_anno = len(annotation_records)
-        st.download_button(
-            "⬇ Download backup",
-            help="Save plot settings, selection, source reference, column mapping "
-            f"and annotations ({n_anno} trial{'s' if n_anno != 1 else ''}) as JSON.",
-            data=json.dumps(plot_config, indent=2),
-            file_name="scanpath_studio_backup.json",
-            mime="application/json",
-            key="plot_config_download",
-            width="stretch",
+    st.caption(
+        "The figure's settings and the selected trial, as a JSON file — for when "
+        "a link won't do. Annotations are exported from 🗂️ **Data → "
+        "Annotations**, and a dataset's column mapping from ✏️ **Edit dataset → "
+        "Save setup**."
+    )
+    st.download_button(
+        "Download settings",
+        icon=ICONS["download"],
+        data=json.dumps(plot_config, indent=2),
+        file_name="scanpath_studio_settings.json",
+        mime="application/json",
+        key="plot_config_download",
+    )
+    st.file_uploader(
+        "Restore settings",
+        type=["json"],
+        key="plot_config_upload",
+        help="Re-apply a settings file. Settings that do not match the loaded "
+        "data are skipped and listed here.",
+        max_upload_size=upload_limit_mb(),
+    )
+    skipped = st.session_state.get("_plot_config_skipped")
+    if skipped:
+        st.caption(
+            f"{ICONS['warning']} Not applied (no match in the current data): "
+            + ", ".join(skipped)
+            + "."
         )
-        st.file_uploader(
-            "Restore backup",
-            type=["json"],
-            key="plot_config_upload",
-            help="Re-apply settings and annotations. Items that do not match "
-            "the loaded data are skipped.",
-            max_upload_size=upload_limit_mb(),
-        )
-        skipped = st.session_state.get("_plot_config_skipped")
-        if skipped:
-            st.caption(
-                f"{ICONS['warning']} Not applied (no match in the current data): "
-                + ", ".join(skipped)
-                + "."
-            )
 
 
 #: Separator between a dataset name and a participant id in the *throwaway*

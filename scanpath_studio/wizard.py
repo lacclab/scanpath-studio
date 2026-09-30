@@ -1656,7 +1656,7 @@ def _wizard_restore_config(host) -> None:
         type=["json"],
         key="wizard_config_restore",
         help="Re-apply a column mapping + field choices you saved earlier "
-        "(⬇️ Save setup at the foot of this page, or a 💾 Session JSON backup).",
+        "(⬇️ Save setup at the foot of this page).",
         max_upload_size=upload_limit_mb(),
     )
     if uploaded is None:

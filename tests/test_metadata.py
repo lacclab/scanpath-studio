@@ -435,37 +435,6 @@ class TestARestoredTableSurvivesTheDataPage:
         assert md.SESSION_KEY not in at.session_state
 
 
-class TestAConfigRestoreBesideALiveFile:
-    """💾 Save & restore marks the table it brings back as restored — unless
-    the uploader still holds a file, whose identity it then keeps, so the next
-    render does not read that file as new and replace the restored table."""
-
-    def _restore(self, *, uploader):
-        import streamlit as st
-
-        from scanpath_studio import url_state
-
-        st.session_state.clear()
-        if uploader is not None:
-            st.session_state["participant_metadata_upload"] = uploader
-        st.session_state[md.FILE_SESSION_KEY] = "live-file-id"
-        built = md.build_participant_metadata(
-            pd.DataFrame({"participant_id": ["p1"], "age": [30]}), "participant_id"
-        )
-        url_state._attach_restored_metadata("participant", built)
-        return st.session_state
-
-    def test_an_empty_uploader_marks_the_table_restored(self):
-        session = self._restore(uploader=None)
-        assert md.is_restored(session, "participant")
-        assert session[md.SESSION_KEY].names == ("age",)
-
-    def test_a_live_file_keeps_its_identity(self):
-        session = self._restore(uploader=object())
-        assert session[md.FILE_SESSION_KEY] == "live-file-id"
-        assert session[md.SESSION_KEY].names == ("age",)
-
-
 def test_loader_bookkeeping_is_not_registered_as_a_field():
     """`data.read_tables` tags rows with `source_file`; that is not metadata.
 

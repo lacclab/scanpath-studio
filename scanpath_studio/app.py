@@ -238,12 +238,12 @@ from scanpath_studio.tabs import (
     EDITOR_PENDING_NAME_KEY,
     _build_figure_settings,
     _render_column_mapping_section,
-    _render_save_restore_expander,
     dataset_editor_is_dirty,
     render_corpus_analysis_tab,
     render_data_inspection_tab,
     render_dataset_editor_footer,
     render_participant_metadata_section,
+    render_settings_file,
     render_single_trial_tab,
     render_text_metadata_section,
     render_trial_identity_section,
@@ -499,9 +499,8 @@ def _render_about_panel(host=None) -> None:
     README.
 
     ``host`` is ``menu.TopMenu.title`` — the left side of the row the settings
-    triggers share. The container is still created, and deliberately: ❓ Help and
-    💾 Session are laid out against it (see ``menu.render_top_menu``), and it is
-    where anything page-level would go.
+    triggers share. The container is still created, and deliberately: it is
+    where anything page-level would go (see ``menu.render_top_menu``).
     """
     (host if host is not None else st).container(key="about_header")
 
@@ -739,8 +738,8 @@ def _render_saved_here_section(app_url: str, host) -> None:
 
     The foot of the Data page's overview: what the recovery cache holds, the
     two ways to throw work away (*Clear recovery cache*, *Reset everything*),
-    and the fine print. It was the 💾 Session dialog's first and third blocks;
-    it lives here because its count is "datasets **you added**", which is the
+    and the fine print. It was the retired 💾 Session dialog's first and third
+    blocks; it lives here because its count is "datasets **you added**", which is the
     table above it.
 
     Drawn *after* this run's ``save_local_state`` (``main``'s
@@ -910,66 +909,6 @@ def _render_reset_everything(host) -> None:
             type="primary",
             on_click=_reset_everything,
         )
-
-
-#: UX-100 — the 💾 Session nav entry's request flag. Same arm-then-serve shape as
-#: ❓ Help's three entries: a nav selection cannot open a dialog itself (the
-#: router reruns), so `menu._arm_help_action` sets this and `main` serves it.
-_SESSION_DIALOG_KEY = "_session_dialog_requested"
-
-
-def _arm_session() -> None:
-    """Request the 💾 Session dialog. Called by the nav entry (``menu.py``)."""
-    st.session_state[_SESSION_DIALOG_KEY] = True
-
-
-@st.dialog(f"{ICONS['session']} Session", width="large")
-def _session_dialog(app_url: str, backup_renderer=None) -> None:
-    """The 💾 Session modal: what this session is holding, and how to keep it.
-
-    Four blocks, in the order UX-96 settled on. Recovery and a JSON backup are
-    deliberately separate and deliberately in that order: recovery contains the
-    local dataset tables and happens automatically, while the portable JSON is
-    user-triggered and intentionally omits those tables — a distinction that is
-    the panel's hierarchy rather than a tooltip-only caveat.
-
-    ``backup_renderer`` fills the ⬇️ JSON backup block. It is a closure rather
-    than data because the panel needs the live figure settings and trial
-    selection, which only exist near the end of ``main`` — and ``main`` returns
-    early on every path where the dataset can't be drawn (the wizard mid-flight,
-    a rejected mapping, an empty pool). Those paths pass ``None``, and the block
-    says why rather than rendering an empty heading, which is what BUG-28 saw.
-
-    **A dialog body is a fragment.** It runs only while the modal is open, so
-    every widget in here either re-seeds from a durable value each render (the
-    persistence pause toggle, the 🐛 Debug gate) or holds nothing worth keeping.
-    An interaction in here reruns *this*, not ``main`` — hence the explicit
-    ``st.rerun(scope="app")`` after a restored backup, and the two inline
-    confirmations (Streamlit allows no dialog inside a dialog).
-    """
-    backup = st.container(key="session_json_backup")
-    backup.markdown(f"#### {ICONS['download']} JSON backup")
-    if backup_renderer is not None:
-        backup_renderer(backup.container())
-    else:
-        backup.caption(
-            "Available once a dataset is loaded and drawable — a backup records "
-            "the figure's settings and your annotations, and there is no figure "
-            "to record yet."
-        )
-
-
-def maybe_show_session(app_url: str, backup_renderer=None) -> None:
-    """Open the 💾 Session dialog if the nav entry armed it.
-
-    Unlike ``maybe_show_about`` this is served **late**, at whichever point of
-    ``main`` the backup renderer exists — the panel reports what this run just
-    persisted and offers a backup of the live figure, neither of which is known
-    early. Exactly one call runs per script run (each early return has its own),
-    which is what keeps the widgets inside single widgets.
-    """
-    if st.session_state.pop(_SESSION_DIALOG_KEY, False):
-        _session_dialog(app_url, backup_renderer)
 
 
 def _arm_about() -> None:
@@ -2866,8 +2805,7 @@ def reset_column_mapping() -> None:
         del st.session_state[key]
 
 
-#: Label + tooltip of the "known-good state" button, shared by the off-page
-#: signpost and the 💾 Session menu so the two read as the same action.
+#: Label + tooltip of the off-page signpost's "known-good state" button.
 DEMO_RESET_LABEL = f"{ICONS['demo']} Load the bundled demo"
 DEMO_RESET_HELP = (
     "Switches to the demo corpus and re-detects its column mapping. Your "
@@ -3954,8 +3892,8 @@ def discard_and_leave_wizard() -> None:
 
     **BUG-36 follow-up:** that assumption breaks for ✕ Cancel, whose prompt
     always names 🗂️ Data as the destination regardless of where the nav
-    actually is — click Session, click Keep setting up, then Cancel, and the
-    nav is still genuinely on Session throughout; closing the wizard alone
+    actually is — click Corpus Analysis, click Keep setting up, then Cancel, and
+    the nav is still genuinely on Corpus Analysis throughout; closing the wizard alone
     left it there instead of on Data as promised. Requesting the recorded
     destination through the same ``main_nav`` seam :func:`url_state._go_data`
     and friends use is a no-op for the nav-triggered case (the router is
@@ -7048,8 +6986,8 @@ def _run_app() -> None:
        filter that empties the pool.
     5. The active view: 🗺️ Scanpath or 📊 Corpus Analysis inside the view
        area, or the Data page's slots filled.
-    6. The epilogue: the JSON backup, the recovery-cache save, and the
-       💾 Session dialog.
+    6. The epilogue: the recovery-cache save, then the Data page's *Saved on
+       this computer* section.
     """
     configure_page()
     # PERF-3: the cache-key memo is scoped to ONE script run — drop last run's
@@ -7206,9 +7144,7 @@ def _run_app() -> None:
     # `st.navigation` draws into, and has to be there when it renders.
     render_app_logo()
     # Active top-level view, resolved BEFORE `render_top_menu` so the BUG-31
-    # wizard hold-override below can land before that call rather than after it
-    # (see the note there — it used to also gate the 💾 Session *page*, which
-    # UX-100 turned back into a popover).
+    # wizard hold-override below can land before that call rather than after it.
     active_view = render_nav()
 
     # BUG-31 — navigating away mid-wizard used to land the user on the *half-built*
@@ -7232,13 +7168,8 @@ def _run_app() -> None:
     # sit on the view the user picked while the page under it asks the question,
     # and *Discard* then needs no navigation at all — the router is already there.
     #
-    # BUG-36 follow-up: this block used to run *after* `render_top_menu`, so
-    # choosing "Keep setting up" correctly held the `if/elif` dispatch below on
-    # Data but did nothing for the 💾 Session *page*, which `render_top_menu`
-    # drew itself from the *raw* nav click, earlier in the run. Resolving the
-    # override here and handing it in as `active_view=` closed that gap.
-    # UX-100 retired that page — Session is a popover, which never becomes the
-    # active view — but the ordering still matters for the dispatch below.
+    # BUG-36 follow-up: resolved here, before `render_top_menu`, and handed in
+    # as `active_view=`, so everything drawn after it agrees on the view.
     if st.session_state.get("_show_upload_wizard"):
         if (
             active_view != _VIEW_DATA
@@ -7253,7 +7184,7 @@ def _run_app() -> None:
     _render_about_panel(menu.title)
     _render_cancelled_load_notice(menu.notices)
 
-    def _finish_page(backup_renderer=None) -> None:
+    def _finish_page() -> None:
         """The run's last UI, once, on whichever path ``main`` leaves by.
 
         🗂️ Data → *Saved on this computer* reports what **this run** just
@@ -7268,7 +7199,6 @@ def _run_app() -> None:
         """
         if data_view and not editing and not wizard_owns_page:
             _render_saved_here_section(app_url, saved_here_slot)
-        maybe_show_session(app_url, backup_renderer)
 
     # First-visit welcome tour. After the URL presets, so embeds and
     # deep-linked sessions can suppress it — but BEFORE the heavy data/plot
@@ -7302,9 +7232,8 @@ def _run_app() -> None:
         # UX-179 — ❓ Help → Debug, served early like its siblings.
         maybe_show_debug()
 
-    # `active_view` was already resolved above, before `render_top_menu` drew
-    # its Session-page panel from it (including the BUG-31 wizard hold-override
-    # — see the note there); the dispatch below reuses the same value.
+    # `active_view` was already resolved above (including the BUG-31 wizard
+    # hold-override — see the note there); the dispatch below reuses it.
 
     # UX-166 — the Scanpath and Corpus views render inside one reserved area.
     # Its first child is the page slot: `loading.Page` fills it with a skeleton
@@ -8399,10 +8328,53 @@ def _run_app() -> None:
                 )
     else:
         # The Scanpath view renders the viz controls itself (right rail) and
-        # writes the global_* keys; re-read them below so Save & restore captures
-        # any edits the user just made in the rail. Data Inspection + Share are
-        # subtabs of this view now — passed in as renderers so the page owns its
-        # subtab bar (Data Inspection renders inline; Share builds the deep link).
+        # writes the global_* keys. Share is a subtab of this view — passed in as
+        # a renderer so the page owns its subtab bar — and its File section
+        # re-reads those keys when it draws, which is after the rail has.
+
+        def _render_share_settings_file() -> None:
+            """🔗 Share → File (UX-179): the settings file of the figure on screen.
+
+            Resolved only when the File section is drawn — the trial from
+            ``_share_selection`` (written by the Scanpath view before its
+            subtabs), the figure settings from the rail's live keys.
+            """
+            live = viz_settings_from_state(
+                fixations_filtered, base_font_size, words=words_filtered
+            )
+            selection = st.session_state.get("_share_selection") or {}
+            pid = str(selection.get("participant_id") or "")
+            trial = str(selection.get("trial_id") or "")
+            screen = selection.get("screen_id")
+            trial_raw_gaze = (
+                (
+                    extract_part(raw_gaze_filtered, pid, trial, screen)
+                    if screen is not None and SCREEN_ID in raw_gaze_filtered.columns
+                    else extract_trial(raw_gaze_filtered, pid, trial)
+                )
+                if pid and trial and not raw_gaze_filtered.empty
+                else pd.DataFrame()
+            )
+            figure_settings = _build_figure_settings(live, not trial_raw_gaze.empty)
+            figure_settings["raw_gaze"] = (
+                trial_raw_gaze if not trial_raw_gaze.empty else None
+            )
+            figure_settings["line_spacing"] = line_spacing
+            figure_settings["scale_text_to_boxes"] = scale_text_to_boxes
+            render_settings_file(
+                pid,
+                trial,
+                canvas_width,
+                canvas_height,
+                live["x_field"],
+                live["y_field"],
+                figure_settings,
+                live,
+                base_font_size,
+                trial_raw_gaze,
+                font_family=font_family,
+            )
+
         with view_area:
             render_single_trial_tab(
                 words_filtered,
@@ -8418,7 +8390,9 @@ def _run_app() -> None:
                 combos_all=combos_all,
                 words_all=words_all,
                 fixations_all=fixations_all,
-                share_renderer=lambda: _render_share_body(data_choice),
+                share_renderer=lambda: _render_share_body(
+                    data_choice, settings_file=_render_share_settings_file
+                ),
                 data_source_renderer=render_data_source_picker,
                 canvas_renderer=canvas_renderer,
             )
@@ -8426,76 +8400,6 @@ def _run_app() -> None:
     # UX-166: a view that never reached a slow region (no trial selected, an
     # empty view) still takes the skeleton down.
     loading.release_page()
-
-    # Re-resolve viz settings from session_state AFTER the dispatch so the Save &
-    # restore panel reflects any edits made in the Scanpath rail this run (the
-    # widgets there write the global_* keys during render).
-    viz_settings = viz_settings_from_state(
-        fixations_filtered, base_font_size, words=words_filtered
-    )
-
-    # Save & restore (plot config + annotations) renders on EVERY view so it stays
-    # reachable when a non-Scanpath view is active (it's a menu panel). The
-    # trial selection comes from _share_selection (written by the Scanpath view;
-    # blank before any trial has been resolved this session).
-    _sr_sel = st.session_state.get("_share_selection") or {}
-    _sr_pid = str(_sr_sel.get("participant_id") or "")
-    _sr_trial = str(_sr_sel.get("trial_id") or "")
-    _sr_screen = _sr_sel.get("screen_id")
-    _sr_raw_gaze = (
-        (
-            extract_part(raw_gaze_filtered, _sr_pid, _sr_trial, _sr_screen)
-            if _sr_screen is not None and SCREEN_ID in raw_gaze_filtered.columns
-            else extract_trial(raw_gaze_filtered, _sr_pid, _sr_trial)
-        )
-        if _sr_pid and _sr_trial and not raw_gaze_filtered.empty
-        else pd.DataFrame()
-    )
-    _sr_figure_settings = _build_figure_settings(viz_settings, not _sr_raw_gaze.empty)
-    _sr_figure_settings["raw_gaze"] = _sr_raw_gaze if not _sr_raw_gaze.empty else None
-    _sr_figure_settings["line_spacing"] = line_spacing
-    _sr_figure_settings["scale_text_to_boxes"] = scale_text_to_boxes
-
-    def _render_session_backup_block(slot) -> None:
-        """The ⬇️ JSON backup block of the 💾 Session dialog (UX-100).
-
-        A closure, because the panel needs the live trial selection and figure
-        settings resolved just above — and the dialog is served a few lines
-        below, after `save_local_state`, so 🗄️ Automatic recovery can report the
-        write that just happened rather than the previous run's. This single
-        panel merges the former Plot-configuration and Annotations panels; it is
-        a session-wide feature, not part of any one source's setup.
-        """
-        _render_save_restore_expander(
-            _sr_pid,
-            _sr_trial,
-            canvas_width,
-            canvas_height,
-            viz_settings["x_field"],
-            viz_settings["y_field"],
-            _sr_figure_settings,
-            viz_settings,
-            base_font_size,
-            _sr_raw_gaze,
-            font_family=font_family,
-            slot=slot,
-        )
-        # A dialog body is a fragment: uploading a backup in here reruns the
-        # dialog, not `main`, and `_apply_uploaded_plot_config` runs in `main`.
-        # So a file the app has not applied yet asks for a whole-app rerun —
-        # which is also what closes the modal onto the restored figure. The
-        # applied-signature marker is the importer's own (it dedupes by
-        # `(name, size)`), so this cannot loop.
-        pending = st.session_state.get("plot_config_upload")
-        if pending is not None and st.session_state.get("_plot_config_last_import") != (
-            pending.name,
-            pending.size,
-        ):
-            st.rerun(scope="app")
-
-    # Share now lives in the Scanpath view's "🔗 Share" subtab (rendered via the
-    # share_renderer passed into render_single_trial_tab), so it builds its deep
-    # link from the resolved trial + live viz settings right where it's shown.
 
     # UX-65 — ❓ Help is a *menu* in the nav now, not a page of buttons: each
     # entry arms the same dialog its button used to (menu._arm_help_action), and
@@ -8513,7 +8417,7 @@ def _run_app() -> None:
     save_local_state(st.session_state, app_url)
     # …then draw *Saved on this computer*, so it reports the write that just
     # happened rather than the previous run's.
-    _finish_page(_render_session_backup_block)
+    _finish_page()
 
 
 if __name__ == "__main__":

@@ -303,27 +303,6 @@ def get_app_css() -> str:
         }
     }
 
-    /* === The 💾 Session dialog ==============================================
-       UX-100 — Session is a modal opened from the nav, not a page, so the
-       off-screen twin the page needed to keep its widgets executing is gone
-       with it (see menu.py for what the dialog's panels had to be written for
-       instead). Its four blocks keep the cards UX-96 gave them; they read the
-       same in a modal as they did on a page. */
-    .st-key-session_auto_recovery,
-    .st-key-session_json_backup,
-    .st-key-session_reset,
-    .st-key-session_debug_tools {
-        border: 1px solid var(--sps-border);
-        border-radius: 0.75rem;
-        padding: 0.85rem 1rem 1rem;
-        margin: 0.65rem 0;
-        background: rgba(128, 128, 128, 0.035);
-    }
-    .st-key-session_auto_recovery h4,
-    .st-key-session_json_backup h4,
-    .st-key-session_reset h4,
-    .st-key-session_debug_tools h4 { margin-top: 0 !important; }
-
     /* UX-53 — the 🗂️ Data page was "too much space and text, and text too
        small". Scoped to the page's own key so the plot rail and the analysis
        views keep the metrics they were tuned against (#UX-51 sized the rail

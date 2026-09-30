@@ -766,8 +766,8 @@ def restore_local_state(
     marker = root / RESTORE_MARKER_NAME
     if marker.is_file():
         # BUG-71: the last session that applied this cache never finished a run,
-        # and a restore that breaks the app breaks it before the 💾 Session
-        # dialog can offer a reset — so every launch would break again. Open
+        # and a restore that breaks the app breaks it before the Data page can
+        # offer a reset — so every launch would break again. Open
         # without it, once. The files stay, and saving is paused so this
         # session's (empty) state cannot overwrite them; the marker goes, so a
         # reload tries again — one strike, because a tab closed mid-way through a

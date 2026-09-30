@@ -4191,7 +4191,7 @@ def _delete_confirmation_dialog(
     owned = token in uploaded
     if owned:
         # BUG-95: said "and annotations" while removing none. The count is the
-        # annotations on its trials that no other added dataset shares.
+        # dataset's own annotations, which since DATA-48 it alone holds.
         from scanpath_studio.wizard import upload_annotations
 
         count = len(upload_annotations(token))
@@ -4251,8 +4251,8 @@ def _delete_confirmation_dialog(
 def _render_delete_confirmation(host, tokens: list, uploaded: set[str]) -> None:
     """The confirm step between ✕ Delete and the dataset actually going away.
 
-    Deleting an upload drops its frames, its mapping and the annotations on its
-    trials (BUG-95) from the session with no undo, and the button that starts it sits on a row that
+    Deleting an upload drops its frames, its mapping and its annotations
+    (BUG-95, DATA-48) from the session with no undo, and the button that starts it sits on a row that
     opens the dataset when clicked anywhere else — so the click arms this, and
     this asks.
 
@@ -7313,14 +7313,17 @@ def _run_app() -> None:
     # the dataset table uses, not `data_choice` — every public corpus loads
     # through one category token, and they must not share a table. The add
     # wizard's dataset has no name yet, so it gets the pending slot.
+    # DATA-48 — and so do the annotations, swapped by the same key.
+    from scanpath_studio import annotations as _annotations
     from scanpath_studio import metadata as _metadata
 
-    _metadata.activate_dataset(
-        st.session_state,
+    _dataset_owner = (
         _metadata.PENDING_DATASET
         if data_choice == UPLOAD_CHOICE
-        else str(st.session_state.get("data_source_choice") or data_choice),
+        else str(st.session_state.get("data_source_choice") or data_choice)
     )
+    _metadata.activate_dataset(st.session_state, _dataset_owner)
+    _annotations.activate_dataset(st.session_state, _dataset_owner)
     # UX-166: on the Data page the dataset card sits above the table.
     data_page_slot = setup_source_slot.empty()
     # UX-54: the page lists every dataset as a *table* — one row each, sortable,

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from scanpath_studio import annotations as annotations_mod
 from scanpath_studio.annotations import (
     deserialize,
@@ -182,22 +184,249 @@ def test_drop_records_removes_exactly_the_named_entries():
     assert set(store) == {("p1", "t1"), ("p9", "t9")}
 
 
-def test_forget_records_drops_them_from_the_session_store():
-    import streamlit as st
+# --- DATA-48: the annotations belong to a dataset ------------------------------
 
-    st.session_state.clear()
-    st.session_state[annotations_mod.ANNOTATIONS_STATE_KEY] = {
-        ("p1", "t1"): {"star": True, "tags": [], "note": ""},
-        ("p2", "t2"): {"star": True, "tags": [], "note": ""},
-    }
-    st.session_state["annotrial_star_p1__t1__parent"] = True
-    removed = annotations_mod.forget_records(
-        [{"participant_id": "p1", "trial_id": "t1"}]
-    )
-    assert removed == 1
-    assert set(st.session_state[annotations_mod.ANNOTATIONS_STATE_KEY]) == {
-        ("p2", "t2")
-    }
-    # The trial editors re-seed from the store instead of writing it back.
-    assert "annotrial_star_p1__t1__parent" not in st.session_state
-    st.session_state.clear()
+KEY = annotations_mod.ANNOTATIONS_STATE_KEY
+STAR = {"star": True, "tags": ["A tag"], "note": "A's note."}
+NOTE = {"star": False, "tags": [], "note": "B's note."}
+
+
+def _live(session):
+    return session[KEY]
+
+
+class TestPerDatasetStore:
+    """Two datasets that reuse ``(participant, trial)`` ids keep their own."""
+
+    def test_colliding_ids_do_not_share_a_star_a_tag_or_a_note(self):
+        session: dict = {}
+        annotations_mod.activate_dataset(session, "A")
+        session[KEY][("p1", "t1")] = dict(STAR)
+        annotations_mod.activate_dataset(session, "B")
+        # The repro: the same ids on another dataset show nothing.
+        assert _live(session) == {}
+        assert select_keys(_live(session), [("p1", "t1")], favorites_only=True) == []
+        session[KEY][("p1", "t1")] = dict(NOTE)
+        annotations_mod.activate_dataset(session, "A")
+        assert _live(session) == {("p1", "t1"): STAR}
+        annotations_mod.activate_dataset(session, "B")
+        assert _live(session) == {("p1", "t1"): NOTE}
+
+    def test_a_switch_round_trips_and_only_a_change_swaps(self):
+        session: dict = {}
+        assert annotations_mod.activate_dataset(session, "A")
+        session[KEY][("p1", "t1")] = dict(STAR)
+        assert not annotations_mod.activate_dataset(session, "A")
+        assert annotations_mod.activate_dataset(session, "B")
+        assert annotations_mod.activate_dataset(session, "A")
+        assert _live(session) == {("p1", "t1"): STAR}
+        # The selected dataset is never also in the store.
+        assert "A" not in session[annotations_mod.DATASET_STORE_KEY]
+
+    def test_a_swap_drops_the_trial_editors_widget_state(self):
+        """Their keys carry the trial ids only, so a trial B shares would seed
+        from A's values and write them into B's store."""
+        session: dict = {}
+        annotations_mod.activate_dataset(session, "A")
+        session["annotrial_star_p1__t1__parent"] = True
+        session["annotrial_note_p1__t1__parent"] = "A's note."
+        annotations_mod.activate_dataset(session, "B")
+        assert not [k for k in session if str(k).startswith("annotrial_")]
+
+    def test_the_first_activation_adopts_what_the_store_holds(self):
+        """A session with no owner yet — its first run, or a restored cache
+        from before DATA-48 — hands what it has to the dataset it opens on."""
+        session = {KEY: {("p1", "t1"): dict(STAR)}}
+        annotations_mod.activate_dataset(session, "A")
+        assert _live(session) == {("p1", "t1"): STAR}
+        annotations_mod.activate_dataset(session, "B")
+        assert _live(session) == {}
+
+    def test_forget_drops_a_dataset_whether_or_not_it_is_selected(self):
+        session: dict = {}
+        annotations_mod.activate_dataset(session, "A")
+        session[KEY][("p1", "t1")] = dict(STAR)
+        annotations_mod.activate_dataset(session, "B")
+        session[KEY][("p1", "t1")] = dict(NOTE)
+        annotations_mod.forget_dataset(session, "A")
+        assert "A" not in annotations_mod.dataset_records(session)
+        annotations_mod.forget_dataset(session, "B")
+        assert _live(session) == {}
+        assert annotations_mod.dataset_records(session) == {}
+        # Nothing of either comes back when a dataset of that name is opened.
+        annotations_mod.activate_dataset(session, "A")
+        assert _live(session) == {}
+
+    def test_rename_keeps_the_annotations(self):
+        session: dict = {}
+        annotations_mod.activate_dataset(session, "A")
+        session[KEY][("p1", "t1")] = dict(STAR)
+        annotations_mod.activate_dataset(session, "B")
+        annotations_mod.rename_dataset(session, "A", "A2")
+        annotations_mod.rename_dataset(session, "B", "B2")
+        assert session[annotations_mod.OWNER_KEY] == "B2"
+        annotations_mod.activate_dataset(session, "A2")
+        assert _live(session) == {("p1", "t1"): STAR}
+
+    def test_the_wizards_dataset_starts_empty_and_is_adopted_by_its_name(self):
+        session: dict = {}
+        annotations_mod.activate_dataset(session, "A")
+        session[KEY][("p1", "t1")] = dict(STAR)
+        annotations_mod.begin_pending_dataset(session)
+        annotations_mod.activate_dataset(session, annotations_mod.PENDING_DATASET)
+        assert _live(session) == {}
+        annotations_mod.adopt_pending_dataset(session, "New")
+        assert session[annotations_mod.OWNER_KEY] == "New"
+        assert not annotations_mod.activate_dataset(session, "New")
+        annotations_mod.activate_dataset(session, "A")
+        assert _live(session) == {("p1", "t1"): STAR}
+
+    def test_adopt_pending_never_relabels_another_datasets_store(self):
+        session: dict = {}
+        annotations_mod.activate_dataset(session, "A")
+        session[KEY][("p1", "t1")] = dict(STAR)
+        annotations_mod.adopt_pending_dataset(session, "New")
+        assert session[annotations_mod.OWNER_KEY] == "A"
+
+    def test_pending_token_matches_metadata(self):
+        from scanpath_studio import metadata
+
+        assert annotations_mod.PENDING_DATASET == metadata.PENDING_DATASET
+
+    def test_store_for_reads_a_dataset_that_is_not_selected(self):
+        session: dict = {}
+        annotations_mod.activate_dataset(session, "A")
+        session[KEY][("p1", "t1")] = dict(STAR)
+        annotations_mod.activate_dataset(session, "B")
+        assert annotations_mod.store_for(session, "A") == {("p1", "t1"): STAR}
+        assert annotations_mod.store_for(session, "B") == {}
+        assert annotations_mod.store_for(session, "never opened") == {}
+
+    def test_compare_b_reads_its_own_datasets_store(self, monkeypatch):
+        """CMP-8's B filters (the ``cmp`` prefix) narrow by B's dataset."""
+        from types import SimpleNamespace
+
+        from scanpath_studio.session_keys import COMPARE_SOURCE_STATE_KEY
+
+        session: dict = {}
+        annotations_mod.activate_dataset(session, "B")
+        session[KEY][("p1", "t1")] = {"star": False, "tags": ["B tag"], "note": ""}
+        annotations_mod.activate_dataset(session, "A")
+        session[KEY][("p1", "t1")] = dict(STAR)
+        monkeypatch.setattr(
+            annotations_mod, "st", SimpleNamespace(session_state=session)
+        )
+
+        session[COMPARE_SOURCE_STATE_KEY] = "B"
+        assert "B tag" in annotations_mod.known_tags("cmp")
+        assert "A tag" not in annotations_mod.known_tags("cmp")
+        assert annotations_mod.filter_keys([("p1", "t1")], favorites_only=True) == [
+            ("p1", "t1")
+        ]
+        assert (
+            annotations_mod.filter_keys(
+                [("p1", "t1")], favorites_only=True, prefix="cmp"
+            )
+            == []
+        )
+        session[COMPARE_SOURCE_STATE_KEY] = "This dataset"
+        assert "A tag" in annotations_mod.known_tags("cmp")
+
+
+class TestCachePayload:
+    """What the recovery cache writes and reads back (``persistence``)."""
+
+    def _two_datasets(self) -> dict:
+        session: dict = {}
+        annotations_mod.activate_dataset(session, "A")
+        session[KEY][("p1", "t1")] = dict(STAR)
+        annotations_mod.activate_dataset(session, "B")
+        session[KEY][("p1", "t1")] = dict(NOTE)
+        return session
+
+    def test_round_trip_keeps_each_datasets_own(self):
+        payload = annotations_mod.cache_payload(self._two_datasets())
+        assert set(payload["datasets"]) == {"A", "B"}
+        assert "unassigned" not in payload
+        restored: dict = {}
+        assert annotations_mod.restore_payload(restored, payload) == 2
+        assert annotations_mod.payload_count(payload) == 2
+        annotations_mod.activate_dataset(restored, "B")
+        assert _live(restored) == {("p1", "t1"): NOTE}
+        annotations_mod.activate_dataset(restored, "A")
+        assert _live(restored) == {("p1", "t1"): STAR}
+
+    def test_the_wizards_dataset_is_never_cached(self):
+        session = self._two_datasets()
+        annotations_mod.activate_dataset(session, annotations_mod.PENDING_DATASET)
+        session[KEY][("p1", "t1")] = dict(STAR)
+        assert set(annotations_mod.dataset_records(session)) == {"A", "B"}
+
+    def test_a_pre_data48_flat_list_is_adopted_by_the_dataset_opened_first(self):
+        """The one-time migration: the old manifest's records name no dataset."""
+        legacy = [
+            {"participant_id": "p1", "trial_id": "t1", "star": True},
+            "not a record",
+        ]
+        assert annotations_mod.payload_count(legacy) == 2
+        session: dict = {}
+        assert annotations_mod.restore_payload(session, legacy) == 1
+        # Before any dataset opens, a save keeps them unassigned — not lost.
+        assert annotations_mod.cache_payload(session)["unassigned"]
+        annotations_mod.activate_dataset(session, "The one it had selected")
+        payload = annotations_mod.cache_payload(session)
+        assert payload == {
+            "datasets": {
+                "The one it had selected": [
+                    {
+                        "participant_id": "p1",
+                        "trial_id": "t1",
+                        "star": True,
+                        "tags": [],
+                        "note": "",
+                    }
+                ]
+            }
+        }
+
+    def test_a_dataset_this_session_already_holds_keeps_its_own(self):
+        session = self._two_datasets()  # B selected, A in the store
+        other = {
+            "datasets": {"A": [{"participant_id": "x", "trial_id": "y", "star": True}]}
+        }
+        assert annotations_mod.restore_payload(session, other) == 0
+        assert annotations_mod.store_for(session, "A") == {("p1", "t1"): STAR}
+
+    def test_malformed_payloads_restore_nothing(self):
+        for payload in (None, 5, "x", {"datasets": [1]}, {"datasets": {"A": "x"}}):
+            session: dict = {}
+            assert annotations_mod.restore_payload(session, payload) == 0
+            assert session[KEY] == {}
+
+
+class TestAnnotationsFile:
+    """🗂️ Data → Annotations' JSON file, schema 3."""
+
+    def test_the_file_names_its_dataset_and_imports_without_it(self):
+        store = {("p1", "t1"): dict(STAR)}
+        text = serialize(store, dataset="Pilot")
+        assert json.loads(text)["schema"] == annotations_mod.SCHEMA_VERSION == 3
+        assert annotations_mod.file_dataset(text) == "Pilot"
+        assert deserialize(text) == store
+
+    def test_an_old_file_names_no_dataset_and_still_imports(self):
+        old = json.dumps(
+            {
+                "schema": 2,
+                "annotations": [
+                    {"participant_id": "p1", "trial_id": "t1", "star": True}
+                ],
+            }
+        )
+        assert annotations_mod.file_dataset(old) is None
+        store: dict = {}
+        applied, skipped = annotations_mod.merge_records(
+            store, store_to_records(deserialize(old)), {("p1", "t1")}
+        )
+        assert (applied, skipped) == (1, 0)
+        assert annotations_mod.file_dataset("not json") is None

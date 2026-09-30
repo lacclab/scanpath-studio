@@ -6,6 +6,15 @@ backend; a local run keeps them in the recovery cache, and to share them 🗂️
 Data → **Annotations** exports and imports a dataset's as JSON (UX-174). The
 Scanpath view's Export bundle can include the same file (UX-179).
 
+**DATA-48 — annotations belong to a dataset**, as the metadata tables do since
+DATA-47: :data:`ANNOTATIONS_STATE_KEY` holds the *selected* dataset's store only
+(so every reader — the per-trial editor, the pickers' markers, the ⭐ / tag
+filters, the Data page, the Export bundle — reads it unchanged), and every other
+dataset's waits in :data:`DATASET_STORE_KEY`. :func:`activate_dataset`, called
+by ``app.main`` beside ``metadata.activate_dataset``, swaps them when the
+selection changes. Two datasets that reuse ``(participant, trial)`` ids
+therefore no longer share a star, a tag or a note.
+
 The module is split into a *pure* core (``records_to_store`` /
 ``store_to_records`` / ``serialize`` / ``deserialize`` — no Streamlit, unit
 tested) and a thin session-backed layer plus the small render helpers used by
@@ -22,12 +31,17 @@ import streamlit as st
 
 from .constants import ICONS, upload_limit_mb
 from .fields import PANEL_LABEL_W, panel_field, row_label
+from .session_keys import COMPARE_SOURCE_STATE_KEY
 
 ANNOTATIONS_STATE_KEY = "trial_annotations"
-SCHEMA_VERSION = 2
+#: The annotations file (🗂️ Data → Annotations, an Export bundle's
+#: ``annotations.json``). Schema 3 (DATA-48) adds the optional ``dataset`` the
+#: file was exported from — for the reader, not the importer: a file of any
+#: schema imports into the dataset that is open, the only one it can belong to.
+SCHEMA_VERSION = 3
 
 # Per-trial annotation widgets use this prefix so they can be cleared on import
-# (forcing a re-seed from the freshly loaded store), e.g. by `forget_records`.
+# (forcing a re-seed from the freshly loaded store), and on a dataset swap.
 _WIDGET_PREFIX = "annotrial_"
 
 # Always-available tag suggestions (users can add their own on top).
@@ -103,11 +117,27 @@ def store_to_records(store: dict[Key, Entry]) -> list[dict]:
     return records
 
 
-def serialize(store: dict[Key, Entry]) -> str:
-    """Serialize a store to a JSON document string."""
-    return json.dumps(
-        {"schema": SCHEMA_VERSION, "annotations": store_to_records(store)}, indent=2
-    )
+def serialize(store: dict[Key, Entry], *, dataset: str | None = None) -> str:
+    """Serialize a store to a JSON document string.
+
+    ``dataset`` names the dataset the annotations were made on (DATA-48); the
+    file says so, and :func:`deserialize` does not need it back.
+    """
+    document: dict[str, object] = {"schema": SCHEMA_VERSION}
+    if dataset:
+        document["dataset"] = str(dataset)
+    document["annotations"] = store_to_records(store)
+    return json.dumps(document, indent=2)
+
+
+def file_dataset(text: str) -> str | None:
+    """The ``dataset`` an annotations file names, if any (schema 3+)."""
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return None
+    name = data.get("dataset") if isinstance(data, dict) else None
+    return name if isinstance(name, str) and name else None
 
 
 def deserialize(text: str) -> dict[Key, Entry]:
@@ -135,9 +165,9 @@ def _trial_set(trials: Iterable[tuple[object, object]]) -> frozenset[tuple[str, 
 def records_in(store: dict[Key, Entry], trials) -> list[dict]:
     """The records of ``store`` on the trials in ``trials``, sorted.
 
-    ``trials`` is ``(participant_id, trial_id)`` pairs — one dataset's trials.
-    The store is one per session and keyed by those two ids alone, so this is
-    what *a dataset's annotations* means: the ones on trials it has. A screen
+    ``trials`` is ``(participant_id, trial_id)`` pairs. Keeps what an Export
+    bundle writes to the trials it exports, and tells a dataset's annotations
+    on trials it still has from ones it no longer has (DATA-48). A screen
     annotation belongs to its parent trial.
     """
     keep = _trial_set(trials)
@@ -184,6 +214,285 @@ def _store() -> dict[Key, Entry]:
     return st.session_state.setdefault(ANNOTATIONS_STATE_KEY, {})
 
 
+# ---------------------------------------------------------------------------
+# DATA-48 — the annotations belong to a dataset
+#
+# `ANNOTATIONS_STATE_KEY` holds the selected dataset's store; every other
+# dataset's waits in `DATASET_STORE_KEY`, and `activate_dataset` swaps them in
+# and out when the selection changes — DATA-47's design for the metadata
+# tables, taken over rather than reinvented, so the two follow one selection by
+# one set of rules. A dataset component in every key was the alternative; it
+# would have made each of the store's readers (the editor, the pickers'
+# markers, the filters, the Data page, the Export bundle) pass a dataset, where
+# the swap leaves them all reading the one store they already read.
+#
+# These functions take the session mapping explicitly, like `metadata`'s, so
+# the swap is testable on a plain dict.
+# ---------------------------------------------------------------------------
+
+#: Every dataset's annotations but the selected one's: ``{dataset: {key:
+#: entry}}``. The selected dataset is never in it.
+DATASET_STORE_KEY = "_annotations_by_dataset"
+#: Which dataset :data:`ANNOTATIONS_STATE_KEY`'s store belongs to right now.
+#: Absent until the first :func:`activate_dataset`, which then *adopts* what the
+#: store holds — see :func:`restore_payload` for why that matters.
+OWNER_KEY = "_annotations_owner"
+#: The add-dataset wizard's dataset, before it has a name. The same token as
+#: ``metadata.PENDING_DATASET`` (pinned by a test; not imported, since
+#: `metadata` pulls in the data layer). Never cached.
+PENDING_DATASET = "\x00pending"
+#: CMP-8's key prefix for scanpath B's filters, and the picker's "same dataset"
+#: answer (``compare_source.THIS_DATASET`` — not imported: `compare_source`
+#: imports `app`, which imports this).
+_COMPARE_PREFIX = "cmp"
+_COMPARE_SAME_DATASET = "This dataset"
+
+
+def _stored(session) -> dict[str, dict[Key, Entry]]:
+    store = session.get(DATASET_STORE_KEY)
+    return dict(store) if isinstance(store, dict) else {}
+
+
+def _live(session) -> dict[Key, Entry]:
+    live = session.get(ANNOTATIONS_STATE_KEY)
+    return dict(live) if isinstance(live, dict) else {}
+
+
+def _reseed_editors_in(session) -> None:
+    """Drop the per-trial editors' widget state from ``session``.
+
+    Their keys carry the trial's ids, not the dataset's: left in place across a
+    swap, the editor of a trial the next dataset shares would seed from the last
+    dataset's values and write them into the new dataset's store.
+    """
+    for key in [
+        k
+        for k in list(session.keys())
+        if isinstance(k, str) and k.startswith(_WIDGET_PREFIX)
+    ]:
+        del session[key]
+
+
+def activate_dataset(session, dataset: str) -> bool:
+    """Make ``dataset``'s annotations the session store; whether it changed.
+
+    Called by ``app.main`` on every run with the selected dataset. When the
+    selection changed, the outgoing dataset's store is filed away and the
+    incoming one's comes back. A session with no owner yet (its first run)
+    **adopts** what the store already holds for ``dataset`` — which is how a
+    store restored from a pre-DATA-48 recovery cache, whose entries name no
+    dataset, becomes the dataset the restored session opens on.
+    """
+    dataset = str(dataset)
+    owner = session.get(OWNER_KEY)
+    if owner == dataset:
+        return False
+    store = _stored(session)
+    live = _live(session)
+    if owner is not None:
+        if live:
+            store[str(owner)] = live
+        else:
+            store.pop(str(owner), None)
+        live = {}
+    incoming = store.pop(dataset, None) or {}
+    # Adopted entries first, so the dataset's own entry wins a collision.
+    session[ANNOTATIONS_STATE_KEY] = {**live, **incoming}
+    session[DATASET_STORE_KEY] = store
+    session[OWNER_KEY] = dataset
+    _reseed_editors_in(session)
+    return True
+
+
+def begin_pending_dataset(session) -> None:
+    """Start the add-dataset wizard's dataset with no annotations of its own."""
+    store = _stored(session)
+    if store.pop(PENDING_DATASET, None) is not None:
+        session[DATASET_STORE_KEY] = store
+
+
+def adopt_pending_dataset(session, dataset: str) -> None:
+    """✅ Add dataset: the wizard's store becomes ``dataset``'s.
+
+    Only while the wizard's dataset is the selected one — relabelling another
+    dataset's store as the new one's would move its annotations.
+    """
+    begin_pending_dataset(session)
+    if session.get(OWNER_KEY) != PENDING_DATASET:
+        return
+    dataset = str(dataset)
+    store = _stored(session)
+    leftover = store.pop(dataset, None)
+    if leftover:
+        session[ANNOTATIONS_STATE_KEY] = {**leftover, **_live(session)}
+        session[DATASET_STORE_KEY] = store
+    session[OWNER_KEY] = dataset
+
+
+def forget_dataset(session, dataset: str) -> None:
+    """A removed dataset's annotations go with it."""
+    dataset = str(dataset)
+    store = _stored(session)
+    if store.pop(dataset, None) is not None:
+        session[DATASET_STORE_KEY] = store
+    if session.get(OWNER_KEY) == dataset:
+        session[ANNOTATIONS_STATE_KEY] = {}
+        session.pop(OWNER_KEY, None)
+        _reseed_editors_in(session)
+
+
+def rename_dataset(session, old: str, new: str) -> None:
+    """A renamed dataset keeps its annotations."""
+    old, new = str(old), str(new)
+    store = _stored(session)
+    if old in store:
+        session[DATASET_STORE_KEY] = {
+            (new if key == old else key): value for key, value in store.items()
+        }
+    if session.get(OWNER_KEY) == old:
+        session[OWNER_KEY] = new
+
+
+def store_for(session, dataset: str) -> dict[Key, Entry]:
+    """``dataset``'s annotation store — the live one while it is selected."""
+    dataset = str(dataset)
+    if session.get(OWNER_KEY) in (None, dataset):
+        return _live(session)
+    return dict(_stored(session).get(dataset) or {})
+
+
+def store_for_prefix(prefix: str = "") -> dict[Key, Entry]:
+    """The store the trial filters under key ``prefix`` narrow by (DATA-48).
+
+    The main pool's filters read the selected dataset's. Compare mode's
+    scanpath B (the ``cmp`` prefix) can come from another dataset, and then its
+    ⭐ / tag filters, its tag list and its picker's markers are *that*
+    dataset's — the rule ``metadata.attached_for`` follows for its tables.
+    Outside a script run (API, CLI) there is no store: ``{}``.
+    """
+    try:
+        session = st.session_state
+        if prefix != _COMPARE_PREFIX:
+            return _live(session)
+        other = session.get(COMPARE_SOURCE_STATE_KEY)
+    except Exception:  # no script run context
+        return {}
+    if not other or other == _COMPARE_SAME_DATASET:
+        return _live(session)
+    return store_for(session, str(other))
+
+
+def dataset_records(session) -> dict[str, list[dict]]:
+    """Every dataset's annotations, the selected one's live: ``{name: records}``.
+
+    What the recovery cache writes. The wizard's unnamed dataset is left out,
+    and so is a store no dataset owns yet — :func:`unassigned_records`.
+    """
+    stores = _stored(session)
+    owner = session.get(OWNER_KEY)
+    if owner is not None:
+        stores[str(owner)] = _live(session)
+    stores.pop(PENDING_DATASET, None)
+    return {
+        name: store_to_records(entries)
+        for name, entries in sorted(stores.items())
+        if entries
+    }
+
+
+def unassigned_records(session) -> list[dict]:
+    """The session store's entries while no dataset owns it yet.
+
+    Only before the first :func:`activate_dataset` — a run that returned early,
+    or a restored pre-DATA-48 store not adopted yet. Cached as such, so a save
+    in that window keeps them for whichever dataset adopts them next.
+    """
+    if session.get(OWNER_KEY) is not None:
+        return []
+    return store_to_records(_live(session))
+
+
+def cache_payload(session) -> dict:
+    """The recovery cache's ``annotations`` value: ``{"datasets": …}`` (DATA-48)."""
+    payload: dict[str, object] = {"datasets": dataset_records(session)}
+    unassigned = unassigned_records(session)
+    if unassigned:
+        payload["unassigned"] = unassigned
+    return payload
+
+
+def _valid_records(records) -> list[dict]:
+    """One malformed record costs that record, not the rest."""
+    return [
+        record
+        for record in (records if isinstance(records, list) else [])
+        if isinstance(record, dict)
+    ]
+
+
+def restore_payload(session, payload) -> int:
+    """Put back what :func:`cache_payload` wrote; how many annotations landed.
+
+    A dataset this session already holds annotations for keeps its own — the
+    restore's ``setdefault`` rule. **The one-time migration:** a manifest
+    written before DATA-48 stored one flat list of records naming no dataset.
+    It is read as ``unassigned``, and unassigned records go into the session
+    store with no owner, so the first :func:`activate_dataset` adopts them for
+    the dataset the restored session opens on — the one the manifest had
+    selected, unless a link names another. Nothing is dropped, and the next save
+    writes them back under that dataset, so the conversion happens once.
+    """
+    if isinstance(payload, list):
+        datasets, unassigned = {}, payload
+    elif isinstance(payload, dict):
+        datasets = payload.get("datasets")
+        datasets = datasets if isinstance(datasets, dict) else {}
+        unassigned = payload.get("unassigned") or []
+    else:
+        datasets, unassigned = {}, []
+    live = _live(session)
+    owner = session.get(OWNER_KEY)
+    store = _stored(session)
+    restored = 0
+    for name, records in datasets.items():
+        name = str(name)
+        entries = records_to_store(_valid_records(records))
+        if not entries or name == PENDING_DATASET or name in store:
+            continue
+        if name == owner:
+            if live:
+                continue
+            live = entries
+        else:
+            store[name] = entries
+        restored += len(entries)
+    adopted = records_to_store(_valid_records(unassigned))
+    if adopted:
+        before = len(live)
+        live = {**adopted, **live}
+        restored += len(live) - before
+    session[ANNOTATIONS_STATE_KEY] = live
+    if store:
+        session[DATASET_STORE_KEY] = store
+    return restored
+
+
+def payload_count(payload) -> int:
+    """How many annotations a cached ``annotations`` value holds, either shape."""
+    if isinstance(payload, list):
+        return len(payload)
+    if not isinstance(payload, dict):
+        return 0
+    datasets = payload.get("datasets")
+    total = sum(
+        len(records)
+        for records in (datasets.values() if isinstance(datasets, dict) else [])
+        if isinstance(records, list)
+    )
+    unassigned = payload.get("unassigned")
+    return total + (len(unassigned) if isinstance(unassigned, list) else 0)
+
+
 def get_entry(
     participant_id: str, trial_id: str, screen_id: str | None = None
 ) -> Entry:
@@ -218,38 +527,27 @@ def set_entry(
         store[key] = entry
 
 
-def known_tags() -> list[str]:
-    """Preset tags plus any tag used anywhere in the store, sorted."""
+def known_tags(prefix: str = "") -> list[str]:
+    """Preset tags plus any tag used in the dataset's store, sorted.
+
+    ``prefix`` picks the dataset as :func:`store_for_prefix` does, so compare
+    mode's scanpath B lists its own dataset's tags (DATA-48).
+    """
     tags: set[str] = set(PRESET_TAGS)
-    for entry in _store().values():
+    store = store_for_prefix(prefix) if prefix else _store()
+    for entry in store.values():
         tags.update(entry.get("tags", []))
     return sorted(tags)
 
 
 def current_records() -> list[dict]:
-    """All annotations as a flat record list — for the Export bundle (UX-179)."""
+    """The open dataset's annotations as records — the Export bundle's (UX-179)."""
     return store_to_records(_store())
-
-
-def forget_records(records: list[dict]) -> int:
-    """Drop ``records`` from the session store; the trial editors re-seed.
-
-    Returns how many entries were removed.
-    """
-    removed = drop_records(_store(), records)
-    if removed:
-        _reseed_trial_editors()
-    return removed
 
 
 def _reseed_trial_editors() -> None:
     """Drop the per-trial editors' widget state, so they re-seed from the store."""
-    for key in [
-        k
-        for k in list(st.session_state.keys())
-        if isinstance(k, str) and k.startswith(_WIDGET_PREFIX)
-    ]:
-        del st.session_state[key]
+    _reseed_editors_in(st.session_state)
 
 
 # ---------------------------------------------------------------------------
@@ -453,10 +751,14 @@ def filter_keys(
     favorites_only: bool = False,
     required_tags: list[str] | None = None,
     excluded_tags: list[str] | None = None,
+    prefix: str = "",
 ) -> list[Key]:
-    """Session-backed wrapper around :func:`select_keys`."""
+    """Session-backed wrapper around :func:`select_keys`.
+
+    ``prefix`` picks the dataset's store as :func:`store_for_prefix` does.
+    """
     return select_keys(
-        _store(),
+        store_for_prefix(prefix) if prefix else _store(),
         keys,
         favorites_only=favorites_only,
         required_tags=required_tags,
@@ -492,12 +794,15 @@ def _plural(count: int, noun: str) -> str:
     return f"{count:,} {noun}{'' if count == 1 else 's'}"
 
 
-def _import_dataset_annotations(uploader_key: str, trials: frozenset) -> None:
+def _import_dataset_annotations(
+    uploader_key: str, trials: frozenset, dataset_name: str = ""
+) -> None:
     upload = st.session_state.get(uploader_key)
     if upload is None:
         return
     try:
-        records = store_to_records(deserialize(upload.getvalue().decode("utf-8")))
+        text = upload.getvalue().decode("utf-8")
+        records = store_to_records(deserialize(text))
     except (UnicodeDecodeError, ValueError):
         st.session_state[_DATASET_NOTE_KEY] = (
             "error:That file is not an annotations JSON file."
@@ -506,8 +811,14 @@ def _import_dataset_annotations(uploader_key: str, trials: frozenset) -> None:
             int(st.session_state.get(_DATASET_NONCE_KEY, 0)) + 1
         )
         return
+    # DATA-48: into the open dataset, whatever the file names — a file from
+    # before annotations were per dataset names none, and one exported from
+    # another dataset is still the user's call to bring here. The name is said.
     applied, skipped = merge_records(_store(), records, trials)
     note = f"Imported {_plural(applied, 'annotation')}."
+    source = file_dataset(text)
+    if source and source != dataset_name:
+        note = f"Imported {_plural(applied, 'annotation')} exported from **{source}**."
     if skipped:
         note += (
             f" Skipped {_plural(skipped, 'annotation')} on trials this dataset "
@@ -521,7 +832,7 @@ def _delete_dataset_annotations(records: list[dict]) -> None:
     _refresh_dataset_widgets(f"Deleted {_plural(removed, 'annotation')}.")
 
 
-def _annotations_frame(records: list[dict]) -> pd.DataFrame:
+def _annotations_frame(records: list[dict], trials: frozenset) -> pd.DataFrame:
     frame = pd.DataFrame(
         {
             "Participant": [r["participant_id"] for r in records],
@@ -530,15 +841,21 @@ def _annotations_frame(records: list[dict]) -> pd.DataFrame:
             "Favorite": [r["star"] for r in records],
             "Tags": [r["tags"] for r in records],
             "Note": [r["note"] for r in records],
+            "In dataset": [
+                (str(r["participant_id"]), str(r["trial_id"])) in trials
+                for r in records
+            ],
         }
     )
     if not frame["Screen"].astype(bool).any():
         frame = frame.drop(columns="Screen")
+    if frame["In dataset"].all():
+        frame = frame.drop(columns="In dataset")
     return frame
 
 
 def render_dataset_annotations(trials, *, dataset_name: str) -> None:
-    """🗂️ Data → **Annotations**: every annotation on the open dataset's trials.
+    """🗂️ Data → **Annotations**: every annotation the open dataset holds.
 
     One table — participant, trial, favorite, tags, note — with **Export** (this
     dataset's annotations as JSON), **Import** (the same file, or the
@@ -546,9 +863,16 @@ def render_dataset_annotations(trials, *, dataset_name: str) -> None:
     are added, the rest are skipped)
     and **Delete**, for the rows ticked in the table. Annotations are still made
     per trial, on 🗺️ Scanpath → Annotations; this is where they are seen whole.
+
+    DATA-48: the session store *is* the dataset's now, so the table lists all
+    of it — including any entry on a trial the dataset has not loaded: one made
+    under another selection of a corpus' parts, or one a recovery cache from
+    before annotations were per dataset assigned here (:func:`restore_payload`).
+    Those are flagged rather than hidden, so an entry is never out of reach:
+    exported from here, it imports into the dataset it belongs to.
     """
     trials = _trial_set(trials)
-    records = records_in(_store(), trials)
+    records = store_to_records(_store())
     note = st.session_state.pop(_DATASET_NOTE_KEY, None)
     if note and note.startswith("error:"):
         st.error(note.removeprefix("error:"), icon=ICONS["error"])
@@ -564,7 +888,7 @@ def render_dataset_annotations(trials, *, dataset_name: str) -> None:
     toolbar.download_button(
         "Export",
         icon=ICONS["download"],
-        data=serialize(records_to_store(records)),
+        data=serialize(records_to_store(records), dataset=dataset_name),
         file_name=f"{_file_slug(dataset_name)}_annotations.json",
         mime="application/json",
         key="dataset_annotations_export",
@@ -578,7 +902,7 @@ def render_dataset_annotations(trials, *, dataset_name: str) -> None:
             type=["json"],
             key=uploader_key,
             on_change=_import_dataset_annotations,
-            args=(uploader_key, trials),
+            args=(uploader_key, trials, dataset_name),
             max_upload_size=upload_limit_mb(),
         )
         st.caption(
@@ -594,8 +918,18 @@ def render_dataset_annotations(trials, *, dataset_name: str) -> None:
             "🗺️ **Scanpath → Annotations**."
         )
         return
+    elsewhere = len(records) - len(records_in(_store(), trials))
+    if elsewhere:
+        st.caption(
+            f"{_plural(elsewhere, 'annotation')} here "
+            f"{'is' if elsewhere == 1 else 'are'} on trials this dataset hasn't "
+            "loaded (*In dataset* unticked) — from an earlier load of it, or "
+            "saved before annotations were kept per dataset. They stay with this "
+            "dataset; to move them to another, **Export** them here and "
+            "**Import** them there."
+        )
     event = st.dataframe(
-        _annotations_frame(records),
+        _annotations_frame(records, trials),
         hide_index=True,
         width="stretch",
         on_select="rerun",
@@ -605,6 +939,11 @@ def render_dataset_annotations(trials, *, dataset_name: str) -> None:
             "Favorite": st.column_config.CheckboxColumn("Favorite", width="small"),
             "Tags": st.column_config.ListColumn("Tags"),
             "Note": st.column_config.TextColumn("Note", width="large"),
+            "In dataset": st.column_config.CheckboxColumn(
+                "In dataset",
+                width="small",
+                help="Whether this dataset has the annotated trial.",
+            ),
         },
     )
     picked = [records[i] for i in event.selection.rows if i < len(records)]

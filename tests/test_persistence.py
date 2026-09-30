@@ -143,6 +143,84 @@ def test_round_trip_datasets_settings_mappings_and_annotations(tmp_path):
     assert restored["trial_annotations"][("p1", "t1")]["note"] == "check"
 
 
+class TestAnnotationsPerDataset:
+    """DATA-48 — the cache keeps each dataset's annotations as its own."""
+
+    STAR = {"star": True, "tags": ["Review"], "note": "A's note."}
+    NOTE = {"star": False, "tags": [], "note": "B's note."}
+
+    def test_two_datasets_with_colliding_ids_round_trip_apart(self, tmp_path):
+        from scanpath_studio import annotations
+
+        session: dict = {"data_source_choice": "B"}
+        annotations.activate_dataset(session, "A")
+        session[ANNOTATIONS_STATE_KEY][("p1", "t1")] = dict(self.STAR)
+        annotations.activate_dataset(session, "B")
+        session[ANNOTATIONS_STATE_KEY][("p1", "t1")] = dict(self.NOTE)
+        assert save_state(session, tmp_path)
+        manifest = json.loads((tmp_path / "manifest.json").read_text("utf-8"))
+        assert set(manifest["annotations"]["datasets"]) == {"A", "B"}
+        assert cache_status(tmp_path)["annotations"] == 2
+
+        restored: dict = {}
+        assert restore_state(restored, tmp_path)
+        assert restored_summary(restored)["annotations"] == 2
+        annotations.activate_dataset(restored, restored["data_source_choice"])
+        assert restored[ANNOTATIONS_STATE_KEY] == {("p1", "t1"): self.NOTE}
+        annotations.activate_dataset(restored, "A")
+        assert restored[ANNOTATIONS_STATE_KEY] == {("p1", "t1"): self.STAR}
+
+    def test_a_switch_is_a_change_the_cache_saves(self, tmp_path):
+        from scanpath_studio import annotations
+
+        session: dict = {}
+        annotations.activate_dataset(session, "A")
+        session[ANNOTATIONS_STATE_KEY][("p1", "t1")] = dict(self.STAR)
+        assert save_state(session, tmp_path)
+        annotations.activate_dataset(session, "B")
+        session[ANNOTATIONS_STATE_KEY][("p1", "t1")] = dict(self.NOTE)
+        assert save_state(session, tmp_path)
+        manifest = json.loads((tmp_path / "manifest.json").read_text("utf-8"))
+        assert set(manifest["annotations"]["datasets"]) == {"A", "B"}
+
+    def test_a_pre_data48_manifest_migrates_to_the_dataset_it_had_open(self, tmp_path):
+        """The manifest's one flat list named no dataset. The session it
+        restores opens on the dataset the manifest had selected, which adopts
+        them; the next save writes them back under that name — once."""
+        from scanpath_studio import annotations
+
+        legacy = {
+            "schema": persistence.SCHEMA_VERSION,
+            "datasets": {},
+            "session": {"data_source_choice": "Bundled Demo"},
+            "annotations": [
+                {
+                    "participant_id": "p1",
+                    "trial_id": "t1",
+                    "star": True,
+                    "tags": ["Review"],
+                    "note": "kept",
+                }
+            ],
+        }
+        (tmp_path / "manifest.json").write_text(json.dumps(legacy), "utf-8")
+        assert cache_status(tmp_path)["annotations"] == 1
+
+        session: dict = {}
+        assert restore_state(session, tmp_path)
+        assert restored_summary(session)["annotations"] == 1
+        # `app.main` activates the selected dataset right after the restore.
+        annotations.activate_dataset(session, session["data_source_choice"])
+        assert session[ANNOTATIONS_STATE_KEY][("p1", "t1")]["note"] == "kept"
+        annotations.activate_dataset(session, "Another dataset")
+        assert session[ANNOTATIONS_STATE_KEY] == {}
+
+        assert save_state(session, tmp_path)
+        manifest = json.loads((tmp_path / "manifest.json").read_text("utf-8"))
+        assert list(manifest["annotations"]["datasets"]) == ["Bundled Demo"]
+        assert "unassigned" not in manifest["annotations"]
+
+
 def test_restore_is_once_only_and_does_not_overwrite_seeded_values(tmp_path):
     source = {"global_show_heatmap": True}
     save_state(source, tmp_path)

@@ -2202,14 +2202,13 @@ def _render_compare_filters(host, source: SecondaryDataset) -> None:
     )
 
 
-def _narrow_secondary(
-    source: SecondaryDataset, filters: dict, *, use_annotations: bool = False
-) -> SecondaryDataset:
+def _narrow_secondary(source: SecondaryDataset, filters: dict) -> SecondaryDataset:
     """Apply B's own (``cmp``-prefixed) trial filters to a comparison source.
 
-    Annotation filters apply only when ``use_annotations`` is true. Favorites
-    and tags belong to the active dataset, so the same-dataset B pool can use
-    them; a different corpus must never inherit matching-looking ids.
+    Its ⭐ / tag filters read B's own dataset's annotations
+    (``annotations.store_for_prefix("cmp")``, DATA-48): the open dataset's for
+    "This dataset", and another corpus' own when B comes from one — never A's,
+    whose matching-looking ids name other trials.
     """
     words, fixations = filter_trials(
         source.words,
@@ -2221,7 +2220,7 @@ def _narrow_secondary(
     selected_keys = filters.get("trial_keys")
     if selected_keys is not None:
         words, fixations = filter_to_keys(words, fixations, set(selected_keys))
-    if use_annotations and (
+    if (
         filters.get("favorites_only")
         or filters.get("required_tags")
         or filters.get("excluded_tags")
@@ -2233,6 +2232,7 @@ def _narrow_secondary(
                 favorites_only=bool(filters.get("favorites_only")),
                 required_tags=list(filters.get("required_tags") or []),
                 excluded_tags=list(filters.get("excluded_tags") or []),
+                prefix=_COMPARE_FILTER_PREFIX,
             )
         )
         words, fixations = filter_to_keys(words, fixations, kept)
@@ -2342,7 +2342,7 @@ def _render_compare_selector(
         if st.session_state.get(_COMPARE_SOURCE_RESOLVED_KEY) != THIS_DATASET:
             same_filters = dict(_NO_COMPARE_NARROWING)
         st.session_state[_COMPARE_SOURCE_RESOLVED_KEY] = THIS_DATASET
-        narrowed = _narrow_secondary(filter_source, same_filters, use_annotations=True)
+        narrowed = _narrow_secondary(filter_source, same_filters)
         comparison_pool = narrowed
         combos = narrowed.combos
         words_filtered = narrowed.words

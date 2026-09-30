@@ -7870,7 +7870,9 @@ def render_trial_filters(
         key=f"{prefix}filter_favorites",
         on_change=_apply,
     )
-    tags = known_tags()
+    # DATA-48: the tags of the dataset this pool comes from — compare mode's B
+    # (the `cmp` prefix) may be another dataset, with tags of its own.
+    tags = known_tags(prefix)
     if tags:
         _seed_filter_widget(f"{prefix}filter_req_tags", tags, [], prefix=prefix)
         _labeled(

@@ -1081,7 +1081,10 @@ class TestDatasetTable:
         assert own[self.NAME] == "Twelve readers, two texts. A pilot."
         assert "description" not in at.session_state["_datasets"][self.NAME]
 
-    def test_the_annotations_tab_lists_only_this_datasets_trials(self):
+    def test_the_annotations_tab_flags_entries_on_trials_it_has_not_loaded(self):
+        """DATA-48: the store is the dataset's own, so the tab lists all of it
+        — an entry on a trial the dataset has not loaded is flagged in the
+        *In dataset* column, not hidden (it would be out of reach otherwise)."""
         from scanpath_studio.annotations import ANNOTATIONS_STATE_KEY
 
         at = self._at()
@@ -1105,7 +1108,10 @@ class TestDatasetTable:
             and "Favorite" in d.value.columns
         ]
         assert len(tables) == 1
-        assert list(tables[0]["Note"]) == ["Mine."]
+        table = tables[0].set_index("Note")
+        assert list(table.index) == ["Mine.", "Not here."]
+        assert table["In dataset"].to_dict() == {"Mine.": True, "Not here.": False}
+        assert any("hasn't loaded" in str(c.value) for c in at.caption)
 
     def test_a_long_list_gets_a_search_and_a_short_one_does_not(self):
         import pandas as pd
@@ -1306,54 +1312,46 @@ class TestDatasetRename:
         # the recovery cache rewrite any stored frames.
         assert DATASET_DESCRIPTIONS_KEY in persistence._SESSION_KEYS
 
-    def test_removing_an_upload_takes_its_trials_annotations(self, _session):
+    def test_removing_an_upload_takes_its_annotations(self, _session):
         """BUG-95: the confirmation said the annotations leave with the upload,
-        and none did. Those on its own trials go; one on a trial another added
-        dataset also has is that dataset's too, and stays."""
-        import pandas as pd
-
-        from scanpath_studio import wizard
+        and none did. DATA-48: all of its own go — and none of another
+        dataset's, even on a trial with the same ids."""
+        from scanpath_studio import annotations, wizard
         from scanpath_studio.annotations import ANNOTATIONS_STATE_KEY
 
-        def frames(*pairs):
-            return {
-                "fixations": pd.DataFrame(
-                    {
-                        "participant_id": [p for p, _ in pairs],
-                        "trial_id": [t for _, t in pairs],
-                    }
-                ),
-                "words": pd.DataFrame(),
-            }
-
-        _session["_datasets"] = {
-            self.NAME: frames(("p1", "t1"), ("p1", "t2")),
-            "Other": frames(("p1", "t2")),
-        }
-        _session["data_source_choice"] = "Other"
+        self._store(_session, self.NAME, "Other")
         note = {"star": False, "tags": [], "note": "n"}
-        _session[ANNOTATIONS_STATE_KEY] = {
-            ("p1", "t1"): dict(note),
-            ("p1", "t1", "s2"): dict(note),
-            ("p1", "t2"): dict(note),
-            ("p9", "t9"): dict(note),
-        }
+        annotations.activate_dataset(_session, self.NAME)
+        _session[ANNOTATIONS_STATE_KEY].update(
+            {("p1", "t1"): dict(note), ("p1", "t1", "s2"): dict(note)}
+        )
+        annotations.activate_dataset(_session, "Other")
+        _session[ANNOTATIONS_STATE_KEY][("p1", "t1")] = dict(note)
         assert len(wizard.upload_annotations(self.NAME)) == 2
         wizard._remove_dataset(self.NAME)
-        assert set(_session[ANNOTATIONS_STATE_KEY]) == {("p1", "t2"), ("p9", "t9")}
+        assert set(_session[ANNOTATIONS_STATE_KEY]) == {("p1", "t1")}
+        assert annotations.store_for(_session, self.NAME) == {}
 
-    def test_a_words_only_upload_is_read_from_its_words(self, _session):
-        import pandas as pd
+        # Removing the *selected* upload empties the store it leaves behind.
+        wizard._remove_dataset("Other")
+        assert _session[ANNOTATIONS_STATE_KEY] == {}
 
-        from scanpath_studio import wizard
+    def test_a_renamed_upload_keeps_its_annotations(self, _session):
+        """DATA-48 — the store is keyed by the dataset's name, so it moves."""
+        from scanpath_studio import annotations, wizard
+        from scanpath_studio.annotations import ANNOTATIONS_STATE_KEY
 
-        entry = {
-            "fixations": pd.DataFrame(),
-            "words": pd.DataFrame(
-                {"participant_id": [1, 1], "unique_trial_id": ["a", "a"]}
-            ),
+        self._store(_session, self.NAME, "Other")
+        annotations.activate_dataset(_session, self.NAME)
+        _session[ANNOTATIONS_STATE_KEY][("p1", "t1")] = {
+            "star": True,
+            "tags": [],
+            "note": "",
         }
-        assert wizard._upload_trials(entry) == {("1", "a")}
+        annotations.activate_dataset(_session, "Other")
+        assert wizard.rename_dataset(self.NAME, "Pilot") == "Pilot"
+        assert annotations.store_for(_session, self.NAME) == {}
+        assert set(annotations.store_for(_session, "Pilot")) == {("p1", "t1")}
 
     def test_a_built_in_source_label_cannot_be_shadowed(self, _session):
         """A stored dataset named exactly like a built-in source would put a
@@ -4363,3 +4361,97 @@ class TestMetadataBelongsToItsDataset:
         attached = self._attached(at)
         assert attached is not None
         assert attached.source_name == "synthetic-readers.csv"
+
+
+class TestAnnotationsBelongToTheirDataset:
+    """DATA-48 through ``app.main`` — the issue's repro: star a trial on an
+    uploaded copy of the demo, switch to the Bundled Demo, and the same trial
+    must show nothing; switch back and the star is there."""
+
+    NAME = "QA Full"
+
+    def _at(self, choice=None, carried=None):
+        """A fresh app on ``choice``, carrying the DATA-48 store keys over.
+
+        A fresh ``AppTest`` per step, because AppTest cannot replay a trial
+        picker whose option labels changed under it (a ★ appearing) — the flow
+        test in ``test_apptest_flows`` works around the same limitation. The
+        store keys ride along, so each step's first run still performs the swap
+        in ``app.main`` from the dataset the last step left selected.
+        """
+        import pandas as pd
+
+        from scanpath_studio import api
+        from scanpath_studio.data import load_sample_data
+
+        words, fixations = api.load_scanpath_data(*load_sample_data())
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["_datasets"] = {
+            self.NAME: {
+                "words": words,
+                "fixations": fixations,
+                "raw_gaze": pd.DataFrame(),
+                "filter_fields": [],
+                "composite_trial_columns": [],
+            }
+        }
+        at.session_state["data_source_choice"] = choice or self.NAME
+        for key, value in (carried or {}).items():
+            at.session_state[key] = value
+        at.run(timeout=120)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        return at
+
+    @staticmethod
+    def _carry(at) -> dict:
+        from scanpath_studio import annotations
+
+        keys = (
+            annotations.ANNOTATIONS_STATE_KEY,
+            annotations.DATASET_STORE_KEY,
+            annotations.OWNER_KEY,
+        )
+        return {key: at.session_state[key] for key in keys if key in at.session_state}
+
+    @staticmethod
+    def _picker_options(at):
+        return [
+            str(option)
+            for s in at.selectbox
+            if s.key == "single_trial_id"
+            for option in s.options
+        ]
+
+    @staticmethod
+    def _star_boxes(at):
+        return [c for c in at.checkbox if c.key and c.key.startswith("annotrial_star_")]
+
+    def test_a_star_on_one_dataset_is_not_on_another_with_the_same_ids(self):
+        from scanpath_studio import annotations
+        from scanpath_studio.app import DEMO_CHOICE
+
+        at = self._at()
+        assert at.session_state[annotations.OWNER_KEY] == self.NAME
+        stars = self._star_boxes(at)
+        assert len(stars) == 1, [c.key for c in stars]
+        stars[0].check()
+        at.run(timeout=120)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        store = dict(at.session_state[annotations.ANNOTATIONS_STATE_KEY])
+        assert len(store) == 1 and next(iter(store.values()))["star"] is True
+        assert any(o.startswith("★ ") for o in self._picker_options(at))
+
+        # The Bundled Demo has the same (participant, trial) ids — and no star.
+        at = self._at(DEMO_CHOICE, self._carry(at))
+        assert at.session_state[annotations.OWNER_KEY] == DEMO_CHOICE
+        assert at.session_state[annotations.ANNOTATIONS_STATE_KEY] == {}
+        assert self._picker_options(at)
+        assert not any(o.startswith("★ ") for o in self._picker_options(at))
+        editor = self._star_boxes(at)
+        assert editor and not any(c.value for c in editor)
+
+        # Back on its own dataset, the star is back.
+        at = self._at(self.NAME, self._carry(at))
+        assert at.session_state[annotations.OWNER_KEY] == self.NAME
+        assert dict(at.session_state[annotations.ANNOTATIONS_STATE_KEY]) == store
+        assert any(o.startswith("★ ") for o in self._picker_options(at))

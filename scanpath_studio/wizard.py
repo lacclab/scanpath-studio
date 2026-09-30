@@ -321,9 +321,13 @@ def _finalize_wizard_dataset() -> None:
     # DATA-47: the tables just attached are this dataset's, not a session-wide
     # slot — hand them over before the switch, so the next run has nothing to
     # swap (and so the dataset this wizard was opened over keeps its own).
+    # DATA-48 — likewise its annotations (none yet: nothing is annotated in
+    # the wizard, but the store it opened on belongs to another dataset).
+    from scanpath_studio import annotations as _annotations
     from scanpath_studio import metadata as _metadata
 
     _metadata.adopt_pending_dataset(st.session_state, ds_name)
+    _annotations.adopt_pending_dataset(st.session_state, ds_name)
     # Apply the source switch through the plain pending key that
     # resolve_data_source consumes before the radio instantiates, and
     # leave the wizard.
@@ -343,52 +347,23 @@ def _finalize_wizard_dataset() -> None:
     st.session_state[TRIAL_IDENTITY_CHECK_KEY] = "add"
 
 
-def _upload_trials(entry) -> frozenset[tuple[str, str]]:
-    """An upload's ``(participant, trial)`` pairs, as annotations are keyed.
-
-    The trial picker's ids: `utils.build_combo_options` lists the fixation
-    table's trials under ``unique_trial_id`` when there is one, else
-    ``trial_id``. A table without fixations is read from its words instead.
-    """
-    for key in ("fixations", "words"):
-        frame = entry.get(key) if isinstance(entry, dict) else None
-        if not isinstance(frame, pd.DataFrame) or frame.empty:
-            continue
-        trial_col = "unique_trial_id" if "unique_trial_id" in frame else "trial_id"
-        if {"participant_id", trial_col} <= set(frame.columns):
-            pairs = frame[["participant_id", trial_col]].drop_duplicates()
-            return frozenset(
-                zip(pairs["participant_id"].astype(str), pairs[trial_col].astype(str))
-            )
-    return frozenset()
-
-
 def upload_annotations(name: str) -> list[dict]:
     """The annotations removing upload ``name`` takes with it (BUG-95).
 
-    Those on its trials — except a trial another added dataset also has: the
-    session keeps one annotation store keyed by participant and trial, so an
-    annotation on a shared trial is that dataset's too, and stays. A public
-    corpus is not in memory to ask, which is why the removal confirmation says
-    how many will go rather than only that they will.
+    All of its own: since DATA-48 each dataset holds its annotations, so none
+    is shared with another dataset that happens to reuse its trial ids — which
+    is why the removal confirmation can say how many will go.
     """
     from scanpath_studio import annotations
 
-    store = st.session_state.get("_datasets", {})
-    others = frozenset().union(
-        *(_upload_trials(entry) for key, entry in store.items() if key != name)
-    )
-    return annotations.records_in(
-        st.session_state.get(annotations.ANNOTATIONS_STATE_KEY) or {},
-        _upload_trials(store.get(name)) - others,
-    )
+    return annotations.store_to_records(annotations.store_for(st.session_state, name))
 
 
 def _remove_dataset(name: str) -> None:
     """Remove a previously added dataset (the ✕ button's ``on_click`` callback).
 
     Pops it from the ``_datasets`` store — with its description, its metadata
-    tables and the annotations on its trials (`upload_annotations`) — and, if
+    tables and its annotations (`upload_annotations`) — and, if
     it was the selected source,
     switches back to the bundled demo via ``_pending_source_choice`` (applied
     before the radio re-instantiates, like the wizard finalize/cancel switch).
@@ -402,11 +377,11 @@ def _remove_dataset(name: str) -> None:
     recomputed on the next rerun from frames that are still loaded, which is the
     same lossless trade the 🧹 button makes.
     """
-    # BUG-95 — its annotations go with it, as the confirmation says. Read
-    # before the entry leaves: the trials are taken from its frames.
+    # BUG-95 — its annotations go with it, as the confirmation says (DATA-48:
+    # the dataset's own store, filed under its name).
     from scanpath_studio import annotations
 
-    annotations.forget_records(upload_annotations(name))
+    annotations.forget_dataset(st.session_state, name)
     store = st.session_state.get("_datasets", {})
     store.pop(name, None)
     # UX-174 r2 — and its description, so a new dataset of that name starts
@@ -459,10 +434,13 @@ def rename_dataset(old: str, new: str) -> str | None:
     if old in descriptions:
         descriptions[name] = descriptions.pop(old)
         st.session_state[DATASET_DESCRIPTIONS_KEY] = descriptions
-    # DATA-47 — and its metadata tables, which are keyed by the name too.
+    # DATA-47 — and its metadata tables, which are keyed by the name too, and
+    # (DATA-48) its annotations.
+    from scanpath_studio import annotations as _annotations
     from scanpath_studio import metadata as _metadata
 
     _metadata.rename_dataset(st.session_state, old, name)
+    _annotations.rename_dataset(st.session_state, old, name)
     rename_cached_dataset(st.session_state, old, name)
     return name
 
@@ -551,10 +529,13 @@ def _enter_add_data_wizard() -> None:
     st.session_state["_show_upload_wizard"] = True
     st.session_state["setup_complete"] = False
     # DATA-47: a new dataset starts with no metadata tables — not the ones of
-    # the dataset the wizard was opened over, and not a previous attempt's.
+    # the dataset the wizard was opened over, and not a previous attempt's —
+    # and no annotations (DATA-48).
+    from scanpath_studio import annotations as _annotations
     from scanpath_studio import metadata as _metadata
 
     _metadata.begin_pending_dataset(st.session_state)
+    _annotations.begin_pending_dataset(st.session_state)
     # DATA-26: the wizard is the 🗂️ Data page's add-a-dataset mode, so take the
     # user there. Written as a *request* (`menu.render_nav` reconciles it on the
     # next run) rather than a `switch_to_view` — this is an `on_click` callback,

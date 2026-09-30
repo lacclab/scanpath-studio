@@ -7,8 +7,8 @@ Scanpath Studio can use the bundled sample, supported public corpora, or tables 
 - **Bundled Demo:** immediate, small, and suitable for learning the interface.
 - **Synthetic sample:** an editable, manually authored six-word scanpath.
 - **Public corpus:** choose the corpus and local data directory; download when prompted.
-- **+ → Import files:** upload or select your own files and map their columns. Also available through **🗂️ Data → ➕ Add dataset**.
-- **+ → Create manually:** sketch a trial from text, with no files at all. Also available through **🗂️ Data → Create manual scanpath**.
+- **+ → Import files:** upload or select your own files and map their columns. Also available through **🗂️ Data → + Add dataset → Import files**.
+- **+ → Create manually:** sketch a trial from text, with no files at all. Also available through **🗂️ Data → + Add dataset → Create manually**.
 
 While a dataset opens, the page shows a skeleton of the view with the steps of the load — reading the files, normalizing them, building the trial list — each ticked off with its time. **Back to *dataset*** stops the load and reopens the dataset you had before, and a notice offers **Try again**. Opening a dataset again skips reading its files — they stay cached until the app restarts — so it's quicker the second time.
 
@@ -27,7 +27,7 @@ Participant ID, text ID, fixation timestamps, raw gaze, conditions, questions, a
 
 The wizard is **three numbered parts** on one screen, with **⬇️ Save setup** and **✅ Add dataset** at the foot.
 
-**1. Dataset name** — what the dataset is called in 📂 **Available datasets**.
+**1. Name & description** — what the dataset is called in 📂 **Available datasets**, and, if you like, a sentence about it, shown under its name.
 
 **2. Upload data tables.** One row per table — **Fixations**, **AOIs** (the words / interest areas) and **Raw gaze** — with the table's uploader on the left and its column mapping beside it; upload at least one. Fixations and AOIs take several files each if your export is split (one per participant, say); raw gaze takes one. Each row's pickers are pre-filled from the column names, and the tint says which were auto-detected: detection matches *names*, so this is where you confirm it picked the right columns.
 
@@ -43,9 +43,15 @@ The wizard is **three numbered parts** on one screen, with **⬇️ Save setup**
 
 The wizard objects only once you press **✅ Add dataset**, and then about everything at once rather than one field at a time: a required field left empty turns red in place. Rows it cannot use are named directly above the button — cells in a mapped number column that don't parse, rows with no trial or reader id, positions that are screen fractions rather than pixels — together with what the load does with them.
 
-📂 **Available datasets** lists the same headline fields shown in the active dataset summary — participants, texts, trials, fixations, words, gaze points and multipart screens; click a name to open it, and the open row is tinted. Rename or remove a source from its table row, or open ✏️ **Edit dataset** to change how it was mapped — the same field grid the wizard draws, and, for a dataset added with only one of the two main tables, an uploader for the other one. Adding the missing half there normalizes it and joins it to what is already loaded, so a fixations-only dataset can gain its word boxes (or an AOI-only one its fixations) without being added again.
+The 🗂️ **Data** page opens on a list with one row per dataset: its kind, its name, its participants, texts, trials and fixations, and its **Status**. Click anywhere on a row to open that dataset. The open one is marked **Current** and tinted, and the list does not reorder when you switch. Click a column heading to sort by it; datasets without that count sort last. The bin at the end of a row removes that dataset, after a confirmation; a dataset you added takes the annotations on its trials with it. Past eight datasets, a search box and Kind / Language filters appear. **+ Add dataset**, under the list, imports your own files or starts a scanpath by hand.
 
-For a public corpus you haven't opened, the **Counts** column shows its *Published* figures; once loaded it shows *Loaded* ones. ℹ️ **About** names the source of each published figure.
+A count that is not a number says why: **Not loaded** (not opened this session, and nothing published), **Not reported** (the corpus publishes figures, but not this one), **Not applicable** (for example, no raw-gaze samples, or single-screen trials), or **Unknown**. A 0 always means zero was counted.
+
+**Status** is *Loaded* once a dataset has been opened in this session, and its counts are then its own. Until then it is *Not loaded*, and a public corpus shows the figures it publishes. A corpus whose files are not on this machine is marked **Needs setup**: the bundled demo shows in its place, and is not counted for it.
+
+Under the list, **What's in the *dataset*** is about the open one: a one-line description with the corpus' home page, and **Edit dataset** at the end of its heading. That opens ✏️ **Edit dataset**, whose first part is its **name** and **description** — the name of a dataset you added is saved with **✅ Save changes** — followed by how it was mapped. Where a dataset's figures read differently from a recording, a note says so: PoTeC's fixation positions are reconstructed, not recorded, and the bundled demo's raw gaze is synthesized. The mapping is the same field grid the wizard draws, and for a dataset added with only one of the two main tables, it has an uploader for the other. Adding the missing half there normalizes it and joins it to what is already loaded, so a fixations-only dataset can gain its word boxes (or an AOI-only one its fixations) without being added again. Its tabs hold the counts — screens, words and gaze points included — the raw tables, and **Annotations**: every favorite, tag and note on the dataset's trials, to **Export** as JSON, **Import** from such a file (or a 💾 Session backup), or **Delete**.
+
+If this session loaded more of a corpus than it publishes, its row says **More than published**: the published figure is the one to check.
 
 ### The recording setup asks how you know
 

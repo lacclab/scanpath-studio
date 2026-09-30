@@ -1875,9 +1875,9 @@ from your own experiment.</p>
 <li><strong>Public corpus:</strong> choose the corpus and local data directory; download when
   prompted.</li>
 <li><strong>+ → Import files:</strong> upload or select your own files and map their columns.
-  Also available through <strong>🗂️ Data → ➕ Add dataset</strong>.</li>
+  Also available through <strong>🗂️ Data → + Add dataset → Import files</strong>.</li>
 <li><strong>+ → Create manually:</strong> sketch a trial from text, with no files at all.
-  Also available through <strong>🗂️ Data → Create manual scanpath</strong>.</li>
+  Also available through <strong>🗂️ Data → + Add dataset → Create manually</strong>.</li>
 </ul>
 <p>While a dataset opens, the page shows a skeleton of the view with the steps of
 the load — reading the files, normalizing them, building the trial list — each
@@ -1916,7 +1916,8 @@ canonical fields and units.</p>
 <h2 id="use-the-setup-wizard">Use the setup wizard<a class="headerlink" href="#use-the-setup-wizard" title="Permanent link">&para;</a></h2>
 <p>The wizard is <strong>three numbered parts</strong> on one screen, with <strong>⬇️ Save setup</strong> and
 <strong>✅ Add dataset</strong> at the foot.</p>
-<p><strong>1. Dataset name</strong> — what the dataset is called in 📂 <strong>Available datasets</strong>.</p>
+<p><strong>1. Name &amp; description</strong> — what the dataset is called in 📂 <strong>Available
+datasets</strong>, and, if you like, a sentence about it, shown under its name.</p>
 <p><strong>2. Upload data tables.</strong> One row per table — <strong>Fixations</strong>, <strong><abbr title="Areas of interest: here, the words' bounding boxes">AOIs</abbr></strong> (the
 words / interest areas) and <strong>Raw gaze</strong> — with the table's uploader on the left
 and its column mapping beside it; upload at least one. Fixations and <abbr title="Areas of interest: here, the words' bounding boxes">AOIs</abbr> take
@@ -1955,21 +1956,44 @@ turns red in place. Rows it cannot use are named directly above the button —
 cells in a mapped number column that don't parse, rows with no trial or reader
 id, positions that are screen fractions rather than pixels — together with what
 the load does with them.</p>
-<p>📂 <strong>Available datasets</strong> lists the same headline fields shown in the active
-dataset summary — participants, texts, trials, fixations, words, gaze points and
-multipart screens; click a name to open it, and the open row is tinted. Rename or
-remove a source from its table row, or open ✏️ <strong>Edit dataset</strong> to change how it
-was mapped — the same field grid the wizard draws, and, for a dataset added with
-only one of the two main tables, an uploader for the other one. Adding the
-missing half there normalizes it and joins it to what is already loaded, so a
-fixations-only dataset can gain its word boxes (or an <abbr title="Area of interest: here, a word's bounding box">AOI</abbr>-only one its
-fixations) without being added again.</p>
+<p>The 🗂️ <strong>Data</strong> page opens on a list with one row per dataset: its kind, its name, its
+participants, texts, trials and fixations, and its <strong>Status</strong>. Click anywhere on
+a row to open that dataset. The open one is marked <strong>Current</strong> and tinted, and
+the list does not reorder when you switch. Click a column heading to sort by it;
+datasets without that count sort last. The bin at the end of a row removes that
+dataset, after a confirmation; a dataset you added takes the annotations on its
+trials with it. Past eight datasets, a search box and Kind /
+Language filters appear. <strong>+ Add dataset</strong>, under the list, imports your own
+files or starts a scanpath by hand.</p>
+<p>A count that is not a number says why: <strong>Not loaded</strong> (not opened this session,
+and nothing published), <strong>Not reported</strong> (the corpus publishes figures, but not
+this one), <strong>Not applicable</strong> (for example, no raw-gaze samples, or
+single-screen trials), or <strong>Unknown</strong>. A 0 always means zero was counted.</p>
+<p><strong>Status</strong> is <em>Loaded</em> once a dataset has been opened in this session, and its
+counts are then its own. Until then it is <em>Not loaded</em>, and a public corpus
+shows the figures it publishes. A corpus whose files are not on this machine is
+marked <strong>Needs setup</strong>: the bundled demo shows in its place, and is not counted
+for it.</p>
+<p>Under the list, <strong>What's in the <em>dataset</em></strong> is about the open one: a one-line
+description with the corpus' home page, and <strong>Edit dataset</strong> at the end of its
+heading. That opens ✏️ <strong>Edit dataset</strong>, whose first part is its <strong>name</strong> and
+<strong>description</strong> — the name of a dataset you added is saved with <strong>✅ Save
+changes</strong> — followed by how it was mapped. Where a dataset's figures read differently from a recording, a note
+says so: PoTeC's fixation positions are reconstructed, not recorded, and the
+bundled demo's raw gaze is synthesized. The mapping is the same
+field grid the wizard draws, and for a dataset added with only one of the two
+main tables, it has an uploader for the other. Adding the missing half there
+normalizes it and joins it to what is already loaded, so a fixations-only
+dataset can gain its word boxes (or an <abbr title="Area of interest: here, a word's bounding box">AOI</abbr>-only one its fixations) without being
+added again. Its tabs hold the counts — screens, words and gaze points
+included — the raw tables, and <strong>Annotations</strong>: every favorite, tag and note on
+the dataset's trials, to <strong>Export</strong> as JSON, <strong>Import</strong> from such a file (or a
+💾 Session backup), or <strong>Delete</strong>.</p>
 <figure class="sps-screenshot">
 <p><img alt="The Data page: the available datasets, and the counts and tables of the open one" src="../../assets/screenshots/data-page.webp" /></p>
 </figure>
-<p>For a public corpus you haven't opened, the <strong>Counts</strong> column shows its
-<em>Published</em> figures; once loaded it shows <em>Loaded</em> ones. ℹ️ <strong>About</strong> names the
-source of each published figure.</p>
+<p>If this session loaded more of a corpus than it publishes, its row says
+<strong>More than published</strong>: the published figure is the one to check.</p>
 <h3 id="the-recording-setup-asks-how-you-know">The recording setup asks how you know<a class="headerlink" href="#the-recording-setup-asks-how-you-know" title="Permanent link">&para;</a></h3>
 <p><strong>Recording setup</strong> describes the screen the data was <strong>recorded</strong> on — not the
 screen you are reading this on. Nothing is preselected: a wrong monitor size
@@ -2059,7 +2083,7 @@ dropped column, add the files again.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 29, 2026 05:26:15 UTC">September 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 30, 2026 15:06:45 UTC">September 30, 2026</span>
   </span>
 
     

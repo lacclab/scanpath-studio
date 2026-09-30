@@ -38,7 +38,9 @@ Choose **+ → Create manually** beside **Select Dataset** when you want to sket
 
 The editor starts with one centred fixation per word. X/Y is the authoritative location; **Target word** is optional metadata for reading measures, so a fixation may sit between or outside words. Enter a **Dataset name** and choose **Save dataset** to add it to the dataset list and open its regular visualization. **Cancel** returns to the previous dataset without adding one.
 
-For a ready-made example, choose **Synthetic sample** in the dataset picker: a manually authored six-word example that opens like any other dataset. To change its text, fixation positions, or timing, press **Edit** on its row in **🗂️ Data → Available datasets**; its draft is separate from your own scanpath. You can also start a scanpath from **🗂️ Data → Create manual scanpath**.
+For a ready-made example, choose **Synthetic sample** in the dataset picker: a manually authored six-word example that opens like any other dataset. To change its text, fixation positions, or timing, open it from the list on the 🗂️ **Data** page and choose **Edit dataset**; its draft is separate from your own scanpath. You can also start a scanpath from \*\*🗂️ Data →
+
+- Add dataset → Create manually\*\*.
 
 ## Run from source
 

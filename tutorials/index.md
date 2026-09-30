@@ -26,10 +26,10 @@ Five shorter tutorials run inside the app, under ❓ **Help → 🧭 Tutorials**
 
 Finish with the parsed words, fixations, and mapping visibly checked. *About 3 min; needs a demo or uploaded dataset.*
 
-1. **Choose the data source.** Everything about the dataset lives on the 🗂️ **Data** page, in the order the pipeline uses it. Start at **📂 Available datasets** — click a name to open it, or ➕ **Add dataset** for your own tables.
-1. **Check the column mapping.** ✏️ **Edit** a dataset's row to open its setup screen — the add screen's numbered parts, for a dataset that already exists. Part **1 · Data tables & column mapping** decides what every measure downstream is computed from. Rows marked ✨ were auto-detected; override any that guessed wrong.
-1. **Verify what was parsed.** **🔎 What's in the selected dataset** opens on 📊 Stats — the counts and their spread, the quickest check that the mapping worked. The six raw tables are the tabs beside it.
-1. **Check one trial id is one reading.** Part **3 · Trial identity** checks the whole dataset, before any filtering, and says so either way. A warning here means the Trial ID above is missing a column — several readings are being drawn as one scanpath, which renders happily as a reading with a lot of regressions.
+1. **Choose the data source.** Everything about the dataset lives on the 🗂️ **Data** page, in the order the pipeline uses it. Start at the list of datasets — click a row to open it, or **+ Add dataset** for your own tables.
+1. **Check the column mapping.** **Edit**, beside the dataset's description, opens its setup screen — the add screen's parts, for a dataset that exists. Part **2 · Data tables & column mapping** decides what every measure downstream is computed from. Rows marked ✨ were auto-detected; override any that guessed wrong.
+1. **Verify what was parsed.** **🔎 What's in the selected dataset** opens on 📊 Stats — the counts and their spread, the quickest check that the mapping worked. The six raw tables and its annotations are the tabs beside it.
+1. **Check one trial id is one reading.** Part **4 · Trial identity** checks the whole dataset, before any filtering, and says so either way. A warning here means the Trial ID above is missing a column — several readings are being drawn as one scanpath, which renders happily as a reading with a lot of regressions.
 
 ### Filter and mark trials
 

@@ -1908,6 +1908,7 @@ behind each line, and the releases before 0.28.0, are in
 <li><strong>Cancel a dataset load, an animation build, Compare's second dataset or a download, and go back to where you were</strong> (UX-168)</li>
 <li><strong>The macOS desktop app is signed and Apple-notarized, and ships as a <code>.dmg</code></strong> (ENG-21)</li>
 <li><strong>A Code of Conduct, linked from the README and CONTRIBUTING</strong> (ENG-82)</li>
+<li><strong>A dataset has a description, and the Data page lists every annotation on it — to export, import or delete</strong> (UX-174)</li>
 <li><strong>The desktop app opens in its own window, not a browser tab</strong> (ENG-85)</li>
 </ul>
 <p><strong>Changed</strong></p>
@@ -1919,9 +1920,14 @@ behind each line, and the releases before 0.28.0, are in
 <li><strong>Compare's A/B legend is larger, so the two readings' names read at a glance</strong> (UX-172)</li>
 <li><strong>The repository drops the pre-migration tracker archive and seven finished design plans</strong> (ENG-84)</li>
 <li><strong>Corpus Analysis shows the reading measures your report brings and computes none; map them on the <abbr title="Area of interest: here, a word's bounding box">AOI</abbr> table</strong> (AN-32)</li>
+<li><strong>📂 Available datasets is a focused table: click a row to open it; Status says whether it is loaded</strong> (UX-174)</li>
+<li><strong>The open dataset is described in one plain sentence, with its home page and a note only where a figure reads differently</strong> (UX-177)</li>
+<li><strong>Rename a dataset on ✏️ Edit dataset, opened by one Edit dataset button; Status sits beside the name</strong> (UX-178)</li>
 </ul>
 <p><strong>Fixed</strong></p>
 <ul>
+<li><strong>A corpus that isn't on this machine no longer shows the demo's counts as its own</strong> (UX-174)</li>
+<li><strong>Removing a dataset you added removes the annotations on its trials, as its confirmation says</strong> (BUG-95)</li>
 <li><strong>Choosing the Synthetic sample shows it; the editor opens from its Edit button</strong> (BUG-94)</li>
 <li><strong>Plot controls use the full right column without a separate scrollbar</strong> (UX-173)</li>
 <li><strong>✅ Save changes on ✏️ Edit dataset no longer strips the word boxes and text from a dataset whose <abbr title="Area of interest: here, a word's bounding box">AOI</abbr> table has no reader column</strong> (DATA-39)</li>

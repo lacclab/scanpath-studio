@@ -30,11 +30,15 @@ Yes, but uploaded data is not embedded in the URL. The recipient must load the s
 
 ## Does a refresh erase my work?
 
-Not on a local or desktop install: completed datasets and session state are restored from an on-device recovery cache. The hosted demo keeps nothing — download a **💾 Session → JSON backup** there.
+Not on a local or desktop install: completed datasets and session state are restored from an on-device recovery cache. The hosted demo keeps nothing — export your annotations from **🗂️ Data → Annotations** and the figure's settings from **🔗 Share → File** there.
 
 ## Where does my data go?
 
-Local and desktop use stays on your machine: nothing is uploaded, and there are no accounts or analytics. A local or desktop run also keeps a recovery copy of your datasets and settings; **💾 Session → 🗄️ Automatic recovery** shows it, pauses it or deletes it. Don't upload identifiable data to the hosted demo. See [Privacy](https://lacclab.github.io/scanpath-studio/privacy/index.md).
+Local and desktop use stays on your machine: nothing is uploaded, and there are no accounts or analytics. A local or desktop run also keeps a recovery copy of your datasets and settings; **🗂️ Data → Saved on this computer** shows what it holds and where. Don't upload identifiable data to the hosted demo. See [Privacy](https://lacclab.github.io/scanpath-studio/privacy/index.md).
+
+## How do I turn the recovery copy off, or delete it?
+
+Start the app with `scanpath-studio run --no-persist`, or set `SCANPATH_STUDIO_PERSIST=0`, and nothing is saved. `scanpath-studio cache --clear` deletes what is already stored — close the app first, or its next change writes a new copy — and `SCANPATH_STUDIO_STATE_DIR=/your/folder` keeps it somewhere else. See [Recovery cache](https://lacclab.github.io/scanpath-studio/cli/#recovery-cache).
 
 ## How do I cite the app?
 

@@ -4131,7 +4131,8 @@ reports that store without launching the app: <code>enabled</code>, <code>direct
 <code>settings</code>, <code>bytes</code>, <code>saved_at</code>, plus <code>exists</code> / <code>readable</code> for a
 missing or unreadable manifest. Delete it with
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.clear_cache&lt;/span&gt;" href="#scanpath_studio.api.clear_cache"><code>clear_cache</code></a>; the same information is in the
-app's 💾 Session → 🗄️ Automatic recovery panel and in <code>scanpath-studio cache</code>.</p>
+app's 🗂️ Data → <em>Saved on this computer</em> section and in
+<code>scanpath-studio cache</code>.</p>
 
 
     </div>
@@ -4154,10 +4155,9 @@ app's 💾 Session → 🗄️ Automatic recovery panel and in <code>scanpath-st
         <p>Delete the on-device recovery cache and return its status afterwards.</p>
 <p>Removes only the files this app wrote (<code>manifest.json</code> and the dataset
 Parquet files); anything else in the folder is left alone. A <em>running</em> local
-app writes its session back out at the end of its next run — turn off <strong>Save
-changes automatically</strong> in its 💾 Session → 🗄️ Automatic recovery panel (the
-panel's <strong>Clear recovery cache</strong> button, like this function, leaves saving on),
-or set <code>SCANPATH_STUDIO_PERSIST=0</code>, to stop that.</p>
+app writes its session back out at the end of its next change — start it
+with <code>scanpath-studio run --no-persist</code> or <code>SCANPATH_STUDIO_PERSIST=0</code> to
+stop that.</p>
 
 
     </div>

@@ -560,7 +560,7 @@ cache_status() -> dict
 
 Describe the on-device recovery cache a local app run keeps.
 
-The app stores completed uploaded datasets, column mappings, view settings and annotations under the user's cache directory so a refresh or restart resumes where it left off — on localhost/desktop only, never on a hosted deployment. This reports that store without launching the app: `enabled`, `directory`, `datasets` (name + per-frame row counts), `rows`, `annotations`, `settings`, `bytes`, `saved_at`, plus `exists` / `readable` for a missing or unreadable manifest. Delete it with clear_cache; the same information is in the app's 💾 Session → 🗄️ Automatic recovery panel and in `scanpath-studio cache`.
+The app stores completed uploaded datasets, column mappings, view settings and annotations under the user's cache directory so a refresh or restart resumes where it left off — on localhost/desktop only, never on a hosted deployment. This reports that store without launching the app: `enabled`, `directory`, `datasets` (name + per-frame row counts), `rows`, `annotations`, `settings`, `bytes`, `saved_at`, plus `exists` / `readable` for a missing or unreadable manifest. Delete it with clear_cache; the same information is in the app's 🗂️ Data → *Saved on this computer* section and in `scanpath-studio cache`.
 
 ### scanpath_studio.api.clear_cache
 
@@ -570,6 +570,6 @@ clear_cache() -> dict
 
 Delete the on-device recovery cache and return its status afterwards.
 
-Removes only the files this app wrote (`manifest.json` and the dataset Parquet files); anything else in the folder is left alone. A *running* local app writes its session back out at the end of its next run — turn off **Save changes automatically** in its 💾 Session → 🗄️ Automatic recovery panel (the panel's **Clear recovery cache** button, like this function, leaves saving on), or set `SCANPATH_STUDIO_PERSIST=0`, to stop that.
+Removes only the files this app wrote (`manifest.json` and the dataset Parquet files); anything else in the folder is left alone. A *running* local app writes its session back out at the end of its next change — start it with `scanpath-studio run --no-persist` or `SCANPATH_STUDIO_PERSIST=0` to stop that.
 
 For a batch loop, see [Automation](https://lacclab.github.io/scanpath-studio/automation/#batch-pattern). GIF and MP4 export uses `scanpath_studio.animation_export.export_animation` and requires Kaleido plus Chrome/Chromium.

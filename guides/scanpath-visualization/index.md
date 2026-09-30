@@ -2,7 +2,7 @@
 
 The Scanpath view shows one selected reading on the stimulus coordinate system.
 
-1. The views — 🗺️ Scanpath, 📊 Corpus Analysis, 🗂️ Data — and the 💾 Session and ❓ Help dialogs.
+1. The views — 🗺️ Scanpath, 📊 Corpus Analysis, 🗂️ Data — and the ❓ Help dialogs.
 1. The dataset and trial pickers, the ⇅ sort and the filter funnel.
 1. The trial's summary chips.
 1. The figure.

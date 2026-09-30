@@ -1132,6 +1132,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#how-do-i-turn-the-recovery-copy-off-or-delete-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How do I turn the recovery copy off, or delete it?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#how-do-i-cite-the-app" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1852,6 +1863,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#how-do-i-turn-the-recovery-copy-off-or-delete-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How do I turn the recovery copy off, or delete it?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#how-do-i-cite-the-app" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1980,13 +2002,20 @@ same dataset. Share links include the current participant and trial; see
 <h2 id="does-a-refresh-erase-my-work">Does a refresh erase my work?<a class="headerlink" href="#does-a-refresh-erase-my-work" title="Permanent link">&para;</a></h2>
 <p>Not on a local or desktop install: completed datasets and session state are
 restored from an on-device recovery cache. The hosted demo keeps nothing —
-download a <strong>💾 Session → JSON backup</strong> there.</p>
+export your annotations from <strong>🗂️ Data → Annotations</strong> and the figure's settings
+from <strong>🔗 Share → File</strong> there.</p>
 <h2 id="where-does-my-data-go">Where does my data go?<a class="headerlink" href="#where-does-my-data-go" title="Permanent link">&para;</a></h2>
 <p>Local and desktop use stays on your machine: nothing is uploaded, and there are
 no accounts or analytics. A local or desktop run also keeps a recovery copy of
-your datasets and settings; <strong>💾 Session → 🗄️ Automatic recovery</strong> shows it,
-pauses it or deletes it. Don't upload identifiable data to the hosted demo. See
+your datasets and settings; <strong>🗂️ Data → Saved on this computer</strong> shows what
+it holds and where. Don't upload identifiable data to the hosted demo. See
 <a href="../privacy/">Privacy</a>.</p>
+<h2 id="how-do-i-turn-the-recovery-copy-off-or-delete-it">How do I turn the recovery copy off, or delete it?<a class="headerlink" href="#how-do-i-turn-the-recovery-copy-off-or-delete-it" title="Permanent link">&para;</a></h2>
+<p>Start the app with <code>scanpath-studio run --no-persist</code>, or set
+<code>SCANPATH_STUDIO_PERSIST=0</code>, and nothing is saved. <code>scanpath-studio cache
+--clear</code> deletes what is already stored — close the app first, or its next
+change writes a new copy — and <code>SCANPATH_STUDIO_STATE_DIR=/your/folder</code> keeps it
+somewhere else. See <a href="../cli/#recovery-cache">Recovery cache</a>.</p>
 <h2 id="how-do-i-cite-the-app">How do I cite the app?<a class="headerlink" href="#how-do-i-cite-the-app" title="Permanent link">&para;</a></h2>
 <p>By its Zenodo DOI,
 <a href="https://doi.org/10.5281/zenodo.22933884">10.5281/zenodo.22933884</a>, which always
@@ -2012,7 +2041,7 @@ and the citations for the demo data and any public corpus you used.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 26, 2026 09:57:31 UTC">September 26, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 30, 2026 16:31:24 UTC">September 30, 2026</span>
   </span>
 
     

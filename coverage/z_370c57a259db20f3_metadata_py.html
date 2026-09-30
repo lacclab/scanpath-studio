@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for scanpath_studio/metadata.py: 93%</title>
+    <title>Coverage for scanpath_studio/metadata.py: 92%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_4667309f.css" type="text/css">
     <script src="coverage_html_cb_15cffcd0.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>scanpath_studio<span class="sep">/</span>metadata.py</b>:
-            <span class="pc_cov">93%</span>
+            <span class="pc_cov">92%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">773 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">716<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">57<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">713<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">60<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_model_scanpaths_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-09-30 16:44 +0000
+            created at 2026-09-30 16:57 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -1411,9 +1411,9 @@
     <p class="pln"><span class="n"><a id="t1329" href="#t1329">1329</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1330" href="#t1330">1330</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1331" href="#t1331">1331</a></span><span class="t"><span class="com"># -----------------------------------------------------------------------------</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1332" href="#t1332">1332</a></span><span class="t"><span class="com"># Serialization &#8212; &#128190; Save &amp; restore (the JSON config), the ENG-26 on-device</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1333" href="#t1333">1333</a></span><span class="t"><span class="com"># recovery cache (DATA-38, see `session_payloads` below), and the payload</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1334" href="#t1334">1334</a></span><span class="t"><span class="com"># `api`/`cli` hand in. Records rather than a pickled frame, so it round-trips</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1332" href="#t1332">1332</a></span><span class="t"><span class="com"># Serialization &#8212; the ENG-26 on-device recovery cache (DATA-38, see</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1333" href="#t1333">1333</a></span><span class="t"><span class="com"># `session_payloads` below) and the payload `api`/`cli` hand in. (The &#128190; Session</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1334" href="#t1334">1334</a></span><span class="t"><span class="com"># backup carried these too until UX-179 cut the settings file to the figure.) Records rather than a pickled frame, so it round-trips</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1335" href="#t1335">1335</a></span><span class="t"><span class="com"># through JSON like every other saved setting.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1336" href="#t1336">1336</a></span><span class="t"><span class="com"># -----------------------------------------------------------------------------</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1337" href="#t1337">1337</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
@@ -1565,14 +1565,14 @@
     <p class="pln"><span class="n"><a id="t1483" href="#t1483">1483</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1484" href="#t1484">1484</a></span><span class="t"><span class="key">def</span> <span class="nam">grain_keys</span><span class="op">(</span><span class="nam">grain</span><span class="op">:</span> <span class="nam">str</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="nam">tuple</span><span class="op">[</span><span class="nam">str</span><span class="op">,</span> <span class="nam">str</span><span class="op">,</span> <span class="nam">str</span><span class="op">]</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1485" href="#t1485">1485</a></span><span class="t">    <span class="str">&quot;&quot;&quot;``(table key, raw key, file key)`` in session state for ``grain``.&quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1486" href="#t1486">1486</a></span><span class="t">    <span class="key">return</span> <span class="nam">_GRAIN_KEYS</span><span class="op">[</span><span class="nam">grain</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t1486" href="#t1486">1486</a></span><span class="t">    <span class="key">return</span> <span class="nam">_GRAIN_KEYS</span><span class="op">[</span><span class="nam">grain</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1487" href="#t1487">1487</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1488" href="#t1488">1488</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1489" href="#t1489">1489</a></span><span class="t"><span class="key">def</span> <span class="nam">mark_restored</span><span class="op">(</span><span class="nam">session</span><span class="op">,</span> <span class="nam">grain</span><span class="op">:</span> <span class="nam">str</span><span class="op">,</span> <span class="nam">attached</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1490" href="#t1490">1490</a></span><span class="t">    <span class="str">&quot;&quot;&quot;Attach ``attached`` as a table with no live upload behind it.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1491" href="#t1491">1491</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1492" href="#t1492">1492</a></span><span class="t"><span class="str">    Shared by the recovery cache and &#128190; Save &amp; restore, which both hand back a</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1493" href="#t1493">1493</a></span><span class="t"><span class="str">    table the uploader never saw &#8212; see :data:`RESTORED_FILE_SIGNATURE`.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1492" href="#t1492">1492</a></span><span class="t"><span class="str">    The recovery cache hands back a table the uploader never saw &#8212; see</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1493" href="#t1493">1493</a></span><span class="t"><span class="str">    :data:`RESTORED_FILE_SIGNATURE`.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1494" href="#t1494">1494</a></span><span class="t"><span class="str">    &quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1495" href="#t1495">1495</a></span><span class="t">    <span class="nam">key</span><span class="op">,</span> <span class="nam">raw</span><span class="op">,</span> <span class="nam">file</span> <span class="op">=</span> <span class="nam">_GRAIN_KEYS</span><span class="op">[</span><span class="nam">grain</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1496" href="#t1496">1496</a></span><span class="t">    <span class="nam">session</span><span class="op">[</span><span class="nam">key</span><span class="op">]</span> <span class="op">=</span> <span class="nam">attached</span>&nbsp;</span><span class="r"></span></p>
@@ -1727,8 +1727,8 @@
     <p class="run"><span class="n"><a id="t1645" href="#t1645">1645</a></span><span class="t">    <span class="nam">rows</span><span class="op">:</span> <span class="nam">dict</span><span class="op">[</span><span class="nam">str</span><span class="op">,</span> <span class="nam">dict</span><span class="op">[</span><span class="nam">str</span><span class="op">,</span> <span class="nam">object</span><span class="op">]</span><span class="op">]</span> <span class="op">=</span> <span class="op">{</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1646" href="#t1646">1646</a></span><span class="t">    <span class="nam">table</span> <span class="op">=</span> <span class="nam">attached_for</span><span class="op">(</span><span class="nam">GRAIN_PARTICIPANT</span><span class="op">,</span> <span class="nam">prefix</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1647" href="#t1647">1647</a></span><span class="t">    <span class="key">if</span> <span class="nam">table</span> <span class="key">is</span> <span class="key">not</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1648" href="#t1648">1648</a></span><span class="t">        <span class="nam">found</span> <span class="op">=</span> <span class="nam">table</span><span class="op">.</span><span class="nam">values_for</span><span class="op">(</span><span class="nam">participant</span><span class="op">)</span> <span class="key">if</span> <span class="nam">participant</span> <span class="key">is</span> <span class="key">not</span> <span class="key">None</span> <span class="key">else</span> <span class="op">{</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1649" href="#t1649">1649</a></span><span class="t">        <span class="nam">rows</span><span class="op">[</span><span class="str">&quot;participants&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="op">{</span><span class="nam">name</span><span class="op">:</span> <span class="nam">found</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="nam">name</span><span class="op">)</span> <span class="key">for</span> <span class="nam">name</span> <span class="key">in</span> <span class="nam">table</span><span class="op">.</span><span class="nam">names</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t1648" href="#t1648">1648</a></span><span class="t">        <span class="nam">found</span> <span class="op">=</span> <span class="nam">table</span><span class="op">.</span><span class="nam">values_for</span><span class="op">(</span><span class="nam">participant</span><span class="op">)</span> <span class="key">if</span> <span class="nam">participant</span> <span class="key">is</span> <span class="key">not</span> <span class="key">None</span> <span class="key">else</span> <span class="op">{</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t1649" href="#t1649">1649</a></span><span class="t">        <span class="nam">rows</span><span class="op">[</span><span class="str">&quot;participants&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="op">{</span><span class="nam">name</span><span class="op">:</span> <span class="nam">found</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="nam">name</span><span class="op">)</span> <span class="key">for</span> <span class="nam">name</span> <span class="key">in</span> <span class="nam">table</span><span class="op">.</span><span class="nam">names</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1650" href="#t1650">1650</a></span><span class="t">    <span class="nam">table</span> <span class="op">=</span> <span class="nam">attached_for</span><span class="op">(</span><span class="nam">GRAIN_TRIAL</span><span class="op">,</span> <span class="nam">prefix</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1651" href="#t1651">1651</a></span><span class="t">    <span class="key">if</span> <span class="nam">table</span> <span class="key">is</span> <span class="key">not</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1652" href="#t1652">1652</a></span><span class="t">        <span class="nam">found</span><span class="op">:</span> <span class="nam">dict</span> <span class="op">=</span> <span class="op">{</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
@@ -1915,7 +1915,7 @@
             <a class="nav" href="z_370c57a259db20f3_model_scanpaths_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-09-30 16:44 +0000
+            created at 2026-09-30 16:57 +0000
         </p>
     </div>
 </footer>

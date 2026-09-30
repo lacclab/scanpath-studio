@@ -48,7 +48,7 @@ Finish at a ready figure download with a reproducible configuration. *About 4 mi
 1. **Choose the visual language.** Use design presets, palette, and the layer controls. Heatmap and scanpath are settings on the same figure, not separate data transformations.
 1. **Decide static or animated.** Use **Animate** only when motion is the outcome. Multipart replay keeps screen boundaries explicit and draws no connector between canvases.
 1. **Download and preserve settings.** Open **Export** for PNG/SVG/HTML or bulk output. Include the plot config when the figure must be reproducible later.
-1. **Keep the figure reproducible.** **🔗 Share** turns the exact configuration into a link, and 💾 **Session** saves it (with your annotations) as JSON. Either one reproduces this figure later — the PNG on its own does not.
+1. **Keep the figure reproducible.** **🔗 Share** turns the exact configuration into a **Link**, the **Code** that redraws it, or a settings **File**. Any of them reproduces this figure later — the PNG on its own does not.
 
 ### Compare readings of one text
 

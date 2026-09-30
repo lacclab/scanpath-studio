@@ -1820,7 +1820,9 @@
   heatmap, and image layers as separate files for editing, and <strong>Tabular data →
   Full measure family</strong> adds saccades, sentence measures, trial and reader
   summaries, character grids, cleaning QA and <code>run_config.json</code> — per trial
-  and concatenated under <code>aggregate/</code>.</li>
+  and concatenated under <code>aggregate/</code>. <strong>Also include → Annotations (JSON)</strong>
+  adds <code>annotations.json</code>: the favorites, tags and notes on the exported
+  trials, which 🗂️ Data → Annotations can import.</li>
 </ul>
 <figure class="sps-screenshot">
 <p><img alt="The Export subtab: the current figure, and the bundle's trials, formats, tables and file naming" src="../../assets/screenshots/export.webp" /></p>
@@ -1834,12 +1836,14 @@ entirely.</p>
 MP4 use Chrome/Chromium through Kaleido. See
 <a href="../../export-troubleshooting/">Export troubleshooting</a> if those formats fail.</p>
 <h2 id="share-a-view">Share a view<a class="headerlink" href="#share-a-view" title="Permanent link">&para;</a></h2>
-<p>The <strong>Share</strong> subtab creates a deep link containing the selected data source and
-visualization settings. <strong>Refresh &amp; Copy</strong> rebuilds the URL from the current
-trial and settings and places it on the clipboard in one step. Below it, the
-code that reproduces the figure, in Python or as a CLI command.</p>
+<p>The <strong>Share</strong> subtab has three ways to pass the figure on — <strong>Link</strong>, <strong>Code</strong>
+and <strong>File</strong>. <strong>Link</strong> is a deep link containing the selected data source and
+visualization settings; <strong>Refresh &amp; Copy</strong> rebuilds the URL from the current
+trial and settings and places it on the clipboard in one step. <strong>Code</strong> is the
+code that reproduces the figure, in Python or as a CLI command. <strong>File</strong> is a
+settings file, described below.</p>
 <figure class="sps-screenshot">
-<p><img alt="The Share subtab: the link, and the code that reproduces the figure" src="../../assets/screenshots/share.webp" /></p>
+<p><img alt="The Share subtab: the Link · Code · File switch, on Link" src="../../assets/screenshots/share.webp" /></p>
 </figure>
 <p>A link never contains an uploaded or public dataset's fixation or word tables.
 Built-in data can be reopened from the URL; a recipient of an uploaded-data link
@@ -1852,12 +1856,24 @@ omitted to keep it short. Public corpora travel by name, not data: the recipient
 needs the same corpus set up; otherwise the link leaves the data source
 unchanged.</p>
 <h2 id="back-up-and-restore-work">Back up and restore work<a class="headerlink" href="#back-up-and-restore-work" title="Permanent link">&para;</a></h2>
-<p><strong>Session → JSON backup</strong> downloads the view, mapping, metadata attachments and
-annotations. It is portable, but it does <strong>not</strong> contain uploaded dataset rows;
-load the same data before restoring it. Inspect annotations before sharing
-because notes may contain participant-related information.</p>
-<p>This differs from <strong>Automatic recovery</strong>, which keeps dataset tables and working
-state on the current computer and restores them after a refresh or restart.</p>
+<p>Each kind of work has its own file, downloaded where it is edited:</p>
+<ul>
+<li><strong>🔗 Share → File</strong> — the figure's settings and trial. <em>Restore settings</em>
+  re-applies one; settings that don't fit the loaded data are listed and
+  skipped.</li>
+<li><strong>🗂️ Data → Annotations</strong> — a dataset's favorites, tags and notes, with
+  <em>Export</em> and <em>Import</em>. Inspect them before sharing: notes may contain
+  participant-related information.</li>
+<li><strong>✏️ Edit dataset → Save setup</strong> — a dataset's column mapping and recording
+  setup, restored when you add the same kind of data again.</li>
+<li><strong>🎨 My designs → Export</strong> — your saved figure designs, imported on another
+  computer with <em>Import</em>.</li>
+</ul>
+<p>None of these files contains uploaded dataset rows; load the same data before
+restoring them. That differs from the recovery cache, which keeps dataset
+tables and working state on the current computer and restores them after a
+refresh or restart — see <strong>Saved on this computer</strong> at the foot of the
+🗂️ Data page.</p>
 <p>For repeatable scripted output, use <a href="../../automation/">Automation</a>.</p>
 
 
@@ -1879,7 +1895,7 @@ state on the current computer and restores them after a refresh or restart.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 25, 2026 10:03:20 UTC">September 25, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 30, 2026 16:31:24 UTC">September 30, 2026</span>
   </span>
 
     

@@ -1836,12 +1836,11 @@ alone — the desktop app, or a launch with <code>server.address</code> set to <
 <code>::1</code> or <code>localhost</code> — or when you opt in with <code>SCANPATH_STUDIO_PERSIST=1</code>. A
 server other machines can reach stores nothing: a hosted deployment, and a bare
 <code>streamlit run</code>, which listens on every interface.</p>
-<p>The cache is visible and removable from inside the app: 💾 <strong>Session →
-🗄️ Automatic recovery</strong> (the dialog the nav's 💾 Session entry opens) names the
-folder, reports what is stored and how large it
-is, pauses saving for the session (<strong>Save changes automatically</strong>), and deletes
-the stored copy (<strong>🗑 Clear recovery cache</strong>, which leaves saving on). The same
-from a terminal, with the app closed:</p>
+<p>The cache is visible from inside the app: <strong>Saved on this computer</strong>, at the
+foot of the <strong>🗂️ Data</strong> page, reports what is stored, how large it is and the
+folder it is in. To run without it, start the app with
+<code>scanpath-studio run --no-persist</code>, or set <code>SCANPATH_STUDIO_PERSIST=0</code>. To see
+or delete it, use a terminal, with the app closed:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">                       </span><span class="c1"># what is stored, where, how big</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">               </span><span class="c1"># delete it</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nv">SCANPATH_STUDIO_PERSIST</span><span class="o">=</span><span class="m">0</span><span class="w"> </span>scanpath-studio<span class="w">   </span><span class="c1"># disable recovery storage</span>
@@ -1866,9 +1865,11 @@ provider. Sessions are temporary and server resources are limited.</p>
   settings. It does not contain the data tables — except for a scanpath made
   with <strong>✏️ Author a scanpath</strong>, whose link carries the typed text and every
   hand-placed fixation, because they <em>are</em> its data.</li>
-<li>A <strong>saved configuration</strong> (JSON backup) can contain column names, annotation
-  notes, and every row of any attached participant, trial or text metadata
-  table.</li>
+<li>A <strong>settings file</strong> (🔗 Share → File) contains the figure's settings and the
+  selected participant and trial IDs.</li>
+<li>An <strong>annotations file</strong> (🗂️ Data → Annotations, or <code>annotations.json</code> in an
+  Export bundle) contains your notes, which may mention participants.</li>
+<li>A <strong>setup file</strong> (✏️ Edit dataset → Save setup) contains column names.</li>
 <li>An <strong>exported table</strong> contains the selected research data.</li>
 </ul>
 <p>Review these artifacts before sharing them. Share links can enter browser
@@ -1910,7 +1911,7 @@ Streamlit's own usage statistics are switched off on every launch path
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 25, 2026 10:03:20 UTC">September 25, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 30, 2026 16:31:24 UTC">September 30, 2026</span>
   </span>
 
     

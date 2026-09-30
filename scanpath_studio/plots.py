@@ -3421,6 +3421,186 @@ def animation_player_post_script(fig) -> str | None:
     return _REPLAY_PLAYER_JS
 
 
+# PERF-17 — the replay's frames, as its HTML page carries them. Every frame
+# restates every animated trace at full length (see `_revealed_xy`), ~33 KB a
+# frame however little changed, so a 2,001-frame replay was a 66 MB page. The
+# page instead carries frame 0 whole and, for each later frame, only what changed
+# since the one before; this decoder rebuilds the exact frame list in the browser
+# and hands it to `Plotly.addFrames`, ahead of the player (which already polls for
+# the frames). Delta-against-the-previous-frame can't be Plotly's own frames: the
+# slider jumps from any frame to any other, so each frame has to be complete.
+#
+# A delta node is `null` (unchanged), `[0, value]` (replaced), `[1, {key: node},
+# [dropped keys]?]` (an object's changed keys), or `[2, [indices], [values]]` (a
+# same-length array's changed slots). Unchanged values are shared between frames
+# rather than copied: Plotly copies a frame's objects before applying it and
+# never writes into a frame. `__SCANPATH_PACKED_FRAMES__` is replaced by the
+# JSON; `{plot_id}` stays literal for plotly.py, as in the player.
+_PACKED_FRAMES_TOKEN = "__SCANPATH_PACKED_FRAMES__"
+_REPLAY_FRAMES_JS = """(function () {
+  var gd = document.getElementById('{plot_id}');
+  if (!gd || typeof Plotly === 'undefined') { return; }
+  var packed = __SCANPATH_PACKED_FRAMES__;
+  var own = Object.prototype.hasOwnProperty;
+  function patch(prev, node) {
+    if (node === null) { return prev; }
+    var out, i, k;
+    if (node[0] === 0) { return node[1]; }
+    if (node[0] === 1) {
+      out = {};
+      for (k in prev) { if (own.call(prev, k)) { out[k] = prev[k]; } }
+      for (k in node[1]) { if (own.call(node[1], k)) { out[k] = patch(prev[k], node[1][k]); } }
+      for (i = 0; node[2] && i < node[2].length; i++) { delete out[node[2][i]]; }
+      return out;
+    }
+    out = prev.slice();
+    for (i = 0; i < node[1].length; i++) { out[node[1][i]] = node[2][i]; }
+    return out;
+  }
+  var state = {};
+  var frames = packed.map(function (f) {
+    var frame = {}, k;
+    for (k in f) { if (own.call(f, k) && k !== 'p') { frame[k] = f[k]; } }
+    if (f.p) {
+      frame.data = f.p.map(function (node, i) {
+        var slot = f.traces ? f.traces[i] : i;
+        state[slot] = patch(state[slot], node);
+        return state[slot];
+      });
+    }
+    return frame;
+  });
+  Plotly.addFrames(gd, frames);
+})();"""
+
+_ABSENT = object()
+
+
+def _same_value(a, b) -> bool:
+    """Whether two figure values serialize to the same JSON value.
+
+    Strict where JSON is: ``True`` is not ``1``. Errs towards *different* —
+    a value judged different is merely carried again, never lost.
+    """
+    if type(a) is not type(b):
+        return False
+    if isinstance(a, np.ndarray):
+        if a.dtype != b.dtype or a.shape != b.shape:
+            return False
+        if a.dtype.hasobject:
+            return _same_value(a.tolist(), b.tolist())
+        return a.tobytes() == b.tobytes()
+    if isinstance(a, dict):
+        return a.keys() == b.keys() and all(_same_value(a[k], b[k]) for k in a)
+    if isinstance(a, (list, tuple)):
+        if len(a) != len(b):
+            return False
+        try:
+            if a != b:  # C speed for the common case: plain numbers and strings
+                return False
+        except ValueError:  # an ndarray inside: no truth value
+            pass
+        kinds = list(map(type, a))
+        if kinds != list(map(type, b)):
+            return False
+        if any(k in (list, tuple, dict, np.ndarray) for k in set(kinds)):
+            return all(_same_value(x, y) for x, y in zip(a, b))
+        return True
+    try:
+        return bool(a == b)
+    except ValueError:
+        return False
+
+
+def _frame_delta(prev, cur):
+    """``cur`` as a change to ``prev`` — the delta node `_REPLAY_FRAMES_JS` applies."""
+    if isinstance(cur, dict) and isinstance(prev, dict):
+        changed = {}
+        for key, value in cur.items():
+            node = _frame_delta(prev.get(key, _ABSENT), value)
+            if node is not None:
+                changed[key] = node
+        dropped = [key for key in prev if key not in cur]
+        if dropped:
+            return [1, changed, dropped]
+        return [1, changed] if changed else None
+    if prev is not _ABSENT and _same_value(prev, cur):
+        return None
+    if isinstance(cur, list) and isinstance(prev, list) and len(cur) == len(prev):
+        slots = [i for i, (a, b) in enumerate(zip(prev, cur)) if not _same_value(a, b)]
+        # A patch costs an index per slot; past half the array, restate it.
+        if 2 * len(slots) < len(cur):
+            return [2, slots, [cur[i] for i in slots]]
+    return [0, cur]
+
+
+def pack_replay_frames(frames: Sequence[Mapping]) -> list[dict]:
+    """Delta-encode a replay's frames for `_REPLAY_FRAMES_JS` (PERF-17).
+
+    ``frames`` are the figure's ``to_dict()["frames"]`` (or the same as plain
+    JSON values). Each packed frame keeps its own keys (``name``, ``traces``, …)
+    and replaces ``data`` with ``p``: one delta node per trace against that
+    trace's state in the frame before — the trace index is ``traces[i]``, or
+    ``i`` without it. Frame 0 has no frame before it, so it is carried whole.
+    Values are carried as they are, so serializing the result the way
+    ``to_html`` serializes frames (``to_json_plotly``) writes each exactly as
+    the frames would have.
+    """
+    state: dict = {}
+    packed = []
+    for frame in frames:
+        out = {key: value for key, value in frame.items() if key != "data"}
+        data = frame.get("data")
+        if data is not None:
+            traces = frame.get("traces")
+            nodes = []
+            for i, trace in enumerate(data):
+                slot = traces[i] if traces is not None else i
+                nodes.append(_frame_delta(state.get(slot, _ABSENT), trace))
+                state[slot] = trace
+            out["p"] = nodes
+        packed.append(out)
+    return packed
+
+
+def replay_page(fig) -> tuple[dict, str] | None:
+    """A replay as its HTML page carries it: ``(figure dict, post_script)``.
+
+    PERF-17: the dict is the figure without its ``frames``, and the script
+    rebuilds them in the browser from :func:`pack_replay_frames`' deltas, then
+    runs :func:`animation_player_post_script`'s player — a 2,001-frame replay's
+    page falls from 66 MB to under 1 MB. Serialize the dict with
+    ``to_html(…, validate=False, post_script=script)``; ``auto_play`` no longer
+    matters, since plotly.py sees no frames. ``fig`` may be a figure or its
+    ``to_dict()``, which is not modified. ``None`` for a figure with no player (a
+    static figure, or a replay with no frames): serialize that one as it is.
+
+    The figure itself keeps its frames: `api.animate_scanpath`, the GIF/MP4
+    export and ``fig.show()`` use them as they are.
+    """
+    player = animation_player_post_script(fig)
+    if player is None:
+        return None
+    fig_dict = fig if isinstance(fig, dict) else fig.to_dict()
+    frames = fig_dict.get("frames") or []
+    if not frames:
+        return None
+    page = {key: value for key, value in fig_dict.items() if key != "frames"}
+    return page, _packed_frames_script(frames) + "\n" + player
+
+
+def _packed_frames_script(frames: Sequence[Mapping]) -> str:
+    """`_REPLAY_FRAMES_JS` carrying ``frames``, packed (PERF-17)."""
+    from plotly.io.json import to_json_plotly
+
+    packed = to_json_plotly(pack_replay_frames(frames))
+    # Inside a <script>: no `<` may close it, and plotly.py substitutes
+    # `{plot_id}` across the whole script — both only ever occur inside a JSON
+    # string, where the escapes decode to the same text.
+    packed = packed.replace("<", "\\u003c").replace("{plot_id}", "\\u007bplot_id}")
+    return _REPLAY_FRAMES_JS.replace(_PACKED_FRAMES_TOKEN, packed)
+
+
 def animation_clip_frame_ms(fig) -> float | None:
     """How long a GIF/MP4 of ``fig`` holds each frame to last as long as its replay.
 

@@ -32,6 +32,7 @@ from pathlib import Path
 
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.io as pio
 
 # Outside a Streamlit runtime the @st.cache_data decorators in `data` fall
 # back to bare-mode caching and log a "No runtime found" warning per cached
@@ -76,13 +77,13 @@ from .plots import (  # noqa: E402
     FigureSettings,
     _resolve_trial_display_name,
     add_illustration_label,
-    animation_player_post_script,
     make_comparison_figure,
     make_difference_profile_figure,
     make_distribution_figure,
     make_scanpath_animation,
     make_scanpath_figure,
     make_word_profile_figure,
+    replay_page,
     split_scanpath_layers,
 )
 
@@ -2338,14 +2339,22 @@ def save_figure(
     if suffix == ".html":
         # BUG-93: an animation replays on the wall-clock player, which also
         # autoplays it at the configured speed when asked (VIZ-10). Plotly's own
-        # `auto_play` stays off — it ignores the frame duration. Static figures
-        # write unchanged.
-        if fig.frames:
-            fig.write_html(
+        # `auto_play` stays off — it ignores the frame duration. PERF-17: the
+        # frames are written packed and rebuilt by the page's own script, so a
+        # long replay writes a fraction of the bytes. Static figures write
+        # unchanged.
+        page = replay_page(fig)
+        if page is not None:
+            figure_dict, script = page
+            pio.write_html(
+                figure_dict,
                 str(path),
+                validate=False,
                 auto_play=False,
-                post_script=animation_player_post_script(fig),
+                post_script=script,
             )
+        elif fig.frames:
+            fig.write_html(str(path), auto_play=False)
         else:
             fig.write_html(str(path))
         return path

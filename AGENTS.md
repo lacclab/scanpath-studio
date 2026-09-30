@@ -114,6 +114,14 @@ and run/pass columns. Initial landing position/distance, regression-in count,
 second-pass duration, and single-fixation duration are also computed. Pre-computed IA values on
 the words table take precedence over computed ones.
 
+**AN-32 — the Corpus Analysis page computes none of them.** It shows only the
+measures the dataset brought, mapped as optional AOI-table fields
+(`data.READING_MEASURE_FIELDS`, schema keys `measure_*`, auto-detected from
+EyeLink `IA_*` names) on the add and edit screens' two *Reading measures*
+lines; without one it shows a notice and greys its sections. A schema that
+names a measure key decides it (cleared = absent); one saved before AN-32 keeps
+the `WORD_OPTIONAL_FIELDS` passthrough.
+
 ### Areas of interest (AOIs)
 
 AOIs (word interest areas) are **not computed** by the app — they come directly

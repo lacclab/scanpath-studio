@@ -292,11 +292,10 @@ def test_a_filter_changes_default_filters_report_on_a_miss():
     )
 
 
-def test_compares_second_dataset_and_the_corpus_measures_report_on_a_miss():
+def test_compares_second_dataset_reports_on_a_miss():
+    # AN-32: the Corpus view no longer computes measures, so it has no miss.
     compare_source._load_builtin_frames.clear()
     assert _reports_on_a_miss(lambda: compare_source._load_builtin_frames(SYNTHETIC))
-    words, fixations = _normalized_synthetic()
-    assert _reports_on_a_miss(lambda: tabs._corpus_word_measures(words, fixations))
 
 
 def test_a_just_added_dataset_shows_its_card_at_once(at, monkeypatch):

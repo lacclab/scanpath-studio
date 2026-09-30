@@ -484,7 +484,7 @@ Duration of the first fixation on a word.
 | **Precedence & caveats** | A precomputed `IA_FIRST_FIXATION_DURATION` wins. |
 | **Reference** | Rayner (1998), standard reading-measure definitions. |
 | **Code** | `scanpath_studio/measures.py:compute_per_word_measures` |
-| **Consumers** | UI, API, CLI, Export, Corpus Analysis |
+| **Consumers** | UI, API, CLI, Export |
 | **Tests** | `tests/test_measures.py`, `tests/test_synthetic.py` |
 | **Verification** | tier A, D — **Partially verified** |
 
@@ -503,7 +503,7 @@ Sum of first-pass fixations on a word.
 | **Precedence & caveats** | A precomputed IA gaze duration wins. |
 | **Reference** | Rayner (1998). |
 | **Code** | `scanpath_studio/measures.py:compute_per_word_measures` |
-| **Consumers** | UI, API, CLI, Export, Corpus Analysis |
+| **Consumers** | UI, API, CLI, Export |
 | **Tests** | `tests/test_measures.py`, `tests/test_synthetic.py` |
 | **Verification** | tier A, D — **Partially verified** |
 
@@ -521,7 +521,7 @@ First entry to the word until the gaze passes it to the right.
 | **Missing & edge cases** | Never fixated ⇒ NaN (an imported 0 is blanked, BUG-63). |
 | **Reference** | Definitions differ across toolkits (go-past vs regression path); #PRE-4 names `eyekit` as the intended comparison. Unresolved until #VAL-4 runs. |
 | **Code** | `scanpath_studio/measures.py:compute_per_word_measures` |
-| **Consumers** | UI, API, CLI, Export, Corpus Analysis |
+| **Consumers** | UI, API, CLI, Export |
 | **Tests** | `tests/test_measures.py`, `tests/test_synthetic.py` |
 | **Verification** | tier A — **Partially verified** |
 
@@ -538,7 +538,7 @@ All time spent on a word across the whole trial.
 | **Missing & edge cases** | Never fixated ⇒ 0 (the word *was* read past; it got no time). |
 | **Precedence & caveats** | A precomputed IA dwell time wins. |
 | **Code** | `scanpath_studio/measures.py:compute_per_word_measures` |
-| **Consumers** | UI, API, CLI, Export, Corpus Analysis |
+| **Consumers** | UI, API, CLI, Export |
 | **Tests** | `tests/test_measures.py`, `tests/test_synthetic.py` |
 | **Verification** | tier A, D — **Partially verified** |
 
@@ -553,7 +553,7 @@ Count of fixations assigned to a word.
 | **Output** | n_fixations |
 | **Missing & edge cases** | Never fixated ⇒ 0. |
 | **Code** | `scanpath_studio/measures.py:compute_per_word_measures` |
-| **Consumers** | UI, API, Export, Corpus Analysis |
+| **Consumers** | UI, API, Export |
 | **Tests** | `tests/test_synthetic.py` |
 | **Verification** | tier A — **Verified** |
 
@@ -569,7 +569,7 @@ Whether a word received no first-pass fixation.
 | **Unit** | rate when aggregated (0–1) |
 | **Missing & edge cases** | A word fixated only after a regression still counts as skipped. |
 | **Code** | `scanpath_studio/measures.py:compute_per_word_measures` |
-| **Consumers** | UI, API, Export, Corpus Analysis |
+| **Consumers** | UI, API, Export |
 | **Tests** | `tests/test_measures.py`, `tests/test_synthetic.py` |
 | **Verification** | tier A — **Verified** |
 
@@ -585,7 +585,7 @@ Whether a word was returned to, or left backwards.
 | **Unit** | rate when aggregated (0–1) |
 | **Precedence & caveats** | Precomputed IA regression flags win (see `norm.flags`). |
 | **Code** | `scanpath_studio/measures.py:compute_per_word_measures` |
-| **Consumers** | UI, API, Export, Corpus Analysis |
+| **Consumers** | UI, API, Export |
 | **Tests** | `tests/test_measures.py`, `tests/test_synthetic.py` |
 | **Verification** | tier A — **Partially verified** |
 
@@ -603,7 +603,7 @@ Where in the word the first fixation landed, in letters.
 | **Precedence & caveats** | VAL-5: the scale is `geom.word_char_advance`, not the local `width / len(text)` this used before — on a tiling corpus that divided a box of `n + 1` advances by `n` characters, reporting every landing ~`(n+1)/n` too far into the word. |
 | **Reference** | Assumes a monospaced advance within the word box — exact for the app's monospace default, approximate for proportional fonts. |
 | **Code** | `scanpath_studio/measures.py:compute_per_word_measures` |
-| **Consumers** | UI, API, Export, Corpus Analysis |
+| **Consumers** | UI, API, Export |
 | **Tests** | `tests/test_measures.py` |
 | **Verification** | tier A — **Partially verified** |
 
@@ -619,7 +619,7 @@ Landing position relative to the word's centre.
 | **Unit** | letters (0 = word centre, negative = left of centre) |
 | **Missing & edge cases** | As `measure.landing_position`. |
 | **Code** | `scanpath_studio/measures.py:compute_per_word_measures` |
-| **Consumers** | UI, API, Export, Corpus Analysis |
+| **Consumers** | UI, API, Export |
 | **Tests** | `tests/test_measures.py` |
 | **Verification** | tier A — **Partially verified** |
 
@@ -635,7 +635,7 @@ Time spent on the word during its second visit.
 | **Unit** | ms |
 | **Missing & edge cases** | Fewer than two runs ⇒ 0 — an imported blank `IA_SECOND_RUN_DWELL_TIME` is filled with 0 too, so the mean means the same whichever source the value came from. |
 | **Code** | `scanpath_studio/measures.py:compute_per_word_measures` |
-| **Consumers** | UI, API, Export, Corpus Analysis |
+| **Consumers** | UI, API, Export |
 | **Tests** | `tests/test_measures.py` |
 | **Verification** | tier A — **Partially verified** |
 
@@ -652,7 +652,7 @@ First-pass duration when the first pass was exactly one fixation.
 | **Missing & edge cases** | A first run of more than one fixation, or never fixated ⇒ NaN. |
 | **Reference** | Rayner (1998). |
 | **Code** | `scanpath_studio/measures.py:compute_per_word_measures` |
-| **Consumers** | UI, API, Export, Corpus Analysis |
+| **Consumers** | UI, API, Export |
 | **Tests** | `tests/test_measures.py` |
 | **Verification** | tier A — **Partially verified** |
 
@@ -667,7 +667,7 @@ How many times the gaze came back to this word.
 | **Output** | number_of_regressions_in |
 | **Missing & edge cases** | Never regressed into ⇒ 0. |
 | **Code** | `scanpath_studio/measures.py:compute_per_word_measures` |
-| **Consumers** | UI, API, Export, Corpus Analysis |
+| **Consumers** | UI, API, Export |
 | **Tests** | `tests/test_measures.py` |
 | **Verification** | tier A — **Partially verified** |
 

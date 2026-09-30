@@ -48,6 +48,7 @@ from .constants import (
     DEMO_CHOICE,
     FIXATION_SYMBOLS,
     ICONS,
+    MANUAL_SAMPLE_CHOICE,
     MULTIPLEYE_BUNDLE_CHOICE,
     ONESTOP_CHOICE,
     ONESTOP_PART_LABELS,
@@ -689,6 +690,7 @@ def _clamp_url_value(state_key: str, value):
 # each. Mirrors the `source` handling in `main()`.
 _SHAREABLE_SOURCES = {
     AUTHOR_CHOICE: "author",
+    MANUAL_SAMPLE_CHOICE: "author",
     DEMO_CHOICE: "demo",
     ONESTOP_CHOICE: "onestop",
     MULTIPLEYE_BUNDLE_CHOICE: "multipleye",
@@ -2517,9 +2519,12 @@ def _build_share_query(
             if valid:
                 params["onestop_parts"] = ",".join(valid)
 
-    if data_choice == AUTHOR_CHOICE:
+    if data_choice in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
         params["author_text"] = str(st.session_state.get("author_text", ""))
         events = st.session_state.get("_authored_events_frame")
+        draft = st.session_state.get("_manual_scanpath_drafts", {}).get(data_choice)
+        if draft is not None:
+            events = draft[2]
         if isinstance(events, pd.DataFrame):
             params["author_events"] = json.dumps(
                 events.to_dict("records"), separators=(",", ":")
@@ -2951,7 +2956,7 @@ def _snippet_source(data_choice: str) -> SnippetSource:
         return SnippetSource(kind=SOURCE_DEMO, label=DEMO_CHOICE)
     if data_choice == SYNTHETIC_CHOICE:
         return SnippetSource(kind=SOURCE_SYNTHETIC, label=SYNTHETIC_CHOICE)
-    if data_choice == AUTHOR_CHOICE:
+    if data_choice in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
         return SnippetSource(
             kind=SOURCE_AUTHOR,
             label=AUTHOR_CHOICE,

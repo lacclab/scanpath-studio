@@ -716,6 +716,121 @@ class TestRecoveryCachePanelFlow:
         assert "Not available here." in captions
 
 
+class TestAddDatasetMenu:
+    """UX-143: creation actions and placeholders cannot become real sources."""
+
+    @pytest.mark.parametrize("source", [AUTHOR_CHOICE, "Synthetic sample"])
+    def test_authoring_cancel_and_save_dataset(self, source):
+        at = _boot(synthetic=True)
+        if source == AUTHOR_CHOICE:
+            at.button(key="add_manual_dataset_btn").click().run(timeout=60)
+        else:
+            at.selectbox(key="data_source_picker").select(source).run(timeout=60)
+        at.button(key="cancel_authoring").click().run(timeout=60)
+        _clean(at)
+        assert at.session_state["data_source_choice"] == SYNTHETIC_SOURCE
+        if source == AUTHOR_CHOICE:
+            at.button(key="add_manual_dataset_btn").click().run(timeout=60)
+        else:
+            at.selectbox(key="data_source_picker").select(source).run(timeout=60)
+        at.text_input(key=f"author_dataset_name_{source}").set_value("My example").run(
+            timeout=60
+        )
+        at.button(key="save_authored_dataset").click().run(timeout=60)
+        _clean(at)
+        assert at.session_state["data_source_choice"] == "My example"
+        saved = at.session_state["_datasets"]["My example"]
+        assert not saved["words"].empty
+        assert not saved["fixations"].empty
+        assert saved["authoring"]
+        assert at.selectbox(key="data_source_picker").value == "My example"
+        assert not any(t.key == "author_text" for t in at.text_area)
+        _rerun(at, view=VIEW_DATA)
+        tables = [d.value for d in at.dataframe if "Dataset" in d.value.columns]
+        assert "My example" in tables[0]["Dataset"].tolist()
+
+    def test_editable_sample_and_manual_draft_are_independent(self):
+        from scanpath_studio.constants import MANUAL_SAMPLE_CHOICE
+
+        at = _boot(synthetic=True)
+        at.selectbox(key="data_source_picker").select(MANUAL_SAMPLE_CHOICE).run(
+            timeout=60
+        )
+        _clean(at)
+        assert at.text_area(key="author_text").value == "The cat sat\non the mat."
+        assert not any("Plot controls" in h.value for h in at.subheader)
+        assert not any(s.label.startswith("**Select Trial**") for s in at.selectbox)
+        at.text_area(key="author_text").set_value("An edited example.").run(timeout=60)
+        _rerun(at, view=VIEW_DATA)
+        at.button(key="create_manual_scanpath_btn").click().run(timeout=60)
+        _clean(at)
+        assert at.text_area(key="author_text").value != "An edited example."
+        _rerun(at, view=VIEW_DATA)
+        _clean(at)
+        tables = [d.value for d in at.dataframe if "Dataset" in d.value.columns]
+        assert tables
+        assert "My scanpath" not in tables[0]["Dataset"].tolist()
+        assert MANUAL_SAMPLE_CHOICE in tables[0]["Dataset"].tolist()
+        at.button(key="create_manual_scanpath_btn").click().run(timeout=60)
+        _clean(at)
+        assert at.session_state["main_nav"] == _VIEW_SCANPATH
+        _rerun(at, view="Corpus Analysis")
+        at.selectbox(key="data_source_picker").select(MANUAL_SAMPLE_CHOICE).run(
+            timeout=60
+        )
+        _clean(at)
+        assert at.text_area(key="author_text").value == "An edited example."
+
+    def test_manual_action_opens_the_editor_and_keeps_the_draft(self):
+        at = _boot(synthetic=True)
+        assert AUTHOR_CHOICE not in at.session_state["_data_source_entries"]
+        at.button(key="add_manual_dataset_btn").click().run(timeout=60)
+        _clean(at)
+        assert at.session_state["data_source_choice"] == AUTHOR_CHOICE
+        assert not any("Plot controls" in h.value for h in at.subheader)
+        assert not any(s.label.startswith("**Select Trial**") for s in at.selectbox)
+        at.text_area(key="author_text").set_value("A small manual trial.").run(
+            timeout=60
+        )
+        _rerun(at, view="Corpus Analysis")
+        at.selectbox(key="data_source_picker").select("Bundled Demo").run(timeout=60)
+        at.button(key="add_manual_dataset_btn").click().run(timeout=60)
+        _clean(at)
+        assert at.text_area(key="author_text").value == "A small manual trial."
+        assert len(at.session_state["_authored_events_frame"]) == 4
+
+    def test_import_action_opens_the_existing_wizard(self):
+        at = _boot(synthetic=True)
+        at.button(key="import_dataset_btn").click().run(timeout=60)
+        _clean(at)
+        assert at.session_state["_show_upload_wizard"] is True
+        assert at.session_state["main_nav"] == VIEW_DATA
+        assert at.session_state["_prev_source"] == SYNTHETIC_SOURCE
+        assert at.button(key="cancel_add_data")
+        assert at.get("file_uploader")
+
+    def test_coming_soon_leaves_the_current_dataset_and_trial_selected(self):
+        from scanpath_studio import app
+
+        at = _boot()
+        trial = next(s for s in at.selectbox if s.label.startswith("**Select Trial**"))
+        trial.select_index(2).run(timeout=60)
+        before_trial = at.selectbox(key=trial.key).value
+        before_source = at.session_state["data_source_choice"]
+        picker = at.selectbox(key="data_source_picker")
+        assert "More coming soon!" in picker.options
+        picker.select(app._MORE_DATASETS_PLACEHOLDER).run(timeout=60)
+        _clean(at)
+        assert at.session_state["data_source_choice"] == before_source
+        assert at.selectbox(key="data_source_picker").value == before_source
+        assert at.selectbox(key=trial.key).value == before_trial
+        assert (
+            app._MORE_DATASETS_PLACEHOLDER
+            not in at.session_state["_data_source_entries"]
+        )
+
+
+@pytest.mark.timeout(180)
 class TestAuthoringEditorFlow:
     """BUG-19 — the ✏️ Author a scanpath grid, driven the way a browser drives it.
 

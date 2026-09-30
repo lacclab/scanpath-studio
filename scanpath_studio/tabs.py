@@ -4975,8 +4975,7 @@ def render_single_trial_tab(
 ) -> None:
     """Render the main Scanpath Visualization screen (static + animated).
 
-    Layout, designed so everything needed is beside
-    the plot, no scrolling):
+    Layout, with the plot and its panels beside the full-height controls:
 
     1. A compact **selection bar** above the plot — the trial picker + a 🔍 Filter
        expander, with a strip of experiment-condition chips below it (the trial's
@@ -5007,9 +5006,9 @@ def render_single_trial_tab(
     # --- Plot (left) + control rail (right) -----------------------------------
     # Columns FIRST so the rail starts at the very top, beside the selection —
     # built for the everything-beside-the-plot workflow. The selection menus +
-    # chips + plot all
-    # live in the left column, including the per-trial subtabs directly below the
-    # plot. The rail is kept narrow (the plot is the hero) and scrolls separately.
+    # chips + plot + per-trial subtabs live in the left column. The narrow rail
+    # stays in page flow, so it can extend below a short plot without pushing
+    # the subtabs away from the figure (UX-173).
     plot_col, rail_col = st.columns([4, 1], gap="large")
     # Rail containers filled after the rail itself (CMP-24: B's filters).
     rail_slots: dict = {}
@@ -5087,12 +5086,9 @@ def render_single_trial_tab(
         # The stage's first child: the size box + loading card (styles.py).
         plot_loading_slot = plot_slot.empty()
 
-    # UX-43: a second row repeats the 4:1 split and reserves only its left side
-    # for the per-trial panels. Keeping the slot OUT of the plot/rail row means
-    # an open Annotations (or any other) panel cannot make the rail taller than
-    # the plot above it; the blank right cell preserves exact plot-column width.
-    subtabs_col, _ = st.columns([4, 1], gap="large")
-    subtabs_slot = subtabs_col.container(key="tour_grp_subtabs")
+        # Keep the panels immediately below the plot even when the controls
+        # extend farther down the right side.
+        subtabs_slot = st.container(key="tour_grp_subtabs")
 
     if not (selected_participant and selected_trial):
         return
@@ -5940,6 +5936,11 @@ def render_single_trial_tab(
             "playback_speed": playback_speed if animate else 1.0,
         },
         data_source=st.session_state.get("_active_data_source"),
+        synthetic=bool(
+            st.session_state.get("_datasets", {})
+            .get(st.session_state.get("data_source_choice"), {})
+            .get("authoring")
+        ),
         fix_index_range=fix_range,
         full_fixation_range=full_fix_range,
         # CMP-24: B's own flags and window disclose as A's do.

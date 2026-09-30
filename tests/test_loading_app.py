@@ -388,9 +388,9 @@ def test_the_missing_corpus_notice_stays_above_the_view(at, monkeypatch):
     assert order.index("missing-corpus-notice") < order.index("scanpath-view-body")
 
 
-def test_the_author_editor_stays_above_the_view(at, monkeypatch):
-    """The ✏️ Author editor is the view's input: with the view inside the reserved
-    area the editor goes in there too, or it lands below its own output."""
+@pytest.mark.parametrize("source", [app.AUTHOR_CHOICE, app.MANUAL_SAMPLE_CHOICE])
+def test_the_author_editor_replaces_the_view(at, monkeypatch, source):
+    """Authoring uses its editable canvas without a second visualization."""
     real_editor = app._render_authoring_source
 
     def _editor():
@@ -406,11 +406,12 @@ def test_the_author_editor_stays_above_the_view(at, monkeypatch):
 
     monkeypatch.setattr(app, "_render_authoring_source", _editor)
     monkeypatch.setattr(app, "render_single_trial_tab", _view)
-    at.session_state["data_source_choice"] = app.AUTHOR_CHOICE
+    at.session_state["data_source_choice"] = source
     at.run()
     assert not at.exception, at.exception
     order = [m.value for m in at.markdown]
-    assert order.index("author-editor") < order.index("scanpath-view-body")
+    assert "author-editor" in order
+    assert "scanpath-view-body" not in order
 
 
 def test_a_download_takes_the_dataset_card_down_first(at, monkeypatch):

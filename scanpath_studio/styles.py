@@ -1495,28 +1495,13 @@ def get_app_css() -> str:
        the page's own background — UX-151 retired the tinted, bordered card,
        whose fill put a second surface behind rows that already carry their own
        outline. A hair more breathing room between the stacked toggles than the
-       app-wide gap:0 rule. UX-43 gives it its own scroll area exactly as tall
-       as the plot row: the subtabs live in the next row and can grow without
-       stretching the rail. */
+       app-wide gap:0 rule. UX-173 keeps the controls in page flow, beside both
+       the plot and its subtabs, so every control can use the space below the
+       figure without a nested scrollbar. */
     .st-key-scanpath_rail {
         border-left: 1px solid var(--sps-border);
         padding: 0.1rem 0.35rem 1.5rem 1rem;
         box-sizing: border-box;
-        /* The card's bottom edge was what made the row cut off at the plot's
-           foot read as "scrolls" rather than "cropped"; without it, the last
-           1.5rem fades out instead. The mask is fixed to the box, not to the
-           scrolled content, so the matching bottom padding is what lets the
-           last control clear it once the rail is scrolled to the end. */
-        mask-image: linear-gradient(to bottom, #000 calc(100% - 1.5rem), transparent);
-        height: 100%;
-        max-height: 100%;
-        overflow-y: auto;
-        /* Chain to the page once the rail hits either end (UX-43 shipped this as
-           `contain`, which stopped the scroll dead there). Browsers latch a
-           gesture to the element it started in, so the hand-off lands on the
-           next wheel/flick rather than mid-gesture. */
-        overscroll-behavior-y: auto;
-        scrollbar-gutter: stable;
         /* UX-29: lets the Quick-view rule below query the rail's own rendered
            width, not the viewport's — the rail is a fraction of the row, so its
            width changes with the window without necessarily crossing a viewport
@@ -1524,20 +1509,6 @@ def get_app_css() -> str:
            too; that is gone, but querying the rail is still the right test.) */
         container-type: inline-size;
         container-name: sps-rail;
-    }
-    /* Remove the rail from the row's intrinsic height calculation, then stretch
-       it through the right column. The left (plot) column alone determines the
-       row height; Streamlit's flex row gives the right column that same height. */
-    [data-testid="stColumn"]:has(.st-key-scanpath_rail) {
-        position: relative;
-    }
-    [data-testid="stColumn"]:has(.st-key-scanpath_rail)
-        > [data-testid="stVerticalBlock"] {
-        position: absolute;
-        inset: 0;
-    }
-    [data-testid="stLayoutWrapper"]:has(> .st-key-scanpath_rail) {
-        height: 100%;
     }
     .st-key-scanpath_rail div[data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .st-key-scanpath_rail h5 { margin: 0.15rem 0 0.1rem; }
@@ -1914,27 +1885,6 @@ def get_app_css() -> str:
         [data-testid="stElementContainer"]:has(iframe[title*="components.html"]),
         [data-testid="stElementContainer"]:has(iframe[title*="st.iframe"]) {
             overflow-x: auto;
-        }
-    }
-    /* Once the layout is narrow enough to stack/reflow, a nested vertical
-       scroller is more awkward than useful. Return the rail to document flow. */
-    @media (max-width: 900px) {
-        [data-testid="stColumn"]:has(.st-key-scanpath_rail) {
-            position: static;
-        }
-        [data-testid="stColumn"]:has(.st-key-scanpath_rail)
-            > [data-testid="stVerticalBlock"] {
-            position: static;
-        }
-        [data-testid="stLayoutWrapper"]:has(> .st-key-scanpath_rail) {
-            height: auto;
-        }
-        .st-key-scanpath_rail {
-            height: auto;
-            max-height: none;
-            overflow-y: visible;
-            overscroll-behavior-y: auto;
-            scrollbar-gutter: auto;
         }
     }
     </style>

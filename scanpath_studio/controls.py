@@ -66,8 +66,17 @@ from .fields import (
     plain,
     row_label,
 )
+from .session_keys import (
+    COMPARE_B_FILTER_STATE_KEYS,
+    SHARE_FLOAT_RANGE_PARAMS,
+    SINGLE_COMPARE_FIX_RANGE,
+    SINGLE_COMPARE_LAYOUT,
+    SINGLE_COMPARE_STIMULUS,
+    SINGLE_COMPARE_TOGGLE,
+    SINGLE_PLAYBACK_SPEED,
+    compare_state_keys,
+)
 from .session_keys import DESIGN_PRESETS as _DESIGN_PRESETS_WIRE_KEY
-from .session_keys import SHARE_FLOAT_RANGE_PARAMS
 
 NONE_OPTION = "(none)"
 
@@ -1209,7 +1218,7 @@ def _apply_view_preset(name: str) -> None:
     Named views always begin from ``_VIZ_WIDGET_DEFAULTS``. Existing dynamic
     ``global_*`` values are cleared so the next app rerun can re-seed dataset-
     dependent canvas/field defaults. Custom is the only view that preserves
-    manual edits; leaving it snapshots the complete live ``global_*`` state.
+    manual edits; leaving it snapshots the complete live design state (``_is_design_key``).
     """
     saved = design_presets()
     if name not in {*_VIEW_PRESETS, _CUSTOM_VIEW, *saved}:
@@ -1227,13 +1236,13 @@ def _apply_view_preset(name: str) -> None:
     # layering onto whatever happened to be on screen.
     if name in saved:
         for key in list(ss):
-            if _is_restorable_global(key):
+            if _is_design_key(key):
                 ss.pop(key, None)
         for key, value in _VIZ_WIDGET_DEFAULTS.items():
-            if _is_restorable_global(key):
+            if _is_design_key(key):
                 ss[key] = deepcopy(value)
         for key, value in saved[name].items():
-            if _is_restorable_global(key):
+            if _is_design_key(key):
                 ss[key] = deepcopy(value)
         ss.pop("_canvas_seeded_for", None)
         ss.pop("_font_seeded_for", None)
@@ -1248,10 +1257,10 @@ def _apply_view_preset(name: str) -> None:
         custom = ss.get(_QUICK_VIEW_CUSTOM_STATE)
         if isinstance(custom, dict):
             for key in list(ss):
-                if _is_restorable_global(key):
+                if _is_design_key(key):
                     ss.pop(key, None)
             for key, value in custom.items():
-                if _is_restorable_global(key):
+                if _is_design_key(key):
                     ss[key] = deepcopy(value)
             _drop_linked_view_params()
         ss[_QUICK_VIEW_SELECTION_KEY] = _CUSTOM_VIEW
@@ -1295,6 +1304,44 @@ def _apply_view_preset(name: str) -> None:
 def _is_restorable_global(key: object) -> bool:
     name = str(key)
     return name.startswith("global_") and not name.endswith("_upload")
+
+
+#: The fixation-index windows (VIZ-7, CMP-24) — one per scanpath, each a value
+#: plus the flag that says it was *chosen* rather than the slider's own
+#: auto-default. They are filters, so a design owns them; see
+#: `_capture_quick_view_state` for how they are recorded.
+_FIX_WINDOWS = (
+    ("single_fix_range", "single_fix_range_user_set"),
+    (SINGLE_COMPARE_FIX_RANGE, f"{SINGLE_COMPARE_FIX_RANGE}_user_set"),
+)
+_FIX_WINDOW_KEYS = frozenset(key for pair in _FIX_WINDOWS for key in pair)
+_FIX_WINDOW_ALL_TRIALS_KEY = "single_fix_range_all_trials"
+
+#: Plot controls that are not `global_*` — the rest of what the rail, the Compare
+#: view and the replay let you set. A design used to snapshot only `global_*`,
+#: so it kept scanpath A's filters and dropped everything beside them: each
+#: scanpath's own styling (`cmp{0,1}_*`), scanpath B's filters
+#: (`cmp1_fixclass_*`, `cmp1_saccade_classes`), whether Compare is on and how it
+#: lays out, the fixation windows and the replay speed. Only the stimulus-image
+#: upload stays out, and that is `_is_restorable_global`'s.
+_DESIGN_EXTRA_KEYS = (
+    compare_state_keys(0)
+    | compare_state_keys(1)
+    | COMPARE_B_FILTER_STATE_KEYS
+    | {
+        SINGLE_COMPARE_TOGGLE,
+        SINGLE_COMPARE_LAYOUT,
+        SINGLE_COMPARE_STIMULUS,
+        SINGLE_PLAYBACK_SPEED,
+        _FIX_WINDOW_ALL_TRIALS_KEY,
+    }
+    | _FIX_WINDOW_KEYS
+)
+
+
+def _is_design_key(key: object) -> bool:
+    """Whether a session key is a plot setting a design records and restores."""
+    return _is_restorable_global(key) or str(key) in _DESIGN_EXTRA_KEYS
 
 
 def _render_saved_designs(host) -> None:
@@ -1554,18 +1601,34 @@ def _rename_named_design(old: str) -> None:
 
 
 def _capture_quick_view_state() -> dict[str, object]:
-    """Snapshot every live global plot setting for the persistent Custom view.
+    """Snapshot every live plot setting for the persistent Custom view and for
+    saved designs — the `global_*` keys plus `_DESIGN_EXTRA_KEYS`.
 
     Uploader keys are left out (see `_is_restorable_global`): an `UploadedFile`
     is neither deep-copyable in any useful sense nor assignable back, and the
     image itself is not a *setting* — it survives on its own widget key across
     the view switch regardless.
+
+    A fixation window is recorded only once it has been *chosen*: the slider
+    rewrites its auto-default on every render, so snapshotting that would make
+    the drift check below fire on a plain trial change. It is applied to
+    whichever trial is open, clamped to its length.
     """
-    return {
+    ss = st.session_state
+    state = {
         str(key): deepcopy(value)
-        for key, value in st.session_state.items()
-        if _is_restorable_global(key)
+        for key, value in ss.items()
+        if _is_design_key(key) and str(key) not in _FIX_WINDOW_KEYS
     }
+    for window_key, user_set_key in _FIX_WINDOWS:
+        window = ss.get(window_key)
+        if (
+            ss.get(user_set_key)
+            and isinstance(window, (list, tuple))
+            and len(window) == 2
+        ):
+            state[window_key] = tuple(window)
+    return state
 
 
 def _sync_quick_view_state() -> str:

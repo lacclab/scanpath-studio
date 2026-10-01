@@ -30,8 +30,10 @@ Usage:
 from __future__ import annotations
 
 import contextlib
+import copy
 import hashlib
 import html
+import json
 import logging
 import os
 import re
@@ -193,6 +195,8 @@ from scanpath_studio.data import (
 )
 from scanpath_studio.dataset_table import DATASET_COUNT_FIELDS, DatasetRow
 from scanpath_studio.datasets import (
+    POTEC_FIX_SCHEMA,
+    POTEC_WORD_SCHEMA,
     load_multipleye_server_bundle,
     multipleye_bundle_dir,
 )
@@ -239,6 +243,9 @@ from scanpath_studio.tabs import (
     EDITOR_NAME_FIELD_KEY,
     EDITOR_PENDING_NAME_KEY,
     STIMULUS_JOIN_NOTICE_KEY,
+    _EDITOR_KEY_NOISE,
+    _REMAP_DIRTY_KEY,
+    _TABLE_LABELS,
     _build_figure_settings,
     _render_column_mapping_section,
     dataset_editor_is_dirty,
@@ -2033,6 +2040,9 @@ MULTIPLEYE_PUBLIC_CHOICE = "MultiplEYE — multilingual reading (ZH-CH sample)"
 PUBLIC_DATASET_REGISTRY: dict = {
     "PoTeC — Potsdam Textbook Corpus": dict(
         loader=_load_potec_source,
+        # The schema `load_potec` uses, so the app's Trial ID is the headless
+        # one: reader + text, not the text name every reader shares.
+        declared_schemas=(POTEC_WORD_SCHEMA, POTEC_FIX_SCHEMA),
         monitor=(1680, 1050),  # DELL P2210
         short="PoTeC",
         language="German",
@@ -2910,6 +2920,152 @@ def reset_column_mapping() -> None:
         del st.session_state[key]
 
 
+#: A built-in source (the demo, a public corpus) maps its columns with the
+#: `col_map_*` panels themselves, which apply as they change. While ✏️ Edit
+#: dataset is open they are a draft instead, like an upload's editor: the
+#: dataset keeps the mapping it had when the editor opened (held here, with the
+#: `col_map_*` keys that produced it) until ✅ Save changes adopts the draft, and
+#: ✕ Cancel puts the keys back.
+BUILTIN_MAPPING_HELD_KEY = "_builtin_mapping_held"
+#: The panels' current picks, ``{"words": schema, "fixations": schema}``,
+#: written by `prepare_data` on every run that draws them.
+BUILTIN_MAPPING_PENDING_KEY = "_builtin_mapping_pending"
+#: Set by ✅ Save changes for the success line on the screen it returns to.
+BUILTIN_MAPPING_SAVED_KEY = "_builtin_mapping_saved"
+#: ✕ Cancel's restore, parked for the next run to apply before the panels draw:
+#: the Leave confirmation is a dialog, whose click runs inside the dialog's own
+#: rerun rather than ahead of the page's widgets.
+BUILTIN_MAPPING_RESTORE_KEY = "_builtin_mapping_restore"
+#: The panels a built-in source draws (`prepare_data`). Only their field
+#: values are held: not the per-cell confirm buttons (`*_cell_confirm`, whose
+#: value Streamlit refuses to have set), the add wizard's `*_upload` files or
+#: its stashed `*_header` — the scaffolding `tabs._EDITOR_KEY_NOISE` names.
+_BUILTIN_PANEL_PREFIXES = ("col_map_words_", "col_map_fix_")
+
+
+def _is_builtin_panel_key(key) -> bool:
+    return (
+        isinstance(key, str)
+        and key.startswith(_BUILTIN_PANEL_PREFIXES)
+        and not any(noise in key for noise in _EDITOR_KEY_NOISE)
+    )
+
+
+def _mapping_signature(schemas: dict | None) -> str:
+    """A comparable rendering of a ``{"words", "fixations"}`` mapping — lists
+    (a composite Trial ID) come back from the widgets as new objects."""
+    return json.dumps(schemas or {}, sort_keys=True, default=str)
+
+
+def held_builtin_mapping(source_key) -> dict | None:
+    """The mapping a built-in source keeps while its editor is open, or None."""
+    held = st.session_state.get(BUILTIN_MAPPING_HELD_KEY)
+    if not held or held.get("source") != source_key:
+        return None
+    return held.get("schemas")
+
+
+def hold_builtin_mapping(source_key) -> None:
+    """Record the mapping this run applied, and the keys behind it, as what an
+    editor opened on the next run starts from and what its ✕ Cancel restores."""
+    st.session_state[BUILTIN_MAPPING_HELD_KEY] = {
+        "source": source_key,
+        "schemas": copy.deepcopy(st.session_state.get(BUILTIN_MAPPING_PENDING_KEY)),
+        "keys": {
+            key: copy.deepcopy(value)
+            for key, value in st.session_state.items()
+            if _is_builtin_panel_key(key)
+        },
+    }
+
+
+def builtin_mapping_is_dirty(source_key) -> bool:
+    """Whether the open editor's mapping panels differ from the held mapping."""
+    held = held_builtin_mapping(source_key)
+    if held is None:
+        return False
+    return _mapping_signature(
+        st.session_state.get(BUILTIN_MAPPING_PENDING_KEY)
+    ) != _mapping_signature(held)
+
+
+def _discard_builtin_mapping_edit() -> None:
+    """Ask the next run to put the panels back as they were when the editor
+    opened (`restore_builtin_mapping`)."""
+    held = st.session_state.pop(BUILTIN_MAPPING_HELD_KEY, None)
+    if held:
+        st.session_state[BUILTIN_MAPPING_RESTORE_KEY] = held
+
+
+def restore_builtin_mapping(source_key) -> None:
+    """Apply a parked ✕ Cancel to ``source_key``'s panels, before they draw.
+
+    A restore parked for another source is dropped: its keys describe columns
+    this source does not have."""
+    held = st.session_state.pop(BUILTIN_MAPPING_RESTORE_KEY, None)
+    if not held or held.get("source") != source_key:
+        return
+    saved = held.get("keys") or {}
+    for key in [k for k in list(st.session_state) if _is_builtin_panel_key(k)]:
+        if key not in saved:
+            del st.session_state[key]
+    for key, value in saved.items():
+        st.session_state[key] = value
+
+
+def _save_builtin_mapping() -> None:
+    """✅ Save changes for a built-in source: adopt the draft mapping.
+
+    A draft that leaves a required field empty is refused here, with the
+    reasons shown above the button, rather than applied and then failing."""
+    pending = st.session_state.get(BUILTIN_MAPPING_PENDING_KEY) or {}
+    problems: dict = {}
+    for table_key, validate in (
+        ("words", validate_word_schema),
+        ("fixations", validate_fix_schema),
+    ):
+        schema = pending.get(table_key)
+        if schema is not None and (found := validate(schema)):
+            problems[table_key] = found
+    if problems:
+        st.session_state["_remap_problems"] = problems
+        return
+    # Dropped first, so closing the editor does not restore the held keys.
+    st.session_state.pop(BUILTIN_MAPPING_HELD_KEY, None)
+    saved = str(st.session_state.get("data_source_choice") or "")
+    _close_dataset_editor()
+    st.session_state[BUILTIN_MAPPING_SAVED_KEY] = saved
+
+
+def _render_builtin_editor_footer(host) -> None:
+    """✅ Save changes at the foot of a built-in source's ✏️ Edit dataset screen.
+
+    `tabs.render_dataset_editor_footer`'s row, for a dataset with no stored
+    entry: the same divider, the same blockers, the button in the same column.
+    There is no ⬇️ Save setup beside it — the corpus' own loader is the setup.
+    """
+    from scanpath_studio.wizard import _FOOTER_ROW_W
+
+    box = host.container()
+    box.container(key="wizard_footer_divider_edit").divider()
+    for table_key, messages in (st.session_state.get("_remap_problems") or {}).items():
+        label = _TABLE_LABELS.get(table_key, table_key)
+        for message in messages:
+            box.error(f"**{label}** — {message}", icon=ICONS["error"])
+    row = box.container(key="wizard_footer_row_edit")
+    _setup_col, apply_col, _rest = row.columns(
+        _FOOTER_ROW_W, gap="small", vertical_alignment="center"
+    )
+    apply_col.button(
+        f"{ICONS['confirm']} Save changes",
+        type="primary",
+        key="builtin_mapping_save",
+        on_click=_save_builtin_mapping,
+        width="stretch",
+        help="Apply the column mapping above to this dataset.",
+    )
+
+
 #: Label + tooltip of the off-page signpost's "known-good state" button.
 DEMO_RESET_LABEL = f"{ICONS['demo']} Load the bundled demo"
 DEMO_RESET_HELP = (
@@ -2981,12 +3137,24 @@ def declared_schemas_for(data_choice: str) -> tuple[dict | None, dict | None]:
     fixations detect `trial="TRIAL_ID"` against the words' `unique_paragraph_id`
     and broadcast **zero** word boxes — silently, since only the words frame
     ends up empty and the empty-pool guard never fires.
+
+    A native corpus whose identity is a published contract declares its schema
+    on its registry entry (``declared_schemas``): PoTeC's Trial ID is the reader
+    *and* the text, which no column name says and detection would guess as the
+    text alone.
     """
     if data_choice != PUBLIC_DATASETS_CHOICE:
+        return None, None
+    # The corpus isn't here and the demo stands in for it: its frames are the
+    # demo's, which the corpus' schema does not describe.
+    if st.session_state.get(_PLACEHOLDER_SHOWN_KEY):
         return None, None
     spec = public_dataset_registry().get(
         st.session_state.get("public_dataset_choice", "")
     )
+    if spec and spec.get("declared_schemas"):
+        word_schema, fix_schema = spec["declared_schemas"]
+        return dict(word_schema), dict(fix_schema)
     if not spec or not spec.get("benchmark_dataset"):
         return None, None
     from scanpath_studio.eyegenbench import (
@@ -3005,6 +3173,7 @@ def prepare_data(
     declared_word_schema: dict | None = None,
     declared_fix_schema: dict | None = None,
     mapping_dataset: object = None,
+    held_schemas: dict | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, list]:
     """Infer schemas and normalize incoming dataframes to canonical column names.
 
@@ -3029,12 +3198,18 @@ def prepare_data(
     column pick made for another dataset — the add-dataset wizard shares these
     ``col_map_*`` keys — is dropped rather than inherited because the headers
     happen to match (BUG-32; ``controls.forget_mapping_for_other_table``).
+
+    ``held_schemas`` (``{"words": …, "fixations": …}``) is the mapping the
+    dataset keeps while ✏️ Edit dataset is open: the panels still render and
+    their picks are published as the draft (``BUILTIN_MAPPING_PENDING_KEY``),
+    but the frames are normalized under the held mapping until ✅ Save changes.
     """
     has_words = not words_df.empty
     has_fixations = not fixations_df.empty
     word_schema = None
     fix_schema = None
     problems: list = []
+    pending: dict = {}
 
     if has_words:
         word_proposed = _apply_declared_schema(
@@ -3058,6 +3233,9 @@ def prepare_data(
                 stack_labels=True,
                 dataset=mapping_dataset,
             )
+            pending["words"] = word_schema
+            if held_schemas and held_schemas.get("words") is not None:
+                word_schema = held_schemas["words"]
         else:
             word_schema = word_proposed
         word_problems = validate_word_schema(word_schema)
@@ -3082,11 +3260,17 @@ def prepare_data(
                 stack_labels=True,
                 dataset=mapping_dataset,
             )
+            pending["fixations"] = fix_schema
+            if held_schemas and held_schemas.get("fixations") is not None:
+                fix_schema = held_schemas["fixations"]
         else:
             fix_schema = fix_proposed
         fix_problems = validate_fix_schema(fix_schema)
         if fix_problems:
             problems.append("Fixations: " + "; ".join(fix_problems))
+
+    if allow_override:
+        st.session_state[BUILTIN_MAPPING_PENDING_KEY] = pending
 
     if problems:
         # Mapping not ready — let the caller surface the raw data instead of
@@ -4833,6 +5017,9 @@ def _close_dataset_editor() -> None:
     # DATA-46: "use the current estimate" is a choice for one editing session.
     for key in [k for k in st.session_state if str(k).endswith("_setup_reestimate")]:
         st.session_state.pop(key, None)
+    # A built-in source's unsaved mapping goes too (✅ Save changes has already
+    # dropped what it would restore).
+    _discard_builtin_mapping_edit()
 
 
 def _ask_leave_dataset_editor() -> None:
@@ -7715,6 +7902,13 @@ def _run_app() -> None:
         # belongs here, on the screen it returns to.
         saved = st.session_state.pop("_remap_applied", None)
         join_notices = st.session_state.pop(STIMULUS_JOIN_NOTICE_KEY, None)
+        builtin_saved = st.session_state.pop(BUILTIN_MAPPING_SAVED_KEY, None)
+        if builtin_saved is not None:
+            dataset_table_slot.success(
+                f"**{_dataset_display_name(str(builtin_saved))}** updated — its "
+                "column mapping is saved.",
+                icon=ICONS["success"],
+            )
         if saved:
             dataset_table_slot.success(
                 f"**{_dataset_display_name(str(saved))}** updated — mapping, "
@@ -7899,6 +8093,7 @@ def _run_app() -> None:
         if st.session_state.get("_colmap_seeded_for") != source_key:
             reset_column_mapping()
             st.session_state["_colmap_seeded_for"] = source_key
+        restore_builtin_mapping(source_key)
         raw_words_df, raw_fixations_df = load_words_and_fixations(
             data_choice,
             participant=deep_link_pid,
@@ -7923,6 +8118,7 @@ def _run_app() -> None:
                     f"{len(raw_fixations_df):,} fixations",
                 )
         declared_word_schema, declared_fix_schema = declared_schemas_for(data_choice)
+        mapping_editor_rendered = data_choice in (PUBLIC_DATASETS_CHOICE, DEMO_CHOICE)
         words_df, fixations_df, mapping_problems = prepare_data(
             raw_words_df,
             raw_fixations_df,
@@ -7930,7 +8126,7 @@ def _run_app() -> None:
             # Demo (DATA-8) so the re-mapping capability is discoverable on the
             # default first-load source; pre-filled with auto-detection, so an
             # untouched mapping normalizes identically.
-            allow_override=(data_choice in (PUBLIC_DATASETS_CHOICE, DEMO_CHOICE)),
+            allow_override=mapping_editor_rendered,
             # Mode A of the Data page's one Column mapping section (DATA-26).
             mapping_host=mapping_body_slot,
             # A prepared benchmark corpus publishes its schema; auto-detection
@@ -7942,8 +8138,26 @@ def _run_app() -> None:
             # and its field widgets persist, so coming back here from it would
             # otherwise inherit its picks whenever the headers match.
             mapping_dataset=source_key,
+            # While ✏️ Edit dataset is open the panels are a draft and the
+            # dataset keeps its mapping until ✅ Save changes.
+            held_schemas=(
+                held_builtin_mapping(source_key)
+                if editing and mapping_editor_rendered
+                else None
+            ),
         )
-        mapping_editor_rendered = data_choice in (PUBLIC_DATASETS_CHOICE, DEMO_CHOICE)
+        if mapping_editor_rendered:
+            if editing:
+                st.session_state[_REMAP_DIRTY_KEY] = builtin_mapping_is_dirty(
+                    source_key
+                )
+            else:
+                hold_builtin_mapping(source_key)
+    if not mapping_editor_rendered:
+        # Another kind of source is open: no built-in snapshot may be restored
+        # over the mapping keys it (or the add wizard) shares.
+        st.session_state.pop(BUILTIN_MAPPING_HELD_KEY, None)
+        st.session_state.pop(BUILTIN_MAPPING_RESTORE_KEY, None)
     if mapping_problems:
         # A required column is still unmapped. Rather than halt the whole app
         # (which hid the data the user needs to choose the mapping), show the
@@ -8454,6 +8668,8 @@ def _run_app() -> None:
         # UX-106 — and the screen's one commit at its foot, in the slot
         # reserved after every section it saves.
         render_dataset_editor_footer(editor_footer_slot)
+        if mapping_editor_rendered:
+            _render_builtin_editor_footer(editor_footer_slot)
         with setup_body_slot:
             st.divider()
             active_token = str(

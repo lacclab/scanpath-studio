@@ -636,6 +636,79 @@ def test_render_potec_conflicts_with_other_inputs():
         cli.main(["render", "--potec", "d", "--sample", "-o", "out.html"])
 
 
+def test_render_potec_narrows_by_the_text_in_a_reader_text_trial(tmp_path, monkeypatch):
+    """DATA-61: a PoTeC trial is ``<reader>_<text>``; ``-t 0_b0`` loads text b0
+    and renders that reader's reading of it."""
+    from scanpath_studio import datasets
+
+    calls = []
+    real = datasets.load_potec
+
+    def fake_load_potec(root, **kwargs):
+        calls.append(kwargs)
+        return real(root, **{**kwargs, "download": False})
+
+    root = tmp_path / "potec"
+    _write_tiny_potec(root)
+    monkeypatch.setattr(datasets, "load_potec", fake_load_potec)
+    out_file = tmp_path / "out.html"
+    cli.main(
+        ["render", "--potec", str(root), "-p", "0", "-t", "0_b0", "-o", str(out_file)]
+    )
+    assert calls[0]["texts"] == ["b0"]
+    assert out_file.is_file()
+
+
+def _write_tiny_potec(root) -> None:
+    """One text (b0) read by reader 0, in PoTeC's on-disk layout."""
+    import pandas as pd
+
+    (root / "stimuli" / "aoi_texts").mkdir(parents=True)
+    (root / "stimuli" / "word_aoi_texts").mkdir(parents=True)
+    (root / "eyetracking_data" / "scanpaths").mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "aoi_type": ["0 RECTANGLE"] * 3,
+            "aoi": [1, 2, 3],
+            "start_x": [80, 93, 115],
+            "start_y": [21] * 3,
+            "end_x": [93, 115, 137],
+            "end_y": [99] * 3,
+            "character": list("Um "),
+            "line": [1] * 3,
+        }
+    ).to_csv(root / "stimuli" / "aoi_texts" / "b0.ias", sep="\t", index=False)
+    pd.DataFrame(
+        {
+            "aoi_type": ["0 RECTANGLE"],
+            "aoi": [1.0],
+            "start_x": [80.0],
+            "start_y": [21.0],
+            "end_x": [137.0],
+            "end_y": [99.0],
+            "word": ["Um"],
+        }
+    ).to_csv(
+        root / "stimuli" / "word_aoi_texts" / "word_aoi_b0.tsv", sep="\t", index=False
+    )
+    pd.DataFrame(
+        {
+            "fixation_index": [1, 2],
+            "fixation_duration": [210, 190],
+            "line": [1, 1],
+            "aoi": [1, 2],
+            "reader_id": [0, 0],
+            "text_id": ["b0", "b0"],
+            "word_index_in_text": [1, 1],
+            "word": ["Um", "Um"],
+        }
+    ).to_csv(
+        root / "eyetracking_data" / "scanpaths" / "reader0_b0_scanpath.tsv",
+        sep="\t",
+        index=False,
+    )
+
+
 def test_render_authoring_json(tmp_path):
     from scanpath_studio.authoring import authoring_json, default_events, layout_text
 

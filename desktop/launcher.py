@@ -461,6 +461,14 @@ def main() -> None:
         ).start()
 
     print(f"Scanpath Studio starting on http://127.0.0.1:{port}")
+    if sys.platform == "win32":
+        # ENG-90: the console is all a Windows user sees during the scan
+        # HEALTH_TIMEOUT_S waits out, so say that the wait is expected.
+        print(
+            "This can take a few minutes, especially the first time while "
+            "Windows scans the app. The window opens on its own when it's "
+            "ready; please keep this terminal open."
+        )
     if grace_s > 0:
         print(f"Close the app window to quit (the server stops {grace_s:.0f}s later).")
     else:

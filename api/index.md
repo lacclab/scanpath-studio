@@ -266,6 +266,8 @@ The tables `scanpath-studio analyze` writes, as a dict of frames.
 
 `fixations`, `saccades`, `word_measures`, `sentence_measures`, `trial_summary`, `reader_summary`, `characters` and `cleaning_qa`.
 
+`word_measures` is the words table with the reading measures it *brought* (AN-32 / EXP-23): none are computed here, and a words table that carries none leaves `word_measures` out. Call compute_word_metrics first to add the app's own.
+
 ### scanpath_studio.api.trial_summary
 
 ```

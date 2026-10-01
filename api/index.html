@@ -3161,6 +3161,11 @@ frames from <a class="autorefs autorefs-internal" title="&lt;code class=&quot;do
         <p>The tables <code>scanpath-studio analyze</code> writes, as a dict of frames.</p>
 <p><code>fixations</code>, <code>saccades</code>, <code>word_measures</code>, <code>sentence_measures</code>,
 <code>trial_summary</code>, <code>reader_summary</code>, <code>characters</code> and <code>cleaning_qa</code>.</p>
+<p><code>word_measures</code> is the words table with the reading measures it
+<em>brought</em> (AN-32 / EXP-23): none are computed here, and a words table that
+carries none leaves <code>word_measures</code> out. Call
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.compute_word_metrics&lt;/span&gt;" href="#scanpath_studio.api.compute_word_metrics"><code>compute_word_metrics</code></a> first
+to add the app's own.</p>
 
 
     </div>

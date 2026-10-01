@@ -1189,9 +1189,16 @@ def _dataset_dir_input(
             st.rerun()
         else:
             cfg.caption("Folder picker unavailable here — type or paste the path.")
+    resolved = _resolve_data_dir(raw)
+    # UX-184: a relative entry such as the default `data/PoTeC` resolves against
+    # the checkout, or in an installed copy against the per-user data home
+    # (ENG-59) — on Windows `%LOCALAPPDATA%`, a folder the box never named, so a
+    # finished download looked lost. Name the folder it actually means.
+    if resolved and resolved != raw.strip():
+        cfg.caption(f"Full path: `{resolved}`")
     with cfg.expander("Expected files", expanded=False):
         st.markdown(structure_md)
-    return _resolve_data_dir(raw)
+    return resolved
 
 
 # UX-7(b): session slot describing a data source the user selected but that
@@ -1327,7 +1334,9 @@ def _render_dataset_unavailable() -> None:
         )
         details = [f"{note['action'].rstrip('.')}{size}"]
         if note["root"]:
-            details.append(f"Looking in `{note['root']}`")
+            # UX-184: say where a download will land, not only where it looked.
+            verb = "Downloads to" if download is not None else "Looking in"
+            details.append(f"{verb} `{note['root']}`")
         st.markdown("\n".join(f"- {line}" for line in details))
         if download is None:
             return
@@ -1396,7 +1405,10 @@ def _dataset_access_status(
             root=root,
         )
         return False
-    cfg.info(f"Not downloaded yet{f' ({size_hint})' if size_hint else ''}.")
+    cfg.info(
+        f"Not downloaded yet{f' ({size_hint})' if size_hint else ''}. "
+        f"**Download** saves it to `{root}`."
+    )
     # S2: fetching writes tens-to-hundreds of MB into a browser-supplied path. On
     # a shared deployment that's a remote visitor filling the server's disk, so
     # the corpus has to be placed by whoever runs it.

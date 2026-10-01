@@ -1,1 +1,0 @@
-Favorites, tags and notes now belong to the dataset they were made on: another dataset that reuses the same participant and trial ids no longer shows them, and annotations saved by an earlier version come back on the added dataset that has their trial, or else on the first dataset you open.

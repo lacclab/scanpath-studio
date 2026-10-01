@@ -1,1 +1,0 @@
-Export, `analyze` and `api.analysis_tables` write only the reading measures the dataset brought and compute none, as Corpus Analysis does; the Export bundle's Mega-table option is replaced by a "Combine all trials into one file" toggle that writes each chosen table once with every trial stacked in it.

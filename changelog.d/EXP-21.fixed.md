@@ -1,1 +1,0 @@
-When scanpath B comes from a second dataset, the Share code snippet's Python and CLI halves now both load B's own tables (placeholders `B_WORDS` / `B_FIXATIONS` to point at its files) and state B's screen, instead of looking B's reader up in the first dataset.

@@ -131,6 +131,26 @@ class TestFrameCache:
         frame_cache("t_evict", "k2", _frame)
         assert frame_cache("t_evict", "k1", _frame) is not first
 
+    def test_keep_two_serves_the_previous_entry_back(self):
+        """PERF-18: switching A → B → A must not rebuild A."""
+        a = frame_cache("t_keep", "A", _frame, keep=2)
+        b = frame_cache("t_keep", "B", _frame, keep=2)
+        assert frame_cache("t_keep", "A", _must_not_run, keep=2) is a
+        assert frame_cache("t_keep", "B", _must_not_run, keep=2) is b
+
+    def test_keep_two_still_evicts_the_third(self):
+        a = frame_cache("t_keep3", "A", _frame, keep=2)
+        frame_cache("t_keep3", "B", _frame, keep=2)
+        frame_cache("t_keep3", "C", _frame, keep=2)
+        assert frame_cache("t_keep3", "A", _frame, keep=2) is not a
+
+    def test_keep_two_evicts_the_least_recently_used(self):
+        a = frame_cache("t_keep_lru", "A", _frame, keep=2)
+        frame_cache("t_keep_lru", "B", _frame, keep=2)
+        frame_cache("t_keep_lru", "A", _must_not_run, keep=2)  # A is current
+        frame_cache("t_keep_lru", "C", _frame, keep=2)  # B goes, not A
+        assert frame_cache("t_keep_lru", "A", _must_not_run, keep=2) is a
+
     def test_slots_are_independent(self):
         a = frame_cache("t_a", "k", _frame)
         frame_cache("t_b", "k", _frame)

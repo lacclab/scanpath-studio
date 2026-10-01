@@ -2843,6 +2843,9 @@ def _normalize_pair(
                 _keep_words=keep_words,
                 _keep_fix=keep_fix,
             ),
+            # PERF-18: the dataset before this one stays normalized, so
+            # switching back to it is instant.
+            keep=2,
         )
     # DATA-49: which key a stimulus-level AOI table joined through, for the
     # add-dataset wizard to say — bookkeeping like `_composite_trial_columns`

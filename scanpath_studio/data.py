@@ -153,6 +153,12 @@ _FRAME_CACHE_KEY = "_sps_frame_cache"
 #: caller) result must not clobber it.
 _LATEST_REQUESTED = "__requested__"
 
+#: PERF-18: the store key `(_EARLIER, slot)` holds a slot's *earlier* entries
+#: — `(key, value)` pairs, most recent first — when it was asked to `keep`
+#: more than one. `store[slot]` stays the current entry, so a one-entry slot
+#: looks exactly as it always did.
+_EARLIER = "__earlier__"
+
 
 @dataclass
 class _InFlight:
@@ -304,7 +310,7 @@ def _shared_build(
         # built this. Loop back and become the new owner ourselves.
 
 
-def frame_cache(slot: str, key, build):
+def frame_cache(slot: str, key, build, *, keep: int = 1):
     """Return ``build()``'s result, reusing the last one while ``key`` holds.
 
     ``st.cache_data`` hands every caller a private **deep copy** of its result.
@@ -320,8 +326,11 @@ def frame_cache(slot: str, key, build):
     byte-identical — and the same file's canary proves the check would notice if
     they didn't. So this hands back **the object itself**.
 
-    One entry per slot, deliberately: keeping the previous corpus alive beside
-    the current one would cost more memory than the copy ever did. Falls back to
+    One entry per slot by default, deliberately: keeping the previous corpus
+    alive beside the current one costs memory. ``keep`` raises that for a slot
+    where going back is the common move (PERF-18: the normalized pair keeps
+    two, so switching PoTeC → OneStop → PoTeC doesn't normalize PoTeC again —
+    a ~20 s wait at OneStop scale). Falls back to
     calling ``build`` when there is no session state, which is what the headless
     API and the CLI see.
 
@@ -352,6 +361,18 @@ def frame_cache(slot: str, key, build):
     entry = store.get(slot)
     if entry is not None and entry[0] == key:
         return entry[1]
+    if keep > 1:
+        with _INFLIGHT_LOCK:
+            earlier = store.get((_EARLIER, slot)) or []
+            for index, (old_key, old_value) in enumerate(earlier):
+                if old_key == key:
+                    # Promote it back to current; the entry it replaces
+                    # becomes the most recent earlier one.
+                    rest = earlier[:index] + earlier[index + 1 :]
+                    current = store.get(slot)
+                    store[(_EARLIER, slot)] = ([current] if current else []) + rest
+                    store[slot] = (old_key, old_value)
+                    return old_value
 
     def _lookup() -> Any:
         # UX-166: a new owner re-checks the store before building — a
@@ -367,6 +388,14 @@ def frame_cache(slot: str, key, build):
         with _INFLIGHT_LOCK:
             wins = store.get((_LATEST_REQUESTED, slot)) == key
             if wins:
+                previous = store.get(slot)
+                if keep > 1 and previous is not None and previous[0] != key:
+                    earlier = [
+                        item
+                        for item in store.get((_EARLIER, slot)) or []
+                        if item[0] != key
+                    ]
+                    store[(_EARLIER, slot)] = [previous, *earlier][: keep - 1]
                 store[slot] = (key, value)
         if wins:
             _vouch_for_frames(value)

@@ -9,6 +9,7 @@ one trial without opening the UI.
 scanpath-studio
 scanpath-studio --server.port 8600
 scanpath-studio --no-persist          # don't cache the session on this computer
+scanpath-studio --download-dir D:\corpora  # where ⬇ Download saves public datasets
 ```
 
 The app listens on this computer only (`127.0.0.1`). It has no login, so

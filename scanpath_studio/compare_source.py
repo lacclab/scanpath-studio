@@ -114,7 +114,8 @@ def _public_location(label: str) -> tuple[str, dict]:
             os.environ.get("ONESTOP_LACCLAB_DIR", "").strip()
             or ONESTOP_LACCLAB_DEFAULT_DIR
             if variant == "lacclab"
-            else ONESTOP_PUBLIC_DEFAULT_DIR
+            # UX-184: the box's own default — under the Download folder.
+            else app._download_target(ONESTOP_PUBLIC_DEFAULT_DIR)
         )
         parts = tuple(
             st.session_state.get("onestop_parts") or datasets.ONESTOP_DEFAULT_PARTS
@@ -125,7 +126,7 @@ def _public_location(label: str) -> tuple[str, dict]:
             "parts": parts,
         }
     if _POTEC_LABEL_HINT in label:
-        return _resolved_dir("potec_dir", POTEC_DEFAULT_DIR), {}
+        return _resolved_dir("potec_dir", app._download_target(POTEC_DEFAULT_DIR)), {}
     if _MULTIPLEYE_LABEL_HINT in label:
         return _resolved_dir("multipleye_dir", MULTIPLEYE_DEFAULT_DIR), {
             "fixation_source": str(

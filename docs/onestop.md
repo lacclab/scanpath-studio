@@ -81,6 +81,13 @@ download — reports range from tens to a few hundred MB each). While it
 downloads, a card shows how much has arrived; **Stop download** ends it and
 deletes the partial file.
 
+The folder defaults to the :material/database: **Data** page's
+:material/download: **Download folder**, where every public corpus gets its own
+subfolder (`<folder>/OneStop`). Leave that box blank for the default: `data/` in
+a source checkout, otherwise the per-user data folder (`~/.local/share/scanpath-studio/data`,
+or `%LOCALAPPDATA%\scanpath-studio\data` on Windows). `scanpath-studio run
+--download-dir DIR` or `SCANPATH_STUDIO_DOWNLOAD_DIR` changes the default.
+
 !!! note "On a server other machines can reach"
     When the app is served to other machines (the hosted demo, or
     `--server.address 0.0.0.0`), the *Data directory* box, the :material/folder_open: folder picker

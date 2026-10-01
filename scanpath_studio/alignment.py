@@ -29,9 +29,6 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-from scipy.cluster.vq import kmeans2
-from scipy.optimize import minimize
-from scipy.stats import norm
 
 from .measures import cluster_word_lines, word_box_bounds
 from .model_scanpaths import _ordered_word_rows
@@ -178,6 +175,11 @@ def _chain(
 
 
 def _cluster(fixation_XY: np.ndarray, line_Y: np.ndarray, word_XY) -> np.ndarray:
+    # ENG-91: scipy is imported where it is used, never at module import —
+    # `controls` imports this module on every app run, and Windows Smart App
+    # Control can block scipy's compiled extensions in the desktop bundle.
+    from scipy.cluster.vq import kmeans2
+
     m = len(line_Y)
     n = len(fixation_XY)
     fixation_Y = fixation_XY[:, 1].reshape(-1, 1).astype(float)
@@ -210,6 +212,8 @@ def _segment(fixation_XY: np.ndarray, line_Y: np.ndarray, word_XY) -> np.ndarray
 
 
 def _split(fixation_XY: np.ndarray, line_Y: np.ndarray, word_XY) -> np.ndarray:
+    from scipy.cluster.vq import kmeans2
+
     n = len(fixation_XY)
     assignment = np.zeros(n, dtype=int)
     diff_X = np.diff(fixation_XY[:, 0]).reshape(-1, 1).astype(float)
@@ -308,6 +312,9 @@ def _regress(
     offset_bounds: tuple[float, float] = (-50, 50),
     std_bounds: tuple[float, float] = (1, 20),
 ) -> np.ndarray:
+    from scipy.optimize import minimize
+    from scipy.stats import norm
+
     n = len(fixation_XY)
     m = len(line_Y)
     fixation_X = fixation_XY[:, 0]
@@ -339,6 +346,8 @@ def _stretch(
     scale_bounds: tuple[float, float] = (0.9, 1.1),
     offset_bounds: tuple[float, float] = (-50, 50),
 ) -> np.ndarray:
+    from scipy.optimize import minimize
+
     fixation_Y = fixation_XY[:, 1]
 
     def fit_lines(params, return_assignment=False):

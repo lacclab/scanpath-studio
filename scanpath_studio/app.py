@@ -240,12 +240,12 @@ from scanpath_studio.persistence import (
 from scanpath_studio.session_keys import COLUMN_MAPPING_PREFIX, PARAM_CORPUS
 from scanpath_studio.styles import get_app_css
 from scanpath_studio.tabs import (
-    EDITOR_NAME_FIELD_KEY,
-    EDITOR_PENDING_NAME_KEY,
-    STIMULUS_JOIN_NOTICE_KEY,
     _EDITOR_KEY_NOISE,
     _REMAP_DIRTY_KEY,
     _TABLE_LABELS,
+    EDITOR_NAME_FIELD_KEY,
+    EDITOR_PENDING_NAME_KEY,
+    STIMULUS_JOIN_NOTICE_KEY,
     _build_figure_settings,
     _render_column_mapping_section,
     dataset_editor_is_dirty,

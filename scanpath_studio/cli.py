@@ -408,8 +408,9 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar="DIR",
         help="Load the PoTeC corpus (DiLi-Lab/PoTeC) from DIR, downloading "
         "the needed files (~45 MB) on first use. Participants are the corpus's "
-        "75 reader ids (sparse within 0–105; --list-trials shows them), trials "
-        "are text ids (b0–b5, p0–p5).",
+        "75 reader ids (sparse within 0–105; --list-trials shows them); a "
+        "trial is one reader's reading of one text, <reader>_<text> (0_b0), "
+        "with texts b0–b5 and p0–p5.",
     )
 
     # DATA-55: the harmonised benchmark corpora are held back from the beta, the
@@ -2216,11 +2217,12 @@ def render(argv: list[str]) -> None:
         try:
             words, fixations = load_potec(
                 args.potec,
-                # Narrow the 900-file load when the trial (= text id) is
-                # known; reader ids always need the full reader list for
-                # --list-trials so only narrow with an explicit -p.
+                # Narrow the 900-file load when the trial is known — its
+                # text is the part after the reader (`0_b0` → `b0`); reader
+                # ids always need the full reader list for --list-trials so
+                # only narrow with an explicit -p.
                 readers=[args.participant] if args.participant else None,
-                texts=[args.trial] if args.trial else None,
+                texts=[str(args.trial).rsplit("_", 1)[-1]] if args.trial else None,
                 download=True,
             )
         except (ValueError, FileNotFoundError, OSError) as exc:

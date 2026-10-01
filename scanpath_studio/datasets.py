@@ -24,7 +24,7 @@ Typical use::
     from scanpath_studio.datasets import load_potec
 
     words, fixations = load_potec("data/PoTeC", download=True)
-    fig = scanpath_studio.plot_scanpath(words, fixations, participant="0", trial="b0")
+    fig = scanpath_studio.plot_scanpath(words, fixations, participant="0", trial="0_b0")
 """
 
 from __future__ import annotations
@@ -365,10 +365,16 @@ def _potec_fixations(
 # (rather than relying on auto-detection) so the loader stays stable even if
 # PoTeC adds columns. No participant on words: the word boxes are
 # stimulus-level and get broadcast across readers. Shared by load_potec and
-# the app's PoTeC data source (which auto-detects, but these document intent).
+# the app's PoTeC data source, which declares them over its auto-detection.
+#
+# A trial is one reader's reading of one text, so the fixations' Trial ID is
+# the composite ``reader_id`` + ``text_id`` (``"0_b0"``): the text name alone
+# repeats across all 75 readers. The word boxes stay keyed by text, and each
+# reading finds its text's boxes through the Text ID both tables map (DATA-49).
 POTEC_WORD_SCHEMA = dict(
     participant=None,
     trial="text_id",
+    text_id="text_id",
     word_id="aoi",
     text="word",
     line="line",
@@ -379,7 +385,8 @@ POTEC_WORD_SCHEMA = dict(
 )
 POTEC_FIX_SCHEMA = dict(
     participant="reader_id",
-    trial="text_id",
+    trial=["reader_id", "text_id"],
+    text_id="text_id",
     duration="fixation_duration",
     x="x",
     y="y",
@@ -434,11 +441,12 @@ def load_potec(
     (e.g. ``[0, 1]``) and/or ``texts`` (e.g. ``["b0", "p3"]``) — the full
     corpus is 75 readers × 12 texts = 900 trials.
 
-    Participants are PoTeC reader ids (as strings), trials are text ids
-    (``b0``–``b5`` biology, ``p0``–``p5`` physics)::
+    Participants are PoTeC reader ids (as strings); a trial is one reader's
+    reading of one text, ``<reader>_<text>`` (``"0_b0"``), and ``text_id`` is
+    the text (``b0``–``b5`` biology, ``p0``–``p5`` physics)::
 
         words, fixations = load_potec("data/PoTeC", readers=[0], texts=["b0"])
-        fig = scanpath_studio.plot_scanpath(words, fixations)
+        fig = scanpath_studio.plot_scanpath(words, fixations, "0", "0_b0")
 
     The PoTeC monitor was 1680×1050 (DELL P2210, 60 Hz); pass that as ``canvas_size`` to
     [`plot_scanpath`][scanpath_studio.api.plot_scanpath] for true-to-scale rendering.

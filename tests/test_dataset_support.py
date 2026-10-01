@@ -521,7 +521,17 @@ def test_load_potec(potec_root):
     # word ids link fixations to the word AOIs
     assert reader0["word_id"].tolist() == [1.0, 2.0, 1.0]
 
-    fig = sps.plot_scanpath(words, fixations, "1", "b0", canvas_size=(1680, 1050))
+    # A trial is one reader's reading of one text — the text name alone repeats
+    # across readers — and each reading finds its text's boxes by Text ID.
+    readings = fixations[["participant_id", "trial_id", "text_id"]].drop_duplicates()
+    assert sorted(map(tuple, readings.values)) == [
+        ("0", "0_b0", "b0"),
+        ("1", "1_b0", "b0"),
+    ]
+    assert set(words["trial_id"]) == {"0_b0", "1_b0"}
+    assert set(words["text_id"]) == {"b0"}
+
+    fig = sps.plot_scanpath(words, fixations, "1", "1_b0", canvas_size=(1680, 1050))
     assert len(fig.data) > 0
 
 
@@ -529,6 +539,36 @@ def test_load_potec_reader_subset(potec_root):
     words, fixations = datasets_module.load_potec(potec_root, readers=[1], texts=["b0"])
     assert set(fixations["participant_id"]) == {"1"}
     assert set(words["participant_id"]) == {"1"}
+
+
+@pytest.mark.timeout(120)
+def test_the_app_maps_potec_trials_as_reader_and_text(potec_root, monkeypatch):
+    """DATA-61: the app declares PoTeC's schema rather than detecting it, so its
+    Trial ID is the reader + text the headless loader uses, not the text alone."""
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import app
+    from tests.conftest import APP_SCRIPT, pin_data_view
+
+    label = next(k for k in app.PUBLIC_DATASET_REGISTRY if "PoTeC" in k)
+    frames = datasets_module.potec_raw_frames(potec_root, texts=["b0"])
+    monkeypatch.setitem(
+        app.PUBLIC_DATASET_REGISTRY[label], "loader", lambda *_slots: frames
+    )
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=90)
+    at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
+    at.session_state["public_dataset_choice"] = label
+    # A pick restored from an older session's recovery cache does not survive
+    # the session's first run of the source.
+    at.session_state["col_map_fix_trial"] = ["text_id"]
+    pin_data_view(at)
+    at.run()
+    assert not at.exception, at.exception
+    assert at.multiselect(key="col_map_fix_trial").value == ["reader_id", "text_id"]
+    assert at.multiselect(key="col_map_words_trial").value == ["text_id"]
+    rows = at.session_state[app.DATASET_TABLE_ROWS_KEY]
+    potec = next(r for r in rows if r["_token"] == label)
+    assert (potec["Participants"], potec["Trials"], potec["Words"]) == (2, 2, 4)
 
 
 def test_load_potec_unknown_text(potec_root):

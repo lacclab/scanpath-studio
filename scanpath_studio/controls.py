@@ -2998,7 +2998,9 @@ def column_mapping_ui(
 
         def _render_multi(spec: dict, default, label: str) -> list[str]:
             state_key = f"{state_key_prefix}_{spec['key']}"
-            proposed_default = [default] if default in df.columns else []
+            # A source may *declare* a composite id (PoTeC's reader + text).
+            parts = default if isinstance(default, (list, tuple)) else [default]
+            proposed_default = [c for c in parts if c is not None and c in df.columns]
             stored = st.session_state.get(state_key)
             if stored is None:
                 # Seed via session state instead of `default=` so the

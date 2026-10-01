@@ -3,10 +3,18 @@
 Use this workflow to move from individual scanpaths to a text, reader, condition,
 or group-level result.
 
+Corpus Analysis shows the reading measures your interest-area table brings
+(mapped under **Reading measures** when you add or edit a dataset); it computes
+none itself. The bundled demo has them. For fixations alone, compute them with
+[`compute_word_metrics`][scanpath_studio.api.compute_word_metrics], join its
+columns onto your AOI table by participant, trial and word ID, and load that;
+the measures map themselves by name.
+
 ## 1. Define the analysis pool
 
 Load the corpus and narrow the trial pool before opening Corpus Analysis. Check
-the participant, text, and trial counts on the :material/database: **Data** page. A text ID must
+the participant, text, and trial counts under **What's in the … dataset → Stats**
+on the :material/database: **Data** page, which follow the filters. A text ID must
 identify the same stimulus across readers; a trial ID identifies one reading.
 
 ## 2. Open Corpus Analysis
@@ -33,7 +41,10 @@ observations do not appear as stable estimates.
 
 Check how many readers, trials, or observations contribute to the chart. In
 **Groups**, turn on comparison only after one cohort looks correct; then define
-the second cohort and inspect the difference/effect-size output.
+the second cohort and inspect the difference/effect-size output. It compares
+the two cohorts' per-reader means, so a reader in both cohorts counts on both
+sides; the test is exploratory, with no correction for many comparisons — see
+[how it is computed](../computations.md#agg-effect-size).
 
 Use a scanpath view to investigate surprising cases.
 

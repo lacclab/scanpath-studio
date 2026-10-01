@@ -39,7 +39,7 @@ The [Python API](api.md) lists the public functions and parameters.
 
 ## From the app to a script
 
-Tune the figure in the app, open :material/share: **Share → Reproduce this figure in code**,
+Tune the figure in the app, open :material/share: **Share → Code**,
 and copy the snippet (Python or CLI); it writes only the options that differ
 from the defaults. The same recipe is available without the app:
 

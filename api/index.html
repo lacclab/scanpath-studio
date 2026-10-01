@@ -2937,10 +2937,11 @@ downloaded) or any folder; with <code>download=True</code> the needed files are
 fetched into it on first use (~45 MB). Narrow the load with <code>readers</code>
 (e.g. <code>[0, 1]</code>) and/or <code>texts</code> (e.g. <code>["b0", "p3"]</code>) — the full
 corpus is 75 readers × 12 texts = 900 trials.</p>
-<p>Participants are PoTeC reader ids (as strings), trials are text ids
-(<code>b0</code>–<code>b5</code> biology, <code>p0</code>–<code>p5</code> physics)::</p>
+<p>Participants are PoTeC reader ids (as strings); a trial is one reader's
+reading of one text, <code>&lt;reader&gt;_&lt;text&gt;</code> (<code>"0_b0"</code>), and <code>text_id</code> is
+the text (<code>b0</code>–<code>b5</code> biology, <code>p0</code>–<code>p5</code> physics)::</p>
 <div class="highlight"><pre><span></span><code>words, fixations = load_potec("data/PoTeC", readers=[0], texts=["b0"])
-fig = scanpath_studio.plot_scanpath(words, fixations)
+fig = scanpath_studio.plot_scanpath(words, fixations, "0", "0_b0")
 </code></pre></div>
 <p>The PoTeC monitor was 1680×1050 (DELL P2210, 60 Hz); pass that as <code>canvas_size</code> to
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.plot_scanpath&lt;/span&gt;" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a> for true-to-scale rendering.</p>

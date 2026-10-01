@@ -37,4 +37,4 @@ Describe the screen the data was **recorded** on, not the one you are using now.
 
 ## The Data page
 
-**Data** lists every dataset with its counts; click a row to open it. **Edit dataset** changes a dataset's name, column mapping and recording setup, or adds a table it is missing. The page also holds each dataset's tables and its annotations, and at the foot, what is saved on this computer.
+**Data** lists every dataset with its counts; click a row to open it. **Edit dataset** changes a dataset's name, column mapping and recording setup, or adds a table it is missing. Changes apply when you click **Save changes**; **Cancel** discards them. The page also holds each dataset's tables and its annotations, and at the foot, what is saved on this computer.

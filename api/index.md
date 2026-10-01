@@ -186,11 +186,11 @@ Load PoTeC as normalized `(words, fixations)` frames, ready to plot.
 
 `root` is a clone of the PoTeC repo (with the eye-tracking data downloaded) or any folder; with `download=True` the needed files are fetched into it on first use (~45 MB). Narrow the load with `readers` (e.g. `[0, 1]`) and/or `texts` (e.g. `["b0", "p3"]`) — the full corpus is 75 readers × 12 texts = 900 trials.
 
-Participants are PoTeC reader ids (as strings), trials are text ids (`b0`–`b5` biology, `p0`–`p5` physics)::
+Participants are PoTeC reader ids (as strings); a trial is one reader's reading of one text, `<reader>_<text>` (`"0_b0"`), and `text_id` is the text (`b0`–`b5` biology, `p0`–`p5` physics)::
 
 ```
 words, fixations = load_potec("data/PoTeC", readers=[0], texts=["b0"])
-fig = scanpath_studio.plot_scanpath(words, fixations)
+fig = scanpath_studio.plot_scanpath(words, fixations, "0", "0_b0")
 ```
 
 The PoTeC monitor was 1680×1050 (DELL P2210, 60 Hz); pass that as `canvas_size` to plot_scanpath for true-to-scale rendering.

@@ -55,7 +55,7 @@ scanpath_studio/
 ├─ model_scanpaths.py synthetic "model-generated" scanpaths over a real text's word boxes (`generate_model_scanpaths`, no product caller today) + `_ordered_word_rows`, the word ordering `alignment.py` reuses
 ├─ plots.py          `FigureSettings` is the shared render contract used by UI, API, export, scanpath, animation, and comparison builders; also owns the Plotly builders, render helpers, and separable-layer export
 ├─ code_snippet.py   EXP-7: the API / CLI code that reproduces the figure on screen — a pure serializer over the same settings dict the builders consume (published as a `FigureState` by `tabs._publish_snippet_state`), diffed against `api.figure_options(kind)` so only the non-defaults are written. `_CLI_EMITTERS` is the `render` flag subset; anything outside it is *named* in `ReproductionCode.cli_unsupported`, never dropped
-├─ export.py         configurable bulk-export module (PNG/SVG/JSON/CSV/Parquet/mega-table; VIZ-5 separable per-layer files via `plots.split_scanpath_layers`)
+├─ export.py         configurable bulk-export module (PNG/SVG/JSON/CSV/Parquet, per trial or combined into one file per table — EXP-23; word tables carry only the measures the dataset brought, AN-32; VIZ-5 separable per-layer files via `plots.split_scanpath_layers`)
 ├─ animation_export.py rasterize the animated scanpath to GIF/MP4 (warm-Kaleido frame render + Pillow/imageio-ffmpeg encode)
 ├─ export_status.py  shared export stage/callback vocabulary + deterministic static-byte signatures
 ├─ tour.py           first-visit/setup guides plus the independent task-tutorial registry, navigation, availability and progress

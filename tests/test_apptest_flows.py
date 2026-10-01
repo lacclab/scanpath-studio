@@ -444,6 +444,41 @@ class TestBulkExportFlow:
         with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
             return set(zf.namelist())
 
+    def test_combine_trials_toggle_replaces_the_mega_table(self, monkeypatch):
+        """EXP-23: no *Mega-table* pill; a table choice reveals *Combine all
+        trials into one file*, and the build then writes `aggregate/` only."""
+        from scanpath_studio import tabs
+
+        calls: list = []
+        real_bulk_export = tabs.bulk_export
+
+        def capturing(*args, **kwargs):
+            result = real_bulk_export(*args, **kwargs)
+            calls.append((kwargs, result[0]))
+            return result
+
+        monkeypatch.setattr(tabs, "bulk_export", capturing)
+
+        at = _boot(subtab=SUBTAB_EXPORT)
+        tabular = at.pills(key="bulk_export_tabular")
+        assert "Mega-table" not in tabular.options
+        at.multiselect(key="filter_participants").set_value(["l7_1090"])
+        at.pills(key="bulk_export_figfmts").set_value([])
+        tabular.set_value(["Fixations"])
+        at.run(timeout=60)
+        at.toggle(key="bulk_export_combine").set_value(True)
+        at.run(timeout=60)
+        _clean(at, "after combining the tables:")
+        next(b for b in at.button if b.label == "Build export").click()
+        at.run(timeout=120)
+        _clean(at, "after building the combined export:")
+
+        kwargs, zip_bytes = calls[-1]
+        assert kwargs["options"].combine_trials is True
+        names = self._zip_names(zip_bytes)
+        assert "aggregate/all_fixations.csv" in names
+        assert not any(n.endswith("/fixations.csv") for n in names)
+
     def test_build_export_zips_the_filtered_pool_and_honours_the_scope(
         self, monkeypatch
     ):

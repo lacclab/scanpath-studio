@@ -89,12 +89,11 @@ class TestBulkExport:
             include_plot_config=True,
             include_fixations=True,
             include_measures=True,
-            include_mega_table=True,
             table_format="csv",
         )
         zip_bytes, progress = bulk_export(
             minimal_combos,
-            minimal_words,
+            minimal_words.assign(total_fixation_duration_ms=[200, 250, 220, 230]),
             minimal_fixations,
             canvas_width=800,
             canvas_height=400,
@@ -110,8 +109,7 @@ class TestBulkExport:
         with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
             names = set(zf.namelist())
             assert "README.md" in names
-            assert "aggregate/all_fixations.csv" in names
-            assert "aggregate/all_measures.csv" in names
+            assert not any(n.startswith("aggregate/") for n in names)
             assert "per_trial/p1__t1/fixations.csv" in names
             assert "per_trial/p1__t1/measures.csv" in names
             assert "per_trial/p1__t1/plot_config.json" in names
@@ -133,7 +131,7 @@ class TestBulkExport:
         )
         zip_bytes, progress = bulk_export(
             minimal_combos,
-            minimal_words,
+            minimal_words.assign(total_fixation_duration_ms=[200, 250, 220, 230]),
             minimal_fixations,
             canvas_width=800,
             canvas_height=400,
@@ -151,8 +149,9 @@ class TestBulkExport:
             assert "per_trial/p1__t1/saccades.csv" in names
             assert "per_trial/p1__t1/word_measures.csv" in names
             assert "per_trial/p1__t1/trial_summary.csv" in names
-            assert "aggregate/all_saccades.csv" in names
-            assert "aggregate/all_word_measures.csv" in names
+            # EXP-23: stacked copies only when the tables are combined — the
+            # reader summary, which has no per-trial form, is always there.
+            assert "aggregate/all_saccades.csv" not in names
             assert "aggregate/all_reader_summary.csv" in names
 
     @pytest.mark.parametrize("table_format", ["csv", "both"])
@@ -164,7 +163,7 @@ class TestBulkExport:
         base_settings,
         table_format,
     ):
-        """EXP-15: with the mega-table *and* the full family ticked,
+        """EXP-15: with the combined tables *and* the full family ticked,
         `aggregate/all_fixations.*` was written twice with different columns —
         a zip keeps both entries, and a reader silently sees only one."""
         import collections
@@ -174,13 +173,13 @@ class TestBulkExport:
             include_svg=False,
             include_fixations=True,
             include_measures=True,
-            include_mega_table=True,
             include_analysis_family=True,
+            combine_trials=True,
             table_format=table_format,
         )
         zip_bytes, progress = bulk_export(
             minimal_combos,
-            minimal_words,
+            minimal_words.assign(total_fixation_duration_ms=[200, 250, 220, 230]),
             minimal_fixations,
             canvas_width=800,
             canvas_height=400,
@@ -199,7 +198,9 @@ class TestBulkExport:
             # The one that survives is the family's word-enriched table.
             fixations = pd.read_csv(zf.open("aggregate/all_fixations.csv"))
             assert "word_id" in fixations.columns
-            assert "aggregate/all_measures.csv" in names
+            # …and the family's word_measures stands in for `measures`.
+            assert "aggregate/all_word_measures.csv" in names
+            assert "aggregate/all_measures.csv" not in names
 
     def test_html_figures_need_no_kaleido(
         self, minimal_combos, minimal_words, minimal_fixations, base_settings
@@ -246,7 +247,6 @@ class TestBulkExport:
             include_plot_config=False,
             include_fixations=True,
             include_measures=False,
-            include_mega_table=False,
             table_format="parquet",
         )
         zip_bytes, _ = bulk_export(
@@ -280,7 +280,6 @@ class TestBulkExport:
             include_plot_config=True,
             include_fixations=False,
             include_measures=False,
-            include_mega_table=False,
             table_format="csv",
         )
         _, progress = bulk_export(
@@ -314,7 +313,6 @@ class TestBulkExport:
             include_plot_config=False,
             include_fixations=False,
             include_measures=False,
-            include_mega_table=False,
             table_format="csv",
         )
         bulk_export(
@@ -332,6 +330,116 @@ class TestBulkExport:
             progress_callback=cb,
         )
         assert seen == [1, 2]
+
+
+def _bulk(combos, words, fixations, settings, **options):
+    zip_bytes, progress = bulk_export(
+        combos,
+        words,
+        fixations,
+        canvas_width=800,
+        canvas_height=400,
+        base_font_size=14,
+        font_family="monospace",
+        x_field="x",
+        y_field="y",
+        settings=settings,
+        options=ExportOptions(
+            include_png=False, include_svg=False, include_plot_config=False, **options
+        ),
+    )
+    assert progress.errors == []
+    return zipfile.ZipFile(io.BytesIO(zip_bytes))
+
+
+class TestExportComputesNoMeasures:
+    """EXP-23: Export follows AN-32 — the word tables carry the reading
+    measures the dataset brought, and nothing is computed."""
+
+    def test_no_brought_measures_means_no_word_table_and_a_note(
+        self, minimal_combos, minimal_words, minimal_fixations, base_settings
+    ):
+        archive = _bulk(
+            minimal_combos,
+            minimal_words,
+            minimal_fixations,
+            base_settings,
+            include_measures=True,
+            include_analysis_family=True,
+        )
+        names = archive.namelist()
+        assert not any(
+            n.endswith(("/measures.csv", "/word_measures.csv")) for n in names
+        )
+        # The rest of the family still comes out.
+        assert "per_trial/p1__t1/saccades.csv" in names
+        readme = archive.read("README.md").decode()
+        assert "This dataset brought none" in readme
+
+    def test_brought_measures_are_written_as_they_came(
+        self, minimal_combos, minimal_words, minimal_fixations, base_settings
+    ):
+        words = minimal_words.assign(total_fixation_duration_ms=[1.0, 2.0, 3.0, 4.0])
+        archive = _bulk(
+            minimal_combos,
+            words,
+            minimal_fixations,
+            base_settings,
+            include_measures=True,
+        )
+        measures = pd.read_csv(archive.open("per_trial/p1__t1/measures.csv"))
+        # The imported values, not the fixations' 200 / 250 ms…
+        assert measures["total_fixation_duration_ms"].tolist() == [1.0, 2.0]
+        # …and no measure the dataset did not bring.
+        assert "first_fixation_ms" not in measures.columns
+        assert "skip_flag" not in measures.columns
+        assert "- total_fixation_duration_ms" in archive.read("README.md").decode()
+
+
+class TestCombineTrials:
+    """EXP-23: *Combine all trials into one file* writes each table once,
+    every trial stacked, in place of the per-trial copies."""
+
+    def test_tables_are_stacked_instead_of_per_trial(
+        self, minimal_combos, minimal_words, minimal_fixations, base_settings
+    ):
+        words = minimal_words.assign(total_fixation_duration_ms=[1.0, 2.0, 3.0, 4.0])
+        archive = _bulk(
+            minimal_combos,
+            words,
+            minimal_fixations,
+            base_settings,
+            include_fixations=True,
+            include_measures=True,
+            combine_trials=True,
+        )
+        names = archive.namelist()
+        assert not any(n.endswith(".csv") and n.startswith("per_trial/") for n in names)
+        fixations = pd.read_csv(archive.open("aggregate/all_fixations.csv"))
+        assert sorted(fixations["trial_id"].unique()) == ["t1", "t2"]
+        assert len(fixations) == len(minimal_fixations)
+        measures = pd.read_csv(archive.open("aggregate/all_measures.csv"))
+        assert measures["total_fixation_duration_ms"].tolist() == [1.0, 2.0, 3.0, 4.0]
+
+    def test_family_tables_combine_too(
+        self, minimal_combos, minimal_words, minimal_fixations, base_settings
+    ):
+        archive = _bulk(
+            minimal_combos,
+            minimal_words,
+            minimal_fixations,
+            base_settings,
+            include_analysis_family=True,
+            combine_trials=True,
+        )
+        names = set(archive.namelist())
+        assert {
+            "aggregate/all_fixations.csv",
+            "aggregate/all_saccades.csv",
+            "aggregate/all_trial_summary.csv",
+            "aggregate/all_reader_summary.csv",
+        } <= names
+        assert "per_trial/p1__t1/saccades.csv" not in names
 
 
 class TestBulkDriftCorrection:
@@ -639,13 +747,14 @@ class TestLocalPathsAreNotExported:
     LEAKY = "/Users/someone/Projects/corpora/images/2_1_1_Ele__paragraph.png"
 
     def _export(self, combos, words, fixations, settings, fmt="csv"):
+        # A brought measure, so the words table is written too (EXP-23).
+        words = words.assign(total_fixation_duration_ms=200.0)
         opts = ExportOptions(
             include_png=False,
             include_svg=False,
             include_plot_config=False,
             include_fixations=True,
             include_measures=True,
-            include_mega_table=True,
             table_format=fmt,
         )
         zip_bytes, _ = bulk_export(

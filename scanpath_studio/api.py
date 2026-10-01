@@ -931,6 +931,12 @@ def analysis_tables(
 
     ``fixations``, ``saccades``, ``word_measures``, ``sentence_measures``,
     ``trial_summary``, ``reader_summary``, ``characters`` and ``cleaning_qa``.
+
+    ``word_measures`` is the words table with the reading measures it
+    *brought* (AN-32 / EXP-23): none are computed here, and a words table that
+    carries none leaves ``word_measures`` out. Call
+    [`compute_word_metrics`][scanpath_studio.api.compute_word_metrics] first
+    to add the app's own.
     """
     from .measures import assign_fixations_to_words, enrich_fixations
     from .preprocessing import (
@@ -945,8 +951,7 @@ def analysis_tables(
         if not fixations.empty and not words.empty
         else fixations
     )
-    measured_words = compute_word_metrics(words, fixations)
-    return {
+    tables = {
         "fixations": analysis_fixations,
         "saccades": saccade_table(
             analysis_fixations,
@@ -954,13 +959,16 @@ def analysis_tables(
             raw_gaze=raw_gaze,
             words=words,
         ),
-        "word_measures": measured_words,
-        "sentence_measures": sentence_measures(measured_words, analysis_fixations),
-        "trial_summary": trial_summary(measured_words, analysis_fixations),
-        "reader_summary": reader_summary(measured_words, analysis_fixations),
+        "word_measures": words,
+        "sentence_measures": sentence_measures(words, analysis_fixations),
+        "trial_summary": trial_summary(words, analysis_fixations),
+        "reader_summary": reader_summary(words, analysis_fixations),
         "characters": character_grid(words),
         "cleaning_qa": cleaning_report(analysis_fixations),
     }
+    if not _data.brought_reading_measures(words):
+        del tables["word_measures"]
+    return tables
 
 
 def alignment_sensitivity(

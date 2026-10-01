@@ -3154,6 +3154,14 @@ def analyze(argv: list[str]) -> None:
         json.dumps(config, indent=2), encoding="utf-8"
     )
     print(f"Wrote {len(tables)} tables + run_config.json to {destination}")
+    if "word_measures" not in tables:
+        # AN-32 / EXP-23: measures are the dataset's own; none are computed.
+        print(
+            "No word_measures.csv: the words table brings no reading measures, "
+            "and none are computed. EyeLink IA_* columns are found on their own; "
+            "map others with --word-schema's measure_* keys, e.g. "
+            '\'{"measure_tfd": "dwell_ms"}\'.'
+        )
 
 
 def _corpus_parser() -> argparse.ArgumentParser:

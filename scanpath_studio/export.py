@@ -2,9 +2,9 @@
 
 This module powers the "Bulk export" button. Users pick which artifacts they
 want per trial (PNG, SVG, JSON plot config, fixations CSV/Parquet, per-word
-measures CSV/Parquet) plus an optional aggregated mega-table across all
-selected trials. Everything is packaged into a single zip archive with a
-clean folder structure:
+measures CSV/Parquet), or each table once with every trial stacked in it
+(EXP-23's *Combine all trials into one file*). Everything is packaged into a
+single zip archive with a clean folder structure:
 
     bulk_export_<timestamp>.zip
     ├─ per_trial/
@@ -20,7 +20,7 @@ clean folder structure:
     │  │  ├─ fixations.csv (and/or .parquet)
     │  │  └─ measures.csv (and/or .parquet)
     │  ├─ ...
-    ├─ aggregate/
+    ├─ aggregate/                 (combined tables, instead of the per-trial ones)
     │  ├─ all_fixations.csv (and/or .parquet)
     │  └─ all_measures.csv (and/or .parquet)
     └─ annotations.json          (UX-179, optional)
@@ -52,7 +52,7 @@ from .constants import (
     UNIFORM_COLOR_FIELD,
     drift_correction_enabled,
 )
-from .data import compute_word_metrics, drop_internal_columns
+from .data import brought_reading_measures, drop_internal_columns
 from .export_status import ExportStage, StatusCallback, emit_status
 from .fields import panel_field
 from .measures import assign_fixations_to_words, enrich_fixations
@@ -114,9 +114,14 @@ class ExportOptions:
     # VIZ-45: each trial's raw (sample-level) gaze as its own table, written as
     # recorded — for a raw-gaze-only dataset it is the only recording there is.
     include_raw_gaze: bool = False
+    # AN-32 / EXP-23: the word table with the reading measures the dataset
+    # *brought*. Export computes none, as the Corpus Analysis page doesn't.
     include_measures: bool = False
-    include_mega_table: bool = False
     include_analysis_family: bool = False
+    # EXP-23: write each chosen table once, every exported trial stacked, as
+    # `aggregate/all_<table>` — instead of one file per trial. Replaced the
+    # "Mega-table", which stacked two of the tables beside the per-trial ones.
+    combine_trials: bool = False
     # VIZ-5: also drop a per-layer breakdown of the figure (word boxes / fixations
     # / saccades / heatmap / labels / stimulus image) into `layers/` so each can be
     # restyled independently in Illustrator / Inkscape. Uses the selected vector /
@@ -168,7 +173,6 @@ class ExportOptions:
             self.include_fixations
             or self.include_raw_gaze
             or self.include_measures
-            or self.include_mega_table
             or self.include_analysis_family
         )
 
@@ -760,7 +764,7 @@ def _drift_corrected_for_figure(
     original→corrected connector layer).
 
     Deliberate asymmetry: this feeds the **figure only** — the exported tables
-    (fixations, measures, mega-table) stay uncorrected, because the correction
+    (fixations, measures, combined tables) stay uncorrected, because the correction
     is a view on the data, not a rewrite of it."""
     algorithm = settings.get("align_algorithm")
     if (
@@ -1325,19 +1329,18 @@ def render_export_options(
                     "Raw gaze",
                     "Word measures",
                     "Full measure family",
-                    "Mega-table",
                 ],
                 selection_mode="multi",
                 default=[],
                 key=f"{key_prefix}_tabular",
-                help="Choose the data tables to include.",
+                help="Choose the data tables to include. Word measures are the "
+                "reading measures the dataset brought; none are computed.",
             )
             or []
         )
         include_fixations = "Fixations" in tabular
         include_raw_gaze = "Raw gaze" in tabular
         include_measures = "Word measures" in tabular
-        include_mega_table = "Mega-table" in tabular
         include_analysis_family = "Full measure family" in tabular
         any_table = bool(tabular)
         if any_table:
@@ -1352,8 +1355,18 @@ def render_export_options(
                 )
                 or "csv"
             )
+            combine_trials = panel_field(
+                st,
+                "toggle",
+                "Combine all trials into one file",
+                value=False,
+                key=f"{key_prefix}_combine",
+                help="Write each table once, with every exported trial stacked "
+                "in it, under aggregate/ — instead of one file per trial.",
+            )
         else:
             table_format = str(st.session_state.get(f"{key_prefix}_fmt", "csv"))
+            combine_trials = bool(st.session_state.get(f"{key_prefix}_combine", False))
 
         metadata_fields = _render_metadata_field_picker(key_prefix)
         trial_metadata_fields = _render_trial_metadata_field_picker(key_prefix)
@@ -1375,8 +1388,8 @@ def render_export_options(
         include_fixations=include_fixations,
         include_raw_gaze=include_raw_gaze,
         include_measures=include_measures,
-        include_mega_table=include_mega_table,
         include_analysis_family=include_analysis_family,
+        combine_trials=combine_trials,
         separable_layers=separable_layers,
         table_format=table_format,
         png_scale=int(png_scale),
@@ -1576,13 +1589,13 @@ def pair_export(
                     fmt,
                 )
             if options.include_measures:
+                # AN-32 / EXP-23: the measures each side's dataset brought.
                 measures = [
-                    compute_word_metrics(words, fixations).assign(scanpath=side)
-                    for side, words, fixations in (
-                        ("A", words_a, fix_a),
-                        ("B", words_b, fix_b),
-                    )
-                    if words is not None and not words.empty
+                    words.assign(scanpath=side)
+                    for side, words in (("A", words_a), ("B", words_b))
+                    if words is not None
+                    and not words.empty
+                    and brought_reading_measures(words)
                 ]
                 if measures:
                     _write_table(
@@ -1770,17 +1783,17 @@ def bulk_export(
     buf = io.BytesIO()
     zf = zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED)
 
-    mega_fixations: list[pd.DataFrame] = []
-    mega_measures: list[pd.DataFrame] = []
-    mega_family: dict[str, list[pd.DataFrame]] = {
-        "fixations": [],
-        "word_measures": [],
-        "saccades": [],
-        "sentence_measures": [],
-        "trial_summary": [],
-        "characters": [],
-        "cleaning_qa": [],
-    }
+    # EXP-23: each table's per-trial frames, stacked into `aggregate/all_<table>`
+    # when the tables are combined. The family's words + fixations are kept
+    # either way, for the reader summary, which only exists across trials.
+    combined: dict[str, list[pd.DataFrame]] = {}
+    family_words: list[pd.DataFrame] = []
+    family_fixations: list[pd.DataFrame] = []
+    # AN-32 / EXP-23: the export writes the reading measures the dataset
+    # brought and computes none — so with none, the word tables are left out
+    # and the README says why.
+    measures_wanted = options.include_measures or options.include_analysis_family
+    brought = brought_reading_measures(words)
 
     readme_lines = [
         "# Bulk export",
@@ -1793,7 +1806,18 @@ def bulk_export(
         "## Layout",
         "- `per_trial/<participant>__<trial>/` holds artifacts for each trial.",
         "- Multipart parents add `screens/screen-001-<id>/` below that trial.",
-        "- `aggregate/` holds long-form tables across every trial in this run.",
+        *(
+            [
+                "- `aggregate/` holds each table once, every trial in this run "
+                "stacked in it (*Combine all trials into one file*)."
+            ]
+            if options.combine_trials and options.any_table()
+            else (
+                ["- `aggregate/` holds the reader summary, across every trial."]
+                if options.include_analysis_family
+                else []
+            )
+        ),
         *(
             [
                 "- `annotations.json` holds the favorites, tags and notes on "
@@ -1809,10 +1833,26 @@ def bulk_export(
         "- screen_id, screen_index (multipart trials only)",
         "- x, y, width, height (word bounding boxes in screen px)",
         "- x, y, duration_ms, timestamp_ms (fixations)",
-        "- first_fixation_ms (FFD), first_pass_gaze_duration_ms (FPRT / gaze duration)",
-        "- regression_path_duration_ms (RPD / go-past)",
-        "- total_fixation_duration_ms (TFD / dwell), n_fixations",
-        "- skip_flag, regression_in_flag, regression_out_flag",
+        *(
+            [f"- {column}" for column in brought]
+            if brought
+            else ["- (no reading measures — see below)"]
+            if measures_wanted
+            else []
+        ),
+        "",
+        "## Reading measures",
+        "The word tables carry the reading measures the dataset brought, as "
+        "mapped on the app's Data page; Scanpath Studio computes none of them.",
+        *(
+            [
+                "",
+                "This dataset brought none, so the bundle has no word-measure "
+                "table. Map them on 🗂️ Data → ✏️ Edit dataset → Reading measures.",
+            ]
+            if measures_wanted and not brought
+            else []
+        ),
         "",
         f"Demo corpus note: {CITATION['corpus_note']}",
     ]
@@ -2072,25 +2112,17 @@ def bulk_export(
                 zf.writestr(_path("plot_config", "json"), data)
                 progress.bytes_written += len(data)
 
-            # Per-word measures need the word table; a fixations-only trial has no
-            # words to measure, so skip (an empty measures file adds nothing).
+            # AN-32 / EXP-23: the word table *is* the measures table — it carries
+            # what the dataset brought, and nothing is computed. A trial with no
+            # words, or a dataset that brought no measures, writes none.
             per_trial_measures = (
-                compute_word_metrics(trial_words, trial_fix)
-                if (
-                    options.include_measures
-                    or options.include_mega_table
-                    or options.include_analysis_family
-                )
-                and not trial_words.empty
+                trial_words
+                if measures_wanted and brought and not trial_words.empty
                 else None
             )
             family = {}
             if options.include_analysis_family:
-                measured = (
-                    per_trial_measures
-                    if per_trial_measures is not None
-                    else trial_words
-                )
+                measured = trial_words
                 analysis_fix = (
                     enrich_fixations(
                         assign_fixations_to_words(trial_fix, trial_words), trial_words
@@ -2100,7 +2132,7 @@ def bulk_export(
                 )
                 family = {
                     "fixations": analysis_fix,
-                    "word_measures": measured,
+                    "word_measures": per_trial_measures,
                     "saccades": saccade_table(
                         analysis_fix,
                         pixels_per_degree=settings.get("pixels_per_degree"),
@@ -2118,34 +2150,36 @@ def bulk_export(
                     ),
                 }
 
-            for fmt in options.table_formats():
-                if options.include_fixations and not options.include_analysis_family:
-                    progress.bytes_written += _write_table(
-                        zf, _path("fixations", fmt), trial_fix, fmt
-                    )
-                if options.include_raw_gaze and not trial_raw_gaze.empty:
-                    progress.bytes_written += _write_table(
-                        zf, _path("raw_gaze", fmt), trial_raw_gaze, fmt
-                    )
-                if options.include_measures and per_trial_measures is not None:
-                    progress.bytes_written += _write_table(
-                        zf, _path("measures", fmt), per_trial_measures, fmt
-                    )
-                if options.include_analysis_family:
-                    for artifact, table in family.items():
-                        if table is not None and not table.empty:
-                            progress.bytes_written += _write_table(
-                                zf, _path(artifact, fmt), table, fmt
-                            )
-
-            if options.include_mega_table:
-                mega_fixations.append(trial_fix)
-                if per_trial_measures is not None:
-                    mega_measures.append(per_trial_measures)
+            # The family's word-enriched fixations and its word_measures stand
+            # in for the plain Fixations / Word measures files (EXP-15: two
+            # members with one name, and a reader keeps only one of them).
+            tables = {
+                "fixations": trial_fix
+                if options.include_fixations and not options.include_analysis_family
+                else None,
+                "raw_gaze": trial_raw_gaze if options.include_raw_gaze else None,
+                "measures": per_trial_measures
+                if options.include_measures and not options.include_analysis_family
+                else None,
+                **family,
+            }
+            tables = {
+                artifact: table
+                for artifact, table in tables.items()
+                if table is not None and not table.empty
+            }
+            if options.combine_trials:
+                for artifact, table in tables.items():
+                    combined.setdefault(artifact, []).append(table)
+            else:
+                for fmt in options.table_formats():
+                    for artifact, table in tables.items():
+                        progress.bytes_written += _write_table(
+                            zf, _path(artifact, fmt), table, fmt
+                        )
             if options.include_analysis_family:
-                for artifact, table in family.items():
-                    if table is not None and not table.empty:
-                        mega_family[artifact].append(table)
+                family_words.append(measured)
+                family_fixations.append(family["fixations"])
 
             progress.finished_trials += 1
             if progress_callback:
@@ -2159,54 +2193,23 @@ def bulk_export(
                 total=progress.total_trials,
             )
 
-    if options.include_mega_table and (mega_fixations or mega_measures):
-        for fmt in options.table_formats():
-            # EXP-15: the full family writes its own, word-enriched
-            # `all_fixations` below — the same rule the per-trial `fixations`
-            # file follows above. Writing both put two members with one name in
-            # the zip, and a reader keeps only one of them, silently.
-            if mega_fixations and not options.include_analysis_family:
-                progress.bytes_written += _write_table(
-                    zf,
-                    f"aggregate/all_fixations.{fmt}",
-                    pd.concat(mega_fixations, ignore_index=True),
-                    fmt,
-                )
-            if mega_measures:
-                progress.bytes_written += _write_table(
-                    zf,
-                    f"aggregate/all_measures.{fmt}",
-                    pd.concat(mega_measures, ignore_index=True),
-                    fmt,
-                )
-
-    if options.include_analysis_family:
-        for fmt in options.table_formats():
-            for artifact, tables in mega_family.items():
-                if tables:
-                    progress.bytes_written += _write_table(
-                        zf,
-                        f"aggregate/all_{artifact}.{fmt}",
-                        pd.concat(tables, ignore_index=True),
-                        fmt,
-                    )
-            if mega_measures or words is not None:
-                all_measures = (
-                    pd.concat(mega_measures, ignore_index=True)
-                    if mega_measures
-                    else compute_word_metrics(words, fixations)
-                )
-                progress.bytes_written += _write_table(
-                    zf,
-                    f"aggregate/all_reader_summary.{fmt}",
-                    reader_summary_table(
-                        all_measures,
-                        pd.concat(mega_family["fixations"], ignore_index=True)
-                        if mega_family["fixations"]
-                        else fixations,
-                    ),
-                    fmt,
-                )
+    # A reader summary has no per-trial form, so it is written across the
+    # exported trials whether or not the tables are combined.
+    if options.include_analysis_family and family_words:
+        summary = reader_summary_table(
+            pd.concat(family_words, ignore_index=True),
+            pd.concat(family_fixations, ignore_index=True),
+        )
+        if not summary.empty:
+            combined["reader_summary"] = [summary]
+    for fmt in options.table_formats():
+        for artifact, frames in combined.items():
+            progress.bytes_written += _write_table(
+                zf,
+                f"aggregate/all_{artifact}.{fmt}",
+                pd.concat(frames, ignore_index=True),
+                fmt,
+            )
     # DATA-20: the participant table travels as its own per-grain table rather
     # than as columns smeared across the trial files — which is what keeps a
     # reader attribute distinguishable from a per-fixation measurement on the

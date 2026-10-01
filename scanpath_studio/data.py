@@ -1275,6 +1275,18 @@ READING_MEASURE_FIELDS: tuple[tuple[str, str, str, str, str, tuple[str, ...]], .
     ),
 )
 READING_MEASURE_KEYS: tuple[str, ...] = tuple(f[0] for f in READING_MEASURE_FIELDS)
+READING_MEASURE_COLUMNS: tuple[str, ...] = tuple(f[1] for f in READING_MEASURE_FIELDS)
+
+
+def brought_reading_measures(words: pd.DataFrame | None) -> list[str]:
+    """The reading-measure columns ``words`` carries — what the dataset brought.
+
+    AN-32 / EXP-23: the Corpus Analysis page and the export show these and
+    compute none, so this only *reads* the frame; an empty list means the
+    dataset has no reading measures."""
+    if words is None:
+        return []
+    return [column for column in READING_MEASURE_COLUMNS if column in words.columns]
 
 
 def _apply_reading_measures(

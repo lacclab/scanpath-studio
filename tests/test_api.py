@@ -901,6 +901,17 @@ def test_analysis_tables_exposes_complete_family(sample):
     assert not tables["trial_summary"].empty
 
 
+def test_analysis_tables_computes_no_reading_measures(sample):
+    """EXP-23 (AN-32): `word_measures` is the words table as it came — the
+    measures the dataset brought — and a words table with none leaves it out."""
+    from scanpath_studio.data import READING_MEASURE_COLUMNS
+
+    words, fixations = sample
+    assert sps.analysis_tables(words, fixations)["word_measures"] is words
+    bare = words.drop(columns=[c for c in READING_MEASURE_COLUMNS if c in words])
+    assert "word_measures" not in sps.analysis_tables(bare, fixations)
+
+
 def test_save_figure_html(sample, tmp_path):
     words, fixations = sample
     pid, tid = sps.list_trials(words, fixations).iloc[0]

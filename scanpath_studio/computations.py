@@ -445,7 +445,7 @@ REGISTER: tuple[Computation, ...] = (
         tiers="A, D",
         status=STATUS_PARTIAL,
         reference="Rayner (1998), standard reading-measure definitions.",
-        consumers=(_UI, _API, _CLI, _EXPORT),
+        consumers=(_UI, _API),
         tests=("tests/test_measures.py", "tests/test_synthetic.py"),
     ),
     Computation(
@@ -469,7 +469,7 @@ REGISTER: tuple[Computation, ...] = (
         tiers="A, D",
         status=STATUS_PARTIAL,
         reference="Rayner (1998).",
-        consumers=(_UI, _API, _CLI, _EXPORT),
+        consumers=(_UI, _API),
         tests=("tests/test_measures.py", "tests/test_synthetic.py"),
     ),
     Computation(
@@ -497,7 +497,7 @@ REGISTER: tuple[Computation, ...] = (
             "#PRE-4 names `eyekit` as the intended comparison. Unresolved until "
             "#VAL-4 runs."
         ),
-        consumers=(_UI, _API, _CLI, _EXPORT),
+        consumers=(_UI, _API),
         tests=("tests/test_measures.py", "tests/test_synthetic.py"),
     ),
     Computation(
@@ -513,7 +513,7 @@ REGISTER: tuple[Computation, ...] = (
         precedence="A precomputed IA dwell time wins.",
         tiers="A, D",
         status=STATUS_PARTIAL,
-        consumers=(_UI, _API, _CLI, _EXPORT),
+        consumers=(_UI, _API),
         tests=("tests/test_measures.py", "tests/test_synthetic.py"),
     ),
     Computation(
@@ -527,7 +527,7 @@ REGISTER: tuple[Computation, ...] = (
         missing="Never fixated ⇒ 0.",
         tiers="A",
         status=STATUS_VERIFIED,
-        consumers=(_UI, _API, _EXPORT),
+        consumers=(_UI, _API),
         tests=("tests/test_synthetic.py",),
     ),
     Computation(
@@ -542,7 +542,7 @@ REGISTER: tuple[Computation, ...] = (
         missing="A word fixated only after a regression still counts as skipped.",
         tiers="A",
         status=STATUS_VERIFIED,
-        consumers=(_UI, _API, _EXPORT),
+        consumers=(_UI, _API),
         tests=("tests/test_measures.py", "tests/test_synthetic.py"),
     ),
     Computation(
@@ -563,7 +563,7 @@ REGISTER: tuple[Computation, ...] = (
         precedence="Precomputed IA regression flags win (see `norm.flags`).",
         tiers="A",
         status=STATUS_PARTIAL,
-        consumers=(_UI, _API, _EXPORT),
+        consumers=(_UI, _API),
         tests=("tests/test_measures.py", "tests/test_synthetic.py"),
     ),
     Computation(
@@ -599,7 +599,7 @@ REGISTER: tuple[Computation, ...] = (
             "Assumes a monospaced advance within the word box — exact for the "
             "app's monospace default, approximate for proportional fonts."
         ),
-        consumers=(_UI, _API, _EXPORT),
+        consumers=(_UI, _API),
         tests=("tests/test_measures.py",),
     ),
     Computation(
@@ -619,7 +619,7 @@ REGISTER: tuple[Computation, ...] = (
         missing="As `measure.landing_position`.",
         tiers="A",
         status=STATUS_PARTIAL,
-        consumers=(_UI, _API, _EXPORT),
+        consumers=(_UI, _API),
         tests=("tests/test_measures.py",),
     ),
     Computation(
@@ -638,7 +638,7 @@ REGISTER: tuple[Computation, ...] = (
         ),
         tiers="A",
         status=STATUS_PARTIAL,
-        consumers=(_UI, _API, _EXPORT),
+        consumers=(_UI, _API),
         tests=("tests/test_measures.py",),
     ),
     Computation(
@@ -654,7 +654,7 @@ REGISTER: tuple[Computation, ...] = (
         tiers="A",
         status=STATUS_PARTIAL,
         reference="Rayner (1998).",
-        consumers=(_UI, _API, _EXPORT),
+        consumers=(_UI, _API),
         tests=("tests/test_measures.py",),
     ),
     Computation(
@@ -672,7 +672,7 @@ REGISTER: tuple[Computation, ...] = (
         missing="Never regressed into ⇒ 0.",
         tiers="A",
         status=STATUS_PARTIAL,
-        consumers=(_UI, _API, _EXPORT),
+        consumers=(_UI, _API),
         tests=("tests/test_measures.py",),
     ),
     Computation(

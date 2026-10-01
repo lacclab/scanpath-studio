@@ -504,7 +504,9 @@ class TestSelfComparisonBundle:
             return ComparisonSide(
                 participant="p1",
                 trial="t1",
-                words=_words("p1", "t1"),
+                # A brought measure: the pair's measures file is the words
+                # table's own, never computed (EXP-23).
+                words=_words("p1", "t1").assign(total_fixation_duration_ms=1.0),
                 fixations=_fixations("p1", "t1"),
             )
 

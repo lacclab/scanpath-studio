@@ -27,10 +27,12 @@ paragraphs, each in an Advanced and an Elementary version).
 
 ## Loading it
 
-OneStop is exposed as a **Public dataset**. In the app, open :material/database: **Data**, click
-**OneStop** in the list of datasets, then choose **Edit dataset**; its
-**Options** pick a **Variant**, a **Reading regime**, and one or more
-**Parts**:
+OneStop is exposed as a **Public dataset**. In the app, open :material/database: **Data** and
+click **OneStop** in the list of datasets. Before anything loads, a dialog asks
+for a **Variant**, a **Reading regime**, and one or more **Parts**, and says
+whether that subset is already on disk; **Open** loads it (or offers its
+download). To change the choice later, use **Edit dataset**, whose **Options**
+hold the same three pickers:
 
 **Variant**
 

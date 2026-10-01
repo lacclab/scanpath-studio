@@ -5052,11 +5052,176 @@ def _dataset_table_rows(
 
 
 def _open_dataset_row(token: str) -> None:
-    """UX-78 — a click anywhere on a dataset's row opens it."""
+    """UX-78 — a click anywhere on a dataset's row opens it.
+
+    DATA-63: OneStop's row asks first. The corpus is a download of tens to
+    hundreds of MB per regime and part, so which regime and parts to open is
+    chosen before the first load, in `_onestop_subset_dialog`, not on ✏️ Edit
+    dataset after the default has already been fetched.
+    """
     if token == st.session_state.get("data_source_choice"):
+        return
+    if token == ONESTOP_PUBLIC_CHOICE:
+        _arm_onestop_subset_dialog(token)
         return
     _select_dataset(token)
     st.session_state[_TABLE_NEEDS_APP_RERUN] = True
+
+
+#: DATA-63 — the OneStop row the subset dialog was opened for. Armed by the
+#: row's callback and read by the table, like `PENDING_DELETE_KEY`.
+PENDING_ONESTOP_SUBSET_KEY = "_dataset_pending_onestop_subset"
+#: The dialog's own pickers. Not the ``onestop_*`` keys the ✏️ Edit dataset
+#: pickers own: Cancel must leave those untouched, so the dialog edits a copy
+#: and **Open** writes it back.
+_ONESTOP_PICK_KEYS = {
+    "variant": "onestop_pick_variant",
+    "regime": "onestop_pick_regime",
+    "parts": "onestop_pick_parts",
+}
+
+
+def _arm_onestop_subset_dialog(token: str) -> None:
+    """Seed the dialog's pickers from the current choice, then arm it."""
+    from scanpath_studio import datasets
+
+    st.session_state[_ONESTOP_PICK_KEYS["variant"]] = (
+        st.session_state.get("onestop_variant") or "public"
+    )
+    st.session_state[_ONESTOP_PICK_KEYS["regime"]] = (
+        st.session_state.get("onestop_regime") or "ordinary"
+    )
+    st.session_state[_ONESTOP_PICK_KEYS["parts"]] = list(
+        st.session_state.get("onestop_parts") or datasets.ONESTOP_DEFAULT_PARTS
+    )
+    st.session_state[PENDING_ONESTOP_SUBSET_KEY] = token
+
+
+def _dismiss_onestop_subset_dialog() -> None:
+    """``on_dismiss`` — ✕ / Escape disarms it (the BUG-36 trap, as for Remove)."""
+    st.session_state.pop(PENDING_ONESTOP_SUBSET_KEY, None)
+
+
+def _onestop_root(variant: str) -> str:
+    """The folder ``_load_onestop_public_source`` will read ``variant`` from.
+
+    Mirrors ``_dataset_dir_input`` without drawing it: the typed location when
+    the path box is the user's, else the server's configured one (S2).
+    """
+    default_dir = _onestop_env_default_dir(variant)
+    if not local_filesystem_enabled():
+        return str(data_root()) if data_root() else _resolve_data_dir(default_dir)
+    return _resolve_data_dir(
+        st.session_state.get(f"onestop_{variant}_dir", default_dir)
+    )
+
+
+def _apply_onestop_subset(token: str) -> None:
+    """**Open**'s callback: the dialog's choice becomes the loader's, then open.
+
+    A callback because it writes the ``onestop_*`` widget keys, which may only
+    be assigned before their widgets instantiate in a run.
+    """
+    st.session_state["onestop_variant"] = st.session_state[
+        _ONESTOP_PICK_KEYS["variant"]
+    ]
+    st.session_state["onestop_regime"] = st.session_state[_ONESTOP_PICK_KEYS["regime"]]
+    st.session_state["onestop_parts"] = list(
+        st.session_state[_ONESTOP_PICK_KEYS["parts"]]
+    )
+    st.session_state.pop(PENDING_ONESTOP_SUBSET_KEY, None)
+    _select_dataset(token)
+
+
+@st.dialog("Open OneStop Eye Movements", on_dismiss=_dismiss_onestop_subset_dialog)
+def _onestop_subset_dialog(token: str) -> None:
+    """DATA-63 — choose OneStop's regime and parts before it loads.
+
+    The same three choices as ✏️ Edit dataset's pickers (which stay, for
+    changing them later), with whether that subset is already on disk. As in
+    ``_delete_confirmation_dialog``, the buttons are handled by their return
+    value plus ``st.rerun(scope="app")``: a dialog body is a fragment.
+    """
+    from scanpath_studio import datasets
+
+    # `persist_state="session"` on each picker, as on every wire-format widget
+    # (ENG-36): without it a rerun that does not reach the table drops the
+    # seeded choice, and the dialog comes back on Ordinary with no parts.
+    st.caption(
+        "OneStop is split into reading regimes and trial parts, each its own "
+        "download. Choose which to open; you can change it later on ✏️ **Edit "
+        "dataset**."
+    )
+    variant = st.selectbox(
+        "Variant",
+        options=list(ONESTOP_VARIANT_LABELS),
+        format_func=lambda v: ONESTOP_VARIANT_LABELS[v],
+        key=_ONESTOP_PICK_KEYS["variant"],
+        persist_state="session",
+    )
+    regime = st.selectbox(
+        "Reading regime",
+        options=list(ONESTOP_REGIME_LABELS),
+        format_func=lambda r: ONESTOP_REGIME_LABELS[r],
+        key=_ONESTOP_PICK_KEYS["regime"],
+        persist_state="session",
+    )
+    parts = st.multiselect(
+        "Parts",
+        options=list(ONESTOP_PART_LABELS),
+        format_func=lambda p: ONESTOP_PART_LABELS[p],
+        key=_ONESTOP_PICK_KEYS["parts"],
+        persist_state="session",
+        help="Paragraph is the reading passage; the others are the screens "
+        "around it. Loading several makes each part its own trial.",
+    )
+    root = _onestop_root(variant)
+    if not parts:
+        st.caption("Choose at least one part.")
+    elif root and datasets.onestop_present(
+        root, regime=regime, parts=parts, variant=variant
+    ):
+        st.success(f"Already on this computer, in `{root}`.")
+    elif variant == "public":
+        files = 2 * len(parts)
+        st.info(
+            f"Not downloaded yet: {files} OSF reports, tens to hundreds of MB per "
+            "part. **Open** offers the download."
+        )
+    else:
+        st.warning(
+            "Not found in the LaCC lab export folder. Set its location on ✏️ "
+            "**Edit dataset** after opening."
+        )
+    yes, no = st.columns(2)
+    if yes.button(
+        "Open",
+        key="onestop_subset_open",
+        type="primary",
+        width="stretch",
+        disabled=not parts,
+        on_click=_apply_onestop_subset,
+        args=(token,),
+    ):
+        st.rerun(scope="app")
+    if no.button(
+        "Cancel",
+        key="onestop_subset_cancel",
+        width="stretch",
+        on_click=_dismiss_onestop_subset_dialog,
+    ):
+        st.rerun(scope="app")
+
+
+def _render_onestop_subset_dialog(tokens: list) -> None:
+    """Open the DATA-63 dialog when the OneStop row armed it."""
+    token = st.session_state.get(PENDING_ONESTOP_SUBSET_KEY)
+    if token is None:
+        return
+    if token not in tokens:
+        st.session_state.pop(PENDING_ONESTOP_SUBSET_KEY, None)
+        return
+    _onestop_subset_dialog(token)
 
 
 def _edit_open_dataset(token: str) -> None:
@@ -5409,6 +5574,7 @@ def render_dataset_table(
         box.caption("No dataset matches the search and filters.")
 
     _render_delete_confirmation(box, tokens, uploaded)
+    _render_onestop_subset_dialog(tokens)
     if note := st.session_state.pop("_dataset_table_note", None):
         box.success(note)
 

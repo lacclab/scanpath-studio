@@ -962,15 +962,59 @@ class TestDatasetTable:
         assert after.set_index("_token").loc[other, "_active"]
         assert not after.set_index("_token").loc[self.NAME, "_active"]
 
+    def test_onestop_asks_for_its_subset_before_it_opens(self):
+        """DATA-63: the OneStop row opens a regime + parts dialog, not the load."""
+        from scanpath_studio.app import PENDING_ONESTOP_SUBSET_KEY
+        from scanpath_studio.constants import ONESTOP_PUBLIC_CHOICE
+
+        at = self._at()
+        self._click(at, f"dataset_open_{self._slug(ONESTOP_PUBLIC_CHOICE)}")
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["data_source_choice"] == self.NAME
+        assert at.session_state[PENDING_ONESTOP_SUBSET_KEY] == ONESTOP_PUBLIC_CHOICE
+        at.selectbox(key="onestop_pick_regime").set_value("repeated")
+        at.multiselect(key="onestop_pick_parts").set_value(["Title", "Paragraph"])
+        pin_data_view(at)
+        at.run(timeout=90)
+        # Choosing in the dialog changes nothing until Open.
+        assert "onestop_regime" not in at.session_state or (
+            at.session_state["onestop_regime"] != "repeated"
+        )
+        self._click(at, "onestop_subset_open")
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["data_source_choice"] == ONESTOP_PUBLIC_CHOICE
+        assert at.session_state["onestop_regime"] == "repeated"
+        assert list(at.session_state["onestop_parts"]) == ["Title", "Paragraph"]
+        assert PENDING_ONESTOP_SUBSET_KEY not in at.session_state
+
+    def test_cancelling_the_onestop_dialog_opens_nothing(self):
+        from scanpath_studio.app import PENDING_ONESTOP_SUBSET_KEY
+        from scanpath_studio.constants import ONESTOP_PUBLIC_CHOICE
+
+        at = self._at()
+        self._click(at, f"dataset_open_{self._slug(ONESTOP_PUBLIC_CHOICE)}")
+        at.selectbox(key="onestop_pick_regime").set_value("repeated")
+        self._click(at, "onestop_subset_cancel")
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["data_source_choice"] == self.NAME
+        assert PENDING_ONESTOP_SUBSET_KEY not in at.session_state
+        assert "onestop_regime" not in at.session_state or (
+            at.session_state["onestop_regime"] != "repeated"
+        )
+
     def test_a_sorted_table_opens_the_row_that_was_clicked(self):
         """The row controls are keyed by dataset, so a sort cannot shift them."""
         from scanpath_studio.app import _DATASET_TABLE_SORT_KEY
+        from scanpath_studio.constants import ONESTOP_PUBLIC_CHOICE
 
         at = self._at()
         self._click(at, "dataset_sort_participants")
         assert at.session_state[_DATASET_TABLE_SORT_KEY] == ("Participants", True)
         frame = self._table(at)
-        target = frame["_token"].iloc[-1]
+        # The last row that opens on a click: OneStop's asks first (DATA-63).
+        target = next(
+            t for t in reversed(list(frame["_token"])) if t != ONESTOP_PUBLIC_CHOICE
+        )
         self._click(at, f"dataset_open_{self._slug(target)}")
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state["data_source_choice"] == target

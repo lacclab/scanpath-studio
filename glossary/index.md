@@ -56,7 +56,7 @@ Trial : One reading: a participant and a trial id together. The same text read b
 
 Text : The stimulus (`text_id`) — what two trials of the same text share.
 
-Dataset : One loaded corpus: the bundled demo, a public corpus, or tables you uploaded, each listed under 🗂️ **Data**.
+Dataset : One loaded corpus: the bundled demo, a public corpus, or tables you uploaded, each listed under **Data**.
 
 Participant metadata : An optional table with one row per reader, whose columns become trial filters without being copied onto the words or fixations.
 

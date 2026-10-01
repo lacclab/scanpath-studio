@@ -37,7 +37,7 @@ The [Python API](https://lacclab.github.io/scanpath-studio/api/index.md) lists t
 
 ## From the app to a script
 
-Tune the figure in the app, open 🔗 **Share → Reproduce this figure in code**, and copy the snippet (Python or CLI); it writes only the options that differ from the defaults. The same recipe is available without the app:
+Tune the figure in the app, open **Share → Reproduce this figure in code**, and copy the snippet (Python or CLI); it writes only the options that differ from the defaults. The same recipe is available without the app:
 
 ```
 # translate a render invocation you already have into Python
@@ -67,4 +67,19 @@ for row in sps.list_trials(words, fixations).itertuples():
     sps.save_figure(fig, out / f"{row.participant_id}_{row.trial_id}.html")
 ```
 
-HTML needs nothing else; PNG, SVG and PDF need Chrome/Chromium (see [Export troubleshooting](https://lacclab.github.io/scanpath-studio/export-troubleshooting/index.md)).
+HTML needs nothing else. PNG, SVG and PDF need Chrome, Chromium or Edge installed; with none, run `plotly_get_chrome -y` once, or save HTML.
+
+## Replays as GIF or MP4
+
+```
+from pathlib import Path
+
+import scanpath_studio as sps
+from scanpath_studio.animation_export import export_animation
+
+words, fixations = sps.load_sample_data()
+anim = sps.animate_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele_r0")
+Path("replay.mp4").write_bytes(export_animation(anim, fmt="mp4"))  # or "gif"
+```
+
+This also needs Chrome, Chromium or Edge; ffmpeg comes with the package. The CLI's `--animate` writes interactive HTML only.

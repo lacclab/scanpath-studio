@@ -4,7 +4,7 @@ Use this workflow during piloting, experimenter training, or session review. The
 
 ## 1. Load a pilot session
 
-On the 🗂️ **Data** page select **➕ Add dataset**, upload the word/IA and fixation tables, then check the proposed columns and the **Recording setup** (the actual monitor resolution) before selecting **✅ Add dataset**. If the dataset is already loaded, open it from 📂 **Available datasets**.
+On the **Data** page select **Add dataset**, upload the word/IA and fixation tables, then check the proposed columns and the **Recording setup** (the actual monitor resolution) before selecting **Add dataset**. If the dataset is already loaded, open it from **Available datasets**.
 
 ## 2. Check the setup on one trial
 
@@ -20,7 +20,7 @@ If every trial is shifted in the same way, check the monitor size and coordinate
 
 Turn on **Animate**. Look for long missing periods, repeated off-text points, frequent interruptions, or a vertical shift that grows during the trial.
 
-Use **🧹 Filter → 👁️ Fixations** in the plot rail to **Highlight** short, long, or out-of-bounds fixations. Highlighting keeps the full trial visible; **Discard** is better reserved for a later, documented filtering decision.
+Use **Filter → Fixations** in the plot rail to **Highlight** short, long, or out-of-bounds fixations. Highlighting keeps the full trial visible; **Discard** is better reserved for a later, documented filtering decision.
 
 ## 4. Record the decision
 
@@ -34,6 +34,6 @@ Move through the participant's trials with the trial picker.
 
 ## 5. Save the review
 
-Open 🗂️ **Data → Annotations** and select **Export**. The file keeps your favorites, tags and notes for later review; **🔗 Share → File** keeps the view settings beside it.
+Open **Data → Annotations** and select **Export**. The file keeps your favorites, tags and notes for later review; **Share → File** keeps the view settings beside it.
 
 **Done:** you have checked geometry and timing, marked suspicious trials, and saved the review. For a formal retained/excluded pool, continue with [Data filtering](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/index.md).

@@ -460,10 +460,6 @@
       
         
       
-        
-      
-        
-      
     
     
     
@@ -934,34 +930,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../desktop/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Desktop app
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../faq/" class="md-nav__link">
         
   
@@ -970,34 +938,6 @@
     
   
     FAQ
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../export-troubleshooting/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Export troubleshooting
   
 
     
@@ -1986,7 +1926,7 @@ serving it to other machines is a deliberate step — pass
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>scanpath-studio<span class="w"> </span>--server.address<span class="w"> </span><span class="m">0</span>.0.0.0
 </code></pre></div>
 <p>Served on a network, the app also turns off everything that reads or writes the
-server's own folders — the data-location box, the 📁 folder picker, ⬇ Download
+server's own folders — the data-location box, the <span class="sps-icon" data-icon="folder_open" aria-hidden="true"></span> folder picker, ⬇ Download
 for the public corpora and stimulus-image folders — since any visitor could use
 them. On a lab server you trust, turn them back on with <code>SCANPATH_LOCAL_FS=1</code>
 (<code>SCANPATH_LOCAL_FS=1 scanpath-studio --server.address 0.0.0.0</code>).</p>
@@ -2126,7 +2066,7 @@ first — the headless form of the app's <strong>Compare</strong> mode.</p>
 </table>
 <p><code>--label-a</code> / <code>--label-b</code> also label the <code>--animate</code> co-animation.</p>
 <p><code>--style-a</code> / <code>--style-b</code> are the app's per-scanpath styling (the Compare rows
-under 👁️ Fixations and ↗️ Saccades), <code>compare_scanpaths</code>'s <code>style_a</code> / <code>style_b</code>:
+under <span class="sps-icon" data-icon="blur_on" aria-hidden="true"></span> Fixations and <span class="sps-icon" data-icon="arrow_outward" aria-hidden="true"></span> Saccades), <code>compare_scanpaths</code>'s <code>style_a</code> / <code>style_b</code>:
 a comma-separated <code>KEY=VALUE</code> list, repeatable, with <code>fix_color</code> and
 <code>saccade_color</code> (<code>#RRGGBB</code>), <code>saccade_style</code> (<code>solid</code>, <code>dash</code>, <code>dot</code>,
 <code>dashdot</code>), <code>saccade_width</code> (px), <code>marker_size_range</code> (<code>MIN:MAX</code>), <code>opacity</code>
@@ -2410,7 +2350,7 @@ restart resumes where you left off. <code>cache</code> shows what is stored and 
 <a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
 <a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the stored session</span>
 </code></pre></div>
-<p>The same information is at the foot of the <strong>🗂️ Data</strong> page, under <strong>Saved on
+<p>The same information is at the foot of the <strong><span class="sps-icon" data-icon="database" aria-hidden="true"></span> Data</strong> page, under <strong>Saved on
 this computer</strong>. A running app writes a new copy at its next change, so clear
 with the app closed. <code>SCANPATH_STUDIO_PERSIST=0</code> turns caching
 off permanently, <code>--no-persist</code> for one launch, and <code>SCANPATH_STUDIO_STATE_DIR</code>
@@ -3342,7 +3282,7 @@ with the default and help <code>--help</code> prints.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 30, 2026 21:52:31 UTC">September 30, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 1, 2026 11:10:06 UTC">October 1, 2026</span>
   </span>
 
     

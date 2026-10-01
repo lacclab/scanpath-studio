@@ -16,7 +16,7 @@ The app listens on this computer only (`127.0.0.1`). It has no login, so serving
 scanpath-studio --server.address 0.0.0.0
 ```
 
-Served on a network, the app also turns off everything that reads or writes the server's own folders — the data-location box, the 📁 folder picker, ⬇ Download for the public corpora and stimulus-image folders — since any visitor could use them. On a lab server you trust, turn them back on with `SCANPATH_LOCAL_FS=1` (`SCANPATH_LOCAL_FS=1 scanpath-studio --server.address 0.0.0.0`).
+Served on a network, the app also turns off everything that reads or writes the server's own folders — the data-location box, the folder picker, ⬇ Download for the public corpora and stimulus-image folders — since any visitor could use them. On a lab server you trust, turn them back on with `SCANPATH_LOCAL_FS=1` (`SCANPATH_LOCAL_FS=1 scanpath-studio --server.address 0.0.0.0`).
 
 Additional launch flags are forwarded to Streamlit. A word that is not one of the commands (`run`, `render`, `analyze`, `corpus`, `cache`) is an error that names the closest one, rather than an argument handed to Streamlit.
 
@@ -120,7 +120,7 @@ scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
 
 `--label-a` / `--label-b` also label the `--animate` co-animation.
 
-`--style-a` / `--style-b` are the app's per-scanpath styling (the Compare rows under 👁️ Fixations and ↗️ Saccades), `compare_scanpaths`'s `style_a` / `style_b`: a comma-separated `KEY=VALUE` list, repeatable, with `fix_color` and `saccade_color` (`#RRGGBB`), `saccade_style` (`solid`, `dash`, `dot`, `dashdot`), `saccade_width` (px), `marker_size_range` (`MIN:MAX`), `opacity` (0.1–1) and `hollow` (`true` / `false`). A key left out keeps that scanpath's default.
+`--style-a` / `--style-b` are the app's per-scanpath styling (the Compare rows under Fixations and Saccades), `compare_scanpaths`'s `style_a` / `style_b`: a comma-separated `KEY=VALUE` list, repeatable, with `fix_color` and `saccade_color` (`#RRGGBB`), `saccade_style` (`solid`, `dash`, `dot`, `dashdot`), `saccade_width` (px), `marker_size_range` (`MIN:MAX`), `opacity` (0.1–1) and `hollow` (`true` / `false`). A key left out keeps that scanpath's default.
 
 ```
 scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
@@ -236,7 +236,7 @@ scanpath-studio cache --json     # the same status as JSON
 scanpath-studio cache --clear    # delete the stored session
 ```
 
-The same information is at the foot of the **🗂️ Data** page, under **Saved on this computer**. A running app writes a new copy at its next change, so clear with the app closed. `SCANPATH_STUDIO_PERSIST=0` turns caching off permanently, `--no-persist` for one launch, and `SCANPATH_STUDIO_STATE_DIR` moves the folder. Hosted deployments never cache. See [Privacy](https://lacclab.github.io/scanpath-studio/privacy/#what-happens-to-a-file-you-upload).
+The same information is at the foot of the **Data** page, under **Saved on this computer**. A running app writes a new copy at its next change, so clear with the app closed. `SCANPATH_STUDIO_PERSIST=0` turns caching off permanently, `--no-persist` for one launch, and `SCANPATH_STUDIO_STATE_DIR` moves the folder. Hosted deployments never cache. See [Privacy](https://lacclab.github.io/scanpath-studio/privacy/#what-happens-to-a-file-you-upload).
 
 ## Full reference
 

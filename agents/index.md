@@ -143,7 +143,7 @@ sps.save_figure(fig, "out.png")  # .png/.svg/.pdf via Kaleido → needs Chrome
 sps.save_figure_layers(fig, "layers/", fmt="svg")  # one file per layer
 ```
 
-**HTML never needs Chrome.** PNG/SVG/PDF go through Kaleido, which drives a Chrome/Chromium binary: run `plotly_get_chrome -y` once, or fall back to HTML. Details in [Export troubleshooting](https://lacclab.github.io/scanpath-studio/export-troubleshooting/index.md).
+**HTML never needs Chrome.** PNG/SVG/PDF go through Kaleido, which drives a Chrome/Chromium binary: run `plotly_get_chrome -y` once, or fall back to HTML.
 
 ## Figure options
 

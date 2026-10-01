@@ -17,11 +17,11 @@ Scanpath Studio reads up to three tables — **words / areas-of-interest**, **fi
 
 Either main table may be omitted — the missing layer is skipped, and a words-only table still draws a heatmap from its pre-aggregated reading measures.
 
-Raw gaze can be the only table, too. Its samples are drawn as recorded, and for a dataset with no fixations the 🔵 **Raw gaze** layer is on by default. Nothing is derived from the samples: no fixations are detected from them, so the fixation and saccade layers, the animated replay and Compare need a fixations table, and Corpus Analysis needs an AOI report that carries reading measures.
+Raw gaze can be the only table, too. Its samples are drawn as recorded, and for a dataset with no fixations the **Raw gaze** layer is on by default. Nothing is derived from the samples: no fixations are detected from them, so the fixation and saccade layers, the animated replay and Compare need a fixations table, and Corpus Analysis needs an AOI report that carries reading measures.
 
 ## Participant metadata
 
-Attach a table of **one row per reader** — native language, age, a comprehension score, a group label. When you upload your own data it is one of the **Metadata** uploaders in part 2 of the setup wizard; for the demo, a public corpus, or a dataset you added earlier, the same uploader is on 🗂️ **Data → ✏️ Edit dataset** under **Metadata → Participants**. Its columns then behave like fields in the data: they filter trials (the filter funnel's *By reader* section), show up as chips above the plot, sort the trial picker, group cohorts in Corpus Analysis, appear in the dataset's inspection tables, and travel with exports and saved sessions.
+Attach a table of **one row per reader** — native language, age, a comprehension score, a group label. When you upload your own data it is one of the **Metadata** uploaders in part 2 of the setup wizard; for the demo, a public corpus, or a dataset you added earlier, the same uploader is on **Data → Edit dataset** under **Metadata → Participants**. Its columns then behave like fields in the data: they filter trials (the filter funnel's *By reader* section), show up as chips above the plot, sort the trial picker, group cohorts in Corpus Analysis, appear in the dataset's inspection tables, and travel with exports and saved sessions.
 
 ```
 participant_id,native_language,age,comprehension
@@ -39,7 +39,7 @@ Headless, it is a `--participant-metadata FILE` flag on `scanpath-studio render`
 
 ## Trial metadata
 
-The same idea one grain down: a table of **one row per trial** — a list name, a presentation order, a per-trial comprehension score, whatever your design recorded about the trial rather than about the reader. It attaches beside the participant table — under **Metadata** in part 2 of the add-dataset wizard, and on 🗂️ **Data → ✏️ Edit dataset** under **Metadata → Trials** for a dataset that is already loaded — and its columns behave like fields in the data in the same way: they filter trials, show up as chips above the plot, sort the trial picker, group cohorts in Corpus Analysis, appear in the inspection tables, and travel with exports (`metadata/trials.csv`) and saved sessions.
+The same idea one grain down: a table of **one row per trial** — a list name, a presentation order, a per-trial comprehension score, whatever your design recorded about the trial rather than about the reader. It attaches beside the participant table — under **Metadata** in part 2 of the add-dataset wizard, and on **Data → Edit dataset** under **Metadata → Trials** for a dataset that is already loaded — and its columns behave like fields in the data in the same way: they filter trials, show up as chips above the plot, sort the trial picker, group cohorts in Corpus Analysis, appear in the inspection tables, and travel with exports (`metadata/trials.csv`) and saved sessions.
 
 ```
 trial_id,list_name,presentation_order,comprehension
@@ -55,7 +55,7 @@ Headless, it is `--trial-metadata FILE` on `scanpath-studio render` and [`load_t
 
 ## Text metadata
 
-The third grain: a table of **one row per text** — a genre, a difficulty rating, a stimulus-level comprehension score. It attaches beside the other two (under **Metadata → Texts** in the wizard and on ✏️ **Edit dataset**), keyed by text id alone — never by reader, since a text is a stimulus rather than something one reader owns — and, like the trial table, the id may be built from several columns. Its columns behave like fields in the data in the same way, travel with exports (`metadata/texts.csv`) and saved sessions, and follow the same join rules.
+The third grain: a table of **one row per text** — a genre, a difficulty rating, a stimulus-level comprehension score. It attaches beside the other two (under **Metadata → Texts** in the wizard and on **Edit dataset**), keyed by text id alone — never by reader, since a text is a stimulus rather than something one reader owns — and, like the trial table, the id may be built from several columns. Its columns behave like fields in the data in the same way, travel with exports (`metadata/texts.csv`) and saved sessions, and follow the same join rules.
 
 Headless, it is `--text-metadata FILE` on `scanpath-studio render` and [`load_text_metadata()`](https://lacclab.github.io/scanpath-studio/api/index.md) in the Python API.
 
@@ -106,6 +106,6 @@ If source reports have arbitrary page markers instead of mappable screen columns
 
 ## Reading measures
 
-The per-AOI reading measures — TFD, FFD, first-pass time (FPRT), regression path (RPD), second-pass and single-fixation duration, fixation count, skip, regressions in / out and their count, landing position and distance — are fields of the **AOI table**. Map them under **Reading measures** (two lines under the word box) when you add a dataset, or later on ✏️ Edit dataset. An EyeLink interest-area report maps them automatically from its `IA_*` names (`IA_DWELL_TIME`, `IA_FIRST_FIXATION_DURATION`, `IA_FIRST_RUN_DWELL_TIME`, `IA_REGRESSION_PATH_DURATION`, …); every one is optional.
+The per-AOI reading measures — TFD, FFD, first-pass time (FPRT), regression path (RPD), second-pass and single-fixation duration, fixation count, skip, regressions in / out and their count, landing position and distance — are fields of the **AOI table**. Map them under **Reading measures** (two lines under the word box) when you add a dataset, or later on Edit dataset. An EyeLink interest-area report maps them automatically from its `IA_*` names (`IA_DWELL_TIME`, `IA_FIRST_FIXATION_DURATION`, `IA_FIRST_RUN_DWELL_TIME`, `IA_REGRESSION_PATH_DURATION`, …); every one is optional.
 
 The **Corpus Analysis** page shows only the measures you mapped — it computes none of its own, and without any it says so. Elsewhere (the word hover, exports, the API's word-metrics tables) a measure missing from your data is still computed from the fixations, with an imported one taking precedence. Definitions are in [Computations & methodology](https://lacclab.github.io/scanpath-studio/computations/index.md).

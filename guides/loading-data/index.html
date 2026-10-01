@@ -462,10 +462,6 @@
       
         
       
-        
-      
-        
-      
     
     
     
@@ -937,22 +933,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#use-the-setup-wizard" class="md-nav__link">
+  <a href="#import-files" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Use the setup wizard
+        Import files
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Use the setup wizard">
+    <nav class="md-nav" aria-label="Import files">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#the-recording-setup-asks-how-you-know" class="md-nav__link">
+  <a href="#recording-setup" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The recording setup asks how you know
+        Recording setup
       
     </span>
   </a>
@@ -965,10 +961,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#reuse-the-setup" class="md-nav__link">
+  <a href="#the-data-page" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Reuse the setup
+        The Data page
       
     </span>
   </a>
@@ -1055,34 +1051,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../desktop/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Desktop app
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../faq/" class="md-nav__link">
         
   
@@ -1091,34 +1059,6 @@
     
   
     FAQ
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../export-troubleshooting/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Export troubleshooting
   
 
     
@@ -1728,22 +1668,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#use-the-setup-wizard" class="md-nav__link">
+  <a href="#import-files" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Use the setup wizard
+        Import files
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Use the setup wizard">
+    <nav class="md-nav" aria-label="Import files">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#the-recording-setup-asks-how-you-know" class="md-nav__link">
+  <a href="#recording-setup" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The recording setup asks how you know
+        Recording setup
       
     </span>
   </a>
@@ -1756,10 +1696,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#reuse-the-setup" class="md-nav__link">
+  <a href="#the-data-page" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Reuse the setup
+        The Data page
       
     </span>
   </a>
@@ -1866,207 +1806,67 @@
 
 
 <h1 id="loading-public-and-own-data">Loading public and own data<a class="headerlink" href="#loading-public-and-own-data" title="Permanent link">&para;</a></h1>
-<p>Scanpath Studio can use the bundled sample, supported public corpora, or tables
-from your own experiment.</p>
 <h2 id="choose-a-source">Choose a source<a class="headerlink" href="#choose-a-source" title="Permanent link">&para;</a></h2>
+<p>Open the dataset picker above the plot, or the <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data</strong> page.</p>
 <ul>
-<li><strong>Bundled Demo:</strong> immediate, small, and suitable for learning the interface.</li>
-<li><strong>Synthetic sample:</strong> an editable, manually authored six-word scanpath.</li>
-<li><strong>Public corpus:</strong> choose the corpus and local data directory; download when
-  prompted.</li>
-<li><strong>+ → Import files:</strong> upload or select your own files and map their columns.
-  Also available through <strong>🗂️ Data → + Add dataset → Import files</strong>.</li>
-<li><strong>+ → Create manually:</strong> sketch a trial from text, with no files at all.
-  Also available through <strong>🗂️ Data → + Add dataset → Create manually</strong>.</li>
+<li><strong>Bundled Demo</strong> — a small OneStop sample, for learning the app.</li>
+<li><strong>Synthetic sample</strong> — a hand-made six-word trial.</li>
+<li><strong>Public corpus</strong> — OneStop or PoTeC; the app downloads it when asked.</li>
+<li><strong>+ → Import files</strong> — your own tables.</li>
+<li><strong>+ → Create manually</strong> — type a text and place fixations on it by hand:
+  click to add, drag to move, or edit the table.</li>
 </ul>
-<p>While a dataset opens, the page shows a skeleton of the view with the steps of
-the load — reading the files, normalizing them, building the trial list — each
-ticked off with its time. <strong>Back to <em>dataset</em></strong> stops the load and reopens the
-dataset you had before, and a notice offers <strong>Try again</strong>. Opening a dataset
-again skips reading its files — they stay cached until the app restarts — so
-it's quicker the second time.</p>
 <h2 id="what-your-data-needs">What your data needs<a class="headerlink" href="#what-your-data-needs" title="Permanent link">&para;</a></h2>
-<p>The default workflow uses two tables:</p>
 <table>
 <thead>
 <tr>
 <th>Table</th>
-<th>Minimum useful fields</th>
+<th>Minimum</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>words / interest areas</td>
-<td>trial ID, word ID, text, and either box edges or x/y/width/height</td>
+<td>words / interest areas (<abbr title="Areas of interest: here, the words' bounding boxes">AOIs</abbr>)</td>
+<td>trial ID, word ID, text, and the word box</td>
 </tr>
 <tr>
 <td>fixations</td>
-<td>trial ID, duration, and x/y or an assigned word ID</td>
+<td>trial ID, duration, and x/y or a word ID</td>
 </tr>
 </tbody>
 </table>
-<p>Participant ID, text ID, fixation timestamps, raw gaze, conditions, questions,
-and precomputed reading measures are optional but enable more features. Accepted
-files are CSV, TSV and tab-separated TXT, Parquet, Feather, Excel (<code>.xlsx</code> and
-the older <code>.xls</code>), and a <code>.zip</code> wrapping any of them. A text file's delimiter
-(comma, semicolon, tab or pipe) is read off its header line, a file that is not
-UTF-8 is read as Windows text, and an <code>.xls</code> that is really tab-separated text —
-EyeLink Data Viewer's "Excel" export — is read as text. See <a href="../../data-format/">Data format</a> for
-canonical fields and units.</p>
-<h2 id="use-the-setup-wizard">Use the setup wizard<a class="headerlink" href="#use-the-setup-wizard" title="Permanent link">&para;</a></h2>
-<p>The wizard is <strong>three numbered parts</strong> on one screen, with <strong>⬇️ Save setup</strong> and
-<strong>✅ Add dataset</strong> at the foot.</p>
-<p><strong>1. Name &amp; description</strong> — what the dataset is called in 📂 <strong>Available
-datasets</strong>, and, if you like, a sentence about it, shown under its name.</p>
-<p><strong>2. Upload data tables.</strong> One row per table — <strong>Fixations</strong>, <strong><abbr title="Areas of interest: here, the words' bounding boxes">AOIs</abbr></strong> (the
-words / interest areas) and <strong>Raw gaze</strong> — with the table's uploader on the left
-and its column mapping beside it; upload at least one. Fixations and <abbr title="Areas of interest: here, the words' bounding boxes">AOIs</abbr> take
-several files each if your export is split (one per participant, say); raw gaze
-takes one. Each row's pickers are
-pre-filled from the column names, and the tint says which were auto-detected:
-detection matches <em>names</em>, so this is where you confirm it picked the right
-columns.</p>
-<ul>
-<li>The first line of each row is its <strong>identity</strong> — trial, screen, reader, text,
-  word and the table's own id. Pick several columns to build a composite trial
-  ID when one is not unique enough; the trial count under each picker is the
-  fastest sanity check, and a warning appears when the two tables share no
-  trial — or share trials but no reader.</li>
-<li>The second line is the table's own <strong>fields</strong>: x/y, timestamp and duration for
-  fixations; the word box (edges or origin + size) and line index for the <abbr title="Area of interest: here, a word's bounding box">AOI</abbr>
-  table, plus whether it has one row per <strong>character</strong> rather than per word.</li>
-<li>Under each table, <strong>Extra fields to keep</strong> lists every column the mapping
-  does not use — recognised measures and conditions come pre-ticked — and
-  whatever you keep is there later to filter, sort or colour by; the rest is
-  dropped at normalization.</li>
-<li><strong>Derive columns from the filename</strong> sits at the top once a table is in, for
-  ids that live only in the file name.</li>
-<li>Below the three tables, under <strong>Metadata</strong>, are three optional keyed tables:
-  <strong>one row per reader</strong> (native language, age, comprehension score), <strong>one row
-  per trial</strong> (list name, presentation order) and <strong>one row per text</strong> — see <a href="../../data-format/#participant-metadata">Participant metadata</a>
-  and <a href="../../data-format/#trial-metadata">Trial metadata</a>. The same
-  attach-and-report UI is on 🗂️ <strong>Data → ✏️ Edit dataset</strong> for datasets that do
-  not come through this wizard.</li>
-</ul>
-<p>↩️ <strong>Restore a saved setup</strong> is a popover beside this part's title.</p>
-<p><strong>3. Recording setup</strong> — the screen the data was recorded on; see below.</p>
-<p>The wizard objects only once you press <strong>✅ Add dataset</strong>, and then about
-everything at once rather than one field at a time: a required field left empty
-turns red in place. Rows it cannot use are named directly above the button —
-cells in a mapped number column that don't parse, rows with no trial or reader
-id, positions that are screen fractions rather than pixels — together with what
-the load does with them.</p>
-<p>The 🗂️ <strong>Data</strong> page opens on a list with one row per dataset: its kind, its name, its
-participants, texts, trials and fixations, and its <strong>Status</strong>. Click anywhere on
-a row to open that dataset. The open one is marked <strong>Current</strong> and tinted, and
-the list does not reorder when you switch. Click a column heading to sort by it;
-datasets without that count sort last. The bin at the end of a row removes that
-dataset, after a confirmation; a dataset you added takes its annotations with
-it. Past eight datasets, a search box and Kind /
-Language filters appear. <strong>+ Add dataset</strong>, under the list, imports your own
-files or starts a scanpath by hand.</p>
-<p>A count that is not a number says why: <strong>Not loaded</strong> (not opened this session,
-and nothing published), <strong>Not reported</strong> (the corpus publishes figures, but not
-this one), <strong>Not applicable</strong> (for example, no raw-gaze samples, or
-single-screen trials), or <strong>Unknown</strong>. A 0 always means zero was counted.</p>
-<p><strong>Status</strong> is <em>Loaded</em> once a dataset has been opened in this session, and its
-counts are then its own. Until then it is <em>Not loaded</em>, and a public corpus
-shows the figures it publishes. A corpus whose files are not on this machine is
-marked <strong>Needs setup</strong>: the bundled demo shows in its place, and is not counted
-for it.</p>
-<p>Under the list, <strong>What's in the <em>dataset</em></strong> is about the open one: a one-line
-description with the corpus' home page, and <strong>Edit dataset</strong> at the end of its
-heading. That opens ✏️ <strong>Edit dataset</strong>, whose first part is its <strong>name</strong> and
-<strong>description</strong> — the name of a dataset you added is saved with <strong>✅ Save
-changes</strong> — followed by how it was mapped. Where a dataset's figures read differently from a recording, a note
-says so: PoTeC's fixation positions are reconstructed, not recorded, and the
-bundled demo's raw gaze is synthesized. The mapping is the same
-field grid the wizard draws, and for a dataset added with only one of the two
-main tables, it has an uploader for the other. Adding the missing half there
-normalizes it and joins it to what is already loaded, so a fixations-only
-dataset can gain its word boxes (or an <abbr title="Area of interest: here, a word's bounding box">AOI</abbr>-only one its fixations) without being
-added again. Its tabs hold the counts — screens, words and gaze points
-included — the raw tables, and <strong>Annotations</strong>: every favorite, tag and note
-made on this dataset, to <strong>Export</strong> as JSON, <strong>Import</strong> from such a file (or an
-Export bundle's <code>annotations.json</code>), or <strong>Delete</strong>. Annotations belong to the
-dataset they were made on: another dataset that reuses the same participant and
-trial ids does not show them, and an import goes into the dataset that is open. At the foot of the page,
-<strong>Saved on this computer</strong> reports what the recovery cache holds and the folder
-it is in.</p>
+<p>Either table alone also works. Participant and text IDs, timestamps, raw gaze,
+conditions and reading measures are optional and unlock more features.</p>
+<p>Files can be CSV, TSV, TXT, Parquet, Feather, Excel, or a <code>.zip</code> of any of
+these. See <a href="../../data-format/">Data format</a> for every field.</p>
+<h2 id="import-files">Import files<a class="headerlink" href="#import-files" title="Permanent link">&para;</a></h2>
+<p>The import screen has three parts:</p>
+<ol>
+<li><strong>Name</strong> — and an optional one-line description.</li>
+<li><strong>Tables</strong> — upload fixations, <abbr title="Areas of interest: here, the words' bounding boxes">AOIs</abbr> and, optionally, raw gaze. The app
+   guesses which column is which; check its guesses. The trial count under each
+   ID picker is a quick sanity check. Reading measures from an EyeLink
+   interest-area report (<code>IA_DWELL_TIME</code>, …) are picked up automatically, and
+   are what Corpus Analysis shows. Optional tables, one row per reader, trial or
+   text, add fields to filter and group by.</li>
+<li><strong>Recording setup</strong> — the screen the data was recorded on (below).</li>
+</ol>
+<p>Then click <strong><span class="sps-icon" data-icon="check" aria-hidden="true"></span> Add dataset</strong>. Anything the app cannot use is listed above the
+button before you confirm.</p>
+<h3 id="recording-setup">Recording setup<a class="headerlink" href="#recording-setup" title="Permanent link">&para;</a></h3>
+<p>Describe the screen the data was <strong>recorded</strong> on, not the one you are using
+now. A wrong resolution rescales every figure, so nothing is preselected. For
+each value, say how you know it: measured, estimated from your data, or a
+default. That answer travels with the dataset, so others can tell measured
+values from assumed ones.</p>
+<h2 id="the-data-page">The Data page<a class="headerlink" href="#the-data-page" title="Permanent link">&para;</a></h2>
+<p><span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data</strong> lists every dataset with its counts; click a row to open it.
+<strong>Edit dataset</strong> changes a dataset's name, column mapping and recording setup,
+or adds a table it is missing. The page also holds each dataset's tables and its
+annotations, and at the foot, what is saved on this computer.</p>
 <figure class="sps-screenshot">
 <p><img alt="The Data page: the available datasets, and the counts and tables of the open one" src="../../assets/screenshots/data-page.webp" /></p>
 </figure>
-<p>If this session loaded more of a corpus than it publishes, its row says
-<strong>More than published</strong>: the published figure is the one to check.</p>
-<h3 id="the-recording-setup-asks-how-you-know">The recording setup asks how you know<a class="headerlink" href="#the-recording-setup-asks-how-you-know" title="Permanent link">&para;</a></h3>
-<p><strong>Recording setup</strong> describes the screen the data was <strong>recorded</strong> on — not the
-screen you are reading this on. Nothing is preselected: a wrong monitor size
-silently rescales every figure. Each of
-the three groups — <em>Screen</em>, <em>Physical size &amp; viewing distance</em>, and <em>Reading
-text size</em> — asks how you know the value, with choices of its own:</p>
-<table>
-<thead>
-<tr>
-<th>Group</th>
-<th>Choice</th>
-<th>Recorded as</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Screen</td>
-<td><em>I know the resolution</em></td>
-<td><code>measured</code></td>
-</tr>
-<tr>
-<td></td>
-<td><em>Estimate from my data</em> — derived from the extent of your word boxes and fixations; always available, always succeeds, and reported as a <strong>lower bound</strong>, since text rarely fills the whole screen</td>
-<td><code>estimated</code></td>
-</tr>
-<tr>
-<td></td>
-<td><em>Use a common default (2560×1440)</em></td>
-<td><code>assumed</code></td>
-</tr>
-<tr>
-<td>Physical size &amp; viewing distance</td>
-<td><em>I know them</em></td>
-<td><code>measured</code></td>
-</tr>
-<tr>
-<td></td>
-<td><em>Use typical lab values (597 mm / 800 mm)</em></td>
-<td><code>assumed</code></td>
-</tr>
-<tr>
-<td></td>
-<td><em>Skip — I don't need visual-angle units</em></td>
-<td><code>skipped</code></td>
-</tr>
-<tr>
-<td>Reading text size</td>
-<td><em>Scale to the word boxes</em> or <em>I know the stimulus font</em></td>
-<td><code>measured</code></td>
-</tr>
-<tr>
-<td></td>
-<td><em>Use a default (16 px)</em></td>
-<td><code>assumed</code></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Add dataset</strong> stays disabled until all three are answered. Values derived
-from a skipped group (pixels per degree, point-to-pixel conversion) are hidden
-rather than computed from a default.</p>
-<p>The answer travels with the dataset — on share links, in the saved-setup JSON
-and in a bulk export's <code>plot_config.json</code> — so readers can tell measured values
-from assumed ones.</p>
-<p>Answers are remembered across datasets in a session as <strong>pre-filled values with
-the choice reset</strong>: quick for a second export from the same lab, while still
-making you assert that the setup applies to this dataset too.</p>
-<h2 id="reuse-the-setup">Reuse the setup<a class="headerlink" href="#reuse-the-setup" title="Permanent link">&para;</a></h2>
-<p>✏️ <strong>Edit dataset</strong> can offer only the columns kept at import; to map a
-dropped column, add the files again.</p>
 
 
 
@@ -2087,7 +1887,7 @@ dropped column, add the files again.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 30, 2026 21:26:25 UTC">September 30, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 1, 2026 11:10:06 UTC">October 1, 2026</span>
   </span>
 
     

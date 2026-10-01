@@ -462,10 +462,6 @@
       
         
       
-        
-      
-        
-      
     
     
     
@@ -947,34 +943,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../desktop/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Desktop app
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../faq/" class="md-nav__link">
         
   
@@ -983,34 +951,6 @@
     
   
     FAQ
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../export-troubleshooting/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Export troubleshooting
   
 
     
@@ -1591,86 +1531,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#in-the-app" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        In the app
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="In the app">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#load-your-own-data" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Load and verify a dataset
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#filter-and-annotate-trials" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Filter and mark trials
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#make-a-paper-ready-figure" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Build a publication figure
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#compare-two-readers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Compare readings of one text
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#explore-the-corpus" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Explore a corpus question
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -1769,6 +1629,8 @@
 
 
 <h1 id="tutorials">Tutorials<a class="headerlink" href="#tutorials" title="Permanent link">&para;</a></h1>
+<p>Each tutorial walks one research task from start to finish. New here? Start
+with <a href="../getting-started/">Getting started</a>.</p>
 <div class="grid cards">
 <ul>
 <li>
@@ -1789,53 +1651,8 @@
 </li>
 </ul>
 </div>
-<p>New here? Complete <a href="../getting-started/">Getting started</a> first.</p>
-<h2 id="in-the-app">In the app<a class="headerlink" href="#in-the-app" title="Permanent link">&para;</a></h2>
-<p>Five shorter tutorials run inside the app, under ❓ <strong>Help → 🧭 Tutorials</strong>.
-Each one spotlights the controls it names as you go, keeps its own progress,
-and never changes your data, filters, annotations, or settings. These are the
-steps each one walks, as the app shows them:</p>
-<p><h3 id="load-your-own-data">Load and verify a dataset<a class="headerlink" href="#load-your-own-data" title="Permanent link">&para;</a></h3>
-<p>Finish with the parsed words, fixations, and mapping visibly checked. <em>About 3 min; needs a demo or uploaded dataset.</em></p>
-<ol>
-<li><strong>Choose the data source.</strong> Everything about the dataset lives on the 🗂️ <strong>Data</strong> page, in the order the pipeline uses it. Start at the list of datasets — click a row to open it, or <strong>+ Add dataset</strong> for your own tables.</li>
-<li><strong>Check the column mapping.</strong> <strong>Edit</strong>, beside the dataset's description, opens its setup screen — the add screen's parts, for a dataset that exists. Part <strong>2 · Data tables &amp; column mapping</strong> decides what every measure downstream is computed from. Rows marked ✨ were auto-detected; override any that guessed wrong.</li>
-<li><strong>Verify what was parsed.</strong> <strong>🔎 What's in the selected dataset</strong> opens on 📊 Stats — the counts and their spread, the quickest check that the mapping worked. The six raw tables and its annotations are the tabs beside it.</li>
-<li><strong>Check one trial id is one reading.</strong> Part <strong>4 · Trial identity</strong> checks the whole dataset, before any filtering, and says so either way. A warning here means the Trial ID above is missing a column — several readings are being drawn as one scanpath, which renders happily as a reading with a lot of regressions.</li>
-</ol>
-<h3 id="filter-and-annotate-trials">Filter and mark trials<a class="headerlink" href="#filter-and-annotate-trials" title="Permanent link">&para;</a></h3>
-<p>Finish with reviewed trials annotated and ready for ID export. <em>About 4 min; needs at least one trial.</em></p>
-<ol>
-<li><strong>Narrow the review pool.</strong> The funnel beside the trial picker — opened for you here — holds the text and participant pickers at the top (<em>All texts</em> / <em>All participants</em> until you narrow), then condition and annotation filters (favorites, tags). This tutorial only points; it never changes a filter.</li>
-<li><strong>Review one trial at a time.</strong> One picker for every dataset: the <strong>Select Trial</strong> dropdown, a scrubbing slider showing <em>index / total</em>, and ◀ ▶ to step through the pool you just narrowed.</li>
-<li><strong>Move between screens.</strong> A multipart trial (one reading spread over several screens) adds a screen navigator under the picker. Each screen is its own coordinate space, so nothing is ever drawn across two of them.</li>
-<li><strong>Annotate at the right scope.</strong> Star, tag, or note the parent trial. Multipart data can instead attach a separate annotation to the active screen.</li>
-<li><strong>Export the marked result.</strong> Open <strong>Export</strong> and choose the filtered scope and tabular files. Screen identity is retained in multipart exports.</li>
-</ol>
-<h3 id="make-a-paper-ready-figure">Build a publication figure<a class="headerlink" href="#make-a-paper-ready-figure" title="Permanent link">&para;</a></h3>
-<p>Finish at a ready figure download with a reproducible configuration. <em>About 4 min; needs words or fixations for a selected trial.</em></p>
-<ol>
-<li><strong>Choose the visual language.</strong> Use design presets, palette, and the layer controls. Heatmap and scanpath are settings on the same figure, not separate data transformations.</li>
-<li><strong>Decide static or animated.</strong> Use <strong>Animate</strong> only when motion is the outcome. Multipart replay keeps screen boundaries explicit and draws no connector between canvases.</li>
-<li><strong>Download and preserve settings.</strong> Open <strong>Export</strong> for PNG/SVG/HTML or bulk output. Include the plot config when the figure must be reproducible later.</li>
-<li><strong>Keep the figure reproducible.</strong> <strong>🔗 Share</strong> turns the exact configuration into a <strong>Link</strong>, the <strong>Code</strong> that redraws it, or a settings <strong>File</strong>. Any of them reproduces this figure later — the PNG on its own does not.</li>
-</ol>
-<h3 id="compare-two-readers">Compare readings of one text<a class="headerlink" href="#compare-two-readers" title="Permanent link">&para;</a></h3>
-<p>Finish with the other readings of one text side by side, at one scale. <em>About 3 min; needs two readings sharing a text (and screen for multipart data).</em></p>
-<ol>
-<li><strong>Choose the reference reading.</strong> Pick the reading that should anchor the comparison. The comparison panel reuses this exact parent trial and active screen.</li>
-<li><strong>Compare like with like.</strong> Open <strong>🔬 Comparisons</strong> and set <strong>Match field</strong> to the text id: the grid shows the other trials that share this trial's value in that field — here, the other readings of <em>this</em> text — at the same scale, so it compares like with like.</li>
-</ol>
-<h3 id="explore-the-corpus">Explore a corpus question<a class="headerlink" href="#explore-the-corpus" title="Permanent link">&para;</a></h3>
-<p>Finish having answered one worked question — how a reader's average fixation duration moved across the experiment. <em>About 4 min; needs variation across trials, readers, or texts.</em></p>
-<ol>
-<li><strong>Switch analysis level.</strong> Open <strong>Corpus Analysis</strong> to aggregate instead of inspecting one trial. Your loaded data and filters stay in place, so whatever you narrowed to on the Scanpath view is what gets aggregated here.</li>
-<li><strong>Pick the question, not the chart.</strong> Four subtabs, four shapes of question: <strong>Per text</strong> (one text, many readers), <strong>Per sentence</strong>, <strong>Per reader</strong> (one reader, all their trials) and <strong>Groups</strong> (a cohort, or two compared). Our question — <em>did this reader speed up over the experiment?</em> — is <strong>Per reader</strong>.</li>
-<li><strong>Choose the reader and the view.</strong> Pick the reader on the left, then set <strong>View</strong> to <strong>Per-trial trend</strong>. That plots one point per trial in presentation order — the whole experiment on one axis, rather than a single trial's dynamics.</li>
-<li><strong>Read average fixation duration across the experiment.</strong> Set the measure to <strong>fixation duration</strong>; each point is that trial's mean. A downward slope is the reader settling in — but check the spread and the trial count before believing it, because one short trial moves a mean a long way.</li>
-<li><strong>Put it against the cohort.</strong> <strong>Distribution vs cohort</strong> answers the companion question — is this reader unusual, or is the whole cohort like this? Read the sample size with the effect, never the plotted mean on its own.</li>
-</ol>
-</p>
+<p>The app also has short interactive tutorials under <span class="sps-icon" data-icon="help" aria-hidden="true"></span> <strong>Help → <span class="sps-icon" data-icon="explore" aria-hidden="true"></span> Tutorials</strong>.
+They highlight each control as you go, and never change your data or settings.</p>
 
 
 
@@ -1856,7 +1673,7 @@ steps each one walks, as the app shows them:</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 25, 2026 10:03:03 UTC">September 25, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 1, 2026 11:10:06 UTC">October 1, 2026</span>
   </span>
 
     

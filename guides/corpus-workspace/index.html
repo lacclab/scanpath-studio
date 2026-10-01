@@ -462,10 +462,6 @@
       
         
       
-        
-      
-        
-      
     
     
     
@@ -943,10 +939,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#inspect-before-analysing" class="md-nav__link">
+  <a href="#reading-measures-come-from-your-data" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Inspect before analysing
+        Reading measures come from your data
       
     </span>
   </a>
@@ -954,10 +950,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#reading-measures" class="md-nav__link">
+  <a href="#four-views" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Reading measures
+        Four views
       
     </span>
   </a>
@@ -965,21 +961,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#choose-the-analysis-view" class="md-nav__link">
+  <a href="#from-summary-to-evidence" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Choose the analysis view
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#move-between-summary-and-evidence" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Move between summary and evidence
+        From summary to evidence
       
     </span>
   </a>
@@ -1038,34 +1023,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../desktop/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Desktop app
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../faq/" class="md-nav__link">
         
   
@@ -1074,34 +1031,6 @@
     
   
     FAQ
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../export-troubleshooting/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Export troubleshooting
   
 
     
@@ -1689,10 +1618,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#inspect-before-analysing" class="md-nav__link">
+  <a href="#reading-measures-come-from-your-data" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Inspect before analysing
+        Reading measures come from your data
       
     </span>
   </a>
@@ -1700,10 +1629,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#reading-measures" class="md-nav__link">
+  <a href="#four-views" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Reading measures
+        Four views
       
     </span>
   </a>
@@ -1711,21 +1640,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#choose-the-analysis-view" class="md-nav__link">
+  <a href="#from-summary-to-evidence" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Choose the analysis view
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#move-between-summary-and-evidence" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Move between summary and evidence
+        From summary to evidence
       
     </span>
   </a>
@@ -1832,76 +1750,52 @@
 
 
 <h1 id="corpus-workspace">Corpus workspace<a class="headerlink" href="#corpus-workspace" title="Permanent link">&para;</a></h1>
-<p>The corpus tools share the active data source and trial filters with the
-Scanpath view.</p>
-<h2 id="inspect-before-analysing">Inspect before analysing<a class="headerlink" href="#inspect-before-analysing" title="Permanent link">&para;</a></h2>
-<p>Open the 🗂️ <strong>Data</strong> page to check the headline counts and raw tables (the
-column mapping is under ✏️ <strong>Edit dataset</strong>). Confirm that IDs mean what you
-intend, that word boxes and fixations share one coordinate system, and that the
-fields you need survived loading.</p>
-<h2 id="reading-measures">Reading measures<a class="headerlink" href="#reading-measures" title="Permanent link">&para;</a></h2>
-<p>The app exposes common per-word measures including first fixation duration,
-first-pass gaze duration, regression-path duration, total fixation duration,
-fixation count, skipping, and regressions. It uses recognized precomputed
-values when available; otherwise it derives them from fixation-to-word
-assignment. Every one of them — its formula, units, grouping keys, and what
-happens when a value is missing — is listed in
-<a href="../../computations/">Computations &amp; methodology</a>.</p>
-<h2 id="choose-the-analysis-view">Choose the analysis view<a class="headerlink" href="#choose-the-analysis-view" title="Permanent link">&para;</a></h2>
-<p>Select <strong>📊 Corpus Analysis</strong> in the navigation.</p>
+<p><strong><span class="sps-icon" data-icon="bar_chart" aria-hidden="true"></span> Corpus Analysis</strong> summarises many readings at once. It uses the same
+dataset and trial filters as the Scanpath view.</p>
 <figure class="sps-screenshot">
 <p><img alt="Corpus Analysis, Per text: each reader's total fixation duration on every word of one text, against the cohort mean" src="../../assets/screenshots/corpus-analysis.webp" /></p>
 </figure>
+<h2 id="reading-measures-come-from-your-data">Reading measures come from your data<a class="headerlink" href="#reading-measures-come-from-your-data" title="Permanent link">&para;</a></h2>
+<p>Corpus Analysis shows the reading measures your interest-area report provides
+(first fixation duration, total fixation duration, regression path, and so on).
+It does not compute them itself. An EyeLink report's <code>IA_*</code> columns are mapped
+automatically; other names can be mapped under <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data → Edit dataset</strong>.
+Without any, the page says so.</p>
+<h2 id="four-views">Four views<a class="headerlink" href="#four-views" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
 <th>View</th>
-<th>Unit of interest</th>
-<th>Typical use</th>
+<th>Answers</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><strong>Per text</strong></td>
-<td>one stimulus across readers</td>
-<td>per-reader and cohort word profiles, word × reader heatmap, word difficulty on the stimulus</td>
+<td>How was this text read, word by word, across readers?</td>
 </tr>
 <tr>
 <td><strong>Per sentence</strong></td>
-<td>one sentence across readers</td>
-<td>one measure combined for each text/sentence pair</td>
+<td>How was each sentence read?</td>
 </tr>
 <tr>
 <td><strong>Per reader</strong></td>
-<td>one reader across trials</td>
-<td>reader summary and within-reader pattern</td>
+<td>How does this reader behave across trials?</td>
 </tr>
 <tr>
 <td><strong>Groups</strong></td>
-<td>one cohort or two cohorts</td>
-<td>condition/population summaries, differences, effect sizes</td>
+<td>How do conditions or populations differ?</td>
 </tr>
 </tbody>
 </table>
-<p>The measure, aggregation, and spread controls apply to the current result. A
-minimum-readers threshold prevents sparse word estimates from looking complete.</p>
-<p><strong>Groups</strong> defines a cohort either by splitting one field or from an independent
-filter set. With a
-<a href="../../data-format/#participant-metadata">participant</a>,
-<a href="../../data-format/#trial-metadata">trial</a> or
-<a href="../../data-format/#text-metadata">text metadata</a> table attached, its fields are
-offered alongside the trial conditions, marked 👤 (reader), 📋 (trial) or
-📄 (text) — each answers a different question from a trial condition, so the
-picker says which is which. A reader field selects that reader's trials, a trial
-field the readings its rows describe, and a text field every reading of those
-texts; in a filter set they combine with each other and with the other pickers.
-A field with more than 60 distinct values is not offered: that is a range
-question, and the trial filters have the slider for it.</p>
-<h2 id="move-between-summary-and-evidence">Move between summary and evidence<a class="headerlink" href="#move-between-summary-and-evidence" title="Permanent link">&para;</a></h2>
-<p>Each result has a <strong>⬇ Download this table (CSV)</strong> button. When a point or group
-looks unusual, return to the Scanpath view and inspect the trials behind it.</p>
-<p>For the compact end-to-end workflow, see the
-<a href="../../tutorials/corpus-analysis/">Corpus analysis tutorial</a>.</p>
+<p>Choose a measure, how to aggregate it, and the spread to show. Set a <strong>minimum
+number of readers</strong> per word so sparse words don't look like stable estimates.</p>
+<p><strong>Groups</strong> defines a cohort by splitting on a field, or with its own filters.
+Turn on <strong>Compare</strong> for a second cohort, with the difference and effect size.
+Fields from attached participant, trial or text tables appear here too.</p>
+<h2 id="from-summary-to-evidence">From summary to evidence<a class="headerlink" href="#from-summary-to-evidence" title="Permanent link">&para;</a></h2>
+<p>Every result has <strong>⬇ Download this table (CSV)</strong>. When something looks odd,
+open the trials behind it in the Scanpath view.</p>
 
 
 
@@ -1922,7 +1816,7 @@ looks unusual, return to the Scanpath view and inspect the trials behind it.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 30, 2026 21:26:19 UTC">September 30, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 1, 2026 11:10:06 UTC">October 1, 2026</span>
   </span>
 
     

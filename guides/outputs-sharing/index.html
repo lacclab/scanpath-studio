@@ -16,7 +16,7 @@
         <link rel="prev" href="../corpus-workspace/">
       
       
-        <link rel="next" href="../../desktop/">
+        <link rel="next" href="../../faq/">
       
       
         
@@ -453,10 +453,6 @@
   
     
     
-      
-        
-      
-        
       
         
       
@@ -971,10 +967,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#export-results" class="md-nav__link">
+  <a href="#export" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Export results
+        Export
       
     </span>
   </a>
@@ -982,10 +978,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#share-a-view" class="md-nav__link">
+  <a href="#share" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Share a view
+        Share
       
     </span>
   </a>
@@ -993,10 +989,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#back-up-and-restore-work" class="md-nav__link">
+  <a href="#back-up-your-work" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Back up and restore work
+        Back up your work
       
     </span>
   </a>
@@ -1027,34 +1023,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../desktop/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Desktop app
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../faq/" class="md-nav__link">
         
   
@@ -1063,34 +1031,6 @@
     
   
     FAQ
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../export-troubleshooting/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Export troubleshooting
   
 
     
@@ -1678,10 +1618,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#export-results" class="md-nav__link">
+  <a href="#export" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Export results
+        Export
       
     </span>
   </a>
@@ -1689,10 +1629,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#share-a-view" class="md-nav__link">
+  <a href="#share" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Share a view
+        Share
       
     </span>
   </a>
@@ -1700,10 +1640,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#back-up-and-restore-work" class="md-nav__link">
+  <a href="#back-up-your-work" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Back up and restore work
+        Back up your work
       
     </span>
   </a>
@@ -1810,82 +1750,68 @@
 
 
 <h1 id="outputs-and-sharing">Outputs and sharing<a class="headerlink" href="#outputs-and-sharing" title="Permanent link">&para;</a></h1>
-<h2 id="export-results">Export results<a class="headerlink" href="#export-results" title="Permanent link">&para;</a></h2>
+<h2 id="export">Export<a class="headerlink" href="#export" title="Permanent link">&para;</a></h2>
 <p>Open the <strong>Export</strong> subtab in the Scanpath view.</p>
 <ul>
-<li><strong>Current figure</strong> exports the visible static or animated figure.</li>
-<li><strong>Export bundle</strong> packages figures, tables, and configuration metadata for
-  this trial, a filtered subset, or the whole dataset. Its <strong>Also include →
-  Separable layers</strong> toggle adds aligned text, boxes, fixations, saccades,
-  heatmap, and image layers as separate files for editing, and <strong>Tabular data →
-  Full measure family</strong> adds saccades, sentence measures, trial and reader
-  summaries, character grids, cleaning QA and <code>run_config.json</code>. <strong>Tabular
-  data → Word measures</strong> writes the reading measures the dataset brought, as
-  mapped on the 🗂️ <strong>Data</strong> page; like Corpus Analysis, Export computes none,
-  so a dataset without them gets no word-measure table and the bundle's
-  <code>README.md</code> says so. <strong>Tabular data → Raw gaze</strong> writes
-  each exported trial's gaze samples as recorded, as <code>raw_gaze.csv</code> (or
-  <code>.parquet</code>) beside its other tables; a trial with no samples gets none.
-  Tables are written one file per trial; <strong>Combine all trials into one file</strong>
-  writes each table once instead, every exported trial stacked in it, as
-  <code>aggregate/all_&lt;table&gt;</code>. The reader summary spans trials, so it is always
-  under <code>aggregate/</code>.
-  The bundle's figures draw the samples whenever the 🔵 <strong>Raw gaze</strong> layer is
-  on. <strong>Also include → Annotations (JSON)</strong>
-  adds <code>annotations.json</code>: the favorites, tags and notes on the exported
-  trials, which 🗂️ Data → Annotations can import.</li>
+<li><strong>Current figure</strong> downloads what is on screen: PNG, SVG, PDF or HTML, or the
+  replay as HTML, GIF or MP4.</li>
+<li><strong>Export bundle</strong> writes figures and tables for this trial, the filtered
+  trials, or the whole dataset, plus a <code>plot_config.json</code> to recreate them.
+  Options add separable layers for a vector editor, raw gaze, annotations, and
+  more tables. Tables are written per trial, or combined into one file each.
+  Word tables carry the reading measures your data brought; the export computes
+  none.</li>
 </ul>
 <figure class="sps-screenshot">
 <p><img alt="The Export subtab: the current figure, and the bundle's trials, formats, tables and file naming" src="../../assets/screenshots/export.webp" /></p>
 </figure>
-<p>With a <a href="../../data-format/#participant-metadata">participant metadata</a> table
-attached, the bundle also carries <code>metadata/participants.*</code>, and <strong>Participant
-fields to include</strong> chooses which of its columns go in. Every field is selected
-by default; clearing one drops it, and clearing them all leaves the table out
-entirely.</p>
-<p>HTML is interactive and needs no local browser engine. PNG, SVG, PDF, GIF, and
-MP4 use Chrome/Chromium through Kaleido. See
-<a href="../../export-troubleshooting/">Export troubleshooting</a> if those formats fail.</p>
-<h2 id="share-a-view">Share a view<a class="headerlink" href="#share-a-view" title="Permanent link">&para;</a></h2>
-<p>The <strong>Share</strong> subtab has three ways to pass the figure on — <strong>Link</strong>, <strong>Code</strong>
-and <strong>File</strong>. <strong>Link</strong> is a deep link containing the selected data source and
-visualization settings; <strong>Refresh &amp; Copy</strong> rebuilds the URL from the current
-trial and settings and places it on the clipboard in one step. <strong>Code</strong> is the
-code that reproduces the figure, in Python or as a CLI command. <strong>File</strong> is a
-settings file, described below.</p>
+<p>HTML, and the current figure's PNG and SVG, always work. PDF, GIF, MP4 and the
+bundle's images need Chrome, Chromium or Edge installed
+(<a href="../../faq/#export-fails">FAQ</a>).</p>
+<h2 id="share">Share<a class="headerlink" href="#share" title="Permanent link">&para;</a></h2>
+<p>The <strong>Share</strong> subtab passes a view on in three ways:</p>
+<ul>
+<li><strong>Link</strong> — a URL with the dataset choice, trial and every figure setting.
+  It never contains your uploaded data: the recipient must load the same
+  dataset. (A scanpath created by hand is the exception; its link carries it.)</li>
+<li><strong>Code</strong> — Python or a CLI command that reproduces the figure.</li>
+<li><strong>File</strong> — the figure's settings as a file, to restore later.</li>
+</ul>
 <figure class="sps-screenshot">
 <p><img alt="The Share subtab: the Link · Code · File switch, on Link" src="../../assets/screenshots/share.webp" /></p>
 </figure>
-<p>A link never contains an uploaded or public dataset's fixation or word tables.
-Built-in data can be reopened from the URL; a recipient of an uploaded-data link
-must load the same dataset. The one exception is <strong>✏️ Author a scanpath</strong>: there
-the text and every hand-placed fixation <em>are</em> the dataset, so its link carries
-them.</p>
-<p>The link carries every figure setting, including the recording setup and
-Compare's per-scanpath styles; settings left at the dataset's defaults are
-omitted to keep it short. Public corpora travel by name, not data: the recipient
-needs the same corpus set up; otherwise the link leaves the data source
-unchanged.</p>
-<h2 id="back-up-and-restore-work">Back up and restore work<a class="headerlink" href="#back-up-and-restore-work" title="Permanent link">&para;</a></h2>
-<p>Each kind of work has its own file, downloaded where it is edited:</p>
-<ul>
-<li><strong>🔗 Share → File</strong> — the figure's settings and trial. <em>Restore settings</em>
-  re-applies one; settings that don't fit the loaded data are listed and
-  skipped.</li>
-<li><strong>🗂️ Data → Annotations</strong> — a dataset's favorites, tags and notes, with
-  <em>Export</em> and <em>Import</em>. Inspect them before sharing: notes may contain
-  participant-related information.</li>
-<li><strong>✏️ Edit dataset → Save setup</strong> — a dataset's column mapping and recording
-  setup, restored when you add the same kind of data again.</li>
-<li><strong>🎨 My designs → Export</strong> — your saved figure designs, imported on another
-  computer with <em>Import</em>.</li>
-</ul>
-<p>None of these files contains uploaded dataset rows; load the same data before
-restoring them. That differs from the recovery cache, which keeps dataset
-tables and working state on the current computer and restores them after a
-refresh or restart — see <strong>Saved on this computer</strong> at the foot of the
-🗂️ Data page.</p>
-<p>For repeatable scripted output, use <a href="../../automation/">Automation</a>.</p>
+<h2 id="back-up-your-work">Back up your work<a class="headerlink" href="#back-up-your-work" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>What</th>
+<th>Where</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>figure settings</td>
+<td><strong><span class="sps-icon" data-icon="share" aria-hidden="true"></span> Share → File</strong></td>
+</tr>
+<tr>
+<td>favorites, tags and notes</td>
+<td><strong><span class="sps-icon" data-icon="database" aria-hidden="true"></span> Data → Annotations → Export</strong></td>
+</tr>
+<tr>
+<td>column mapping and recording setup</td>
+<td><strong><span class="sps-icon" data-icon="edit" aria-hidden="true"></span> Edit dataset → Save setup</strong></td>
+</tr>
+<tr>
+<td>saved figure designs</td>
+<td><strong><span class="sps-icon" data-icon="palette" aria-hidden="true"></span> My designs → Export</strong></td>
+</tr>
+</tbody>
+</table>
+<p>None of these files contain your data rows; load the same data before restoring
+one. Notes may contain participant information, so check them before sharing.</p>
+<p>On a local or desktop install, the app also keeps a recovery copy of your
+datasets and work, restored after a refresh or restart.</p>
+<p>For scripted output, see <a href="../../automation/">Automation</a>.</p>
 
 
 
@@ -1906,7 +1832,7 @@ refresh or restart — see <strong>Saved on this computer</strong> at the foot o
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 1, 2026 00:17:35 UTC">October 1, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 1, 2026 11:10:06 UTC">October 1, 2026</span>
   </span>
 
     
@@ -1961,13 +1887,13 @@ refresh or restart — see <strong>Saved on this computer</strong> at the foot o
         
         
           
-          <a href="../../desktop/" class="md-footer__link md-footer__link--next" aria-label="Next: Desktop app">
+          <a href="../../faq/" class="md-footer__link md-footer__link--next" aria-label="Next: FAQ">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Desktop app
+                FAQ
               </div>
             </div>
             <div class="md-footer__button md-icon">

@@ -1856,3 +1856,33 @@ def test_the_address_flag_is_a_real_streamlit_option():
 
     st_config.get_config_options()
     assert "server.address" in st_config._config_options_template
+
+
+# ---------------------------------------------------------------------------
+# UX-183 — no Deploy button in the header
+# ---------------------------------------------------------------------------
+def test_a_launch_hides_the_deploy_button(monkeypatch, tmp_path):
+    argv = _launch_argv(monkeypatch, tmp_path, [])
+    assert "--client.toolbarMode=viewer" in argv
+
+
+def test_a_toolbar_flag_the_user_passes_wins(monkeypatch, tmp_path):
+    argv = _launch_argv(monkeypatch, tmp_path, ["--client.toolbarMode=developer"])
+    assert "--client.toolbarMode=viewer" not in argv
+
+
+def test_the_toolbar_mode_is_set_on_every_launch_path():
+    import tomllib
+    from pathlib import Path
+
+    from streamlit import config as st_config
+
+    st_config.get_config_options()
+    assert (
+        "viewer" in st_config._config_options_template["client.toolbarMode"].description
+    )
+    root = Path(__file__).resolve().parents[1]
+    config = tomllib.loads((root / ".streamlit" / "config.toml").read_text("utf-8"))
+    assert config["client"]["toolbarMode"] == "viewer"
+    launcher = (root / "desktop" / "launcher.py").read_text("utf-8")
+    assert '"--client.toolbarMode=viewer"' in launcher

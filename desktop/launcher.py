@@ -491,6 +491,8 @@ def main() -> None:
             # No hot reload in a frozen app; the watcher only costs threads.
             "--server.fileWatcherType=none",
             "--browser.gatherUsageStats=false",
+            # No Deploy button (UX-183) — see cli.launch_app.
+            "--client.toolbarMode=viewer",
         ]
     )
 

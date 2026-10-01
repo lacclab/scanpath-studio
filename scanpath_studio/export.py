@@ -2202,13 +2202,14 @@ def bulk_export(
         )
         if not summary.empty:
             combined["reader_summary"] = [summary]
+    stacked = {
+        artifact: pd.concat(frames, ignore_index=True)
+        for artifact, frames in combined.items()
+    }
     for fmt in options.table_formats():
-        for artifact, frames in combined.items():
+        for artifact, table in stacked.items():
             progress.bytes_written += _write_table(
-                zf,
-                f"aggregate/all_{artifact}.{fmt}",
-                pd.concat(frames, ignore_index=True),
-                fmt,
+                zf, f"aggregate/all_{artifact}.{fmt}", table, fmt
             )
     # DATA-20: the participant table travels as its own per-grain table rather
     # than as columns smeared across the trial files — which is what keeps a

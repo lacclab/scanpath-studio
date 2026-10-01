@@ -6,7 +6,7 @@ The Scanpath view draws one reading on the screen it was recorded on.
 ![The Scanpath view, its regions numbered](../assets/screenshots/scanpath-view.webp)
 </figure>
 
-1. Views and ❓ Help.
+1. Views and :material/help: Help.
 2. Dataset and trial pickers, sort (⇅) and filter funnel.
 3. The trial's summary.
 4. The figure.
@@ -21,26 +21,26 @@ several screens gets a second navigator to move between them.
 
 ## Control the layers
 
-The **🎛️ Plot controls** rail starts with **🎬 Animate**, **⚖️ Compare**, four
+The **:material/tune: Plot controls** rail starts with **:material/movie: Animate**, **:material/compare: Compare**, four
 design presets and a palette. Below them, each section is one line: a switch,
 and a **▾** with its settings.
 
 | Section | What it controls |
 | --- | --- |
-| 👁️ Fixations | markers: size, colour, order |
-| ↗️ Saccades | lines and arrows, coloured by direction or reading type |
-| 📄 Stimulus | text, word boxes, stimulus image, font and background |
-| 🔥 Heatmap | where fixations concentrate, by count or duration |
-| 🔵 Raw gaze | the gaze samples as recorded |
-| 🧹 Filter | which fixations and saccades are drawn |
-| 📐 Figure & canvas | screen framing, axes and grid, title and labels |
+| :material/blur_on: Fixations | markers: size, colour, order |
+| :material/arrow_outward: Saccades | lines and arrows, coloured by direction or reading type |
+| :material/article: Stimulus | text, word boxes, stimulus image, font and background |
+| :material/local_fire_department: Heatmap | where fixations concentrate, by count or duration |
+| :material/grain: Raw gaze | the gaze samples as recorded |
+| :material/cleaning_services: Filter | which fixations and saccades are drawn |
+| :material/aspect_ratio: Figure & canvas | screen framing, axes and grid, title and labels |
 
 Colour ranges start on **Auto**, scaled to each trial. Pin a range to keep it
 fixed as you step through trials, so they stay comparable.
 
 ## Filter what is drawn
 
-**🧹 Filter** thins the reading on screen (the funnel above the plot chooses
+**:material/cleaning_services: Filter** thins the reading on screen (the funnel above the plot chooses
 *which* readings you can pick). For fixations, **Highlight** or **Discard**
 short, long, out-of-bounds or blink fixations, or show only an index range.
 For saccades, choose which reading types are drawn: hide everything but

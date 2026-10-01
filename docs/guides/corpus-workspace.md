@@ -1,6 +1,6 @@
 # Corpus workspace
 
-**📊 Corpus Analysis** summarises many readings at once. It uses the same
+**:material/bar_chart: Corpus Analysis** summarises many readings at once. It uses the same
 dataset and trial filters as the Scanpath view.
 
 <figure class="sps-screenshot" markdown>
@@ -12,7 +12,7 @@ dataset and trial filters as the Scanpath view.
 Corpus Analysis shows the reading measures your interest-area report provides
 (first fixation duration, total fixation duration, regression path, and so on).
 It does not compute them itself. An EyeLink report's `IA_*` columns are mapped
-automatically; other names can be mapped under 🗂️ **Data → Edit dataset**.
+automatically; other names can be mapped under :material/database: **Data → Edit dataset**.
 Without any, the page says so.
 
 ## Four views

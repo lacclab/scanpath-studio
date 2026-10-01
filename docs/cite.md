@@ -18,7 +18,7 @@ The DOI always resolves to the latest release; the
 version if you need to pin the one you used. The entry above is generated from
 [`CITATION.cff`](https://github.com/lacclab/scanpath-studio/blob/main/CITATION.cff),
 the same file behind GitHub's **Cite this repository** button and the app's
-❓ **Help → About** dialog.
+:material/help: **Help → About** dialog.
 
 ## The data
 

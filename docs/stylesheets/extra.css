@@ -181,3 +181,36 @@
   border-radius: 0.4rem;
   border: 1px solid var(--md-default-fg-color--lightest);
 }
+
+/* The app's icons (ENG-88): a page writes `:material/database:`, the docs hook
+   turns it into a span, and this draws the glyph from the Material Symbols font
+   Streamlit ships (copied into the site by the hook) — the same one the app uses. */
+@font-face {
+  font-family: "Material Symbols Rounded";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("../assets/fonts/material-symbols-rounded.woff2") format("woff2");
+}
+
+.md-typeset .sps-icon::before {
+  content: attr(data-icon);
+  font-family: "Material Symbols Rounded";
+  font-weight: normal;
+  font-style: normal;
+  font-size: 1.15em;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  direction: ltr;
+  font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
+}
+
+.md-typeset .sps-icon {
+  display: inline-block;
+  vertical-align: -0.2em;
+  margin-right: 0.15em;
+  user-select: none;
+}

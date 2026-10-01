@@ -27,7 +27,7 @@ paragraphs, each in an Advanced and an Elementary version).
 
 ## Loading it
 
-OneStop is exposed as a **Public dataset**. In the app, open 🗂️ **Data**, click
+OneStop is exposed as a **Public dataset**. In the app, open :material/database: **Data**, click
 **OneStop** in the list of datasets, then choose **Edit dataset**; its
 **Options** pick a **Variant**, a **Reading regime**, and one or more
 **Parts**:
@@ -72,7 +72,7 @@ its own trial (the part is folded into the trial id, e.g. `Paragraph::1` vs
 regime-split; the other parts come from the all-regimes full release, so they
 are not narrowed to the chosen regime: they hold every regime's trials.
 
-The ✏️ **Edit dataset** screen's data-location part lists the **Expected files** and
+The :material/edit: **Edit dataset** screen's data-location part lists the **Expected files** and
 shows whether they're already present (until they are, the app shows the bundled
 demo, with a **⬇ Download now** panel). For the Public variant, if they're
 present the corpus loads with no network access; if not, click **⬇ Download** to
@@ -83,7 +83,7 @@ deletes the partial file.
 
 !!! note "On a server other machines can reach"
     When the app is served to other machines (the hosted demo, or
-    `--server.address 0.0.0.0`), the *Data directory* box, the 📁 folder picker
+    `--server.address 0.0.0.0`), the *Data directory* box, the :material/folder_open: folder picker
     and **⬇ Download** are turned off: the corpus is read from the server's
     configured data location, and whoever runs it places the files there — or,
     on a trusted network, starts it with `SCANPATH_LOCAL_FS=1`. See

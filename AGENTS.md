@@ -284,8 +284,10 @@ omitted from the measurement: they walk corpora that cannot exist in CI.
 - Icons drawn as chrome (labels, `icon=`, headings, alerts) come from
   `constants.ICONS` — Material Symbols, keyed by concept (UX-138); inside raw
   HTML use `constants.icon_html`. Never a literal emoji or `:material/…:` there
-  (`tests/test_icons.py`). Prose — help text, tour bodies, docstrings, `cli.py`,
-  `docs/` — keeps its emoji ("the 🗂️ **Data** page").
+  (`tests/test_icons.py`). Prose — help text, tour bodies, docstrings, `cli.py`
+  — keeps its emoji ("the 🗂️ **Data** page"). The docs site names an app icon
+  with the label's own shortcode, `:material/database: **Data**`, which
+  `scripts/mkdocs_hooks.py` draws in the font Streamlit ships (ENG-88).
 
 ## Testing patterns
 

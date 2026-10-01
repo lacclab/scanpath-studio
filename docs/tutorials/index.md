@@ -23,5 +23,5 @@ with [Getting started](../getting-started.md).
 
 </div>
 
-The app also has short interactive tutorials under ❓ **Help → 🧭 Tutorials**.
+The app also has short interactive tutorials under :material/help: **Help → :material/explore: Tutorials**.
 They highlight each control as you go, and never change your data or settings.

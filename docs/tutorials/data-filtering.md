@@ -17,7 +17,7 @@ to clear just that one.
 ## 2. Review candidate trials
 
 For each candidate, inspect the default scanpath and turn on **Animate** only
-when timing helps. Open **🧹 Filter → 👁️ Fixations** in the plot rail and set
+when timing helps. Open **:material/cleaning_services: Filter → :material/blur_on: Fixations** in the plot rail and set
 **Highlight** for:
 
 - out-of-bounds points;
@@ -37,7 +37,7 @@ review decisions into the active pool without deleting the source data.
 ## 4. Verify the retained pool
 
 Check at least one trial from each participant or condition. Then open the
-🗂️ **Data** page and confirm the remaining participant, text, trial,
+:material/database: **Data** page and confirm the remaining participant, text, trial,
 fixation, and word counts are plausible.
 
 ## 5. Export the record

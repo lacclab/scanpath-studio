@@ -52,7 +52,7 @@ The app opens on a small bundled sample of the
 
 Click **+** beside **Select Dataset** and choose **Import files**. Upload a
 fixation table and a words (interest-area) table, check the column mapping the
-app proposes, describe the **Recording setup**, then click **✅ Add dataset**.
+app proposes, describe the **Recording setup**, then click **:material/check: Add dataset**.
 
 [Loading data](guides/loading-data.md) lists the accepted formats and what each
 table needs.

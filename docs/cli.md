@@ -21,7 +21,7 @@ scanpath-studio --server.address 0.0.0.0
 ```
 
 Served on a network, the app also turns off everything that reads or writes the
-server's own folders — the data-location box, the 📁 folder picker, ⬇ Download
+server's own folders — the data-location box, the :material/folder_open: folder picker, ⬇ Download
 for the public corpora and stimulus-image folders — since any visitor could use
 them. On a lab server you trust, turn them back on with `SCANPATH_LOCAL_FS=1`
 (`SCANPATH_LOCAL_FS=1 scanpath-studio --server.address 0.0.0.0`).
@@ -142,7 +142,7 @@ scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
 `--label-a` / `--label-b` also label the `--animate` co-animation.
 
 `--style-a` / `--style-b` are the app's per-scanpath styling (the Compare rows
-under 👁️ Fixations and ↗️ Saccades), `compare_scanpaths`'s `style_a` / `style_b`:
+under :material/blur_on: Fixations and :material/arrow_outward: Saccades), `compare_scanpaths`'s `style_a` / `style_b`:
 a comma-separated `KEY=VALUE` list, repeatable, with `fix_color` and
 `saccade_color` (`#RRGGBB`), `saccade_style` (`solid`, `dash`, `dot`,
 `dashdot`), `saccade_width` (px), `marker_size_range` (`MIN:MAX`), `opacity`
@@ -280,7 +280,7 @@ scanpath-studio cache --json     # the same status as JSON
 scanpath-studio cache --clear    # delete the stored session
 ```
 
-The same information is at the foot of the **🗂️ Data** page, under **Saved on
+The same information is at the foot of the **:material/database: Data** page, under **Saved on
 this computer**. A running app writes a new copy at its next change, so clear
 with the app closed. `SCANPATH_STUDIO_PERSIST=0` turns caching
 off permanently, `--no-persist` for one launch, and `SCANPATH_STUDIO_STATE_DIR`

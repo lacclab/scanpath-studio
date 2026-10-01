@@ -9,7 +9,7 @@ hide:
 Every figure on this page is drawn from the bundled demo while the docs are
 built, by the code shown under it, so what you see is what the current release
 renders. Hover a fixation or a word for its values. The app draws the same
-figures from its plot controls, and its 🔗 **Share** subtab prints the code that
+figures from its plot controls, and its :material/share: **Share** subtab prints the code that
 reproduces whichever one is on screen.
 
 All of them start from the demo and one of its trials:
@@ -37,7 +37,7 @@ print(embed(fig))  # markdown-exec: hide
 ## Where the reader dwelt
 
 The heatmap on its own, here as a smooth duration-weighted density rather than
-one tint per word; the app's **🔥 Heatmap** controls offer both.
+one tint per word; the app's **:material/local_fire_department: Heatmap** controls offer both.
 
 ```python exec="true" html="true" source="below" session="gallery"
 fig = sps.plot_scanpath(
@@ -156,7 +156,7 @@ print(embed(fig))  # markdown-exec: hide
 
 Beyond single trials: the total fixation duration on every word of one text,
 averaged over the demo's readers, with ± one standard deviation as a band. The
-app's 📊 **Corpus Analysis** view draws this and more.
+app's :material/bar_chart: **Corpus Analysis** view draws this and more.
 
 ```python exec="true" html="true" source="below" session="gallery"
 measures = sps.compute_word_metrics(words, fixations)

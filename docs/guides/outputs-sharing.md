@@ -31,14 +31,18 @@ The **Share** subtab passes a view on in three ways:
 - **Code** — Python or a CLI command that reproduces the figure.
 - **File** — the figure's settings as a file, to restore later.
 
+<figure class="sps-screenshot" markdown>
+![The Share subtab: the Link · Code · File switch, on Link](../assets/screenshots/share.webp)
+</figure>
+
 ## Back up your work
 
 | What | Where |
 | --- | --- |
-| figure settings | **🔗 Share → File** |
-| favorites, tags and notes | **🗂️ Data → Annotations → Export** |
-| column mapping and recording setup | **✏️ Edit dataset → Save setup** |
-| saved figure designs | **🎨 My designs → Export** |
+| figure settings | **:material/share: Share → File** |
+| favorites, tags and notes | **:material/database: Data → Annotations → Export** |
+| column mapping and recording setup | **:material/edit: Edit dataset → Save setup** |
+| saved figure designs | **:material/palette: My designs → Export** |
 
 None of these files contain your data rows; load the same data before restoring
 one. Notes may contain participant information, so check them before sharing.

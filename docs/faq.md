@@ -6,7 +6,7 @@
 
 Words and fixations must use the same pixel coordinates and share trial IDs.
 Most often the recording screen size is wrong: set the resolution of the
-monitor used in the experiment under 🗂️ **Data → ✏️ Edit dataset → Recording
+monitor used in the experiment under :material/database: **Data → :material/edit: Edit dataset → Recording
 setup**. *Estimate from my data* only gives a lower bound.
 
 ### The text is too big or too small
@@ -18,7 +18,7 @@ the real resolution (see above); for OneStop it is 2560×1440. In Python, pass
 ### A column was detected wrongly
 
 The app guesses columns from their names. Pick the right one under
-🗂️ **Data → ✏️ Edit dataset**, or pass `word_schema` / `fix_schema` to
+:material/database: **Data → :material/edit: Edit dataset**, or pass `word_schema` / `fix_schema` to
 [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data].
 
 ### Can I load only one table?
@@ -43,7 +43,7 @@ interest-area report provides, as they are. The Python function
 them from fixations and word boxes; [Computations](computations.md) defines
 each one.
 
-### Does 🧹 Filter change my data?
+### Does :material/cleaning_services: Filter change my data?
 
 No. It changes only what the figure draws. Your tables and measures stay as
 they are.
@@ -74,7 +74,7 @@ data to the online demo. See [Privacy](privacy.md).
 ### Will a refresh lose my work?
 
 Not on a local or desktop install: the app keeps a recovery copy of your
-datasets and settings, and **🗂️ Data → Saved on this computer** shows what it
+datasets and settings, and **:material/database: Data → Saved on this computer** shows what it
 holds. The online demo keeps nothing, so export your annotations and settings
 before you leave.
 

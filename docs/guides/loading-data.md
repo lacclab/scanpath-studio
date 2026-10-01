@@ -2,7 +2,7 @@
 
 ## Choose a source
 
-Open the dataset picker above the plot, or the 🗂️ **Data** page.
+Open the dataset picker above the plot, or the :material/database: **Data** page.
 
 - **Bundled Demo** — a small OneStop sample, for learning the app.
 - **Synthetic sample** — a hand-made six-word trial.
@@ -37,7 +37,7 @@ The import screen has three parts:
    text, add fields to filter and group by.
 3. **Recording setup** — the screen the data was recorded on (below).
 
-Then click **✅ Add dataset**. Anything the app cannot use is listed above the
+Then click **:material/check: Add dataset**. Anything the app cannot use is listed above the
 button before you confirm.
 
 ### Recording setup
@@ -50,7 +50,7 @@ values from assumed ones.
 
 ## The Data page
 
-🗂️ **Data** lists every dataset with its counts; click a row to open it.
+:material/database: **Data** lists every dataset with its counts; click a row to open it.
 **Edit dataset** changes a dataset's name, column mapping and recording setup,
 or adds a table it is missing. The page also holds each dataset's tables and its
 annotations, and at the foot, what is saved on this computer.

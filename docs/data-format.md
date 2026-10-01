@@ -34,7 +34,7 @@ Either main table may be omitted — the missing layer is skipped, and a
 words-only table still draws a heatmap from its pre-aggregated reading measures.
 
 Raw gaze can be the only table, too. Its samples are drawn as recorded, and for
-a dataset with no fixations the 🔵 **Raw gaze** layer is on by default. Nothing
+a dataset with no fixations the :material/grain: **Raw gaze** layer is on by default. Nothing
 is derived from the samples: no fixations are detected from them, so the
 fixation and saccade layers, the animated replay and Compare need a fixations
 table, and Corpus Analysis needs an AOI report that carries reading measures.
@@ -44,7 +44,7 @@ table, and Corpus Analysis needs an AOI report that carries reading measures.
 Attach a table of **one row per reader** — native language, age, a
 comprehension score, a group label. When you upload your own data it is one of
 the **Metadata** uploaders in part 2 of the setup wizard; for the demo, a public
-corpus, or a dataset you added earlier, the same uploader is on 🗂️ **Data → ✏️ Edit dataset**
+corpus, or a dataset you added earlier, the same uploader is on :material/database: **Data → :material/edit: Edit dataset**
 under **Metadata → Participants**. Its columns then behave like fields in the
 data: they filter trials (the filter funnel's *By reader* section), show up as
 chips above the plot, sort the trial picker, group cohorts in Corpus Analysis,
@@ -77,7 +77,7 @@ The same idea one grain down: a table of **one row per trial** — a list
 name, a presentation order, a per-trial comprehension score, whatever your
 design recorded about the trial rather than about the reader. It attaches
 beside the participant table — under **Metadata** in part 2 of the add-dataset
-wizard, and on 🗂️ **Data → ✏️ Edit dataset** under **Metadata → Trials** for a
+wizard, and on :material/database: **Data → :material/edit: Edit dataset** under **Metadata → Trials** for a
 dataset that is already loaded — and its columns behave like fields in the data in the same
 way: they filter trials, show up as chips above the plot, sort the trial picker,
 group cohorts in Corpus Analysis, appear in the inspection tables, and travel
@@ -108,7 +108,7 @@ Headless, it is `--trial-metadata FILE` on `scanpath-studio render` and
 
 The third grain: a table of **one row per text** — a genre, a difficulty rating,
 a stimulus-level comprehension score. It attaches beside the other two (under
-**Metadata → Texts** in the wizard and on ✏️ **Edit dataset**), keyed by text id
+**Metadata → Texts** in the wizard and on :material/edit: **Edit dataset**), keyed by text id
 alone — never by reader, since a text is a stimulus rather than something one
 reader owns — and, like the trial table, the id may be built from several
 columns. Its columns behave like fields in the data in the same way, travel with
@@ -205,7 +205,7 @@ The per-AOI reading measures — TFD, FFD, first-pass time (FPRT), regression
 path (RPD), second-pass and single-fixation duration, fixation count, skip,
 regressions in / out and their count, landing position and distance — are
 fields of the **AOI table**. Map them under **Reading measures** (two lines
-under the word box) when you add a dataset, or later on ✏️ Edit dataset. An
+under the word box) when you add a dataset, or later on :material/edit: Edit dataset. An
 EyeLink interest-area report maps them automatically from its `IA_*` names
 (`IA_DWELL_TIME`, `IA_FIRST_FIXATION_DURATION`, `IA_FIRST_RUN_DWELL_TIME`,
 `IA_REGRESSION_PATH_DURATION`, …); every one is optional.

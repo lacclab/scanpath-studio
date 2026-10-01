@@ -26,5 +26,11 @@ runOnSave = true
 # launched from this directory.
 maxUploadSize = 5000
 
+[client]
+# UX-183: no Deploy button. "viewer" drops Streamlit's developer-only toolbar
+# items but keeps the ⋮ menu and its System / Light / Dark switch. The CLI and the
+# desktop launcher pass the same value as a flag.
+toolbarMode = "viewer"
+
 [browser]
 gatherUsageStats = false

@@ -315,6 +315,16 @@ def launch_app(extra_args: list[str]) -> None:
         if any(str(arg).startswith("--browser.gatherUsageStats") for arg in extra_args)
         else ["--browser.gatherUsageStats=false"]
     )
+    # UX-183: Streamlit's toolbar resolves to "developer" on localhost, which
+    # puts a Deploy button (to Streamlit Community Cloud) in the header. The
+    # "viewer" toolbar drops it and the other developer-only items but keeps
+    # the ⋮ menu with its System / Light / Dark switch. Same override
+    # rule: `--client.toolbarMode=developer` brings the full toolbar back.
+    toolbar_args = (
+        []
+        if any(str(arg).startswith("--client.toolbarMode") for arg in extra_args)
+        else ["--client.toolbarMode=viewer"]
+    )
     app_resource = resources.files(__package__).joinpath("app.py")
     with resources.as_file(app_resource) as app_path:
         sys.argv = [
@@ -323,6 +333,7 @@ def launch_app(extra_args: list[str]) -> None:
             str(app_path),
             *theme_args,
             *stats_args,
+            *toolbar_args,
             *_max_upload_cli_flags(extra_args),
             *_bind_cli_flags(extra_args),
             *extra_args,

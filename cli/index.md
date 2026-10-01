@@ -243,7 +243,7 @@ The same information is at the foot of the **🗂️ Data** page, under **Saved 
 Generated from the parsers the commands themselves use, so every flag is here with the default and help `--help` prints.
 
 ```
-scanpath-studio 0.32.0 — visualize eye-tracking-while-reading scanpaths
+scanpath-studio 0.32.1 — visualize eye-tracking-while-reading scanpaths
 
 usage:
   scanpath-studio                  launch the interactive app (Streamlit)

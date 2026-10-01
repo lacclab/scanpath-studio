@@ -8,6 +8,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Changes not yet released are one file each in [`changelog.d/`](changelog.d/)
 (ENG-86); `scripts/changelog_fragments.py release` writes them in here.
 
+## [0.32.1] - 2026-10-01
+
+### Added
+- Corpus Analysis → Groups can now split or filter a cohort by an attached trial- or text-metadata field (marked 📋 and 📄), alongside reader fields and trial conditions. (AN-31)
+
+### Changed
+- The README and docs-home app demo recording is re-recorded from the current app. (ENG-87)
+- Export, `analyze` and `api.analysis_tables` write only the reading measures the dataset brought and compute none, as Corpus Analysis does; the Export bundle's Mega-table option is replaced by a "Combine all trials into one file" toggle that writes each chosen table once with every trial stacked in it. (EXP-23)
+- A replay's page is now a fraction of its old size: frames travel packed and are rebuilt in the browser, so the demo's longest trial loads as 0.3 MB instead of 12 MB (0.7 MB instead of 66 MB at the finest frame grid), in the app, the saved HTML and the docs gallery alike. (PERF-17)
+
+### Fixed
+- A missing corpus's "isn't here yet" note no longer carries over to the next dataset you open after a load that stopped at a column-mapping problem. (BUG-96)
+- The bundled demo now holds only readers it has fixations for: the third reader, who had word boxes but no fixations, is gone, so every trial the Data page counts can be opened. (DATA-43)
+- A Participants, Trials or Texts table now picks its id column by itself whenever the data would, so a Texts table keyed by `unique_paragraph_id` needs no manual pick. (DATA-44)
+- A text-metadata field picked in the chips now shows its value above the plot, like participant and trial fields; before, the chip silently rendered nothing. (DATA-45)
+- Favorites, tags and notes now belong to the dataset they were made on: another dataset that reuses the same participant and trial ids no longer shows them, and annotations saved by an earlier version come back on the added dataset that has their trial, or else on the first dataset you open. (DATA-48)
+- A word table with no participant column now attaches to each reading by its trial ID, or by Text ID when the trial IDs include the reader, so the add-dataset screen says how the words attached and stops with a message instead of adding a dataset with no word boxes; with no Text ID mapped, a repeated reading now shares its first reading's text ID, so per-text grouping pools re-readings. (DATA-49)
+- The Texts count on the Data page and in a dataset's Stats now counts the text ids in every table, so a dataset whose text id is only on its fixations no longer says it has none. (DATA-50)
+- An AOI export whose word-id column is `AOI_ID` now maps it by itself, next to `AOI_LABEL` and the `AOI_*` box edges, instead of sending you to map it by hand. (DATA-60)
+- When scanpath B comes from a second dataset, the Share code snippet's Python and CLI halves now both load B's own tables (placeholders `B_WORDS` / `B_FIXATIONS` to point at its files) and state B's screen, instead of looking B's reader up in the first dataset. (EXP-21)
+- Wizard and Edit-dataset metadata rows keep their Participants / Trials / Texts title visible once a file is attached. (UX-147)
+- Long 'Extra fields to keep' chip lists wrap onto more rows instead of scrolling sideways out of sight. (UX-148)
+- Two trial filters over columns that read the same, such as `TRIAL_INDEX` and `trial_index`, no longer share a title: the second names its column, as the chip editor already did. (UX-149)
+- Narrowing the trial pool no longer switches the design preset to 🛠️ Custom, and a trial with no fixations no longer clears the fixation hover fields you picked. (VIZ-44)
+- A dataset recorded as raw gaze alone now opens showing its samples: the Raw gaze layer is on by default when a dataset has no fixations, samples-only trials are pickable, the chips count gaze samples instead of showing zero reading time and fixations, no "derived from raw gaze" Illustration label appears, Animate and Compare fall back to the static figure with the reason, the Export bundle draws the samples and can include them as a table, and `render --raw-gaze` and `plot_scanpath(raw_gaze=…)` accept raw gaze as the only input. (VIZ-45)
+
 ## [0.32.0] - 2026-09-30
 
 ### Added

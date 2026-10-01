@@ -1,1 +1,0 @@
-A replay's page is now a fraction of its old size: frames travel packed and are rebuilt in the browser, so the demo's longest trial loads as 0.3 MB instead of 12 MB (0.7 MB instead of 66 MB at the finest frame grid), in the app, the saved HTML and the docs gallery alike.

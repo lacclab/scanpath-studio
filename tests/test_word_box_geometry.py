@@ -9,8 +9,8 @@ against one or one is drawn, and a fixation on the space after a word belongs to
 that word.
 
 The layout's *shape* still matters inside a word: `word_box_space_px` detects the
-trailing space so the letter scale (BUG-27) and the drawn label (BUG-30) stay on
-the glyphs, which is what the second half of this module pins.
+trailing space so the letter scale (BUG-27) and the glyph run stay on the
+letters, which is what the second half of this module pins.
 """
 
 from __future__ import annotations
@@ -308,27 +308,28 @@ class TestTheGlyphsStayWhereTheStimulusHadThem:
         assert list(start) == list(words["x"])
         assert list(run) == pytest.approx(list(words["width"]))
 
-    def test_the_label_is_centred_on_the_glyphs_not_the_box(self):
-        """Centring in the raw tiling box would draw 'Robert' at 424.5, half a
-        space right of the text the stimulus image shows at 358 → 472."""
+    def test_the_label_is_centred_in_the_box(self):
+        """#BUG-97: the label sits in the middle of the box the data defines —
+        'Robert', 358 → 491, at 424.5 — not on its glyph run (BUG-30's 415),
+        which drew every tiling word flush left in its box."""
         from scanpath_studio import plots
 
         words = _tiling_words()
         fig = plots.go.Figure()
         plots._add_word_label_trace(fig, words, base_font_size=12, font_family="mono")
         (trace,) = [t for t in fig.data if t.name == "words"]
-        assert trace.x[0] == pytest.approx(415.0)
+        assert trace.x[0] == pytest.approx(424.5)
 
-    def test_snapping_a_fixation_lands_on_the_glyph_centre(self):
-        """Render-only, like the label: the linear-reading schematic puts the
-        dot above the text, not half a character right of it."""
+    def test_snapping_a_fixation_lands_on_the_box_centre(self):
+        """Render-only, like the label, and on the same point: the
+        linear-reading schematic puts the dot above the word's label."""
         from scanpath_studio import plots
 
         words = _tiling_words()
         out = plots._snap_fixations_to_words(
             _fixation(400.0, word_id=0), words, "x", "y"
         )
-        assert out["x"].iloc[0] == pytest.approx(415.0)
+        assert out["x"].iloc[0] == pytest.approx(424.5)
         assert out["y"].iloc[0] == pytest.approx(100.0)
 
     def test_a_landing_on_the_trailing_space_is_not_clipped(self):

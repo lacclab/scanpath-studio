@@ -1001,7 +1001,7 @@ Where one word's interest area ends and the next begins.
 | | |
 | --- | --- |
 | **Unit** | px |
-| **Precedence & caveats** | The boundary *between* words, for everything that tests a point against a box or draws one: `assign.fixation_to_word`, `assign.in_text`, the drawn outlines, the word heatmaps, the critical-span frame, drift correction and the model scanpaths. A position *inside* a word goes through `geom.word_char_advance` instead, and the drawn label through `geom.word_glyph_span`. #BUG-83 reverted BUG-11, which pulled every tiling boundary back half a space to mid-whitespace and so disagreed with EyeLink's own interest-area assignment on 7.4% of the demo's fixations. |
+| **Precedence & caveats** | The boundary *between* words, for everything that tests a point against a box or draws one: `assign.fixation_to_word`, `assign.in_text`, the drawn outlines, the word heatmaps, the critical-span frame, drift correction and the model scanpaths. A position *inside* a word goes through `geom.word_char_advance` instead, and where its letters are through `geom.word_glyph_span`; the drawn word label is centred in the box (#BUG-97). #BUG-83 reverted BUG-11, which pulled every tiling boundary back half a space to mid-whitespace and so disagreed with EyeLink's own interest-area assignment on 7.4% of the demo's fixations. |
 | **Code** | `scanpath_studio/measures.py:word_box_bounds` |
 | **Consumers** | UI, API, Corpus Analysis |
 | **Tests** | `tests/test_word_box_geometry.py`, `tests/test_word_id_offset.py` |
@@ -1041,16 +1041,16 @@ How wide one letter is — the scale for every within-word position.
 
 ### `geom.word_glyph_span` — Where a word's glyphs are { #geom-word-glyph-span }
 
-The glyph run inside a word's box — where its label is drawn.
+The glyph run inside a word's box — where its letters are.
 
 **Formula.** Starts at `x` and runs `len(text) × geom.word_char_advance`: the whole box on a glyph-tight corpus, one advance short of it on a tiling one. No `text` ⇒ the box width.
 
 | | |
 | --- | --- |
 | **Unit** | px |
-| **Precedence & caveats** | Rendering, not an interest area: the word label is centred on it (BUG-30), the linear-reading schematic snaps a fixation above its centre, and `agg.landing_curve` mirrors an RTL landing across it. #BUG-83 keeps the label here while the drawn box grew to the experiment's — centring in a tiling box would draw the text half a space right of the stimulus image and the fixations. |
+| **Precedence & caveats** | Not an interest area: `agg.landing_curve` measures a landing across it and mirrors an RTL one. The drawn word label and the linear-reading snap used to sit on it (BUG-30); #BUG-97 centres both in the box as the data defines it. |
 | **Code** | `scanpath_studio/measures.py:word_glyph_span` |
-| **Consumers** | UI, API, CLI, Export, Corpus Analysis |
+| **Consumers** | UI, API, Corpus Analysis |
 | **Tests** | `tests/test_word_box_geometry.py` |
 | **Verification** | tier A — **Verified** |
 

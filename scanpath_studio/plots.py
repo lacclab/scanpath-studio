@@ -1029,15 +1029,13 @@ def _snap_fixations_to_words(
         wid = pd.to_numeric(
             assign_fixations_to_words(out, words)["word_id"], errors="coerce"
         )
-    # Snap above the word's *glyphs*, where its label is drawn — not the middle
-    # of its interest area. A tiling box carries the following space as its last
-    # cell, so the box centre sits half a character right of the text, visibly
-    # off-centre once a fixation snaps to it. Render-only: which word a fixation
-    # belongs to is still `assign_fixations_to_words`, against the raw boxes.
-    from .measures import word_glyph_span
+    # Snap above the middle of the word's box, where its label is drawn (BUG-97).
+    # Render-only: which word a fixation belongs to is still
+    # `assign_fixations_to_words`, against the same boxes.
+    from .measures import word_box_bounds
 
-    start, run = word_glyph_span(words)
-    cx_by_id = dict(zip(words["word_id"], start + run / 2.0))
+    x0, _, x1, _ = word_box_bounds(words)
+    cx_by_id = dict(zip(words["word_id"], (x0 + x1) / 2.0))
     top_by_id = dict(zip(words["word_id"], pd.to_numeric(words["y"], errors="coerce")))
     snap_x = wid.map(cx_by_id)
     snap_y = wid.map(top_by_id)
@@ -1163,9 +1161,7 @@ def build_word_boxes(words: pd.DataFrame, color: str = WORD_BOX_COLOR) -> list:
     Drawn from ``measures.word_box_bounds`` — the experiment's own rectangles
     (BUG-83) — so what's on screen is exactly what ``assign_fixations_to_words``
     assigns against. On a tiling corpus each outline therefore runs on across
-    the space after its word, while the word *label* sits on the glyphs
-    (``measures.word_glyph_span``), which is what keeps the true-to-scale text on
-    top of the stimulus image.
+    the space after its word, and the word *label* is centred in it (BUG-97).
     """
     from .measures import word_box_bounds
 
@@ -1453,27 +1449,12 @@ def _add_word_label_trace(
         ]
     else:
         label_color = text_color
-    # BUG-30 — the label is **centred on its word's glyphs**, so whatever room the
-    # text does not fill splits evenly instead of piling up on one side.
-    #
-    # It used to anchor at the box's leading edge (raw `x` for LTR, `x + width`
-    # for RTL), which put every word flush against that edge: the ~8% of slack
-    # `_WIDTH_FIT_MARGIN` leaves, plus whatever the conservative width fit gives
-    # back on a short word, all showed up as a gap on the *trailing* side and none
-    # on the leading one — "no space from the left side of the AOI".
-    #
-    # Centred on the word's *glyph run* (`measures.word_glyph_span`), not on its
-    # interest area. Where the boxes hug the glyphs the two are the same, and the
-    # padding lands half on each side — which is the reported ask, as a
-    # rendering. A tiling corpus' box carries the following space as its last
-    # cell (BUG-83 keeps it there, as the experiment defined it), so its centre
-    # sits half a space right of the text; centring the label there would draw
-    # every word off the stimulus image and off the fixations that read it.
-    #
-    # Centring also retires the LTR/RTL anchor split: centred text is centred in
-    # either direction. The Unicode direction isolates stay — they are about
-    # *shaping* mixed Hebrew/Arabic + punctuation, not about placement.
-    from .measures import word_glyph_span
+    # BUG-97 — the label is centred in its word's box, as the data defines it.
+    # BUG-30 centred it on the glyph run instead, which on a tiling corpus (the
+    # box carries the following space) drew every word flush left in its box.
+    # Centred text needs no LTR/RTL anchor; the Unicode direction isolates stay —
+    # they are about *shaping* mixed Hebrew/Arabic + punctuation, not placement.
+    from .measures import word_box_bounds
     from .preprocessing import detect_right_to_left
 
     rtl = words.get("right_to_left")
@@ -1481,8 +1462,8 @@ def _add_word_label_trace(
         rtl = words["text"].astype(str).map(detect_right_to_left)
     else:
         rtl = rtl.fillna(False).astype(bool)
-    glyph_start, glyph_run = word_glyph_span(words)
-    label_x = glyph_start + glyph_run / 2.0
+    box_x0, _, box_x1, _ = word_box_bounds(words)
+    label_x = (box_x0 + box_x1) / 2.0
     label_text = [
         f"\u2067{value}\u2069" if is_rtl else value
         for value, is_rtl in zip(words["text"].astype(str), rtl)

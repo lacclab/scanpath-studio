@@ -113,8 +113,8 @@ def _assign_word_ids_single(
 # What the layout's shape is still needed for is *inside* a word. A tiling box
 # is one advance wider than its glyph run, so `word_char_advance` divides by
 # ``len(text) + 1`` there (BUG-27), and `word_glyph_span` says where the letters
-# actually are — the drawn word labels sit on the glyph run (BUG-30), not in the
-# middle of a box whose right-hand cell is a space. `word_box_space_px` only
+# actually are, for landing positions. (The drawn word label is centred in the
+# box itself — BUG-97.) `word_box_space_px` only
 # reports a padding width when the layout really looks like "tiling boxes with
 # one trailing space"; glyph-tight AOIs (PoTeC, MultiplEYE) read 0.0.
 _TILING_GAP_TOL_PX = 1.0
@@ -292,13 +292,12 @@ def word_glyph_span(
 ) -> tuple[np.ndarray, np.ndarray]:
     """``(start, run)`` — where each word's glyphs begin, and how wide they are.
 
-    A rendering accessor, not an interest area: the drawn word label is centred
-    on ``start + run / 2`` (BUG-30), and a fixation snapped to its word in the
-    linear-reading schematic lands there too. On a glyph-tight layout the run is
-    the whole box; on a tiling one it is ``len(text)`` :func:`word_char_advance`
-    units, one advance short of the box, whose last cell is the space after the
-    word. Centring a label in that box would draw the text half a space right of
-    where the stimulus had it, and off the fixations that read it.
+    Not an interest area: ``agg.landing_positions`` measures a landing (and
+    mirrors an RTL one) across it. On a glyph-tight layout the run is the whole
+    box; on a tiling one it is ``len(text)`` :func:`word_char_advance` units,
+    one advance short of the box, whose last cell is the space after the word.
+    The drawn word label is *not* placed on it — that is centred in the box
+    (BUG-97).
 
     Falls back to the box ``width`` for a frame with no ``text`` column, where
     there are no letters to count. ``layout`` is as for

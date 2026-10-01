@@ -204,7 +204,7 @@ Parts of the site are generated when it builds, so they cannot drift:
 
 - `` ```python exec="true" `` fences run during the build (markdown-exec): the
   Gallery's figures, printed example output, the CLI and figure-option
-  references, the in-app tutorial steps, and the Cite and Changelog pages, all
+  references, and the Cite and Changelog pages, all
   through [`scripts/docs_support.py`](scripts/docs_support.py). A fence that
   raises fails the build.
 - The API reference is generated from the `api.py` docstrings, so keep those

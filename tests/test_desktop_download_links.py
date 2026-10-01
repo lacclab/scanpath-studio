@@ -15,7 +15,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 DOWNLOAD = "https://github.com/lacclab/scanpath-studio/releases/latest/download/"
-PAGES = ["README.md", "docs/getting-started.md", "docs/desktop.md"]
+PAGES = ["README.md", "docs/getting-started.md"]
 
 
 def _published_archives() -> set[str]:

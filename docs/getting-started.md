@@ -1,78 +1,65 @@
 # Getting started
 
-## 1. Choose how to run it { #install }
+## 1. Install { #install }
 
 === "Try online"
 
-    Open the [live demo](https://scanpath-studio.streamlit.app). Use only public
-    or non-sensitive data on the hosted service.
+    Open the [live demo](https://scanpath-studio.streamlit.app). Nothing to
+    install.
 
-=== "Install with pip"
+=== "pip"
 
     ```bash
     pip install scanpath-studio
     scanpath-studio
     ```
 
-    Requires Python 3.11–3.14 and opens the app at
-    <http://localhost:8501>.
+    Needs Python 3.11–3.14. The app opens at <http://localhost:8501>.
 
 === "Desktop app"
 
-    Download the build for your operating system —
-    [macOS (Apple silicon)](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-macos-arm64.dmg) ·
-    [Windows](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip) ·
-    [Linux](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-linux-x86_64.tar.gz) —
-    and launch Scanpath Studio. On macOS that is a `.dmg` you drag to
-    Applications; on Windows and Linux an archive you unpack. See the
-    [desktop notes](desktop.md) for the first-launch steps.
+    No Python needed. Download the build for your system, then:
 
-## 2. Make the first plot
+    - **macOS** (14 or later, Apple silicon):
+      [`ScanpathStudio-macos-arm64.dmg`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-macos-arm64.dmg).
+      Open it, drag **Scanpath Studio** to **Applications**, and launch it from
+      there. If macOS refuses to open it, go to **System Settings → Privacy &
+      Security** and click **Open Anyway**.
+    - **Windows**:
+      [`ScanpathStudio-windows-x86_64.zip`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip).
+      Extract it and run `ScanpathStudio.exe`. The build is not code-signed, so
+      SmartScreen warns the first time: click **More info → Run anyway**.
+    - **Linux**:
+      [`ScanpathStudio-linux-x86_64.tar.gz`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-linux-x86_64.tar.gz).
+      Extract it and run `./ScanpathStudio/ScanpathStudio`.
 
-1. Keep **Bundled Demo** as the data source.
-2. Keep the default participant and trial.
-3. Use the layer controls beside the plot to show or hide text, fixations,
-   saccades, bounding boxes, and the heatmap.
-4. Turn on **Animate** to replay the trial.
-5. Open **Export → Current figure** and download HTML. HTML needs nothing
-   else, nor do a still figure's PNG and SVG; PDF, GIF and MP4 need Chrome,
-   Chromium or Edge.
+    The app opens in its own window. To quit, close that window on macOS, or
+    the console window on Windows and Linux. On an Intel Mac or an older macOS,
+    use pip instead.
 
-Next, pick a [tutorial](tutorials/index.md).
+## 2. Explore the demo
 
-## 3. Load your data
+The app opens on a small bundled sample of the
+[OneStop](onestop.md) corpus.
 
-Click **+** beside **Select Dataset**, choose **Import files**, upload your fixation and words/IA
-tables, check the proposed column mapping, answer **Recording setup**, then
-select **✅ Add dataset**. See
-[Loading public and own data](guides/loading-data.md) for accepted formats,
-manual mapping, and common checks. **🗂️ Data → ➕ Add dataset** opens the same wizard.
+1. Pick a trial with the picker above the plot.
+2. Switch layers on and off in the controls beside the plot: fixations,
+   saccades, text, word boxes, heatmap.
+3. Turn on **Animate** to replay the reading.
+4. Open **Export → Current figure** to download it.
 
-## Author a scanpath without files
+## 3. Load your own data
 
-Choose **+ → Create manually** beside **Select Dataset** when you want to sketch a
-trial from text instead of uploading tables. Enter the stimulus, inspect the
-generated word boxes, then edit the scanpath in either place:
+Click **+** beside **Select Dataset** and choose **Import files**. Upload a
+fixation table and a words (interest-area) table, check the column mapping the
+app proposes, describe the **Recording setup**, then click **✅ Add dataset**.
 
-- click empty canvas space to add a fixation;
-- drag a fixation to change its X/Y coordinate;
-- select and delete a fixation on the canvas; or
-- edit the event table directly.
+[Loading data](guides/loading-data.md) lists the accepted formats and what each
+table needs.
 
-The editor starts with one centred fixation per word. X/Y is the authoritative
-location; **Target word** is optional metadata for reading measures, so a
-fixation may sit between or outside words. Enter a **Dataset name** and choose
-**Save dataset** to add it to the dataset list and open its regular visualization.
-**Cancel** returns to the previous dataset without adding one.
+## Next steps
 
-For a ready-made example, choose **Synthetic sample** in the dataset picker:
-a manually authored six-word example that opens like any other dataset. To
-change its text, fixation positions, or timing, open it from the list on
-the 🗂️ **Data** page and choose **Edit dataset**; its draft is
-separate from your own scanpath. You can also start a scanpath from **🗂️ Data →
-+ Add dataset → Create manually**.
-
-## Run from source
-
-To run from a source checkout, see the
-[contributor guide](https://github.com/lacclab/scanpath-studio/blob/main/CONTRIBUTING.md).
+- [Tutorials](tutorials/index.md) walk through common tasks, from checking a
+  pilot to exporting a figure.
+- [Feature guides](guides/index.md) explain each part of the app.
+- [Automation](automation.md) covers the Python API and the command line.

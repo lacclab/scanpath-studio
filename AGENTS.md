@@ -252,7 +252,7 @@ uv run --with playwright python scripts/capture_docs_screenshots.py  # re-captur
 User-facing docs live in `docs/` and publish to
 <https://lacclab.github.io/scanpath-studio/>. The Python API reference is
 generated from the `api.py` docstrings, so keep those current. The gallery,
-printed example output, CLI and figure-option references, in-app tutorial steps,
+printed example output, CLI and figure-option references,
 and the Cite / Changelog pages are generated at build time by `exec="true"`
 fences calling `scripts/docs_support.py` — see CONTRIBUTING.md → *Docs site*.
 

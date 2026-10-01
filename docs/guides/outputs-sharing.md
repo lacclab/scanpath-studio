@@ -1,89 +1,49 @@
 # Outputs and sharing
 
-## Export results
+## Export
 
 Open the **Export** subtab in the Scanpath view.
 
-- **Current figure** exports the visible static or animated figure.
-- **Export bundle** packages figures, tables, and configuration metadata for
-  this trial, a filtered subset, or the whole dataset. Its **Also include →
-  Separable layers** toggle adds aligned text, boxes, fixations, saccades,
-  heatmap, and image layers as separate files for editing, and **Tabular data →
-  Full measure family** adds saccades, sentence measures, trial and reader
-  summaries, character grids, cleaning QA and `run_config.json`. **Tabular
-  data → Word measures** writes the reading measures the dataset brought, as
-  mapped on the 🗂️ **Data** page; like Corpus Analysis, Export computes none,
-  so a dataset without them gets no word-measure table and the bundle's
-  `README.md` says so. **Tabular data → Raw gaze** writes
-  each exported trial's gaze samples as recorded, as `raw_gaze.csv` (or
-  `.parquet`) beside its other tables; a trial with no samples gets none.
-  Tables are written one file per trial; **Combine all trials into one file**
-  writes each table once instead, every exported trial stacked in it, as
-  `aggregate/all_<table>`. The reader summary spans trials, so it is always
-  under `aggregate/`.
-  The bundle's figures draw the samples whenever the 🔵 **Raw gaze** layer is
-  on. **Also include → Annotations (JSON)**
-  adds `annotations.json`: the favorites, tags and notes on the exported
-  trials, which 🗂️ Data → Annotations can import.
+- **Current figure** downloads what is on screen: PNG, SVG, PDF or HTML, or the
+  replay as HTML, GIF or MP4.
+- **Export bundle** writes figures and tables for this trial, the filtered
+  trials, or the whole dataset, plus a `plot_config.json` to recreate them.
+  Options add separable layers for a vector editor, raw gaze, annotations, and
+  more tables. Tables are written per trial, or combined into one file each.
+  Word tables carry the reading measures your data brought; the export computes
+  none.
 
 <figure class="sps-screenshot" markdown>
 ![The Export subtab: the current figure, and the bundle's trials, formats, tables and file naming](../assets/screenshots/export.webp)
 </figure>
 
-With a [participant metadata](../data-format.md#participant-metadata) table
-attached, the bundle also carries `metadata/participants.*`, and **Participant
-fields to include** chooses which of its columns go in. Every field is selected
-by default; clearing one drops it, and clearing them all leaves the table out
-entirely.
+HTML, and the current figure's PNG and SVG, always work. PDF, GIF, MP4 and the
+bundle's images need Chrome, Chromium or Edge installed
+([FAQ](../faq.md#export-fails)).
 
-HTML is interactive and needs no local browser engine. PNG, SVG, PDF, GIF, and
-MP4 use Chrome/Chromium through Kaleido. See
-[Export troubleshooting](../export-troubleshooting.md) if those formats fail.
+## Share
 
-## Share a view
+The **Share** subtab passes a view on in three ways:
 
-The **Share** subtab has three ways to pass the figure on — **Link**, **Code**
-and **File**. **Link** is a deep link containing the selected data source and
-visualization settings; **Refresh & Copy** rebuilds the URL from the current
-trial and settings and places it on the clipboard in one step. **Code** is the
-code that reproduces the figure, in Python or as a CLI command. **File** is a
-settings file, described below.
+- **Link** — a URL with the dataset choice, trial and every figure setting.
+  It never contains your uploaded data: the recipient must load the same
+  dataset. (A scanpath created by hand is the exception; its link carries it.)
+- **Code** — Python or a CLI command that reproduces the figure.
+- **File** — the figure's settings as a file, to restore later.
 
-<figure class="sps-screenshot" markdown>
-![The Share subtab: the Link · Code · File switch, on Link](../assets/screenshots/share.webp)
-</figure>
+## Back up your work
 
-A link never contains an uploaded or public dataset's fixation or word tables.
-Built-in data can be reopened from the URL; a recipient of an uploaded-data link
-must load the same dataset. The one exception is **✏️ Author a scanpath**: there
-the text and every hand-placed fixation *are* the dataset, so its link carries
-them.
+| What | Where |
+| --- | --- |
+| figure settings | **🔗 Share → File** |
+| favorites, tags and notes | **🗂️ Data → Annotations → Export** |
+| column mapping and recording setup | **✏️ Edit dataset → Save setup** |
+| saved figure designs | **🎨 My designs → Export** |
 
-The link carries every figure setting, including the recording setup and
-Compare's per-scanpath styles; settings left at the dataset's defaults are
-omitted to keep it short. Public corpora travel by name, not data: the recipient
-needs the same corpus set up; otherwise the link leaves the data source
-unchanged.
+None of these files contain your data rows; load the same data before restoring
+one. Notes may contain participant information, so check them before sharing.
 
-## Back up and restore work
+On a local or desktop install, the app also keeps a recovery copy of your
+datasets and work, restored after a refresh or restart.
 
-Each kind of work has its own file, downloaded where it is edited:
-
-- **🔗 Share → File** — the figure's settings and trial. *Restore settings*
-  re-applies one; settings that don't fit the loaded data are listed and
-  skipped.
-- **🗂️ Data → Annotations** — a dataset's favorites, tags and notes, with
-  *Export* and *Import*. Inspect them before sharing: notes may contain
-  participant-related information.
-- **✏️ Edit dataset → Save setup** — a dataset's column mapping and recording
-  setup, restored when you add the same kind of data again.
-- **🎨 My designs → Export** — your saved figure designs, imported on another
-  computer with *Import*.
-
-None of these files contains uploaded dataset rows; load the same data before
-restoring them. That differs from the recovery cache, which keeps dataset
-tables and working state on the current computer and restores them after a
-refresh or restart — see **Saved on this computer** at the foot of the
-🗂️ Data page.
-
-For repeatable scripted output, use [Automation](../automation.md).
+For scripted output, see [Automation](../automation.md).

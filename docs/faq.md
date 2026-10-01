@@ -1,78 +1,91 @@
 # FAQ
 
-## Why is the plot empty or misaligned?
+## Loading data
 
-Check the 🗂️ **Data** page. The words and fixations must share trial IDs and the
-same pixel coordinate system. Also set the monitor size used in the experiment
-(🗂️ **Data → ✏️ Edit dataset → Recording setup**): most eye-tracker exports
-don't record it, and *Estimate from my data* gives only a lower bound. See
-[Loading data](guides/loading-data.md).
+### The fixations don't line up with the text
 
-## Why do the measures differ from EyeLink or my pipeline?
+Words and fixations must use the same pixel coordinates and share trial IDs.
+Most often the recording screen size is wrong: set the resolution of the
+monitor used in the experiment under 🗂️ **Data → ✏️ Edit dataset → Recording
+setup**. *Estimate from my data* only gives a lower bound.
 
-Recognized EyeLink IA measures are preserved. Otherwise the app assigns
-fixations using your word boxes and computes its own measures. AOI padding,
-fixation exclusions, and definitions can differ between pipelines. Cross-check
-values used in a publication.
+### The text is too big or too small
 
-## Does 🧹 Filter change the measures?
+Text is drawn to scale from the word boxes and the recording screen size. Set
+the real resolution (see above); for OneStop it is 2560×1440. In Python, pass
+`canvas_size=(2560, 1440)`.
 
-No. The plot rail's **🧹 Filter** section — duration, boundary, and index
-controls for fixations, reading classes for saccades — affects the rendered
-scanpath only. It does not edit the source tables or recompute the corpus
-measures.
+### A column was detected wrongly
 
-## Can I load only one table?
+The app guesses columns from their names. Pick the right one under
+🗂️ **Data → ✏️ Edit dataset**, or pass `word_schema` / `fix_schema` to
+[`load_scanpath_data`][scanpath_studio.api.load_scanpath_data].
 
-Yes. A words-only table can visualize precomputed word measures; a
-fixations-only table can show gaze positions without stimulus text. Most
-features work best with both tables.
+### Can I load only one table?
 
-## A zip upload is refused as "above the per-file limit"
+Yes. A words table alone shows the text and any reading measures it carries; a
+fixations table alone shows gaze positions without text. Most features need
+both.
 
-The app caps how far a `.zip` may decompress (32 GB per file and 64 GB in total
-by default). The error names the setting to raise, e.g.
+### My zip file is refused as too large
+
+The app limits how far a `.zip` may decompress (32 GB per file, 64 GB in
+total). The error names the setting that raises it, for example
 `SCANPATH_ZIP_MAX_MEMBER_GB=64 scanpath-studio`.
 
-## Why does HTML export work but PDF fail?
+## Results
 
-In the app, **Export → Current figure** saves a still figure's PNG and SVG in
-your browser from the figure on screen, so they always work. PDF, GIF and MP4,
-the images in the export bundle and the Compare pair bundle, and
-`save_figure` / `render` use Kaleido, which needs Chrome, Chromium or Edge. See [Export troubleshooting](export-troubleshooting.md).
+### Does the app compute reading measures?
 
-## Can another person open my share link?
+Not in the app. Corpus Analysis and Export show the measures your
+interest-area report provides, as they are. The Python function
+[`compute_word_metrics`][scanpath_studio.api.compute_word_metrics] does compute
+them from fixations and word boxes; [Computations](computations.md) defines
+each one.
 
-Yes, but uploaded data is not embedded in the URL. The recipient must load the
-same dataset. Share links include the current participant and trial; see
-[Outputs and sharing](guides/outputs-sharing.md).
+### Does 🧹 Filter change my data?
 
-## Does a refresh erase my work?
+No. It changes only what the figure draws. Your tables and measures stay as
+they are.
 
-Not on a local or desktop install: completed datasets and session state are
-restored from an on-device recovery cache. The hosted demo keeps nothing —
-export your annotations from **🗂️ Data → Annotations** and the figure's settings
-from **🔗 Share → File** there.
+## Export and sharing
 
-## Where does my data go?
+### PDF, GIF or MP4 export fails { #export-fails }
 
-Local and desktop use stays on your machine: nothing is uploaded, and there are
-no accounts or analytics. A local or desktop run also keeps a recovery copy of
-your datasets and settings; **🗂️ Data → Saved on this computer** shows what
-it holds and where. Don't upload identifiable data to the hosted demo. See
-[Privacy](privacy.md).
+These formats need Chrome, Chromium or Edge installed on the computer running
+the app. Installing one is enough. With a pip install you can instead run
+`plotly_get_chrome -y` once. HTML, and the current figure's PNG and SVG, work
+without a browser.
 
-## How do I turn the recovery copy off, or delete it?
+### Can someone else open my share link?
 
-Start the app with `scanpath-studio run --no-persist`, or set
-`SCANPATH_STUDIO_PERSIST=0`, and nothing is saved. `scanpath-studio cache
---clear` deletes what is already stored — close the app first, or its next
-change writes a new copy — and `SCANPATH_STUDIO_STATE_DIR=/your/folder` keeps it
-somewhere else. See [Recovery cache](cli.md#recovery-cache).
+Yes, but the link does not contain your uploaded data, so they need to load the
+same dataset first. The bundled demo opens directly, and a public corpus opens
+if they have it set up.
 
-## How do I cite the app?
+## Privacy and storage
 
-By its Zenodo DOI,
-[10.5281/zenodo.22933884](https://doi.org/10.5281/zenodo.22933884), which always
-resolves to the latest release. [Cite](cite.md) has the BibTeX and APA entries,
-and the citations for the demo data and any public corpus you used.
+### Where does my data go?
+
+When you run it locally or as the desktop app, nowhere: it stays on your
+computer. There are no accounts and no analytics. Don't upload identifiable
+data to the online demo. See [Privacy](privacy.md).
+
+### Will a refresh lose my work?
+
+Not on a local or desktop install: the app keeps a recovery copy of your
+datasets and settings, and **🗂️ Data → Saved on this computer** shows what it
+holds. The online demo keeps nothing, so export your annotations and settings
+before you leave.
+
+### How do I turn the recovery copy off, or delete it?
+
+Start the app with `scanpath-studio run --no-persist` to save nothing. To
+delete what is saved, close the app and run `scanpath-studio cache --clear`.
+See [Recovery cache](cli.md#recovery-cache).
+
+## Citing
+
+### How do I cite Scanpath Studio?
+
+See [Cite](cite.md) for BibTeX and APA entries, and for the datasets you used.

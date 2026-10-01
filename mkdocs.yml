@@ -91,9 +91,7 @@ nav:
           - Loading public and own data: guides/loading-data.md
           - Corpus workspace: guides/corpus-workspace.md
           - Outputs and sharing: guides/outputs-sharing.md
-      - Desktop app: desktop.md
       - FAQ: faq.md
-      - Export troubleshooting: export-troubleshooting.md
   - Gallery: gallery.md
   - Automate:
       - Overview: automation.md
@@ -164,6 +162,9 @@ plugins:
         multipleye.md: guides/loading-data.md
         rendering.md: guides/scanpath-visualization.md
         contributing-a-dataset.md: https://github.com/lacclab/scanpath-studio/blob/main/docs/contributing-a-dataset.md
+        # ENG-88 folded these into Getting started and the FAQ.
+        desktop.md: getting-started.md#install
+        export-troubleshooting.md: faq.md#export-fails
   # Runs the pages' `exec="true"` fences: the gallery, printed example output,
   # and the generated references (scripts/docs_support.py).
   - markdown-exec

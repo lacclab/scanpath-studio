@@ -1,5 +1,8 @@
 # Tutorials
 
+Each tutorial walks one research task from start to finish. New here? Start
+with [Getting started](../getting-started.md).
+
 <div class="grid cards" markdown>
 
 - :material-clipboard-pulse:{ .lg .middle } **[Data collection](data-collection.md)**
@@ -20,17 +23,5 @@
 
 </div>
 
-New here? Complete [Getting started](../getting-started.md) first.
-
-## In the app
-
-Five shorter tutorials run inside the app, under ❓ **Help → 🧭 Tutorials**.
-Each one spotlights the controls it names as you go, keeps its own progress,
-and never changes your data, filters, annotations, or settings. These are the
-steps each one walks, as the app shows them:
-
-```python exec="true" idprefix=""
-from docs_support import in_app_tutorials
-
-print(in_app_tutorials())
-```
+The app also has short interactive tutorials under ❓ **Help → 🧭 Tutorials**.
+They highlight each control as you go, and never change your data or settings.

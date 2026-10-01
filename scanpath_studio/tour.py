@@ -146,7 +146,10 @@ class TutorialDefinition:
     steps: tuple[TutorialStep, ...]
 
 
-DOCS_TUTORIALS_URL = f"{CITATION['docs_url']}tutorials/"
+# Each tutorial's "Matching written tutorial" button opens the docs page that
+# covers the same task (ENG-88), not a copy of these steps.
+DOCS_URL = CITATION["docs_url"]
+DOCS_TUTORIALS_URL = f"{DOCS_URL}tutorials/"
 
 # PRE-21 hides NLD similarity scoring unless SCANPATH_EXPERIMENTAL=1, so the
 # comparison tutorial must not promise a ranking this build does not show —
@@ -168,7 +171,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
         prerequisite="A demo or uploaded dataset",
         availability="always",
         completion_test="Data page opened",
-        docs_url=f"{DOCS_TUTORIALS_URL}#load-your-own-data",
+        docs_url=f"{DOCS_URL}guides/loading-data/",
         steps=(
             TutorialStep(
                 "Choose the data source",
@@ -231,7 +234,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
         prerequisite="At least one trial",
         availability="has_trials",
         completion_test="Export panel reached after annotation review",
-        docs_url=f"{DOCS_TUTORIALS_URL}#filter-and-annotate-trials",
+        docs_url=f"{DOCS_TUTORIALS_URL}data-filtering/",
         steps=(
             TutorialStep(
                 "Narrow the review pool",
@@ -282,7 +285,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
         prerequisite="Words or fixations for a selected trial",
         availability="has_visual_data",
         completion_test="Export panel reached",
-        docs_url=f"{DOCS_TUTORIALS_URL}#make-a-paper-ready-figure",
+        docs_url=f"{DOCS_TUTORIALS_URL}exporting-figures/",
         steps=(
             TutorialStep(
                 "Choose the visual language",
@@ -324,7 +327,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
         prerequisite="Two readings sharing a text (and screen for multipart data)",
         availability="has_comparable_readings",
         completion_test="Comparisons panel reached",
-        docs_url=f"{DOCS_TUTORIALS_URL}#compare-two-readers",
+        docs_url=f"{DOCS_URL}guides/scanpath-visualization/#replay-and-compare",
         steps=(
             TutorialStep(
                 "Choose the reference reading",
@@ -354,7 +357,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
         prerequisite="Variation across trials, readers, or texts",
         availability="has_corpus_variation",
         completion_test="Corpus Analysis opened",
-        docs_url=f"{DOCS_TUTORIALS_URL}#explore-the-corpus",
+        docs_url=f"{DOCS_TUTORIALS_URL}corpus-analysis/",
         # UX-40 round 2: this was two steps where the others are four or five,
         # and it named the three subtabs without answering anything. It now walks
         # one real question end to end — the user's own example — because "here

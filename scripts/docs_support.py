@@ -189,39 +189,6 @@ def changelog() -> str:
 
 
 # ---------------------------------------------------------------------------
-# In-app tutorials
-# ---------------------------------------------------------------------------
-
-
-def in_app_tutorials() -> str:
-    """The ❓ Help → 🧭 Tutorials registry, one section per tutorial.
-
-    The page used to restate these steps by hand, a second copy of
-    `tour.TUTORIALS` to keep in sync (ENG-77). Each heading's anchor is the
-    fragment of that tutorial's own ``docs_url``, so the app's "docs" link lands
-    on its section by construction; steps a gated feature owns are dropped by
-    `tour.steps_of`, exactly as the release build's app drops them.
-    """
-    from scanpath_studio import tour
-
-    out = []
-    for tutorial in tour.TUTORIALS:
-        anchor = tutorial.docs_url.partition("#")[2]
-        out += [
-            f"### {tutorial.title} {{ #{anchor} }}",
-            "",
-            f"{tutorial.outcome} *About {tutorial.estimated_time}; needs "
-            f"{tutorial.prerequisite[0].lower()}{tutorial.prerequisite[1:]}.*",
-            "",
-        ]
-        for number, step in enumerate(tour.steps_of(tutorial), 1):
-            body = " ".join(step.body.split())
-            out.append(f"{number}. **{step.title}.** {body}")
-        out.append("")
-    return "\n".join(out)
-
-
-# ---------------------------------------------------------------------------
 # CLI reference
 # ---------------------------------------------------------------------------
 

@@ -86,7 +86,7 @@ print(measures[columns].head(3))
 
 ## Reproduce a figure in code
 
-The app's 🔗 **Share** subtab shows the API or CLI code that rebuilds the figure
+The app's :material/share: **Share** subtab shows the API or CLI code that rebuilds the figure
 currently on screen — paste it into a notebook or terminal to get the same
 figure. `figure_code` is the headless
 form of that block, and `render --print-code` prints it for an invocation you

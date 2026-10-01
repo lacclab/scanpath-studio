@@ -5,10 +5,10 @@ result is a short record of which trials need attention and why.
 
 ## 1. Load a pilot session
 
-On the 🗂️ **Data** page select **➕ Add dataset**, upload the word/IA and
+On the :material/database: **Data** page select **:material/add: Add dataset**, upload the word/IA and
 fixation tables, then check the proposed columns and the **Recording setup**
-(the actual monitor resolution) before selecting **✅ Add dataset**. If the
-dataset is already loaded, open it from 📂 **Available datasets**.
+(the actual monitor resolution) before selecting **:material/check: Add dataset**. If the
+dataset is already loaded, open it from :material/folder_open: **Available datasets**.
 
 ## 2. Check the setup on one trial
 
@@ -26,7 +26,7 @@ system before judging participants.
 Turn on **Animate**. Look for long missing periods, repeated off-text points,
 frequent interruptions, or a vertical shift that grows during the trial.
 
-Use **🧹 Filter → 👁️ Fixations** in the plot rail to **Highlight** short, long,
+Use **:material/cleaning_services: Filter → :material/blur_on: Fixations** in the plot rail to **Highlight** short, long,
 or out-of-bounds fixations. Highlighting keeps the full trial visible; **Discard**
 is better reserved for a later, documented filtering decision.
 
@@ -42,8 +42,8 @@ Move through the participant's trials with the trial picker.
 
 ## 5. Save the review
 
-Open 🗂️ **Data → Annotations** and select **Export**. The file keeps your
-favorites, tags and notes for later review; **🔗 Share → File** keeps the view
+Open :material/database: **Data → Annotations** and select **Export**. The file keeps your
+favorites, tags and notes for later review; **:material/share: Share → File** keeps the view
 settings beside it.
 
 **Done:** you have checked geometry and timing, marked suspicious trials, and

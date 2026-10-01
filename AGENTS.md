@@ -252,7 +252,7 @@ uv run --with playwright python scripts/capture_docs_screenshots.py  # re-captur
 User-facing docs live in `docs/` and publish to
 <https://lacclab.github.io/scanpath-studio/>. The Python API reference is
 generated from the `api.py` docstrings, so keep those current. The gallery,
-printed example output, CLI and figure-option references, in-app tutorial steps,
+printed example output, CLI and figure-option references,
 and the Cite / Changelog pages are generated at build time by `exec="true"`
 fences calling `scripts/docs_support.py` — see CONTRIBUTING.md → *Docs site*.
 
@@ -284,8 +284,10 @@ omitted from the measurement: they walk corpora that cannot exist in CI.
 - Icons drawn as chrome (labels, `icon=`, headings, alerts) come from
   `constants.ICONS` — Material Symbols, keyed by concept (UX-138); inside raw
   HTML use `constants.icon_html`. Never a literal emoji or `:material/…:` there
-  (`tests/test_icons.py`). Prose — help text, tour bodies, docstrings, `cli.py`,
-  `docs/` — keeps its emoji ("the 🗂️ **Data** page").
+  (`tests/test_icons.py`). Prose — help text, tour bodies, docstrings, `cli.py`
+  — keeps its emoji ("the 🗂️ **Data** page"). The docs site names an app icon
+  with the label's own shortcode, `:material/database: **Data**`, which
+  `scripts/mkdocs_hooks.py` draws in the font Streamlit ships (ENG-88).
 
 ## Testing patterns
 

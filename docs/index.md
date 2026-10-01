@@ -56,12 +56,9 @@ Inspect, compare, analyse, and export eye-tracking-while-reading scanpaths.
 - **Scanpath visualization:** true-position text, fixations, saccades, raw gaze,
   heatmaps, replay, and comparison — including two trials from different
   datasets.
-- **Flexible loading:** your own word, fixation, and raw-gaze tables with
-  automatic or manual column mapping, a table of participant metadata, or the
-  OneStop and PoTeC public corpora.
+- **Flexible loading:** your own word, fixation, and raw-gaze tables.
 - **Corpus analysis:** per-text, per-sentence, per-reader, and group summaries
-  using standard reading measures, each one documented in the
-  [computation register](computations.md).
+  of the reading measures in your data.
 - **Reproducible output:** static and animated figures, bulk exports, share
   links, and restorable configurations.
 
@@ -74,6 +71,6 @@ See the [Gallery](gallery.md) for what it draws, the
     publishing. If something looks wrong — or if you have a feature request or
     suggestion — [report it](https://github.com/lacclab/scanpath-studio/issues).
 
-Cite the software by its Zenodo DOI,
-[10.5281/zenodo.22933884](https://doi.org/10.5281/zenodo.22933884) —
-[Cite](cite.md) has ready-made BibTeX and APA entries.
+## Citing
+
+If you use Scanpath Studio in your research, please [cite it](cite.md).

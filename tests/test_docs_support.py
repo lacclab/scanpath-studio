@@ -1,8 +1,8 @@
 """The docs' generated content (ENG-77, ENG-78, ENG-79).
 
 ``scripts/docs_support.py`` writes the parts of the site that are read from
-the code rather than restated: the CLI and figure-option references, the in-app
-tutorial steps, the Cite and Changelog pages, the gallery's figures. The docs
+the code rather than restated: the CLI and figure-option references, the Cite
+and Changelog pages, the gallery's figures. The docs
 build runs it too (``mkdocs build --strict`` fails on an exception), but these
 catch a break in the ordinary test run, before anyone builds the site.
 """
@@ -58,12 +58,37 @@ def test_the_figure_option_table_covers_every_option():
         assert f"| `{name}` |" in table, name
 
 
-def test_every_in_app_tutorial_has_the_anchor_its_docs_link_names():
-    page = docs_support.in_app_tutorials()
-    for tutorial in tour.TUTORIALS:
-        fragment = tutorial.docs_url.partition("#")[2]
-        assert fragment, tutorial.id
-        assert f"{{ #{fragment} }}" in page, tutorial.id
+def _heading_anchors(page: Path) -> set[str]:
+    """The anchors a page's headings get: an explicit ``{ #id }``, else the
+    toc extension's default slug (lower-case, punctuation dropped, spaces to
+    hyphens)."""
+    anchors = set()
+    for line in page.read_text(encoding="utf-8").splitlines():
+        match = re.match(r"#+\s+(.*?)\s*(?:\{\s*#([\w-]+)\s*\})?\s*$", line)
+        if not match:
+            continue
+        title, explicit = match.groups()
+        anchors.add(
+            explicit
+            or re.sub(r"[\s]+", "-", re.sub(r"[^\w\s-]", "", title).strip().lower())
+        )
+    return anchors
+
+
+@pytest.mark.parametrize("tutorial", tour.TUTORIALS, ids=lambda t: t.id)
+def test_every_in_app_tutorial_links_a_page_and_heading_that_exist(tutorial):
+    # ENG-88: the "Matching written tutorial" button opens the docs page that
+    # covers the task, so a renamed page or heading must fail here, not 404.
+    url, _, fragment = tutorial.docs_url.partition("#")
+    base = tour.DOCS_URL
+    assert url.startswith(base), tutorial.docs_url
+    path = url.removeprefix(base).strip("/")
+    page = ROOT / "docs" / f"{path}.md"
+    if not page.exists():
+        page = ROOT / "docs" / path / "index.md"
+    assert page.exists(), tutorial.docs_url
+    if fragment:
+        assert fragment in _heading_anchors(page), tutorial.docs_url
 
 
 def test_the_changelog_page_is_headlines_from_the_two_tier_release_on():

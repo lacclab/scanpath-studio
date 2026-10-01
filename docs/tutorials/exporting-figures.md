@@ -19,7 +19,7 @@ fonts; it defines the figure's coordinate system.
 
 Check the whole canvas for clipped marks, unreadable text, and an unnecessary
 legend. When several figures must share identical grid marks, set a manual
-interval under **📐 Figure & canvas → 📊 Axes & grid → Grid** (untick **Auto**).
+interval under **:material/aspect_ratio: Figure & canvas → :material/grid_on: Axes & grid → Grid** (untick **Auto**).
 
 Open **Export → Current figure** and choose:
 
@@ -48,7 +48,7 @@ saccades, heatmap, and stimulus image can be stacked in a vector editor.
 
 ## 4. Keep provenance
 
-Keep `plot_config.json` with the batch (or a **🔗 Share → File** settings file
+Keep `plot_config.json` with the batch (or a **:material/share: Share → File** settings file
 for a single figure), and record the package version, dataset version and any trial
 filtering in the caption or analysis log — the export does not store them.
 

@@ -676,6 +676,76 @@ def get_app_css() -> str:
         color: #212529;
         border: 1px solid rgba(0, 0, 0, 0.06);
     }
+    /* UX-190 — Compare mode's A/B table, in place of a chip strip per reading:
+       one column per field, A's value directly above B's, a shared value once
+       across both rows (quieter, so what differs stands out). A value never
+       wraps; a header label does, but only once the table would otherwise be
+       wider than its column, and past that the table scrolls sideways rather
+       than push the plot down. The selectors are long on purpose — they must
+       beat the table styles Streamlit's markdown gives every table. */
+    .sps-compare-table-wrap {
+        overflow-x: auto;
+        margin: 0.1rem 0 0.5rem;
+    }
+    .sps-compare-table-wrap table.sps-compare-table {
+        width: auto;
+        margin: 0;
+        border: none;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+        line-height: 1.45;
+        color: inherit;
+    }
+    .sps-compare-table-wrap table.sps-compare-table th,
+    .sps-compare-table-wrap table.sps-compare-table td {
+        padding: 0.2rem 0.55rem;
+        border: none;
+        border-bottom: 1px solid var(--sps-border);
+        background: transparent;
+        text-align: left;
+        vertical-align: middle;
+        white-space: nowrap;
+        font-weight: 500;
+    }
+    .sps-compare-table-wrap table.sps-compare-table thead th {
+        padding-top: 0;
+        vertical-align: bottom;
+        white-space: normal;
+        font-size: 0.75rem;
+        font-weight: 600;
+        line-height: 1.25;
+        color: color-mix(in srgb, currentColor 62%, transparent);
+    }
+    .sps-ct-tint {
+        display: inline-block;
+        padding: 0 0.45rem;
+        border-radius: 999px;
+    }
+    .sps-compare-table-wrap table.sps-compare-table tbody tr:last-child > *,
+    .sps-compare-table-wrap table.sps-compare-table td.sps-ct-same {
+        border-bottom: none;
+    }
+    .sps-compare-table-wrap table.sps-compare-table th.sps-ct-side {
+        padding-left: 0;
+        font-weight: 700;
+    }
+    .sps-compare-table-wrap table.sps-compare-table .sps-ct-num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+    .sps-compare-table-wrap table.sps-compare-table td.sps-ct-same,
+    .sps-compare-table-wrap table.sps-compare-table td.sps-ct-missing {
+        font-weight: 400;
+        color: color-mix(in srgb, currentColor 62%, transparent);
+    }
+    .sps-ct-dot {
+        display: inline-block;
+        width: 0.6rem;
+        height: 0.6rem;
+        margin-right: 0.4rem;
+        border-radius: 50%;
+        vertical-align: 0.02em;
+    }
     /* UX-42: Data source and Filter by share a row but are separate tasks (and
        separate tour targets). A quiet rule makes that boundary legible; the
        inset keeps the Filter-by label from sitting directly against it. */

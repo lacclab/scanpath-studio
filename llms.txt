@@ -6,13 +6,35 @@ Scanpath Studio is an interactive Streamlit workbench, a Python API (`import sca
 
 ## Use the app
 
+- [Get started](https://lacclab.github.io/scanpath-studio/getting-started/index.md): Install, launch, and a first plot
+- [Tutorials](https://lacclab.github.io/scanpath-studio/tutorials/index.md)
+- [Corpus analysis](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/index.md)
+- [Data collection](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/index.md)
+- [Data filtering](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/index.md)
+- [Exporting figures](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/index.md)
+- [Feature guides](https://lacclab.github.io/scanpath-studio/guides/index.md)
+- [Corpus workspace](https://lacclab.github.io/scanpath-studio/guides/corpus-workspace/index.md)
+- [Loading public and own data](https://lacclab.github.io/scanpath-studio/guides/loading-data/index.md)
+- [Outputs and sharing](https://lacclab.github.io/scanpath-studio/guides/outputs-sharing/index.md)
+- [Scanpath visualization](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/index.md)
+- [FAQ](https://lacclab.github.io/scanpath-studio/faq/index.md)
 
 ## Automate
 
+- [Overview](https://lacclab.github.io/scanpath-studio/automation/index.md): Choosing between the app, the CLI and the Python API
+- [Python API](https://lacclab.github.io/scanpath-studio/api/index.md): The Python API reference
+- [CLI reference](https://lacclab.github.io/scanpath-studio/cli/index.md): The CLI reference, every flag included
+- [For coding agents](https://lacclab.github.io/scanpath-studio/agents/index.md): Headless use by a coding agent or script
 
 ## Reference
 
+- [Data format](https://lacclab.github.io/scanpath-studio/data-format/index.md): Accepted tables, units and metadata
+- [Computations & methodology](https://lacclab.github.io/scanpath-studio/computations/index.md): How every measure and derived value is computed
+- [Glossary](https://lacclab.github.io/scanpath-studio/glossary/index.md)
+- [OneStop corpus](https://lacclab.github.io/scanpath-studio/onestop/index.md)
 
 ## Project
 
+- [Cite](https://lacclab.github.io/scanpath-studio/cite/index.md)
+- [Privacy](https://lacclab.github.io/scanpath-studio/privacy/index.md)
 

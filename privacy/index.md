@@ -34,7 +34,7 @@ The public demo has no account or data-use agreement. Use it with the bundled sa
 - A **share link** contains the participant and trial IDs plus the visualization settings. It does not contain the data tables — except for a scanpath made with **Author a scanpath**, whose link carries the typed text and every hand-placed fixation, because they *are* its data.
 - A **settings file** ( Share → File) contains the figure's settings and the selected participant and trial IDs.
 - An **annotations file** ( Data → Annotations, or `annotations.json` in an Export bundle) contains your notes, which may mention participants.
-- A **setup file** ( Edit dataset → Save setup) contains column names.
+- A **setup file** ( Edit dataset → Save setup) contains the dataset's name, its column mapping, and its recording setup.
 - An **exported table** contains the selected research data.
 
 Review these artifacts before sharing them. Share links can enter browser history, logs, or chat previews, so do not copy one when its participant or trial identifiers should not be exposed there.

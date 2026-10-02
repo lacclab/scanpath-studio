@@ -189,8 +189,12 @@ Load PoTeC as normalized `(words, fixations)` frames, ready to plot.
 Participants are PoTeC reader ids (as strings); a trial is one reader's reading of one text, `<reader>_<text>` (`"0_b0"`), and `text_id` is the text (`b0`–`b5` biology, `p0`–`p5` physics)::
 
 ```
-words, fixations = load_potec("data/PoTeC", readers=[0], texts=["b0"])
-fig = scanpath_studio.plot_scanpath(words, fixations, "0", "0_b0")
+import scanpath_studio as sps
+
+words, fixations = sps.load_potec("data/PoTeC", readers=[0], texts=["b0"])
+fig = sps.plot_scanpath(
+    words, fixations, "0", "0_b0", canvas_size=(1680, 1050)
+)
 ```
 
 The PoTeC monitor was 1680×1050 (DELL P2210, 60 Hz); pass that as `canvas_size` to plot_scanpath for true-to-scale rendering.
@@ -206,12 +210,13 @@ Load OneStop as normalized `(words, fixations)` frames, ready to plot.
 `root` is a folder holding (or to download into, public variant only) the OneStop reports. Narrow the load with `regime` (`ordinary` / `information_seeking` / `repeated` / `information_seeking_repeated`), `parts` (any subset of `Title / Question_Preview / Paragraph / Questions / Answers / QA / Feedback` — default Paragraph), and `variant` (`public` OSF release or `lacclab` local export). The public OSF reports are large; pass `download=True` to fetch the chosen regime + parts into `root` on first use::
 
 ```
-words, fixations = load_onestop(
+import scanpath_studio as sps
+
+words, fixations = sps.load_onestop(
     "data/OneStop", regime="ordinary", parts=["Paragraph"], download=True
 )
-fig = scanpath_studio.plot_scanpath(
-    words, fixations, canvas_size=(2560, 1440)
-)
+pid, tid = sps.list_trials(words, fixations).iloc[0]  # one reading
+fig = sps.plot_scanpath(words, fixations, pid, tid, canvas_size=(2560, 1440))
 ```
 
 OneStop's presentation monitor was 2560×1440 (Dell U2715H) — the citation lives in `scanpath_studio.eyegenbench_geometry.DISPLAY_SPECS`'s `"onestop"` entry (Berzak et al. 2025, Methods → Apparatus); pass that as `canvas_size` to plot_scanpath for true-to-scale rendering. The reports already match the bundled demo's schema, so this reuses the generic auto-detect → normalize path (no OneStop-specific column mapping).

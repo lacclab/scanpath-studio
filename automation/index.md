@@ -37,7 +37,7 @@ The [Python API](https://lacclab.github.io/scanpath-studio/api/index.md) lists t
 
 ## From the app to a script
 
-Tune the figure in the app, open **Share → Reproduce this figure in code**, and copy the snippet (Python or CLI); it writes only the options that differ from the defaults. The same recipe is available without the app:
+Tune the figure in the app, open **Share → Code**, and copy the snippet (Python or CLI); it writes only the options that differ from the defaults. The same recipe is available without the app:
 
 ```
 # translate a render invocation you already have into Python

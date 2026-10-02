@@ -6,16 +6,16 @@ Open the dataset picker above the plot, or the **Data** page.
 
 - **Bundled Demo** — a small OneStop sample, for learning the app.
 - **Synthetic sample** — a hand-made six-word trial.
-- **Public corpus** — OneStop or PoTeC; the app downloads it when asked.
+- **Public corpus** — OneStop or PoTeC; the app downloads it when asked (only when it runs on your own computer — [OneStop](https://lacclab.github.io/scanpath-studio/onestop/index.md)).
 - **+ → Import files** — your own tables.
 - **+ → Create manually** — type a text and place fixations on it by hand: click to add, drag to move, or edit the table.
 
 ## What your data needs
 
-| Table                         | Minimum                                   |
-| ----------------------------- | ----------------------------------------- |
-| words / interest areas (AOIs) | trial ID, word ID, text, and the word box |
-| fixations                     | trial ID, duration, and x/y or a word ID  |
+| Table                         | Minimum                                                         |
+| ----------------------------- | --------------------------------------------------------------- |
+| words / interest areas (AOIs) | trial ID, word ID, and the word box (the word text, to show it) |
+| fixations                     | trial ID, duration, and x/y or a word ID                        |
 
 Either table alone also works. Participant and text IDs, timestamps, raw gaze, conditions and reading measures are optional and unlock more features.
 

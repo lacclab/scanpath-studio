@@ -31,7 +31,7 @@ Colour ranges start on **Auto**, scaled to each trial. Pin a range to keep it fi
 
 ## Filter what is drawn
 
-**Filter** thins the reading on screen (the funnel above the plot chooses *which* readings you can pick). For fixations, **Highlight** or **Discard** short, long, out-of-bounds or blink fixations, or show only an index range. For saccades, choose which reading types are drawn: hide everything but regressions, for example. Filtering changes only the figure, never your data.
+**Filter** thins the reading on screen (the funnel above the plot chooses *which* readings you can pick). For fixations, **Highlight** or **Discard** short, long, out-of-bounds or blink fixations, or show only an index range. *Out of bounds* means outside every word box, not off the screen; *blink* needs a blink column in your fixations (`is_blink`, `blink`, `blink_before`, `blink_after`), and without one nothing is flagged. For saccades, choose which reading types are drawn: hide everything but regressions, for example. Filtering changes only the figure, never your data.
 
 ## Replay and compare
 

@@ -70,23 +70,27 @@ class TestCells:
 
 
 class TestStatus:
-    def test_a_loaded_row_says_loaded(self):
-        assert _row("x", 0, source="loaded").status_label == dt.LOADED
+    """BUG-113: Status says whether a dataset can be opened, never where its
+    numbers came from."""
 
-    def test_published_figures_are_not_loaded(self):
-        row = _row("PoTeC", 0, source="published", counts={"Participants": 75})
-        assert row.status_label == dt.NOT_LOADED_STATUS
+    @pytest.mark.parametrize("source", ["loaded", "published", ""])
+    def test_a_row_with_nothing_missing_is_ready_whatever_its_counts(self, source):
+        assert _row("x", 0, source=source).status_label == dt.READY
 
-    def test_nothing_known_is_not_loaded(self):
-        assert _row("x", 0).status_label == dt.NOT_LOADED_STATUS
+    def test_a_missing_state_takes_its_place(self):
+        row = _row("PoTeC", 0, source="loaded", status=dt.NEEDS_DOWNLOAD)
+        assert row.status_label == dt.NEEDS_DOWNLOAD
 
-    def test_an_operational_state_takes_its_place(self):
-        row = _row("PoTeC", 0, source="published", status="Needs setup")
-        assert row.status_label == "Needs setup"
+    def test_opening_a_row_does_not_change_what_it_says(self):
+        from dataclasses import replace
+
+        row = _row("OneStop", 0, source="loaded", status=dt.NEEDS_DOWNLOAD)
+        assert replace(row, active=True).status_label == row.status_label
 
     def test_every_status_is_explained(self):
-        for label in (dt.LOADED, dt.NOT_LOADED_STATUS):
+        for label in (dt.READY, dt.NEEDS_DOWNLOAD, dt.NEEDS_SETUP):
             assert dt.STATUS_EXPLANATIONS[label]
+        assert dt.COUNTS_EXPLANATION
 
 
 class TestSorting:
@@ -193,4 +197,4 @@ def test_the_record_keeps_values_and_cells_apart():
     assert record["_cells"]["Participants"] == "75"
     assert record["_cells"]["Screens"] == dt.NOT_REPORTED
     assert record["Counts"] == "Published"
-    assert record["Status"] == dt.NOT_LOADED_STATUS
+    assert record["Status"] == dt.READY

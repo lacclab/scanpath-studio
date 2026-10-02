@@ -1392,6 +1392,55 @@ def _dataset_dir_input(
     return resolved
 
 
+def _dataset_folder(key_prefix: str, default_dir: str) -> str:
+    """The folder :func:`_dataset_dir_input` would resolve, without drawing it.
+
+    BUG-113: the dataset table states every row's status, and a corpus that is
+    not open has no loader running to draw its location box. This reads the
+    same state the box keeps — a typed path, else the default, which a box still
+    showing its old seeded default follows (UX-184) — and resolves it the same
+    way, so the row and the loader can never disagree about where the files are.
+    """
+    if not local_filesystem_enabled():
+        return str(data_root()) if data_root() else _resolve_data_dir(default_dir)
+    dir_key = f"{key_prefix}_dir"
+    typed = str(st.session_state.get(dir_key) or "").strip()
+    if not typed or typed == st.session_state.get(f"{dir_key}_default"):
+        typed = default_dir
+    return _resolve_data_dir(typed)
+
+
+def _potec_files_present() -> bool:
+    from scanpath_studio import datasets
+
+    root = _dataset_folder("potec", _download_target(POTEC_DEFAULT_DIR))
+    return datasets.potec_present(root)
+
+
+def _onestop_files_present(regime: str) -> bool:
+    from scanpath_studio import datasets
+
+    root = _dataset_folder(
+        "onestop_public", _download_target(ONESTOP_PUBLIC_DEFAULT_DIR)
+    )
+    parts = datasets.onestop_regime_parts(regime)
+    return datasets.onestop_present(root, regime=regime, parts=parts)
+
+
+def _multipleye_files_present() -> bool:
+    root = _dataset_folder("multipleye", MULTIPLEYE_DEFAULT_DIR)
+    source = st.session_state.get("multipleye_fixation_source") or "scanpaths"
+    sessions, _ = _cached_multipleye_inventory(root, source)
+    return bool(sessions)
+
+
+def _benchmark_files_present(dataset: str) -> bool:
+    from scanpath_studio.eyegenbench import eyegenbench_present
+
+    root = _dataset_folder("eyegenbench", EYEGENBENCH_DEFAULT_DIR)
+    return eyegenbench_present(root, dataset)
+
+
 # UX-7(b): session slot describing a data source the user selected but that
 # isn't available locally. Written by `_dataset_access_status` (and the bundle
 # sources) on the run it happens, read + cleared by `_render_dataset_unavailable`
@@ -2210,6 +2259,9 @@ def _onestop_regime_entry(regime: str) -> dict:
     label = ONESTOP_REGIME_LABELS[regime]
     return dict(
         loader=partial(_load_onestop_regime_source, regime=regime),
+        # BUG-113: the dataset table's Status, for a row that is not open.
+        files_present=partial(_onestop_files_present, regime),
+        downloadable=True,
         # OneStop presentation monitor (full-screen px coords). Sourced in
         # `eyegenbench_geometry.DISPLAY_SPECS["onestop"]` — Berzak et al. 2025,
         # Sci Data 12:1995, Methods → Apparatus, which states the Dell U2715H
@@ -2230,6 +2282,8 @@ def _onestop_regime_entry(regime: str) -> dict:
 PUBLIC_DATASET_REGISTRY: dict = {
     "PoTeC — Potsdam Textbook Corpus": dict(
         loader=_load_potec_source,
+        files_present=_potec_files_present,  # BUG-113
+        downloadable=True,
         # The schema `load_potec` uses, so the app's Trial ID is the headless
         # one: reader + text, not the text name every reader shares.
         declared_schemas=(POTEC_WORD_SCHEMA, POTEC_FIX_SCHEMA),
@@ -2264,6 +2318,8 @@ PUBLIC_DATASET_REGISTRY: dict = {
     ),
     MULTIPLEYE_PUBLIC_CHOICE: dict(
         loader=_load_multipleye_source,
+        # BUG-113. No download: MultiplEYE is read from a local session set.
+        files_present=_multipleye_files_present,
         monitor=(1920, 1080),  # MultiplEYE physical screen (coords offset to it)
         short="MultiplEYE",
         language="Multilingual (ZH-CH sample)",
@@ -2428,6 +2484,8 @@ def _benchmark_registry_entries() -> dict:
         short = _benchmark_short_name(name)
         spec = dict(
             loader=partial(_load_benchmark_source, dataset=name),
+            # BUG-113. No download: a bundle is prepared by a script.
+            files_present=partial(_benchmark_files_present, name),
             short=short,
             language=language_display(entry.get("language")),
             size=_benchmark_size_caption(entry),
@@ -5429,11 +5487,38 @@ def _dataset_table_rows(
                 exceeds_published=row_counts.exceeds_published,
                 active=token == active,
                 measured=bool(measured),
-                status="Needs setup" if token == active and placeholder else "",
+                status=_dataset_status(
+                    registry.get(token),
+                    stood_in_for=token == active and placeholder,
+                ),
                 order=len(rows),
             )
         )
     return rows
+
+
+def _dataset_status(spec: Mapping | None, *, stood_in_for: bool = False) -> str:
+    """One row's **Status** — ``""`` (Ready) or what is missing (BUG-113).
+
+    Asked the same way of every row, open or not: a corpus with files on disk
+    has a ``files_present`` check in its registry entry — path stats only, never
+    a read — and a missing set reads *Needs download* where the app can fetch
+    it and *Needs setup* where it cannot. Bundled datasets and stored uploads
+    have no check and are always here. The open row whose loader fell back to
+    the demo (``stood_in_for``) is not here either, whatever the check says.
+    """
+    check = (spec or {}).get("files_present")
+    if check is None:
+        return dataset_table.NEEDS_SETUP if stood_in_for else ""
+    try:
+        present = bool(check())
+    except _MANIFEST_ERRORS:
+        present = False
+    if present:
+        return dataset_table.NEEDS_SETUP if stood_in_for else ""
+    if (spec or {}).get("downloadable"):
+        return dataset_table.NEEDS_DOWNLOAD
+    return dataset_table.NEEDS_SETUP
 
 
 def _open_dataset_row(token: str) -> None:
@@ -5579,9 +5664,7 @@ def _render_dataset_table_head(grid, sort) -> None:
         " ".join(
             f"**{label}** — {text}"
             for label, text in dataset_table.STATUS_EXPLANATIONS.items()
-        )
-        + " **Needs setup** — its files are not on this machine, so the bundled "
-        "demo is showing in its place.",
+        ),
     )
     head.space("stretch")
     gaps = " ".join(
@@ -5603,7 +5686,8 @@ def _render_dataset_table_head(grid, sort) -> None:
             cell,
             count_field,
             f"Sort by {count_field.lower()}, largest first. Datasets without a "
-            f"count sort last either way.\n\n{gaps}",
+            f"count sort last either way.\n\n{dataset_table.COUNTS_EXPLANATION}"
+            f"\n\n{gaps}",
         )
     # The actions column has no title: its one button says what it does. The
     # cell is still drawn — an empty container is not — so the columns line up.
@@ -5684,12 +5768,11 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
 
     status = line.container(key=f"dsc_status_{slug}", width=_DATASET_STATUS_W)
     if row.status:
-        # An operational state, kept apart from where the counts came from.
+        # Something is missing before the dataset can open (BUG-113).
         status.badge(row.status, icon=ICONS["warning"], color="orange")
     else:
-        muted = "" if row.status_label == dataset_table.LOADED else " sps-ds-gap"
         status.markdown(
-            f'<span class="sps-ds-status{muted}">{row.status_label}</span>',
+            f'<span class="sps-ds-status">{row.status_label}</span>',
             unsafe_allow_html=True,
         )
 
@@ -5734,8 +5817,9 @@ def render_dataset_table(
     **Kind · Dataset · Status · Participants · Texts · Trials · Fixations ·
     Remove** (UX-178 moved Status beside the name it qualifies). A click anywhere on a row opens that dataset (UX-78); the open one
     carries a **Current** badge and a tint, and never moves. **Status** is
-    *Loaded* / *Not loaded* — DATA-36's loaded-vs-published distinction — or an
-    operational state such as *Needs setup*. Everything else about a dataset —
+    whether the dataset can be opened now — *Ready*, *Needs download* or
+    *Needs setup* — asked the same way of every row (BUG-113; see
+    `_dataset_status`). Everything else about a dataset —
     Screens, Words and Gaze points, its description, renaming it, editing its
     setup — is in *What's in the dataset* under the table, for the open one.
 

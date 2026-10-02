@@ -431,8 +431,16 @@ class TestFromSchema:
         normalization carried it — every field by default, the kept ones when
         the wizard narrowed the read."""
         raw = pd.DataFrame(
-            columns=["trial", "IA_ID", "IA_LABEL", "x", "y", "width", "height",
-                     "Reduced_POS"]
+            columns=[
+                "trial",
+                "IA_ID",
+                "IA_LABEL",
+                "x",
+                "y",
+                "width",
+                "height",
+                "Reduced_POS",
+            ]
         )
         schema = {
             "trial": "trial",
@@ -547,9 +555,11 @@ def from_schema(
             out[canonical] = SourceName((schema[key],))
 
     if table == "words":
-        out["word_id"] = SourceName((schema["word_id"],)) if schema.get(
-            "word_id"
-        ) else SourceName((), GENERATED, "the row order")
+        out["word_id"] = (
+            SourceName((schema["word_id"],))
+            if schema.get("word_id")
+            else SourceName((), GENERATED, "the row order")
+        )
         out["text"] = (
             SourceName((schema["text"],))
             if schema.get("text")
@@ -653,7 +663,9 @@ def test_every_column_the_measures_add_is_known_as_computed(
     from scanpath_studio import measures
 
     fixations = measures.enrich_fixations(
-        measures.assign_fixations_to_words(normalized_fixations_df, normalized_words_df),
+        measures.assign_fixations_to_words(
+            normalized_fixations_df, normalized_words_df
+        ),
         normalized_words_df,
     )
     added = set(fixations.columns) - set(normalized_fixations_df.columns)
@@ -766,22 +778,18 @@ Add the import near the other local imports: `from scanpath_studio.column_names 
 Pass the raw columns at each call:
 
 ```python
-    # prepare_data (~L3542)
-    _stash_active_mapping(
-        "words", word_schema if has_words else None, words_df.columns
-    )
-    _stash_active_mapping(
-        "fixations", fix_schema if has_fixations else None, fixations_df.columns
-    )
+# prepare_data (~L3542)
+_stash_active_mapping("words", word_schema if has_words else None, words_df.columns)
+_stash_active_mapping(
+    "fixations", fix_schema if has_fixations else None, fixations_df.columns
+)
 ```
 
 ```python
-        # demo raw gaze (~L4087): the raw sample is inside the cached builder,
-        # so read its columns once more (load_sample_raw_gaze is cached).
-        if raw_gaze_schema:
-            _stash_active_mapping(
-                "raw_gaze", raw_gaze_schema, load_sample_raw_gaze().columns
-            )
+# demo raw gaze (~L4087): the raw sample is inside the cached builder,
+# so read its columns once more (load_sample_raw_gaze is cached).
+if raw_gaze_schema:
+    _stash_active_mapping("raw_gaze", raw_gaze_schema, load_sample_raw_gaze().columns)
 ```
 
 ```python

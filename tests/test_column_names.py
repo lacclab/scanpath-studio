@@ -209,3 +209,21 @@ def test_every_column_the_measures_add_is_known_as_computed(
     )
     added |= set(words.columns) - set(normalized_words_df.columns)
     assert added - cn.COMPUTED_COLUMNS - {"word_id"} == set()
+
+
+streamlit_testing = pytest.importorskip("streamlit.testing.v1")
+
+
+@pytest.mark.timeout(180)
+def test_the_demo_is_opened_with_its_own_column_names():
+    from scanpath_studio import app
+    from tests.conftest import APP_SCRIPT
+
+    at = streamlit_testing.AppTest.from_file(APP_SCRIPT, default_timeout=120)
+    at.run()
+    assert not at.exception, at.exception
+    stashed = at.session_state[app.ACTIVE_COLUMN_NAMES_KEY]
+    words = ColumnNames.from_payload(stashed["words"])
+    assert words.display("total_fixation_duration_ms") == "IA_DWELL_TIME"
+    assert ColumnNames.from_payload(stashed["fixations"]).display("x") != "x"
+    assert "raw_gaze" in stashed  # the demo ships raw gaze

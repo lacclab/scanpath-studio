@@ -40,7 +40,7 @@ import re
 import shutil
 import subprocess
 import sys
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
@@ -66,6 +66,7 @@ from scanpath_studio import metadata as metadata_mod
 from scanpath_studio.annotations import (
     filter_keys,
 )
+from scanpath_studio.column_names import ColumnNames, from_schema
 from scanpath_studio.constants import (
     _VIEW_CORPUS,
     _VIEW_DATA,
@@ -3120,18 +3121,48 @@ def _normalize_pair(
     return words_norm, fixations_norm
 
 
+#: DATA-66 — the open dataset's column-name map per table, as payloads
+#: (`column_names.ColumnNames.to_payload`), stashed beside the mapping.
+ACTIVE_COLUMN_NAMES_KEY = "_active_column_names"
+
+
 def _reset_active_mapping() -> None:
     """Clear the stashed column mapping at the start of each data load, so a new
     source doesn't inherit the previous one's mapping in the Data Inspection tab."""
     st.session_state["_active_column_mapping"] = {}
+    st.session_state[ACTIVE_COLUMN_NAMES_KEY] = {}
 
 
-def _stash_active_mapping(table: str, schema: dict | None) -> None:
+def _stash_active_mapping(
+    table: str,
+    schema: dict | None,
+    columns: Iterable[str] | None = None,
+    *,
+    keep_columns: Iterable[str] | None = None,
+    names: ColumnNames | None = None,
+) -> None:
     """Record the schema (field → source column) actually used for ``table`` so
     ``tabs.render_data_inspection_tab`` can show how columns were mapped. ``table``
-    is one of ``"words" / "fixations" / "raw_gaze"``."""
+    is one of ``"words" / "fixations" / "raw_gaze"``.
+
+    DATA-66: also the column-name map the schema implies — ``names`` when the
+    caller already holds one (a stored upload), else built from the raw table's
+    ``columns``. Neither: the table's map is dropped, never left stale."""
     mapping = st.session_state.setdefault("_active_column_mapping", {})
     mapping[table] = dict(schema) if schema else None
+    stash = st.session_state.setdefault(ACTIVE_COLUMN_NAMES_KEY, {})
+    if names is None and schema and columns is not None:
+        names = from_schema(table, schema, columns, keep_columns=keep_columns)
+    if names is None:
+        stash.pop(table, None)
+    else:
+        stash[table] = names.to_payload()
+
+
+def active_column_names(table: str) -> ColumnNames:
+    """The open dataset's column-name map for ``table`` (DATA-66)."""
+    stash = st.session_state.get(ACTIVE_COLUMN_NAMES_KEY) or {}
+    return ColumnNames.from_payload(stash.get(table))
 
 
 #: Lead of the ``problems`` entry a **rejected** mapping produces, as opposed to
@@ -3539,8 +3570,10 @@ def prepare_data(
         return empty_words_frame(), empty_fixations_frame(), problems
 
     # Record the mapping actually used so the Data Inspection tab can show it.
-    _stash_active_mapping("words", word_schema if has_words else None)
-    _stash_active_mapping("fixations", fix_schema if has_fixations else None)
+    _stash_active_mapping("words", word_schema if has_words else None, words_df.columns)
+    _stash_active_mapping(
+        "fixations", fix_schema if has_fixations else None, fixations_df.columns
+    )
 
     try:
         words_norm, fixations_norm = _normalize_pair(
@@ -4084,7 +4117,11 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
             "raw_gaze", ("demo",), _demo_raw_gaze
         )
         if raw_gaze_schema:
-            _stash_active_mapping("raw_gaze", raw_gaze_schema)
+            # The raw sample is read inside the cached builder; its loader is
+            # cached too, so asking it again for the columns is free.
+            _stash_active_mapping(
+                "raw_gaze", raw_gaze_schema, load_sample_raw_gaze().columns
+            )
         elif unmappable:
             warn.warning("Could not infer raw gaze schema from sample data")
     else:
@@ -4126,7 +4163,7 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
                 warn.warning("Raw gaze ignored — " + "; ".join(problems))
                 raw_gaze_df = pd.DataFrame()
             else:
-                _stash_active_mapping("raw_gaze", raw_gaze_schema)
+                _stash_active_mapping("raw_gaze", raw_gaze_schema, raw_gaze_df.columns)
                 source = raw_gaze_df
                 raw_gaze_df = frame_cache(
                     "raw_gaze",
@@ -8498,8 +8535,17 @@ def _run_app() -> None:
         st.session_state["_composite_trial_columns"] = composite or None
         # Re-publish the stored column mapping so the Data Inspection tab shows
         # how this dataset's columns were mapped (the wizard isn't re-run here).
+        # DATA-66: and its column-name map, which only the stored entry holds —
+        # the raw tables it was built from are gone.
+        stored_names = stored.get("column_names") or {}
         for table, schema in (stored.get("schemas") or {}).items():
-            _stash_active_mapping(table, schema)
+            _stash_active_mapping(
+                table,
+                schema,
+                names=ColumnNames.from_payload(stored_names[table])
+                if table in stored_names
+                else None,
+            )
     else:
         # Built-in sources (demo / synthetic / OneStop / public) auto-detect
         # their mapping, so they skip the wizard entirely. Drop any wizard filter

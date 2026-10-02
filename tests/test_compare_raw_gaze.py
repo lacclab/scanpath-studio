@@ -169,3 +169,17 @@ def test_the_note_is_unchanged_outside_compare():
         _raw_gaze_missing_note(True, trial_has_raw_gaze=False)
         == "Raw gaze not available for this trial."
     )
+
+
+def test_compare_raw_gaze_needs_compare_with(tmp_path):
+    with pytest.raises(SystemExit, match="pass --compare-with"):
+        cli.main(
+            [
+                "render",
+                "--sample",
+                "--compare-raw-gaze",
+                str(tmp_path / "gaze.csv"),
+                "-o",
+                str(tmp_path / "out.html"),
+            ]
+        )

@@ -3941,6 +3941,7 @@ def _build_compare_meta(
     source: SecondaryDataset | None = None,
     primary_dataset: str | None = None,
     raw_gaze: pd.DataFrame | None = None,
+    include_raw_gaze: bool = True,
 ) -> dict | None:
     """Build the second trial's words/fixations + column labels for the
     side-by-side metadata table, or None when no comparison is active.
@@ -3969,13 +3970,13 @@ def _build_compare_meta(
     ``raw_gaze`` (VIZ-48) is A's dataset's samples; B's are cut from it, or from
     ``source.raw_gaze`` when B is foreign, to the same trial and screen, and
     returned under ``"raw_gaze"`` (empty when B has none) keyed as B's figure
-    frames are.
+    frames are. ``include_raw_gaze=False`` skips them, ``source``'s included.
     """
     if compare_participant is None or compare_trial is None:
         return None
     if source is not None:
         words_filtered, fixations_filtered = source.words, source.fixations
-        raw_gaze = source.raw_gaze
+        raw_gaze = source.raw_gaze if include_raw_gaze else None
     compare_raw = pd.DataFrame()
     if raw_gaze is not None and not raw_gaze.empty:
         compare_raw = extract_trial(raw_gaze, compare_participant, compare_trial)
@@ -6245,6 +6246,7 @@ def render_single_trial_tab(
     # frames would make a valid B choice disappear whenever A's filters
     # exclude it, exactly what the separate B filters are meant to prevent)
     # were built above, alongside B's own screen navigator.
+    draw_compare_raw_gaze = bool(global_raw_toggle and not animate)
     compare_meta = _build_compare_meta(
         compare_words_pool,
         compare_fixations_pool,
@@ -6256,7 +6258,15 @@ def render_single_trial_tab(
         source=compare_source,
         # CMP-15: A's corpus, so a cross-dataset pair names both sides.
         primary_dataset=str(st.session_state.get("data_source_choice") or ""),
-        raw_gaze=raw_gaze,
+        # Only the static comparison draws B's samples, so nothing is cut for
+        # them while the switch is off or the replay runs. The *unfiltered*
+        # samples: B's pool ignores A's filters, so A's `raw_gaze` can lack B.
+        raw_gaze=(
+            (raw_gaze if raw_gaze_all is None else raw_gaze_all)
+            if draw_compare_raw_gaze
+            else None
+        ),
+        include_raw_gaze=draw_compare_raw_gaze,
     )
     comparing = compare_meta is not None
     # VIZ-48: Compare draws raw gaze too — each reading's own samples, so the
@@ -6266,10 +6276,12 @@ def render_single_trial_tab(
     )
     compare_shows_raw_gaze = bool(
         comparing
-        and global_raw_toggle
+        and draw_compare_raw_gaze
         and (trial_has_raw_gaze or not compare_raw_gaze.empty)
     )
     if compare_shows_raw_gaze:
+        # Never while animating: `show_raw_gaze` is part of the replay's cache
+        # key, and the replay draws no raw gaze (VIZ-49).
         figure_settings["show_raw_gaze"] = True
     # CMP-8 §7: publish B for the Share link, alongside A above. Always the
     # *real* ids, never the namespaced ones — a link names readers as their own

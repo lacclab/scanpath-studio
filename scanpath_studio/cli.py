@@ -2153,6 +2153,11 @@ def render(argv: list[str]) -> None:
             "table was given; ignoring it.",
             file=sys.stderr,
         )
+    if args.compare_raw_gaze and args.compare_with is None:
+        raise SystemExit(
+            "--compare-raw-gaze is scanpath B's raw gaze; pass --compare-with "
+            "PARTICIPANT:TRIAL too."
+        )
     if args.raw_gaze_schema is not None and not args.raw_gaze:
         raise SystemExit(
             "--raw-gaze-schema maps the --raw-gaze table; pass --raw-gaze too."
@@ -2848,6 +2853,8 @@ def render(argv: list[str]) -> None:
             # Raw gaze is a `plot_scanpath` frame; the replay draws none.
             if raw_gaze is not None:
                 ignored.append("raw_gaze")
+            if args.compare_raw_gaze:
+                ignored.append("compare_raw_gaze")
             if ignored:
                 print(
                     f"Warning: not supported with --animate, ignoring: "

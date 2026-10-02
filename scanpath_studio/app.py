@@ -259,6 +259,7 @@ from scanpath_studio.tabs import (
     _build_figure_settings,
     _render_column_mapping_section,
     dataset_editor_is_dirty,
+    render_analysis_pool_bar,
     render_corpus_analysis_tab,
     render_data_inspection_tab,
     render_dataset_editor_footer,
@@ -9043,8 +9044,30 @@ def _run_app() -> None:
             # UX-25: Corpus Analysis has no "Filter by" row, so the picker gets
             # its own compact row at the top of the page — it stays reachable on
             # every view.
-            _ds_col, _ = st.columns([2, 5])
+            _ds_col, pool_col = st.columns([2, 5], vertical_alignment="bottom")
             render_data_source_picker(host=_ds_col)
+            # UX-198: the pool the analysis reads — and the filters behind it —
+            # beside the dataset, where Scanpath keeps its own filter funnel.
+            pool = render_analysis_pool_bar(
+                pool_col,
+                words_all=words_all,
+                fixations_all=fixations_all,
+                raw_gaze_all=raw_gaze_all,
+                combos=combos,
+                combos_all=combos_all,
+            )
+            # AN-34: what each table's recipe shares — the dataset by the name
+            # the picker shows (and its stable token), and the pool above.
+            source_token = str(
+                st.session_state.get("data_source_choice") or data_choice
+            )
+            recipe_context = {
+                **pool,
+                "dataset": {
+                    "name": _dataset_display_name(source_token),
+                    "source": source_token,
+                },
+            }
             with st.container(key="tutorial_corpus_analysis"):
                 render_corpus_analysis_tab(
                     words_filtered,
@@ -9058,6 +9081,7 @@ def _run_app() -> None:
                     scale_text_to_boxes=scale_text_to_boxes,
                     canvas_renderer=canvas_renderer,
                     has_raw_gaze=not raw_gaze_filtered.empty,
+                    recipe_context=recipe_context,
                 )
     else:
         # The Scanpath view renders the viz controls itself (right rail) and

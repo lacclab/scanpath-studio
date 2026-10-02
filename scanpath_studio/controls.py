@@ -6954,6 +6954,134 @@ def has_active_trial_filters(prefix: str = "") -> bool:
     )
 
 
+#: UX-198 — the titles of the filters whose session key is not
+#: ``filter_<column>``; every other one is titled by its column.
+_FILTER_KEY_LABELS = {
+    "filter_participants": "Participant",
+    "filter_text_id": "Text",
+    "filter_favorites": "Favorites only",
+    "filter_req_tags": "With any of these tags",
+    "filter_exc_tags": "Excluding tags",
+}
+
+#: The metadata filters' key stems (DATA-20 / DATA-29 / text grain), longest
+#: first so ``filter_meta_`` cannot claim a ``filter_metadata_…`` column.
+_METADATA_FILTER_STEMS = ("filter_trialmeta_", "filter_textmeta_", "filter_meta_")
+
+
+def active_filter_keys(trial_filters: dict, prefix: str = "") -> list[str]:
+    """The widget keys behind every narrowing in ``trial_filters`` (UX-198).
+
+    The filter result already carries them for UX-7's per-filter clear; this
+    lists them once, in the panel's order, so a summary of the pool names the
+    same controls the panel shows.
+    """
+    keys: list[str] = []
+    if trial_filters.get("participants") is not None:
+        keys.append(f"{prefix}filter_participants")
+        keys.extend(trial_filters.get("participant_filter_keys") or ())
+    keys.extend((trial_filters.get("metadata_keys") or {}).values())
+    keys.extend(trial_filters.get("text_filter_keys") or ())
+    if trial_filters.get("trial_keys") is not None:
+        keys.extend(trial_filters.get("trial_filter_keys") or ())
+    if trial_filters.get("favorites_only"):
+        keys.append(f"{prefix}filter_favorites")
+    if trial_filters.get("required_tags"):
+        keys.append(f"{prefix}filter_req_tags")
+    if trial_filters.get("excluded_tags"):
+        keys.append(f"{prefix}filter_exc_tags")
+    return list(dict.fromkeys(keys))
+
+
+def _is_number(value) -> bool:
+    return isinstance(value, (int, float, np.integer, np.floating)) and not isinstance(
+        value, (bool, np.bool_)
+    )
+
+
+def describe_filter_keys(
+    keys, values, label_for: Callable[[str], str], prefix: str = ""
+) -> list[dict]:
+    """One ``{"field", "values" | "range"}`` entry per filter that narrows.
+
+    Pure: ``values`` maps a key to its widget value and ``label_for`` titles it.
+    A key whose value no longer narrows (an emptied multiselect) is skipped, so
+    the list says exactly what is constraining the pool. A range is a
+    two-number tuple, or a two-number list under a range or metadata key —
+    a categorical multiselect also holds a list. ``Favorites only`` has
+    neither values nor range: it is on or absent.
+    """
+    items: list[dict] = []
+    for key in keys:
+        value = values.get(key)
+        bare = key[len(prefix) :] if prefix and key.startswith(prefix) else key
+        if bare == "filter_favorites":
+            if value:
+                items.append({"field": label_for(key)})
+            continue
+        ranged = isinstance(value, tuple) or (
+            isinstance(value, list)
+            and (bare.endswith("_range") or bare.startswith(_METADATA_FILTER_STEMS))
+        )
+        if ranged and len(value) == 2 and all(_is_number(v) for v in value):
+            items.append(
+                {"field": label_for(key), "range": [float(value[0]), float(value[1])]}
+            )
+            continue
+        if isinstance(value, (list, tuple, set)) and value:
+            items.append({"field": label_for(key), "values": [str(v) for v in value]})
+    return items
+
+
+def active_filter_items(
+    words: pd.DataFrame, fixations: pd.DataFrame, *, prefix: str = ""
+) -> list[dict]:
+    """What is narrowing the pool this run, one entry per filter (UX-198).
+
+    Read from the result ``app.main`` filtered with (``read_trial_filters``),
+    so the list always matches the counts beside it. The values are the
+    widgets', falling back to the ``_trial_filters_raw`` mirror on a run where
+    the panel has not drawn them yet — the labels the user picked, not the
+    raw booleans a condition filter resolves to.
+    """
+    keys = active_filter_keys(read_trial_filters(prefix), prefix)
+    if not keys:
+        return []
+    values = dict(st.session_state.get(f"{prefix}_trial_filters_raw") or {})
+    values.update({k: st.session_state[k] for k in keys if k in st.session_state})
+    labels = trial_filter_labels(words, fixations)
+
+    def label_for(key: str) -> str:
+        from scanpath_studio import metadata as md
+
+        bare = key[len(prefix) :] if prefix and key.startswith(prefix) else key
+        if bare in _FILTER_KEY_LABELS:
+            return _FILTER_KEY_LABELS[bare]
+        for stem in _METADATA_FILTER_STEMS:
+            if bare.startswith(stem):
+                return md.field_label(bare[len(stem) :])
+        col = bare.removeprefix("filter_")
+        if col.endswith("_range") and col.removesuffix("_range") in labels:
+            col = col.removesuffix("_range")
+        return labels.get(col) or _trial_filter_label(col)
+
+    return describe_filter_keys(keys, values, label_for, prefix)
+
+
+def format_filter_item(item: dict, *, max_values: int = 3) -> str:
+    """``Participant: p1, p2`` / ``Trial index: 3–10`` / ``Favorites only``."""
+    if "range" in item:
+        lo, hi = item["range"]
+        return f"{item['field']}: {lo:g}–{hi:g}"
+    values = list(item.get("values") or ())
+    if not values:
+        return str(item["field"])
+    shown = ", ".join(values[:max_values])
+    if len(values) > max_values:
+        shown += f" +{len(values) - max_values} more"
+    return f"{item['field']}: {shown}"
+
+
 # --- Trial summary chips (the "Field = Value" strip above the plot) ----------
 _CHIP_TEXT_ID_COLS = (
     "unique_text_id",

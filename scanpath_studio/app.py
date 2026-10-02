@@ -2200,15 +2200,55 @@ _ONESTOP_REGIME_DESCRIPTIONS = {
 }
 
 
+#: DATA-65 — each regime's figures, counted from the reports at the OSF version
+#: `datasets` pins, through this app's own load (every part, as the regime's
+#: dataset loads them) and `_dataset_counts`, on 2026-10-02. The corpus
+#: publishes figures for the whole release only, so these are measured, not
+#: quoted; the pin is what makes them stay true. A regime not listed has not been
+#: counted yet and fills in once it is opened. Recount after a pipeline change
+#: that moves trials, texts or screens (DATA-63 did: it made each part a screen).
+_ONESTOP_REGIME_COUNTS: dict[str, dict[str, int]] = {
+    "ordinary": {
+        "Participants": 180,
+        "Texts": 330,
+        "Trials": 10078,
+        "Screens": 52369,
+        "Words": 2096092,
+        "Fixations": 2085412,
+    },
+    "repeated": {
+        "Participants": 180,
+        "Texts": 324,
+        "Trials": 1944,
+        "Screens": 10080,
+        "Words": 399394,
+        "Fixations": 296202,
+    },
+}
+
+
 def _onestop_regime_entry(regime: str) -> dict:
     """The registry entry for one OneStop regime's dataset (DATA-63).
 
-    No ``published_counts``: the corpus publishes its figures for the whole
-    release, not per regime, and DATA-36 shows a published figure only where
-    it is true of the row — so a row fills in once its dataset is opened.
+    ``published_counts`` are this regime's own, measured (DATA-65,
+    :data:`_ONESTOP_REGIME_COUNTS`) — never the whole release's, which no single
+    regime holds.
     """
     label = ONESTOP_REGIME_LABELS[regime]
+    counts = _ONESTOP_REGIME_COUNTS.get(regime)
+    extra = (
+        dict(
+            published_counts=counts,
+            published_counts_source=(
+                "Counted from the OSF reports at the version this release pins, "
+                "by this app's own load of every part of the regime."
+            ),
+        )
+        if counts
+        else {}
+    )
     return dict(
+        **extra,
         loader=partial(_load_onestop_regime_source, regime=regime),
         # OneStop presentation monitor (full-screen px coords). Sourced in
         # `eyegenbench_geometry.DISPLAY_SPECS["onestop"]` — Berzak et al. 2025,

@@ -122,11 +122,15 @@ def _trial_ids(at: AppTest) -> list[str]:
     """The trial ids currently offered by the picker (the live trial pool).
 
     Favorited trials are labelled ``★ <id>``; strip that so the ids compare.
+    The options are the ids as shown, part by part (UX-187); rejoining the
+    parts with ``_`` gives the id back.
     """
     box = [s for s in at.selectbox if s.key == "single_trial_id"]
     if not box:
         return []
-    return [str(o).removeprefix("★ ").strip() for o in box[0].options]
+    return [
+        str(o).removeprefix("★ ").strip().replace(" · ", "_") for o in box[0].options
+    ]
 
 
 def _metric(at: AppTest, label: str) -> str | None:

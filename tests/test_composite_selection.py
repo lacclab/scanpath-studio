@@ -6,8 +6,8 @@ per raw component (minus UX-5's pruning of the ones that were also trial-filter
 columns), then a Participant → Text cascade. Both made the shape of the *mapping*
 visible in the UI and neither offered the slider or the step buttons, so stepping
 through trials worked on some datasets and not others. Participant and Text are
-what the **Narrow by** row is for; the joined id is shown verbatim in the picker
-and spelled out part-by-part by the trial chips.
+what the **Narrow by** row is for; the joined id is shown part by part, in the
+picker (UX-187) and by the trial chips.
 """
 
 from __future__ import annotations
@@ -97,10 +97,10 @@ class TestCompositeTrialPicker:
         at.run(timeout=15)
         picker = next(s for s in at.selectbox if s.label.startswith("**Select Trial**"))
         assert list(picker.options) == [
-            "A_p1_False",
-            "B_p1_False",
-            "A_p2_False",
-            "A_p1_True",
+            "A · p1 · False",
+            "B · p1 · False",
+            "A · p2 · False",
+            "A · p1 · True",
         ]
 
     def test_single_composite_trial_degrades_without_slider(self):
@@ -152,7 +152,7 @@ class TestCompositeTrialPicker:
         # columns that jointly ARE the paragraph identity (paragraph_id,
         # article_id, article_batch, difficulty_level), and Text ID maps to those
         # same four. Five mapped columns, one picker — labelled **Select Trial**,
-        # listing the joined ids verbatim (the user's call: no relabelling).
+        # listing the joined ids (shown part by part since UX-187).
         def _onestop_app():
             import pandas as pd
             import streamlit as st
@@ -191,11 +191,12 @@ class TestCompositeTrialPicker:
         assert not at.exception
         picker = next(s for s in at.selectbox if s.label.startswith("**Select Trial**"))
         assert "Participant" not in [s.label for s in at.selectbox]
+        # UX-187: shown part by part, from the composite's own columns.
         assert list(picker.options) == [
-            "l10_338_1_10_3_Adv",
-            "l10_338_1_10_3_Ele",
-            "l10_338_1_11_3_Adv",
-            "l10_338_1_11_3_Ele",
+            "l10_338 · 1 · 10 · 3 · Adv",
+            "l10_338 · 1 · 10 · 3 · Ele",
+            "l10_338 · 1 · 11 · 3 · Adv",
+            "l10_338 · 1 · 11 · 3 · Ele",
         ]
         _, trial, _, text = at.session_state["_picked"]
         assert trial == "l10_338_1_10_3_Adv"

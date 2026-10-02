@@ -505,8 +505,10 @@ _ONESTOP_OSF_URL = "https://osf.io/download/{resource}"
 # The seven trial parts (interest periods), in presentation order. Each maps to
 # one interest-area + one fixation OSF report in the ``onestop-full`` release
 # (all-regimes). Paragraph is the reading passage; the others are the surrounding
-# screens (title, the pre/post question, its four answers, the combined QA
-# screen, the correctness feedback). All share the Paragraph report schema
+# screens (title, the pre/post question, its four answers, the correctness
+# feedback) — except QA, which is not a screen: it is the Questions and Answers
+# interest periods taken together (the corpus gives its page as "3+4"), so its
+# fixations are theirs again (DATA-64). All share the Paragraph report schema
 # (IA_LEFT/RIGHT/TOP/BOTTOM boxes, IA_LABEL word text, per-word reading measures),
 # so every part renders as a scanpath. Keep the display order = presentation order.
 _ONESTOP_PARTS: tuple[str, ...] = (
@@ -576,18 +578,24 @@ _ONESTOP_REGIME_COLUMNS: tuple[str, ...] = (
 
 
 def onestop_regime_parts(regime: str) -> list[str]:
-    """Every trial part a reader in ``regime`` saw, in presentation order.
+    """Every screen a reader in ``regime`` saw, in presentation order.
 
-    All seven, except the question-preview screen, which only the
-    information-seeking regimes show — its report holds no trial of the others,
-    so loading it there would download a file to keep none of it.
+    The parts other than QA, and of those the question-preview screen only for
+    the information-seeking regimes — its report holds no trial of the others,
+    so loading it there would download a file to keep none of it. QA is left
+    out (DATA-64): it repeats the Questions and Answers screens' fixations as
+    one interest period, so loading it beside them counts each fixation twice
+    and shows that stretch of the trial as a further screen. ``parts=["QA"]``
+    still loads it on request.
     """
     if regime not in _ONESTOP_REGIME_FLAGS:
         raise ValueError(
             f"regime must be one of {sorted(_ONESTOP_REGIME_FLAGS)}, got {regime!r}"
         )
     preview, _ = _ONESTOP_REGIME_FLAGS[regime]
-    return [p for p in _ONESTOP_PARTS if preview or p != "Question_Preview"]
+    return [
+        p for p in _ONESTOP_PARTS if p != "QA" and (preview or p != "Question_Preview")
+    ]
 
 
 def _keep_onestop_regime(frame: pd.DataFrame, regime: str) -> pd.DataFrame:

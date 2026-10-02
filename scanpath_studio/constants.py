@@ -723,7 +723,7 @@ ONESTOP_PART_LABELS = {
     "Paragraph": "Paragraph",
     "Questions": "Question",
     "Answers": "Answers",
-    "QA": "Question + answers (QA)",
+    "QA": "Question + answers combined (QA)",
     "Feedback": "Feedback",
 }
 # OneStop source variants → display label. `public` downloads from OSF on demand;

@@ -2496,9 +2496,13 @@ def test_a_stored_upload_reports_the_setup_its_wizard_captured():
 
 
 def test_a_regime_lists_every_part_it_shows():
-    assert datasets_module.onestop_regime_parts("information_seeking") == list(
-        datasets_module._ONESTOP_PARTS
-    )
+    assert datasets_module.onestop_regime_parts("information_seeking") == [
+        p for p in datasets_module._ONESTOP_PARTS if p != "QA"
+    ]
+    # DATA-64: QA is Questions + Answers again, as one interest period — not a
+    # screen, so no regime's dataset loads it.
+    for regime in datasets_module._ONESTOP_REGIME_FLAGS:
+        assert "QA" not in datasets_module.onestop_regime_parts(regime)
     # Only the information-seeking regimes show the question first.
     assert "Question_Preview" not in datasets_module.onestop_regime_parts("ordinary")
     with pytest.raises(ValueError):

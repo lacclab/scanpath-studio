@@ -48,6 +48,7 @@ from .constants import (
     DEFAULT_LINE_SPACING,
     DEFAULT_PALETTE,
     ICONS,
+    PLOTLY_CONFIG,
     SACCADE_CLASS_ORDER,
     UNIFORM_COLOR_FIELD,
     drift_correction_enabled,
@@ -1564,9 +1565,9 @@ def pair_export(
             width = int(getattr(fig.layout, "width", None) or canvas_width)
             height = int(getattr(fig.layout, "height", None) or canvas_height)
             if fmt == "html":
-                data = fig.to_html(include_plotlyjs="cdn", full_html=True).encode(
-                    "utf-8"
-                )
+                data = fig.to_html(
+                    include_plotlyjs="cdn", full_html=True, config={**PLOTLY_CONFIG}
+                ).encode("utf-8")
             else:
                 data = render_static_figure_bytes(
                     fig,
@@ -2053,7 +2054,9 @@ def bulk_export(
                         if fmt == "html":
                             # Browser-free + interactive; no Kaleido needed.
                             data = fig.to_html(
-                                include_plotlyjs="cdn", full_html=True
+                                include_plotlyjs="cdn",
+                                full_html=True,
+                                config={**PLOTLY_CONFIG},
                             ).encode("utf-8")
                         else:
                             scale = options.png_scale if fmt == "png" else 1

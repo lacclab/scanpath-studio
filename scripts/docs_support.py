@@ -357,8 +357,10 @@ def figure_options_table() -> str:
 
 #: The app's own figure config (`tabs._render_true_scale_chart`): Plotly's zoom
 #: re-lays-out the axes and leaves markers and text at their pixel sizes, which
-#: is exactly what the true-scale embed exists to avoid.
+#: is exactly what the true-scale embed exists to avoid. No "Share chart…"
+#: upload to Plotly Cloud, as in the app (`constants.PLOTLY_CONFIG`, BUG-101).
 _PLOT_CONFIG = {
+    "showSendToCloud": False,
     "displaylogo": False,
     "responsive": False,
     "modeBarButtonsToRemove": [

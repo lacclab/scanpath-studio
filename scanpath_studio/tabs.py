@@ -96,6 +96,7 @@ from scanpath_studio.constants import (
     FOCUS_MAPPING_KEY,
     HIGHLIGHTED_TEXT_COLOR,
     ICONS,
+    PLOTLY_CONFIG,
     SACCADE_CLASS_COLORS,
     SACCADE_CLASS_ORDER,
     SACCADE_COLOR,
@@ -883,6 +884,7 @@ def _true_scale_plot_html(
     if page is not None:
         figure_dict, player_script = page
     config: dict = {
+        **PLOTLY_CONFIG,
         "responsive": False,
         "displaylogo": False,
         "toImageButtonOptions": {
@@ -1185,7 +1187,12 @@ def _figure_download_data(
 ) -> Callable[[], str | bytes]:
     """The zero-argument callable `st.download_button` runs on click (UX-150)."""
     if fmt == "HTML":
-        return partial(fig.to_html, include_plotlyjs="cdn", full_html=True)
+        return partial(
+            fig.to_html,
+            include_plotlyjs="cdn",
+            full_html=True,
+            config={**PLOTLY_CONFIG},
+        )
     return partial(
         render_static_figure_bytes,
         fig,
@@ -1216,7 +1223,12 @@ def _animation_html(fig) -> str:
     travel packed and are rebuilt in the browser (PERF-17). ``fig`` may also be a
     figure's ``to_dict()`` (a replay's cached view), serialized as is.
     """
-    options = dict(include_plotlyjs="cdn", full_html=True, auto_play=False)
+    options = dict(
+        include_plotlyjs="cdn",
+        full_html=True,
+        auto_play=False,
+        config={**PLOTLY_CONFIG},
+    )
     page = replay_page(fig)
     if page is not None:
         # PERF-17: the frames travel packed; the script rebuilds them, then plays.
@@ -8310,7 +8322,7 @@ def _render_per_sentence_tab(
 
 def _chart(fig) -> None:
     """Render a non-spatial Plotly figure stretched to the column width."""
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, width="stretch", config={**PLOTLY_CONFIG})
 
 
 def _corpus_series_colors(viz_settings: dict) -> tuple[str, str]:
@@ -10126,7 +10138,9 @@ def render_multiple_comparison_tab(
                 base_font_size=int(base_font_size),
                 font_family=font_family,
             )
-            st.plotly_chart(fig_idx, width="stretch", config={"responsive": True})
+            st.plotly_chart(
+                fig_idx, width="stretch", config={**PLOTLY_CONFIG, "responsive": True}
+            )
         with conv_cols[1]:
             fig_time = make_metric_convergence_figure(
                 time_curves,
@@ -10137,7 +10151,9 @@ def render_multiple_comparison_tab(
                 base_font_size=int(base_font_size),
                 font_family=font_family,
             )
-            st.plotly_chart(fig_time, width="stretch", config={"responsive": True})
+            st.plotly_chart(
+                fig_time, width="stretch", config={**PLOTLY_CONFIG, "responsive": True}
+            )
 
 
 # -----------------------------------------------------------------------------

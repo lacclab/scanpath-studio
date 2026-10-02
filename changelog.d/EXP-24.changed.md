@@ -1,0 +1,1 @@
+The export bundle warns when its PNG, SVG or PDF figures cannot be drawn because no browser is installed on the server, reports how many files and figures each build made and how many failed, and keeps a trial's HTML figure when its image formats fail.

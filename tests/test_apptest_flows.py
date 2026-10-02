@@ -611,6 +611,56 @@ class TestBulkExportFlow:
         assert exported == {"l7_1090", "l37_1129"}
         assert len(names_all) == 1 + 2 * DEMO_TRIALS_IN_PICKER
 
+    def test_a_missing_browser_is_said_and_a_partial_build_counts_its_failures(
+        self, monkeypatch
+    ):
+        """EXP-24: with no browser on the server, picking PNG says so before the
+        build; the build reports how many figures it made and how many failed,
+        keeps the HTML it could make downloadable — and when it made none, the
+        error list opens by itself."""
+        from contextlib import contextmanager
+
+        import scanpath_studio.animation_export as anim
+        import scanpath_studio.export as export_mod
+
+        @contextmanager
+        def no_browser(enabled):
+            def render(fig, fmt, width, height, scale):
+                raise RuntimeError(anim.CHROME_INSTALL_HINT)
+
+            yield render
+
+        monkeypatch.setattr(anim, "chrome_available", lambda: False)
+        monkeypatch.setattr(export_mod, "_figure_renderer", no_browser)
+
+        at = _boot(subtab=SUBTAB_EXPORT)
+        at.radio(key="bulk_export_scope").set_value("This trial")
+        at.pills(key="bulk_export_figfmts").set_value(["PNG", "HTML"])
+        at.run(timeout=60)
+        _clean(at, "after picking PNG + HTML:")
+        warnings = " ".join(str(w.value) for w in at.warning)
+        assert "bundle figures are drawn on this server" in warnings
+
+        next(b for b in at.button if b.label == "Build export").click()
+        at.run(timeout=120)
+        assert not at.exception, at.exception
+        partial = [str(w.value) for w in at.warning if "Partly built" in str(w.value)]
+        assert partial and "1 of 2 figures made · 1 failed" in partial[0]
+        errors = next(e for e in at.expander if e.label.startswith("Export errors"))
+        assert errors.proto.expanded is False
+        assert "Download zip" in self._download_labels(at)
+
+        at.pills(key="bulk_export_figfmts").set_value(["PNG"])
+        at.run(timeout=60)
+        next(b for b in at.button if b.label == "Build export").click()
+        at.run(timeout=120)
+        assert not at.exception, at.exception
+        failed = [str(e.value) for e in at.error]
+        assert failed and failed[0].startswith("No figures were made")
+        errors = next(e for e in at.expander if e.label.startswith("Export errors"))
+        assert errors.proto.expanded is True
+        assert "Download zip" in self._download_labels(at)
+
 
 @pytest.mark.timeout(180)
 class TestRecoveryCachePanelFlow:

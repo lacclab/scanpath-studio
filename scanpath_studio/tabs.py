@@ -198,6 +198,7 @@ from scanpath_studio.export import (
     render_export_options,
     render_pattern,
     render_static_figure_bytes,
+    summarize_export,
 )
 from scanpath_studio.export_status import (
     EXPORTER_VERSION,
@@ -7385,13 +7386,26 @@ def _render_bulk_export(
             progress_slot.empty()
             cache = {"sig": sig, "data": zip_bytes, "progress": progress}
             st.session_state["_bulk_export_cache"] = cache
+            # EXP-24: the status box's last word is the bundle's, not
+            # "ready" over a zip whose figures failed.
+            built = summarize_export(progress, len(zip_bytes))
+            status_box.update(
+                label=built.message,
+                state="error" if built.level == "error" else "complete",
+                expanded=False,
+            )
 
     if cache and cache.get("sig") == sig:
         zip_bytes = cache["data"]
         progress = cache["progress"]
-        info_col.success(f"Ready · {len(zip_bytes) / 1_048_576:.1f} MB")
+        # EXP-24: what was made and what failed; a partial zip still downloads.
+        built = summarize_export(progress, len(zip_bytes))
+        getattr(info_col, built.level)(built.message, icon=ICONS[built.level])
         if progress.errors:
-            with st.expander("Export warnings"):
+            with st.expander(
+                f"Export errors ({len(progress.errors):,})",
+                expanded=built.expand_errors,
+            ):
                 for err in progress.errors:
                     st.write(err)
         st.download_button(

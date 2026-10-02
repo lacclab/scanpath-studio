@@ -4437,15 +4437,23 @@ def render_data_source_picker(host=None) -> None:
         "**Select Dataset**",
         [*entries, _MORE_DATASETS_PLACEHOLDER],
         format_func=_entry_label,
+        key="data_source_picker",
+        on_change=_on_data_source_pick,
+    )
+    # The help icon sits in the label row, right-aligned over +, not beside the
+    # label: the bottom-aligned row keeps + level with the picker, so the icon
+    # lands on the label's line.
+    add_col = box.container(width="content", horizontal_alignment="right", gap=None)
+    add_col.markdown(
+        "",
+        width="content",
         help=(
             "Which dataset the app is showing. Use + to create a scanpath or "
             f"import files. Rename or remove datasets on the {ICONS['view_data']} Data page. "
             "More coming soon! is a preview of future datasets."
         ),
-        key="data_source_picker",
-        on_change=_on_data_source_pick,
     )
-    with box.popover(ICONS["add"], help="Add dataset", key="add_dataset_menu"):
+    with add_col.popover(ICONS["add"], help="Add dataset", key="add_dataset_menu"):
         st.button(
             "Create manually",
             icon=ICONS["author"],

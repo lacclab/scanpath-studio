@@ -121,6 +121,7 @@ from scanpath_studio.constants import (
     drift_correction_enabled,
     icon_html,
     preprocessing_enabled,
+    sentence_analysis_enabled,
     similarity_enabled,
     upload_limit_mb,
 )
@@ -301,6 +302,16 @@ if TYPE_CHECKING:
 #: The Corpus Analysis subtabs, in bar order — also the values the keyed tab bar
 #: (`corpus_subtab`) takes, so a test or a tutorial can open one by name.
 CORPUS_SUBTABS = ("Per text", "Per sentence", "Per reader", "Groups")
+
+
+def corpus_subtabs() -> tuple[str, ...]:
+    """The Corpus Analysis subtabs this build draws — Per sentence only behind
+    the experimental flag (AN-33)."""
+    return tuple(
+        name
+        for name in CORPUS_SUBTABS
+        if name != "Per sentence" or sentence_analysis_enabled()
+    )
 
 
 def _safe_filename(text: str) -> str:
@@ -8290,7 +8301,7 @@ def _corpus_unavailable_notice(
         )
     sections = "".join(
         f'<span class="sps-corpus-off-tab">{html.escape(name)}</span>'
-        for name in CORPUS_SUBTABS
+        for name in corpus_subtabs()
     )
     st.markdown(
         f'<div class="sps-corpus-off" aria-disabled="true">{sections}</div>',
@@ -8361,8 +8372,9 @@ def render_corpus_analysis_tab(
     # widget key, so a tutorial can only *point* at it, never switch it.
     #
     with st.container(key="tutorial_corpus_subtabs"):
-        text_tab, sentence_tab, reader_tab, groups_tab = st.tabs(
-            list(CORPUS_SUBTABS),
+        names = corpus_subtabs()
+        panes = st.tabs(
+            list(names),
             # PERF-9: the same PERF-3 fix the Scanpath subtabs got — `st.tabs`
             # runs every body on every run, so the hidden Per sentence table
             # (uncached, masking the whole fixation frame per sentence) was
@@ -8371,6 +8383,13 @@ def render_corpus_analysis_tab(
             key="corpus_subtab",
             on_change="rerun",
         )
+        opened = dict(zip(names, panes, strict=True))
+    text_tab, reader_tab, groups_tab = (
+        opened["Per text"],
+        opened["Per reader"],
+        opened["Groups"],
+    )
+    sentence_tab = opened.get("Per sentence")
     if text_tab.open:
         with text_tab:
             render_per_text_tab(
@@ -8384,7 +8403,7 @@ def render_corpus_analysis_tab(
                 viz_settings=viz_settings,
                 **common,
             )
-    if sentence_tab.open:
+    if sentence_tab is not None and sentence_tab.open:
         with sentence_tab:
             _render_per_sentence_tab(words_filtered, fixations_filtered)
     if groups_tab.open:
@@ -8401,8 +8420,32 @@ def render_corpus_analysis_tab(
 def _c_sentence_measures(_words, _fix, fwkey, ffkey):
     from scanpath_studio.preprocessing import sentence_measures
 
-    # `_words` already carries the per-word measures (BUG-78).
+    # Derived from the fixations, not the supplied word measures — why AN-33
+    # holds the subtab back.
     return sentence_measures(_words, _fix)
+
+
+#: Per sentence's measures, in picker order, with what each one says and its
+#: unit — the columns of `preprocessing.sentence_measures` (AN-33).
+_SENTENCE_MEASURE_LABELS = {
+    "total_dur": "Total fixation duration (ms)",
+    "total_n_fixations": "Fixations",
+    "firstpass_dur": "First-pass duration (ms)",
+    "firstpass_n_fixations": "First-pass fixations",
+    "gopast": "Go-past duration (ms)",
+    "gopast_sel": "Selective go-past duration (ms)",
+    "firstpass_forward_dur": "First-pass forward reading (ms)",
+    "firstpass_forward_n_fixations": "First-pass forward fixations",
+    "firstpass_reread_dur": "First-pass rereading (ms)",
+    "firstpass_reread_n_fixations": "First-pass rereading fixations",
+    "lookback_dur": "Look-back to earlier sentences (ms)",
+    "lookback_n_fixations": "Look-back fixations",
+    "lookfrom_dur": "Later rereading (ms)",
+    "lookfrom_n_fixations": "Later rereading fixations",
+    "nrun": "Runs",
+    "rate_wpm": "Reading rate (words/min)",
+    "n_words": "Words",
+}
 
 
 def _render_per_sentence_tab(
@@ -8420,16 +8463,17 @@ def _render_per_sentence_tab(
         "across readers for each text/sentence pair."
     )
     numeric = [
-        column
-        for column in sentence_table.select_dtypes(include="number").columns
-        if column not in {"sentence_id", SCREEN_INDEX}
+        column for column in _SENTENCE_MEASURE_LABELS if column in sentence_table
     ]
     if sentence_table.empty or not numeric:
         st.info("No sentence-level measures are available for this selection.")
     else:
         controls = st.columns(2)
         metric = controls[0].selectbox(
-            "Sentence measure", numeric, key="sentence_measure"
+            "Sentence measure",
+            numeric,
+            format_func=_SENTENCE_MEASURE_LABELS.get,
+            key="sentence_measure",
         )
         aggregate = controls[1].selectbox(
             "Aggregate", ["Mean", "Median"], key="sentence_aggregate"
@@ -8443,10 +8487,11 @@ def _render_per_sentence_tab(
             if column in sentence_table
         ]
         reducer = "mean" if aggregate == "Mean" else "median"
+        label = _SENTENCE_MEASURE_LABELS[metric]
         summary = (
             sentence_table.groupby(identity, dropna=False)[metric]
             .agg(reducer)
-            .reset_index(name=f"{reducer}_{metric}")
+            .reset_index(name=f"{aggregate} {label[0].lower()}{label[1:]}")
         )
         if SCREEN_ID in identity and SCREEN_INDEX in sentence_table:
             # Screens in reading order, not alphabetically.

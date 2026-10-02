@@ -372,9 +372,9 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Pick the question, not the chart",
-                "Four subtabs, four shapes of question: **Per text** (one text, many "
-                "readers), **Per sentence**, **Per reader** (one reader, all their "
-                "trials) and **Groups** (a cohort, or two compared). Our question — "
+                "Each subtab answers one shape of question: **Per text** (one text, "
+                "many readers), **Per reader** (one reader, all their trials) and "
+                "**Groups** (a cohort, or two compared). Our question — "
                 "*did this reader speed up over the experiment?* — is **Per reader**.",
                 ".st-key-tutorial_corpus_subtabs",
                 view=_VIEW_CORPUS,

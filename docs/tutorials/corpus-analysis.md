@@ -25,7 +25,6 @@ matches the question:
 | Question | View |
 | --- | --- |
 | How was one text read? | **Per text** |
-| How was one sentence read, across readers? | **Per sentence** |
 | How does one reader behave across trials? | **Per reader** |
 | How do conditions or populations differ? | **Groups** |
 

@@ -563,4 +563,4 @@ def test_per_sentence_keeps_each_screens_sentences_apart():
     summary = at.dataframe[0].value
     assert list(summary[SCREEN_ID]) == ["intro", "question"]
     assert list(summary["sentence_id"]) == [1, 1]
-    assert summary["mean_total_dur"].nunique() == 2
+    assert summary["Mean total fixation duration (ms)"].nunique() == 2

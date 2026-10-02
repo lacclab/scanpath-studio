@@ -3915,7 +3915,13 @@ def render_settings_file(
         exported_at=datetime.now().isoformat(timespec="seconds"),
         compare_styles=compare_styles,
     )
-    st.caption("This figure's settings and trial, as a JSON file.")
+    # UX-199: the file's boundary, as `_build_studio_config` draws it — the
+    # Corpus Analysis tutorial explains the excluded choices at more length.
+    st.caption(
+        "Includes the figure settings, recording setup and trial selection; "
+        "excludes trial filters, cohort definitions, annotations, the column "
+        "mapping and the data."
+    )
     st.download_button(
         "Download settings",
         icon=ICONS["download"],

@@ -3738,6 +3738,10 @@ class TestNavRegressions:
             d for d in at.get("download_button") if d.key == "plot_config_download"
         ], "Share → File has no settings download"
         assert [u for u in at.get("file_uploader") if u.key == "plot_config_upload"]
+        # UX-199: what the file holds, and what it does not, beside it.
+        captions = " ".join(str(c.value) for c in at.caption)
+        assert "Includes the figure settings, recording setup and trial" in captions
+        assert "excludes trial filters, cohort definitions, annotations" in captions
 
 
 def _mpe_upload_frames():

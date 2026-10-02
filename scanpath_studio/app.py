@@ -239,6 +239,7 @@ from scanpath_studio.persistence import (
     human_size,
     is_loopback_url,
     local_state_restored,
+    persistence_enabled,
     persistence_paused,
     restore_local_state,
     restored_from_cache,
@@ -7376,6 +7377,67 @@ def _render_cancelled_load_notice(host) -> None:
     )
 
 
+#: UX-199: ``"show"`` once the first upload lands on a deployment that keeps
+#: nothing, ``"dismissed"`` once the user closes the reminder — which keeps it
+#: down for the rest of the session, later uploads included. UI-only, so it is
+#: not wire format and no link or saved file carries it.
+BACKUP_REMINDER_KEY = "_sps_backup_reminder"
+
+#: Where the docs list what to download, and from where, to keep your work.
+BACKUP_GUIDE_URL = f"{CITATION['docs_url']}guides/outputs-sharing/#back-up-your-work"
+
+
+def arm_backup_reminder() -> None:
+    """Ask for the backup reminder after an upload, where nothing is saved (UX-199).
+
+    Called from the wizard's ✅ Add dataset callback. *Saved on this computer*
+    says the same thing at the foot of the 🗂️ Data page, where a hosted user
+    working in Scanpath may never look — so the first upload, the moment there
+    is something to lose, says it in the notices strip on every view.
+    """
+    if st.session_state.get(BACKUP_REMINDER_KEY) == "dismissed":
+        return
+    if persistence_enabled(str(getattr(st.context, "url", "") or "")):
+        return
+    st.session_state[BACKUP_REMINDER_KEY] = "show"
+
+
+def _dismiss_backup_reminder() -> None:
+    st.session_state[BACKUP_REMINDER_KEY] = "dismissed"
+
+
+def _render_backup_reminder(host, active_view: str) -> None:
+    """UX-199: the dismissible "nothing is saved here" reminder, in the notices."""
+    if st.session_state.get(BACKUP_REMINDER_KEY) != "show":
+        return
+    box = host.container(key="sps_backup_reminder", border=True)
+    box.markdown(
+        f"{ICONS['warning']} **This deployment saves nothing.** Closing or "
+        "refreshing the tab loses the datasets you added, their column mappings "
+        "and your annotations. Keep the files you uploaded, and export your "
+        f"annotations from {ICONS['view_data']} **Data → Annotations** and each "
+        "dataset's mapping from "
+        f"{ICONS['edit']} **Edit dataset → Save setup**. "
+        f"[What to back up ↗]({BACKUP_GUIDE_URL})"
+    )
+    row = box.container(horizontal=True, gap="small")
+    if active_view != _VIEW_DATA:
+        row.button(
+            "Open the Data page",
+            key="sps_backup_reminder_go",
+            icon=ICONS["view_data"],
+            on_click=_go_data,
+            type="tertiary",
+        )
+    row.button(
+        "Dismiss",
+        key="sps_backup_reminder_dismiss",
+        icon=ICONS["close"],
+        on_click=_dismiss_backup_reminder,
+        type="tertiary",
+    )
+
+
 def _open_dataset_card(
     page: loading.Page,
     data_choice: str,
@@ -7742,6 +7804,7 @@ def _run_app() -> None:
     menu = render_top_menu(active_view=active_view)
     _render_about_panel(menu.title)
     _render_cancelled_load_notice(menu.notices)
+    _render_backup_reminder(menu.notices, active_view)
 
     def _finish_page() -> None:
         """The run's last UI, once, on whichever path ``main`` leaves by.

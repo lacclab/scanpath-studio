@@ -341,6 +341,8 @@ def _finalize_wizard_dataset() -> None:
     # the mapping that produced it is still fresh — instead of a page-wide
     # banner it will learn to ignore. See `app._trial_identity_alert_dialog`.
     st.session_state[TRIAL_IDENTITY_CHECK_KEY] = "add"
+    # UX-199: on a deployment that saves nothing, the first upload says so.
+    app.arm_backup_reminder()
 
 
 def upload_annotations(name: str) -> list[dict]:

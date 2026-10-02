@@ -65,6 +65,11 @@ def get_app_css() -> str:
     div[data-testid="stPlotlyChart"] {margin: 0 !important; padding: 0 !important; line-height: 0 !important;}
     div[data-testid="stPlotlyChart"] > div {margin: 0 !important; padding: 0 !important;}
     div[data-testid="stPlotlyChart"] iframe {display: block !important; margin: 0 !important; padding: 0 !important;}
+    /* UX-188: an inline iframe sits on the text baseline, leaving a descender's
+       gap under it that its overflow:auto container turned into a scrollbar
+       with nothing to scroll (8px under the plot, 25px under each script-only
+       embed). */
+    iframe[data-testid="stIFrame"] {display: block;}
     .stPlotlyChart {margin: 0 !important; padding: 0 !important;}
     /* Target parent containers */
     div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stPlotlyChart"]) {padding: 0 !important; margin: 0 !important; gap: 0 !important;}
@@ -2123,6 +2128,8 @@ def get_app_css() -> str:
         [data-testid="stElementContainer"]:has(iframe[title*="components.html"]),
         [data-testid="stElementContainer"]:has(iframe[title*="st.iframe"]) {
             overflow-x: auto;
+            /* Without this, overflow-x alone makes the y axis auto as well. */
+            overflow-y: hidden;
         }
     }
     </style>

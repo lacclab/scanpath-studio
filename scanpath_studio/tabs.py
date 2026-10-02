@@ -258,6 +258,8 @@ from scanpath_studio.utils import (
     COMPARE_DATASET_SEP,
     COMPARE_OPTIONS_SNAPSHOT_KEY,
     COMPARE_STEP_LINK_KEY,
+    SAME_PARTICIPANT_MARKER,
+    SAME_TEXT_MARKER,
     TRIAL_SORT_DATA_ORDER,
     TRIAL_SORT_DEFAULT,
     align_compare_columns,
@@ -276,6 +278,9 @@ from scanpath_studio.utils import (
     separate_self_compare,
     sort_trial_options,
     step_within,
+    trial_id_help,
+    trial_id_layout,
+    trial_id_shown,
     trial_options_snapshot_key,
     trial_sort_keys,
     unqualify_for_export,
@@ -458,6 +463,10 @@ _ZOOM_MAX = 8.0
 
 _TRUE_SCALE_TEMPLATE = """
 <style>
+  /* UX-188: the frame is the figure's height + 12px; the browser's default 8px
+     body margin, top and bottom, made the page 4px taller than that, so a
+     figure drawn at full size scrolled by 4px. */
+  html, body { margin: 0; }
   /* UX-169: a placeholder at the figure's size while plotly.js loads and the
      figure draws — seconds for a big replay. It fades in only after 300 ms, so
      a small figure never flickers, and goes on Plotly's first draw. Ahead of
@@ -2181,9 +2190,24 @@ def _render_compare_dataset_cell(
             if ready_by_name.get(name, True)
             else f"{_mark_wip_if_benchmark(name)} (needs setup)"
         ),
-        help="Choose dataset and trial B. 📄 marks the same text; 👤 marks the "
-        "same participant. Other datasets keep their own screen geometry.",
+        help="The dataset scanpath B comes from. Other datasets keep their own "
+        "screen geometry.",
     )
+
+
+def _compare_label_display(
+    label: str, trial_id: str, markers: str, id_display: dict[str, str]
+) -> str:
+    """A *Compare to* option as shown: its trial id spelled out part by part.
+
+    The option's value stays ``build_comparison_options``' label (the widget key
+    holds it), so only the id inside it is swapped for its display form.
+    """
+    prefix = f"{markers} " if markers else ""
+    shown = id_display.get(trial_id)
+    if not shown or not label.startswith(prefix + trial_id):
+        return label
+    return prefix + shown + label[len(prefix) + len(trial_id) :]
 
 
 def _render_compare_filters(host, source: SecondaryDataset) -> None:
@@ -2491,7 +2515,23 @@ def _render_compare_selector(
 
     labels = [opt[2] for opt in options]
     label_to_trial = {opt[2]: (opt[0], opt[1]) for opt in options}
-    label_to_id = {opt[2]: str(opt[1]) for opt in options}
+    # UX-187: B's trial ids spelled out part by part, as A's picker shows them.
+    composite_b = (
+        filter_source.composite_trial_columns if filter_source is not None else ()
+    )
+    id_display, id_part_names = trial_id_layout(
+        combos,
+        composite_cols=composite_b,
+        columns=next(
+            (f.columns for f in (fixations_filtered, words_filtered) if f is not None),
+            (),
+        ),
+    )
+    label_to_id = {opt[2]: id_display.get(str(opt[1]), str(opt[1])) for opt in options}
+    label_display = {
+        opt[2]: _compare_label_display(opt[2], str(opt[1]), opt[3], id_display)
+        for opt in options
+    }
 
     sel_key = "single_compare_trial"
     pos_key = "single_compare_pos"
@@ -2599,11 +2639,23 @@ def _render_compare_selector(
 
         current_idx = labels.index(current)
 
+    # UX-189: the label is shown, like A's *Select Trial*, so its help "?" is there.
     selected_compare_label = sel_col.selectbox(
-        "Compare trial",
+        "**Compare to**",
         options=labels,
         key=sel_key,
-        label_visibility="collapsed",
+        format_func=lambda v: label_display.get(v, v),
+        help=" ".join(
+            filter(
+                None,
+                (
+                    f"{SAME_TEXT_MARKER} the same text as the selected trial · "
+                    f"{SAME_PARTICIPANT_MARKER} the same participant. "
+                    "★ favorite · 🏷️ tagged · 📝 has notes.",
+                    trial_id_help(id_part_names),
+                ),
+            )
+        ),
     )
     if n > 1:
         with slider_col:
@@ -6198,7 +6250,17 @@ def render_single_trial_tab(
                 trial_fixations,
                 selected_participant,
                 chip_fields,
-                leading_chip=(f"Trial ID = {selected_trial}", color_a)
+                leading_chip=(
+                    "Trial ID = "
+                    + trial_id_shown(
+                        selected_trial,
+                        trial_fixations,
+                        trial_words,
+                        composite_cols=st.session_state.get("_composite_trial_columns")
+                        or (),
+                    ),
+                    color_a,
+                )
                 if comparing and color_a
                 else None,
                 trial_raw_gaze=trial_raw_gaze,
@@ -6216,7 +6278,16 @@ def render_single_trial_tab(
                     compare_meta["fixations"],
                     compare_participant,
                     chip_fields,
-                    leading_chip=(f"Trial ID = {compare_trial}", color_b),
+                    leading_chip=(
+                        "Trial ID = "
+                        + trial_id_shown(
+                            compare_trial,
+                            compare_meta["fixations"],
+                            compare_meta["words"],
+                            participant_id=compare_meta.get("raw_participant"),
+                        ),
+                        color_b,
+                    ),
                 )
 
     # CMP-8 §6: the two halves of the pair bundle, built from the *unqualified*

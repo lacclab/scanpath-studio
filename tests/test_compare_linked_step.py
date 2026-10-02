@@ -195,10 +195,13 @@ class TestTheLinkedStepEndToEnd:
         selection on the next run."""
         at = self._boot_compare()
         picker = at.selectbox(key="single_compare_trial")
-        other = next(o for o in picker.options if o != picker.value)
-        at = picker.set_value(other).run(timeout=90)
+        before = picker.value
+        # By index: the options are the labels as shown (UX-187), not the values.
+        other = next(i for i in range(len(picker.options)) if i != picker.index)
+        at = picker.select_index(other).run(timeout=90)
         assert not at.exception, at.exception
-        assert at.session_state["single_compare_trial"] == other
+        assert at.selectbox(key="single_compare_trial").index == other
+        assert at.session_state["single_compare_trial"] != before
 
     def test_the_link_works_from_the_compare_pickers_arrows_too(self):
         at = self._boot_compare()

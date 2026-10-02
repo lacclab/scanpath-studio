@@ -209,6 +209,7 @@ from scanpath_studio.html_embed import embed_html_iframe, plotlyjs_script
 from scanpath_studio.illustration import illustration_reasons, resolve_label_reasons
 from scanpath_studio.multipart import (
     SCREEN_ID,
+    SCREEN_INDEX,
     extract_part,
     has_screen_identity,
     part_catalog,
@@ -8421,7 +8422,7 @@ def _render_per_sentence_tab(
     numeric = [
         column
         for column in sentence_table.select_dtypes(include="number").columns
-        if column not in {"sentence_id"}
+        if column not in {"sentence_id", SCREEN_INDEX}
     ]
     if sentence_table.empty or not numeric:
         st.info("No sentence-level measures are available for this selection.")
@@ -8433,8 +8434,13 @@ def _render_per_sentence_tab(
         aggregate = controls[1].selectbox(
             "Aggregate", ["Mean", "Median"], key="sentence_aggregate"
         )
+        # BUG-109: a sentence is identified within its screen. Sentence ids
+        # restart on every screen of a multipart text, so grouping on the text
+        # and sentence alone averaged different sentences together.
         identity = [
-            column for column in ("text_id", "sentence_id") if column in sentence_table
+            column
+            for column in ("text_id", SCREEN_ID, "sentence_id")
+            if column in sentence_table
         ]
         reducer = "mean" if aggregate == "Mean" else "median"
         summary = (
@@ -8442,6 +8448,15 @@ def _render_per_sentence_tab(
             .agg(reducer)
             .reset_index(name=f"{reducer}_{metric}")
         )
+        if SCREEN_ID in identity and SCREEN_INDEX in sentence_table:
+            # Screens in reading order, not alphabetically.
+            order = sentence_table.groupby(identity, dropna=False)[SCREEN_INDEX].min()
+            summary = (
+                summary.assign(_order=order.to_numpy())
+                .sort_values(["_order" if c == SCREEN_ID else c for c in identity])
+                .drop(columns="_order")
+                .reset_index(drop=True)
+            )
         st.dataframe(summary, hide_index=True, width="stretch")
 
 

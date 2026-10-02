@@ -539,3 +539,28 @@ def test_a_co_animation_draws_one_screen_of_a_multipart_second_reading():
         fixations_b=extract_part(fixations, pid, tid, "question"),
     )
     assert len(trace_b(chosen).x) == MULTIPART_EXPECTED["fixations_per_screen"][1]
+
+
+def _per_sentence_app():
+    from scanpath_studio import tabs
+    from scanpath_studio.synthetic import make_multipart_synthetic_data
+
+    words, fixations = make_multipart_synthetic_data()
+    # One text over both screens, so only the screen tells their sentence 1s apart.
+    tabs._render_per_sentence_tab(
+        words.assign(text_id="same"), fixations.assign(text_id="same")
+    )
+
+
+def test_per_sentence_keeps_each_screens_sentences_apart():
+    """BUG-109: sentence ids restart per screen, so a sentence is keyed by its
+    screen too — screen 1's sentence 1 is never averaged with screen 2's."""
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_function(_per_sentence_app).run()
+    assert not at.exception, at.exception
+    at.selectbox(key="sentence_measure").set_value("total_dur").run()
+    summary = at.dataframe[0].value
+    assert list(summary[SCREEN_ID]) == ["intro", "question"]
+    assert list(summary["sentence_id"]) == [1, 1]
+    assert summary["mean_total_dur"].nunique() == 2

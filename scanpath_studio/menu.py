@@ -49,7 +49,9 @@ NAV_SELECTOR = '[data-testid="stTopNavLinkContainer"]'
 
 #: Nav entries: view constant → (label, icon, url path). The labels are short —
 #: "Scanpath", not "Scanpath Visualization" — because the nav sits in Streamlit's
-#: header strip beside the toolbar, where a long label crowds it.
+#: header strip beside the toolbar, where a long label crowds it. UX-196 is the
+#: one exception: beta testers looked for the page by its header, *Data
+#: Management*, so the nav says that too.
 #: **Data comes last** (DATA-26) even though setting a dataset up comes first in
 #: time: it is visited occasionally, while the two analysis views are where the
 #: work happens, and moving them rightwards to make room for a setup page would
@@ -57,7 +59,7 @@ NAV_SELECTOR = '[data-testid="stTopNavLinkContainer"]'
 _NAV_PAGES = {
     _VIEW_SCANPATH: ("Scanpath", ICONS["view_scanpath"], "scanpath"),
     _VIEW_CORPUS: ("Corpus Analysis", ICONS["view_corpus"], "corpus-analysis"),
-    _VIEW_DATA: ("Data", ICONS["view_data"], "data"),
+    _VIEW_DATA: ("Data Management", ICONS["view_data"], "data"),
 }
 
 #: UX-65 — the ❓ Help *section* of the nav: entry id → (label, icon, url path).

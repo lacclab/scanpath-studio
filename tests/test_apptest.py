@@ -895,6 +895,40 @@ class TestDatasetTable:
 
         return _dataset_row_slug(token)
 
+    def test_the_editor_opens_under_the_table_and_its_stats(self):
+        """UX-197: ✏️ Edit dataset no longer replaces the overview — the table
+        and *What's in the dataset* stay on screen, the editor opens under
+        them, and the page is brought down to it once."""
+        from scanpath_studio.app import _EDITOR_SCROLL_KEY
+        from scanpath_studio.constants import (
+            DATA_EDITOR_KEY,
+            DATA_OVERVIEW_KEY,
+            DATASET_EDITOR_OPEN_KEY,
+        )
+
+        at = self._at()
+        self._click(at, "dataset_edit_btn")
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state[DATASET_EDITOR_OPEN_KEY]
+        assert _EDITOR_SCROLL_KEY not in at.session_state  # used up by the bar
+        overview = at.main.get_by_key(DATA_OVERVIEW_KEY)
+        assert overview is not None
+        assert at.main.get_by_key(DATA_EDITOR_KEY) is not None
+        overview_keys = {getattr(w, "key", None) for w in overview}
+        assert f"dataset_open_{self._slug(self.NAME)}" in overview_keys
+        assert "tutorial_data_inspection" in overview_keys
+
+    def test_opening_another_row_closes_an_untouched_editor(self):
+        from scanpath_studio.constants import DATASET_EDITOR_OPEN_KEY, DEMO_CHOICE
+
+        at = self._at()
+        self._click(at, "dataset_edit_btn")
+        self._click(at, f"dataset_open_{self._slug(DEMO_CHOICE)}")
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # The editor edits the open dataset, so opening another one closes it.
+        assert DATASET_EDITOR_OPEN_KEY not in at.session_state
+        assert at.session_state["data_source_choice"] == DEMO_CHOICE
+
     def test_the_table_lists_datasets_with_counts_and_row_actions(self):
         at = self._at()
         frame = self._table(at)
@@ -922,10 +956,12 @@ class TestDatasetTable:
                 assert f"{gone}{slug}" not in keys
         assert not [k for k in keys if "rename" in str(k)]
         assert "dataset_edit_btn" in keys
-        # The open dataset has been counted from its rows; the rest have not.
+        # BUG-113: Status says whether a dataset can be opened — a stored
+        # upload always can — and nothing else.
         status = frame.set_index("_token")["Status"]
-        assert status[self.NAME] == "Loaded"
-        assert set(status) <= {"Loaded", "Not loaded", "Needs setup"}
+        assert status[self.NAME] == "Ready"
+        assert set(status) <= {"Ready", "Needs download", "Needs setup"}
+        assert frame.set_index("_token")["Counts"][self.NAME] == "Loaded"
         demo = frame[frame["Dataset"].str.contains("demo", case=False)]
         if not demo.empty:
             # DATA-35's language: the demo is a OneStop subset, so it knows its
@@ -1153,7 +1189,7 @@ class TestDatasetTable:
         """PoTeC picked but not on disk: the loader shows the bundled demo in its
         place (UX-7(b)), and the table used to count those demo rows as PoTeC's
         *loaded* figures — and remember them. The row keeps its published
-        figures instead, with *Needs setup* as a state of its own."""
+        figures instead, with *Needs download* as a state of its own."""
         from scanpath_studio import datasets
 
         monkeypatch.setattr(datasets, "potec_present", lambda root: False)
@@ -1166,8 +1202,41 @@ class TestDatasetTable:
         row = self._table(at).set_index("_token").loc[token]
         assert row["_active"]
         assert row["Counts"] == "Published"
-        assert row["Status"] == "Needs setup"
+        assert row["Status"] == "Needs download"
         assert row["Participants"] == 75
+
+    def _status_with(self, monkeypatch, *, opened: str, present: bool) -> str:
+        from scanpath_studio import datasets
+
+        monkeypatch.setattr(datasets, "potec_present", lambda root: present)
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["data_source_choice"] = opened
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        return self._table(at).set_index("_token").loc[self.POTEC, "Status"]
+
+    POTEC = "PoTeC — Potsdam Textbook Corpus"
+
+    def test_a_missing_corpus_says_so_whether_or_not_it_is_open(self, monkeypatch):
+        """BUG-113: OneStop read *Loaded* while the demo was open and *Needs
+        setup* the moment it was opened — the first was where its remembered
+        counts came from, the second whether its files were there. A row now
+        says the second, the same way whichever dataset is open."""
+        from scanpath_studio.constants import DEMO_CHOICE
+
+        closed = self._status_with(monkeypatch, opened=DEMO_CHOICE, present=False)
+        opened = self._status_with(monkeypatch, opened=self.POTEC, present=False)
+        assert closed == opened == "Needs download"
+
+    def test_a_corpus_whose_files_are_here_is_ready_before_it_is_opened(
+        self, monkeypatch
+    ):
+        from scanpath_studio.constants import DEMO_CHOICE
+
+        assert self._status_with(monkeypatch, opened=DEMO_CHOICE, present=True) == (
+            "Ready"
+        )
 
     def test_the_open_dataset_says_one_sentence_and_its_home_page(self):
         """UX-177: no *About this dataset* popover — the description, the home

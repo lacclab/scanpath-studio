@@ -792,7 +792,6 @@ RAW_GAZE_LINK_FOR_KEY = "_raw_gaze_link_for"
 #: that did not render.
 DATASET_EDITOR_OPEN_KEY = "_dataset_editor_open"
 DATA_OVERVIEW_KEY = "data_overview"
-DATA_OVERVIEW_OFFSCREEN_KEY = "data_overview_offscreen"
 DATA_EDITOR_KEY = "data_dataset_editor"
 DATA_EDITOR_OFFSCREEN_KEY = "data_dataset_editor_offscreen"
 

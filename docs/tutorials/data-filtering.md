@@ -41,7 +41,7 @@ tagged, including the ones the filter now hides.
 ## 4. Verify the retained pool
 
 Check at least one trial from each participant or condition. Then open the
-:material/database: **Data** page and confirm that the participant, text, trial,
+:material/database: **Data Management** page and confirm that the participant, text, trial,
 fixation, and word counts under **What's in the … dataset → Stats** are
 plausible. Those follow the filters; the dataset table above them counts the
 whole dataset.
@@ -55,5 +55,5 @@ record.
 
 **Done:** the original data remains intact, the retained trials are in the
 export bundle, and each manual decision has a tag and a reason in the
-annotations file you exported from the Data page. (The bundle's
+annotations file you exported from the Data Management page. (The bundle's
 `annotations.json` covers only the trials it exports.)

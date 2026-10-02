@@ -31,7 +31,7 @@ recovery below possible: it reads the raw files the pipeline downloaded.
 
 ## Using a corpus
 
-1. Open 🗂️ **Data** and pick a corpus as the data source. Each prepared corpus is one
+1. Open 🗂️ **Data Management** and pick a corpus as the data source. Each prepared corpus is one
    🌐 entry under its own name (*Provo (WIP)*, *ZuCo1 (WIP)*, …). The **(WIP)**
    marker is there because this feature ships to main unfinished; it is display
    only, and nothing about the corpus depends on it.
@@ -83,7 +83,7 @@ Thirty-one corpora, ~14.0 million fixations, 22,255 distinct texts. This table i
 generated from `data/EyeGenBench/manifest.json`, which is the authoritative
 record of what a bundle holds; your own bundle's manifest is the authority for
 your machine. Those same manifest figures fill the dataset table's count columns
-on the 🗂️ Data page, so a prepared corpus lists its readers, texts and fixations
+on the 🗂️ Data Management page, so a prepared corpus lists its readers, texts and fixations
 before you open it. Languages are the ISO codes the manifest records — the picker
 renders them as names (`de` → German).
 

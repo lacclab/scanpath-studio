@@ -35,7 +35,7 @@ from scanpath_studio.constants import (
     _VIEW_DATA,
     _VIEW_SCANPATH,
     DATA_EDITOR_KEY,
-    DATA_OVERVIEW_OFFSCREEN_KEY,
+    DATA_OVERVIEW_KEY,
     DATASET_EDITOR_OPEN_KEY,
 )
 from scanpath_studio.session_keys import COMPARE_SOURCE_STATE_KEY
@@ -502,9 +502,9 @@ def test_an_unavailable_corpus_gets_no_counts_on_its_card(at, monkeypatch):
 
 
 def test_the_editors_card_sits_on_the_editor_screen(at, monkeypatch):
-    """While ✏️ Edit dataset is open the overview is hidden, and a card drawn
-    there would be invisible while still silencing every spinner — so the page
-    lives in the slot under the editor's header."""
+    """While ✏️ Edit dataset is open the page card lives in the slot under the
+    editor's header — where the user is looking, since opening the editor
+    scrolls down to it (UX-197) — and not a second time above the table."""
     monkeypatch.setattr(loading, "DELAY_S", 0)
     monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
     monkeypatch.setattr(app, "prepare_data", _stop)
@@ -512,7 +512,7 @@ def test_the_editors_card_sits_on_the_editor_screen(at, monkeypatch):
     pin_view(at, _VIEW_DATA)
     at.run()
     editor = at.main.get_by_key(DATA_EDITOR_KEY)
-    overview = at.main.get_by_key(DATA_OVERVIEW_OFFSCREEN_KEY)
+    overview = at.main.get_by_key(DATA_OVERVIEW_KEY)
     assert "sps-card-head" in _markdown_in(editor)
     assert "sps-card-head" not in _markdown_in(overview)
 

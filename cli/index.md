@@ -8,6 +8,7 @@
 scanpath-studio
 scanpath-studio --server.port 8600
 scanpath-studio --no-persist          # don't cache the session on this computer
+scanpath-studio --download-dir D:\corpora  # where ⬇ Download saves public datasets
 ```
 
 The app listens on this computer only (`127.0.0.1`). It has no login, so serving it to other machines is a deliberate step — pass `--server.address 0.0.0.0` (or set `server.address` in a Streamlit `config.toml`, or `STREAMLIT_SERVER_ADDRESS`), and only on a network you trust:
@@ -251,6 +252,9 @@ usage:
   scanpath-studio [run] --no-persist
                                    launch without the on-device recovery cache
                                    (this run only; see `cache` below)
+  scanpath-studio [run] --download-dir DIR
+                                   where Download saves public datasets when
+                                   the Data page's Download folder is blank
   scanpath-studio render …         render one trial to .html/.png/.svg/.pdf
                                    (see `scanpath-studio render --help`)
   scanpath-studio analyze …        export preprocessing + the full measure family

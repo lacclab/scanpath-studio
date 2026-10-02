@@ -48,6 +48,8 @@ Every part ships an **interest-area report** (one row per word, with bounding bo
 
 The **Edit dataset** screen's data-location part lists the **Expected files** and shows whether they're already present (until they are, the app shows the bundled demo, with a **⬇ Download now** panel). For the Public variant, if they're present the corpus loads with no network access; if not, click **⬇ Download** to fetch them into the folder (cached on disk, so only the first load pays the download — reports range from tens to a few hundred MB each). While it downloads, a card shows how much has arrived; **Stop download** ends it and deletes the partial file.
 
+The folder defaults to the **Data** page's **Download folder**, where every public corpus gets its own subfolder (`<folder>/OneStop`). Leave that box blank for the default: `data/` in a source checkout, otherwise the per-user data folder (`~/.local/share/scanpath-studio/data`, or `%LOCALAPPDATA%\scanpath-studio\data` on Windows). `scanpath-studio run --download-dir DIR` or `SCANPATH_STUDIO_DOWNLOAD_DIR` changes the default.
+
 On a server other machines can reach
 
 When the app is served to other machines (the hosted demo, or `--server.address 0.0.0.0`), the *Data directory* box, the folder picker and **⬇ Download** are turned off: the corpus is read from the server's configured data location, and whoever runs it places the files there — or, on a trusted network, starts it with `SCANPATH_LOCAL_FS=1`. See [Launch](https://lacclab.github.io/scanpath-studio/cli/#launch).

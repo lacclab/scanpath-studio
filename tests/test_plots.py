@@ -2228,11 +2228,10 @@ class TestPlotEnhancements:
         x0, _, x1, _ = word_box_bounds(synthetic_words_df)
         assert list(trace.x) == pytest.approx(list((x0 + x1) / 2.0))
 
-    def test_labels_on_a_tiling_corpus_sit_on_the_glyphs_not_the_box(self):
-        """BUG-83 draws the experiment's boxes, and on the demo each one runs on
-        across the space after its word. The label stays on the glyphs — the
-        demo's first word, 'Robert', is six 19 px letters from x = 358, centred
-        at 415 — rather than moving half a space right to the box's 424.5."""
+    def test_labels_on_a_tiling_corpus_are_centred_in_the_box(self):
+        """BUG-97: on the demo each box runs on across the space after its word
+        (BUG-83), and the label is centred in that box — 'Robert', 358 → 491,
+        at 424.5 — not on its glyph run (415), which drew it flush left."""
         from scanpath_studio import api, plots
         from scanpath_studio.measures import word_box_bounds
 
@@ -2247,9 +2246,9 @@ class TestPlotEnhancements:
         trace = next(t for t in fig.data if t.name == "words")
         first = trial.iloc[0]
         assert (first["text"], first["x"], first["width"]) == ("Robert", 358, 133)
-        assert trace.x[0] == pytest.approx(415.0)
         x0, _, x1, _ = word_box_bounds(trial)
-        assert (x0[0] + x1[0]) / 2.0 == pytest.approx(424.5)
+        assert trace.x[0] == pytest.approx((x0[0] + x1[0]) / 2.0)
+        assert trace.x[0] == pytest.approx(424.5)
 
 
 class TestTrueToScaleText:

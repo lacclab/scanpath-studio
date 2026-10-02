@@ -37,6 +37,9 @@ import json
 import logging
 import os
 import re
+import shutil
+import subprocess
+import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from functools import partial
@@ -1203,13 +1206,60 @@ def _resolve_data_dir(root: str) -> str:
     return str(literal)
 
 
+#: BUG-98 — how long a 📁 click may wait for the user to pick a folder.
+_FOLDER_PICKER_TIMEOUT_S = 600
+
+_MACOS_PICKER = 'POSIX path of (choose folder with prompt "Choose a folder")'
+# STA + a TopMost owner form, or the dialog opens behind the browser; UTF-8 so a
+# folder name outside the console's code page comes back intact.
+_WINDOWS_PICKER = (
+    "[Console]::OutputEncoding = [Text.Encoding]::UTF8; "
+    "Add-Type -AssemblyName System.Windows.Forms; "
+    "$d = New-Object System.Windows.Forms.FolderBrowserDialog; "
+    "$o = New-Object System.Windows.Forms.Form -Property @{TopMost = $true}; "
+    "if ($d.ShowDialog($o) -eq 'OK') { [Console]::Out.Write($d.SelectedPath) }"
+)
+_TK_PICKER = (
+    "import tkinter as tk; from tkinter import filedialog; "
+    "r = tk.Tk(); r.withdraw(); r.wm_attributes('-topmost', 1); "
+    "print(filedialog.askdirectory() or '', end='')"
+)
+
+
+def _folder_picker_command() -> list[str] | None:
+    """The command that shows this OS's folder dialog and prints the pick (BUG-98).
+
+    The dialog runs in a child process. In-process tkinter ran on Streamlit's
+    script thread, and macOS refuses to open a window off the main thread — it
+    aborts the whole server (``NSWindow should only be instantiated on the main
+    thread``), so one 📁 click took the app down. A child has its own main
+    thread, and whatever it does cannot reach the server. The OS's own dialog
+    comes first; tkinter is the fallback for a Linux desktop without zenity or
+    kdialog, and never in the desktop bundle, which ships no tkinter and whose
+    ``sys.executable`` is the app itself. ``None`` when there is none."""
+    if sys.platform == "darwin":
+        return ["osascript", "-e", _MACOS_PICKER] if shutil.which("osascript") else None
+    if sys.platform == "win32":
+        shell = shutil.which("powershell") or shutil.which("pwsh")
+        if shell:
+            return [shell, "-NoProfile", "-STA", "-Command", _WINDOWS_PICKER]
+    elif shutil.which("zenity"):
+        return ["zenity", "--file-selection", "--directory"]
+    elif shutil.which("kdialog"):
+        return ["kdialog", "--getexistingdirectory"]
+    if getattr(sys, "frozen", False):
+        return None
+    return [sys.executable, "-c", _TK_PICKER]
+
+
 def _pick_directory_dialog() -> str | None:
     """Open a native folder picker and return the chosen path, or None.
 
-    Only works when the app runs on a machine with a display + tkinter (a
-    locally-run app). Returns None — and never raises — on a headless host
-    (Streamlit Cloud), a missing tkinter, or a cancelled dialog, so the text
-    input stays the portable fallback.
+    Only works when the app runs on a machine with a display (a locally-run
+    app). Returns None — and never raises — on a headless host, with no dialog
+    to run, or on a cancelled dialog, so the text input stays the portable
+    fallback. The dialog is a child process (:func:`_folder_picker_command`,
+    BUG-98); this blocks until it closes, as the in-process one did.
 
     S2: refuses outright on a shared deployment. Degrading to None on a headless
     host was never the guarantee — on a host that *does* have a display, a remote
@@ -1217,20 +1267,25 @@ def _pick_directory_dialog() -> str | None:
     the thread until someone there dismisses it."""
     if not local_filesystem_enabled():
         return None
-    try:
-        import tkinter as tk
-        from tkinter import filedialog
-    except Exception:
+    command = _folder_picker_command()
+    if command is None:
         return None
     try:
-        root = tk.Tk()
-        root.withdraw()
-        root.wm_attributes("-topmost", 1)
-        chosen = filedialog.askdirectory()
-        root.destroy()
-    except Exception:
+        done = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=_FOLDER_PICKER_TIMEOUT_S,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
         return None
-    return chosen or None
+    # A cancel exits non-zero (osascript, zenity, kdialog) or prints nothing.
+    chosen = done.stdout.strip() if done.returncode == 0 else ""
+    # osascript's POSIX path ends in "/"; keep a bare root as it is.
+    return (chosen.rstrip("/\\") or chosen) if chosen else None
 
 
 def _dataset_dir_input(

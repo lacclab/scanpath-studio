@@ -85,7 +85,7 @@ Verification tiers: **A** hand-calculated synthetic oracle · **B** independent 
 | [`geom.word_box_bounds`](#geom-word-box-bounds) | Word interest-area edges | Unit / coordinate conversion | px | Partially verified |
 | [`geom.word_box_space_px`](#geom-word-box-space-px) | Inter-word padding baked into each box | Unit / coordinate conversion | px | Verified |
 | [`geom.word_char_advance`](#geom-word-char-advance) | Character advance within a word | Unit / coordinate conversion | px / character | Verified |
-| [`geom.word_glyph_span`](#geom-word-glyph-span) | Where a word's glyphs are | Unit / coordinate conversion | px | Verified |
+| [`geom.word_glyph_span`](#geom-word-glyph-span) | Where a word's glyphs are | Unit / coordinate conversion | px | Partially verified |
 | [`disp.marker_sizes`](#disp-marker-sizes) | Fixation marker sizing | Display / export transformation | px (marker diameter) | Intentional convention |
 | [`disp.axis_ranges`](#disp-axis-ranges) | Axis ranges and inversion | Display / export transformation | px | Intentional convention |
 | [`disp.true_scale`](#disp-true-scale) | True-scale text rendering | Display / export transformation | — | Intentional convention |
@@ -1048,11 +1048,11 @@ The glyph run inside a word's box — where its letters are.
 | | |
 | --- | --- |
 | **Unit** | px |
-| **Precedence & caveats** | Not an interest area: `agg.landing_curve` measures a landing across it and mirrors an RTL one. The drawn word label and the linear-reading snap used to sit on it (BUG-30); #BUG-97 centres both in the box as the data defines it. |
+| **Precedence & caveats** | Not an interest area: `agg.landing_curve` measures a landing across it and mirrors an RTL one. The drawn word label and the linear-reading snap used to sit on it (BUG-30). #BUG-97 measured OneStop's own Experiment Builder screens: each tiling box is centred on its word, half a space either side, so the run's `x` start is half an advance early there; the label and snap moved to the box centre, the landing measures have not. |
 | **Code** | `scanpath_studio/measures.py:word_glyph_span` |
 | **Consumers** | UI, API, Corpus Analysis |
 | **Tests** | `tests/test_word_box_geometry.py` |
-| **Verification** | tier A — **Verified** |
+| **Verification** | tier A — **Partially verified** |
 
 ## Display / export transformation
 

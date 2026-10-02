@@ -8,11 +8,11 @@ paragraphs at both Adv and Ele difficulty levels.
 Stimulus images are NOT produced here. The per-trial paragraph PNGs under
 ``sample_data/images/`` plus the ``image_path`` / ``image_x`` / ``image_y``
 columns are stamped by a separate, external rendering step. When regenerating
-those, place each page at data origin ``(image_x=358, image_y=184)`` — the top
-left of the OneStop text area in the IA/fixation coordinate frame (text is
-left-aligned at the box left edge; ``image_y=184`` centers the line on the AOI
-box, ≈ the paper's paragraph top at y≈186). ``image_y=148`` was wrong — it sat
-the page ~36 px too high. ``tests/test_smoke.py::TestStimulusImageAlignment``
+those, place each page at data origin ``(image_x=368, image_y=186)`` — where the
+experiment itself drew the paragraph image (the ``IMGLOAD`` origin in each
+trial's Experiment Builder ``.vcl`` view file). Each word box is then centred on
+its word, half a space either side (BUG-97); ``(358, 184)`` put the text flush
+left in the boxes, and ``image_y=148`` sat the page ~36 px too high. ``tests/test_smoke.py::TestStimulusImageAlignment``
 asserts the shipped origin keeps every PNG line on its word boxes, so a bad
 origin fails CI regardless of which script emitted it.
 """

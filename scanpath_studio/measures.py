@@ -113,8 +113,9 @@ def _assign_word_ids_single(
 # What the layout's shape is still needed for is *inside* a word. A tiling box
 # is one advance wider than its glyph run, so `word_char_advance` divides by
 # ``len(text) + 1`` there (BUG-27), and `word_glyph_span` says where the letters
-# actually are, for landing positions. (The drawn word label is centred in the
-# box itself — BUG-97.) `word_box_space_px` only
+# start, for landing positions — assumed to be the box's left edge. (OneStop's
+# own screens centre each box on its word, half a space either side, so the
+# drawn word label sits at the box centre — BUG-97.) `word_box_space_px` only
 # reports a padding width when the layout really looks like "tiling boxes with
 # one trailing space"; glyph-tight AOIs (PoTeC, MultiplEYE) read 0.0.
 _TILING_GAP_TOL_PX = 1.0
@@ -296,8 +297,10 @@ def word_glyph_span(
     mirrors an RTL one) across it. On a glyph-tight layout the run is the whole
     box; on a tiling one it is ``len(text)`` :func:`word_char_advance` units,
     one advance short of the box, whose last cell is the space after the word.
-    The drawn word label is *not* placed on it — that is centred in the box
-    (BUG-97).
+    It assumes the glyphs start at ``x``. OneStop's experiment screens instead
+    centre each tiling box on its word (half a space either side), which is
+    why the drawn word label is centred in the box rather than placed on this
+    run (BUG-97).
 
     Falls back to the box ``width`` for a frame with no ``text`` column, where
     there are no letters to count. ``layout`` is as for

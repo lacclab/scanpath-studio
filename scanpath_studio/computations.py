@@ -1350,11 +1350,14 @@ REGISTER: tuple[Computation, ...] = (
         precedence=(
             "Not an interest area: `agg.landing_curve` measures a landing "
             "across it and mirrors an RTL one. The drawn word label and the "
-            "linear-reading snap used to sit on it (BUG-30); #BUG-97 centres "
-            "both in the box as the data defines it."
+            "linear-reading snap used to sit on it (BUG-30). #BUG-97 measured "
+            "OneStop's own Experiment Builder screens: each tiling box is "
+            "centred on its word, half a space either side, so the run's "
+            "`x` start is half an advance early there; the label and snap "
+            "moved to the box centre, the landing measures have not."
         ),
         tiers="A",
-        status=STATUS_VERIFIED,
+        status=STATUS_PARTIAL,
         consumers=(_UI, _API, _CORPUS),
         tests=("tests/test_word_box_geometry.py",),
     ),

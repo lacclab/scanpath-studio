@@ -353,9 +353,35 @@ def get_app_css() -> str:
     /* BUG-108: a mode or rail-section trigger is named ("Fixation settings")
        so a screen reader can tell them apart, but only its chevron is drawn
        (UX-80 r2): the label stays in the accessibility tree, clipped to
-       nothing, as `.sps-sr-only` does. */
+       nothing, as `.sps-sr-only` does.
+       UX-200 named the other icon-only popovers the same way: the + menu,
+       the table previews, the chip-field editor and the ⇅ sorts, each keyed
+       `iconpop_*` (the + menu kept its own key). A plain label, so the
+       popover's dialog, which takes the label as its `aria-label`, is named
+       the same. */
+    .st-key-add_dataset_menu [data-testid="stPopoverButton"]
+        [data-testid="stMarkdownContainer"],
+    [class*="st-key-iconpop_"] [data-testid="stPopoverButton"]
+        [data-testid="stMarkdownContainer"],
     [class*="st-key-split_mode_"] [data-testid="stPopoverButton"]
         [data-testid="stMarkdownContainer"] {
+        position: absolute !important; width: 1px; height: 1px;
+        margin: -1px; padding: 0; border: 0; overflow: hidden;
+        clip-path: inset(50%); white-space: nowrap;
+    }
+    /* …and ⇅ is a typographic glyph, not an icon `icon=` can take, so the
+       sorts draw it here. The second `content` gives it empty alt text, which
+       keeps it out of the accessible name; a browser that does not know the
+       syntax drops that line and keeps the first. */
+    [class*="st-key-iconpop_sort_"] [data-testid="stPopoverButton"]::before {
+        content: "⇅";
+        content: "⇅" / "";
+    }
+    /* UX-200: an icon-only *button* names itself with `constants.spoken`, an
+       `<em>` in its label clipped the same way, so the glyph or icon stays
+       all that is drawn. No button label uses emphasis for anything else
+       (`tests/test_popover_names.py`). */
+    button [data-testid="stMarkdownContainer"] em {
         position: absolute !important; width: 1px; height: 1px;
         margin: -1px; padding: 0; border: 0; overflow: hidden;
         clip-path: inset(50%); white-space: nowrap;
@@ -927,6 +953,16 @@ def get_app_css() -> str:
         border-radius: 0 !important;
         background: transparent !important;
         box-shadow: none !important;
+    }
+    /* UX-200: `box-shadow: none` above also took Streamlit's focus ring, so a
+       keyboard user tabbing along the rail lost track of which ▾ was focused.
+       An outline instead, inset because the row is a scroll box (UX-102) that
+       would clip one drawn outside the button, in the accent the dataset
+       table's rows already focus with. */
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stPopover"] button:focus-visible {
+        outline: 2px solid var(--sps-accent);
+        outline-offset: -2px;
     }
     /* The hover tint goes on the slot too, so the whole half lights up to the
        seam instead of only the glyph's own box. `:has(button:hover:enabled)`

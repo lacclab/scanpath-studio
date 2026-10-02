@@ -130,9 +130,11 @@ from scanpath_studio.constants import (
     derived_analysis_tables_enabled,
     drift_correction_enabled,
     icon_html,
+    plural,
     preprocessing_enabled,
     sentence_analysis_enabled,
     similarity_enabled,
+    spoken,
     upload_limit_mb,
 )
 from scanpath_studio.controls import (
@@ -175,6 +177,7 @@ from scanpath_studio.data import (
     StimulusJoinWarning,
     aggregate_char_boxes,
     assign_derived,
+    brought_reading_measures,
     compute_word_metrics,
     derive_trial_index,
     drop_internal_columns,
@@ -434,8 +437,10 @@ def _render_screen_navigator(
     # the chip strip below. `width="stretch"` is deliberately gone — it fought the
     # `width: auto` that makes the cluster content-sized.
     trail = trail_col.container(key=f"railbtn_{key_prefix}_screen_trail")
+    # UX-200: `spoken` names the glyph buttons for screen readers.
     trail.button(
-        "◀",
+        f"◀ {spoken('Previous screen')}",
+        wrap=True,
         key=f"{key_prefix}_screen_previous",
         help="Previous screen in this logical trial",
         disabled=position == 0,
@@ -443,7 +448,8 @@ def _render_screen_navigator(
         args=(key_prefix, options, -1),
     )
     trail.button(
-        "▶",
+        f"▶ {spoken('Next screen')}",
+        wrap=True,
         key=f"{key_prefix}_screen_next",
         help="Next screen in this logical trial",
         disabled=position == len(options) - 1,
@@ -2517,7 +2523,14 @@ def _render_compare_selector(
     if sort_col is not None:
         if st.session_state.get("single_compare_order") not in sort_options:
             st.session_state["single_compare_order"] = _CMP_SORT_DEFAULT
-        with sort_col.popover("⇅", width="content", help="Sort the comparison trials"):
+        # UX-200: named for screen readers; `styles.py` draws ⇅ alone.
+        with sort_col.popover(
+            "Sort the comparison trials",
+            width="content",
+            wrap=True,
+            help="Sort the comparison trials",
+            key="iconpop_sort_compare",
+        ):
             sort_choice = _labeled(
                 st,
                 "selectbox",
@@ -2733,7 +2746,8 @@ def _render_compare_selector(
         )
         step_help = " Linked: also steps the main trial." if linked else ""
         step_col.button(
-            "◀",
+            f"◀ {spoken('Previous comparison trial')}",
+            wrap=True,
             key="single_compare_prev",
             on_click=_step_compare,
             args=(-1,),
@@ -2742,7 +2756,8 @@ def _render_compare_selector(
             help="Previous candidate." + step_help,
         )
         step_col.button(
-            "▶",
+            f"▶ {spoken('Next comparison trial')}",
+            wrap=True,
             key="single_compare_next",
             on_click=_step_compare,
             args=(1,),
@@ -3222,7 +3237,8 @@ def _span_fixated_note(
     if n == 0:
         return ' <span style="color:#dc3545;">— not fixated</span>'
     dwell = float(pd.to_numeric(trial_fixations.loc[mask, "duration_ms"]).sum())
-    return f' <span style="color:#198754;">— {n} fixations, {dwell:.0f} ms</span>'
+    fixed = plural(n, "fixation")
+    return f' <span style="color:#198754;">— {fixed}, {dwell:.0f} ms</span>'
 
 
 def _render_paragraph_panel(
@@ -6624,11 +6640,16 @@ def render_single_trial_tab(
         )
         trail = trail_col.container(key="railbtn_chip_trail")
         edit_box = trail.container(key="railbtn_chip_edit")
+        # UX-200: named for screen readers; `styles.py` clips the name, so
+        # the pencil is still all that is drawn.
         with edit_box.popover(
-            ICONS["edit"],
+            "Choose the chip fields",
+            icon=ICONS["edit"],
             help="Edit which fields show as chips above the plot, and drag to "
             "reorder them.",
             width="content",
+            wrap=True,
+            key="iconpop_chip_fields",
         ):
             render_trial_chip_picker(words_all, fixations_all, host=st.container())
         chip_fields = st.session_state.get("trial_chip_fields") or []
@@ -7994,7 +8015,8 @@ def _apply_min_readers(host, df, min_readers, *, key):
     out = df[df["enough"]]
     if dropped:
         host.caption(
-            f"{ICONS['warning']} {dropped} word(s) backed by < {min_readers} readers hidden."
+            f"{ICONS['warning']} {plural(dropped, 'word')} backed by < "
+            f"{plural(min_readers, 'reader')} hidden."
         )
     return out
 
@@ -8864,7 +8886,7 @@ def _text_picker(words: pd.DataFrame, *, key: str, host=None, label: str = "Text
     counts = text_read_counts(words, text_col)
     if not counts.empty:
         labels = {
-            f"{row.text}  ({row.n_participants} readers)": row.text
+            f"{row.text}  ({plural(row.n_participants, 'reader')})": row.text
             for row in counts.itertuples()
         }
         chosen = host.selectbox(label, list(labels), key=key)
@@ -11514,13 +11536,19 @@ def _participant_metadata_body(
     # Fixations/AOI/Raw gaze's own `upload_box` — not a separate status line
     # further down the mapping side.
     stats = stats_host.container(key="wiz_upload_stats_participant_metadata")
+    # UX-200: named for screen readers; `styles.py` clips the name.
     preview = stats.popover(
-        ICONS["preview"], width="content", help="Preview — first rows"
+        "Preview the first rows",
+        icon=ICONS["preview"],
+        width="content",
+        wrap=True,
+        help="Preview — first rows",
+        key="iconpop_preview_participant_metadata",
     )
     preview.caption("First rows:")
     preview.dataframe(raw.head(), width="stretch", hide_index=True)
     counts = stats.container(key="wiz_upload_counts_participant_metadata")
-    counts.caption(f"{len(raw):,} row(s)")
+    counts.caption(plural(len(raw), "row"))
     counts.caption(f"{len(raw.columns)} columns")
 
     columns = [str(column) for column in raw.columns]
@@ -11709,13 +11737,19 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
 
     # UX-129 — see the matching block in `_participant_metadata_body`.
     stats = stats_host.container(key="wiz_upload_stats_trial_metadata")
+    # UX-200: named for screen readers; `styles.py` clips the name.
     preview = stats.popover(
-        ICONS["preview"], width="content", help="Preview — first rows"
+        "Preview the first rows",
+        icon=ICONS["preview"],
+        width="content",
+        wrap=True,
+        help="Preview — first rows",
+        key="iconpop_preview_trial_metadata",
     )
     preview.caption("First rows:")
     preview.dataframe(raw.head(), width="stretch", hide_index=True)
     counts = stats.container(key="wiz_upload_counts_trial_metadata")
-    counts.caption(f"{len(raw):,} row(s)")
+    counts.caption(plural(len(raw), "row"))
     counts.caption(f"{len(raw.columns)} columns")
 
     columns = [str(column) for column in raw.columns]
@@ -11922,13 +11956,19 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
 
     # UX-129 — see the matching block in `_participant_metadata_body`.
     stats = stats_host.container(key="wiz_upload_stats_text_metadata")
+    # UX-200: named for screen readers; `styles.py` clips the name.
     preview = stats.popover(
-        ICONS["preview"], width="content", help="Preview — first rows"
+        "Preview the first rows",
+        icon=ICONS["preview"],
+        width="content",
+        wrap=True,
+        help="Preview — first rows",
+        key="iconpop_preview_text_metadata",
     )
     preview.caption("First rows:")
     preview.dataframe(raw.head(), width="stretch", hide_index=True)
     counts = stats.container(key="wiz_upload_counts_text_metadata")
-    counts.caption(f"{len(raw):,} row(s)")
+    counts.caption(plural(len(raw), "row"))
     counts.caption(f"{len(raw.columns)} columns")
 
     columns = [str(column) for column in raw.columns]
@@ -13560,6 +13600,119 @@ def _render_dataset_stats_tab(
     # Provenance is a fact about the *dataset*, so it sits with the counts.
     # Silent for every source but a OneStop server bundle.
     _render_data_provenance()
+
+
+#: DATA-67 — a reading measure's short label (``"TFD"``) by canonical column.
+_MEASURE_SHORT_LABELS = {
+    column: label for _k, column, label, *_ in READING_MEASURE_FIELDS
+}
+
+
+def dataset_capabilities(
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    raw_gaze: pd.DataFrame | None,
+) -> list[str]:
+    """*Available with this dataset*: four lines, one per thing a dataset may
+    or may not support (DATA-67).
+
+    Read off the same checks the app already makes, never a new rule: the
+    trials with fixations (what the Scanpath view draws), the reading measures
+    the AOI table brought (`data.brought_reading_measures`, all Corpus
+    Analysis shows — AN-32), the trials the raw gaze covers, and the multipart
+    screens (`multipart.part_catalog`, the 📊 Stats tab's Screens count).
+    """
+    words = words if words is not None else pd.DataFrame()
+    fixations = fixations if fixations is not None else pd.DataFrame()
+    raw_gaze = raw_gaze if raw_gaze is not None else pd.DataFrame()
+    fix_trials = trial_keys(fixations)
+    gaze_trials = trial_keys(raw_gaze)
+    all_trials = fix_trials | trial_keys(words) | gaze_trials
+
+    if fix_trials and not words.empty:
+        scanpath = f"over the text, for {plural(len(fix_trials), 'trial')}"
+    elif fix_trials:
+        scanpath = (
+            f"for {plural(len(fix_trials), 'trial')}, with no text: "
+            "the dataset has no AOI table"
+        )
+    elif gaze_trials:
+        scanpath = (
+            "none, as the dataset has no fixations; "
+            f"raw gaze is drawn instead, for {plural(len(gaze_trials), 'trial')}"
+        )
+    else:
+        scanpath = "none, as the dataset has no fixations"
+
+    measures = [
+        _MEASURE_SHORT_LABELS[column] for column in brought_reading_measures(words)
+    ]
+    measure_line = (
+        f"{', '.join(measures)}, shown by Corpus Analysis"
+        if measures
+        else "none supplied, so Corpus Analysis has nothing to show"
+    )
+
+    gaze_line = (
+        f"{len(gaze_trials):,} of {plural(len(all_trials), 'trial')}"
+        if gaze_trials
+        else "none"
+    )
+
+    try:
+        parts = part_catalog(words, fixations)
+    except ValueError:
+        parts = pd.DataFrame()
+    if parts.empty:
+        screen_line = "one per trial"
+    else:
+        n_parents = len(parts[["participant_id", "trial_id"]].drop_duplicates())
+        screen_line = (
+            f"{plural(len(parts), 'screen')} across {plural(n_parents, 'trial')}"
+        )
+
+    return [
+        f"{ICONS['view_scanpath']} **Scanpaths:** {scanpath}",
+        f"{ICONS['view_corpus']} **Reading measures:** {measure_line}",
+        f"{ICONS['raw_gaze']} **Raw gaze:** {gaze_line}",
+        f"{ICONS['screens']} **Screens:** {screen_line}",
+    ]
+
+
+@st.cache_data(show_spinner=False)
+def _c_dataset_capabilities(_words, _fixations, _raw_gaze, key) -> list[str]:
+    """`dataset_capabilities`, keyed on the three frames' fingerprints.
+
+    The Data page draws it on every rerun, and on a corpus it scans every
+    trial key of the raw gaze samples.
+    """
+    return dataset_capabilities(_words, _fixations, _raw_gaze)
+
+
+def render_dataset_capabilities(
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    raw_gaze: pd.DataFrame | None,
+) -> None:
+    """*Available with this dataset* under the *What's in…* heading (DATA-67).
+
+    A handful of lines for the whole dataset, before any trial filter: the
+    numbers are in 📊 Stats below, and how to change what is available is
+    ✏️ Edit dataset on the heading's line.
+    """
+    lines = _c_dataset_capabilities(
+        words,
+        fixations,
+        raw_gaze,
+        (
+            frame_fingerprint(words),
+            frame_fingerprint(fixations),
+            frame_fingerprint(raw_gaze),
+        ),
+    )
+    with st.container(key="dataset_capabilities"):
+        st.caption("**Available with this dataset**")
+        st.caption("  \n".join(lines))
 
 
 def render_data_inspection_tab(

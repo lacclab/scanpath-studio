@@ -432,8 +432,8 @@ def test_ux47_screen_steps_live_in_a_railbtn_cluster():
     # actually matches on.
     assert 'container(key=f"railbtn_{key_prefix}_screen_trail")' in source
     # The steps must be children of that container, not of the columns.
-    assert 'trail.button(\n        "◀"' in source
-    assert 'trail.button(\n        "▶"' in source
+    assert 'trail.button(\n        f"◀ {spoken(' in source
+    assert 'trail.button(\n        f"▶ {spoken(' in source
     # ...and the shared rule must actually match that key.
     assert '[class*="st-key-railbtn_"] {' in get_app_css()
 

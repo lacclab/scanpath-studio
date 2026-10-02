@@ -31,6 +31,7 @@ from .constants import (
     TRIAL_IDENTITY_CHECK_KEY,
     WIZARD_LEAVE_KEY,
     multipleye_upload_enabled,
+    plural,
     upload_limit_label,
     upload_limit_mb,
 )
@@ -92,6 +93,7 @@ from .experimental_setup import (
 from .persistence import is_loopback_url, rename_cached_dataset
 from .session_keys import COMPARE_SOURCE_STATE_KEY
 from .styles import mapping_menu_css
+from .synthetic import EXAMPLE_ZIP_FILE, example_import_zip
 from .tabs import _collect_column_mapping
 from .tour import (
     maybe_show_wizard_guide,
@@ -1314,7 +1316,7 @@ def _wizard_trial_step(
         cell = cell_by_table.get(table)
         if values is None or cell is None:
             continue
-        cell.caption(f"~{len(values):,} trials")
+        cell.caption(f"~{plural(len(values), 'trial')}")
     # Only a real problem still gets a box, and it renders where UX-67 put the
     # blockers: directly above **Add dataset**.
     present = {k: v for k, v in sets.items() if v is not None}
@@ -3086,9 +3088,32 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # UX-113: a small caption near the stage title, not a boxed alert — the
         # three tables below say the same thing at their own titles' hover, this
         # is just the nudge to open with.
-        intro.caption(
-            f"{ICONS['upload']} Upload at least one of **Fixations**, **Words / IA**, or "
-            "**Raw gaze** below to get started."
+        guide = intro.container(
+            key="wiz_example_row",
+            horizontal=True,
+            vertical_alignment="center",
+            gap="small",
+        )
+        guide.caption(
+            f"{ICONS['upload']} Upload at least one of **Fixations**, **AOIs**, or "
+            "**Raw gaze** below to get started.",
+            width="content",
+        )
+        # DATA-67: a tiny AOI + fixation pair that maps with no manual pick,
+        # with a README naming every column's unit and what the IDs mean.
+        # Built on click (`data=` a callable) and `on_click="ignore"`, so the
+        # download neither costs a run nor reruns the wizard.
+        guide.download_button(
+            "Download example tables",
+            data=example_import_zip,
+            file_name=EXAMPLE_ZIP_FILE,
+            mime="application/zip",
+            icon=ICONS["download"],
+            key="wizard_example_download",
+            on_click="ignore",
+            help="Two tiny tables, one AOI table and one fixation table, that "
+            "import with every column mapped automatically. The README inside "
+            "explains each column, its unit, and the IDs.",
         )
         app_url = str(getattr(st.context, "url", "") or "")
         if not is_loopback_url(app_url):
@@ -3155,8 +3180,14 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 # at all until opened, so the grid always mounts visible.
                 # UX-119: icon-only trigger (no "Preview" label) — way smaller,
                 # matching the rail's other icon-only popovers (⇅, ✏️).
+                # UX-200: named for screen readers; `styles.py` clips it.
                 preview = stats.popover(
-                    ICONS["preview"], width="content", help="Preview — first rows"
+                    "Preview the first rows",
+                    icon=ICONS["preview"],
+                    width="content",
+                    wrap=True,
+                    help="Preview — first rows",
+                    key=f"iconpop_preview_{prefix}",
                 )
                 preview.caption("First rows:")
                 preview.dataframe(frame.head(), width="stretch", hide_index=True)
@@ -3396,7 +3427,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # still benefits from the reminder that each is optional on its own
         # but at least one is required.
         derive_host.caption(
-            f"{ICONS['upload']} Upload at least one of **Fixations**, **Words / IA**, or "
+            f"{ICONS['upload']} Upload at least one of **Fixations**, **AOIs**, or "
             "**Raw gaze** below to get started."
         )
         raw_words, raw_fix, raw_gaze = _wizard_filename_derive(

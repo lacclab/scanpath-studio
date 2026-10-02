@@ -121,7 +121,9 @@ from scanpath_studio.constants import (
     icon_html,
     language_display,
     multipleye_enabled,
+    plural,
     preprocessing_enabled,
+    spoken,
     upload_limit_mb,
 )
 from scanpath_studio.controls import (
@@ -262,6 +264,7 @@ from scanpath_studio.tabs import (
     render_analysis_pool_bar,
     render_corpus_analysis_tab,
     render_data_inspection_tab,
+    render_dataset_capabilities,
     render_dataset_editor_footer,
     render_participant_metadata_section,
     render_settings_file,
@@ -823,7 +826,9 @@ def _render_download_folder_section(host) -> None:
         persist_state="session",
     )
     browse_col.button(
-        ICONS["folder"],
+        # UX-200: named for screen readers; the folder icon is all that shows.
+        f"{ICONS['folder']} {spoken('Choose the download folder')}",
+        wrap=True,
         key=f"{DOWNLOAD_DIR_KEY}_browse",
         help="Browse for a folder",
         on_click=_pick_download_folder,
@@ -1374,7 +1379,11 @@ def _dataset_dir_input(
     # Vertical-align the button with the input (past its label).
     browse_col.markdown("<div style='height:1.7em'></div>", unsafe_allow_html=True)
     if browse_col.button(
-        ICONS["folder"], key=f"{key_prefix}_browse", help="Browse for a folder"
+        # UX-200: named for screen readers; the folder icon is all that shows.
+        f"{ICONS['folder']} {spoken('Choose the data folder')}",
+        wrap=True,
+        key=f"{key_prefix}_browse",
+        help="Browse for a folder",
     ):
         chosen = _pick_directory_dialog()
         if chosen:
@@ -4512,7 +4521,15 @@ def render_data_source_picker(host=None) -> None:
             "More coming soon! is a preview of future datasets."
         ),
     )
-    with add_col.popover(ICONS["add"], help="Add dataset", key="add_dataset_menu"):
+    # UX-200: named for screen readers; `styles.py` clips the name, so + is
+    # still all that is drawn.
+    with add_col.popover(
+        "Add dataset",
+        icon=ICONS["add"],
+        help="Add dataset",
+        wrap=True,
+        key="add_dataset_menu",
+    ):
         st.button(
             "Create manually",
             icon=ICONS["author"],
@@ -8544,7 +8561,7 @@ def _run_app() -> None:
         if not suspicious.empty:
             with view_notices:
                 st.warning(
-                    f"Data quality: {len(suspicious)} trial(s) put at least 12 "
+                    f"Data quality: {plural(len(suspicious), 'trial')} put at least 12 "
                     "fixations on one word. Check stimulus alignment or line "
                     "assignment."
                 )
@@ -9023,6 +9040,9 @@ def _run_app() -> None:
             # and the counts they came for. UX-174 r2 put Rename on the heading
             # and Edit on the description line, off the table's rows.
             render_dataset_inspection_head(active_token)
+            # DATA-67 — what the dataset supports, before any trial filter:
+            # the first thing a newly added dataset's overview answers.
+            render_dataset_capabilities(words_all, fixations_all, raw_gaze_all)
             # Keyed wrapper → the stable `.st-key-…` selector the "Load and
             # verify a dataset" tutorial spotlights (it kept its name across the
             # move off the Scanpath subtab bar).

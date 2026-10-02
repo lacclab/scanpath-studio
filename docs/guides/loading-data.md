@@ -41,6 +41,11 @@ The import screen has three parts:
 Then click **:material/check: Add dataset**. Anything the app cannot use is listed above the
 button before you confirm.
 
+To see what the two main tables look like, click **:material/download: Download example
+tables** before uploading anything: a tiny AOI table and fixation table that map
+without a single manual pick, with a README giving each column's unit and what
+the IDs mean.
+
 ### Recording setup
 
 Describe the screen the data was **recorded** on, not the one you are using

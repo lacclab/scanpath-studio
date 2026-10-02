@@ -5126,7 +5126,9 @@ def render_plot_controls(
         # Nothing to draw: the popover body's own `_layer_off` caption says it.
         note="" if heat_nothing else heat_reason,
     )
-    raw_disabled, raw_reason = _mode_gate(animating, comparing, **_static_only)
+    # VIZ-48: the comparison builder draws each reading's samples; the replay
+    # still has no raw-gaze layer (VIZ-49).
+    raw_disabled, raw_reason = _mode_gate(animating, comparing, in_animation=False)
     show_raw_gaze, raw_gaze_grp = _rail_section(
         viz,
         f"{ICONS['raw_gaze']} **Raw gaze**",
@@ -6235,21 +6237,35 @@ def render_plot_controls(
                 ),
             )
 
-    # Raw gaze is a `make_scanpath_figure`-only overlay. The toggle is on the
-    # section's row (UX-86); this owns the style popover — previously nothing,
-    # since raw gaze had no styling of its own before it got a section.
+    # Raw gaze is drawn by the static and comparison builders. The toggle is on
+    # the section's row (UX-86); this owns the style popover — previously
+    # nothing, since raw gaze had no styling of its own before it got a section.
     # UX-161: one *Marker* group, as in 👁️ Fixations (UX-158).
     with (
         raw_gaze_grp,
         _layer_off(f"{ICONS['raw_gaze']} Raw gaze", off=not show_raw_gaze),
         _popover_rows("rawgaze"),
     ):
+        # VIZ-48: a comparison colours each reading's samples by its scanpath
+        # (the A/B cue), so the flat colour has nothing to colour there.
+        color_mode_disabled, color_reason = (
+            (raw_disabled, raw_reason)
+            if raw_disabled
+            else (
+                comparing,
+                f"{ICONS['warning']} In **Compare** mode each reading's samples "
+                "take its scanpath colour, so A and B stay apart. Your value is "
+                "kept and applies again once the mode is off."
+                if comparing
+                else "",
+            )
+        )
         color_disabled, color_help = _layer_gate(
-            raw_disabled,
+            color_mode_disabled,
             _gated_help(
                 "Flat marker colour. Ignored when the data carries timestamps, "
                 "which are colour-mapped by time instead.",
-                raw_reason,
+                color_reason,
             ),
         )
         _sub_row(

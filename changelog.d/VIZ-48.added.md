@@ -1,0 +1,1 @@
+Compare mode draws raw gaze: each reading's samples sit under its scanpath in that scanpath's colour, in all three layouts, from the app, `render --compare-with` (plus `--compare-raw-gaze` for a second dataset) and `compare_scanpaths(raw_gaze=…, raw_gaze_b=…)`.

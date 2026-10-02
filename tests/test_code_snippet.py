@@ -131,14 +131,51 @@ def test_an_uploaded_raw_gaze_table_is_a_placeholder_and_a_caveat():
     assert any("raw gaze" in note for note in code.caveats)
 
 
-@pytest.mark.parametrize("kind", ["animation", "comparison"])
-def test_a_figure_without_a_raw_gaze_layer_loads_none(kind):
-    """Only the single-trial builder draws raw gaze; the rail greys the switch
-    in the other two modes, so the figure on screen has no layer to rebuild."""
-    code = cs.reproduction_code(DEMO, _state(kind, figure={"show_raw_gaze": True}))
+def test_a_replay_has_no_raw_gaze_layer_to_load():
+    """The replay draws no raw gaze (VIZ-49); the rail greys the switch there,
+    so the figure on screen has no layer to rebuild."""
+    code = cs.reproduction_code(
+        DEMO, _state("animation", figure={"show_raw_gaze": True})
+    )
     assert "raw_gaze" not in code.python
     assert "raw-gaze" not in code.cli
     assert not any("raw gaze" in note for note in code.caveats)
+
+
+def test_a_comparison_loads_its_raw_gaze():
+    """VIZ-48: `compare_scanpaths` takes the samples, like `plot_scanpath`."""
+    state = _state(
+        "comparison",
+        figure={"show_raw_gaze": True},
+        compare=cs.CompareTarget(participant="p2", trial="t2"),
+    )
+    code = cs.reproduction_code(DEMO, state)
+    assert "raw_gaze = sps.load_sample_raw_gaze()" in code.python
+    assert "    raw_gaze=raw_gaze," in code.python
+    assert "raw_gaze_b" not in code.python
+    assert "--sample-raw-gaze" in code.cli
+    assert "--compare-raw-gaze" not in code.cli
+
+
+@pytest.mark.parametrize(
+    ("paths", "named"), [(("b_gaze.csv",), "b_gaze.csv"), ((), "B_RAW_GAZE")]
+)
+def test_a_second_datasets_raw_gaze_is_loaded_as_b(paths, named):
+    """VIZ-48: B's own samples, by path when there is one, else a placeholder
+    that the caveats own up to."""
+    state = _state(
+        "comparison",
+        figure={"show_raw_gaze": True},
+        compare=cs.CompareTarget(
+            participant="p2", trial="t2", dataset="Lab B", raw_gaze=paths
+        ),
+    )
+    code = cs.reproduction_code(DEMO, state)
+    assert f"raw_gaze_b = sps.load_raw_gaze({named!r})" in code.python
+    assert "    raw_gaze_b=raw_gaze_b," in code.python
+    assert f"--compare-raw-gaze {named}" in code.cli.replace(" \\\n ", " ")
+    placeholder_noted = any("Scanpath B's raw gaze" in n for n in code.caveats)
+    assert placeholder_noted == (not paths)
 
 
 def test_an_uploaded_dataset_says_it_cannot_name_the_files():

@@ -102,5 +102,5 @@ def test_compare_looks_in_the_download_folder_too(monkeypatch, tmp_path):
         st.session_state.pop(key, None)
     root, _ = compare_source._public_location("PoTeC — Potsdam Textbook Corpus")
     assert root == str(tmp_path / "PoTeC")
-    root, _ = compare_source._public_location(app.ONESTOP_PUBLIC_CHOICE)
+    root, _ = compare_source._public_location(app.ONESTOP_REGIME_CHOICES["repeated"])
     assert root == str(tmp_path / "OneStop")

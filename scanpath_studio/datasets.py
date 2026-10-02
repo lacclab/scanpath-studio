@@ -557,6 +557,55 @@ _ONESTOP_REGIMES = {
 
 ONESTOP_VARIANTS = ("public", "lacclab")
 
+# DATA-63: what makes a trial belong to a regime, as the corpus records it on
+# every report — ``(question_preview, repeated_reading_trial)``. The per-regime
+# Paragraph files are exactly these slices (checked against the OSF ordinary
+# file: every row is ``(False, False)``), and the all-regimes reports of the
+# other parts carry the same two columns, so they are cut to the regime by the
+# same rule instead of handing every regime's trials to each one.
+_ONESTOP_REGIME_FLAGS: dict[str, tuple[bool, bool]] = {
+    "ordinary": (False, False),
+    "information_seeking": (True, False),
+    "repeated": (False, True),
+    "information_seeking_repeated": (True, True),
+}
+_ONESTOP_REGIME_COLUMNS: tuple[str, ...] = (
+    "question_preview",
+    "repeated_reading_trial",
+)
+
+
+def onestop_regime_parts(regime: str) -> list[str]:
+    """Every trial part a reader in ``regime`` saw, in presentation order.
+
+    All seven, except the question-preview screen, which only the
+    information-seeking regimes show — its report holds no trial of the others,
+    so loading it there would download a file to keep none of it.
+    """
+    if regime not in _ONESTOP_REGIME_FLAGS:
+        raise ValueError(
+            f"regime must be one of {sorted(_ONESTOP_REGIME_FLAGS)}, got {regime!r}"
+        )
+    preview, _ = _ONESTOP_REGIME_FLAGS[regime]
+    return [p for p in _ONESTOP_PARTS if preview or p != "Question_Preview"]
+
+
+def _keep_onestop_regime(frame: pd.DataFrame, regime: str) -> pd.DataFrame:
+    """The rows of an all-regimes report that belong to ``regime``.
+
+    A frame without the two flag columns is returned untouched: there is
+    nothing to tell its regimes apart by.
+    """
+    from . import data
+
+    if not set(_ONESTOP_REGIME_COLUMNS) <= set(frame.columns):
+        return frame
+    preview, repeated = _ONESTOP_REGIME_FLAGS[regime]
+    mask = (data.coerce_flag(frame["question_preview"]) == preview) & (
+        data.coerce_flag(frame["repeated_reading_trial"]) == repeated
+    )
+    return frame.loc[mask].reset_index(drop=True)
+
 
 def _onestop_osf_resource(kind: str, part: str, regime: str) -> str | None:
     """OSF id for a (kind, part, regime), or None when not published.
@@ -786,8 +835,12 @@ def _read_onestop_part(
     frame = data.read_mapped_table(
         path,
         kind="words" if kind == "ia" else "fixations",
-        filter_fields=_ONESTOP_ID_COLUMNS,
+        filter_fields=_ONESTOP_ID_COLUMNS + _ONESTOP_REGIME_COLUMNS,
     )
+    # DATA-63: only Paragraph is regime-split on OSF; every other public part
+    # holds all four regimes' trials, so cut it to the one asked for.
+    if variant == "public" and part != "Paragraph":
+        frame = _keep_onestop_regime(frame, regime)
     frame = _compose_onestop_ids(frame)
     frame["part"] = part
     if part == "QA":
@@ -795,31 +848,46 @@ def _read_onestop_part(
     return frame
 
 
-def _fold_onestop_part_into_identity(
-    words: pd.DataFrame, fixations: pd.DataFrame, parts: list
+def _onestop_parts_as_screens(
+    words: pd.DataFrame, fixations: pd.DataFrame
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """When >1 part is loaded, prefix the paragraph id with the part.
+    """Make each part a *screen* of its trial, in presentation order (DATA-63).
 
-    Every part of a trial shares the same ``paragraph_id`` / ``TRIAL_INDEX``, so
-    loading e.g. Paragraph + Title together would collapse them into one trial
-    (and fight over word boxes). Prefix ``unique_paragraph_id`` /
-    ``paragraph_id`` / ``unique_trial_id`` with the part so each part becomes its
-    own trial — ``Paragraph::1`` vs ``Title::1``. A single-part load is untouched
-    (the historical trial ids are preserved)."""
-    if len(parts) <= 1:
+    Every part of a reading shares its ``unique_trial_id`` — the title, the
+    passage and the question screens are one trial, shown one after another —
+    so the trial is left whole and the part is its screen: the ``part`` column
+    is auto-detected as ``screen_id`` (`data.SCREEN_ID_CANDIDATES`), and
+    ``screen_index`` numbers the screens a trial *has* 1..N in `_ONESTOP_PARTS`
+    order. Per trial, because the Screen picker reads it as "n of N": not every
+    reading has every part (only an article's first paragraph has a title
+    screen, only the information-seeking regimes a question preview), and a
+    fixed per-part number would read "3 of 6" on the second screen. Words and
+    fixations are numbered from the screens both hold, so the two agree. Each
+    screen keeps its own coordinate space and word boxes (`multipart.py`). A
+    frame without the ``part`` / ``unique_trial_id`` columns is returned
+    untouched.
+    """
+    keys = ["participant_id", "unique_trial_id"]
+    needed = {*keys, "part"}
+    if words.empty or not needed <= set(words.columns):
         return words, fixations
+    order = {part: index for index, part in enumerate(_ONESTOP_PARTS)}
+    screens = words[[*keys, "part"]].drop_duplicates().astype(str)
+    screens["_order"] = screens["part"].map(order)
+    screens = screens.sort_values([*keys, "_order"], kind="stable")
+    screens["screen_index"] = screens.groupby(keys, sort=False).cumcount() + 1
+    screens = screens.drop(columns="_order")
 
-    def _prefix(frame: pd.DataFrame) -> pd.DataFrame:
-        if frame.empty or "part" not in frame.columns:
+    def _stamp(frame: pd.DataFrame) -> pd.DataFrame:
+        if frame.empty or not needed <= set(frame.columns):
             return frame
+        probe = frame[[*keys, "part"]].astype(str)
+        index = probe.merge(screens, on=[*keys, "part"], how="left")["screen_index"]
         frame = frame.copy()
-        part = frame["part"].astype(str)
-        for col in ("unique_paragraph_id", "paragraph_id", "unique_trial_id"):
-            if col in frame.columns:
-                frame[col] = part + "::" + frame[col].astype(str)
+        frame["screen_index"] = index.to_numpy()
         return frame
 
-    return _prefix(words), _prefix(fixations)
+    return _stamp(words), _stamp(fixations)
 
 
 def onestop_raw_frames(
@@ -838,9 +906,13 @@ def onestop_raw_frames(
     the returned frames go through the same auto-detect → normalize path as an
     upload — no OneStop-specific column mapping is needed here.
 
-    ``parts`` is any subset of the seven trial parts (default: Paragraph). When
-    more than one is chosen, each part becomes its own trial (the part is folded
-    into the paragraph/trial id so they don't collide). ``variant`` is
+    ``parts`` is any subset of the seven trial parts (default: Paragraph;
+    :func:`onestop_regime_parts` lists every part of a regime). A public part
+    other than Paragraph is cut to ``regime`` by its ``question_preview`` /
+    ``repeated_reading_trial`` flags (DATA-63). Each part is a *screen* of its
+    trial (``part`` → ``screen_id``, plus a ``screen_index`` in presentation
+    order), so a reading's title, passage and question screens are one trial.
+    ``variant`` is
     ``"public"`` (OSF release) or ``"lacclab"`` (a local lab-processed export;
     superset schema, no download).
     """
@@ -868,7 +940,54 @@ def onestop_raw_frames(
         progress.report(index, len(reports), unit="reports")
     words = pd.concat(word_frames, ignore_index=True, sort=False)
     fixations = pd.concat(fix_frames, ignore_index=True, sort=False)
-    return _fold_onestop_part_into_identity(words, fixations, part_list)
+    if len(part_list) > 1:
+        words, fixations = _onestop_drop_unmatched_screens(words, fixations)
+    return _onestop_parts_as_screens(words, fixations)
+
+
+def _onestop_drop_unmatched_screens(
+    words: pd.DataFrame, fixations: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Keep only the screens both reports have, loudly (DATA-63).
+
+    Several parts make each part a screen, and ``multipart.validate_matching_parts``
+    rejects a screen present in one report and absent from the other — which
+    the OSF release has: its *Answers* fixation report holds 31 fixations of
+    ``l55_519``'s first reading of ``2_9_2_Ele`` that its interest-area report
+    has no row for. One such gap would otherwise abort the whole load, as
+    ``_multipleye_drop_screens_without_boxes`` already guards against for
+    MultiplEYE. A frame without the identity columns is returned untouched.
+    """
+    keys = ["participant_id", "unique_trial_id", "part"]
+    if not (set(keys) <= set(words.columns) and set(keys) <= set(fixations.columns)):
+        return words, fixations
+    word_keys = pd.MultiIndex.from_frame(words[keys].astype(str))
+    fix_keys = pd.MultiIndex.from_frame(fixations[keys].astype(str))
+    shared = word_keys.unique().intersection(fix_keys.unique())
+    keep_words = word_keys.isin(shared)
+    keep_fix = fix_keys.isin(shared)
+    for name, frame, keep in (
+        ("word box", words, keep_words),
+        ("fixation", fixations, keep_fix),
+    ):
+        if not keep.all():
+            dropped = frame.loc[~keep, keys].drop_duplicates()
+            _LOGGER.warning(
+                "OneStop: dropped %d %s row(s) on %d screen(s) the other report "
+                "does not have (e.g. %s).",
+                int((~keep).sum()),
+                name,
+                len(dropped),
+                ", ".join(
+                    "/".join(map(str, row)) for row in dropped.head(3).to_numpy()
+                ),
+            )
+    # A fresh index: later steps align on it, and a gapped one is how a
+    # positional assignment quietly lands on the wrong rows.
+    return (
+        words.loc[keep_words].reset_index(drop=True),
+        fixations.loc[keep_fix].reset_index(drop=True),
+    )
 
 
 def load_onestop(

@@ -309,8 +309,8 @@ PARAM_HIDE_FIXATION_NUMBERS = "hide_fixation_numbers"
 # manifest name, a built-in's registry `short`) — never of its display label,
 # which is copy and will be reworded.
 #
-# `onestop_public` keeps its own token and is emitted in preference to this pair
-# for the corpus it names, so links written before this existed keep resolving.
+# OneStop's regimes keep tokens of their own (`onestop_<regime>`, DATA-63) and
+# are emitted in preference to this pair, as `onestop_public` was before them.
 PARAM_CORPUS = "corpus"
 
 # The bundle *directory* is deliberately NOT here and never goes in a link: it is
@@ -679,6 +679,15 @@ URL_OPTIONAL_PARAMS = frozenset(
     }
 )
 
+# DATA-63: params the reader still accepts from links written before, and the
+# writer never emits. DATA-3's public OneStop link carried its variant, regime
+# and parts; each regime is now its own dataset with its own `?source=` token,
+# holding every part from the public release, so a link has nothing to add —
+# but `onestop_public` + `onestop_regime` must keep opening the regime it named.
+URL_LEGACY_PARAMS = frozenset(
+    {PARAM_ONESTOP_VARIANT, PARAM_ONESTOP_REGIME, PARAM_ONESTOP_PARTS}
+)
+
 # The exact key set of `url_state._URL_PRESETS` — every param a deep link can
 # carry that presets a widget.
 URL_PRESET_PARAMS = frozenset(SHARE_PARAMS) | {PARAM_HIDE_FIXATION_NUMBERS}
@@ -687,8 +696,10 @@ URL_PRESET_PARAMS = frozenset(SHARE_PARAMS) | {PARAM_HIDE_FIXATION_NUMBERS}
 # on a shareable source. `trial` is absent on purpose: Share writes the
 # canonical `trial_id` instead of a slider index.
 SHARE_QUERY_PARAMS = (
-    frozenset(SHARE_PARAMS) | (URL_SELECTION_PARAMS - {PARAM_TRIAL})
-) - URL_OPTIONAL_PARAMS
+    (frozenset(SHARE_PARAMS) | (URL_SELECTION_PARAMS - {PARAM_TRIAL}))
+    - URL_OPTIONAL_PARAMS
+    - URL_LEGACY_PARAMS
+)
 
 # Session keys `_URL_BOUNDED` clamps on the way in (a hand-crafted link with an
 # out-of-range value would otherwise crash the widget on render).

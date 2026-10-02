@@ -1079,18 +1079,21 @@ def test_an_uploaded_dataset_maps_to_the_unnameable_source():
     assert source.note == cs.UNKNOWN_SOURCE_NOTE
 
 
-def test_a_public_corpus_carries_the_options_it_was_loaded_with():
-    from scanpath_studio.constants import ONESTOP_PUBLIC_CHOICE
+def test_a_onestop_regime_carries_its_regime_and_every_part():
+    """DATA-63: the dataset is the regime, whatever the session's leftover keys."""
+    from scanpath_studio import datasets
+    from scanpath_studio.constants import ONESTOP_REGIME_CHOICES
 
     source = _resolve_source(
-        ONESTOP_PUBLIC_CHOICE,
-        onestop_regime="repeated",
-        onestop_parts=["Paragraph", "Questions"],
+        ONESTOP_REGIME_CHOICES["repeated"],
+        onestop_regime="ordinary",
+        onestop_parts=["Title"],
         onestop_public_dir="/data/OneStop",
     )
     assert source.kind == cs.SOURCE_ONESTOP
     assert source.options["regime"] == "repeated"
-    assert source.options["parts"] == ["Paragraph", "Questions"]
+    assert source.options["variant"] == "public"
+    assert source.options["parts"] == datasets.onestop_regime_parts("repeated")
     assert source.options["root"] == "/data/OneStop"
 
 
@@ -1105,11 +1108,11 @@ def test_the_onestop_server_bundle_says_which_loader_it_is_not():
 def test_a_shared_deployment_never_quotes_the_servers_data_path(monkeypatch):
     """S2: on a hosted app the path box isn't the user's, so the snippet must
     not hand every visitor the server's layout."""
-    from scanpath_studio.constants import ONESTOP_PUBLIC_CHOICE
+    from scanpath_studio.constants import ONESTOP_REGIME_CHOICES
 
     monkeypatch.setenv("SCANPATH_LOCAL_FS", "0")
     source = _resolve_source(
-        ONESTOP_PUBLIC_CHOICE, onestop_public_dir="/srv/private/onestop"
+        ONESTOP_REGIME_CHOICES["ordinary"], onestop_public_dir="/srv/private/onestop"
     )
     assert "/srv/private" not in source.options["root"]
     assert "/srv/private" not in cs.reproduction_code(source, _state()).python

@@ -868,30 +868,23 @@ def test_onestop_default_part_is_paragraph(onestop_offline, tmp_path):
     assert set(words["unique_paragraph_id"]) == {_FAKE_ONESTOP_PARAGRAPH}
 
 
-def test_onestop_multiple_parts_stay_separate(onestop_offline, tmp_path):
-    """Loading several parts keeps each as its own trial (part folded into the
-    paragraph id) so the word boxes don't collide."""
-    words, fixations = datasets_module.onestop_raw_frames(
-        tmp_path,
-        regime="ordinary",
-        parts=["Title", "Paragraph"],
-        download=True,
+def test_onestop_parts_are_screens_of_one_trial(onestop_offline, tmp_path):
+    """DATA-63: a reading's parts are the *screens* of one trial, in presentation
+    order — not one trial per part."""
+    words, fixations = datasets_module.load_onestop(
+        tmp_path, regime="ordinary", parts=["Title", "Paragraph"], download=True
     )
-    # Both parts present, each labelled with its own words.
-    assert set(words["part"]) == {"Title", "Paragraph"}
-    assert set(words["IA_LABEL"]) == {"Bold", "Head", "The", "cat"}
-    # The shared paragraph id was prefixed with the part, so the two parts are
-    # now distinct trials rather than one collapsed one.
-    assert set(words["unique_paragraph_id"]) == {
-        f"Title::{_FAKE_ONESTOP_PARAGRAPH}",
-        f"Paragraph::{_FAKE_ONESTOP_PARAGRAPH}",
-    }
-    assert set(fixations["unique_paragraph_id"]) == {
-        f"Title::{_FAKE_ONESTOP_PARAGRAPH}",
-        f"Paragraph::{_FAKE_ONESTOP_PARAGRAPH}",
-    }
-    # Parts are returned in presentation order (Title before Paragraph).
-    assert list(dict.fromkeys(words["part"])) == ["Title", "Paragraph"]
+    for frame in (words, fixations):
+        assert frame["trial_id"].nunique() == 1
+        screens = frame[["screen_id", "screen_index"]].drop_duplicates()
+        # Numbered 1..N within the trial, in presentation order.
+        assert sorted(map(tuple, screens.to_numpy())) == [
+            ("Paragraph", 2),
+            ("Title", 1),
+        ]
+    # Each screen keeps its own words.
+    by_screen = words.groupby("screen_id")["text"].agg(set).to_dict()
+    assert by_screen == {"Title": {"Bold", "Head"}, "Paragraph": {"The", "cat"}}
 
 
 def test_onestop_qa_deduplicates(tmp_path):
@@ -2494,3 +2487,81 @@ def test_a_stored_upload_reports_the_setup_its_wizard_captured():
     assert not at.exception, at.exception
     assert at.session_state["_canvas"] == (1280, 1024)
     assert at.session_state["_prov"] == "estimated"
+
+
+# ---------------------------------------------------------------------------
+# DATA-63: one dataset per regime. Only Paragraph is regime-split on OSF, so a
+# regime's other parts are the all-regimes reports cut by the corpus' own flags.
+# ---------------------------------------------------------------------------
+
+
+def test_a_regime_lists_every_part_it_shows():
+    assert datasets_module.onestop_regime_parts("information_seeking") == list(
+        datasets_module._ONESTOP_PARTS
+    )
+    # Only the information-seeking regimes show the question first.
+    assert "Question_Preview" not in datasets_module.onestop_regime_parts("ordinary")
+    with pytest.raises(ValueError):
+        datasets_module.onestop_regime_parts("speed_reading")
+
+
+@pytest.mark.parametrize(
+    ("regime", "kept"),
+    [
+        ("ordinary", "p00"),
+        ("information_seeking", "p10"),
+        ("repeated", "p01"),
+        ("information_seeking_repeated", "p11"),
+    ],
+)
+def test_an_all_regimes_part_is_cut_to_the_regime(tmp_path, regime, kept):
+    """A QA report holding all four regimes keeps only the asked regime's rows."""
+    flags = {"question_preview": [], "repeated_reading_trial": [], "pid": []}
+    for preview in (False, True):
+        for repeated in (False, True):
+            flags["question_preview"] += [preview, preview]
+            flags["repeated_reading_trial"] += [repeated, repeated]
+            flags["pid"] += [f"p{int(preview)}{int(repeated)}"] * 2
+
+    def _four(frame):
+        frame = pd.concat([frame] * 4, ignore_index=True)
+        frame["participant_id"] = flags["pid"]
+        frame["question_preview"] = flags["question_preview"]
+        frame["repeated_reading_trial"] = flags["repeated_reading_trial"]
+        return frame
+
+    _onestop_public_report(
+        tmp_path,
+        _four(_onestop_public_words()),
+        _four(_onestop_public_fixations()),
+        regime=regime,
+        part="QA",
+    )
+    words, fixations = datasets_module.onestop_raw_frames(
+        tmp_path, regime=regime, parts=["QA"]
+    )
+    assert set(words["participant_id"]) == {kept}
+    assert set(fixations["participant_id"]) == {kept}
+
+
+def test_a_screen_only_one_report_has_is_dropped_not_fatal(tmp_path, caplog):
+    """DATA-63: the OSF Answers fixation report holds a trial its interest-area
+    report lacks. Several parts make each part a screen, and one such orphan
+    used to abort the whole load in `multipart.validate_matching_parts`."""
+    _onestop_public_report(
+        tmp_path, _onestop_public_words(), _onestop_public_fixations()
+    )
+    orphan = _onestop_public_fixations(participant_id=["p2", "p2"])
+    _onestop_public_report(
+        tmp_path,
+        _onestop_public_words(),
+        pd.concat([_onestop_public_fixations(), orphan], ignore_index=True),
+        part="Answers",
+    )
+    with caplog.at_level("WARNING", logger="scanpath_studio.datasets"):
+        words, fixations = datasets_module.load_onestop(
+            tmp_path, regime="ordinary", parts=["Paragraph", "Answers"]
+        )
+    assert set(fixations["participant_id"]) == {"p1"}
+    assert set(words["participant_id"]) == {"p1"}
+    assert "the other report does not have" in caplog.text

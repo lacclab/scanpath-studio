@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import pandas as pd
+import pytest
+
 from scanpath_studio import column_names as cn
-from scanpath_studio.column_names import ColumnNames, SourceName
+from scanpath_studio import data
+from scanpath_studio.column_names import ColumnNames, SourceName, from_schema
 
 
 class TestColumnNames:
@@ -69,3 +73,139 @@ class TestColumnNames:
         assert merged.kind_of("timestamp_ms") == cn.GENERATED
         # What the edit did not touch keeps the earlier record.
         assert merged.display("total_fixation_duration_ms") == "IA_DWELL_TIME"
+
+
+@pytest.fixture(scope="module")
+def demo_raw():
+    return data.load_sample_data()
+
+
+class TestFromSchema:
+    def test_the_demo_words_keep_their_eyelink_names(self, demo_raw):
+        words, _ = demo_raw
+        names = from_schema("words", data.propose_word_schema(words), words.columns)
+        assert names.display("word_id") == "IA_ID"
+        assert names.display("text") == "IA_LABEL"
+        assert names.display("total_fixation_duration_ms") == "IA_DWELL_TIME"
+        assert names.kind_of("width") == cn.CONVERTED
+        assert "IA_RIGHT" in names.source("width").note
+
+    def test_the_demo_fixations_keep_their_eyelink_names(self, demo_raw):
+        _, fixations = demo_raw
+        schema = data.propose_fix_schema(fixations)
+        names = from_schema("fixations", schema, fixations.columns)
+        assert names.display("duration_ms") == schema["duration"]
+        assert names.display("x") == schema["x"]
+        assert names.kind_of("order_in_trial") == cn.COMPUTED
+
+    def test_every_canonical_column_has_a_name_or_is_computed(self, demo_raw):
+        words, fixations = demo_raw
+        for table, raw, canonical in (
+            ("words", words, data.WORDS_CANONICAL_COLUMNS),
+            ("fixations", fixations, data.FIX_CANONICAL_COLUMNS),
+        ):
+            schema = (
+                data.propose_word_schema(raw)
+                if table == "words"
+                else data.propose_fix_schema(raw)
+            )
+            names = from_schema(table, schema, raw.columns)
+            for column in canonical:
+                assert names.source(column) is not None or (
+                    names.kind_of(column) == cn.COMPUTED
+                ), (table, column)
+
+    def test_missing_fields_are_generated_not_named(self):
+        raw = pd.DataFrame(columns=["trial", "dur", "px", "py"])
+        schema = {"trial": "trial", "duration": "dur", "x": "px", "y": "py"}
+        names = from_schema("fixations", schema, raw.columns)
+        for column in ("participant_id", "fixation_id", "timestamp_ms", "text_id"):
+            assert names.kind_of(column) == cn.GENERATED, column
+            assert names.display(column) == column
+
+    def test_a_unit_conversion_is_said(self):
+        raw = pd.DataFrame(columns=["trial", "FPOGD", "FPOGX", "FPOGY"])
+        schema = {"trial": "trial", "duration": "FPOGD", "x": "FPOGX", "y": "FPOGY"}
+        names = from_schema("fixations", schema, raw.columns)
+        assert names.kind_of("duration_ms") == cn.CONVERTED
+        assert names.display("duration_ms") == "FPOGD"
+
+    def test_a_composite_trial_id_names_every_part(self):
+        raw = pd.DataFrame(columns=["reader", "item", "dur", "x", "y"])
+        schema = {
+            "participant": "reader",
+            "trial": ["reader", "item"],
+            "duration": "dur",
+            "x": "x",
+            "y": "y",
+        }
+        names = from_schema("fixations", schema, raw.columns)
+        assert names.kind_of("trial_id") == cn.COMPOSITE
+        assert names.display("trial_id") == "reader + item"
+
+    def test_keep_columns_limit_the_registry(self):
+        """A registry rename (`Reduced_POS` → `reduced_pos`) is named only when
+        normalization carried it — every field by default, the kept ones when
+        the wizard narrowed the read."""
+        raw = pd.DataFrame(
+            columns=[
+                "trial",
+                "IA_ID",
+                "IA_LABEL",
+                "x",
+                "y",
+                "width",
+                "height",
+                "Reduced_POS",
+            ]
+        )
+        schema = {
+            "trial": "trial",
+            "word_id": "IA_ID",
+            "text": "IA_LABEL",
+            "x": "x",
+            "y": "y",
+            "width": "width",
+            "height": "height",
+        }
+        assert from_schema("words", schema, raw.columns).display("reduced_pos") == (
+            "Reduced_POS"
+        )
+        kept_none = from_schema("words", schema, raw.columns, keep_columns=set())
+        assert kept_none.source("reduced_pos") is None
+
+    def test_a_cleared_reading_measure_has_no_name(self, demo_raw):
+        words, _ = demo_raw
+        schema = dict(data.propose_word_schema(words), measure_tfd=None)
+        names = from_schema("words", schema, words.columns)
+        assert names.source("total_fixation_duration_ms") is None
+
+    def test_for_tables_skips_absent_tables(self, demo_raw):
+        words, fixations = demo_raw
+        payloads = cn.for_tables(
+            {"words": data.propose_word_schema(words), "fixations": None},
+            {"words": words, "fixations": fixations},
+        )
+        assert set(payloads) == {"words"}
+        assert ColumnNames.from_payload(payloads["words"]).display("text") == "IA_LABEL"
+
+
+def test_every_column_the_measures_add_is_known_as_computed(
+    normalized_words_df, normalized_fixations_df
+):
+    """A column `measures.py` starts adding must be classed as computed, or it
+    would be shown as if it were the user's."""
+    from scanpath_studio import measures
+
+    fixations = measures.enrich_fixations(
+        measures.assign_fixations_to_words(
+            normalized_fixations_df, normalized_words_df
+        ),
+        normalized_words_df,
+    )
+    added = set(fixations.columns) - set(normalized_fixations_df.columns)
+    words = measures.compute_per_word_measures(
+        normalized_fixations_df, normalized_words_df
+    )
+    added |= set(words.columns) - set(normalized_words_df.columns)
+    assert added - cn.COMPUTED_COLUMNS - {"word_id"} == set()

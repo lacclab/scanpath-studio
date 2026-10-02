@@ -174,3 +174,162 @@ class ColumnNames:
 
 
 EMPTY = ColumnNames({})
+
+
+#: Mapped screen fields: schema key → canonical column (`data._copy_screen_fields`).
+_SCREEN_FIELDS = (
+    ("screen_id", "screen_id"),
+    ("screen_index", "screen_index"),
+    ("screen_timestamp", "screen_timestamp_ms"),
+    ("screen_fixation_id", "screen_fixation_id"),
+    ("canvas_width", "canvas_width"),
+    ("canvas_height", "canvas_height"),
+)
+
+
+def _id_entry(value) -> SourceName | None:
+    """A schema id field — one column, or several joined (a composite id)."""
+    from .data import trial_mapping_columns
+
+    if not value:
+        return None
+    columns = [str(c) for c in trial_mapping_columns(value)]
+    if len(columns) > 1:
+        return SourceName(tuple(columns), COMPOSITE)
+    return SourceName((columns[0],), MAPPED)
+
+
+def _timed(column: str) -> SourceName:
+    """A time column, which normalization converts to ms when its unit says so."""
+    from .data import time_unit_ms
+
+    if time_unit_ms(column) != 1.0:
+        return SourceName((column,), CONVERTED, f"{column}, in ms")
+    return SourceName((column,), MAPPED)
+
+
+def _mapped_or(schema: Mapping, key: str, kind: str, note: str) -> SourceName:
+    """The schema's column for ``key``, else a stand-in of ``kind``."""
+    column = schema.get(key)
+    return SourceName((str(column),)) if column else SourceName((), kind, note)
+
+
+def _registry(out: dict, registry, present: set, keep: set | None) -> None:
+    """The optional-field renames normalization applied (`_apply_optional_fields`).
+
+    A later entry for the same destination overwrites an earlier one there, so
+    it does here too; a passthrough (`src == dest`) keeps its own name and needs
+    no entry.
+    """
+    for src, dest, _kind, _category in registry:
+        if src not in present or (keep is not None and src not in keep):
+            continue
+        if dest != src:
+            out[dest] = SourceName((src,), MAPPED)
+
+
+def from_schema(
+    table: str,
+    schema: Mapping | None,
+    columns: Iterable[str],
+    *,
+    keep_columns: Iterable[str] | None = None,
+) -> ColumnNames:
+    """The map ``data.normalize_<table>`` implies for ``schema`` over ``columns``.
+
+    ``table`` is ``"words"``, ``"fixations"`` or ``"raw_gaze"``; ``columns`` are
+    the raw table's; ``keep_columns`` the set normalization was given (``None``
+    carries every registry field, as normalization does).
+    """
+    from . import data
+
+    schema = dict(schema or {})
+    present = {str(c) for c in columns}
+    keep = None if keep_columns is None else {str(c) for c in keep_columns}
+    out: dict[str, SourceName] = {}
+
+    out["participant_id"] = _id_entry(schema.get("participant")) or SourceName(
+        (), GENERATED, "one reader for the whole table"
+    )
+    if trial := _id_entry(schema.get("trial")):
+        out["trial_id"] = out["unique_trial_id"] = trial
+    if table != "raw_gaze" and "unique_paragraph_id" in present:
+        out["text_id"] = out["unique_text_id"] = SourceName(("unique_paragraph_id",))
+    else:
+        out["text_id"] = _id_entry(schema.get("text_id")) or SourceName(
+            (), GENERATED, "the trial id"
+        )
+    for key, canonical in _SCREEN_FIELDS:
+        if schema.get(key):
+            out[canonical] = SourceName((str(schema[key]),))
+
+    if table == "words":
+        out["word_id"] = _mapped_or(schema, "word_id", GENERATED, "the row order")
+        out["text"] = _mapped_or(schema, "text", GENERATED, "w0, w1 … from the word id")
+        out["line_idx"] = _mapped_or(schema, "line", GENERATED, "1 — one line")
+        if all(schema.get(k) for k in ("x", "y", "width", "height")):
+            for key in ("x", "y", "width", "height"):
+                out[key] = SourceName((str(schema[key]),))
+        elif all(schema.get(k) for k in ("left", "right", "top", "bottom")):
+            left, right = str(schema["left"]), str(schema["right"])
+            top, bottom = str(schema["top"]), str(schema["bottom"])
+            out["x"], out["y"] = SourceName((left,)), SourceName((top,))
+            out["width"] = SourceName((right, left), CONVERTED, f"{right} − {left}")
+            out["height"] = SourceName((bottom, top), CONVERTED, f"{bottom} − {top}")
+        _registry(out, data.WORD_OPTIONAL_FIELDS, present, keep)
+        # AN-32: a measure the schema names decides it, after the passthrough.
+        for key, canonical, *_ in data.READING_MEASURE_FIELDS:
+            if key not in schema:
+                continue
+            column = schema.get(key)
+            if column and column in present:
+                out[canonical] = SourceName((str(column),))
+            else:
+                out.pop(canonical, None)
+    elif table == "fixations":
+        for coord in ("x", "y"):
+            out[coord] = _mapped_or(
+                schema, coord, COMPUTED, "the fixated word's box centre"
+            )
+        if schema.get("duration"):
+            out["duration_ms"] = _timed(str(schema["duration"]))
+        out["timestamp_ms"] = (
+            _timed(str(schema["timestamp"]))
+            if schema.get("timestamp")
+            else SourceName((), GENERATED, "the fixation's order in its trial")
+        )
+        out["fixation_id"] = _mapped_or(
+            schema, "fixation_id", GENERATED, "1, 2, … per trial"
+        )
+        out["word_id"] = _mapped_or(
+            schema, "word_id", COMPUTED, "assigned from the word boxes"
+        )
+        _registry(out, data.FIX_OPTIONAL_FIELDS, present, keep)
+    else:  # raw gaze
+        for key in ("x", "y", "text", "word_id"):
+            if schema.get(key):
+                out[key] = SourceName((str(schema[key]),))
+        out["timestamp_ms"] = (
+            _timed(str(schema["timestamp"]))
+            if schema.get("timestamp")
+            else SourceName((), GENERATED, "the sample's order in its trial")
+        )
+    return ColumnNames(out)
+
+
+def for_tables(
+    schemas: Mapping[str, Mapping | None],
+    frames: Mapping[str, object],
+    keeps: Mapping[str, Iterable[str] | None] | None = None,
+) -> dict[str, dict]:
+    """``{table: payload}`` for every table with a schema and a raw frame."""
+    keeps = keeps or {}
+    out: dict[str, dict] = {}
+    for table, schema in schemas.items():
+        columns = getattr(frames.get(table), "columns", None)
+        if not schema or columns is None or len(columns) == 0:
+            continue
+        out[table] = from_schema(
+            table, schema, columns, keep_columns=keeps.get(table)
+        ).to_payload()
+    return out

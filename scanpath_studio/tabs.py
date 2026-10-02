@@ -3359,8 +3359,14 @@ def _summary_rows(
     trial_words: pd.DataFrame,
     trial_fixations: pd.DataFrame,
     trial_raw_gaze: pd.DataFrame | None = None,
+    *,
+    gaze_samples: int | None = None,
 ) -> list[dict]:
     """Field/Value rows summarising a trial — totals + in-text fixation count.
+
+    ``gaze_samples`` is the sample count when the caller has the count but not
+    the samples — Compare's B, whose count is cached (UX-190); it stands in for
+    ``len(trial_raw_gaze)``.
 
     Folded into the metadata table (formerly the three `st.metric` cards plus
     the out-of-text caption), so a trial's headline numbers live in one place.
@@ -3403,11 +3409,13 @@ def _summary_rows(
     in_text = _in_text_fixation_value(trial_words, trial_fixations)
     if in_text is not None:
         rows.append({"Field": "Fixations in word boxes", "Value": in_text})
-    if trial_raw_gaze is not None and not trial_raw_gaze.empty:
+    if gaze_samples is None and trial_raw_gaze is not None:
+        gaze_samples = len(trial_raw_gaze)
+    if gaze_samples:
         rows.append(
             {
                 "Field": SUMMARY_CHIP_FIELDS["@gaze_sample_count"],
-                "Value": f"{len(trial_raw_gaze):,}",
+                "Value": f"{gaze_samples:,}",
             }
         )
     return rows
@@ -5001,15 +5009,259 @@ def _chip_color(col: str, value_str: str) -> str:
     return _CHIP_NEUTRAL_BG
 
 
+@dataclass(frozen=True)
+class ChipEntry:
+    """One chip's facts, before they are drawn as a chip or a table cell (UX-190).
+
+    ``label`` and ``value`` are plain text — escaped where they are drawn.
+    ``trial_level`` is False for a column that varies within the trial (drawn
+    with the warning mark); ``color`` is the chip's background (`_chip_color`).
+    """
+
+    col: str
+    label: str
+    value: str
+    trial_level: bool = True
+    color: str = _CHIP_NEUTRAL_BG
+
+
+def _trial_chip_entries(
+    trial_words: pd.DataFrame,
+    trial_fixations: pd.DataFrame,
+    participant: str | None,
+    fields,
+    *,
+    trial_raw_gaze: pd.DataFrame | None = None,
+    gaze_samples: int | None = None,
+) -> list[ChipEntry]:
+    """The chips one trial gets for ``fields``, in order, with nothing to show
+    dropped — what both the chip strip and Compare's A/B table draw (UX-190).
+
+    ``gaze_samples`` is `_summary_rows`' count in place of the samples."""
+    entries: list[ChipEntry] = []
+    summary_lookup: dict | None = None  # computed once, only if a summary chip
+    for col in fields or []:
+        # Virtual summary fields (reading time / counts) — always trial-level,
+        # computed once from `_summary_rows` rather than read off a column.
+        if col in SUMMARY_CHIP_FIELDS:
+            if summary_lookup is None:
+                summary_lookup = {
+                    r["Field"]: r["Value"]
+                    for r in _summary_rows(
+                        trial_words,
+                        trial_fixations,
+                        trial_raw_gaze,
+                        gaze_samples=gaze_samples,
+                    )
+                }
+            label = SUMMARY_CHIP_FIELDS[col]
+            value = summary_lookup.get(label)
+            if value in (None, ""):
+                # Not measured for this trial (VIZ-45): no fixations to count, no
+                # words to count, no word boxes for "Fixations in word boxes".
+                continue
+            entries.append(
+                ChipEntry(col, label, str(value), True, _chip_color(col, str(value)))
+            )
+            continue
+        value, trial_level = _chip_value_and_uniqueness(
+            col, trial_words, trial_fixations, participant
+        )
+        if value is None:
+            continue
+        value_str = str(value)
+        # Skip empty / missing values (a "string" optional field coerces NaN to
+        # the literal "nan", e.g. ET2 readers with no recorded gender).
+        if value_str.strip().lower() in ("", "nan", "none", "<na>"):
+            continue
+        entries.append(
+            ChipEntry(
+                col,
+                _chip_field_label(col),
+                value_str,
+                bool(trial_level),
+                _chip_color(col, value_str),
+            )
+        )
+    return entries
+
+
+def _is_number(value: str) -> bool:
+    """Whether a chip value reads as a number — ``2,233`` included."""
+    try:
+        float(value.replace(",", ""))
+    except ValueError:
+        return False
+    return True
+
+
+def _compare_chip_table_html(
+    *sides: tuple[str, str, list[ChipEntry]],
+    order,
+) -> str:
+    """Compare mode's A/B table (UX-190): one column per field, one row per scanpath.
+
+    ``sides`` is ``(name, colour, entries)`` per row — A first. ``order`` is the
+    column order (the ✏️ chip order, Trial ID first); a field that no side has
+    gets no column. Deliberately *not* differences first: the columns would
+    reshuffle every time ◀ ▶ steps to a trial that differs elsewhere.
+
+    A value every side shares is written once, in a cell spanning all the rows,
+    and in a quieter weight, so what differs is what stands out. A value one
+    side lacks reads ``–``. Each value keeps its chip's tint, as a pill — the
+    built-in condition colours and the ones picked in ✏️ (UX-28) — and a column
+    whose values are all numbers is right-aligned so they line up.
+
+    Built as one line of HTML: `st.markdown` would read an indented line as code.
+    """
+    by_side = [{e.col: e for e in entries} for _name, _color, entries in sides]
+    columns = [col for col in order if any(col in side for side in by_side)]
+
+    def cell(entry: ChipEntry | None, *, extra: str = "", attrs: str = "") -> str:
+        classes = [extra] if extra else []
+        if entry is None:
+            classes.append("sps-ct-missing")
+            body = "–"
+        else:
+            body = html.escape(entry.value)
+            if entry.color != _CHIP_NEUTRAL_BG:
+                # A pill around the value, not a filled cell: a whole tinted cell
+                # glares in a dark theme. Chip tints are always light, so the
+                # text is pinned dark, as on a chip.
+                body = (
+                    f'<span class="sps-ct-tint" style="background:'
+                    f'{html.escape(entry.color)};color:#212529">{body}</span>'
+                )
+            if not entry.trial_level:
+                body = f"{icon_html('warning')} {body}"
+        class_attr = f' class="{" ".join(classes)}"' if classes else ""
+        return f"<td{class_attr}{attrs}>{body}</td>"
+
+    numeric = {
+        col: all(_is_number(side[col].value) for side in by_side if col in side)
+        for col in columns
+    }
+    shared = {
+        col: all(col in side for side in by_side)
+        and len({side[col].value for side in by_side}) == 1
+        for col in columns
+    }
+    num_class = ' class="sps-ct-num"'
+    head = "".join(
+        f'<th scope="col"{num_class if numeric[col] else ""}>'
+        f"{html.escape(next(side[col].label for side in by_side if col in side))}</th>"
+        for col in columns
+    )
+    rows = []
+    for index, ((name, color, _entries), side) in enumerate(zip(sides, by_side)):
+        cells = []
+        for col in columns:
+            num = "sps-ct-num" if numeric[col] else ""
+            if not shared[col]:
+                cells.append(cell(side.get(col), extra=num))
+            elif index == 0:
+                # Any side's warning mark says the shared value varies somewhere.
+                entry = side[col]
+                if any(not s[col].trial_level for s in by_side):
+                    entry = replace(entry, trial_level=False)
+                cells.append(
+                    cell(
+                        entry,
+                        extra=" ".join(filter(None, (num, "sps-ct-same"))),
+                        attrs=f' rowspan="{len(sides)}"',
+                    )
+                )
+        rows.append(
+            '<tr><th scope="row" class="sps-ct-side">'
+            f'<span class="sps-ct-dot" style="background:{html.escape(color)}"></span>'
+            f"{html.escape(name)}</th>{''.join(cells)}</tr>"
+        )
+    return (
+        '<div class="sps-compare-table-wrap"><table class="sps-compare-table">'
+        f'<thead><tr><td class="sps-ct-corner"></td>{head}</tr></thead>'
+        f"<tbody>{''.join(rows)}</tbody></table></div>"
+    )
+
+
+#: The Trial ID column Compare's table always leads with — not a chip field, so
+#: it cannot collide with one (the ``trial_id`` field itself is left out there).
+_TRIAL_ID_COLUMN = "@trial_id_shown"
+
+
+@dataclass(frozen=True)
+class ChipReading:
+    """One row of Compare's A/B table: a reading's own rows and its ids.
+
+    ``raw_gaze`` is the reading's samples when the caller already holds them
+    (A); ``gaze_samples`` is just their count (B — `_c_gaze_sample_count`)."""
+
+    words: pd.DataFrame
+    fixations: pd.DataFrame
+    participant: str | None
+    trial_shown: str  # `utils.trial_id_shown` — the id as the pickers show it
+    raw_gaze: pd.DataFrame | None = None
+    gaze_samples: int | None = None
+
+
+@st.cache_data(show_spinner=False, max_entries=256)
+def _c_gaze_sample_count(
+    _raw_gaze: pd.DataFrame, cache_key: tuple, participant, trial, screen
+) -> int | None:
+    """How many samples B has, for its gaze-sample chip in Compare (UX-190).
+
+    Cached as a number, so a rerun neither re-cuts B's samples nor unpickles
+    the trial index (a frame cached here would be). ``cache_key`` is
+    ``frame_fingerprint(_raw_gaze)``. ``None`` when there are none to count — a
+    multipart B whose samples carry no screen id included, which A's own
+    extraction hides rather than counting every screen's samples as one.
+    """
+    frame = extract_trial(_raw_gaze, participant, trial)
+    if screen is not None:
+        if SCREEN_ID not in frame.columns:
+            return None
+        frame = extract_part(frame, participant, trial, screen)
+    return len(frame) or None
+
+
+def _render_compare_chip_table(fields, *, a: ChipReading, b: ChipReading) -> None:
+    """Draw Compare mode's A/B table (UX-190) — the chips of both readings.
+
+    Each row is named in its scanpath's colour, which is what replaced the old
+    "■ A … ■ B compared with:" legend line and, after it, the coloured Trial ID
+    chip leading each strip."""
+    style_a, style_b = _collect_compare_styles()
+    colors = (
+        style_a.get("fix_color") or compare_palette_color(0),
+        style_b.get("fix_color") or compare_palette_color(1),
+    )
+    sides = []
+    for name, color, reading in zip("AB", colors, (a, b)):
+        entries = _trial_chip_entries(
+            reading.words,
+            reading.fixations,
+            reading.participant,
+            fields,
+            trial_raw_gaze=reading.raw_gaze,
+            gaze_samples=reading.gaze_samples,
+        )
+        trial_id = ChipEntry(_TRIAL_ID_COLUMN, "Trial ID", reading.trial_shown)
+        sides.append(
+            (name, color, [trial_id, *(e for e in entries if e.col != "trial_id")])
+        )
+    st.markdown(
+        _compare_chip_table_html(*sides, order=[_TRIAL_ID_COLUMN, *(fields or [])]),
+        unsafe_allow_html=True,
+    )
+
+
 def _render_trial_condition_chips(
     trial_words: pd.DataFrame,
     trial_fixations: pd.DataFrame,
     participant: str | None,
     fields,
     *,
-    leading_chip: tuple[str, str] | None = None,
     trial_raw_gaze: pd.DataFrame | None = None,
-) -> list[tuple[str, str]]:
+) -> None:
     """Render the ``Field = Value`` chip strip above the plot — the trial's
     identity and experiment conditions, so "what am I looking at" is answered at
     a glance (these chips replaced the Trial Info subtab).
@@ -5031,62 +5283,28 @@ def _render_trial_condition_chips(
     two numbers most often wanted (total reading time, fixation count) and left
     a control on the row that was empty as often as not. They are ordinary chips
     now — picked, ordered and coloured in the ✏️ popover like every other field
-    — so the popover is gone and this returns nothing."""
-    primary: list[tuple[str, str]] = []  # identity + conditions + computed stats
-    summary_lookup: dict | None = None  # computed once, only if a summary chip
-    for col in fields or []:
-        # Virtual summary fields (reading time / counts) — always trial-level,
-        # computed once from `_summary_rows` rather than read off a column.
-        if col in SUMMARY_CHIP_FIELDS:
-            if summary_lookup is None:
-                summary_lookup = {
-                    r["Field"]: r["Value"]
-                    for r in _summary_rows(trial_words, trial_fixations, trial_raw_gaze)
-                }
-            label = SUMMARY_CHIP_FIELDS[col]
-            value = summary_lookup.get(label)
-            if value in (None, ""):
-                # Not measured for this trial (VIZ-45): no fixations to count, no
-                # words to count, no word boxes for "Fixations in word boxes".
-                continue
-            primary.append(
-                (html.escape(f"{label} = {value}"), _chip_color(col, str(value)))
-            )
-            continue
-        value, trial_level = _chip_value_and_uniqueness(
-            col, trial_words, trial_fixations, participant
-        )
-        if value is None:
-            continue
-        value_str = str(value)
-        # Skip empty / missing values (a "string" optional field coerces NaN to
-        # the literal "nan", e.g. ET2 readers with no recorded gender).
-        if value_str.strip().lower() in ("", "nan", "none", "<na>"):
-            continue
-        label = _chip_field_label(col)
-        # Escaped here, not at the join below, so the reader-level mark can be
-        # the icon's own HTML (UX-138 — a shortcode is inert inside raw HTML).
-        prefix = "" if trial_level else f"{icon_html('warning')} "
-        primary.append(
-            (
-                f"{prefix}{html.escape(f'{label} = {value_str}')}",
-                _chip_color(col, value_str),
-            )
-        )
-    if primary or leading_chip:
-        leading_html = ""
-        if leading_chip is not None:
-            leading_label, leading_color = leading_chip
-            leading_html = (
-                f'<span class="sps-chip" style="background:{leading_color};'
-                f'color:#fff;">{html.escape(leading_label)}</span>'
-            )
+    — so the popover is gone and this returns nothing.
+
+    One reading only: Compare mode draws `_compare_chip_table_html` in its place
+    (UX-190), from the same `_trial_chip_entries`."""
+    entries = _trial_chip_entries(
+        trial_words,
+        trial_fixations,
+        participant,
+        fields,
+        trial_raw_gaze=trial_raw_gaze,
+    )
+    if entries:
+        # The reader-level mark is the icon's own HTML (UX-138 — a shortcode is
+        # inert inside raw HTML), so only the text is escaped.
         st.markdown(
             '<div class="sps-trial-chips">'
-            + leading_html
             + "".join(
-                f'<span class="sps-chip" style="background:{bg};">{lbl}</span>'
-                for lbl, bg in primary
+                f'<span class="sps-chip" style="background:{e.color};">'
+                + ("" if e.trial_level else f"{icon_html('warning')} ")
+                + html.escape(f"{e.label} = {e.value}")
+                + "</span>"
+                for e in entries
             )
             + "</div>",
             unsafe_allow_html=True,
@@ -5214,24 +5432,21 @@ def render_single_trial_tab(
         # Slots filled once the selection is resolved (chips need the trial).
         # Keyed containers double as welcome-tour spotlight targets.
         #
-        # CMP-16 — creation order *is* screen order, so these three reservations
-        # are the whole layout: **both control lines first, then both chip
-        # strips** (control A · control B · chips A · chips B). UX-75 had paired
-        # them the other way — each reading's chips directly under the row that
-        # chose it — which says whose chips are whose but puts the two control
-        # lines a strip apart, so comparing the A and B selectors means reading
-        # across an unrelated block. Grouping by kind puts them adjacent, and
-        # #CMP-15 is what keeps the attribution: each chip strip names its own
-        # dataset, so nothing depends on vertical adjacency any more. Keyed
-        # containers double as welcome-tour spotlight targets — `compare_slot`
-        # takes one too, for symmetry with the strip it now sits beside.
+        # CMP-16 — creation order *is* screen order, so these reservations are
+        # the whole layout: **both control lines first, then the chips**
+        # (control A · control B · chips). UX-75 had paired them the other way —
+        # each reading's chips directly under the row that chose it — which puts
+        # the two control lines a strip apart, so comparing the A and B
+        # selectors means reading across an unrelated block. Since UX-190 the
+        # chips of both readings are one A/B table in `chips_slot`, its rows
+        # named in each scanpath's colour, so there is no second strip to place.
+        # Keyed containers double as welcome-tour spotlight targets.
         compare_slot = st.container(key="tour_grp_compare_picker")
         # UX-112: B's own screen navigator, directly under B's trial row, the
         # same relationship `screen_slot` has with A's row above it — reserved
-        # here (before the chip strips) so creation order keeps it in place.
+        # here (before the chips) so creation order keeps it in place.
         compare_screen_slot = st.container(key="tour_grp_compare_screen_picker")
         chips_slot = st.container(key="tour_grp_chips")
-        compare_chips_slot = st.container(key="tour_grp_compare_chips")
         # UX-167: notes about the figure that come *before* it sit above the
         # stage, so the figure is always the stage's second child and a figure
         # already on screen stays put while the next one is built.
@@ -5334,8 +5549,8 @@ def render_single_trial_tab(
     )
 
     # Condition chips above the plot are filled later (into chips_slot), once the
-    # comparison selection is known — so a second chip strip can show the compared
-    # trial too.
+    # comparison selection is known — so Compare's A/B table can show the
+    # compared trial too (UX-190).
 
     # Render the rail (plot controls) before the figure so it sees the
     # resolved Animate / Compare / viz settings; its right-side position is fixed
@@ -6202,20 +6417,11 @@ def render_single_trial_tab(
 
     # Condition chips above the plot — configurable via the ✏️ Edit chips picker
     # (`trial_chip_fields`); `Field = Value` for the chosen fields. When comparing,
-    # a second labelled strip shows the compared trial too.
-    # UX-75 — one line per reading: its **title on the left**, its chips filling
-    # the rest, and the row's controls in the trailing track. The line takes
-    # `SELECTOR_ROW_TRIO` — the control-line grid with the trial and scrub
-    # tracks merged — so the title sits under the dataset picker, the chips
-    # under the trial picker and scrubber, and ✏️ under ◀ ▶ ⇅.
-    color_a = color_b = None
-    if comparing and compare_meta:
-        # Each title takes the colour of the scanpath it names (A = primary,
-        # B = compared), which is what replaced the old "■ A … ■ B compared
-        # with:" legend line.
-        _ca, _cb = _collect_compare_styles()
-        color_a = _ca.get("fix_color") or compare_palette_color(0)
-        color_b = _cb.get("fix_color") or compare_palette_color(1)
+    # both readings share one A/B table instead (UX-190): two strips of chips put
+    # A's value and B's at different offsets on different lines, so comparing
+    # them meant searching; a table puts B's value directly under A's.
+    # The line takes `SELECTOR_ROW_WIDE_GRID` — the control-line grid with the
+    # first three tracks merged — so ✏️ sits under ◀ ▶ ⇅.
     with chips_slot:
         # Inline "Edit chips" popover at the right end of the row (UX-1) —
         # replaces the former sidebar 🏷️ Trial chips picker. Rendered before the
@@ -6229,8 +6435,8 @@ def render_single_trial_tab(
         # now that the computed stats are chips of their own (see
         # `_render_trial_condition_chips`).
         # The Participant chip already identifies the reading. Do not repeat
-        # the same id in a title cell; use that width for the chip strip in both
-        # ordinary and Compare modes.
+        # the same id in a title cell; use that width for the chip strip (or,
+        # in Compare, the A/B table).
         strip_col, trail_col = st.columns(
             SELECTOR_ROW_WIDE_GRID, vertical_alignment="top"
         )
@@ -6245,49 +6451,63 @@ def render_single_trial_tab(
             render_trial_chip_picker(words_all, fixations_all, host=st.container())
         chip_fields = st.session_state.get("trial_chip_fields") or []
         with strip_col:
-            _render_trial_condition_chips(
-                trial_words,
-                trial_fixations,
-                selected_participant,
-                chip_fields,
-                leading_chip=(
-                    "Trial ID = "
-                    + trial_id_shown(
-                        selected_trial,
-                        trial_fixations,
-                        trial_words,
-                        composite_cols=st.session_state.get("_composite_trial_columns")
-                        or (),
-                    ),
-                    color_a,
+            if comparing and compare_meta:
+                # B's gaze-sample count, only while that chip is shown, and only
+                # for a B from this dataset — a cross-dataset B carries no
+                # samples, so it reads "–". Read off the *unfiltered* samples:
+                # B's pool ignores A's filters, so A's `raw_gaze` can lack B.
+                b_samples = raw_gaze if raw_gaze_all is None else raw_gaze_all
+                b_gaze_samples = (
+                    _c_gaze_sample_count(
+                        b_samples,
+                        frame_fingerprint(b_samples),
+                        compare_participant,
+                        compare_trial,
+                        selected_compare_screen,
+                    )
+                    if "@gaze_sample_count" in chip_fields
+                    and compare_source is None
+                    and b_samples is not None
+                    and not b_samples.empty
+                    else None
                 )
-                if comparing and color_a
-                else None,
-                trial_raw_gaze=trial_raw_gaze,
-            )
-    if comparing and compare_meta:
-        with compare_chips_slot:
-            # B's own line, directly under B's control row. No ✏️ of its own:
-            # the chip fields are one setting for both readings.
-            b_strip, _b_trail = st.columns(
-                SELECTOR_ROW_WIDE_GRID, vertical_alignment="top"
-            )
-            with b_strip:
-                _render_trial_condition_chips(
-                    compare_meta["words"],
-                    compare_meta["fixations"],
-                    compare_participant,
+                _render_compare_chip_table(
                     chip_fields,
-                    leading_chip=(
-                        "Trial ID = "
-                        + trial_id_shown(
+                    a=ChipReading(
+                        words=trial_words,
+                        fixations=trial_fixations,
+                        raw_gaze=trial_raw_gaze,
+                        participant=selected_participant,
+                        trial_shown=trial_id_shown(
+                            selected_trial,
+                            trial_fixations,
+                            trial_words,
+                            composite_cols=st.session_state.get(
+                                "_composite_trial_columns"
+                            )
+                            or (),
+                        ),
+                    ),
+                    b=ChipReading(
+                        words=compare_meta["words"],
+                        fixations=compare_meta["fixations"],
+                        gaze_samples=b_gaze_samples,
+                        participant=compare_participant,
+                        trial_shown=trial_id_shown(
                             compare_trial,
                             compare_meta["fixations"],
                             compare_meta["words"],
                             participant_id=compare_meta.get("raw_participant"),
                         ),
-                        color_b,
                     ),
+                )
+            else:
+                _render_trial_condition_chips(
+                    trial_words,
+                    trial_fixations,
+                    selected_participant,
+                    chip_fields,
+                    trial_raw_gaze=trial_raw_gaze,
                 )
 
     # CMP-8 §6: the two halves of the pair bundle, built from the *unqualified*

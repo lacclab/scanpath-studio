@@ -66,7 +66,7 @@ def test_a_summary_field_renders_as_a_chip_not_a_popover(monkeypatch):
     monkeypatch.setattr(
         tabs,
         "_summary_rows",
-        lambda w, f, g=None: [
+        lambda w, f, g=None, **_kw: [
             {"Field": "Total reading time (s)", "Value": "12.3"},
             {"Field": "Number of fixations", "Value": "154"},
         ],

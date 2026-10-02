@@ -12,6 +12,7 @@ import re
 import warnings
 import zlib
 from collections.abc import Callable, Hashable
+from contextvars import ContextVar
 from dataclasses import dataclass, replace
 from dataclasses import fields as dataclass_fields
 from functools import partial
@@ -57,6 +58,13 @@ from scanpath_studio.aggregation import (
     word_box_aggregate,
     word_measure_vs_feature,
     word_rate_profile,
+)
+from scanpath_studio.analysis_recipe import (
+    analysis_choices,
+    build_analysis_recipe,
+    group_definition,
+    recipe_file_name,
+    result_counts,
 )
 from scanpath_studio.animation_export import (
     CHROME_INSTALL_HINT,
@@ -7786,16 +7794,59 @@ def _min_readers_input(host, *, key, label="Min readers per word", default=1):
     )
 
 
-def _download_tidy(host, df, *, name, key, label="⬇ Download this table (CSV)"):
-    """Per-view tidy-table download (AN-27)."""
+def _download_tidy(
+    host, df, *, name, key, label="⬇ Download this table (CSV)", recipe=None
+):
+    """Per-view tidy-table download (AN-27), with its recipe beside it (AN-34).
+
+    ``recipe`` is the view's own choices — the keyword arguments of
+    `analysis_recipe.analysis_choices`, plus ``counts`` for what the view
+    already counted. The recipe adds the page's dataset, trial filters and pool
+    (`_RECIPE_CONTEXT`); outside the page, or with no ``recipe``, the CSV
+    downloads alone.
+    """
     if df is None or getattr(df, "empty", True):
         return
-    host.download_button(
-        label,
-        data=df.to_csv(index=False).encode("utf-8"),
-        file_name=name,
-        mime="text/csv",
-        key=key,
+    context = _RECIPE_CONTEXT.get()
+    csv = df.to_csv(index=False).encode("utf-8")
+    if recipe is None or context is None:
+        host.download_button(label, data=csv, file_name=name, mime="text/csv", key=key)
+        return
+    recipe = dict(recipe)
+    counts = result_counts(df, recipe.pop("counts", None))
+    analysis = analysis_choices(section=context.get("section"), **recipe)
+    row = host.container(horizontal=True, gap="small")
+    row.download_button(label, data=csv, file_name=name, mime="text/csv", key=key)
+    row.download_button(
+        "⬇ Download the recipe (JSON)",
+        data=partial(_recipe_json, context, analysis, name, counts),
+        file_name=recipe_file_name(name),
+        mime="application/json",
+        key=f"{key}_recipe",
+        on_click="ignore",
+        help="How this table was made: the dataset, the trial filters, these "
+        "choices and the counts. No data rows and no figure settings.",
+    )
+
+
+def _recipe_json(context: dict, analysis: dict, name: str, counts: dict) -> str:
+    """The recipe file's text, built when the button is clicked (AN-34)."""
+    from datetime import datetime
+
+    from scanpath_studio import __version__
+
+    return json.dumps(
+        build_analysis_recipe(
+            app_version=__version__,
+            dataset=context.get("dataset") or {},
+            trial_filters=context.get("trial_filters") or [],
+            pool=context.get("pool") or {},
+            analysis=analysis,
+            table_file=name,
+            counts=counts,
+            exported_at=datetime.now().isoformat(timespec="seconds"),
+        ),
+        indent=2,
     )
 
 
@@ -8401,7 +8452,7 @@ def render_analysis_pool_bar(
     raw_gaze_all: pd.DataFrame | None,
     combos: pd.DataFrame,
     combos_all: pd.DataFrame,
-) -> None:
+) -> dict:
     """The pool Corpus Analysis reads, on one line, with its filters (UX-198).
 
     Filters set on the Scanpath view narrow this page too, which it never said:
@@ -8409,13 +8460,22 @@ def render_analysis_pool_bar(
     trial picker's pool (``combos``) against the Export subtab's *All*
     (``combos_all``), so all three views count the same trials, and **Edit
     filters** opens the Scanpath funnel's own panel.
+
+    Returns what it showed — the filters and the counts — for the AN-34 recipe,
+    so the file and the line on screen cannot disagree.
     """
     active = has_active_trial_filters()
+    pool = {
+        "trials": len(combos),
+        "trials_in_dataset": len(combos_all),
+        "readers": _n_unique_readers(combos),
+        "readers_in_dataset": _n_unique_readers(combos_all),
+    }
     counts = pool_count_text(
-        len(combos),
-        len(combos_all),
-        _n_unique_readers(combos),
-        _n_unique_readers(combos_all),
+        pool["trials"],
+        pool["trials_in_dataset"],
+        pool["readers"],
+        pool["readers_in_dataset"],
     )
     items = active_filter_items(words_all, fixations_all) if active else []
     described = " · ".join(_md_escape(format_filter_item(i)) for i in items)
@@ -8452,6 +8512,27 @@ def render_analysis_pool_bar(
         width="content",
         help="Reset every trial filter, on every view.",
     )
+    return {"trial_filters": items, "pool": pool}
+
+
+#: AN-34 — what every Corpus Analysis table's recipe shares: the dataset, the
+#: trial filters and the pool (set by `render_corpus_analysis_tab`), plus the
+#: section being drawn (`_recipe_section`). ``None`` outside the page, where
+#: `_download_tidy` draws the CSV alone.
+_RECIPE_CONTEXT: ContextVar[dict | None] = ContextVar(
+    "corpus_recipe_context", default=None
+)
+
+
+@contextlib.contextmanager
+def _recipe_section(section: str):
+    """Name the Corpus Analysis subtab the recipes drawn inside belong to."""
+    base = _RECIPE_CONTEXT.get()
+    token = _RECIPE_CONTEXT.set(None if base is None else {**base, "section": section})
+    try:
+        yield
+    finally:
+        _RECIPE_CONTEXT.reset(token)
 
 
 def render_corpus_analysis_tab(
@@ -8467,6 +8548,7 @@ def render_corpus_analysis_tab(
     scale_text_to_boxes: bool = True,
     canvas_renderer: Callable[[Any], None] | None = None,
     has_raw_gaze: bool = False,
+    recipe_context: dict | None = None,
 ) -> None:
     """Corpus Analysis tab — question-oriented analysis sections.
 
@@ -8476,7 +8558,45 @@ def render_corpus_analysis_tab(
     Every section obeys the active trial filters and reads the shared measure
     picker / aggregation / spread / normalization controls. (**Generations** moved
     to the Scanpath view's **Comparisons** subtab — ENG-8.)
+
+    ``recipe_context`` — the dataset, trial filters and pool — is what each
+    table's AN-34 recipe records beside the view's own choices; without it the
+    tables download as CSV alone.
     """
+    token = _RECIPE_CONTEXT.set(dict(recipe_context) if recipe_context else None)
+    try:
+        _render_corpus_analysis_body(
+            words_filtered,
+            fixations_filtered,
+            canvas_width=canvas_width,
+            canvas_height=canvas_height,
+            base_font_size=base_font_size,
+            font_family=font_family,
+            viz_settings=viz_settings,
+            line_spacing=line_spacing,
+            scale_text_to_boxes=scale_text_to_boxes,
+            canvas_renderer=canvas_renderer,
+            has_raw_gaze=has_raw_gaze,
+        )
+    finally:
+        _RECIPE_CONTEXT.reset(token)
+
+
+def _render_corpus_analysis_body(
+    words_filtered: pd.DataFrame,
+    fixations_filtered: pd.DataFrame,
+    *,
+    canvas_width: int,
+    canvas_height: int,
+    base_font_size: int,
+    font_family: str,
+    viz_settings: dict,
+    line_spacing: float,
+    scale_text_to_boxes: bool,
+    canvas_renderer: Callable[[Any], None] | None,
+    has_raw_gaze: bool,
+) -> None:
+    """The body of :func:`render_corpus_analysis_tab`."""
     # AN-32: the page shows the reading measures the dataset *brought* and
     # computes none — BUG-78 used to derive them from the fixations and word
     # boxes when a report had none. Without one there is nothing to show.
@@ -8527,12 +8647,12 @@ def render_corpus_analysis_tab(
     )
     sentence_tab = opened.get("Per sentence")
     if text_tab.open:
-        with text_tab:
+        with text_tab, _recipe_section("Per text"):
             render_per_text_tab(
                 words_filtered, fixations_filtered, viz_settings=viz_settings, **common
             )
     if reader_tab.open:
-        with reader_tab:
+        with reader_tab, _recipe_section("Per reader"):
             render_per_reader_tab(
                 words_filtered,
                 fixations_filtered,
@@ -8543,7 +8663,7 @@ def render_corpus_analysis_tab(
         with sentence_tab:
             _render_per_sentence_tab(words_filtered, fixations_filtered)
     if groups_tab.open:
-        with groups_tab:
+        with groups_tab, _recipe_section("Groups"):
             render_groups_tab(
                 words_filtered,
                 fixations_filtered,
@@ -8785,7 +8905,18 @@ def render_per_text_tab(
         )
         rate = _apply_min_readers(st, rate, min_readers, key="ptext6_min_note")
         _chart(make_word_rate_figure(rate, **fw))
-        _download_tidy(st, rate, name=f"word_rates_{text_id}.csv", key="dl_ptext6")
+        _download_tidy(
+            st,
+            rate,
+            name=f"word_rates_{text_id}.csv",
+            key="dl_ptext6",
+            recipe=dict(
+                view=view,
+                text=(text_col, text_id),
+                screen=screen_id,
+                min_readers=min_readers,
+            ),
+        )
         return
 
     c = st.columns([3, 1, 1, 1])
@@ -8846,7 +8977,18 @@ def render_per_text_tab(
             )
         )
         _download_tidy(
-            st, per, name=f"per_reader_{measure.key}_{text_id}.csv", key="dl_ptext1"
+            st,
+            per,
+            name=f"per_reader_{measure.key}_{text_id}.csv",
+            key="dl_ptext1",
+            recipe=dict(
+                view=view,
+                text=(text_col, text_id),
+                screen=screen_id,
+                measure=measure,
+                aggregation=agg,
+                normalize=normalize,
+            ),
         )
     elif view == "Word × reader heatmap":  # AN-2
         per = _c_per_reader_word(
@@ -8871,7 +9013,18 @@ def render_per_text_tab(
             )
         )
         _download_tidy(
-            st, per, name=f"word_reader_{measure.key}_{text_id}.csv", key="dl_ptext2"
+            st,
+            per,
+            name=f"word_reader_{measure.key}_{text_id}.csv",
+            key="dl_ptext2",
+            recipe=dict(
+                view=view,
+                text=(text_col, text_id),
+                screen=screen_id,
+                measure=measure,
+                aggregation=agg,
+                normalize=normalize,
+            ),
         )
     elif view == "Cohort profile":  # AN-3
         spread = c[2].selectbox(
@@ -8909,6 +9062,16 @@ def render_per_text_tab(
             prof,
             name=f"cohort_profile_{measure.key}_{text_id}.csv",
             key="dl_ptext3",
+            recipe=dict(
+                view=view,
+                text=(text_col, text_id),
+                screen=screen_id,
+                measure=measure,
+                aggregation=agg,
+                normalize=normalize,
+                spread=spread,
+                min_readers=min_readers,
+            ),
         )
     elif view == "Word difficulty on stimulus":  # AN-4 (+ AN-28: reads viz_settings)
         agg_words = _c_word_box_aggregate(
@@ -8964,6 +9127,13 @@ def render_per_text_tab(
             agg_words[["word_id", "value"]],
             name=f"stimulus_{measure.key}_{text_id}.csv",
             key="dl_ptext4",
+            recipe=dict(
+                view=view,
+                text=(text_col, text_id),
+                screen=screen_id,
+                measure=measure,
+                aggregation=agg,
+            ),
         )
     elif view == "Measure vs feature":  # AN-5
         feats = available_features(words_filtered)
@@ -9000,6 +9170,15 @@ def render_per_text_tab(
             df,
             name=f"feature_{measure.key}_{feature_col}_{text_id}.csv",
             key="dl_ptext5",
+            recipe=dict(
+                view=view,
+                text=(text_col, text_id),
+                screen=screen_id,
+                measure=measure,
+                aggregation=agg,
+                normalize=normalize,
+                feature=feat_label,
+            ),
         )
 
 
@@ -9154,6 +9333,7 @@ def render_per_reader_tab(
                     selected_reader,
                     name=f"reader_summary_{pid}.csv",
                     key="dl_prdr8_reader",
+                    recipe=dict(view=view, reader=pid),
                 )
             with trial_table:
                 _render_trials_with_open_button(trials, pid, key="prdr8")
@@ -9162,6 +9342,7 @@ def render_per_reader_tab(
                     trials,
                     name=f"trial_summaries_{pid}.csv",
                     key="dl_prdr8_trials",
+                    recipe=dict(view=view, reader=pid),
                 )
     elif view == "Fixation duration over time":  # AN-9
         c = st.columns([3, 2])
@@ -9186,7 +9367,11 @@ def render_per_reader_tab(
             )
         )
         _download_tidy(
-            st, df, name=f"over_time_{measure.key}_{pid}.csv", key="dl_prdr9"
+            st,
+            df,
+            name=f"over_time_{measure.key}_{pid}.csv",
+            key="dl_prdr9",
+            recipe=dict(view=view, reader=pid, measure=measure, x_axis=by),
         )
     elif view == "Saccade vs fixation duration":  # AN-10
         df = saccade_vs_duration(fix_e, participant_id=pid)
@@ -9206,7 +9391,13 @@ def render_per_reader_tab(
             st.info("Needs fixation→word assignment to classify regressions.")
             return
         _chart(make_progression_figure(df, **fw))
-        _download_tidy(st, df, name=f"progression_{pid}.csv", key="dl_prdr11")
+        _download_tidy(
+            st,
+            df,
+            name=f"progression_{pid}.csv",
+            key="dl_prdr11",
+            recipe=dict(view=view, reader=pid),
+        )
     elif view == "Landing-position curve":  # AN-12
         vals = landing_positions(words_filtered, fix_e, participant_id=pid)
         if vals.size == 0:
@@ -9242,7 +9433,13 @@ def render_per_reader_tab(
                 **fw,
             )
         )
-        _download_tidy(st, df, name=f"trend_{measure.key}_{pid}.csv", key="dl_prdr13")
+        _download_tidy(
+            st,
+            df,
+            name=f"trend_{measure.key}_{pid}.csv",
+            key="dl_prdr13",
+            recipe=dict(view=view, reader=pid, measure=measure, aggregation=agg),
+        )
 
 
 def render_groups_tab(
@@ -9430,7 +9627,22 @@ def render_per_group_tab(
             )
         )
         _download_tidy(
-            st, prof, name=f"group_profile_{measure.key}_{text_id}.csv", key="dl_pgrp15"
+            st,
+            prof,
+            name=f"group_profile_{measure.key}_{text_id}.csv",
+            key="dl_pgrp15",
+            recipe=dict(
+                view=view,
+                groups=[group_definition(label, spec)],
+                text=(text_col, text_id),
+                screen=grp_screens[0] if grp_screens else None,
+                measure=measure,
+                aggregation=agg,
+                normalize=False,
+                spread=spread,
+                min_readers=min_readers,
+                counts={"group_readers": n_readers, "group_fixations": n_fix},
+            ),
         )
     elif view == "Reader summary table":  # AN-16
         table = _c_cohort_summary(
@@ -9446,12 +9658,28 @@ def render_per_group_tab(
         with reader_tab:
             st.dataframe(table, width="stretch", hide_index=True)
             _download_tidy(
-                st, table, name="group_reader_summaries.csv", key="dl_pgrp16"
+                st,
+                table,
+                name="group_reader_summaries.csv",
+                key="dl_pgrp16",
+                recipe=dict(
+                    view=view,
+                    groups=[group_definition(label, spec)],
+                    counts={"group_readers": n_readers, "group_fixations": n_fix},
+                ),
             )
         with trial_tab:
             st.dataframe(trials, width="stretch", hide_index=True)
             _download_tidy(
-                st, trials, name="group_trial_summaries.csv", key="dl_pgrp16_trials"
+                st,
+                trials,
+                name="group_trial_summaries.csv",
+                key="dl_pgrp16_trials",
+                recipe=dict(
+                    view=view,
+                    groups=[group_definition(label, spec)],
+                    counts={"group_readers": n_readers, "group_fixations": n_fix},
+                ),
             )
     elif view == "Group trend":  # AN-17
         c = st.columns([3, 1, 1])
@@ -9492,7 +9720,19 @@ def render_per_group_tab(
                     hoverinfo="skip",
                 )
         _chart(fig)
-        _download_tidy(st, df, name=f"group_trend_{measure.key}.csv", key="dl_pgrp17")
+        _download_tidy(
+            st,
+            df,
+            name=f"group_trend_{measure.key}.csv",
+            key="dl_pgrp17",
+            recipe=dict(
+                view=view,
+                groups=[group_definition(label, spec)],
+                measure=measure,
+                aggregation=agg,
+                counts={"group_readers": n_readers, "group_fixations": n_fix},
+            ),
+        )
 
 
 def render_group_comparison_tab(
@@ -9624,7 +9864,23 @@ def render_group_comparison_tab(
             )
         )
         _download_tidy(
-            st, diff, name=f"difference_{measure.key}_{text_id}.csv", key="dl_cmp19"
+            st,
+            diff,
+            name=f"difference_{measure.key}_{text_id}.csv",
+            key="dl_cmp19",
+            recipe=dict(
+                view=view,
+                groups=[
+                    group_definition(label_a, spec_a),
+                    group_definition(label_b, spec_b),
+                ],
+                text=(text_col, text_id),
+                screen=screen_id,
+                measure=measure,
+                aggregation=agg,
+                min_readers=min_readers,
+                counts={"group_a_readers": readers_a, "group_b_readers": readers_b},
+            ),
         )
     elif view == "Paired summary bars":  # AN-20
         all_measures = available_measures(words_filtered, fixations_filtered)
@@ -9665,7 +9921,23 @@ def render_group_comparison_tab(
             fixations=fixations_filtered,
         )
         _chart(make_paired_bars_figure(df, **fw))
-        _download_tidy(st, df, name="paired_group_means.csv", key="dl_cmp20")
+        _download_tidy(
+            st,
+            df,
+            name="paired_group_means.csv",
+            key="dl_cmp20",
+            recipe=dict(
+                view=view,
+                groups=[
+                    group_definition(label_a, spec_a),
+                    group_definition(label_b, spec_b),
+                ],
+                measures=measures,
+                aggregation=agg,
+                spread=spread,
+                counts={"group_a_readers": readers_a, "group_b_readers": readers_b},
+            ),
+        )
     elif view == "Effect size + test":  # AN-21
         c = st.columns([3, 2])
         measure = _measure_picker(
@@ -9764,7 +10036,22 @@ def render_group_comparison_tab(
             )
         )
         _download_tidy(
-            st, long, name=f"two_group_{measure.key}_{text_id}.csv", key="dl_cmp22"
+            st,
+            long,
+            name=f"two_group_{measure.key}_{text_id}.csv",
+            key="dl_cmp22",
+            recipe=dict(
+                view=view,
+                groups=[
+                    group_definition(label_a, spec_a),
+                    group_definition(label_b, spec_b),
+                ],
+                text=(text_col, text_id),
+                screen=screen_id,
+                measure=measure,
+                aggregation=agg,
+                counts={"group_a_readers": readers_a, "group_b_readers": readers_b},
+            ),
         )
 
 

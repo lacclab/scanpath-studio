@@ -35,5 +35,7 @@ Fields from attached participant, trial or text tables appear here too.
 
 ## From summary to evidence
 
-Every result has **⬇ Download this table (CSV)**. When something looks odd,
-open the trials behind it in the Scanpath view.
+Every result table has **⬇ Download this table (CSV)**, with **⬇ Download the
+recipe (JSON)** beside it: the dataset, trial filters, analysis choices and
+counts that produced the table, without its rows or any figure settings. When
+something looks odd, open the trials behind it in the Scanpath view.

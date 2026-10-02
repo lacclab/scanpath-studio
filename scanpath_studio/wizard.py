@@ -31,6 +31,7 @@ from .constants import (
     TRIAL_IDENTITY_CHECK_KEY,
     WIZARD_LEAVE_KEY,
     multipleye_upload_enabled,
+    plural,
     upload_limit_label,
     upload_limit_mb,
 )
@@ -1313,7 +1314,7 @@ def _wizard_trial_step(
         cell = cell_by_table.get(table)
         if values is None or cell is None:
             continue
-        cell.caption(f"~{len(values):,} trials")
+        cell.caption(f"~{plural(len(values), 'trial')}")
     # Only a real problem still gets a box, and it renders where UX-67 put the
     # blockers: directly above **Add dataset**.
     present = {k: v for k, v in sets.items() if v is not None}
@@ -3092,7 +3093,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             gap="small",
         )
         guide.caption(
-            f"{ICONS['upload']} Upload at least one of **Fixations**, **Words / IA**, or "
+            f"{ICONS['upload']} Upload at least one of **Fixations**, **AOIs**, or "
             "**Raw gaze** below to get started.",
             width="content",
         )
@@ -3177,8 +3178,14 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 # at all until opened, so the grid always mounts visible.
                 # UX-119: icon-only trigger (no "Preview" label) — way smaller,
                 # matching the rail's other icon-only popovers (⇅, ✏️).
+                # UX-200: named for screen readers; `styles.py` clips it.
                 preview = stats.popover(
-                    ICONS["preview"], width="content", help="Preview — first rows"
+                    "Preview the first rows",
+                    icon=ICONS["preview"],
+                    width="content",
+                    wrap=True,
+                    help="Preview — first rows",
+                    key=f"iconpop_preview_{prefix}",
                 )
                 preview.caption("First rows:")
                 preview.dataframe(frame.head(), width="stretch", hide_index=True)
@@ -3418,7 +3425,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # still benefits from the reminder that each is optional on its own
         # but at least one is required.
         derive_host.caption(
-            f"{ICONS['upload']} Upload at least one of **Fixations**, **Words / IA**, or "
+            f"{ICONS['upload']} Upload at least one of **Fixations**, **AOIs**, or "
             "**Raw gaze** below to get started."
         )
         raw_words, raw_fix, raw_gaze = _wizard_filename_derive(

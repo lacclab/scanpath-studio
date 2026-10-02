@@ -54,6 +54,7 @@ from .constants import (
     icon_html,
     icons_to_html,
     palette_settings,
+    spoken,
     upload_limit_mb,
 )
 from .data import (
@@ -1538,9 +1539,11 @@ def _render_saved_designs(host) -> None:
             # Material icons rather than emoji: emoji render at whatever size and
             # baseline the platform font decides, which is what made these two
             # sit high and unaligned in their buttons.
+            # UX-200: `spoken` names each icon for screen readers.
             cells[1].button(
-                "",
+                spoken(f"Rename design {name}"),
                 icon=ICONS["edit"],
+                wrap=True,
                 key=f"design_edit_{name}",
                 type="tertiary",
                 width="stretch",
@@ -1549,8 +1552,9 @@ def _render_saved_designs(host) -> None:
                 args=(name,),
             )
             cells[2].button(
-                "",
+                spoken(f"Delete design {name}"),
                 icon=ICONS["delete"],
+                wrap=True,
                 key=f"design_delete_{name}",
                 type="tertiary",
                 width="stretch",
@@ -1560,8 +1564,9 @@ def _render_saved_designs(host) -> None:
             )
         _render_design_file_row(st, saved)
     if shell.button(
-        "",
+        spoken("Save the plot settings as a design"),
         icon=ICONS["save"],
+        wrap=True,
         key="design_save",
         help="Save the plot settings on screen now as a named design.",
     ):
@@ -1710,11 +1715,13 @@ def _render_design_rename(row, name: str) -> None:
             label_visibility="collapsed",
         )
         # Both need an explicit `key`: a submit button's identity is its label,
-        # and these two share the empty one — the icon is not part of it, so the
-        # second silently collapsed to a 0-height cell without them.
+        # and these two shared the empty one — the icon is not part of it, so
+        # the second silently collapsed to a 0-height cell without them.
+        # UX-200 named them for screen readers (`spoken`).
         cells[1].form_submit_button(
-            "",
+            spoken("Save the new name"),
             icon=ICONS["confirm"],
+            wrap=True,
             key=f"design_rename_go_{name}",
             type="tertiary",
             width="stretch",
@@ -1723,8 +1730,9 @@ def _render_design_rename(row, name: str) -> None:
             args=(name,),
         )
         cells[2].form_submit_button(
-            "",
+            spoken("Cancel renaming"),
             icon=ICONS["close"],
+            wrap=True,
             key=f"design_rename_cancel_{name}",
             type="tertiary",
             width="stretch",
@@ -2856,7 +2864,10 @@ def column_mapping_ui(
             # A one-click confirm in the space the flag already occupies is the
             # only honest way to say "I chose this" for that case.
             note_col.button(
-                ICONS["auto_detected"],
+                # UX-200: named for screen readers; only the ✨ shows.
+                f"{ICONS['auto_detected']} "
+                + spoken(f"Confirm the detected {field_label} column"),
+                wrap=True,
                 key=f"{cell_key}_confirm",
                 help=f"{hover} — click to confirm this column and clear the mark.",
                 on_click=_mark_field_touched,
@@ -3099,7 +3110,9 @@ def multi_field_flag(
     )
     if state == "auto":
         flag_host.button(
-            ICONS["auto_detected"],
+            # UX-200: named for screen readers; only the ✨ shows.
+            f"{ICONS['auto_detected']} {spoken('Confirm the detected columns')}",
+            wrap=True,
             key=f"{cell_key}_confirm",
             help=f"{hover} — click to confirm and clear the mark.",
             on_click=_mark_field_touched,

@@ -1074,6 +1074,28 @@ def plural(count: int, noun: str, plural_noun: str | None = None) -> str:
     return f"{count:,} {word}"
 
 
+_MARKDOWN_SPECIALS = re.compile(r"([\\`*_{}\[\]<>()#+\-.!|~:$])")
+
+
+def spoken(name: str) -> str:
+    """``name`` as an icon-only button's accessible name (UX-200).
+
+    A button whose face is a glyph (◀, ⇅) or an icon reads, to a screen reader,
+    as the glyph's own name ("black left-pointing triangle") or the icon's
+    ligature ("folder_open"). Append this to its label — ``f"◀ {spoken('Previous
+    trial')}"``, or on its own beside ``icon=`` — and the button is named for
+    what it does. The text is an ``<em>`` that ``styles.py`` clips to nothing,
+    the ``.sps-sr-only`` way, so the face stays the glyph alone; markdown in
+    ``name`` is escaped so a design called ``*draft*`` stays text.
+
+    Buttons only. A popover passes its raw label to its dialog's
+    ``aria-label`` as well, asterisks and all, so a popover is named with a
+    plain label clipped by key instead (`styles.py`, BUG-108).
+    """
+    escaped = _MARKDOWN_SPECIALS.sub(r"\\\1", name)
+    return f"*{escaped}*"
+
+
 def icon_html(concept: str) -> str:
     """``ICONS[concept]`` for raw HTML, where a ``:material/…:`` shortcode is inert.
 

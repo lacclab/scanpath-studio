@@ -12,7 +12,7 @@ That 330 is the 162 paragraphs at two levels (324), plus **six** more from the p
 
 ## Loading it
 
-OneStop is exposed as **four public datasets**, one per reading regime. In the app, open **Data** and click the one you want in the list of datasets:
+OneStop is exposed as **four public datasets**, one per reading regime. In the app, open **Data Management** and click the one you want in the list of datasets:
 
 | Dataset                                  | What it is                                                    |
 | ---------------------------------------- | ------------------------------------------------------------- |
@@ -37,7 +37,7 @@ Every part ships an **interest-area report** (one row per word, with bounding bo
 
 The **Edit dataset** screen's data-location part lists the **Expected files** and shows whether they're already present (until they are, the app shows the bundled demo, with a **⬇ Download now** panel). If they're present the dataset loads with no network access; if not, click **⬇ Download** to fetch them into the folder (cached on disk, so only the first load pays the download — reports range from tens to a few hundred MB each, and a regime has up to fourteen). While it downloads, a card shows how much has arrived; **Stop download** ends it and deletes the partial file.
 
-The folder defaults to the **Data** page's **Download folder**, where every public corpus gets its own subfolder (`<folder>/OneStop`). Leave that box blank for the default: `data/` in a source checkout, otherwise the per-user data folder (`~/.local/share/scanpath-studio/data`, or `%LOCALAPPDATA%\scanpath-studio\data` on Windows). `scanpath-studio run --download-dir DIR` or `SCANPATH_STUDIO_DOWNLOAD_DIR` changes the default.
+The folder defaults to the **Data Management** page's **Download folder**, where every public corpus gets its own subfolder (`<folder>/OneStop`). Leave that box blank for the default: `data/` in a source checkout, otherwise the per-user data folder (`~/.local/share/scanpath-studio/data`, or `%LOCALAPPDATA%\scanpath-studio\data` on Windows). `scanpath-studio run --download-dir DIR` or `SCANPATH_STUDIO_DOWNLOAD_DIR` changes the default.
 
 On a server other machines can reach
 

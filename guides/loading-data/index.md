@@ -2,7 +2,7 @@
 
 ## Choose a source
 
-Open the dataset picker above the plot, or the **Data** page.
+Open the dataset picker above the plot, or the **Data Management** page.
 
 - **Bundled Demo** — a small OneStop sample, for learning the app.
 - **Synthetic sample** — a hand-made six-word trial.
@@ -35,6 +35,6 @@ Then click **Add dataset**. Anything the app cannot use is listed above the butt
 
 Describe the screen the data was **recorded** on, not the one you are using now. A wrong resolution rescales every figure, so nothing is preselected. For each value, say how you know it: measured, estimated from your data, or a default. That answer travels with the dataset, so others can tell measured values from assumed ones.
 
-## The Data page
+## The Data Management page
 
-**Data** lists every dataset with its counts; click a row to open it. **Edit dataset** changes a dataset's name, column mapping and recording setup, or adds a table it is missing. Changes apply when you click **Save changes**; **Cancel** discards them. The page also holds each dataset's tables and its annotations, and at the foot, what is saved on this computer.
+**Data Management** lists every dataset with its counts; click a row to open it. **Edit dataset** opens under the list, below the open dataset's counts and tables, and changes its name, column mapping and recording setup, or adds a table it is missing. Changes apply when you click **Save changes**; **Cancel** discards them. The page also holds each dataset's tables and its annotations, and at the foot, what is saved on this computer.

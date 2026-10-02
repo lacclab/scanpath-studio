@@ -4,7 +4,7 @@
 
 ### The fixations don't line up with the text
 
-Words and fixations must use the same pixel coordinates and share trial IDs. If the fixations are shifted, mirrored or scaled against the words, the two tables are in different coordinate frames — a different origin, unit or offset — and no setting here fixes that; convert one of them ([Data format → Units](https://lacclab.github.io/scanpath-studio/data-format/#tables)). If the alignment is right but the figure is framed or sized wrongly, the recording screen size is: set the resolution of the monitor used in the experiment under **Data → Edit dataset → Recording setup**. *Estimate from my data* only gives a lower bound.
+Words and fixations must use the same pixel coordinates and share trial IDs. If the fixations are shifted, mirrored or scaled against the words, the two tables are in different coordinate frames — a different origin, unit or offset — and no setting here fixes that; convert one of them ([Data format → Units](https://lacclab.github.io/scanpath-studio/data-format/#tables)). If the alignment is right but the figure is framed or sized wrongly, the recording screen size is: set the resolution of the monitor used in the experiment under **Data Management → Edit dataset → Recording setup**. *Estimate from my data* only gives a lower bound.
 
 ### The text is too big or too small
 
@@ -12,7 +12,7 @@ Text is drawn to scale from the word boxes and the recording screen size. Set th
 
 ### A column was detected wrongly
 
-The app guesses columns from their names. Pick the right one under **Data → Edit dataset**, or pass `word_schema` / `fix_schema` to load_scanpath_data.
+The app guesses columns from their names. Pick the right one under **Data Management → Edit dataset**, or pass `word_schema` / `fix_schema` to load_scanpath_data.
 
 ### Can I load only one table?
 

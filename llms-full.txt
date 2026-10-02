@@ -78,7 +78,7 @@ Corpus Analysis shows the reading measures your interest-area table brings (mapp
 
 ## 1. Define the analysis pool
 
-Load the corpus and narrow the trial pool before opening Corpus Analysis. Check the participant, text, and trial counts under **What's in the … dataset → Stats** on the **Data** page, which follow the filters. A text ID must identify the same stimulus across readers; a trial ID identifies one reading.
+Load the corpus and narrow the trial pool before opening Corpus Analysis. Check the participant, text, and trial counts under **What's in the … dataset → Stats** on the **Data Management** page, which follow the filters. A text ID must identify the same stimulus across readers; a trial ID identifies one reading.
 
 ## 2. Open Corpus Analysis
 
@@ -115,7 +115,7 @@ Use this workflow during piloting, experimenter training, or session review. The
 
 ## 1. Load a pilot session
 
-On the **Data** page select **Add dataset**, upload the word/IA and fixation tables, then check the proposed columns and the **Recording setup** (the actual monitor resolution) before selecting **Add dataset**. If the dataset is already loaded, open it from **Available datasets**.
+On the **Data Management** page select **Add dataset**, upload the word/IA and fixation tables, then check the proposed columns and the **Recording setup** (the actual monitor resolution) before selecting **Add dataset**. If the dataset is already loaded, open it from **Available datasets**.
 
 ## 2. Check the setup on one trial
 
@@ -145,7 +145,7 @@ Move through the participant's trials with the trial picker.
 
 ## 5. Save the review
 
-Open **Data → Annotations** and select **Export**. The file keeps your favorites, tags and notes for later review; **Share → File** keeps the view settings beside it.
+Open **Data Management → Annotations** and select **Export**. The file keeps your favorites, tags and notes for later review; **Share → File** keeps the view settings beside it.
 
 **Done:** you have checked geometry and timing, marked suspicious trials, and saved the review. For a formal retained/excluded pool, continue with [Data filtering](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/index.md).
 
@@ -176,13 +176,13 @@ Return to the trial filters and, under **By annotation**, put `exclude` in **Exc
 
 ## 4. Verify the retained pool
 
-Check at least one trial from each participant or condition. Then open the **Data** page and confirm that the participant, text, trial, fixation, and word counts under **What's in the … dataset → Stats** are plausible. Those follow the filters; the dataset table above them counts the whole dataset.
+Check at least one trial from each participant or condition. Then open the **Data Management** page and confirm that the participant, text, trial, fixation, and word counts under **What's in the … dataset → Stats** are plausible. Those follow the filters; the dataset table above them counts the whole dataset.
 
 ## 5. Export the record
 
 Use **Export → Export bundle** for the active filtered pool. Include the tidy tables, `plot_config.json` and **Annotations (JSON)** — the tags and notes are the human review record; export figures only if they are part of the analysis record.
 
-**Done:** the original data remains intact, the retained trials are in the export bundle, and each manual decision has a tag and a reason in the annotations file you exported from the Data page. (The bundle's `annotations.json` covers only the trials it exports.)
+**Done:** the original data remains intact, the retained trials are in the export bundle, and each manual decision has a tag and a reason in the annotations file you exported from the Data Management page. (The bundle's `annotations.json` covers only the trials it exports.)
 
 # Tutorial: export figures
 
@@ -257,7 +257,7 @@ For end-to-end workflows, see the [tutorials](https://lacclab.github.io/scanpath
 
 ## Reading measures come from your data
 
-Corpus Analysis shows the reading measures your interest-area report provides (first fixation duration, total fixation duration, regression path, and so on). It does not compute them itself. An EyeLink report's `IA_*` columns are mapped automatically; other names can be mapped under **Data → Edit dataset**. Without any, the page says so.
+Corpus Analysis shows the reading measures your interest-area report provides (first fixation duration, total fixation duration, regression path, and so on). It does not compute them itself. An EyeLink report's `IA_*` columns are mapped automatically; other names can be mapped under **Data Management → Edit dataset**. Without any, the page says so.
 
 ## Four views
 
@@ -280,7 +280,7 @@ Every result has **⬇ Download this table (CSV)**. When something looks odd, op
 
 ## Choose a source
 
-Open the dataset picker above the plot, or the **Data** page.
+Open the dataset picker above the plot, or the **Data Management** page.
 
 - **Bundled Demo** — a small OneStop sample, for learning the app.
 - **Synthetic sample** — a hand-made six-word trial.
@@ -313,9 +313,9 @@ Then click **Add dataset**. Anything the app cannot use is listed above the butt
 
 Describe the screen the data was **recorded** on, not the one you are using now. A wrong resolution rescales every figure, so nothing is preselected. For each value, say how you know it: measured, estimated from your data, or a default. That answer travels with the dataset, so others can tell measured values from assumed ones.
 
-## The Data page
+## The Data Management page
 
-**Data** lists every dataset with its counts; click a row to open it. **Edit dataset** changes a dataset's name, column mapping and recording setup, or adds a table it is missing. Changes apply when you click **Save changes**; **Cancel** discards them. The page also holds each dataset's tables and its annotations, and at the foot, what is saved on this computer.
+**Data Management** lists every dataset with its counts; click a row to open it. **Edit dataset** opens under the list, below the open dataset's counts and tables, and changes its name, column mapping and recording setup, or adds a table it is missing. Changes apply when you click **Save changes**; **Cancel** discards them. The page also holds each dataset's tables and its annotations, and at the foot, what is saved on this computer.
 
 # Outputs and sharing
 
@@ -402,7 +402,7 @@ Compare is also available from Python ([`compare_scanpaths`](https://lacclab.git
 
 ### The fixations don't line up with the text
 
-Words and fixations must use the same pixel coordinates and share trial IDs. If the fixations are shifted, mirrored or scaled against the words, the two tables are in different coordinate frames — a different origin, unit or offset — and no setting here fixes that; convert one of them ([Data format → Units](https://lacclab.github.io/scanpath-studio/data-format/#tables)). If the alignment is right but the figure is framed or sized wrongly, the recording screen size is: set the resolution of the monitor used in the experiment under **Data → Edit dataset → Recording setup**. *Estimate from my data* only gives a lower bound.
+Words and fixations must use the same pixel coordinates and share trial IDs. If the fixations are shifted, mirrored or scaled against the words, the two tables are in different coordinate frames — a different origin, unit or offset — and no setting here fixes that; convert one of them ([Data format → Units](https://lacclab.github.io/scanpath-studio/data-format/#tables)). If the alignment is right but the figure is framed or sized wrongly, the recording screen size is: set the resolution of the monitor used in the experiment under **Data Management → Edit dataset → Recording setup**. *Estimate from my data* only gives a lower bound.
 
 ### The text is too big or too small
 
@@ -410,7 +410,7 @@ Text is drawn to scale from the word boxes and the recording screen size. Set th
 
 ### A column was detected wrongly
 
-The app guesses columns from their names. Pick the right one under **Data → Edit dataset**, or pass `word_schema` / `fix_schema` to load_scanpath_data.
+The app guesses columns from their names. Pick the right one under **Data Management → Edit dataset**, or pass `word_schema` / `fix_schema` to load_scanpath_data.
 
 ### Can I load only one table?
 
@@ -1118,7 +1118,7 @@ cache_status() -> dict
 
 Describe the on-device recovery cache a local app run keeps.
 
-The app stores completed uploaded datasets, column mappings, view settings and annotations under the user's cache directory so a refresh or restart resumes where it left off — on localhost/desktop only, never on a hosted deployment. This reports that store without launching the app: `enabled`, `directory`, `datasets` (name + per-frame row counts), `rows`, `annotations`, `settings`, `bytes`, `saved_at`, plus `exists` / `readable` for a missing or unreadable manifest. Delete it with clear_cache; the same information is in the app's 🗂️ Data → *Saved on this computer* section and in `scanpath-studio cache`.
+The app stores completed uploaded datasets, column mappings, view settings and annotations under the user's cache directory so a refresh or restart resumes where it left off — on localhost/desktop only, never on a hosted deployment. This reports that store without launching the app: `enabled`, `directory`, `datasets` (name + per-frame row counts), `rows`, `annotations`, `settings`, `bytes`, `saved_at`, plus `exists` / `readable` for a missing or unreadable manifest. Delete it with clear_cache; the same information is in the app's 🗂️ Data Management → *Saved on this computer* section and in `scanpath-studio cache`.
 
 ### scanpath_studio.api.clear_cache
 
@@ -1389,7 +1389,7 @@ usage:
                                    (this run only; see `cache` below)
   scanpath-studio [run] --download-dir DIR
                                    where Download saves public datasets when
-                                   the Data page's Download folder is blank
+                                   the Data Management page's Download folder is blank
   scanpath-studio render …         render one trial to .html/.png/.svg/.pdf
                                    (see `scanpath-studio render --help`)
   scanpath-studio analyze …        export preprocessing + the full measure family
@@ -1841,7 +1841,7 @@ Raw gaze can be the only table, too. Its samples are drawn as recorded, and for 
 
 ## Participant metadata
 
-Attach a table of **one row per reader** — native language, age, a comprehension score, a group label. When you upload your own data it is one of the **Metadata** uploaders in part 2 of the setup wizard; for the demo, a public corpus, or a dataset you added earlier, the same uploader is on **Data → Edit dataset** under **Metadata → Participants**. Its columns then behave like fields in the data: they filter trials (the filter funnel's *By reader* section), show up as chips above the plot, sort the trial picker, group cohorts in Corpus Analysis, appear in the dataset's inspection tables, and travel with exports and saved sessions.
+Attach a table of **one row per reader** — native language, age, a comprehension score, a group label. When you upload your own data it is one of the **Metadata** uploaders in part 2 of the setup wizard; for the demo, a public corpus, or a dataset you added earlier, the same uploader is on **Data Management → Edit dataset** under **Metadata → Participants**. Its columns then behave like fields in the data: they filter trials (the filter funnel's *By reader* section), show up as chips above the plot, sort the trial picker, group cohorts in Corpus Analysis, appear in the dataset's inspection tables, and travel with exports and saved sessions.
 
 ```
 participant_id,native_language,age,comprehension
@@ -1859,7 +1859,7 @@ Headless, it is a `--participant-metadata FILE` flag on `scanpath-studio render`
 
 ## Trial metadata
 
-The same idea one grain down: a table of **one row per trial** — a list name, a presentation order, a per-trial comprehension score, whatever your design recorded about the trial rather than about the reader. It attaches beside the participant table — under **Metadata** in part 2 of the add-dataset wizard, and on **Data → Edit dataset** under **Metadata → Trials** for a dataset that is already loaded — and its columns behave like fields in the data in the same way: they filter trials, show up as chips above the plot, sort the trial picker, group cohorts in Corpus Analysis, appear in the inspection tables, and travel with exports (`metadata/trials.csv`) and saved sessions.
+The same idea one grain down: a table of **one row per trial** — a list name, a presentation order, a per-trial comprehension score, whatever your design recorded about the trial rather than about the reader. It attaches beside the participant table — under **Metadata** in part 2 of the add-dataset wizard, and on **Data Management → Edit dataset** under **Metadata → Trials** for a dataset that is already loaded — and its columns behave like fields in the data in the same way: they filter trials, show up as chips above the plot, sort the trial picker, group cohorts in Corpus Analysis, appear in the inspection tables, and travel with exports (`metadata/trials.csv`) and saved sessions.
 
 ```
 trial_id,list_name,presentation_order,comprehension
@@ -3115,7 +3115,7 @@ Trial : One reading: a participant and a trial id together. The same text read b
 
 Text : The stimulus (`text_id`) — what two trials of the same text share.
 
-Dataset : One loaded corpus: the bundled demo, a public corpus, or tables you uploaded, each listed under **Data**.
+Dataset : One loaded corpus: the bundled demo, a public corpus, or tables you uploaded, each listed under **Data Management**.
 
 Participant metadata : An optional table with one row per reader, whose columns become trial filters without being copied onto the words or fixations.
 
@@ -3135,7 +3135,7 @@ That 330 is the 162 paragraphs at two levels (324), plus **six** more from the p
 
 ## Loading it
 
-OneStop is exposed as **four public datasets**, one per reading regime. In the app, open **Data** and click the one you want in the list of datasets:
+OneStop is exposed as **four public datasets**, one per reading regime. In the app, open **Data Management** and click the one you want in the list of datasets:
 
 | Dataset                                  | What it is                                                    |
 | ---------------------------------------- | ------------------------------------------------------------- |
@@ -3160,7 +3160,7 @@ Every part ships an **interest-area report** (one row per word, with bounding bo
 
 The **Edit dataset** screen's data-location part lists the **Expected files** and shows whether they're already present (until they are, the app shows the bundled demo, with a **⬇ Download now** panel). If they're present the dataset loads with no network access; if not, click **⬇ Download** to fetch them into the folder (cached on disk, so only the first load pays the download — reports range from tens to a few hundred MB each, and a regime has up to fourteen). While it downloads, a card shows how much has arrived; **Stop download** ends it and deletes the partial file.
 
-The folder defaults to the **Data** page's **Download folder**, where every public corpus gets its own subfolder (`<folder>/OneStop`). Leave that box blank for the default: `data/` in a source checkout, otherwise the per-user data folder (`~/.local/share/scanpath-studio/data`, or `%LOCALAPPDATA%\scanpath-studio\data` on Windows). `scanpath-studio run --download-dir DIR` or `SCANPATH_STUDIO_DOWNLOAD_DIR` changes the default.
+The folder defaults to the **Data Management** page's **Download folder**, where every public corpus gets its own subfolder (`<folder>/OneStop`). Leave that box blank for the default: `data/` in a source checkout, otherwise the per-user data folder (`~/.local/share/scanpath-studio/data`, or `%LOCALAPPDATA%\scanpath-studio\data` on Windows). `scanpath-studio run --download-dir DIR` or `SCANPATH_STUDIO_DOWNLOAD_DIR` changes the default.
 
 On a server other machines can reach
 

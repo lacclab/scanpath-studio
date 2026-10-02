@@ -6,7 +6,7 @@ Corpus Analysis shows the reading measures your interest-area table brings (mapp
 
 ## 1. Define the analysis pool
 
-Load the corpus and narrow the trial pool before opening Corpus Analysis. Check the participant, text, and trial counts under **What's in the … dataset → Stats** on the **Data** page, which follow the filters. A text ID must identify the same stimulus across readers; a trial ID identifies one reading.
+Load the corpus and narrow the trial pool before opening Corpus Analysis. Check the participant, text, and trial counts under **What's in the … dataset → Stats** on the **Data Management** page, which follow the filters. A text ID must identify the same stimulus across readers; a trial ID identifies one reading.
 
 ## 2. Open Corpus Analysis
 

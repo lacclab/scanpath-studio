@@ -25,10 +25,10 @@ Return to the trial filters and, under **By annotation**, put `exclude` in **Exc
 
 ## 4. Verify the retained pool
 
-Check at least one trial from each participant or condition. Then open the **Data** page and confirm that the participant, text, trial, fixation, and word counts under **What's in the … dataset → Stats** are plausible. Those follow the filters; the dataset table above them counts the whole dataset.
+Check at least one trial from each participant or condition. Then open the **Data Management** page and confirm that the participant, text, trial, fixation, and word counts under **What's in the … dataset → Stats** are plausible. Those follow the filters; the dataset table above them counts the whole dataset.
 
 ## 5. Export the record
 
 Use **Export → Export bundle** for the active filtered pool. Include the tidy tables, `plot_config.json` and **Annotations (JSON)** — the tags and notes are the human review record; export figures only if they are part of the analysis record.
 
-**Done:** the original data remains intact, the retained trials are in the export bundle, and each manual decision has a tag and a reason in the annotations file you exported from the Data page. (The bundle's `annotations.json` covers only the trials it exports.)
+**Done:** the original data remains intact, the retained trials are in the export bundle, and each manual decision has a tag and a reason in the annotations file you exported from the Data Management page. (The bundle's `annotations.json` covers only the trials it exports.)

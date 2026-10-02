@@ -255,7 +255,7 @@ usage:
                                    (this run only; see `cache` below)
   scanpath-studio [run] --download-dir DIR
                                    where Download saves public datasets when
-                                   the Data page's Download folder is blank
+                                   the Data Management page's Download folder is blank
   scanpath-studio render …         render one trial to .html/.png/.svg/.pdf
                                    (see `scanpath-studio render --help`)
   scanpath-studio analyze …        export preprocessing + the full measure family

@@ -1376,6 +1376,18 @@ def apply_group(frame: pd.DataFrame, spec: Mapping[str, Sequence]) -> pd.DataFra
     return frame[group_mask(frame, spec)]
 
 
+def distinct_group_labels(label_a: str, label_b: str) -> tuple[str, str]:
+    """The two cohorts' labels, told apart when they read the same (BUG-111).
+
+    The charts key their series by label, so two cohorts both named "Control"
+    became one: B's values replaced A's without a word. Equal labels get a
+    visible ``(A)`` / ``(B)``.
+    """
+    if str(label_a).strip() == str(label_b).strip():
+        return f"{label_a} (A)", f"{label_b} (B)"
+    return label_a, label_b
+
+
 def two_group_values(
     frame: pd.DataFrame,
     measure: Measure,
@@ -1387,6 +1399,7 @@ def two_group_values(
     normalize: bool = False,
 ) -> dict[str, np.ndarray]:
     """``{label_a: values, label_b: values}`` for overlaid distributions (AN-18)."""
+    label_a, label_b = distinct_group_labels(label_a, label_b)
     out: dict[str, np.ndarray] = {}
     a = measure_values(apply_group(frame, spec_a), measure, normalize=normalize)
     b = measure_values(apply_group(frame, spec_b), measure, normalize=normalize)
@@ -1459,6 +1472,7 @@ def two_group_word_profiles(
     label_b: str = "Group B",
 ) -> pd.DataFrame:
     """Long ``[group, word_id, value]`` for the stacked two-group heatmap (AN-22)."""
+    label_a, label_b = distinct_group_labels(label_a, label_b)
     frames = []
     for spec, label in ((spec_a, label_a), (spec_b, label_b)):
         prof = cohort_word_profile(
@@ -1491,6 +1505,7 @@ def paired_group_summary(
     word- and fixation-level measures; pass ``words``/``fixations`` so each reads
     its backing frame (``frame`` is the fallback).
     """
+    label_a, label_b = distinct_group_labels(label_a, label_b)
     rows = []
     for m in measures:
         src = (

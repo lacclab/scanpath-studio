@@ -30,6 +30,7 @@ from scanpath_studio.aggregation import (
     available_features,
     available_measures,
     cohort_word_profile,
+    distinct_group_labels,
     ensure_fixation_enrichment,
     group_effect_size,
     group_word_difference,
@@ -8138,6 +8139,20 @@ def _render_filter_set(words, fixations, *, key, default_label):
     return spec, (label or default_label)
 
 
+def _cohort_readers(fixations: pd.DataFrame | None, words: pd.DataFrame | None) -> int:
+    """How many readers a cohort holds: counted on its fixations, or — for a
+    dataset of word measures alone — on its words (BUG-112: an AOI-only
+    dataset's cohorts read "0 readers" beside charts drawn from theirs)."""
+    for frame in (fixations, words):
+        if frame is not None and not frame.empty and "participant_id" in frame:
+            return int(frame["participant_id"].nunique())
+    return 0
+
+
+def _n_readers(count: int) -> str:
+    return f"{count:,} reader{'' if count == 1 else 's'}"
+
+
 def _render_group_definition(words, fixations, *, key, two_groups, host=None):
     """Group-definition UI → one ``spec``/``(spec, label)`` or two ``(a, b, la, lb)``."""
     host = host or st
@@ -9202,12 +9217,12 @@ def render_per_group_tab(
         frame_fingerprint(words_g),
     )
     assign_derived(fix_g, "enrich_fix", (fix_in, words_g))
-    n_readers = (
-        fix_g["participant_id"].nunique()
-        if "participant_id" in getattr(fix_g, "columns", [])
-        else 0
+    n_readers = _cohort_readers(fix_g, words_g)
+    n_fix = len(fix_g) if fix_g is not None else 0
+    st.caption(
+        f"**{label}** — {_n_readers(n_readers)}, "
+        f"{n_fix:,} fixation{'' if n_fix == 1 else 's'} in scope."
     )
-    st.caption(f"**{label}** — {n_readers} reader(s), {len(fix_g)} fixations in scope.")
     if (words_g is None or words_g.empty) and (fix_g is None or fix_g.empty):
         st.info("This group is empty — widen the definition.")
         return
@@ -9386,13 +9401,19 @@ def render_group_comparison_tab(
         )
     spec_a = spec_a or {}
     spec_b = spec_b or {}
+    # BUG-111: every chart keys its series by label, so equal labels merged A
+    # into B; from here on both read apart, the caption included.
+    label_a, label_b = distinct_group_labels(label_a, label_b)
     _warn_word_only_group_fields(st, fixations_filtered, spec_a, spec_b)
-    na = apply_group(fixations_filtered, spec_a)
-    nb = apply_group(fixations_filtered, spec_b)
+    readers_a = _cohort_readers(
+        apply_group(fixations_filtered, spec_a), apply_group(words_filtered, spec_a)
+    )
+    readers_b = _cohort_readers(
+        apply_group(fixations_filtered, spec_b), apply_group(words_filtered, spec_b)
+    )
     st.caption(
-        f"**{label_a}**: {na['participant_id'].nunique() if 'participant_id' in na else 0}"
-        f" reader(s) · **{label_b}**: "
-        f"{nb['participant_id'].nunique() if 'participant_id' in nb else 0} reader(s)."
+        f"**{label_a}**: {_n_readers(readers_a)} · **{label_b}**: "
+        f"{_n_readers(readers_b)}."
     )
     view = st.selectbox(
         "View",

@@ -33,6 +33,7 @@ from scanpath_studio.aggregation import (
     distinct_group_labels,
     ensure_fixation_enrichment,
     group_effect_size,
+    group_mask,
     group_word_difference,
     landing_positions,
     measure_values,
@@ -8139,18 +8140,26 @@ def _render_filter_set(words, fixations, *, key, default_label):
     return spec, (label or default_label)
 
 
-def _cohort_readers(fixations: pd.DataFrame | None, words: pd.DataFrame | None) -> int:
+def _cohort_readers(
+    fixations: pd.DataFrame | None, words: pd.DataFrame | None, spec=None
+) -> int:
     """How many readers a cohort holds: counted on its fixations, or — for a
     dataset of word measures alone — on its words (BUG-112: an AOI-only
-    dataset's cohorts read "0 readers" beside charts drawn from theirs)."""
+    dataset's cohorts read "0 readers" beside charts drawn from theirs).
+
+    ``spec`` selects the cohort from whole frames by mask, without copying them.
+    """
     for frame in (fixations, words):
         if frame is not None and not frame.empty and "participant_id" in frame:
-            return int(frame["participant_id"].nunique())
+            ids = frame["participant_id"]
+            if spec:
+                ids = ids[group_mask(frame, spec)]
+            return int(ids.nunique())
     return 0
 
 
 def _n_readers(count: int) -> str:
-    return f"{count:,} reader{'' if count == 1 else 's'}"
+    return f"{count} reader{'' if count == 1 else 's'}"
 
 
 def _render_group_definition(words, fixations, *, key, two_groups, host=None):
@@ -9221,7 +9230,7 @@ def render_per_group_tab(
     n_fix = len(fix_g) if fix_g is not None else 0
     st.caption(
         f"**{label}** — {_n_readers(n_readers)}, "
-        f"{n_fix:,} fixation{'' if n_fix == 1 else 's'} in scope."
+        f"{n_fix} fixation{'' if n_fix == 1 else 's'} in scope."
     )
     if (words_g is None or words_g.empty) and (fix_g is None or fix_g.empty):
         st.info("This group is empty — widen the definition.")
@@ -9405,12 +9414,8 @@ def render_group_comparison_tab(
     # into B; from here on both read apart, the caption included.
     label_a, label_b = distinct_group_labels(label_a, label_b)
     _warn_word_only_group_fields(st, fixations_filtered, spec_a, spec_b)
-    readers_a = _cohort_readers(
-        apply_group(fixations_filtered, spec_a), apply_group(words_filtered, spec_a)
-    )
-    readers_b = _cohort_readers(
-        apply_group(fixations_filtered, spec_b), apply_group(words_filtered, spec_b)
-    )
+    readers_a = _cohort_readers(fixations_filtered, words_filtered, spec_a)
+    readers_b = _cohort_readers(fixations_filtered, words_filtered, spec_b)
     st.caption(
         f"**{label_a}**: {_n_readers(readers_a)} · **{label_b}**: "
         f"{_n_readers(readers_b)}."

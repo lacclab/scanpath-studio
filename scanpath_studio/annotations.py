@@ -872,8 +872,9 @@ def render_trial_annotations(
         # UX-76: no shortcut button under this — the caption names where the
         # whole dataset's annotations are listed instead.
         st.caption(
-            "Every annotation on this dataset is listed on 🗂️ **Data → "
-            "Annotations**, to export, import or delete."
+            "Every annotation on this dataset is listed on "
+            f"{ICONS['view_data']} **Data → Annotations**, to export, import "
+            "or delete."
         )
 
 
@@ -1078,7 +1079,7 @@ def render_dataset_annotations(trials, *, dataset_name: str) -> None:
     if not records:
         st.caption(
             "No annotations on this dataset yet. Star, tag or note a trial on "
-            "🗺️ **Scanpath → Annotations**."
+            f"{ICONS['view_scanpath']} **Scanpath → Annotations**."
         )
         return
     elsewhere = len(records) - len(records_in(_store(), trials))

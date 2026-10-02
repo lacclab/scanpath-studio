@@ -175,7 +175,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
         steps=(
             TutorialStep(
                 "Choose the data source",
-                f"Everything about the dataset lives on the {ICONS['view_data']} **Data** page, in the "
+                f"Everything about the dataset lives on the {ICONS['view_data']} **Data Management** page, in the "
                 "order the pipeline uses it. Start at the list of datasets — "
                 "click a row to open it, or **+ Add dataset** for your own tables.",
                 ".st-key-tutorial_available_datasets",
@@ -441,7 +441,7 @@ _STEPS = [
         "over the text. A demo dataset is loaded; this tour takes under a minute.",
     ),
     (
-        f"{ICONS['datasets']} Data",
+        f"{ICONS['datasets']} Data Management",
         "Use the demo, or **upload your own** fixations / word tables "
         "(CSV / TSV / Parquet). Columns auto-detect — remap any field in the wizard.",
     ),
@@ -458,12 +458,12 @@ _STEPS = [
     (
         f"{ICONS['views']} Three views",
         "**Scanpath** (tick *Animate* to replay) · **Corpus Analysis** · "
-        "**Data** (set up and inspect the dataset). Bulk export is the "
+        "**Data Management** (set up and inspect the dataset). Bulk export is the "
         "**Export** subtab in Scanpath.",
     ),
     (
         f"{ICONS['annotations']} Annotate & save",
-        f"Star, tag, and note trials, then filter to them. **{ICONS['view_data']} Data → "
+        f"Star, tag, and note trials, then filter to them. **{ICONS['view_data']} Data Management → "
         "Annotations** exports them as JSON. Replay this via "
         "**Tutorials → Welcome tour**. 👀",
     ),
@@ -744,7 +744,7 @@ _SPOTLIGHT_STEPS = [
         "selector": ".st-key-tour_grp_data_source",
         "title": f"{ICONS['datasets']} Your datasets",
         "body": "Your **data source** (demo or your own upload) sits at the left "
-        f"of the control line. Every dataset is listed on the {ICONS['view_data']} **Data** page — "
+        f"of the control line. Every dataset is listed on the {ICONS['view_data']} **Data Management** page — "
         "click a row there to open it, **+ Add dataset** for your own.",
     },
     # Picking comes before narrowing: the picker is the control a new reader
@@ -811,7 +811,7 @@ _SPOTLIGHT_STEPS = [
         "title": f"{ICONS['nav']} The nav",
         "body": f"**{ICONS['view_scanpath']} Scanpath** is what you see now. "
         f"**{ICONS['view_corpus']} Corpus Analysis** aggregates across readers; "
-        f"**{ICONS['view_data']} Data** sets one up. **{ICONS['help']} Help** opens over your work.",
+        f"**{ICONS['view_data']} Data Management** sets one up. **{ICONS['help']} Help** opens over your work.",
     },
 ]
 
@@ -1786,7 +1786,7 @@ DOCS_FAQ_URL = f"{CITATION['docs_url']}faq/"
 _FAQ_ITEMS = [
     (
         "A column was mapped to the wrong field. Where do I fix it?",
-        f"{ICONS['view_data']} **Data → {ICONS['edit']} Edit dataset → 2 · Data tables & column mapping** — an "
+        f"{ICONS['view_data']} **Data Management → {ICONS['edit']} Edit dataset → 2 · Data tables & column mapping** — an "
         "editable form that "
         "re-derives everything in place, no re-upload. It can only offer columns "
         "that survived the import; anything dropped needs a re-upload.",
@@ -1801,10 +1801,10 @@ _FAQ_ITEMS = [
     ),
     (
         "Where does my data go?",
-        "Nowhere off your machine — no accounts, no database, no analytics, no "
+        "Nowhere off your machine — no accounts, no analytics, no "
         "upload. A local or desktop run also keeps a **recovery copy** here "
         "(added datasets, mappings, settings, annotations), so a refresh "
-        f"resumes where you left off; **{ICONS['view_data']} Data → Saved on this computer** says "
+        f"resumes where you left off; **{ICONS['view_data']} Data Management → Saved on this computer** says "
         "what is stored and where. Two caveats: "
         "`streamlit run` listens on your whole network (use "
         "`--server.address=127.0.0.1`), and the online demo runs on "
@@ -1813,9 +1813,9 @@ _FAQ_ITEMS = [
     (
         "My uploaded data vanished after a refresh.",
         "Local and desktop runs normally recover uploaded datasets, settings and "
-        f"annotations automatically. Check **{ICONS['view_data']} Data → Saved on this computer** "
+        f"annotations automatically. Check **{ICONS['view_data']} Data Management → Saved on this computer** "
         "to see whether it is enabled and where it is saved. For a portable "
-        f"copy, export annotations from **{ICONS['view_data']} Data → Annotations** and the "
+        f"copy, export annotations from **{ICONS['view_data']} Data Management → Annotations** and the "
         f"figure's settings from **{ICONS['view_scanpath']} Scanpath → {ICONS['share']} Share → File**; neither file "
         "holds dataset rows.",
     ),
@@ -2028,7 +2028,7 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": "1 · Name & description",
         "body": (
-            f"Name it — this is what shows up on the {ICONS['view_data']} **Data** page and in the "
+            f"Name it — this is what shows up on the {ICONS['view_data']} **Data Management** page and in the "
             "dataset picker, so you can switch back to it later. A description "
             "is optional."
         ),

@@ -14,7 +14,7 @@ the measures map themselves by name.
 
 Load the corpus and narrow the trial pool before opening Corpus Analysis. Check
 the participant, text, and trial counts under **What's in the … dataset → Stats**
-on the :material/database: **Data** page, which follow the filters. A text ID must
+on the :material/database: **Data Management** page, which follow the filters. A text ID must
 identify the same stimulus across readers; a trial ID identifies one reading.
 
 ## 2. Open Corpus Analysis

@@ -126,7 +126,7 @@ Text
 
 Dataset
 :   One loaded corpus: the bundled demo, a public corpus, or tables you
-    uploaded, each listed under :material/database: **Data**.
+    uploaded, each listed under :material/database: **Data Management**.
 
 Participant metadata
 :   An optional table with one row per reader, whose columns become trial

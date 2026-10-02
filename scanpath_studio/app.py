@@ -699,7 +699,7 @@ def _render_empty_after_filtering(
             st.markdown("#### This dataset has no trials to show")
             st.markdown(
                 "Pick another **Data source**, or check the column mapping on "
-                f"the {ICONS['view_data']} **Data** page."
+                f"the {ICONS['view_data']} **Data Management** page."
             )
         return
 
@@ -1591,7 +1591,7 @@ def _dataset_access_status(
         _note_dataset_unavailable(
             label=label,
             reason="its files aren't in the folder you pointed at.",
-            action=f"Set **Data location** on the {ICONS['view_data']} Data page to a folder "
+            action=f"Set **Data location** on the {ICONS['view_data']} Data Management page to a folder "
             "holding the files listed under **Expected files**.",
             root=root,
         )
@@ -2744,7 +2744,7 @@ WORDS_JOIN_NOTHING_WARNING = (
     "without its text or its word-level measures. The usual cause is a **Trial "
     "ID** or **Participant ID** mapping that names different trials in the two "
     "tables — for instance one carried over from another dataset with the same "
-    f"columns. Check it on {ICONS['view_data']} **Data → Column mapping**, or start again from "
+    f"columns. Check it on {ICONS['view_data']} **Data Management → Column mapping**, or start again from "
     "**↩️ Reset to the auto-detected mapping**."
 )
 
@@ -3601,12 +3601,12 @@ def _render_offpage_setup_notice(data_view: bool) -> None:
         return
     st.info(
         "**This dataset isn't set up yet**, so there's nothing to plot. "
-        f"Finish it on the {ICONS['view_data']} **Data** page — or start over from the demo.",
+        f"Finish it on the {ICONS['view_data']} **Data Management** page — or start over from the demo.",
         icon=ICONS["view_data"],
     )
     finish, demo = st.columns(2)
     finish.button(
-        f"{ICONS['view_data']} Go to Data setup",
+        f"{ICONS['view_data']} Go to Data Management",
         on_click=_go_data,
         type="primary",
         width="stretch",
@@ -4486,7 +4486,7 @@ def render_data_source_picker(host=None) -> None:
         width="content",
         help=(
             "Which dataset the app is showing. Use + to create a scanpath or "
-            f"import files. Rename or remove datasets on the {ICONS['view_data']} Data page. "
+            f"import files. Rename or remove datasets on the {ICONS['view_data']} Data Management page. "
             "More coming soon! is a preview of future datasets."
         ),
     )
@@ -4989,7 +4989,7 @@ def render_description_field(host, token: str) -> None:
         on_change=_save_description_field,
         args=(token,),
         placeholder="What this dataset is — the readers, the texts, the language.",
-        help=f"Shown under the dataset's name on the {ICONS['view_data']} Data page.",
+        help=f"Shown under the dataset's name on the {ICONS['view_data']} Data Management page.",
         height=80,
     )
 
@@ -5166,7 +5166,7 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
         "A Trial ID that doesn't fully identify one reading concatenates several "
         "into one scanpath — which renders perfectly happily, as an ordinary "
         "scanpath with a lot of regressions. The full evidence is on the "
-        f"{ICONS['view_data']} Data page, under **4 · Trial identity**."
+        f"{ICONS['view_data']} Data Management page, under **4 · Trial identity**."
     )
     edit_col, keep_col = st.columns(2, gap="small")
     if edit_col.button(
@@ -5182,14 +5182,14 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
         "Keep it as is",
         key="trial_identity_alert_keep",
         width="stretch",
-        help=f"Dismiss. Nothing changes, and the verdict stays on the {ICONS['view_data']} Data "
+        help=f"Dismiss. Nothing changes, and the verdict stays on the {ICONS['view_data']} Data Management "
         "page under 4 · Trial identity.",
     ):
         st.rerun(scope="app")
     if asked_by == "add":
         st.caption(
             "Checked automatically because the dataset was just added. It is "
-            f"already on the {ICONS['view_data']} Data page's list either way."
+            f"already on the {ICONS['view_data']} Data Management page's list either way."
         )
 
 
@@ -6645,7 +6645,11 @@ def render_canvas_controls(
     screen.caption(
         f"Geometry: **{px_per_degree:.1f} px/degree** · "
         f"{1.0 / px_per_degree:.4f}° per pixel."
-        + (f"  ·  set in {ICONS['view_data']} Data → Recording setup." if bare else "")
+        + (
+            f"  ·  set in {ICONS['view_data']} Data Management → Recording setup."
+            if bare
+            else ""
+        )
     )
 
     # Text can be switched off while this function still supplies the screen
@@ -7581,7 +7585,7 @@ def _run_app() -> None:
         # after the user cleared the cache by hand. Naming the counts is what
         # makes the claim checkable against the panel it points at.
         st.toast(
-            f"Recovered {_restored_recap()} from this computer — see {ICONS['view_data']} Data → "
+            f"Recovered {_restored_recap()} from this computer — see {ICONS['view_data']} Data Management → "
             "Saved on this computer.",
             icon=ICONS["recovery"],
         )

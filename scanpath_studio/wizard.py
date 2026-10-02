@@ -2801,7 +2801,7 @@ def _wizard_name_header(host, active: bool) -> None:
         key="wizard_dataset_description",
         placeholder="Optional — what this dataset is: the readers, the texts, "
         "the language.",
-        help=f"Shown under the dataset's name on the {ICONS['view_data']} Data page.",
+        help=f"Shown under the dataset's name on the {ICONS['view_data']} Data Management page.",
         height=68,
     )
 

@@ -317,7 +317,7 @@ def launch_app(extra_args: list[str]) -> None:
         os.environ[PERSIST_ENV_VAR] = "0"
 
     # UX-184: `--download-dir DIR` (or `=DIR`) is ours too — where ⬇ Download
-    # saves the public corpora when the Data page's Download folder is blank.
+    # saves the public corpora when the Data Management page's Download folder is blank.
     extra_args = _consume_download_dir(extra_args)
 
     # Inject the branded theme unless the caller passes their own ``--theme.*``
@@ -3340,7 +3340,7 @@ def _cache_parser() -> argparse.ArgumentParser:
 def cache(argv: list[str]) -> None:
     """Inspect or clear the on-device recovery cache (ENG-30).
 
-    The terminal counterpart of the app's 🗂️ Data → *Saved on this computer*
+    The terminal counterpart of the app's 🗂️ Data Management → *Saved on this computer*
     section, so the storage a local run creates can be found, measured and deleted without
     launching the app (or after closing it).
     """
@@ -3408,7 +3408,7 @@ usage:
                                    (this run only; see `cache` below)
   scanpath-studio [run] --download-dir DIR
                                    where Download saves public datasets when
-                                   the Data page's Download folder is blank
+                                   the Data Management page's Download folder is blank
   scanpath-studio render …         render one trial to .html/.png/.svg/.pdf
                                    (see `scanpath-studio render --help`)
   scanpath-studio analyze …        export preprocessing + the full measure family

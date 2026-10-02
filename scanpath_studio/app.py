@@ -151,6 +151,8 @@ from scanpath_studio.data import (
     WORD_OPTIONAL_FIELDS,
     ReadPlan,
     StimulusJoin,
+    adopt_source,
+    assign_derived,
     clear_frame_cache,
     compute_canvas_size,
     count_trials,
@@ -166,6 +168,7 @@ from scanpath_studio.data import (
     frame_cache,
     frame_fingerprint,
     harmonize_frames_with_join,
+    hashable_key,
     infer_raw_gaze_schema,
     load_onestop_server_bundle,
     load_sample_data,
@@ -187,6 +190,7 @@ from scanpath_studio.data import (
     repair_stranded_stimulus_words,
     reset_fingerprint_memo,
     resolve_stimulus_image_paths,
+    stamp_source,
     text_ids,
     trial_identity_warning,
     trial_keys,
@@ -196,6 +200,7 @@ from scanpath_studio.data import (
     validate_fix_schema,
     validate_raw_gaze_schema,
     validate_word_schema,
+    vouch_for_frames,
 )
 from scanpath_studio.dataset_table import DATASET_COUNT_FIELDS, DatasetRow
 from scanpath_studio.datasets import (
@@ -1649,7 +1654,7 @@ def _cached_potec_raw_frames(root: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     every reader × text (75 × 12); narrow the trial pool with **Narrow by**."""
     from scanpath_studio.datasets import potec_raw_frames
 
-    return potec_raw_frames(root)
+    return stamp_source(potec_raw_frames(root))
 
 
 def _load_potec_source(
@@ -1710,7 +1715,7 @@ def _cached_multipleye_raw_frames(
     narrow the trial pool with **Narrow by**."""
     from scanpath_studio.datasets import multipleye_raw_frames
 
-    return multipleye_raw_frames(root, fixation_source=fixation_source)
+    return stamp_source(multipleye_raw_frames(root, fixation_source=fixation_source))
 
 
 @st.cache_data(show_spinner=False)
@@ -1790,7 +1795,9 @@ def _cached_onestop_raw_frames(
     it never touches the network."""
     from scanpath_studio.datasets import onestop_raw_frames
 
-    return onestop_raw_frames(root, regime=regime, parts=list(parts), variant=variant)
+    return stamp_source(
+        onestop_raw_frames(root, regime=regime, parts=list(parts), variant=variant)
+    )
 
 
 def _load_onestop_regime_source(
@@ -1855,7 +1862,7 @@ def _cached_eyegenbench_raw_frames(
     dict, so the cache survives an unrelated manifest re-read."""
     from scanpath_studio.eyegenbench import eyegenbench_raw_frames
 
-    return eyegenbench_raw_frames(root, dataset=dataset)
+    return stamp_source(eyegenbench_raw_frames(root, dataset=dataset))
 
 
 # A malformed manifest (an entry with no `name`, a `datasets` value that isn't a
@@ -2552,17 +2559,6 @@ _RAW_GAZE_LAYER_KEY = "global_show_raw_gaze"
 _RAW_GAZE_LINK_SPENT = "\x00spent"
 
 
-def _hashable(value):
-    """``value`` as a hashable, order-free key part (sets and dicts sorted)."""
-    if isinstance(value, dict):
-        return tuple(sorted(((str(k), _hashable(v)) for k, v in value.items())))
-    if isinstance(value, (set, frozenset)):
-        return tuple(sorted((_hashable(v) for v in value), key=repr))
-    if isinstance(value, (list, tuple)):
-        return tuple(_hashable(v) for v in value)
-    return value
-
-
 def _narrowed_raw_gaze(
     raw_gaze: pd.DataFrame,
     *,
@@ -2597,10 +2593,10 @@ def _narrowed_raw_gaze(
 
     key = (
         frame_fingerprint(raw_gaze),
-        _hashable(participants),
-        _hashable(metadata or {}),
-        _hashable(ranges or {}),
-        _hashable(trial_keys),
+        hashable_key(participants),
+        hashable_key(metadata or {}),
+        hashable_key(ranges or {}),
+        hashable_key(trial_keys),
     )
     return frame_cache("raw_gaze_narrowed", key, _build)
 
@@ -2778,7 +2774,7 @@ def _cached_multipleye_server_bundle(
     participant: str | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     progress.report()  # a miss: real work, so the gated dataset card may show
-    return load_multipleye_server_bundle(participant)
+    return stamp_source(load_multipleye_server_bundle(participant))
 
 
 def load_words_and_fixations(
@@ -3655,7 +3651,7 @@ def _read_uploaded_table_cached(
     except Exception:
         pass
     if kind is None:
-        return read_table(_uploaded)
+        return stamp_source(read_table(_uploaded))
     # PERF-6: parse only the columns the mapping, the registry and the user's
     # own picks need. `kind` and `chosen` are part of the cache key, so naming
     # a new column simply re-reads the file under the new plan.
@@ -3663,7 +3659,7 @@ def _read_uploaded_table_cached(
     plan = upload_read_plan(
         header, kind, chosen=chosen, text_column=text_column, identity=identity
     )
-    return read_table(_uploaded, plan=plan)
+    return stamp_source(read_table(_uploaded, plan=plan))
 
 
 @st.cache_data(show_spinner="Reading uploaded data…", show_time=True)
@@ -3683,7 +3679,7 @@ def _read_uploaded_tables_cached(
                 header, kind, chosen=chosen, text_column=text_column, identity=identity
             )
 
-    return read_tables(list(_uploaded_list), plan_for=plan_for)
+    return stamp_source(read_tables(list(_uploaded_list), plan_for=plan_for))
 
 
 #: Session keys naming a source column the user has picked: every mapping
@@ -3854,7 +3850,7 @@ def _read_uploaded_frame(
     # that took it, the way the metadata uploaders already do, instead of a
     # traceback over the whole page.
     try:
-        return _read_upload(uploaded, state_prefix, multi=multi, kind=kind)
+        frame = _read_upload(uploaded, state_prefix, multi=multi, kind=kind)
     except Exception as exc:  # unreadable file — say so, keep the page
         logging.getLogger(__name__).warning(
             "Could not read upload %s", state_prefix, exc_info=True
@@ -3864,6 +3860,9 @@ def _read_uploaded_frame(
         names = ", ".join(str(getattr(f, "name", "the file")) for f in files)
         host.error(f"Couldn't read **{names}**: {exc}")
         return pd.DataFrame()
+    # BUG-103: this upload's own ID, before the wizard derives anything from it.
+    adopt_source(frame)
+    return frame
 
 
 def _read_upload(uploaded, state_prefix: str, *, multi: bool, kind) -> pd.DataFrame:
@@ -7512,6 +7511,15 @@ def _run_app() -> None:
     # entries before anything fingerprints a frame, so a frame rebuilt this run
     # is hashed afresh and last run's frames stop being kept alive.
     reset_fingerprint_memo()
+    # BUG-103: every stored dataset's tables, open or not — the Data page counts
+    # them all — are held run after run and never written into, so each is
+    # hashed once rather than on every rerun, however it entered the store
+    # (the wizard, ✏️ Edit dataset, the recovery cache, a repair).
+    for stored in (st.session_state.get("_datasets") or {}).values():
+        if isinstance(stored, dict):
+            vouch_for_frames(
+                tuple(stored.get(t) for t in ("words", "fixations", "raw_gaze"))
+            )
     st.session_state[_PLACEHOLDER_SHOWN_KEY] = False
     # BUG-96: the missing-corpus note describes the run that wrote it. It is
     # consumed later in that run, but a run that leaves before then — a mapping
@@ -8262,6 +8270,9 @@ def _run_app() -> None:
                 failed[data_choice] = attempt
         words_df, fixations_df = stored["words"], stored["fixations"]
         raw_gaze_df = stored["raw_gaze"]
+        # BUG-103: held run after run and never written into, so each is hashed
+        # once — not on every rerun — even when it was read back from disk.
+        vouch_for_frames((words_df, fixations_df, raw_gaze_df))
         raw_words_df, raw_fixations_df = words_df, fixations_df
         mapping_problems = []
         # Re-publish this dataset's chosen filter fields so the trial-filter
@@ -8311,6 +8322,9 @@ def _run_app() -> None:
             options_host=source_options_slot,
             location_host=data_location_slot,
         )
+        # BUG-103: the loader's own ID for these tables, so the normalization
+        # below is keyed on which load they came from rather than re-hashed.
+        adopt_source(raw_words_df, raw_fixations_df)
         # DATA-48: the demo may have stood in for a corpus that isn't here.
         _file_annotations_under_shown_dataset(_dataset_owner)
         if dataset_card is not None and len(dataset_card.steps) == 3:
@@ -8558,12 +8572,26 @@ def _run_app() -> None:
     if dataset_card is not None and dataset_card.steps:
         dataset_card.step(len(dataset_card.steps) - 1)  # Building the trial list
     trial_filters = read_trial_filters()
+    # BUG-103: each narrowing below makes new frames every rerun while a filter
+    # is on. `assign_derived` names them by their inputs and settings, so the
+    # caches downstream are keyed without hashing the whole pool each time.
+    pool = (words_df, fixations_df)
     words_df, fixations_df = filter_trials(
         words_df,
         fixations_df,
         participants=trial_filters["participants"],
         metadata=trial_filters["metadata"],
         ranges=trial_filters.get("ranges"),
+    )
+    assign_derived(
+        (words_df, fixations_df),
+        "filter_trials",
+        pool,
+        (
+            trial_filters["participants"],
+            trial_filters["metadata"],
+            trial_filters.get("ranges"),
+        ),
     )
     # DATA-29: a trial-grain metadata narrowing is already `(participant_id,
     # trial_id)` keys, so it applies through `filter_to_keys` rather than
@@ -8588,7 +8616,9 @@ def _run_app() -> None:
         trial_keys=trialmeta_keys,
     )
     if trialmeta_keys is not None:
+        pool = (words_df, fixations_df)
         words_df, fixations_df = filter_to_keys(words_df, fixations_df, trialmeta_keys)
+        assign_derived((words_df, fixations_df), "filter_to_keys", pool, trialmeta_keys)
     # BUG-12: the raw-gaze samples table has to travel through the same
     # annotation filter as words + fixations, or a sample row for an unstarred
     # trial survives "⭐ Favorites only" — which also kept the all-three-empty
@@ -8615,8 +8645,12 @@ def _run_app() -> None:
                 excluded_tags=trial_filters["excluded_tags"],
             )
         )
+        pool = (words_df, fixations_df, raw_gaze_scoped)
         words_df, fixations_df = filter_to_keys(words_df, fixations_df, kept)
         raw_gaze_scoped = filter_frame_to_keys(raw_gaze_scoped, kept)
+        assign_derived(
+            (words_df, fixations_df, raw_gaze_scoped), "filter_to_keys", pool, kept
+        )
 
     # Apply filters (participant/trial/text selection). For a raw-gaze-only
     # dataset (no words/fixations) derive the participant/trial options from the
@@ -8625,6 +8659,12 @@ def _run_app() -> None:
         words_df, fixations_df if not fixations_df.empty else raw_gaze_scoped
     )
     words_filtered, fixations_filtered = filter_data(words_df, fixations_df, filters)
+    assign_derived(
+        (words_filtered, fixations_filtered),
+        "filter_data",
+        (words_df, fixations_df),
+        filters,
+    )
 
     # The samples of the trials in the pool — and of every trial only the raw
     # gaze has, which no filter on the other two tables can speak for (VIZ-45;

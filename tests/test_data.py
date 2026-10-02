@@ -1432,21 +1432,43 @@ class TestFrameFingerprint:
         assert frame_fingerprint(None) == (0, ())
         assert frame_fingerprint(pd.DataFrame()) == (0, ())
 
-    def test_a_huge_frame_falls_back_to_sampling_rather_than_stalling(self):
-        """Above the cap a full hash would cost ~237 ms at 5M rows, taken about
-        six times per rerun. The sampled key is a deliberate trade, documented on
-        the function — this pins that the cheap path is actually taken."""
-        import time
+    def test_a_large_frame_is_hashed_in_full(self):
+        """BUG-103. Above 200,000 rows the key used to be ~384 sampled rows, so
+        this edit — row 100, past the first 64 and between two stride rows — left
+        it unchanged, and a corrected re-upload was served the old results."""
+        n = 200_001
+        a = pd.DataFrame({"duration_ms": np.full(n, 100.0)})
+        b = a.copy()
+        b.loc[100, "duration_ms"] = 999.0
+        assert frame_fingerprint(a) != frame_fingerprint(b)
+        assert len(frame_fingerprint(a)) == 3  # (rows, columns, full digest)
 
-        from scanpath_studio.data import _FINGERPRINT_FULL_MAX_ROWS
+    def test_the_review_repro_reaches_the_cached_result(self):
+        """The same edit through a real cached consumer: the corrected frame gets
+        its own trial summary, not the one cached for the original."""
+        from scanpath_studio import tabs
 
-        n = _FINGERPRINT_FULL_MAX_ROWS + 1
-        df = pd.DataFrame({"x": np.arange(n, dtype=float)})
-        start = time.perf_counter()
-        key = frame_fingerprint(df)
-        assert time.perf_counter() - start < 0.1
-        assert len(key) == 5  # (n, cols, head, tail, middle) — the sampled shape
-        assert len(frame_fingerprint(df.head(100))) == 3  # (n, cols, full hash)
+        n = 200_001
+        fix = pd.DataFrame(
+            {
+                "participant_id": "p1",
+                "trial_id": "t1",
+                "duration_ms": np.full(n, 100.0),
+                "x": 1.0,
+                "y": 1.0,
+            }
+        )
+        fixed = fix.copy()
+        fixed.loc[100, "duration_ms"] = 999.0
+        words = pd.DataFrame()
+
+        def total(frame):
+            summary = tabs._c_trial_summary(
+                words, frame, frame_fingerprint(words), frame_fingerprint(frame)
+            )
+            return summary.filter(like="reading_time").iloc[0, 0]
+
+        assert total(fixed) - total(fix) == pytest.approx(899.0, abs=0.5)
 
     def test_an_unhashable_frame_fails_closed(self):
         """The old last resort returned (n, cols, 0, 0), so every frame of the

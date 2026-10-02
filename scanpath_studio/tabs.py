@@ -158,6 +158,7 @@ from scanpath_studio.data import (
     READING_MEASURE_KEYS,
     StimulusJoinWarning,
     aggregate_char_boxes,
+    assign_derived,
     compute_word_metrics,
     derive_trial_index,
     drop_internal_columns,
@@ -2247,6 +2248,8 @@ def _narrow_secondary(source: SecondaryDataset, filters: dict) -> SecondaryDatas
     "This dataset", and another corpus' own when B comes from one — never A's,
     whose matching-looking ids name other trials.
     """
+    # BUG-103: each step names its new frames by its inputs and settings, as
+    # A's chain in `app._run_app` does, so B's pool is not re-hashed per rerun.
     words, fixations = filter_trials(
         source.words,
         source.fixations,
@@ -2254,9 +2257,17 @@ def _narrow_secondary(source: SecondaryDataset, filters: dict) -> SecondaryDatas
         metadata=filters["metadata"],
         ranges=filters.get("ranges"),
     )
+    assign_derived(
+        (words, fixations),
+        "filter_trials",
+        (source.words, source.fixations),
+        (filters["participants"], filters["metadata"], filters.get("ranges")),
+    )
     selected_keys = filters.get("trial_keys")
     if selected_keys is not None:
+        pool = (words, fixations)
         words, fixations = filter_to_keys(words, fixations, set(selected_keys))
+        assign_derived((words, fixations), "filter_to_keys", pool, set(selected_keys))
     if (
         filters.get("favorites_only")
         or filters.get("required_tags")
@@ -2272,7 +2283,9 @@ def _narrow_secondary(source: SecondaryDataset, filters: dict) -> SecondaryDatas
                 prefix=_COMPARE_FILTER_PREFIX,
             )
         )
+        pool = (words, fixations)
         words, fixations = filter_to_keys(words, fixations, kept)
+        assign_derived((words, fixations), "filter_to_keys", pool, kept)
     if fixations is source.fixations and words is source.words:
         return source
     combos, _, _ = build_combo_options_for(fixations, source.composite_trial_columns)
@@ -8804,6 +8817,8 @@ def render_per_reader_tab(
         frame_fingerprint(fixations_filtered),
         frame_fingerprint(words_filtered),
     )
+    # BUG-103: a fresh copy out of the cache each rerun, named by its inputs.
+    assign_derived(fix_e, "enrich_fix", (fixations_filtered, words_filtered))
     view = top[1].selectbox(
         "View",
         [
@@ -9091,12 +9106,16 @@ def render_per_group_tab(
     # corpus-sized frame that nothing else ever saw — and (since PERF-3) parked
     # it in the fingerprint memo for the rest of the run.
     fix_in = apply_group(fixations_filtered, spec or {})
+    # BUG-103: all three are new every rerun; each is named by what made it.
+    assign_derived(words_g, "apply_group", words_filtered, spec or {})
+    assign_derived(fix_in, "apply_group", fixations_filtered, spec or {})
     fix_g = _c_enrich_fix(
         fix_in,
         words_g,
         frame_fingerprint(fix_in),
         frame_fingerprint(words_g),
     )
+    assign_derived(fix_g, "enrich_fix", (fix_in, words_g))
     n_readers = (
         fix_g["participant_id"].nunique()
         if "participant_id" in getattr(fix_g, "columns", [])

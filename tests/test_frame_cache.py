@@ -196,10 +196,11 @@ class TestClearFrameCache:
 
 
 class TestFingerprintsOutliveTheRun:
-    """PERF-10: a frame `frame_cache` hands back as the same object run after
-    run cannot change, so its fingerprint must not be recomputed every run —
-    the per-run memo reset used to force a full re-hash of the normalized pair
-    on every rerun (~0.5 s of a 1.9 s rerun at 50× the demo)."""
+    """PERF-10 → BUG-103: a frame `frame_cache` hands back as the same object
+    run after run is named by its slot and key, which decide its content — it is
+    never hashed at all. The per-run memo reset used to force a full re-hash of
+    the normalized pair on every rerun (~0.5 s of a 1.9 s rerun at 50× the
+    demo)."""
 
     def _counting(self, monkeypatch):
         from scanpath_studio import data
@@ -213,15 +214,40 @@ class TestFingerprintsOutliveTheRun:
         )
         return data, calls
 
-    def test_a_cached_frame_is_hashed_once_across_runs(self, monkeypatch):
+    def test_a_cached_frame_is_named_by_its_key_not_hashed(self, monkeypatch):
         data, calls = self._counting(monkeypatch)
         pair = frame_cache("t_fp_stable", "k", lambda: (_frame(5), _frame(7)))
         seen = set()
         for _ in range(3):
             data.reset_fingerprint_memo()
             seen.add(tuple(data.frame_fingerprint(f) for f in pair))
-        assert len(calls) == 2
-        assert len(seen) == 1
+        assert calls == []
+        assert seen == {
+            (
+                ("assigned", ("frame_cache", "t_fp_stable", "k", 0)),
+                ("assigned", ("frame_cache", "t_fp_stable", "k", 1)),
+            )
+        }
+
+    def test_an_input_handed_back_keeps_its_own_fingerprint(self, monkeypatch):
+        """A build with nothing to do returns its input; one object, one ID."""
+        data, _ = self._counting(monkeypatch)
+        source = _frame(5)
+        data.assign_fingerprint(source, "the source")
+        out = frame_cache("t_fp_passthrough", "k", lambda: source)
+        assert out is source
+        assert data.frame_fingerprint(out) == ("assigned", "the source")
+
+    def test_a_vouched_frame_is_hashed_once_across_runs(self, monkeypatch):
+        data, calls = self._counting(monkeypatch)
+        frame = _frame(5)
+        data.vouch_for_frames((frame,))
+        seen = set()
+        for _ in range(3):
+            data.reset_fingerprint_memo()
+            seen.add(data.frame_fingerprint(frame))
+        assert len(calls) == 1
+        assert seen == {data._compute_frame_fingerprint(frame)}
 
     def test_any_other_frame_is_still_hashed_every_run(self, monkeypatch):
         data, calls = self._counting(monkeypatch)
@@ -230,6 +256,96 @@ class TestFingerprintsOutliveTheRun:
             data.reset_fingerprint_memo()
             data.frame_fingerprint(frame)
         assert len(calls) == 3
+
+
+class TestSourceLabels:
+    """BUG-103: a cached loader's frames are named by the load they came from.
+
+    `st.cache_data` hands out a fresh copy per call, so the label rides in
+    `attrs` (which survive the copy) and `adopt_source` moves it onto the object.
+    """
+
+    @staticmethod
+    def _cache_copy(value):
+        import pickle
+
+        return pickle.loads(pickle.dumps(value))
+
+    def _load(self):
+        return data_module.stamp_source((_frame(4), _frame(6)))
+
+    def test_every_copy_of_one_load_gets_the_same_fingerprint(self):
+        stored = self._load()
+        first, second = self._cache_copy(stored), self._cache_copy(stored)
+        data_module.adopt_source(*first)
+        data_module.adopt_source(*second)
+        fp = data_module.frame_fingerprint
+        assert [fp(f) for f in first] == [fp(f) for f in second]
+        assert fp(first[0]) != fp(first[1])
+        assert fp(first[0])[0] == "assigned"
+
+    def test_another_load_of_the_same_content_is_a_new_source(self):
+        """The case BUG-103 is about: a re-upload must not match the old file —
+        even when its content happens to be identical, which only costs a
+        recompute."""
+        a, b = self._cache_copy(self._load()), self._cache_copy(self._load())
+        data_module.adopt_source(*a)
+        data_module.adopt_source(*b)
+        fp = data_module.frame_fingerprint
+        assert fp(a[0]) != fp(b[0])
+
+    def test_the_label_comes_off_so_nothing_derived_inherits_it(self):
+        frames = self._cache_copy(self._load())
+        data_module.adopt_source(*frames)
+        assert data_module.SOURCE_TOKEN_ATTR not in frames[0].attrs
+        derived = frames[0][frames[0]["a"] > 1]
+        assert data_module.SOURCE_TOKEN_ATTR not in derived.attrs
+        assert data_module.frame_fingerprint(derived)[0] != "assigned"
+
+    def test_an_unlabelled_frame_is_left_to_the_hash(self):
+        frame = _frame(4)
+        data_module.adopt_source(frame, None)
+        assert data_module.frame_fingerprint(frame)[0] != "assigned"
+
+
+class TestDerivedFingerprints:
+    """BUG-103: a filtered pool is named by its inputs and its settings."""
+
+    def _parents(self):
+        words, fixations = _frame(4), _frame(6)
+        data_module.assign_fingerprint(words, "words")
+        data_module.assign_fingerprint(fixations, "fixations")
+        return words, fixations
+
+    def _derive(self, parents, params):
+        out = tuple(frame.iloc[1:] for frame in parents)
+        data_module.assign_derived(out, "filter", parents, params)
+        return tuple(data_module.frame_fingerprint(frame) for frame in out)
+
+    def test_the_same_step_names_its_output_the_same_way(self):
+        parents = self._parents()
+        params = {"participants": ["p2", "p1"], "metadata": {"group": {"a"}}}
+        assert self._derive(parents, params) == self._derive(parents, params)
+
+    def test_other_settings_or_other_inputs_are_another_output(self):
+        parents = self._parents()
+        first = self._derive(parents, ["p1"])
+        assert self._derive(parents, ["p2"]) != first
+        others = (_frame(4), _frame(6))
+        data_module.assign_fingerprint(others[0], "corrected words")
+        data_module.assign_fingerprint(others[1], "fixations")
+        assert self._derive(others, ["p1"]) != first
+
+    def test_a_step_with_nothing_to_do_keeps_the_parent(self):
+        words, fixations = self._parents()
+        data_module.assign_derived((words, fixations), "filter", (words, fixations))
+        assert data_module.frame_fingerprint(words) == ("assigned", "words")
+
+    def test_unhashable_settings_fall_back_to_the_hash(self):
+        parents = self._parents()
+        out = tuple(frame.iloc[1:] for frame in parents)
+        data_module.assign_derived(out, "filter", parents, {"x": pd.Series([1])})
+        assert data_module.frame_fingerprint(out[0])[0] != "assigned"
 
 
 @pytest.mark.timeout(_THREAD_TEST_TIMEOUT)

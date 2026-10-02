@@ -837,8 +837,9 @@ def test_onestop_parts_are_screens_of_one_trial(onestop_offline, tmp_path):
     for frame in (words, fixations):
         assert frame["trial_id"].nunique() == 1
         screens = frame[["screen_id", "screen_index"]].drop_duplicates()
+        # Numbered 1..N within the trial, in presentation order.
         assert sorted(map(tuple, screens.to_numpy())) == [
-            ("Paragraph", 3),
+            ("Paragraph", 2),
             ("Title", 1),
         ]
     # Each screen keeps its own words.

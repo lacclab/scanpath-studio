@@ -844,19 +844,35 @@ def _onestop_parts_as_screens(
     Every part of a reading shares its ``unique_trial_id`` — the title, the
     passage and the question screens are one trial, shown one after another —
     so the trial is left whole and the part is its screen: the ``part`` column
-    is auto-detected as ``screen_id`` (`data.SCREEN_ID_CANDIDATES`) and
-    ``screen_index`` is the part's place in `_ONESTOP_PARTS`, the same number
-    for a part in every regime (Paragraph is always 3). Each screen keeps its
-    own coordinate space and word boxes (`multipart.py`). A frame without a
-    ``part`` column is returned untouched.
+    is auto-detected as ``screen_id`` (`data.SCREEN_ID_CANDIDATES`), and
+    ``screen_index`` numbers the screens a trial *has* 1..N in `_ONESTOP_PARTS`
+    order. Per trial, because the Screen picker reads it as "n of N": not every
+    reading has every part (only an article's first paragraph has a title
+    screen, only the information-seeking regimes a question preview), and a
+    fixed per-part number would read "3 of 6" on the second screen. Words and
+    fixations are numbered from the screens both hold, so the two agree. Each
+    screen keeps its own coordinate space and word boxes (`multipart.py`). A
+    frame without the ``part`` / ``unique_trial_id`` columns is returned
+    untouched.
     """
-    order = {part: index for index, part in enumerate(_ONESTOP_PARTS, start=1)}
+    keys = ["participant_id", "unique_trial_id"]
+    needed = {*keys, "part"}
+    if words.empty or not needed <= set(words.columns):
+        return words, fixations
+    order = {part: index for index, part in enumerate(_ONESTOP_PARTS)}
+    screens = words[[*keys, "part"]].drop_duplicates().astype(str)
+    screens["_order"] = screens["part"].map(order)
+    screens = screens.sort_values([*keys, "_order"], kind="stable")
+    screens["screen_index"] = screens.groupby(keys, sort=False).cumcount() + 1
+    screens = screens.drop(columns="_order")
 
     def _stamp(frame: pd.DataFrame) -> pd.DataFrame:
-        if frame.empty or "part" not in frame.columns:
+        if frame.empty or not needed <= set(frame.columns):
             return frame
+        probe = frame[[*keys, "part"]].astype(str)
+        index = probe.merge(screens, on=[*keys, "part"], how="left")["screen_index"]
         frame = frame.copy()
-        frame["screen_index"] = frame["part"].map(order).astype(int)
+        frame["screen_index"] = index.to_numpy()
         return frame
 
     return _stamp(words), _stamp(fixations)
@@ -954,7 +970,12 @@ def _onestop_drop_unmatched_screens(
                     "/".join(map(str, row)) for row in dropped.head(3).to_numpy()
                 ),
             )
-    return words.loc[keep_words], fixations.loc[keep_fix]
+    # A fresh index: later steps align on it, and a gapped one is how a
+    # positional assignment quietly lands on the wrong rows.
+    return (
+        words.loc[keep_words].reset_index(drop=True),
+        fixations.loc[keep_fix].reset_index(drop=True),
+    )
 
 
 def load_onestop(

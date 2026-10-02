@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import io
+import json
 import zipfile
 
 import pandas as pd
+import pytest
 
 from scanpath_studio import api
 from scanpath_studio.annotations import deserialize, serialize
@@ -203,6 +205,43 @@ def test_bulk_export_writes_deterministic_per_screen_folders():
         paths = archive.namelist()
     assert any("screens/screen-001-intro/fixations.csv" in path for path in paths)
     assert any("screens/screen-002-question/fixations.csv" in path for path in paths)
+
+
+@pytest.mark.parametrize("with_figure", [True, False])
+def test_each_screens_plot_config_records_its_own_canvas(with_figure):
+    """The config beside a screen's figure records that screen's canvas, not the
+    dataset's — with or without the figure (BUG-104)."""
+    words, fixations = make_multipart_synthetic_data()
+    payload, _ = bulk_export(
+        api.list_trials(words, fixations),
+        words,
+        fixations,
+        canvas_width=2560,
+        canvas_height=1440,
+        base_font_size=16,
+        font_family="Arial",
+        x_field="x",
+        y_field="y",
+        settings={},
+        options=ExportOptions(
+            include_png=False,
+            include_svg=False,
+            include_html=with_figure,
+            include_plot_config=True,
+        ),
+    )
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        canvases = {
+            name.split("/screens/")[1].split("/")[0]: json.loads(archive.read(name))[
+                "canvas_px"
+            ]
+            for name in archive.namelist()
+            if name.endswith("plot_config.json") and "/screens/" in name
+        }
+    assert canvases == {
+        "screen-001-intro": {"width": 640, "height": 480},
+        "screen-002-question": {"width": 800, "height": 600},
+    }
 
 
 def test_direct_comparison_selects_the_matching_screen_only():

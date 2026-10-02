@@ -43,6 +43,8 @@ def _label_text(node) -> str | None:
         return node.value
     if isinstance(node, ast.Subscript) and getattr(node.value, "id", "") == "ICONS":
         return ""
+    if isinstance(node, ast.Name) and node.id.endswith("_ICON"):
+        return ""  # an icon constant, e.g. `tabs._FILTER_ICON`
     if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "spoken":
         return _NAMED
     if isinstance(node, ast.JoinedStr):
@@ -136,8 +138,9 @@ def test_the_clipped_popovers_are_named_in_plain_words():
         text = _label_text(node.args[0])
         assert text and _visible_words(text) and not _SHORTCODE.search(text), where
         assert _keyword(node, "icon") is not None or "iconpop_sort_" in source, where
-    # The + menu, the four previews, the chip fields and the two sorts.
-    assert clipped == 8
+    # The + menu, the four previews, the chip fields, the two sorts and the
+    # two trial-filter funnels.
+    assert clipped == 10
 
 
 def test_no_button_label_uses_emphasis_but_spoken():

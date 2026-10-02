@@ -340,8 +340,8 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "Compare like with like",
                 f"Open **{ICONS['comparisons']} Comparisons** and set **Match field** to the text id: "
                 "the grid shows the other trials that share this trial's value in "
-                "that field — here, the other readings of *this* text — at the same "
-                "scale, so it compares like with like." + _SIMILARITY_SENTENCE,
+                "that field — here, the other readings of *this* text — at one "
+                "scale." + _SIMILARITY_SENTENCE,
                 ".st-key-tutorial_comparisons",
                 subtab=SUBTAB_COMPARISONS,
             ),

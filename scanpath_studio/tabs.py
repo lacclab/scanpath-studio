@@ -2266,7 +2266,11 @@ def _render_compare_filters(host, source: SecondaryDataset) -> None:
     unchanged — only where they render is.
     """
     pop = host.popover(
-        _FILTER_ICON, width="content", help=f"Filter {source.name}'s trials"
+        "Filter scanpath B's trials",
+        icon=_FILTER_ICON,
+        width="content",
+        help=f"Filter {source.name}'s trials",
+        key="iconpop_filter_compare",
     )
     box = pop.container(key="cmp_narrow_by")
     box.caption(f"Narrow **{source.name}** — scanpath B only.")
@@ -5565,7 +5569,11 @@ def render_single_trial_tab(
         def _render_filters(host) -> None:
             """Every way to narrow the pool, behind one funnel (UX-64)."""
             pop = host.popover(
-                _FILTER_ICON, width="content", help="Filter the trial list"
+                "Filter the trial list",
+                icon=_FILTER_ICON,
+                width="content",
+                help="Filter the trial list",
+                key="iconpop_filter_trials",
             )
             box = pop.container(key="tour_grp_narrow_by")
             _render_pool_filters(box, words_all, fixations_all, raw_gaze_all)

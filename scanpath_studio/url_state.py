@@ -2437,8 +2437,8 @@ def _build_share_query(
         caveats.append(
             "This data source can't be rebuilt from a link — the recipient will "
             "need to load the same files themselves. Send them the dataset's "
-            "**⬇️ Save setup** JSON (on the ➕ Add dataset screen, beside "
-            "✅ Add dataset) along with the files: it carries the column mapping "
+            f"**⬇ Save setup** JSON (on the {ICONS['add']} Add dataset screen, beside "
+            f"{ICONS['confirm']} Add dataset) along with the files: it carries the column mapping "
             "and recording setup, and they re-apply it from *Restore a saved "
             "setup* on that same screen. The view settings below travel in the "
             "link itself."
@@ -3038,7 +3038,7 @@ def _render_code_snippet_body(data_choice: str) -> None:
     state = st.session_state.get(SNIPPET_STATE_KEY)
     if not isinstance(state, FigureState):
         st.caption(
-            "Open a trial on the 🗺️ Scanpath view and the code that rebuilds "
+            f"Open a trial on the {ICONS['view_scanpath']} Scanpath view and the code that rebuilds "
             "its figure appears here."
         )
         return
@@ -3078,7 +3078,7 @@ def _render_code_snippet_body(data_choice: str) -> None:
             st.caption(
                 f"{ICONS['warning']} `render` has no flag for "
                 + ", ".join(f"`{name}`" for name in code.cli_unsupported)
-                + " — the 🐍 Python form carries "
+                + f" — the {ICONS['python']} Python form carries "
                 + ("them." if len(code.cli_unsupported) > 1 else "it.")
             )
         # The install line rides *in* the copied block (one 📋 copies both), so

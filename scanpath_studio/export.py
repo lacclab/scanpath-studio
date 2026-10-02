@@ -1317,7 +1317,7 @@ def render_export_options(
             value=False,
             key=f"{key_prefix}_annotations",
             help="Include the exported trials' favorites, tags and notes as one "
-            "annotations.json — the file 🗂️ Data → Annotations imports.",
+            f"annotations.json — the file {ICONS['view_data']} Data → Annotations imports.",
         )
         tabular = (
             panel_field(
@@ -1375,7 +1375,7 @@ def render_export_options(
         if title_pattern or caption_pattern:
             st.caption(
                 "Title & caption on the figure — set on the Scanpath rail's "
-                "**📐 Figure & canvas** → *Title & caption*, and applied here too."
+                f"**{ICONS['figure']} Figure & canvas** → *Title & caption*, and applied here too."
             )
 
     return ExportOptions(
@@ -1848,7 +1848,7 @@ def bulk_export(
             [
                 "",
                 "This dataset brought none, so the bundle has no word-measure "
-                "table. Map them on 🗂️ Data → ✏️ Edit dataset → Reading measures.",
+                f"table. Map them on {ICONS['view_data']} Data → {ICONS['edit']} Edit dataset → Reading measures.",
             ]
             if measures_wanted and not brought
             else []

@@ -7811,9 +7811,9 @@ def _corpus_unavailable_notice(
     editable = _active_stored_dataset() is not None
     if not has_aoi_table:
         where = (
-            "Add one to this dataset on ✏️ Edit dataset"
+            f"Add one to this dataset on {ICONS['edit']} Edit dataset"
             if editable
-            else "Add a dataset that has one with ➕ Add dataset"
+            else f"Add a dataset that has one with {ICONS['add']} Add dataset"
         )
         samples = (
             " Raw gaze samples carry no reading measures, and Scanpath Studio "
@@ -7832,10 +7832,10 @@ def _corpus_unavailable_notice(
     else:
         where = (
             "Map them under **Reading measures** in this dataset's AOI table, on "
-            "✏️ Edit dataset"
+            f"{ICONS['edit']} Edit dataset"
             if editable
             else "This dataset is built in and cannot be remapped — add your own "
-            "report with ➕ Add dataset and map them under **Reading measures** in "
+            f"report with {ICONS['add']} Add dataset and map them under **Reading measures** in "
             "its AOI table"
         )
         st.info(
@@ -11585,7 +11585,7 @@ def _render_missing_table_uploads(name: str, stored: dict, *, host=None) -> dict
         box.markdown(f"**{headline}**")
         box.caption(
             "This dataset was added without one. Upload the file and map it "
-            "below; **✅ Save changes** normalizes it and joins it to the "
+            f"below; **{ICONS['confirm']} Save changes** normalizes it and joins it to the "
             "tables already here."
         )
         uploads = box.file_uploader(
@@ -12278,7 +12278,7 @@ def _render_setup_provenance_note(host=None) -> None:
             box.caption(
                 "This data source doesn't state the screen it was recorded on, "
                 "so nothing is assumed on its behalf. Set it in "
-                "**📐 Figure & canvas → 🖥️ Screen & framing** on the Scanpath "
+                f"**{ICONS['figure']} Figure & canvas → {ICONS['screen']} Screen & framing** on the Scanpath "
                 "view, or add the dataset yourself to record it here."
             )
         return

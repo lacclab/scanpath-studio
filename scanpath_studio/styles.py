@@ -350,6 +350,16 @@ def get_app_css() -> str:
     [data-testid="stPopoverButton"] [aria-hidden="true"] * {
         pointer-events: none;
     }
+    /* BUG-108: a mode or rail-section trigger is named ("Fixation settings")
+       so a screen reader can tell them apart, but only its chevron is drawn
+       (UX-80 r2): the label stays in the accessibility tree, clipped to
+       nothing, as `.sps-sr-only` does. */
+    [class*="st-key-split_mode_"] [data-testid="stPopoverButton"]
+        [data-testid="stMarkdownContainer"] {
+        position: absolute !important; width: 1px; height: 1px;
+        margin: -1px; padding: 0; border: 0; overflow: hidden;
+        clip-path: inset(50%); white-space: nowrap;
+    }
     div[data-testid="stPopoverBody"] {
         min-width: min(28rem, 90vw);
     }

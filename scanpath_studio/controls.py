@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import json
 import math
+import re
 from collections.abc import Callable
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -4635,7 +4636,7 @@ def corpus_style_controls(
     return viz_settings_from_state(trial_fixations, base_font_size, words=words)
 
 
-def _rail_section(host, label: str, *, slug: str, **toggle):
+def _rail_section(host, label: str, *, slug: str, name: str | None = None, **toggle):
     """One rail section: `[toggle | ▾]` on a single line (UX-80).
 
     The shape #UX-68 gave 🎬 Animate and ⚖️ Compare, applied to every section of
@@ -4669,17 +4670,20 @@ def _rail_section(host, label: str, *, slug: str, **toggle):
     - ``width="content"``, not ``"stretch"`` — a stretched trigger claims the
       row's whole width, so the switch and the ▾ could not share a line however
       much room the rail had. Animate and Compare had it right.
-    - **No label and no icon on the trigger.** A `▾` label (or a
+    - **No visible label and no icon on the trigger.** A `▾` label (or a
       `:material/arrow_drop_down:` icon) sits *beside* the chevron Streamlit
-      draws on every popover, which is one arrow too many.
+      draws on every popover, which is one arrow too many. Since BUG-108 the
+      trigger does carry a label, ``name="Fixation"`` → "Fixation settings"
+      (``label`` without its icon and bold when ``name`` is omitted), for
+      screen readers; `styles.py` clips it off screen.
     - ``help_text`` went to the **popover**, not the toggle, so that a row which
       has to fit did not also carry Streamlit's `?` icon. **UX-103 took the
       hover text off this row entirely** — see the comments in the body.
 
     **BUG-37 — the popover carries an explicit ``key=``.** ``st.popover`` is a
     stateful widget in this Streamlit version (it takes ``key``/``on_change``
-    like ``st.expander``), and every section here calls it with the same empty
-    label (``""``) — the only thing distinguishing one from another is
+    like ``st.expander``), and every section here called it with the same empty
+    label (``""``, until BUG-108 named each) — the only thing distinguishing one from another is
     surrounding call order. Without a `key`, Streamlit falls back to a
     positional auto-key, and this row sits downstream of several booleans that
     change which widgets render (`_mode_gate`'s `disabled=`/`help=`, the
@@ -4717,9 +4721,15 @@ def _rail_section(host, label: str, *, slug: str, **toggle):
         # target over the whole row, so the name opens the popover (UX-153).
         value = None
         row.markdown(label)
+    # BUG-108: the trigger is named for screen readers ("Fixation settings");
+    # `styles.py` clips that label off screen, so the chevron stays the only
+    # thing drawn. `wrap=True` for the reason the switch has it: a truncated
+    # one-line label would stamp a native `title=` tooltip.
+    name = name or re.sub(r":material/\w+:|\*", "", label).strip()
     body = row.popover(
-        "",
+        f"{name} settings",
         width="content",
+        wrap=True,
         key=f"split_mode_rail_{slug}_popover",
     )
     # ...and the popover trigger carries no `help=` either. What hovered there
@@ -5065,6 +5075,7 @@ def render_plot_controls(
         viz,
         f"{ICONS['fixations']} **Fixations**",
         slug="fix",
+        name="Fixation",
         key="global_show_fix",
         persist_state="session",
         disabled=fix_off_disabled or not has_fixations,
@@ -5083,6 +5094,7 @@ def render_plot_controls(
         viz,
         f"{ICONS['saccades']} **Saccades**",
         slug="sac",
+        name="Saccade",
         key="global_show_saccades",
         persist_state="session",
         disabled=not has_fixations,
@@ -5100,6 +5112,7 @@ def render_plot_controls(
         viz,
         f"{ICONS['stimulus']} **Stimulus**",
         slug="stim",
+        name="Stimulus",
         key="global_show_stimulus",
         persist_state="session",
     )
@@ -5121,6 +5134,7 @@ def render_plot_controls(
         viz,
         f"{ICONS['heatmap']} **Heatmap**",
         slug="heatmap",
+        name="Heatmap",
         key="global_show_heatmap",
         persist_state="session",
         disabled=heat_disabled or heat_nothing,
@@ -5134,6 +5148,7 @@ def render_plot_controls(
         viz,
         f"{ICONS['raw_gaze']} **Raw gaze**",
         slug="rawgaze",
+        name="Raw gaze",
         key="global_show_raw_gaze",
         persist_state="session",
         disabled=not has_raw_gaze or raw_disabled,
@@ -5158,6 +5173,7 @@ def render_plot_controls(
         viz,
         f"{ICONS['plot_filter']} **Filter**{_plot_filter_badge()}",
         slug="filter",
+        name="Filter",
         note=no_fixations_note,
     )
     # Sub-slots up front so each block below renders into the right half of the
@@ -5179,6 +5195,7 @@ def render_plot_controls(
         viz,
         f"{ICONS['figure']} **Figure & canvas**",
         slug="figure",
+        name="Figure & canvas",
     )
 
     # --- Fixations --------------------------------------------------------

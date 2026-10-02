@@ -5715,7 +5715,9 @@ def render_single_trial_tab(
                 # in controls.py for the full diagnosis; this row predates
                 # that helper but shares its exact shape and its exposure.
                 with st.popover(
-                    "",
+                    # BUG-108: named for screen readers; `styles.py` clips the
+                    # label off screen, so the chevron is all that is drawn.
+                    "Replay settings",
                     width="content",
                     key="split_mode_animate_popover",
                     help="Replay settings. Playback controls appear above the plot.",
@@ -5920,7 +5922,7 @@ def render_single_trial_tab(
                 # than hidden), *Legend* and *Step* as `label | ☑ Show` rows.
                 with (
                     st.popover(
-                        "",
+                        "Compare settings",  # BUG-108: see the Animate row
                         width="content",
                         key="split_mode_compare_popover",
                         help="Compare settings. "

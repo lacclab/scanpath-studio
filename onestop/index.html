@@ -1747,62 +1747,42 @@ repeated in all three batches. The published <em>30 articles / 162 paragraphs</e
 counts experimental material and leaves it out, so both figures are right.</p>
 </div>
 <h2 id="loading-it">Loading it<a class="headerlink" href="#loading-it" title="Permanent link">&para;</a></h2>
-<p>OneStop is exposed as a <strong>Public dataset</strong>. In the app, open <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data</strong>, click
-<strong>OneStop</strong> in the list of datasets, then choose <strong>Edit dataset</strong>; its
-<strong>Options</strong> pick a <strong>Variant</strong>, a <strong>Reading regime</strong>, and one or more
-<strong>Parts</strong>:</p>
-<p><strong>Variant</strong></p>
+<p>OneStop is exposed as <strong>four public datasets</strong>, one per reading regime. In the
+app, open <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data</strong> and click the one you want in the list
+of datasets:</p>
 <table>
 <thead>
 <tr>
-<th>Variant</th>
+<th>Dataset</th>
 <th>What it is</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Public (OSF download)</td>
-<td>Reports fetched from <a href="https://osf.io/2prdq/">OSF</a> on demand, cached on disk.</td>
+<td>OneStop — Ordinary reading</td>
+<td>Reading for comprehension, without seeing the question first.</td>
 </tr>
 <tr>
-<td>LaCC lab (local export)</td>
-<td>LaCC lab's internal export — not publicly distributed.</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Reading regime</strong></p>
-<table>
-<thead>
-<tr>
-<th>Regime</th>
-<th>What it is</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Ordinary reading</td>
-<td>Standard paragraph reading.</td>
+<td>OneStop — Information seeking</td>
+<td>Reading after seeing the question to be answered.</td>
 </tr>
 <tr>
-<td>Information seeking</td>
-<td>Reading to answer a known question.</td>
+<td>OneStop — Repeated reading</td>
+<td>Reading a paragraph for the second time.</td>
 </tr>
 <tr>
-<td>Repeated reading</td>
-<td>Re-reading the same paragraphs.</td>
-</tr>
-<tr>
-<td>Information seeking (repeated)</td>
-<td>Information seeking during repeated reading.</td>
+<td>OneStop — Information seeking (repeated)</td>
+<td>A second reading, after seeing the question.</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Parts</strong> — which <em>screen</em> of a trial to load (default <strong>Paragraph</strong>):</p>
+<p>Each holds <strong>every part</strong> of its regime's trials, the reading passage and the
+screens around it, from the public <a href="https://osf.io/2prdq/">OSF</a> release:</p>
 <table>
 <thead>
 <tr>
-<th>Part (app label)</th>
-<th>CLI / deep-link id</th>
+<th>Part</th>
+<th>CLI id</th>
 <th>What it is</th>
 </tr>
 </thead>
@@ -1815,12 +1795,12 @@ counts experimental material and leaves it out, so both figures are right.</p>
 <tr>
 <td>Question preview</td>
 <td><code>Question_Preview</code></td>
-<td>The question shown before reading (information-seeking regimes).</td>
+<td>The question shown before reading (information-seeking regimes only).</td>
 </tr>
 <tr>
 <td>Paragraph</td>
 <td><code>Paragraph</code></td>
-<td>The reading passage (the default).</td>
+<td>The reading passage.</td>
 </tr>
 <tr>
 <td>Question</td>
@@ -1844,22 +1824,22 @@ counts experimental material and leaves it out, so both figures are right.</p>
 </tr>
 </tbody>
 </table>
-<p>The first column is what the app's <strong>Parts</strong> picker shows; the second is the
-literal id for <code>--onestop-part</code> on the <a href="../cli/">CLI</a> and the
-<code>?onestop_parts=</code> deep-link parameter.</p>
 <p>Every part ships an <strong>interest-area report</strong> (one row per word, with bounding
 boxes and reading measures) and a <strong>fixation report</strong>, all in the same schema —
-so each part renders as a scanpath. Selecting <strong>several parts</strong> makes each part
-its own trial (the part is folded into the trial id, e.g. <code>Paragraph::1</code> vs
-<code>Title::1</code>, so their word boxes don't collide). On OSF only <em>Paragraph</em> is
-regime-split; the other parts come from the all-regimes full release, so they
-are not narrowed to the chosen regime: they hold every regime's trials.</p>
+so each part renders as a scanpath. A trial is one reading of one paragraph,
+and its parts are that trial's <strong>screens</strong>, in the order they were shown —
+step through them with the <strong>Screen</strong> picker above the plot. Each screen keeps
+its own word boxes; not every reading has every part (the title screen opens
+an article, so only a reading of its first paragraph has one). On OSF only <em>Paragraph</em> is split by regime; the other
+parts come from one all-regimes release, which the four datasets share on disk,
+and each dataset keeps only its own regime's trials from them (by the reports'
+<code>question_preview</code> and <code>repeated_reading_trial</code> columns).</p>
 <p>The <span class="sps-icon" data-icon="edit" aria-hidden="true"></span> <strong>Edit dataset</strong> screen's data-location part lists the <strong>Expected files</strong> and
 shows whether they're already present (until they are, the app shows the bundled
-demo, with a <strong>⬇ Download now</strong> panel). For the Public variant, if they're
-present the corpus loads with no network access; if not, click <strong>⬇ Download</strong> to
-fetch them into the folder (cached on disk, so only the first load pays the
-download — reports range from tens to a few hundred MB each). While it
+demo, with a <strong>⬇ Download now</strong> panel). If they're present the dataset loads
+with no network access; if not, click <strong>⬇ Download</strong> to fetch them into the
+folder (cached on disk, so only the first load pays the download — reports
+range from tens to a few hundred MB each, and a regime has up to fourteen). While it
 downloads, a card shows how much has arrived; <strong>Stop download</strong> ends it and
 deletes the partial file.</p>
 <p>The folder defaults to the <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data</strong> page's
@@ -1885,22 +1865,27 @@ renders true-to-scale to that monitor.</p>
 plot-ready frames:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">scanpath_studio</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sps</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># Fetch (public variant) + normalize the chosen regime + parts (cached under root).</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># Fetch + normalize the chosen regime + parts (cached under root).</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">load_onestop</span><span class="p">(</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="s2">"data/OneStop"</span><span class="p">,</span>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">regime</span><span class="o">=</span><span class="s2">"ordinary"</span><span class="p">,</span>
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">parts</span><span class="o">=</span><span class="p">[</span><span class="s2">"Paragraph"</span><span class="p">],</span>  <span class="c1"># any subset of the seven parts</span>
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">download</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="p">)</span>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="n">pid</span><span class="p">,</span> <span class="n">tid</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">list_trials</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">)</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>  <span class="c1"># or any row you want</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="n">fig</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">plot_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="n">pid</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">canvas_size</span><span class="o">=</span><span class="p">(</span><span class="mi">2560</span><span class="p">,</span> <span class="mi">1440</span><span class="p">))</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># The app's dataset for a regime is every part of it:</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scanpath_studio.datasets</span><span class="w"> </span><span class="kn">import</span> <span class="n">onestop_regime_parts</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="n">parts</span> <span class="o">=</span> <span class="n">onestop_regime_parts</span><span class="p">(</span><span class="s2">"ordinary"</span><span class="p">)</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="n">pid</span><span class="p">,</span> <span class="n">tid</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">list_trials</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">)</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>  <span class="c1"># or any row you want</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="n">fig</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">plot_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="n">pid</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">canvas_size</span><span class="o">=</span><span class="p">(</span><span class="mi">2560</span><span class="p">,</span> <span class="mi">1440</span><span class="p">))</span>
 </code></pre></div>
 <h2 id="from-the-command-line">From the command line<a class="headerlink" href="#from-the-command-line" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--onestop<span class="w"> </span>data/OneStop<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">    </span>--onestop-regime<span class="w"> </span>ordinary<span class="w"> </span>--onestop-part<span class="w"> </span>Paragraph<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span>-p<span class="w"> </span>&lt;participant&gt;<span class="w"> </span>-t<span class="w"> </span>&lt;trial&gt;<span class="w"> </span>-o<span class="w"> </span>out.html
 </code></pre></div>
-<p><code>--onestop-part</code> is repeatable.</p>
+<p><code>--onestop-part</code> is repeatable. Parts other than Paragraph are cut to
+<code>--onestop-regime</code> here too, as in the app.</p>
 
 
 
@@ -1921,7 +1906,7 @@ plot-ready frames:</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 2, 2026 05:15:28 UTC">October 2, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 2, 2026 07:02:10 UTC">October 2, 2026</span>
   </span>
 
     

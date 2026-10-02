@@ -454,6 +454,43 @@ _TOOLTIP_OWNER_SCRIPT = """
 </script>
 """
 
+#: UX-193: a click on an embedded iframe — the scanpath plot above all, which
+#: spans the whole main column — never closed an open popover. Streamlit
+#: dismisses one on a `click` on the *page's* document, and a click inside an
+#: iframe lands in that iframe's document instead. What the page does see is
+#: its window losing focus to the frame, so on `blur` with an `<iframe>` now
+#: active (and not one inside a popover) this clicks every expanded popover
+#: trigger, which toggles it shut — the same move as `menu.close_open_popovers`.
+#: Installed in the parent's realm once per page load, like the script above.
+_IFRAME_CLICK_CLOSES_POPOVER_SCRIPT = """
+<script>
+(function () {
+    function install() {
+        window.addEventListener("blur", function () {
+            setTimeout(function () {
+                var active = document.activeElement;
+                if (!active || active.tagName !== "IFRAME") { return; }
+                if (active.closest('[data-st-overlay-root="true"]')) { return; }
+                document.querySelectorAll(
+                    '[data-testid="stPopover"] button[aria-expanded="true"]'
+                ).forEach(function (trigger) { trigger.click(); });
+            }, 0);
+        });
+    }
+    try {
+        var host = window.parent;
+        if (host.__spsIframePopoverCloseInstalled) { return; }
+        var script = host.document.createElement("script");
+        script.textContent = "(" + install.toString() + ")();";
+        host.document.head.appendChild(script);
+        host.__spsIframePopoverCloseInstalled = true;
+    } catch (e) {
+        /* Not same-origin: clicks outside the iframes still close popovers. */
+    }
+})();
+</script>
+"""
+
 
 def configure_page() -> None:
     """Streamlit page config + custom CSS.
@@ -476,6 +513,7 @@ def configure_page() -> None:
     st.markdown(get_app_css(), unsafe_allow_html=True)
     embed_html_iframe(_FORCE_LTR_LOCALE_SCRIPT, height=0)
     embed_html_iframe(_TOOLTIP_OWNER_SCRIPT, height=0)
+    embed_html_iframe(_IFRAME_CLICK_CLOSES_POPOVER_SCRIPT, height=0)
 
 
 #: The app's wordmark, shown in Streamlit's own header (UX-62). Inside the

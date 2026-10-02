@@ -1903,6 +1903,7 @@ behind each line, and the releases before 0.28.0, are in
 <li>Compare mode shows both readings' chips as one two-row A/B table, writing a value they share once, instead of a chip strip per reading. (UX-190)</li>
 <li>The plot controls' block titles (Screen &amp; framing, Axes &amp; grid, Title &amp; labels, and the Filter's Fixations / Saccades) are larger. (UX-191)</li>
 <li>The dataset picker's help icon sits above the + button instead of beside the Select Dataset label. (UX-192)</li>
+<li>The design preset buttons keep their names on an ordinary laptop screen; they shrink to icons only in a window under about 1220 pixels wide. (UX-194)</li>
 <li>A single trial's chips are now a one-row table, a column per field, in the same format as Compare mode's A/B table. (UX-195)</li>
 </ul>
 <p><strong>Fixed</strong></p>
@@ -1911,13 +1912,19 @@ behind each line, and the releases before 0.28.0, are in
 <li>The 📁 folder button no longer crashes the app on macOS, and it opens the system's own folder dialog, including in the desktop app, where it never opened before. (BUG-98)</li>
 <li>Loading a OneStop report no longer warns that its <code>TOP_LEFT</code> column isn't numbers, and the column mapping no longer proposes that text column for the word box's X and Y. (BUG-99)</li>
 <li>A public dataset whose tables load but fail to normalize now says so on the Data page, naming the dataset and the reason, with Edit dataset and Load the bundled demo beside it; the error and its traceback also reach the server terminal. (BUG-100)</li>
+<li>The Line index field's help now says what it does: the plot infers lines from the word boxes, not from this column. (BUG-102)</li>
 <li>PoTeC's trial ID is now the reader and the text together (<code>0_b0</code>), not the text name every reader shares, in the app, the CLI (<code>render --potec -t 0_b0</code>) and <code>load_potec</code>. (DATA-61)</li>
 <li>A built-in dataset's Edit dataset screen (the demo, PoTeC, OneStop) now ends in Save changes: mapping edits wait for it, and Cancel discards them. (DATA-62)</li>
 <li>The docs Gallery's figures draw after you arrive from another page or a heading link, and the site's llms.txt and llms-full.txt list every page again. (ENG-92)</li>
 <li>The docs are corrected where a careful review found them wrong or vague: Pupil Labs coordinates, which measures are computed where, excluding trials by tag, which counts follow the filters, offline HTML, and what a setup file holds. (ENG-93)</li>
+<li>The docs site is published only from a build that passed, and is rebuilt when the scripts and changelog it is generated from change. (ENG-94)</li>
 <li>Switching back to the dataset you had open just before no longer normalizes it again: going PoTeC → OneStop → PoTeC is instant on the way back. (PERF-18)</li>
 <li>The plot no longer shows a scrollbar with nothing to scroll. (UX-188)</li>
 <li>Clicking the plot, or any other embedded frame, now closes an open plot-control popover. (UX-193)</li>
+</ul>
+<p><strong>Security</strong></p>
+<ul>
+<li>Figures no longer offer Plotly's "Share chart…" button, which uploaded the figure and its data to Plotly Cloud — in the app, in saved HTML and on the docs site. (BUG-101)</li>
 </ul>
 <h2 id="0321-2026-10-01">0.32.1 — 2026-10-01<a class="headerlink" href="#0321-2026-10-01" title="Permanent link">&para;</a></h2>
 <p><strong>Added</strong></p>

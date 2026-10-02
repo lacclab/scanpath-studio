@@ -207,5 +207,5 @@ class TestChips:
         at.run(timeout=90)
         assert not at.exception, at.exception
         assert "genre" in at.session_state["trial_chip_fields"]
-        strip = " ".join(m.value for m in at.markdown)
-        assert "Genre = news" in strip, strip[:400]
+        table = " ".join(m.value for m in at.markdown)
+        assert ">Genre</th>" in table and ">news</td>" in table, table[:400]

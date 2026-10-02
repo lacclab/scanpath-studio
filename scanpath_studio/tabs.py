@@ -3401,7 +3401,7 @@ def _summary_rows(
     zeros for two things nobody measured — and a words-only one did the same.
     Reading time needs a recorded dwell time or fixations to sum, the word count
     a words table, the fixation count fixations; a row with nothing behind it is
-    left out, and the chip strip skips a field with no row. The sample count is
+    left out, and the chip table skips a field with no row. The sample count is
     a raw-gaze trial's own headline number, so it is a row whenever the trial
     has samples."""
     stats = compute_trial_stats(trial_words, trial_fixations)
@@ -5082,7 +5082,7 @@ def _trial_chip_entries(
     gaze_samples: int | None = None,
 ) -> list[ChipEntry]:
     """The chips one trial gets for ``fields``, in order, with nothing to show
-    dropped — what both the chip strip and Compare's A/B table draw (UX-190).
+    dropped — what the chip table draws, for one reading or two (UX-190, UX-195).
 
     ``gaze_samples`` is `_summary_rows`' count in place of the samples."""
     entries: list[ChipEntry] = []
@@ -5142,18 +5142,22 @@ def _is_number(value: str) -> bool:
     return True
 
 
-def _compare_chip_table_html(
-    *sides: tuple[str, str, list[ChipEntry]],
+def _chip_table_html(
+    *sides: tuple[str | None, str | None, list[ChipEntry]],
     order,
 ) -> str:
-    """Compare mode's A/B table (UX-190): one column per field, one row per scanpath.
+    """The chips above the plot as a table: one column per field, one row per
+    reading — Compare's A/B table (UX-190) and, with one row, the single trial's
+    (UX-195).
 
-    ``sides`` is ``(name, colour, entries)`` per row — A first. ``order`` is the
-    column order (the ✏️ chip order, Trial ID first); a field that no side has
-    gets no column. Deliberately *not* differences first: the columns would
-    reshuffle every time ◀ ▶ steps to a trial that differs elsewhere.
+    ``sides`` is ``(name, colour, entries)`` per row — A first. A side with no
+    name gets no row label: the single trial's one row has nothing to tell apart,
+    so it has no label column at all. ``order`` is the column order (the ✏️ chip
+    order; Compare puts Trial ID first); a field that no side has gets no
+    column. Deliberately *not* differences first: the columns would reshuffle
+    every time ◀ ▶ steps to a trial that differs elsewhere.
 
-    A value every side shares is written once, in a cell spanning all the rows,
+    With two rows, a value both share is written once, in a cell spanning them,
     and in a quieter weight, so what differs is what stands out. A value one
     side lacks reads ``–``. Each value keeps its chip's tint, as a pill — the
     built-in condition colours and the ones picked in ✏️ (UX-28) — and a column
@@ -5188,8 +5192,10 @@ def _compare_chip_table_html(
         col: all(_is_number(side[col].value) for side in by_side if col in side)
         for col in columns
     }
+    labelled = any(name for name, _color, _entries in sides)
     shared = {
-        col: all(col in side for side in by_side)
+        col: len(sides) > 1
+        and all(col in side for side in by_side)
         and len({side[col].value for side in by_side}) == 1
         for col in columns
     }
@@ -5218,14 +5224,23 @@ def _compare_chip_table_html(
                         attrs=f' rowspan="{len(sides)}"',
                     )
                 )
-        rows.append(
-            '<tr><th scope="row" class="sps-ct-side">'
-            f'<span class="sps-ct-dot" style="background:{html.escape(color)}"></span>'
-            f"{html.escape(name)}</th>{''.join(cells)}</tr>"
-        )
+        label = ""
+        if labelled:
+            dot = (
+                f'<span class="sps-ct-dot" style="background:{html.escape(color)}">'
+                "</span>"
+                if color
+                else ""
+            )
+            label = (
+                f'<th scope="row" class="sps-ct-side">{dot}'
+                f"{html.escape(name or '')}</th>"
+            )
+        rows.append(f"<tr>{label}{''.join(cells)}</tr>")
+    corner = '<td class="sps-ct-corner"></td>' if labelled else ""
     return (
-        '<div class="sps-compare-table-wrap"><table class="sps-compare-table">'
-        f'<thead><tr><td class="sps-ct-corner"></td>{head}</tr></thead>'
+        '<div class="sps-chip-table-wrap"><table class="sps-chip-table">'
+        f"<thead><tr>{corner}{head}</tr></thead>"
         f"<tbody>{''.join(rows)}</tbody></table></div>"
     )
 
@@ -5296,7 +5311,7 @@ def _render_compare_chip_table(fields, *, a: ChipReading, b: ChipReading) -> Non
             (name, color, [trial_id, *(e for e in entries if e.col != "trial_id")])
         )
     st.markdown(
-        _compare_chip_table_html(*sides, order=[_TRIAL_ID_COLUMN, *(fields or [])]),
+        _chip_table_html(*sides, order=[_TRIAL_ID_COLUMN, *(fields or [])]),
         unsafe_allow_html=True,
     )
 
@@ -5309,16 +5324,10 @@ def _render_trial_condition_chips(
     *,
     trial_raw_gaze: pd.DataFrame | None = None,
 ) -> None:
-    """Render the ``Field = Value`` chip strip above the plot — the trial's
-    identity and experiment conditions, so "what am I looking at" is answered at
-    a glance (these chips replaced the Trial Info subtab).
-
-    **UX-11.** The strip used to be pinned to one line, clipping whatever didn't
-    fit, with a **More** disclosure that re-listed *every* chip so the clipped
-    ones stayed reachable — the same facts shown twice, because which chips fit
-    is a live-width question Python can't answer. The fix is to stop asking: the
-    strip is a wrapping flex row, so nothing is ever cut at any width or rail
-    state, and the duplicate list has no reason to exist.
+    """Render the chips above the plot — the trial's identity and experiment
+    conditions, so "what am I looking at" is answered at a glance (these chips
+    replaced the Trial Info subtab). Since UX-195 they are a one-row table, a
+    column per field, rather than a wrapping strip of ``Field = Value`` chips.
 
     ``fields`` is the configurable list of fields to surface (the ✏️ Edit chips
     popover). A data column that varies within the trial is shown (first value)
@@ -5332,8 +5341,8 @@ def _render_trial_condition_chips(
     now — picked, ordered and coloured in the ✏️ popover like every other field
     — so the popover is gone and this returns nothing.
 
-    One reading only: Compare mode draws `_compare_chip_table_html` in its place
-    (UX-190), from the same `_trial_chip_entries`."""
+    **UX-195** drew it as `_chip_table_html`'s one-row table — the format
+    Compare's A/B table (UX-190) introduced, so the two modes read alike."""
     entries = _trial_chip_entries(
         trial_words,
         trial_fixations,
@@ -5342,18 +5351,8 @@ def _render_trial_condition_chips(
         trial_raw_gaze=trial_raw_gaze,
     )
     if entries:
-        # The reader-level mark is the icon's own HTML (UX-138 — a shortcode is
-        # inert inside raw HTML), so only the text is escaped.
         st.markdown(
-            '<div class="sps-trial-chips">'
-            + "".join(
-                f'<span class="sps-chip" style="background:{e.color};">'
-                + ("" if e.trial_level else f"{icon_html('warning')} ")
-                + html.escape(f"{e.label} = {e.value}")
-                + "</span>"
-                for e in entries
-            )
-            + "</div>",
+            _chip_table_html((None, None, entries), order=list(fields or [])),
             unsafe_allow_html=True,
         )
 
@@ -6521,8 +6520,8 @@ def render_single_trial_tab(
         # now that the computed stats are chips of their own (see
         # `_render_trial_condition_chips`).
         # The Participant chip already identifies the reading. Do not repeat
-        # the same id in a title cell; use that width for the chip strip (or,
-        # in Compare, the A/B table).
+        # the same id in a title cell; use that width for the chip table (one
+        # row, or Compare's A and B).
         strip_col, trail_col = st.columns(
             SELECTOR_ROW_WIDE_GRID, vertical_alignment="top"
         )

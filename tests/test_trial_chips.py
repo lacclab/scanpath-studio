@@ -52,9 +52,9 @@ def test_every_summary_field_is_still_pickable():
         assert key in options, key
 
 
-def test_a_summary_field_renders_as_a_chip_not_a_popover(monkeypatch):
-    """The strip writes `Label = Value` for a computed field exactly as it does
-    for a data column, and returns nothing for a popover to show."""
+def test_a_summary_field_renders_as_a_column_not_a_popover(monkeypatch):
+    """The chip table gives a computed field a column exactly as it does a data
+    column, and returns nothing for a popover to show."""
     import pandas as pd
 
     from scanpath_studio import tabs
@@ -80,9 +80,9 @@ def test_a_summary_field_renders_as_a_chip_not_a_popover(monkeypatch):
     )
 
     assert result is None
-    strip = " ".join(written)
-    assert "Total reading time (s) = 12.3" in strip
-    assert "Number of fixations = 154" in strip
+    table = " ".join(written)
+    assert ">Total reading time (s)</th>" in table and ">12.3</td>" in table
+    assert ">Number of fixations</th>" in table and ">154</td>" in table
 
 
 def test_the_summary_stats_popover_is_gone():

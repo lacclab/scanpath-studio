@@ -744,6 +744,22 @@ def _save_entry_callback(
     )
 
 
+def widget_slug(
+    participant_id: str, trial_id: str, screen_id: str | None = None
+) -> str:
+    """The per-trial editor's widget-key suffix: the store key, unambiguously.
+
+    BUG-110: joining the ids with ``__`` and writing the parent scope as the
+    word ``parent`` gave ``("a__b", "c")`` and ``("a", "b__c")`` — or a trial's
+    parent and its screen named ``parent`` — the same widget keys, so opening
+    the one seeded its editor from the other's values and saved them as its
+    own. A JSON list keeps every id whole and writes the parent as ``null``.
+    """
+    ident = [str(participant_id), str(trial_id)]
+    ident.append(None if screen_id is None else str(screen_id))
+    return json.dumps(ident, ensure_ascii=False)
+
+
 def render_trial_annotations(
     participant_id: str,
     trial_id: str,
@@ -756,7 +772,7 @@ def render_trial_annotations(
     ``bare=True`` drops the expander wrapper so it can sit inside a subtab."""
     annotation_screen = None
     if screen_id is not None:
-        scope_key = f"{_WIDGET_PREFIX}scope_{participant_id}__{trial_id}"
+        scope_key = f"{_WIDGET_PREFIX}scope_{widget_slug(participant_id, trial_id)}"
         scope = panel_field(
             st,
             "radio",
@@ -770,7 +786,7 @@ def render_trial_annotations(
         if scope == "This screen":
             annotation_screen = str(screen_id)
     entry = get_entry(participant_id, trial_id, annotation_screen)
-    slug = f"{participant_id}__{trial_id}__{annotation_screen or 'parent'}"
+    slug = widget_slug(participant_id, trial_id, annotation_screen)
     star_key = f"{_WIDGET_PREFIX}star_{slug}"
     tags_key = f"{_WIDGET_PREFIX}tags_{slug}"
     note_key = f"{_WIDGET_PREFIX}note_{slug}"

@@ -395,32 +395,25 @@ class TestBuildShareQuery:
         assert fake_st.session_state["global_anim_grid_step_ms"] == 500
         assert fake_st.session_state["global_anim_max_frames"] == 30
 
-    def test_onestop_public_source_shares_variant_regime_parts(self, fake_st):
-        # DATA-3: the public OneStop corpus + its variant/regime/parts round-trip
-        # through the share link (build → apply).
-        from scanpath_studio.constants import ONESTOP_PUBLIC_CHOICE
+    def test_a_onestop_regime_shares_as_its_own_token(self, fake_st):
+        # DATA-3 + DATA-63: each regime is its own dataset and its own token;
+        # the session's leftover regime/parts keys don't ride along.
+        from scanpath_studio.constants import ONESTOP_REGIME_CHOICES
 
         fake_st.session_state = {
             "_share_selection": {"participant_id": "p1", "trial_id": "t1"},
-            "onestop_variant": "public",
-            "onestop_regime": "repeated",
+            "onestop_regime": "ordinary",
             "onestop_parts": ["Paragraph", "Title"],
         }
-        query, _ = _build_share_query(ONESTOP_PUBLIC_CHOICE)
+        query, _ = _build_share_query(ONESTOP_REGIME_CHOICES["repeated"])
         parsed = parse_qs(query)
-        assert parsed["source"] == ["onestop_public"]
-        assert parsed["onestop_variant"] == ["public"]
-        assert parsed["onestop_regime"] == ["repeated"]
-        assert parsed["onestop_parts"] == ["Paragraph,Title"]
+        assert parsed["source"] == ["onestop_repeated"]
+        assert "onestop_regime" not in parsed
+        assert "onestop_parts" not in parsed
 
-        # Apply the link into a fresh session → the options are seeded pre-widget.
         fake_st.session_state = {}
         fake_st.query_params = {k: v[0] for k, v in parsed.items()}
-        assert _apply_url_preset() == "onestop_public"
-        ss = fake_st.session_state
-        assert ss["onestop_variant"] == "public"
-        assert ss["onestop_regime"] == "repeated"
-        assert ss["onestop_parts"] == ["Paragraph", "Title"]
+        assert _apply_url_preset() == "onestop_repeated"
 
     def test_onestop_options_not_shared_for_other_sources(self, fake_st):
         # The onestop_* params are emitted only when the source IS public OneStop.

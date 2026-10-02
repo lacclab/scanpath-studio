@@ -19,7 +19,6 @@ cycle (the same reason `wizard.py` is imported lazily by `app`).
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 
 import pandas as pd
@@ -30,11 +29,10 @@ from .constants import (
     DEMO_CHOICE,
     EYEGENBENCH_DEFAULT_DIR,
     MULTIPLEYE_DEFAULT_DIR,
-    ONESTOP_LACCLAB_DEFAULT_DIR,
-    ONESTOP_PUBLIC_CHOICE,
     ONESTOP_PUBLIC_DEFAULT_DIR,
     POTEC_DEFAULT_DIR,
     SYNTHETIC_CHOICE,
+    onestop_regime_for_choice,
 )
 from .experimental_setup import Provenance, SetupSnapshot
 from .session_keys import COMPARE_SOURCE_STATE_KEY
@@ -108,21 +106,12 @@ def _public_location(label: str) -> tuple[str, dict]:
         return _resolved_dir("eyegenbench_dir", EYEGENBENCH_DEFAULT_DIR), {
             "dataset": dataset,
         }
-    if label == ONESTOP_PUBLIC_CHOICE:
-        variant = str(st.session_state.get("onestop_variant") or "public")
-        default = (
-            os.environ.get("ONESTOP_LACCLAB_DIR", "").strip()
-            or ONESTOP_LACCLAB_DEFAULT_DIR
-            if variant == "lacclab"
-            else ONESTOP_PUBLIC_DEFAULT_DIR
-        )
-        parts = tuple(
-            st.session_state.get("onestop_parts") or datasets.ONESTOP_DEFAULT_PARTS
-        )
-        return _resolved_dir(f"onestop_{variant}_dir", default), {
-            "variant": variant,
-            "regime": str(st.session_state.get("onestop_regime") or "ordinary"),
-            "parts": parts,
+    if regime := onestop_regime_for_choice(label):
+        # DATA-63: one dataset per regime, every part, from the public release.
+        return _resolved_dir("onestop_public_dir", ONESTOP_PUBLIC_DEFAULT_DIR), {
+            "variant": "public",
+            "regime": regime,
+            "parts": tuple(datasets.onestop_regime_parts(regime)),
         }
     if _POTEC_LABEL_HINT in label:
         return _resolved_dir("potec_dir", POTEC_DEFAULT_DIR), {}
@@ -184,7 +173,7 @@ def _public_ready_cached(
             from scanpath_studio.eyegenbench import eyegenbench_present
 
             present = eyegenbench_present(root, dataset)
-        elif label == ONESTOP_PUBLIC_CHOICE:
+        elif onestop_regime_for_choice(label):
             present = datasets.onestop_present(
                 root,
                 regime=kwargs["regime"],
@@ -266,7 +255,7 @@ def _load_public_frames(
         from scanpath_studio.eyegenbench import load_eyegenbench
 
         return load_eyegenbench(root, dataset=dataset)
-    if label == ONESTOP_PUBLIC_CHOICE:
+    if onestop_regime_for_choice(label):
         return datasets.load_onestop(
             root,
             regime=kwargs["regime"],

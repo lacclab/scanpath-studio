@@ -307,12 +307,16 @@ def test_the_packaged_sources_publish_figures(token):
     assert app.published_dataset_counts(token)
 
 
-@pytest.mark.parametrize(
-    "corpus", ["PoTeC — Potsdam Textbook Corpus", app.ONESTOP_PUBLIC_CHOICE]
-)
-def test_the_public_corpora_publish_figures(corpus):
+def test_the_public_corpora_publish_figures():
     """The rows this item exists for: opened by nobody, and no longer blank."""
-    assert app.published_dataset_counts(corpus)
+    assert app.published_dataset_counts("PoTeC — Potsdam Textbook Corpus")
+
+
+@pytest.mark.parametrize("regime", list(app.ONESTOP_REGIME_CHOICES))
+def test_a_onestop_regime_publishes_no_figure_it_cannot_vouch_for(regime):
+    """DATA-63: the corpus publishes whole-release figures, not per regime, so a
+    regime's row says *Not loaded* until it is opened rather than quoting them."""
+    assert not app.published_dataset_counts(app.ONESTOP_REGIME_CHOICES[regime])
 
 
 class TestTheTableItself:

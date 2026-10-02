@@ -92,12 +92,11 @@ from scanpath_studio.constants import (
     MULTIPLEYE_BUNDLE_CHOICE,
     MULTIPLEYE_DEFAULT_DIR,
     ONESTOP_CHOICE,
-    ONESTOP_LACCLAB_DEFAULT_DIR,
-    ONESTOP_PART_LABELS,
-    ONESTOP_PUBLIC_CHOICE,
+    ONESTOP_LEGACY_SOURCE_TOKEN,
     ONESTOP_PUBLIC_DEFAULT_DIR,
+    ONESTOP_REGIME_CHOICES,
     ONESTOP_REGIME_LABELS,
-    ONESTOP_VARIANT_LABELS,
+    ONESTOP_REGIME_SOURCE_TOKENS,
     POTEC_DEFAULT_DIR,
     PUBLIC_DATASETS_CHOICE,
     RAW_GAZE_LINK_FOR_KEY,
@@ -966,38 +965,24 @@ the files.
 """
 
 
-def _onestop_structure_md(regime: str, parts: list, variant: str) -> str:
-    """Expected-files note for the OneStop public source (regime/parts/variant)."""
+def _onestop_structure_md(regime: str) -> str:
+    """Expected-files note for one OneStop regime's dataset (DATA-63)."""
     from scanpath_studio import datasets
 
-    lines = []
-    for part in parts or ["Paragraph"]:
-        for kind in ("ia", "fixations"):
-            path = datasets._onestop_part_paths(
-                Path("<dir>"), kind, regime, part, variant
-            )
-            lines.append(f"├─ {path.name}")
-    listing = "\n".join(lines)
-    if variant == "lacclab":
-        return f"""\
-**Expected files** — a LaCC lab OneStop export folder holding the chosen parts'
-reports (per-part `ia_*` / `fixations_*` CSV.zip, no regime suffix). No download —
-point at your local export:
-```
-<dir>/
-{listing}
-```
-"""
+    listing = "\n".join(
+        f"├─ {datasets._onestop_report_path(Path('<dir>'), kind, regime, part).name}"
+        for part in datasets.onestop_regime_parts(regime)
+        for kind in ("ia", "fixations")
+    )
     return f"""\
-**Expected files** — the OSF reports for the chosen regime + parts, placed
+**Expected files** — the OSF reports for every part of this regime, placed
 directly in the folder (or fetched by **Download**). Only *Paragraph* is
-regime-split on OSF; the other parts come from the all-regimes full release:
+regime-split on OSF; the other parts come from the all-regimes full release,
+which the four OneStop datasets share, and are cut to this regime when read:
 ```
 <dir>/
 {listing}
 ```
-Switch **Reading regime** / **Parts** above to load different ones (each is a
-separate download).
 """
 
 
@@ -1595,105 +1580,50 @@ def _cached_onestop_raw_frames(
     return onestop_raw_frames(root, regime=regime, parts=list(parts), variant=variant)
 
 
-def _onestop_env_default_dir(variant: str) -> str:
-    """Default OneStop data dir for a variant (env-overridable for the lacclab one)."""
-    if variant == "lacclab":
-        return os.environ.get("ONESTOP_LACCLAB_DIR", "").strip() or (
-            ONESTOP_LACCLAB_DEFAULT_DIR
-        )
-    return ONESTOP_PUBLIC_DEFAULT_DIR
-
-
-def _load_onestop_public_source(
-    options_host=None, location_host=None
+def _load_onestop_regime_source(
+    options_host=None, location_host=None, *, regime: str
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Sidebar controls + loader for the OneStop corpus (OSF or LaCC lab).
+    """Loader for one OneStop regime's dataset — every part, from OSF (DATA-63).
 
-    OneStop's interest-area + fixation reports share the bundled demo's schema
-    across every trial part, so this fetches (public variant) or reads (lacclab
-    variant) the chosen reading regime + parts and hands the raw frames to the
-    normal normalization pipeline — the Column-mapping panels still appear and
-    stay overridable. Distinct from the env-var "OneStop server bundle" source,
-    which serves a lacclab export (and per-pid shards for deep links).
+    Each reading regime is its own entry in the dataset table, so there are no
+    source options to pick: the regime is the dataset, and it holds all of that
+    regime's parts (`datasets.onestop_regime_parts`), each part its own trial.
+    The reports are the public OSF release, downloaded once into one folder the
+    four regimes share (the parts other than Paragraph are the same files for
+    all of them). They share the bundled demo's schema, so the raw frames go
+    through the normal normalization pipeline and the Column-mapping panels
+    still appear. Distinct from the env-var "OneStop server bundle" source.
 
-    ``options_host`` / ``location_host`` are the DATA-9 sub-slots (source
-    options above, data location below); default to their own expanders so the
-    loader still works standalone.
+    ``options_host`` is unused (kept for the registry's loader signature);
+    ``location_host`` is the DATA-9 data-location sub-slot.
     """
     from scanpath_studio import datasets
 
-    opt = options_host if options_host is not None else st.container()
     loc = location_host if location_host is not None else st.container()
-    variant = opt.selectbox(
-        "Variant",
-        options=list(ONESTOP_VARIANT_LABELS),
-        format_func=lambda v: ONESTOP_VARIANT_LABELS[v],
-        key="onestop_variant",
-        persist_state="session",
-        help="Public downloads the reports from OSF on demand; LaCC lab reads a "
-        "local lab-processed export (extra derived columns, no download).",
-    )
-    regime = opt.selectbox(
-        "Reading regime",
-        options=list(ONESTOP_REGIME_LABELS),
-        format_func=lambda r: ONESTOP_REGIME_LABELS[r],
-        key="onestop_regime",
-        persist_state="session",
-        help="Which OneStop reading regime to load. For the public variant each "
-        "is a separate OSF download of the paragraph reports.",
-    )
-    # Seeded rather than `default=`-ed: a deep link seeds `onestop_parts`
-    # pre-widget (`url_state._apply_url_preset`), and passing both makes
-    # Streamlit warn about the collision (BUG-17). This picker renders only while
-    # the OneStop public source is selected, so it can first mount on a later run —
-    # `persist_state="session"` on the widget is what makes it come up carrying the
-    # seeded/deep-linked value rather than empty (BUG-15 / ENG-36).
-    _pin("onestop_parts", list(datasets.ONESTOP_DEFAULT_PARTS))
-    parts = opt.multiselect(
-        "Parts",
-        options=list(ONESTOP_PART_LABELS),
-        format_func=lambda p: ONESTOP_PART_LABELS[p],
-        key="onestop_parts",
-        persist_state="session",
-        help="Which trial screens to load. Paragraph is the reading passage; the "
-        "others are the surrounding screens (title / question / answers / "
-        "feedback). Loading several makes each part its own trial.",
-    )
-    parts = parts or list(datasets.ONESTOP_DEFAULT_PARTS)
-    default_dir = _onestop_env_default_dir(variant)
+    parts = datasets.onestop_regime_parts(regime)
     root = _dataset_dir_input(
         loc,
-        default_dir=default_dir,
-        dir_help=(
-            "Folder holding a LaCC lab OneStop export."
-            if variant == "lacclab"
-            else "Folder to download the OneStop reports into (cached on disk, "
-            "so only the first load fetches them)."
-        ),
-        structure_md=_onestop_structure_md(regime, parts, variant),
-        key_prefix=f"onestop_{variant}",
+        default_dir=ONESTOP_PUBLIC_DEFAULT_DIR,
+        dir_help="Folder to download the OneStop reports into (cached on disk, so "
+        "only the first load fetches them). The four OneStop datasets can share it.",
+        structure_md=_onestop_structure_md(regime),
+        key_prefix="onestop_public",
     )
-    present = datasets.onestop_present(
-        root, regime=regime, parts=parts, variant=variant
-    )
+    present = datasets.onestop_present(root, regime=regime, parts=parts)
     ready = _dataset_access_status(
         loc,
         root=root,
         present=present,
-        # Only the public variant can download; the lacclab export is local.
-        download=(
-            (lambda r: datasets.download_onestop(r, regime=regime, parts=parts))
-            if variant == "public"
-            else None
-        ),
-        size_hint="OSF reports, tens–hundreds MB per part",
-        key_prefix=f"onestop_{variant}",
-        label=f"OneStop Eye Movements ({ONESTOP_VARIANT_LABELS[variant]})",
+        download=lambda r: datasets.download_onestop(r, regime=regime, parts=parts),
+        size_hint=f"{2 * len(parts)} OSF reports, hundreds of MB each",
+        # Per regime: two regimes' Download buttons must not share a key.
+        key_prefix=f"onestop_{regime}",
+        label=ONESTOP_REGIME_CHOICES[regime],
     )
     if not ready:
         return load_sample_data()
     try:
-        return _cached_onestop_raw_frames(root, regime, tuple(parts), variant)
+        return _cached_onestop_raw_frames(root, regime, tuple(parts), "public")
     except (FileNotFoundError, ValueError, OSError) as exc:
         loc.error(f"Couldn't load OneStop from `{root}`: {exc}")
         return pd.DataFrame(), pd.DataFrame()
@@ -2030,6 +1960,52 @@ def _load_benchmark_source(
 #: (`constants.multipleye_enabled`) has to find it.
 MULTIPLEYE_PUBLIC_CHOICE = "MultiplEYE — multilingual reading (ZH-CH sample)"
 
+#: DATA-63 — a regime dataset's ``?source=`` token → its registry label.
+ONESTOP_REGIME_TOKEN_CHOICES = {
+    token: ONESTOP_REGIME_CHOICES[regime]
+    for regime, token in ONESTOP_REGIME_SOURCE_TOKENS.items()
+}
+
+#: DATA-63 — what each OneStop regime's dataset says about itself.
+_ONESTOP_REGIME_DESCRIPTIONS = {
+    "ordinary": "native English speakers reading Guardian articles for "
+    "comprehension, without seeing the question first.",
+    "information_seeking": "native English speakers reading Guardian articles "
+    "after seeing the question they will answer.",
+    "repeated": "native English speakers reading a paragraph for the second "
+    "time, without seeing the question first.",
+    "information_seeking_repeated": "native English speakers reading a "
+    "paragraph for the second time, after seeing the question.",
+}
+
+
+def _onestop_regime_entry(regime: str) -> dict:
+    """The registry entry for one OneStop regime's dataset (DATA-63).
+
+    No ``published_counts``: the corpus publishes its figures for the whole
+    release, not per regime, and DATA-36 shows a published figure only where
+    it is true of the row — so a row fills in once its dataset is opened.
+    """
+    label = ONESTOP_REGIME_LABELS[regime]
+    return dict(
+        loader=partial(_load_onestop_regime_source, regime=regime),
+        # OneStop presentation monitor (full-screen px coords). Sourced in
+        # `eyegenbench_geometry.DISPLAY_SPECS["onestop"]` — Berzak et al. 2025,
+        # Sci Data 12:1995, Methods → Apparatus, which states the Dell U2715H
+        # at 2560 px × 1440 px over a 597 mm × 336 mm display area.
+        monitor=(2560, 1440),
+        # Distinct per regime: `short` is the stable identifier a Share link's
+        # corpus slug and the code snippet are derived from.
+        short=f"OneStop · {label}",
+        onestop_regime=regime,
+        language="English (L1)",
+        size=f"{label} · every trial part, from the OSF release",
+        description=f"OneStop Eye Movements, {label.lower()} — "
+        f"{_ONESTOP_REGIME_DESCRIPTIONS[regime]}",
+        link="https://github.com/lacclab/OneStop-Eye-Movements",
+    )
+
+
 PUBLIC_DATASET_REGISTRY: dict = {
     "PoTeC — Potsdam Textbook Corpus": dict(
         loader=_load_potec_source,
@@ -2076,48 +2052,11 @@ PUBLIC_DATASET_REGISTRY: dict = {
         # wide number that would be true of the next person's copy — the row
         # fills in the moment it is opened, which is the honest answer.
     ),
-    ONESTOP_PUBLIC_CHOICE: dict(
-        loader=_load_onestop_public_source,
-        # OneStop presentation monitor (full-screen px coords). Sourced in
-        # `eyegenbench_geometry.DISPLAY_SPECS["onestop"]` — Berzak et al. 2025,
-        # Sci Data 12:1995, Methods → Apparatus, which states the Dell U2715H
-        # at 2560 px × 1440 px over a 597 mm × 336 mm display area.
-        monitor=(2560, 1440),
-        short="OneStop",
-        language="English (L1)",
-        # Verified against the OneStop docs (lacclab.github.io/OneStop-Eye-Movements
-        # / Berzak et al. 2025): 360 participants, 30 Guardian articles = 162
-        # paragraphs (each in Advanced + Elementary), ~19.4k regular trials.
-        # The release also ships a practice article (`article_id` 0) that those
-        # figures do not count: 2 paragraphs, Advanced only, repeated in all
-        # three batches. That is the whole of the gap to the 330 texts below.
-        size="360 readers · 30 articles (162 paragraphs) · ~19.4k trials",
-        description="OneStop Eye Movements — native English speakers reading "
-        "Guardian articles, some with a question shown beforehand and some for "
-        "a second time.",
-        link="https://github.com/lacclab/OneStop-Eye-Movements",
-        # DATA-36. **Texts** counts one paragraph at one difficulty level: the
-        # composed `unique_paragraph_id` (BUG-43) makes Advanced and Elementary
-        # two texts rather than two renderings of one, exactly as the bundled
-        # demo's ids do. Before that fix `text_id` mapped to `paragraph_id` —
-        # the index *within* an article — and the whole corpus read as seven
-        # texts, which is why this figure was left unpublished until now.
-        published_counts={
-            "Participants": 360,
-            "Texts": 330,
-            "Trials": 24046,
-            "Words": 2632159,
-            "Fixations": 2400788,
-        },
-        published_counts_source=(
-            "360 readers is the corpus' own figure (Berzak et al. 2025); the rest "
-            "was measured from the public OSF release across all four regimes, so "
-            "one load holds a fraction of them. 330 texts is the 162 paragraphs "
-            "at two difficulty levels, plus the six Advanced-only texts of the "
-            "practice article (`article_id` 0), which the corpus' published "
-            "30 articles / 162 paragraphs does not count."
-        ),
-    ),
+    # DATA-63: one dataset per reading regime, each holding every part.
+    **{
+        ONESTOP_REGIME_CHOICES[regime]: _onestop_regime_entry(regime)
+        for regime in ONESTOP_REGIME_CHOICES
+    },
 }
 
 
@@ -4950,8 +4889,9 @@ _DATASET_SEARCH_KEY = "dataset_table_search"
 _DATASET_KIND_FILTER_KEY = "dataset_table_kinds"
 _DATASET_LANGUAGE_FILTER_KEY = "dataset_table_languages"
 #: Search and the Kind / Language filters appear only past this many rows — on
-#: the short default list they would be controls with nothing to narrow.
-_DATASET_FILTER_MIN_ROWS = 8
+#: the short default list they would be controls with nothing to narrow. Ten,
+#: since DATA-63 made OneStop four rows: the default list is eight.
+_DATASET_FILTER_MIN_ROWS = 10
 _DATASET_SORTABLE = ("Kind", "Dataset", *DATASET_COUNT_FIELDS, "Status")
 #: Cell widths, in px, shared by the header and every row so the columns line
 #: up. The name takes whatever is left (`width="stretch"`, with a CSS minimum).
@@ -5052,176 +4992,11 @@ def _dataset_table_rows(
 
 
 def _open_dataset_row(token: str) -> None:
-    """UX-78 — a click anywhere on a dataset's row opens it.
-
-    DATA-63: OneStop's row asks first. The corpus is a download of tens to
-    hundreds of MB per regime and part, so which regime and parts to open is
-    chosen before the first load, in `_onestop_subset_dialog`, not on ✏️ Edit
-    dataset after the default has already been fetched.
-    """
+    """UX-78 — a click anywhere on a dataset's row opens it."""
     if token == st.session_state.get("data_source_choice"):
-        return
-    if token == ONESTOP_PUBLIC_CHOICE:
-        _arm_onestop_subset_dialog(token)
         return
     _select_dataset(token)
     st.session_state[_TABLE_NEEDS_APP_RERUN] = True
-
-
-#: DATA-63 — the OneStop row the subset dialog was opened for. Armed by the
-#: row's callback and read by the table, like `PENDING_DELETE_KEY`.
-PENDING_ONESTOP_SUBSET_KEY = "_dataset_pending_onestop_subset"
-#: The dialog's own pickers. Not the ``onestop_*`` keys the ✏️ Edit dataset
-#: pickers own: Cancel must leave those untouched, so the dialog edits a copy
-#: and **Open** writes it back.
-_ONESTOP_PICK_KEYS = {
-    "variant": "onestop_pick_variant",
-    "regime": "onestop_pick_regime",
-    "parts": "onestop_pick_parts",
-}
-
-
-def _arm_onestop_subset_dialog(token: str) -> None:
-    """Seed the dialog's pickers from the current choice, then arm it."""
-    from scanpath_studio import datasets
-
-    st.session_state[_ONESTOP_PICK_KEYS["variant"]] = (
-        st.session_state.get("onestop_variant") or "public"
-    )
-    st.session_state[_ONESTOP_PICK_KEYS["regime"]] = (
-        st.session_state.get("onestop_regime") or "ordinary"
-    )
-    st.session_state[_ONESTOP_PICK_KEYS["parts"]] = list(
-        st.session_state.get("onestop_parts") or datasets.ONESTOP_DEFAULT_PARTS
-    )
-    st.session_state[PENDING_ONESTOP_SUBSET_KEY] = token
-
-
-def _dismiss_onestop_subset_dialog() -> None:
-    """``on_dismiss`` — ✕ / Escape disarms it (the BUG-36 trap, as for Remove)."""
-    st.session_state.pop(PENDING_ONESTOP_SUBSET_KEY, None)
-
-
-def _onestop_root(variant: str) -> str:
-    """The folder ``_load_onestop_public_source`` will read ``variant`` from.
-
-    Mirrors ``_dataset_dir_input`` without drawing it: the typed location when
-    the path box is the user's, else the server's configured one (S2).
-    """
-    default_dir = _onestop_env_default_dir(variant)
-    if not local_filesystem_enabled():
-        return str(data_root()) if data_root() else _resolve_data_dir(default_dir)
-    return _resolve_data_dir(
-        st.session_state.get(f"onestop_{variant}_dir", default_dir)
-    )
-
-
-def _apply_onestop_subset(token: str) -> None:
-    """**Open**'s callback: the dialog's choice becomes the loader's, then open.
-
-    A callback because it writes the ``onestop_*`` widget keys, which may only
-    be assigned before their widgets instantiate in a run.
-    """
-    st.session_state["onestop_variant"] = st.session_state[
-        _ONESTOP_PICK_KEYS["variant"]
-    ]
-    st.session_state["onestop_regime"] = st.session_state[_ONESTOP_PICK_KEYS["regime"]]
-    st.session_state["onestop_parts"] = list(
-        st.session_state[_ONESTOP_PICK_KEYS["parts"]]
-    )
-    st.session_state.pop(PENDING_ONESTOP_SUBSET_KEY, None)
-    _select_dataset(token)
-
-
-@st.dialog("Open OneStop Eye Movements", on_dismiss=_dismiss_onestop_subset_dialog)
-def _onestop_subset_dialog(token: str) -> None:
-    """DATA-63 — choose OneStop's regime and parts before it loads.
-
-    The same three choices as ✏️ Edit dataset's pickers (which stay, for
-    changing them later), with whether that subset is already on disk. As in
-    ``_delete_confirmation_dialog``, the buttons are handled by their return
-    value plus ``st.rerun(scope="app")``: a dialog body is a fragment.
-    """
-    from scanpath_studio import datasets
-
-    # `persist_state="session"` on each picker, as on every wire-format widget
-    # (ENG-36): without it a rerun that does not reach the table drops the
-    # seeded choice, and the dialog comes back on Ordinary with no parts.
-    st.caption(
-        "OneStop is split into reading regimes and trial parts, each its own "
-        "download. Choose which to open; you can change it later on ✏️ **Edit "
-        "dataset**."
-    )
-    variant = st.selectbox(
-        "Variant",
-        options=list(ONESTOP_VARIANT_LABELS),
-        format_func=lambda v: ONESTOP_VARIANT_LABELS[v],
-        key=_ONESTOP_PICK_KEYS["variant"],
-        persist_state="session",
-    )
-    regime = st.selectbox(
-        "Reading regime",
-        options=list(ONESTOP_REGIME_LABELS),
-        format_func=lambda r: ONESTOP_REGIME_LABELS[r],
-        key=_ONESTOP_PICK_KEYS["regime"],
-        persist_state="session",
-    )
-    parts = st.multiselect(
-        "Parts",
-        options=list(ONESTOP_PART_LABELS),
-        format_func=lambda p: ONESTOP_PART_LABELS[p],
-        key=_ONESTOP_PICK_KEYS["parts"],
-        persist_state="session",
-        help="Paragraph is the reading passage; the others are the screens "
-        "around it. Loading several makes each part its own trial.",
-    )
-    root = _onestop_root(variant)
-    if not parts:
-        st.caption("Choose at least one part.")
-    elif root and datasets.onestop_present(
-        root, regime=regime, parts=parts, variant=variant
-    ):
-        st.success(f"Already on this computer, in `{root}`.")
-    elif variant == "public":
-        files = 2 * len(parts)
-        st.info(
-            f"Not downloaded yet: {files} OSF reports, tens to hundreds of MB per "
-            "part. **Open** offers the download."
-        )
-    else:
-        st.warning(
-            "Not found in the LaCC lab export folder. Set its location on ✏️ "
-            "**Edit dataset** after opening."
-        )
-    yes, no = st.columns(2)
-    if yes.button(
-        "Open",
-        key="onestop_subset_open",
-        type="primary",
-        width="stretch",
-        disabled=not parts,
-        on_click=_apply_onestop_subset,
-        args=(token,),
-    ):
-        st.rerun(scope="app")
-    if no.button(
-        "Cancel",
-        key="onestop_subset_cancel",
-        width="stretch",
-        on_click=_dismiss_onestop_subset_dialog,
-    ):
-        st.rerun(scope="app")
-
-
-def _render_onestop_subset_dialog(tokens: list) -> None:
-    """Open the DATA-63 dialog when the OneStop row armed it."""
-    token = st.session_state.get(PENDING_ONESTOP_SUBSET_KEY)
-    if token is None:
-        return
-    if token not in tokens:
-        st.session_state.pop(PENDING_ONESTOP_SUBSET_KEY, None)
-        return
-    _onestop_subset_dialog(token)
 
 
 def _edit_open_dataset(token: str) -> None:
@@ -5574,7 +5349,6 @@ def render_dataset_table(
         box.caption("No dataset matches the search and filters.")
 
     _render_delete_confirmation(box, tokens, uploaded)
-    _render_onestop_subset_dialog(tokens)
     if note := st.session_state.pop("_dataset_table_note", None):
         box.success(note)
 
@@ -7385,11 +7159,18 @@ def _run_app() -> None:
         )
     elif url_source == "author":
         linked_choice = st.session_state.setdefault("data_source_choice", AUTHOR_CHOICE)
-    elif url_source == "onestop_public" and public_datasets_enabled():
-        # DATA-3: the public OneStop corpus is shareable. Land on it in the flat
-        # picker; _apply_url_preset already seeded onestop_variant/regime/parts.
+    elif (
+        url_source in ONESTOP_REGIME_TOKEN_CHOICES
+        or url_source == ONESTOP_LEGACY_SOURCE_TOKEN
+    ) and public_datasets_enabled():
+        # DATA-3: the public OneStop corpus is shareable. DATA-63: one dataset
+        # per regime, each its own token; a DATA-3 link's `onestop_public` names
+        # its regime in `onestop_regime` (seeded by _apply_url_preset).
+        regime = st.session_state.get("onestop_regime")
         linked_choice = st.session_state.setdefault(
-            "data_source_choice", ONESTOP_PUBLIC_CHOICE
+            "data_source_choice",
+            ONESTOP_REGIME_TOKEN_CHOICES.get(url_source)
+            or ONESTOP_REGIME_CHOICES.get(regime, ONESTOP_REGIME_CHOICES["ordinary"]),
         )
     elif url_source == CORPUS_SOURCE_TOKEN:
         # DATA-27 (Task 12): `?source=corpus&corpus=<slug>` names ONE entry of

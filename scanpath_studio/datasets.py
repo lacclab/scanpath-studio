@@ -545,6 +545,55 @@ _ONESTOP_REGIMES = {
 
 ONESTOP_VARIANTS = ("public", "lacclab")
 
+# DATA-63: what makes a trial belong to a regime, as the corpus records it on
+# every report — ``(question_preview, repeated_reading_trial)``. The per-regime
+# Paragraph files are exactly these slices (checked against the OSF ordinary
+# file: every row is ``(False, False)``), and the all-regimes reports of the
+# other parts carry the same two columns, so they are cut to the regime by the
+# same rule instead of handing every regime's trials to each one.
+_ONESTOP_REGIME_FLAGS: dict[str, tuple[bool, bool]] = {
+    "ordinary": (False, False),
+    "information_seeking": (True, False),
+    "repeated": (False, True),
+    "information_seeking_repeated": (True, True),
+}
+_ONESTOP_REGIME_COLUMNS: tuple[str, ...] = (
+    "question_preview",
+    "repeated_reading_trial",
+)
+
+
+def onestop_regime_parts(regime: str) -> list[str]:
+    """Every trial part a reader in ``regime`` saw, in presentation order.
+
+    All seven, except the question-preview screen, which only the
+    information-seeking regimes show — its report holds no trial of the others,
+    so loading it there would download a file to keep none of it.
+    """
+    if regime not in _ONESTOP_REGIME_FLAGS:
+        raise ValueError(
+            f"regime must be one of {sorted(_ONESTOP_REGIME_FLAGS)}, got {regime!r}"
+        )
+    preview, _ = _ONESTOP_REGIME_FLAGS[regime]
+    return [p for p in _ONESTOP_PARTS if preview or p != "Question_Preview"]
+
+
+def _keep_onestop_regime(frame: pd.DataFrame, regime: str) -> pd.DataFrame:
+    """The rows of an all-regimes report that belong to ``regime``.
+
+    A frame without the two flag columns is returned untouched: there is
+    nothing to tell its regimes apart by.
+    """
+    from . import data
+
+    if not set(_ONESTOP_REGIME_COLUMNS) <= set(frame.columns):
+        return frame
+    preview, repeated = _ONESTOP_REGIME_FLAGS[regime]
+    mask = (data.coerce_flag(frame["question_preview"]) == preview) & (
+        data.coerce_flag(frame["repeated_reading_trial"]) == repeated
+    )
+    return frame.loc[mask].reset_index(drop=True)
+
 
 def _onestop_osf_resource(kind: str, part: str, regime: str) -> str | None:
     """OSF id for a (kind, part, regime), or None when not published.
@@ -774,8 +823,12 @@ def _read_onestop_part(
     frame = data.read_mapped_table(
         path,
         kind="words" if kind == "ia" else "fixations",
-        filter_fields=_ONESTOP_ID_COLUMNS,
+        filter_fields=_ONESTOP_ID_COLUMNS + _ONESTOP_REGIME_COLUMNS,
     )
+    # DATA-63: only Paragraph is regime-split on OSF; every other public part
+    # holds all four regimes' trials, so cut it to the one asked for.
+    if variant == "public" and part != "Paragraph":
+        frame = _keep_onestop_regime(frame, regime)
     frame = _compose_onestop_ids(frame)
     frame["part"] = part
     if part == "QA":
@@ -826,8 +879,10 @@ def onestop_raw_frames(
     the returned frames go through the same auto-detect → normalize path as an
     upload — no OneStop-specific column mapping is needed here.
 
-    ``parts`` is any subset of the seven trial parts (default: Paragraph). When
-    more than one is chosen, each part becomes its own trial (the part is folded
+    ``parts`` is any subset of the seven trial parts (default: Paragraph;
+    :func:`onestop_regime_parts` lists every part of a regime). A public part
+    other than Paragraph is cut to ``regime`` by its ``question_preview`` /
+    ``repeated_reading_trial`` flags (DATA-63). When more than one is chosen, each part becomes its own trial (the part is folded
     into the paragraph/trial id so they don't collide). ``variant`` is
     ``"public"`` (OSF release) or ``"lacclab"`` (a local lab-processed export;
     superset schema, no download).

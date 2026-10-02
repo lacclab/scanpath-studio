@@ -485,7 +485,7 @@ class TestTheBetaHidesMultiplEYE:
         registry = app.public_dataset_registry()
         assert app.MULTIPLEYE_PUBLIC_CHOICE not in registry
         # The other built-ins are unaffected.
-        assert app.ONESTOP_PUBLIC_CHOICE in registry
+        assert app.ONESTOP_REGIME_CHOICES["ordinary"] in registry
         assert any("PoTeC" in label for label in registry)
 
     def test_the_flag_brings_it_back(self, monkeypatch):
@@ -500,7 +500,9 @@ class TestTheBetaHidesMultiplEYE:
         monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
         names = [name for name, _ok, _why in compare_source.secondary_dataset_options()]
         assert app.MULTIPLEYE_PUBLIC_CHOICE not in names
-        assert app.ONESTOP_PUBLIC_CHOICE in names  # not passing by offering nothing
+        assert (
+            app.ONESTOP_REGIME_CHOICES["ordinary"] in names
+        )  # not passing by offering nothing
 
     def test_a_multipleye_share_link_no_longer_resolves(self, monkeypatch):
         """A link naming the corpus falls back like any corpus the recipient
@@ -566,7 +568,7 @@ class TestTheBetaHidesTheHarmonisedBenchmarkCorpora:
         registry = app.public_dataset_registry()
         assert not any(app.spec_is_benchmark(spec) for spec in registry.values())
         # The built-ins are unaffected — the native PoTeC included.
-        assert app.ONESTOP_PUBLIC_CHOICE in registry
+        assert app.ONESTOP_REGIME_CHOICES["ordinary"] in registry
         assert "PoTeC — Potsdam Textbook Corpus" in registry
 
     def test_the_flag_brings_the_corpus_back(self, monkeypatch):
@@ -581,7 +583,9 @@ class TestTheBetaHidesTheHarmonisedBenchmarkCorpora:
         monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
         names = [name for name, _ok, _why in compare_source.secondary_dataset_options()]
         assert self._label() not in names
-        assert app.ONESTOP_PUBLIC_CHOICE in names  # not passing by offering nothing
+        assert (
+            app.ONESTOP_REGIME_CHOICES["ordinary"] in names
+        )  # not passing by offering nothing
 
     def test_a_prepared_corpus_share_link_no_longer_resolves(self, monkeypatch):
         """Falls back like any corpus the recipient lacks."""

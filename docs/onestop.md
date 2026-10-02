@@ -27,59 +27,45 @@ paragraphs, each in an Advanced and an Elementary version).
 
 ## Loading it
 
-OneStop is exposed as a **Public dataset**. In the app, open :material/database: **Data** and
-click **OneStop** in the list of datasets. Before anything loads, a dialog asks
-for a **Variant**, a **Reading regime**, and one or more **Parts**, and says
-whether that subset is already on disk; **Open** loads it (or offers its
-download). To change the choice later, use **Edit dataset**, whose **Options**
-hold the same three pickers:
+OneStop is exposed as **four public datasets**, one per reading regime. In the
+app, open :material/database: **Data** and click the one you want in the list
+of datasets:
 
-**Variant**
-
-| Variant | What it is |
+| Dataset | What it is |
 | --- | --- |
-| Public (OSF download) | Reports fetched from [OSF](https://osf.io/2prdq/) on demand, cached on disk. |
-| LaCC lab (local export) | LaCC lab's internal export — not publicly distributed. |
+| OneStop — Ordinary reading | Reading for comprehension, without seeing the question first. |
+| OneStop — Information seeking | Reading after seeing the question to be answered. |
+| OneStop — Repeated reading | Reading a paragraph for the second time. |
+| OneStop — Information seeking (repeated) | A second reading, after seeing the question. |
 
-**Reading regime**
+Each holds **every part** of its regime's trials, the reading passage and the
+screens around it, from the public [OSF](https://osf.io/2prdq/) release:
 
-| Regime | What it is |
-| --- | --- |
-| Ordinary reading | Standard paragraph reading. |
-| Information seeking | Reading to answer a known question. |
-| Repeated reading | Re-reading the same paragraphs. |
-| Information seeking (repeated) | Information seeking during repeated reading. |
-
-**Parts** — which *screen* of a trial to load (default **Paragraph**):
-
-| Part (app label) | CLI / deep-link id | What it is |
+| Part | CLI id | What it is |
 | --- | --- | --- |
 | Title | `Title` | The article title screen. |
-| Question preview | `Question_Preview` | The question shown before reading (information-seeking regimes). |
-| Paragraph | `Paragraph` | The reading passage (the default). |
+| Question preview | `Question_Preview` | The question shown before reading (information-seeking regimes only). |
+| Paragraph | `Paragraph` | The reading passage. |
 | Question | `Questions` | The question shown after reading. |
 | Answers | `Answers` | The four answer choices. |
 | Question + answers (QA) | `QA` | The combined question-and-answers screen. |
 | Feedback | `Feedback` | The correctness feedback screen. |
 
-The first column is what the app's **Parts** picker shows; the second is the
-literal id for `--onestop-part` on the [CLI](cli.md) and the
-`?onestop_parts=` deep-link parameter.
-
 Every part ships an **interest-area report** (one row per word, with bounding
 boxes and reading measures) and a **fixation report**, all in the same schema —
-so each part renders as a scanpath. Selecting **several parts** makes each part
-its own trial (the part is folded into the trial id, e.g. `Paragraph::1` vs
-`Title::1`, so their word boxes don't collide). On OSF only *Paragraph* is
-regime-split; the other parts come from the all-regimes full release, so they
-are not narrowed to the chosen regime: they hold every regime's trials.
+so each part renders as a scanpath, and each part is its own trial (the part is
+folded into the trial id, e.g. `Paragraph::1` vs `Title::1`, so their word
+boxes don't collide). On OSF only *Paragraph* is split by regime; the other
+parts come from one all-regimes release, which the four datasets share on disk,
+and each dataset keeps only its own regime's trials from them (by the reports'
+`question_preview` and `repeated_reading_trial` columns).
 
 The :material/edit: **Edit dataset** screen's data-location part lists the **Expected files** and
 shows whether they're already present (until they are, the app shows the bundled
-demo, with a **⬇ Download now** panel). For the Public variant, if they're
-present the corpus loads with no network access; if not, click **⬇ Download** to
-fetch them into the folder (cached on disk, so only the first load pays the
-download — reports range from tens to a few hundred MB each). While it
+demo, with a **⬇ Download now** panel). If they're present the dataset loads
+with no network access; if not, click **⬇ Download** to fetch them into the
+folder (cached on disk, so only the first load pays the download — reports
+range from tens to a few hundred MB each, and a regime has up to fourteen). While it
 downloads, a card shows how much has arrived; **Stop download** ends it and
 deletes the partial file.
 
@@ -103,13 +89,17 @@ plot-ready frames:
 ```python
 import scanpath_studio as sps
 
-# Fetch (public variant) + normalize the chosen regime + parts (cached under root).
+# Fetch + normalize the chosen regime + parts (cached under root).
 words, fixations = sps.load_onestop(
     "data/OneStop",
     regime="ordinary",
     parts=["Paragraph"],  # any subset of the seven parts
     download=True,
 )
+# The app's dataset for a regime is every part of it:
+from scanpath_studio.datasets import onestop_regime_parts
+
+parts = onestop_regime_parts("ordinary")
 pid, tid = sps.list_trials(words, fixations).iloc[0]  # or any row you want
 fig = sps.plot_scanpath(words, fixations, pid, tid, canvas_size=(2560, 1440))
 ```
@@ -122,4 +112,5 @@ scanpath-studio render --onestop data/OneStop \
     -p <participant> -t <trial> -o out.html
 ```
 
-`--onestop-part` is repeatable.
+`--onestop-part` is repeatable. Parts other than Paragraph are cut to
+`--onestop-regime` here too, as in the app.

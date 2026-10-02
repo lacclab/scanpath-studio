@@ -666,13 +666,11 @@ def language_display(value) -> str:
 MULTIPLEYE_DEFAULT_DIR = "data/MultiplEYE_ZH_CH_Zurich_1_2025"
 ONESTOP_CHOICE = "OneStop server bundle"
 # Public OneStop (OSF download-on-demand) — distinct from the env-var
-# ONESTOP_CHOICE server bundle. Reading regimes map to the OSF reports the
-# loader fetches (see datasets._ONESTOP_REGIMES); labels are the picker text.
-# The registry label for the public OneStop corpus in the flat data-source picker.
-# A named constant (not an inline string) so the deep-link/Share contract in
-# url_state.py can reference it without importing app.py's PUBLIC_DATASET_REGISTRY
-# (DATA-3: the public source + its variant/regime/parts are shareable).
-ONESTOP_PUBLIC_CHOICE = "OneStop — 360-participant English corpus"
+# ONESTOP_CHOICE server bundle. DATA-63: each reading regime is its own dataset
+# in the flat data-source picker, holding every part of that regime; these are
+# their registry labels. Named constants (not inline strings) so the deep-link /
+# Share contract in url_state.py and compare_source.py can reference them
+# without importing app.py's PUBLIC_DATASET_REGISTRY (DATA-3: shareable).
 ONESTOP_PUBLIC_DEFAULT_DIR = "data/OneStop"
 # Default folder for the lacclab OneStop variant (a lab-processed local export;
 # superset schema, no download). Blank: ENG-60 — it was one maintainer's own
@@ -685,6 +683,27 @@ ONESTOP_REGIME_LABELS = {
     "repeated": "Repeated reading",
     "information_seeking_repeated": "Information seeking (repeated)",
 }
+#: DATA-63 — regime → the registry label of that regime's dataset.
+ONESTOP_REGIME_CHOICES = {
+    regime: f"OneStop — {label}" for regime, label in ONESTOP_REGIME_LABELS.items()
+}
+
+
+#: DATA-63 — each regime dataset's ``?source=`` token. Its own per regime,
+#: because the token also names Compare's dataset B (``cmp_source``), which
+#: carries no regime of its own. The DATA-3 ``onestop_public`` token stays
+#: readable: with its ``onestop_regime`` it names one of these four.
+ONESTOP_REGIME_SOURCE_TOKENS = {
+    regime: f"onestop_{regime}" for regime in ONESTOP_REGIME_LABELS
+}
+ONESTOP_LEGACY_SOURCE_TOKEN = "onestop_public"
+
+
+def onestop_regime_for_choice(choice: str | None) -> str | None:
+    """The regime a OneStop dataset label names, else ``None``."""
+    return next((r for r, c in ONESTOP_REGIME_CHOICES.items() if c == choice), None)
+
+
 # OneStop trial parts (screens) → display label, in presentation order. Mirrors
 # datasets._ONESTOP_PARTS; the Parts multiselect + the parts URL/CLI contract
 # use these keys. Paragraph is the reading passage (the default).

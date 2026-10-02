@@ -345,7 +345,7 @@ def _share_query_app():
 
     from scanpath_studio.constants import (
         ONESTOP_PART_LABELS,
-        ONESTOP_PUBLIC_CHOICE,
+        ONESTOP_REGIME_CHOICES,
         ONESTOP_REGIME_LABELS,
         ONESTOP_VARIANT_LABELS,
     )
@@ -388,7 +388,7 @@ def _share_query_app():
     st.session_state[ONESTOP_REGIME] = next(iter(ONESTOP_REGIME_LABELS))
     st.session_state[ONESTOP_PARTS] = list(ONESTOP_PART_LABELS)[:2]
 
-    query, caveats = _build_share_query(ONESTOP_PUBLIC_CHOICE)
+    query, caveats = _build_share_query(ONESTOP_REGIME_CHOICES["ordinary"])
     st.session_state["_query"] = query
     st.session_state["_caveats"] = caveats
 
@@ -416,6 +416,8 @@ def test_share_link_emits_frozen_params():
         what="params the Share link emits",
         where="url_state._build_share_query()",
     )
+    # DATA-63: read from old links, never written to new ones.
+    assert not emitted & sk.URL_LEGACY_PARAMS
     accepted = sk.URL_PRESET_PARAMS | sk.URL_SELECTION_PARAMS | sk.URL_OPTIONAL_PARAMS
     assert emitted <= accepted, (
         "the Share link emits a param the deep-link reader doesn't parse: "
@@ -618,11 +620,11 @@ def _setup_prov_round_trip_app():
 
     import streamlit as st
 
-    from scanpath_studio.constants import ONESTOP_PUBLIC_CHOICE
+    from scanpath_studio.constants import ONESTOP_REGIME_CHOICES
     from scanpath_studio.url_state import _apply_url_preset, _build_share_query
 
     st.session_state["_share_selection"] = {"participant_id": "p1", "trial_id": "t1"}
-    query, _ = _build_share_query(ONESTOP_PUBLIC_CHOICE)
+    query, _ = _build_share_query(ONESTOP_REGIME_CHOICES["ordinary"])
     st.session_state["_query"] = query
 
     # Feed the emitted params straight back through the reader.

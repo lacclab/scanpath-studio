@@ -52,8 +52,9 @@ from .constants import (
     MULTIPLEYE_BUNDLE_CHOICE,
     ONESTOP_CHOICE,
     ONESTOP_PART_LABELS,
-    ONESTOP_PUBLIC_CHOICE,
+    ONESTOP_REGIME_CHOICES,
     ONESTOP_REGIME_LABELS,
+    ONESTOP_REGIME_SOURCE_TOKENS,
     ONESTOP_VARIANT_LABELS,
     PALETTES,
     PUBLIC_DATASETS_CHOICE,
@@ -65,6 +66,7 @@ from .constants import (
     SYNTHETIC_CHOICE,
     UNIFORM_COLOR_FIELD,
     drift_correction_enabled,
+    onestop_regime_for_choice,
 )
 from .controls import (
     _ALIGN_OPTIONS,
@@ -695,9 +697,13 @@ _SHAREABLE_SOURCES = {
     ONESTOP_CHOICE: "onestop",
     MULTIPLEYE_BUNDLE_CHOICE: "multipleye",
     SYNTHETIC_CHOICE: "synthetic",
-    # DATA-3: the public OneStop corpus (OSF download-on-demand) is shareable too;
-    # its variant/regime/parts options ride alongside via `_build_share_query`.
-    ONESTOP_PUBLIC_CHOICE: "onestop_public",
+    # DATA-3: the public OneStop corpus (OSF download-on-demand) is shareable too.
+    # DATA-63: one dataset per regime, each its own token (`onestop_<regime>`).
+    # A DATA-3 link (`onestop_public` + `onestop_regime`) is read by `app.main`.
+    **{
+        ONESTOP_REGIME_CHOICES[regime]: token
+        for regime, token in ONESTOP_REGIME_SOURCE_TOKENS.items()
+    },
 }
 
 
@@ -2390,10 +2396,9 @@ def _build_share_query(
     # what the picker collapsed away — see `_selected_corpus`.
     corpus_label, corpus_spec = ("", {}) if source else _selected_corpus(data_choice)
     if corpus_label and not source:
-        # A corpus reachable by both tokens keeps emitting the older one:
-        # `onestop_public` (with its variant / regime / parts) has been in links
-        # since DATA-3, and those links must keep resolving unchanged. The new
-        # generic token is additive, never a replacement.
+        # A corpus reachable by both tokens keeps emitting its own: OneStop's
+        # regimes (`onestop_<regime>`, DATA-63; `onestop_public` before it)
+        # have had one since DATA-3. The generic token is additive.
         source = _SHAREABLE_SOURCES.get(corpus_label)
     # Read through `registry_corpus_slugs`, not `corpus_slug` directly, so a slug
     # another entry would also answer to is never emitted: the reader refuses it,
@@ -2438,24 +2443,6 @@ def _build_share_query(
             "setup* on that same screen. The view settings below travel in the "
             "link itself."
         )
-
-    # DATA-3: the public OneStop source carries its variant / regime / parts so a
-    # shared link reopens the same corpus slice. The recipient still needs the
-    # reports present (or downloadable) — the source caveat above covers that.
-    # Matched against the resolved corpus too, since the picker hands this
-    # function the collapsed `PUBLIC_DATASETS_CHOICE` for every public corpus.
-    if ONESTOP_PUBLIC_CHOICE in (data_choice, corpus_label):
-        variant = st.session_state.get("onestop_variant")
-        if variant in ONESTOP_VARIANT_LABELS:
-            params["onestop_variant"] = str(variant)
-        regime = st.session_state.get("onestop_regime")
-        if regime in ONESTOP_REGIME_LABELS:
-            params["onestop_regime"] = str(regime)
-        parts = st.session_state.get("onestop_parts")
-        if isinstance(parts, (list, tuple)):
-            valid = [p for p in parts if p in ONESTOP_PART_LABELS]
-            if valid:
-                params["onestop_parts"] = ",".join(valid)
 
     if data_choice in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
         params["author_text"] = str(st.session_state.get("author_text", ""))
@@ -2956,38 +2943,46 @@ def _snippet_source(data_choice: str) -> SnippetSource:
                 () if fixation_source == "scanpaths" else ("fixation_source",)
             ),
         )
-    if short == "OneStop" or data_choice in (ONESTOP_CHOICE, ONESTOP_PUBLIC_CHOICE):
-        variant = str(st.session_state.get("onestop_variant") or "public")
-        note = ""
-        if data_choice == ONESTOP_CHOICE:
-            # The 🗄️ server bundle is the lab export by definition; it has no
-            # variant picker of its own. It is also read through a *different*
-            # loader from the public one — `data.load_onestop_server_bundle`,
-            # which takes the per-pid shards or the CSV.zip exports under
-            # `$ONESTOP_DATA_DIR`. `load_onestop` is the public API's nearest
-            # twin but reads the regime/part report layout, so the difference is
-            # stated rather than papered over: a snippet that silently pointed
-            # the wrong loader at the right folder would fail on the user's
-            # machine with nothing to explain it.
-            variant = "lacclab"
-            note = (
+    if regime := onestop_regime_for_choice(corpus_label or data_choice):
+        # DATA-63: one regime's dataset — every part, from the public release.
+        from scanpath_studio import datasets
+
+        return SnippetSource(
+            kind=SOURCE_ONESTOP,
+            label=corpus_label or data_choice,
+            options={
+                "root": root("onestop_public_dir", "data/OneStop"),
+                "regime": regime,
+                "variant": "public",
+                "parts": datasets.onestop_regime_parts(regime),
+            },
+        )
+    if data_choice == ONESTOP_CHOICE:
+        # The 🗄️ server bundle is the lab export by definition; it has no
+        # variant picker of its own. It is also read through a *different*
+        # loader from the public one — `data.load_onestop_server_bundle`,
+        # which takes the per-pid shards or the CSV.zip exports under
+        # `$ONESTOP_DATA_DIR`. `load_onestop` is the public API's nearest
+        # twin but reads the regime/part report layout, so the difference is
+        # stated rather than papered over: a snippet that silently pointed
+        # the wrong loader at the right folder would fail on the user's
+        # machine with nothing to explain it.
+        return SnippetSource(
+            kind=SOURCE_ONESTOP,
+            label=data_choice,
+            options={
+                "root": root("onestop_lacclab_dir", "data/OneStop"),
+                "regime": "ordinary",
+                "variant": "lacclab",
+                "parts": ["Paragraph"],
+            },
+            note=(
                 "The app read this through its **server-bundle** path "
                 "(`$ONESTOP_DATA_DIR`, per-participant shards or the CSV.zip "
                 "exports). The snippet uses the public `load_onestop` loader, "
                 "which expects the regime/part report layout in that same "
                 "folder — point it at your reports if the two differ."
-            )
-        parts = st.session_state.get("onestop_parts")
-        return SnippetSource(
-            kind=SOURCE_ONESTOP,
-            label=corpus_label or data_choice,
-            options={
-                "root": root(f"onestop_{variant}_dir", "data/OneStop"),
-                "regime": str(st.session_state.get("onestop_regime") or "ordinary"),
-                "variant": variant,
-                "parts": list(parts) if parts else ["Paragraph"],
-            },
-            note=note,
+            ),
         )
     if data_choice == MULTIPLEYE_BUNDLE_CHOICE:
         # Unlike OneStop's, this bundle loader *is* `multipleye_raw_frames` over

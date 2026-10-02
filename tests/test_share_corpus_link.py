@@ -442,32 +442,25 @@ class TestShareEmitsTheCorpus:
         assert parsed["corpus"] == ["potec"]
         assert caveats == []
 
-    def test_public_onestop_keeps_its_own_older_token_and_its_three_options(
-        self, bundle
-    ):
-        """R42: a corpus reachable by both tokens still emits the older one —
-        **with** the variant / regime / parts that make that token worth keeping.
-
-        `?source=onestop_public` (+ its three options) has been in links since
-        DATA-3. The generic token is additive; it must not retire that branch, or
-        every link already written stops carrying the corpus slice.
-
-        The three options are the point of this test, and they are asserted on
-        the path the **app** takes: `data_choice` is `PUBLIC_DATASETS_CHOICE` and
-        only `public_dataset_choice` says which corpus it is. The picker collapses
-        every registry label before the Share panel sees it, so
-        `data_choice == ONESTOP_PUBLIC_CHOICE` is never true in the running app —
-        which is why the emitting block matches the *resolved* corpus too, and
-        why a test that passes the label in directly proves nothing about it.
+    @pytest.mark.parametrize(
+        "regime",
+        ["ordinary", "information_seeking", "repeated", "information_seeking_repeated"],
+    )
+    def test_each_onestop_regime_keeps_a_token_of_its_own(self, bundle, regime):
+        """R42 + DATA-63: a corpus reachable by both tokens emits its own. Each
+        OneStop regime is its own dataset, so it is its own `onestop_<regime>`
+        — on the path the **app** takes, where `data_choice` is
+        `PUBLIC_DATASETS_CHOICE` and only `public_dataset_choice` names it. The
+        helper sets `onestop_regime="repeated"` for every share, so a link that
+        carried the session's regime instead of the dataset's would fail here.
         """
-        from scanpath_studio.constants import ONESTOP_PUBLIC_CHOICE
+        from scanpath_studio.constants import ONESTOP_REGIME_CHOICES
 
-        parsed, _ = _share(ONESTOP_PUBLIC_CHOICE)
-        assert parsed["source"] == ["onestop_public"]
+        parsed, _ = _share(ONESTOP_REGIME_CHOICES[regime])
+        assert parsed["source"] == [f"onestop_{regime}"]
         assert "corpus" not in parsed
-        assert parsed["onestop_variant"] == ["public"]
-        assert parsed["onestop_regime"] == ["repeated"]
-        assert parsed["onestop_parts"] == ["Paragraph,Title"]
+        for gone in ("onestop_variant", "onestop_regime", "onestop_parts"):
+            assert gone not in parsed
 
     def test_the_onestop_options_ride_only_with_that_corpus(self, bundle):
         """The same three keys are set for every corpus this helper shares, so
@@ -661,9 +654,10 @@ class TestRoundTripThroughTheApp:
             f"silent no-op: {[w.value for w in at.warning]}"
         )
 
-    def test_an_old_public_onestop_link_still_resolves_with_its_variant(self, bundle):
-        """Back-compat for the one corpus that had a token before this task."""
-        from scanpath_studio.constants import ONESTOP_PUBLIC_CHOICE
+    def test_an_old_public_onestop_link_opens_the_regime_it_names(self, bundle):
+        """DATA-3's `onestop_public` + `onestop_regime` lands on that regime's
+        dataset (DATA-63)."""
+        from scanpath_studio.constants import ONESTOP_REGIME_CHOICES
 
         at = AppTest.from_file(APP_SCRIPT)
         at.query_params["source"] = "onestop_public"
@@ -671,10 +665,19 @@ class TestRoundTripThroughTheApp:
         at.query_params["onestop_regime"] = "repeated"
         at.run(timeout=60)
         assert not at.exception, at.exception
-        assert at.session_state["data_source_choice"] == ONESTOP_PUBLIC_CHOICE
-        assert at.session_state["public_dataset_choice"] == ONESTOP_PUBLIC_CHOICE
-        assert at.session_state["onestop_variant"] == "public"
-        assert at.session_state["onestop_regime"] == "repeated"
+        repeated = ONESTOP_REGIME_CHOICES["repeated"]
+        assert at.session_state["data_source_choice"] == repeated
+        assert at.session_state["public_dataset_choice"] == repeated
+
+    def test_a_regime_link_opens_that_regime(self, bundle):
+        from scanpath_studio.constants import ONESTOP_REGIME_CHOICES
+
+        at = AppTest.from_file(APP_SCRIPT)
+        at.query_params["source"] = "onestop_information_seeking"
+        at.run(timeout=60)
+        assert not at.exception, at.exception
+        seeking = ONESTOP_REGIME_CHOICES["information_seeking"]
+        assert at.session_state["data_source_choice"] == seeking
 
 
 def test_the_corpus_param_and_the_keys_it_writes_are_pinned_as_wire_format():

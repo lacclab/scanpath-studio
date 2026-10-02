@@ -2454,3 +2454,58 @@ def test_a_stored_upload_reports_the_setup_its_wizard_captured():
     assert not at.exception, at.exception
     assert at.session_state["_canvas"] == (1280, 1024)
     assert at.session_state["_prov"] == "estimated"
+
+
+# ---------------------------------------------------------------------------
+# DATA-63: one dataset per regime. Only Paragraph is regime-split on OSF, so a
+# regime's other parts are the all-regimes reports cut by the corpus' own flags.
+# ---------------------------------------------------------------------------
+
+
+def test_a_regime_lists_every_part_it_shows():
+    assert datasets_module.onestop_regime_parts("information_seeking") == list(
+        datasets_module._ONESTOP_PARTS
+    )
+    # Only the information-seeking regimes show the question first.
+    assert "Question_Preview" not in datasets_module.onestop_regime_parts("ordinary")
+    with pytest.raises(ValueError):
+        datasets_module.onestop_regime_parts("speed_reading")
+
+
+@pytest.mark.parametrize(
+    ("regime", "kept"),
+    [
+        ("ordinary", "p00"),
+        ("information_seeking", "p10"),
+        ("repeated", "p01"),
+        ("information_seeking_repeated", "p11"),
+    ],
+)
+def test_an_all_regimes_part_is_cut_to_the_regime(tmp_path, regime, kept):
+    """A QA report holding all four regimes keeps only the asked regime's rows."""
+    flags = {"question_preview": [], "repeated_reading_trial": [], "pid": []}
+    for preview in (False, True):
+        for repeated in (False, True):
+            flags["question_preview"] += [preview, preview]
+            flags["repeated_reading_trial"] += [repeated, repeated]
+            flags["pid"] += [f"p{int(preview)}{int(repeated)}"] * 2
+
+    def _four(frame):
+        frame = pd.concat([frame] * 4, ignore_index=True)
+        frame["participant_id"] = flags["pid"]
+        frame["question_preview"] = flags["question_preview"]
+        frame["repeated_reading_trial"] = flags["repeated_reading_trial"]
+        return frame
+
+    _onestop_public_report(
+        tmp_path,
+        _four(_onestop_public_words()),
+        _four(_onestop_public_fixations()),
+        regime=regime,
+        part="QA",
+    )
+    words, fixations = datasets_module.onestop_raw_frames(
+        tmp_path, regime=regime, parts=["QA"]
+    )
+    assert set(words["participant_id"]) == {kept}
+    assert set(fixations["participant_id"]) == {kept}

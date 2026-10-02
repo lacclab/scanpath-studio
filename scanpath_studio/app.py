@@ -86,6 +86,8 @@ from scanpath_studio.constants import (
     DEFAULT_FIGURE_SIZE,
     DEFAULT_LINE_SPACING,
     DEMO_CHOICE,
+    DOWNLOAD_DIR_ENV,
+    DOWNLOAD_DIR_KEY,
     EYEGENBENCH_DEFAULT_DIR,
     FOCUS_MAPPING_KEY,
     FONT_FAMILY,
@@ -731,6 +733,59 @@ def _restored_recap(session=None) -> str:
     return f"{', '.join(parts[:-1])} and {parts[-1]}"
 
 
+def _pick_download_folder() -> None:
+    """📁 beside the Download folder box: a native picker, applied next run."""
+    chosen = _pick_directory_dialog()
+    if chosen:
+        st.session_state[f"{DOWNLOAD_DIR_KEY}_picked"] = chosen
+    else:
+        st.session_state[f"{DOWNLOAD_DIR_KEY}_no_picker"] = True
+
+
+def _render_download_folder_section(host) -> None:
+    """🗂️ Data → **Download folder** (UX-184).
+
+    One folder for every ⬇ Download, so a user chooses where the corpora go once
+    rather than per dataset — the per-dataset Data directory box still
+    overrides it. Before this the folder was implicit (the checkout's ``data/``,
+    or the per-user data home: ``%LOCALAPPDATA%`` on Windows) and the page only
+    ever said ``data/PoTeC``. Not drawn where the app may not touch local
+    folders (S2) — there the server's configuration decides.
+    """
+    if not local_filesystem_enabled():
+        return
+    picked = st.session_state.pop(f"{DOWNLOAD_DIR_KEY}_picked", None)
+    if picked:
+        st.session_state[DOWNLOAD_DIR_KEY] = picked
+    st.session_state.setdefault(DOWNLOAD_DIR_KEY, "")
+    host.divider()
+    host.subheader(f"{ICONS['download']} Download folder")
+    host.caption(
+        "Where **Download** saves a public dataset, each in its own subfolder. "
+        "Leave it blank for the default. A dataset's own *Data directory* box "
+        "overrides it."
+    )
+    text_col, browse_col = host.columns([4, 1])
+    text_col.text_input(
+        "Download folder",
+        key=DOWNLOAD_DIR_KEY,
+        placeholder=str(_default_download_folder()),
+        label_visibility="collapsed",
+        # Rendered only on the Data page's overview; without this the choice
+        # would be dropped the first run another view is open (BUG-15).
+        persist_state="session",
+    )
+    browse_col.button(
+        ICONS["folder"],
+        key=f"{DOWNLOAD_DIR_KEY}_browse",
+        help="Browse for a folder",
+        on_click=_pick_download_folder,
+    )
+    if st.session_state.pop(f"{DOWNLOAD_DIR_KEY}_no_picker", False):
+        host.caption("Folder picker unavailable here — type or paste the path.")
+    host.markdown(f"**Saving to:** `{download_folder()}`")
+
+
 def _render_saved_here_section(app_url: str, host) -> None:
     """🗂️ Data → **Saved on this computer** (UX-179; ENG-30 underneath).
 
@@ -1041,6 +1096,39 @@ def _user_data_home() -> Path:
     return Path(base) / "scanpath-studio"
 
 
+def _default_download_folder() -> Path:
+    """Where downloads go when nobody chose: ``SCANPATH_STUDIO_DOWNLOAD_DIR``,
+    else ``data/`` under :func:`_project_root` (UX-184)."""
+    configured = os.environ.get(DOWNLOAD_DIR_ENV, "").strip()
+    if configured:
+        return Path(_resolve_data_dir(configured))
+    return (_project_root() / "data").resolve()
+
+
+def download_folder() -> Path:
+    """The folder every downloadable corpus goes into, one subfolder each (UX-184).
+
+    The 🗂️ Data page's *Download folder* (a blank box means the default), else
+    :func:`_default_download_folder`. A relative entry anchors like a Data
+    directory does, and ``SCANPATH_DATA_ROOT`` confines it the same way."""
+    chosen = str(st.session_state.get(DOWNLOAD_DIR_KEY) or "").strip()
+    if chosen and local_filesystem_enabled():
+        return Path(_resolve_data_dir(chosen))
+    return _default_download_folder()
+
+
+def _download_target(default_dir: str) -> str:
+    """A downloadable corpus' default Data directory under :func:`download_folder`.
+
+    The built-in defaults are ``data/<corpus>``; that ``data/`` is the download
+    folder, so ``data/PoTeC`` becomes ``<folder>/PoTeC``. Anything else (an
+    absolute path a test or a deployment pinned) is left as it is."""
+    rel = Path(default_dir)
+    if not default_dir or rel.is_absolute() or rel.parts[:1] != ("data",):
+        return default_dir
+    return str(download_folder().joinpath(*rel.parts[1:]))
+
+
 # DATA-16 (security audit S2). The corpus **Data directory** box takes a
 # free-text path from the browser, stats it, reports the result back into the
 # page, and — via ⬇ Download — writes into it. On a local run that's just a file
@@ -1171,10 +1259,23 @@ def _dataset_dir_input(
     picked = st.session_state.pop(f"{dir_key}_picked", None)
     if picked:
         st.session_state[dir_key] = picked
+    # UX-184: a box still showing the default it was given follows a new
+    # Download folder; one the user edited keeps what they typed.
+    seeded_key = f"{dir_key}_default"
+    seeded = st.session_state.get(seeded_key)
+    if (
+        seeded is not None
+        and seeded != default_dir
+        and st.session_state.get(dir_key) == seeded
+    ):
+        st.session_state[dir_key] = default_dir
+    st.session_state[seeded_key] = default_dir
+    # Seeded rather than `value=`-ed: the two writes above go through session
+    # state, and passing both makes Streamlit warn (as for BUG-17).
+    st.session_state.setdefault(dir_key, default_dir)
     text_col, browse_col = cfg.columns([4, 1])
     raw = text_col.text_input(
         "Data directory",
-        value=st.session_state.get(dir_key, default_dir),
         help=dir_help,
         key=dir_key,
         # A typed path must survive a run in which this input doesn't render —
@@ -1196,9 +1297,16 @@ def _dataset_dir_input(
             st.rerun()
         else:
             cfg.caption("Folder picker unavailable here — type or paste the path.")
+    resolved = _resolve_data_dir(raw)
+    # UX-184: a relative entry such as the default `data/PoTeC` resolves against
+    # the checkout, or in an installed copy against the per-user data home
+    # (ENG-59) — on Windows `%LOCALAPPDATA%`, a folder the box never named, so a
+    # finished download looked lost. Name the folder it actually means.
+    if resolved and resolved != raw.strip():
+        cfg.caption(f"Full path: `{resolved}`")
     with cfg.expander("Expected files", expanded=False):
         st.markdown(structure_md)
-    return _resolve_data_dir(raw)
+    return resolved
 
 
 # UX-7(b): session slot describing a data source the user selected but that
@@ -1334,7 +1442,9 @@ def _render_dataset_unavailable() -> None:
         )
         details = [f"{note['action'].rstrip('.')}{size}"]
         if note["root"]:
-            details.append(f"Looking in `{note['root']}`")
+            # UX-184: say where a download will land, not only where it looked.
+            verb = "Downloads to" if download is not None else "Looking in"
+            details.append(f"{verb} `{note['root']}`")
         st.markdown("\n".join(f"- {line}" for line in details))
         if download is None:
             return
@@ -1403,7 +1513,10 @@ def _dataset_access_status(
             root=root,
         )
         return False
-    cfg.info(f"Not downloaded yet{f' ({size_hint})' if size_hint else ''}.")
+    cfg.info(
+        f"Not downloaded yet{f' ({size_hint})' if size_hint else ''}. "
+        f"**Download** saves it to `{root}`."
+    )
     # S2: fetching writes tens-to-hundreds of MB into a browser-supplied path. On
     # a shared deployment that's a remote visitor filling the server's disk, so
     # the corpus has to be placed by whoever runs it.
@@ -1482,7 +1595,7 @@ def _load_potec_source(
     loc = location_host if location_host is not None else st.container()
     root = _dataset_dir_input(
         loc,
-        default_dir=POTEC_DEFAULT_DIR,
+        default_dir=_download_target(POTEC_DEFAULT_DIR),
         dir_help="Folder holding (or to download) the PoTeC files. A clone of "
         "github.com/DiLi-Lab/PoTeC works, or any empty folder with Download.",
         structure_md=_POTEC_STRUCTURE_MD,
@@ -1608,7 +1721,7 @@ def _onestop_env_default_dir(variant: str) -> str:
         return os.environ.get("ONESTOP_LACCLAB_DIR", "").strip() or (
             ONESTOP_LACCLAB_DEFAULT_DIR
         )
-    return ONESTOP_PUBLIC_DEFAULT_DIR
+    return _download_target(ONESTOP_PUBLIC_DEFAULT_DIR)
 
 
 def _load_onestop_public_source(
@@ -7526,6 +7639,7 @@ def _run_app() -> None:
         wizard owns the page.
         """
         if data_view and not editing and not wizard_owns_page:
+            _render_download_folder_section(download_folder_slot)
             _render_saved_here_section(app_url, saved_here_slot)
 
     # First-visit welcome tour. After the URL presets, so embeds and
@@ -7686,6 +7800,7 @@ def _run_app() -> None:
     # UX-179 — *Saved on this computer*, the overview's last section: the
     # recovery cache and the two ways to throw work away. Filled by
     # `_finish_page`, after this run's `save_local_state`.
+    download_folder_slot = overview_page.container(key="data_download_folder")
     saved_here_slot = overview_page.container(key="data_saved_here")
     # Keyed → the stable `.st-key-…` selectors the "Load and verify a dataset"
     # tutorial spotlights (UX-40), alongside `tutorial_data_inspection` above.

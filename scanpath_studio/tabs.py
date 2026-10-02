@@ -7919,12 +7919,11 @@ def _download_tidy(
         return
     recipe = dict(recipe)
     counts = result_counts(df, recipe.pop("counts", None))
-    analysis = analysis_choices(section=context.get("section"), **recipe)
     row = host.container(horizontal=True, gap="small")
     row.download_button(label, data=csv, file_name=name, mime="text/csv", key=key)
     row.download_button(
         "⬇ Download the recipe (JSON)",
-        data=partial(_recipe_json, context, analysis, name, counts),
+        data=partial(_recipe_json, context, recipe, name, counts),
         file_name=recipe_file_name(name),
         mime="application/json",
         key=f"{key}_recipe",
@@ -7934,11 +7933,21 @@ def _download_tidy(
     )
 
 
-def _recipe_json(context: dict, analysis: dict, name: str, counts: dict) -> str:
-    """The recipe file's text, built when the button is clicked (AN-34)."""
+def _recipe_json(context: dict, recipe: dict, name: str, counts: dict) -> str:
+    """The recipe file's text, built when the button is clicked (AN-34).
+
+    ``recipe["groups"]`` holds ``(label, spec)`` pairs, resolved here: a
+    trial-metadata cohort's spec lists every matching reading, too many to
+    serialize on every rerun.
+    """
     from datetime import datetime
 
     from scanpath_studio import __version__
+
+    recipe = dict(recipe)
+    if recipe.get("groups"):
+        recipe["groups"] = [group_definition(*pair) for pair in recipe["groups"]]
+    analysis = analysis_choices(section=context.get("section"), **recipe)
 
     return json.dumps(
         build_analysis_recipe(
@@ -9739,7 +9748,7 @@ def render_per_group_tab(
             key="dl_pgrp15",
             recipe=dict(
                 view=view,
-                groups=[group_definition(label, spec)],
+                groups=[(label, spec)],
                 text=(text_col, text_id),
                 screen=grp_screens[0] if grp_screens else None,
                 measure=measure,
@@ -9770,7 +9779,7 @@ def render_per_group_tab(
                 key="dl_pgrp16",
                 recipe=dict(
                     view=view,
-                    groups=[group_definition(label, spec)],
+                    groups=[(label, spec)],
                     counts={"group_readers": n_readers, "group_fixations": n_fix},
                 ),
             )
@@ -9783,7 +9792,7 @@ def render_per_group_tab(
                 key="dl_pgrp16_trials",
                 recipe=dict(
                     view=view,
-                    groups=[group_definition(label, spec)],
+                    groups=[(label, spec)],
                     counts={"group_readers": n_readers, "group_fixations": n_fix},
                 ),
             )
@@ -9833,7 +9842,7 @@ def render_per_group_tab(
             key="dl_pgrp17",
             recipe=dict(
                 view=view,
-                groups=[group_definition(label, spec)],
+                groups=[(label, spec)],
                 measure=measure,
                 aggregation=agg,
                 counts={"group_readers": n_readers, "group_fixations": n_fix},
@@ -9977,8 +9986,8 @@ def render_group_comparison_tab(
             recipe=dict(
                 view=view,
                 groups=[
-                    group_definition(label_a, spec_a),
-                    group_definition(label_b, spec_b),
+                    (label_a, spec_a),
+                    (label_b, spec_b),
                 ],
                 text=(text_col, text_id),
                 screen=screen_id,
@@ -10035,8 +10044,8 @@ def render_group_comparison_tab(
             recipe=dict(
                 view=view,
                 groups=[
-                    group_definition(label_a, spec_a),
-                    group_definition(label_b, spec_b),
+                    (label_a, spec_a),
+                    (label_b, spec_b),
                 ],
                 measures=measures,
                 aggregation=agg,
@@ -10149,8 +10158,8 @@ def render_group_comparison_tab(
             recipe=dict(
                 view=view,
                 groups=[
-                    group_definition(label_a, spec_a),
-                    group_definition(label_b, spec_b),
+                    (label_a, spec_a),
+                    (label_b, spec_b),
                 ],
                 text=(text_col, text_id),
                 screen=screen_id,

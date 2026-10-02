@@ -7779,7 +7779,9 @@ def _trial_metadata_narrowing(prefix: str, keys) -> tuple:
 
     ``None`` means no constraint; an empty set means a constraint nothing
     satisfies — the same three-way contract as
-    :func:`_participant_metadata_narrowing`, one grain down.
+    :func:`_participant_metadata_narrowing`, one grain down. ``keys`` is a
+    callable returning the loaded pool's keys, called only when a trial table
+    is attached: it scans every frame, and this runs on every rerun.
     """
     from scanpath_studio import metadata as md
 
@@ -7808,7 +7810,7 @@ def _trial_metadata_narrowing(prefix: str, keys) -> tuple:
             selections[field.name] = list(chosen)
             widget_keys.append(key)
     return (
-        md.trials_matching(attached, selections, ranges, keys=keys),
+        md.trials_matching(attached, selections, ranges, keys=keys()),
         tuple(widget_keys),
     )
 
@@ -7870,9 +7872,20 @@ def _participant_metadata_narrowing(prefix: str) -> tuple:
 
 def _loaded_trial_keys(words: pd.DataFrame, fixations: pd.DataFrame) -> set:
     """``(participant_id, trial_id)`` pairs present in either frame (DATA-29)."""
+    from scanpath_studio.data import frame_fingerprint
+
+    return set(
+        _c_loaded_trial_keys(
+            words, fixations, frame_fingerprint(words), frame_fingerprint(fixations)
+        )
+    )
+
+
+@st.cache_data(show_spinner=False, max_entries=8)
+def _c_loaded_trial_keys(_words, _fixations, wkey, fkey) -> frozenset:
     from scanpath_studio.data import trial_keys as _keys
 
-    return set(_keys(words)) | set(_keys(fixations))
+    return frozenset(_keys(_words)) | frozenset(_keys(_fixations))
 
 
 def _compute_trial_filters(
@@ -7947,7 +7960,7 @@ def _compute_trial_filters(
     # trial, and so a numeric range keeps the trials the table never mentions
     # (UX-49's rule, one grain down).
     by_trial, trial_keys_used = _trial_metadata_narrowing(
-        prefix, _loaded_trial_keys(words, fixations)
+        prefix, lambda: _loaded_trial_keys(words, fixations)
     )
     if by_trial is not None:
         result["trial_keys"] = by_trial

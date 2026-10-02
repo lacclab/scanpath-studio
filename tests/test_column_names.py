@@ -227,3 +227,54 @@ def test_the_demo_is_opened_with_its_own_column_names():
     assert words.display("total_fixation_duration_ms") == "IA_DWELL_TIME"
     assert ColumnNames.from_payload(stashed["fixations"]).display("x") != "x"
     assert "raw_gaze" in stashed  # the demo ships raw gaze
+
+
+_UPLOAD_WORDS = pd.DataFrame(
+    {
+        "participant_id": ["r0"] * 3,
+        "trial_id": ["t0"] * 3,
+        "IA_ID": [0, 1, 2],
+        "IA_LABEL": ["one", "two", "three"],
+        "IA_LEFT": [0.0, 50.0, 100.0],
+        "IA_RIGHT": [50.0, 100.0, 150.0],
+        "IA_TOP": [10.0] * 3,
+        "IA_BOTTOM": [30.0] * 3,
+        "IA_DWELL_TIME": [200.0, 180.0, 240.0],
+    }
+)
+_UPLOAD_FIXATIONS = pd.DataFrame(
+    {
+        "participant_id": ["r0"] * 3,
+        "trial_id": ["t0"] * 3,
+        "CURRENT_FIX_DURATION": [200.0, 180.0, 240.0],
+        "CURRENT_FIX_X": [15.0, 65.0, 115.0],
+        "CURRENT_FIX_Y": [24.0] * 3,
+    }
+)
+
+
+@pytest.mark.timeout(240)
+def test_an_upload_stores_its_column_names(monkeypatch):
+    from scanpath_studio import app
+    from tests.conftest import APP_SCRIPT
+
+    monkeypatch.setattr(
+        app,
+        "_read_uploaded_frame",
+        lambda **kw: {
+            "col_map_words": _UPLOAD_WORDS,
+            "col_map_fix": _UPLOAD_FIXATIONS,
+        }.get(kw["state_prefix"], pd.DataFrame()),
+    )
+    at = streamlit_testing.AppTest.from_file(APP_SCRIPT, default_timeout=180)
+    at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+    at.run(timeout=180)
+    assert not at.exception, at.exception
+    payload = at.session_state["_wizard_finalize_payload"]
+    fixations = ColumnNames.from_payload(payload["column_names"]["fixations"])
+    assert fixations.display("duration_ms") == "CURRENT_FIX_DURATION"
+    words = ColumnNames.from_payload(payload["column_names"]["words"])
+    assert words.display("total_fixation_duration_ms") == "IA_DWELL_TIME"
+    # …and the wizard's own live view has it too.
+    stashed = at.session_state[app.ACTIVE_COLUMN_NAMES_KEY]
+    assert stashed["fixations"] == payload["column_names"]["fixations"]

@@ -22,6 +22,7 @@ import pandas as pd
 import streamlit as st
 
 from . import app, wizard_shell
+from .column_names import ColumnNames, for_tables
 from .constants import (
     _VIEW_DATA,
     DATASET_DESCRIPTIONS_KEY,
@@ -2681,6 +2682,13 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
             "filter_fields": filter_fields,
             "composite_trial_columns": [],
             "schemas": schemas,
+            # DATA-66 — the loader-built frames' names (MultiplEYE's own files
+            # carry no identity columns; see the plan's settled defaults).
+            "column_names": for_tables(
+                schemas,
+                {"words": words_raw, "fixations": fix_raw},
+                {"words": keep_words, "fixations": keep_fix},
+            ),
             "dropped_columns": {
                 "words": dropped_columns(words_raw, keep=keep_words)
                 if has_words
@@ -4073,7 +4081,24 @@ def _render_data_setup(active: bool) -> _UploadResult:
             # geometry at all before this, which is why switching to one left the
             # canvas on the previous source's monitor.
             "setup": setup_snapshot.to_dict(),
+            # DATA-66: what each canonical column was called in these files —
+            # the record the app shows, exports and accepts names from. Built
+            # from exactly what normalization read: the tables after character
+            # aggregation, narrowed to the kept columns.
+            "column_names": for_tables(
+                wizard_schemas,
+                {"words": raw_words, "fixations": raw_fix, "raw_gaze": raw_gaze},
+                {"words": keep_words, "fixations": keep_fix},
+            ),
         }
+        for table, names in st.session_state["_wizard_finalize_payload"][
+            "column_names"
+        ].items():
+            app._stash_active_mapping(
+                table,
+                wizard_schemas.get(table),
+                names=ColumnNames.from_payload(names),
+            )
         # UX-53: the two things you can do with a finished setup share one row —
         # save it for next time, or add it — instead of stacking two full-width
         # buttons. UX-93 made that row the same on all three endings.

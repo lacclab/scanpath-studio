@@ -71,6 +71,11 @@ range from tens to a few hundred MB each, and a regime has up to fourteen). Whil
 downloads, a card shows how much has arrived; **Stop download** ends it and
 deletes the partial file.
 
+Each report is downloaded at a **fixed OSF version** (version 1, of
+2025-05-28) and checked against that version's size, so everyone who downloads
+OneStop through the app gets the same files. That is also why the dataset list
+can show a regime's counts before you open it.
+
 The folder defaults to the :material/database: **Data Management** page's
 :material/download: **Download folder**, where every public corpus gets its own
 subfolder (`<folder>/OneStop`). Leave that box blank for the default: `data/` in

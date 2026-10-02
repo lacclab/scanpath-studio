@@ -162,6 +162,7 @@ def test_a_cancelled_unpack_leaves_no_partial_corpus(monkeypatch, tmp_path):
     monkeypatch.setattr(
         datasets, "_fetch_bytes", lambda url, *, detail: archive.getvalue()
     )
+    monkeypatch.setattr(datasets, "_check_download_size", lambda *a: None)
     monkeypatch.setattr(progress, "report", report)
     with progress.task(key, title="Downloading PoTeC"):
         with pytest.raises(progress.Cancelled):
@@ -183,6 +184,7 @@ def test_an_archive_without_the_fixation_files_fails_with_a_clear_message(
     monkeypatch.setattr(
         datasets, "_fetch_bytes", lambda url, *, detail: archive.getvalue()
     )
+    monkeypatch.setattr(datasets, "_check_download_size", lambda *a: None)
     with pytest.raises(ValueError, match="scanpaths"):
         datasets.download_potec(tmp_path)
     assert not (tmp_path / "eyetracking_data" / "scanpaths").exists()
@@ -250,6 +252,8 @@ def test_an_archive_that_is_not_a_zip_is_a_value_error(monkeypatch, tmp_path):
     monkeypatch.setattr(
         datasets, "_fetch_bytes", lambda url, *, detail: b"<html>not a zip</html>"
     )
+    # Past DATA-65's size pin, so the unpack is what is tested.
+    monkeypatch.setattr(datasets, "_check_download_size", lambda *a: None)
     with pytest.raises(ValueError, match="PoTeC archive") as raised:
         datasets.download_potec(tmp_path)
     assert isinstance(raised.value.__cause__, zipfile.BadZipFile)

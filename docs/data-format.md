@@ -47,7 +47,7 @@ table, and Corpus Analysis needs an AOI report that carries reading measures.
 Attach a table of **one row per reader** — native language, age, a
 comprehension score, a group label. When you upload your own data it is one of
 the **Metadata** uploaders in part 2 of the setup wizard; for the demo, a public
-corpus, or a dataset you added earlier, the same uploader is on :material/database: **Data → :material/edit: Edit dataset**
+corpus, or a dataset you added earlier, the same uploader is on :material/database: **Data Management → :material/edit: Edit dataset**
 under **Metadata → Participants**. Its columns then behave like fields in the
 data: they filter trials (the filter funnel's *By reader* section), show up as
 chips above the plot, sort the trial picker, group cohorts in Corpus Analysis,
@@ -80,7 +80,7 @@ The same idea one grain down: a table of **one row per trial** — a list
 name, a presentation order, a per-trial comprehension score, whatever your
 design recorded about the trial rather than about the reader. It attaches
 beside the participant table — under **Metadata** in part 2 of the add-dataset
-wizard, and on :material/database: **Data → :material/edit: Edit dataset** under **Metadata → Trials** for a
+wizard, and on :material/database: **Data Management → :material/edit: Edit dataset** under **Metadata → Trials** for a
 dataset that is already loaded — and its columns behave like fields in the data in the same
 way: they filter trials, show up as chips above the plot, sort the trial picker,
 group cohorts in Corpus Analysis, appear in the inspection tables, and travel

@@ -79,7 +79,6 @@ from scanpath_studio.constants import (
     DATA_EDITOR_KEY,
     DATA_EDITOR_OFFSCREEN_KEY,
     DATA_OVERVIEW_KEY,
-    DATA_OVERVIEW_OFFSCREEN_KEY,
     DATA_PAGE_KEY,
     DATA_PAGE_OFFSCREEN_KEY,
     DATASET_COUNTS_STORE_KEY,
@@ -5201,6 +5200,7 @@ def _open_mapping_editor() -> None:
     if token:
         st.session_state[FOCUS_MAPPING_KEY] = token
     st.session_state[DATASET_EDITOR_OPEN_KEY] = True
+    st.session_state[_EDITOR_SCROLL_KEY] = True
 
 
 @st.dialog(f"{ICONS['warning']} Check the Trial ID mapping")
@@ -5256,6 +5256,42 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
 #: open a dialog, and a dialog opened from a return value is lost on the next
 #: full rerun.
 _EDITOR_LEAVE_PENDING_KEY = "_dataset_editor_leave_pending"
+#: UX-197 — the dataset a row click asked for while the editor had unsaved
+#: changes. The table stays on screen above the editor now, so a click on
+#: another row is a way out of the editor too, and goes through the same
+#: confirmation; ✕ Leave then opens this dataset.
+_EDITOR_LEAVE_TARGET_KEY = "_dataset_editor_leave_target"
+#: UX-197 — set by whatever opens the editor, popped by its bar: the editor
+#: opens under the table, so the page is brought down to it once.
+_EDITOR_SCROLL_KEY = "_dataset_editor_scroll"
+
+#: Bring the editor's top under the app's header — in its own scroller, never
+#: by `scrollIntoView` (which moves the document; see `tour.py`). Retries while
+#: Streamlit is still laying the editor out.
+_SCROLL_TO_EDITOR_SCRIPT = """<script>
+(function () {
+  const doc = window.parent.document;
+  const win = doc.defaultView;
+  let tries = 0;
+  (function attempt() {
+    const el = doc.querySelector(".st-key-data_dataset_editor");
+    const r = el && el.getBoundingClientRect();
+    if (!r || r.height === 0) {
+      if (++tries < 20) setTimeout(attempt, 150);
+      return;
+    }
+    for (let box = el.parentElement; box; box = box.parentElement) {
+      const cs = win.getComputedStyle(box);
+      if (/(auto|scroll|overlay)/.test(cs.overflowY)
+          && box.scrollHeight > box.clientHeight + 4) {
+        const b = box.getBoundingClientRect();
+        box.scrollTop += r.top - b.top - 56;
+        return;
+      }
+    }
+  })();
+})();
+</script>"""
 
 
 def _close_dataset_editor() -> None:
@@ -5263,6 +5299,7 @@ def _close_dataset_editor() -> None:
     st.session_state.pop(DATASET_EDITOR_OPEN_KEY, None)
     st.session_state.pop(FOCUS_MAPPING_KEY, None)
     st.session_state.pop(_EDITOR_LEAVE_PENDING_KEY, None)
+    st.session_state.pop(_EDITOR_LEAVE_TARGET_KEY, None)
     # Anything typed into the editor and not saved goes with it — including a
     # table uploaded to fill a missing half, which is only a *pending* attach
     # until ✅ Save changes runs.
@@ -5294,6 +5331,7 @@ def _ask_leave_dataset_editor() -> None:
 
 def _dismiss_leave_dataset_editor() -> None:
     st.session_state.pop(_EDITOR_LEAVE_PENDING_KEY, None)
+    st.session_state.pop(_EDITOR_LEAVE_TARGET_KEY, None)
 
 
 @st.dialog("Leave without saving?", on_dismiss=_dismiss_leave_dataset_editor)
@@ -5326,7 +5364,12 @@ def _leave_dataset_editor_dialog() -> None:
         type="primary",
         width="stretch",
     ):
+        target = st.session_state.get(_EDITOR_LEAVE_TARGET_KEY)
         _close_dataset_editor()
+        if target:
+            # Through the pre-widget seam only: this is a button's return
+            # value, after the picker has instantiated in this run.
+            st.session_state["_pending_source_choice"] = target
         st.rerun(scope="app")
     if stay.button("Keep editing", key="dataset_editor_leave_cancel", width="stretch"):
         _dismiss_leave_dataset_editor()
@@ -5366,6 +5409,9 @@ def _render_dataset_editor_bar(host, data_choice: str) -> None:
     )
     if st.session_state.get(_EDITOR_LEAVE_PENDING_KEY):
         _leave_dataset_editor_dialog()
+    if st.session_state.pop(_EDITOR_SCROLL_KEY, False):
+        with bar:
+            embed_html_iframe(_SCROLL_TO_EDITOR_SCRIPT, height=0)
     bar.caption(
         "How this dataset is read and measured — where its files are, how its "
         "columns map onto the app's fields, the screen it was recorded on, and "
@@ -5522,11 +5568,22 @@ def _dataset_status(spec: Mapping | None, *, stood_in_for: bool = False) -> str:
 
 
 def _open_dataset_row(token: str) -> None:
-    """UX-78 — a click anywhere on a dataset's row opens it."""
+    """UX-78 — a click anywhere on a dataset's row opens it.
+
+    UX-197: the table stays above ✏️ Edit dataset, and the editor edits the
+    open dataset, so opening another one closes it — at once when nothing is
+    unsaved, else through the editor's own *Leave without saving?*.
+    """
     if token == st.session_state.get("data_source_choice"):
         return
-    _select_dataset(token)
     st.session_state[_TABLE_NEEDS_APP_RERUN] = True
+    if st.session_state.get(DATASET_EDITOR_OPEN_KEY):
+        if dataset_editor_is_dirty():
+            st.session_state[_EDITOR_LEAVE_PENDING_KEY] = True
+            st.session_state[_EDITOR_LEAVE_TARGET_KEY] = token
+            return
+        _close_dataset_editor()
+    _select_dataset(token)
 
 
 def _edit_open_dataset(token: str) -> None:
@@ -5547,6 +5604,7 @@ def _edit_open_dataset(token: str) -> None:
     st.session_state.pop(EDITOR_PENDING_NAME_KEY, None)
     st.session_state[FOCUS_MAPPING_KEY] = token
     st.session_state[DATASET_EDITOR_OPEN_KEY] = True
+    st.session_state[_EDITOR_SCROLL_KEY] = True
 
 
 def _arm_dataset_row(pending_key: str, token: str) -> None:
@@ -7907,7 +7965,9 @@ def _run_app() -> None:
     # of every loader into a render/resolve pair.
     #
     # DATA-35 split it into **two screens**, both built every run and switched by
-    # key for the same reason the page itself is (above):
+    # key for the same reason the page itself is (above). UX-197 made them two
+    # *parts* of one page: the overview always shows, and the editor opens
+    # under it:
     #
     #   Overview  📂 Available datasets (the table + ➕ Add dataset)
     #             🔎 What's in the open dataset
@@ -7932,9 +7992,11 @@ def _run_app() -> None:
     editing = (
         bool(st.session_state.get(DATASET_EDITOR_OPEN_KEY)) and not wizard_owns_page
     )
-    overview_page = setup_page.container(
-        key=DATA_OVERVIEW_OFFSCREEN_KEY if editing else DATA_OVERVIEW_KEY
-    )
+    # UX-197: the overview stays on screen while the editor is open, and the
+    # editor opens under it, set apart — beta testers lost the dataset's counts
+    # and tables the moment they started editing it. Only the editor is
+    # switched by key now.
+    overview_page = setup_page.container(key=DATA_OVERVIEW_KEY)
     editor_page = setup_page.container(
         key=DATA_EDITOR_KEY if editing else DATA_EDITOR_OFFSCREEN_KEY
     )
@@ -7948,9 +8010,8 @@ def _run_app() -> None:
     # way back, filled below once the dataset's display name is known.
     editor_head_slot = editor_page.container()
     # UX-166: the dataset card's slot on the ✏️ Edit dataset screen, directly
-    # under its header bar. The overview, where the card sits otherwise, is
-    # hidden while the editor is open — and a card nobody can see would still
-    # silence every spinner on the page.
+    # under its header bar: opening the editor scrolls the page down to it
+    # (UX-197), so that is where the user is looking.
     editor_loading_slot = editor_page.empty()
     # UX-135 — the editor's sections are the add screen's numbered *parts*, not
     # a `st.divider()` + `st.subheader()` + `st.caption()` stack. `_editor_part`
@@ -8477,8 +8538,9 @@ def _run_app() -> None:
             _render_unmapped_view(raw_words_df, raw_fixations_df, mapping_problems)
         # BUG-100: the slot above is on the ✏️ Edit dataset screen, hidden until
         # it is opened — the overview needs its own word, where *What's in the
-        # dataset* would have been.
-        if data_view and not editing and not wizard_owns_page:
+        # dataset* would have been — open editor or not, since UX-197 keeps
+        # the overview on screen above it.
+        if data_view and not wizard_owns_page:
             with setup_body_slot:
                 _render_dataset_load_failure(
                     _dataset_display_name(_dataset_owner), mapping_problems

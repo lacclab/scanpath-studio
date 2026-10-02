@@ -895,6 +895,40 @@ class TestDatasetTable:
 
         return _dataset_row_slug(token)
 
+    def test_the_editor_opens_under_the_table_and_its_stats(self):
+        """UX-197: ✏️ Edit dataset no longer replaces the overview — the table
+        and *What's in the dataset* stay on screen, the editor opens under
+        them, and the page is brought down to it once."""
+        from scanpath_studio.app import _EDITOR_SCROLL_KEY
+        from scanpath_studio.constants import (
+            DATA_EDITOR_KEY,
+            DATA_OVERVIEW_KEY,
+            DATASET_EDITOR_OPEN_KEY,
+        )
+
+        at = self._at()
+        self._click(at, "dataset_edit_btn")
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state[DATASET_EDITOR_OPEN_KEY]
+        assert _EDITOR_SCROLL_KEY not in at.session_state  # used up by the bar
+        overview = at.main.get_by_key(DATA_OVERVIEW_KEY)
+        assert overview is not None
+        assert at.main.get_by_key(DATA_EDITOR_KEY) is not None
+        overview_keys = {getattr(w, "key", None) for w in overview}
+        assert f"dataset_open_{self._slug(self.NAME)}" in overview_keys
+        assert "tutorial_data_inspection" in overview_keys
+
+    def test_opening_another_row_closes_an_untouched_editor(self):
+        from scanpath_studio.constants import DATASET_EDITOR_OPEN_KEY, DEMO_CHOICE
+
+        at = self._at()
+        self._click(at, "dataset_edit_btn")
+        self._click(at, f"dataset_open_{self._slug(DEMO_CHOICE)}")
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # The editor edits the open dataset, so opening another one closes it.
+        assert DATASET_EDITOR_OPEN_KEY not in at.session_state
+        assert at.session_state["data_source_choice"] == DEMO_CHOICE
+
     def test_the_table_lists_datasets_with_counts_and_row_actions(self):
         at = self._at()
         frame = self._table(at)

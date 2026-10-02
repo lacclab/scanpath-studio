@@ -52,8 +52,9 @@ values from assumed ones.
 ## The Data Management page
 
 :material/database: **Data Management** lists every dataset with its counts; click a row to open it.
-**Edit dataset** changes a dataset's name, column mapping and recording setup,
-or adds a table it is missing. Changes apply when you click **Save changes**;
+**Edit dataset** opens under the list, below the open dataset's counts and
+tables, and changes its name, column mapping and recording setup, or adds a
+table it is missing. Changes apply when you click **Save changes**;
 **Cancel** discards them. The page also holds each dataset's tables and its
 annotations, and at the foot, what is saved on this computer.
 

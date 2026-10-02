@@ -42,7 +42,7 @@ Move through the participant's trials with the trial picker.
 
 ## 5. Save the review
 
-Open :material/database: **Data → Annotations** and select **Export**. The file keeps your
+Open :material/database: **Data Management → Annotations** and select **Export**. The file keeps your
 favorites, tags and notes for later review; **:material/share: Share → File** keeps the view
 settings beside it.
 

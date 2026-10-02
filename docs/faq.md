@@ -10,7 +10,7 @@ tables are in different coordinate frames — a different origin, unit or offset
 — and no setting here fixes that; convert one of them
 ([Data format → Units](data-format.md#tables)). If the alignment is right but
 the figure is framed or sized wrongly, the recording screen size is: set the
-resolution of the monitor used in the experiment under :material/database: **Data → :material/edit: Edit dataset → Recording
+resolution of the monitor used in the experiment under :material/database: **Data Management → :material/edit: Edit dataset → Recording
 setup**. *Estimate from my data* only gives a lower bound.
 
 ### The text is too big or too small
@@ -22,7 +22,7 @@ the real resolution (see above); for OneStop it is 2560×1440. In Python, pass
 ### A column was detected wrongly
 
 The app guesses columns from their names. Pick the right one under
-:material/database: **Data → :material/edit: Edit dataset**, or pass `word_schema` / `fix_schema` to
+:material/database: **Data Management → :material/edit: Edit dataset**, or pass `word_schema` / `fix_schema` to
 [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data].
 
 ### Can I load only one table?

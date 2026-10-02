@@ -163,12 +163,10 @@ def test_the_missing_samples_note_names_the_reading(a, b, expected):
     )
 
 
-def test_the_note_is_unchanged_outside_compare():
+def test_the_note_outside_compare_names_this_trial():
     assert _raw_gaze_missing_note(False, trial_has_raw_gaze=False) == ""
-    assert (
-        _raw_gaze_missing_note(True, trial_has_raw_gaze=False)
-        == "Raw gaze not available for this trial."
-    )
+    # VIZ-50 reworded it; tests/test_raw_gaze_provenance.py pins the wording.
+    assert "this trial" in _raw_gaze_missing_note(True, trial_has_raw_gaze=False)
 
 
 def test_compare_raw_gaze_needs_compare_with(tmp_path):

@@ -95,7 +95,6 @@ from scanpath_studio.constants import (
     DEFAULT_MARKER_SIZE_RANGE,
     DEFAULT_PALETTE,
     DEFAULT_SACCADE_WIDTH,
-    DEMO_CHOICE,
     FOCUS_MAPPING_KEY,
     HIGHLIGHTED_TEXT_COLOR,
     ICONS,
@@ -3347,22 +3346,58 @@ def _in_text_fixation_value(
     return f"{n_in} / {n_total}"
 
 
+def _synthesized_raw_gaze_note(token: str | None) -> str:
+    """`app.synthesized_raw_gaze_note`, imported late (``app`` imports ``tabs``)."""
+    from scanpath_studio.app import synthesized_raw_gaze_note
+
+    return synthesized_raw_gaze_note(token)
+
+
+def _synthetic_raw_gaze_plot_note(
+    *, drawn_a: bool, source_a: str | None, drawn_b: bool = False, source_b=None
+) -> str:
+    """VIZ-50: the caption for a figure that draws synthesized samples, or ``""``.
+
+    ``drawn_a`` / ``drawn_b`` say whether each reading's samples are actually
+    on the figure (switch on, samples on this trial, not the replay), and
+    ``source_*`` names the dataset they came from — B's is a second dataset's
+    under CMP-8. The sentence is the 🗂️ Data page's own (`reading_note`).
+    """
+    note = (drawn_a and _synthesized_raw_gaze_note(source_a)) or (
+        drawn_b and _synthesized_raw_gaze_note(source_b)
+    )
+    if not note:
+        return ""
+    return f"{ICONS['raw_gaze']} **Synthetic raw-gaze illustration.** {note}"
+
+
 def _raw_gaze_missing_note(
     shown: bool,
     *,
     trial_has_raw_gaze: bool,
     comparing: bool = False,
     compare_has_raw_gaze: bool = False,
+    screen: bool = False,
 ) -> str:
     """The warning for a 🔵 Raw gaze switch with nothing to draw, or ``""``.
 
     VIZ-48: a comparison draws each reading's samples, so it names the reading
     that has none — and says nothing when both have some.
+
+    VIZ-50: outside Compare it says the samples are missing *here* — the switch
+    is live because the dataset has samples, on other trials or screens — so
+    the layer does not look broken. ``screen`` names a multipart trial's screen.
     """
     if not shown:
         return ""
     if not comparing:
-        return "" if trial_has_raw_gaze else "Raw gaze not available for this trial."
+        where = "screen" if screen else "trial"
+        return (
+            ""
+            if trial_has_raw_gaze
+            else f"No raw-gaze samples on this {where}. The dataset's samples "
+            f"cover other {where}s; the layer draws where they exist."
+        )
     if trial_has_raw_gaze and compare_has_raw_gaze:
         return ""
     if not (trial_has_raw_gaze or compare_has_raw_gaze):
@@ -3759,6 +3794,9 @@ def _build_studio_config(
         "raw_gaze": {
             "available": not trial_raw_gaze.empty,
             "points": len(trial_raw_gaze) if not trial_raw_gaze.empty else 0,
+            # VIZ-50: the dataset's samples are made up (the bundled demo's) —
+            # provenance, like the two keys above, and not read back.
+            "synthesized": bool(_synthesized_raw_gaze_note(data_source)),
             # VIZ-43: the layer's own style — the two keys above describe the
             # trial the config was saved on and are not read back.
             "color": viz_settings.get("raw_gaze_color", "#888888"),
@@ -4883,6 +4921,10 @@ def _render_export_panel(
     )
     bulk_settings["line_spacing"] = line_spacing
     bulk_settings["scale_text_to_boxes"] = scale_text_to_boxes
+    # VIZ-50: each trial's `plot_config.json` says when its samples are made up.
+    bulk_settings["raw_gaze_synthesized"] = bool(
+        _synthesized_raw_gaze_note(st.session_state.get("data_source_choice"))
+    )
     # EXP-4 / VIZ-24: the bulk export rebuilds every figure from scratch, so the
     # PRE-3 drift correction must ride along or the batch silently differs from
     # the corrected figure on screen. Applied per trial inside `bulk_export`
@@ -6853,9 +6895,23 @@ def render_single_trial_tab(
             trial_has_raw_gaze=trial_has_raw_gaze,
             comparing=comparing and not animate,
             compare_has_raw_gaze=not compare_raw_gaze.empty,
+            screen=selected_screen is not None,
         )
         if raw_gaze_missing:
             plot_notes_slot.warning(raw_gaze_missing, icon=ICONS["warning"])
+        # VIZ-50: synthesized samples say so where they are drawn, not only on
+        # the 🗂️ Data page. The replay draws no raw gaze (VIZ-49).
+        synthetic_note = _synthetic_raw_gaze_plot_note(
+            drawn_a=effective_show_raw_gaze and not animate,
+            source_a=st.session_state.get("data_source_choice"),
+            drawn_b=compare_shows_raw_gaze and not compare_raw_gaze.empty,
+            source_b=(
+                (compare_meta.get("dataset") if compare_meta else None)
+                or st.session_state.get("data_source_choice")
+            ),
+        )
+        if synthetic_note:
+            plot_notes_slot.caption(synthetic_note)
         no_fixations_note = _no_fixations_note(
             trial_has_fixations=trial_has_fixations,
             trial_has_raw_gaze=trial_has_raw_gaze,
@@ -10442,7 +10498,8 @@ def render_raw_gaze_tab(raw_gaze_filtered: pd.DataFrame) -> None:
         return
     # DATA-15: the bundled demo's raw gaze is synthesized from the fixation
     # report — a table that looks like recorded samples must say it isn't.
-    if st.session_state.get("data_source_choice") == DEMO_CHOICE:
+    # VIZ-50: the catalogue's flag decides it, as it does at the plot.
+    if _synthesized_raw_gaze_note(st.session_state.get("data_source_choice")):
         st.caption(
             f"{ICONS['warning']} The demo's raw gaze is **synthesized** from its fixations for "
             "illustration — it is not recorded eye-tracker output."

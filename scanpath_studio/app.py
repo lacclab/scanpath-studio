@@ -2314,8 +2314,11 @@ _BUILTIN_DATASET_ABOUT: dict[str, dict] = {
         ),
         # UX-177: OneStop publishes no raw samples, so the raw-gaze layer is
         # made up — which changes how that layer is read, so it is said.
-        reading_note="Its raw-gaze samples are synthesized: OneStop publishes "
+        # VIZ-50: the flag says it at the figure too, and in its exports
+        # (`synthesized_raw_gaze_note`), in this same sentence.
+        reading_note="The raw-gaze samples are synthesized: OneStop publishes "
         "no raw gaze.",
+        raw_gaze_synthesized=True,
     ),
     ONESTOP_CHOICE: dict(
         language="English (L1)",
@@ -2399,6 +2402,23 @@ def dataset_about(token: str, registry: dict | None = None) -> dict:
     if "published_counts" in about:
         about["published_counts"] = dict(about["published_counts"])
     return about
+
+
+def synthesized_raw_gaze_note(token: str | None) -> str:
+    """The catalogue's sentence for a dataset whose raw gaze is made up, else ``""``.
+
+    VIZ-50: the 🗂️ Data page says the demo's samples are synthesized, but the
+    🔵 Raw gaze layer is switched on from Scanpath, where that page is out of
+    sight — so the plot repeats the note while the layer is drawn, and the
+    Share → File settings and the bundle's ``plot_config.json`` record it. One
+    flag (``raw_gaze_synthesized``) and one sentence (``reading_note``), read
+    from the packaged sources' table directly: no public corpus or upload sets
+    it, so the registry is never built to answer.
+    """
+    about = _BUILTIN_DATASET_ABOUT.get(str(token or "")) or {}
+    if not about.get("raw_gaze_synthesized"):
+        return ""
+    return str(about.get("reading_note") or "")
 
 
 def _benchmark_registry_entries() -> dict:

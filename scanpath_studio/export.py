@@ -2124,6 +2124,14 @@ def bulk_export(
                 # EXP-2: the title/caption are part of how the figure looked, so
                 # the manifest records them verbatim alongside the settings.
                 cfg["figure_text"] = {"title": title, "caption": caption}
+                # VIZ-50: the trial's samples, and whether they were recorded —
+                # the bundled demo's are synthesized, which its figure and its
+                # raw-gaze table cannot say for themselves.
+                if not trial_raw_gaze.empty:
+                    cfg["raw_gaze"] = {
+                        "points": len(trial_raw_gaze),
+                        "synthesized": bool(settings.get("raw_gaze_synthesized")),
+                    }
                 data = json.dumps(cfg, indent=2).encode("utf-8")
                 zf.writestr(_path("plot_config", "json"), data)
                 progress.bytes_written += len(data)

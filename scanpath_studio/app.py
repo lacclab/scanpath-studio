@@ -277,6 +277,7 @@ from scanpath_studio.tour import (
     render_use_case_tutorial,
     stash_tutorial_context,
 )
+from scanpath_studio.truncation_tooltip import render_truncation_tooltips
 from scanpath_studio.url_state import (
     CORPUS_SOURCE_TOKEN,
     _apply_pending_trial_selection,
@@ -7762,6 +7763,9 @@ def _run_app() -> None:
         # doesn't care about DOM order, being a height-0 script that retries until the
         # heading has hydrated.
         render_easter_egg()
+        # UX-196: a cut-off dropdown label shows in full on hover. Unconditional,
+        # so it never moves the view's index (UX-167).
+        render_truncation_tooltips()
         # UX-15: same deal for the FAQ dialog — the ❓ Help menu button that arms it
         # renders at the bottom of this function, so serving it here is what keeps
         # the modal from waiting out the whole rerun. Ditto ℹ️ About, a dialog since

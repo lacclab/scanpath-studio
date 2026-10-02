@@ -964,7 +964,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
             "delimiter into positional columns, or pull out named regex "
             "groups for parts of variable length (e.g. a stimulus name). "
             "Pick the table first, then any of its own columns — defaults to "
-            "the uploaded filename (captured as `source_file`). ➕ Another "
+            f"the uploaded filename (captured as `source_file`). {ICONS['add']} Another "
             "adds a second line when one column's text isn't enough."
         ),
     )
@@ -2786,7 +2786,7 @@ def _wizard_name_header(host, active: bool) -> None:
         key="wizard_dataset_description",
         placeholder="Optional — what this dataset is: the readers, the texts, "
         "the language.",
-        help="Shown under the dataset's name on the 🗂️ Data page.",
+        help=f"Shown under the dataset's name on the {ICONS['view_data']} Data page.",
         height=68,
     )
 

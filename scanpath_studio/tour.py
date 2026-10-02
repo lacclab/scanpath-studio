@@ -175,7 +175,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
         steps=(
             TutorialStep(
                 "Choose the data source",
-                "Everything about the dataset lives on the 🗂️ **Data** page, in the "
+                f"Everything about the dataset lives on the {ICONS['view_data']} **Data** page, in the "
                 "order the pipeline uses it. Start at the list of datasets — "
                 "click a row to open it, or **+ Add dataset** for your own tables.",
                 ".st-key-tutorial_available_datasets",
@@ -194,7 +194,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Verify what was parsed",
-                "**🔎 What's in the selected dataset** opens on 📊 Stats — the "
+                f"**{ICONS['search']} What's in the selected dataset** opens on {ICONS['view_corpus']} Stats — the "
                 "counts and their spread, the quickest check that the mapping "
                 "worked. The six raw tables and its annotations are the tabs "
                 "beside it.",
@@ -214,7 +214,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Decide on preprocessing",
-                "**Preprocessing**, the last part of the ✏️ Edit screen, can "
+                f"**Preprocessing**, the last part of the {ICONS['edit']} Edit screen, can "
                 "soft-exclude or merge short fixations before anything is "
                 "measured. It is off by default, applies to every view, and "
                 "never discards your original rows.",
@@ -308,7 +308,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Keep the figure reproducible",
-                "**🔗 Share** turns the exact configuration into a **Link**, the "
+                f"**{ICONS['share']} Share** turns the exact configuration into a **Link**, the "
                 "**Code** that redraws it, or a settings **File**. Any of them "
                 "reproduces this figure later — the PNG on its own does not.",
                 ".st-key-tutorial_share",
@@ -337,7 +337,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Compare like with like",
-                "Open **🔬 Comparisons** and set **Match field** to the text id: "
+                f"Open **{ICONS['comparisons']} Comparisons** and set **Match field** to the text id: "
                 "the grid shows the other trials that share this trial's value in "
                 "that field — here, the other readings of *this* text — at the same "
                 "scale, so it compares like with like." + _SIMILARITY_SENTENCE,
@@ -452,7 +452,7 @@ _STEPS = [
     (
         f"{ICONS['plot_controls']} Plot controls",
         "Toggle and style every layer — fixations, saccades, heatmap, word boxes, "
-        "text. **📐 Figure & canvas → 🖥️ Screen & geometry** sets your monitor so "
+        f"text. **{ICONS['figure']} Figure & canvas → {ICONS['screen']} Screen & geometry** sets your monitor so "
         "it stays true-to-scale.",
     ),
     (
@@ -463,7 +463,7 @@ _STEPS = [
     ),
     (
         f"{ICONS['annotations']} Annotate & save",
-        "Star, tag, and note trials, then filter to them. **🗂️ Data → "
+        f"Star, tag, and note trials, then filter to them. **{ICONS['view_data']} Data → "
         "Annotations** exports them as JSON. Replay this via "
         "**Tutorials → Welcome tour**. 👀",
     ),
@@ -663,7 +663,7 @@ def _render_tour_optout(host=st, *, key_suffix: str = "") -> None:
         "Don't show this again",
         key=key,
         help="Skip the tour on future visits. **Tutorials → Welcome tour** under "
-        "❓ Help always brings it back.",
+        f"{ICONS['help']} Help always brings it back.",
     )
     st.session_state[synced_key] = opted_out
     st.session_state["_tour_dismissed"] = opted_out
@@ -744,7 +744,7 @@ _SPOTLIGHT_STEPS = [
         "selector": ".st-key-tour_grp_data_source",
         "title": f"{ICONS['datasets']} Your datasets",
         "body": "Your **data source** (demo or your own upload) sits at the left "
-        "of the control line. Every dataset is listed on the 🗂️ **Data** page — "
+        f"of the control line. Every dataset is listed on the {ICONS['view_data']} **Data** page — "
         "click a row there to open it, **+ Add dataset** for your own.",
     },
     # Picking comes before narrowing: the picker is the control a new reader
@@ -776,7 +776,7 @@ _SPOTLIGHT_STEPS = [
         "title": f"{ICONS['chips']} Trial at a glance",
         "body": "These chips show the trial's **identity, conditions, and summary "
         "stats**. Choose which fields appear — and drag to reorder — with "
-        "**✏️ Edit chips** at the right of the strip.",
+        f"**{ICONS['edit']} Edit chips** at the right of the strip.",
     },
     {
         "selector": ".st-key-tour_grp_view_modes",
@@ -791,15 +791,15 @@ _SPOTLIGHT_STEPS = [
         "title": f"{ICONS['plot_controls']} Plot controls",
         "body": "Toggle and style every layer — fixations, saccades, heatmap, word "
         "boxes, text. **Design presets** jump between Scanpath, Heatmap, "
-        "Illustration and your last custom tuning — and 💾 keeps the ones you "
+        f"Illustration and your last tuning — and {ICONS['save']} keeps the ones you "
         "set up yourself under a name.",
     },
     {
         "selector": ".st-key-tour_grp_subtabs",
         "title": f"{ICONS['panels']} Per-trial panels",
-        "body": "Below the plot: **📝 Annotations**, **📄 Stimulus & Context**, "
-        "**🔬 Comparisons**, **📤 Export** (this trial or bulk), and "
-        "**🔗 Share** a deep link.",
+        "body": f"Below the plot: **{ICONS['annotations']} Annotations**, **{ICONS['stimulus']} Stimulus & Context**, "
+        f"**{ICONS['comparisons']} Comparisons**, **{ICONS['export']} Export** (this trial or bulk), and "
+        f"**{ICONS['share']} Share** a deep link.",
     },
     {
         # UX-100 merged the old "📚 The menu bar" step into this one. It named
@@ -809,10 +809,10 @@ _SPOTLIGHT_STEPS = [
         # nav entries themselves, which makes this the same target.
         "selector": NAV_SELECTOR,
         "title": f"{ICONS['nav']} The nav",
-        "body": "**🗺️ Scanpath** is what you see now. "
-        "**📊 Corpus Analysis** aggregates across readers and texts; "
-        "**🗂️ Data** sets one up. **❓ Help** opens over your work rather "
-        "than navigating away — replay this tour under **Tutorials**. 👀",
+        "body": f"**{ICONS['view_scanpath']} Scanpath** is what you see now. "
+        f"**{ICONS['view_corpus']} Corpus Analysis** aggregates across readers and texts; "
+        f"**{ICONS['view_data']} Data** sets one up. **{ICONS['help']} Help** opens over your work — "
+        "replay this tour under **Tutorials**.",
     },
 ]
 
@@ -1787,7 +1787,7 @@ DOCS_FAQ_URL = f"{CITATION['docs_url']}faq/"
 _FAQ_ITEMS = [
     (
         "A column was mapped to the wrong field. Where do I fix it?",
-        "🗂️ **Data → ✏️ Edit dataset → 2 · Data tables & column mapping** — an "
+        f"{ICONS['view_data']} **Data → {ICONS['edit']} Edit dataset → 2 · Data tables & column mapping** — an "
         "editable form that "
         "re-derives everything in place, no re-upload. It can only offer columns "
         "that survived the import; anything dropped needs a re-upload.",
@@ -1805,7 +1805,7 @@ _FAQ_ITEMS = [
         "Nowhere off your machine — no accounts, no database, no analytics, no "
         "upload. A local or desktop run also keeps a **recovery copy** here "
         "(added datasets, mappings, settings, annotations), so a refresh "
-        "resumes where you left off; **🗂️ Data → Saved on this computer** says "
+        f"resumes where you left off; **{ICONS['view_data']} Data → Saved on this computer** says "
         "what is stored and where. Two caveats: "
         "`streamlit run` listens on your whole network (use "
         "`--server.address=127.0.0.1`), and the online demo runs on "
@@ -1814,10 +1814,10 @@ _FAQ_ITEMS = [
     (
         "My uploaded data vanished after a refresh.",
         "Local and desktop runs normally recover uploaded datasets, settings and "
-        "annotations automatically. Check **🗂️ Data → Saved on this computer** "
+        f"annotations automatically. Check **{ICONS['view_data']} Data → Saved on this computer** "
         "to see whether it is enabled and where it is saved. For a portable "
-        "copy, export annotations from **🗂️ Data → Annotations** and the "
-        "figure's settings from **🗺️ Scanpath → 🔗 Share → File**; neither file "
+        f"copy, export annotations from **{ICONS['view_data']} Data → Annotations** and the "
+        f"figure's settings from **{ICONS['view_scanpath']} Scanpath → {ICONS['share']} Share → File**; neither file "
         "holds dataset rows.",
     ),
     (
@@ -1839,7 +1839,7 @@ _FAQ_ITEMS = [
     ),
     (
         "How do I cite Scanpath Studio?",
-        "See **ℹ️ About** under ❓ Help (and `CITATION.cff` in the "
+        f"See **{ICONS['about']} About** under {ICONS['help']} Help (and `CITATION.cff` in the "
         "repository). Cite the bundled demo data as OneStop Eye Movements too.",
     ),
 ]
@@ -1853,7 +1853,7 @@ _DRIFT_FAQ_ITEMS = [
         "It reassigns each fixation to the text **line** it most likely belongs "
         "to and snaps it there — the ten algorithms from Carr et al. (2021). It "
         "changes the figure, not your data. Apply one via **Fixations ⚙️ → Drift "
-        "correction**, or compare all ten in the **📐 Line assignment** subtab.",
+        f"correction**, or compare all ten in the **{ICONS['line_assignment']} Line assignment** subtab.",
     ),
 ]
 
@@ -2001,7 +2001,7 @@ def _render_wizard_guide_optout() -> None:
     opted_out = st.checkbox(
         "Don't show this again",
         key=key,
-        help="Skip the setup guide on future visits. **❓ Show setup guide** in "
+        help=f"Skip the setup guide on future visits. **{ICONS['help']} Show setup guide** in "
         "the wizard always brings it back.",
     )
     st.session_state["_wizard_guide_dismissed"] = opted_out
@@ -2029,7 +2029,7 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": "1 · Name & description",
         "body": (
-            "Name it — this is what shows up on the 🗂️ **Data** page and in the "
+            f"Name it — this is what shows up on the {ICONS['view_data']} **Data** page and in the "
             "dataset picker, so you can switch back to it later. A description "
             "is optional."
         ),
@@ -2043,7 +2043,7 @@ _WIZARD_GUIDE_STEPS = [
             "Words / IA, Raw gaze, then Participant/Trial/Text metadata. 👀 "
             "Right under each table's own mapping, pick which extra columns "
             "to keep — fewer is faster. Anything still missing is listed "
-            "above **✅ Add dataset**."
+            f"above **{ICONS['confirm']} Add dataset**."
         ),
         "selector": ".st-key-wiz_part_data",
         "step_id": "data",

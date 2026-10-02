@@ -657,7 +657,7 @@ def _render_empty_after_filtering(
             st.markdown("#### This dataset has no trials to show")
             st.markdown(
                 "Pick another **Data source**, or check the column mapping on "
-                "the 🗂️ **Data** page."
+                f"the {ICONS['view_data']} **Data** page."
             )
         return
 
@@ -819,7 +819,7 @@ def _render_saved_here_section(app_url: str, host) -> None:
             "only — closing or refreshing the tab loses the datasets you "
             "uploaded, their column mappings and your annotations. Export the "
             "annotations from **Annotations** above, and the figure's settings "
-            "from 🗺️ Scanpath → 🔗 Share → **File**."
+            f"from {ICONS['view_scanpath']} Scanpath → {ICONS['share']} Share → **File**."
             + (
                 f" Turned off by `{PERSIST_ENV_VAR}=0`."
                 if status["override"] == "off"
@@ -1563,7 +1563,7 @@ def _dataset_access_status(
         _note_dataset_unavailable(
             label=label,
             reason="its files aren't in the folder you pointed at.",
-            action="Set **Data location** on the 🗂️ Data page to a folder "
+            action=f"Set **Data location** on the {ICONS['view_data']} Data page to a folder "
             "holding the files listed under **Expected files**.",
             root=root,
         )
@@ -2770,7 +2770,7 @@ WORDS_JOIN_NOTHING_WARNING = (
     "without its text or its word-level measures. The usual cause is a **Trial "
     "ID** or **Participant ID** mapping that names different trials in the two "
     "tables — for instance one carried over from another dataset with the same "
-    "columns. Check it on 🗂️ **Data → Column mapping**, or start again from "
+    f"columns. Check it on {ICONS['view_data']} **Data → Column mapping**, or start again from "
     "**↩️ Reset to the auto-detected mapping**."
 )
 
@@ -3627,7 +3627,7 @@ def _render_offpage_setup_notice(data_view: bool) -> None:
         return
     st.info(
         "**This dataset isn't set up yet**, so there's nothing to plot. "
-        "Finish it on the 🗂️ **Data** page — or start over from the demo.",
+        f"Finish it on the {ICONS['view_data']} **Data** page — or start over from the demo.",
         icon=ICONS["view_data"],
     )
     finish, demo = st.columns(2)
@@ -4499,7 +4499,7 @@ def render_data_source_picker(host=None) -> None:
         format_func=_entry_label,
         help=(
             "Which dataset the app is showing. Use + to create a scanpath or "
-            "import files. Rename or remove datasets on the 🗂️ Data page. "
+            f"import files. Rename or remove datasets on the {ICONS['view_data']} Data page. "
             "More coming soon! is a preview of future datasets."
         ),
         key="data_source_picker",
@@ -5004,7 +5004,7 @@ def render_description_field(host, token: str) -> None:
         on_change=_save_description_field,
         args=(token,),
         placeholder="What this dataset is — the readers, the texts, the language.",
-        help="Shown under the dataset's name on the 🗂️ Data page.",
+        help=f"Shown under the dataset's name on the {ICONS['view_data']} Data page.",
         height=80,
     )
 
@@ -5146,7 +5146,7 @@ def render_name_field(host, token: str) -> None:
         key=EDITOR_NAME_FIELD_KEY,
         on_change=_stage_upload_name if uploaded else _rename_builtin_from_field,
         args=() if uploaded else (token,),
-        help="Saved with **✅ Save changes**."
+        help=f"Saved with **{ICONS['confirm']} Save changes**."
         if uploaded
         else "Shown in the list of datasets and the dataset picker.",
     )
@@ -5181,7 +5181,7 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
         "A Trial ID that doesn't fully identify one reading concatenates several "
         "into one scanpath — which renders perfectly happily, as an ordinary "
         "scanpath with a lot of regressions. The full evidence is on the "
-        "🗂️ Data page, under **4 · Trial identity**."
+        f"{ICONS['view_data']} Data page, under **4 · Trial identity**."
     )
     edit_col, keep_col = st.columns(2, gap="small")
     if edit_col.button(
@@ -5189,7 +5189,7 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
         key="trial_identity_alert_edit",
         type="primary",
         width="stretch",
-        help="Open ✏️ Edit dataset on the Trial ID mapping this verdict is about.",
+        help=f"Open {ICONS['edit']} Edit dataset on the Trial ID mapping this verdict is about.",
     ):
         _open_mapping_editor()
         st.rerun(scope="app")
@@ -5197,14 +5197,14 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
         "Keep it as is",
         key="trial_identity_alert_keep",
         width="stretch",
-        help="Dismiss. Nothing changes, and the verdict stays on the 🗂️ Data "
+        help=f"Dismiss. Nothing changes, and the verdict stays on the {ICONS['view_data']} Data "
         "page under 4 · Trial identity.",
     ):
         st.rerun(scope="app")
     if asked_by == "add":
         st.caption(
             "Checked automatically because the dataset was just added. It is "
-            "already on the 🗂️ Data page's list either way."
+            f"already on the {ICONS['view_data']} Data page's list either way."
         )
 
 
@@ -6659,7 +6659,7 @@ def render_canvas_controls(
     screen.caption(
         f"Geometry: **{px_per_degree:.1f} px/degree** · "
         f"{1.0 / px_per_degree:.4f}° per pixel."
-        + ("  ·  set in 🗂️ Data → Recording setup." if bare else "")
+        + (f"  ·  set in {ICONS['view_data']} Data → Recording setup." if bare else "")
     )
 
     # Text can be switched off while this function still supplies the screen
@@ -7586,7 +7586,7 @@ def _run_app() -> None:
         # after the user cleared the cache by hand. Naming the counts is what
         # makes the claim checkable against the panel it points at.
         st.toast(
-            f"Recovered {_restored_recap()} from this computer — see 🗂️ Data → "
+            f"Recovered {_restored_recap()} from this computer — see {ICONS['view_data']} Data → "
             "Saved on this computer.",
             icon=ICONS["recovery"],
         )

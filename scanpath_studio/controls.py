@@ -573,7 +573,9 @@ def _mode_gate(
     if not modes:
         return False, ""
     return True, (
-        "⚠️ Not available in " + " / ".join(modes) + " mode — that render path "
+        f"{ICONS['warning']} Not available in "
+        + " / ".join(modes)
+        + " mode — that render path "
         "ignores this setting. Your value is kept and applies again once the "
         "mode is off."
     )
@@ -1512,7 +1514,7 @@ def _render_saved_designs(host) -> None:
         if not saved:
             st.caption(
                 "No saved designs yet. Set the layers, colours and figure up "
-                "the way you like them, then hit 💾 — it lands here, one click "
+                f"the way you like them, then hit {ICONS['save']} — it lands here, one click "
                 "from every trial you look at afterwards."
             )
         for name in saved:
@@ -4945,7 +4947,7 @@ def render_plot_controls(
         type="primary" if _active == _CUSTOM_VIEW else "secondary",
         width="stretch",
         help="Your most recent custom plot settings. Save it under a name in "
-        "🎨 My designs to keep it.",
+        f"{ICONS['designs']} My designs to keep it.",
         on_click=_apply_view_preset,
         args=(_CUSTOM_VIEW,),
     )
@@ -5420,7 +5422,7 @@ def render_plot_controls(
                 persist_state="session",
                 help="Snap fixations to their assigned text line using a "
                 "vertical drift-correction algorithm (Carr et al., 2021). "
-                "'Off' shows the raw fixations. See also the 📐 Line "
+                f"'Off' shows the raw fixations. See also the {ICONS['line_assignment']} Line "
                 "assignment subtab to compare all algorithms side by side.",
             )
             if align_algo != "Off":
@@ -5726,7 +5728,7 @@ def render_plot_controls(
             class_disabled,
             _gated_help(
                 "Straight connectors, or upward **arcs** over the text (the "
-                "classic linear-reading diagram). Pairs with 👁️ Fixations ▾ → "
+                f"classic linear-reading diagram). Pairs with {ICONS['fixations']} Fixations ▾ → "
                 "**Snap above words**.",
                 class_reason,
             ),
@@ -5889,7 +5891,7 @@ def render_plot_controls(
             "**Mark text** colours the span's words; **Mark border** draws a thin "
             "outline around the span. The box beside it is that colour."
             + (
-                "\n\n⚠️ **Mark border** draws on the static plot only — the replay "
+                f"\n\n{ICONS['warning']} **Mark border** draws on the static plot only — the replay "
                 "and the comparison figure have no border layer, so the span shows "
                 "unmarked there. Use **Mark text** in those modes."
                 if border_disabled

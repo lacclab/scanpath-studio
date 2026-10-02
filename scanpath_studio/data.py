@@ -13,7 +13,7 @@ import warnings
 import weakref
 import zipfile
 from collections import OrderedDict
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Hashable, Iterable, Sequence
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
@@ -39,18 +39,6 @@ from .multipart import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-# DATA-16 / audit S5. Up to this many rows the fingerprint hashes the WHOLE
-# frame, so any edit anywhere changes the key. Measured on a 4-column frame:
-# 8 ms at 100k rows, 59 ms at 1M, 237 ms at 5M — and roughly six corpus-sized
-# fingerprints are taken per rerun, so a full hash of a multi-million-row corpus
-# would cost seconds of latency on every interaction. 200k keeps the exact path
-# under ~16 ms while covering the case that actually matters: a user editing
-# their own table and re-uploading it.
-_FINGERPRINT_FULL_MAX_ROWS = 200_000
-# Above the threshold: rows sampled from each end, plus an evenly-spaced stride.
-_FINGERPRINT_EDGE_ROWS = 64
-_FINGERPRINT_STRIDE_ROWS = 256
 
 # PERF-3. Per-run memo, `id(frame) -> (frame, fingerprint)`.
 #
@@ -81,11 +69,11 @@ _FINGERPRINT_STRIDE_ROWS = 256
 # THE ASSUMPTION: a fingerprinted frame is not mutated **in place** part-way
 # through a run. That holds today — the frames the app fingerprints are built by
 # `normalize_*` / `filter_*` / `.copy()` and then only read; helpers that add
-# columns (`aggregation.py`) do it to a local copy — and it is the within-run
-# form of the DATA-16 / audit S5 hazard the sampling threshold above is about.
-# If you ever add an in-place `frame[col] = …` to a long-lived frame, either
-# copy instead or the caches downstream of it will serve pre-mutation results
-# for the rest of that run.
+# columns (`aggregation.py`) do it to a local copy. A frame with an *assigned*
+# fingerprint (`_STABLE_FINGERPRINTS` below) relies on the same thing for as
+# long as it lives, since its ID is never re-checked against its content.
+# If you ever add an in-place `frame[col] = …` to a fingerprinted frame, either
+# copy instead or the caches downstream of it will serve pre-mutation results.
 _FINGERPRINT_MEMO = threading.local()
 #: Backstop for a non-Streamlit caller (headless `api.py`, the CLI) that never
 #: reaches `reset_fingerprint_memo`: keep the memo from growing without bound.
@@ -96,19 +84,31 @@ _FINGERPRINT_MEMO = threading.local()
 _FINGERPRINT_MEMO_MAX = 64
 
 
-#: PERF-10: fingerprints that outlive the per-run memo, for the frames
-#: `frame_cache` hands back as the *same object* run after run. Those are never
-#: written in place (tests/test_frame_immutability.py), so their fingerprint
-#: cannot change — yet the per-run reset threw it away, and the normalized pair
-#: was fully re-hashed on every rerun: ~0.5 s of a 1.9 s rerun at 50× the demo.
-#: `id → (weakref, fingerprint | None)`; the weak ref is what makes the id key
-#: safe (a reissued id finds a dead ref), and `None` means "vouched for, not yet
-#: hashed". Process-wide on purpose — a fingerprint depends only on content.
+#: PERF-10 → BUG-103: fingerprints the app *knows* rather than computes, so a
+#: large frame is not re-hashed on every rerun. `id → (weakref, fingerprint |
+#: None)`; the weak ref is what makes the id key safe (a reissued id finds a
+#: dead ref), so an entry lives exactly as long as its frame. Three kinds:
+#:
+#: * **assigned** (`assign_fingerprint`): an ID from where the frame came from —
+#:   a loader's source token (`stamp_source` / `adopt_source`), a `frame_cache`
+#:   slot + key, or a derivation and its parents (`assign_derived`). Free, and
+#:   exact as long as the ID determines the content, which each producer
+#:   guarantees.
+#: * **vouched** (`vouch_for_frames`, value `None`): a long-lived frame nothing
+#:   writes into (tests/test_frame_immutability.py) — hashed in full once, the
+#:   first time it is asked for, then remembered.
+#: * anything else is hashed in full, once per run (`_FINGERPRINT_MEMO`).
+#:
+#: An entry is never overwritten: one object keeps one ID, so a frame a
+#: producer hands back unchanged (an input returned as is) keeps its own.
+#: Process-wide on purpose — every kind depends only on content.
 _STABLE_FINGERPRINTS: dict[int, tuple[weakref.ref, tuple | None]] = {}
-_STABLE_FINGERPRINTS_MAX = 64
+#: Dead entries are swept once the registry grows past this. Not a cap — an
+#: entry is only bookkeeping for a frame that is still alive.
+_STABLE_FINGERPRINTS_SWEEP = 64
 #: UX-166 fix-round-2 (Ruling T5-6): guards every iteration/mutation of
 #: `_STABLE_FINGERPRINTS` above. The dict is process-wide, so two script runs
-#: can reach `_vouch_for_frames` at once — a superseded run's build publishing
+#: can reach `_register_fingerprints` at once — a superseded run's build publishing
 #: beside the run that replaced it, or two sessions' runs — though no build is
 #: ever shared *across* sessions (`frame_cache`'s identity includes the
 #: session's own store). An unlocked `.items()` iteration racing another
@@ -118,26 +118,155 @@ _STABLE_FINGERPRINTS_MAX = 64
 _STABLE_FINGERPRINTS_LOCK = threading.Lock()
 
 
-def _vouch_for_frames(value) -> None:
-    """Mark the frames in a `frame_cache` value as never mutated (PERF-10)."""
+def _frame_parts(value) -> list[tuple[object, pd.DataFrame]]:
+    """``(label, frame)`` for each non-empty frame in a frame, dict or tuple."""
     if isinstance(value, pd.DataFrame):
-        parts = (value,)
+        items = [(0, value)]
     elif isinstance(value, dict):
-        parts = tuple(value.values())
+        items = list(value.items())
     elif isinstance(value, (tuple, list)):
-        parts = value
+        items = list(enumerate(value))
     else:
-        return
+        return []
+    return [
+        (label, frame)
+        for label, frame in items
+        if isinstance(frame, pd.DataFrame) and not frame.empty
+    ]
+
+
+def _register_fingerprints(entries: list[tuple[pd.DataFrame, tuple | None]]) -> None:
+    """Record known fingerprints, never replacing one a frame already has."""
     with _STABLE_FINGERPRINTS_LOCK:
-        for dead in [
-            k for k, (ref, _) in _STABLE_FINGERPRINTS.items() if ref() is None
-        ]:
-            _STABLE_FINGERPRINTS.pop(dead, None)
-        for frame in parts:
-            if len(_STABLE_FINGERPRINTS) >= _STABLE_FINGERPRINTS_MAX:
-                break
-            if isinstance(frame, pd.DataFrame) and not frame.empty:
-                _STABLE_FINGERPRINTS.setdefault(id(frame), (weakref.ref(frame), None))
+        if len(_STABLE_FINGERPRINTS) > _STABLE_FINGERPRINTS_SWEEP:
+            for dead in [
+                k for k, (ref, _) in _STABLE_FINGERPRINTS.items() if ref() is None
+            ]:
+                _STABLE_FINGERPRINTS.pop(dead, None)
+        for frame, value in entries:
+            current = _STABLE_FINGERPRINTS.get(id(frame))
+            if current is not None and current[0]() is frame:
+                continue
+            _STABLE_FINGERPRINTS[id(frame)] = (weakref.ref(frame), value)
+
+
+def vouch_for_frames(value) -> None:
+    """Mark long-lived frames as never written in place (PERF-10).
+
+    Each is hashed in full the first time its fingerprint is asked for, and that
+    answer is kept for as long as the frame lives — for a frame the app holds
+    run after run without knowing where it came from, such as a stored dataset
+    read back from the recovery cache.
+    """
+    _register_fingerprints([(frame, None) for _, frame in _frame_parts(value)])
+
+
+def assign_fingerprint(frame: pd.DataFrame, ident: Hashable) -> None:
+    """Give ``frame`` the fingerprint ``("assigned", ident)`` instead of a hash.
+
+    BUG-103. ``ident`` must determine the frame's content — two frames with the
+    same ``ident`` are taken to be identical, which is exactly what makes the
+    caches downstream reuse a result. A frame that already has a fingerprint
+    keeps it.
+    """
+    if isinstance(frame, pd.DataFrame) and not frame.empty:
+        _register_fingerprints([(frame, ("assigned", ident))])
+
+
+#: BUG-103: the `DataFrame.attrs` entry a cached loader labels its frames with.
+#: Only a carrier: `st.cache_data` hands out a fresh copy per call, and `attrs`
+#: survive the copy, so the label reaches the caller — where `adopt_source`
+#: takes it off again before the frame goes anywhere else. Never read anywhere
+#: but there: pandas copies `attrs` onto every frame derived from this one, so a
+#: label left on would follow a filtered or edited copy that is not the source.
+SOURCE_TOKEN_ATTR = "_sps_source_token"
+
+
+def stamp_source(value):
+    """Label a loader's frames with a fresh random token, for `adopt_source`.
+
+    Call it on the return value **inside** an ``@st.cache_data`` loader: the
+    token is drawn once per real load, so every cache hit carries the same one
+    and a reload — a new upload, another read plan, a cleared cache — a new one.
+    Returns ``value``.
+    """
+    token = uuid.uuid4().hex
+    for label, frame in _frame_parts(value):
+        frame.attrs[SOURCE_TOKEN_ATTR] = (token, label)
+    return value
+
+
+def adopt_source(*frames: pd.DataFrame | None) -> None:
+    """Turn a loader's `stamp_source` label into each frame's fingerprint.
+
+    Call it where a loader's frames come out, before anything derives from them.
+    The label comes off the frame, so nothing made from it inherits the token;
+    the fingerprint stays with this object only.
+    """
+    for frame in frames:
+        if not isinstance(frame, pd.DataFrame):
+            continue
+        token = frame.attrs.pop(SOURCE_TOKEN_ATTR, None)
+        if token is not None:
+            assign_fingerprint(frame, ("source", token))
+
+
+def assign_derived(outputs, op: str, parents, params=None) -> None:
+    """Fingerprint ``outputs`` by how they were made, not by hashing them.
+
+    For a pure step — ``outputs`` determined by ``op``, the ``parents`` frames'
+    content and ``params`` — the ID is ``(op, parent fingerprints, params)``,
+    labelled by each output's position. An output that is one of its parents
+    (a step with nothing to do) keeps the parent's fingerprint. ``params`` must
+    be hashable after `hashable_key`; when it is not, the outputs are simply
+    hashed like any other frame.
+    """
+    parent_ids = {id(p) for p in _as_frames(parents)}
+    if all(id(frame) in parent_ids for _, frame in _frame_parts(outputs)):
+        return  # nothing new to name (a step with nothing to do)
+    key = hashable_key(params)
+    if not _plain(key):
+        return
+    parent_keys = tuple(frame_fingerprint(p) for p in _as_frames(parents))
+    # Digested: every cache downstream hashes its key on every call, and the
+    # settings can be long (the filter's full trial list), so the ID stays
+    # small however much went into it. `repr` is stable for what `hashable_key`
+    # leaves: tuples of plain values, sets and dicts already sorted.
+    digest = hashlib.blake2b(
+        repr((op, parent_keys, key)).encode(), digest_size=16
+    ).hexdigest()
+    for label, frame in _frame_parts(outputs):
+        if id(frame) not in parent_ids:
+            assign_fingerprint(frame, ("derived", op, digest, label))
+
+
+#: What a derived ID's settings may hold: values whose `repr` is their content.
+#: Anything else — an object whose `repr` is its address, a Series — could
+#: name two different settings the same way, so it is hashed instead.
+_PLAIN_TYPES = (str, int, float, bool, type(None), np.generic, pd.Timestamp)
+
+
+def _plain(value) -> bool:
+    if isinstance(value, tuple):
+        return all(_plain(v) for v in value)
+    return isinstance(value, _PLAIN_TYPES)
+
+
+def _as_frames(value) -> tuple:
+    if isinstance(value, pd.DataFrame) or value is None:
+        return (value,)
+    return tuple(value)
+
+
+def hashable_key(value):
+    """``value`` as a hashable, order-free key part (sets and dicts sorted)."""
+    if isinstance(value, dict):
+        return tuple(sorted(((str(k), hashable_key(v)) for k, v in value.items())))
+    if isinstance(value, (set, frozenset)):
+        return tuple(sorted((hashable_key(v) for v in value), key=repr))
+    if isinstance(value, (list, tuple)):
+        return tuple(hashable_key(v) for v in value)
+    return value
 
 
 #: Session-state home of the no-copy frame caches (PERF-6), one entry per slot.
@@ -237,7 +366,7 @@ def _shared_build(
             # try/finally, so the registry pop and `done.set()` ALWAYS run —
             # whether `lookup`, `build` or `publish` raises, or nothing does.
             # Without this, a raising `publish` (the reviewer's repro:
-            # `_vouch_for_frames` racing another session's concurrent insert)
+            # `_register_fingerprints` racing another session's concurrent insert)
             # left the entry registered forever: every waiter already joined
             # blocks in `entry.done.wait()` with no timeout and no Streamlit
             # checkpoint to free it, and every later miss for this `ident`
@@ -398,7 +527,13 @@ def frame_cache(slot: str, key, build, *, keep: int = 1):
                     store[(_EARLIER, slot)] = [previous, *earlier][: keep - 1]
                 store[slot] = (key, value)
         if wins:
-            _vouch_for_frames(value)
+            # BUG-103: the key decides the value, so it is the value's ID too.
+            _register_fingerprints(
+                [
+                    (frame, ("assigned", ("frame_cache", slot, key, label)))
+                    for label, frame in _frame_parts(value)
+                ]
+            )
 
     # UX-166: shared with a build already running for this session, slot and key.
     return _shared_build(
@@ -425,28 +560,25 @@ def reset_fingerprint_memo() -> None:
 
 
 def frame_fingerprint(df: pd.DataFrame | None) -> tuple:
-    """Cheap, content-sensitive identity for a DataFrame.
+    """Exact, content-sensitive identity for a DataFrame.
 
     Used as an *explicit* ``@st.cache_data`` key for functions that take an
     underscore-prefixed (un-hashed) frame argument — so Streamlit never re-hashes
     a multi-million-row frame on every rerun just to look up the cache.
 
-    **Up to ``_FINGERPRINT_FULL_MAX_ROWS`` the whole frame is hashed**, so any
-    edit anywhere changes the key. This is the fix for DATA-16 / audit S5: the
-    previous key sampled only the first and last 64 rows, so a table of ≥129 rows
-    edited anywhere in between produced an *identical* key — not a probabilistic
-    collision but a certain one. Re-uploading a corrected table of the same shape
-    then served every figure, measure and aggregate from the pre-edit data,
-    silently, which is a route to a wrong number in a paper.
+    **Two frames share a fingerprint only when they are the same data**
+    (BUG-103). It is one of:
 
-    **Above the threshold the key is a sample** (both ends plus an evenly-spaced
-    stride) and detection becomes probabilistic: a single-cell edit in a
-    5-million-row corpus has roughly a 1-in-19,000 chance of landing on a sampled
-    row. That is a deliberate trade — a full hash there costs ~237 ms, taken
-    about six times per rerun. It is the right trade because the frames people
-    hand-edit and re-upload are their own tables, not multi-million-row public
-    corpora, but it *is* a limit: after editing a corpus that large, use **Clear
-    cache** in the ☰ menu.
+    * the ID the app *assigned* the frame — from the loader that read it, the
+      ``frame_cache`` entry that holds it, or the step that derived it (see
+      ``_STABLE_FINGERPRINTS``). That is what keeps a corpus-sized frame from
+      being hashed on every rerun;
+    * otherwise ``(rows, columns, digest)`` over **every** row. Until BUG-103 a
+      frame over 200,000 rows was keyed on ~384 sampled rows, so a corrected
+      re-upload of the same shape matched the old file and was served its
+      results — and its normalized tables, which were then stored as the new
+      dataset — without a word. A full hash costs ~60 ms per million rows, which
+      is why the large frames on the rerun path are assigned an ID instead.
 
     The per-row hashes are digested **in order** rather than summed. Summing is
     order-invariant, so a frame and a ``sort_values`` of itself — same rows, same
@@ -499,12 +631,12 @@ def _compute_frame_fingerprint(df: pd.DataFrame) -> tuple:
     cols = tuple(map(str, df.columns))
     n = len(df)
 
-    def _hash(sample: pd.DataFrame) -> str:
+    def _hash(frame: pd.DataFrame) -> str:
         try:
-            per_row = pd.util.hash_pandas_object(sample, index=True)
+            per_row = pd.util.hash_pandas_object(frame, index=True)
         except TypeError:
             # Unhashable cell objects — stringify so content still drives the key.
-            per_row = pd.util.hash_pandas_object(sample.astype(str), index=True)
+            per_row = pd.util.hash_pandas_object(frame.astype(str), index=True)
         # Digest the per-row hashes in ORDER. Summing them (the previous
         # approach) is order-invariant, so a frame and a `sort_values` of itself
         # — same rows, same index labels, different order — produced the same
@@ -514,19 +646,12 @@ def _compute_frame_fingerprint(df: pd.DataFrame) -> tuple:
         ).hexdigest()
 
     try:
-        if n <= _FINGERPRINT_FULL_MAX_ROWS:
-            return (n, cols, _hash(df))
-        head = _hash(df.head(_FINGERPRINT_EDGE_ROWS))
-        tail = _hash(df.tail(_FINGERPRINT_EDGE_ROWS))
-        # An evenly-spaced sample of the whole frame, capped at
-        # _FINGERPRINT_STRIDE_ROWS rows however long the table is.
-        middle = _hash(df.iloc[:: max(1, n // _FINGERPRINT_STRIDE_ROWS)])
+        return (n, cols, _hash(df))
     except Exception:
         # Fail CLOSED: a key nothing else can equal, so this frame simply doesn't
         # share a cache entry. `(n, cols, 0, 0)` failed *open* — every frame of
         # the same shape collided.
         return (n, cols, uuid.uuid4().hex)
-    return (n, cols, head, tail, middle)
 
 
 # ---------------------------------------------------------------------------
@@ -660,9 +785,11 @@ def load_onestop_server_bundle(
         fix_present = fix_shard.exists()
         if ia_present and fix_present:
             # PERF-6: parse only the columns the mapping + registry keep.
-            return (
-                read_mapped_table(ia_shard, kind="words"),
-                read_mapped_table(fix_shard, kind="fixations"),
+            return stamp_source(
+                (
+                    read_mapped_table(ia_shard, kind="words"),
+                    read_mapped_table(fix_shard, kind="fixations"),
+                )
             )
         # NEVER fall through to the 15 GB load when a participant is named —
         # the deep link is for one pid only, so loading the whole cohort just
@@ -697,7 +824,7 @@ def load_onestop_server_bundle(
     # path reach ~25 GB resident before a single measure was computed.
     words = read_mapped_table(ia_path, kind="words")
     fixations = read_mapped_table(fix_path, kind="fixations")
-    return words, fixations
+    return stamp_source((words, fixations))
 
 
 _TRAILING_UNIT = re.compile(r"\s*[\[(][^\[\]()]*[\])]\s*$")
@@ -5741,7 +5868,10 @@ def preprocess_fixation_stage(
         frame_fingerprint(fixations),
         tuple(sorted(settings.items())),
     )
-    return _preprocess_fixation_stage_cached(words, fixations, settings, key)
+    result = _preprocess_fixation_stage_cached(words, fixations, settings, key)
+    # BUG-103: a fresh copy out of the cache each rerun, named by its inputs.
+    assign_derived(result, "preprocess_fixation_stage", (words, fixations), settings)
+    return result
 
 
 #: Ceiling on the caches keyed by a *single trial's* frames (PERF-6). Without

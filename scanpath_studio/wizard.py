@@ -55,6 +55,7 @@ from .data import (
     SOURCE_FILE_COLUMN,
     WORD_OPTIONAL_FIELDS,
     aggregate_char_boxes,
+    assign_derived,
     canvas_geometry_frames,
     categorize_columns,
     compute_canvas_size,
@@ -1161,6 +1162,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
         if target.empty or applied_column not in target.columns:
             continue
         existing = existing_by_table.setdefault(target_table, set())
+        parent = target
 
         if config["mode"] == "Split on a delimiter":
             split = split_source_file(
@@ -1175,6 +1177,13 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
             new_names = _next_available_names(existing, applied_column, len(temp_cols))
             target = split.rename(columns=dict(zip(temp_cols, new_names)))
             new_cols = new_names
+            # BUG-103: named by what made it, so it is not re-hashed each rerun.
+            assign_derived(
+                target,
+                "split_source_file",
+                parent,
+                (config["delimiter"], applied_column, tuple(new_names)),
+            )
         else:
             applied_pattern = config.get("pattern")
             if not applied_pattern:
@@ -1196,6 +1205,12 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
                 applied_pattern,
                 column=applied_column,
                 lowercase=config["lower"],
+            )
+            assign_derived(
+                target,
+                "extract_columns_from_source_file",
+                parent,
+                (applied_pattern, applied_column, bool(config["lower"])),
             )
             new_cols = [
                 c for c in re.compile(applied_pattern).groupindex if c in target.columns
@@ -3892,11 +3907,16 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # using the final word mapping, before normalization (which expects one row
     # per word box).
     if has_words and st.session_state.get("wizard_aggregate_char_boxes"):
+        characters = raw_words
         raw_words = _c_aggregate_char_boxes(
-            raw_words,
+            characters,
             word_schema,
-            frame_fingerprint(raw_words),
+            frame_fingerprint(characters),
             _schema_key(word_schema),
+        )
+        # BUG-103: a fresh copy out of the cache each rerun, named by its input.
+        assign_derived(
+            raw_words, "aggregate_char_boxes", characters, _schema_key(word_schema)
         )
 
     keep_words = (

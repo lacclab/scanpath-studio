@@ -34,6 +34,7 @@ from .constants import (
     SYNTHETIC_CHOICE,
     onestop_regime_for_choice,
 )
+from .data import adopt_source, stamp_source, vouch_for_frames
 from .experimental_setup import Provenance, SetupSnapshot
 from .session_keys import COMPARE_SOURCE_STATE_KEY
 
@@ -259,17 +260,23 @@ def _load_public_frames(
     if dataset := kwargs.get("dataset"):
         from scanpath_studio.eyegenbench import load_eyegenbench
 
-        return load_eyegenbench(root, dataset=dataset)
-    if onestop_regime_for_choice(label):
-        return datasets.load_onestop(
+        frames = load_eyegenbench(root, dataset=dataset)
+    elif onestop_regime_for_choice(label):
+        frames = datasets.load_onestop(
             root,
             regime=kwargs["regime"],
             parts=list(kwargs["parts"]),
             variant=kwargs["variant"],
         )
-    if _POTEC_LABEL_HINT in label:
-        return datasets.load_potec(root)
-    return datasets.load_multipleye(root, fixation_source=kwargs["fixation_source"])
+    elif _POTEC_LABEL_HINT in label:
+        frames = datasets.load_potec(root)
+    else:
+        frames = datasets.load_multipleye(
+            root, fixation_source=kwargs["fixation_source"]
+        )
+    # BUG-103: B's corpus is copied out of this cache on every rerun; the label
+    # lets `load_secondary_dataset` key it without hashing it each time.
+    return stamp_source(frames)
 
 
 @st.cache_data(show_spinner=False)  # UX-168: B's dataset card covers this.
@@ -371,6 +378,7 @@ def load_secondary_dataset(name: str | None) -> SecondaryDataset | None:
         words, fixations = stored["words"], stored["fixations"]
         composite = tuple(stored.get("composite_trial_columns") or ())
         raw_gaze = stored.get("raw_gaze")
+        vouch_for_frames((words, fixations, raw_gaze))
     else:
         from scanpath_studio import app
 
@@ -384,6 +392,7 @@ def load_secondary_dataset(name: str | None) -> SecondaryDataset | None:
             words, fixations = _load_public_frames(
                 name, root, tuple(sorted(options.items()))
             )
+            adopt_source(words, fixations)
         elif name in (DEMO_CHOICE, SYNTHETIC_CHOICE):
             words, fixations = _load_builtin_frames(name)
             if name == DEMO_CHOICE:

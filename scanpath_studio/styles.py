@@ -644,50 +644,20 @@ def get_app_css() -> str:
     /* === Scanpath screen: condition chips + control rail ====================
        The viz controls moved out of the sidebar into a rail beside the plot, so
        the trial's key experiment conditions ride above the plot as a compact
-       chip strip and the rail reads as a tidy inspector panel. */
-    /* UX-11: the chip strip WRAPS. It used to be pinned to one line, clipping
-       whatever didn't fit, with a "More" disclosure that re-listed every chip so
-       the clipped ones stayed reachable — the same facts twice, because which
-       chips fit is a live-width question Python can't answer. Wrapping means
-       nothing is ever cut at any window width, so the duplicate list
-       (and the whole floating-dropdown mechanism) is gone. The derived summary
-       stats went to a "Summary stats" popover beside the strip and, this round,
-       became ordinary chips in it — so the popover and its `.sps-stat` rows are
-       gone too. This is also the first half of UX-19 — the strip was what broke
-       first on a narrow laptop. */
-    .sps-trial-chips {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.35rem;
-        margin: 0.1rem 0 0.5rem;
-    }
-    .sps-trial-chips .sps-chip { flex: 0 0 auto; }
-    .sps-chip {
-        display: inline-flex;
-        align-items: center;
-        padding: 0.12rem 0.6rem;
-        border-radius: 999px;
-        font-size: 0.9rem;
-        font-weight: 600;
-        line-height: 1.55;
-        /* Chip backgrounds are always light (set inline), so pin dark text so it
-           stays readable in dark mode too. */
-        color: #212529;
-        border: 1px solid rgba(0, 0, 0, 0.06);
-    }
-    /* UX-190 — Compare mode's A/B table, in place of a chip strip per reading:
-       one column per field, A's value directly above B's, a shared value once
-       across both rows (quieter, so what differs stands out). A value never
-       wraps; a header label does, but only once the table would otherwise be
+       chip table and the rail reads as a tidy inspector panel. */
+    /* UX-190 / UX-195 — the chips as a table, in place of the wrapping chip
+       strip (UX-11): one column per field and one row per reading — Compare's
+       A above B, with a value they share once across both rows (quieter, so
+       what differs stands out). A value never wraps;
+       a header label does, but only once the table would otherwise be
        wider than its column, and past that the table scrolls sideways rather
        than push the plot down. The selectors are long on purpose — they must
        beat the table styles Streamlit's markdown gives every table. */
-    .sps-compare-table-wrap {
+    .sps-chip-table-wrap {
         overflow-x: auto;
         margin: 0.1rem 0 0.5rem;
     }
-    .sps-compare-table-wrap table.sps-compare-table {
+    .sps-chip-table-wrap table.sps-chip-table {
         width: auto;
         margin: 0;
         border: none;
@@ -696,8 +666,8 @@ def get_app_css() -> str:
         line-height: 1.45;
         color: inherit;
     }
-    .sps-compare-table-wrap table.sps-compare-table th,
-    .sps-compare-table-wrap table.sps-compare-table td {
+    .sps-chip-table-wrap table.sps-chip-table th,
+    .sps-chip-table-wrap table.sps-chip-table td {
         padding: 0.2rem 0.55rem;
         border: none;
         border-bottom: 1px solid var(--sps-border);
@@ -707,7 +677,7 @@ def get_app_css() -> str:
         white-space: nowrap;
         font-weight: 500;
     }
-    .sps-compare-table-wrap table.sps-compare-table thead th {
+    .sps-chip-table-wrap table.sps-chip-table thead th {
         padding-top: 0;
         vertical-align: bottom;
         white-space: normal;
@@ -721,20 +691,20 @@ def get_app_css() -> str:
         padding: 0 0.45rem;
         border-radius: 999px;
     }
-    .sps-compare-table-wrap table.sps-compare-table tbody tr:last-child > *,
-    .sps-compare-table-wrap table.sps-compare-table td.sps-ct-same {
+    .sps-chip-table-wrap table.sps-chip-table tbody tr:last-child > *,
+    .sps-chip-table-wrap table.sps-chip-table td.sps-ct-same {
         border-bottom: none;
     }
-    .sps-compare-table-wrap table.sps-compare-table th.sps-ct-side {
+    .sps-chip-table-wrap table.sps-chip-table th.sps-ct-side {
         padding-left: 0;
         font-weight: 700;
     }
-    .sps-compare-table-wrap table.sps-compare-table .sps-ct-num {
+    .sps-chip-table-wrap table.sps-chip-table .sps-ct-num {
         text-align: right;
         font-variant-numeric: tabular-nums;
     }
-    .sps-compare-table-wrap table.sps-compare-table td.sps-ct-same,
-    .sps-compare-table-wrap table.sps-compare-table td.sps-ct-missing {
+    .sps-chip-table-wrap table.sps-chip-table td.sps-ct-same,
+    .sps-chip-table-wrap table.sps-chip-table td.sps-ct-missing {
         font-weight: 400;
         color: color-mix(in srgb, currentColor 62%, transparent);
     }
@@ -1691,19 +1661,6 @@ def get_app_css() -> str:
         color: var(--sps-accent);
     }
 
-    /* UX-75 — the chip line's title cell: the reading this strip belongs to,
-       on the strip's own first line. Bold but not loud, and clipped rather than
-       wrapped — the title shares its row with a strip that wraps, and a title
-       growing to two lines would push the chips down for no gain. */
-    .sps-chip-title {
-        font-weight: 700;
-        font-size: 0.9rem;
-        line-height: 1.6;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
     /* UX-72 — the two halves of the rail's 🧹 Filter section. A rule and a
        small label: enough to group, cheap in height. (UX-74 briefly used this
        for every section's contents and was reverted — the sections read better
@@ -2191,8 +2148,7 @@ def get_app_css() -> str:
             padding-left: 0.75rem !important;
             padding-right: 0.75rem !important;
         }
-        .st-key-scanpath_rail [data-testid="stWidgetLabel"] p,
-        .sps-chip { overflow-wrap: anywhere; }
+        .st-key-scanpath_rail [data-testid="stWidgetLabel"] p { overflow-wrap: anywhere; }
         /* A figure that somehow can't scale down far enough scrolls rather than
            being squeezed out of true scale (the one guarantee that must hold). */
         /* Match both iframe titles: Streamlit titles these "st.iframe" now,

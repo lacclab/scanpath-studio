@@ -1,9 +1,11 @@
-"""UX-190: Compare mode's A/B table, which replaced its two chip strips.
+"""UX-190 / UX-195: the chips above the plot, drawn as a table.
 
-Two strips of ``Field = Value`` chips put A's value and B's in different rows
-at different horizontal offsets, so comparing them meant searching. The table
-gives each field one column — A's value directly above B's — and writes a value
-the two readings share once, across both rows.
+UX-190 replaced Compare mode's two chip strips: two strips of ``Field = Value``
+chips put A's value and B's in different rows at different horizontal offsets,
+so comparing them meant searching. The table gives each field one column — A's
+value directly above B's — and writes a value the two readings share once,
+across both rows. UX-195 drew the single trial's chips the same way, as a
+one-row table.
 """
 
 from __future__ import annotations
@@ -14,12 +16,11 @@ import pandas as pd
 import pytest
 
 from scanpath_studio import tabs
-from scanpath_studio.tabs import ChipEntry, _compare_chip_table_html
+from scanpath_studio.tabs import ChipEntry, _chip_table_html
 
 BLUE, RED = "#1f77b4", "#d62728"
-# The drawn elements — the stylesheet names both classes too.
-TABLE = '<table class="sps-compare-table"'
-STRIP = '<div class="sps-trial-chips"'
+# The drawn element — the stylesheet names the class too.
+TABLE = '<table class="sps-chip-table"'
 
 
 def _entry(col, value, *, label=None, trial_level=True, color=tabs._CHIP_NEUTRAL_BG):
@@ -33,7 +34,7 @@ def _entry(col, value, *, label=None, trial_level=True, color=tabs._CHIP_NEUTRAL
 
 
 def _table(a, b, order):
-    return _compare_chip_table_html(("A", BLUE, a), ("B", RED, b), order=order)
+    return _chip_table_html(("A", BLUE, a), ("B", RED, b), order=order)
 
 
 def _header(html):
@@ -202,6 +203,45 @@ class TestTheEntries:
         assert tabs._trial_chip_entries(words, pd.DataFrame(), "p1", ["gender"]) == []
 
 
+class TestOneReading:
+    """UX-195: the single trial's chips are the same table with one row."""
+
+    @staticmethod
+    def _one(entries, order):
+        return _chip_table_html((None, None, entries), order=order)
+
+    def test_one_row_with_no_label_column(self):
+        html = self._one(
+            [_entry("text", "t"), _entry("time", "70.7")], ["text", "time"]
+        )
+
+        assert _header(html) == ["Text", "Time"]
+        (row,) = _rows(html)
+        assert "<th" not in row  # no A/B label to tell one row apart
+        assert "sps-ct-corner" not in html
+
+    def test_a_lone_value_is_not_muted_as_shared(self):
+        html = self._one([_entry("text", "t")], ["text"])
+
+        assert "sps-ct-same" not in html
+        assert "rowspan" not in html
+
+    def test_tints_numbers_and_the_warning_mark_carry_over(self):
+        green = "#d4edda"
+        html = self._one(
+            [
+                _entry("correct", "True", color=green),
+                _entry("time", "70.7"),
+                _entry("speed", "fast", trial_level=False),
+            ],
+            ["correct", "time", "speed"],
+        )
+
+        assert f"background:{green}" in html
+        assert "sps-ct-num" in html
+        assert "warning" in html
+
+
 class TestBsSampleCount:
     @staticmethod
     def _count(frame, screen=None):
@@ -232,8 +272,8 @@ class TestBsSampleCount:
 
 
 @pytest.mark.timeout(180)
-class TestCompareModeDrawsTheTable:
-    def test_compare_mode_shows_one_table_and_no_chip_strips(self):
+class TestTheAppDrawsTheTable:
+    def test_compare_mode_shows_one_ab_table(self):
         from tests.conftest import APP_SCRIPT
 
         streamlit_testing = pytest.importorskip("streamlit.testing.v1")
@@ -245,10 +285,10 @@ class TestCompareModeDrawsTheTable:
         bodies = [m.value for m in at.markdown]
         tables = [b for b in bodies if TABLE in b]
         assert len(tables) == 1
-        assert not any(STRIP in b for b in bodies)
         assert "Trial ID" in tables[0]
+        assert ">A</th>" in tables[0] and ">B</th>" in tables[0]
 
-    def test_without_compare_the_chip_strip_stays(self):
+    def test_a_single_trial_shows_a_one_row_table(self):
         from tests.conftest import APP_SCRIPT
 
         streamlit_testing = pytest.importorskip("streamlit.testing.v1")
@@ -256,6 +296,8 @@ class TestCompareModeDrawsTheTable:
         at.run(timeout=90)
         assert not at.exception, at.exception
 
-        bodies = [m.value for m in at.markdown]
-        assert any(STRIP in b for b in bodies)
-        assert not any(TABLE in b for b in bodies)
+        tables = [m.value for m in at.markdown if TABLE in m.value]
+        assert len(tables) == 1
+        assert len(_rows(tables[0])) == 1
+        assert "sps-ct-side" not in tables[0]
+        assert 'class="sps-chip"' not in " ".join(m.value for m in at.markdown)

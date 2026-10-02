@@ -135,10 +135,11 @@ class TestSummaryRows:
             ["@reading_time_s", "@fixation_count", "@gaze_sample_count"],
             trial_raw_gaze=raw_gaze,
         )
-        strip = " ".join(written)
-        assert f"Number of gaze samples = {len(raw_gaze):,}" in strip
-        assert "Total reading time" not in strip
-        assert "Number of fixations" not in strip
+        table = " ".join(written)
+        assert ">Number of gaze samples</th>" in table
+        assert f">{len(raw_gaze):,}</td>" in table
+        assert "Total reading time" not in table
+        assert "Number of fixations" not in table
 
 
 def test_the_note_above_the_plot_says_nothing_is_detected():
@@ -568,9 +569,12 @@ class TestScanpathView:
         assert not [
             a for a in figure.layout.annotations if "Illustration" in str(a.text)
         ]
-        chips = " ".join(m.value for m in at.markdown if "sps-chip" in m.value)
-        assert f"Number of gaze samples = {len(raw_gaze):,}" in chips
-        assert "= 0.0" not in chips and "fixations = 0" not in chips
+        chips = " ".join(
+            m.value for m in at.markdown if '<table class="sps-chip-table"' in m.value
+        )
+        assert ">Number of gaze samples</th>" in chips
+        assert f">{len(raw_gaze):,}</td>" in chips
+        assert ">0.0</td>" not in chips and "Number of fixations" not in chips
         captions = " ".join(c.value for c in at.caption)
         assert "Raw gaze only" in captions
         assert "does not detect fixations" in captions

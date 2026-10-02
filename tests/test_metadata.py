@@ -338,9 +338,9 @@ class TestTheAppSurfaces:
         assert not at.exception, at.exception
         assert "native_language" in at.session_state["trial_chip_fields"]
 
-        # And it is drawn in the strip above the plot, with the reader's value.
-        strip = " ".join(m.value for m in at.markdown)
-        assert "Native language = Hebrew" in strip, strip[:400]
+        # And it is drawn in the chip table above the plot, with the reader's value.
+        table = " ".join(m.value for m in at.markdown)
+        assert ">Native language</th>" in table and ">Hebrew</td>" in table, table[:400]
 
         # Projection: the per-trial frame carries the value for each reader.
         combos = pd.DataFrame({"participant_id": readers, "trial_id": list(readers)})

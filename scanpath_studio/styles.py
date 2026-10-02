@@ -138,13 +138,18 @@ def get_app_css() -> str:
        spotlight target has to measure zero rather than sit off to one side. */
     .st-key-data_setup_page_offscreen { display: none !important; }
 
-    /* DATA-35 — the Data page's two screens: the overview (the dataset table +
-       what's in the open dataset) and the ✏️ Edit dataset screen. Same
-       mechanism and same reason as the page above, one level in: the editor is
-       *made* of the widgets that drive `prepare_data`, so it renders every run
-       and is hidden by key rather than skipped. */
-    .st-key-data_overview_offscreen { display: none !important; }
+    /* DATA-35 — the ✏️ Edit dataset screen. Same mechanism and same reason as
+       the page above, one level in: the editor is *made* of the widgets that
+       drive `prepare_data`, so it renders every run and is hidden by key rather
+       than skipped. UX-197: it opens *under* the overview (the dataset table +
+       what's in the open dataset), which stays on screen, so it is set apart
+       from it by a rule and room above. */
     .st-key-data_dataset_editor_offscreen { display: none !important; }
+    .st-key-data_dataset_editor {
+        margin-top: 2.5rem;
+        padding-top: 0.75rem;
+        border-top: 3px solid rgba(128, 128, 128, 0.35);
+    }
 
     /* UX-174 — 📂 Available datasets as a focused table, built from keyed
        containers (`app.render_dataset_table`): `dsrow_head` + one

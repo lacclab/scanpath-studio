@@ -79,7 +79,6 @@ from scanpath_studio.constants import (
     DATA_EDITOR_KEY,
     DATA_EDITOR_OFFSCREEN_KEY,
     DATA_OVERVIEW_KEY,
-    DATA_OVERVIEW_OFFSCREEN_KEY,
     DATA_PAGE_KEY,
     DATA_PAGE_OFFSCREEN_KEY,
     DATASET_COUNTS_STORE_KEY,
@@ -277,6 +276,7 @@ from scanpath_studio.tour import (
     render_use_case_tutorial,
     stash_tutorial_context,
 )
+from scanpath_studio.truncation_tooltip import render_truncation_tooltips
 from scanpath_studio.url_state import (
     CORPUS_SOURCE_TOKEN,
     _apply_pending_trial_selection,
@@ -699,7 +699,7 @@ def _render_empty_after_filtering(
             st.markdown("#### This dataset has no trials to show")
             st.markdown(
                 "Pick another **Data source**, or check the column mapping on "
-                f"the {ICONS['view_data']} **Data** page."
+                f"the {ICONS['view_data']} **Data Management** page."
             )
         return
 
@@ -1392,6 +1392,55 @@ def _dataset_dir_input(
     return resolved
 
 
+def _dataset_folder(key_prefix: str, default_dir: str) -> str:
+    """The folder :func:`_dataset_dir_input` would resolve, without drawing it.
+
+    BUG-113: the dataset table states every row's status, and a corpus that is
+    not open has no loader running to draw its location box. This reads the
+    same state the box keeps — a typed path, else the default, which a box still
+    showing its old seeded default follows (UX-184) — and resolves it the same
+    way, so the row and the loader can never disagree about where the files are.
+    """
+    if not local_filesystem_enabled():
+        return str(data_root()) if data_root() else _resolve_data_dir(default_dir)
+    dir_key = f"{key_prefix}_dir"
+    typed = str(st.session_state.get(dir_key) or "").strip()
+    if not typed or typed == st.session_state.get(f"{dir_key}_default"):
+        typed = default_dir
+    return _resolve_data_dir(typed)
+
+
+def _potec_files_present() -> bool:
+    from scanpath_studio import datasets
+
+    root = _dataset_folder("potec", _download_target(POTEC_DEFAULT_DIR))
+    return datasets.potec_present(root)
+
+
+def _onestop_files_present(regime: str) -> bool:
+    from scanpath_studio import datasets
+
+    root = _dataset_folder(
+        "onestop_public", _download_target(ONESTOP_PUBLIC_DEFAULT_DIR)
+    )
+    parts = datasets.onestop_regime_parts(regime)
+    return datasets.onestop_present(root, regime=regime, parts=parts)
+
+
+def _multipleye_files_present() -> bool:
+    root = _dataset_folder("multipleye", MULTIPLEYE_DEFAULT_DIR)
+    source = st.session_state.get("multipleye_fixation_source") or "scanpaths"
+    sessions, _ = _cached_multipleye_inventory(root, source)
+    return bool(sessions)
+
+
+def _benchmark_files_present(dataset: str) -> bool:
+    from scanpath_studio.eyegenbench import eyegenbench_present
+
+    root = _dataset_folder("eyegenbench", EYEGENBENCH_DEFAULT_DIR)
+    return eyegenbench_present(root, dataset)
+
+
 # UX-7(b): session slot describing a data source the user selected but that
 # isn't available locally. Written by `_dataset_access_status` (and the bundle
 # sources) on the run it happens, read + cleared by `_render_dataset_unavailable`
@@ -1591,7 +1640,7 @@ def _dataset_access_status(
         _note_dataset_unavailable(
             label=label,
             reason="its files aren't in the folder you pointed at.",
-            action=f"Set **Data location** on the {ICONS['view_data']} Data page to a folder "
+            action=f"Set **Data location** on the {ICONS['view_data']} Data Management page to a folder "
             "holding the files listed under **Expected files**.",
             root=root,
         )
@@ -2210,6 +2259,9 @@ def _onestop_regime_entry(regime: str) -> dict:
     label = ONESTOP_REGIME_LABELS[regime]
     return dict(
         loader=partial(_load_onestop_regime_source, regime=regime),
+        # BUG-113: the dataset table's Status, for a row that is not open.
+        files_present=partial(_onestop_files_present, regime),
+        downloadable=True,
         # OneStop presentation monitor (full-screen px coords). Sourced in
         # `eyegenbench_geometry.DISPLAY_SPECS["onestop"]` — Berzak et al. 2025,
         # Sci Data 12:1995, Methods → Apparatus, which states the Dell U2715H
@@ -2230,6 +2282,8 @@ def _onestop_regime_entry(regime: str) -> dict:
 PUBLIC_DATASET_REGISTRY: dict = {
     "PoTeC — Potsdam Textbook Corpus": dict(
         loader=_load_potec_source,
+        files_present=_potec_files_present,  # BUG-113
+        downloadable=True,
         # The schema `load_potec` uses, so the app's Trial ID is the headless
         # one: reader + text, not the text name every reader shares.
         declared_schemas=(POTEC_WORD_SCHEMA, POTEC_FIX_SCHEMA),
@@ -2264,6 +2318,8 @@ PUBLIC_DATASET_REGISTRY: dict = {
     ),
     MULTIPLEYE_PUBLIC_CHOICE: dict(
         loader=_load_multipleye_source,
+        # BUG-113. No download: MultiplEYE is read from a local session set.
+        files_present=_multipleye_files_present,
         monitor=(1920, 1080),  # MultiplEYE physical screen (coords offset to it)
         short="MultiplEYE",
         language="Multilingual (ZH-CH sample)",
@@ -2428,6 +2484,8 @@ def _benchmark_registry_entries() -> dict:
         short = _benchmark_short_name(name)
         spec = dict(
             loader=partial(_load_benchmark_source, dataset=name),
+            # BUG-113. No download: a bundle is prepared by a script.
+            files_present=partial(_benchmark_files_present, name),
             short=short,
             language=language_display(entry.get("language")),
             size=_benchmark_size_caption(entry),
@@ -2744,7 +2802,7 @@ WORDS_JOIN_NOTHING_WARNING = (
     "without its text or its word-level measures. The usual cause is a **Trial "
     "ID** or **Participant ID** mapping that names different trials in the two "
     "tables — for instance one carried over from another dataset with the same "
-    f"columns. Check it on {ICONS['view_data']} **Data → Column mapping**, or start again from "
+    f"columns. Check it on {ICONS['view_data']} **Data Management → Column mapping**, or start again from "
     "**↩️ Reset to the auto-detected mapping**."
 )
 
@@ -3601,12 +3659,12 @@ def _render_offpage_setup_notice(data_view: bool) -> None:
         return
     st.info(
         "**This dataset isn't set up yet**, so there's nothing to plot. "
-        f"Finish it on the {ICONS['view_data']} **Data** page — or start over from the demo.",
+        f"Finish it on the {ICONS['view_data']} **Data Management** page — or start over from the demo.",
         icon=ICONS["view_data"],
     )
     finish, demo = st.columns(2)
     finish.button(
-        f"{ICONS['view_data']} Go to Data setup",
+        f"{ICONS['view_data']} Go to Data Management",
         on_click=_go_data,
         type="primary",
         width="stretch",
@@ -4486,7 +4544,7 @@ def render_data_source_picker(host=None) -> None:
         width="content",
         help=(
             "Which dataset the app is showing. Use + to create a scanpath or "
-            f"import files. Rename or remove datasets on the {ICONS['view_data']} Data page. "
+            f"import files. Rename or remove datasets on the {ICONS['view_data']} Data Management page. "
             "More coming soon! is a preview of future datasets."
         ),
     )
@@ -4989,7 +5047,7 @@ def render_description_field(host, token: str) -> None:
         on_change=_save_description_field,
         args=(token,),
         placeholder="What this dataset is — the readers, the texts, the language.",
-        help=f"Shown under the dataset's name on the {ICONS['view_data']} Data page.",
+        help=f"Shown under the dataset's name on the {ICONS['view_data']} Data Management page.",
         height=80,
     )
 
@@ -5143,6 +5201,7 @@ def _open_mapping_editor() -> None:
     if token:
         st.session_state[FOCUS_MAPPING_KEY] = token
     st.session_state[DATASET_EDITOR_OPEN_KEY] = True
+    st.session_state[_EDITOR_SCROLL_KEY] = True
 
 
 @st.dialog(f"{ICONS['warning']} Check the Trial ID mapping")
@@ -5166,7 +5225,7 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
         "A Trial ID that doesn't fully identify one reading concatenates several "
         "into one scanpath — which renders perfectly happily, as an ordinary "
         "scanpath with a lot of regressions. The full evidence is on the "
-        f"{ICONS['view_data']} Data page, under **4 · Trial identity**."
+        f"{ICONS['view_data']} Data Management page, under **4 · Trial identity**."
     )
     edit_col, keep_col = st.columns(2, gap="small")
     if edit_col.button(
@@ -5182,14 +5241,14 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
         "Keep it as is",
         key="trial_identity_alert_keep",
         width="stretch",
-        help=f"Dismiss. Nothing changes, and the verdict stays on the {ICONS['view_data']} Data "
+        help=f"Dismiss. Nothing changes, and the verdict stays on the {ICONS['view_data']} Data Management "
         "page under 4 · Trial identity.",
     ):
         st.rerun(scope="app")
     if asked_by == "add":
         st.caption(
             "Checked automatically because the dataset was just added. It is "
-            f"already on the {ICONS['view_data']} Data page's list either way."
+            f"already on the {ICONS['view_data']} Data Management page's list either way."
         )
 
 
@@ -5198,6 +5257,45 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
 #: open a dialog, and a dialog opened from a return value is lost on the next
 #: full rerun.
 _EDITOR_LEAVE_PENDING_KEY = "_dataset_editor_leave_pending"
+#: UX-197 — the dataset a row click asked for while the editor had unsaved
+#: changes. The table stays on screen above the editor now, so a click on
+#: another row is a way out of the editor too, and goes through the same
+#: confirmation; ✕ Leave then opens this dataset.
+_EDITOR_LEAVE_TARGET_KEY = "_dataset_editor_leave_target"
+#: UX-197 — set by whatever opens the editor, popped by its bar: the editor
+#: opens under the table, so the page is brought down to it once.
+_EDITOR_SCROLL_KEY = "_dataset_editor_scroll"
+
+#: Bring the editor's top under the app's header — in its own scroller, never
+#: by `scrollIntoView` (which moves the document; see `tour.py`). Waits while
+#: Streamlit is still laying the editor out, then keeps the editor's top in
+#: place for a second, because the page above it is still settling and a
+#: single scroll lands wherever the layout happened to be at that moment.
+_SCROLL_TO_EDITOR_SCRIPT = """<script>
+(function () {
+  const doc = window.parent.document;
+  const win = doc.defaultView;
+  let tries = 0, aligned = 0;
+  (function attempt() {
+    const el = doc.querySelector(".st-key-data_dataset_editor");
+    const r = el && el.getBoundingClientRect();
+    if (!r || r.height === 0) {
+      if (++tries < 20) setTimeout(attempt, 150);
+      return;
+    }
+    for (let box = el.parentElement; box; box = box.parentElement) {
+      const cs = win.getComputedStyle(box);
+      if (/(auto|scroll|overlay)/.test(cs.overflowY)
+          && box.scrollHeight > box.clientHeight + 4) {
+        const b = box.getBoundingClientRect();
+        box.scrollTop += r.top - b.top - 56;
+        break;
+      }
+    }
+    if (++aligned < 8) setTimeout(attempt, 150);
+  })();
+})();
+</script>"""
 
 
 def _close_dataset_editor() -> None:
@@ -5205,6 +5303,7 @@ def _close_dataset_editor() -> None:
     st.session_state.pop(DATASET_EDITOR_OPEN_KEY, None)
     st.session_state.pop(FOCUS_MAPPING_KEY, None)
     st.session_state.pop(_EDITOR_LEAVE_PENDING_KEY, None)
+    st.session_state.pop(_EDITOR_LEAVE_TARGET_KEY, None)
     # Anything typed into the editor and not saved goes with it — including a
     # table uploaded to fill a missing half, which is only a *pending* attach
     # until ✅ Save changes runs.
@@ -5236,6 +5335,7 @@ def _ask_leave_dataset_editor() -> None:
 
 def _dismiss_leave_dataset_editor() -> None:
     st.session_state.pop(_EDITOR_LEAVE_PENDING_KEY, None)
+    st.session_state.pop(_EDITOR_LEAVE_TARGET_KEY, None)
 
 
 @st.dialog("Leave without saving?", on_dismiss=_dismiss_leave_dataset_editor)
@@ -5268,7 +5368,12 @@ def _leave_dataset_editor_dialog() -> None:
         type="primary",
         width="stretch",
     ):
+        target = st.session_state.get(_EDITOR_LEAVE_TARGET_KEY)
         _close_dataset_editor()
+        if target:
+            # Through the pre-widget seam only: this is a button's return
+            # value, after the picker has instantiated in this run.
+            st.session_state["_pending_source_choice"] = target
         st.rerun(scope="app")
     if stay.button("Keep editing", key="dataset_editor_leave_cancel", width="stretch"):
         _dismiss_leave_dataset_editor()
@@ -5308,6 +5413,9 @@ def _render_dataset_editor_bar(host, data_choice: str) -> None:
     )
     if st.session_state.get(_EDITOR_LEAVE_PENDING_KEY):
         _leave_dataset_editor_dialog()
+    if st.session_state.pop(_EDITOR_SCROLL_KEY, False):
+        with bar:
+            embed_html_iframe(_SCROLL_TO_EDITOR_SCRIPT, height=0)
     bar.caption(
         "How this dataset is read and measured — where its files are, how its "
         "columns map onto the app's fields, the screen it was recorded on, and "
@@ -5345,7 +5453,7 @@ _DATASET_KIND_W = 92
 #: the free space goes between Status and the counts (`_row_gap`).
 _DATASET_NAME_W = 280
 _DATASET_COUNT_W = 96
-_DATASET_STATUS_W = 112
+_DATASET_STATUS_W = 156  # BUG-113: fits the "Needs download" badge
 _DATASET_ACTIONS_W = 40
 
 
@@ -5429,19 +5537,57 @@ def _dataset_table_rows(
                 exceeds_published=row_counts.exceeds_published,
                 active=token == active,
                 measured=bool(measured),
-                status="Needs setup" if token == active and placeholder else "",
+                status=_dataset_status(
+                    registry.get(token),
+                    stood_in_for=token == active and placeholder,
+                ),
                 order=len(rows),
             )
         )
     return rows
 
 
+def _dataset_status(spec: Mapping | None, *, stood_in_for: bool = False) -> str:
+    """One row's **Status** — ``""`` (Ready) or what is missing (BUG-113).
+
+    Asked the same way of every row, open or not: a corpus with files on disk
+    has a ``files_present`` check in its registry entry — path stats only, never
+    a read — and a missing set reads *Needs download* where the app can fetch
+    it and *Needs setup* where it cannot. Bundled datasets and stored uploads
+    have no check and are always here. The open row whose loader fell back to
+    the demo (``stood_in_for``) is not here either, whatever the check says.
+    """
+    check = (spec or {}).get("files_present")
+    if check is None:
+        return dataset_table.NEEDS_SETUP if stood_in_for else ""
+    try:
+        present = bool(check())
+    except _MANIFEST_ERRORS:
+        present = False
+    if present:
+        return dataset_table.NEEDS_SETUP if stood_in_for else ""
+    if (spec or {}).get("downloadable"):
+        return dataset_table.NEEDS_DOWNLOAD
+    return dataset_table.NEEDS_SETUP
+
+
 def _open_dataset_row(token: str) -> None:
-    """UX-78 — a click anywhere on a dataset's row opens it."""
+    """UX-78 — a click anywhere on a dataset's row opens it.
+
+    UX-197: the table stays above ✏️ Edit dataset, and the editor edits the
+    open dataset, so opening another one closes it — at once when nothing is
+    unsaved, else through the editor's own *Leave without saving?*.
+    """
     if token == st.session_state.get("data_source_choice"):
         return
-    _select_dataset(token)
     st.session_state[_TABLE_NEEDS_APP_RERUN] = True
+    if st.session_state.get(DATASET_EDITOR_OPEN_KEY):
+        if dataset_editor_is_dirty():
+            st.session_state[_EDITOR_LEAVE_PENDING_KEY] = True
+            st.session_state[_EDITOR_LEAVE_TARGET_KEY] = token
+            return
+        _close_dataset_editor()
+    _select_dataset(token)
 
 
 def _edit_open_dataset(token: str) -> None:
@@ -5462,6 +5608,7 @@ def _edit_open_dataset(token: str) -> None:
     st.session_state.pop(EDITOR_PENDING_NAME_KEY, None)
     st.session_state[FOCUS_MAPPING_KEY] = token
     st.session_state[DATASET_EDITOR_OPEN_KEY] = True
+    st.session_state[_EDITOR_SCROLL_KEY] = True
 
 
 def _arm_dataset_row(pending_key: str, token: str) -> None:
@@ -5579,9 +5726,7 @@ def _render_dataset_table_head(grid, sort) -> None:
         " ".join(
             f"**{label}** — {text}"
             for label, text in dataset_table.STATUS_EXPLANATIONS.items()
-        )
-        + " **Needs setup** — its files are not on this machine, so the bundled "
-        "demo is showing in its place.",
+        ),
     )
     head.space("stretch")
     gaps = " ".join(
@@ -5603,7 +5748,8 @@ def _render_dataset_table_head(grid, sort) -> None:
             cell,
             count_field,
             f"Sort by {count_field.lower()}, largest first. Datasets without a "
-            f"count sort last either way.\n\n{gaps}",
+            f"count sort last either way.\n\n{dataset_table.COUNTS_EXPLANATION}"
+            f"\n\n{gaps}",
         )
     # The actions column has no title: its one button says what it does. The
     # cell is still drawn — an empty container is not — so the columns line up.
@@ -5684,12 +5830,11 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
 
     status = line.container(key=f"dsc_status_{slug}", width=_DATASET_STATUS_W)
     if row.status:
-        # An operational state, kept apart from where the counts came from.
+        # Something is missing before the dataset can open (BUG-113).
         status.badge(row.status, icon=ICONS["warning"], color="orange")
     else:
-        muted = "" if row.status_label == dataset_table.LOADED else " sps-ds-gap"
         status.markdown(
-            f'<span class="sps-ds-status{muted}">{row.status_label}</span>',
+            f'<span class="sps-ds-status">{row.status_label}</span>',
             unsafe_allow_html=True,
         )
 
@@ -5734,8 +5879,9 @@ def render_dataset_table(
     **Kind · Dataset · Status · Participants · Texts · Trials · Fixations ·
     Remove** (UX-178 moved Status beside the name it qualifies). A click anywhere on a row opens that dataset (UX-78); the open one
     carries a **Current** badge and a tint, and never moves. **Status** is
-    *Loaded* / *Not loaded* — DATA-36's loaded-vs-published distinction — or an
-    operational state such as *Needs setup*. Everything else about a dataset —
+    whether the dataset can be opened now — *Ready*, *Needs download* or
+    *Needs setup* — asked the same way of every row (BUG-113; see
+    `_dataset_status`). Everything else about a dataset —
     Screens, Words and Gaze points, its description, renaming it, editing its
     setup — is in *What's in the dataset* under the table, for the open one.
 
@@ -6645,7 +6791,11 @@ def render_canvas_controls(
     screen.caption(
         f"Geometry: **{px_per_degree:.1f} px/degree** · "
         f"{1.0 / px_per_degree:.4f}° per pixel."
-        + (f"  ·  set in {ICONS['view_data']} Data → Recording setup." if bare else "")
+        + (
+            f"  ·  set in {ICONS['view_data']} Data Management → Recording setup."
+            if bare
+            else ""
+        )
     )
 
     # Text can be switched off while this function still supplies the screen
@@ -7581,7 +7731,7 @@ def _run_app() -> None:
         # after the user cleared the cache by hand. Naming the counts is what
         # makes the claim checkable against the panel it points at.
         st.toast(
-            f"Recovered {_restored_recap()} from this computer — see {ICONS['view_data']} Data → "
+            f"Recovered {_restored_recap()} from this computer — see {ICONS['view_data']} Data Management → "
             "Saved on this computer.",
             icon=ICONS["recovery"],
         )
@@ -7762,6 +7912,9 @@ def _run_app() -> None:
         # doesn't care about DOM order, being a height-0 script that retries until the
         # heading has hydrated.
         render_easter_egg()
+        # UX-196: a cut-off dropdown label shows in full on hover. Unconditional,
+        # so it never moves the view's index (UX-167).
+        render_truncation_tooltips()
         # UX-15: same deal for the FAQ dialog — the ❓ Help menu button that arms it
         # renders at the bottom of this function, so serving it here is what keeps
         # the modal from waiting out the whole rerun. Ditto ℹ️ About, a dialog since
@@ -7819,7 +7972,9 @@ def _run_app() -> None:
     # of every loader into a render/resolve pair.
     #
     # DATA-35 split it into **two screens**, both built every run and switched by
-    # key for the same reason the page itself is (above):
+    # key for the same reason the page itself is (above). UX-197 made them two
+    # *parts* of one page: the overview always shows, and the editor opens
+    # under it:
     #
     #   Overview  📂 Available datasets (the table + ➕ Add dataset)
     #             🔎 What's in the open dataset
@@ -7844,9 +7999,11 @@ def _run_app() -> None:
     editing = (
         bool(st.session_state.get(DATASET_EDITOR_OPEN_KEY)) and not wizard_owns_page
     )
-    overview_page = setup_page.container(
-        key=DATA_OVERVIEW_OFFSCREEN_KEY if editing else DATA_OVERVIEW_KEY
-    )
+    # UX-197: the overview stays on screen while the editor is open, and the
+    # editor opens under it, set apart — beta testers lost the dataset's counts
+    # and tables the moment they started editing it. Only the editor is
+    # switched by key now.
+    overview_page = setup_page.container(key=DATA_OVERVIEW_KEY)
     editor_page = setup_page.container(
         key=DATA_EDITOR_KEY if editing else DATA_EDITOR_OFFSCREEN_KEY
     )
@@ -7860,9 +8017,8 @@ def _run_app() -> None:
     # way back, filled below once the dataset's display name is known.
     editor_head_slot = editor_page.container()
     # UX-166: the dataset card's slot on the ✏️ Edit dataset screen, directly
-    # under its header bar. The overview, where the card sits otherwise, is
-    # hidden while the editor is open — and a card nobody can see would still
-    # silence every spinner on the page.
+    # under its header bar: opening the editor scrolls the page down to it
+    # (UX-197), so that is where the user is looking.
     editor_loading_slot = editor_page.empty()
     # UX-135 — the editor's sections are the add screen's numbered *parts*, not
     # a `st.divider()` + `st.subheader()` + `st.caption()` stack. `_editor_part`
@@ -8389,8 +8545,9 @@ def _run_app() -> None:
             _render_unmapped_view(raw_words_df, raw_fixations_df, mapping_problems)
         # BUG-100: the slot above is on the ✏️ Edit dataset screen, hidden until
         # it is opened — the overview needs its own word, where *What's in the
-        # dataset* would have been.
-        if data_view and not editing and not wizard_owns_page:
+        # dataset* would have been — open editor or not, since UX-197 keeps
+        # the overview on screen above it.
+        if data_view and not wizard_owns_page:
             with setup_body_slot:
                 _render_dataset_load_failure(
                     _dataset_display_name(_dataset_owner), mapping_problems

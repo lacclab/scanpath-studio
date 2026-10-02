@@ -1,6 +1,6 @@
 # DATA-66 — Show the dataset's own column names, everywhere
 
-*Design spec, 2026-10-02. Status: draft for review.*
+*Design spec, 2026-10-02. Status: approved 2026-10-03 (the approach); open questions settled with defaults below.*
 
 ## Request
 
@@ -186,25 +186,31 @@ One issue, several PRs, each shippable:
 4. **API + CLI** — `ScanpathData`, `names=`, either-name inputs, CLI flags,
    docs.
 
-## Open questions (second iteration)
+## Open questions — settled defaults (2026-10-03)
 
-- Many-to-one registry renames (`EYE_USED` / `EYE_TRACKED` → `eye`): show
+The user approved the approach ("okay I think?") without ruling on these, so
+each is settled here with the recommended default. The phase PR that
+implements one names it again, so it can still be overturned at review.
+
+- **Many-to-one registry renames** (`EYE_USED` / `EYE_TRACKED` → `eye`): show
   whichever the dataset had — the map records the one that matched.
-- One-to-two (`IA_SECOND_RUN_DWELL_TIME` → `second_pass_duration_ms` and its
-  alias `higher_pass_fixation_duration_ms`): drop the alias from user-facing
-  output, or show both pointing at one source?
-- Loader-invented names (PoTeC's `x`/`y`, OneStop's `unique_paragraph_id`,
-  MultiplEYE's `left`/`top`, the wizard's `file_part_N`): `generated`, or the
-  loader declares the publisher's name.
-- Two datasets in Compare whose source names differ: label by A's names, B's in
-  its own panel?
-- Should *Export* offer "canonical names" as an option for users who already
-  have scripts?
-- The Share → Code snippet: canonical values always, or the user's names when
-  the snippet loads with an explicit schema (more readable, but tied to that
-  dataset)?
-- `ScanpathData`: keep two-value unpacking (`words, fixations = load(...)`,
-  with the map as an attribute), or break it and return three values?
+- **One-to-two** (`IA_SECOND_RUN_DWELL_TIME` → `second_pass_duration_ms` and its
+  alias `higher_pass_fixation_duration_ms`): user-facing output shows the
+  source once; the alias stays an internal compatibility column and is hidden
+  from pickers, tables and exports.
+- **Loader-invented names** (PoTeC's `x`/`y`, OneStop's `unique_paragraph_id`,
+  MultiplEYE's `left`/`top`, the wizard's `file_part_N`): the loader declares
+  the publisher's name where there is one, else the column is `generated`.
+- **Compare across datasets**: the shared rail labels by A's names; B's panel,
+  chips and hover use B's own.
+- **Export**: no "canonical names" switch (no back-compat modes); `columns.json`
+  in every bundle carries the map for a script that wants the internal names.
+- **Share → Code snippet**: canonical values always — they are valid on every
+  dataset and are what the API checks against; a comment line names the
+  dataset's own name beside each column the snippet uses.
+- **`ScanpathData`**: keeps two-value unpacking (`words, fixations = load(...)`)
+  with `column_names` as an attribute, so existing scripts keep working without
+  a shim of their own.
 
 ## Testing
 

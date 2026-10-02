@@ -390,11 +390,11 @@ def saccade_class_legend() -> list[tuple[str, str]]:
 def embed(fig, *, caption: str | None = None, legend=None) -> str:
     """A figure for a docs page, drawn the way the app draws it.
 
-    The figure's own JSON rides in the page, and ``javascripts/figures.js``
-    renders it at its exact pixel size and scales the whole block uniformly to
-    the column — the app's true-to-scale rule, so word labels keep the size they
-    were fitted to. Plotly itself is loaded only on a page that has a figure,
-    from the site's own copy (``mkdocs_hooks.on_post_build``), never a CDN.
+    The figure's own JSON rides in the page, in its ``data-figure`` attribute,
+    and ``javascripts/figures.js`` renders it at its exact pixel size and scales
+    the whole block uniformly to the column — the app's true-to-scale rule, so
+    word labels keep the size they were fitted to. Plotly itself is loaded only
+    on a page that has a figure, from the site's own copy (``mkdocs_hooks.on_post_build``), never a CDN.
     ``legend`` is ``[(label, colour), …]``, drawn as swatches under the figure.
     A replay also carries the app's player, so its ▶ Play keeps real time, and
     its frames packed, as the app's page does (PERF-17).
@@ -419,7 +419,11 @@ def embed(fig, *, caption: str | None = None, legend=None) -> str:
         spec["player"] = player
         spec["layout"]["meta"]["scanpath_autoplay"] = False
     spec["config"] = _PLOT_CONFIG
-    payload = json.dumps(spec, separators=(",", ":")).replace("</", "<\\/")
+    # An attribute, not a `<script type="application/json">`: Material's instant
+    # navigation re-creates every inline script in the new page from its text
+    # alone, dropping the type, so the JSON ran as JavaScript and the figure was
+    # gone after a click from another page or a heading link.
+    payload = html.escape(json.dumps(spec, separators=(",", ":")))
     # A <div>, not a <figure>: Material sizes figures to fit their content, and
     # the plot's content is positioned absolutely, so a figure collapses to 0.
     extra = ""
@@ -435,7 +439,7 @@ def embed(fig, *, caption: str | None = None, legend=None) -> str:
     return (
         '<div class="sps-figure">'
         f'<div class="sps-plot" data-width="{width}" data-height="{height}" '
-        f'style="aspect-ratio: {width} / {height}; max-width: {width}px">'
-        f'<script type="application/json">{payload}</script></div>'
+        f'style="aspect-ratio: {width} / {height}; max-width: {width}px" '
+        f'data-figure="{payload}"></div>'
         f"{extra}</div>"
     )

@@ -2886,12 +2886,15 @@ def _snippet_source(data_choice: str) -> SnippetSource:
     never sees it, so quoting it back in a copyable snippet would hand every
     visitor the server's layout. There the snippet carries a placeholder.
     """
-    from scanpath_studio.app import local_filesystem_enabled
+    from scanpath_studio.app import _download_target, local_filesystem_enabled
 
-    def root(key: str, placeholder: str) -> str:
+    def root(key: str, placeholder: str, *, downloadable: bool = False) -> str:
         if not local_filesystem_enabled():
             return placeholder
-        return str(st.session_state.get(key) or placeholder)
+        # UX-184: before its box renders, a downloadable corpus is where the
+        # Download folder puts it — the folder the snippet's reader has it in.
+        fallback = _download_target(placeholder) if downloadable else placeholder
+        return str(st.session_state.get(key) or fallback)
 
     if data_choice == DEMO_CHOICE:
         return SnippetSource(kind=SOURCE_DEMO, label=DEMO_CHOICE)
@@ -2924,7 +2927,7 @@ def _snippet_source(data_choice: str) -> SnippetSource:
         return SnippetSource(
             kind=SOURCE_POTEC,
             label=corpus_label,
-            options={"root": root("potec_dir", "data/PoTeC")},
+            options={"root": root("potec_dir", "data/PoTeC", downloadable=True)},
         )
     if short == "MultiplEYE":
         fixation_source = str(
@@ -2951,7 +2954,7 @@ def _snippet_source(data_choice: str) -> SnippetSource:
             kind=SOURCE_ONESTOP,
             label=corpus_label or data_choice,
             options={
-                "root": root("onestop_public_dir", "data/OneStop"),
+                "root": root("onestop_public_dir", "data/OneStop", downloadable=True),
                 "regime": regime,
                 "variant": "public",
                 "parts": datasets.onestop_regime_parts(regime),

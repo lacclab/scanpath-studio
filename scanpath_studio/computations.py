@@ -1276,7 +1276,7 @@ REGISTER: tuple[Computation, ...] = (
             "`assign.in_text`, the drawn outlines, the word heatmaps, the "
             "critical-span frame, drift correction and the model scanpaths. A "
             "position *inside* a word goes through `geom.word_char_advance` "
-            "instead, and the drawn label through `geom.word_glyph_span`. "
+            "instead, and where its letters are through `geom.word_glyph_span`; the drawn word label is centred in the box (#BUG-97). "
             "#BUG-83 reverted BUG-11, which pulled every tiling boundary back "
             "half a space to mid-whitespace and so disagreed with EyeLink's own "
             "interest-area assignment on 7.4% of the demo's fixations."
@@ -1339,7 +1339,7 @@ REGISTER: tuple[Computation, ...] = (
         id="geom.word_glyph_span",
         name="Where a word's glyphs are",
         category=CATEGORY_GEOMETRY,
-        summary="The glyph run inside a word's box — where its label is drawn.",
+        summary="The glyph run inside a word's box — where its letters are.",
         formula=(
             "Starts at `x` and runs `len(text) × geom.word_char_advance`: the "
             "whole box on a glyph-tight corpus, one advance short of it on a "
@@ -1348,16 +1348,17 @@ REGISTER: tuple[Computation, ...] = (
         code="scanpath_studio/measures.py:word_glyph_span",
         unit="px",
         precedence=(
-            "Rendering, not an interest area: the word label is centred on it "
-            "(BUG-30), the linear-reading schematic snaps a fixation above its "
-            "centre, and `agg.landing_curve` mirrors an RTL landing across it. "
-            "#BUG-83 keeps the label here while the drawn box grew to the "
-            "experiment's — centring in a tiling box would draw the text half a "
-            "space right of the stimulus image and the fixations."
+            "Not an interest area: `agg.landing_curve` measures a landing "
+            "across it and mirrors an RTL one. The drawn word label and the "
+            "linear-reading snap used to sit on it (BUG-30). #BUG-97 measured "
+            "OneStop's own Experiment Builder screens: each tiling box is "
+            "centred on its word, half a space either side, so the run's "
+            "`x` start is half an advance early there; the label and snap "
+            "moved to the box centre, the landing measures have not."
         ),
         tiers="A",
-        status=STATUS_VERIFIED,
-        consumers=(_UI, _API, _CLI, _EXPORT, _CORPUS),
+        status=STATUS_PARTIAL,
+        consumers=(_UI, _API, _CORPUS),
         tests=("tests/test_word_box_geometry.py",),
     ),
     # ------------------------------------------------------------------

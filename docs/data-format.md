@@ -28,7 +28,10 @@ write — is converted, and so are the vendor columns documented in seconds
 be **pixels**: screen fractions (Gazepoint `FPOGX` / `FPOGY`, Pupil Labs Core
 `norm_pos_x` / `norm_pos_y`) are flagged with a warning but not converted, since
 the load does not know the screen size — multiply them by the screen width and
-height in pixels first.
+height in pixels first. Pupil Labs Core measures *y* upward from the bottom
+edge, so its row is `(1 − y) × height`. Its `norm_pos` is relative to the
+world-camera image, not the screen: map the gaze onto the stimulus screen first
+(Pupil's Surface Tracker), whose coordinates have the same bottom-left origin.
 
 Either main table may be omitted — the missing layer is skipped, and a
 words-only table still draws a heatmap from its pre-aggregated reading measures.
@@ -211,7 +214,8 @@ EyeLink interest-area report maps them automatically from its `IA_*` names
 `IA_REGRESSION_PATH_DURATION`, …); every one is optional.
 
 The **Corpus Analysis** page shows only the measures you mapped — it computes
-none of its own, and without any it says so. Elsewhere (the word hover,
-exports, the API's word-metrics tables) a measure missing from your data is
-still computed from the fixations, with an imported one taking precedence.
-Definitions are in [Computations & methodology](computations.md).
+none of its own, and without any it says so. Exports and the word hover carry
+the measures you mapped, too. Only the Python function
+[`compute_word_metrics`][scanpath_studio.api.compute_word_metrics] computes them
+from the fixations, with an imported value taking precedence. Definitions are
+in [Computations & methodology](computations.md).

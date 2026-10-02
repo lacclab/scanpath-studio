@@ -6,7 +6,8 @@ Open the dataset picker above the plot, or the :material/database: **Data** page
 
 - **Bundled Demo** — a small OneStop sample, for learning the app.
 - **Synthetic sample** — a hand-made six-word trial.
-- **Public corpus** — OneStop or PoTeC; the app downloads it when asked.
+- **Public corpus** — OneStop or PoTeC; the app downloads it when asked
+  (only when it runs on your own computer — [OneStop](../onestop.md)).
 - **+ → Import files** — your own tables.
 - **+ → Create manually** — type a text and place fixations on it by hand:
   click to add, drag to move, or edit the table.
@@ -15,7 +16,7 @@ Open the dataset picker above the plot, or the :material/database: **Data** page
 
 | Table | Minimum |
 | --- | --- |
-| words / interest areas (AOIs) | trial ID, word ID, text, and the word box |
+| words / interest areas (AOIs) | trial ID, word ID, and the word box (the word text, to show it) |
 | fixations | trial ID, duration, and x/y or a word ID |
 
 Either table alone also works. Participant and text IDs, timestamps, raw gaze,
@@ -52,7 +53,8 @@ values from assumed ones.
 
 :material/database: **Data** lists every dataset with its counts; click a row to open it.
 **Edit dataset** changes a dataset's name, column mapping and recording setup,
-or adds a table it is missing. The page also holds each dataset's tables and its
+or adds a table it is missing. Changes apply when you click **Save changes**;
+**Cancel** discards them. The page also holds each dataset's tables and its
 annotations, and at the foot, what is saved on this computer.
 
 <figure class="sps-screenshot" markdown>

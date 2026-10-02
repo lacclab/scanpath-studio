@@ -348,8 +348,10 @@ class TestStimulusImageAlignment:
     ``image_y=148`` (~36 px too high) bug. Aligns the PNG's own text lines to the
     word boxes; a wrong origin fails here regardless of which script produced it.
 
-    Correct origin for the OneStop demo is ``(image_x=358, image_y=184)``: the
-    text is left-aligned at the box left edge, and the line centers coincide.
+    Correct origin for the OneStop demo is ``(image_x=368, image_y=186)`` — where
+    the experiment's own Experiment Builder drew the paragraph image (its
+    ``.vcl`` view commands, BUG-97). Each word box is then centred on its
+    word: half a space of margin on each side, and the line centers coincide.
     """
 
     def test_image_origin_aligns_page_to_word_boxes(self, normalized_demo):
@@ -388,12 +390,17 @@ class TestStimulusImageAlignment:
                 f"vertically (max line-center diff {max(diffs):.1f}px, image_y={image_y})"
             )
 
-            # Horizontal: the page's left ink edge sits at the leftmost box edge
-            # (text is left-aligned), so image_x + first-ink-col ≈ min box x.
+            # Horizontal: the boxes are centred on their words (BUG-97), so the
+            # page's left ink edge sits half a space inside the leftmost box —
+            # image_x + first-ink-col ≈ min box x + advance / 2. The old,
+            # flush-left origin (358) lands ~10 px off and fails.
+            first = boxes.loc[boxes["x"].idxmin()]
+            half_space = float(first["width"]) / (len(str(first["text"])) + 1) / 2
             left_edge = image_x + _png_first_ink_col(image_path)
-            assert abs(left_edge - float(boxes["x"].min())) < 8.0, (
+            expected = float(boxes["x"].min()) + half_space
+            assert abs(left_edge - expected) < 5.0, (
                 f"{os.path.basename(image_path)}: stimulus image misaligned "
-                f"horizontally (left edge {left_edge:.1f} vs box {boxes['x'].min():.1f})"
+                f"horizontally (left edge {left_edge:.1f}, expected {expected:.1f})"
             )
             checked += 1
 

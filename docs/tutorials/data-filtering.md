@@ -31,14 +31,20 @@ In **Annotations**, apply a consistent tag vocabulary—for example `exclude`,
 `review`, `poor-calibration`, or `skimming`—and add a brief reason. Star trials
 that are useful examples or approved for a figure.
 
-Return to the trial filters and filter by favorites or tags. This turns the
-review decisions into the active pool without deleting the source data.
+Return to the trial filters and, under **By annotation**, put `exclude` in
+**Excluding tags** — not in **With any of these tags**, which would keep only
+the rejected trials. This turns the review decisions into the active pool
+without deleting the source data. Before you narrow the pool, save the full
+record with **:material/database: Data → Annotations → Export**: it lists every trial you
+tagged, including the ones the filter now hides.
 
 ## 4. Verify the retained pool
 
 Check at least one trial from each participant or condition. Then open the
-:material/database: **Data** page and confirm the remaining participant, text, trial,
-fixation, and word counts are plausible.
+:material/database: **Data** page and confirm that the participant, text, trial,
+fixation, and word counts under **What's in the … dataset → Stats** are
+plausible. Those follow the filters; the dataset table above them counts the
+whole dataset.
 
 ## 5. Export the record
 
@@ -48,5 +54,6 @@ the human review record; export figures only if they are part of the analysis
 record.
 
 **Done:** the original data remains intact, the retained trials are in the
-export bundle, and each manual decision has a tag and a reason in its
-`annotations.json`.
+export bundle, and each manual decision has a tag and a reason in the
+annotations file you exported from the Data page. (The bundle's
+`annotations.json` covers only the trials it exports.)

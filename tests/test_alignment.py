@@ -16,6 +16,9 @@ Two layers:
 
 from __future__ import annotations
 
+import subprocess
+import sys
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -172,3 +175,20 @@ def test_word_order_methods_run_without_word_xy_arg(method):
     fixations = make_synthetic_fixations()
     _, line = alignment.correct(fixations, words, method)
     assert {int(v) for v in line.dropna()} <= {0, 1}
+
+
+def test_app_modules_do_not_import_scipy():
+    """ENG-91: Windows Smart App Control blocked one of scipy's compiled
+    extensions in the desktop bundle, and because `controls` imported
+    `alignment`, which imported scipy at module level, every app run failed.
+    scipy stays a lazy import, loaded only by the paths that use it."""
+    code = (
+        "import sys\n"
+        "import scanpath_studio.alignment, scanpath_studio.controls, "
+        "scanpath_studio.app\n"
+        "print(sorted(m for m in sys.modules if m.split('.')[0] == 'scipy'))\n"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert out.stdout.strip() == "[]"

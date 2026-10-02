@@ -108,13 +108,15 @@ def _public_location(label: str) -> tuple[str, dict]:
         }
     if regime := onestop_regime_for_choice(label):
         # DATA-63: one dataset per regime, every part, from the public release.
-        return _resolved_dir("onestop_public_dir", ONESTOP_PUBLIC_DEFAULT_DIR), {
+        # UX-184: the box's own default — under the Download folder.
+        default = app._download_target(ONESTOP_PUBLIC_DEFAULT_DIR)
+        return _resolved_dir("onestop_public_dir", default), {
             "variant": "public",
             "regime": regime,
             "parts": tuple(datasets.onestop_regime_parts(regime)),
         }
     if _POTEC_LABEL_HINT in label:
-        return _resolved_dir("potec_dir", POTEC_DEFAULT_DIR), {}
+        return _resolved_dir("potec_dir", app._download_target(POTEC_DEFAULT_DIR)), {}
     if _MULTIPLEYE_LABEL_HINT in label:
         return _resolved_dir("multipleye_dir", MULTIPLEYE_DEFAULT_DIR), {
             "fixation_source": str(

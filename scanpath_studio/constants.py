@@ -753,6 +753,14 @@ DATASET_COUNTS_STORE_KEY = "_dataset_counts_store"
 #: upload's Parquet files. Here for the same import-cycle reason as above.
 DATASET_DESCRIPTIONS_KEY = "_dataset_descriptions"
 
+#: UX-184 — the folder every public corpus downloads into, each in a subfolder
+#: (``<folder>/PoTeC``), set on the 🗂️ Data page. A recovery-cache session key
+#: so the choice survives a restart; never in a link, since it is a local path
+#: (see `session_keys.PARAM_CORPUS`). Unset, `DOWNLOAD_DIR_ENV` decides, then
+#: the checkout's ``data/`` or the per-user data home (ENG-59).
+DOWNLOAD_DIR_KEY = "download_dir"
+DOWNLOAD_DIR_ENV = "SCANPATH_STUDIO_DOWNLOAD_DIR"
+
 #: VIZ-45 — the raw-gaze layer's per-dataset default (`app.seed_raw_gaze_default`):
 #: the dataset it was last decided for, and the value that decision overwrote.
 #: Recovery-cache session keys, so a relaunch onto the same dataset does not

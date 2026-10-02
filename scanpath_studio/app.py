@@ -30,11 +30,16 @@ Usage:
 from __future__ import annotations
 
 import contextlib
+import copy
 import hashlib
 import html
+import json
 import logging
 import os
 import re
+import shutil
+import subprocess
+import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from functools import partial
@@ -84,6 +89,8 @@ from scanpath_studio.constants import (
     DEFAULT_FIGURE_SIZE,
     DEFAULT_LINE_SPACING,
     DEMO_CHOICE,
+    DOWNLOAD_DIR_ENV,
+    DOWNLOAD_DIR_KEY,
     EYEGENBENCH_DEFAULT_DIR,
     FOCUS_MAPPING_KEY,
     FONT_FAMILY,
@@ -192,6 +199,8 @@ from scanpath_studio.data import (
 )
 from scanpath_studio.dataset_table import DATASET_COUNT_FIELDS, DatasetRow
 from scanpath_studio.datasets import (
+    POTEC_FIX_SCHEMA,
+    POTEC_WORD_SCHEMA,
     load_multipleye_server_bundle,
     multipleye_bundle_dir,
 )
@@ -235,6 +244,9 @@ from scanpath_studio.persistence import (
 from scanpath_studio.session_keys import COLUMN_MAPPING_PREFIX, PARAM_CORPUS
 from scanpath_studio.styles import get_app_css
 from scanpath_studio.tabs import (
+    _EDITOR_KEY_NOISE,
+    _REMAP_DIRTY_KEY,
+    _TABLE_LABELS,
     EDITOR_NAME_FIELD_KEY,
     EDITOR_PENDING_NAME_KEY,
     STIMULUS_JOIN_NOTICE_KEY,
@@ -723,6 +735,59 @@ def _restored_recap(session=None) -> str:
     return f"{', '.join(parts[:-1])} and {parts[-1]}"
 
 
+def _pick_download_folder() -> None:
+    """📁 beside the Download folder box: a native picker, applied next run."""
+    chosen = _pick_directory_dialog()
+    if chosen:
+        st.session_state[f"{DOWNLOAD_DIR_KEY}_picked"] = chosen
+    else:
+        st.session_state[f"{DOWNLOAD_DIR_KEY}_no_picker"] = True
+
+
+def _render_download_folder_section(host) -> None:
+    """🗂️ Data → **Download folder** (UX-184).
+
+    One folder for every ⬇ Download, so a user chooses where the corpora go once
+    rather than per dataset — the per-dataset Data directory box still
+    overrides it. Before this the folder was implicit (the checkout's ``data/``,
+    or the per-user data home: ``%LOCALAPPDATA%`` on Windows) and the page only
+    ever said ``data/PoTeC``. Not drawn where the app may not touch local
+    folders (S2) — there the server's configuration decides.
+    """
+    if not local_filesystem_enabled():
+        return
+    picked = st.session_state.pop(f"{DOWNLOAD_DIR_KEY}_picked", None)
+    if picked:
+        st.session_state[DOWNLOAD_DIR_KEY] = picked
+    st.session_state.setdefault(DOWNLOAD_DIR_KEY, "")
+    host.divider()
+    host.subheader(f"{ICONS['download']} Download folder")
+    host.caption(
+        "Where **Download** saves a public dataset, each in its own subfolder. "
+        "Leave it blank for the default. A dataset's own *Data directory* box "
+        "overrides it."
+    )
+    text_col, browse_col = host.columns([4, 1])
+    text_col.text_input(
+        "Download folder",
+        key=DOWNLOAD_DIR_KEY,
+        placeholder=str(_default_download_folder()),
+        label_visibility="collapsed",
+        # Rendered only on the Data page's overview; without this the choice
+        # would be dropped the first run another view is open (BUG-15).
+        persist_state="session",
+    )
+    browse_col.button(
+        ICONS["folder"],
+        key=f"{DOWNLOAD_DIR_KEY}_browse",
+        help="Browse for a folder",
+        on_click=_pick_download_folder,
+    )
+    if st.session_state.pop(f"{DOWNLOAD_DIR_KEY}_no_picker", False):
+        host.caption("Folder picker unavailable here — type or paste the path.")
+    host.markdown(f"**Saving to:** `{download_folder()}`")
+
+
 def _render_saved_here_section(app_url: str, host) -> None:
     """🗂️ Data → **Saved on this computer** (UX-179; ENG-30 underneath).
 
@@ -1019,6 +1084,39 @@ def _user_data_home() -> Path:
     return Path(base) / "scanpath-studio"
 
 
+def _default_download_folder() -> Path:
+    """Where downloads go when nobody chose: ``SCANPATH_STUDIO_DOWNLOAD_DIR``,
+    else ``data/`` under :func:`_project_root` (UX-184)."""
+    configured = os.environ.get(DOWNLOAD_DIR_ENV, "").strip()
+    if configured:
+        return Path(_resolve_data_dir(configured))
+    return (_project_root() / "data").resolve()
+
+
+def download_folder() -> Path:
+    """The folder every downloadable corpus goes into, one subfolder each (UX-184).
+
+    The 🗂️ Data page's *Download folder* (a blank box means the default), else
+    :func:`_default_download_folder`. A relative entry anchors like a Data
+    directory does, and ``SCANPATH_DATA_ROOT`` confines it the same way."""
+    chosen = str(st.session_state.get(DOWNLOAD_DIR_KEY) or "").strip()
+    if chosen and local_filesystem_enabled():
+        return Path(_resolve_data_dir(chosen))
+    return _default_download_folder()
+
+
+def _download_target(default_dir: str) -> str:
+    """A downloadable corpus' default Data directory under :func:`download_folder`.
+
+    The built-in defaults are ``data/<corpus>``; that ``data/`` is the download
+    folder, so ``data/PoTeC`` becomes ``<folder>/PoTeC``. Anything else (an
+    absolute path a test or a deployment pinned) is left as it is."""
+    rel = Path(default_dir)
+    if not default_dir or rel.is_absolute() or rel.parts[:1] != ("data",):
+        return default_dir
+    return str(download_folder().joinpath(*rel.parts[1:]))
+
+
 # DATA-16 (security audit S2). The corpus **Data directory** box takes a
 # free-text path from the browser, stats it, reports the result back into the
 # page, and — via ⬇ Download — writes into it. On a local run that's just a file
@@ -1093,13 +1191,60 @@ def _resolve_data_dir(root: str) -> str:
     return str(literal)
 
 
+#: BUG-98 — how long a 📁 click may wait for the user to pick a folder.
+_FOLDER_PICKER_TIMEOUT_S = 600
+
+_MACOS_PICKER = 'POSIX path of (choose folder with prompt "Choose a folder")'
+# STA + a TopMost owner form, or the dialog opens behind the browser; UTF-8 so a
+# folder name outside the console's code page comes back intact.
+_WINDOWS_PICKER = (
+    "[Console]::OutputEncoding = [Text.Encoding]::UTF8; "
+    "Add-Type -AssemblyName System.Windows.Forms; "
+    "$d = New-Object System.Windows.Forms.FolderBrowserDialog; "
+    "$o = New-Object System.Windows.Forms.Form -Property @{TopMost = $true}; "
+    "if ($d.ShowDialog($o) -eq 'OK') { [Console]::Out.Write($d.SelectedPath) }"
+)
+_TK_PICKER = (
+    "import tkinter as tk; from tkinter import filedialog; "
+    "r = tk.Tk(); r.withdraw(); r.wm_attributes('-topmost', 1); "
+    "print(filedialog.askdirectory() or '', end='')"
+)
+
+
+def _folder_picker_command() -> list[str] | None:
+    """The command that shows this OS's folder dialog and prints the pick (BUG-98).
+
+    The dialog runs in a child process. In-process tkinter ran on Streamlit's
+    script thread, and macOS refuses to open a window off the main thread — it
+    aborts the whole server (``NSWindow should only be instantiated on the main
+    thread``), so one 📁 click took the app down. A child has its own main
+    thread, and whatever it does cannot reach the server. The OS's own dialog
+    comes first; tkinter is the fallback for a Linux desktop without zenity or
+    kdialog, and never in the desktop bundle, which ships no tkinter and whose
+    ``sys.executable`` is the app itself. ``None`` when there is none."""
+    if sys.platform == "darwin":
+        return ["osascript", "-e", _MACOS_PICKER] if shutil.which("osascript") else None
+    if sys.platform == "win32":
+        shell = shutil.which("powershell") or shutil.which("pwsh")
+        if shell:
+            return [shell, "-NoProfile", "-STA", "-Command", _WINDOWS_PICKER]
+    elif shutil.which("zenity"):
+        return ["zenity", "--file-selection", "--directory"]
+    elif shutil.which("kdialog"):
+        return ["kdialog", "--getexistingdirectory"]
+    if getattr(sys, "frozen", False):
+        return None
+    return [sys.executable, "-c", _TK_PICKER]
+
+
 def _pick_directory_dialog() -> str | None:
     """Open a native folder picker and return the chosen path, or None.
 
-    Only works when the app runs on a machine with a display + tkinter (a
-    locally-run app). Returns None — and never raises — on a headless host
-    (Streamlit Cloud), a missing tkinter, or a cancelled dialog, so the text
-    input stays the portable fallback.
+    Only works when the app runs on a machine with a display (a locally-run
+    app). Returns None — and never raises — on a headless host, with no dialog
+    to run, or on a cancelled dialog, so the text input stays the portable
+    fallback. The dialog is a child process (:func:`_folder_picker_command`,
+    BUG-98); this blocks until it closes, as the in-process one did.
 
     S2: refuses outright on a shared deployment. Degrading to None on a headless
     host was never the guarantee — on a host that *does* have a display, a remote
@@ -1107,20 +1252,25 @@ def _pick_directory_dialog() -> str | None:
     the thread until someone there dismisses it."""
     if not local_filesystem_enabled():
         return None
-    try:
-        import tkinter as tk
-        from tkinter import filedialog
-    except Exception:
+    command = _folder_picker_command()
+    if command is None:
         return None
     try:
-        root = tk.Tk()
-        root.withdraw()
-        root.wm_attributes("-topmost", 1)
-        chosen = filedialog.askdirectory()
-        root.destroy()
-    except Exception:
+        done = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=_FOLDER_PICKER_TIMEOUT_S,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
         return None
-    return chosen or None
+    # A cancel exits non-zero (osascript, zenity, kdialog) or prints nothing.
+    chosen = done.stdout.strip() if done.returncode == 0 else ""
+    # osascript's POSIX path ends in "/"; keep a bare root as it is.
+    return (chosen.rstrip("/\\") or chosen) if chosen else None
 
 
 def _dataset_dir_input(
@@ -1149,10 +1299,23 @@ def _dataset_dir_input(
     picked = st.session_state.pop(f"{dir_key}_picked", None)
     if picked:
         st.session_state[dir_key] = picked
+    # UX-184: a box still showing the default it was given follows a new
+    # Download folder; one the user edited keeps what they typed.
+    seeded_key = f"{dir_key}_default"
+    seeded = st.session_state.get(seeded_key)
+    if (
+        seeded is not None
+        and seeded != default_dir
+        and st.session_state.get(dir_key) == seeded
+    ):
+        st.session_state[dir_key] = default_dir
+    st.session_state[seeded_key] = default_dir
+    # Seeded rather than `value=`-ed: the two writes above go through session
+    # state, and passing both makes Streamlit warn (as for BUG-17).
+    st.session_state.setdefault(dir_key, default_dir)
     text_col, browse_col = cfg.columns([4, 1])
     raw = text_col.text_input(
         "Data directory",
-        value=st.session_state.get(dir_key, default_dir),
         help=dir_help,
         key=dir_key,
         # A typed path must survive a run in which this input doesn't render —
@@ -1174,9 +1337,16 @@ def _dataset_dir_input(
             st.rerun()
         else:
             cfg.caption("Folder picker unavailable here — type or paste the path.")
+    resolved = _resolve_data_dir(raw)
+    # UX-184: a relative entry such as the default `data/PoTeC` resolves against
+    # the checkout, or in an installed copy against the per-user data home
+    # (ENG-59) — on Windows `%LOCALAPPDATA%`, a folder the box never named, so a
+    # finished download looked lost. Name the folder it actually means.
+    if resolved and resolved != raw.strip():
+        cfg.caption(f"Full path: `{resolved}`")
     with cfg.expander("Expected files", expanded=False):
         st.markdown(structure_md)
-    return _resolve_data_dir(raw)
+    return resolved
 
 
 # UX-7(b): session slot describing a data source the user selected but that
@@ -1312,7 +1482,9 @@ def _render_dataset_unavailable() -> None:
         )
         details = [f"{note['action'].rstrip('.')}{size}"]
         if note["root"]:
-            details.append(f"Looking in `{note['root']}`")
+            # UX-184: say where a download will land, not only where it looked.
+            verb = "Downloads to" if download is not None else "Looking in"
+            details.append(f"{verb} `{note['root']}`")
         st.markdown("\n".join(f"- {line}" for line in details))
         if download is None:
             return
@@ -1381,7 +1553,10 @@ def _dataset_access_status(
             root=root,
         )
         return False
-    cfg.info(f"Not downloaded yet{f' ({size_hint})' if size_hint else ''}.")
+    cfg.info(
+        f"Not downloaded yet{f' ({size_hint})' if size_hint else ''}. "
+        f"**Download** saves it to `{root}`."
+    )
     # S2: fetching writes tens-to-hundreds of MB into a browser-supplied path. On
     # a shared deployment that's a remote visitor filling the server's disk, so
     # the corpus has to be placed by whoever runs it.
@@ -1460,7 +1635,7 @@ def _load_potec_source(
     loc = location_host if location_host is not None else st.container()
     root = _dataset_dir_input(
         loc,
-        default_dir=POTEC_DEFAULT_DIR,
+        default_dir=_download_target(POTEC_DEFAULT_DIR),
         dir_help="Folder holding (or to download) the PoTeC files. A clone of "
         "github.com/DiLi-Lab/PoTeC works, or any empty folder with Download.",
         structure_md=_POTEC_STRUCTURE_MD,
@@ -1603,7 +1778,8 @@ def _load_onestop_regime_source(
     parts = datasets.onestop_regime_parts(regime)
     root = _dataset_dir_input(
         loc,
-        default_dir=ONESTOP_PUBLIC_DEFAULT_DIR,
+        # UX-184: under the one Download folder every public corpus shares.
+        default_dir=_download_target(ONESTOP_PUBLIC_DEFAULT_DIR),
         dir_help="Folder to download the OneStop reports into (cached on disk, so "
         "only the first load fetches them). The four OneStop datasets can share it.",
         structure_md=_onestop_structure_md(regime),
@@ -2009,6 +2185,9 @@ def _onestop_regime_entry(regime: str) -> dict:
 PUBLIC_DATASET_REGISTRY: dict = {
     "PoTeC — Potsdam Textbook Corpus": dict(
         loader=_load_potec_source,
+        # The schema `load_potec` uses, so the app's Trial ID is the headless
+        # one: reader + text, not the text name every reader shares.
+        declared_schemas=(POTEC_WORD_SCHEMA, POTEC_FIX_SCHEMA),
         monitor=(1680, 1050),  # DELL P2210
         short="PoTeC",
         language="German",
@@ -2782,6 +2961,9 @@ def _normalize_pair(
                 _keep_words=keep_words,
                 _keep_fix=keep_fix,
             ),
+            # PERF-18: the dataset before this one stays normalized, so
+            # switching back to it is instant.
+            keep=2,
         )
     # DATA-49: which key a stimulus-level AOI table joined through, for the
     # add-dataset wizard to say — bookkeeping like `_composite_trial_columns`
@@ -2847,6 +3029,152 @@ def reset_column_mapping() -> None:
         if isinstance(k, str) and k.startswith(COLUMN_MAPPING_PREFIX)
     ]:
         del st.session_state[key]
+
+
+#: A built-in source (the demo, a public corpus) maps its columns with the
+#: `col_map_*` panels themselves, which apply as they change. While ✏️ Edit
+#: dataset is open they are a draft instead, like an upload's editor: the
+#: dataset keeps the mapping it had when the editor opened (held here, with the
+#: `col_map_*` keys that produced it) until ✅ Save changes adopts the draft, and
+#: ✕ Cancel puts the keys back.
+BUILTIN_MAPPING_HELD_KEY = "_builtin_mapping_held"
+#: The panels' current picks, ``{"words": schema, "fixations": schema}``,
+#: written by `prepare_data` on every run that draws them.
+BUILTIN_MAPPING_PENDING_KEY = "_builtin_mapping_pending"
+#: Set by ✅ Save changes for the success line on the screen it returns to.
+BUILTIN_MAPPING_SAVED_KEY = "_builtin_mapping_saved"
+#: ✕ Cancel's restore, parked for the next run to apply before the panels draw:
+#: the Leave confirmation is a dialog, whose click runs inside the dialog's own
+#: rerun rather than ahead of the page's widgets.
+BUILTIN_MAPPING_RESTORE_KEY = "_builtin_mapping_restore"
+#: The panels a built-in source draws (`prepare_data`). Only their field
+#: values are held: not the per-cell confirm buttons (`*_cell_confirm`, whose
+#: value Streamlit refuses to have set), the add wizard's `*_upload` files or
+#: its stashed `*_header` — the scaffolding `tabs._EDITOR_KEY_NOISE` names.
+_BUILTIN_PANEL_PREFIXES = ("col_map_words_", "col_map_fix_")
+
+
+def _is_builtin_panel_key(key) -> bool:
+    return (
+        isinstance(key, str)
+        and key.startswith(_BUILTIN_PANEL_PREFIXES)
+        and not any(noise in key for noise in _EDITOR_KEY_NOISE)
+    )
+
+
+def _mapping_signature(schemas: dict | None) -> str:
+    """A comparable rendering of a ``{"words", "fixations"}`` mapping — lists
+    (a composite Trial ID) come back from the widgets as new objects."""
+    return json.dumps(schemas or {}, sort_keys=True, default=str)
+
+
+def held_builtin_mapping(source_key) -> dict | None:
+    """The mapping a built-in source keeps while its editor is open, or None."""
+    held = st.session_state.get(BUILTIN_MAPPING_HELD_KEY)
+    if not held or held.get("source") != source_key:
+        return None
+    return held.get("schemas")
+
+
+def hold_builtin_mapping(source_key) -> None:
+    """Record the mapping this run applied, and the keys behind it, as what an
+    editor opened on the next run starts from and what its ✕ Cancel restores."""
+    st.session_state[BUILTIN_MAPPING_HELD_KEY] = {
+        "source": source_key,
+        "schemas": copy.deepcopy(st.session_state.get(BUILTIN_MAPPING_PENDING_KEY)),
+        "keys": {
+            key: copy.deepcopy(value)
+            for key, value in st.session_state.items()
+            if _is_builtin_panel_key(key)
+        },
+    }
+
+
+def builtin_mapping_is_dirty(source_key) -> bool:
+    """Whether the open editor's mapping panels differ from the held mapping."""
+    held = held_builtin_mapping(source_key)
+    if held is None:
+        return False
+    return _mapping_signature(
+        st.session_state.get(BUILTIN_MAPPING_PENDING_KEY)
+    ) != _mapping_signature(held)
+
+
+def _discard_builtin_mapping_edit() -> None:
+    """Ask the next run to put the panels back as they were when the editor
+    opened (`restore_builtin_mapping`)."""
+    held = st.session_state.pop(BUILTIN_MAPPING_HELD_KEY, None)
+    if held:
+        st.session_state[BUILTIN_MAPPING_RESTORE_KEY] = held
+
+
+def restore_builtin_mapping(source_key) -> None:
+    """Apply a parked ✕ Cancel to ``source_key``'s panels, before they draw.
+
+    A restore parked for another source is dropped: its keys describe columns
+    this source does not have."""
+    held = st.session_state.pop(BUILTIN_MAPPING_RESTORE_KEY, None)
+    if not held or held.get("source") != source_key:
+        return
+    saved = held.get("keys") or {}
+    for key in [k for k in list(st.session_state) if _is_builtin_panel_key(k)]:
+        if key not in saved:
+            del st.session_state[key]
+    for key, value in saved.items():
+        st.session_state[key] = value
+
+
+def _save_builtin_mapping() -> None:
+    """✅ Save changes for a built-in source: adopt the draft mapping.
+
+    A draft that leaves a required field empty is refused here, with the
+    reasons shown above the button, rather than applied and then failing."""
+    pending = st.session_state.get(BUILTIN_MAPPING_PENDING_KEY) or {}
+    problems: dict = {}
+    for table_key, validate in (
+        ("words", validate_word_schema),
+        ("fixations", validate_fix_schema),
+    ):
+        schema = pending.get(table_key)
+        if schema is not None and (found := validate(schema)):
+            problems[table_key] = found
+    if problems:
+        st.session_state["_remap_problems"] = problems
+        return
+    # Dropped first, so closing the editor does not restore the held keys.
+    st.session_state.pop(BUILTIN_MAPPING_HELD_KEY, None)
+    saved = str(st.session_state.get("data_source_choice") or "")
+    _close_dataset_editor()
+    st.session_state[BUILTIN_MAPPING_SAVED_KEY] = saved
+
+
+def _render_builtin_editor_footer(host) -> None:
+    """✅ Save changes at the foot of a built-in source's ✏️ Edit dataset screen.
+
+    `tabs.render_dataset_editor_footer`'s row, for a dataset with no stored
+    entry: the same divider, the same blockers, the button in the same column.
+    There is no ⬇️ Save setup beside it — the corpus' own loader is the setup.
+    """
+    from scanpath_studio.wizard import _FOOTER_ROW_W
+
+    box = host.container()
+    box.container(key="wizard_footer_divider_edit").divider()
+    for table_key, messages in (st.session_state.get("_remap_problems") or {}).items():
+        label = _TABLE_LABELS.get(table_key, table_key)
+        for message in messages:
+            box.error(f"**{label}** — {message}", icon=ICONS["error"])
+    row = box.container(key="wizard_footer_row_edit")
+    _setup_col, apply_col, _rest = row.columns(
+        _FOOTER_ROW_W, gap="small", vertical_alignment="center"
+    )
+    apply_col.button(
+        f"{ICONS['confirm']} Save changes",
+        type="primary",
+        key="builtin_mapping_save",
+        on_click=_save_builtin_mapping,
+        width="stretch",
+        help="Apply the column mapping above to this dataset.",
+    )
 
 
 #: Label + tooltip of the off-page signpost's "known-good state" button.
@@ -2920,12 +3248,24 @@ def declared_schemas_for(data_choice: str) -> tuple[dict | None, dict | None]:
     fixations detect `trial="TRIAL_ID"` against the words' `unique_paragraph_id`
     and broadcast **zero** word boxes — silently, since only the words frame
     ends up empty and the empty-pool guard never fires.
+
+    A native corpus whose identity is a published contract declares its schema
+    on its registry entry (``declared_schemas``): PoTeC's Trial ID is the reader
+    *and* the text, which no column name says and detection would guess as the
+    text alone.
     """
     if data_choice != PUBLIC_DATASETS_CHOICE:
+        return None, None
+    # The corpus isn't here and the demo stands in for it: its frames are the
+    # demo's, which the corpus' schema does not describe.
+    if st.session_state.get(_PLACEHOLDER_SHOWN_KEY):
         return None, None
     spec = public_dataset_registry().get(
         st.session_state.get("public_dataset_choice", "")
     )
+    if spec and spec.get("declared_schemas"):
+        word_schema, fix_schema = spec["declared_schemas"]
+        return dict(word_schema), dict(fix_schema)
     if not spec or not spec.get("benchmark_dataset"):
         return None, None
     from scanpath_studio.eyegenbench import (
@@ -2944,6 +3284,7 @@ def prepare_data(
     declared_word_schema: dict | None = None,
     declared_fix_schema: dict | None = None,
     mapping_dataset: object = None,
+    held_schemas: dict | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, list]:
     """Infer schemas and normalize incoming dataframes to canonical column names.
 
@@ -2968,12 +3309,18 @@ def prepare_data(
     column pick made for another dataset — the add-dataset wizard shares these
     ``col_map_*`` keys — is dropped rather than inherited because the headers
     happen to match (BUG-32; ``controls.forget_mapping_for_other_table``).
+
+    ``held_schemas`` (``{"words": …, "fixations": …}``) is the mapping the
+    dataset keeps while ✏️ Edit dataset is open: the panels still render and
+    their picks are published as the draft (``BUILTIN_MAPPING_PENDING_KEY``),
+    but the frames are normalized under the held mapping until ✅ Save changes.
     """
     has_words = not words_df.empty
     has_fixations = not fixations_df.empty
     word_schema = None
     fix_schema = None
     problems: list = []
+    pending: dict = {}
 
     if has_words:
         word_proposed = _apply_declared_schema(
@@ -2997,6 +3344,9 @@ def prepare_data(
                 stack_labels=True,
                 dataset=mapping_dataset,
             )
+            pending["words"] = word_schema
+            if held_schemas and held_schemas.get("words") is not None:
+                word_schema = held_schemas["words"]
         else:
             word_schema = word_proposed
         word_problems = validate_word_schema(word_schema)
@@ -3021,11 +3371,17 @@ def prepare_data(
                 stack_labels=True,
                 dataset=mapping_dataset,
             )
+            pending["fixations"] = fix_schema
+            if held_schemas and held_schemas.get("fixations") is not None:
+                fix_schema = held_schemas["fixations"]
         else:
             fix_schema = fix_proposed
         fix_problems = validate_fix_schema(fix_schema)
         if fix_problems:
             problems.append("Fixations: " + "; ".join(fix_problems))
+
+    if allow_override:
+        st.session_state[BUILTIN_MAPPING_PENDING_KEY] = pending
 
     if problems:
         # Mapping not ready — let the caller surface the raw data instead of
@@ -3117,6 +3473,47 @@ def _render_unmapped_view(
         st.info("No data loaded yet.")
     _render_raw_preview("Words / IA", raw_words_df)
     _render_raw_preview("Fixations", raw_fixations_df)
+
+
+def _render_dataset_load_failure(name: str, problems: list) -> None:
+    """BUG-100: say on the Data overview that the dataset didn't load, and why.
+
+    :func:`_render_unmapped_view` draws into the ✏️ Edit dataset screen, which
+    is hidden until it is opened — so a corpus the pipeline rejected (OneStop ·
+    Ordinary reading's orphan screens, before DATA-63) left the overview with a
+    "Not loaded" row and no other trace. This is the overview's half: the
+    dataset's name, the reason, and the two ways on — the editor that can fix
+    the mapping, or back to the demo.
+    """
+    rejected = [p for p in problems if p.startswith(MAPPING_FAILURE_LEAD)]
+    with st.container(border=True, key="dataset_load_failure_panel"):
+        if rejected:
+            for problem in rejected:
+                reason = problem.removeprefix(MAPPING_FAILURE_LEAD).lstrip(": ")
+                st.error(
+                    f"**{name} didn't load.** Normalizing its tables failed: {reason}",
+                    icon=ICONS["error"],
+                )
+        else:
+            st.warning(
+                f"**{name} isn't loaded yet** — its column mapping is "
+                "incomplete:\n\n" + "\n".join(f"- {p}" for p in problems)
+            )
+        edit, demo = st.columns(2)
+        edit.button(
+            f"{ICONS['edit']} Edit dataset",
+            key="dataset_load_failure_edit",
+            on_click=_open_mapping_editor,
+            type="primary",
+            width="stretch",
+        )
+        demo.button(
+            DEMO_RESET_LABEL,
+            key="dataset_load_failure_demo",
+            on_click=load_bundled_demo,
+            width="stretch",
+            help=DEMO_RESET_HELP,
+        )
 
 
 @st.cache_data(show_spinner=False)
@@ -4772,6 +5169,9 @@ def _close_dataset_editor() -> None:
     # DATA-46: "use the current estimate" is a choice for one editing session.
     for key in [k for k in st.session_state if str(k).endswith("_setup_reestimate")]:
         st.session_state.pop(key, None)
+    # A built-in source's unsaved mapping goes too (✅ Save changes has already
+    # dropped what it would restore).
+    _discard_builtin_mapping_edit()
 
 
 def _ask_leave_dataset_editor() -> None:
@@ -7283,6 +7683,7 @@ def _run_app() -> None:
         wizard owns the page.
         """
         if data_view and not editing and not wizard_owns_page:
+            _render_download_folder_section(download_folder_slot)
             _render_saved_here_section(app_url, saved_here_slot)
 
     # First-visit welcome tour. After the URL presets, so embeds and
@@ -7443,6 +7844,7 @@ def _run_app() -> None:
     # UX-179 — *Saved on this computer*, the overview's last section: the
     # recovery cache and the two ways to throw work away. Filled by
     # `_finish_page`, after this run's `save_local_state`.
+    download_folder_slot = overview_page.container(key="data_download_folder")
     saved_here_slot = overview_page.container(key="data_saved_here")
     # Keyed → the stable `.st-key-…` selectors the "Load and verify a dataset"
     # tutorial spotlights (UX-40), alongside `tutorial_data_inspection` above.
@@ -7662,6 +8064,13 @@ def _run_app() -> None:
         # belongs here, on the screen it returns to.
         saved = st.session_state.pop("_remap_applied", None)
         join_notices = st.session_state.pop(STIMULUS_JOIN_NOTICE_KEY, None)
+        builtin_saved = st.session_state.pop(BUILTIN_MAPPING_SAVED_KEY, None)
+        if builtin_saved is not None:
+            dataset_table_slot.success(
+                f"**{_dataset_display_name(str(builtin_saved))}** updated — its "
+                "column mapping is saved.",
+                icon=ICONS["success"],
+            )
         if saved:
             dataset_table_slot.success(
                 f"**{_dataset_display_name(str(saved))}** updated — mapping, "
@@ -7846,6 +8255,7 @@ def _run_app() -> None:
         if st.session_state.get("_colmap_seeded_for") != source_key:
             reset_column_mapping()
             st.session_state["_colmap_seeded_for"] = source_key
+        restore_builtin_mapping(source_key)
         raw_words_df, raw_fixations_df = load_words_and_fixations(
             data_choice,
             participant=deep_link_pid,
@@ -7870,6 +8280,7 @@ def _run_app() -> None:
                     f"{len(raw_fixations_df):,} fixations",
                 )
         declared_word_schema, declared_fix_schema = declared_schemas_for(data_choice)
+        mapping_editor_rendered = data_choice in (PUBLIC_DATASETS_CHOICE, DEMO_CHOICE)
         words_df, fixations_df, mapping_problems = prepare_data(
             raw_words_df,
             raw_fixations_df,
@@ -7877,7 +8288,7 @@ def _run_app() -> None:
             # Demo (DATA-8) so the re-mapping capability is discoverable on the
             # default first-load source; pre-filled with auto-detection, so an
             # untouched mapping normalizes identically.
-            allow_override=(data_choice in (PUBLIC_DATASETS_CHOICE, DEMO_CHOICE)),
+            allow_override=mapping_editor_rendered,
             # Mode A of the Data page's one Column mapping section (DATA-26).
             mapping_host=mapping_body_slot,
             # A prepared benchmark corpus publishes its schema; auto-detection
@@ -7889,8 +8300,26 @@ def _run_app() -> None:
             # and its field widgets persist, so coming back here from it would
             # otherwise inherit its picks whenever the headers match.
             mapping_dataset=source_key,
+            # While ✏️ Edit dataset is open the panels are a draft and the
+            # dataset keeps its mapping until ✅ Save changes.
+            held_schemas=(
+                held_builtin_mapping(source_key)
+                if editing and mapping_editor_rendered
+                else None
+            ),
         )
-        mapping_editor_rendered = data_choice in (PUBLIC_DATASETS_CHOICE, DEMO_CHOICE)
+        if mapping_editor_rendered:
+            if editing:
+                st.session_state[_REMAP_DIRTY_KEY] = builtin_mapping_is_dirty(
+                    source_key
+                )
+            else:
+                hold_builtin_mapping(source_key)
+    if not mapping_editor_rendered:
+        # Another kind of source is open: no built-in snapshot may be restored
+        # over the mapping keys it (or the add wizard) shares.
+        st.session_state.pop(BUILTIN_MAPPING_HELD_KEY, None)
+        st.session_state.pop(BUILTIN_MAPPING_RESTORE_KEY, None)
     if mapping_problems:
         # A required column is still unmapped. Rather than halt the whole app
         # (which hid the data the user needs to choose the mapping), show the
@@ -7898,6 +8327,14 @@ def _run_app() -> None:
         # mapping section — and, from any other view, say where that page is.
         with unmapped_slot:
             _render_unmapped_view(raw_words_df, raw_fixations_df, mapping_problems)
+        # BUG-100: the slot above is on the ✏️ Edit dataset screen, hidden until
+        # it is opened — the overview needs its own word, where *What's in the
+        # dataset* would have been.
+        if data_view and not editing and not wizard_owns_page:
+            with setup_body_slot:
+                _render_dataset_load_failure(
+                    _dataset_display_name(_dataset_owner), mapping_problems
+                )
         _render_offpage_setup_notice(data_view)
         _finish_page()
         _render_datasets_table(None, None, None)
@@ -8401,6 +8838,8 @@ def _run_app() -> None:
         # UX-106 — and the screen's one commit at its foot, in the slot
         # reserved after every section it saves.
         render_dataset_editor_footer(editor_footer_slot)
+        if mapping_editor_rendered:
+            _render_builtin_editor_footer(editor_footer_slot)
         with setup_body_slot:
             st.divider()
             active_token = str(

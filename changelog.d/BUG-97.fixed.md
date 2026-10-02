@@ -1,0 +1,1 @@
+Word labels sit in the middle of their word boxes, and the OneStop demo's stimulus images are placed where the experiment drew them (368, 186), so the image text, the drawn labels and the boxes line up.

@@ -1,10 +1,12 @@
 /* Figures on the docs pages (ENG-78).
  *
- * `docs_support.embed` writes each figure's Plotly JSON into the page. This
- * draws it the way the app does (`tabs._render_true_scale_chart`): at the
- * figure's exact pixel size, then scaled uniformly to the column with a CSS
- * transform, so the word labels keep the size they were fitted to — a Plotly
- * re-layout would leave the fonts and markers at their pixel sizes instead.
+ * `docs_support.embed` writes each figure's Plotly JSON into the page, as the
+ * host's `data-figure` attribute — never an inline script, which Material's
+ * instant navigation re-runs as JavaScript. This draws it the way the app
+ * does (`tabs._render_true_scale_chart`): at the figure's exact pixel size,
+ * then scaled uniformly to the column with a CSS transform, so the word labels
+ * keep the size they were fitted to — a Plotly re-layout would leave the fonts
+ * and markers at their pixel sizes instead.
  *
  * Plotly is fetched only when a figure scrolls near the viewport, from the
  * site's own copy (`mkdocs_hooks.on_post_build`), never from a CDN. Material's
@@ -45,8 +47,7 @@
   };
 
   const draw = async (host) => {
-    const source = host.querySelector('script[type="application/json"]');
-    const { player, ...spec } = JSON.parse(source.textContent);
+    const { player, ...spec } = JSON.parse(host.dataset.figure);
     const stage = document.createElement("div");
     stage.className = "sps-plot-stage";
     stage.id = `sps-plot-${++plotCount}`;

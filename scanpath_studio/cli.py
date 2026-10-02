@@ -284,6 +284,25 @@ def _bind_cli_flags(extra_args) -> list[str]:
     return [f"--server.address={LOOPBACK_ADDRESS}"]
 
 
+def _consume_download_dir(extra_args: list[str]) -> list[str]:
+    """Strip ``--download-dir DIR`` / ``--download-dir=DIR`` into its env var."""
+    from .constants import DOWNLOAD_DIR_ENV
+
+    rest: list[str] = []
+    args = iter(extra_args)
+    for arg in args:
+        if arg == "--download-dir":
+            value = next(args, None)
+            if value is None:
+                raise SystemExit("--download-dir needs a folder")
+            os.environ[DOWNLOAD_DIR_ENV] = value
+        elif str(arg).startswith("--download-dir="):
+            os.environ[DOWNLOAD_DIR_ENV] = str(arg).split("=", 1)[1]
+        else:
+            rest.append(arg)
+    return rest
+
+
 def launch_app(extra_args: list[str]) -> None:
     """Launch the Streamlit app via ``streamlit run``, forwarding extra args."""
     from streamlit.web import cli as stcli
@@ -296,6 +315,10 @@ def launch_app(extra_args: list[str]) -> None:
 
         extra_args = [arg for arg in extra_args if arg != "--no-persist"]
         os.environ[PERSIST_ENV_VAR] = "0"
+
+    # UX-184: `--download-dir DIR` (or `=DIR`) is ours too — where ⬇ Download
+    # saves the public corpora when the Data page's Download folder is blank.
+    extra_args = _consume_download_dir(extra_args)
 
     # Inject the branded theme unless the caller passes their own ``--theme.*``
     # (explicit flags win), so the app looks the same regardless of where it was
@@ -408,8 +431,9 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar="DIR",
         help="Load the PoTeC corpus (DiLi-Lab/PoTeC) from DIR, downloading "
         "the needed files (~45 MB) on first use. Participants are the corpus's "
-        "75 reader ids (sparse within 0–105; --list-trials shows them), trials "
-        "are text ids (b0–b5, p0–p5).",
+        "75 reader ids (sparse within 0–105; --list-trials shows them); a "
+        "trial is one reader's reading of one text, <reader>_<text> (0_b0), "
+        "with texts b0–b5 and p0–p5.",
     )
 
     # DATA-55: the harmonised benchmark corpora are held back from the beta, the
@@ -2216,11 +2240,12 @@ def render(argv: list[str]) -> None:
         try:
             words, fixations = load_potec(
                 args.potec,
-                # Narrow the 900-file load when the trial (= text id) is
-                # known; reader ids always need the full reader list for
-                # --list-trials so only narrow with an explicit -p.
+                # Narrow the 900-file load when the trial is known — its
+                # text is the part after the reader (`0_b0` → `b0`); reader
+                # ids always need the full reader list for --list-trials so
+                # only narrow with an explicit -p.
                 readers=[args.participant] if args.participant else None,
-                texts=[args.trial] if args.trial else None,
+                texts=[str(args.trial).rsplit("_", 1)[-1]] if args.trial else None,
                 download=True,
             )
         except (ValueError, FileNotFoundError, OSError) as exc:
@@ -3343,6 +3368,9 @@ usage:
   scanpath-studio [run] --no-persist
                                    launch without the on-device recovery cache
                                    (this run only; see `cache` below)
+  scanpath-studio [run] --download-dir DIR
+                                   where Download saves public datasets when
+                                   the Data page's Download folder is blank
   scanpath-studio render …         render one trial to .html/.png/.svg/.pdf
                                    (see `scanpath-studio render --help`)
   scanpath-studio analyze …        export preprocessing + the full measure family

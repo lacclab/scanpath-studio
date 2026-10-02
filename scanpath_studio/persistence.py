@@ -43,6 +43,7 @@ from . import progress
 from .constants import (
     DATASET_COUNTS_STORE_KEY,
     DATASET_DESCRIPTIONS_KEY,
+    DOWNLOAD_DIR_KEY,
     RAW_GAZE_SEEDED_FOR_KEY,
     RAW_GAZE_SNAP_RESTORE_KEY,
 )
@@ -125,6 +126,10 @@ _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
     # dataset decides again and turns back on a layer the user switched off.
     RAW_GAZE_SEEDED_FOR_KEY,
     RAW_GAZE_SNAP_RESTORE_KEY,
+    # UX-184 — the folder the user chose for corpus downloads. A preference,
+    # like the design library: a restart must not send the next download back
+    # to the default folder.
+    DOWNLOAD_DIR_KEY,
 }
 
 
@@ -607,6 +612,11 @@ def _restorable_session(stored: Any) -> dict:
                     for name, text in value.items()
                     if isinstance(text, str)
                 }
+            continue
+        if key == DOWNLOAD_DIR_KEY:
+            # UX-184 — a path seeds a text box: only a string may.
+            if isinstance(value, str):
+                clean[key] = value
             continue
         if key == DESIGN_PRESETS:
             # The design library is the user's own work: keep every well-formed

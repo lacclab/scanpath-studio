@@ -7,7 +7,8 @@ Open the **Export** subtab in the Scanpath view.
 - **Current figure** downloads what is on screen: PNG, SVG, PDF or HTML, or the
   replay as HTML, GIF or MP4.
 - **Export bundle** writes figures and tables for this trial, the filtered
-  trials, or the whole dataset, plus a `plot_config.json` to recreate them.
+  trials, or the whole dataset, plus a `plot_config.json` recording the main
+  settings they were drawn with (the full set is **Share → File**).
   Options add separable layers for a vector editor, raw gaze, annotations, and
   more tables. Tables are written per trial, or combined into one file each.
   Word tables carry the reading measures your data brought; the export computes
@@ -17,9 +18,10 @@ Open the **Export** subtab in the Scanpath view.
 ![The Export subtab: the current figure, and the bundle's trials, formats, tables and file naming](../assets/screenshots/export.webp)
 </figure>
 
-HTML, and the current figure's PNG and SVG, always work. PDF, GIF, MP4 and the
-bundle's images need Chrome, Chromium or Edge installed
-([FAQ](../faq.md#export-fails)).
+HTML, and the current figure's PNG and SVG, always work. An HTML file loads
+the Plotly library from the internet when opened; one written by the Python API
+or the CLI embeds it and opens offline. PDF, GIF, MP4 and the bundle's images
+need Chrome, Chromium or Edge installed ([FAQ](../faq.md#export-fails)).
 
 ## Share
 

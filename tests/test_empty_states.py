@@ -307,3 +307,28 @@ class TestADeadEndStillShowsTheWayOut:
 
         # UX-174: the table's rows, by value (it is no longer a dataframe).
         assert at.session_state[DATASET_TABLE_ROWS_KEY]
+
+
+@pytest.mark.timeout(180)
+def test_a_relative_data_directory_names_the_folder_it_downloads_to():
+    """UX-184: the box said `data/PoTeC`, and an installed copy downloaded it to
+    the per-user data home (on Windows `%LOCALAPPDATA%`), which nothing on the
+    page named — the finished download looked lost."""
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import app
+    from scanpath_studio.constants import _VIEW_DATA
+    from tests.conftest import APP_SCRIPT, pin_view
+
+    relative = "no_such_dir_ux184/PoTeC"
+    full = app._resolve_data_dir(relative)
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
+    at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
+    at.session_state["public_dataset_choice"] = "PoTeC — Potsdam Textbook Corpus"
+    at.session_state["potec_dir"] = relative
+    pin_view(at, _VIEW_DATA)
+    at.run()
+    assert not at.exception, at.exception
+    assert any(f"Full path: `{full}`" in str(c.value) for c in at.caption)
+    assert any(f"saves it to `{full}`" in str(i.value) for i in at.info)
+    assert any(f"Downloads to `{full}`" in str(m.value) for m in at.markdown)

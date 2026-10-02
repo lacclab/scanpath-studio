@@ -1801,9 +1801,9 @@ _FAQ_ITEMS = [
     ),
     (
         "Where does my data go?",
-        "Nowhere off your machine — no accounts, no analytics, no "
+        "Nowhere off your machine — no accounts, no database, no analytics, no "
         "upload. A local or desktop run also keeps a **recovery copy** here "
-        "(added datasets, mappings, settings, annotations), so a refresh "
+        "(datasets, mappings, settings, annotations), so a refresh "
         f"resumes where you left off; **{ICONS['view_data']} Data Management → Saved on this computer** says "
         "what is stored and where. Two caveats: "
         "`streamlit run` listens on your whole network (use "

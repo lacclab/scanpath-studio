@@ -53,7 +53,8 @@ values from assumed ones.
 
 :material/database: **Data** lists every dataset with its counts; click a row to open it.
 **Edit dataset** changes a dataset's name, column mapping and recording setup,
-or adds a table it is missing. The page also holds each dataset's tables and its
+or adds a table it is missing. Changes apply when you click **Save changes**;
+**Cancel** discards them. The page also holds each dataset's tables and its
 annotations, and at the foot, what is saved on this computer.
 
 <figure class="sps-screenshot" markdown>

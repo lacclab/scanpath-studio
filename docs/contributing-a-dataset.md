@@ -74,6 +74,7 @@ omit them to let auto-detection run.
     POTEC_WORD_SCHEMA = dict(
         participant=None,
         trial="text_id",
+        text_id="text_id",
         word_id="aoi",
         text="word",
         line="line",
@@ -84,10 +85,10 @@ omit them to let auto-detection run.
     )
     ```
 
-    Your dicts bind the **headless** loader only. The app never sees them — it
-    takes the raw frames and runs auto-detection, exactly as for an upload. So
-    detection has to land on the same answer, or your users open the corpus and
-    have to fix the mapping by hand. Check it:
+    By default your dicts bind the **headless** loader only: the app takes the
+    raw frames and runs auto-detection, exactly as for an upload. So detection
+    has to land on the same answer, or your users open the corpus and have to
+    fix the mapping by hand. Check it:
 
     ```python
     words, fixations = datasets.potec_raw_frames("data/PoTeC", texts=["b0"])
@@ -98,6 +99,12 @@ omit them to let auto-detection run.
     If a column can't be guessed, add its name to the right `*_CANDIDATES` list
     in `data.py` rather than renaming it in your loader — that fixes it for
     every corpus using the same convention.
+
+    When the right answer can't be read off the column names at all, give the
+    app's registry entry `declared_schemas=(word_schema, fix_schema)`, and the
+    app maps through your dicts instead. PoTeC does this: a trial is one
+    reader's reading of a text, so its fixations' Trial ID is
+    `["reader_id", "text_id"]`, where detection would pick the text alone.
 
 **3. Register any extra column you add.** Normalization builds a *fresh* frame and
 silently drops anything it doesn't recognise. A corpus-specific extra — reader

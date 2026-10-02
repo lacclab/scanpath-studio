@@ -1514,6 +1514,92 @@ class TestDatasetRename:
         assert not [b.key for b in at.button if "rename" in str(b.key)]
 
 
+@pytest.mark.timeout(240)
+class TestBuiltInEditorSavesItsMapping:
+    """DATA-62: a built-in dataset's ✏️ Edit dataset screen ends in ✅ Save
+    changes like an upload's. Its mapping panels are a draft while the editor is
+    open — the dataset keeps its mapping until Save, and ✕ Cancel discards."""
+
+    KEY = "col_map_fix_timestamp"
+
+    def _editing(self):
+        from scanpath_studio.constants import DEMO_CHOICE
+
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["data_source_choice"] = DEMO_CHOICE
+        pin_data_view(at)
+        at.run(timeout=90)
+        at.button(key="dataset_edit_btn").click()
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        return at
+
+    def _edit_timestamp(self, at) -> str:
+        box = at.selectbox(key=self.KEY)
+        before = box.value
+        other = "CURRENT_FIX_END"
+        assert other in box.options and other != before
+        box.set_value(other)
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        return before, other
+
+    @staticmethod
+    def _applied(at) -> str:
+        return at.session_state["_active_column_mapping"]["fixations"]["timestamp"]
+
+    def test_an_edit_waits_for_save_changes(self):
+        at = self._editing()
+        before, other = self._edit_timestamp(at)
+        assert self._applied(at) == before  # still the dataset's mapping
+        assert at.session_state["_remap_dirty"] is True
+        at.button(key="builtin_mapping_save").click()
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert self._applied(at) == other
+        assert "_dataset_editor_open" not in at.session_state
+        assert any("column mapping is saved" in str(s.value) for s in at.success)
+
+    def test_cancel_puts_the_mapping_keys_back(self, monkeypatch):
+        """✕ Cancel's restore, driven directly: the Leave button sits in a
+        dialog, whose return-value click AppTest does not replay. The restore
+        is parked for the next run, which applies it before the panels draw."""
+        from scanpath_studio import app
+
+        state = {"col_map_fix_timestamp": "CURRENT_FIX_START", "other": 1}
+        monkeypatch.setattr(app.st, "session_state", state)
+        state[app.BUILTIN_MAPPING_PENDING_KEY] = {"fixations": {"timestamp": "A"}}
+        app.hold_builtin_mapping("src")
+        assert not app.builtin_mapping_is_dirty("src")
+        state["col_map_fix_timestamp"] = "CURRENT_FIX_END"
+        state["col_map_fix_new"] = "x"
+        state[app.BUILTIN_MAPPING_PENDING_KEY] = {"fixations": {"timestamp": "B"}}
+        assert app.builtin_mapping_is_dirty("src")
+        assert app.held_builtin_mapping("src") == {"fixations": {"timestamp": "A"}}
+        assert app.held_builtin_mapping("another source") is None
+        # Scaffolding is never held: the wizard's file, a cell's confirm button.
+        state["col_map_fix_upload"] = object()
+        state["col_map_fix_timestamp_cell_confirm"] = False
+        app._discard_builtin_mapping_edit()
+        assert app.BUILTIN_MAPPING_HELD_KEY not in state
+        # Parked, then applied by the next run of the same source only.
+        app.restore_builtin_mapping("another source")
+        assert state["col_map_fix_timestamp"] == "CURRENT_FIX_END"
+        app._discard_builtin_mapping_edit()  # nothing held any more: a no-op
+        state[app.BUILTIN_MAPPING_RESTORE_KEY] = {
+            "source": "src",
+            "keys": {"col_map_fix_timestamp": "CURRENT_FIX_START"},
+        }
+        app.restore_builtin_mapping("src")
+        assert state["col_map_fix_timestamp"] == "CURRENT_FIX_START"
+        assert "col_map_fix_new" not in state
+        assert "col_map_fix_upload" in state
+        assert "col_map_fix_timestamp_cell_confirm" in state
+
+
 @pytest.mark.timeout(90)
 class TestUnmappedRawDataView:
     """When a required column is unmapped, the app must show the raw uploaded
@@ -2160,6 +2246,10 @@ class TestUnmappedRawDataView:
                 app.PUBLIC_DATASET_REGISTRY[key],
                 "loader",
                 lambda *_slots: (words, fixations),
+            )
+            # These stand-in frames are not PoTeC's, so its schema can't map them.
+            monkeypatch.delitem(
+                app.PUBLIC_DATASET_REGISTRY[key], "declared_schemas", raising=False
             )
 
         at = _make_apptest()

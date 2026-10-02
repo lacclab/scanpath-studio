@@ -5266,13 +5266,15 @@ _EDITOR_LEAVE_TARGET_KEY = "_dataset_editor_leave_target"
 _EDITOR_SCROLL_KEY = "_dataset_editor_scroll"
 
 #: Bring the editor's top under the app's header — in its own scroller, never
-#: by `scrollIntoView` (which moves the document; see `tour.py`). Retries while
-#: Streamlit is still laying the editor out.
+#: by `scrollIntoView` (which moves the document; see `tour.py`). Waits while
+#: Streamlit is still laying the editor out, then keeps the editor's top in
+#: place for a second, because the page above it is still settling and a
+#: single scroll lands wherever the layout happened to be at that moment.
 _SCROLL_TO_EDITOR_SCRIPT = """<script>
 (function () {
   const doc = window.parent.document;
   const win = doc.defaultView;
-  let tries = 0;
+  let tries = 0, aligned = 0;
   (function attempt() {
     const el = doc.querySelector(".st-key-data_dataset_editor");
     const r = el && el.getBoundingClientRect();
@@ -5286,9 +5288,10 @@ _SCROLL_TO_EDITOR_SCRIPT = """<script>
           && box.scrollHeight > box.clientHeight + 4) {
         const b = box.getBoundingClientRect();
         box.scrollTop += r.top - b.top - 56;
-        return;
+        break;
       }
     }
+    if (++aligned < 8) setTimeout(attempt, 150);
   })();
 })();
 </script>"""
@@ -5449,7 +5452,7 @@ _DATASET_KIND_W = 92
 #: the free space goes between Status and the counts (`_row_gap`).
 _DATASET_NAME_W = 280
 _DATASET_COUNT_W = 96
-_DATASET_STATUS_W = 112
+_DATASET_STATUS_W = 156  # BUG-113: fits the "Needs download" badge
 _DATASET_ACTIONS_W = 40
 
 

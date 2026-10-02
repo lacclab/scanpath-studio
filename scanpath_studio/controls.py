@@ -2118,8 +2118,9 @@ WORD_FIELD_SPECS: list[dict] = [
         "key": "line",
         "label": "Line index",
         "required": False,
-        "help": "Line number of the word on screen; used for color-by-line "
-        "(otherwise inferred from box Y).",
+        "help": "Line number of the word on screen, kept as source metadata. "
+        "The plot's line colouring and hover infer lines from the word boxes' Y "
+        "instead, since many exports carry one constant here.",
     },
     # UX-113: only meaningful alongside "Aggregate character AOIs into word
     # boxes" — a table whose rows are grouped into sub-blocks that each

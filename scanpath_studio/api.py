@@ -56,6 +56,7 @@ from .constants import (  # noqa: E402
     EXPERIMENTAL_ENV_VAR,
     FONT_FAMILY,
     PALETTES,
+    PLOTLY_CONFIG,
     SACCADE_CLASS_ORDER,
     UNIFORM_COLOR_FIELD,
     drift_correction_enabled,
@@ -2514,11 +2515,12 @@ def save_figure(
                 validate=False,
                 auto_play=False,
                 post_script=script,
+                config={**PLOTLY_CONFIG},
             )
         elif fig.frames:
-            fig.write_html(str(path), auto_play=False)
+            fig.write_html(str(path), auto_play=False, config={**PLOTLY_CONFIG})
         else:
-            fig.write_html(str(path))
+            fig.write_html(str(path), config={**PLOTLY_CONFIG})
         return path
     if suffix in (".png", ".svg", ".pdf"):
         try:

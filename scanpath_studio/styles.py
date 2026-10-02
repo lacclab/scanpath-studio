@@ -1938,8 +1938,35 @@ def get_app_css() -> str:
     /* The 2×2 Quick-view grid keeps full labels at ordinary rail widths and
        falls back to icons only at the narrowest size. UX-138: the label's own
        Material icon is what stays — the text collapses around it — so the
-       fallback no longer re-draws each glyph from a `content:` rule. */
-    @container sps-rail (max-width: 320px) {
+       fallback no longer re-draws each glyph from a `content:` rule.
+       UX-194: the rail is a fifth of the row, and these queries measure its
+       *content* box — 191px on a 1280px laptop — so the old 320px cut-off hid
+       the names on any window narrower than ~1800px. The full-size label
+       needs ~240px ("✎ Illustration", the longest, is 84px at 14px plus 12px
+       padding a side); under that the buttons tighten (padding, gap, a point
+       smaller: 75px), which holds one line down to ~175px. The icon fallback
+       starts at 178px, a few pixels of slack for other platforms' fonts — a
+       window under ~1220px. */
+    @container sps-rail (max-width: 240px) {
+        .st-key-quick_views_grid [data-testid="stHorizontalBlock"] {
+            gap: 0.4rem !important;
+        }
+        .st-key-viz_view_scanpath button,
+        .st-key-viz_view_heatmap button,
+        .st-key-viz_view_illustration button,
+        .st-key-viz_view_custom button {
+            padding-left: 0.25rem;
+            padding-right: 0.25rem;
+        }
+        .st-key-viz_view_scanpath button p,
+        .st-key-viz_view_heatmap button p,
+        .st-key-viz_view_illustration button p,
+        .st-key-viz_view_custom button p {
+            font-size: 0.8125rem;
+            white-space: nowrap;
+        }
+    }
+    @container sps-rail (max-width: 178px) {
         .st-key-viz_view_scanpath button p,
         .st-key-viz_view_heatmap button p,
         .st-key-viz_view_illustration button p,

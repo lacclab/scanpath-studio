@@ -337,6 +337,16 @@ CANVAS_PAD_MIN_PX = 20.0
 CANVAS_PAD_FRACTION = 0.05
 
 
+# --- BUG-101 · the Plotly config every figure is drawn with --------------------
+# plotly.js 3 defaults `showSendToCloud` to true: the modebar's "Share chart…"
+# button uploads the whole figure — words, coordinates, hover fields — to
+# cloud.plotly.com. Nothing in Scanpath Studio sends data anywhere unasked, and
+# its own Share means something else, so every figure turns the button off:
+# the app's embeds and charts, the HTML it writes, and the docs site's figures.
+# Merge it into any other config: ``{**PLOTLY_CONFIG, "responsive": False}``.
+PLOTLY_CONFIG: dict = {"showSendToCloud": False}
+
+
 # --- VIZ-18 · selectable palettes --------------------------------------------
 # These figures don't only get looked at on the screen they were made on: they go
 # into papers (printed, sometimes in black & white) and are read by colourblind

@@ -68,6 +68,9 @@ class SecondaryDataset:
     combos: pd.DataFrame
     setup: SetupSnapshot
     composite_trial_columns: tuple[str, ...] = field(default=())
+    #: VIZ-48: the source's normalized raw gaze, when it carries any — an
+    #: upload's, or the bundled demo's. The public corpora ship none.
+    raw_gaze: pd.DataFrame | None = None
 
 
 def _resolved_dir(key: str, default_dir: str) -> str:
@@ -287,6 +290,14 @@ def _load_builtin_frames(name: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     return api.load_scanpath_data(raw[0], raw[1])
 
 
+@st.cache_data(show_spinner=False)
+def _load_demo_raw_gaze() -> pd.DataFrame:
+    """The bundled demo's normalized raw gaze, for a demo B (VIZ-48)."""
+    from scanpath_studio import api
+
+    return api.load_sample_raw_gaze()
+
+
 def snapshot_for(
     name: str, words: pd.DataFrame, fixations: pd.DataFrame
 ) -> SetupSnapshot:
@@ -339,9 +350,11 @@ def load_secondary_dataset(name: str | None) -> SecondaryDataset | None:
     if not name or name == THIS_DATASET:
         return None
     stored = (st.session_state.get("_datasets") or {}).get(name)
+    raw_gaze = None
     if isinstance(stored, dict):
         words, fixations = stored["words"], stored["fixations"]
         composite = tuple(stored.get("composite_trial_columns") or ())
+        raw_gaze = stored.get("raw_gaze")
     else:
         from scanpath_studio import app
 
@@ -357,6 +370,8 @@ def load_secondary_dataset(name: str | None) -> SecondaryDataset | None:
             )
         elif name in (DEMO_CHOICE, SYNTHETIC_CHOICE):
             words, fixations = _load_builtin_frames(name)
+            if name == DEMO_CHOICE:
+                raw_gaze = _load_demo_raw_gaze()
         else:
             return None
         composite = ()
@@ -370,4 +385,5 @@ def load_secondary_dataset(name: str | None) -> SecondaryDataset | None:
         combos=combos,
         setup=snapshot_for(name, words, fixations),
         composite_trial_columns=composite,
+        raw_gaze=raw_gaze if raw_gaze is not None and not raw_gaze.empty else None,
     )

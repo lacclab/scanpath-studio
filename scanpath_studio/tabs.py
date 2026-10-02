@@ -3307,6 +3307,29 @@ def _in_text_fixation_value(
     return f"{n_in} / {n_total}"
 
 
+def _raw_gaze_missing_note(
+    shown: bool,
+    *,
+    trial_has_raw_gaze: bool,
+    comparing: bool = False,
+    compare_has_raw_gaze: bool = False,
+) -> str:
+    """The warning for a 🔵 Raw gaze switch with nothing to draw, or ``""``.
+
+    VIZ-48: a comparison draws each reading's samples, so it names the reading
+    that has none — and says nothing when both have some.
+    """
+    if not shown:
+        return ""
+    if not comparing:
+        return "" if trial_has_raw_gaze else "Raw gaze not available for this trial."
+    if trial_has_raw_gaze and compare_has_raw_gaze:
+        return ""
+    if not (trial_has_raw_gaze or compare_has_raw_gaze):
+        return "Raw gaze not available for either trial."
+    return f"Raw gaze not available for scanpath {'B' if trial_has_raw_gaze else 'A'}."
+
+
 def _no_fixations_note(
     *,
     trial_has_fixations: bool,
@@ -3917,6 +3940,7 @@ def _build_compare_meta(
     compare_screen: str | None = None,
     source: SecondaryDataset | None = None,
     primary_dataset: str | None = None,
+    raw_gaze: pd.DataFrame | None = None,
 ) -> dict | None:
     """Build the second trial's words/fixations + column labels for the
     side-by-side metadata table, or None when no comparison is active.
@@ -3941,11 +3965,30 @@ def _build_compare_meta(
     though each is its own coordinate space. B choosing its own screen fixes
     both: it means the same thing regardless of ``source``, so there is
     nothing left to force.
+
+    ``raw_gaze`` (VIZ-48) is A's dataset's samples; B's are cut from it, or from
+    ``source.raw_gaze`` when B is foreign, to the same trial and screen, and
+    returned under ``"raw_gaze"`` (empty when B has none) keyed as B's figure
+    frames are.
     """
     if compare_participant is None or compare_trial is None:
         return None
     if source is not None:
         words_filtered, fixations_filtered = source.words, source.fixations
+        raw_gaze = source.raw_gaze
+    compare_raw = pd.DataFrame()
+    if raw_gaze is not None and not raw_gaze.empty:
+        compare_raw = extract_trial(raw_gaze, compare_participant, compare_trial)
+        if compare_screen is not None:
+            compare_raw = (
+                extract_part(
+                    compare_raw, compare_participant, compare_trial, compare_screen
+                )
+                if SCREEN_ID in compare_raw.columns
+                # No screen identity: hidden rather than concatenated across
+                # screens, as A's are.
+                else pd.DataFrame()
+            )
     compare_words = extract_trial(words_filtered, compare_participant, compare_trial)
     compare_fix = extract_trial(fixations_filtered, compare_participant, compare_trial)
     if compare_screen is not None:
@@ -3990,10 +4033,12 @@ def _build_compare_meta(
     if source is not None:
         compare_words = _qualify_for_compare(compare_words, source.name)
         compare_fix = _qualify_for_compare(compare_fix, source.name)
+        compare_raw = _qualify_for_compare(compare_raw, source.name)
         figure_participant = _qualified_participant(source.name, compare_participant)
     return {
         "words": compare_words,
         "fixations": compare_fix,
+        "raw_gaze": compare_raw,
         "label_primary": label_primary,
         "label_compare": label_compare,
         # The id to slice the *merged* compare frames by — namespaced when B is
@@ -6211,8 +6256,21 @@ def render_single_trial_tab(
         source=compare_source,
         # CMP-15: A's corpus, so a cross-dataset pair names both sides.
         primary_dataset=str(st.session_state.get("data_source_choice") or ""),
+        raw_gaze=raw_gaze,
     )
     comparing = compare_meta is not None
+    # VIZ-48: Compare draws raw gaze too — each reading's own samples, so the
+    # layer is on when either reading has some.
+    compare_raw_gaze = (
+        compare_meta["raw_gaze"] if compare_meta is not None else pd.DataFrame()
+    )
+    compare_shows_raw_gaze = bool(
+        comparing
+        and global_raw_toggle
+        and (trial_has_raw_gaze or not compare_raw_gaze.empty)
+    )
+    if compare_shows_raw_gaze:
+        figure_settings["show_raw_gaze"] = True
     # CMP-8 §7: publish B for the Share link, alongside A above. Always the
     # *real* ids, never the namespaced ones — a link names readers as their own
     # corpus does. `source` is None for a same-dataset comparison.
@@ -6393,6 +6451,7 @@ def render_single_trial_tab(
     # shared numeric set feeds the §5.4 metric gate below.
     shared_numeric: frozenset[str] | None = None
     self_compare_figure_id: str | None = None
+    cmp_raw_gaze: pd.DataFrame | None = None
     if comparing and compare_meta is not None:
         words_a, words_b, _ = _align_compare_columns(trial_words, compare_meta["words"])
         fix_a, fix_b, shared_fix = _align_compare_columns(
@@ -6406,9 +6465,16 @@ def render_single_trial_tab(
             # only — `make_comparison_figure` slices by (participant, trial).
             words_b = separate_self_compare(words_b, selected_participant)
             fix_b = separate_self_compare(fix_b, selected_participant)
+            compare_raw_gaze = separate_self_compare(
+                compare_raw_gaze, selected_participant
+            )
             self_compare_figure_id = self_compare_participant(selected_participant)
         cmp_words = pd.concat([words_a, words_b])
         cmp_fixations = pd.concat([fix_a, fix_b])
+        if compare_shows_raw_gaze:
+            cmp_raw_gaze = pd.concat(
+                _align_compare_columns(trial_raw_gaze, compare_raw_gaze)[:2]
+            )
         if cross_dataset:
             shared_numeric = shared_fix
     else:
@@ -6656,6 +6722,13 @@ def render_single_trial_tab(
                     and compare_meta.get("setup") is not None
                     else None
                 ),
+                # VIZ-48: a second dataset's samples have no path the app can
+                # name, so the snippet loads a placeholder for them.
+                raw_gaze=(
+                    ()
+                    if compare_meta.get("dataset") and not compare_raw_gaze.empty
+                    else None
+                ),
             )
             # BUG-85: an animation names B only when it co-animates B. Where it
             # fell back to A alone (B empty, or two screens), a snippet naming B
@@ -6702,10 +6775,14 @@ def render_single_trial_tab(
     with plot_slot:
         if not animate:
             _abandon_animation_task()
-        if global_raw_toggle and not trial_has_raw_gaze:
-            plot_notes_slot.warning(
-                "Raw gaze not available for this trial.", icon=ICONS["warning"]
-            )
+        raw_gaze_missing = _raw_gaze_missing_note(
+            global_raw_toggle,
+            trial_has_raw_gaze=trial_has_raw_gaze,
+            comparing=comparing and not animate,
+            compare_has_raw_gaze=not compare_raw_gaze.empty,
+        )
+        if raw_gaze_missing:
+            plot_notes_slot.warning(raw_gaze_missing, icon=ICONS["warning"])
         no_fixations_note = _no_fixations_note(
             trial_has_fixations=trial_has_fixations,
             trial_has_raw_gaze=trial_has_raw_gaze,
@@ -6834,6 +6911,7 @@ def render_single_trial_tab(
                     primary_combo_row=primary_combo_row,
                     download_name=f"scanpath_{_safe_filename(save_slug)}",
                     figure_participant_b=self_compare_figure_id,
+                    raw_gaze=cmp_raw_gaze,
                 )
         else:
             # PRE-3: the corrected frame (`plot_fixations`) was built above and is
@@ -7215,8 +7293,12 @@ def _render_comparison_figure(
     primary_combo_row: Callable[[], dict | None] | None = None,
     download_name: str = "scanpath",
     figure_participant_b: str | None = None,
+    raw_gaze: pd.DataFrame | None = None,
 ):
     """Render comparison figure for two trials.
+
+    ``raw_gaze`` (VIZ-48) is both readings' samples, keyed like the merged
+    frames, or ``None`` when the layer is off or neither reading has any.
 
     ``figure_participant_b`` (CMP-22) is the id B's rows carry in the merged
     frames when it differs from ``compare_participant`` — a trial compared with
@@ -7361,6 +7443,7 @@ def _render_comparison_figure(
         (selected_participant, selected_trial),
         (figure_participant_b or compare_participant, compare_trial),
         settings=comparison_settings,
+        raw_gaze=raw_gaze,
     )
     add_illustration_label(fig_compare, viz_settings.get("illustration_reasons"))
     _apply_preprocessing_caption(fig_compare, selected_participant, selected_trial)

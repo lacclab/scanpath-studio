@@ -1101,7 +1101,9 @@ def _render_parser() -> argparse.ArgumentParser:
         nargs="+",
         help="Raw (sample-level) gaze table(s) to draw under the fixations, "
         "columns auto-detected like --fixations (same formats; several "
-        "paths or a quoted glob concatenate). Static figures only. On its own "
+        "paths or a quoted glob concatenate). Static figures and --compare-with "
+        "comparisons, where each reading's samples take its scanpath colour "
+        "(not --animate). On its own "
         "(no other input) it is the dataset: its trials are listed and drawn "
         "as recorded — no fixations are detected from the samples.",
     )
@@ -1131,7 +1133,8 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--raw-gaze-color",
         metavar="COLOR",
-        help="Raw-gaze sample colour (default: #888888).",
+        help="Raw-gaze sample colour (default: #888888). A comparison draws "
+        "each reading's samples in its scanpath colour instead.",
     )
     viz.add_argument(
         "--raw-gaze-marker-size",
@@ -1379,6 +1382,14 @@ def _render_parser() -> argparse.ArgumentParser:
         nargs="+",
         help="Fixations table(s) for the SECOND dataset. Same formats and "
         "globbing as --fixations.",
+    )
+    cmp_group.add_argument(
+        "--compare-raw-gaze",
+        metavar="PATH",
+        nargs="+",
+        help="Raw gaze table(s) for the SECOND dataset, drawn under B's scanpath "
+        "(VIZ-48). Same formats as --raw-gaze; with no second dataset, "
+        "--raw-gaze already covers both readings.",
     )
     cmp_group.add_argument(
         "--compare-dataset-name",
@@ -1825,7 +1836,8 @@ def _print_reproduction_code(
     settings = {**api.figure_options(kind), **api._expand_palette(dict(overrides))}
     # EXP-20: `plot_scanpath` turns the raw-gaze layer on for the frame it is
     # handed, so the flag never reaches `overrides`; the snippet reads it here.
-    if raw_gaze and kind == "static":
+    # VIZ-48: `compare_scanpaths` too.
+    if raw_gaze and kind in {"static", "comparison"}:
         settings["show_raw_gaze"] = args.show_raw_gaze is not False
     # These two are passed to `animate_scanpath` beside the overrides rather
     # than through them, so they never reached `settings` — a straight silent
@@ -1864,6 +1876,12 @@ def _print_reproduction_code(
             canvas=_parse_canvas(args.compare_canvas) if second else None,
             words=tuple(args.compare_words or ()) if second else (),
             fixations=tuple(args.compare_fixations or ()) if second else (),
+            # VIZ-48: B's own samples, drawn only when this run loads them.
+            raw_gaze=(
+                tuple(args.compare_raw_gaze)
+                if second and args.compare_raw_gaze
+                else None
+            ),
         )
     state = cs.FigureState(
         kind=kind,
@@ -2917,12 +2935,21 @@ def render(argv: list[str]) -> None:
             loaded_b, loaded_fix_b, cross_dataset = _compare_second_dataset(
                 api, args, words, fixations
             )
-            if raw_gaze is not None:
-                print(
-                    "Warning: --raw-gaze draws on the single-trial figure only; "
-                    "a comparison has no raw-gaze layer. Ignoring it.",
-                    file=sys.stderr,
-                )
+            raw_gaze_b = None
+            if args.compare_raw_gaze:
+                if not cross_dataset:
+                    raise SystemExit(
+                        "--compare-raw-gaze is the second dataset's raw gaze; pass "
+                        "--compare-words/--compare-fixations too, or use "
+                        "--raw-gaze, which covers both readings of one dataset."
+                    )
+                try:
+                    raw_gaze_b = api.load_raw_gaze(args.compare_raw_gaze)
+                except (ValueError, FileNotFoundError, OSError) as exc:
+                    raise SystemExit(
+                        "--compare-raw-gaze: "
+                        + _load_error_message(exc, schema_flags=False)
+                    )
             # None keeps `compare_scanpaths` on its same-dataset path, which is
             # what skips the namespacing.
             words_b = loaded_b if cross_dataset else None
@@ -2951,8 +2978,10 @@ def render(argv: list[str]) -> None:
                     fix_index_range_b=_parse_fix_index_range(
                         args.compare_fix_index_range
                     ),
-                    # A comparison has no raw-gaze layer (VIZ-45: --no-raw-gaze).
-                    **{k: v for k, v in overrides.items() if k != "show_raw_gaze"},
+                    # VIZ-48: each reading's samples under its scanpath.
+                    raw_gaze=raw_gaze,
+                    raw_gaze_b=raw_gaze_b,
+                    **overrides,
                     **common,  # carries canvas_size / fonts / title / caption
                 )
             except IncomparableScreensError as exc:

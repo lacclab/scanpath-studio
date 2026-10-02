@@ -4669,6 +4669,70 @@ def _arrow_class_mask(
     ]
 
 
+def _comparison_raw_gaze(
+    raw_gaze: pd.DataFrame | None, trial: tuple[str, str], *, show: bool
+) -> pd.DataFrame | None:
+    """One reading's raw-gaze samples out of the comparison's frame, or ``None``.
+
+    ``raw_gaze`` carries both readings keyed exactly as the words / fixations
+    frames are — B's ids already namespaced or renamed apart by the caller — so
+    it is sliced by the same ``(participant, trial)`` pair.
+    """
+    if not show or raw_gaze is None or raw_gaze.empty:
+        return None
+    rows = raw_gaze[
+        (raw_gaze["participant_id"] == trial[0]) & (raw_gaze["trial_id"] == trial[1])
+    ]
+    return rows if not rows.empty else None
+
+
+def _add_comparison_raw_gaze_trace(
+    fig: go.Figure,
+    samples: pd.DataFrame | None,
+    display_name: str,
+    color: str,
+    settings: FigureSettings,
+    *,
+    row: int | None = None,
+    col: int | None = None,
+) -> None:
+    """One reading's raw-gaze samples in a comparison figure (VIZ-48).
+
+    Drawn in that scanpath's own colour rather than the single-trial figure's
+    time scale: two clouds on one Viridis ramp could not be told apart in an
+    overlay, and the A/B colour is the cue every other comparison layer keeps.
+    Size and opacity are the 🔵 Raw gaze settings, as on the single figure. The
+    trace joins its scanpath's legend group, so toggling A in the legend hides
+    A's samples with it.
+    """
+    if samples is None or samples.empty:
+        return
+    has_time = "timestamp_ms" in samples.columns
+    trace = go.Scatter(
+        x=samples["x"],
+        y=samples["y"],
+        mode="markers",
+        marker=dict(
+            size=settings.raw_gaze_marker_size,
+            color=color,
+            opacity=settings.raw_gaze_opacity,
+        ),
+        hovertemplate=(
+            f"Raw gaze · {display_name}<br>x: %{{x:.1f}}<br>y: %{{y:.1f}}"
+            + ("<br>t: %{customdata} ms" if has_time else "")
+            + "<extra></extra>"
+        ),
+        customdata=samples["timestamp_ms"] if has_time else None,
+        name=f"{display_name} · raw gaze",
+        legendgroup=display_name,
+        showlegend=bool(settings.show_legend),
+    )
+    if row is not None:
+        fig.add_trace(trace, row=row, col=col)
+    else:
+        fig.add_trace(trace)
+
+
 def _add_comparison_fixation_trace(
     fig: go.Figure,
     trial_fix: pd.DataFrame,
@@ -5099,6 +5163,7 @@ def _make_split_comparison_figure(
     settings: FigureSettings,
     orientation: str,
     styles: tuple[dict, dict] | None = None,
+    raw_gaze: pd.DataFrame | None = None,
 ) -> go.Figure:
     """Two-panel comparison, either horizontal (side-by-side) or vertical (stacked).
 
@@ -5242,6 +5307,9 @@ def _make_split_comparison_figure(
             dict(
                 trial_words=trial_words,
                 trial_fix=trial_fix,
+                raw_gaze=_comparison_raw_gaze(
+                    raw_gaze, trial, show=settings.show_raw_gaze
+                ),
                 display_name=display_name,
                 style=style,
                 color=style["fix_color"],
@@ -5303,6 +5371,7 @@ def _make_split_comparison_figure(
             panel_cw,
             panel_ch,
             (trial_fix, "x", "y"),
+            (spec["raw_gaze"], "x", "y"),
             word_frames=[trial_words] if not trial_words.empty else [],
             fit_to_monitor=fit_to_monitor,
         )
@@ -5356,6 +5425,16 @@ def _make_split_comparison_figure(
             )
         )
 
+        # Under the scanpath, as on the single-trial figure.
+        _add_comparison_raw_gaze_trace(
+            fig,
+            spec["raw_gaze"],
+            spec["display_name"],
+            spec["color"],
+            settings,
+            row=row,
+            col=col,
+        )
         _add_comparison_fixation_trace(
             fig,
             trial_fix,
@@ -5537,6 +5616,7 @@ def _render_comparison_figure(
     trial_b: tuple[str, str],
     *,
     settings: FigureSettings,
+    raw_gaze: pd.DataFrame | None = None,
 ) -> go.Figure:
     """Two scanpaths on one canvas — overlaid, side by side, or stacked.
 
@@ -5598,6 +5678,7 @@ def _render_comparison_figure(
             settings=settings,
             orientation=layout,
             styles=(style_a, style_b),
+            raw_gaze=raw_gaze,
         )
 
     # Shared metric colour range across BOTH trials (when colouring by a numeric
@@ -5661,6 +5742,9 @@ def _render_comparison_figure(
             dict(
                 trial_words=trial_words,
                 trial_fix=trial_fix,
+                raw_gaze=_comparison_raw_gaze(
+                    raw_gaze, trial, show=settings.show_raw_gaze
+                ),
                 display_name=display_name,
                 style=style,
                 color=style["fix_color"],
@@ -5717,6 +5801,7 @@ def _render_comparison_figure(
         canvas_width,
         canvas_height,
         *((spec["trial_fix"], "x", "y") for spec in trial_specs),
+        *((spec["raw_gaze"], "x", "y") for spec in trial_specs),
         word_frames=[
             spec["trial_words"] for spec in trial_specs if not spec["trial_words"].empty
         ],
@@ -5731,6 +5816,12 @@ def _render_comparison_figure(
     overlay_scale = _display_scale(x_range, y_range, fitted_w, fitted_h)
 
     draws_stimulus = _compare_stimulus_sides(settings.compare_stimulus)
+    # Both readings' samples before either scanpath, so neither cloud covers the
+    # other reading's fixations.
+    for spec in trial_specs:
+        _add_comparison_raw_gaze_trace(
+            fig, spec["raw_gaze"], spec["display_name"], spec["color"], settings
+        )
     for _idx, spec in enumerate(trial_specs):
         _add_comparison_fixation_trace(
             fig,
@@ -6994,9 +7085,14 @@ def make_comparison_figure(
     trial_b: tuple[str, str],
     *,
     settings: FigureSettings | Mapping[str, Any] | None = None,
+    raw_gaze: pd.DataFrame | None = None,
     **overrides: Any,
 ) -> go.Figure:
-    """Build a two-scanpath comparison from the shared rendering settings."""
+    """Build a two-scanpath comparison from the shared rendering settings.
+
+    ``raw_gaze`` (VIZ-48) holds either reading's samples, keyed like ``words``
+    and ``fixations``; with ``show_raw_gaze`` each reading's are drawn under its
+    scanpath, in its colour."""
     resolved = _resolve_figure_settings(
         settings,
         overrides,
@@ -7015,4 +7111,5 @@ def make_comparison_figure(
         trial_a,
         trial_b,
         settings=resolved,
+        raw_gaze=raw_gaze,
     )

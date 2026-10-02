@@ -2237,6 +2237,8 @@ def compare_scanpaths(
     words_b: pd.DataFrame | None = None,
     fixations_b: pd.DataFrame | None = None,
     dataset_b: str = "Dataset B",
+    raw_gaze: pd.DataFrame | None = None,
+    raw_gaze_b: pd.DataFrame | None = None,
     layout: str = "overlay",
     compare_stimulus: str = "both",
     setup: SetupSnapshot | None = None,
@@ -2292,6 +2294,13 @@ def compare_scanpaths(
     ``fix_index_range`` windows both scanpaths; ``fix_index_range_b`` gives B a
     window of its own (the app's B slider).
 
+    **Raw gaze (VIZ-48).** ``raw_gaze`` is a frame from
+    [`load_raw_gaze`][scanpath_studio.api.load_raw_gaze]; each reading's samples
+    are drawn under its scanpath, in that scanpath's colour (``raw_gaze_marker_size``
+    / ``raw_gaze_opacity`` style them). It serves both readings of a
+    same-dataset comparison; across datasets it is A's, and ``raw_gaze_b`` is
+    B's. Passing either turns the layer on; ``show_raw_gaze=False`` keeps it off.
+
     Remaining keywords are forwarded to `plots.make_comparison_figure`
     (e.g. ``show_words=False``, ``color_by="duration_ms"``); an unknown one
     raises ``TypeError`` naming the closest valid options;
@@ -2321,6 +2330,11 @@ def compare_scanpaths(
     cross_dataset = words_b is not None or fixations_b is not None
     words_b = words if words_b is None else words_b
     fixations_b = fixations if fixations_b is None else fixations_b
+    for frame, name in ((raw_gaze, "raw_gaze"), (raw_gaze_b, "raw_gaze_b")):
+        if frame is not None:
+            _require_normalized(frame, name)
+    if raw_gaze_b is None and not cross_dataset:
+        raw_gaze_b = raw_gaze
 
     pid_a, tid_a = str(trial_a[0]), str(trial_a[1])
     pid_b, tid_b = str(trial_b[0]), str(trial_b[1])
@@ -2328,6 +2342,8 @@ def compare_scanpaths(
     trial_fix_a = extract_trial(fixations, pid_a, tid_a)
     trial_words_b = extract_trial(words_b, pid_b, tid_b)
     trial_fix_b = extract_trial(fixations_b, pid_b, tid_b)
+    trial_raw_a = _compare_raw_gaze(raw_gaze, pid_a, tid_a, trial_fix_a)
+    trial_raw_b = _compare_raw_gaze(raw_gaze_b, pid_b, tid_b, trial_fix_b)
     for frame, (pid, tid) in ((trial_fix_a, trial_a), (trial_fix_b, trial_b)):
         if frame.empty:
             raise ValueError(
@@ -2374,6 +2390,7 @@ def compare_scanpaths(
     if cross_dataset:
         trial_words_b = qualify_for_compare(trial_words_b, dataset_b)
         trial_fix_b = qualify_for_compare(trial_fix_b, dataset_b)
+        trial_raw_b = qualify_for_compare(trial_raw_b, dataset_b)
         figure_pid_b = (
             str(trial_fix_b["participant_id"].iloc[0])
             if not trial_fix_b.empty
@@ -2411,13 +2428,19 @@ def compare_scanpaths(
             )
         trial_words_b = separate_self_compare(trial_words_b, pid_b)
         trial_fix_b = separate_self_compare(trial_fix_b, pid_b)
+        trial_raw_b = separate_self_compare(trial_raw_b, pid_b)
         figure_pid_b = self_compare_participant(pid_b)
     merged_words, merged_words_b, _ = align_compare_columns(
         trial_words_a, trial_words_b
     )
     merged_fix, merged_fix_b, _ = align_compare_columns(trial_fix_a, trial_fix_b)
+    merged_raw = None
+    if not (trial_raw_a.empty and trial_raw_b.empty):
+        merged_raw = pd.concat(align_compare_columns(trial_raw_a, trial_raw_b)[:2])
     settings = _figure_kwargs(figure_overrides)
     settings.pop("illustration_reasons", None)
+    if raw_gaze is not None or raw_gaze_b is not None:
+        settings.setdefault("show_raw_gaze", True)
     render_settings = FigureSettings.from_mapping(
         {k: v for k, v in settings.items() if k in _COMPARISON_FIGURE_PARAMS},
         canvas_width=int(setup_a.canvas_width),
@@ -2439,9 +2462,25 @@ def compare_scanpaths(
         (pid_a, tid_a),
         (figure_pid_b, tid_b),
         settings=render_settings,
+        raw_gaze=merged_raw,
     )
     annotate_figure(fig, title=title, caption=caption)
     return fig
+
+
+def _compare_raw_gaze(
+    raw_gaze: pd.DataFrame | None, pid: str, tid: str, trial_fix: pd.DataFrame
+) -> pd.DataFrame:
+    """One comparison reading's samples — its trial's, and its screen's when the
+    reading is one screen of a multipart trial (VIZ-48)."""
+    if raw_gaze is None or raw_gaze.empty:
+        return pd.DataFrame()
+    samples = _data.filter_raw_gaze(raw_gaze, [pid], [tid])
+    if SCREEN_ID in samples.columns and SCREEN_ID in trial_fix.columns:
+        screens = trial_fix[SCREEN_ID].dropna().unique()
+        if len(screens) == 1:
+            samples = extract_part(samples, pid, tid, screens[0])
+    return samples
 
 
 def save_figure(

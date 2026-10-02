@@ -336,6 +336,10 @@ class CompareTarget:
     canvas: tuple[int, int] | None = None
     words: tuple[str, ...] = ()
     fixations: tuple[str, ...] = ()
+    #: VIZ-48 — only beside a ``dataset``: B's own raw gaze. ``None`` when B has
+    #: none; the paths it was read from (``render --print-code``), or ``()``
+    #: when it has samples but no path to name (an upload — a placeholder).
+    raw_gaze: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -1089,10 +1093,25 @@ _RAW_GAZE_PLACEHOLDER = "raw_gaze.csv"
 def draws_raw_gaze(state: FigureState) -> bool:
     """Whether the figure on screen draws a raw-gaze layer (EXP-20).
 
-    Only the single-trial builder has one (`raw_gaze=` is a `plot_scanpath`
-    frame), so a replay or a comparison that carries the switch draws none, and
-    its snippet has nothing to load."""
-    return state.kind == "static" and bool(state.settings.get("show_raw_gaze"))
+    The single-trial and comparison builders have one (`raw_gaze=` is a frame
+    of `plot_scanpath` and, since VIZ-48, `compare_scanpaths`), so a replay that
+    carries the switch draws none, and its snippet has nothing to load."""
+    return state.kind in {"static", "comparison"} and bool(
+        state.settings.get("show_raw_gaze")
+    )
+
+
+#: What a snippet names for B's raw gaze when it can't name the file (VIZ-48).
+B_RAW_GAZE_PLACEHOLDER = "B_RAW_GAZE"
+
+
+def _second_raw_gaze(state: FigureState) -> list[str] | None:
+    """B's raw-gaze paths when the comparison draws a second dataset's samples
+    (VIZ-48), its placeholder when they can't be named, else ``None``."""
+    other = second_dataset(state)
+    if other is None or other.raw_gaze is None or not draws_raw_gaze(state):
+        return None
+    return list(other.raw_gaze) or [B_RAW_GAZE_PLACEHOLDER]
 
 
 def _passes_raw_gaze(source: SnippetSource, state: FigureState) -> bool:
@@ -1261,6 +1280,9 @@ def python_snippet(
         lines.append(_raw_gaze_python(source))
     if other is not None:
         lines += _second_dataset_python(other)
+    raw_gaze_b = _second_raw_gaze(state)
+    if raw_gaze_b is not None:
+        lines.append(f"raw_gaze_b = sps.load_raw_gaze({_py(_one_or_list(raw_gaze_b))})")
     lines.append("")
 
     func = _API_FUNCTION[state.kind]
@@ -1300,6 +1322,8 @@ def python_snippet(
         args += _second_dataset_kwargs(other)
     if _passes_raw_gaze(source, state):
         args.append("raw_gaze=raw_gaze")
+    if raw_gaze_b is not None:
+        args.append("raw_gaze_b=raw_gaze_b")
     if _raw_gaze_layer_off(source, state):
         args.append("show_raw_gaze=False")
 
@@ -1438,6 +1462,9 @@ def cli_snippet(
         argv += ["--compare-with", f"{compare.participant}:{compare.trial}"]
         if other is not None:
             argv += _second_dataset_cli(other, explicit=explicit)
+        raw_gaze_b = _second_raw_gaze(state)
+        if raw_gaze_b is not None:
+            argv += ["--compare-raw-gaze", *raw_gaze_b]
         argv += ["--compare-layout", _CLI_COMPARE_LAYOUT.get(compare.layout, "overlay")]
         if explicit or compare.compare_stimulus != "both":
             argv += ["--compare-stimulus", str(compare.compare_stimulus).lower()]
@@ -1567,6 +1594,12 @@ def state_caveats(source: SnippetSource, state: FigureState) -> list[str]:
             "The raw gaze was loaded into the app, so the snippet can't name the "
             f"file it came from and loads `{_RAW_GAZE_PLACEHOLDER}` instead — "
             "point it at your own table."
+        )
+    if _second_raw_gaze(state) == [B_RAW_GAZE_PLACEHOLDER]:
+        notes.append(
+            "Scanpath B's raw gaze was loaded into the app, so the snippet can't "
+            f"name its file and loads `{B_RAW_GAZE_PLACEHOLDER}` instead — point "
+            "it at your own table."
         )
     if any(
         _is_data_uri(state.settings.get(key))

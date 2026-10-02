@@ -136,6 +136,7 @@ scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
 | the A/B legend | `--compare-legend` |
 | B's own stimulus page (split layouts) | `--stimulus-image-b PATH`, with `--stimulus-image-size-b WxH` / `--stimulus-image-origin-b X,Y` |
 | B from another dataset | `--compare-words PATH… --compare-fixations PATH…` |
+| that dataset's raw gaze | `--compare-raw-gaze PATH…` |
 | name that dataset | `--compare-dataset-name NAME` |
 | declare the screens | `--canvas WxH`, `--compare-canvas WxH` |
 | co-animate both readings | add `--animate` (HTML output) |
@@ -201,8 +202,9 @@ flag.
 
 Raw gaze is a third table rather than an option: `--raw-gaze` reads it (columns
 auto-detected like `--fixations`) and draws the plotted trial's samples under the
-fixations. It is a single-trial layer, so `--animate` and `--compare-with`
-ignore it with a warning.
+fixations. With `--compare-with` it covers both readings, each drawn in its
+scanpath's colour, and `--compare-raw-gaze PATH…` is B's when B comes from
+another dataset. `--animate` ignores it with a warning.
 
 ```bash
 scanpath-studio render --sample -p l37_1129 -t l37_1129_2_2_2_Adv_r0 \

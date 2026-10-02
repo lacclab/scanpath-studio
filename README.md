@@ -54,7 +54,7 @@ runs on Streamlit Community Cloud.
 | A reading, replayed fixation by fixation | Two readers of one paragraph, overlaid ([animated](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/docs/assets/demo_dual_scanpath.gif)) |
 
 The app has three views: 🗺️ **Scanpath** for one trial at a time, 📊 **Corpus
-Analysis** for the whole dataset, and 🗂️ **Data** for loading and configuring
+Analysis** for the whole dataset, and 🗂️ **Data Management** for loading and configuring
 datasets. The [feature guides](https://lacclab.github.io/scanpath-studio/guides/)
 walk through each one.
 

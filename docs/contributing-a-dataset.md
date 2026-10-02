@@ -53,12 +53,12 @@ def <corpus>_raw_frames(root, *, download=False, ...) -> tuple[pd.DataFrame, pd.
 It returns the two tables **before** normalization, in the corpus' own column
 names. That's deliberate: the app runs them through the same auto-detect →
 normalize pipeline as an upload, so the **Column mapping** panels on
-🗂️ **Data → ✏️ Edit dataset** still appear and stay editable. Read the whole
+🗂️ **Data Management → ✏️ Edit dataset** still appear and stay editable. Read the whole
 corpus (the global trial filters do the narrowing), and never write anything —
 that's the downloader's job.
 
 When something's missing, raise `FileNotFoundError` with a message that says what
-to do. The app prints it verbatim on the 🗂️ Data page, so your message *is* the
+to do. The app prints it verbatim on the 🗂️ Data Management page, so your message *is* the
 error UI.
 
 **2. A normalized loader** — `load_<corpus>(root, ...)`, which calls

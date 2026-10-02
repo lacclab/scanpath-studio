@@ -14,7 +14,7 @@ makes.
 
 ## Loading it
 
-On the 🗂️ **Data** page, click **MultiplEYE** in the list of datasets, then
+On the 🗂️ **Data Management** page, click **MultiplEYE** in the list of datasets, then
 choose **Edit dataset**: point *Data directory* at a session set
 (the *Expected files* panel lists the layout it looks for) and choose the
 **fixation source**

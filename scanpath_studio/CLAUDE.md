@@ -45,7 +45,7 @@ built from keyed containers and buttons, not an `st.dataframe` — a grid can't
 write *Not loaded* in a numeric column without sorting it as text. What a row
 says is the pure `dataset_table.DatasetRow` (a count, or its reason: Not loaded
 / Not reported / Not applicable / Unknown — never `None` or a stand-in 0; and
-`status_label`: Loaded / Not loaded, or an operational state), and
+`status_label`: Ready / Needs download / Needs setup), and
 `dataset_table.sort_rows` sorts on the integers with gaps last. **The whole row
 opens its dataset** (UX-174 r2): its first child is a `dataset_open_<slug>`
 button that `styles.py` stretches over the row (`position: absolute`), and every
@@ -59,8 +59,18 @@ holds `row_record`s for tests. The cell CSS selects each cell's
 block, not on the flex item — and an *empty* container is not rendered at all,
 so a header cell with no title still holds a `&nbsp;`. When the demo stands in
 for a corpus that isn't on disk (`_PLACEHOLDER_SHOWN_KEY`), the open row is not
-counted from the demo's frames, drops what it remembered, and shows **Needs
-setup** as its Status. Rename and edit are not on the rows: **Edit dataset**
+counted from the demo's frames and drops what it remembered. **BUG-113 —
+Status is availability, asked of every row**: `app._dataset_status` calls the
+registry entry's `files_present` (path stats only — `potec_present`,
+`onestop_present`, the MultiplEYE inventory, `eyegenbench_present`, against the
+folder `app._dataset_folder` resolves exactly as `_dataset_dir_input` would,
+without drawing it) and says *Needs download* (`downloadable=True`) or *Needs
+setup*; an entry with no check (bundled, stored uploads) is *Ready*. It never
+reads where the counts came from — that used to be the column (*Loaded* / *Not
+loaded*), so a corpus read *Loaded* until you opened it and found its files
+gone; the count headers' help says it now (`COUNTS_EXPLANATION`). A new
+downloadable corpus needs a `files_present` in its entry, or its row says
+*Ready* while it is not. Rename and edit are not on the rows: **Edit dataset**
 sits at the end of the *What's in…* heading (`app.render_dataset_inspection_head`),
 and the editor's part 1 (**UX-178**, `EDITOR_STEPS` `edit_name`) holds **Name**
 and **Description**. An upload's name is applied by ✅ Save changes
@@ -81,8 +91,9 @@ catalogue entry may carry `published_counts` (keyed by `app.DATASET_COUNT_FIELDS
 plus a `published_counts_source` sentence, reached through the one `dataset_about`
 lookup, and the prepared benchmark corpora take theirs from the bundle manifest
 via `benchmark_published_counts`. `dataset_row_counts` resolves a row to *either*
-what loaded *or* what is published — never a mixture — and **Status** says
-which (*Loaded* / *Not loaded*), and a row whose load exceeds a published
+what loaded *or* what is published — never a mixture — and the record's
+`Counts` says which (*Loaded* / *Published*; not the Status column since
+BUG-113), and a row whose load exceeds a published
 figure carries a **More than published** badge. `published_counts_source` is
 catalogue documentation only since **UX-177**: the ❔ *About this dataset*
 popover that showed it (with a published-vs-loaded table and a coordinate badge

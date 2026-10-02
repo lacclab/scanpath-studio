@@ -5,7 +5,7 @@ result is a short record of which trials need attention and why.
 
 ## 1. Load a pilot session
 
-On the :material/database: **Data** page select **:material/add: Add dataset**, upload the word/IA and
+On the :material/database: **Data Management** page select **:material/add: Add dataset**, upload the word/IA and
 fixation tables, then check the proposed columns and the **Recording setup**
 (the actual monitor resolution) before selecting **:material/check: Add dataset**. If the
 dataset is already loaded, open it from :material/folder_open: **Available datasets**.
@@ -42,7 +42,7 @@ Move through the participant's trials with the trial picker.
 
 ## 5. Save the review
 
-Open :material/database: **Data → Annotations** and select **Export**. The file keeps your
+Open :material/database: **Data Management → Annotations** and select **Export**. The file keeps your
 favorites, tags and notes for later review; **:material/share: Share → File** keeps the view
 settings beside it.
 

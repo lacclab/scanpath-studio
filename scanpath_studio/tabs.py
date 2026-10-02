@@ -3895,10 +3895,17 @@ def render_settings_file(
 _COMPARE_DATASET_SEP = COMPARE_DATASET_SEP
 
 #: Metric names that are safe across any two corpora (CMP-8 §5.4): canonical
-#: fixation columns every normalized frame carries, plus the two synthetic
-#: choices that are not columns at all.
+#: fixation columns every normalized frame carries, plus the synthetic choices
+#: that are not columns at all (``line``, ``counts``, and the uniform colour).
 _CROSS_DATASET_SAFE_METRICS = frozenset(
-    {"line", "counts", "duration_ms", "order_in_trial", "timestamp_ms"}
+    {
+        "line",
+        "counts",
+        "duration_ms",
+        "order_in_trial",
+        "timestamp_ms",
+        UNIFORM_COLOR_FIELD,
+    }
 )
 
 
@@ -6562,11 +6569,17 @@ def render_single_trial_tab(
         chip_fields = st.session_state.get("trial_chip_fields") or []
         with strip_col:
             if comparing and compare_meta:
-                # B's gaze-sample count, only while that chip is shown, and only
-                # for a B from this dataset — a cross-dataset B carries no
-                # samples, so it reads "–". Read off the *unfiltered* samples:
-                # B's pool ignores A's filters, so A's `raw_gaze` can lack B.
-                b_samples = raw_gaze if raw_gaze_all is None else raw_gaze_all
+                # B's gaze-sample count, only while that chip is shown. A
+                # cross-dataset B counts its own dataset's samples (VIZ-48 loads
+                # them); otherwise read off the *unfiltered* samples: B's pool
+                # ignores A's filters, so A's `raw_gaze` can lack B.
+                b_samples = (
+                    compare_source.raw_gaze
+                    if compare_source is not None
+                    else raw_gaze
+                    if raw_gaze_all is None
+                    else raw_gaze_all
+                )
                 b_gaze_samples = (
                     _c_gaze_sample_count(
                         b_samples,
@@ -6576,7 +6589,6 @@ def render_single_trial_tab(
                         selected_compare_screen,
                     )
                     if "@gaze_sample_count" in chip_fields
-                    and compare_source is None
                     and b_samples is not None
                     and not b_samples.empty
                     else None

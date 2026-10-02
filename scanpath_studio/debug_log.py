@@ -216,7 +216,7 @@ class _SessionStateHandler(logging.Handler):
 
 
 class _TerminalHandler(logging.StreamHandler):
-    """The app logger's own stderr handler (BUG-99), marked so it is added once."""
+    """The app logger's own stderr handler (BUG-100), marked so it is added once."""
 
 
 def install_log_capture(level: int = logging.INFO) -> None:
@@ -237,12 +237,12 @@ def install_log_capture(level: int = logging.INFO) -> None:
     what flooded the panel. A record's level is tested where it is logged, and
     propagation to an ancestor's *handlers* ignores the ancestor's level, so
     scoping it here still delivers every ``scanpath_studio`` INFO line to this
-    handler; WARNING and up also go to the terminal (BUG-99).
+    handler; WARNING and up also go to the terminal (BUG-100).
     """
     app_logger = logging.getLogger(_APP_LOGGER)
     if app_logger.level == logging.NOTSET or app_logger.level > level:
         app_logger.setLevel(level)
-    # BUG-99: a handler anywhere on the chain switches off logging's
+    # BUG-100: a handler anywhere on the chain switches off logging's
     # ``lastResort`` — the stderr fallback that used to print the app's warnings
     # — so the handler below made every app warning and traceback (a dataset
     # whose normalization failed, say) vanish from the server terminal. Put the

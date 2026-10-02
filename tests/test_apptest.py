@@ -1727,7 +1727,7 @@ class TestUnmappedRawDataView:
         assert at.session_state["public_dataset_choice"] == potec_key
 
     def test_public_dataset_normalize_failure_is_shown_on_overview(self, monkeypatch):
-        """BUG-99: a public corpus whose raw frames load but whose normalization
+        """BUG-100: a public corpus whose raw frames load but whose normalization
         raises names itself and the reason on the 🗂️ Data overview.
 
         The rejection used to render only into the ✏️ Edit dataset screen, which

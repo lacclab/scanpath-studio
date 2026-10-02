@@ -1,1 +1,1 @@
-A public dataset whose tables load but fail to normalize now says so on the Data page, naming the dataset and the reason, with Edit dataset and Load the bundled demo beside it; the error and its traceback also reach the server terminal.
+Loading a OneStop report no longer warns that its `TOP_LEFT` column isn't numbers, and the column mapping no longer proposes that text column for the word box's X and Y.

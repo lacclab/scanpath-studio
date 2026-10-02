@@ -444,7 +444,7 @@ def test_a_rerun_request_is_not_swallowed_by_the_log_handler(monkeypatch):
 
 
 def test_app_warnings_reach_the_terminal_once():
-    """BUG-99: the root handler switched off logging's ``lastResort``, so app
+    """BUG-100: the root handler switched off logging's ``lastResort``, so app
     warnings and tracebacks never reached the server terminal. The app logger
     carries one stderr handler of its own, at WARNING, however often installed."""
     import logging as _logging

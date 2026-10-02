@@ -3536,7 +3536,7 @@ def _render_unmapped_view(
 
 
 def _render_dataset_load_failure(name: str, problems: list) -> None:
-    """BUG-99: say on the Data overview that the dataset didn't load, and why.
+    """BUG-100: say on the Data overview that the dataset didn't load, and why.
 
     :func:`_render_unmapped_view` draws into the ✏️ Edit dataset screen, which
     is hidden until it is opened — so a corpus the pipeline rejected (OneStop ·
@@ -8379,7 +8379,7 @@ def _run_app() -> None:
         # mapping section — and, from any other view, say where that page is.
         with unmapped_slot:
             _render_unmapped_view(raw_words_df, raw_fixations_df, mapping_problems)
-        # BUG-99: the slot above is on the ✏️ Edit dataset screen, hidden until
+        # BUG-100: the slot above is on the ✏️ Edit dataset screen, hidden until
         # it is opened — the overview needs its own word, where *What's in the
         # dataset* would have been.
         if data_view and not editing and not wizard_owns_page:

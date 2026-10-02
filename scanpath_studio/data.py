@@ -1345,6 +1345,13 @@ def _apply_reading_measures(
 def propose_word_schema(words: pd.DataFrame) -> dict[str, str | None]:
     """Return a candidate column mapping for words/IA data without erroring."""
     schema = _propose_word_schema_by_field(words)
+    # BUG-99: a box field is a number, so a column with no number in it is not
+    # one, whatever its name says. OneStop's IA report carries `TOP_LEFT`, the
+    # box corner as the text `(368,186)`; its tokens matched both the x and the
+    # y list, so the load proposed it for both and warned about every cell.
+    for key in _BOX_FIELDS:
+        if schema[key] and _holds_no_number(words[schema[key]]):
+            schema[key] = None
     # AN-32: every reading measure is proposed too, from its known names.
     # The app's own canonical name is a candidate too, right after EyeLink's,
     # so a table the app itself wrote (an exported words.csv, a normalized
@@ -1366,6 +1373,22 @@ def propose_word_schema(words: pd.DataFrame) -> dict[str, str | None]:
     for size in ("width", "height"):
         schema[size] = _affix_sibling(words, affix, size)
     return schema
+
+
+_BOX_FIELDS = ("x", "y", "width", "height", *_BOX_EDGES)
+
+
+def _holds_no_number(values: pd.Series) -> bool:
+    """Whether ``values`` has filled cells and none of them reads as a number.
+
+    A header-only frame (the mapping screen proposes from one) has no cells and
+    so is never ruled out; a numeric column with a few bad cells is still a
+    numeric column, and stays proposed for :func:`numeric_parse_issues` to
+    report."""
+    if pd.api.types.is_numeric_dtype(values) or pd.api.types.is_bool_dtype(values):
+        return False
+    filled = _filled_cells(values)
+    return not filled.empty and _to_number(filled).isna().all()
 
 
 def _propose_word_schema_by_field(words: pd.DataFrame) -> dict[str, str | None]:

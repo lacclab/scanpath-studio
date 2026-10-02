@@ -59,7 +59,8 @@ provider. Sessions are temporary and server resources are limited.
   selected participant and trial IDs.
 - An **annotations file** (:material/database: Data → Annotations, or `annotations.json` in an
   Export bundle) contains your notes, which may mention participants.
-- A **setup file** (:material/edit: Edit dataset → Save setup) contains column names.
+- A **setup file** (:material/edit: Edit dataset → Save setup) contains the
+  dataset's name, its column mapping, and its recording setup.
 - An **exported table** contains the selected research data.
 
 Review these artifacts before sharing them. Share links can enter browser

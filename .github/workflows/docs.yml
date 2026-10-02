@@ -97,6 +97,11 @@ jobs:
           )
           PY
 
+      # Publish the `site/` built above, as it is. `mkdocs gh-deploy --dirty`
+      # rebuilt it first, and a dirty build skips every page older than its
+      # output — all of them, a minute after the strict build — so the llmstxt
+      # plugin saw no page and shipped llms.txt / llms-full.txt as bare headings.
+      # ghp-import is what gh-deploy itself pushes with (a MkDocs dependency).
       - name: Deploy to GitHub Pages
         if: always()
-        run: mkdocs gh-deploy --dirty --force
+        run: ghp-import --no-jekyll --push --force --message "Deploy docs from ${GITHUB_SHA}" site

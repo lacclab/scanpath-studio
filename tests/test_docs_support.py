@@ -114,19 +114,28 @@ def test_the_citation_is_the_cff():
     assert 'J{\\"a}ger, Lena' in page and "Jäger, L." in page
 
 
-def test_an_embedded_figure_cannot_close_its_script_tag():
+def test_an_embedded_figure_cannot_leave_its_attribute():
+    # ENG-92: the JSON is an attribute, not an inline script, which Material's
+    # instant navigation would re-run as JavaScript.
+    import html
+    import json
+
     import plotly.graph_objects as go
 
-    fig = go.Figure(go.Scatter(x=[1], y=[1], name="</script><b>x</b>"))
+    name = '"></div><script>x</script><b>x</b>'
+    fig = go.Figure(go.Scatter(x=[1], y=[1], name=name))
     fig.update_layout(width=400, height=300)
-    html = docs_support.embed(fig)
-    assert html.count("</script>") == 1
-    assert 'data-width="400" data-height="300"' in html
+    page = docs_support.embed(fig)
+    assert "<script" not in page
+    assert 'data-width="400" data-height="300"' in page
+    found = re.search(r'data-figure="([^"]*)"', page)
+    assert json.loads(html.unescape(found.group(1)))["data"][0]["name"] == name
 
 
 def test_an_embedded_replay_carries_the_replay_player():
     # BUG-93: the Gallery's ▶ Play keeps real time on the app's own player —
     # figures.js runs it against the drawn plot — and a static figure has none.
+    import html
     import json
 
     from scanpath_studio import api
@@ -139,8 +148,8 @@ def test_an_embedded_replay_carries_the_replay_player():
 
     def payload(fig) -> dict:
         page = docs_support.embed(fig)
-        found = re.search(r'<script type="application/json">(.*?)</script>', page)
-        return json.loads(found.group(1))
+        found = re.search(r'data-figure="([^"]*)"', page)
+        return json.loads(html.unescape(found.group(1)))
 
     # PERF-17: the spec leaves the frames out; the script ahead of the player
     # rebuilds them (`plots.replay_page`).

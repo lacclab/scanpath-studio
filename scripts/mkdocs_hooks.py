@@ -14,7 +14,10 @@ here is the plumbing that plugin cannot do:
 * draw the app's icons (ENG-88). A page names an icon with the shortcode the
   app's labels use, ``:material/database:``, and it renders as the same
   Material Symbols glyph, from the font file Streamlit ships — copied into the
-  built site, never fetched.
+  built site, never fetched;
+* check that ``llms.txt`` lists the pages (ENG-92). The llmstxt plugin only
+  sees a page it rebuilt, so a ``--dirty`` build wrote the file as bare section
+  headings — and the site shipped it that way for weeks.
 """
 
 from __future__ import annotations
@@ -86,3 +89,18 @@ def on_post_build(config, **kwargs) -> None:
     font = site / _ICON_FONT
     font.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(_streamlit_icon_font(), font)
+
+    _check_llms_txt(site / "llms.txt")
+
+
+def _check_llms_txt(path: Path) -> None:
+    """Fail the build when a section of ``llms.txt`` lists no page.
+
+    Hooks run after the plugins, so the llmstxt plugin has written the file."""
+    sections = re.split(r"^## ", path.read_text(), flags=re.MULTILINE)[1:]
+    empty = [s.splitlines()[0] for s in sections if "\n- [" not in s]
+    if empty:
+        raise RuntimeError(
+            f"{path.name} lists no page under {', '.join(empty)}: a dirty build "
+            "skips unchanged pages, and the llmstxt plugin only sees those it builds"
+        )

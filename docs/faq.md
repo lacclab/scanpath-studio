@@ -5,8 +5,12 @@
 ### The fixations don't line up with the text
 
 Words and fixations must use the same pixel coordinates and share trial IDs.
-Most often the recording screen size is wrong: set the resolution of the
-monitor used in the experiment under :material/database: **Data → :material/edit: Edit dataset → Recording
+If the fixations are shifted, mirrored or scaled against the words, the two
+tables are in different coordinate frames — a different origin, unit or offset
+— and no setting here fixes that; convert one of them
+([Data format → Units](data-format.md#tables)). If the alignment is right but
+the figure is framed or sized wrongly, the recording screen size is: set the
+resolution of the monitor used in the experiment under :material/database: **Data → :material/edit: Edit dataset → Recording
 setup**. *Estimate from my data* only gives a lower bound.
 
 ### The text is too big or too small
@@ -74,8 +78,9 @@ data to the online demo. See [Privacy](privacy.md).
 ### Will a refresh lose my work?
 
 Not on a local or desktop install: the app keeps a recovery copy of your
-datasets and settings, and **:material/database: Data → Saved on this computer** shows what it
-holds. The online demo keeps nothing, so export your annotations and settings
+datasets and settings (when it listens only on this computer, as
+`scanpath-studio` and the desktop app do — see [Privacy](privacy.md)), and
+**:material/database: Data → Saved on this computer** shows what it holds. The online demo keeps nothing, so export your annotations and settings
 before you leave.
 
 ### How do I turn the recovery copy off, or delete it?

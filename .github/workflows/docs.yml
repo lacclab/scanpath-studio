@@ -12,6 +12,15 @@ on:
       - scanpath_studio/**
       - tests/**
       - pyproject.toml
+      # ENG-94: what the build reads besides docs/ — the generated references,
+      # the hooks, and the Changelog / Cite pages (with their Unreleased
+      # fragments). A change to only these used to leave the site stale.
+      - scripts/docs_support.py
+      - scripts/mkdocs_hooks.py
+      - scripts/changelog_fragments.py
+      - CHANGELOG.md
+      - changelog.d/**
+      - CITATION.cff
       - .github/workflows/docs.yml
   workflow_dispatch:
 
@@ -49,6 +58,7 @@ jobs:
         # the site (ENG-37) — see "Coverage report" below.
         run: pip install -e ".[docs,test]"
       - name: Build (strict — fail on warnings / bad refs)
+        id: build
         run: mkdocs build --strict
 
       # ENG-37 — the coverage badge, with no third-party account and no
@@ -56,9 +66,8 @@ jobs:
       # HTML report is written into the built `site/` and shipped with it, plus a
       # tiny shields.io *endpoint* JSON the README badge reads. That makes the
       # badge a link to the browsable report rather than a bare number.
-      # `gh-deploy --dirty` below is what preserves these extra files: gh-deploy
-      # always rebuilds, and without `--dirty` it clears `site/` first (there is
-      # no `--no-build`).
+      # The deploy below publishes `site/` as built, so these extra files ship
+      # with it.
       #
       # ENG-62: the report is a by-product of this job, not its gate. It used to
       # run the whole suite *before* deploying with the coverage floor enforced,
@@ -102,6 +111,9 @@ jobs:
       # output — all of them, a minute after the strict build — so the llmstxt
       # plugin saw no page and shipped llms.txt / llms-full.txt as bare headings.
       # ghp-import is what gh-deploy itself pushes with (a MkDocs dependency).
+      # ENG-94: only a build that passed. `always()` (there so a failed coverage
+      # run or badge still ships the site) also force-pushed the partial `site/`
+      # a failed strict build leaves behind.
       - name: Deploy to GitHub Pages
-        if: always()
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ghp-import --no-jekyll --push --force --message "Deploy docs from ${GITHUB_SHA}" site

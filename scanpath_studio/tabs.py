@@ -9466,6 +9466,8 @@ def render_group_comparison_tab(
         if text_col is None or text_id is None:
             st.info("No word-level data.")
             return
+        # BUG-114: one screen for both groups, chosen before they are split.
+        screen_id = _screen_picker(words_filtered, text_col, text_id, key="cmp_screen")
         measure = _measure_picker(
             words_filtered,
             fixations_filtered,
@@ -9491,6 +9493,7 @@ def render_group_comparison_tab(
             spec_b,
             agg=agg,
             min_readers=min_readers,
+            screen_id=screen_id,
         )
         diff = _apply_min_readers(st, diff, min_readers, key="cmp19_note")
         _chart(
@@ -9605,6 +9608,8 @@ def render_group_comparison_tab(
         if text_col is None or text_id is None:
             st.info("No word-level data.")
             return
+        # BUG-114: one screen for both groups, chosen before they are split.
+        screen_id = _screen_picker(words_filtered, text_col, text_id, key="cmp_screen")
         measure = _measure_picker(
             words_filtered,
             fixations_filtered,
@@ -9630,6 +9635,7 @@ def render_group_comparison_tab(
             agg=agg,
             label_a=label_a,
             label_b=label_b,
+            screen_id=screen_id,
         )
         _chart(
             make_word_matrix_heatmap(

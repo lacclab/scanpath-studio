@@ -1376,6 +1376,20 @@ def apply_group(frame: pd.DataFrame, spec: Mapping[str, Sequence]) -> pd.DataFra
     return frame[group_mask(frame, spec)]
 
 
+def _shared_screen(words: pd.DataFrame, text_col: str, text_id, screen_id):
+    """The one screen both cohorts of a word comparison describe (BUG-114).
+
+    Resolved on the frame *before* it is split: left to each cohort,
+    :func:`_text_subset` picks each one's own first screen, so a cohort that
+    never saw page 1 compared its page 2 against the other's page 1, word id
+    for word id. A cohort without the chosen screen then contributes nothing.
+    """
+    if screen_id is not None:
+        return screen_id
+    options = text_screen_options(words, text_col, text_id)
+    return options[0] if options else None
+
+
 def distinct_group_labels(label_a: str, label_b: str) -> tuple[str, str]:
     """The two cohorts' labels, told apart when they read the same (BUG-111).
 
@@ -1420,12 +1434,16 @@ def group_word_difference(
     *,
     agg: str = "mean",
     min_readers: int = 1,
+    screen_id=None,
 ) -> pd.DataFrame:
     """Per-word A−B difference profile for one text (AN-19).
 
-    Returns ``[word_id, a, b, diff, n_a, n_b, enough, word_text]``.
+    On multipart data both cohorts describe ``screen_id`` — the text's first
+    screen when it is ``None`` (BUG-114). Returns
+    ``[word_id, a, b, diff, n_a, n_b, enough, word_text]``.
     """
     cols = ["word_id", "a", "b", "diff", "n_a", "n_b", "enough", "word_text"]
+    screen_id = _shared_screen(words, text_col, text_id, screen_id)
     pa = cohort_word_profile(
         apply_group(words, spec_a),
         text_col,
@@ -1433,6 +1451,7 @@ def group_word_difference(
         measure,
         agg=agg,
         min_readers=min_readers,
+        screen_id=screen_id,
     )
     pb = cohort_word_profile(
         apply_group(words, spec_b),
@@ -1441,6 +1460,7 @@ def group_word_difference(
         measure,
         agg=agg,
         min_readers=min_readers,
+        screen_id=screen_id,
     )
     if pa.empty and pb.empty:
         return pd.DataFrame(columns=cols)
@@ -1470,13 +1490,22 @@ def two_group_word_profiles(
     agg: str = "mean",
     label_a: str = "Group A",
     label_b: str = "Group B",
+    screen_id=None,
 ) -> pd.DataFrame:
-    """Long ``[group, word_id, value]`` for the stacked two-group heatmap (AN-22)."""
+    """Long ``[group, word_id, value]`` for the stacked two-group heatmap (AN-22).
+
+    Both cohorts describe one screen, as in :func:`group_word_difference`."""
     label_a, label_b = distinct_group_labels(label_a, label_b)
+    screen_id = _shared_screen(words, text_col, text_id, screen_id)
     frames = []
     for spec, label in ((spec_a, label_a), (spec_b, label_b)):
         prof = cohort_word_profile(
-            apply_group(words, spec), text_col, text_id, measure, agg=agg
+            apply_group(words, spec),
+            text_col,
+            text_id,
+            measure,
+            agg=agg,
+            screen_id=screen_id,
         )
         if not prof.empty:
             frames.append(prof[["word_id", "value"]].assign(group=label))

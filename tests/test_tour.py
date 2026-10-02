@@ -1094,8 +1094,13 @@ class TestSpotlightSelectorsResolve:
         assert 'width="stretch"' in reset_source
         assert "compact" not in reset_source.split('"""')[0]
 
+        # The rule that hid it re-stacked a row inside a rail container query.
+        # UX-194's preset tiers query the same container (one at 240px) but
+        # only resize their buttons; none of them may change a row's direction.
         css = get_app_css()
-        assert "@container sps-rail (max-width: 240px)" not in css
+        for block in css.split("@container sps-rail")[1:]:
+            body = block[: block.find("\n    }")]
+            assert "flex-direction" not in body, block[:120]
         assert ".st-key-railbtn_plot_reset" not in css
 
 

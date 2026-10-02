@@ -836,31 +836,30 @@ def _read_onestop_part(
     return frame
 
 
-def _fold_onestop_part_into_identity(
-    words: pd.DataFrame, fixations: pd.DataFrame, parts: list
+def _onestop_parts_as_screens(
+    words: pd.DataFrame, fixations: pd.DataFrame
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """When >1 part is loaded, prefix the paragraph id with the part.
+    """Make each part a *screen* of its trial, in presentation order (DATA-63).
 
-    Every part of a trial shares the same ``paragraph_id`` / ``TRIAL_INDEX``, so
-    loading e.g. Paragraph + Title together would collapse them into one trial
-    (and fight over word boxes). Prefix ``unique_paragraph_id`` /
-    ``paragraph_id`` / ``unique_trial_id`` with the part so each part becomes its
-    own trial — ``Paragraph::1`` vs ``Title::1``. A single-part load is untouched
-    (the historical trial ids are preserved)."""
-    if len(parts) <= 1:
-        return words, fixations
+    Every part of a reading shares its ``unique_trial_id`` — the title, the
+    passage and the question screens are one trial, shown one after another —
+    so the trial is left whole and the part is its screen: the ``part`` column
+    is auto-detected as ``screen_id`` (`data.SCREEN_ID_CANDIDATES`) and
+    ``screen_index`` is the part's place in `_ONESTOP_PARTS`, the same number
+    for a part in every regime (Paragraph is always 3). Each screen keeps its
+    own coordinate space and word boxes (`multipart.py`). A frame without a
+    ``part`` column is returned untouched.
+    """
+    order = {part: index for index, part in enumerate(_ONESTOP_PARTS, start=1)}
 
-    def _prefix(frame: pd.DataFrame) -> pd.DataFrame:
+    def _stamp(frame: pd.DataFrame) -> pd.DataFrame:
         if frame.empty or "part" not in frame.columns:
             return frame
         frame = frame.copy()
-        part = frame["part"].astype(str)
-        for col in ("unique_paragraph_id", "paragraph_id", "unique_trial_id"):
-            if col in frame.columns:
-                frame[col] = part + "::" + frame[col].astype(str)
+        frame["screen_index"] = frame["part"].map(order).astype(int)
         return frame
 
-    return _prefix(words), _prefix(fixations)
+    return _stamp(words), _stamp(fixations)
 
 
 def onestop_raw_frames(
@@ -882,8 +881,10 @@ def onestop_raw_frames(
     ``parts`` is any subset of the seven trial parts (default: Paragraph;
     :func:`onestop_regime_parts` lists every part of a regime). A public part
     other than Paragraph is cut to ``regime`` by its ``question_preview`` /
-    ``repeated_reading_trial`` flags (DATA-63). When more than one is chosen, each part becomes its own trial (the part is folded
-    into the paragraph/trial id so they don't collide). ``variant`` is
+    ``repeated_reading_trial`` flags (DATA-63). Each part is a *screen* of its
+    trial (``part`` → ``screen_id``, plus a ``screen_index`` in presentation
+    order), so a reading's title, passage and question screens are one trial.
+    ``variant`` is
     ``"public"`` (OSF release) or ``"lacclab"`` (a local lab-processed export;
     superset schema, no download).
     """
@@ -913,7 +914,7 @@ def onestop_raw_frames(
     fixations = pd.concat(fix_frames, ignore_index=True, sort=False)
     if len(part_list) > 1:
         words, fixations = _onestop_drop_unmatched_screens(words, fixations)
-    return _fold_onestop_part_into_identity(words, fixations, part_list)
+    return _onestop_parts_as_screens(words, fixations)
 
 
 def _onestop_drop_unmatched_screens(

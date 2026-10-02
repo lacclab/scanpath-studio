@@ -828,30 +828,22 @@ def test_onestop_default_part_is_paragraph(onestop_offline, tmp_path):
     assert set(words["unique_paragraph_id"]) == {_FAKE_ONESTOP_PARAGRAPH}
 
 
-def test_onestop_multiple_parts_stay_separate(onestop_offline, tmp_path):
-    """Loading several parts keeps each as its own trial (part folded into the
-    paragraph id) so the word boxes don't collide."""
-    words, fixations = datasets_module.onestop_raw_frames(
-        tmp_path,
-        regime="ordinary",
-        parts=["Title", "Paragraph"],
-        download=True,
+def test_onestop_parts_are_screens_of_one_trial(onestop_offline, tmp_path):
+    """DATA-63: a reading's parts are the *screens* of one trial, in presentation
+    order — not one trial per part."""
+    words, fixations = datasets_module.load_onestop(
+        tmp_path, regime="ordinary", parts=["Title", "Paragraph"], download=True
     )
-    # Both parts present, each labelled with its own words.
-    assert set(words["part"]) == {"Title", "Paragraph"}
-    assert set(words["IA_LABEL"]) == {"Bold", "Head", "The", "cat"}
-    # The shared paragraph id was prefixed with the part, so the two parts are
-    # now distinct trials rather than one collapsed one.
-    assert set(words["unique_paragraph_id"]) == {
-        f"Title::{_FAKE_ONESTOP_PARAGRAPH}",
-        f"Paragraph::{_FAKE_ONESTOP_PARAGRAPH}",
-    }
-    assert set(fixations["unique_paragraph_id"]) == {
-        f"Title::{_FAKE_ONESTOP_PARAGRAPH}",
-        f"Paragraph::{_FAKE_ONESTOP_PARAGRAPH}",
-    }
-    # Parts are returned in presentation order (Title before Paragraph).
-    assert list(dict.fromkeys(words["part"])) == ["Title", "Paragraph"]
+    for frame in (words, fixations):
+        assert frame["trial_id"].nunique() == 1
+        screens = frame[["screen_id", "screen_index"]].drop_duplicates()
+        assert sorted(map(tuple, screens.to_numpy())) == [
+            ("Paragraph", 3),
+            ("Title", 1),
+        ]
+    # Each screen keeps its own words.
+    by_screen = words.groupby("screen_id")["text"].agg(set).to_dict()
+    assert by_screen == {"Title": {"Bold", "Head"}, "Paragraph": {"The", "cat"}}
 
 
 def test_onestop_qa_deduplicates(tmp_path):

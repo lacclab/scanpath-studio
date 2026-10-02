@@ -970,7 +970,9 @@ class TestDatasetTable:
         self._click(at, "dataset_sort_participants")
         assert at.session_state[_DATASET_TABLE_SORT_KEY] == ("Participants", True)
         frame = self._table(at)
-        target = frame["_token"].iloc[-1]
+        # The last row that opens without reading a corpus off disk: a public
+        # one whose files happen to be on this machine would load for minutes.
+        target = frame.loc[frame["Kind"] != "Public", "_token"].iloc[-1]
         self._click(at, f"dataset_open_{self._slug(target)}")
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state["data_source_choice"] == target

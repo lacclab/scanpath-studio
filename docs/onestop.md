@@ -53,9 +53,11 @@ screens around it, from the public [OSF](https://osf.io/2prdq/) release:
 
 Every part ships an **interest-area report** (one row per word, with bounding
 boxes and reading measures) and a **fixation report**, all in the same schema —
-so each part renders as a scanpath, and each part is its own trial (the part is
-folded into the trial id, e.g. `Paragraph::1` vs `Title::1`, so their word
-boxes don't collide). On OSF only *Paragraph* is split by regime; the other
+so each part renders as a scanpath. A trial is one reading of one paragraph,
+and its parts are that trial's **screens**, in the order they were shown —
+step through them with the **Screen** picker above the plot. Each screen keeps
+its own word boxes; not every reading has every part (the title screen opens
+an article, so only a reading of its first paragraph has one). On OSF only *Paragraph* is split by regime; the other
 parts come from one all-regimes release, which the four datasets share on disk,
 and each dataset keeps only its own regime's trials from them (by the reports'
 `question_preview` and `repeated_reading_trial` columns).

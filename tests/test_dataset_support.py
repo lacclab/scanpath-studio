@@ -2509,3 +2509,26 @@ def test_an_all_regimes_part_is_cut_to_the_regime(tmp_path, regime, kept):
     )
     assert set(words["participant_id"]) == {kept}
     assert set(fixations["participant_id"]) == {kept}
+
+
+def test_a_screen_only_one_report_has_is_dropped_not_fatal(tmp_path, caplog):
+    """DATA-63: the OSF Answers fixation report holds a trial its interest-area
+    report lacks. Several parts make each part a screen, and one such orphan
+    used to abort the whole load in `multipart.validate_matching_parts`."""
+    _onestop_public_report(
+        tmp_path, _onestop_public_words(), _onestop_public_fixations()
+    )
+    orphan = _onestop_public_fixations(participant_id=["p2", "p2"])
+    _onestop_public_report(
+        tmp_path,
+        _onestop_public_words(),
+        pd.concat([_onestop_public_fixations(), orphan], ignore_index=True),
+        part="Answers",
+    )
+    with caplog.at_level("WARNING", logger="scanpath_studio.datasets"):
+        words, fixations = datasets_module.load_onestop(
+            tmp_path, regime="ordinary", parts=["Paragraph", "Answers"]
+        )
+    assert set(fixations["participant_id"]) == {"p1"}
+    assert set(words["participant_id"]) == {"p1"}
+    assert "the other report does not have" in caplog.text

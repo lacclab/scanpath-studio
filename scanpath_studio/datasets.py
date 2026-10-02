@@ -911,7 +911,49 @@ def onestop_raw_frames(
         progress.report(index, len(reports), unit="reports")
     words = pd.concat(word_frames, ignore_index=True, sort=False)
     fixations = pd.concat(fix_frames, ignore_index=True, sort=False)
+    if len(part_list) > 1:
+        words, fixations = _onestop_drop_unmatched_screens(words, fixations)
     return _fold_onestop_part_into_identity(words, fixations, part_list)
+
+
+def _onestop_drop_unmatched_screens(
+    words: pd.DataFrame, fixations: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Keep only the screens both reports have, loudly (DATA-63).
+
+    Several parts make each part a screen, and ``multipart.validate_matching_parts``
+    rejects a screen present in one report and absent from the other — which
+    the OSF release has: its *Answers* fixation report holds 31 fixations of
+    ``l55_519``'s first reading of ``2_9_2_Ele`` that its interest-area report
+    has no row for. One such gap would otherwise abort the whole load, as
+    ``_multipleye_drop_screens_without_boxes`` already guards against for
+    MultiplEYE. A frame without the identity columns is returned untouched.
+    """
+    keys = ["participant_id", "unique_trial_id", "part"]
+    if not (set(keys) <= set(words.columns) and set(keys) <= set(fixations.columns)):
+        return words, fixations
+    word_keys = pd.MultiIndex.from_frame(words[keys].astype(str))
+    fix_keys = pd.MultiIndex.from_frame(fixations[keys].astype(str))
+    shared = word_keys.unique().intersection(fix_keys.unique())
+    keep_words = word_keys.isin(shared)
+    keep_fix = fix_keys.isin(shared)
+    for name, frame, keep in (
+        ("word box", words, keep_words),
+        ("fixation", fixations, keep_fix),
+    ):
+        if not keep.all():
+            dropped = frame.loc[~keep, keys].drop_duplicates()
+            _LOGGER.warning(
+                "OneStop: dropped %d %s row(s) on %d screen(s) the other report "
+                "does not have (e.g. %s).",
+                int((~keep).sum()),
+                name,
+                len(dropped),
+                ", ".join(
+                    "/".join(map(str, row)) for row in dropped.head(3).to_numpy()
+                ),
+            )
+    return words.loc[keep_words], fixations.loc[keep_fix]
 
 
 def load_onestop(

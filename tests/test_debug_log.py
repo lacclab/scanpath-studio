@@ -441,3 +441,21 @@ def test_a_rerun_request_is_not_swallowed_by_the_log_handler(monkeypatch):
     )
     with pytest.raises(RerunException):
         debug_log._SessionStateHandler().emit(record)
+
+
+def test_app_warnings_reach_the_terminal_once():
+    """BUG-99: the root handler switched off logging's ``lastResort``, so app
+    warnings and tracebacks never reached the server terminal. The app logger
+    carries one stderr handler of its own, at WARNING, however often installed."""
+    import logging as _logging
+
+    from scanpath_studio import debug_log
+
+    debug_log.install_log_capture()
+    debug_log.install_log_capture()
+    app_logger = _logging.getLogger("scanpath_studio")
+    terminal = [
+        h for h in app_logger.handlers if isinstance(h, debug_log._TerminalHandler)
+    ]
+    assert len(terminal) == 1
+    assert terminal[0].level == _logging.WARNING

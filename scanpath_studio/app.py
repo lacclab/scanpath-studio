@@ -3535,6 +3535,47 @@ def _render_unmapped_view(
     _render_raw_preview("Fixations", raw_fixations_df)
 
 
+def _render_dataset_load_failure(name: str, problems: list) -> None:
+    """BUG-99: say on the Data overview that the dataset didn't load, and why.
+
+    :func:`_render_unmapped_view` draws into the ✏️ Edit dataset screen, which
+    is hidden until it is opened — so a corpus the pipeline rejected (OneStop ·
+    Ordinary reading's orphan screens, before DATA-63) left the overview with a
+    "Not loaded" row and no other trace. This is the overview's half: the
+    dataset's name, the reason, and the two ways on — the editor that can fix
+    the mapping, or back to the demo.
+    """
+    rejected = [p for p in problems if p.startswith(MAPPING_FAILURE_LEAD)]
+    with st.container(border=True, key="dataset_load_failure_panel"):
+        if rejected:
+            for problem in rejected:
+                reason = problem.removeprefix(MAPPING_FAILURE_LEAD).lstrip(": ")
+                st.error(
+                    f"**{name} didn't load.** Normalizing its tables failed: {reason}",
+                    icon=ICONS["error"],
+                )
+        else:
+            st.warning(
+                f"**{name} isn't loaded yet** — its column mapping is "
+                "incomplete:\n\n" + "\n".join(f"- {p}" for p in problems)
+            )
+        edit, demo = st.columns(2)
+        edit.button(
+            f"{ICONS['edit']} Edit dataset",
+            key="dataset_load_failure_edit",
+            on_click=_open_mapping_editor,
+            type="primary",
+            width="stretch",
+        )
+        demo.button(
+            DEMO_RESET_LABEL,
+            key="dataset_load_failure_demo",
+            on_click=load_bundled_demo,
+            width="stretch",
+            help=DEMO_RESET_HELP,
+        )
+
+
 @st.cache_data(show_spinner=False)
 def _cached_participant_ids(_words, _fixations, cache_key) -> list:
     """Every reader id in the dataset (DATA-20), memoized per frame pair.
@@ -8338,6 +8379,14 @@ def _run_app() -> None:
         # mapping section — and, from any other view, say where that page is.
         with unmapped_slot:
             _render_unmapped_view(raw_words_df, raw_fixations_df, mapping_problems)
+        # BUG-99: the slot above is on the ✏️ Edit dataset screen, hidden until
+        # it is opened — the overview needs its own word, where *What's in the
+        # dataset* would have been.
+        if data_view and not editing and not wizard_owns_page:
+            with setup_body_slot:
+                _render_dataset_load_failure(
+                    _dataset_display_name(_dataset_owner), mapping_problems
+                )
         _render_offpage_setup_notice(data_view)
         _finish_page()
         _render_datasets_table(None, None, None)

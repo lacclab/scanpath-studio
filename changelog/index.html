@@ -1887,6 +1887,7 @@ behind each line, and the releases before 0.28.0, are in
 <ul>
 <li>OneStop is now four datasets, one per reading regime; a trial is one reading, and its title, passage and question screens are its screens. (DATA-63)</li>
 <li>Public datasets download into one Download folder you choose on the Data page (also <code>scanpath-studio run --download-dir</code> or <code>SCANPATH_STUDIO_DOWNLOAD_DIR</code>), each in its own subfolder, and the page names the full folder, so a download into the per-user data folder (on Windows, AppData\Local\scanpath-studio) is no longer hard to find. (UX-184)</li>
+<li>The Compare to trial picker has a ? that explains its 📄 same-text and 👤 same-participant markers. (UX-189)</li>
 </ul>
 <p><strong>Changed</strong></p>
 <ul>
@@ -1897,6 +1898,7 @@ behind each line, and the releases before 0.28.0, are in
 <li>The header no longer shows Streamlit's Deploy button. (UX-183)</li>
 <li>The Annotations hint captions name the Data and Scanpath views with their app icons instead of emoji. (UX-185)</li>
 <li>Hints, tooltips and the tour name the app's views and actions with their icons instead of emoji. (UX-186)</li>
+<li>The trial pickers show a trial id part by part, separated by · (for OneStop: participant · batch · article · paragraph · level · reading), and the Select Trial help says what the parts are. (UX-187)</li>
 </ul>
 <p><strong>Fixed</strong></p>
 <ul>
@@ -1909,6 +1911,7 @@ behind each line, and the releases before 0.28.0, are in
 <li>The docs Gallery's figures draw after you arrive from another page or a heading link, and the site's llms.txt and llms-full.txt list every page again. (ENG-92)</li>
 <li>The docs are corrected where a careful review found them wrong or vague: Pupil Labs coordinates, which measures are computed where, excluding trials by tag, which counts follow the filters, offline HTML, and what a setup file holds. (ENG-93)</li>
 <li>Switching back to the dataset you had open just before no longer normalizes it again: going PoTeC → OneStop → PoTeC is instant on the way back. (PERF-18)</li>
+<li>The plot no longer shows a scrollbar with nothing to scroll. (UX-188)</li>
 </ul>
 <h2 id="0321-2026-10-01">0.32.1 — 2026-10-01<a class="headerlink" href="#0321-2026-10-01" title="Permanent link">&para;</a></h2>
 <p><strong>Added</strong></p>

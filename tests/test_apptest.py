@@ -1726,6 +1726,83 @@ class TestUnmappedRawDataView:
         assert source.value == potec_key
         assert at.session_state["public_dataset_choice"] == potec_key
 
+    def test_public_dataset_normalize_failure_is_shown_on_overview(self, monkeypatch):
+        """BUG-100: a public corpus whose raw frames load but whose normalization
+        raises names itself and the reason on the 🗂️ Data overview.
+
+        The rejection used to render only into the ✏️ Edit dataset screen, which
+        is hidden until opened — the overview read "Not loaded" and nothing
+        else (OneStop · Ordinary reading's orphan screens, before DATA-63).
+        """
+        import pandas as pd
+
+        from scanpath_studio import app, datasets
+
+        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+        words = pd.DataFrame(
+            {
+                "aoi": [1, 2],
+                "start_x": [80.0, 115.0],
+                "start_y": [21.0, 21.0],
+                "end_x": [115.0, 189.0],
+                "end_y": [99.0, 99.0],
+                "word": ["Um", "null"],
+                "text_id": ["b0", "b0"],
+                "line": [1, 1],
+            }
+        )
+        fixations = pd.DataFrame(
+            {
+                "reader_id": [0, 0],
+                "text_id": ["b0", "b0"],
+                "fixation_duration": [210, 190],
+                "fixation_index": [1, 2],
+                "word_index_in_text": [1, 2],
+                "x": [97.5, 152.0],
+                "y": [60.0, 60.0],
+            }
+        )
+        monkeypatch.setattr(
+            datasets, "potec_raw_frames", lambda *a, **k: (words, fixations)
+        )
+        monkeypatch.setattr(datasets, "potec_present", lambda *a, **k: True)
+        message = "Multipart reports contain orphan screens: no words for ['p2']"
+        normalize = app._normalize_pair
+
+        def _reject_potec(words_df, word_schema, fixations_df, fix_schema):
+            # Only the PoTeC frames are rejected; the demo still normalizes.
+            if "aoi" in words_df.columns:
+                raise ValueError(message)
+            return normalize(words_df, word_schema, fixations_df, fix_schema)
+
+        monkeypatch.setattr(app, "_normalize_pair", _reject_potec)
+
+        at = _make_apptest()
+        potec_key = next(k for k in app.PUBLIC_DATASET_REGISTRY if "PoTeC" in k)
+        at.session_state["data_source_choice"] = potec_key
+        pin_data_view(at)
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+        def _errors_under(node, key, inside=False):
+            for child in getattr(node, "children", {}).values():
+                here = inside or getattr(child, "key", None) == key
+                if here and type(child).__name__ == "Error":
+                    yield child.value
+                yield from _errors_under(child, key, here)
+
+        shown = list(_errors_under(at._tree, "data_overview"))
+        name = app._dataset_display_name(potec_key)
+        assert any(name in e and message in e for e in shown), shown
+
+        # The way back still works: the demo loads and the error is gone.
+        next(b for b in at.button if b.key == "dataset_load_failure_demo").click()
+        pin_data_view(at)
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["data_source_choice"] == app.DEMO_CHOICE
+        assert not list(_errors_under(at._tree, "data_overview"))
+
     def test_each_public_dataset_loader_ui_renders(self, monkeypatch, tmp_path):
         """Every corpus loader's access UI renders without error when its data
         directory is absent: a Data-directory input, an Expected-files expander,

@@ -8,6 +8,7 @@ import html
 import json
 import os
 import pickle
+import re
 import warnings
 import zlib
 from collections.abc import Callable, Hashable
@@ -142,10 +143,14 @@ from scanpath_studio.controls import (
     _popover_rows,
     _sub_row,
     _text_field_and_frame,
+    active_filter_items,
+    clear_trial_filters,
     column_mapping_ui,
     compare_b_filters,
     corpus_style_controls,
     current_dataset_name,
+    format_filter_item,
+    has_active_trial_filters,
     inline_field_label,
     read_trial_filters,
     render_compare_filters,
@@ -5490,20 +5495,7 @@ def render_single_trial_tab(
                 _FILTER_ICON, width="content", help="Filter the trial list"
             )
             box = pop.container(key="tour_grp_narrow_by")
-            # VIZ-45: a raw-gaze-only dataset's readers and trials are in its
-            # samples, so that is what the filters are offered from (and what
-            # `app.main` narrows with them); beside fixations or words the
-            # samples follow those tables' filters instead.
-            filter_fixations = (
-                raw_gaze_all
-                if words_all.empty
-                and fixations_all.empty
-                and raw_gaze_all is not None
-                and not raw_gaze_all.empty
-                else fixations_all
-            )
-            render_narrow_by(words_all, filter_fixations, text_host=box, part_host=box)
-            render_trial_filters(words_all, filter_fixations, host=box)
+            _render_pool_filters(box, words_all, fixations_all, raw_gaze_all)
 
         # Trial picker (its own row of columns): selectbox + slider + ◀ ▶.
         with st.container(key="tour_grp_trial_picker"):
@@ -8340,6 +8332,126 @@ def _open_measure_mapping() -> None:
 
     _open_mapping_editor()
     _go_data()
+
+
+def _render_pool_filters(
+    host,
+    words_all: pd.DataFrame,
+    fixations_all: pd.DataFrame,
+    raw_gaze_all: pd.DataFrame | None,
+) -> None:
+    """Every trial filter, into ``host`` — the one panel both views open.
+
+    The Scanpath picker's funnel and Corpus Analysis' *Edit filters* (UX-198)
+    draw the same widgets under the same ``filter_*`` keys; only one view runs
+    per rerun, so the keys never meet.
+    """
+    # VIZ-45: a raw-gaze-only dataset's readers and trials are in its
+    # samples, so that is what the filters are offered from (and what
+    # `app.main` narrows with them); beside fixations or words the
+    # samples follow those tables' filters instead.
+    filter_fixations = (
+        raw_gaze_all
+        if words_all.empty
+        and fixations_all.empty
+        and raw_gaze_all is not None
+        and not raw_gaze_all.empty
+        else fixations_all
+    )
+    render_narrow_by(words_all, filter_fixations, text_host=host, part_host=host)
+    render_trial_filters(words_all, filter_fixations, host=host)
+
+
+def _count_noun(n: int, noun: str) -> str:
+    return f"{n:,} {noun}{'' if n == 1 else 's'}"
+
+
+def pool_count_text(
+    trials: int, trials_total: int, readers: int, readers_total: int
+) -> str:
+    """``12 of 24 trials · 1 of 2 readers`` — the analysis pool against the
+    dataset (UX-198). An unnarrowed pool is just ``24 trials · 2 readers``; a
+    dataset that names no readers leaves the reader half out."""
+    whole = trials == trials_total and readers == readers_total
+    parts = [(trials, trials_total, "trial")]
+    if readers_total:
+        parts.append((readers, readers_total, "reader"))
+    return " · ".join(
+        _count_noun(n, noun) if whole else f"{n:,} of {_count_noun(total, noun)}"
+        for n, total, noun in parts
+    )
+
+
+def _n_unique_readers(combos: pd.DataFrame | None) -> int:
+    if combos is None or combos.empty or "participant_id" not in combos:
+        return 0
+    return int(combos["participant_id"].astype(str).nunique())
+
+
+def _md_escape(text: str) -> str:
+    """Field values as literal text inside a markdown line."""
+    return re.sub(r"([\\`*_\[\]<>#|~$])", r"\\\1", str(text))
+
+
+def render_analysis_pool_bar(
+    host,
+    *,
+    words_all: pd.DataFrame,
+    fixations_all: pd.DataFrame,
+    raw_gaze_all: pd.DataFrame | None,
+    combos: pd.DataFrame,
+    combos_all: pd.DataFrame,
+) -> None:
+    """The pool Corpus Analysis reads, on one line, with its filters (UX-198).
+
+    Filters set on the Scanpath view narrow this page too, which it never said:
+    a reader filtered out there was simply missing here. The counts are the
+    trial picker's pool (``combos``) against the Export subtab's *All*
+    (``combos_all``), so all three views count the same trials, and **Edit
+    filters** opens the Scanpath funnel's own panel.
+    """
+    active = has_active_trial_filters()
+    counts = pool_count_text(
+        len(combos),
+        len(combos_all),
+        _n_unique_readers(combos),
+        _n_unique_readers(combos_all),
+    )
+    items = active_filter_items(words_all, fixations_all) if active else []
+    described = " · ".join(_md_escape(format_filter_item(i)) for i in items)
+    text = f"**{counts}**"
+    if described:
+        text += f" · {described}"
+    elif not active:
+        text += " · no filters"
+    bar = host.container(
+        key="corpus_pool_bar",
+        horizontal=True,
+        vertical_alignment="center",
+        gap="small",
+    )
+    bar.markdown(text, width="stretch")
+    pop = bar.popover(
+        "Edit filters",
+        icon=ICONS["trial_filter"],
+        width="content",
+        help="The trial filters the Scanpath view uses — the same pool.",
+    )
+    _render_pool_filters(
+        pop.container(key="corpus_pool_filters"),
+        words_all,
+        fixations_all,
+        raw_gaze_all,
+    )
+    bar.button(
+        "Clear",
+        icon=ICONS["close"],
+        key="corpus_pool_clear",
+        on_click=clear_trial_filters,
+        disabled=not active,
+        width="content",
+        help="Reset every trial filter, on every view.",
+    )
 
 
 def render_corpus_analysis_tab(

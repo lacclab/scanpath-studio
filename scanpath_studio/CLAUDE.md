@@ -191,7 +191,7 @@ the core data dependencies acyclic.
 1. Load: upload (one or many files per table; either table may be omitted), bundled `sample_data/`, the synthetic test trial, OneStop server bundle (`$ONESTOP_DATA_DIR` set), a stored uploaded dataset (`st.session_state["_datasets"]`), or a `datasets.py` corpus loader (PoTeC, MultiplEYE, OneStop public).
 2. Infer schema → normalize column names to canonical form.
 3. Compute reading measures if pre-aggregated columns missing.
-4. Narrow the trial pool: inline **Narrow by** Text/Participant multiselects + the **More** condition/annotation filters (`controls.render_narrow_by` / `render_trial_filters`).
+4. Narrow the trial pool: inline **Narrow by** Text/Participant multiselects + the **More** condition/annotation filters (`controls.render_narrow_by` / `render_trial_filters`). Both views draw the same panel (`tabs._render_pool_filters`): Scanpath behind the picker's funnel, Corpus Analysis behind **Edit filters** on its pool line (`tabs.render_analysis_pool_bar`, UX-198), which counts `combos` against `combos_all` — the picker's pool and the Export subtab's *All*.
 5. Dispatch to one of three views via Streamlit's native top nav (`menu.render_nav` → `st.navigation(position="top")`, mirrored into `main_nav`): 🗺️ Scanpath, 📊 Corpus Analysis, 🗂️ Data. The dataset inspection lives on the 🗂️ Data page and Share is a Scanpath subtab.
 6. Bulk export is the **Export** subtab of the Scanpath view (`tabs._render_export_panel`), no longer a separate step.
 

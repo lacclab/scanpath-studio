@@ -1,5 +1,6 @@
 """Pytest configuration and fixtures for scanpath visualization tests."""
 
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -224,6 +225,23 @@ def pin_view(at, view: str) -> None:
 def pin_data_view(at) -> None:
     """:func:`pin_view` for the 🗂️ Data page — the common case."""
     pin_view(at, VIEW_DATA)
+
+
+def picker_trial_id(option: str) -> str:
+    """The trial id behind a trial-picker option, as ``AppTest`` shows it.
+
+    The picker displays an id part by part (UX-187) and leaves a first reading
+    out (UX-202), and ``AppTest`` exposes only the displayed text — so rejoin
+    the parts with ``_`` and put back the ``r0`` a split id no longer shows. An
+    id that did not split is shown as it is.
+    """
+    shown = str(option).removeprefix("★ ").strip()
+    parts = shown.split(" · ")
+    if len(parts) == 1:
+        return shown
+    if not re.fullmatch(r"r\d+", parts[-1]):
+        parts.append("r0")
+    return "_".join(parts)
 
 
 def arm_debug_dialog(at) -> None:

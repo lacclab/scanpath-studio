@@ -1,10 +1,11 @@
-"""UX-187 / UX-189: a trial id shown part by part, and the pickers' help.
+"""UX-187 / UX-189 / UX-202: a trial id shown part by part, and the pickers' help.
 
-The pickers *display* ``l37_1129_2_2_1_Adv_r0`` as
-``l37_1129 · 2 · 2 · 1 · Adv · r0``. A plain split on ``_`` cannot do that —
-the reader id has an underscore of its own — so the parts come from the ids the
-trial is known to be made of, and an id none of them matches stays as it is.
-Only the display changes: the selected value is still the id itself.
+The pickers *display* ``l37_1129_2_2_1_Adv_r1`` as ``l37_1129 · 2_2_1_Adv · r1``.
+A plain split on ``_`` cannot do that — the reader id has an underscore of its
+own — so the parts come from the ids the trial is known to be made of, and an
+id none of them matches stays as it is. UX-202 keeps the text id whole and
+leaves a first reading (``r0``) out. Only the display changes: the selected value
+is still the id itself.
 """
 
 from __future__ import annotations
@@ -20,40 +21,39 @@ from scanpath_studio.utils import (
     trial_id_shown,
 )
 
-ONESTOP_TEXT_PARTS = ("batch", "article", "paragraph", "level")
-
 
 class TestTrialIdParts:
-    def test_onestop_id_splits_into_its_six_parts(self):
+    def test_onestop_id_is_participant_text_and_reading(self):
         parts = trial_id_parts(
-            "l37_1129_2_2_1_Adv_r0",
-            participant_id="l37_1129",
-            text_id="2_2_1_Adv",
-            text_part_names=ONESTOP_TEXT_PARTS,
+            "l37_1129_2_2_1_Adv_r1", participant_id="l37_1129", text_id="2_2_1_Adv"
         )
         assert parts == [
             ("participant", "l37_1129"),
-            ("batch", "2"),
-            ("article", "2"),
-            ("paragraph", "1"),
-            ("level", "Adv"),
-            ("reading", "r0"),
+            ("text", "2_2_1_Adv"),
+            ("reading", "r1"),
         ]
-        assert trial_id_display(parts) == "l37_1129 · 2 · 2 · 1 · Adv · r0"
+        assert trial_id_display(parts) == "l37_1129 · 2_2_1_Adv · r1"
 
-    def test_unknown_text_composition_stays_one_part(self):
+    def test_a_first_reading_is_not_shown(self):
+        """UX-202: the demo holds first readings only; `r0` on every trial said
+        nothing."""
         parts = trial_id_parts(
             "l37_1129_2_2_1_Adv_r0", participant_id="l37_1129", text_id="2_2_1_Adv"
         )
-        assert [name for name, _ in parts] == ["participant", "text", "reading"]
-        assert trial_id_display(parts) == "l37_1129 · 2_2_1_Adv · r0"
+        assert parts[-1] == ("reading", "r0")
+        assert trial_id_display(parts) == "l37_1129 · 2_2_1_Adv"
 
     def test_disambiguated_repeat_reads_as_text_and_reading(self):
         # `data._disambiguate_repeated_readings` appends `_r2` to a text id.
-        assert trial_id_parts("3_r2", participant_id="p1", text_id="3") == [
-            ("text", "3"),
-            ("reading", "r2"),
-        ]
+        parts = trial_id_parts("3_r2", participant_id="p1", text_id="3")
+        assert parts == [("text", "3"), ("reading", "r2")]
+        assert trial_id_display(parts) == "3 · r2"
+
+    def test_an_id_that_does_not_split_still_sets_its_reading_off(self):
+        """UX-202: wherever a repeat suffix is shown it reads `· r2`, not `_r2`."""
+        assert trial_id_display(trial_id_parts("someone_else_r2")) == (
+            "someone_else · r2"
+        )
 
     @pytest.mark.parametrize(
         ("trial_id", "participant", "text"),
@@ -84,7 +84,7 @@ class TestTrialIdParts:
 
 
 class TestTrialIdLayout:
-    def test_onestop_layout_needs_its_marker_columns(self):
+    def test_the_text_id_is_one_part(self):
         combos = pd.DataFrame(
             {
                 "participant_id": ["l37_1129", "l37_1129"],
@@ -92,16 +92,25 @@ class TestTrialIdLayout:
                 "text_id": ["2_2_1_Adv", "2_2_2_Ele"],
             }
         )
-        # `paragraph_id` is consumed as the text id by normalization, so the
-        # marker is the three that survive it.
-        columns = ["article_batch", "article_id", "difficulty_level"]
-        display, names = trial_id_layout(combos, columns=columns)
-        assert display["l37_1129_2_2_2_Ele_r1"] == "l37_1129 · 2 · 2 · 2 · Ele · r1"
-        assert names == ("participant", *ONESTOP_TEXT_PARTS, "reading")
-
         display, names = trial_id_layout(combos)
-        assert display["l37_1129_2_2_1_Adv_r0"] == "l37_1129 · 2_2_1_Adv · r0"
+        assert display == {
+            "l37_1129_2_2_1_Adv_r0": "l37_1129 · 2_2_1_Adv",
+            "l37_1129_2_2_2_Ele_r1": "l37_1129 · 2_2_2_Ele · r1",
+        }
+        # One trial shows its reading, so the help names it.
         assert names == ("participant", "text", "reading")
+
+    def test_first_readings_only_name_no_reading_part(self):
+        combos = pd.DataFrame(
+            {
+                "participant_id": ["l37_1129"],
+                "trial_id": ["l37_1129_2_2_1_Adv_r0"],
+                "text_id": ["2_2_1_Adv"],
+            }
+        )
+        display, names = trial_id_layout(combos)
+        assert display == {"l37_1129_2_2_1_Adv_r0": "l37_1129 · 2_2_1_Adv"}
+        assert names == ("participant", "text")
 
     def test_composite_columns_spell_the_id_out(self):
         combos = pd.DataFrame(
@@ -137,28 +146,19 @@ class TestTrialIdLayout:
     def test_help_names_the_parts_and_the_reading(self):
         text = trial_id_help(("participant", "text", "reading"))
         assert "participant · text · reading" in text
-        assert "`r0`" in text
-        assert "`r0`" not in trial_id_help(("participant", "text"))
+        assert "`r1`" in text
+        assert "`r1`" not in trial_id_help(("participant", "text"))
 
     def test_shown_reads_one_trials_rows(self):
-        rows = pd.DataFrame(
-            {
-                "participant_id": ["l37_1129"],
-                "text_id": ["2_2_1_Adv"],
-                "article_batch": [2],
-                "article_id": [2],
-                "difficulty_level": ["Adv"],
-            }
-        )
-        assert (
-            trial_id_shown("l37_1129_2_2_1_Adv_r0", None, rows)
-            == "l37_1129 · 2 · 2 · 1 · Adv · r0"
+        rows = pd.DataFrame({"participant_id": ["l37_1129"], "text_id": ["2_2_1_Adv"]})
+        assert trial_id_shown("l37_1129_2_2_1_Adv_r1", None, rows) == (
+            "l37_1129 · 2_2_1_Adv · r1"
         )
         # A cross-dataset B carries a namespaced participant; the raw one wins.
         rows["participant_id"] = "OneStop · l37_1129"
         assert (
             trial_id_shown("l37_1129_2_2_1_Adv_r0", rows, participant_id="l37_1129")
-            == "l37_1129 · 2 · 2 · 1 · Adv · r0"
+            == "l37_1129 · 2_2_1_Adv"
         )
         assert trial_id_shown("t5", None) == "t5"
 
@@ -201,12 +201,12 @@ def test_the_scanpath_pickers_show_ids_by_part_and_explain_them():
     # The value is still the id itself; only the option text is split.
     assert "_" in picker.value
     assert all(" · " in option for option in picker.options), picker.options
-    assert "participant · batch · article · paragraph · level · reading" in (
-        picker.help
-    )
+    # UX-202: the text id is one part, and the demo's first readings show none.
+    assert "participant · text" in picker.help
+    assert not any(o.endswith(" · r0") for o in picker.options), picker.options
 
     compare = at.selectbox(key="single_compare_trial")
     assert compare.label == "**Compare to**"
     assert "📄" in compare.help and "👤" in compare.help
-    assert "participant · batch" in compare.help
+    assert "participant · text" in compare.help
     assert all(" · " in option for option in compare.options), compare.options

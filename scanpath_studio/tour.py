@@ -810,9 +810,8 @@ _SPOTLIGHT_STEPS = [
         "selector": NAV_SELECTOR,
         "title": f"{ICONS['nav']} The nav",
         "body": f"**{ICONS['view_scanpath']} Scanpath** is what you see now. "
-        f"**{ICONS['view_corpus']} Corpus Analysis** aggregates across readers and texts; "
-        f"**{ICONS['view_data']} Data** sets one up. **{ICONS['help']} Help** opens over your work — "
-        "replay this tour under **Tutorials**.",
+        f"**{ICONS['view_corpus']} Corpus Analysis** aggregates across readers; "
+        f"**{ICONS['view_data']} Data** sets one up. **{ICONS['help']} Help** opens over your work.",
     },
 ]
 
@@ -2040,9 +2039,9 @@ _WIZARD_GUIDE_STEPS = [
         "title": "2 · Upload data tables",
         "body": (
             "Every table uploads and maps in its own row here — Fixations, "
-            "Words / IA, Raw gaze, then Participant/Trial/Text metadata. 👀 "
-            "Right under each table's own mapping, pick which extra columns "
-            "to keep — fewer is faster. Anything still missing is listed "
+            "Words / IA, Raw gaze, then Participant/Trial/Text metadata. "
+            "Under each mapping, pick which extra columns to keep. "
+            "Anything still missing is listed "
             f"above **{ICONS['confirm']} Add dataset**."
         ),
         "selector": ".st-key-wiz_part_data",

@@ -260,6 +260,7 @@ from scanpath_studio.tabs import (
     dataset_editor_is_dirty,
     render_corpus_analysis_tab,
     render_data_inspection_tab,
+    render_dataset_capabilities,
     render_dataset_editor_footer,
     render_participant_metadata_section,
     render_settings_file,
@@ -8939,6 +8940,9 @@ def _run_app() -> None:
             # and the counts they came for. UX-174 r2 put Rename on the heading
             # and Edit on the description line, off the table's rows.
             render_dataset_inspection_head(active_token)
+            # DATA-67 — what the dataset supports, before any trial filter:
+            # the first thing a newly added dataset's overview answers.
+            render_dataset_capabilities(words_all, fixations_all, raw_gaze_all)
             # Keyed wrapper → the stable `.st-key-…` selector the "Load and
             # verify a dataset" tutorial spotlights (it kept its name across the
             # move off the Scanpath subtab bar).

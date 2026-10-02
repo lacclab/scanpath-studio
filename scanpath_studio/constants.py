@@ -1064,6 +1064,16 @@ ICONS: dict[str, str] = {
 }
 
 
+def plural(count: int, noun: str, plural_noun: str | None = None) -> str:
+    """``"1 trial"`` / ``"3 trials"`` — a count with its noun agreeing.
+
+    For a caption, in place of ``trial(s)``. ``plural_noun`` is for a noun that
+    does not take an *s* (``"entry"`` → ``"entries"``).
+    """
+    word = noun if count == 1 else (plural_noun or f"{noun}s")
+    return f"{count:,} {word}"
+
+
 def icon_html(concept: str) -> str:
     """``ICONS[concept]`` for raw HTML, where a ``:material/…:`` shortcode is inert.
 

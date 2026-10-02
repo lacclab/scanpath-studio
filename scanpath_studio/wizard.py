@@ -92,6 +92,7 @@ from .experimental_setup import (
 from .persistence import is_loopback_url, rename_cached_dataset
 from .session_keys import COMPARE_SOURCE_STATE_KEY
 from .styles import mapping_menu_css
+from .synthetic import EXAMPLE_ZIP_FILE, example_import_zip
 from .tabs import _collect_column_mapping
 from .tour import (
     maybe_show_wizard_guide,
@@ -3084,9 +3085,32 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # UX-113: a small caption near the stage title, not a boxed alert — the
         # three tables below say the same thing at their own titles' hover, this
         # is just the nudge to open with.
-        intro.caption(
+        guide = intro.container(
+            key="wiz_example_row",
+            horizontal=True,
+            vertical_alignment="center",
+            gap="small",
+        )
+        guide.caption(
             f"{ICONS['upload']} Upload at least one of **Fixations**, **Words / IA**, or "
-            "**Raw gaze** below to get started."
+            "**Raw gaze** below to get started.",
+            width="content",
+        )
+        # DATA-67: a tiny AOI + fixation pair that maps with no manual pick,
+        # with a README naming every column's unit and what the IDs mean.
+        # Built on click (`data=` a callable) and `on_click="ignore"`, so the
+        # download neither costs a run nor reruns the wizard.
+        guide.download_button(
+            "Download example tables",
+            data=example_import_zip,
+            file_name=EXAMPLE_ZIP_FILE,
+            mime="application/zip",
+            icon=ICONS["download"],
+            key="wizard_example_download",
+            on_click="ignore",
+            help="Two tiny tables, one AOI table and one fixation table, that "
+            "import with every column mapped automatically. The README inside "
+            "explains each column, its unit, and the IDs.",
         )
         app_url = str(getattr(st.context, "url", "") or "")
         if not is_loopback_url(app_url):

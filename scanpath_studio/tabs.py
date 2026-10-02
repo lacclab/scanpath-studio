@@ -122,6 +122,7 @@ from scanpath_studio.constants import (
     derived_analysis_tables_enabled,
     drift_correction_enabled,
     icon_html,
+    plural,
     preprocessing_enabled,
     sentence_analysis_enabled,
     similarity_enabled,
@@ -163,6 +164,7 @@ from scanpath_studio.data import (
     StimulusJoinWarning,
     aggregate_char_boxes,
     assign_derived,
+    brought_reading_measures,
     compute_word_metrics,
     derive_trial_index,
     drop_internal_columns,
@@ -13084,6 +13086,119 @@ def _render_dataset_stats_tab(
     # Provenance is a fact about the *dataset*, so it sits with the counts.
     # Silent for every source but a OneStop server bundle.
     _render_data_provenance()
+
+
+#: DATA-67 — a reading measure's short label (``"TFD"``) by canonical column.
+_MEASURE_SHORT_LABELS = {
+    column: label for _k, column, label, *_ in READING_MEASURE_FIELDS
+}
+
+
+def dataset_capabilities(
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    raw_gaze: pd.DataFrame | None,
+) -> list[str]:
+    """*Available with this dataset*: four lines, one per thing a dataset may
+    or may not support (DATA-67).
+
+    Read off the same checks the app already makes, never a new rule: the
+    trials with fixations (what the Scanpath view draws), the reading measures
+    the AOI table brought (`data.brought_reading_measures`, all Corpus
+    Analysis shows — AN-32), the trials the raw gaze covers, and the multipart
+    screens (`multipart.part_catalog`, the 📊 Stats tab's Screens count).
+    """
+    words = words if words is not None else pd.DataFrame()
+    fixations = fixations if fixations is not None else pd.DataFrame()
+    raw_gaze = raw_gaze if raw_gaze is not None else pd.DataFrame()
+    fix_trials = trial_keys(fixations)
+    gaze_trials = trial_keys(raw_gaze)
+    all_trials = fix_trials | trial_keys(words) | gaze_trials
+
+    if fix_trials and not words.empty:
+        scanpath = f"over the text, for {plural(len(fix_trials), 'trial')}"
+    elif fix_trials:
+        scanpath = (
+            f"for {plural(len(fix_trials), 'trial')}, with no text: "
+            "the dataset has no AOI table"
+        )
+    elif gaze_trials:
+        scanpath = (
+            "none, as the dataset has no fixations; "
+            f"raw gaze is drawn instead, for {plural(len(gaze_trials), 'trial')}"
+        )
+    else:
+        scanpath = "none, as the dataset has no fixations"
+
+    measures = [
+        _MEASURE_SHORT_LABELS[column] for column in brought_reading_measures(words)
+    ]
+    measure_line = (
+        f"{', '.join(measures)}, shown by Corpus Analysis"
+        if measures
+        else "none supplied, so Corpus Analysis has nothing to show"
+    )
+
+    gaze_line = (
+        f"{len(gaze_trials):,} of {plural(len(all_trials), 'trial')}"
+        if gaze_trials
+        else "none"
+    )
+
+    try:
+        parts = part_catalog(words, fixations)
+    except ValueError:
+        parts = pd.DataFrame()
+    if parts.empty:
+        screen_line = "one per trial"
+    else:
+        n_parents = len(parts[["participant_id", "trial_id"]].drop_duplicates())
+        screen_line = (
+            f"{plural(len(parts), 'screen')} across {plural(n_parents, 'trial')}"
+        )
+
+    return [
+        f"{ICONS['view_scanpath']} **Scanpaths:** {scanpath}",
+        f"{ICONS['view_corpus']} **Reading measures:** {measure_line}",
+        f"{ICONS['raw_gaze']} **Raw gaze:** {gaze_line}",
+        f"{ICONS['screens']} **Screens:** {screen_line}",
+    ]
+
+
+@st.cache_data(show_spinner=False)
+def _c_dataset_capabilities(_words, _fixations, _raw_gaze, key) -> list[str]:
+    """`dataset_capabilities`, keyed on the three frames' fingerprints.
+
+    The Data page draws it on every rerun, and on a corpus it scans every
+    trial key of the raw gaze samples.
+    """
+    return dataset_capabilities(_words, _fixations, _raw_gaze)
+
+
+def render_dataset_capabilities(
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    raw_gaze: pd.DataFrame | None,
+) -> None:
+    """*Available with this dataset* under the *What's in…* heading (DATA-67).
+
+    A handful of lines for the whole dataset, before any trial filter: the
+    numbers are in 📊 Stats below, and how to change what is available is
+    ✏️ Edit dataset on the heading's line.
+    """
+    lines = _c_dataset_capabilities(
+        words,
+        fixations,
+        raw_gaze,
+        (
+            frame_fingerprint(words),
+            frame_fingerprint(fixations),
+            frame_fingerprint(raw_gaze),
+        ),
+    )
+    with st.container(key="dataset_capabilities"):
+        st.caption("**Available with this dataset**")
+        st.caption("  \n".join(lines))
 
 
 def render_data_inspection_tab(

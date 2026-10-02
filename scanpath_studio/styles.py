@@ -1709,10 +1709,12 @@ def get_app_css() -> str:
        for every section's contents and was reverted — the sections read better
        with their `⚙️ …` popovers.) */
     .sps-rail-subhead {
-        font-size: 0.78rem;
+        /* UX-191: above the rows' 0.9rem labels, so a block's title outranks
+           its own fields instead of reading as a footnote to them. */
+        font-size: 0.95rem;
         font-weight: 700;
-        letter-spacing: 0.02em;
-        opacity: 0.72;
+        letter-spacing: 0.01em;
+        opacity: 0.8;
         /* More room above than below, so the label still reads as belonging to
            the block under it — but 0.15rem below put "🖥️ Screen & framing"
            almost on the baseline of the "Show full monitor" switch, which made

@@ -340,6 +340,10 @@ class CompareTarget:
     #: none; the paths it was read from (``render --print-code``), or ``()``
     #: when it has samples but no path to name (an upload — a placeholder).
     raw_gaze: tuple[str, ...] | None = None
+    #: VIZ-48: whether A's own dataset has raw gaze to load. ``False`` only
+    #: when B's dataset alone brings samples, so the recipe loads B's and not a
+    #: placeholder for A's.
+    primary_raw_gaze: bool = True
 
 
 @dataclass(frozen=True)
@@ -1101,6 +1105,16 @@ def draws_raw_gaze(state: FigureState) -> bool:
     )
 
 
+def _draws_primary_raw_gaze(state: FigureState) -> bool:
+    """Whether A's dataset's samples are loaded — every drawn layer except a
+    comparison whose samples all come from B's dataset (VIZ-48)."""
+    return draws_raw_gaze(state) and (
+        state.kind != "comparison"
+        or state.compare is None
+        or state.compare.primary_raw_gaze
+    )
+
+
 #: What a snippet names for B's raw gaze when it can't name the file (VIZ-48).
 B_RAW_GAZE_PLACEHOLDER = "B_RAW_GAZE"
 
@@ -1119,7 +1133,7 @@ def _passes_raw_gaze(source: SnippetSource, state: FigureState) -> bool:
 
     Wherever the layer is drawn — and always for a raw-gaze-only source
     (VIZ-45), whose samples are the data the trial is looked up in."""
-    return draws_raw_gaze(state) or (
+    return _draws_primary_raw_gaze(state) or (
         source.kind == SOURCE_RAW_GAZE and state.kind == "static"
     )
 
@@ -1276,7 +1290,7 @@ def python_snippet(
     lines.append("")
     lines += loader(source)
     # A raw-gaze-only source loaded its samples as its data half already.
-    if draws_raw_gaze(state) and source.kind != SOURCE_RAW_GAZE:
+    if _draws_primary_raw_gaze(state) and source.kind != SOURCE_RAW_GAZE:
         lines.append(_raw_gaze_python(source))
     if other is not None:
         lines += _second_dataset_python(other)
@@ -1453,7 +1467,7 @@ def cli_snippet(
         lo, hi = state.fix_index_range_b
         argv += ["--compare-fix-index-range", f"{int(lo)}:{int(hi)}"]
     # A raw-gaze-only source's input flags *are* its --raw-gaze (VIZ-45).
-    if draws_raw_gaze(state) and source.kind != SOURCE_RAW_GAZE:
+    if _draws_primary_raw_gaze(state) and source.kind != SOURCE_RAW_GAZE:
         argv += _raw_gaze_cli(source)
     if _raw_gaze_layer_off(source, state):
         argv.append("--no-raw-gaze")
@@ -1589,7 +1603,7 @@ def state_caveats(source: SnippetSource, state: FigureState) -> list[str]:
     notes = []
     if source.note:
         notes.append(source.note)
-    if draws_raw_gaze(state) and not _raw_gaze_named(source):
+    if _draws_primary_raw_gaze(state) and not _raw_gaze_named(source):
         notes.append(
             "The raw gaze was loaded into the app, so the snippet can't name the "
             f"file it came from and loads `{_RAW_GAZE_PLACEHOLDER}` instead — "

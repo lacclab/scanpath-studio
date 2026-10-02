@@ -1836,8 +1836,9 @@ def _print_reproduction_code(
     settings = {**api.figure_options(kind), **api._expand_palette(dict(overrides))}
     # EXP-20: `plot_scanpath` turns the raw-gaze layer on for the frame it is
     # handed, so the flag never reaches `overrides`; the snippet reads it here.
-    # VIZ-48: `compare_scanpaths` too.
-    if raw_gaze and kind in {"static", "comparison"}:
+    # VIZ-48: `compare_scanpaths` too — whose samples may all be B's.
+    draws_b = kind == "comparison" and bool(args.compare_raw_gaze)
+    if (raw_gaze or draws_b) and kind in {"static", "comparison"}:
         settings["show_raw_gaze"] = args.show_raw_gaze is not False
     # These two are passed to `animate_scanpath` beside the overrides rather
     # than through them, so they never reached `settings` — a straight silent
@@ -1882,6 +1883,7 @@ def _print_reproduction_code(
                 if second and args.compare_raw_gaze
                 else None
             ),
+            primary_raw_gaze=raw_gaze,
         )
     state = cs.FigureState(
         kind=kind,

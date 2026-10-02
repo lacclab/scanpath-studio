@@ -82,6 +82,7 @@ from scanpath_studio.compare_source import (
     load_secondary_dataset,
     secondary_dataset_options,
     snapshot_for,
+    source_has_raw_gaze,
 )
 from scanpath_studio.constants import (
     DATASET_EDITOR_OPEN_KEY,
@@ -5864,9 +5865,10 @@ def render_single_trial_tab(
                     persist_state="session",
                     wrap=True,
                 )
-                # VIZ-45: Compare draws two readings' fixations and has no raw-gaze
-                # layer, so a trial without fixations stays on its static figure
-                # rather than drawing an empty comparison — same resolve as Animate.
+                # VIZ-45: Compare is built from two readings' fixations (its
+                # raw-gaze layer, VIZ-48, only sits under them), so a trial without
+                # fixations stays on its static figure rather than drawing an empty
+                # comparison — same resolve as Animate.
                 compare_enabled = compare_requested and trial_has_fixations
                 # Opens either way; greyed inside while Compare is off — see the
                 # Animate row above for why the menu does not refuse to open.
@@ -6085,7 +6087,13 @@ def render_single_trial_tab(
             host=rail,
             # CMP-24: where scanpath B's filters go, once B is loaded below.
             slots=rail_slots,
-            has_raw_gaze=has_raw_gaze,
+            # VIZ-48: Compare draws B's samples too, so B's dataset having some
+            # is enough — the rail is drawn before B loads, hence the peek.
+            has_raw_gaze=has_raw_gaze
+            or bool(
+                compare_enabled
+                and source_has_raw_gaze(st.session_state.get(COMPARE_SOURCE_KEY))
+            ),
             has_stimulus_image=has_stimulus_image,
             has_fixations=trial_has_fixations,
             has_words=not trial_words.empty,
@@ -6741,6 +6749,7 @@ def render_single_trial_tab(
                     if compare_meta.get("dataset") and not compare_raw_gaze.empty
                     else None
                 ),
+                primary_raw_gaze=has_raw_gaze,
             )
             # BUG-85: an animation names B only when it co-animates B. Where it
             # fell back to A alone (B empty, or two screens), a snippet naming B

@@ -183,3 +183,48 @@ def test_compare_raw_gaze_needs_compare_with(tmp_path):
                 str(tmp_path / "out.html"),
             ]
         )
+
+
+def test_the_rail_peeks_at_bs_dataset_for_samples():
+    """VIZ-48: the rail is drawn before B loads, so whether B's dataset has
+    raw gaze is read without loading it."""
+    import streamlit as st
+
+    from scanpath_studio.compare_source import THIS_DATASET, source_has_raw_gaze
+    from scanpath_studio.constants import DEMO_CHOICE
+
+    st.session_state["_datasets"] = {
+        "with": {"raw_gaze": pd.DataFrame({"x": [1.0]})},
+        "without": {"raw_gaze": pd.DataFrame()},
+    }
+    try:
+        assert source_has_raw_gaze(DEMO_CHOICE)
+        assert source_has_raw_gaze("with")
+        assert not source_has_raw_gaze("without")
+        assert not source_has_raw_gaze(THIS_DATASET)
+        assert not source_has_raw_gaze("PoTeC — Potsdam Textbook Corpus")
+    finally:
+        del st.session_state["_datasets"]
+
+
+def test_a_snippet_whose_samples_are_all_bs_loads_none_for_a():
+    from scanpath_studio import code_snippet as cs
+
+    state = cs.FigureState(
+        kind="comparison",
+        settings={**sps.figure_options("comparison"), "show_raw_gaze": True},
+        participant="p1",
+        trial="t1",
+        compare=cs.CompareTarget(
+            participant="p2",
+            trial="t2",
+            dataset="Lab B",
+            raw_gaze=("b.csv",),
+            primary_raw_gaze=False,
+        ),
+    )
+    code = cs.reproduction_code(cs.SnippetSource(kind=cs.SOURCE_DEMO), state)
+    assert "raw_gaze = " not in code.python
+    assert "raw_gaze_b = sps.load_raw_gaze('b.csv')" in code.python
+    assert "--sample-raw-gaze" not in code.cli
+    assert "--compare-raw-gaze b.csv" in code.cli

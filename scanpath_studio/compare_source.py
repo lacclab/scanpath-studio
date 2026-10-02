@@ -290,6 +290,22 @@ def _load_builtin_frames(name: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     return api.load_scanpath_data(raw[0], raw[1])
 
 
+def source_has_raw_gaze(name: str | None) -> bool:
+    """Whether comparison source ``name`` carries raw gaze, without loading it.
+
+    The rail is drawn before B's dataset loads, and its 🔵 Raw gaze switch must
+    be live when only B's dataset has samples (VIZ-48). A stored upload says so
+    in its frame, the demo always has some, the public corpora never do.
+    """
+    if not name or name == THIS_DATASET:
+        return False
+    stored = (st.session_state.get("_datasets") or {}).get(name)
+    if isinstance(stored, dict):
+        raw = stored.get("raw_gaze")
+        return raw is not None and not raw.empty
+    return name == DEMO_CHOICE
+
+
 @st.cache_data(show_spinner=False)
 def _load_demo_raw_gaze() -> pd.DataFrame:
     """The bundled demo's normalized raw gaze, for a demo B (VIZ-48)."""

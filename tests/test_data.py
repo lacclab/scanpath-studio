@@ -167,6 +167,57 @@ class TestPickColumnPrefixSuffixSecondPass:
         assert pick_column(df, ["word_id", "IA_ID", "aoi"]) is None
 
 
+class TestTextColumnIsNotABoxField:
+    """BUG-99: OneStop's IA report carries ``TOP_LEFT``, the box corner as the
+    text ``(368,186)``, beside the ``IA_*`` edges. Its tokens ``top`` + ``left``
+    made it the x and the y proposal, and every load warned that none of its
+    values were numbers."""
+
+    @staticmethod
+    def _onestop_like() -> pd.DataFrame:
+        return pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1"],
+                "TRIAL_INDEX": [1, 1],
+                "IA_ID": [1, 2],
+                "IA_LABEL": ["The", "cat"],
+                "IA_LEFT": [368.0, 420.0],
+                "IA_RIGHT": [420.0, 470.0],
+                "IA_TOP": [186.0, 186.0],
+                "IA_BOTTOM": [230.0, 230.0],
+                "TOP_LEFT": ["(368,186)", "(420, 186)"],
+            }
+        )
+
+    def test_the_tuple_column_is_not_proposed_for_x_or_y(self):
+        schema = propose_word_schema(self._onestop_like())
+        assert "TOP_LEFT" not in schema.values()
+        assert (schema["left"], schema["right"], schema["top"], schema["bottom"]) == (
+            "IA_LEFT",
+            "IA_RIGHT",
+            "IA_TOP",
+            "IA_BOTTOM",
+        )
+
+    def test_the_load_warns_about_nothing(self):
+        words = self._onestop_like()
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            out = normalize_words(words, propose_word_schema(words))
+        assert out["x"].tolist() == [368.0, 420.0]
+        assert out["width"].tolist() == [52.0, 50.0]
+
+    def test_a_header_only_frame_still_proposes_by_name(self):
+        # The mapping screen proposes from a header; there are no cells to read.
+        schema = propose_word_schema(pd.DataFrame(columns=["box_x", "box_y"]))
+        assert (schema["x"], schema["y"]) == ("box_x", "box_y")
+
+    def test_a_numeric_column_with_a_few_bad_cells_is_still_proposed(self):
+        # Mostly numbers: still the x column, and its bad cells get reported.
+        df = pd.DataFrame({"x": ["1", "2", "oops"], "y": [1, 2, 3]})
+        assert propose_word_schema(df)["x"] == "x"
+
+
 class TestBoxEdgesResolveAsOneSet:
     """DATA-57: the four edges are picked as a set sharing one affix, so an AOI
     table carrying two box encodings still auto-fills instead of every edge

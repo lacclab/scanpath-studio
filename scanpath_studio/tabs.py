@@ -8,9 +8,11 @@ import html
 import json
 import os
 import pickle
+import re
 import warnings
 import zlib
 from collections.abc import Callable, Hashable
+from contextvars import ContextVar
 from dataclasses import dataclass, replace
 from dataclasses import fields as dataclass_fields
 from functools import partial
@@ -57,6 +59,13 @@ from scanpath_studio.aggregation import (
     word_measure_vs_feature,
     word_rate_profile,
 )
+from scanpath_studio.analysis_recipe import (
+    analysis_choices,
+    build_analysis_recipe,
+    group_definition,
+    recipe_file_name,
+    result_counts,
+)
 from scanpath_studio.animation_export import (
     CHROME_INSTALL_HINT,
     AnimationBudgetError,
@@ -96,7 +105,6 @@ from scanpath_studio.constants import (
     DEFAULT_MARKER_SIZE_RANGE,
     DEFAULT_PALETTE,
     DEFAULT_SACCADE_WIDTH,
-    DEMO_CHOICE,
     FOCUS_MAPPING_KEY,
     HIGHLIGHTED_TEXT_COLOR,
     ICONS,
@@ -123,9 +131,11 @@ from scanpath_studio.constants import (
     derived_analysis_tables_enabled,
     drift_correction_enabled,
     icon_html,
+    plural,
     preprocessing_enabled,
     sentence_analysis_enabled,
     similarity_enabled,
+    spoken,
     upload_limit_mb,
 )
 from scanpath_studio.controls import (
@@ -143,10 +153,14 @@ from scanpath_studio.controls import (
     _popover_rows,
     _sub_row,
     _text_field_and_frame,
+    active_filter_items,
+    clear_trial_filters,
     column_mapping_ui,
     compare_b_filters,
     corpus_style_controls,
     current_dataset_name,
+    format_filter_item,
+    has_active_trial_filters,
     inline_field_label,
     read_trial_filters,
     render_compare_filters,
@@ -164,6 +178,7 @@ from scanpath_studio.data import (
     StimulusJoinWarning,
     aggregate_char_boxes,
     assign_derived,
+    brought_reading_measures,
     compute_word_metrics,
     derive_trial_index,
     drop_internal_columns,
@@ -200,6 +215,7 @@ from scanpath_studio.export import (
     render_export_options,
     render_pattern,
     render_static_figure_bytes,
+    summarize_export,
 )
 from scanpath_studio.export_status import (
     EXPORTER_VERSION,
@@ -422,8 +438,10 @@ def _render_screen_navigator(
     # the chip strip below. `width="stretch"` is deliberately gone — it fought the
     # `width: auto` that makes the cluster content-sized.
     trail = trail_col.container(key=f"railbtn_{key_prefix}_screen_trail")
+    # UX-200: `spoken` names the glyph buttons for screen readers.
     trail.button(
-        "◀",
+        f"◀ {spoken('Previous screen')}",
+        wrap=True,
         key=f"{key_prefix}_screen_previous",
         help="Previous screen in this logical trial",
         disabled=position == 0,
@@ -431,7 +449,8 @@ def _render_screen_navigator(
         args=(key_prefix, options, -1),
     )
     trail.button(
-        "▶",
+        f"▶ {spoken('Next screen')}",
+        wrap=True,
         key=f"{key_prefix}_screen_next",
         help="Next screen in this logical trial",
         disabled=position == len(options) - 1,
@@ -2248,7 +2267,11 @@ def _render_compare_filters(host, source: SecondaryDataset) -> None:
     unchanged — only where they render is.
     """
     pop = host.popover(
-        _FILTER_ICON, width="content", help=f"Filter {source.name}'s trials"
+        "Filter scanpath B's trials",
+        icon=_FILTER_ICON,
+        width="content",
+        help=f"Filter {source.name}'s trials",
+        key="iconpop_filter_compare",
     )
     box = pop.container(key="cmp_narrow_by")
     box.caption(f"Narrow **{source.name}** — scanpath B only.")
@@ -2505,7 +2528,14 @@ def _render_compare_selector(
     if sort_col is not None:
         if st.session_state.get("single_compare_order") not in sort_options:
             st.session_state["single_compare_order"] = _CMP_SORT_DEFAULT
-        with sort_col.popover("⇅", width="content", help="Sort the comparison trials"):
+        # UX-200: named for screen readers; `styles.py` draws ⇅ alone.
+        with sort_col.popover(
+            "Sort the comparison trials",
+            width="content",
+            wrap=True,
+            help="Sort the comparison trials",
+            key="iconpop_sort_compare",
+        ):
             sort_choice = _labeled(
                 st,
                 "selectbox",
@@ -2714,7 +2744,8 @@ def _render_compare_selector(
         )
         step_help = " Linked: also steps the main trial." if linked else ""
         step_col.button(
-            "◀",
+            f"◀ {spoken('Previous comparison trial')}",
+            wrap=True,
             key="single_compare_prev",
             on_click=_step_compare,
             args=(-1,),
@@ -2723,7 +2754,8 @@ def _render_compare_selector(
             help="Previous candidate." + step_help,
         )
         step_col.button(
-            "▶",
+            f"▶ {spoken('Next comparison trial')}",
+            wrap=True,
             key="single_compare_next",
             on_click=_step_compare,
             args=(1,),
@@ -3203,7 +3235,8 @@ def _span_fixated_note(
     if n == 0:
         return ' <span style="color:#dc3545;">— not fixated</span>'
     dwell = float(pd.to_numeric(trial_fixations.loc[mask, "duration_ms"]).sum())
-    return f' <span style="color:#198754;">— {n} fixations, {dwell:.0f} ms</span>'
+    fixed = plural(n, "fixation")
+    return f' <span style="color:#198754;">— {fixed}, {dwell:.0f} ms</span>'
 
 
 def _render_paragraph_panel(
@@ -3341,22 +3374,58 @@ def _in_text_fixation_value(
     return f"{n_in} / {n_total}"
 
 
+def _synthesized_raw_gaze_note(token: str | None) -> str:
+    """`app.synthesized_raw_gaze_note`, imported late (``app`` imports ``tabs``)."""
+    from scanpath_studio.app import synthesized_raw_gaze_note
+
+    return synthesized_raw_gaze_note(token)
+
+
+def _synthetic_raw_gaze_plot_note(
+    *, drawn_a: bool, source_a: str | None, drawn_b: bool = False, source_b=None
+) -> str:
+    """VIZ-50: the caption for a figure that draws synthesized samples, or ``""``.
+
+    ``drawn_a`` / ``drawn_b`` say whether each reading's samples are actually
+    on the figure (switch on, samples on this trial, not the replay), and
+    ``source_*`` names the dataset they came from — B's is a second dataset's
+    under CMP-8. The sentence is the 🗂️ Data page's own (`reading_note`).
+    """
+    note = (drawn_a and _synthesized_raw_gaze_note(source_a)) or (
+        drawn_b and _synthesized_raw_gaze_note(source_b)
+    )
+    if not note:
+        return ""
+    return f"{ICONS['raw_gaze']} **Synthetic raw-gaze illustration.** {note}"
+
+
 def _raw_gaze_missing_note(
     shown: bool,
     *,
     trial_has_raw_gaze: bool,
     comparing: bool = False,
     compare_has_raw_gaze: bool = False,
+    screen: bool = False,
 ) -> str:
     """The warning for a 🔵 Raw gaze switch with nothing to draw, or ``""``.
 
     VIZ-48: a comparison draws each reading's samples, so it names the reading
     that has none — and says nothing when both have some.
+
+    VIZ-50: outside Compare it says the samples are missing *here* — the switch
+    is live because the dataset has samples, on other trials or screens — so
+    the layer does not look broken. ``screen`` names a multipart trial's screen.
     """
     if not shown:
         return ""
     if not comparing:
-        return "" if trial_has_raw_gaze else "Raw gaze not available for this trial."
+        where = "screen" if screen else "trial"
+        return (
+            ""
+            if trial_has_raw_gaze
+            else f"No raw-gaze samples on this {where}. The dataset's samples "
+            f"cover other {where}s; the layer draws where they exist."
+        )
     if trial_has_raw_gaze and compare_has_raw_gaze:
         return ""
     if not (trial_has_raw_gaze or compare_has_raw_gaze):
@@ -3753,6 +3822,9 @@ def _build_studio_config(
         "raw_gaze": {
             "available": not trial_raw_gaze.empty,
             "points": len(trial_raw_gaze) if not trial_raw_gaze.empty else 0,
+            # VIZ-50: the dataset's samples are made up (the bundled demo's) —
+            # provenance, like the two keys above, and not read back.
+            "synthesized": bool(_synthesized_raw_gaze_note(data_source)),
             # VIZ-43: the layer's own style — the two keys above describe the
             # trial the config was saved on and are not read back.
             "color": viz_settings.get("raw_gaze_color", "#888888"),
@@ -3870,7 +3942,13 @@ def render_settings_file(
         exported_at=datetime.now().isoformat(timespec="seconds"),
         compare_styles=compare_styles,
     )
-    st.caption("This figure's settings and trial, as a JSON file.")
+    # UX-199: the file's boundary, as `_build_studio_config` draws it — the
+    # Corpus Analysis tutorial explains the excluded choices at more length.
+    st.caption(
+        "Includes the figure settings, recording setup and trial selection; "
+        "excludes trial filters, cohort definitions, annotations, the column "
+        "mapping and the data."
+    )
     st.download_button(
         "Download settings",
         icon=ICONS["download"],
@@ -4877,6 +4955,10 @@ def _render_export_panel(
     )
     bulk_settings["line_spacing"] = line_spacing
     bulk_settings["scale_text_to_boxes"] = scale_text_to_boxes
+    # VIZ-50: each trial's `plot_config.json` says when its samples are made up.
+    bulk_settings["raw_gaze_synthesized"] = bool(
+        _synthesized_raw_gaze_note(st.session_state.get("data_source_choice"))
+    )
     # EXP-4 / VIZ-24: the bulk export rebuilds every figure from scratch, so the
     # PRE-3 drift correction must ride along or the batch silently differs from
     # the corrected figure on screen. Applied per trial inside `bulk_export`
@@ -5481,23 +5563,14 @@ def render_single_trial_tab(
         def _render_filters(host) -> None:
             """Every way to narrow the pool, behind one funnel (UX-64)."""
             pop = host.popover(
-                _FILTER_ICON, width="content", help="Filter the trial list"
+                "Filter the trial list",
+                icon=_FILTER_ICON,
+                width="content",
+                help="Filter the trial list",
+                key="iconpop_filter_trials",
             )
             box = pop.container(key="tour_grp_narrow_by")
-            # VIZ-45: a raw-gaze-only dataset's readers and trials are in its
-            # samples, so that is what the filters are offered from (and what
-            # `app.main` narrows with them); beside fixations or words the
-            # samples follow those tables' filters instead.
-            filter_fixations = (
-                raw_gaze_all
-                if words_all.empty
-                and fixations_all.empty
-                and raw_gaze_all is not None
-                and not raw_gaze_all.empty
-                else fixations_all
-            )
-            render_narrow_by(words_all, filter_fixations, text_host=box, part_host=box)
-            render_trial_filters(words_all, filter_fixations, host=box)
+            _render_pool_filters(box, words_all, fixations_all, raw_gaze_all)
 
         # Trial picker (its own row of columns): selectbox + slider + ◀ ▶.
         with st.container(key="tour_grp_trial_picker"):
@@ -6569,11 +6642,16 @@ def render_single_trial_tab(
         )
         trail = trail_col.container(key="railbtn_chip_trail")
         edit_box = trail.container(key="railbtn_chip_edit")
+        # UX-200: named for screen readers; `styles.py` clips the name, so
+        # the pencil is still all that is drawn.
         with edit_box.popover(
-            ICONS["edit"],
+            "Choose the chip fields",
+            icon=ICONS["edit"],
             help="Edit which fields show as chips above the plot, and drag to "
             "reorder them.",
             width="content",
+            wrap=True,
+            key="iconpop_chip_fields",
         ):
             render_trial_chip_picker(words_all, fixations_all, host=st.container())
         chip_fields = st.session_state.get("trial_chip_fields") or []
@@ -6847,9 +6925,23 @@ def render_single_trial_tab(
             trial_has_raw_gaze=trial_has_raw_gaze,
             comparing=comparing and not animate,
             compare_has_raw_gaze=not compare_raw_gaze.empty,
+            screen=selected_screen is not None,
         )
         if raw_gaze_missing:
             plot_notes_slot.warning(raw_gaze_missing, icon=ICONS["warning"])
+        # VIZ-50: synthesized samples say so where they are drawn, not only on
+        # the 🗂️ Data page. The replay draws no raw gaze (VIZ-49).
+        synthetic_note = _synthetic_raw_gaze_plot_note(
+            drawn_a=effective_show_raw_gaze and not animate,
+            source_a=st.session_state.get("data_source_choice"),
+            drawn_b=compare_shows_raw_gaze and not compare_raw_gaze.empty,
+            source_b=(
+                (compare_meta.get("dataset") if compare_meta else None)
+                or st.session_state.get("data_source_choice")
+            ),
+        )
+        if synthetic_note:
+            plot_notes_slot.caption(synthetic_note)
         no_fixations_note = _no_fixations_note(
             trial_has_fixations=trial_has_fixations,
             trial_has_raw_gaze=trial_has_raw_gaze,
@@ -7323,13 +7415,26 @@ def _render_bulk_export(
             progress_slot.empty()
             cache = {"sig": sig, "data": zip_bytes, "progress": progress}
             st.session_state["_bulk_export_cache"] = cache
+            # EXP-24: the status box's last word is the bundle's, not
+            # "ready" over a zip whose figures failed.
+            built = summarize_export(progress, len(zip_bytes))
+            status_box.update(
+                label=built.message,
+                state="error" if built.level == "error" else "complete",
+                expanded=False,
+            )
 
     if cache and cache.get("sig") == sig:
         zip_bytes = cache["data"]
         progress = cache["progress"]
-        info_col.success(f"Ready · {len(zip_bytes) / 1_048_576:.1f} MB")
+        # EXP-24: what was made and what failed; a partial zip still downloads.
+        built = summarize_export(progress, len(zip_bytes))
+        getattr(info_col, built.level)(built.message, icon=ICONS[built.level])
         if progress.errors:
-            with st.expander("Export warnings"):
+            with st.expander(
+                f"Export errors ({len(progress.errors):,})",
+                expanded=built.expand_errors,
+            ):
                 for err in progress.errors:
                     st.write(err)
         st.download_button(
@@ -7788,16 +7893,68 @@ def _min_readers_input(host, *, key, label="Min readers per word", default=1):
     )
 
 
-def _download_tidy(host, df, *, name, key, label="⬇ Download this table (CSV)"):
-    """Per-view tidy-table download (AN-27)."""
+def _download_tidy(
+    host, df, *, name, key, label="⬇ Download this table (CSV)", recipe=None
+):
+    """Per-view tidy-table download (AN-27), with its recipe beside it (AN-34).
+
+    ``recipe`` is the view's own choices — the keyword arguments of
+    `analysis_recipe.analysis_choices`, plus ``counts`` for what the view
+    already counted. The recipe adds the page's dataset, trial filters and pool
+    (`_RECIPE_CONTEXT`); outside the page, or with no ``recipe``, the CSV
+    downloads alone.
+    """
     if df is None or getattr(df, "empty", True):
         return
-    host.download_button(
-        label,
-        data=df.to_csv(index=False).encode("utf-8"),
-        file_name=name,
-        mime="text/csv",
-        key=key,
+    context = _RECIPE_CONTEXT.get()
+    csv = df.to_csv(index=False).encode("utf-8")
+    if recipe is None or context is None:
+        host.download_button(label, data=csv, file_name=name, mime="text/csv", key=key)
+        return
+    recipe = dict(recipe)
+    counts = result_counts(df, recipe.pop("counts", None))
+    row = host.container(horizontal=True, gap="small")
+    row.download_button(label, data=csv, file_name=name, mime="text/csv", key=key)
+    row.download_button(
+        "⬇ Download the recipe (JSON)",
+        data=partial(_recipe_json, context, recipe, name, counts),
+        file_name=recipe_file_name(name),
+        mime="application/json",
+        key=f"{key}_recipe",
+        on_click="ignore",
+        help="How this table was made: the dataset, the trial filters, these "
+        "choices and the counts. No data rows and no figure settings.",
+    )
+
+
+def _recipe_json(context: dict, recipe: dict, name: str, counts: dict) -> str:
+    """The recipe file's text, built when the button is clicked (AN-34).
+
+    ``recipe["groups"]`` holds ``(label, spec)`` pairs, resolved here: a
+    trial-metadata cohort's spec lists every matching reading, too many to
+    serialize on every rerun.
+    """
+    from datetime import datetime
+
+    from scanpath_studio import __version__
+
+    recipe = dict(recipe)
+    if recipe.get("groups"):
+        recipe["groups"] = [group_definition(*pair) for pair in recipe["groups"]]
+    analysis = analysis_choices(section=context.get("section"), **recipe)
+
+    return json.dumps(
+        build_analysis_recipe(
+            app_version=__version__,
+            dataset=context.get("dataset") or {},
+            trial_filters=context.get("trial_filters") or [],
+            pool=context.get("pool") or {},
+            analysis=analysis,
+            table_file=name,
+            counts=counts,
+            exported_at=datetime.now().isoformat(timespec="seconds"),
+        ),
+        indent=2,
     )
 
 
@@ -7869,7 +8026,8 @@ def _apply_min_readers(host, df, min_readers, *, key):
     out = df[df["enough"]]
     if dropped:
         host.caption(
-            f"{ICONS['warning']} {dropped} word(s) backed by < {min_readers} readers hidden."
+            f"{ICONS['warning']} {plural(dropped, 'word')} backed by < "
+            f"{plural(min_readers, 'reader')} hidden."
         )
     return out
 
@@ -8336,6 +8494,176 @@ def _open_measure_mapping() -> None:
     _go_data()
 
 
+def _render_pool_filters(
+    host,
+    words_all: pd.DataFrame,
+    fixations_all: pd.DataFrame,
+    raw_gaze_all: pd.DataFrame | None,
+) -> None:
+    """Every trial filter, into ``host`` — the one panel both views open.
+
+    The Scanpath picker's funnel and Corpus Analysis' *Edit filters* (UX-198)
+    draw the same widgets under the same ``filter_*`` keys; only one view runs
+    per rerun, so the keys never meet.
+    """
+    # VIZ-45: a raw-gaze-only dataset's readers and trials are in its
+    # samples, so that is what the filters are offered from (and what
+    # `app.main` narrows with them); beside fixations or words the
+    # samples follow those tables' filters instead.
+    filter_fixations = (
+        raw_gaze_all
+        if words_all.empty
+        and fixations_all.empty
+        and raw_gaze_all is not None
+        and not raw_gaze_all.empty
+        else fixations_all
+    )
+    render_narrow_by(words_all, filter_fixations, text_host=host, part_host=host)
+    render_trial_filters(words_all, filter_fixations, host=host)
+
+
+def _count_noun(n: int, noun: str) -> str:
+    return f"{n:,} {noun}{'' if n == 1 else 's'}"
+
+
+def pool_count_text(
+    trials: int, trials_total: int, readers: int, readers_total: int
+) -> str:
+    """``12 of 24 trials · 1 of 2 readers`` — the analysis pool against the
+    dataset (UX-198). An unnarrowed pool is just ``24 trials · 2 readers``; a
+    dataset that names no readers leaves the reader half out."""
+    whole = trials == trials_total and readers == readers_total
+    parts = [(trials, trials_total, "trial")]
+    if readers_total:
+        parts.append((readers, readers_total, "reader"))
+    return " · ".join(
+        _count_noun(n, noun) if whole else f"{n:,} of {_count_noun(total, noun)}"
+        for n, total, noun in parts
+    )
+
+
+def _n_unique_readers(combos: pd.DataFrame | None) -> int:
+    if combos is None or combos.empty or "participant_id" not in combos:
+        return 0
+    return int(combos["participant_id"].astype(str).nunique())
+
+
+def _md_escape(text: str) -> str:
+    """Field values as literal text inside a markdown line."""
+    return re.sub(r"([\\`*_\[\]<>#|~$])", r"\\\1", str(text))
+
+
+def render_analysis_pool_bar(
+    host,
+    *,
+    words_all: pd.DataFrame,
+    fixations_all: pd.DataFrame,
+    raw_gaze_all: pd.DataFrame | None,
+    combos: pd.DataFrame,
+    combos_all: pd.DataFrame,
+) -> dict:
+    """The pool Corpus Analysis reads, on one line, with its filters (UX-198).
+
+    Filters set on the Scanpath view narrow this page too, which it never said:
+    a reader filtered out there was simply missing here. The counts are the
+    trial picker's pool (``combos``) against the Export subtab's *All*
+    (``combos_all``), so all three views count the same trials, and **Edit
+    filters** opens the Scanpath funnel's own panel.
+
+    Returns what it showed — the filters and the counts — for the AN-34 recipe,
+    so the file and the line on screen cannot disagree.
+    """
+    active = has_active_trial_filters()
+    pool = {
+        "trials": len(combos),
+        "trials_in_dataset": len(combos_all),
+        "readers": _n_unique_readers(combos),
+        "readers_in_dataset": _n_unique_readers(combos_all),
+    }
+    counts = pool_count_text(
+        pool["trials"],
+        pool["trials_in_dataset"],
+        pool["readers"],
+        pool["readers_in_dataset"],
+    )
+    items = active_filter_items(words_all, fixations_all) if active else []
+    described = " · ".join(_md_escape(format_filter_item(i)) for i in items)
+    text = f"**{counts}**"
+    if described:
+        text += f" · {described}"
+    elif not active:
+        text += " · no filters"
+    bar = host.container(
+        key="corpus_pool_bar",
+        horizontal=True,
+        vertical_alignment="center",
+        gap="small",
+    )
+    bar.markdown(text, width="stretch")
+    pop = bar.popover(
+        "Edit filters",
+        icon=ICONS["trial_filter"],
+        width="content",
+        help="The trial filters the Scanpath view uses — the same pool.",
+        # Stateful, so Clear can open it (`_clear_pool_filters`).
+        key=_POOL_POPOVER_KEY,
+        on_change="rerun",
+    )
+    _render_pool_filters(
+        pop.container(key="corpus_pool_filters"),
+        words_all,
+        fixations_all,
+        raw_gaze_all,
+    )
+    bar.button(
+        "Clear",
+        icon=ICONS["close"],
+        key="corpus_pool_clear",
+        on_click=_clear_pool_filters,
+        disabled=not active,
+        width="content",
+        help="Reset every trial filter, on every view.",
+    )
+    return {"trial_filters": items, "pool": pool}
+
+
+_POOL_POPOVER_KEY = "corpus_pool_popover"
+
+
+def _clear_pool_filters() -> None:
+    """The pool line's Clear: reset the filters and open **Edit filters**.
+
+    A closed popover's widgets are not mounted in the browser, so a
+    value the server sets for them never reaches it, and the browser sent the
+    old selection back on a later rerun — the filter returned after a view
+    switch. Opening the popover mounts them with the cleared values, and shows
+    what was cleared. (The panel's own *Clear all filters* runs while it is
+    open, which is why it never had this problem.)
+    """
+    clear_trial_filters()
+    st.session_state[_POOL_POPOVER_KEY] = True
+
+
+#: AN-34 — what every Corpus Analysis table's recipe shares: the dataset, the
+#: trial filters and the pool (set by `render_corpus_analysis_tab`), plus the
+#: section being drawn (`_recipe_section`). ``None`` outside the page, where
+#: `_download_tidy` draws the CSV alone.
+_RECIPE_CONTEXT: ContextVar[dict | None] = ContextVar(
+    "corpus_recipe_context", default=None
+)
+
+
+@contextlib.contextmanager
+def _recipe_section(section: str):
+    """Name the Corpus Analysis subtab the recipes drawn inside belong to."""
+    base = _RECIPE_CONTEXT.get()
+    token = _RECIPE_CONTEXT.set(None if base is None else {**base, "section": section})
+    try:
+        yield
+    finally:
+        _RECIPE_CONTEXT.reset(token)
+
+
 def render_corpus_analysis_tab(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
@@ -8349,6 +8677,7 @@ def render_corpus_analysis_tab(
     scale_text_to_boxes: bool = True,
     canvas_renderer: Callable[[Any], None] | None = None,
     has_raw_gaze: bool = False,
+    recipe_context: dict | None = None,
 ) -> None:
     """Corpus Analysis tab — question-oriented analysis sections.
 
@@ -8358,7 +8687,45 @@ def render_corpus_analysis_tab(
     Every section obeys the active trial filters and reads the shared measure
     picker / aggregation / spread / normalization controls. (**Generations** moved
     to the Scanpath view's **Comparisons** subtab — ENG-8.)
+
+    ``recipe_context`` — the dataset, trial filters and pool — is what each
+    table's AN-34 recipe records beside the view's own choices; without it the
+    tables download as CSV alone.
     """
+    token = _RECIPE_CONTEXT.set(dict(recipe_context) if recipe_context else None)
+    try:
+        _render_corpus_analysis_body(
+            words_filtered,
+            fixations_filtered,
+            canvas_width=canvas_width,
+            canvas_height=canvas_height,
+            base_font_size=base_font_size,
+            font_family=font_family,
+            viz_settings=viz_settings,
+            line_spacing=line_spacing,
+            scale_text_to_boxes=scale_text_to_boxes,
+            canvas_renderer=canvas_renderer,
+            has_raw_gaze=has_raw_gaze,
+        )
+    finally:
+        _RECIPE_CONTEXT.reset(token)
+
+
+def _render_corpus_analysis_body(
+    words_filtered: pd.DataFrame,
+    fixations_filtered: pd.DataFrame,
+    *,
+    canvas_width: int,
+    canvas_height: int,
+    base_font_size: int,
+    font_family: str,
+    viz_settings: dict,
+    line_spacing: float,
+    scale_text_to_boxes: bool,
+    canvas_renderer: Callable[[Any], None] | None,
+    has_raw_gaze: bool,
+) -> None:
+    """The body of :func:`render_corpus_analysis_tab`."""
     # AN-32: the page shows the reading measures the dataset *brought* and
     # computes none — BUG-78 used to derive them from the fixations and word
     # boxes when a report had none. Without one there is nothing to show.
@@ -8409,12 +8776,12 @@ def render_corpus_analysis_tab(
     )
     sentence_tab = opened.get("Per sentence")
     if text_tab.open:
-        with text_tab:
+        with text_tab, _recipe_section("Per text"):
             render_per_text_tab(
                 words_filtered, fixations_filtered, viz_settings=viz_settings, **common
             )
     if reader_tab.open:
-        with reader_tab:
+        with reader_tab, _recipe_section("Per reader"):
             render_per_reader_tab(
                 words_filtered,
                 fixations_filtered,
@@ -8425,7 +8792,7 @@ def render_corpus_analysis_tab(
         with sentence_tab:
             _render_per_sentence_tab(words_filtered, fixations_filtered)
     if groups_tab.open:
-        with groups_tab:
+        with groups_tab, _recipe_section("Groups"):
             render_groups_tab(
                 words_filtered,
                 fixations_filtered,
@@ -8550,7 +8917,7 @@ def _text_picker(words: pd.DataFrame, *, key: str, host=None, label: str = "Text
     counts = text_read_counts(words, text_col)
     if not counts.empty:
         labels = {
-            f"{row.text}  ({row.n_participants} readers)": row.text
+            f"{row.text}  ({plural(row.n_participants, 'reader')})": row.text
             for row in counts.itertuples()
         }
         chosen = host.selectbox(label, list(labels), key=key)
@@ -8667,7 +9034,18 @@ def render_per_text_tab(
         )
         rate = _apply_min_readers(st, rate, min_readers, key="ptext6_min_note")
         _chart(make_word_rate_figure(rate, **fw))
-        _download_tidy(st, rate, name=f"word_rates_{text_id}.csv", key="dl_ptext6")
+        _download_tidy(
+            st,
+            rate,
+            name=f"word_rates_{text_id}.csv",
+            key="dl_ptext6",
+            recipe=dict(
+                view=view,
+                text=(text_col, text_id),
+                screen=screen_id,
+                min_readers=min_readers,
+            ),
+        )
         return
 
     c = st.columns([3, 1, 1, 1])
@@ -8728,7 +9106,18 @@ def render_per_text_tab(
             )
         )
         _download_tidy(
-            st, per, name=f"per_reader_{measure.key}_{text_id}.csv", key="dl_ptext1"
+            st,
+            per,
+            name=f"per_reader_{measure.key}_{text_id}.csv",
+            key="dl_ptext1",
+            recipe=dict(
+                view=view,
+                text=(text_col, text_id),
+                screen=screen_id,
+                measure=measure,
+                aggregation=agg,
+                normalize=normalize,
+            ),
         )
     elif view == "Word × reader heatmap":  # AN-2
         per = _c_per_reader_word(
@@ -8753,7 +9142,18 @@ def render_per_text_tab(
             )
         )
         _download_tidy(
-            st, per, name=f"word_reader_{measure.key}_{text_id}.csv", key="dl_ptext2"
+            st,
+            per,
+            name=f"word_reader_{measure.key}_{text_id}.csv",
+            key="dl_ptext2",
+            recipe=dict(
+                view=view,
+                text=(text_col, text_id),
+                screen=screen_id,
+                measure=measure,
+                aggregation=agg,
+                normalize=normalize,
+            ),
         )
     elif view == "Cohort profile":  # AN-3
         spread = c[2].selectbox(
@@ -8791,6 +9191,16 @@ def render_per_text_tab(
             prof,
             name=f"cohort_profile_{measure.key}_{text_id}.csv",
             key="dl_ptext3",
+            recipe=dict(
+                view=view,
+                text=(text_col, text_id),
+                screen=screen_id,
+                measure=measure,
+                aggregation=agg,
+                normalize=normalize,
+                spread=spread,
+                min_readers=min_readers,
+            ),
         )
     elif view == "Word difficulty on stimulus":  # AN-4 (+ AN-28: reads viz_settings)
         agg_words = _c_word_box_aggregate(
@@ -8846,6 +9256,13 @@ def render_per_text_tab(
             agg_words[["word_id", "value"]],
             name=f"stimulus_{measure.key}_{text_id}.csv",
             key="dl_ptext4",
+            recipe=dict(
+                view=view,
+                text=(text_col, text_id),
+                screen=screen_id,
+                measure=measure,
+                aggregation=agg,
+            ),
         )
     elif view == "Measure vs feature":  # AN-5
         feats = available_features(words_filtered)
@@ -8882,6 +9299,15 @@ def render_per_text_tab(
             df,
             name=f"feature_{measure.key}_{feature_col}_{text_id}.csv",
             key="dl_ptext5",
+            recipe=dict(
+                view=view,
+                text=(text_col, text_id),
+                screen=screen_id,
+                measure=measure,
+                aggregation=agg,
+                normalize=normalize,
+                feature=feat_label,
+            ),
         )
 
 
@@ -9036,6 +9462,7 @@ def render_per_reader_tab(
                     selected_reader,
                     name=f"reader_summary_{pid}.csv",
                     key="dl_prdr8_reader",
+                    recipe=dict(view=view, reader=pid),
                 )
             with trial_table:
                 _render_trials_with_open_button(trials, pid, key="prdr8")
@@ -9044,6 +9471,7 @@ def render_per_reader_tab(
                     trials,
                     name=f"trial_summaries_{pid}.csv",
                     key="dl_prdr8_trials",
+                    recipe=dict(view=view, reader=pid),
                 )
     elif view == "Fixation duration over time":  # AN-9
         c = st.columns([3, 2])
@@ -9068,7 +9496,11 @@ def render_per_reader_tab(
             )
         )
         _download_tidy(
-            st, df, name=f"over_time_{measure.key}_{pid}.csv", key="dl_prdr9"
+            st,
+            df,
+            name=f"over_time_{measure.key}_{pid}.csv",
+            key="dl_prdr9",
+            recipe=dict(view=view, reader=pid, measure=measure, x_axis=by),
         )
     elif view == "Saccade vs fixation duration":  # AN-10
         df = saccade_vs_duration(fix_e, participant_id=pid)
@@ -9088,7 +9520,13 @@ def render_per_reader_tab(
             st.info("Needs fixation→word assignment to classify regressions.")
             return
         _chart(make_progression_figure(df, **fw))
-        _download_tidy(st, df, name=f"progression_{pid}.csv", key="dl_prdr11")
+        _download_tidy(
+            st,
+            df,
+            name=f"progression_{pid}.csv",
+            key="dl_prdr11",
+            recipe=dict(view=view, reader=pid),
+        )
     elif view == "Landing-position curve":  # AN-12
         vals = landing_positions(words_filtered, fix_e, participant_id=pid)
         if vals.size == 0:
@@ -9124,7 +9562,13 @@ def render_per_reader_tab(
                 **fw,
             )
         )
-        _download_tidy(st, df, name=f"trend_{measure.key}_{pid}.csv", key="dl_prdr13")
+        _download_tidy(
+            st,
+            df,
+            name=f"trend_{measure.key}_{pid}.csv",
+            key="dl_prdr13",
+            recipe=dict(view=view, reader=pid, measure=measure, aggregation=agg),
+        )
 
 
 def render_groups_tab(
@@ -9312,7 +9756,22 @@ def render_per_group_tab(
             )
         )
         _download_tidy(
-            st, prof, name=f"group_profile_{measure.key}_{text_id}.csv", key="dl_pgrp15"
+            st,
+            prof,
+            name=f"group_profile_{measure.key}_{text_id}.csv",
+            key="dl_pgrp15",
+            recipe=dict(
+                view=view,
+                groups=[(label, spec)],
+                text=(text_col, text_id),
+                screen=grp_screens[0] if grp_screens else None,
+                measure=measure,
+                aggregation=agg,
+                normalize=False,
+                spread=spread,
+                min_readers=min_readers,
+                counts={"group_readers": n_readers, "group_fixations": n_fix},
+            ),
         )
     elif view == "Reader summary table":  # AN-16
         table = _c_cohort_summary(
@@ -9328,12 +9787,28 @@ def render_per_group_tab(
         with reader_tab:
             st.dataframe(table, width="stretch", hide_index=True)
             _download_tidy(
-                st, table, name="group_reader_summaries.csv", key="dl_pgrp16"
+                st,
+                table,
+                name="group_reader_summaries.csv",
+                key="dl_pgrp16",
+                recipe=dict(
+                    view=view,
+                    groups=[(label, spec)],
+                    counts={"group_readers": n_readers, "group_fixations": n_fix},
+                ),
             )
         with trial_tab:
             st.dataframe(trials, width="stretch", hide_index=True)
             _download_tidy(
-                st, trials, name="group_trial_summaries.csv", key="dl_pgrp16_trials"
+                st,
+                trials,
+                name="group_trial_summaries.csv",
+                key="dl_pgrp16_trials",
+                recipe=dict(
+                    view=view,
+                    groups=[(label, spec)],
+                    counts={"group_readers": n_readers, "group_fixations": n_fix},
+                ),
             )
     elif view == "Group trend":  # AN-17
         c = st.columns([3, 1, 1])
@@ -9374,7 +9849,19 @@ def render_per_group_tab(
                     hoverinfo="skip",
                 )
         _chart(fig)
-        _download_tidy(st, df, name=f"group_trend_{measure.key}.csv", key="dl_pgrp17")
+        _download_tidy(
+            st,
+            df,
+            name=f"group_trend_{measure.key}.csv",
+            key="dl_pgrp17",
+            recipe=dict(
+                view=view,
+                groups=[(label, spec)],
+                measure=measure,
+                aggregation=agg,
+                counts={"group_readers": n_readers, "group_fixations": n_fix},
+            ),
+        )
 
 
 def render_group_comparison_tab(
@@ -9506,7 +9993,23 @@ def render_group_comparison_tab(
             )
         )
         _download_tidy(
-            st, diff, name=f"difference_{measure.key}_{text_id}.csv", key="dl_cmp19"
+            st,
+            diff,
+            name=f"difference_{measure.key}_{text_id}.csv",
+            key="dl_cmp19",
+            recipe=dict(
+                view=view,
+                groups=[
+                    (label_a, spec_a),
+                    (label_b, spec_b),
+                ],
+                text=(text_col, text_id),
+                screen=screen_id,
+                measure=measure,
+                aggregation=agg,
+                min_readers=min_readers,
+                counts={"group_a_readers": readers_a, "group_b_readers": readers_b},
+            ),
         )
     elif view == "Paired summary bars":  # AN-20
         all_measures = available_measures(words_filtered, fixations_filtered)
@@ -9547,7 +10050,23 @@ def render_group_comparison_tab(
             fixations=fixations_filtered,
         )
         _chart(make_paired_bars_figure(df, **fw))
-        _download_tidy(st, df, name="paired_group_means.csv", key="dl_cmp20")
+        _download_tidy(
+            st,
+            df,
+            name="paired_group_means.csv",
+            key="dl_cmp20",
+            recipe=dict(
+                view=view,
+                groups=[
+                    (label_a, spec_a),
+                    (label_b, spec_b),
+                ],
+                measures=measures,
+                aggregation=agg,
+                spread=spread,
+                counts={"group_a_readers": readers_a, "group_b_readers": readers_b},
+            ),
+        )
     elif view == "Effect size + test":  # AN-21
         c = st.columns([3, 2])
         measure = _measure_picker(
@@ -9646,7 +10165,22 @@ def render_group_comparison_tab(
             )
         )
         _download_tidy(
-            st, long, name=f"two_group_{measure.key}_{text_id}.csv", key="dl_cmp22"
+            st,
+            long,
+            name=f"two_group_{measure.key}_{text_id}.csv",
+            key="dl_cmp22",
+            recipe=dict(
+                view=view,
+                groups=[
+                    (label_a, spec_a),
+                    (label_b, spec_b),
+                ],
+                text=(text_col, text_id),
+                screen=screen_id,
+                measure=measure,
+                aggregation=agg,
+                counts={"group_a_readers": readers_a, "group_b_readers": readers_b},
+            ),
         )
 
 
@@ -10436,7 +10970,8 @@ def render_raw_gaze_tab(raw_gaze_filtered: pd.DataFrame) -> None:
         return
     # DATA-15: the bundled demo's raw gaze is synthesized from the fixation
     # report — a table that looks like recorded samples must say it isn't.
-    if st.session_state.get("data_source_choice") == DEMO_CHOICE:
+    # VIZ-50: the catalogue's flag decides it, as it does at the plot.
+    if _synthesized_raw_gaze_note(st.session_state.get("data_source_choice")):
         st.caption(
             f"{ICONS['warning']} The demo's raw gaze is **synthesized** from its fixations for "
             "illustration — it is not recorded eye-tracker output."
@@ -11032,13 +11567,19 @@ def _participant_metadata_body(
     # Fixations/AOI/Raw gaze's own `upload_box` — not a separate status line
     # further down the mapping side.
     stats = stats_host.container(key="wiz_upload_stats_participant_metadata")
+    # UX-200: named for screen readers; `styles.py` clips the name.
     preview = stats.popover(
-        ICONS["preview"], width="content", help="Preview — first rows"
+        "Preview the first rows",
+        icon=ICONS["preview"],
+        width="content",
+        wrap=True,
+        help="Preview — first rows",
+        key="iconpop_preview_participant_metadata",
     )
     preview.caption("First rows:")
     preview.dataframe(raw.head(), width="stretch", hide_index=True)
     counts = stats.container(key="wiz_upload_counts_participant_metadata")
-    counts.caption(f"{len(raw):,} row(s)")
+    counts.caption(plural(len(raw), "row"))
     counts.caption(f"{len(raw.columns)} columns")
 
     columns = [str(column) for column in raw.columns]
@@ -11227,13 +11768,19 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
 
     # UX-129 — see the matching block in `_participant_metadata_body`.
     stats = stats_host.container(key="wiz_upload_stats_trial_metadata")
+    # UX-200: named for screen readers; `styles.py` clips the name.
     preview = stats.popover(
-        ICONS["preview"], width="content", help="Preview — first rows"
+        "Preview the first rows",
+        icon=ICONS["preview"],
+        width="content",
+        wrap=True,
+        help="Preview — first rows",
+        key="iconpop_preview_trial_metadata",
     )
     preview.caption("First rows:")
     preview.dataframe(raw.head(), width="stretch", hide_index=True)
     counts = stats.container(key="wiz_upload_counts_trial_metadata")
-    counts.caption(f"{len(raw):,} row(s)")
+    counts.caption(plural(len(raw), "row"))
     counts.caption(f"{len(raw.columns)} columns")
 
     columns = [str(column) for column in raw.columns]
@@ -11440,13 +11987,19 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
 
     # UX-129 — see the matching block in `_participant_metadata_body`.
     stats = stats_host.container(key="wiz_upload_stats_text_metadata")
+    # UX-200: named for screen readers; `styles.py` clips the name.
     preview = stats.popover(
-        ICONS["preview"], width="content", help="Preview — first rows"
+        "Preview the first rows",
+        icon=ICONS["preview"],
+        width="content",
+        wrap=True,
+        help="Preview — first rows",
+        key="iconpop_preview_text_metadata",
     )
     preview.caption("First rows:")
     preview.dataframe(raw.head(), width="stretch", hide_index=True)
     counts = stats.container(key="wiz_upload_counts_text_metadata")
-    counts.caption(f"{len(raw):,} row(s)")
+    counts.caption(plural(len(raw), "row"))
     counts.caption(f"{len(raw.columns)} columns")
 
     columns = [str(column) for column in raw.columns]
@@ -13094,6 +13647,119 @@ def _render_dataset_stats_tab(
     # Provenance is a fact about the *dataset*, so it sits with the counts.
     # Silent for every source but a OneStop server bundle.
     _render_data_provenance()
+
+
+#: DATA-67 — a reading measure's short label (``"TFD"``) by canonical column.
+_MEASURE_SHORT_LABELS = {
+    column: label for _k, column, label, *_ in READING_MEASURE_FIELDS
+}
+
+
+def dataset_capabilities(
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    raw_gaze: pd.DataFrame | None,
+) -> list[str]:
+    """*Available with this dataset*: four lines, one per thing a dataset may
+    or may not support (DATA-67).
+
+    Read off the same checks the app already makes, never a new rule: the
+    trials with fixations (what the Scanpath view draws), the reading measures
+    the AOI table brought (`data.brought_reading_measures`, all Corpus
+    Analysis shows — AN-32), the trials the raw gaze covers, and the multipart
+    screens (`multipart.part_catalog`, the 📊 Stats tab's Screens count).
+    """
+    words = words if words is not None else pd.DataFrame()
+    fixations = fixations if fixations is not None else pd.DataFrame()
+    raw_gaze = raw_gaze if raw_gaze is not None else pd.DataFrame()
+    fix_trials = trial_keys(fixations)
+    gaze_trials = trial_keys(raw_gaze)
+    all_trials = fix_trials | trial_keys(words) | gaze_trials
+
+    if fix_trials and not words.empty:
+        scanpath = f"over the text, for {plural(len(fix_trials), 'trial')}"
+    elif fix_trials:
+        scanpath = (
+            f"for {plural(len(fix_trials), 'trial')}, with no text: "
+            "the dataset has no AOI table"
+        )
+    elif gaze_trials:
+        scanpath = (
+            "none, as the dataset has no fixations; "
+            f"raw gaze is drawn instead, for {plural(len(gaze_trials), 'trial')}"
+        )
+    else:
+        scanpath = "none, as the dataset has no fixations"
+
+    measures = [
+        _MEASURE_SHORT_LABELS[column] for column in brought_reading_measures(words)
+    ]
+    measure_line = (
+        f"{', '.join(measures)}, shown by Corpus Analysis"
+        if measures
+        else "none supplied, so Corpus Analysis has nothing to show"
+    )
+
+    gaze_line = (
+        f"{len(gaze_trials):,} of {plural(len(all_trials), 'trial')}"
+        if gaze_trials
+        else "none"
+    )
+
+    try:
+        parts = part_catalog(words, fixations)
+    except ValueError:
+        parts = pd.DataFrame()
+    if parts.empty:
+        screen_line = "one per trial"
+    else:
+        n_parents = len(parts[["participant_id", "trial_id"]].drop_duplicates())
+        screen_line = (
+            f"{plural(len(parts), 'screen')} across {plural(n_parents, 'trial')}"
+        )
+
+    return [
+        f"{ICONS['view_scanpath']} **Scanpaths:** {scanpath}",
+        f"{ICONS['view_corpus']} **Reading measures:** {measure_line}",
+        f"{ICONS['raw_gaze']} **Raw gaze:** {gaze_line}",
+        f"{ICONS['screens']} **Screens:** {screen_line}",
+    ]
+
+
+@st.cache_data(show_spinner=False)
+def _c_dataset_capabilities(_words, _fixations, _raw_gaze, key) -> list[str]:
+    """`dataset_capabilities`, keyed on the three frames' fingerprints.
+
+    The Data page draws it on every rerun, and on a corpus it scans every
+    trial key of the raw gaze samples.
+    """
+    return dataset_capabilities(_words, _fixations, _raw_gaze)
+
+
+def render_dataset_capabilities(
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    raw_gaze: pd.DataFrame | None,
+) -> None:
+    """*Available with this dataset* under the *What's in…* heading (DATA-67).
+
+    A handful of lines for the whole dataset, before any trial filter: the
+    numbers are in 📊 Stats below, and how to change what is available is
+    ✏️ Edit dataset on the heading's line.
+    """
+    lines = _c_dataset_capabilities(
+        words,
+        fixations,
+        raw_gaze,
+        (
+            frame_fingerprint(words),
+            frame_fingerprint(fixations),
+            frame_fingerprint(raw_gaze),
+        ),
+    )
+    with st.container(key="dataset_capabilities"):
+        st.caption("**Available with this dataset**")
+        st.caption("  \n".join(lines))
 
 
 def render_data_inspection_tab(

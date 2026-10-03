@@ -11,7 +11,7 @@ import streamlit as st
 
 from . import progress
 from .annotations import get_entry, store_for_prefix
-from .constants import SELECTOR_ROW_GRID, SELECTOR_ROW_TRIO
+from .constants import SELECTOR_ROW_GRID, SELECTOR_ROW_TRIO, spoken
 from .data import frame_fingerprint, stable_id
 from .fields import labeled
 
@@ -922,7 +922,14 @@ def _render_trial_sort_popover(
     state_key = f"{key_prefix}_trial_sort"
     if st.session_state.get(state_key) not in options:
         st.session_state[state_key] = options[0]
-    with host.popover("⇅", width="content", help="Sort the trial list"):
+    # UX-200: named for screen readers; `styles.py` draws ⇅ alone.
+    with host.popover(
+        "Sort the trial list",
+        width="content",
+        wrap=True,
+        help="Sort the trial list",
+        key=f"iconpop_sort_trial_{key_prefix}",
+    ):
         choice = labeled(
             st,
             "selectbox",
@@ -1292,9 +1299,11 @@ def _select_trial_none_mode(
             else []
         )
         step_help = " Linked: also steps the compared trial." if linked else ""
+        # UX-200: `spoken` names the glyph buttons for screen readers.
         steps.button(
-            "◀",
+            f"◀ {spoken('Previous trial')}",
             key=f"{key_prefix}_prev_trial" if key_prefix else "prev_trial",
+            wrap=True,
             on_click=_step_trial,
             args=(-1,),
             disabled=current_idx == 0
@@ -1302,8 +1311,9 @@ def _select_trial_none_mode(
             help="Previous trial." + step_help,
         )
         steps.button(
-            "▶",
+            f"▶ {spoken('Next trial')}",
             key=f"{key_prefix}_next_trial" if key_prefix else "next_trial",
+            wrap=True,
             on_click=_step_trial,
             args=(1,),
             disabled=current_idx == n_trials - 1

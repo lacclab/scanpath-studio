@@ -938,3 +938,131 @@ class TestAnnotationsInTheBundle:
             cfg = json.loads(zf.read("per_trial/p1__t1/plot_config.json"))
             assert "annotations" not in cfg
             assert set(cfg["figure_text"]) == {"title", "caption"}
+
+
+class TestBuildSummary:
+    """EXP-24: a built bundle says what it made and what failed, and a missing
+    browser costs only the formats that need one."""
+
+    @staticmethod
+    def _failing_renderer():
+        from contextlib import contextmanager
+
+        @contextmanager
+        def fake(enabled):
+            def render(fig, fmt, width, height, scale):
+                raise RuntimeError("no browser")
+
+            yield render
+
+        return fake
+
+    def _build(self, monkeypatch, combos, words, fixations, settings, **formats):
+        import scanpath_studio.export as export_mod
+
+        monkeypatch.setattr(export_mod, "_figure_renderer", self._failing_renderer())
+        return bulk_export(
+            combos,
+            words,
+            fixations,
+            canvas_width=800,
+            canvas_height=400,
+            base_font_size=14,
+            font_family="monospace",
+            x_field="x",
+            y_field="y",
+            settings=settings,
+            options=ExportOptions(
+                **{"include_png": False, "include_svg": False, **formats}
+            ),
+        )
+
+    def test_html_survives_a_failed_png_and_the_summary_says_partly(
+        self,
+        monkeypatch,
+        minimal_combos,
+        minimal_words,
+        minimal_fixations,
+        base_settings,
+    ):
+        from scanpath_studio.export import summarize_export
+
+        zip_bytes, progress = self._build(
+            monkeypatch,
+            minimal_combos,
+            minimal_words,
+            minimal_fixations,
+            base_settings,
+            include_png=True,
+            include_html=True,
+        )
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+            names = set(zf.namelist())
+        assert "per_trial/p1__t1/figure.html" in names
+        assert not any(n.endswith(".png") for n in names)
+        assert (progress.figures_written, progress.figures_failed) == (2, 2)
+        assert progress.files_written == len(names)
+        summary = summarize_export(progress, len(zip_bytes))
+        assert summary.level == "warning"
+        assert summary.expand_errors is False
+        assert "2 of 4 figures made" in summary.message
+        assert "2 failed" in summary.message
+
+    def test_no_figure_made_is_an_error_with_the_list_open(
+        self,
+        monkeypatch,
+        minimal_combos,
+        minimal_words,
+        minimal_fixations,
+        base_settings,
+    ):
+        from scanpath_studio.export import summarize_export
+
+        zip_bytes, progress = self._build(
+            monkeypatch,
+            minimal_combos,
+            minimal_words,
+            minimal_fixations,
+            base_settings,
+            include_png=True,
+        )
+        summary = summarize_export(progress, len(zip_bytes))
+        assert summary.level == "error"
+        assert summary.expand_errors is True
+        assert summary.message.startswith("No figures were made")
+        # The plot configs were still written — the zip is worth downloading.
+        assert progress.files_written > 1
+
+    def test_a_clean_tables_only_build_is_ready(self):
+        from scanpath_studio.export import ExportProgress, summarize_export
+
+        progress = ExportProgress(total_trials=2, finished_trials=2, files_written=5)
+        summary = summarize_export(progress, 2 * 1_048_576)
+        assert summary == summary.__class__(
+            "success", "Ready · 5 files · 2.0 MB", False
+        )
+
+    def test_skipped_trials_are_counted(self):
+        from scanpath_studio.export import ExportProgress, summarize_export
+
+        progress = ExportProgress(
+            total_trials=2,
+            files_written=1,
+            trials_skipped=1,
+            errors=["p1__t9: empty data, skipped"],
+        )
+        summary = summarize_export(progress, 0)
+        assert summary.level == "warning"
+        assert "1 trial skipped" in summary.message
+
+
+class TestMissingBrowserNote:
+    def test_only_when_static_formats_meet_a_missing_browser(self, monkeypatch):
+        import scanpath_studio.animation_export as anim
+        from scanpath_studio.export import missing_browser_note
+
+        monkeypatch.setattr(anim, "chrome_available", lambda: False)
+        assert "HTML" in missing_browser_note(True)
+        assert missing_browser_note(False) == ""
+        monkeypatch.setattr(anim, "chrome_available", lambda: True)
+        assert missing_browser_note(True) == ""

@@ -67,6 +67,7 @@ from .constants import (
     UNIFORM_COLOR_FIELD,
     drift_correction_enabled,
     onestop_regime_for_choice,
+    plural,
 )
 from .controls import (
     _ALIGN_OPTIONS,
@@ -2354,7 +2355,8 @@ def _apply_uploaded_plot_config(combos: pd.DataFrame, fixations: pd.DataFrame) -
     st.session_state["_plot_config_skipped"] = skipped
     if applied:
         st.toast(
-            f"Restored {applied} setting(s) from plot config.", icon=ICONS["success"]
+            f"Restored {plural(applied, 'setting')} from plot config.",
+            icon=ICONS["success"],
         )
     elif not skipped:
         st.toast("Plot config had no recognized settings.", icon=ICONS["warning"])

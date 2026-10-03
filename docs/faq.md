@@ -80,8 +80,9 @@ data to the online demo. See [Privacy](privacy.md).
 Not on a local or desktop install: the app keeps a recovery copy of your
 datasets and settings (when it listens only on this computer, as
 `scanpath-studio` and the desktop app do — see [Privacy](privacy.md)), and
-**:material/database: Data → Saved on this computer** shows what it holds. The online demo keeps nothing, so export your annotations and settings
-before you leave.
+**:material/database: Data Management → Saved on this computer** shows what it holds. The online demo keeps nothing, and says so after your first upload,
+so export your annotations and settings before you leave
+([what to back up](guides/outputs-sharing.md#back-up-your-work)).
 
 ### How do I turn the recovery copy off, or delete it?
 

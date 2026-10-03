@@ -121,7 +121,9 @@ from scanpath_studio.constants import (
     icon_html,
     language_display,
     multipleye_enabled,
+    plural,
     preprocessing_enabled,
+    spoken,
     upload_limit_mb,
 )
 from scanpath_studio.controls import (
@@ -239,6 +241,7 @@ from scanpath_studio.persistence import (
     human_size,
     is_loopback_url,
     local_state_restored,
+    persistence_enabled,
     persistence_paused,
     restore_local_state,
     restored_from_cache,
@@ -258,8 +261,10 @@ from scanpath_studio.tabs import (
     _build_figure_settings,
     _render_column_mapping_section,
     dataset_editor_is_dirty,
+    render_analysis_pool_bar,
     render_corpus_analysis_tab,
     render_data_inspection_tab,
+    render_dataset_capabilities,
     render_dataset_editor_footer,
     render_participant_metadata_section,
     render_settings_file,
@@ -822,7 +827,9 @@ def _render_download_folder_section(host) -> None:
         persist_state="session",
     )
     browse_col.button(
-        ICONS["folder"],
+        # UX-200: named for screen readers; the folder icon is all that shows.
+        f"{ICONS['folder']} {spoken('Choose the download folder')}",
+        wrap=True,
         key=f"{DOWNLOAD_DIR_KEY}_browse",
         help="Browse for a folder",
         on_click=_pick_download_folder,
@@ -1373,7 +1380,11 @@ def _dataset_dir_input(
     # Vertical-align the button with the input (past its label).
     browse_col.markdown("<div style='height:1.7em'></div>", unsafe_allow_html=True)
     if browse_col.button(
-        ICONS["folder"], key=f"{key_prefix}_browse", help="Browse for a folder"
+        # UX-200: named for screen readers; the folder icon is all that shows.
+        f"{ICONS['folder']} {spoken('Choose the data folder')}",
+        wrap=True,
+        key=f"{key_prefix}_browse",
+        help="Browse for a folder",
     ):
         chosen = _pick_directory_dialog()
         if chosen:
@@ -2427,8 +2438,11 @@ _BUILTIN_DATASET_ABOUT: dict[str, dict] = {
         ),
         # UX-177: OneStop publishes no raw samples, so the raw-gaze layer is
         # made up — which changes how that layer is read, so it is said.
-        reading_note="Its raw-gaze samples are synthesized: OneStop publishes "
+        # VIZ-50: the flag says it at the figure too, and in its exports
+        # (`synthesized_raw_gaze_note`), in this same sentence.
+        reading_note="The raw-gaze samples are synthesized: OneStop publishes "
         "no raw gaze.",
+        raw_gaze_synthesized=True,
     ),
     ONESTOP_CHOICE: dict(
         language="English (L1)",
@@ -2512,6 +2526,23 @@ def dataset_about(token: str, registry: dict | None = None) -> dict:
     if "published_counts" in about:
         about["published_counts"] = dict(about["published_counts"])
     return about
+
+
+def synthesized_raw_gaze_note(token: str | None) -> str:
+    """The catalogue's sentence for a dataset whose raw gaze is made up, else ``""``.
+
+    VIZ-50: the 🗂️ Data page says the demo's samples are synthesized, but the
+    🔵 Raw gaze layer is switched on from Scanpath, where that page is out of
+    sight — so the plot repeats the note while the layer is drawn, and the
+    Share → File settings and the bundle's ``plot_config.json`` record it. One
+    flag (``raw_gaze_synthesized``) and one sentence (``reading_note``), read
+    from the packaged sources' table directly: no public corpus or upload sets
+    it, so the registry is never built to answer.
+    """
+    about = _BUILTIN_DATASET_ABOUT.get(str(token or "")) or {}
+    if not about.get("raw_gaze_synthesized"):
+        return ""
+    return str(about.get("reading_note") or "")
 
 
 def _benchmark_registry_entries() -> dict:
@@ -4641,7 +4672,15 @@ def render_data_source_picker(host=None) -> None:
             "More coming soon! is a preview of future datasets."
         ),
     )
-    with add_col.popover(ICONS["add"], help="Add dataset", key="add_dataset_menu"):
+    # UX-200: named for screen readers; `styles.py` clips the name, so + is
+    # still all that is drawn.
+    with add_col.popover(
+        "Add dataset",
+        icon=ICONS["add"],
+        help="Add dataset",
+        wrap=True,
+        key="add_dataset_menu",
+    ):
         st.button(
             "Create manually",
             icon=ICONS["author"],
@@ -7599,6 +7638,67 @@ def _render_cancelled_load_notice(host) -> None:
     )
 
 
+#: UX-199: ``"show"`` once the first upload lands on a deployment that keeps
+#: nothing, ``"dismissed"`` once the user closes the reminder — which keeps it
+#: down for the rest of the session, later uploads included. UI-only, so it is
+#: not wire format and no link or saved file carries it.
+BACKUP_REMINDER_KEY = "_sps_backup_reminder"
+
+#: Where the docs list what to download, and from where, to keep your work.
+BACKUP_GUIDE_URL = f"{CITATION['docs_url']}guides/outputs-sharing/#back-up-your-work"
+
+
+def arm_backup_reminder() -> None:
+    """Ask for the backup reminder after an upload, where nothing is saved (UX-199).
+
+    Called from the wizard's ✅ Add dataset callback. *Saved on this computer*
+    says the same thing at the foot of the 🗂️ Data page, where a hosted user
+    working in Scanpath may never look — so the first upload, the moment there
+    is something to lose, says it in the notices strip on every view.
+    """
+    if st.session_state.get(BACKUP_REMINDER_KEY) == "dismissed":
+        return
+    if persistence_enabled(str(getattr(st.context, "url", "") or "")):
+        return
+    st.session_state[BACKUP_REMINDER_KEY] = "show"
+
+
+def _dismiss_backup_reminder() -> None:
+    st.session_state[BACKUP_REMINDER_KEY] = "dismissed"
+
+
+def _render_backup_reminder(host, active_view: str) -> None:
+    """UX-199: the dismissible "nothing is saved here" reminder, in the notices."""
+    if st.session_state.get(BACKUP_REMINDER_KEY) != "show":
+        return
+    box = host.container(key="sps_backup_reminder", border=True)
+    box.markdown(
+        f"{ICONS['warning']} **This deployment saves nothing.** Closing or "
+        "refreshing the tab loses the datasets you added, their column mappings "
+        "and your annotations. Keep the files you uploaded, and export your "
+        f"annotations from {ICONS['view_data']} **Data Management → Annotations** and each "
+        "dataset's mapping from "
+        f"{ICONS['edit']} **Edit dataset → Save setup**. "
+        f"[What to back up ↗]({BACKUP_GUIDE_URL})"
+    )
+    row = box.container(horizontal=True, gap="small")
+    if active_view != _VIEW_DATA:
+        row.button(
+            "Open Data Management",
+            key="sps_backup_reminder_go",
+            icon=ICONS["view_data"],
+            on_click=_go_data,
+            type="tertiary",
+        )
+    row.button(
+        "Dismiss",
+        key="sps_backup_reminder_dismiss",
+        icon=ICONS["close"],
+        on_click=_dismiss_backup_reminder,
+        type="tertiary",
+    )
+
+
 def _open_dataset_card(
     page: loading.Page,
     data_choice: str,
@@ -7965,6 +8065,7 @@ def _run_app() -> None:
     menu = render_top_menu(active_view=active_view)
     _render_about_panel(menu.title)
     _render_cancelled_load_notice(menu.notices)
+    _render_backup_reminder(menu.notices, active_view)
 
     def _finish_page() -> None:
         """The run's last UI, once, on whichever path ``main`` leaves by.
@@ -8719,7 +8820,7 @@ def _run_app() -> None:
         if not suspicious.empty:
             with view_notices:
                 st.warning(
-                    f"Data quality: {len(suspicious)} trial(s) put at least 12 "
+                    f"Data quality: {plural(len(suspicious), 'trial')} put at least 12 "
                     "fixations on one word. Check stimulus alignment or line "
                     "assignment."
                 )
@@ -9198,6 +9299,9 @@ def _run_app() -> None:
             # and the counts they came for. UX-174 r2 put Rename on the heading
             # and Edit on the description line, off the table's rows.
             render_dataset_inspection_head(active_token)
+            # DATA-67 — what the dataset supports, before any trial filter:
+            # the first thing a newly added dataset's overview answers.
+            render_dataset_capabilities(words_all, fixations_all, raw_gaze_all)
             # Keyed wrapper → the stable `.st-key-…` selector the "Load and
             # verify a dataset" tutorial spotlights (it kept its name across the
             # move off the Scanpath subtab bar).
@@ -9219,8 +9323,30 @@ def _run_app() -> None:
             # UX-25: Corpus Analysis has no "Filter by" row, so the picker gets
             # its own compact row at the top of the page — it stays reachable on
             # every view.
-            _ds_col, _ = st.columns([2, 5])
+            _ds_col, pool_col = st.columns([2, 5], vertical_alignment="bottom")
             render_data_source_picker(host=_ds_col)
+            # UX-198: the pool the analysis reads — and the filters behind it —
+            # beside the dataset, where Scanpath keeps its own filter funnel.
+            pool = render_analysis_pool_bar(
+                pool_col,
+                words_all=words_all,
+                fixations_all=fixations_all,
+                raw_gaze_all=raw_gaze_all,
+                combos=combos,
+                combos_all=combos_all,
+            )
+            # AN-34: what each table's recipe shares — the dataset by the name
+            # the picker shows (and its stable token), and the pool above.
+            source_token = str(
+                st.session_state.get("data_source_choice") or data_choice
+            )
+            recipe_context = {
+                **pool,
+                "dataset": {
+                    "name": _dataset_display_name(source_token),
+                    "source": source_token,
+                },
+            }
             with st.container(key="tutorial_corpus_analysis"):
                 render_corpus_analysis_tab(
                     words_filtered,
@@ -9234,6 +9360,7 @@ def _run_app() -> None:
                     scale_text_to_boxes=scale_text_to_boxes,
                     canvas_renderer=canvas_renderer,
                     has_raw_gaze=not raw_gaze_filtered.empty,
+                    recipe_context=recipe_context,
                 )
     else:
         # The Scanpath view renders the viz controls itself (right rail) and

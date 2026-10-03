@@ -54,6 +54,7 @@ from .constants import (
     icon_html,
     icons_to_html,
     palette_settings,
+    spoken,
     upload_limit_mb,
 )
 from .data import (
@@ -1538,9 +1539,11 @@ def _render_saved_designs(host) -> None:
             # Material icons rather than emoji: emoji render at whatever size and
             # baseline the platform font decides, which is what made these two
             # sit high and unaligned in their buttons.
+            # UX-200: `spoken` names each icon for screen readers.
             cells[1].button(
-                "",
+                spoken(f"Rename design {name}"),
                 icon=ICONS["edit"],
+                wrap=True,
                 key=f"design_edit_{name}",
                 type="tertiary",
                 width="stretch",
@@ -1549,8 +1552,9 @@ def _render_saved_designs(host) -> None:
                 args=(name,),
             )
             cells[2].button(
-                "",
+                spoken(f"Delete design {name}"),
                 icon=ICONS["delete"],
+                wrap=True,
                 key=f"design_delete_{name}",
                 type="tertiary",
                 width="stretch",
@@ -1560,8 +1564,9 @@ def _render_saved_designs(host) -> None:
             )
         _render_design_file_row(st, saved)
     if shell.button(
-        "",
+        spoken("Save the plot settings as a design"),
         icon=ICONS["save"],
+        wrap=True,
         key="design_save",
         help="Save the plot settings on screen now as a named design.",
     ):
@@ -1710,11 +1715,13 @@ def _render_design_rename(row, name: str) -> None:
             label_visibility="collapsed",
         )
         # Both need an explicit `key`: a submit button's identity is its label,
-        # and these two share the empty one — the icon is not part of it, so the
-        # second silently collapsed to a 0-height cell without them.
+        # and these two shared the empty one — the icon is not part of it, so
+        # the second silently collapsed to a 0-height cell without them.
+        # UX-200 named them for screen readers (`spoken`).
         cells[1].form_submit_button(
-            "",
+            spoken("Save the new name"),
             icon=ICONS["confirm"],
+            wrap=True,
             key=f"design_rename_go_{name}",
             type="tertiary",
             width="stretch",
@@ -1723,8 +1730,9 @@ def _render_design_rename(row, name: str) -> None:
             args=(name,),
         )
         cells[2].form_submit_button(
-            "",
+            spoken("Cancel renaming"),
             icon=ICONS["close"],
+            wrap=True,
             key=f"design_rename_cancel_{name}",
             type="tertiary",
             width="stretch",
@@ -2856,7 +2864,10 @@ def column_mapping_ui(
             # A one-click confirm in the space the flag already occupies is the
             # only honest way to say "I chose this" for that case.
             note_col.button(
-                ICONS["auto_detected"],
+                # UX-200: named for screen readers; only the ✨ shows.
+                f"{ICONS['auto_detected']} "
+                + spoken(f"Confirm the detected {field_label} column"),
+                wrap=True,
                 key=f"{cell_key}_confirm",
                 help=f"{hover} — click to confirm this column and clear the mark.",
                 on_click=_mark_field_touched,
@@ -3099,7 +3110,9 @@ def multi_field_flag(
     )
     if state == "auto":
         flag_host.button(
-            ICONS["auto_detected"],
+            # UX-200: named for screen readers; only the ✨ shows.
+            f"{ICONS['auto_detected']} {spoken('Confirm the detected columns')}",
+            wrap=True,
             key=f"{cell_key}_confirm",
             help=f"{hover} — click to confirm and clear the mark.",
             on_click=_mark_field_touched,
@@ -6954,6 +6967,134 @@ def has_active_trial_filters(prefix: str = "") -> bool:
     )
 
 
+#: UX-198 — the titles of the filters whose session key is not
+#: ``filter_<column>``; every other one is titled by its column.
+_FILTER_KEY_LABELS = {
+    "filter_participants": "Participant",
+    "filter_text_id": "Text",
+    "filter_favorites": "Favorites only",
+    "filter_req_tags": "With any of these tags",
+    "filter_exc_tags": "Excluding tags",
+}
+
+#: The metadata filters' key stems (DATA-20 / DATA-29 / text grain), longest
+#: first so ``filter_meta_`` cannot claim a ``filter_metadata_…`` column.
+_METADATA_FILTER_STEMS = ("filter_trialmeta_", "filter_textmeta_", "filter_meta_")
+
+
+def active_filter_keys(trial_filters: dict, prefix: str = "") -> list[str]:
+    """The widget keys behind every narrowing in ``trial_filters`` (UX-198).
+
+    The filter result already carries them for UX-7's per-filter clear; this
+    lists them once, in the panel's order, so a summary of the pool names the
+    same controls the panel shows.
+    """
+    keys: list[str] = []
+    if trial_filters.get("participants") is not None:
+        keys.append(f"{prefix}filter_participants")
+        keys.extend(trial_filters.get("participant_filter_keys") or ())
+    keys.extend((trial_filters.get("metadata_keys") or {}).values())
+    keys.extend(trial_filters.get("text_filter_keys") or ())
+    if trial_filters.get("trial_keys") is not None:
+        keys.extend(trial_filters.get("trial_filter_keys") or ())
+    if trial_filters.get("favorites_only"):
+        keys.append(f"{prefix}filter_favorites")
+    if trial_filters.get("required_tags"):
+        keys.append(f"{prefix}filter_req_tags")
+    if trial_filters.get("excluded_tags"):
+        keys.append(f"{prefix}filter_exc_tags")
+    return list(dict.fromkeys(keys))
+
+
+def _is_number(value) -> bool:
+    return isinstance(value, (int, float, np.integer, np.floating)) and not isinstance(
+        value, (bool, np.bool_)
+    )
+
+
+def describe_filter_keys(
+    keys, values, label_for: Callable[[str], str], prefix: str = ""
+) -> list[dict]:
+    """One ``{"field", "values" | "range"}`` entry per filter that narrows.
+
+    Pure: ``values`` maps a key to its widget value and ``label_for`` titles it.
+    A key whose value no longer narrows (an emptied multiselect) is skipped, so
+    the list says exactly what is constraining the pool. A range is a
+    two-number tuple, or a two-number list under a range or metadata key —
+    a categorical multiselect also holds a list. ``Favorites only`` has
+    neither values nor range: it is on or absent.
+    """
+    items: list[dict] = []
+    for key in keys:
+        value = values.get(key)
+        bare = key[len(prefix) :] if prefix and key.startswith(prefix) else key
+        if bare == "filter_favorites":
+            if value:
+                items.append({"field": label_for(key)})
+            continue
+        ranged = isinstance(value, tuple) or (
+            isinstance(value, list)
+            and (bare.endswith("_range") or bare.startswith(_METADATA_FILTER_STEMS))
+        )
+        if ranged and len(value) == 2 and all(_is_number(v) for v in value):
+            items.append(
+                {"field": label_for(key), "range": [float(value[0]), float(value[1])]}
+            )
+            continue
+        if isinstance(value, (list, tuple, set)) and value:
+            items.append({"field": label_for(key), "values": [str(v) for v in value]})
+    return items
+
+
+def active_filter_items(
+    words: pd.DataFrame, fixations: pd.DataFrame, *, prefix: str = ""
+) -> list[dict]:
+    """What is narrowing the pool this run, one entry per filter (UX-198).
+
+    Read from the result ``app.main`` filtered with (``read_trial_filters``),
+    so the list always matches the counts beside it. The values are the
+    widgets', falling back to the ``_trial_filters_raw`` mirror on a run where
+    the panel has not drawn them yet — the labels the user picked, not the
+    raw booleans a condition filter resolves to.
+    """
+    keys = active_filter_keys(read_trial_filters(prefix), prefix)
+    if not keys:
+        return []
+    values = dict(st.session_state.get(f"{prefix}_trial_filters_raw") or {})
+    values.update({k: st.session_state[k] for k in keys if k in st.session_state})
+    labels = trial_filter_labels(words, fixations)
+
+    def label_for(key: str) -> str:
+        from scanpath_studio import metadata as md
+
+        bare = key[len(prefix) :] if prefix and key.startswith(prefix) else key
+        if bare in _FILTER_KEY_LABELS:
+            return _FILTER_KEY_LABELS[bare]
+        for stem in _METADATA_FILTER_STEMS:
+            if bare.startswith(stem):
+                return md.field_label(bare[len(stem) :])
+        col = bare.removeprefix("filter_")
+        if col.endswith("_range") and col.removesuffix("_range") in labels:
+            col = col.removesuffix("_range")
+        return labels.get(col) or _trial_filter_label(col)
+
+    return describe_filter_keys(keys, values, label_for, prefix)
+
+
+def format_filter_item(item: dict, *, max_values: int = 3) -> str:
+    """``Participant: p1, p2`` / ``Trial index: 3–10`` / ``Favorites only``."""
+    if "range" in item:
+        lo, hi = item["range"]
+        return f"{item['field']}: {lo:g}–{hi:g}"
+    values = list(item.get("values") or ())
+    if not values:
+        return str(item["field"])
+    shown = ", ".join(values[:max_values])
+    if len(values) > max_values:
+        shown += f" +{len(values) - max_values} more"
+    return f"{item['field']}: {shown}"
+
+
 # --- Trial summary chips (the "Field = Value" strip above the plot) ----------
 _CHIP_TEXT_ID_COLS = (
     "unique_text_id",
@@ -7638,7 +7779,9 @@ def _trial_metadata_narrowing(prefix: str, keys) -> tuple:
 
     ``None`` means no constraint; an empty set means a constraint nothing
     satisfies — the same three-way contract as
-    :func:`_participant_metadata_narrowing`, one grain down.
+    :func:`_participant_metadata_narrowing`, one grain down. ``keys`` is a
+    callable returning the loaded pool's keys, called only when a trial table
+    is attached: it scans every frame, and this runs on every rerun.
     """
     from scanpath_studio import metadata as md
 
@@ -7667,7 +7810,7 @@ def _trial_metadata_narrowing(prefix: str, keys) -> tuple:
             selections[field.name] = list(chosen)
             widget_keys.append(key)
     return (
-        md.trials_matching(attached, selections, ranges, keys=keys),
+        md.trials_matching(attached, selections, ranges, keys=keys()),
         tuple(widget_keys),
     )
 
@@ -7729,9 +7872,20 @@ def _participant_metadata_narrowing(prefix: str) -> tuple:
 
 def _loaded_trial_keys(words: pd.DataFrame, fixations: pd.DataFrame) -> set:
     """``(participant_id, trial_id)`` pairs present in either frame (DATA-29)."""
+    from scanpath_studio.data import frame_fingerprint
+
+    return set(
+        _c_loaded_trial_keys(
+            words, fixations, frame_fingerprint(words), frame_fingerprint(fixations)
+        )
+    )
+
+
+@st.cache_data(show_spinner=False, max_entries=8)
+def _c_loaded_trial_keys(_words, _fixations, wkey, fkey) -> frozenset:
     from scanpath_studio.data import trial_keys as _keys
 
-    return set(_keys(words)) | set(_keys(fixations))
+    return frozenset(_keys(_words)) | frozenset(_keys(_fixations))
 
 
 def _compute_trial_filters(
@@ -7806,7 +7960,7 @@ def _compute_trial_filters(
     # trial, and so a numeric range keeps the trials the table never mentions
     # (UX-49's rule, one grain down).
     by_trial, trial_keys_used = _trial_metadata_narrowing(
-        prefix, _loaded_trial_keys(words, fixations)
+        prefix, lambda: _loaded_trial_keys(words, fixations)
     )
     if by_trial is not None:
         result["trial_keys"] = by_trial

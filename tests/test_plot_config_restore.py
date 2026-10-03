@@ -784,6 +784,29 @@ class TestSavedStateCoverage:
         assert at.session_state["_config"]["layers"]["raw_gaze"] is True
         assert at.session_state["global_show_raw_gaze"] is True
 
+    def test_the_file_holds_what_share_file_says_it_does(self):
+        """UX-199: Share → File says the file has the figure settings, recording
+        setup and trial selection, and no trial filters, cohorts, annotations,
+        column mapping or data — so a filter set in the session stays out."""
+        import json
+
+        from scanpath_studio.session_keys import SINGLE_PLAYBACK_SPEED
+
+        at = _run(
+            _build_config_app,
+            _figure_settings=_minimal_figure_settings(),
+            _viz_settings={"heatmap_metric": "duration_ms"},
+            _clear=[SINGLE_PLAYBACK_SPEED],
+            filter_participants=["reader_in_a_filter"],
+            col_map_words_participant="participant_from_a_mapping",
+        )
+        config = at.session_state["_config"]
+        assert {"selection", "experimental_setup", "layers", "coloring"} <= set(config)
+        text = json.dumps(config, default=str)
+        assert "reader_in_a_filter" not in text
+        assert "participant_from_a_mapping" not in text
+        assert not {"filters", "annotations", "column_mapping", "groups"} & set(config)
+
     def test_speed_legend_and_blink_flags_round_trip(self):
         from scanpath_studio.session_keys import SINGLE_PLAYBACK_SPEED
 

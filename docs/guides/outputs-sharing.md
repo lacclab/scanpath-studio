@@ -21,7 +21,9 @@ Open the **Export** subtab in the Scanpath view.
 HTML, and the current figure's PNG and SVG, always work. An HTML file loads
 the Plotly library from the internet when opened; one written by the Python API
 or the CLI embeds it and opens offline. PDF, GIF, MP4 and the bundle's images
-need Chrome, Chromium or Edge installed ([FAQ](../faq.md#export-fails)).
+need Chrome, Chromium or Edge installed ([FAQ](../faq.md#export-fails)); the
+bundle says so when none is found. After a build it reports how many files and
+figures it made and how many failed, and a partly built bundle still downloads.
 
 ## Share
 

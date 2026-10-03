@@ -223,6 +223,82 @@ class ExportProgress:
     finished_trials: int = 0
     bytes_written: int = 0
     errors: list[str] = field(default_factory=list)
+    # EXP-24: what the build produced, for the summary under it — every file in
+    # the zip, and the figure files (combined figures and per-layer files)
+    # written and failed, one per format per trial.
+    files_written: int = 0
+    figures_written: int = 0
+    figures_failed: int = 0
+    trials_skipped: int = 0
+
+
+@dataclass(frozen=True)
+class ExportSummary:
+    """EXP-24: how a finished bundle reads — ``level`` is ``"success"``,
+    ``"warning"`` (some of it failed) or ``"error"`` (figures were asked for and
+    none was made), and ``expand_errors`` opens the error list for the last."""
+
+    level: str
+    message: str
+    expand_errors: bool
+
+
+def missing_browser_note(static_formats: bool) -> str:
+    """EXP-24: the bundle's browser prerequisite, when it is unmet, else ``""``.
+
+    The bundle draws PNG, SVG and PDF through Kaleido on the server, which
+    needs Chrome, Chromium or Edge there; the current figure's PNG and SVG are
+    saved by the reader's own browser and need none — a distinction the panel
+    used to keep to itself, so a bundle on a machine without one built a zip
+    of failures. Asked only when ``static_formats`` are picked.
+    """
+    if not static_formats:
+        return ""
+    from .animation_export import chrome_available
+
+    if chrome_available():
+        return ""
+    return (
+        "PNG, SVG and PDF bundle figures are drawn on this server with Chrome, "
+        "Chromium or Edge, and none was found, so they will fail. Pick **HTML**, "
+        "which needs no browser — or install one. The current figure's PNG and "
+        "SVG downloads are saved by your own browser and need none."
+    )
+
+
+def summarize_export(progress: ExportProgress, size_bytes: int) -> ExportSummary:
+    """What a built bundle holds and what failed, in one line (EXP-24).
+
+    A generic "Ready" over a zip whose figures all failed read as a success,
+    with the failures one click away in an expander. The line counts what was
+    made and what wasn't; a build whose requested figures all failed is an
+    error, with its list open. The zip stays downloadable either way — the
+    files it does hold are good.
+    """
+
+    def plural(n: int, word: str) -> str:
+        return f"{n:,} {word}{'' if n == 1 else 's'}"
+
+    parts = [
+        f"{plural(progress.files_written, 'file')} · {size_bytes / 1_048_576:.1f} MB"
+    ]
+    asked = progress.figures_written + progress.figures_failed
+    if asked:
+        parts.append(f"{progress.figures_written:,} of {plural(asked, 'figure')} made")
+    if progress.figures_failed:
+        parts.append(f"{progress.figures_failed:,} failed")
+    if progress.trials_skipped:
+        parts.append(f"{plural(progress.trials_skipped, 'trial')} skipped (no data)")
+    message = " · ".join(parts)
+    if asked and not progress.figures_written:
+        return ExportSummary(
+            "error",
+            f"No figures were made · {message}. The errors are listed below.",
+            True,
+        )
+    if progress.errors:
+        return ExportSummary("warning", f"Partly built · {message}", False)
+    return ExportSummary("success", f"Ready · {message}", False)
 
 
 def _safe_id(text: str) -> str:
@@ -1257,7 +1333,9 @@ def render_export_options(
                 selection_mode="multi",
                 default=["PDF"],
                 key=f"{key_prefix}_figfmts",
-                help="PDF/SVG are vector, PNG is raster, and HTML is interactive.",
+                help="PDF/SVG are vector, PNG is raster, and HTML is interactive. "
+                "The bundle draws PDF, SVG and PNG on the server with Chrome, "
+                "Chromium or Edge; HTML needs no browser.",
             )
             or []
         )
@@ -1265,6 +1343,11 @@ def render_export_options(
         include_svg = "SVG" in fig_formats
         include_png = "PNG" in fig_formats
         include_html = "HTML" in fig_formats
+        # EXP-24: the bundle's static figures need a browser on the server,
+        # which the current figure's PNG/SVG do not — said only when it is
+        # missing, and only while one of those formats is picked.
+        if note := missing_browser_note(include_pdf or include_svg or include_png):
+            st.warning(note, icon=ICONS["warning"])
         # Only surface the scale stepper when PNG is on, and keep it narrow.
         # `width` does here what the old `st.columns([1, 3])` did: a 1–4 stepper
         # stretched across the whole field column reads as a text box. UX-69
@@ -1952,6 +2035,7 @@ def bulk_export(
             # a trial recorded as raw gaze alone is drawn from its samples.
             if trial_words.empty and trial_fix.empty and trial_raw_gaze.empty:
                 progress.finished_trials += 1
+                progress.trials_skipped += 1
                 progress.errors.append(f"{slug}: empty data, skipped")
                 if progress_callback:
                     progress_callback(progress)
@@ -2058,26 +2142,40 @@ def bulk_export(
                     # size — the bands grow the figure, and rendering at the
                     # pre-title size would crop them off.
                     annotate_figure(fig, title=title, caption=caption)
+                except Exception as exc:
+                    fig = None
+                    # Its formats, and its layer set when one was asked for.
+                    progress.figures_failed += len(figure_formats) + bool(layer_formats)
+                    progress.errors.append(f"{slug}: figure export failed ({exc})")
+                # EXP-24: each format on its own, so a missing browser costs the
+                # PNG/SVG/PDF and still leaves the trial's HTML in the zip.
+                if fig is not None:
                     # Render at the figure's own fitted size (not the raw
                     # monitor canvas) so the exported reading text matches the
                     # on-screen scale.
                     out_w = int(fig.layout.width or unit_width)
                     out_h = int(fig.layout.height or unit_height)
                     for fmt in figure_formats:
-                        if fmt == "html":
-                            # Browser-free + interactive; no Kaleido needed.
-                            data = fig.to_html(
-                                include_plotlyjs="cdn",
-                                full_html=True,
-                                config={**PLOTLY_CONFIG},
-                            ).encode("utf-8")
-                        else:
-                            scale = options.png_scale if fmt == "png" else 1
-                            data = render_figure(fig, fmt, out_w, out_h, scale)
-                        zf.writestr(_path("figure", fmt), data)
+                        try:
+                            if fmt == "html":
+                                # Browser-free + interactive; no Kaleido needed.
+                                data = fig.to_html(
+                                    include_plotlyjs="cdn",
+                                    full_html=True,
+                                    config={**PLOTLY_CONFIG},
+                                ).encode("utf-8")
+                            else:
+                                scale = options.png_scale if fmt == "png" else 1
+                                data = render_figure(fig, fmt, out_w, out_h, scale)
+                            zf.writestr(_path("figure", fmt), data)
+                        except Exception as exc:
+                            progress.figures_failed += 1
+                            progress.errors.append(
+                                f"{slug}: {fmt.upper()} figure export failed ({exc})"
+                            )
+                            continue
                         progress.bytes_written += len(data)
-                except Exception as exc:
-                    progress.errors.append(f"{slug}: figure export failed ({exc})")
+                        progress.figures_written += 1
 
                 # VIZ-5: per-layer breakdown into `layers/<layer>.<fmt>` — each a
                 # copy of the figure with only one layer's elements, same
@@ -2097,7 +2195,9 @@ def bulk_export(
                                 )
                                 zf.writestr(_path(f"layers/{layer_name}", fmt), data)
                                 progress.bytes_written += len(data)
+                                progress.figures_written += 1
                     except Exception as exc:
+                        progress.figures_failed += 1
                         progress.errors.append(f"{slug}: layer export failed ({exc})")
 
             if options.include_plot_config:
@@ -2124,6 +2224,14 @@ def bulk_export(
                 # EXP-2: the title/caption are part of how the figure looked, so
                 # the manifest records them verbatim alongside the settings.
                 cfg["figure_text"] = {"title": title, "caption": caption}
+                # VIZ-50: the trial's samples, and whether they were recorded —
+                # the bundled demo's are synthesized, which its figure and its
+                # raw-gaze table cannot say for themselves.
+                if not trial_raw_gaze.empty:
+                    cfg["raw_gaze"] = {
+                        "points": len(trial_raw_gaze),
+                        "synthesized": bool(settings.get("raw_gaze_synthesized")),
+                    }
                 data = json.dumps(cfg, indent=2).encode("utf-8")
                 zf.writestr(_path("plot_config", "json"), data)
                 progress.bytes_written += len(data)
@@ -2303,6 +2411,7 @@ def bulk_export(
         completed=progress.finished_trials,
         total=progress.total_trials,
     )
+    progress.files_written = len(zf.namelist())
     zf.close()
     buf.seek(0)
     result = buf.getvalue()

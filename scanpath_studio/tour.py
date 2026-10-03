@@ -74,6 +74,7 @@ from .constants import (
     drift_correction_enabled,
     preprocessing_enabled,
     similarity_enabled,
+    spoken,
 )
 
 # UX-12: name of the first-party cookie holding the "don't show the welcome tour
@@ -339,8 +340,8 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "Compare like with like",
                 f"Open **{ICONS['comparisons']} Comparisons** and set **Match field** to the text id: "
                 "the grid shows the other trials that share this trial's value in "
-                "that field — here, the other readings of *this* text — at the same "
-                "scale, so it compares like with like." + _SIMILARITY_SENTENCE,
+                "that field — here, the other readings of *this* text — at one "
+                "scale." + _SIMILARITY_SENTENCE,
                 ".st-key-tutorial_comparisons",
                 subtab=SUBTAB_COMPARISONS,
             ),
@@ -861,6 +862,12 @@ _CARD_CSS = """
     opacity: 0.55;
 }
 .st-key-tour_sp_close button:hover { opacity: 1; }
+/* UX-200: `box-shadow: none` above took Streamlit's focus ring too. */
+.st-key-tour_sp_close button:focus-visible {
+    opacity: 1;
+    outline: 2px solid var(--sps-accent);
+    outline-offset: 1px;
+}
 /* Vertical rhythm inside the card: body → progress → Back / Next footer (the
    gap around the progress bar is set on both sides — the column row is what
    actually carries it). The card's own bottom padding is trimmed to match. */
@@ -1174,7 +1181,9 @@ def render_spotlight_tour() -> None:
         # Close (✕) in the top-right corner — exits the tour like "Exit"/"Done"
         # (CSS pins it; the dismiss listener wires it for instant close too).
         st.button(
-            "✕",
+            # UX-200: `spoken` names the glyph for screen readers.
+            f"✕ {spoken('Close the tour')}",
+            wrap=True,
             key="tour_sp_close",
             on_click=_exit_spotlight,
             help="Close the tour",

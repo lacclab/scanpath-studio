@@ -45,7 +45,8 @@ take the smallest marker and longer ones the largest. Under
 **:material/blur_on: Fixations ▾**, **Scale** picks the curve: **√ duration** (the
 default) grows marker area with duration, **Linear** grows the diameter with it,
 **Log** compresses long fixations. **Durations** sets the two bounds, and
-**Size key** draws reference circles labelled in ms in the figure's corner.
+**Size key** draws reference circles labelled in ms in the figure's corner
+(in Compare, only while both scanpaths use the same marker size range).
 **Relative to this figure** stretches each figure from its own shortest to
 longest fixation instead, so its sizes compare only within that figure. Share
 links, settings files, saved designs and restored sessions from before the fixed

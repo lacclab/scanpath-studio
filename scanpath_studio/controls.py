@@ -3645,7 +3645,9 @@ _DURATION_BOUNDS_HELP = (
 )
 _SIZE_KEY_HELP = (
     "Reference circles labelled in ms, in the figure's bottom-right corner, "
-    "on screen and in exports. Drawn only on a fixed scale."
+    "on screen and in exports. Drawn only on a fixed scale. In Compare it is "
+    "not drawn when the two scanpaths use different marker size ranges, "
+    "since one duration is then two sizes."
 )
 
 

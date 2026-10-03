@@ -2058,6 +2058,7 @@ def _setup_mode(
     label=None,
     *,
     key_prefix: str = "wizard",
+    persist: dict | None = None,
 ):
     """One setup group's radio, namespaced for add or edit.
 
@@ -2082,6 +2083,7 @@ def _setup_mode(
         index=None,
         key=f"{key_prefix}_setup_{group}_mode",
         help=help_text,
+        **(persist or {}),
     )
 
 
@@ -2109,6 +2111,11 @@ def _wizard_setup_step(
     returns before the rail renders, so no widget on a ``global_*`` key exists
     this run.
     """
+    # ✏️ Edit dataset lives on the Data page, which runs only while it is the
+    # open view: without this a trip to the Scanpath view mid-edit dropped the
+    # setup draft (Streamlit forgets an unrendered widget's key) while the
+    # mapping fields beside it — `persist_state` since DATA-26 — kept theirs.
+    persist = {"persist_state": "session"} if initial is not None else {}
     # UX-58: three columns, one per group, so their headings sit at the same
     # line height. Each column starts with its own radio, which is what keeps
     # them level even though what follows differs per answer (two number inputs,
@@ -2156,6 +2163,7 @@ def _wizard_setup_step(
         "these coordinates.",
         label="Screen",
         key_prefix=key_prefix,
+        persist=persist,
     )
     canvas_w = (
         initial.canvas_width if initial is not None else _recalled("canvas_width", 2560)
@@ -2173,6 +2181,7 @@ def _wizard_setup_step(
             10000,
             int(canvas_w),
             key=f"{key_prefix}_setup_screen_w",
+            **persist,
         )
         canvas_h = h_col.number_input(
             "Height (px)",
@@ -2180,6 +2189,7 @@ def _wizard_setup_step(
             10000,
             int(canvas_h),
             key=f"{key_prefix}_setup_screen_h",
+            **persist,
         )
     elif screen_mode == _SCREEN_ESTIMATE:
         est_w, est_h = (
@@ -2233,6 +2243,7 @@ def _wizard_setup_step(
         "a real answer — the app then hides the numbers it cannot honestly derive.",
         label="Physical size",
         key_prefix=key_prefix,
+        persist=persist,
     )
     mon_mm = float(
         initial.monitor_width_mm
@@ -2251,6 +2262,7 @@ def _wizard_setup_step(
             2000.0,
             mon_mm,
             key=f"{key_prefix}_setup_monitor_mm",
+            **persist,
         )
         dist_mm = geom_host.number_input(
             "Viewing distance (mm)",
@@ -2258,6 +2270,7 @@ def _wizard_setup_step(
             5000.0,
             dist_mm,
             key=f"{key_prefix}_setup_distance_mm",
+            **persist,
         )
         if canvas_w and mon_mm > 0 and dist_mm > 0:
             geom_host.caption(
@@ -2287,6 +2300,7 @@ def _wizard_setup_step(
         "so the figure matches what the participant saw.",
         label="Text size",
         key_prefix=key_prefix,
+        persist=persist,
     )
     scale_to_boxes = True
     base_font = int(
@@ -2316,9 +2330,13 @@ def _wizard_setup_step(
             96.0,
             initial_font_pt,
             key=f"{key_prefix}_setup_font_pt",
+            **persist,
         )
         font_family = text_host.text_input(
-            "Font family", value=font_family, key=f"{key_prefix}_setup_font_family"
+            "Font family",
+            value=font_family,
+            key=f"{key_prefix}_setup_font_family",
+            **persist,
         )
         # pt→px needs a DPI, which needs the physical width. Under a skipped
         # geometry group there is no honest DPI, so the conversion is withheld

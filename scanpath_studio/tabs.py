@@ -13489,7 +13489,159 @@ def dataset_editor_is_dirty() -> bool:
     signature that cannot be built) counts as changed, because a wrong "clean"
     discards work in silence while a wrong "dirty" costs one extra click.
     """
-    return bool(st.session_state.get(_REMAP_DIRTY_KEY, True))
+    return bool(st.session_state.get(_REMAP_DIRTY_KEY, True)) or bool(
+        st.session_state.get(_BUILTIN_SETUP_DIRTY_KEY)
+    )
+
+
+#: A built-in or public dataset's **Recording setup** on ✏️ Edit dataset — the
+#: same form an upload gets, saved as the user's own setup for that dataset
+#: (`app.save_dataset_setup_override`) rather than over the corpus' declared
+#: one. ``_remap_*`` keys, so ✕ Cancel and ✅ Save changes sweep them with the
+#: rest of the edit: which dataset's form is open (its widgets are forgotten
+#: when a new edit opens, so a cancelled answer never comes back), what it
+#: holds, what it held when it opened, a pending *Reset to source setup*, and
+#: whether it differs.
+_BUILTIN_SETUP_OPEN_KEY = "_remap_builtin_setup_open"
+_BUILTIN_SETUP_PENDING_KEY = "_remap_builtin_setup_pending"
+_BUILTIN_SETUP_BASELINE_KEY = "_remap_builtin_setup_baseline"
+_BUILTIN_SETUP_RESET_KEY = "_remap_builtin_setup_reset"
+_BUILTIN_SETUP_DIRTY_KEY = "_remap_builtin_setup_dirty"
+
+
+def _builtin_setup_prefix(token: str) -> str:
+    """The form's widget-key prefix — not ``edit_<name>``, an upload's."""
+    return f"edit_src_{token}"
+
+
+def _forget_builtin_setup_widgets(token: str) -> None:
+    prefix = f"{_builtin_setup_prefix(token)}_setup_"
+    for key in [k for k in st.session_state if str(k).startswith(prefix)]:
+        st.session_state.pop(key, None)
+
+
+def _reset_builtin_setup(token: str) -> None:
+    """*Reset to source setup*: redraw the form at the corpus' own values.
+    Nothing is dropped until ✅ Save changes (`commit_builtin_setup`)."""
+    _forget_builtin_setup_widgets(token)
+    st.session_state[_BUILTIN_SETUP_RESET_KEY] = token
+    st.session_state.pop(_BUILTIN_SETUP_BASELINE_KEY, None)
+
+
+def _setup_groups_differing(a, b) -> list[str]:
+    """The setup groups whose values or provenance differ between two
+    snapshots, by their on-screen names."""
+    fields = {
+        "screen": ("canvas_width", "canvas_height"),
+        "geometry": ("monitor_width_mm", "viewing_distance_mm"),
+        "text": (
+            "base_font_size",
+            "font_family",
+            "line_spacing",
+            "scale_text_to_boxes",
+        ),
+    }
+    labels = {"screen": "Screen", "geometry": "Physical size", "text": "Text size"}
+    return [
+        labels[group]
+        for group, names in fields.items()
+        if a.provenance[group] != b.provenance[group]
+        or any(getattr(a, n) != getattr(b, n) for n in names)
+    ]
+
+
+def render_builtin_setup_editor(
+    token: str,
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    host,
+) -> None:
+    """Recording setup for a built-in or public dataset, editable.
+
+    The upload's form (`wizard._wizard_setup_step`), started from the setup
+    this dataset has now — the user's own, if they saved one, else what the
+    corpus declares. ✅ Save changes keeps a changed form as this dataset's own
+    setup (`commit_builtin_setup`); ✕ Cancel discards it. The corpus' declared
+    values are never rewritten, so *Reset to source setup* can always go back.
+    """
+    from scanpath_studio.app import dataset_setup_override, source_setup_snapshot
+    from scanpath_studio.wizard import _wizard_setup_step
+
+    if st.session_state.get(_BUILTIN_SETUP_OPEN_KEY) != token:
+        # A new edit: whatever an earlier, cancelled one typed is not this one.
+        _forget_builtin_setup_widgets(token)
+        st.session_state.pop(_BUILTIN_SETUP_BASELINE_KEY, None)
+        st.session_state.pop(_BUILTIN_SETUP_RESET_KEY, None)
+        st.session_state[_BUILTIN_SETUP_OPEN_KEY] = token
+    resetting = st.session_state.get(_BUILTIN_SETUP_RESET_KEY) == token
+    words = words if isinstance(words, pd.DataFrame) else pd.DataFrame()
+    fixations = fixations if isinstance(fixations, pd.DataFrame) else pd.DataFrame()
+    source = source_setup_snapshot(token, words, fixations)
+    override = None if resetting else dataset_setup_override(token)
+    note, action = host.columns([0.78, 0.22], vertical_alignment="center")
+    if override is not None:
+        changed = _setup_groups_differing(override, source)
+        note.caption(
+            f"{ICONS['edit']} **Your own setup** for this dataset"
+            + (f" — set by you: {', '.join(changed)}" if changed else "")
+            + ". The corpus' declared setup is kept; reset to go back to it."
+        )
+        action.button(
+            f"{ICONS['reset']} Reset to source setup",
+            key=f"{_builtin_setup_prefix(token)}_reset",
+            on_click=_reset_builtin_setup,
+            args=(token,),
+            width="stretch",
+            help="Show the setup this corpus declares. Nothing changes until you save.",
+        )
+    elif resetting:
+        note.caption(
+            "Back to the setup this corpus declares — **Save changes** to drop "
+            "your own."
+        )
+    else:
+        note.caption(
+            "The setup this corpus declares. Change anything to save your own "
+            "for this dataset; the corpus' values are kept."
+        )
+    setup = _wizard_setup_step(
+        host,
+        words,
+        fixations,
+        not words.empty,
+        key_prefix=_builtin_setup_prefix(token),
+        initial=override or source,
+        publish=False,
+    )
+    payload = setup.to_dict()
+    st.session_state[_BUILTIN_SETUP_PENDING_KEY] = {"token": token, "setup": payload}
+    signature = _editor_signature({}, payload)
+    baseline = st.session_state.get(_BUILTIN_SETUP_BASELINE_KEY)
+    if baseline is None:
+        st.session_state[_BUILTIN_SETUP_BASELINE_KEY] = baseline = signature
+    st.session_state[_BUILTIN_SETUP_DIRTY_KEY] = resetting or signature != baseline
+
+
+def commit_builtin_setup() -> None:
+    """✅ Save changes' half for a built-in dataset's Recording setup.
+
+    A form the user changed becomes the dataset's own setup; a *Reset to source
+    setup* left as it was drops it; an untouched form changes nothing — saving
+    the mapping must not turn the corpus' declared setup into an override.
+    """
+    from scanpath_studio.app import save_dataset_setup_override
+
+    pending = st.session_state.get(_BUILTIN_SETUP_PENDING_KEY)
+    if not isinstance(pending, dict) or not pending.get("token"):
+        return
+    token, payload = str(pending["token"]), pending.get("setup")
+    changed = _editor_signature({}, payload) != st.session_state.get(
+        _BUILTIN_SETUP_BASELINE_KEY
+    )
+    if changed and isinstance(payload, dict):
+        save_dataset_setup_override(token, payload)
+    elif st.session_state.get(_BUILTIN_SETUP_RESET_KEY) == token:
+        save_dataset_setup_override(token, None)
 
 
 #: The editor's own widget namespace → the add screen's. The two screens run the
@@ -13838,7 +13990,12 @@ def render_trial_identity_section() -> None:
 
 
 def _render_column_mapping_section(
-    *, editor_rendered: bool = False, uploads_host=None, setup_host=None
+    *,
+    editor_rendered: bool = False,
+    uploads_host=None,
+    setup_host=None,
+    words: pd.DataFrame | None = None,
+    fixations: pd.DataFrame | None = None,
 ) -> None:
     """The body of the Data page's **Column mapping** section (DATA-26).
 
@@ -13867,12 +14024,26 @@ def _render_column_mapping_section(
     callee with no host renders inline under its own heading, as before, and
     normalizing it to ``st`` here would silently drop that heading for every
     caller.
+
+    In mode A the Recording setup is editable too while ✏️ Edit dataset is
+    open (`render_builtin_setup_editor`, which reads ``words`` / ``fixations``
+    for *Estimate from my data*): the demo and the public corpora have the
+    editor's ✅ Save changes, and a declared setup can still be wrong for how
+    someone uses the data — an assumed physical size, most often.
     """
     if editor_rendered:
         # The editable built-in mapping now uses the same compact field grid as
         # Add dataset; widen its option menus just as the wizard does.
         st.markdown(mapping_menu_css(), unsafe_allow_html=True)
-        _render_setup_provenance_note(host=setup_host)
+        token = str(st.session_state.get("data_source_choice") or "")
+        if (
+            setup_host is not None
+            and token
+            and st.session_state.get(DATASET_EDITOR_OPEN_KEY)
+        ):
+            render_builtin_setup_editor(token, words, fixations, setup_host)
+        else:
+            _render_setup_provenance_note(host=setup_host)
         return
     active = _active_stored_dataset()
     if active is not None:

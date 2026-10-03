@@ -351,6 +351,9 @@ def snapshot_for(
     stored = (st.session_state.get("_datasets") or {}).get(name)
     if isinstance(stored, dict) and isinstance(stored.get("setup"), dict):
         return SetupSnapshot.from_dict(stored["setup"], fallback=SetupSnapshot())
+    # A built-in or public dataset whose setup the user saved is that setup.
+    if (override := app.dataset_setup_override(name)) is not None:
+        return override
     width, height, authoritative = app.resolve_source_monitor(name, words, fixations)
     return SetupSnapshot(
         canvas_width=int(width),

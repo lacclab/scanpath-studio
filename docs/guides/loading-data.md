@@ -66,7 +66,10 @@ tables, and changes its name, column mapping and recording setup, or adds a
 table it is missing; its mapped fields show the same value preview. Its
 **:material/download: Save setup** writes the mapping in your files' own column names, so
 whoever has the same files can restore it on the add screen; anything a
-restore cannot redo by itself is listed beside the button. Changes
+restore cannot redo by itself is listed beside the button. For the demo and
+the public corpora, a recording setup you save is your own for that dataset
+alone: the setup the corpus declares is kept, and **Reset to source setup**
+goes back to it. Changes
 apply when you click **Save changes**;
 **Cancel** discards them. The page also holds each dataset's tables and its
 annotations, and at the foot, what is saved on this computer.

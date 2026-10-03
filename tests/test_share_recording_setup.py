@@ -84,11 +84,15 @@ def test_the_snap_protected_keys_are_the_ones_the_snap_writes():
     """The reader names these to `seed_canvas_state`; a snap key it does not
     know would still overwrite a linked value on the recipient's first run."""
     from scanpath_studio import app, url_state
+    from scanpath_studio.constants import SETUP_OVERRIDE_SESSION_KEYS
 
     assert url_state._SOURCE_SNAPPED_KEYS == {
         "global_canvas_width",
         "global_canvas_height",
         *app._FONT_SNAP_KEYS,
+        # A recording setup the recipient saved for the dataset applies on
+        # the same first seeding.
+        *SETUP_OVERRIDE_SESSION_KEYS,
     }
 
 
@@ -199,6 +203,41 @@ def test_a_source_that_declares_no_screen_always_carries_its_canvas():
     from scanpath_studio.constants import SYNTHETIC_CHOICE
 
     assert _emitted_defaults(SYNTHETIC_CHOICE) == {"canvas_width", "canvas_height"}
+
+
+def _own_setup_app():
+    """The demo with a recording setup the sender saved for it, applied."""
+    import streamlit as st
+
+    from scanpath_studio.app import _apply_setup_override, save_dataset_setup_override
+    from scanpath_studio.constants import DEMO_CHOICE
+    from scanpath_studio.experimental_setup import Provenance, SetupSnapshot
+    from scanpath_studio.url_state import _build_share_query
+
+    own = SetupSnapshot(
+        canvas_width=1920,
+        canvas_height=1080,
+        monitor_width_mm=520.0,
+        geometry_provenance=Provenance.MEASURED,
+    )
+    save_dataset_setup_override(DEMO_CHOICE, own.to_dict())
+    _apply_setup_override(DEMO_CHOICE, own)
+    st.session_state["_share_selection"] = {"participant_id": "p1"}
+    st.session_state["_query"] = _build_share_query(DEMO_CHOICE)[0]
+
+
+def test_a_saved_setup_for_a_built_in_dataset_travels_on_the_link():
+    """The recipient has none of the sender's own setup for the demo, so the
+    link elides against what the demo itself declares, and its badge says how
+    the sender's setup is known."""
+    at = AppTest.from_function(_own_setup_app)
+    at.run(timeout=60)
+    assert not at.exception, at.exception
+    emitted = parse_qs(at.session_state["_query"])
+    assert emitted["canvas_width"] == ["1920"]
+    assert emitted["canvas_height"] == ["1080"]
+    assert emitted["monitor_width_mm"] == ["520.0"]
+    assert "geom:measured" in emitted[sk.SETUP_PROVENANCE_PARAM][0]
 
 
 def _no_compare_app():

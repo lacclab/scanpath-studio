@@ -1585,6 +1585,93 @@ class TestDatasetRename:
         assert not [b.key for b in at.button if "rename" in str(b.key)]
 
 
+@pytest.mark.timeout(300)
+class TestBuiltInRecordingSetupOverride:
+    """A built-in dataset's Recording setup is editable on ✏️ Edit dataset —
+    the upload's form, saved as the user's own setup for that dataset behind
+    ✅ Save changes, never rewriting what the corpus declares, and put back
+    when another dataset is opened."""
+
+    PREFIX = "edit_src_Bundled Demo_setup"
+
+    @staticmethod
+    def _run(at):
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+    def _open(self, at):
+        at.button(key="dataset_edit_btn").click()
+        self._run(at)
+
+    def _overrides(self, at) -> dict:
+        from scanpath_studio.constants import DATASET_SETUP_OVERRIDES_KEY
+
+        try:
+            return dict(at.session_state[DATASET_SETUP_OVERRIDES_KEY] or {})
+        except KeyError:
+            return {}
+
+    def test_save_cancel_switch_and_reset(self):
+        from scanpath_studio.constants import DEMO_CHOICE, SYNTHETIC_CHOICE
+        from scanpath_studio.wizard import _GEOM_KNOW
+
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["data_source_choice"] = DEMO_CHOICE
+        self._run(at)
+        self._open(at)
+        # The upload's form, not a read-only summary.
+        assert at.radio(key=f"{self.PREFIX}_geometry_mode").value != _GEOM_KNOW
+        # An untouched Save saves no setup of the user's.
+        at.button(key="builtin_mapping_save").click()
+        self._run(at)
+        assert DEMO_CHOICE not in self._overrides(at)
+
+        # A change that is cancelled is gone, and gone from the next edit too.
+        self._open(at)
+        at.radio(key=f"{self.PREFIX}_geometry_mode").set_value(_GEOM_KNOW)
+        self._run(at)
+        assert at.session_state["_remap_builtin_setup_dirty"] is True
+        for key in [k for k in at.session_state if str(k).startswith("_remap_")]:
+            del at.session_state[key]  # what ✕ Cancel's close does
+        del at.session_state["_dataset_editor_open"]
+        self._run(at)
+        self._open(at)
+        assert at.radio(key=f"{self.PREFIX}_geometry_mode").value != _GEOM_KNOW
+        assert DEMO_CHOICE not in self._overrides(at)
+
+        # A saved change is this dataset's own setup, on the figure at once.
+        at.radio(key=f"{self.PREFIX}_geometry_mode").set_value(_GEOM_KNOW)
+        self._run(at)
+        at.number_input(key=f"{self.PREFIX}_monitor_mm").set_value(400.0)
+        self._run(at)
+        at.button(key="builtin_mapping_save").click()
+        self._run(at)
+        saved = self._overrides(at)[DEMO_CHOICE]
+        assert saved["monitor_width_mm"] == 400.0
+        assert saved["provenance"]["geometry"] == "measured"
+        assert at.session_state["global_monitor_width_mm"] == 400.0
+
+        # Another dataset does not inherit it; coming back brings it back.
+        at.session_state["data_source_choice"] = SYNTHETIC_CHOICE
+        self._run(at)
+        assert at.session_state["global_monitor_width_mm"] == 597.0
+        assert list(self._overrides(at)) == [DEMO_CHOICE]
+        at.session_state["data_source_choice"] = DEMO_CHOICE
+        self._run(at)
+        assert at.session_state["global_monitor_width_mm"] == 400.0
+
+        # Reset to source setup, saved: the corpus' declared setup again.
+        self._open(at)
+        at.button(key="edit_src_Bundled Demo_reset").click()
+        self._run(at)
+        assert at.radio(key=f"{self.PREFIX}_geometry_mode").value != _GEOM_KNOW
+        at.button(key="builtin_mapping_save").click()
+        self._run(at)
+        assert DEMO_CHOICE not in self._overrides(at)
+        assert at.session_state["global_monitor_width_mm"] == 597.0
+
+
 @pytest.mark.timeout(240)
 class TestBuiltInEditorSavesItsMapping:
     """DATA-62: a built-in dataset's ✏️ Edit dataset screen ends in ✅ Save

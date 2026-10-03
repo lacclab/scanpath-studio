@@ -41,7 +41,7 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -90,6 +90,7 @@ from scanpath_studio.constants import (
     DATASET_COUNTS_STORE_KEY,
     DATASET_DESCRIPTIONS_KEY,
     DATASET_EDITOR_OPEN_KEY,
+    DATASET_SETUP_OVERRIDES_KEY,
     DEFAULT_BACKGROUND_COLOR,
     DEFAULT_FIGURE_SIZE,
     DEFAULT_LINE_SPACING,
@@ -114,6 +115,9 @@ from scanpath_studio.constants import (
     RAW_GAZE_LINK_FOR_KEY,
     RAW_GAZE_SEEDED_FOR_KEY,
     RAW_GAZE_SNAP_RESTORE_KEY,
+    SETUP_OVERRIDE_FOR_KEY,
+    SETUP_OVERRIDE_RESTORE_KEY,
+    SETUP_OVERRIDE_SESSION_KEYS,
     SYNTHETIC_CHOICE,
     TRIAL_IDENTITY_CHECK_KEY,
     TRIAL_IDENTITY_FULL_KEY,
@@ -265,6 +269,7 @@ from scanpath_studio.tabs import (
     STIMULUS_JOIN_NOTICE_KEY,
     _build_figure_settings,
     _render_column_mapping_section,
+    commit_builtin_setup,
     data_scope_text,
     dataset_editor_is_dirty,
     render_analysis_pool_bar,
@@ -3353,6 +3358,8 @@ def _save_builtin_mapping() -> None:
         return
     # Dropped first, so closing the editor does not restore the held keys.
     st.session_state.pop(BUILTIN_MAPPING_HELD_KEY, None)
+    # …and the Recording setup, before closing sweeps the form's state away.
+    commit_builtin_setup()
     saved = str(st.session_state.get("data_source_choice") or "")
     _close_dataset_editor()
     st.session_state[BUILTIN_MAPPING_SAVED_KEY] = saved
@@ -3383,7 +3390,7 @@ def _render_builtin_editor_footer(host) -> None:
         key="builtin_mapping_save",
         on_click=_save_builtin_mapping,
         width="stretch",
-        help="Apply the column mapping above to this dataset.",
+        help="Apply the column mapping and recording setup above to this dataset.",
     )
 
 
@@ -6123,6 +6130,8 @@ def resolve_source_monitor(
     data_choice: str | None,
     words: pd.DataFrame | None,
     fixations: pd.DataFrame | None,
+    *,
+    own_setup: bool = True,
 ) -> tuple[int, int, bool]:
     """The presentation monitor for a data source: ``(width, height, authoritative)``.
 
@@ -6141,7 +6150,18 @@ def resolve_source_monitor(
     ``None`` for both to say "don't estimate": the answer degrades to
     `DEFAULT_FIGURE_SIZE`, still non-authoritative, and the row scan is skipped.
     Only a caller that will discard a non-authoritative size may do that.
+
+    A built-in or public dataset whose recording setup the user saved on
+    ✏️ Edit dataset answers with that screen, authoritatively — it is this
+    dataset's setup now (`dataset_setup_override`). ``own_setup=False`` asks
+    for what the source itself declares instead: the share link's elision
+    (`url_state._link_defaults`) needs what a *recipient* resolves, and the
+    recipient has no override.
     """
+    if own_setup and (
+        override := dataset_setup_override(setup_override_token(data_choice))
+    ):
+        return override.canvas_width, override.canvas_height, True
     # OneStop server bundle + bundled demo share the same experimental setup
     # (Dell U2715H, 2560x1440) — cited once in
     # `eyegenbench_geometry.DISPLAY_SPECS["onestop"]`.
@@ -6224,15 +6244,189 @@ def capture_setup_snapshot(
     )
 
 
+def setup_override_token(data_choice: str | None) -> str | None:
+    """The dataset a recording-setup override is filed under: the public
+    corpus' label behind ``PUBLIC_DATASETS_CHOICE``, else the choice itself."""
+    if data_choice == PUBLIC_DATASETS_CHOICE:
+        return st.session_state.get("public_dataset_choice") or None
+    return data_choice
+
+
+def dataset_setup_override(token: str | None) -> SetupSnapshot | None:
+    """The recording setup the user saved for a built-in or public dataset, or
+    ``None`` when they saved none (the corpus' own declaration stands).
+
+    An upload's setup lives on its own ``_datasets`` entry, so a name that is an
+    upload never answers here, even if an override was once filed under it.
+    """
+    if not token or token in (st.session_state.get("_datasets") or {}):
+        return None
+    payload = (st.session_state.get(DATASET_SETUP_OVERRIDES_KEY) or {}).get(token)
+    if not isinstance(payload, dict):
+        return None
+    return SetupSnapshot.from_dict(payload, fallback=SetupSnapshot())
+
+
+def setup_override_session_values(snapshot: SetupSnapshot) -> dict:
+    """The ``global_*`` values a saved setup puts on the figure — the keys the
+    add flow publishes, plus the DPI those imply."""
+    return {
+        "global_canvas_width": int(snapshot.canvas_width),
+        "global_canvas_height": int(snapshot.canvas_height),
+        "global_monitor_width_mm": float(snapshot.monitor_width_mm),
+        "global_viewing_distance_mm": float(snapshot.viewing_distance_mm),
+        "global_display_dpi": round(
+            float(snapshot.canvas_width) / (float(snapshot.monitor_width_mm) / 25.4),
+            2,
+        ),
+        "global_base_font_size": int(snapshot.base_font_size),
+        "global_font_family": str(snapshot.font_family),
+        "global_line_spacing": float(snapshot.line_spacing),
+        "global_scale_text_to_boxes": bool(snapshot.scale_text_to_boxes),
+    }
+
+
+def _restore_setup_override_stash() -> None:
+    """Put back what the ``global_*`` keys held before an override was applied."""
+    st.session_state.pop(SETUP_OVERRIDE_FOR_KEY, None)
+    stashed = st.session_state.pop(SETUP_OVERRIDE_RESTORE_KEY, None)
+    for key, value in (stashed or {}).items():
+        if value is None:
+            st.session_state.pop(key, None)
+        else:
+            st.session_state[key] = value
+
+
+def _apply_setup_override(
+    token: str, snapshot: SetupSnapshot, skip: frozenset = frozenset()
+) -> None:
+    """Write ``snapshot`` onto the figure as ``token``'s setup, remembering what
+    it replaced. ``skip`` — keys a share link just seeded, which win."""
+    if st.session_state.get(SETUP_OVERRIDE_FOR_KEY) != token:
+        # The first override of a run of them keeps the pre-override state.
+        st.session_state.setdefault(
+            SETUP_OVERRIDE_RESTORE_KEY,
+            {
+                key: None if key in skip else st.session_state.get(key)
+                for key in SETUP_OVERRIDE_SESSION_KEYS
+            },
+        )
+    for key, value in setup_override_session_values(snapshot).items():
+        if key not in skip:
+            st.session_state[key] = value
+    st.session_state[SETUP_OVERRIDE_FOR_KEY] = token
+
+
+def save_dataset_setup_override(token: str, payload: dict | None) -> None:
+    """✅ Save changes for a built-in or public dataset's Recording setup.
+
+    ``payload`` (a ``SetupSnapshot.to_dict()``) becomes the dataset's own setup
+    and applies to the figure at once, as an upload's saved setup does;
+    ``None`` drops it — *Reset to source setup* — and puts back what the figure
+    showed before it, so the corpus' declared screen snaps in again. Only this
+    dataset's entry changes: another dataset's override is never touched.
+    """
+    overrides = dict(st.session_state.get(DATASET_SETUP_OVERRIDES_KEY) or {})
+    if payload is None:
+        overrides.pop(token, None)
+        st.session_state[DATASET_SETUP_OVERRIDES_KEY] = overrides
+        if st.session_state.get(SETUP_OVERRIDE_FOR_KEY) == token:
+            _restore_setup_override_stash()
+        # Re-snap the canvas to what the source itself declares.
+        st.session_state.pop("_canvas_seeded_for", None)
+        return
+    snapshot = SetupSnapshot.from_dict(payload, fallback=SetupSnapshot())
+    overrides[token] = snapshot.to_dict()
+    st.session_state[DATASET_SETUP_OVERRIDES_KEY] = overrides
+    _apply_setup_override(token, snapshot)
+
+
+def _declared_setup_snapshot(choice: str | None) -> SetupSnapshot | None:
+    """What a built-in source itself declares (``active_setup_snapshot``'s
+    answer before overrides existed), or ``None`` when it declares nothing."""
+    declared = (
+        choice in (ONESTOP_CHOICE, DEMO_CHOICE, MULTIPLEYE_BUNDLE_CHOICE)
+        or _public_dataset_monitor(choice) is not None
+        # A public corpus reached by its own label (the DATA-3 OneStop source)
+        # rather than through the `Public datasets` picker still declares a
+        # monitor in the registry.
+        or bool((public_dataset_registry().get(choice) or {}).get("monitor"))
+    )
+    if not declared:
+        return None
+    snapshot = capture_setup_snapshot(
+        {
+            # The corpus declares its presentation monitor, so the screen is
+            # measured. The physical size / viewing distance are *not* — no
+            # registry entry records them, so they stay honestly "assumed".
+            "screen": Provenance.MEASURED,
+            "geometry": Provenance.ASSUMED,
+            "text": Provenance.MEASURED,
+        }
+    )
+    token = setup_override_token(choice)
+    if token and st.session_state.get(SETUP_OVERRIDE_FOR_KEY) == token:
+        # The live keys hold this dataset's override: the source's own values
+        # are the ones it replaced, and its screen the one it declares.
+        stashed = st.session_state.get(SETUP_OVERRIDE_RESTORE_KEY) or {}
+        width, height, _ = resolve_source_monitor(choice, None, None, own_setup=False)
+        fields = {"canvas_width": int(width), "canvas_height": int(height)}
+        for key, name, cast in (
+            ("global_monitor_width_mm", "monitor_width_mm", float),
+            ("global_viewing_distance_mm", "viewing_distance_mm", float),
+            ("global_base_font_size", "base_font_size", int),
+            ("global_font_family", "font_family", str),
+            ("global_line_spacing", "line_spacing", float),
+            ("global_scale_text_to_boxes", "scale_text_to_boxes", bool),
+        ):
+            value = stashed.get(key)
+            fields[name] = (
+                cast(value) if value is not None else getattr(SetupSnapshot(), name)
+            )
+        snapshot = replace(snapshot, **fields)
+    return snapshot
+
+
+def source_setup_snapshot(
+    data_choice: str | None,
+    words: pd.DataFrame | None = None,
+    fixations: pd.DataFrame | None = None,
+) -> SetupSnapshot:
+    """A built-in or public dataset's setup **as its source states it** — what
+    ✏️ Edit dataset's *Reset to source setup* returns to.
+
+    A corpus that declares its monitor reports it as measured; one that does
+    not (a prepared benchmark corpus whose manifest invents its screen) gets
+    the extent of its data, estimated, as `compare_source.snapshot_for` does.
+    """
+    declared = _declared_setup_snapshot(data_choice)
+    if declared is not None:
+        return declared
+    width, height, authoritative = resolve_source_monitor(
+        data_choice, words, fixations, own_setup=False
+    )
+    return SetupSnapshot(
+        canvas_width=int(width),
+        canvas_height=int(height),
+        screen_provenance=(
+            Provenance.MEASURED if authoritative else Provenance.ESTIMATED
+        ),
+        geometry_provenance=Provenance.ASSUMED,
+        text_provenance=Provenance.ASSUMED,
+    )
+
+
 def active_setup_snapshot(
     data_choice: str | None = None,
 ) -> SetupSnapshot | None:
     """A source's recorded setup, or ``None`` when it has none.
 
-    A stored upload carries the snapshot the wizard captured; a built-in corpus
-    that declares a monitor reports it as ``MEASURED``; anything else has nothing
-    to say, and saying nothing is the honest answer (a caller must not print
-    "assumed 2560x1440" for a corpus that never claimed one).
+    A stored upload carries the snapshot the wizard captured; a built-in or
+    public dataset whose setup the user saved on ✏️ Edit dataset reports that
+    (`dataset_setup_override`); a built-in corpus that declares a monitor
+    reports it as ``MEASURED``; anything else has nothing to say, and saying
+    nothing is the honest answer (a caller must not print "assumed 2560x1440"
+    for a corpus that never claimed one).
 
     ``data_choice`` defaults to the active source, but callers that already know
     which source they are describing — `_build_share_query` is handed one —
@@ -6246,25 +6440,10 @@ def active_setup_snapshot(
     stored = (st.session_state.get("_datasets") or {}).get(choice)
     if isinstance(stored, dict) and isinstance(stored.get("setup"), dict):
         return SetupSnapshot.from_dict(stored["setup"], fallback=SetupSnapshot())
-    declared = (
-        choice in (ONESTOP_CHOICE, DEMO_CHOICE, MULTIPLEYE_BUNDLE_CHOICE)
-        or _public_dataset_monitor(choice) is not None
-        # A public corpus reached by its own label (the DATA-3 OneStop source)
-        # rather than through the `Public datasets` picker still declares a
-        # monitor in the registry.
-        or bool((public_dataset_registry().get(choice) or {}).get("monitor"))
-    )
-    if declared:
-        return capture_setup_snapshot(
-            {
-                # The corpus declares its presentation monitor, so the screen is
-                # measured. The physical size / viewing distance are *not* — no
-                # registry entry records them, so they stay honestly "assumed".
-                "screen": Provenance.MEASURED,
-                "geometry": Provenance.ASSUMED,
-                "text": Provenance.MEASURED,
-            }
-        )
+    if (override := dataset_setup_override(setup_override_token(choice))) is not None:
+        return override
+    if (declared := _declared_setup_snapshot(choice)) is not None:
+        return declared
     payload = st.session_state.get("_wizard_setup_snapshot")
     if isinstance(payload, dict):
         return SetupSnapshot.from_dict(payload, fallback=SetupSnapshot())
@@ -6355,6 +6534,13 @@ def seed_canvas_state(
     # next source opened without its own monitor.
     source_key = (data_choice, st.session_state.get("public_dataset_choice"))
     from_link = link_setup_keys_for(source_key)
+    # A recording setup the user saved for a built-in or public dataset is that
+    # dataset's alone: leaving it puts back what the figure held before — first,
+    # so the snaps below then answer for the next source as they always have.
+    override_token = setup_override_token(data_choice)
+    applied_for = st.session_state.get(SETUP_OVERRIDE_FOR_KEY)
+    if applied_for is not None and applied_for != override_token:
+        _restore_setup_override_stash()
     if monitor_is_authoritative and st.session_state.get("_canvas_seeded_for") != (
         source_key
     ):
@@ -6436,6 +6622,16 @@ def seed_canvas_state(
         # deep link or a restored config may have set these keys deliberately,
         # and nothing has overwritten them, so there is nothing to undo.
         st.session_state["_font_seeded_for"] = source_key
+
+    # …and entering a dataset with a saved setup applies it, after the canvas
+    # and font snaps so it is what the figure shows. Once per visit: a value
+    # tuned on the rail afterwards stays until the dataset is left.
+    if (
+        override_token
+        and st.session_state.get(SETUP_OVERRIDE_FOR_KEY) != override_token
+        and (override := dataset_setup_override(override_token)) is not None
+    ):
+        _apply_setup_override(override_token, override, frozenset(from_link))
 
     # The remaining widget defaults. Each of these used to be `setdefault`ed
     # inline, immediately above its own widget; seeding them here is what lets a
@@ -9266,6 +9462,8 @@ def _run_app() -> None:
                 editor_rendered=mapping_editor_rendered,
                 uploads_host=editor_uploads_slot,
                 setup_host=recording_body,
+                words=words_all,
+                fixations=fixations_all,
             )
         with _editor_part(setup_identity_slot, "edit_identity"):
             render_trial_identity_section()

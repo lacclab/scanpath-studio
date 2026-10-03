@@ -1008,6 +1008,71 @@ class TestMakeScanpathAnimation:
         assert hasattr(fig, "frames")
         assert 1 <= len(fig.frames) <= _ANIM_MAX_FRAMES + 1
 
+    @pytest.mark.parametrize(
+        "style",
+        [
+            dict(fixation_symbol="heart"),
+            dict(fixation_symbol="heart", hollow_fixations=True),
+            dict(fixation_symbol="circle", hollow_fixations=True),
+        ],
+    )
+    def test_the_replay_samples_trail_colours_once(
+        self, monkeypatch, normalized_words_df, normalized_fixations_df, style
+    ):
+        """A glyph or hollow trail samples its colorscale once per scanpath, not
+        once per frame — every frame restates the same full-length colours."""
+        from scanpath_studio import plots
+
+        calls = []
+        real = plots._sample_colorscale_colors
+
+        def counting(*args, **kwargs):
+            calls.append(1)
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(plots, "_sample_colorscale_colors", counting)
+        fig = make_scanpath_animation(
+            normalized_words_df,
+            normalized_fixations_df,
+            canvas_width=800,
+            canvas_height=600,
+            base_font_size=12,
+            color_by="duration_ms",
+            **style,
+        )
+        assert len(fig.frames) > 5
+        assert len(calls) == 1
+
+    def test_heart_replay_frames_restate_the_base_trail(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        """Hoisting the glyph layers out of the frame loop keeps every frame's
+        trail identical to the base trace but for the revealed positions."""
+        fig = make_scanpath_animation(
+            normalized_words_df,
+            normalized_fixations_df,
+            canvas_width=800,
+            canvas_height=600,
+            base_font_size=12,
+            color_by="duration_ms",
+            fixation_symbol="heart",
+        )
+        hearts = [
+            i
+            for i, t in enumerate(fig.data)
+            if t.mode == "text" and t.text and set(t.text) == {"♥"}
+        ]
+        assert hearts
+        base = fig.data[hearts[0]].to_plotly_json()
+        assert len(set(base["textfont"]["color"])) > 1  # sampled per fixation
+        for frame in fig.frames:
+            trail = next(
+                t for t, idx in zip(frame.data, frame.traces) if idx == hearts[0]
+            ).to_plotly_json()
+            assert trail["textfont"] == base["textfont"]
+            assert trail["text"] == base["text"]
+            assert trail["opacity"] == base["opacity"]
+
     def test_make_scanpath_animation_background_image_layer(
         self, tmp_path, normalized_words_df, normalized_fixations_df
     ):

@@ -6,7 +6,7 @@ import base64
 import copy
 import math
 import struct
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import MISSING, dataclass, fields, replace
@@ -1047,8 +1047,19 @@ def _glyph_scatter_traces(
     outline colour. A hollow marker becomes the outline glyph (♡) in its
     outline colour. ``top`` goes onto the glyph layer (name, hover, legend);
     the outline layer under it takes no hover and no legend entry.
+
+    The two halves are separate so a replay can state the layers once
+    (:func:`_glyph_layers`) and draw them at each frame's positions
+    (:func:`_glyph_layer_traces`) without re-sampling the colours.
     """
-    n = len(x)
+    return _glyph_layer_traces(x, y, _glyph_layers(marker, glyph, len(x)), **top)
+
+
+def _glyph_layers(marker: dict, glyph: str, n: int) -> list[dict]:
+    """What :func:`_glyph_scatter_traces` draws, bottom first, minus positions.
+
+    One dict per layer — ``text`` / ``textfont`` / ``opacity`` — with the
+    colours sampled and the sizes scaled, for ``n`` fixations."""
     sizes = np.asarray(marker.get("size"), dtype=float) * FIXATION_GLYPH_SIZE_SCALE
     sizes = np.broadcast_to(sizes, (n,)) if sizes.ndim == 0 else sizes
     color = marker.get("color")
@@ -1078,18 +1089,35 @@ def _glyph_scatter_traces(
             layers.append((glyph, outline, sizes + _GLYPH_OUTLINE_PX))
         layers.append((glyph, color, sizes))
     opacity = float(marker.get("opacity", 1.0))
+    return [
+        dict(
+            text=[char] * n,
+            textfont=dict(color=layer_color, size=list(layer_sizes)),
+            opacity=opacity,
+        )
+        for char, layer_color, layer_sizes in layers
+    ]
+
+
+def _glyph_layer_traces(
+    x, y, layers: list[dict], *, make: Callable = go.Scatter, **top: Any
+) -> list:
+    """:func:`_glyph_layers`' layers drawn at ``x``/``y``; ``top`` on the last.
+
+    ``make=dict`` returns the traces unvalidated, for a replay frame (see the
+    frame loop in :func:`_render_scanpath_animation`)."""
     traces = []
-    for i, (char, layer_color, layer_sizes) in enumerate(layers):
+    for i, layer in enumerate(layers):
         is_top = i == len(layers) - 1
         traces.append(
-            go.Scatter(
+            make(
                 x=x,
                 y=y,
                 mode="text",
-                text=[char] * n,
-                textfont=dict(color=layer_color, size=list(layer_sizes)),
+                text=layer["text"],
+                textfont=layer["textfont"],
                 textposition="middle center",
-                opacity=opacity,
+                opacity=layer["opacity"],
                 **(
                     top
                     if is_top
@@ -4662,21 +4690,33 @@ def _render_scanpath_animation(
 
     glyph = FIXATION_GLYPH_SYMBOLS.get(fixation_symbol or "")
 
-    def _trail_traces(s, x, y, **top) -> list[go.Scatter]:
+    def _trail_style(s) -> tuple[dict, list[dict] | None]:
+        """The trail's marker dict and, for a glyph shape, its text layers —
+        stated once per scanpath and reused by every frame, which only moves
+        positions. Building them per frame re-sampled the colorscale (glyph and
+        hollow markers) for every fixation on each of ~360 frames."""
+        if "trail_style" not in s:
+            marker = _trail_marker(s)
+            layers = _glyph_layers(marker, glyph, s["n_total"]) if glyph else None
+            s["trail_style"] = (marker, layers)
+        return s["trail_style"]
+
+    def _trail_traces(s, x, y, *, make: Callable = go.Scatter, **top) -> list:
         """The trail as drawn at positions ``x``/``y`` — one marker trace, or
         for a glyph shape (♥) its text layers (`_glyph_scatter_traces`), which
         un-mask exactly like the markers do. Full length either way, so the
-        frames still only move positions."""
-        if glyph:
-            return _glyph_scatter_traces(
-                x, y, _trail_marker(s), glyph, customdata=s["customdata"], **top
+        frames still only move positions. ``make=dict`` for a frame."""
+        marker, layers = _trail_style(s)
+        if layers is not None:
+            return _glyph_layer_traces(
+                x, y, layers, make=make, customdata=s["customdata"], **top
             )
         return [
-            go.Scatter(
+            make(
                 x=x,
                 y=y,
                 mode="markers",
-                marker=_trail_marker(s),
+                marker=marker,
                 text=s["order_text"],
                 customdata=s["customdata"],
                 **top,
@@ -4909,7 +4949,7 @@ def _render_scanpath_animation(
         # A glyph carries no colorscale, so A's numeric colour bar rides on a
         # trace of its own (after the animated ones, like the legend entries).
         bar = _glyph_colorbar_trace(
-            _trail_marker(specs[0]), specs[0]["marker_colors"] or ()
+            _trail_style(specs[0])[0], specs[0]["marker_colors"] or ()
         )
         if bar is not None:
             fig.add_trace(bar)
@@ -4920,6 +4960,11 @@ def _render_scanpath_animation(
         max_frames=anim_max_frames,
     )
 
+    # Frames are plain dicts, validated once, by the `fig.frames` assignment
+    # below. Built from `go.Scatter`/`go.Frame` they were validated (and deep-
+    # copied) three times over — each trace, each frame, then the figure —
+    # which on a long replay is most of the build: every frame restates the
+    # trail's full-length sizes and colours (see `_trail_marker`).
     frames = []
     n_frames = len(frame_times)
     for k, t in enumerate(frame_times):
@@ -4939,7 +4984,7 @@ def _render_scanpath_animation(
             # frame, so only positions change — `redraw=False` then re-renders
             # just this trace, not the whole figure.
             tx, ty = _revealed_xy(all_x, all_y, kk)
-            for idx, trace in zip(s["idx_trails"], _trail_traces(s, tx, ty)):
+            for idx, trace in zip(s["idx_trails"], _trail_traces(s, tx, ty, make=dict)):
                 traces_in_frame.append(trace)
                 traces_idx_in_frame.append(idx)
 
@@ -4949,7 +4994,7 @@ def _render_scanpath_animation(
                 # so numbers appear in place (and `redraw=False` shows them).
                 ox, oy = _revealed_xy(all_x, all_y, kk)
                 traces_in_frame.append(
-                    go.Scatter(
+                    dict(
                         x=ox,
                         y=oy,
                         mode="text",
@@ -4967,7 +5012,7 @@ def _render_scanpath_animation(
             if show_saccades:
                 sac_x, sac_y = _revealed_saccade_xy(all_x, all_y, kk)
                 traces_in_frame.append(
-                    go.Scatter(
+                    dict(
                         x=sac_x,
                         y=sac_y,
                         mode="lines",
@@ -4986,12 +5031,12 @@ def _render_scanpath_animation(
                 arw_x, arw_y = _revealed_arrow_xy(
                     s["arrow_x"], s["arrow_y"], s["arrow_seg"], kk
                 )
-                traces_in_frame.append(go.Scatter(x=arw_x, y=arw_y, mode="markers"))
+                traces_in_frame.append(dict(x=arw_x, y=arw_y, mode="markers"))
                 traces_idx_in_frame.append(s["idx_arrow"])
 
             ci = kk - 1
             traces_in_frame.append(
-                go.Scatter(
+                dict(
                     x=[all_x[ci]],
                     y=[all_y[ci]],
                     mode="markers",
@@ -5008,12 +5053,12 @@ def _render_scanpath_animation(
                 # A flagged fixation's highlight appears with the fixation itself.
                 ox_f, oy_f = _revealed_xy(overlay["x"], overlay["y"], kk)
                 traces_in_frame.append(
-                    go.Scatter(x=ox_f, y=oy_f, mode="markers", marker=overlay["marker"])
+                    dict(x=ox_f, y=oy_f, mode="markers", marker=overlay["marker"])
                 )
                 traces_idx_in_frame.append(overlay["idx"])
 
         frames.append(
-            go.Frame(data=traces_in_frame, name=str(k), traces=traces_idx_in_frame)
+            dict(data=traces_in_frame, name=str(k), traces=traces_idx_in_frame)
         )
     fig.frames = frames
 

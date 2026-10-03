@@ -1593,7 +1593,7 @@ def _restore_selection(
     return True
 
 
-def _apply_url_trial_selection(combos: pd.DataFrame) -> None:
+def _apply_url_trial_selection(combos: pd.DataFrame) -> str | None:
     """Apply a ``?trial_id=`` deep link to the trial picker — exactly once.
 
     Unlike ``?trial=`` (a slider *index*, seeded before any widget renders in
@@ -1604,29 +1604,37 @@ def _apply_url_trial_selection(combos: pd.DataFrame) -> None:
     restore uses), seeding *every* selection prefix so non-first tabs land on the
     trial too (mirrors the ``_SELECTION_PREFIXES`` loop in ``_apply_url_preset``).
     The Share button emits this param; see ``_build_share_query``.
+
+    Resolved like its in-app twin, :func:`_apply_pending_trial_selection`: held
+    over only while ``combos`` is *empty* (still loading — the OneStop shard, a
+    big upload), and consumed once the pool can answer, hit or miss. A miss must
+    not retry on every rerun and then jump the picker the moment a filter change
+    brings the named reader back into the pool.
+
+    Returns ``None`` when nothing was waiting or the reading opened, and
+    otherwise a sentence saying why the link could not land (its reader filtered
+    out, a trial id several readers share with no reader named, …) for the
+    caller to show in the page notices.
     """
     if st.session_state.get("_url_trial_applied"):
-        return
+        return None
     trial_id = st.query_params.get("trial_id")
     if not trial_id:
-        return
+        return None
+    if combos is None or combos.empty:
+        return None
+    st.session_state["_url_trial_applied"] = True
     selection = {
         "participant_id": st.query_params.get("participant"),
         "trial_id": trial_id,
         "screen_id": st.query_params.get("screen"),
     }
-    # Stamp the once-flag only after the trial is actually found, so a rerun
-    # where `combos` is still empty/partial (e.g. the OneStop shard is mid-load)
-    # retries on the next rerun instead of losing the deep link. `_restore_selection`
-    # only writes when it matches, so retrying never clobbers manual navigation.
-    # Materialize (not a short-circuiting any()) so EVERY prefix is seeded, not
-    # just up to the first match.
-    results = [
+    _row, reason = _match_selection(selection, combos)
+    if reason:
+        return f"The link's reading couldn't be opened: {reason}."
+    for prefix in _SELECTION_PREFIXES:
         _restore_selection(selection, combos, key_prefix=prefix)
-        for prefix in _SELECTION_PREFIXES
-    ]
-    if any(results):
-        st.session_state["_url_trial_applied"] = True
+    return None
 
 
 #: Where an in-app "open this trial" request waits for `combos` to exist.

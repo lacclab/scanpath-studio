@@ -5047,6 +5047,46 @@ class TestPendingTrialRequestDoesNotLinger:
         assert PENDING_TRIAL_KEY not in at.session_state
 
 
+@pytest.mark.timeout(240)
+class TestDeepLinkToAFilteredOutReader:
+    """A ``?participant=&trial_id=`` link whose reader the filters exclude.
+
+    It says why it could not land, is consumed rather than retried every rerun,
+    and so does not jump the picker later when that reader re-enters the pool —
+    the same contract as the in-app Open (`_apply_pending_trial_selection`).
+    """
+
+    def test_reports_once_and_does_not_fire_when_the_reader_returns(self):
+        participant = "l37_1129"
+        trial = "l37_1129_2_2_2_Adv_r0"
+        at = _make_apptest()
+        at.run(timeout=180)
+        assert not at.exception, at.exception
+        part = next(m for m in at.multiselect if m.key == "filter_participants")
+        others = [p for p in part.options if p != participant]
+        assert others, part.options
+        part.set_value([others[0]])
+        at.run(timeout=180)
+        assert not at.exception, at.exception
+
+        at.query_params["participant"] = participant
+        at.query_params["trial_id"] = trial
+        at.run(timeout=180)
+        assert not at.exception, at.exception
+        warnings = " ".join(str(w.value) for w in at.warning)
+        assert "The link's reading couldn't be opened" in warnings
+        assert f"reader {participant}'s trial {trial}" in warnings
+        assert at.session_state["_url_trial_applied"] is True
+
+        # The reader comes back into the pool: the consumed link stays put.
+        at.session_state["filter_participants"] = []
+        at.run(timeout=180)
+        assert not at.exception, at.exception
+        assert at.session_state["single_trial_id"] != trial
+        warnings = " ".join(str(w.value) for w in at.warning)
+        assert "The link's reading couldn't be opened" not in warnings
+
+
 @pytest.mark.timeout(180)
 class TestRecordingSetupGate(TestSetupWizard):
     """DATA-22 §3: **Add dataset** is blocked until all three setup groups say

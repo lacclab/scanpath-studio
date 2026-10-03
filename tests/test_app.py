@@ -579,13 +579,33 @@ class TestApplyUrlTrialSelection:
         _apply_url_trial_selection(self._combos())
         assert "single_trial_id" not in fake_st.session_state
 
-    def test_unknown_trial_id_does_not_burn_guard(self, fake_st):
-        # A trial id absent from combos must NOT stamp the once-flag, so a later
+    def test_an_empty_pool_does_not_burn_guard(self, fake_st):
+        # `combos` still loading (empty) must NOT stamp the once-flag, so a later
         # rerun (e.g. once an async shard finishes loading) can still land it.
-        fake_st.query_params = {"trial_id": "nope"}
-        _apply_url_trial_selection(self._combos())
+        fake_st.query_params = {"trial_id": "t2"}
+        assert _apply_url_trial_selection(pd.DataFrame()) is None
         assert "single_trial_id" not in fake_st.session_state
         assert "_url_trial_applied" not in fake_st.session_state
+
+    def test_a_miss_is_reported_and_consumed(self, fake_st):
+        # The pool answered "not here": say why, and never retry — a retry would
+        # jump the picker when a filter change brings the reader back.
+        fake_st.query_params = {"participant": "p9", "trial_id": "t1"}
+        message = _apply_url_trial_selection(self._combos())
+        assert message == (
+            "The link's reading couldn't be opened: reader p9's trial t1 is not "
+            "in the current trial pool."
+        )
+        assert "single_trial_id" not in fake_st.session_state
+        assert fake_st.session_state["_url_trial_applied"] is True
+        assert _apply_url_trial_selection(self._combos()) is None
+
+    def test_an_ambiguous_participant_free_trial_is_reported(self, fake_st):
+        fake_st.query_params = {"trial_id": "t1"}
+        combos = pd.DataFrame({"participant_id": ["p1", "p2"], "trial_id": ["t1"] * 2})
+        message = _apply_url_trial_selection(combos)
+        assert message is not None and "belongs to 2 readers" in message
+        assert "single_trial_id" not in fake_st.session_state
 
     def test_applies_only_once(self, fake_st):
         # Once applied, a later rerun must not re-seed the picker (so the user's

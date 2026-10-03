@@ -9825,7 +9825,10 @@ def _run_app() -> None:
     # Land a shared/deep link on its exact `?trial_id=` (once) now that combos
     # exist — see _apply_url_trial_selection. Runs before the rail/tab widgets
     # render so the seeded selection is picked up as their initial value.
-    _apply_url_trial_selection(combos)
+    # A link the pool cannot answer — its reader filtered out, or a trial id
+    # several readers share with none named — is reported, and not retried.
+    if missed_link := _apply_url_trial_selection(combos):
+        menu.notices.warning(missed_link, icon=ICONS["warning"])
     # Same hop, from inside the app: a "go to this trial" button in a Corpus
     # Analysis table parks its request in a callback (before combos exist) and
     # it is applied here — see url_state.request_trial (ENG-36).

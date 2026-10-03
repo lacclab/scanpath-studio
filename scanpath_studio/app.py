@@ -4118,7 +4118,7 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
         )
         if raw_gaze_schema:
             # The raw sample is read inside the cached builder; its loader is
-            # cached too, so asking it again for the columns is free.
+            # cached too, so asking it again costs a copy of a 2k-row sample.
             _stash_active_mapping(
                 "raw_gaze", raw_gaze_schema, load_sample_raw_gaze().columns
             )

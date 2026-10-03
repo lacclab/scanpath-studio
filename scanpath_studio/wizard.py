@@ -2662,8 +2662,13 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
     filter_fields = ["genre", "session", "is_practice"]
     st.session_state["wizard_filter_fields"] = filter_fields
     schemas = {"words": word_schema, "fixations": fix_schema, "raw_gaze": None}
-    app._stash_active_mapping("words", word_schema)
-    app._stash_active_mapping("fixations", fix_schema)
+    # DATA-66: with the loader-built frames' columns, so the map is stashed too.
+    app._stash_active_mapping(
+        "words", word_schema, words_raw.columns, keep_columns=keep_words
+    )
+    app._stash_active_mapping(
+        "fixations", fix_schema, fix_raw.columns, keep_columns=keep_fix
+    )
 
     if active:
         boxes_msg = (

@@ -7385,10 +7385,14 @@ def _c_export_unit_count(
     _raw_gaze: pd.DataFrame | None,
     frame_keys: tuple,
     scope: tuple,
-) -> tuple[int, int]:
+) -> tuple[int, int] | None:
     """``(trials, screen units)`` the bundle will export, for the plan line
     above Build export. Cached on the four frames' fingerprints
-    (``frame_keys``) and the scope choice, since it walks every trial."""
+    (``frame_keys``) and the scope choice, since it walks every trial.
+
+    ``None`` when screens contradict each other (Build export reports it) —
+    returned, not raised, so that answer is cached too rather than re-walked
+    on every rerun."""
     scope_name, participant, trial, text = scope
     scoped = apply_export_scope(
         _combos,
@@ -7399,7 +7403,11 @@ def _c_export_unit_count(
             scope_text=text,
         ),
     )
-    return len(scoped), count_export_units(scoped, _words, _fixations, _raw_gaze)
+    try:
+        units = count_export_units(scoped, _words, _fixations, _raw_gaze)
+    except ValueError:
+        return None
+    return len(scoped), units
 
 
 def _render_bulk_export(
@@ -7479,25 +7487,21 @@ def _render_bulk_export(
     if not active_combos.empty:
         # What Build export is about to write: a parent trial can hold many
         # screens, and each screen one file per format (and per layer).
-        try:
-            trials, units = _c_export_unit_count(
-                active_combos,
-                active_words,
-                active_fix,
-                active_raw_gaze,
-                frame_keys,
-                (
-                    options.scope,
-                    options.scope_participant,
-                    options.scope_trial,
-                    options.scope_text,
-                ),
-            )
-        except ValueError:
-            # Screens that contradict each other: Build export reports it.
-            pass
-        else:
-            info_col.caption(describe_plan(plan_from_counts(trials, units, options)))
+        counts = _c_export_unit_count(
+            active_combos,
+            active_words,
+            active_fix,
+            active_raw_gaze,
+            frame_keys,
+            (
+                options.scope,
+                options.scope_participant,
+                options.scope_trial,
+                options.scope_text,
+            ),
+        )
+        if counts is not None:
+            info_col.caption(describe_plan(plan_from_counts(*counts, options)))
     if st.session_state.pop(_BULK_EXPORT_STOPPED, False) and not run:
         info_col.warning(
             "Export stopped — no bundle was built. Build export starts again.",

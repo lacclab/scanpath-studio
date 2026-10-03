@@ -3441,7 +3441,10 @@ def cache(argv: list[str]) -> None:
         print("Stored:  nothing")
         return
     if not status["readable"]:
-        print("Stored:  unreadable (wrong schema or incomplete) — ignored on startup")
+        print(
+            "Stored:  unreadable (wrong schema or incomplete) — the app opens "
+            "without it and leaves it as it is"
+        )
         print(f"Size:    {_human_size(status['bytes'])}")
         return
     names = ", ".join(entry["name"] for entry in status["datasets"]) or "none"
@@ -3456,6 +3459,10 @@ def cache(argv: list[str]) -> None:
         f"{status.get('metadata', 0)} metadata table(s) · "
         f"{status['settings']} setting(s)"
     )
+    # A stored dataset the app cannot restore (a file gone, an entry damaged):
+    # the app holds it back, restores the rest, and keeps it in the cache.
+    for entry in status.get("damaged") or []:
+        print(f"Damaged: {entry['name']} — {entry['reason']} (kept; not restored)")
     print(f"Size:    {_human_size(status['bytes'])}")
     print(f"Written: {status['saved_at']}")
     print("Delete with `scanpath-studio cache --clear`.")

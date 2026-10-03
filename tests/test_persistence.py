@@ -898,7 +898,9 @@ class TestAMalformedCacheNeverStopsTheApp:
             assert not restore_state(session, tmp_path)
             assert "_datasets" not in session
 
-    def test_a_malformed_dataset_entry_abandons_the_restore_untouched(self, tmp_path):
+    def test_a_malformed_dataset_entry_costs_only_that_dataset(self, tmp_path):
+        """It used to abandon the whole restore; now it is held back — kept,
+        verbatim, for the next save — and everything else restores."""
         self._write(
             tmp_path,
             self._manifest(
@@ -906,9 +908,14 @@ class TestAMalformedCacheNeverStopsTheApp:
             ),
         )
         session = {}
-        assert not restore_state(session, tmp_path)
-        # Checked before anything is applied, so nothing is half-restored.
-        assert session == {persistence._RESTORED_KEY: True}
+        assert restore_state(session, tmp_path)
+        assert "_datasets" not in session
+        assert session["global_show_heatmap"] is True
+        assert list(persistence.failed_datasets(session)) == ["x"]
+        assert not persistence.persistence_paused(session)
+        assert persistence.save_state(session, tmp_path)
+        manifest = json.loads((tmp_path / "manifest.json").read_text())
+        assert manifest["datasets"] == {"x": "str"}
 
     def test_malformed_annotation_records_are_skipped(self, tmp_path):
         good = {"participant_id": "p1", "trial_id": "t1", "star": True}
@@ -1344,3 +1351,231 @@ def test_a_built_in_datasets_own_setup_survives_a_cache_round_trip(tmp_path):
         "global_monitor_width_mm": 597.0,
         "global_font_family": None,
     }
+
+
+class TestEachCachedDatasetRestoresOnItsOwn:
+    """One damaged dataset used to block every dataset's recovery, and the next
+    automatic save then wrote the empty session over the manifest. Now each
+    dataset restores on its own, a failed one is kept (entry and files) through
+    every save until it is retried or removed, and a cache that cannot be read
+    at all pauses saving — while an absent or cleared cache saves normally.
+    """
+
+    URL = "http://localhost:8501"
+
+    @pytest.fixture
+    def cache(self, tmp_path, monkeypatch):
+        """A temporary cache holding `good` and `damaged` — never the real one."""
+        import scanpath_studio.annotations as annotations_mod
+
+        monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
+        monkeypatch.setattr(persistence, "state_directory", lambda *a, **k: tmp_path)
+        session = {
+            "_datasets": {"good": _dataset(), "damaged": _dataset()},
+            "global_show_heatmap": True,
+            DESIGN_PRESETS: {"Mine": {"global_show_words": False}},
+        }
+        note = {"star": False, "tags": [], "note": "mine"}
+        annotations_mod.activate_dataset(session, "good")
+        session[ANNOTATIONS_STATE_KEY][("p1", "t1")] = dict(note)
+        annotations_mod.activate_dataset(session, "damaged")
+        session[ANNOTATIONS_STATE_KEY][("p1", "t1")] = dict(note)
+        assert save_state(session, tmp_path)
+        return tmp_path
+
+    @staticmethod
+    def _files(root, name):
+        slug = persistence._dataset_slug(name)
+        return {
+            key: root / "datasets" / f"{slug}-{key}.parquet"
+            for key in ("words", "fixations", "raw_gaze")
+        }
+
+    @staticmethod
+    def _manifest(root):
+        return json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+
+    def _damage(self, root):
+        """The review's case: only `damaged`'s word table goes missing."""
+        words = self._files(root, "damaged")["words"]
+        backup = words.read_bytes()
+        words.unlink()
+        return words, backup
+
+    def test_the_healthy_dataset_settings_and_notes_come_back(self, cache):
+        import scanpath_studio.annotations as annotations_mod
+
+        self._damage(cache)
+        session = {}
+        assert restore_local_state(session, self.URL)
+        assert list(session["_datasets"]) == ["good"]
+        assert session["global_show_heatmap"] is True
+        assert DESIGN_PRESETS in session
+        failed = persistence.failed_datasets(session)
+        assert list(failed) == ["damaged"]
+        assert "missing" in failed["damaged"]
+        assert persistence.cache_failure(session) is None
+        # A partial failure is not a reason to stop saving the rest.
+        assert not persistence_paused(session)
+        # Both datasets' notes restored, the held-back one's under its name.
+        records = annotations_mod.dataset_records(session)
+        assert set(records) == {"good", "damaged"}
+
+    def test_the_next_save_keeps_the_failed_entry_and_its_files(self, cache):
+        words, _ = self._damage(cache)
+        before = self._manifest(cache)["datasets"]["damaged"]
+        session = {}
+        restore_local_state(session, self.URL)
+        session["global_show_heatmap"] = False  # an ordinary change → a save
+        assert save_local_state(session, self.URL)
+        datasets = self._manifest(cache)["datasets"]
+        assert set(datasets) == {"good", "damaged"}
+        assert datasets["damaged"] == before  # verbatim
+        others = self._files(cache, "damaged")
+        assert others["fixations"].is_file() and others["raw_gaze"].is_file()
+        assert all(path.is_file() for path in self._files(cache, "good").values())
+        assert not words.exists()  # nothing invented, either
+
+        # …and the following launch still holds it back rather than losing it.
+        again = {}
+        restore_local_state(again, self.URL)
+        assert list(persistence.failed_datasets(again)) == ["damaged"]
+
+    def test_retry_reads_it_once_its_file_is_back(self, cache):
+        words, backup = self._damage(cache)
+        session = {}
+        restore_local_state(session, self.URL)
+        assert persistence.retry_failed_datasets(session)  # still missing
+        words.write_bytes(backup)
+        assert persistence.retry_failed_datasets(session) == {}
+        assert set(session["_datasets"]) == {"good", "damaged"}
+        assert persistence.failed_datasets(session) == {}
+        session["global_show_heatmap"] = False
+        assert save_local_state(session, self.URL)
+        assert set(self._manifest(cache)["datasets"]) == {"good", "damaged"}
+
+    def test_remove_from_cache_deletes_its_entry_and_files(self, cache):
+        self._damage(cache)
+        session = {}
+        restore_local_state(session, self.URL)
+        assert persistence.discard_failed_dataset(session, "damaged")
+        assert not any(p.exists() for p in self._files(cache, "damaged").values())
+        assert save_local_state(session, self.URL)
+        assert set(self._manifest(cache)["datasets"]) == {"good"}
+        assert all(path.is_file() for path in self._files(cache, "good").values())
+
+    def test_a_dataset_re_added_under_its_name_replaces_the_failed_copy(self, cache):
+        self._damage(cache)
+        session = {}
+        restore_local_state(session, self.URL)
+        session["_datasets"] = {**session["_datasets"], "damaged": _dataset()}
+        assert save_local_state(session, self.URL)
+        assert persistence.failed_datasets(session) == {}
+        again = {}
+        restore_local_state(again, self.URL)
+        assert set(again["_datasets"]) == {"good", "damaged"}
+
+    def test_cache_status_names_the_damaged_dataset(self, cache):
+        self._damage(cache)
+        status = cache_status(cache, url=self.URL)
+        assert status["readable"]
+        assert [entry["name"] for entry in status["datasets"]] == ["good"]
+        assert [entry["name"] for entry in status["damaged"]] == ["damaged"]
+        assert "missing" in status["damaged"][0]["reason"]
+
+    def test_an_unreadable_manifest_pauses_saving_until_cleared(self, cache):
+        manifest_path = cache / "manifest.json"
+        manifest_path.write_text("{ not json", encoding="utf-8")
+        session = {}
+        assert not restore_local_state(session, self.URL)
+        assert persistence.cache_failure(session) == "its manifest is not valid JSON"
+        assert persistence_paused(session)
+        session["global_show_heatmap"] = False
+        assert not save_local_state(session, self.URL)
+        assert manifest_path.read_text(encoding="utf-8") == "{ not json"
+
+        # Clearing it on purpose: nothing left to protect, so saving resumes.
+        clear_local_state(session, cache)
+        assert persistence.cache_failure(session) is None
+        assert not persistence_paused(session)
+        assert save_local_state(session, self.URL)
+        assert self._manifest(cache)["session"]["global_show_heatmap"] is False
+
+    def test_retrying_an_unreadable_manifest_restores_it_once_fixed(self, cache):
+        manifest_path = cache / "manifest.json"
+        good_text = manifest_path.read_text(encoding="utf-8")
+        manifest_path.write_text("[]", encoding="utf-8")
+        session = {}
+        restore_local_state(session, self.URL)
+        assert persistence.cache_failure(session)
+        manifest_path.write_text(good_text, encoding="utf-8")
+        assert persistence.retry_cache_restore(session, self.URL)
+        assert persistence.cache_failure(session) is None
+        assert not persistence_paused(session)
+        assert set(session["_datasets"]) == {"good", "damaged"}
+
+    def test_no_cache_and_a_cleared_cache_save_normally(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
+        monkeypatch.setattr(persistence, "state_directory", lambda *a, **k: tmp_path)
+        fresh = {}
+        assert not restore_local_state(fresh, self.URL)
+        assert persistence.cache_failure(fresh) is None
+        assert not persistence_paused(fresh)
+        fresh["_datasets"] = {"new": _dataset()}
+        assert save_local_state(fresh, self.URL)
+
+        clear_local_state(fresh, tmp_path)
+        cleared = {}
+        assert not restore_local_state(cleared, self.URL)
+        assert persistence.cache_failure(cleared) is None
+        assert not persistence_paused(cleared)
+        cleared["global_show_heatmap"] = True
+        assert save_local_state(cleared, self.URL)
+
+    def test_a_frame_path_outside_the_cache_is_not_read(self, cache):
+        manifest = self._manifest(cache)
+        manifest["datasets"]["damaged"]["frames"]["words"] = "../../elsewhere.parquet"
+        (cache / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        session = {}
+        restore_local_state(session, self.URL)
+        assert (
+            "outside the cache folder"
+            in persistence.failed_datasets(session)["damaged"]
+        )
+        # …and removing it never deletes outside the cache folder either.
+        assert persistence.discard_failed_dataset(session, "damaged")
+
+
+def test_the_app_names_a_damaged_dataset_and_keeps_it(tmp_path, monkeypatch):
+    """End to end: the full app restores the healthy dataset, says which one did
+    not come back (with Retry / Remove from cache, on the page and on the Data
+    page's *Saved on this computer*), and its next save keeps the damaged entry."""
+    streamlit_testing = pytest.importorskip("streamlit.testing.v1")
+    from tests.conftest import APP_SCRIPT, open_data_view
+
+    monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
+    monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
+    save_state({"_datasets": {"good": _dataset(), "damaged": _dataset()}}, tmp_path)
+    slug = persistence._dataset_slug("damaged")
+    (tmp_path / "datasets" / f"{slug}-words.parquet").unlink()
+
+    at = streamlit_testing.AppTest.from_file(APP_SCRIPT, default_timeout=180)
+    at.run()
+    assert not at.exception, [e.message for e in at.exception]
+    assert "good" in at.session_state["_datasets"]
+    warnings = " ".join(str(w.value) for w in at.warning)
+    assert "couldn't be restored" in warnings
+    labels = [b.label for b in at.button]
+    assert "Retry" in labels and "Remove from cache" in labels
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert set(manifest["datasets"]) == {"good", "damaged"}
+
+    open_data_view(at)
+    assert not at.exception, [e.message for e in at.exception]
+    keys = {b.key for b in at.button}
+    assert "saved_here_recovery_remove_0" in keys
+
+    next(b for b in at.button if b.key == "cache_recovery_remove_0").click().run()
+    assert not at.exception, [e.message for e in at.exception]
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert set(manifest["datasets"]) == {"good"}

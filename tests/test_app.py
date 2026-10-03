@@ -201,9 +201,10 @@ class _FakeSt:
     def __init__(self):
         self.session_state = {}
         self.query_params = {}
+        self.warnings: list[str] = []
 
-    def warning(self, *args, **kwargs):  # no-op stand-in
-        pass
+    def warning(self, *args, **kwargs):  # recorded, so a test can assert on it
+        self.warnings.append(" ".join(str(arg) for arg in args))
 
 
 @pytest.fixture
@@ -451,7 +452,92 @@ class TestBuildShareQuery:
         ss = fake_st.session_state
         assert ss["author_text"] == "alpha beta"
         assert ss["_author_text_for_events"] == "alpha beta"
-        assert ss["_authored_events_frame"].to_dict("records") == events
+        restored = ss["_authored_events_frame"]
+        assert restored[list(events[0])].to_dict("records") == events
+        # Normalized on the way in: the stable id/order a link may omit.
+        assert restored[["fixation_id", "order_in_trial"]].to_dict("records") == [
+            {"fixation_id": 1, "order_in_trial": 1}
+        ]
+
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            '[{"x":100},1]',  # mixed list
+            "[1, 2]",  # scalars
+            "42",  # a scalar, not a list
+            '{"x": 100}',  # an object, not a list
+            "[{",  # malformed JSON
+            '[{"x": [1, 2]}]',  # non-scalar value
+            '[{"x": {"a": 1}}]',  # nested object
+            '[{"colour": "red"}]',  # an object that names no event field
+        ],
+    )
+    def test_malformed_authored_events_warn_and_keep_text(self, fake_st, raw):
+        fake_st.query_params = {
+            "source": "author",
+            "author_text": "alpha beta",
+            "author_events": raw,
+        }
+        assert _apply_url_preset() == "author"
+        ss = fake_st.session_state
+        assert ss["author_text"] == "alpha beta"
+        assert "_authored_events_frame" not in ss
+        assert "_author_text_for_events" not in ss
+        assert any("malformed authored-fixation" in str(w) for w in fake_st.warnings)
+
+
+class TestExplicitReaderIsBinding:
+    """A named reader is never swapped for another reader's same-named trial."""
+
+    _COMBOS = pd.DataFrame(
+        {"participant_id": ["other-reader"], "trial_id": ["trial-1"]}
+    )
+
+    def test_a_filtered_out_reader_is_not_substituted(self, fake_st):
+        from scanpath_studio.url_state import _restore_selection
+
+        selection = {"participant_id": "requested-reader", "trial_id": "trial-1"}
+        assert _restore_selection(selection, self._COMBOS) is False
+        assert "single_trial_id" not in fake_st.session_state
+
+    def test_a_participant_free_request_takes_a_unique_trial(self, fake_st):
+        from scanpath_studio.url_state import _restore_selection
+
+        assert _restore_selection({"trial_id": "trial-1"}, self._COMBOS) is True
+        assert fake_st.session_state["single_trial_id"] == "trial-1"
+
+    def test_the_in_app_open_says_why_it_could_not_navigate(self, fake_st):
+        from scanpath_studio.url_state import (
+            PENDING_TRIAL_KEY,
+            _apply_pending_trial_selection,
+        )
+
+        fake_st.session_state[PENDING_TRIAL_KEY] = {
+            "participant_id": "requested-reader",
+            "trial_id": "trial-1",
+            "screen_id": None,
+        }
+        message = _apply_pending_trial_selection(self._COMBOS)
+        assert message == (
+            "Couldn't open that reading: reader requested-reader's trial trial-1 "
+            "is not in the current trial pool."
+        )
+        assert PENDING_TRIAL_KEY not in fake_st.session_state
+        assert "single_trial_id" not in fake_st.session_state
+
+    def test_the_in_app_open_still_opens_a_reading_in_the_pool(self, fake_st):
+        from scanpath_studio.url_state import (
+            PENDING_TRIAL_KEY,
+            _apply_pending_trial_selection,
+        )
+
+        fake_st.session_state[PENDING_TRIAL_KEY] = {
+            "participant_id": "other-reader",
+            "trial_id": "trial-1",
+            "screen_id": None,
+        }
+        assert _apply_pending_trial_selection(self._COMBOS) is None
+        assert fake_st.session_state["single_trial_id"] == "trial-1"
 
 
 class TestApplyUrlTrialSelection:

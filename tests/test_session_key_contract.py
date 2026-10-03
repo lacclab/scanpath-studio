@@ -555,7 +555,13 @@ def _restore_config_app():
         # list above. Both fields are validated against the segmented controls'
         # options, so placeholders would be skipped rather than written.
         "compare_view": {"layout": "Stacked", "stimulus": "A", "legend": True},
-        "selection": {"participant_id": "p1", "trial_id": "t1"},
+        "selection": {
+            "participant_id": "p1",
+            "trial_id": "t1",
+            # Schema 6 — scanpath B by identity, in the same dataset.
+            "compare": {"participant_id": "p2", "trial_id": "t1", "screen_id": "2"},
+        },
+        "mode": {"animate": True, "compare": True},
         "annotations": [],
     }
     before = set(st.session_state.keys())

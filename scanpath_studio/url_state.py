@@ -21,6 +21,7 @@ import streamlit as st
 
 from scanpath_studio.html_embed import embed_html_iframe
 
+from .authoring import event_records_frame
 from .code_snippet import (
     INSTALL_COMMAND,
     SNIPPET_STATE_KEY,
@@ -85,7 +86,7 @@ from .controls import (
     numeric_field_options,
     palette_state,
 )
-from .data import respell_reading
+from .data import composite_respelling_map, respell_reading
 from .experimental_setup import format_provenance_param, parse_provenance_param
 from .session_keys import (
     COMPARE_FIX_RANGE_PARAM,
@@ -104,6 +105,8 @@ from .session_keys import (
     SETUP_PARAMS,
     SETUP_PROVENANCE_PARAM,
     SETUP_PROVENANCE_STATE_KEY,
+    SINGLE_ANIMATE,
+    SINGLE_COMPARE_SCREEN_ID,
     SINGLE_COMPARE_TOGGLE,
 )
 
@@ -1052,7 +1055,7 @@ def _apply_url_preset() -> str | None:
             # trial has that screen, as A's does with `screen=`.
             if qp.get(COMPARE_SCREEN_PARAM) not in (None, ""):
                 st.session_state.setdefault(
-                    "single_compare_screen_id", str(qp[COMPARE_SCREEN_PARAM])
+                    SINGLE_COMPARE_SCREEN_ID, str(qp[COMPARE_SCREEN_PARAM])
                 )
 
     # DATA-3: the public OneStop source options (variant / regime / parts) ride
@@ -1073,16 +1076,16 @@ def _apply_url_preset() -> str | None:
         if "author_text" in qp:
             st.session_state.setdefault("author_text", str(qp["author_text"]))
         if "author_events" in qp:
+            # The whole build — parse, shape check, table, normalization — sits
+            # inside the boundary: a hand-edited `[{"x":100},1]` used to pass
+            # the list check and raise from `pd.DataFrame` before the app drew
+            # anything. The text is kept either way.
             try:
-                events = json.loads(str(qp["author_events"]))
-                if not isinstance(events, list):
-                    raise ValueError
-            except (ValueError, TypeError, json.JSONDecodeError):
+                events = event_records_frame(json.loads(str(qp["author_events"])))
+            except (ValueError, TypeError, RecursionError):
                 st.warning("Ignored malformed authored-fixation data in the URL.")
             else:
-                st.session_state.setdefault(
-                    "_authored_events_frame", pd.DataFrame(events)
-                )
+                st.session_state.setdefault("_authored_events_frame", events)
                 # Prevent the authoring widget's text-change initializer from
                 # replacing the just-restored events on its first render.
                 st.session_state.setdefault(
@@ -1327,6 +1330,10 @@ def sanitize_session_value(key: str, value):
 #   schema 5 — the fixed duration scale (`sizing.marker_size_scale`,
 #              `marker_duration_range`, `duration_size_legend`). Older files
 #              were drawn on the relative scale and are migrated to it.
+#   schema 6 — the figure *mode* (`mode.animate` / `mode.compare`) and
+#              scanpath B (`selection.compare`: its reader, trial, dataset and
+#              screen). Older files carry neither, so they restore no
+#              comparison and leave the current mode alone.
 #
 # **Bump `PLOT_CONFIG_SCHEMA` and register a migration in `_PLOT_CONFIG_MIGRATIONS`
 # whenever the config layout changes** (a renamed key, a moved section, a changed
@@ -1335,7 +1342,7 @@ def sanitize_session_value(key: str, value):
 # time. The field-by-field reader already tolerates *missing* sections, so a
 # migration is only needed when an old key must be *translated*, not merely when
 # new keys are added.
-PLOT_CONFIG_SCHEMA = 5
+PLOT_CONFIG_SCHEMA = 6
 
 
 def _detect_config_schema(config: dict) -> int:
@@ -1441,6 +1448,23 @@ def _migrate_config_4_to_5(config: dict) -> dict:
     return migrated
 
 
+def _migrate_config_5_to_6(config: dict) -> dict:
+    """Schema 6 *added* the figure mode and scanpath B; nothing to translate.
+
+    A schema-5 file never recorded whether it was saved in Animate or Compare,
+    nor which reading B was — so it gets no ``mode`` section here, and the
+    reader leaves the current mode alone rather than guessing a comparison the
+    file cannot name. Only a schema-6 file's explicit ``mode`` (including an
+    explicit static one) moves the switches.
+    """
+    migrated = dict(config)
+    migrated.pop("mode", None)
+    selection = migrated.get("selection")
+    if isinstance(selection, dict) and "compare" in selection:
+        migrated["selection"] = {k: v for k, v in selection.items() if k != "compare"}
+    return migrated
+
+
 # version N -> callable that upgrades an N config to N+1. Keyed by the *source*
 # version so `_migrate_plot_config` can walk an old config forward step by step.
 _PLOT_CONFIG_MIGRATIONS = {
@@ -1448,6 +1472,7 @@ _PLOT_CONFIG_MIGRATIONS = {
     2: _migrate_config_2_to_3,
     3: _migrate_config_3_to_4,
     4: _migrate_config_4_to_5,
+    5: _migrate_config_5_to_6,
 }
 
 
@@ -1487,37 +1512,70 @@ def _migrate_plot_config(config: dict) -> tuple[dict, str | None]:
     return working, None
 
 
+def _match_selection(
+    selection: dict, combos: pd.DataFrame
+) -> tuple[pd.Series | None, str]:
+    """Find the one reading ``selection`` names in ``combos``, or say why not.
+
+    Returns ``(row, "")`` on a match and ``(None, reason)`` otherwise, the
+    reason a short phrase a notice can quote. A **supplied participant is
+    binding**: only that exact ``(participant, trial)`` pair matches, so a
+    reader filtered out of the pool is reported as missing rather than replaced
+    by another reader's trial of the same name. Only a request that *omitted*
+    the participant (a trial-only link, `_build_share_query(include_participant=
+    False)`) is looked up by trial id alone — and then only a unique match is
+    taken; a trial id several readers share is reported as ambiguous.
+    """
+    pid = selection.get("participant_id")
+    tid = selection.get("trial_id")
+    if tid in (None, ""):
+        return None, "it names no trial"
+    if combos is None or combos.empty:
+        return None, "the trial pool is empty"
+    tid = str(tid)
+    participant_given = pid not in (None, "")
+    readings = list(zip(combos["participant_id"], combos["trial_id"], strict=True))
+    if participant_given:
+        # A link or config saved before composite ids escaped a `_` inside a
+        # part names the trial by its old spelling (`composite_respelling_map`).
+        pid, tid = respell_reading(str(pid), tid, readings)
+        match = combos[
+            (combos["participant_id"].astype(str) == pid)
+            & (combos["trial_id"].astype(str) == tid)
+        ]
+        if match.empty:
+            return None, (
+                f"reader {pid}'s trial {tid} is not in the current trial pool"
+            )
+        return match.iloc[0], ""
+    trial_ids = {str(t) for _, t in readings}
+    if tid not in trial_ids:
+        tid = composite_respelling_map([tid], trial_ids).get(tid, tid)
+    match = combos[combos["trial_id"].astype(str) == tid]
+    if match.empty:
+        return None, f"trial {tid} is not in the current trial pool"
+    readers = match["participant_id"].astype(str).unique()
+    if len(readers) > 1:
+        return None, (
+            f"trial {tid} belongs to {len(readers)} readers in the current pool "
+            "and no reader was named"
+        )
+    return match.iloc[0], ""
+
+
 def _restore_selection(
     selection: dict, combos: pd.DataFrame, key_prefix: str = "single"
 ) -> bool:
     """Best-effort: point a tab's trial picker at the saved ``(participant,
-    trial)``. Returns True when a matching trial is found in the current
-    (filtered) data. Mirrors the key scheme of ``utils.select_trial`` for the
-    given ``key_prefix``, which is now one scheme for every dataset (BUG-23 —
-    a composite trial id no longer gets a picker, or keys, of its own).
-
-    The trial id is sufficient on its own: a missing/blank participant (e.g. a
-    ``?trial_id=`` link with no ``?participant=``) falls through to the trial-id-
-    alone match below, so the picker still lands on the trial."""
-    pid = selection.get("participant_id")
-    tid = selection.get("trial_id")
-    if tid in (None, "") or combos.empty:
+    trial)``. Returns True when that reading is found in the current
+    (filtered) data — see :func:`_match_selection` for what counts as found,
+    and for the reason when it is not. Mirrors the key scheme of
+    ``utils.select_trial`` for the given ``key_prefix``, which is now one
+    scheme for every dataset (BUG-23 — a composite trial id no longer gets a
+    picker, or keys, of its own)."""
+    row, _reason = _match_selection(selection, combos)
+    if row is None:
         return False
-    pid, tid = str(pid), str(tid)
-    # A link or config saved before composite ids escaped a `_` inside a part
-    # names the trial by its old spelling (`data.composite_respelling_map`).
-    pid, tid = respell_reading(
-        pid, tid, zip(combos["participant_id"], combos["trial_id"], strict=True)
-    )
-    match = combos[
-        (combos["participant_id"].astype(str) == pid)
-        & (combos["trial_id"].astype(str) == tid)
-    ]
-    if match.empty:  # participant absent/blank or filtered out — try trial id alone
-        match = combos[combos["trial_id"].astype(str) == tid]
-    if match.empty:
-        return False
-    row = match.iloc[0]
     st.session_state[f"{key_prefix}_select_trial_mode"] = "Trial"
     # The picker renders a single dropdown keyed `<prefix>_trial_id` whose
     # *options* are the trial_field values (`unique_trial_id` when present), so
@@ -1599,7 +1657,7 @@ def request_trial(
     _go_scanpath()
 
 
-def _apply_pending_trial_selection(combos: pd.DataFrame) -> None:
+def _apply_pending_trial_selection(combos: pd.DataFrame) -> str | None:
     """Consume a :func:`request_trial` hop, if one is waiting.
 
     Held over only while the pool cannot answer — an *empty* ``combos`` means
@@ -1610,13 +1668,22 @@ def _apply_pending_trial_selection(combos: pd.DataFrame) -> None:
     silently re-pointing the picker the moment a filter change happens to bring
     that trial back into scope. Unlike the deep-link twin there is no once-flag —
     each click is its own request, and the key *is* the flag.
+
+    Returns ``None`` when nothing was waiting or the reading opened, and
+    otherwise a sentence saying why it could not — a reader filtered out of the
+    pool is never swapped for another reader's same-named trial — for the
+    caller to show where the Open click lands.
     """
     selection = st.session_state.get(PENDING_TRIAL_KEY)
     if not selection or combos is None or combos.empty:
-        return
+        return None
+    st.session_state.pop(PENDING_TRIAL_KEY, None)
+    _row, reason = _match_selection(selection, combos)
+    if reason:
+        return f"Couldn't open that reading: {reason}."
     for prefix in _SELECTION_PREFIXES:
         _restore_selection(selection, combos, key_prefix=prefix)
-    st.session_state.pop(PENDING_TRIAL_KEY, None)
+    return None
 
 
 def _seed_column_mapping(
@@ -2418,9 +2485,90 @@ def _restore_plot_config(
         if _restore_selection(selection, combos):
             restore.applied += 1
         else:
-            skipped.append("trial selection")
+            _row, reason = _match_selection(selection, combos)
+            skipped.append(f"trial selection ({reason})")
+
+    _restore_figure_mode(config, selection, combos, put, skipped)
 
     return restore.applied, skipped
+
+
+def _compare_b_problem(compare: object, combos: pd.DataFrame) -> tuple[str | None, str]:
+    """``(B's dataset or None, "")`` when a saved scanpath B can be requested,
+    else ``(None, reason)``.
+
+    B in the open dataset is checked against the pool now, by the same exact
+    reader-and-trial rule as A. B in another dataset can only be checked once
+    that dataset is loaded — Compare's picker reports it then (see
+    `tabs` → the pending-compare consumer) — so here it is enough that the
+    dataset is one this app can draw B from.
+    """
+    from .compare_source import secondary_dataset_options
+
+    if not isinstance(compare, dict) or compare.get("trial_id") in (None, ""):
+        return None, "the file names no second reading"
+    if compare.get("participant_id") in (None, ""):
+        return None, "the file's second reading names no reader"
+    source = compare.get("source")
+    if source in (None, "") or source == st.session_state.get("data_source_choice"):
+        _row, reason = _match_selection(compare, combos)
+        return None, reason
+    offered = {
+        name: (ready, why)
+        for name, ready, why in secondary_dataset_options(
+            exclude=st.session_state.get("data_source_choice")
+        )
+    }
+    if source not in offered:
+        return None, f"its dataset {source} is not available here"
+    ready, why = offered[source]
+    if not ready:
+        return None, f"its dataset {source} is not ready — {why or 'not found'}"
+    return str(source), ""
+
+
+def _restore_figure_mode(
+    config: dict, selection: dict, combos: pd.DataFrame, put, skipped: list
+) -> None:
+    """Schema 6: put the figure back in the mode it was saved in.
+
+    ``mode`` is explicit both ways — a static file switches a running Animate
+    or Compare *off*, so restoring a figure gives that figure. A comparison
+    restores only with the B it names (requested through the same pending
+    selection a ``?compare=`` link uses, so B's picker resolves it); when B
+    cannot be named here, Compare stays off and the file's restore notice says
+    why, rather than pairing A with whichever reading B's picker defaults to.
+    """
+    mode = config.get("mode")
+    if not isinstance(mode, dict):
+        return  # an older file: it never said, so nothing is guessed
+    if isinstance(mode.get("animate"), bool):
+        put(SINGLE_ANIMATE, mode["animate"])
+    if not isinstance(mode.get("compare"), bool):
+        return
+    if not mode["compare"]:
+        put(SINGLE_COMPARE_TOGGLE, False)
+        st.session_state.pop(PENDING_COMPARE_STATE_KEY, None)
+        return
+    compare = selection.get("compare") if isinstance(selection, dict) else None
+    source, reason = _compare_b_problem(compare, combos)
+    if reason:
+        put(SINGLE_COMPARE_TOGGLE, False)
+        st.session_state.pop(PENDING_COMPARE_STATE_KEY, None)
+        skipped.append(f"comparison ({reason})")
+        return
+    put(SINGLE_COMPARE_TOGGLE, True)
+    from .compare_source import THIS_DATASET
+
+    put(COMPARE_SOURCE_STATE_KEY, source or THIS_DATASET)
+    st.session_state[PENDING_COMPARE_STATE_KEY] = {
+        "participant_id": str(compare["participant_id"]),
+        "trial_id": str(compare["trial_id"]),
+    }
+    if compare.get("screen_id") not in (None, ""):
+        put(SINGLE_COMPARE_SCREEN_ID, str(compare["screen_id"]))
+    else:
+        st.session_state.pop(SINGLE_COMPARE_SCREEN_ID, None)
 
 
 def _apply_uploaded_plot_config(combos: pd.DataFrame, fixations: pd.DataFrame) -> None:
@@ -2483,8 +2631,9 @@ def _build_share_query(
     ``include_participant`` / ``include_trial`` (S3) let the caller leave the
     identifying half out of the link — a URL lands in browser history, proxy
     logs, ``Referer`` headers and chat previews, so naming a participant there
-    is opt-out-able. Dropping only the participant still lands on the exact
-    trial: ``_restore_selection`` falls through to a trial-id-alone match. The
+    is opt-out-able. Dropping only the participant still lands on the
+    trial when its id is unique in the recipient's pool: ``_restore_selection``
+    looks a participant-free request up by trial id alone. The
     view settings are unaffected either way.
 
     Returns ``(query_string, caveats)`` — ``caveats`` holds human-readable notes

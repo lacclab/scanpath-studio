@@ -4777,6 +4777,28 @@ class TestOpenTrialFromCorpusTable:
         # Consumed once it lands, so it can't re-apply over later navigation.
         assert PENDING_TRIAL_KEY not in at.session_state
 
+    def test_a_reader_outside_the_pool_is_reported_not_substituted(self):
+        """Open on a reading whose reader is not in the pool used to land on
+        another reader's trial of the same id; now it stays put and says why."""
+        from scanpath_studio.url_state import PENDING_TRIAL_KEY
+
+        at = _make_apptest()
+        at.run(timeout=60)
+        booted_on = at.session_state["single_trial_id"]
+        at.session_state[PENDING_TRIAL_KEY] = {
+            "participant_id": "a-reader-who-is-not-here",
+            "trial_id": booted_on,
+        }
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["single_trial_id"] == booted_on
+        assert PENDING_TRIAL_KEY not in at.session_state
+        assert any(
+            "Couldn't open that reading" in str(w.value)
+            and "a-reader-who-is-not-here" in str(w.value)
+            for w in at.warning
+        ), [w.value for w in at.warning]
+
     def test_an_annotation_row_opens_its_screen(self):
         """Data Management → Annotations' **Open** on a screen annotation lands
         on that screen of the trial, and the table offers the button."""

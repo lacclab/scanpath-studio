@@ -301,6 +301,7 @@ from scanpath_studio.plots import (
 from scanpath_studio.session_keys import (
     PENDING_COMPARE_STATE_KEY,
     SETUP_PROVENANCE_STATE_KEY,
+    SINGLE_ANIMATE,
     SINGLE_COMPARE_LAYOUT,
     SINGLE_COMPARE_STIMULUS,
     SINGLE_COMPARE_TOGGLE,
@@ -1037,16 +1038,6 @@ def _different_texts_note(text_a: str | None, text_b: str | None) -> str | None:
         "isn't meaningful. Compare two readings of the same text, or switch to a "
         "side-by-side layout."
     )
-
-
-def _trial_text_id(trial_words: pd.DataFrame) -> str | None:
-    """Best-available text identifier for a trial's words (for same-text checks)."""
-    for col in ("unique_text_id", "text_id"):
-        if col in trial_words.columns and not trial_words.empty:
-            value = trial_words[col].iloc[0]
-            if pd.notna(value):
-                return str(value)
-    return None
 
 
 _MIME_FOR_FORMAT = {
@@ -2710,6 +2701,15 @@ def _render_compare_selector(
         wanted = respell_reading(*wanted, identity_to_label)
         if wanted in identity_to_label:
             st.session_state[sel_key] = identity_to_label[wanted]
+        else:
+            # A link or settings file named a B this pool cannot answer — say
+            # so, rather than let the default candidate pass for the pair.
+            st.warning(
+                f"Couldn't restore scanpath B: reader {wanted[0]}'s trial "
+                f"{wanted[1]} is not among B's trials. Showing another reading "
+                "instead.",
+                icon=ICONS["warning"],
+            )
 
     # CMP-13 (the "B suddenly skips to a different trial" report): the widget key
     # holds a *label*, and the labels are rebuilt relative to A — the 📄 same-text
@@ -3724,6 +3724,27 @@ def _build_studio_config(
             return {}
         return {"provenance": {g: str(p) for g, p in snapshot.provenance.items()}}
 
+    # Schema 6: the *requested* mode (the switches), as a link records it.
+    animate_on = bool(st.session_state.get(SINGLE_ANIMATE, False))
+    compare_on = bool(st.session_state.get(SINGLE_COMPARE_TOGGLE, False))
+    published = (st.session_state.get("_share_selection") or {}).get("compare")
+    compare_b = (
+        {
+            "participant_id": str(published["participant_id"]),
+            "trial_id": str(published["trial_id"]),
+            "source": published.get("source") or None,
+            "screen_id": (
+                str(published["screen_id"])
+                if published.get("screen_id") not in (None, "")
+                else None
+            ),
+        }
+        if compare_on
+        and isinstance(published, dict)
+        and published.get("trial_id") not in (None, "")
+        else None
+    )
+
     return {
         # Schema 4 (UX-179) = the figure only; older files still restore
         # through the same reader, which ignores what they carry beyond it.
@@ -3741,7 +3762,13 @@ def _build_studio_config(
                 if st.session_state.get("single_screen_id") not in (None, "")
                 else {}
             ),
+            # Schema 6: scanpath B by identity — reader, trial, dataset (None
+            # = A's) and screen — as the figure last published it for Share.
+            **({"compare": compare_b} if compare_b else {}),
         },
+        # Schema 6: the mode the figure was saved in. Written both ways, so a
+        # static file restores as static rather than leaving a replay running.
+        "mode": {"animate": animate_on, "compare": compare_on},
         "canvas_px": {"width": int(canvas_width), "height": int(canvas_height)},
         "experimental_setup": {
             "monitor_width_mm": float(
@@ -7217,8 +7244,8 @@ def render_single_trial_tab(
                 # A co-replay is always one coordinate space (`requested_layout`
                 # is forced to overlay above), so the overlay wording applies.
                 text_note = _different_texts_note(
-                    _trial_text_id(trial_words),
-                    _trial_text_id(compare_meta["words"]),
+                    _trial_text_id(trial_words, trial_fixations),
+                    _trial_text_id(compare_meta["words"], compare_meta["fixations"]),
                 )
                 if text_note:
                     st.warning(text_note, icon=ICONS["warning"])

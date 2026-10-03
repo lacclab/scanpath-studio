@@ -246,8 +246,12 @@ from scanpath_studio.menu import (
 from scanpath_studio.multipart import SCREEN_ID, extract_part, part_catalog
 from scanpath_studio.persistence import (
     PERSIST_ENV_VAR,
+    cache_failure,
     cache_status,
+    clear_local_state,
     consume_restore_skipped,
+    discard_failed_dataset,
+    failed_datasets,
     human_size,
     is_loopback_url,
     local_state_restored,
@@ -256,6 +260,8 @@ from scanpath_studio.persistence import (
     restore_local_state,
     restored_from_cache,
     restored_summary,
+    retry_cache_restore,
+    retry_failed_datasets,
     save_local_state,
     server_bound_to_loopback,
 )
@@ -867,6 +873,99 @@ def _render_download_folder_section(host) -> None:
     host.markdown(f"**Saving to:** `{download_folder()}`")
 
 
+def _retry_cached_datasets() -> None:
+    """``on_click``: read the held-back cached datasets again."""
+    retry_failed_datasets(st.session_state)
+
+
+def _remove_cached_dataset(name: str) -> None:
+    """``on_click``: delete one held-back dataset's entry and files from the cache."""
+    discard_failed_dataset(st.session_state, name)
+
+
+def _retry_unreadable_cache(app_url: str) -> None:
+    """``on_click``: try the whole cache again, as a reload would."""
+    retry_cache_restore(st.session_state, app_url)
+
+
+def _clear_unreadable_cache() -> None:
+    """``on_click``: delete a cache that cannot be read; saving resumes."""
+    clear_local_state(st.session_state)
+
+
+def render_cache_recovery_notice(host, app_url: str, *, key: str) -> bool:
+    """What of the recovery cache this session could not restore, with actions.
+
+    Drawn where the recovery notices go (the page's notices) and again in
+    🗂️ Data → *Saved on this computer*, with ``key`` keeping the two sets of
+    buttons apart. Two cases, never the third — a cache that is absent, or was
+    cleared on purpose, is not a failure and says nothing:
+
+    - **a dataset** whose files are missing or unreadable. The rest restored;
+      this one is held back, and kept in the cache — every save writes it back
+      as it was — so **Retry** can read it once its file is back, and **Remove
+      from cache** deletes it.
+    - **the cache as a whole** (a manifest that cannot be read). Saving is
+      paused so this session cannot replace it; **Retry** reads it again and
+      **Clear the cache** deletes it, after which saving resumes.
+
+    Returns whether anything was drawn.
+    """
+    failure = cache_failure(st.session_state)
+    failed = failed_datasets(st.session_state)
+    if not failure and not failed:
+        return False
+    box = host.container(border=True)
+    if failure:
+        box.warning(
+            f"The recovery cache on this computer couldn't be read — {failure}. "
+            "Nothing was restored from it, and saving is paused so it stays as it "
+            "is.",
+            icon=ICONS["warning"],
+        )
+        row = box.container(horizontal=True)
+        row.button(
+            "Retry",
+            icon=ICONS["refresh"],
+            key=f"{key}_retry_cache",
+            on_click=_retry_unreadable_cache,
+            args=(app_url,),
+        )
+        row.button(
+            "Clear the cache",
+            icon=ICONS["delete"],
+            key=f"{key}_clear_cache",
+            on_click=_clear_unreadable_cache,
+            help="Delete the stored session. Saving resumes.",
+        )
+        return True
+    box.warning(
+        f"{len(failed)} dataset{'s' if len(failed) != 1 else ''} saved on this "
+        "computer couldn't be restored. Everything else came back. "
+        f"{'They are' if len(failed) != 1 else 'It is'} kept in the cache until "
+        "you retry or remove it.",
+        icon=ICONS["warning"],
+    )
+    for index, (name, reason) in enumerate(sorted(failed.items())):
+        row = box.container(horizontal=True, vertical_alignment="center")
+        row.markdown(f"**{name}** — {reason}")
+        row.button(
+            "Retry",
+            icon=ICONS["refresh"],
+            key=f"{key}_retry_{index}",
+            on_click=_retry_cached_datasets,
+        )
+        row.button(
+            "Remove from cache",
+            icon=ICONS["delete"],
+            key=f"{key}_remove_{index}",
+            on_click=_remove_cached_dataset,
+            args=(name,),
+            help="Delete this dataset's stored copy. Its annotations are kept.",
+        )
+    return True
+
+
 def _render_saved_here_section(app_url: str, host) -> None:
     """🗂️ Data → **Saved on this computer** (UX-179; ENG-30 underneath).
 
@@ -933,16 +1032,17 @@ def _render_saved_here_section(app_url: str, host) -> None:
             )
             + f"{human_size(status['bytes'])}"
         )
-    elif status["exists"]:
+    elif status["exists"] and not cache_failure(st.session_state):
         host.warning(
             "The stored session can't be read (written by a different version, "
-            "or incomplete). It is ignored; saving over it is safe.",
+            "or incomplete).",
             icon=ICONS["warning"],
         )
-    else:
+    elif not status["exists"]:
         host.caption("Nothing saved yet. The first change creates the cache.")
+    render_cache_recovery_notice(host, app_url, key="saved_here_recovery")
     host.markdown(f"**Folder:** `{status['directory']}`")
-    if persistence_paused(st.session_state):
+    if persistence_paused(st.session_state) and not cache_failure(st.session_state):
         # BUG-71 — the only pause left: the last launch never finished opening
         # with this cache, so this session neither restored nor overwrites it.
         host.caption(
@@ -8555,6 +8655,10 @@ def _run_app() -> None:
             icon=ICONS["warning"],
             duration="long",
         )
+    # A cache that is there but did not all come back says so on every run
+    # until it is retried or removed — never silently, and never by replacing
+    # it (the held-back parts are kept by every save).
+    render_cache_recovery_notice(page_notices, app_url, key="cache_recovery")
     linked_choice = None
     if url_source == "onestop" and onestop_data_dir() is not None:
         linked_choice = st.session_state.setdefault(
@@ -9723,7 +9827,10 @@ def _run_app() -> None:
     # Same hop, from inside the app: a "go to this trial" button in a Corpus
     # Analysis table parks its request in a callback (before combos exist) and
     # it is applied here — see url_state.request_trial (ENG-36).
-    _apply_pending_trial_selection(combos)
+    # A reading the pool cannot answer — its reader filtered out, say — is
+    # reported, never replaced by another reader's trial of the same name.
+    if missed := _apply_pending_trial_selection(combos):
+        menu.notices.warning(missed, icon=ICONS["warning"])
 
     # Restore settings from an uploaded settings file BEFORE the rail widgets
     # render, so they pick up the saved values (see _apply_url_preset for the

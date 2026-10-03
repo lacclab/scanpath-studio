@@ -48,8 +48,8 @@ default) grows marker area with duration, **Linear** grows the diameter with it,
 **Size key** draws reference circles labelled in ms in the figure's corner.
 **Relative to this figure** stretches each figure from its own shortest to
 longest fixation instead, so its sizes compare only within that figure. Share
-links and settings files saved before the fixed scale reopen on the relative
-one, as they were drawn.
+links, settings files, saved designs and restored sessions from before the fixed
+scale reopen on the relative one, as they were drawn.
 
 ## Filter what is drawn
 

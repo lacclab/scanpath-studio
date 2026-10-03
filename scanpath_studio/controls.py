@@ -93,6 +93,7 @@ from .session_keys import (
     SINGLE_COMPARE_TOGGLE,
     SINGLE_PLAYBACK_SPEED,
     compare_state_keys,
+    keep_legacy_marker_scale,
 )
 from .session_keys import DESIGN_PRESETS as _DESIGN_PRESETS_WIRE_KEY
 
@@ -1173,7 +1174,9 @@ def delete_design_preset(name: str) -> None:
 #: The retired 💾 Session backup was the only portable copy of the library; this
 #: is its own file now, written by *Export* and read by *Import* in My designs.
 DESIGNS_FILE_KIND = "scanpath_studio_designs"
-DESIGNS_FILE_SCHEMA = 1
+#: 2 — the fixed duration scale. A schema-1 design predates it, so it keeps
+#: the relative marker scale it was drawn with (`keep_legacy_marker_scale`).
+DESIGNS_FILE_SCHEMA = 2
 _DESIGN_IMPORT_KEY = "design_import_upload"
 _DESIGN_IMPORT_NOTE_KEY = "_design_import_note"
 
@@ -1207,6 +1210,10 @@ def designs_from_json(text: str) -> dict[str, dict]:
     raw = data.get("designs")
     if not isinstance(raw, dict):
         raise ValueError("the file holds no designs")
+    try:
+        schema = int(data.get("schema", 1))
+    except (TypeError, ValueError):
+        schema = 1
     designs: dict[str, dict] = {}
     for name, values in raw.items():
         clean = " ".join(str(name).split())[:60]
@@ -1214,9 +1221,10 @@ def designs_from_json(text: str) -> dict[str, dict]:
             continue
         if clean in _VIEW_PRESETS:
             clean = f"{clean} (mine)"
-        designs[clean] = {
+        design = {
             str(key): value for key, value in values.items() if _is_design_key(key)
         }
+        designs[clean] = keep_legacy_marker_scale(design) if schema < 2 else design
     return designs
 
 

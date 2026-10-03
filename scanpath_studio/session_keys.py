@@ -951,3 +951,23 @@ PLOT_CONFIG_OTHER_STATE_KEYS = frozenset(
 def compare_state_keys(index: int) -> frozenset:
     """The `cmp{index}_*` session keys one `compare` config entry restores."""
     return frozenset(t.format(idx=index) for t in COMPARE_STATE_KEY_TEMPLATES)
+
+
+def keep_legacy_marker_scale(values: Mapping) -> dict:
+    """``values`` with the relative marker scale stamped in when it predates it.
+
+    Old work keeps its old look. A design or a recovery-cache session saved
+    before the fixed duration scale existed holds plot settings but no
+    ``GLOBAL_MARKER_SIZE_SCALE``; left alone it would re-render on the new
+    default. Anything saved since carries the key (it is seeded with the rest),
+    so its absence beside other ``global_*`` keys marks the old kind. A mapping
+    with no plot settings at all is returned unchanged. Returns a copy.
+    """
+    from .constants import LEGACY_MARKER_SIZE_SCALE
+
+    out = dict(values)
+    if GLOBAL_MARKER_SIZE_SCALE not in out and any(
+        str(key).startswith("global_") for key in out
+    ):
+        out[GLOBAL_MARKER_SIZE_SCALE] = LEGACY_MARKER_SIZE_SCALE
+    return out

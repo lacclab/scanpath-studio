@@ -380,6 +380,53 @@ def test_the_migration_leaves_current_and_annotation_only_files_alone():
     assert "sizing" not in _migrate_plot_config(notes_only)[0]
 
 
+def test_a_design_file_from_before_the_scale_keeps_the_relative_scale():
+    from scanpath_studio import controls
+
+    old = json.dumps(
+        {
+            "kind": controls.DESIGNS_FILE_KIND,
+            "schema": 1,
+            "designs": {
+                "Paper": {"global_show_fix": True},
+                "Chosen": {"global_marker_size_scale": "log"},
+            },
+        }
+    )
+    designs = controls.designs_from_json(old)
+    assert designs["Paper"]["global_marker_size_scale"] == "relative"
+    assert designs["Chosen"]["global_marker_size_scale"] == "log"
+    # A current file is read as written: a design saved now carries the key.
+    current = controls.designs_to_json({"New": {"global_show_fix": True}})
+    assert json.loads(current)["schema"] == controls.DESIGNS_FILE_SCHEMA == 2
+    assert controls.designs_from_json(current) == {"New": {"global_show_fix": True}}
+
+
+def test_a_cached_session_from_before_the_scale_keeps_the_relative_scale():
+    from scanpath_studio.persistence import _restorable_session
+    from scanpath_studio.session_keys import DESIGN_PRESETS
+
+    restored = _restorable_session(
+        {
+            "global_show_fix": True,
+            DESIGN_PRESETS: {"Old": {"global_show_heatmap": True}},
+        }
+    )
+    assert restored["global_marker_size_scale"] == "relative"
+    assert restored[DESIGN_PRESETS]["Old"]["global_marker_size_scale"] == "relative"
+    # A session saved since carries its own scale; one with no plot settings
+    # gains none.
+    assert (
+        _restorable_session({"global_marker_size_scale": "sqrt"})[
+            "global_marker_size_scale"
+        ]
+        == "sqrt"
+    )
+    assert "global_marker_size_scale" not in _restorable_session(
+        {"main_nav": "scanpath"}
+    )
+
+
 def _link_app():
     import streamlit as st
 

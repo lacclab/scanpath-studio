@@ -35,6 +35,7 @@ def test_only_plot_settings_come_in():
     text = json.dumps(
         {
             "kind": controls.DESIGNS_FILE_KIND,
+            "schema": controls.DESIGNS_FILE_SCHEMA,
             "designs": {
                 "  Mine  ": {
                     "global_show_fix": False,
@@ -56,6 +57,7 @@ def test_compare_settings_come_in_with_the_design():
     text = json.dumps(
         {
             "kind": controls.DESIGNS_FILE_KIND,
+            "schema": controls.DESIGNS_FILE_SCHEMA,
             "designs": {"Mine": {extra: "value", "global_show_fix": True}},
         }
     )

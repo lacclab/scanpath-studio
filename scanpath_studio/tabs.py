@@ -208,8 +208,10 @@ from scanpath_studio.data import (
     has_explicit_trial_index,
     identity_text_plan,
     normalize_fixations,
+    normalize_raw_gaze,
     normalize_words,
     propose_fix_schema,
+    propose_raw_gaze_schema,
     propose_word_schema,
     read_tables,
     remap_normalized_frame,
@@ -12687,6 +12689,58 @@ def _harmonize_noting_join(
     return result
 
 
+def _reading_keys(frame, columns) -> set:
+    if not isinstance(frame, pd.DataFrame) or frame.empty:
+        return set()
+    if not set(columns) <= set(frame.columns):
+        return set()
+    rows = frame[list(columns)].dropna().astype(str).drop_duplicates()
+    return set(map(tuple, rows.to_numpy()))
+
+
+def raw_gaze_identity_problem(raw_gaze: pd.DataFrame, entry: dict) -> str | None:
+    """Why a raw-gaze table cannot join this dataset, or ``None`` if it can.
+
+    Samples are drawn under the scanpath of the reading — participant + trial,
+    and the screen on a multipart dataset — they share, so a table that shares
+    none with the dataset's fixations (else its word boxes) would attach and
+    then never appear. Said before Save commits it, naming the fields to check.
+    """
+    parent = ["participant_id", "trial_id"]
+    for table_key in ("fixations", "words"):
+        frame = entry.get(table_key)
+        if isinstance(frame, pd.DataFrame) and not frame.empty:
+            break
+    else:
+        return None
+    if not _reading_keys(raw_gaze, parent) & _reading_keys(frame, parent):
+        return (
+            "None of its readings match this dataset's: no sample has a "
+            "participant and trial the dataset's "
+            f"{_TABLE_LABELS[table_key].lower()} table has. Check that "
+            "**Participant ID** and **Trial ID** name the same readers and "
+            "trials, spelled the same way."
+        )
+    gaze_screens = (
+        "screen_id" in raw_gaze.columns and raw_gaze["screen_id"].notna().any()
+    )
+    data_screens = "screen_id" in frame.columns and frame["screen_id"].notna().any()
+    if gaze_screens and not data_screens:
+        return (
+            "It maps a **Screen ID**, but this dataset has no screens. Clear "
+            "Screen ID, or add the dataset again with its screens mapped."
+        )
+    if gaze_screens and not (
+        _reading_keys(raw_gaze, [*parent, "screen_id"])
+        & _reading_keys(frame, [*parent, "screen_id"])
+    ):
+        return (
+            "Its readings match, but none of its screens do. Check that "
+            "**Screen ID** names the same screens as the dataset's."
+        )
+    return None
+
+
 def _apply_remap() -> None:
     """Re-derive the active stored dataset's frames under the edited mapping and
     overwrite the entry in place (the "Apply remapping" button's ``on_click``).
@@ -12783,13 +12837,21 @@ def _apply_remap() -> None:
     # uploaded today line up with a half uploaded weeks ago. Both halves are
     # written back, because harmonizing can change either.
     harmonized = False
-    for table_key in added:
+    # Raw gaze last, so it is matched against the fixations and boxes this save
+    # ends with, including a table added beside it.
+    for table_key in sorted(added, key=lambda key: key == "raw_gaze"):
         raw = st.session_state.get(_added_raw_key(name, table_key))
         if raw is None or raw.empty or table_key not in pending:
             continue
         schema = pending[table_key]
         try:
-            if table_key == "words":
+            if table_key == "raw_gaze":
+                fresh = normalize_raw_gaze(raw, schema)
+                if problem := raw_gaze_identity_problem(fresh, new_entry):
+                    st.session_state["_remap_problems"] = {"raw_gaze": [problem]}
+                    return
+                new_entry["raw_gaze"] = fresh
+            elif table_key == "words":
                 # UX-106 — the add screen's aggregation, on the add-a-table
                 # path. Runs on the RAW frame before normalization, which is the
                 # only point it can: `normalize_words` expects one row per box.
@@ -12809,7 +12871,7 @@ def _apply_remap() -> None:
                     other = empty_words_frame()
                 other, fresh = _harmonize_noting_join(other, fresh)
                 new_entry["words"], new_entry["fixations"] = other, fresh
-            harmonized = True
+            harmonized = harmonized or table_key != "raw_gaze"
         except Exception as exc:
             # The mapping is complete but the pipeline rejects the combination
             # (`app.mapping_failure_problem` names the usual causes). Reported
@@ -13048,7 +13110,7 @@ _EDIT_ROW_W = (0.10, 0.18, 0.18, 0.18, 0.18, 0.18)
 _TABLE_LABELS = {"fixations": "Fixations", "words": "AOI", "raw_gaze": "Raw gaze"}
 
 
-#: UX-104 — the two tables a stored dataset can be *missing* and later gain.
+#: UX-104 — the tables a stored dataset can be *missing* and later gain.
 #: A dataset added from fixations alone is a complete dataset (the app draws a
 #: scanpath with no text), and so is one added from word boxes alone (it draws a
 #: heatmap from pre-aggregated measures) — but until now the only way to give
@@ -13062,6 +13124,14 @@ _ADDABLE_TABLES = (
         propose_fix_schema,
     ),
     ("words", "Add an AOI (word box) table", "Word AOI CSVs", propose_word_schema),
+    # Round 6, improvement C — the samples, for a dataset added from its
+    # fixation / AOI reports before they were exported.
+    (
+        "raw_gaze",
+        "Add a raw gaze table",
+        "Raw gaze sample CSVs",
+        propose_raw_gaze_schema,
+    ),
 )
 
 

@@ -375,6 +375,141 @@ class TestAnAddedTableIsReadLikeTheAddScreenReadsIt:
         assert set(after[0]) >= {"rdr", "itm", "wnum", "wort", "x", "width"}
 
 
+def _raw_gaze_app(content: bytes) -> None:
+    import io
+
+    import pandas as pd
+    import streamlit as st
+    from streamlit.delta_generator import DeltaGenerator
+
+    from scanpath_studio.app import _close_dataset_editor, _edit_open_dataset
+    from scanpath_studio.constants import DATASET_EDITOR_OPEN_KEY
+    from scanpath_studio.data import normalize_fixations
+    from scanpath_studio.tabs import _apply_remap, _render_remap_editor
+
+    class Upload(io.BytesIO):
+        name = "gaze.csv"
+        file_id = "probe-gaze"
+        size = len(content)
+
+    name = "Probe"
+    if "_datasets" not in st.session_state:
+        raw = pd.DataFrame(
+            {
+                "participant_id": ["007", "007"],
+                "trial_id": ["t1", "t1"],
+                "x": [100, 110],
+                "y": [200, 210],
+                "duration_ms": [250, 260],
+            }
+        )
+        schema = {
+            "participant": "participant_id",
+            "trial": "trial_id",
+            "x": "x",
+            "y": "y",
+            "duration": "duration_ms",
+        }
+        st.session_state["_datasets"] = {
+            name: {
+                "fixations": normalize_fixations(raw.astype({"x": int}), schema),
+                "schemas": {"fixations": schema},
+                "setup": {
+                    "canvas_width": 1280,
+                    "canvas_height": 1024,
+                    "monitor_width_mm": 500.0,
+                    "viewing_distance_mm": 700.0,
+                    "base_font_size": 16,
+                    "font_family": "monospace",
+                    "line_spacing": 3.0,
+                    "scale_text_to_boxes": True,
+                    "provenance": {
+                        "screen": "measured",
+                        "geometry": "measured",
+                        "text": "measured",
+                    },
+                },
+            }
+        }
+        st.session_state["data_source_choice"] = name
+        _edit_open_dataset(name)
+    st.button("Close", on_click=_close_dataset_editor)
+    st.button("Save", on_click=_apply_remap)
+    if st.session_state.get(DATASET_EDITOR_OPEN_KEY):
+        original = DeltaGenerator.file_uploader
+
+        def uploader(self, label, *args, key=None, **kwargs):
+            if key and "raw_gaze" in key and st.session_state.get("attach", True):
+                return [Upload(content)]
+            return original(self, label, *args, key=key, **kwargs)
+
+        DeltaGenerator.file_uploader = uploader
+        try:
+            _render_remap_editor(name, st.session_state["_datasets"][name])
+        finally:
+            DeltaGenerator.file_uploader = original
+
+
+_GAZE_CSV = (
+    b"participant_id,trial_id,x,y,timestamp_ms\n"
+    b"007,t1,101,201,0\n007,t1,102,202,1\n007,t1,103,203,2\n"
+)
+
+
+class TestAnExistingDatasetGainsRawGaze:
+    def test_raw_gaze_is_added_and_matched(self):
+        at = AppTest.from_function(_raw_gaze_app, args=(_GAZE_CSV,)).run()
+        assert not at.exception
+        assert at.session_state["_remap_dirty"]
+        at.button[1].click().run()
+        assert not at.exception
+        assert "_remap_problems" not in at.session_state
+        entry = at.session_state["_datasets"]["Probe"]
+        gaze = entry["raw_gaze"]
+        assert len(gaze) == 3
+        assert set(gaze["participant_id"].astype(str)) == {"007"}
+        assert gaze["x"].tolist() == [101, 102, 103]
+        assert entry["schemas"]["raw_gaze"]["x"] == "x"
+        # The rest of the dataset is as it was.
+        assert entry["fixations"]["x"].tolist() == [100, 110]
+        assert entry["setup"]["canvas_width"] == 1280
+
+    def test_cancel_leaves_the_dataset_without_it(self):
+        at = AppTest.from_function(_raw_gaze_app, args=(_GAZE_CSV,)).run()
+        at.button[0].click().run()
+        assert not at.exception
+        assert "raw_gaze" not in at.session_state["_datasets"]["Probe"]
+        assert not any(
+            str(key).startswith("_remap_add_raw_") for key in at.session_state
+        )
+
+    def test_samples_of_other_readers_are_refused(self):
+        content = b"participant_id,trial_id,x,y,timestamp_ms\n7,t1,101,201,0\n"
+        at = AppTest.from_function(_raw_gaze_app, args=(content,)).run()
+        at.button[1].click().run()
+        assert not at.exception
+        problem = at.session_state["_remap_problems"]["raw_gaze"][0]
+        assert "Participant ID" in problem
+        assert "raw_gaze" not in at.session_state["_datasets"]["Probe"]
+
+    def test_screens_have_to_match_on_a_multipart_dataset(self):
+        import pandas as pd
+
+        from scanpath_studio.tabs import raw_gaze_identity_problem
+
+        fixations = pd.DataFrame(
+            {"participant_id": ["p1"], "trial_id": ["t1"], "screen_id": ["a"]}
+        )
+        gaze = fixations.assign(screen_id=["z"])
+        problem = raw_gaze_identity_problem(gaze, {"fixations": fixations})
+        assert problem and "Screen ID" in problem
+        assert raw_gaze_identity_problem(fixations, {"fixations": fixations}) is None
+        problem = raw_gaze_identity_problem(
+            gaze, {"fixations": fixations.drop(columns="screen_id")}
+        )
+        assert problem and "no screens" in problem
+
+
 class TestNameDescriptionAndMetadataWaitForSave:
     """Improvement A — the parts of an edit the editor's widgets do not hold
     (the metadata tables) are noted when it opens and put back on Cancel; the

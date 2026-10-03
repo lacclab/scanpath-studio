@@ -483,3 +483,25 @@ class TestLabels:
         session = {cn.ACTIVE_COLUMN_NAMES_KEY: {"fixations": self.NAMES.to_payload()}}
         assert cn.active(session, "fixations") == self.NAMES
         assert cn.active({}, "fixations") == cn.EMPTY
+
+
+@pytest.mark.timeout(180)
+def test_the_rail_shows_the_demos_own_column_names(demo_raw):
+    """AppTest exposes a picker's *formatted* options — what a person sees."""
+    from tests.conftest import APP_SCRIPT
+
+    _, fixations = demo_raw
+    duration = data.propose_fix_schema(fixations)["duration"]
+    at = streamlit_testing.AppTest.from_file(APP_SCRIPT, default_timeout=120)
+    at.run()
+    assert not at.exception, at.exception
+    color = at.selectbox(key="global_color_by")
+    assert duration in color.options, color.options
+    assert "duration_ms" not in color.options
+    hover = at.multiselect(key="global_fixation_hover_fields")
+    assert duration in hover.options, hover.options
+    assert any(o.endswith(cn.COMPUTED_SUFFIX) for o in hover.options)
+    metric = at.selectbox(key="global_heatmap_metric")
+    assert metric.options == [duration, "Fixation count"]
+    # The values are still canonical: links and saved configs are unchanged.
+    assert at.session_state["global_heatmap_metric"] == "duration_ms"

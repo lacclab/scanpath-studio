@@ -129,6 +129,7 @@ scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
 | Goal | Option |
 | --- | --- |
 | pick B | `--compare-with PARTICIPANT:TRIAL` |
+| pick each screen of a multipart trial | `--screen ID` (A), `--compare-screen ID` (B); each defaults to its trial's first screen |
 | arrange the panels | `--compare-layout {overlay,side-by-side,stacked}` (default `overlay`) |
 | whose stimulus an overlay draws | `--compare-stimulus {both,a,b}` (default `both`) |
 | name the two traces | `--label-a TEXT --label-b TEXT` (both or neither) |
@@ -161,8 +162,9 @@ scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
 `--animate --compare-with` replays **both** readings on one clock, the same dual
 co-animation the app renders with Animate and Compare both on.
 `--compare-with` cannot be combined with `--all-screens`: a comparison
-is a single figure of two readings, so render one screen at a time with
-`--screen`.
+is a single figure of two readings, each drawn from one screen. Pick A's with
+`--screen` and B's with `--compare-screen`; B's is looked up in B's own trial,
+so it can be a later page, or a page of the second dataset.
 
 **Overlay across two datasets requires matching canvases.** On two different
 canvases `--compare-layout overlay` fails rather than falling back, and so does

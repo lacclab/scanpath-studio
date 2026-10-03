@@ -6903,6 +6903,8 @@ def render_single_trial_tab(
                 # Share link does two blocks above.
                 participant=str(compare_meta["raw_participant"]),
                 trial=str(compare_meta["trial"]),
+                # B's own screen, from its own navigator (`screen_b=`).
+                screen=selected_compare_screen,
                 layout=str(compare_layout),
                 compare_stimulus=str(compare_stimulus),
                 dataset=str(compare_meta.get("dataset") or ""),

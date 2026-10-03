@@ -1350,8 +1350,12 @@ def _select_part(
     screen: str | None,
     *,
     raw_gaze: pd.DataFrame | None = None,
+    screen_param: str = "screen",
 ) -> tuple[pd.DataFrame, pd.DataFrame, str, str, str | None]:
-    """Resolve one logical trial and, for multipart data, exactly one screen."""
+    """Resolve one logical trial and, for multipart data, exactly one screen.
+
+    ``screen_param`` is the keyword the caller took the screen as, so an error
+    names the one to fix (``screen_b=`` for a comparison's second reading)."""
     trial_words, trial_fixations, pid, tid = _select_trial(
         words, fixations, participant, trial, raw_gaze=raw_gaze
     )
@@ -1369,13 +1373,17 @@ def _select_part(
         catalog = part_catalog(_data.filter_raw_gaze(raw_gaze, [pid], [tid]))
     if catalog.empty:
         if screen is not None:
-            raise ValueError("screen= was supplied for a single-screen trial.")
+            raise ValueError(
+                f"{screen_param}= was supplied for a single-screen trial "
+                f"(participant={pid!r}, trial={tid!r})."
+            )
         return trial_words, trial_fixations, pid, tid, None
     available = catalog[SCREEN_ID].astype(str).tolist()
     selected = str(screen) if screen is not None else available[0]
     if selected not in available:
         raise ValueError(
-            f"Unknown screen={selected!r} for participant={pid!r}, trial={tid!r}. "
+            f"Unknown {screen_param}={selected!r} for participant={pid!r}, "
+            f"trial={tid!r}. "
             f"Available: {', '.join(repr(value) for value in available)}."
         )
     return (
@@ -1810,6 +1818,7 @@ def animate_scanpath(
     trial: str | None = None,
     *,
     screen: str | None = None,
+    screen_b: str | None = None,
     canvas_size: tuple[int, int] | None = None,
     base_font_size: int = 16,
     font_family: str = FONT_FAMILY,
@@ -1861,8 +1870,8 @@ def animate_scanpath(
     [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths] takes it.
     Without ``trial_b``, ``words_b`` / ``fixations_b`` must hold one trial; B
     frames holding several raise ``ValueError`` rather than drawing them all. A
-    multipart B is drawn at its first recorded screen; cut B's frames to
-    another with `multipart.extract_part` to draw that one.
+    multipart B is drawn at ``screen_b`` — looked up in B's own trial — or at
+    its first recorded screen without it, as A is with ``screen``.
 
     **Two datasets.** Both readings are drawn in A's coordinates, so a
     co-animation is an overlay, and a reading from another dataset has to share
@@ -1962,7 +1971,14 @@ def animate_scanpath(
             "words_b nor fixations_b was passed. Pass B's frames too, or leave "
             "both out to draw trial_b from these frames."
         )
-    words_b, fixations_b = _second_reading(words, fixations, *passed_b, trial_b)
+    if screen_b is not None and trial_b is None and all(f is None for f in passed_b):
+        raise ValueError(
+            "screen_b= picks scanpath B's screen, but there is no scanpath B. "
+            "Pass trial_b=(participant, trial) too."
+        )
+    words_b, fixations_b = _second_reading(
+        words, fixations, *passed_b, trial_b, screen_b=screen_b
+    )
     if second_dataset and fixations_b is not None and not fixations_b.empty:
         _refuse_co_animation_across_screens(
             setup_a,
@@ -2041,6 +2057,8 @@ def _second_reading(
     words_b: pd.DataFrame | None,
     fixations_b: pd.DataFrame | None,
     trial_b: tuple[str, str] | None,
+    *,
+    screen_b: str | None = None,
 ) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
     """Scanpath B's frames for a co-animation, cut to one reading (BUG-85).
 
@@ -2050,8 +2068,8 @@ def _second_reading(
     otherwise, as `compare_scanpaths` does; without it B's frames must hold one
     trial, since guessing among several would draw somebody else's reading.
     A multipart B keeps one screen, never all of them — each is its own
-    coordinate space: its first, as A without ``screen=`` and the app's B
-    navigator start, unless the caller cut B to another with `extract_part`.
+    coordinate space: ``screen_b``, else its first, as A without ``screen=``
+    and the app's B navigator start.
     """
     if trial_b is None:
         source = fixations_b if fixations_b is not None else words_b
@@ -2090,8 +2108,21 @@ def _second_reading(
             f"trial={tid_b!r}. list_trials() shows what the frames contain."
         )
     catalog = part_catalog(trial_words_b, trial_fix_b)
-    if not catalog.empty:
-        screen_b = str(catalog[SCREEN_ID].iloc[0])
+    if catalog.empty:
+        if screen_b is not None:
+            raise ValueError(
+                "screen_b= was supplied for a single-screen trial "
+                f"(participant={pid_b!r}, trial={tid_b!r})."
+            )
+    else:
+        available = catalog[SCREEN_ID].astype(str).tolist()
+        if screen_b is not None and str(screen_b) not in available:
+            raise ValueError(
+                f"Unknown screen_b={str(screen_b)!r} for participant={pid_b!r}, "
+                f"trial={tid_b!r}. "
+                f"Available: {', '.join(repr(value) for value in available)}."
+            )
+        screen_b = str(screen_b) if screen_b is not None else available[0]
         trial_words_b, trial_fix_b = (
             extract_part(frame, pid_b, tid_b, screen_b)
             if frame is not None and SCREEN_ID in frame.columns
@@ -2284,6 +2315,8 @@ def compare_scanpaths(
     trial_a: tuple[str, str],
     trial_b: tuple[str, str],
     *,
+    screen: str | None = None,
+    screen_b: str | None = None,
     words_b: pd.DataFrame | None = None,
     fixations_b: pd.DataFrame | None = None,
     dataset_b: str = "Dataset B",
@@ -2311,6 +2344,16 @@ def compare_scanpaths(
     The headless form of the app's **Compare** mode. ``trial_a`` / ``trial_b``
     are ``(participant, trial)`` pairs; ``layout`` is ``"overlay"``,
     ``"side_by_side"`` (``"side-by-side"`` also accepted) or ``"stacked"``.
+
+    **Multipart trials.** Each scanpath is one screen, never a whole multipart
+    trial: every screen is its own coordinate space, so pooling them would draw
+    saccades across page boundaries. ``screen`` picks A's screen and
+    ``screen_b`` B's, independently — B's is looked up in B's own frames, so it
+    may be a later page or another dataset's. Either one left out is that
+    trial's first recorded screen, as in
+    [`plot_scanpath`][scanpath_studio.api.plot_scanpath];
+    ``list_parts()`` lists them. A screen named for a single-screen trial, or
+    one the trial does not have, raises ``ValueError``.
 
     **Two datasets.** Pass ``words_b`` / ``fixations_b`` to draw B from a
     *different* corpus. Two corpora can hold the same ``(participant_id,
@@ -2359,7 +2402,6 @@ def compare_scanpaths(
     from .experimental_setup import IncomparableScreensError, setups_comparable
     from .utils import (
         align_compare_columns,
-        extract_trial,
         qualify_for_compare,
         self_compare_participant,
         separate_self_compare,
@@ -2386,12 +2428,20 @@ def compare_scanpaths(
     if raw_gaze_b is None and not cross_dataset:
         raw_gaze_b = raw_gaze
 
-    pid_a, tid_a = str(trial_a[0]), str(trial_a[1])
-    pid_b, tid_b = str(trial_b[0]), str(trial_b[1])
-    trial_words_a = extract_trial(words, pid_a, tid_a)
-    trial_fix_a = extract_trial(fixations, pid_a, tid_a)
-    trial_words_b = extract_trial(words_b, pid_b, tid_b)
-    trial_fix_b = extract_trial(fixations_b, pid_b, tid_b)
+    # One screen per side, each resolved in its own frames — the same contract
+    # as `plot_scanpath`'s `screen`. Extracting whole parent trials pooled every
+    # page of a multipart reading into one scanpath, saccades across pages and all.
+    trial_words_a, trial_fix_a, pid_a, tid_a, _screen_a = _select_part(
+        words, fixations, str(trial_a[0]), str(trial_a[1]), screen
+    )
+    trial_words_b, trial_fix_b, pid_b, tid_b, _screen_b = _select_part(
+        words_b,
+        fixations_b,
+        str(trial_b[0]),
+        str(trial_b[1]),
+        screen_b,
+        screen_param="screen_b",
+    )
     trial_raw_a = _compare_raw_gaze(raw_gaze, pid_a, tid_a, trial_fix_a)
     trial_raw_b = _compare_raw_gaze(raw_gaze_b, pid_b, tid_b, trial_fix_b)
     for frame, (pid, tid) in ((trial_fix_a, trial_a), (trial_fix_b, trial_b)):
@@ -2638,6 +2688,7 @@ def figure_code(
     trial: str = "",
     screen: str | None = None,
     compare: tuple[str, str] | None = None,
+    compare_screen: str | None = None,
     compare_layout: str = "overlay",
     compare_stimulus: str = "both",
     compare_dataset: str = "",
@@ -2681,6 +2732,9 @@ def figure_code(
     Python form, ``--raw-gaze`` in the CLI one. ``source="raw_gaze"`` is a dataset
     recorded as raw gaze alone: the samples at ``source_options["raw_gaze"]`` are the
     data, and ``plot_scanpath`` is handed ``None`` for the words and fixations.
+
+    ``screen`` / ``compare_screen`` are A's and B's screens of a multipart trial
+    (``screen=`` / ``screen_b=``, ``--screen`` / ``--compare-screen``).
 
     ``compare_dataset`` names the corpus scanpath B was loaded from when it is a
     *second* one. B's participant id belongs to that corpus rather than
@@ -2750,6 +2804,7 @@ def figure_code(
             _snippet.CompareTarget(
                 participant=str(compare[0]),
                 trial=str(compare[1]),
+                screen=None if compare_screen is None else str(compare_screen),
                 layout=compare_layout,
                 compare_stimulus=compare_stimulus,
                 dataset=str(compare_dataset),

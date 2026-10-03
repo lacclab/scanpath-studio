@@ -1,20 +1,15 @@
 ---
 name: Bug report
 about: Something in Scanpath Studio behaves wrongly
-title: "[BUG-N] "
+title: ""
 type: Bug
 labels: ["area:bug"]
 ---
 
 <!--
-Maintainers: replace N in the title with the next free BUG number. Most IDs
-live in only one place, so check all three (CLAUDE.md → Tracking work):
-CHANGELOG.md plus the file names in changelog.d/, `gh issue list --state all
---search "[BUG-"`, and the open PRs' fragments (`gh pr list --state open`, then
-the changelog.d/ files in each `gh pr diff <n> --name-only`).
-IDs are stable and never renumbered.
-Outside reporters: leave the title as-is; we will number it.
 Maintainers: add it to the "Scanpath Studio" project board and set its Status.
+The issue's own #N is its ID — no [BUG-N] prefix in the title (CLAUDE.md →
+Tracking work).
 -->
 
 ## Request

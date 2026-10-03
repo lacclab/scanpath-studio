@@ -23,7 +23,8 @@ output). Fix trivial failures (formatting) directly; report anything else.
    suite is the gate.
 4. **Changelog** — `git diff` + `git status` to see the pending work; if it
    is user-visible or a bug fix, it needs a fragment
-   `changelog.d/<ID>.<group>.md` holding one line of plain text
+   `changelog.d/<issue>.<group>.md` (or `<slug>.<group>.md` when there is no
+   issue) holding one line of plain text
    (`changelog.d/README.md`). If missing, write it. `CHANGELOG.md` itself must
    **not** be in the diff — only a release edits it (ENG-86). Then
    `python scripts/changelog_fragments.py check`.

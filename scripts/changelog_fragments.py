@@ -7,14 +7,18 @@ Usage:
     python scripts/changelog_fragments.py release <version> [--date YYYY-MM-DD]
 
 A pull request never edits ``CHANGELOG.md``. It adds a file to ``changelog.d/``
-instead, so two open PRs never touch the same lines:
+instead, so two open PRs never touch the same lines. The file name is what the
+entry cites — an issue (or PR) number, or a short slug when there is no issue —
+plus its Keep a Changelog group; the file holds one line of text:
 
-    changelog.d/VIZ-47.changed.md       -> - <the file's text> (VIZ-47)
-    changelog.d/AN-32+UX-176.fixed.md   -> - <the file's text> (AN-32, UX-176)
+    changelog.d/341.fixed.md                -> - <the file's text> ([#341](…))
+    changelog.d/340+341.changed.md          -> - <the file's text> ([#340](…), [#341](…))
+    changelog.d/trial-picker-ids.changed.md -> - <the file's text> ([#327](…))
 
-The file name carries the item's ID(s) and its Keep a Changelog group; the file
-holds one line of text. Two branches that take the same ID for the same group
-create the same file, so git reports the clash instead of both merging.
+A slug becomes the number of the pull request that added it, read from the
+squash-merge subject on ``main`` (``… (#327)``), so nothing has to be allocated
+up front and parallel branches cannot collide on a number. Before that PR has
+merged, ``preview`` prints the entry without one; ``release`` refuses it.
 
 ``check`` validates every fragment, ``preview`` prints the unreleased section
 they add up to, and ``release`` writes that section into ``CHANGELOG.md`` as
@@ -26,6 +30,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,28 +38,52 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 FRAGMENT_DIR = ROOT / "changelog.d"
 CHANGELOG = ROOT / "CHANGELOG.md"
+ISSUES_URL = "https://github.com/lacclab/scanpath-studio/issues"
 
 #: Keep a Changelog's groups, in the order a section lists them.
 GROUPS = ("added", "changed", "deprecated", "removed", "fixed", "security")
 
-_ID = r"[A-Z]+-\d+"
-_NAME = re.compile(rf"^(?P<ids>{_ID}(?:\+{_ID})*)\.(?P<group>[a-z]+)\.md$")
+_NUMBERS = r"\d+(?:\+\d+)*"
+_SLUG = r"[A-Za-z0-9][A-Za-z0-9_-]*"
+_NAME = re.compile(rf"^(?P<ref>{_NUMBERS}|{_SLUG})\.(?P<group>[a-z]+)\.md$")
+_MERGED_PR = re.compile(r"\(#(\d+)\)\s*$")
 
 
 @dataclass(frozen=True)
 class Fragment:
-    ids: tuple[str, ...]
+    numbers: tuple[int, ...]
     group: str
     text: str
+    #: The file's name when it is a slug, kept for the error that names it.
+    slug: str = ""
 
     @property
     def line(self) -> str:
-        return f"- {self.text} ({', '.join(self.ids)})"
+        if not self.numbers:
+            return f"- {self.text}"
+        refs = ", ".join(f"[#{n}]({ISSUES_URL}/{n})" for n in self.numbers)
+        return f"- {self.text} ({refs})"
 
 
-def _id_key(item_id: str) -> tuple[str, int]:
-    prefix, _, number = item_id.partition("-")
-    return prefix, int(number)
+def merged_pr(path: Path) -> int | None:
+    """The PR whose squash-merge added *path*, or ``None`` before it merges.
+
+    Follows renames, so a fragment that was renamed after it landed still
+    resolves to the PR that first added it.
+    """
+    try:
+        subjects = subprocess.run(
+            ["git", "log", "--follow", "--diff-filter=A", "--format=%s", "--", path],
+            cwd=path.parent,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.splitlines()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    # git log lists newest first; the first add is the one that counts.
+    match = _MERGED_PR.search(subjects[-1]) if subjects else None
+    return int(match[1]) if match else None
 
 
 def load(directory: Path = FRAGMENT_DIR) -> tuple[list[Fragment], list[str]]:
@@ -69,7 +98,8 @@ def load(directory: Path = FRAGMENT_DIR) -> tuple[list[Fragment], list[str]]:
         match = _NAME.match(path.name)
         if match is None:
             errors.append(
-                f"{path.name}: expected <ID>[+<ID>...].<group>.md, e.g. VIZ-47.fixed.md"
+                f"{path.name}: expected <issue>[+<issue>...].<group>.md or "
+                "<slug>.<group>.md, e.g. 341.fixed.md or trial-picker-ids.fixed.md"
             )
             continue
         group = match["group"]
@@ -83,8 +113,16 @@ def load(directory: Path = FRAGMENT_DIR) -> tuple[list[Fragment], list[str]]:
         if text.startswith("- "):
             errors.append(f"{path.name}: write the text alone, without a '- ' bullet")
             continue
-        fragments.append(Fragment(tuple(match["ids"].split("+")), group, text))
-    fragments.sort(key=lambda f: [_id_key(i) for i in f.ids])
+        ref = match["ref"]
+        if re.fullmatch(_NUMBERS, ref):
+            numbers = tuple(int(n) for n in ref.split("+"))
+            fragments.append(Fragment(numbers, group, text))
+        else:
+            pr = merged_pr(path)
+            numbers = (pr,) if pr is not None else ()
+            fragments.append(Fragment(numbers, group, text, slug=path.name))
+    # Numbered entries in issue order; the not-yet-merged ones last.
+    fragments.sort(key=lambda f: (not f.numbers, f.numbers, f.slug))
     return fragments, errors
 
 
@@ -107,6 +145,13 @@ def release(
         raise SystemExit("\n".join(errors))
     if not fragments:
         raise SystemExit(f"no fragments in {directory}")
+    unmerged = [f.slug for f in fragments if not f.numbers]
+    if unmerged:
+        raise SystemExit(
+            "no merged PR found for "
+            + ", ".join(unmerged)
+            + " — release from an up-to-date main, or name the file by its issue"
+        )
     text = changelog.read_text(encoding="utf-8")
     if re.search(rf"^## \[{re.escape(version)}\]", text, re.MULTILINE):
         raise SystemExit(f"CHANGELOG.md already has a {version} section")

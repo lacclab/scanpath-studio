@@ -26,10 +26,11 @@ Read them before changing code. The rules most worth repeating:
 - **Never rename the `global_*` / `single_*` / `filter_*` widget keys** — deep
   links and saved configs depend on them — and keep the spatial plot on
   `tabs._render_true_scale_chart`, never `st.plotly_chart`.
-- **Every item has a stable ID** (`VIZ-37`), cited in the commit subject and a
-  changelog fragment, `changelog.d/<ID>.<group>.md` (never an edit to
-  `CHANGELOG.md`). Take the next number from the changelog, the
-  GitHub issues *and* the open PRs (`CLAUDE.md` → *Tracking work*).
+- **Cite the issue's `#N`** in the commit subject, and add a changelog
+  fragment, `changelog.d/<issue>.<group>.md` — or `<slug>.<group>.md` with no
+  issue, which the release resolves to the PR (never an edit to
+  `CHANGELOG.md`). Don't mint `[VIZ-37]`-style IDs; they are retired
+  (`CLAUDE.md` → *Tracking work*).
 - **`main` is protected** — land work through a branch and a pull request. No AI
   co-author trailers in commit messages.
 - **Don't edit** `uv.lock`, `site/` or `*.egg-info`.

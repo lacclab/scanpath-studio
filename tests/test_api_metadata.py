@@ -17,7 +17,7 @@ from scanpath_studio import api
 
 @pytest.fixture(scope="module")
 def loaded():
-    words, fixations = api.load_sample_data()[:2]
+    words, fixations = api.load_sample_data(names="canonical")[:2]
     return words, fixations
 
 

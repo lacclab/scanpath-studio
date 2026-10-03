@@ -550,7 +550,7 @@ CHANGED = {
 
 @pytest.fixture()
 def demo_trial():
-    words, fixations = api.load_sample_data()
+    words, fixations = api.load_sample_data(names="canonical")
     combos = api.list_trials(words, fixations)
     row = combos.iloc[0]
     return words, fixations, str(row["participant_id"]), str(row["trial_id"])
@@ -697,7 +697,7 @@ def test_figure_code_with_no_trial_draws_what_render_draws(tmp_path, monkeypatch
 
 def test_figure_code_names_a_trial_half_given(monkeypatch):
     python = api.figure_code(participant="l7_1090")
-    assert "trials['participant_id'] == 'l7_1090'" in python
+    assert "trials.iloc[:, 0] == 'l7_1090'" in python
     monkeypatch.setattr(api, "save_figure", lambda fig, path, **kwargs: path)
     namespace: dict = {}
     exec(compile(python, "<snippet>", "exec"), namespace)  # noqa: S102
@@ -824,7 +824,7 @@ def test_two_way_class_colours_reach_the_cli_beside_the_fold(tmp_path, monkeypat
 
     monkeypatch.setattr(api, "plot_scanpath", spy)
     monkeypatch.setattr(api, "save_figure", lambda fig, path, **kwargs: path)
-    words, fixations = api.load_sample_data()
+    words, fixations = api.load_sample_data(names="canonical")
     row = api.list_trials(words, fixations).iloc[0]
     argv = shlex.split(command.replace(" \\\n", " "))[1:]
     argv[argv.index("-p") + 1] = str(row["participant_id"])

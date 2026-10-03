@@ -370,7 +370,7 @@ def test_the_bundled_demo_is_recognised_as_a_tiling_layout():
 def demo():
     from scanpath_studio import api
 
-    return api.load_sample_data()
+    return api.load_sample_data(names="canonical")
 
 
 class TestTheBundledDemoAgreesWithEyeLink:

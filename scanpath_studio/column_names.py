@@ -846,3 +846,62 @@ def stored_source_recipe(stored: Mapping) -> dict:
         if missing:
             unresolved[table] = list(missing)
     return {"schemas": schemas, "unresolved": unresolved}
+
+
+# --- Phase 4: a frame that carries its own names ------------------------------
+
+#: The `DataFrame.attrs` key a frame under the dataset's own names carries its
+#: map in (`attach`). pandas 3 keeps `attrs` through filtering, `loc`, `copy`,
+#: `assign`, `merge`, `concat` and `groupby`, so a script can slice the frame it
+#: loaded and hand it back to the API.
+ATTRS_KEY = "scanpath_studio.columns"
+
+
+def attach(frame, table: str, names: ColumnNames | None):
+    """``frame`` under the dataset's own names (:func:`as_written`), carrying
+    its map in ``attrs`` so :func:`to_canonical_frame` can undo it. A frame
+    with no names to apply comes back as it was."""
+    if frame is None or names is None or not names.entries:
+        return frame
+    hidden, headers = _written_plan(frame, names)
+    partners = {alias: main for main, alias in _ALIAS_PAIRS}
+    out = as_written(frame, names, hidden)
+    out.attrs = {
+        **frame.attrs,
+        ATTRS_KEY: {
+            "table": table,
+            "names": names.to_payload(),
+            "renamed": {header: column for column, header in headers.items()},
+            "aliases": {alias: partners[alias] for alias in hidden},
+        },
+    }
+    return out
+
+
+def frame_names(frame) -> tuple[str, ColumnNames] | None:
+    """``(table, map)`` a frame under the dataset's own names carries, else
+    ``None`` (a canonical frame, or any other table)."""
+    record = getattr(frame, "attrs", {}).get(ATTRS_KEY)
+    if not isinstance(record, Mapping):
+        return None
+    return str(record.get("table", "")), ColumnNames.from_payload(record.get("names"))
+
+
+def to_canonical_frame(frame):
+    """A frame :func:`attach` named, back under the canonical names it is
+    processed in — the inverse every API function applies on entry. Any other
+    frame is returned unchanged."""
+    record = getattr(frame, "attrs", {}).get(ATTRS_KEY)
+    if not isinstance(record, Mapping):
+        return frame
+    renamed = {
+        header: column
+        for header, column in (record.get("renamed") or {}).items()
+        if header in frame.columns and column not in frame.columns
+    }
+    out = frame.rename(columns=renamed) if renamed else frame.copy(deep=False)
+    for alias, main in (record.get("aliases") or {}).items():
+        if alias not in out.columns and main in out.columns:
+            out[alias] = out[main]
+    out.attrs = {k: v for k, v in frame.attrs.items() if k != ATTRS_KEY}
+    return out

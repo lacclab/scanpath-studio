@@ -313,17 +313,17 @@ def test_the_sample_raw_gaze_reaches_the_builder(monkeypatch):
 
 def test_a_raw_gaze_file_reaches_the_builder(monkeypatch, tmp_path):
     path = tmp_path / "gaze.csv"
-    api.load_sample_raw_gaze().to_csv(path, index=False)
+    api.load_sample_raw_gaze(names="canonical").to_csv(path, index=False)
     seen = _spy(monkeypatch, "plot_scanpath")
     cli.main([*_BASE, "--raw-gaze", str(path)])
-    assert len(seen["raw_gaze"]) == len(api.load_sample_raw_gaze())
+    assert len(seen["raw_gaze"]) == len(api.load_sample_raw_gaze(names="canonical"))
 
 
 def test_a_raw_gaze_mapping_names_the_columns(monkeypatch, tmp_path):
     """`--raw-gaze-schema` is `--fix-schema`'s twin: a table whose columns
     auto-detection can't read is mapped by hand."""
     path = tmp_path / "gaze.csv"
-    frame = api.load_sample_raw_gaze().rename(
+    frame = api.load_sample_raw_gaze(names="canonical").rename(
         columns={"x": "GX", "y": "GY", "trial_id": "TRIAL"}
     )
     frame.drop(columns=["unique_trial_id", "text_id"]).to_csv(path, index=False)
@@ -631,7 +631,7 @@ def test_a_palette_with_one_class_colour_changed_round_trips(monkeypatch):
     (from_cli,) = _figures(
         monkeypatch, [shlex.split(command.replace(" \\\n", " "))[1:]]
     )
-    words, fixations = api.load_sample_data()
+    words, fixations = api.load_sample_data()  # as `render --sample`, by its own names
     expected = api.plot_scanpath(
         words,
         fixations,

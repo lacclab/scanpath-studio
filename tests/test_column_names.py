@@ -324,7 +324,11 @@ def _stored_upload() -> dict:
     word_schema = data.propose_word_schema(_UPLOAD_WORDS)
     fix_schema = data.propose_fix_schema(_UPLOAD_FIXATIONS)
     words, fixations = api.load_scanpath_data(
-        _UPLOAD_WORDS, _UPLOAD_FIXATIONS, word_schema=word_schema, fix_schema=fix_schema
+        _UPLOAD_WORDS,
+        _UPLOAD_FIXATIONS,
+        word_schema=word_schema,
+        fix_schema=fix_schema,
+        names="canonical",
     )
     return {
         "words": words,

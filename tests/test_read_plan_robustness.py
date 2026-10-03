@@ -185,7 +185,7 @@ class TestWordTextIsReadVerbatim:
 
         path = tmp_path / "ia.tsv"
         self._table().to_csv(path, sep="\t", index=False)
-        words, _ = api.load_scanpath_data(words=str(path))
+        words, _ = api.load_scanpath_data(words=str(path), names="canonical")
         assert words["text"].tolist() == self.WORDS
 
     def test_a_hand_mapped_text_column_is_the_one_kept(self):

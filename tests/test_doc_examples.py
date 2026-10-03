@@ -86,7 +86,7 @@ def test_the_documented_figure_code_call_builds_its_figure(monkeypatch):
 
 def test_the_documented_examples_name_real_demo_ids():
     """The ids the Python examples quote exist in the bundled demo."""
-    combos = api.list_trials(*api.load_sample_data())
+    combos = api.list_trials(*api.load_sample_data(names="canonical"))
     pairs = set(combos.itertuples(index=False, name=None))
     for pair in (
         ("l37_1129", "l37_1129_2_1_1_Ele_r0"),

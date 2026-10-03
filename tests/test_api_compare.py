@@ -390,7 +390,7 @@ class TestCoAnimationDrawsOneSecondReading:
     def test_trial_b_picks_one_reading_out_of_the_corpus(self):
         from scanpath_studio.utils import extract_trial
 
-        words, fixations = api.load_sample_data()
+        words, fixations = api.load_sample_data(names="canonical")
         expected = len(extract_trial(fixations, *self._B))
         fig = api.animate_scanpath(words, fixations, *self._A, trial_b=self._B)
         assert len(self._trace_b(fig).x) == expected
@@ -423,7 +423,7 @@ class TestCoAnimationDrawsOneSecondReading:
         position cache — keyed by the frame's identity, which an in-place edit
         keeps — a second call after `sort_values(inplace=True)` returned the
         same *positions*: as many rows, from somebody else's trials."""
-        words, fixations = api.load_sample_data()
+        words, fixations = api.load_sample_data(names="canonical")
         fixations = fixations.copy()
         api._second_reading(words, fixations, None, None, self._B)
         fixations.sort_values(
@@ -433,14 +433,14 @@ class TestCoAnimationDrawsOneSecondReading:
         assert set(zip(fix_b["participant_id"], fix_b["trial_id"])) == {self._B}
 
     def test_b_frames_holding_several_trials_ask_for_trial_b(self):
-        words, fixations = api.load_sample_data()
+        words, fixations = api.load_sample_data(names="canonical")
         with pytest.raises(ValueError, match=r"trial_b="):
             api.animate_scanpath(
                 words, fixations, *self._A, words_b=words, fixations_b=fixations
             )
 
     def test_a_trial_b_with_no_fixations_raises(self):
-        words, fixations = api.load_sample_data()
+        words, fixations = api.load_sample_data(names="canonical")
         with pytest.raises(ValueError, match="No fixations for the second scanpath"):
             api.animate_scanpath(
                 words, fixations, *self._A, trial_b=("nobody", "nothing")

@@ -16,7 +16,7 @@ from scanpath_studio.export import _plot_config_dict
 
 @pytest.fixture(scope="module")
 def sample():
-    return sps.load_sample_data()
+    return sps.load_sample_data(names="canonical")
 
 
 def test_ticks_are_zero_anchored_for_full_cropped_negative_and_inverted_ranges():

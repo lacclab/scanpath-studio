@@ -58,7 +58,7 @@ def _app():
             controls.save_design_preset(name)
         else:
             controls._apply_view_preset(name)
-    words, fixations = api.load_sample_data()
+    words, fixations = api.load_sample_data(names="canonical")
     first = fixations[["participant_id", "trial_id"]].iloc[0]
     trial = fixations[
         (fixations["participant_id"] == first["participant_id"])

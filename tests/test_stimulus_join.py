@@ -63,7 +63,7 @@ def _reader_fixations() -> pd.DataFrame:
 class TestReaderEmbeddedTrialIds:
     def test_every_reading_gets_the_boxes_of_its_text(self):
         words, fixations = sps.load_scanpath_data(
-            words=_text_words(), fixations=_reader_fixations()
+            words=_text_words(), fixations=_reader_fixations(), names="canonical"
         )
         assert len(set(zip(fixations["participant_id"], fixations["trial_id"]))) == 4
         for reader in ("l37", "l42"):
@@ -131,6 +131,7 @@ class TestReaderEmbeddedTrialIds:
                 "y": "fy",
                 "duration": "dur",
             },
+            names="canonical",
         )
         assert len(extract_trial(words, "p1", "p1-a")) == 2
         assert len(extract_trial(words, "p1", "p1-b")) == 1
@@ -170,7 +171,9 @@ class TestSharedAndRepeatedIds:
         join = plan_stimulus_join(words_norm, fix_norm)
         assert join.key == "trial_id"
         assert join.matched == join.readings == 3
-        words, _ = sps.load_scanpath_data(words=self._words(), fixations=fixations)
+        words, _ = sps.load_scanpath_data(
+            words=self._words(), fixations=fixations, names="canonical"
+        )
         for reader in ("7", "8"):
             assert extract_trial(words, reader, "t1")["text"].tolist() == [
                 "Hello",
@@ -209,7 +212,10 @@ class TestSharedAndRepeatedIds:
         join = plan_stimulus_join(words_norm, fix_norm)
         assert (join.key, join.matched, join.readings) == ("trial_id", 2, 2)
         words, _ = sps.load_scanpath_data(
-            words=self._words(), fixations=fixations, fix_schema=fix_schema
+            words=self._words(),
+            fixations=fixations,
+            fix_schema=fix_schema,
+            names="canonical",
         )
         for trial in ("t1", "t1_r2"):
             assert extract_trial(words, "7", trial)["text"].tolist() == [
@@ -237,7 +243,9 @@ class TestNoJoinRefuses:
     def test_no_shared_trial_or_text_raises(self):
         fixations = _reader_fixations().assign(unique_paragraph_id="other")
         with pytest.raises(StimulusJoinError, match="Text ID"):
-            sps.load_scanpath_data(words=_text_words(), fixations=fixations)
+            sps.load_scanpath_data(
+                words=_text_words(), fixations=fixations, names="canonical"
+            )
 
     def test_the_error_is_a_value_error_for_api_callers(self):
         assert issubclass(StimulusJoinError, ValueError)
@@ -290,6 +298,7 @@ class TestNoJoinRefuses:
             fixations=shared,
             word_schema=word_schema,
             fix_schema=fix_schema,
+            names="canonical",
         )
         assert len(extract_trial(w, "p1", "art1_p1")) == 1
         assert len(extract_trial(w, "p2", "art1_p2")) == 1
@@ -300,6 +309,7 @@ class TestNoJoinRefuses:
                 fixations=per_reader,
                 word_schema=word_schema,
                 fix_schema=fix_schema,
+                names="canonical",
             )
 
     def test_a_partial_join_keeps_the_readings_it_reaches(self):
@@ -388,6 +398,7 @@ class TestMultipart:
                 "y": "fy",
                 "duration": "dur",
             },
+            names="canonical",
         )
         r1 = words_norm[words_norm["participant_id"] == "r1"]
         assert sorted(r1["text"]) == ["one", "three", "two"]
@@ -499,6 +510,7 @@ class TestPerReadingRule:
             fixations=fixations,
             word_schema={**_EDGE_SCHEMA, "trial": "trial", "text_id": "text"},
             fix_schema={**_FIX_SCHEMA, "text_id": "text"},
+            names="canonical",
         )
         assert _boxes(w, "p1", "A") == ["a"]
         assert _boxes(w, "p1", "q1") == ["b"]
@@ -535,6 +547,7 @@ class TestPerReadingRule:
             fixations=fixations,
             word_schema={**_EDGE_SCHEMA, "trial": "trial", "text_id": "text"},
             fix_schema={**_FIX_SCHEMA, "text_id": "text"},
+            names="canonical",
         )
         assert set(f["trial_id"]) == {"a1p1", "a1p2", "a1p1_r2"}
         assert _boxes(w, "r1", "a1p1") == ["first"]
@@ -554,6 +567,7 @@ class TestPerReadingRule:
                 fixations=fixations,
                 word_schema={**_EDGE_SCHEMA, "trial": "trial", "text_id": "text"},
                 fix_schema={**_FIX_SCHEMA, "text_id": "text"},
+                names="canonical",
             )
         assert _boxes(w, "r1", "r1_Y") == ["y"]
         assert _boxes(w, "r2", "r2_X") == []
@@ -595,6 +609,7 @@ class TestZeroPadding:
             fixations=fixations,
             word_schema={**_EDGE_SCHEMA, "trial": "trial", "text_id": "text"},
             fix_schema={**_FIX_SCHEMA, "text_id": "text"},
+            names="canonical",
         )
         assert _boxes(w, "p1", "p1_stim") == ["seven"]
 
@@ -606,7 +621,9 @@ class TestHeadlessSurfaces:
             "unknown"
         )
         with pytest.warns(UserWarning, match="2 of 4 readings have word boxes"):
-            sps.load_scanpath_data(words=_text_words(), fixations=fixations)
+            sps.load_scanpath_data(
+                words=_text_words(), fixations=fixations, names="canonical"
+            )
 
     def _run_cli(self, tmp_path, fixations):
         import subprocess
@@ -669,6 +686,7 @@ class TestTrialIdMatchesStand:
                 **({"text_id": "text"} if word_text else {}),
             },
             fix_schema={**_FIX_SCHEMA, **({"text_id": "text"} if fix_text else {})},
+            names="canonical",
         )
 
     def test_a_coarser_fixations_text_id_moves_no_boxes(self):
@@ -736,6 +754,7 @@ class TestMultipartScreens:
                 fixations=fixations,
                 word_schema=self._WS,
                 fix_schema=self._FS,
+                names="canonical",
             )
         text = str(err.value)
         assert "has no boxes for that screen ('p9')" in text
@@ -747,7 +766,11 @@ class TestMultipartScreens:
             page=["p1", None]
         )
         w, _ = sps.load_scanpath_data(
-            words=words, fixations=fixations, word_schema=self._WS, fix_schema=self._FS
+            words=words,
+            fixations=fixations,
+            word_schema=self._WS,
+            fix_schema=self._FS,
+            names="canonical",
         )
         assert sorted(w["text"]) == ["one", "two"]
 
@@ -775,6 +798,7 @@ class TestReservedColumns:
                 fixations=fixations,
                 word_schema={**_EDGE_SCHEMA, "trial": "trial", "text_id": "text"},
                 fix_schema={**_FIX_SCHEMA, "text_id": "text"},
+                names="canonical",
             )
         assert data_module.BASE_TRIAL_ID not in f.columns
         assert _boxes(w, "r1", "A") == ["a"]
@@ -786,14 +810,16 @@ class TestReservedColumns:
         import warnings
 
         w, f = sps.load_scanpath_data(
-            words=_text_words(), fixations=_reader_fixations()
+            words=_text_words(), fixations=_reader_fixations(), names="canonical"
         )
         w.to_csv(tmp_path / "w.csv", index=False)
         f.to_csv(tmp_path / "f.csv", index=False)
         with warnings.catch_warnings():
             warnings.simplefilter("error", UserWarning)
             again, _ = sps.load_scanpath_data(
-                words=tmp_path / "w.csv", fixations=tmp_path / "f.csv"
+                words=tmp_path / "w.csv",
+                fixations=tmp_path / "f.csv",
+                names="canonical",
             )
         assert not again.empty
 
@@ -846,6 +872,7 @@ class TestMessages:
                     "screen_id": "page",
                 },
                 fix_schema={**_FIX_SCHEMA, "text_id": "text", "screen_id": "page"},
+                names="canonical",
             )
         assert "multipart dataset needs boxes for every screen" in str(err.value)
         assert "orphan" not in str(err.value)
@@ -874,7 +901,7 @@ class TestInternalColumns:
         from scanpath_studio import controls, export
 
         w, f = sps.load_scanpath_data(
-            words=_text_words(), fixations=_reader_fixations()
+            words=_text_words(), fixations=_reader_fixations(), names="canonical"
         )
         assert data_module.AOI_TRIAL_ID in w.columns
         buf = io.BytesIO()
@@ -894,7 +921,9 @@ def test_no_field_picker_offers_an_internal_column():
     comparison fields all draw from `data.user_columns`."""
     from scanpath_studio import controls, tabs
 
-    w, f = sps.load_scanpath_data(words=_text_words(), fixations=_reader_fixations())
+    w, f = sps.load_scanpath_data(
+        words=_text_words(), fixations=_reader_fixations(), names="canonical"
+    )
     f = f.assign(**{data_module.BASE_TRIAL_ID: f["trial_id"]})
     assert data_module.AOI_TRIAL_ID in w.columns
     internal = data_module.INTERNAL_COLUMNS
@@ -920,6 +949,7 @@ class TestTextIdMappedSignal:
             fixations=fixations,
             word_schema={**_EDGE_SCHEMA, "trial": "trial", "text_id": "text"},
             fix_schema={**_FIX_SCHEMA, "trial": "text", "text_id": "text"},
+            names="canonical",
         )
         assert f[data_module.TEXT_ID_MAPPED].all()
         assert _boxes(w, "r1", "alpha") == ["a"]
@@ -963,6 +993,7 @@ class TestTextIdMappedSignal:
                 fixations=fixations,
                 word_schema={**_EDGE_SCHEMA, "trial": "trial", "text_id": "text"},
                 fix_schema=_FIX_SCHEMA,
+                names="canonical",
             )
         assert set(f["trial_id"]) == set(f["text_id"]) == {"007"}
         assert _boxes(w, "r1", "007") == ["seven"]

@@ -946,6 +946,29 @@ def _duration_key_references(duration_range) -> list[tuple[float, str]]:
 
 # Name of the size key's label annotations, so the layer split can find them.
 _SIZE_KEY_NAME = "duration_size_key"
+# The Illustration stamp shares the size key's bottom-right corner.
+_ILLUSTRATION_LABEL_NAME = "illustration_label"
+
+
+def _stack_bottom_right(fig: go.Figure) -> None:
+    """Lift the Illustration stamp above the duration size key when both are drawn.
+
+    Both sit in the plot's bottom-right corner, and either can be added first
+    (the public builders stamp the label inside ``make_scanpath_figure`` and add
+    the key after; the app's replay does the reverse), so each calls this once
+    it is on the figure. The key's height is read off its own circles — the
+    only pixel-sized circles in paper coordinates — so the stamp clears the
+    largest one at any size range."""
+    key_top = [
+        float(sh.y1)
+        for sh in fig.layout.shapes or ()
+        if sh.type == "circle" and sh.yref == "paper" and sh.ysizemode == "pixel"
+    ]
+    if not key_top:
+        return
+    for ann in fig.layout.annotations or ():
+        if ann.name == _ILLUSTRATION_LABEL_NAME:
+            ann.yshift = max(key_top) + 4.0
 
 
 def _add_duration_size_key(
@@ -1010,6 +1033,7 @@ def _add_duration_size_key(
             font=dict(size=10, color="#444444", family=font_family or FONT_FAMILY),
             name=_SIZE_KEY_NAME,
         )
+    _stack_bottom_right(fig)
 
 
 # VIZ-9 "linear reading" mode: draw saccades as upward arcs instead of straight
@@ -2793,7 +2817,9 @@ def add_illustration_label(fig: go.Figure, reasons: Sequence[str] | None) -> go.
         font=dict(size=10, color="#5f6368"),
         bgcolor="rgba(255,255,255,0.82)",
         borderpad=3,
+        name=_ILLUSTRATION_LABEL_NAME,
     )
+    _stack_bottom_right(fig)
     metadata = dict(fig.layout.meta or {})
     metadata["illustration"] = True
     metadata["illustration_reasons"] = reasons

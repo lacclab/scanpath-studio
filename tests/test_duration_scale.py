@@ -359,6 +359,34 @@ def test_the_key_is_on_every_fixed_scale_figure_and_toggles(sample, contrasting_
     assert not _key_labels(split)
 
 
+def _illustration_stamp(fig):
+    (stamp,) = [a for a in fig.layout.annotations if a.name == "illustration_label"]
+    return stamp
+
+
+def test_the_illustration_stamp_sits_above_the_key(sample, contrasting_trials):
+    from scanpath_studio.plots import _add_duration_size_key, add_illustration_label
+
+    words, fixations = sample
+    pid, tid = contrasting_trials[0]
+    key_top = HI_SIZE + 8 + 16  # pad + label row + the largest circle
+
+    # Key first, stamp after.
+    fig = sps.plot_scanpath(words, fixations, pid, tid)
+    assert _key_labels(fig)
+    add_illustration_label(fig, ["schematic"])
+    assert _illustration_stamp(fig).yshift >= key_top
+
+    # Stamp first, key after (the app's replay order).
+    fig = sps.plot_scanpath(words, fixations, pid, tid, duration_size_legend=False)
+    add_illustration_label(fig, ["schematic"])
+    assert not _illustration_stamp(fig).yshift
+    _add_duration_size_key(
+        fig, DEFAULT_MARKER_SIZE_RANGE, "sqrt", DEFAULT_MARKER_DURATION_RANGE
+    )
+    assert _illustration_stamp(fig).yshift >= key_top
+
+
 # ---------------------------------------------------------------------------
 # Saved settings files and Share links
 # ---------------------------------------------------------------------------

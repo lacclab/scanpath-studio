@@ -12744,9 +12744,23 @@ def _apply_remap() -> None:
         if frame is None or frame.empty or table_key not in pending:
             continue
         schema = pending[table_key]
-        new_entry[table_key] = remap_normalized_frame(
-            frame, schema, kind=table_key, repeat_of=repeat_of
-        )
+        try:
+            new_entry[table_key] = remap_normalized_frame(
+                frame, schema, kind=table_key, repeat_of=repeat_of
+            )
+        except Exception as exc:
+            # A complete mapping the data does not fit (a Screen ID that maps
+            # to two screen orders in one trial, say). Reported on the screen
+            # like the added tables' failures below, never raised from this
+            # `on_click`; nothing is saved — `new_entry` is only written back
+            # at the end, so the tables remapped before this one stay as they
+            # were too — and the draft stays open to be corrected.
+            from scanpath_studio.app import mapping_failure_problem
+
+            st.session_state["_remap_problems"] = {
+                table_key: [mapping_failure_problem(exc)]
+            }
+            return
         new_schemas[table_key] = schema
         earlier = ColumnNames.from_payload(new_names.get(table_key))
         recipe_schemas[table_key], missing = source_schema(schema, earlier)
@@ -13198,7 +13212,10 @@ def _render_remap_fields(
             state_key_prefix=prefixes[table_key],
             field_specs=specs_by_table[table_key],
             proposed=proposals[table_key],
-            problems=problems.get(table_key),
+            # What blocked the last Save is listed once per table above
+            # ✅ Save changes (`render_dataset_editor_footer`); handed to every
+            # one-field cell here, it printed the same warning in each of them.
+            problems=None,
             container=host,
             use_expander=False,
             only_keys=[field],

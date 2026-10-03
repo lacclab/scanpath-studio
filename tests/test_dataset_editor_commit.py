@@ -162,3 +162,121 @@ class TestCancelledMappingDoesNotReturn:
         _close_and_reopen(at)
         touched = at.session_state[TOUCHED_FIELDS_KEY]
         assert not any(str(key).startswith("remap_") for key in touched)
+
+
+def _invalid_mapping_app() -> None:
+    import pandas as pd
+    import streamlit as st
+
+    from scanpath_studio.data import normalize_fixations, normalize_words
+    from scanpath_studio.tabs import _apply_remap, render_dataset_editor_footer
+
+    if "_datasets" not in st.session_state:
+        fix_raw = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1"],
+                "trial_id": ["t1", "t1"],
+                "screen_id": ["a", "b"],
+                "screen_index": [1, 2],
+                "block": ["same", "same"],
+                "x": [10, 20],
+                "y": [20, 30],
+                "duration_ms": [200, 250],
+            }
+        )
+        fix_schema = {
+            "participant": "participant_id",
+            "trial": "trial_id",
+            "screen_id": "screen_id",
+            "screen_index": "screen_index",
+            "x": "x",
+            "y": "y",
+            "duration": "duration_ms",
+        }
+        word_raw = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1"],
+                "trial_id": ["t1", "t1"],
+                "screen_id": ["a", "b"],
+                "screen_index": [1, 2],
+                "word_id": [1, 2],
+                "text": ["Hi", "there"],
+                "alt_text": ["Yo", "you"],
+                "x": [0.0, 50.0],
+                "y": [0.0, 0.0],
+                "width": [40.0, 40.0],
+                "height": [20.0, 20.0],
+            }
+        )
+        word_schema = {
+            "participant": "participant_id",
+            "trial": "trial_id",
+            "screen_id": "screen_id",
+            "screen_index": "screen_index",
+            "word_id": "word_id",
+            "text": "text",
+            "x": "x",
+            "y": "y",
+            "width": "width",
+            "height": "height",
+        }
+        st.session_state["_datasets"] = {
+            "Probe": {
+                "fixations": normalize_fixations(
+                    fix_raw, fix_schema, keep_columns={"block"}
+                ),
+                "words": normalize_words(
+                    word_raw, word_schema, keep_columns={"alt_text"}
+                ),
+                "schemas": {"fixations": fix_schema, "words": word_schema},
+            }
+        }
+        st.session_state["data_source_choice"] = "Probe"
+        st.session_state["fix_schema"] = fix_schema
+        st.session_state["word_schema"] = word_schema
+    st.session_state["_remap_pending_schemas"] = {
+        "words": {**st.session_state["word_schema"], "text": "alt_text"},
+        "fixations": {
+            **st.session_state["fix_schema"],
+            "screen_id": st.session_state.get("screen_pick", "block"),
+        },
+    }
+    st.button("Save", on_click=_apply_remap)
+    render_dataset_editor_footer(st.container())
+
+
+class TestAnInvalidStoredMappingIsReportedNotRaised:
+    def test_the_failure_is_an_editor_problem_and_nothing_is_saved(self):
+        at = AppTest.from_function(_invalid_mapping_app).run()
+        at.button[0].click().run()
+        assert not at.exception
+        problems = at.session_state["_remap_problems"]
+        assert list(problems) == ["fixations"]
+        assert "screen_index" in problems["fixations"][0]
+        # Shown at the foot of the editor, named after its table.
+        assert any(
+            "Fixations" in error.value and "screen_index" in error.value
+            for error in at.error
+        )
+        stored = at.session_state["_datasets"]["Probe"]
+        assert stored["fixations"]["screen_id"].tolist() == ["a", "b"]
+        # The AOI table remapped before it is not committed either.
+        assert stored["words"]["text"].tolist() == ["Hi", "there"]
+
+    def test_a_blocked_save_is_not_repeated_in_every_field(self):
+        at = AppTest.from_function(_editor_app).run()
+        at.selectbox(key="remap_Probe_fixations_x").set_value(None).run()
+        at.button[2].click().run()
+        assert at.session_state["_remap_problems"]["fixations"]
+        assert not any("Fix these" in warning.value for warning in at.warning)
+
+    def test_a_corrected_mapping_then_saves(self):
+        at = AppTest.from_function(_invalid_mapping_app).run()
+        at.button[0].click().run()
+        at.session_state["screen_pick"] = "screen_id"
+        at.run()
+        at.button[0].click().run()
+        assert not at.exception
+        assert "_remap_problems" not in at.session_state
+        stored = at.session_state["_datasets"]["Probe"]
+        assert stored["words"]["text"].tolist() == ["Yo", "you"]

@@ -9005,11 +9005,38 @@ def _participant_picker(words, fixations, *, key, host=None, label="Reader"):
     return None
 
 
-def _percentile(series: pd.Series, value) -> float | None:
-    s = pd.to_numeric(series, errors="coerce").dropna()
-    if s.empty or value is None or pd.isna(value):
-        return None
-    return float((s < value).mean() * 100.0)
+def _percentile_among_others(
+    cohort: pd.DataFrame, participant_id, column: str, value
+) -> tuple[float | None, int]:
+    """Where ``value`` falls among the *other* readers' values of ``column``.
+
+    Returns ``(percentile, n)``: the share (0–100) of the other readers with a
+    value for this measure whose value is lower, and how many such readers
+    there are. The selected reader is left out, so with nobody else to compare
+    against the percentile is ``None`` (``n == 0``) rather than a rank against
+    themselves.
+    """
+    if (
+        cohort is None
+        or column not in getattr(cohort, "columns", [])
+        or "participant_id" not in cohort.columns
+    ):
+        return None, 0
+    others = cohort.loc[
+        cohort["participant_id"].astype(str) != str(participant_id), column
+    ]
+    others = pd.to_numeric(others, errors="coerce").dropna()
+    if others.empty or value is None or pd.isna(value):
+        return None, int(others.size)
+    return float((others < value).mean() * 100.0), int(others.size)
+
+
+def _ordinal(number: int) -> str:
+    """``1`` → ``1st``, ``12`` → ``12th``, ``22`` → ``22nd``."""
+    if 10 <= number % 100 <= 20:
+        return f"{number}th"
+    suffix = {1: "st", 2: "nd", 3: "rd"}.get(number % 10, "th")
+    return f"{number}{suffix}"
 
 
 def render_per_text_tab(
@@ -9470,21 +9497,23 @@ def render_per_reader_tab(
         cols = st.columns(len(present)) if present else []
         for col, (skey, label, fmt, icon) in zip(cols, present):
             value = summary.get(skey)
-            pct = (
-                _percentile(cohort[skey], value)
-                if skey in getattr(cohort, "columns", [])
-                else None
-            )
+            pct, n_others = _percentile_among_others(cohort, pid, skey, value)
             col.metric(
                 label,
                 fmt.format(value) if value is not None else "—",
-                delta=(f"{pct:.0f}th pct" if pct is not None else None),
+                delta=(
+                    f"{_ordinal(round(pct))} pct of {n_others}"
+                    if pct is not None
+                    else None
+                ),
                 delta_color="off",
                 icon=icon,
             )
         st.caption(
-            f"Reader **{pid}** vs the {max(len(cohort) - 1, 0)} other readers "
-            "in scope (percentiles)."
+            f"Reader **{pid}** vs the other readers in scope: each percentile is "
+            "the share of the other readers with a value for that measure who "
+            "are lower, out of the number shown. None is shown when no other "
+            "reader has a value."
         )
         trials = _c_trial_summary(
             words_filtered,

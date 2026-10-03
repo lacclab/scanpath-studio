@@ -1518,3 +1518,45 @@ def test_cohort_word_comparisons_share_one_screen():
         words, "text_id", "text", tfd, a, b, screen_id="page2"
     )
     assert profiles[["group", "value"]].values.tolist() == [["Group B", 700.0]]
+
+
+class TestReaderPercentileAmongOthers:
+    """Reading summary says "vs the other readers", so the selected reader is
+    not part of the population it is ranked in."""
+
+    cohort = pd.DataFrame(
+        {"participant_id": ["p1", "p2", "p3"], "wpm": [100.0, 200.0, np.nan]}
+    )
+
+    def test_the_selected_reader_is_left_out(self):
+        from scanpath_studio.tabs import _percentile_among_others
+
+        # p2 against p1 alone: everyone else is lower → 100th, out of 1.
+        assert _percentile_among_others(self.cohort, "p2", "wpm", 200.0) == (100.0, 1)
+        assert _percentile_among_others(self.cohort, "p1", "wpm", 100.0) == (0.0, 1)
+
+    def test_no_other_reader_with_a_value_means_no_percentile(self):
+        from scanpath_studio.tabs import _percentile_among_others
+
+        alone = self.cohort[self.cohort["participant_id"] == "p1"]
+        assert _percentile_among_others(alone, "p1", "wpm", 100.0) == (None, 0)
+        # p3 is in scope but has no value for this measure, so it is not counted.
+        no_value = self.cohort[self.cohort["participant_id"] != "p2"]
+        assert _percentile_among_others(no_value, "p1", "wpm", 100.0) == (None, 0)
+
+    def test_ordinals(self):
+        from scanpath_studio.tabs import _ordinal
+
+        numbers = (0, 1, 2, 3, 11, 12, 13, 21, 22, 100)
+        assert [_ordinal(n) for n in numbers] == [
+            "0th",
+            "1st",
+            "2nd",
+            "3rd",
+            "11th",
+            "12th",
+            "13th",
+            "21st",
+            "22nd",
+            "100th",
+        ]

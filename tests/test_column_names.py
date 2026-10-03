@@ -431,3 +431,55 @@ def test_a_measure_cleared_on_edit_dataset_loses_its_name():
     assert "total_fixation_duration_ms" not in saved["words"].columns
     words = ColumnNames.from_payload(saved["column_names"]["words"])
     assert words.source("total_fixation_duration_ms") is None
+
+
+class TestLabels:
+    NAMES = ColumnNames(
+        {
+            "duration_ms": SourceName(("CURRENT_FIX_DURATION",)),
+            "trial_id": SourceName(("TRIAL",)),
+            "unique_trial_id": SourceName(("TRIAL",)),
+            "fixation_id": SourceName((), cn.GENERATED, "1, 2, …"),
+        }
+    )
+
+    def test_a_mapped_column_is_labelled_by_its_source(self):
+        assert self.NAMES.label("duration_ms") == "CURRENT_FIX_DURATION"
+
+    def test_an_app_made_column_says_so(self):
+        assert self.NAMES.label("is_regression") == "Regression (computed)"
+        assert self.NAMES.label("fixation_id").endswith(cn.COMPUTED_SUFFIX)
+
+    def test_a_reading_measure_takes_its_full_name(self):
+        assert cn.canonical_label("total_fixation_duration_ms") != (
+            "total_fixation_duration_ms"
+        )
+
+    def test_a_carried_column_keeps_its_name(self):
+        assert self.NAMES.label("gpt2_surprisal") == "gpt2_surprisal"
+
+    def test_option_labels_are_unique(self):
+        labels = self.NAMES.option_labels(["trial_id", "unique_trial_id"])
+        assert len(set(labels.values())) == 2
+        assert labels["trial_id"].startswith("TRIAL")
+
+    def test_the_users_columns_come_first_and_computed_last(self):
+        ordered = self.NAMES.sort_options(
+            ["is_regression", "(uniform)", "duration_ms", "gpt2_surprisal"],
+            first=("(uniform)",),
+        )
+        assert ordered == [
+            "(uniform)",
+            "duration_ms",
+            "gpt2_surprisal",
+            "is_regression",
+        ]
+
+    def test_merged_prefers_its_own_entries(self):
+        words = ColumnNames({"duration_ms": SourceName(("OTHER",))})
+        assert self.NAMES.merged(words).label("duration_ms") == "CURRENT_FIX_DURATION"
+
+    def test_active_reads_the_session(self):
+        session = {cn.ACTIVE_COLUMN_NAMES_KEY: {"fixations": self.NAMES.to_payload()}}
+        assert cn.active(session, "fixations") == self.NAMES
+        assert cn.active({}, "fixations") == cn.EMPTY

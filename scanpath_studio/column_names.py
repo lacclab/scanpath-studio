@@ -79,6 +79,69 @@ COMPUTED_COLUMNS: frozenset[str] = frozenset(
     }
 )
 
+#: What marks a column the app made, wherever a column is named on screen.
+#: Text, not an icon: option labels cannot carry a Material icon, and literal
+#: emoji are kept out of chrome (`tests/test_icons.py`).
+COMPUTED_SUFFIX = " (computed)"
+
+#: Where the open dataset's map lives in session state (stashed by
+#: `app._stash_active_mapping`), one payload per table.
+ACTIVE_COLUMN_NAMES_KEY = "_active_column_names"
+
+#: Curated labels for columns the app makes. A reading measure's comes from
+#: `data.READING_MEASURE_FIELDS` (its full name) — see `canonical_label`.
+_CANONICAL_LABELS: dict[str, str] = {
+    "order_in_trial": "Fixation order",
+    "order_in_screen": "Fixation order on screen",
+    "fixation_id": "Fixation #",
+    "timestamp_ms": "Time (ms)",
+    "participant_id": "Participant",
+    "text_id": "Text",
+    "line_idx": "Line",
+    "text": "Word",
+    "word_id": "Word #",
+    "x": "X",
+    "y": "Y",
+    "saccade_amplitude": "Saccade amplitude (px)",
+    "angle_incoming": "Incoming angle",
+    "angle_outgoing": "Outgoing angle",
+    "progression": "Progression",
+    "is_regression": "Regression",
+    "right_to_left": "Right to left",
+    "first_fix_x": "First fixation X",
+    "first_fix_y": "First fixation Y",
+    "gaze_duration_ms": "Gaze duration (ms)",
+    "run": "Run",
+    "linerun": "Line run",
+    "word_runid": "Word run id",
+    "word_run": "Word run",
+    "word_run_fix": "Fixation in word run",
+    "nrun": "Runs on word",
+    "reread": "Reread",
+    "excluded": "Excluded",
+    "excluded_reason": "Excluded because",
+    "blink_before": "Blink before",
+    "blink_after": "Blink after",
+    "original_duration_ms": "Original duration (ms)",
+    "y_original": "Y before correction",
+    "y_correction": "Y correction",
+    "alignment_agreement": "Line agreement",
+}
+
+
+def canonical_label(column) -> str:
+    """A readable label for a column the app made (a measure, a run, an angle …)."""
+    from .data import READING_MEASURE_FIELDS
+
+    column = str(column)
+    for _key, canonical, _short, full, *_ in READING_MEASURE_FIELDS:
+        if canonical == column:
+            return str(full)
+    if column in _CANONICAL_LABELS:
+        return _CANONICAL_LABELS[column]
+    text = column.replace("_", " ").strip()
+    return text[:1].upper() + text[1:]
+
 
 @dataclass(frozen=True)
 class SourceName:
@@ -147,6 +210,57 @@ class ColumnNames:
             out.setdefault(column, entry)
         return ColumnNames(out)
 
+    def label(self, column) -> str:
+        """What a person is shown for ``column`` (DATA-66 phase 2).
+
+        The user's own name when the column was read from their files; a
+        curated label marked :data:`COMPUTED_SUFFIX` when the app made it; else
+        the column's own name.
+        """
+        entry = self.source(column)
+        kind = self.kind_of(column)
+        if (
+            entry is not None
+            and entry.sources
+            and kind in (MAPPED, COMPOSITE, CONVERTED)
+        ):
+            return entry.display
+        if kind in (COMPUTED, GENERATED):
+            return canonical_label(column) + COMPUTED_SUFFIX
+        return str(column)
+
+    def merged(self, other: ColumnNames) -> ColumnNames:
+        """Both tables' entries, this map's winning where both name a column."""
+        return ColumnNames({**dict(other.entries), **dict(self.entries)})
+
+    def option_labels(self, options, extra: Mapping | None = None) -> dict[str, str]:
+        """``{option: label}`` for a picker; ``extra`` labels synthetic options
+        (``"(uniform)"``, ``"line"``). A label two options share gets the
+        internal name added, so a picker never shows two identical rows."""
+        extra = dict(extra or {})
+        labels = {o: extra.get(o) or self.label(o) for o in options}
+        counts: dict[str, int] = {}
+        for value in labels.values():
+            counts[value] = counts.get(value, 0) + 1
+        return {
+            o: f"{label} · {o}" if counts[label] > 1 and label != str(o) else label
+            for o, label in labels.items()
+        }
+
+    def sort_options(self, options, first=()) -> list:
+        """The user's columns first, the app's last; ``first`` stays in front.
+
+        Stable within each group, so a curated order survives."""
+        options = list(options)
+        head = [o for o in options if o in first]
+        rest = [o for o in options if o not in first]
+        made = (COMPUTED, GENERATED)
+        return (
+            head
+            + [o for o in rest if self.kind_of(o) not in made]
+            + [o for o in rest if self.kind_of(o) in made]
+        )
+
     def restricted_to(self, columns: Iterable[str]) -> ColumnNames:
         """Only the entries for ``columns`` — a frame's actual columns.
 
@@ -185,6 +299,16 @@ class ColumnNames:
 
 
 EMPTY = ColumnNames({})
+
+
+def active(session: Mapping, table: str) -> ColumnNames:
+    """The open dataset's map for ``table``, read from a session mapping.
+
+    Takes the session as an argument so this module stays free of Streamlit;
+    callers pass ``st.session_state``.
+    """
+    stash = session.get(ACTIVE_COLUMN_NAMES_KEY) or {}
+    return ColumnNames.from_payload(stash.get(table))
 
 
 #: Mapped screen fields: schema key → canonical column (`data._copy_screen_fields`).

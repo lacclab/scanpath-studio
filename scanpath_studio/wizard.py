@@ -2210,8 +2210,8 @@ def _wizard_setup_step(
                     f"↻ Use the current estimate ({est_w} × {est_h} px)",
                     key=f"{key_prefix}_setup_reestimate_btn",
                     on_click=lambda: st.session_state.__setitem__(reestimate_key, True),
-                    help="Re-estimate the screen from this dataset's data as it "
-                    "is stored now. Nothing changes until you save.",
+                    help="Re-estimate the screen from this dataset's data as "
+                    "mapped above. Nothing changes until you save.",
                 )
         else:
             canvas_w, canvas_h = est_w, est_h

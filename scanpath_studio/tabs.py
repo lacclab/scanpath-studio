@@ -13291,6 +13291,50 @@ def _render_remap_fields(
     return pending
 
 
+def _pending_canvas_estimate(
+    stored: dict, pending: dict, added: dict
+) -> tuple[int, int]:
+    """*Estimate from my data* on ✏️ Edit dataset: the screen the data **as it
+    will be saved** needs — the pending mapping over the stored frames, and a
+    table being added in place of the one the dataset lacks.
+
+    The stored frames' own ``x``/``y`` are the *old* mapping's; estimating from
+    them and saving a new coordinate column beside it stored a screen that did
+    not hold the data saved with it. A dataset can only add a table it has
+    none of, so each table comes from exactly one place. Reuses the add
+    screen's cached estimate (`wizard._c_estimate_canvas`), which projects just
+    the mapped geometry columns rather than normalizing anything.
+    """
+    from scanpath_studio.wizard import (
+        _FIX_GEOMETRY_FIELDS,
+        _WORD_GEOMETRY_FIELDS,
+        _c_estimate_canvas,
+        _geometry_key,
+    )
+
+    frames: dict = {}
+    for table in ("words", "fixations"):
+        frame = added.get(table)
+        if not isinstance(frame, pd.DataFrame) or frame.empty:
+            frame = stored.get(table)
+        if isinstance(frame, pd.DataFrame) and not frame.empty and pending.get(table):
+            frames[table] = frame
+    words, fixations = frames.get("words"), frames.get("fixations")
+    word_schema = pending.get("words") if words is not None else None
+    fix_schema = pending.get("fixations") if fixations is not None else None
+    return _c_estimate_canvas(
+        words,
+        word_schema,
+        fixations,
+        fix_schema,
+        (frame_fingerprint(words), frame_fingerprint(fixations)),
+        (
+            _geometry_key(word_schema, _WORD_GEOMETRY_FIELDS),
+            _geometry_key(fix_schema, _FIX_GEOMETRY_FIELDS),
+        ),
+    )
+
+
 def _render_remap_editor(
     name: str, stored: dict, uploads_host=None, setup_host=None
 ) -> None:
@@ -13369,6 +13413,7 @@ def _render_remap_editor(
         key_prefix=f"edit_{name}",
         initial=initial_setup,
         publish=False,
+        estimate=partial(_pending_canvas_estimate, stored, pending, added or {}),
     )
     st.session_state["_remap_pending_setup"] = setup.to_dict()
     # UX-107 — is there anything to lose by leaving? A table uploaded here is

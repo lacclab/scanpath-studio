@@ -1368,3 +1368,40 @@ class TestLegacyStoredRepeats:
             for (reader, trial), text in expected.items():
                 got = extract_trial(entry["words"], reader, trial)["text"].tolist()
                 assert got == text, (fix_pick, reader, trial, got)
+
+
+class TestEditorEstimateUsesPendingMapping:
+    """*Estimate from my data* on ✏️ Edit dataset measures the data as it will
+    be **saved** — the pending mapping, and a table being added — not the
+    stored frame's old coordinates."""
+
+    def test_a_remapped_coordinate_is_what_the_estimate_encloses(self):
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_function(_setup_file_editor_app, default_timeout=30)
+        at.run()
+        at.selectbox(key="remap_Lab_fixations_x").set_value("alt_x").run()
+        at.radio(key="edit_Lab_setup_screen_mode").set_value(
+            "Estimate from my data"
+        ).run()
+        assert not at.exception, at.exception
+        # The old X reaches 100 and the boxes 130; the new X reaches 444.
+        assert at.session_state["_remap_pending_setup"]["canvas_width"] == 500
+
+    def test_a_table_being_added_counts_towards_the_estimate(self):
+        from scanpath_studio.tabs import _pending_canvas_estimate
+
+        _raw_words, raw_fix = _setup_file_raw_tables()
+        stored = {"fixations": normalize_fixations(raw_fix, _SETUP_FIX_SCHEMA)}
+        added_words = pd.DataFrame(
+            {"item": ["i1"], "L": [1000.0], "R": [1450.0], "T": [900.0], "B": [950.0]}
+        )
+        pending = {
+            "fixations": {"x": "x", "y": "y"},
+            "words": {"left": "L", "right": "R", "top": "T", "bottom": "B"},
+        }
+        assert _pending_canvas_estimate(stored, pending, {}) == (100, 100)
+        assert _pending_canvas_estimate(stored, pending, {"words": added_words}) == (
+            1500,
+            1000,
+        )

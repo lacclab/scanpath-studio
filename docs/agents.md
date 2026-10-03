@@ -192,7 +192,8 @@ accept it: the [figure options table](api.md#figure-options), or
 `api.figure_options(kind)` at runtime. The option *values* below are the ones
 neither reference spells out.
 
-`color_by` is a *fixation column name* (`"duration_ms"`, `"pass_index"`, …),
+`color_by` is a *fixation column name* (`"duration_ms"`, `"pass_index"`, a
+pupil size you kept with `load_scanpath_data(keep_columns=[…])`, …),
 the sentinel `"(uniform)"` for one flat colour, or `"line"` to colour each
 fixation by the text line it lands on (the lines are inferred from word-box
 geometry); a name the frame doesn't have raises a `ValueError` naming the

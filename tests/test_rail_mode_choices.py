@@ -408,3 +408,153 @@ def test_a_numeric_colour_bar_survives_the_heart():
     bars = [t for t in fig.data if t.marker is not None and t.marker.showscale]
     assert len(bars) == 1
     assert (bars[0].marker.cmin, bars[0].marker.cmax) == (100.0, 300.0)
+
+
+# --- Color by offers the dataset's other numeric columns ----------------------
+
+
+def test_color_by_offers_retained_numeric_columns_after_the_familiar_ones():
+    from scanpath_studio.controls import color_field_options
+
+    _, fixations = _frames()
+    fixations = fixations.assign(saccade_ok=True, label=["a", "b", "c", "d"])
+    options = color_field_options(fixations)
+    assert options.index("pupil_size") > options.index("timestamp_ms")
+    # Identifiers, positions, flags and text are not colour scales.
+    for column in ("x", "y", "fixation_id", "saccade_ok", "label"):
+        assert column not in options
+    # Bookkeeping never shows (DATA-49).
+    assert "_timestamp_synthesized" not in color_field_options(
+        fixations.assign(_timestamp_synthesized=False)
+    )
+
+
+def test_the_rail_offers_and_draws_a_retained_column_by_its_own_name():
+    from scanpath_studio import column_names as cn
+
+    names = cn.ColumnNames({"pupil_size": cn.SourceName(("PUPIL_DIAMETER",))})
+    at = _rail(
+        **{
+            cn.ACTIVE_COLUMN_NAMES_KEY: {"fixations": names.to_payload()},
+            "global_color_by": "pupil_size",
+        }
+    )
+    picker = at.selectbox(key="global_color_by")
+    assert "PUPIL_DIAMETER" in picker.options
+    assert picker.value == "pupil_size"
+    static = next(t for t in _static(at).data if t.name == "Fixations")
+    assert list(static.marker.color) == [2.1, 2.2, 2.3, 2.4]
+    assert static.marker.colorscale
+
+
+def _share_app():
+    """The rail over the demo with a retained `pupil_size`, then its Share link."""
+    from urllib.parse import parse_qs
+
+    import streamlit as st
+
+    from scanpath_studio import api, controls
+    from scanpath_studio.constants import DEMO_CHOICE
+    from scanpath_studio.url_state import _apply_url_preset, _build_share_query
+
+    _apply_url_preset()
+    words, fixations = api.load_sample_data()
+    fixations = fixations.assign(pupil_size=fixations["duration_ms"] / 100.0)
+    pid, tid = fixations.iloc[0][["participant_id", "trial_id"]]
+    trial_fix = fixations[
+        (fixations["participant_id"] == pid) & (fixations["trial_id"] == tid)
+    ]
+    st.session_state["_viz"] = controls.render_plot_controls(
+        fixations, 16, words=words, fix_range_fixations=trial_fix
+    )
+    st.session_state["_share_selection"] = {"participant_id": pid, "trial_id": tid}
+    query, _caveats = _build_share_query(DEMO_CHOICE)
+    st.session_state["_params"] = parse_qs(query)
+
+
+def test_a_retained_colour_column_round_trips_a_share_link():
+    at = AppTest.from_function(_share_app)
+    at.session_state["global_color_by"] = "pupil_size"
+    at.run(timeout=60)
+    assert not at.exception, at.exception
+    params = at.session_state["_params"]
+    assert params["color_by"] == ["pupil_size"]
+
+    opened = AppTest.from_function(_share_app)
+    for key, values in params.items():
+        opened.query_params[key] = values
+    opened.run(timeout=60)
+    assert not opened.exception, opened.exception
+    assert opened.session_state["global_color_by"] == "pupil_size"
+    assert opened.session_state["_viz"]["color_by"] == "pupil_size"
+
+
+def _write_tables(tmp_path):
+    words, fixations = _frames()
+    words_csv, fixations_csv = tmp_path / "words.csv", tmp_path / "fixations.csv"
+    words.to_csv(words_csv, index=False)
+    fixations.to_csv(fixations_csv, index=False)
+    return str(words_csv), str(fixations_csv)
+
+
+def test_the_api_cli_and_snippet_colour_by_a_retained_column(tmp_path, monkeypatch):
+    from scanpath_studio import api, cli
+    from scanpath_studio import code_snippet as cs
+
+    monkeypatch.chdir(tmp_path)  # the snippet saves its figure where it runs
+    words_csv, fixations_csv = _write_tables(tmp_path)
+    # Normalization drops a column it doesn't recognise unless told to keep it.
+    _, dropped = api.load_scanpath_data(words=words_csv, fixations=fixations_csv)
+    assert "pupil_size" not in dropped.columns
+    words, fixations = api.load_scanpath_data(
+        words=words_csv, fixations=fixations_csv, keep_columns=["pupil_size"]
+    )
+    assert "eye" in fixations.columns  # the recognised fields still come along
+    fig = api.plot_scanpath(words, fixations, color_by="pupil_size")
+    marker = next(t for t in fig.data if t.name == "Fixations").marker
+    assert list(marker.color) == [2.1, 2.2, 2.3, 2.4]
+
+    source = cs.SnippetSource(
+        kind=cs.SOURCE_FILES,
+        options={"words": [words_csv], "fixations": [fixations_csv]},
+    )
+    state = cs.FigureState(
+        kind="static",
+        settings={**api.figure_options("static"), "color_by": "pupil_size"},
+        participant="p",
+        trial="t",
+    )
+    code = cs.reproduction_code(source, state)
+    namespace: dict = {}
+    exec(compile(code.python, "<snippet>", "exec"), namespace)  # noqa: S102
+    snippet_marker = next(
+        t for t in namespace["fig"].data if t.name == "Fixations"
+    ).marker
+    assert list(snippet_marker.color) == [2.1, 2.2, 2.3, 2.4]
+    command = code.cli.replace(" \\\n ", " ")
+    assert "--color-by pupil_size" in command
+    assert "--keep-columns pupil_size" in command
+    assert not code.cli_unsupported
+
+    rendered = []
+    monkeypatch.setattr(
+        api, "save_figure", lambda fig, path, **_kw: rendered.append(fig)
+    )
+    cli.main(
+        [
+            "render",
+            "--words",
+            words_csv,
+            "--fixations",
+            fixations_csv,
+            "--keep-columns",
+            "pupil_size",
+            "--color-by",
+            "pupil_size",
+            "-o",
+            str(tmp_path / "out.html"),
+        ]
+    )
+    (cli_fig,) = rendered
+    cli_marker = next(t for t in cli_fig.data if t.name == "Fixations").marker
+    assert list(cli_marker.color) == [2.1, 2.2, 2.3, 2.4]

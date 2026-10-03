@@ -107,7 +107,8 @@ _SCHEMA_FLAGS = {
 
 
 def _add_schema_flags(group) -> None:
-    """``--word-schema`` / ``--fix-schema`` on ``render`` and ``analyze``."""
+    """``--word-schema`` / ``--fix-schema`` / ``--keep-columns`` on ``render``
+    and ``analyze`` — the loader's own options."""
     for flag, table in (("--word-schema", "--words"), ("--fix-schema", "--fixations")):
         group.add_argument(
             flag,
@@ -119,6 +120,17 @@ def _add_schema_flags(group) -> None:
             "api.load_scanpath_data takes. Needed only when a column isn't "
             "recognised; the error then prints a mapping to start from.",
         )
+    group.add_argument(
+        "--keep-columns",
+        nargs="+",
+        metavar="COLUMN",
+        default=None,
+        help="Further columns of your own to carry through loading under their "
+        "own names (e.g. a pupil size), from whichever table has them — "
+        "normalization keeps only the mapped and recognised fields otherwise. "
+        "A kept fixation column can then be --color-by, an axis or a hover "
+        "field. The keep_columns= of api.load_scanpath_data.",
+    )
 
 
 def _parse_schema_arg(value: str | None, flag: str) -> dict | None:
@@ -2397,6 +2409,7 @@ def render(argv: list[str]) -> None:
                     image_root=args.image_root,
                     image_pattern=args.image_pattern,
                     trial_parts_manifest=manifest,
+                    keep_columns=args.keep_columns,
                 )
             except (ValueError, OSError) as exc:
                 raise SystemExit(_load_error_message(exc)) from exc
@@ -3230,6 +3243,7 @@ def analyze(argv: list[str]) -> None:
             word_schema=word_schema,
             fix_schema=fix_schema,
             trial_parts_manifest=manifest,
+            keep_columns=args.keep_columns,
         )
     except (ValueError, OSError) as exc:
         raise SystemExit(_load_error_message(exc)) from exc

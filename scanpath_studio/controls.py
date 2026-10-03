@@ -3274,9 +3274,30 @@ def _emit_field_tints(tint_cells: dict[str, list[str]]) -> None:
 # Field-option helpers — shared by the rail's selectors and the plot-config
 # restore path (`app._restore_plot_config`) so both agree on what's valid for
 # the current data.
+#: Numeric fixation columns 'Color fixations by' never offers on its own:
+#: identifiers and on-screen geometry, which say *which* fixation or *where* —
+#: the figure already shows both — not something about it.
+_COLOR_BY_EXCLUDED = frozenset(
+    {
+        "participant_id",
+        "trial_id",
+        "text_id",
+        "screen_id",
+        "screen_index",
+        "fixation_id",
+        "screen_fixation_id",
+        "x",
+        "y",
+        "canvas_width",
+        "canvas_height",
+    }
+)
+
+
 def color_field_options(trial_fixations: pd.DataFrame) -> list[str]:
-    """Columns offered in the 'Color fixations by' selector — a preferred order
-    intersected with what's present, falling back to ``['duration_ms']``."""
+    """Columns offered in the 'Color fixations by' selector — the familiar fields
+    in a preferred order, then the dataset's other numeric columns, falling back
+    to ``['duration_ms']``."""
     preferred_color_fields = [
         "duration_ms",
         "pass_index",
@@ -3298,6 +3319,19 @@ def color_field_options(trial_fixations: pd.DataFrame) -> list[str]:
         "ptb_pos",
     ]
     fields = [f for f in preferred_color_fields if f in trial_fixations.columns]
+    # Then every other numeric column the dataset kept (pupil size, a detection
+    # confidence, a measure of its own), as the axis and hover pickers offer
+    # them — but no identifier, no position (the plot already *is* x/y) and no
+    # bookkeeping column (`user_columns`), and no boolean: a 0–1 colorscale over
+    # a flag reads worse than the flags' own pickers.
+    fields += [
+        col
+        for col in user_columns(trial_fixations)
+        if col not in fields
+        and col not in _COLOR_BY_EXCLUDED
+        and pd.api.types.is_numeric_dtype(trial_fixations[col])
+        and not pd.api.types.is_bool_dtype(trial_fixations[col])
+    ]
     fields = fields or ["duration_ms"]
     # `(uniform)` leads and is the default (VIZ-17): marker *size* already encodes
     # duration, so mapping duration to hue as well spends the colour channel on a
@@ -5415,7 +5449,9 @@ def render_plot_controls(
             f"The metric mapped to fixation marker hue. **{UNIFORM_COLOR_FIELD}** "
             "(the default) maps nothing — marker *size* already shows fixation "
             "duration, so colour is free for a second variable — and the box "
-            "beside it is the one colour every marker wears. Pick a column, or "
+            "beside it is the one colour every marker wears. Pick a column — the "
+            "familiar fields first, then any other numeric column your data "
+            "kept, under its own name — or "
             "'line' to tint each fixation by the text line it lands on, and that "
             "box becomes its colorscale (a categorical column or 'line' takes a "
             "discrete palette instead). In Compare, animated or not, both "

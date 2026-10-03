@@ -7934,17 +7934,18 @@ def _download_tidy(
     if df is None or getattr(df, "empty", True):
         return
     context = _RECIPE_CONTEXT.get()
-    # DATA-66: the identity columns under the dataset's own names, as on screen.
-    csv = (
-        as_written(df, active_all(st.session_state)).to_csv(index=False).encode("utf-8")
-    )
+    # Written on click, not on every rerun: a words × readers table on a full
+    # corpus took most of a second to serialize. DATA-66: under the dataset's
+    # own names, as on screen — the map is read here, where the session is.
+    csv = partial(_tidy_csv, df, active_all(st.session_state))
+    button = dict(data=csv, file_name=name, mime="text/csv", key=key, on_click="ignore")
     if recipe is None or context is None:
-        host.download_button(label, data=csv, file_name=name, mime="text/csv", key=key)
+        host.download_button(label, **button)
         return
     recipe = dict(recipe)
     counts = result_counts(df, recipe.pop("counts", None))
     row = host.container(horizontal=True, gap="small")
-    row.download_button(label, data=csv, file_name=name, mime="text/csv", key=key)
+    row.download_button(label, **button)
     row.download_button(
         "⬇ Download the recipe (JSON)",
         data=partial(_recipe_json, context, recipe, name, counts),
@@ -7955,6 +7956,11 @@ def _download_tidy(
         help="How this table was made: the dataset, the trial filters, these "
         "choices and the counts. No data rows and no figure settings.",
     )
+
+
+def _tidy_csv(df: pd.DataFrame, names: ColumnNames) -> bytes:
+    """A tidy table's CSV, built when its download button is clicked."""
+    return as_written(df, names).to_csv(index=False).encode("utf-8")
 
 
 def _recipe_json(context: dict, recipe: dict, name: str, counts: dict) -> str:

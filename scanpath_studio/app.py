@@ -4197,7 +4197,10 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
         uploaded_raw_gaze = cfg.file_uploader(
             "Raw gaze table (optional)",
             type=["csv", "parquet", "feather", "zip"],
-            help="Optional: millisecond-level gaze with participant_id, trial_id, x, y.",
+            help=(
+                "Optional: one row per gaze sample with participant_id, trial_id, "
+                "x, y and, if recorded, a timestamp."
+            ),
             max_upload_size=upload_limit_mb(),
         )
         if uploaded_raw_gaze:

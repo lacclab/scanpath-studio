@@ -7,6 +7,12 @@ import re
 
 PACKAGE_NAME = "scanpath_studio"
 
+#: On raw gaze imported with no clock: each sample's position in its trial, 1,
+#: 2, … — in place of `timestamp_ms`, which such a table does not have
+#: (`data.normalize_raw_gaze`). A column the user sees and exports, the sample
+#: number, so the plot can colour by order without calling it time.
+SAMPLE_INDEX = "sample_index"
+
 
 # --- PRE-21: features that are built but not fully integrated ----------------
 # Vertical drift correction (the PRE-3 port of Carr et al. 2021) and the NLD

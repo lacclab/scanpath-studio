@@ -18,6 +18,8 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
+from .constants import SAMPLE_INDEX
+
 #: How a canonical column came to be.
 MAPPED = "mapped"  # read from one source column, unchanged
 COMPOSITE = "composite"  # several source columns joined (a composite id)
@@ -95,6 +97,7 @@ _CANONICAL_LABELS: dict[str, str] = {
     "order_in_screen": "Fixation order on screen",
     "fixation_id": "Fixation #",
     "timestamp_ms": "Time (ms)",
+    SAMPLE_INDEX: "Sample #",
     "participant_id": "Participant",
     "text_id": "Text",
     "line_idx": "Line",
@@ -636,11 +639,13 @@ def from_schema(
         for key in ("x", "y", "text", "word_id"):
             if schema.get(key):
                 out[key] = SourceName((str(schema[key]),))
-        out["timestamp_ms"] = (
-            _timed(str(schema["timestamp"]))
-            if schema.get("timestamp")
-            else SourceName((), GENERATED, "the sample's order in its trial")
-        )
+        if schema.get("timestamp"):
+            out["timestamp_ms"] = _timed(str(schema["timestamp"]))
+        else:
+            # No clock: the samples are numbered, never given a time.
+            out[SAMPLE_INDEX] = SourceName(
+                (), GENERATED, "the sample's order in its trial (no time mapped)"
+            )
     return ColumnNames(out)
 
 

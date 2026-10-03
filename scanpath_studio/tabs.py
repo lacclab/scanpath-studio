@@ -86,6 +86,7 @@ from scanpath_studio.code_snippet import (
     CompareTarget,
     FigureState,
 )
+from scanpath_studio.column_names import ColumnNames, from_schema
 from scanpath_studio.compare_source import (
     COMPARE_SOURCE_KEY,
     THIS_DATASET,
@@ -2589,14 +2590,7 @@ def _render_compare_selector(
     composite_b = (
         filter_source.composite_trial_columns if filter_source is not None else ()
     )
-    id_display, id_part_names = trial_id_layout(
-        combos,
-        composite_cols=composite_b,
-        columns=next(
-            (f.columns for f in (fixations_filtered, words_filtered) if f is not None),
-            (),
-        ),
-    )
+    id_display, id_part_names = trial_id_layout(combos, composite_cols=composite_b)
     label_to_id = {opt[2]: id_display.get(str(opt[1]), str(opt[1])) for opt in options}
     label_display = {
         opt[2]: _compare_label_display(opt[2], str(opt[1]), opt[3], id_display)
@@ -12362,6 +12356,11 @@ def _apply_remap() -> None:
 
     new_entry = dict(stored)
     new_schemas = dict(stored.get("schemas") or {})
+    # DATA-66: the save maps fields onto the stored frame's *canonical* columns;
+    # read through the dataset's earlier record, the column-name map keeps the
+    # user's names (they used to be lost here, with `schemas` overwritten by
+    # the identity).
+    new_names = dict(stored.get("column_names") or {})
     # DATA-49 — which stored trial ids are repeats of which, so a dataset
     # stored before the join recorded provenance folds a repeat's copy of the
     # boxes back into the trial it copied (`data.repeat_bases`).
@@ -12375,6 +12374,14 @@ def _apply_remap() -> None:
             frame, schema, kind=table_key, repeat_of=repeat_of
         )
         new_schemas[table_key] = schema
+        earlier = ColumnNames.from_payload(new_names.get(table_key))
+        new_names[table_key] = (
+            from_schema(table_key, schema, frame.columns)
+            .through(earlier)
+            # A field the edit cleared left the frame; its name goes with it.
+            .restricted_to(new_entry[table_key].columns)
+            .to_payload()
+        )
     # …then the added ones, which are *raw*: they take the same normalization
     # the add-dataset screen runs, and then `harmonize_frames` — the
     # cross-frame fixups (id dtypes, the BUG-8 word-id offset, AoI-only
@@ -12420,6 +12427,8 @@ def _apply_remap() -> None:
             }
             return
         new_schemas[table_key] = schema
+        # An added table is raw: its names are its own.
+        new_names[table_key] = from_schema(table_key, schema, raw.columns).to_payload()
     # DATA-39 — the same cross-frame fixups for the tables this save *remapped*,
     # which until now never got them. A remapped AOI table with no Participant
     # comes back stimulus-level (the first reader's copy of each trial, on the
@@ -12463,6 +12472,7 @@ def _apply_remap() -> None:
         if has_fixations:
             new_entry["fixations"] = fixations
     new_entry["schemas"] = new_schemas
+    new_entry["column_names"] = new_names
     # Recompute the composite trial components from the new trial mapping so the
     # cascading trial picker stays in sync (mirrors the wizard finalize).
     trial_schema = next(

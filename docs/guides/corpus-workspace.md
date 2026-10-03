@@ -15,7 +15,7 @@ view's filter panel, and **Clear** resets every filter.
 Corpus Analysis shows the reading measures your interest-area report provides
 (first fixation duration, total fixation duration, regression path, and so on).
 It does not compute them itself. An EyeLink report's `IA_*` columns are mapped
-automatically; other names can be mapped under :material/database: **Data → Edit dataset**.
+automatically; other names can be mapped under :material/database: **Data Management → Edit dataset**.
 Without any, the page says so.
 
 ## Three views

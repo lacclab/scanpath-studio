@@ -12,11 +12,12 @@ dataset and draws it; everything that decides a cell's text lives here:
 - **Sorting on the numbers, not the text.** :func:`sort_rows` orders by the
   integer value, and a missing value sorts last in either direction, so
   formatting a cell can never turn a numeric sort into a lexical one.
-- **A status of its own.** Whether a row's numbers were *loaded* (counted from
-  rows this session held) or are the corpus' *published* figures is DATA-36's
-  distinction, unchanged; the table's **Status** column says it as *Loaded* /
-  *Not loaded* (:attr:`DatasetRow.status_label`), with an operational state
-  such as *Needs setup* taking its place when there is one.
+- **A status of its own.** The **Status** column says whether the dataset can
+  be opened right now — *Ready*, *Needs download* or *Needs setup*
+  (:attr:`DatasetRow.status_label`) — and every row says it the same way,
+  whichever dataset is open (BUG-113). Where a row's numbers came from
+  (DATA-36's *loaded* vs *published*) is a different question, which the
+  count columns' header explains (:data:`COUNTS_EXPLANATION`).
 """
 
 from __future__ import annotations
@@ -71,15 +72,29 @@ _NOT_APPLICABLE_WHEN_LOADED: Mapping[str, str] = {
     "Gaze points": "This dataset has no raw-gaze samples.",
 }
 
-LOADED = "Loaded"
-NOT_LOADED_STATUS = "Not loaded"
+#: BUG-113 — the **Status** column's three values. It used to say *Loaded* /
+#: *Not loaded*, which is where the counts came from, and computed *Needs setup*
+#: for the open dataset only — so a corpus whose files had gone read *Loaded*
+#: until you opened it, and *Needs setup* the moment you did. Every row now says
+#: whether its dataset can be opened.
+READY = "Ready"
+NEEDS_DOWNLOAD = "Needs download"
+NEEDS_SETUP = "Needs setup"
 
 #: What each value of the **Status** column means, for its hover text.
 STATUS_EXPLANATIONS: Mapping[str, str] = {
-    LOADED: "Opened in this session — its counts are from its own rows.",
-    NOT_LOADED_STATUS: "Not opened in this session. Any counts shown are the "
-    "figures the corpus publishes for itself.",
+    READY: "Its data is here — bundled with the app, stored in this session, or "
+    "its files are in its folder.",
+    NEEDS_DOWNLOAD: "Its files are not in its folder yet: open it to download them.",
+    NEEDS_SETUP: "Its files were not found and there is no download: open it "
+    "and point it at the folder that holds them.",
 }
+
+#: Where a row's numbers come from (DATA-36), for the count columns' header.
+COUNTS_EXPLANATION = (
+    "Counted from a dataset's own rows once it has been opened; until then, the "
+    "figures the corpus publishes for itself."
+)
 
 #: Kind is ordered by what a row is, not alphabetically, when it is sorted.
 KIND_ORDER: tuple[str, ...] = ("Demo", "Manual", "Private", "Public")
@@ -98,9 +113,10 @@ class DatasetRow:
     ``counts`` holds only that source's numbers (a row never mixes the two).
     ``measured`` says whether the session ever counted this dataset at all,
     which is what tells *Not loaded* from *Unknown* on a row with no numbers.
-    ``status`` is an operational state (*Needs setup*), deliberately a field of
-    its own: it says what the app can do with the dataset right now, which is a
-    different question from where its numbers came from.
+    ``status`` is whether the dataset can be opened now — :data:`READY` when
+    blank, else :data:`NEEDS_DOWNLOAD` / :data:`NEEDS_SETUP` — deliberately a
+    field of its own: it says what the app can do with the dataset right now,
+    which is a different question from where its numbers came from (BUG-113).
     ``order`` is the row's place in the unsorted list, so the list returns to
     it and does not move when the open dataset changes.
     """
@@ -147,15 +163,12 @@ class DatasetRow:
 
     @property
     def status_label(self) -> str:
-        """The **Status** cell: an operational state, else *Loaded* / *Not loaded*.
+        """The **Status** cell — :data:`READY` unless a state says otherwise.
 
-        *Loaded* is DATA-36's ``"loaded"`` source — the counts were taken from
-        rows this session held. Anything else, including a row showing the
-        corpus' published figures, is *Not loaded*.
+        Never derived from :attr:`source` (BUG-113): whether the numbers were
+        counted or published says nothing about whether the files are here.
         """
-        if self.status:
-            return self.status
-        return LOADED if self.source == "loaded" else NOT_LOADED_STATUS
+        return self.status or READY
 
 
 def _text_key(row: DatasetRow, column: str) -> str | int | None:

@@ -313,10 +313,17 @@ def test_the_public_corpora_publish_figures():
 
 
 @pytest.mark.parametrize("regime", list(app.ONESTOP_REGIME_CHOICES))
-def test_a_onestop_regime_publishes_no_figure_it_cannot_vouch_for(regime):
+def test_a_onestop_regime_publishes_only_its_own_measured_figures(regime):
     """DATA-63: the corpus publishes whole-release figures, not per regime, so a
-    regime's row says *Not loaded* until it is opened rather than quoting them."""
-    assert not app.published_dataset_counts(app.ONESTOP_REGIME_CHOICES[regime])
+    regime never quotes them. DATA-65 pinned the reports, which makes a regime's
+    own count stable enough to publish: a counted regime shows exactly what was
+    measured, and one not yet counted says *Not loaded* until it is opened."""
+    published = app.published_dataset_counts(app.ONESTOP_REGIME_CHOICES[regime])
+    assert published == app._ONESTOP_REGIME_COUNTS.get(regime, {})
+    if published:
+        assert set(published) <= set(app.DATASET_COUNT_FIELDS)
+        # Never the whole release's 360 readers: each regime holds half.
+        assert published["Participants"] < 360
 
 
 class TestTheTableItself:

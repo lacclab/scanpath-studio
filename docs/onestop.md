@@ -28,7 +28,7 @@ paragraphs, each in an Advanced and an Elementary version).
 ## Loading it
 
 OneStop is exposed as **four public datasets**, one per reading regime. In the
-app, open :material/database: **Data** and click the one you want in the list
+app, open :material/database: **Data Management** and click the one you want in the list
 of datasets:
 
 | Dataset | What it is |
@@ -75,7 +75,12 @@ range from tens to a few hundred MB each, and a regime has up to twelve). While 
 downloads, a card shows how much has arrived; **Stop download** ends it and
 deletes the partial file.
 
-The folder defaults to the :material/database: **Data** page's
+Each report is downloaded at a **fixed OSF version** (version 1, of
+2025-05-28) and checked against that version's size, so everyone who downloads
+OneStop through the app gets the same files. That is also why the dataset list
+can show a regime's counts before you open it.
+
+The folder defaults to the :material/database: **Data Management** page's
 :material/download: **Download folder**, where every public corpus gets its own
 subfolder (`<folder>/OneStop`). Leave that box blank for the default: `data/` in
 a source checkout, otherwise the per-user data folder (`~/.local/share/scanpath-studio/data`,

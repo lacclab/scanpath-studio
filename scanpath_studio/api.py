@@ -2752,7 +2752,7 @@ def cache_status() -> dict:
     ``settings``, ``bytes``, ``saved_at``, plus ``exists`` / ``readable`` for a
     missing or unreadable manifest. Delete it with
     [`clear_cache`][scanpath_studio.api.clear_cache]; the same information is in the
-    app's 🗂️ Data → *Saved on this computer* section and in
+    app's 🗂️ Data Management → *Saved on this computer* section and in
     ``scanpath-studio cache``."""
     from .persistence import cache_status as _cache_status
 

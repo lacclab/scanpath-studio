@@ -1401,7 +1401,7 @@ def render_export_options(
             value=False,
             key=f"{key_prefix}_annotations",
             help="Include the exported trials' favorites, tags and notes as one "
-            f"annotations.json — the file {ICONS['view_data']} Data → Annotations imports.",
+            f"annotations.json — the file {ICONS['view_data']} Data Management → Annotations imports.",
         )
         tabular = (
             panel_field(
@@ -1916,7 +1916,7 @@ def bulk_export(
         *(
             [
                 "- `annotations.json` holds the favorites, tags and notes on "
-                "these trials; import it on the app's Data page → Annotations."
+                "these trials; import it on the app's Data Management page → Annotations."
             ]
             if options.include_annotations and annotation_records
             else []
@@ -1938,12 +1938,12 @@ def bulk_export(
         "",
         "## Reading measures",
         "The word tables carry the reading measures the dataset brought, as "
-        "mapped on the app's Data page; Scanpath Studio computes none of them.",
+        "mapped on the app's Data Management page; Scanpath Studio computes none of them.",
         *(
             [
                 "",
                 "This dataset brought none, so the bundle has no word-measure "
-                f"table. Map them on {ICONS['view_data']} Data → {ICONS['edit']} Edit dataset → Reading measures.",
+                f"table. Map them on {ICONS['view_data']} Data Management → {ICONS['edit']} Edit dataset → Reading measures.",
             ]
             if measures_wanted and not brought
             else []

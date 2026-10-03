@@ -2,7 +2,7 @@
 
 ## Choose a source
 
-Open the dataset picker above the plot, or the :material/database: **Data** page.
+Open the dataset picker above the plot, or the :material/database: **Data Management** page.
 
 - **Bundled Demo** — a small OneStop sample, for learning the app.
 - **Synthetic sample** — a hand-made six-word trial.
@@ -54,14 +54,15 @@ each value, say how you know it: measured, estimated from your data, or a
 default. That answer travels with the dataset, so others can tell measured
 values from assumed ones.
 
-## The Data page
+## The Data Management page
 
-:material/database: **Data** lists every dataset with its counts; click a row to open it.
-**Edit dataset** changes a dataset's name, column mapping and recording setup,
-or adds a table it is missing. Changes apply when you click **Save changes**;
+:material/database: **Data Management** lists every dataset with its counts; click a row to open it.
+**Edit dataset** opens under the list, below the open dataset's counts and
+tables, and changes its name, column mapping and recording setup, or adds a
+table it is missing. Changes apply when you click **Save changes**;
 **Cancel** discards them. The page also holds each dataset's tables and its
 annotations, and at the foot, what is saved on this computer.
 
 <figure class="sps-screenshot" markdown>
-![The Data page: the available datasets, and the counts and tables of the open one](../assets/screenshots/data-page.webp)
+![The Data Management page: the available datasets, and the counts and tables of the open one](../assets/screenshots/data-page.webp)
 </figure>

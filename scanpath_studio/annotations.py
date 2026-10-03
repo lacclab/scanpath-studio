@@ -889,7 +889,7 @@ def render_trial_annotations(
         # whole dataset's annotations are listed instead.
         st.caption(
             "Every annotation on this dataset is listed on "
-            f"{ICONS['view_data']} **Data → Annotations**, to export, import "
+            f"{ICONS['view_data']} **Data Management → Annotations**, to export, import "
             "or delete."
         )
 

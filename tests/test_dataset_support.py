@@ -820,6 +820,58 @@ def test_onestop_missing_report_message(tmp_path):
         datasets_module.onestop_raw_frames(tmp_path, regime="ordinary")
 
 
+class TestPinnedDownloads:
+    """DATA-65: a download names one OSF file version (and one commit of the
+    PoTeC repo), and a file that is not that version is refused — or two users
+    could open two different corpora under one name, and the dataset table's
+    published figures would describe neither."""
+
+    def test_every_onestop_report_is_pinned(self):
+        resources = {
+            *(
+                r
+                for kinds in datasets_module._ONESTOP_FULL_OSF.values()
+                for r in kinds.values()
+            ),
+            *(
+                r
+                for kinds in datasets_module._ONESTOP_REGIMES.values()
+                for r in kinds.values()
+            ),
+        }
+        assert resources == set(datasets_module._ONESTOP_OSF_SIZES)
+
+    def test_a_pinned_url_names_its_version(self):
+        pin = datasets_module.OsfFile("xkgfz", 1, 177_291_322)
+        assert pin.url == "https://osf.io/download/xkgfz/?version=1"
+        for pin in datasets_module._POTEC_OSF_RESOURCES.values():
+            assert f"/?version={pin.version}" in pin.url
+        commit = datasets_module._POTEC_REPO_COMMIT
+        assert len(commit) == 40 and f"/{commit}/" in datasets_module._POTEC_RAW_URL
+
+    def test_a_download_of_another_size_is_refused_and_removed(
+        self, monkeypatch, tmp_path
+    ):
+        def fake_fetch(url, dest, *, detail):
+            assert "?version=1" in url
+            Path(dest).write_bytes(b"not the pinned file")
+
+        monkeypatch.setattr(datasets_module, "_fetch_to_file", fake_fetch)
+        with pytest.raises(OSError, match="not the file this release pins"):
+            datasets_module.download_onestop(
+                tmp_path, regime="ordinary", parts=["Paragraph"]
+            )
+        assert not list(tmp_path.glob("*.csv.zip"))
+
+    def test_a_potec_archive_of_another_size_is_refused(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(
+            datasets_module, "_fetch_bytes", lambda url, *, detail: b"short"
+        )
+        with pytest.raises(OSError, match="not the file this release pins"):
+            datasets_module.download_potec(tmp_path)
+        assert not (tmp_path / "eyetracking_data" / "scanpaths").exists()
+
+
 def test_download_onestop_atomic_and_skips_existing(monkeypatch, tmp_path):
     """download_onestop writes via a temp file (no leftover .part) and skips
     reports already on disk on a re-run."""
@@ -846,6 +898,8 @@ def test_download_onestop_atomic_and_skips_existing(monkeypatch, tmp_path):
         return _FakeResp(_zip_bytes("x.csv", b"a\n1\n"))
 
     monkeypatch.setattr(datasets_module.urllib.request, "urlopen", fake_urlopen)
+    # The fake reports are not the pinned files (DATA-65 is tested below).
+    monkeypatch.setattr(datasets_module, "_check_download_size", lambda *a: None)
     datasets_module.download_onestop(tmp_path, regime="ordinary")
 
     ia = datasets_module._onestop_report_path(tmp_path, "ia", "ordinary")

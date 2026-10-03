@@ -304,8 +304,10 @@ def test_the_selected_trial_survives_a_trip_to_another_view():
     at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
     at.run()
     picker = next(s for s in at.selectbox if s.key == "single_trial_id")
-    # The options are the ids as shown (UX-187); rejoined, the parts are the id.
-    chosen = picker.options[3].replace(" · ", "_")
+    # The options are the ids as shown (UX-187 / UX-202).
+    from tests.conftest import picker_trial_id
+
+    chosen = picker_trial_id(picker.options[3])
     picker.select_index(3)
     at.run()
     assert at.session_state["single_trial_id"] == chosen

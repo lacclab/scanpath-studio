@@ -22,6 +22,7 @@ import pandas as pd
 import streamlit as st
 
 from . import app, wizard_shell
+from .column_names import ColumnNames, for_tables
 from .constants import (
     _VIEW_DATA,
     DATASET_DESCRIPTIONS_KEY,
@@ -2665,8 +2666,13 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
     filter_fields = ["genre", "session", "is_practice"]
     st.session_state["wizard_filter_fields"] = filter_fields
     schemas = {"words": word_schema, "fixations": fix_schema, "raw_gaze": None}
-    app._stash_active_mapping("words", word_schema)
-    app._stash_active_mapping("fixations", fix_schema)
+    # DATA-66: with the loader-built frames' columns, so the map is stashed too.
+    app._stash_active_mapping(
+        "words", word_schema, words_raw.columns, keep_columns=keep_words
+    )
+    app._stash_active_mapping(
+        "fixations", fix_schema, fix_raw.columns, keep_columns=keep_fix
+    )
 
     if active:
         boxes_msg = (
@@ -2685,6 +2691,13 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
             "filter_fields": filter_fields,
             "composite_trial_columns": [],
             "schemas": schemas,
+            # DATA-66 — the loader-built frames' names (MultiplEYE's own files
+            # carry no identity columns; see the plan's settled defaults).
+            "column_names": for_tables(
+                schemas,
+                {"words": words_raw, "fixations": fix_raw},
+                {"words": keep_words, "fixations": keep_fix},
+            ),
             "dropped_columns": {
                 "words": dropped_columns(words_raw, keep=keep_words)
                 if has_words
@@ -2805,7 +2818,7 @@ def _wizard_name_header(host, active: bool) -> None:
         key="wizard_dataset_description",
         placeholder="Optional — what this dataset is: the readers, the texts, "
         "the language.",
-        help=f"Shown under the dataset's name on the {ICONS['view_data']} Data page.",
+        help=f"Shown under the dataset's name on the {ICONS['view_data']} Data Management page.",
         height=68,
     )
 
@@ -4106,7 +4119,30 @@ def _render_data_setup(active: bool) -> _UploadResult:
             # geometry at all before this, which is why switching to one left the
             # canvas on the previous source's monitor.
             "setup": setup_snapshot.to_dict(),
+            # DATA-66: what each canonical column was called in these files —
+            # the record the app shows, exports and accepts names from. Built
+            # from exactly what normalization read: the tables after character
+            # aggregation, narrowed to the kept columns.
+            "column_names": for_tables(
+                wizard_schemas,
+                {
+                    "words": raw_words,
+                    "fixations": raw_fix,
+                    # Raw gaze the wizard ignored (a broken mapping) is not
+                    # stored, so it gets no names either.
+                    "raw_gaze": raw_gaze if not raw_gaze_norm.empty else None,
+                },
+                {"words": keep_words, "fixations": keep_fix},
+            ),
         }
+        for table, names in st.session_state["_wizard_finalize_payload"][
+            "column_names"
+        ].items():
+            app._stash_active_mapping(
+                table,
+                wizard_schemas.get(table),
+                names=ColumnNames.from_payload(names),
+            )
         # UX-53: the two things you can do with a finished setup share one row —
         # save it for next time, or add it — instead of stacking two full-width
         # buttons. UX-93 made that row the same on all three endings.

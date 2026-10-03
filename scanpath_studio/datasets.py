@@ -40,6 +40,7 @@ import shutil
 import urllib.request
 import zipfile
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
@@ -73,14 +74,51 @@ _POTEC_NA_VALUES = [
 
 _POTEC_TEXTS = [f"{domain}{i}" for domain in ("b", "p") for i in range(6)]
 
-# OSF storage ids from the PoTeC repo's download_data_files.py.
-_POTEC_OSF_URL = "https://osf.io/download/{resource}"
+#: DATA-65 — one OSF file version, pinned. ``osf.io/download/<id>`` with no
+#: version serves whatever was uploaded last, and PoTeC's own files have been
+#: replaced five times since 2023 (the scanpaths archive is at version 5, of
+#: 2026-06-17), so an unpinned download could hand two users two corpora under
+#: one name — and the dataset table's published figures (DATA-36) would describe
+#: neither. A pin is the file's version *and* its size in bytes, which the
+#: download is checked against.
+_OSF_DOWNLOAD_URL = "https://osf.io/download/{resource}/?version={version}"
+
+
+@dataclass(frozen=True)
+class OsfFile:
+    """One pinned OSF file: its storage id, version and size in bytes."""
+
+    resource: str
+    version: int
+    size: int
+
+    @property
+    def url(self) -> str:
+        return _OSF_DOWNLOAD_URL.format(resource=self.resource, version=self.version)
+
+
+def _check_download_size(got: int, pin: OsfFile, detail: str) -> None:
+    """Refuse a download that is not the pinned file (DATA-65)."""
+    if got != pin.size:
+        raise OSError(
+            f"{detail}: OSF sent {got:,} bytes where version {pin.version} of "
+            f"{pin.resource} is {pin.size:,} — not the file this release pins."
+        )
+
+
+# OSF storage ids from the PoTeC repo's download_data_files.py, at the versions
+# current on 2026-10-02.
 _POTEC_OSF_RESOURCES = {
-    "scanpaths": "thgv2",
-    "fixations": "53zwb",
-    "reading_measures": "g5jds",
+    "scanpaths": OsfFile("thgv2", 5, 9_796_046),
+    "fixations": OsfFile("53zwb", 2, 6_456_542),
+    "reading_measures": OsfFile("g5jds", 6, 3_326_244),
 }
-_POTEC_RAW_URL = "https://raw.githubusercontent.com/DiLi-Lab/PoTeC/main/{path}"
+#: The AOI files come from the PoTeC repo itself — pinned to a commit (DATA-65),
+#: not ``main``, for the same reason as the OSF versions above.
+_POTEC_REPO_COMMIT = "46247ca2aea5876311acf6b59338880d0bf5449d"
+_POTEC_RAW_URL = (
+    f"https://raw.githubusercontent.com/DiLi-Lab/PoTeC/{_POTEC_REPO_COMMIT}/{{path}}"
+)
 
 
 def _read_potec_tsv(path) -> pd.DataFrame:
@@ -184,9 +222,11 @@ def download_potec(root, *, fixation_source: str = "scanpaths") -> Path:
 
     eyetracking_dir = root / "eyetracking_data" / fixation_source
     if not eyetracking_dir.is_dir():
-        url = _POTEC_OSF_URL.format(resource=_POTEC_OSF_RESOURCES[fixation_source])
-        print(f"Downloading PoTeC {fixation_source} from {url} …")
-        payload = _fetch_bytes(url, detail=f"PoTeC {fixation_source} archive")
+        pin = _POTEC_OSF_RESOURCES[fixation_source]
+        print(f"Downloading PoTeC {fixation_source} from {pin.url} …")
+        detail = f"PoTeC {fixation_source} archive"
+        payload = _fetch_bytes(pin.url, detail=detail)
+        _check_download_size(len(payload), pin, detail)
         target = root / "eyetracking_data"
         target.mkdir(parents=True, exist_ok=True)
         # UX-168: unpack into a staging folder and rename it into place only
@@ -206,7 +246,7 @@ def download_potec(root, *, fixation_source: str = "scanpaths") -> Path:
                 if not members:
                     # Say what is wrong, not that the staging folder is missing.
                     raise ValueError(
-                        f"The PoTeC archive from {url} holds no "
+                        f"The PoTeC archive from {pin.url} holds no "
                         f"{fixation_source}/*.tsv files; its layout may have changed."
                     )
                 for index, member in enumerate(members, start=1):
@@ -222,7 +262,7 @@ def download_potec(root, *, fixation_source: str = "scanpaths") -> Path:
             # UX-168: a damaged archive — opened or extracted — is a data error
             # both ⬇ Download buttons report, not a raw traceback.
             raise ValueError(
-                f"The PoTeC archive from {url} isn't a readable zip file ({exc})."
+                f"The PoTeC archive from {pin.url} isn't a readable zip file ({exc})."
             ) from exc
         finally:
             shutil.rmtree(staging, ignore_errors=True)
@@ -500,7 +540,36 @@ def load_potec(
 # ``$ONESTOP_DATA_DIR`` and its per-pid shards for review-app deep links.
 # ---------------------------------------------------------------------------
 
-_ONESTOP_OSF_URL = "https://osf.io/download/{resource}"
+#: DATA-65 — every OneStop report is at OSF version 1 (2025-05-28, checked
+#: 2026-10-02); id → size in bytes, the pin `download_onestop` checks against.
+_ONESTOP_OSF_VERSION = 1
+_ONESTOP_OSF_SIZES = {
+    # all-regimes full release, interest areas
+    "u7f9b": 8_287_933,
+    "zn473": 23_885_174,
+    "zhywq": 397_501_066,
+    "tcv9h": 43_745_513,
+    "q3shp": 130_794_114,
+    "3j8av": 151_191_442,
+    "t6n8v": 12_472_761,
+    # all-regimes full release, fixations
+    "uwz2e": 17_724_147,
+    "7a3md": 41_597_351,
+    "tbxdc": 597_284_698,
+    "cmx6k": 64_566_806,
+    "ax4md": 185_658_405,
+    "fg7se": 207_300_032,
+    "e76vz": 25_763_786,
+    # per-regime Paragraph reports
+    "xkgfz": 177_291_322,
+    "ne4az": 288_349_184,
+    "yxzte": 165_756_770,
+    "bznfk": 245_787_943,
+    "dwfk4": 28_875_267,
+    "83ctd": 36_529_359,
+    "ygjup": 25_606_136,
+    "paqn8": 26_657_407,
+}
 
 # The seven trial parts (interest periods), in presentation order. Each maps to
 # one interest-area + one fixation OSF report in the ``onestop-full`` release
@@ -726,13 +795,19 @@ def download_onestop(
             resource = _onestop_osf_resource(kind, part, regime)
             if resource is None:
                 continue
-            url = _ONESTOP_OSF_URL.format(resource=resource)
-            print(f"Downloading OneStop {regime} {part} {kind} report from {url} …")
+            pin = OsfFile(resource, _ONESTOP_OSF_VERSION, _ONESTOP_OSF_SIZES[resource])
+            print(f"Downloading OneStop {regime} {part} {kind} report from {pin.url} …")
             # Write to a temp file and atomically rename into place, so an
             # interrupted write (killed process / full disk) never leaves a
             # truncated .csv.zip that `dest.is_file()` would then skip forever —
             # forcing a manual delete. The reports are large, so the window is real.
-            _fetch_to_file(url, dest, detail=f"{part} {kind} report")
+            detail = f"{part} {kind} report"
+            _fetch_to_file(pin.url, dest, detail=detail)
+            try:
+                _check_download_size(dest.stat().st_size, pin, detail)
+            except OSError:
+                dest.unlink(missing_ok=True)
+                raise
     return root
 
 

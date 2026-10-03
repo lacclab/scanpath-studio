@@ -656,11 +656,15 @@ def trials_matching(
         result = {key for key in loaded if key[1] in matching}
     if not active_selections and loaded:
         # Range-only narrowing keeps the unmeasured, including a reading with no
-        # row at all — the participant table's rule, one grain down.
+        # row at all — the participant table's rule, one grain down. "Has a
+        # row" is read from the whole table, never from the rows that passed
+        # the range: a reading described *outside* the range is described, and
+        # treating it as unlisted added every one of them back.
+        listed = set(metadata.key_series())
         described = (
-            matching
+            listed
             if metadata.keyed_by_participant
-            else {key for key in loaded if key[1] in set(metadata.key_series())}
+            else {key for key in loaded if key[1] in listed}
         )
         result |= {key for key in loaded if key not in described}
     return result

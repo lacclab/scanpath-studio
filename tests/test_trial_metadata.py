@@ -109,6 +109,30 @@ class TestFiltering:
         # t1 is in range, t9 has no row at all — both kept; t2 is out of range.
         assert matching == {("p1", "t1"), ("p2", "t1"), ("p1", "t9"), ("p2", "t9")}
 
+    def test_a_reader_keyed_range_drops_the_readings_outside_it(self):
+        """The round-7 example: p2 is described, out of range, and stays out.
+
+        p1 is in range, p3's score is missing and p4 has no row: both unknown,
+        both kept under the range rule. Without ``keys`` the table's own rows
+        give the same answer for every reading the table describes.
+        """
+        keys = {("p1", "t1"), ("p2", "t1"), ("p3", "t1"), ("p4", "t1")}
+        table = pd.DataFrame(
+            {
+                "reader": ["p1", "p2", "p3"],
+                "trial": ["t1"] * 3,
+                "score": [10, 90, None],
+            }
+        )
+        built = metadata.build_trial_metadata(table, "trial", "reader", keys=keys)
+        ranges = {"score": (0.0, 20.0)}
+        with_keys = metadata.trials_matching(built, ranges=ranges, keys=keys)
+        assert with_keys == {("p1", "t1"), ("p3", "t1"), ("p4", "t1")}
+        without_keys = metadata.trials_matching(built, ranges=ranges)
+        assert without_keys == {("p1", "t1"), ("p3", "t1")}
+        described = set(built.key_series())
+        assert with_keys & described == without_keys
+
     def test_a_categorical_selection_excludes_the_unlisted(self):
         built = metadata.build_trial_metadata(_table(), "trial", keys=KEYS)
         keys = KEYS | {("p1", "t9")}

@@ -137,3 +137,19 @@ def test_a_comparison_separates_its_bars(layout, orientation):
     assert len(positions) == 2
     if orientation == "Vertical":
         assert fig.layout.margin.r >= _COLORBAR_RESERVE_PX
+
+
+def test_the_word_heatmap_bar_names_dwell_not_fixation_duration():
+    words, fixations = _frames()
+    options = {
+        **_options("Vertical"),
+        "color_by": "duration_ms",
+        "heatmap_metric": "duration_ms",
+    }
+    fig = plots.make_scanpath_figure(words, fixations, **options)
+    titles = sorted(bar.title.text for bar in _bars(fig))
+    assert titles == ["Duration (ms)", "Dwell time per word (ms)"]
+    log = plots.make_scanpath_figure(
+        words, fixations, **{**options, "heatmap_norm": "Log"}
+    )
+    assert "Dwell time per word (ms) (log)" in [b.title.text for b in _bars(log)]

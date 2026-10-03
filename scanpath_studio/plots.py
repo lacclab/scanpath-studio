@@ -2967,6 +2967,12 @@ def _apply_heatmap_norm(values, norm: str):
     return arr
 
 
+#: The duration-weighted word-box heatmap's colour-bar title: a box maps the
+#: *summed* duration of its fixations, which a fixation-duration colour bar
+#: beside it must not be mistaken for (round-7 review, findings 11 and 16).
+_WORD_DWELL_TITLE = "Dwell time per word (ms)"
+
+
 def _heatmap_title(base: str, norm: str) -> str:
     """Colour-bar title, marked ``(log)`` when the log normalization is active."""
     return f"{base} (log)" if norm == "Log" else base
@@ -3020,7 +3026,7 @@ def _add_word_level_heatmap(
         heatmap_range=heatmap_range,
         show_colorbars=show_colorbars,
         heatmap_norm=heatmap_norm,
-        colorbar_title="Fixation count" if weights is None else "Duration (ms)",
+        colorbar_title="Fixation count" if weights is None else _WORD_DWELL_TITLE,
         colorbar_style=colorbar_style,
     )
 
@@ -3053,7 +3059,7 @@ def _add_word_measure_heatmap(
         heatmap_norm=heatmap_norm,
         colorbar_title="Fixation count"
         if measure == "n_fixations"
-        else "Duration (ms)",
+        else _WORD_DWELL_TITLE,
         colorbar_style=colorbar_style,
     )
 
@@ -5380,7 +5386,7 @@ def _comparison_word_heatmap_data(
     z_max = float(_apply_heatmap_norm(raw_max, heatmap_norm))
     if z_max <= z_min:
         z_max = z_min + 1.0
-    title = "Duration (ms)" if duration_weighted else "Fixation count"
+    title = _WORD_DWELL_TITLE if duration_weighted else "Fixation count"
     return value_maps, z_min, z_max, title
 
 

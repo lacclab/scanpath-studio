@@ -21,6 +21,12 @@ any guess.
 | **Trial metadata** *(optional)* | one row per trial | trial id, plus anything you know about that trial |
 | **Text metadata** *(optional)* | one row per text | text id, plus anything you know about that text |
 
+**Without timestamps.** A fixations table with no timestamp column still
+loads: its rows are taken to be in reading order. Reading time and reading
+speed are then an estimate — the fixations laid end to end by their durations,
+leaving out the time between them — and the summaries label them so
+(`reading_time_source`). The replay uses the same clock.
+
 **Units.** Durations and timestamps are read in milliseconds. A column whose
 header names another unit — `[s]`, `[μs]`, `[ns]`, as Tobii and Pupil Labs Neon
 write — is converted, and so are the vendor columns documented in seconds

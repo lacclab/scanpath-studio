@@ -835,6 +835,7 @@ class TestReaderViews:
         fx = _tidy_fixations().drop(columns=["timestamp_ms"])
         s = reader_summary(_tidy_words(), fx, "p1")
         assert s["wpm"] == pytest.approx(3 / (380 / 60000.0))  # 100+150+130 = 380
+        assert s["reading_time_source"] == agg.READING_TIME_ESTIMATED
 
     def test_cohort_summary_table_one_row_per_reader(self):
         t = cohort_summary_table(_tidy_words(), _tidy_fixations())
@@ -1514,3 +1515,91 @@ def test_cohort_word_comparisons_share_one_screen():
         words, "text_id", "text", tfd, a, b, screen_id="page2"
     )
     assert profiles[["group", "value"]].values.tolist() == [["Group B", 700.0]]
+
+
+class TestTimestampFreeReadingTime:
+    """A fixation table with no onset column: normalization numbers the
+    fixations 0, 1, 2, … so they still sort. Those are not milliseconds — the
+    summaries lay the fixations end to end by duration and say it is an
+    estimate, as the replay clock does."""
+
+    @staticmethod
+    def _load(drop_timestamps: bool = True):
+        from scanpath_studio import api
+        from tests.synthetic_data import (
+            make_synthetic_fixations,
+            make_synthetic_words,
+        )
+
+        fixations = make_synthetic_fixations()
+        if drop_timestamps:
+            fixations = fixations.drop(columns=["timestamp_ms"])
+        return api.load_scanpath_data(make_synthetic_words(), fixations)
+
+    def test_normalization_marks_the_made_up_timestamps(self):
+        from scanpath_studio import data
+
+        _, fixations = self._load()
+        assert data.timestamps_synthesized(fixations)
+        assert fixations["timestamp_ms"].tolist() == list(range(len(fixations)))
+
+    def test_trial_summary_is_a_labelled_duration_estimate(self):
+        words, fixations = self._load()
+        row = agg.trial_summary_table(words, fixations).iloc[0]
+        # 9 fixations totalling 960 ms over 6 words: not 205 ms / 1,756 wpm.
+        assert row["reading_time_ms"] == pytest.approx(960.0)
+        assert row["wpm"] == pytest.approx(6 / (960 / 60000.0))
+        assert row["reading_time_source"] == agg.READING_TIME_ESTIMATED
+
+    def test_reader_summary_says_so_too(self):
+        words, fixations = self._load()
+        row = agg.reader_summary_table(words, fixations).iloc[0]
+        assert row["wpm"] == pytest.approx(375.0)
+        assert row["reading_time_source"] == agg.READING_TIME_ESTIMATED
+
+    def test_recorded_timestamps_are_the_recorded_span(self):
+        from scanpath_studio import data
+
+        words, fixations = self._load(drop_timestamps=False)
+        assert not data.timestamps_synthesized(fixations)
+        row = agg.trial_summary_table(words, fixations).iloc[0]
+        assert row["reading_time_source"] == agg.READING_TIME_RECORDED
+
+    def test_the_replay_clock_is_the_same_estimate(self):
+        from scanpath_studio import measures
+
+        _, fixations = self._load()
+        ordered = fixations.sort_values("timestamp_ms")
+        onsets = measures.rebased_fixation_onsets(ordered)
+        durations = ordered["duration_ms"].to_numpy()
+        assert onsets[-1] + durations[-1] == pytest.approx(960.0)
+
+    def test_each_screen_is_its_own_estimate(self):
+        from scanpath_studio import data
+
+        fixations = pd.DataFrame(
+            {
+                "participant_id": "p",
+                "trial_id": "t",
+                "screen_id": ["a", "a", "b"],
+                "screen_index": [1, 1, 2],
+                "duration_ms": [100.0, 200.0, 400.0],
+                "timestamp_ms": [0, 1, 2],
+                data.TIMESTAMP_SYNTHESIZED: True,
+            }
+        )
+        reading = agg._trial_reading_time_ms(fixations)
+        assert reading.set_index("screen_id")["reading_time_ms"].to_dict() == {
+            "a": 300.0,
+            "b": 400.0,
+        }
+        assert set(reading["reading_time_source"]) == {agg.READING_TIME_ESTIMATED}
+
+    def test_a_remap_that_keeps_the_stored_clock_keeps_the_mark(self):
+        from scanpath_studio import data
+
+        _, fixations = self._load()
+        schema = data.propose_fix_schema(fixations)
+        assert schema["timestamp"] == "timestamp_ms"
+        remapped = data.remap_normalized_frame(fixations, schema, kind="fixations")
+        assert data.timestamps_synthesized(remapped)

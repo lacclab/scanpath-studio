@@ -3352,13 +3352,39 @@ AOI_TRIAL_ID = "_aoi_trial_id"
 #: trial-id fallback — written by `normalize_*` from the schema, so a mapped
 #: Text ID whose values happen to equal the trial ids still counts (DATA-49).
 TEXT_ID_MAPPED = "_text_id_mapped"
+#: On a fixation: its `timestamp_ms` was made up by `normalize_fixations`
+#: because the table mapped no onset — the reading order 0, 1, 2, …, kept so
+#: fixations still sort, but not a time. Anything that needs elapsed time
+#: (the summaries' reading time and speed, the replay clock) lays the
+#: fixations end to end by their durations instead and says it is an estimate.
+TIMESTAMP_SYNTHESIZED = "_timestamp_synthesized"
 #: Bookkeeping columns the pipeline needs and the user never sees: kept in the
 #: frames and the recovery cache, dropped from exports and the Data page's
 #: tables (`drop_internal_columns`), and never offered as a field — their
 #: leading underscore is what the field listers skip.
 INTERNAL_COLUMNS = frozenset(
-    {STIMULUS_WORDS_FLAG, BASE_TRIAL_ID, AOI_TRIAL_ID, TEXT_ID_MAPPED}
+    {
+        STIMULUS_WORDS_FLAG,
+        BASE_TRIAL_ID,
+        AOI_TRIAL_ID,
+        TEXT_ID_MAPPED,
+        TIMESTAMP_SYNTHESIZED,
+    }
 )
+
+
+def timestamps_synthesized(fixations: pd.DataFrame | None) -> bool:
+    """Whether any of these fixations has a made-up ``timestamp_ms``.
+
+    True when normalization had no onset column to read and numbered the
+    fixations instead (:data:`TIMESTAMP_SYNTHESIZED`). A frame without the
+    column — one built by hand, or stored before it existed — counts as
+    recorded, which is what it always did."""
+    if fixations is None or TIMESTAMP_SYNTHESIZED not in fixations.columns:
+        return False
+    return bool(fixations[TIMESTAMP_SYNTHESIZED].fillna(False).astype(bool).any())
+
+
 #: Scratch column the stimulus broadcast merges through.
 _STIMULUS_KEY = "_stimulus_key"
 
@@ -4919,6 +4945,11 @@ def normalize_fixations(
         )
 
     df = _preserve_composite_columns(df, fixations, schema["trial"])
+    synthesized = _synthesized_timestamps(fixations, schema, _renormalizing)
+    if synthesized is None:
+        df = df.drop(columns=[TIMESTAMP_SYNTHESIZED], errors="ignore")
+    else:
+        df[TIMESTAMP_SYNTHESIZED] = synthesized
 
     df["order_in_trial"] = (
         df.sort_values(["timestamp_ms", "duration_ms"])
@@ -5036,6 +5067,27 @@ def _map_repeats(frame: pd.DataFrame, repeat_of: dict) -> pd.Series:
     wanted = pd.MultiIndex.from_arrays([frame["participant_id"].astype(str), ids])
     found = table.reindex(wanted).to_numpy()
     return pd.Series(np.where(pd.isna(found), ids.to_numpy(), found), index=frame.index)
+
+
+def _synthesized_timestamps(
+    fixations: pd.DataFrame, schema: dict, renormalizing: bool
+) -> pd.Series | None:
+    """The :data:`TIMESTAMP_SYNTHESIZED` flags for a normalized fixations frame.
+
+    Every row when no onset is mapped. A remap that keeps the stored
+    ``timestamp_ms`` as the onset keeps the stored flags — those numbers are
+    still the ones normalization made up. ``None`` when the timestamps are
+    the data's own."""
+    onset = schema.get("timestamp")
+    if not onset:
+        return pd.Series(True, index=fixations.index)
+    if (
+        renormalizing
+        and onset == "timestamp_ms"
+        and TIMESTAMP_SYNTHESIZED in fixations.columns
+    ):
+        return fixations[TIMESTAMP_SYNTHESIZED].fillna(False).astype(bool)
+    return None
 
 
 def remap_normalized_frame(

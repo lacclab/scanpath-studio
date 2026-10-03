@@ -3711,6 +3711,52 @@ class TestCorpusAnalysisTab:
             f"{view_key}={view!r} st.error: {[e.value for e in at.error]}"
         )
 
+    def test_reading_speed_without_timestamps_is_labelled_an_estimate(self):
+        """With no onset column the fixations are numbered 0, 1, 2, …; the
+        Reading summary's speed is then a duration estimate and says so, and
+        the over-time view offers no `timestamp_ms` axis."""
+        import pandas as pd
+
+        from scanpath_studio import api
+        from scanpath_studio.data import load_sample_data
+
+        raw_words, raw_fix = load_sample_data()
+        fix_schema = api.propose_schema(raw_fix, "fixations") | {"timestamp": None}
+        words, fixations = api.load_scanpath_data(
+            raw_words, raw_fix, fix_schema=fix_schema
+        )
+
+        def opened(view, **state):
+            # A fresh app per view: AppTest's router does not follow the
+            # app's own `st.switch_page` on a second run.
+            at = AppTest.from_file(APP_SCRIPT)
+            at.session_state["_datasets"] = {
+                "No clock": {
+                    "words": words,
+                    "fixations": fixations,
+                    "raw_gaze": pd.DataFrame(),
+                    "filter_fields": [],
+                    "composite_trial_columns": [],
+                }
+            }
+            at.session_state["data_source_choice"] = "No clock"
+            at.session_state["main_nav"] = "Corpus Analysis"
+            at.session_state["corpus_subtab"] = "Per reader"
+            at.session_state["prdr_view"] = view
+            for key, value in state.items():
+                at.session_state[key] = value
+            at.run(timeout=120)
+            assert not at.exception, f"Streamlit exceptions: {at.exception}"
+            return at
+
+        at = opened("Reading summary")
+        assert "Reading speed (estimate)" in [m.label for m in at.metric]
+        assert any("no fixation timestamps" in c.value for c in at.caption)
+
+        at = opened("Fixation duration over time", prdr_measure="Fixation duration")
+        x_axis = [s for s in at.selectbox if s.key == "prdr9_x"]
+        assert x_axis and x_axis[0].options == ["order in trial"]
+
     def test_group_filter_set_mode_renders(self):
         # The 'Independent filter sets' group-definition mode (the second of the
         # two modes the user asked for) must render for both the single-group

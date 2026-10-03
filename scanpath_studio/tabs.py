@@ -26,6 +26,7 @@ import streamlit as st
 from scanpath_studio import alignment, loading, progress
 from scanpath_studio import metadata as _metadata_mod
 from scanpath_studio.aggregation import (
+    READING_TIME_ESTIMATED,
     MEASURES,
     Measure,
     apply_group,
@@ -197,6 +198,7 @@ from scanpath_studio.data import (
     propose_word_schema,
     read_tables,
     remap_normalized_frame,
+    timestamps_synthesized,
     repeat_bases,
     text_ids,
     trial_keys,
@@ -9432,12 +9434,24 @@ def render_per_reader_tab(
             frame_fingerprint(words_filtered),
             frame_fingerprint(fix_e),
         )
+        speed_estimated = summary.get("reading_time_source") == READING_TIME_ESTIMATED
+        if speed_estimated:
+            st.caption(
+                "This data has no fixation timestamps, so reading speed is an "
+                "estimate: the fixations laid end to end by their durations, "
+                "leaving out the time between them."
+            )
         # ENG-36: `st.metric(icon=…)` (1.61). Six numbers in one row read as an
         # undifferentiated wall; the glyph is what lets you find "the speed one"
         # without reading every label. Chosen to say what the number *is*, not to
         # decorate — speed, duration, count, direction of travel.
         specs = [
-            ("wpm", "Reading speed", "{:.0f} wpm", ICONS["reading_speed"]),
+            (
+                "wpm",
+                "Reading speed (estimate)" if speed_estimated else "Reading speed",
+                "{:.0f} wpm",
+                ICONS["reading_speed"],
+            ),
             (
                 "mean_fixation_ms",
                 "Mean fixation",
@@ -9515,9 +9529,16 @@ def render_per_reader_tab(
         if measure is None or measure.frame != "fixations":
             c[0].info("Pick a per-fixation measure (duration / saccade amplitude).")
             return
+        # Numbered fixations are not a time axis: without recorded onsets
+        # `timestamp_ms` is 0, 1, 2, … and only the order is offered.
+        x_options = ["order_in_trial"]
+        if not timestamps_synthesized(fix_e):
+            x_options.append("timestamp_ms")
+        if st.session_state.get("prdr9_x") not in (None, *x_options):
+            del st.session_state["prdr9_x"]
         by = c[1].selectbox(
             "X axis",
-            ["order_in_trial", "timestamp_ms"],
+            x_options,
             key="prdr9_x",
             format_func=lambda s: s.replace("_", " "),
         )

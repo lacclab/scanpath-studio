@@ -67,7 +67,7 @@ are carried through under their canonical / original names when present.
 | `text_id` | Text/passage id, when present. |
 | `x`, `y` | Fixation location in screen px. **Required unless** `word_id` is given — AOI-sequence data is placed at word-box centers. |
 | `duration_ms` | Fixation duration. **Required.** |
-| `timestamp_ms` | Fixation onset. Falls back to the row's position within the trial (0, 1, 2, …) when the source has no timestamp — it drives the ordering, so rows must already be in reading order in that case. |
+| `timestamp_ms` | Fixation onset. Falls back to the row's position within the trial (0, 1, 2, …) when the source has no timestamp — it drives the ordering, so rows must already be in reading order in that case. Those numbers are not times: the internal `_timestamp_synthesized` column marks them, and the summaries' `reading_time_ms` / `wpm` then sum fixation durations, with `reading_time_source` saying it is an estimate. |
 | `screen_timestamp_ms`, `screen_fixation_id` | Optional local clock/id that resets per screen; retained alongside the parent-global columns. |
 | `word_id` | Source word/AOI assignment, carried through when the export has one — otherwise `NaN`. The loader only shifts ids numbered from 1 onto 0-based word boxes; the assignment (box containment, then nearest word center within 50 px) happens inside `compute_word_metrics` and the plots that need it. |
 | `order_in_trial` | 1-based fixation index, added during normalization. |

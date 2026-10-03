@@ -1104,7 +1104,17 @@ REGISTER: tuple[Computation, ...] = (
         name="Per-trial summary",
         category=CATEGORY_AGGREGATION,
         summary="One row per trial: reading time, counts, rates.",
-        formula="Counts and sums over the trial's fixations and word measures.",
+        formula=(
+            "Counts and sums over the trial's fixations and word measures. "
+            "`reading_time_ms` is last fixation end − first fixation start; "
+            "without recorded fixation onsets it is the summed fixation "
+            "durations, and `reading_time_source` says it is an estimate. "
+            "`wpm` = words ÷ reading time."
+        ),
+        missing=(
+            "No onset column ⇒ reading time and wpm are duration-based "
+            "estimates, labelled as such — never the 0, 1, 2, … order numbers."
+        ),
         code="scanpath_studio/aggregation.py:trial_summary_table",
         output="Trials table",
         unit="ms, counts",

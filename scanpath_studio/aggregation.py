@@ -730,25 +730,51 @@ def reader_vs_cohort_values(
     return out
 
 
-def _trial_reading_time_ms(fixations: pd.DataFrame) -> pd.DataFrame:
-    """Per-(participant, trial) reading time in ms from the fixation span.
+#: How a summary's reading time was measured (`reading_time_source`).
+READING_TIME_RECORDED = "recorded"
+READING_TIME_ESTIMATED = "estimate (summed fixation durations; no timestamps)"
 
-    Span = last fixation end − first fixation start (falls back to the sum of
-    fixation durations when timestamps are missing)."""
+
+def _trial_reading_time_ms(fixations: pd.DataFrame) -> pd.DataFrame:
+    """Per-reading (and per-screen) reading time in ms, and how it was measured.
+
+    Recorded timestamps give the span, last fixation end − first fixation
+    start. Without them — no timestamp column, or one normalization numbered
+    0, 1, 2, … because the table had no onset (``data.TIMESTAMP_SYNTHESIZED``)
+    — the fixations are laid end to end by their durations, the clock the
+    replay uses (``measures.rebased_fixation_onsets``): an estimate that leaves
+    out every gap between them, so ``reading_time_source`` says so."""
+    from .data import TIMESTAMP_SYNTHESIZED
+
+    columns = ["reading_time_ms", "reading_time_source"]
     if fixations.empty or not {"participant_id", "trial_id"} <= set(fixations.columns):
-        return pd.DataFrame(columns=["participant_id", "trial_id", "reading_time_ms"])
+        return pd.DataFrame(columns=["participant_id", "trial_id", *columns])
     keys = grouping_columns(fixations)
     df = fixations[keys].copy()
     dur = pd.to_numeric(fixations.get("duration_ms"), errors="coerce")
+    df["_d"] = dur
+    if TIMESTAMP_SYNTHESIZED in fixations.columns:
+        df["_synth"] = fixations[TIMESTAMP_SYNTHESIZED].fillna(False).astype(bool)
+    else:
+        df["_synth"] = "timestamp_ms" not in fixations.columns
     if "timestamp_ms" in fixations.columns:
         ts = pd.to_numeric(fixations["timestamp_ms"], errors="coerce")
         df["_start"] = ts
         df["_end"] = ts + dur.fillna(0)
-        grp = df.groupby(keys)
-        out = (grp["_end"].max() - grp["_start"].min()).rename("reading_time_ms")
     else:
-        df["_d"] = dur
-        out = df.groupby(keys)["_d"].sum().rename("reading_time_ms")
+        df["_start"] = df["_end"] = np.nan
+    grp = df.groupby(keys)
+    estimated = grp["_synth"].any()
+    span = grp["_end"].max() - grp["_start"].min()
+    summed = grp["_d"].sum()
+    out = pd.DataFrame(
+        {
+            "reading_time_ms": summed.where(estimated, span),
+            "reading_time_source": np.where(
+                estimated, READING_TIME_ESTIMATED, READING_TIME_RECORDED
+            ),
+        }
+    )
     return out.reset_index()
 
 
@@ -933,6 +959,7 @@ def trial_summary_table(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Data
             reading = _trial_reading_time_ms(fx)
             if not reading.empty:
                 row["reading_time_ms"] = float(reading.iloc[0]["reading_time_ms"])
+                row["reading_time_source"] = reading.iloc[0]["reading_time_source"]
             row.update(_run_summary(fx, n_words))
             if "blink_count" in fx.columns:
                 blink = pd.to_numeric(fx["blink_count"], errors="coerce").dropna()
@@ -1024,6 +1051,11 @@ def _summary_row(words, fixations, pid) -> dict[str, float]:
         )
         if total_ms > 0 and n_words:
             out["wpm"] = float(n_words / (total_ms / 60000.0))
+            out["reading_time_source"] = (
+                READING_TIME_ESTIMATED
+                if (rt["reading_time_source"] == READING_TIME_ESTIMATED).any()
+                else READING_TIME_RECORDED
+            )
         trials = trial_summary_table(wd, fx)
         if not trials.empty:
             for column in (

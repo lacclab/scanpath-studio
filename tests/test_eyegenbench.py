@@ -149,14 +149,18 @@ def test_auto_detection_agrees_with_our_schemas(bundle):
 
 
 def test_load_normalizes_and_broadcasts_to_the_reader(bundle):
-    words, fixations = eyegenbench.load_eyegenbench(bundle, dataset="PoTeC")
+    words, fixations = eyegenbench.load_eyegenbench(
+        bundle, dataset="PoTeC", names="canonical"
+    )
     assert set(words["participant_id"]) == {"r1"}
     assert {"x", "y", "width", "height"} <= set(words.columns)
     assert fixations.loc[0, "duration_ms"] == 200
 
 
 def test_geometry_source_survives_normalization(bundle):
-    words, fixations = eyegenbench.load_eyegenbench(bundle, dataset="PoTeC")
+    words, fixations = eyegenbench.load_eyegenbench(
+        bundle, dataset="PoTeC", names="canonical"
+    )
     assert set(words["geometry_source"]) == {"real"}
     assert set(fixations["geometry_source"]) == {"real"}
 
@@ -360,7 +364,7 @@ def test_a_harmonised_label_reaches_the_benchmark_loader_not_the_native_corpus(
 
     monkeypatch.setattr(datasets, "load_potec", _native_loader_must_not_run)
     monkeypatch.setattr(datasets, "load_multipleye", _native_loader_must_not_run)
-    words, fixations = compare_source._load_public_frames.__wrapped__(
+    words, fixations, _names = compare_source._load_public_frames.__wrapped__(
         label, root, tuple(sorted(kwargs.items()))
     )
     assert not words.empty and not fixations.empty

@@ -50,7 +50,9 @@ for _name in (
 ):
     logging.getLogger(_name).setLevel(logging.ERROR)
 
+from . import column_names as _cn  # noqa: E402
 from . import data as _data  # noqa: E402
+from .column_names import ColumnNames  # noqa: E402
 from .constants import (  # noqa: E402
     DEFAULT_BACKGROUND_COLOR,
     DEFAULT_ORDER_FONT_COLOR,
@@ -225,7 +227,11 @@ CANONICAL_FIGURE_DEFAULTS: dict = FigureSettings.defaults(
 
 def _as_dataframe(table: TablesLike, label: str, *, plan_for=None) -> pd.DataFrame:
     if isinstance(table, pd.DataFrame):
-        return table
+        # DATA-66: a frame this API returned under the dataset's own names goes
+        # back to the internal names it was normalized under, so loading it
+        # again is the round-trip it was before (a converted width sits beside
+        # a renamed left edge, which no detection would pair up).
+        return _cn.to_canonical_frame(table)
     items = _data.expand_table_inputs(table)
     for item in items:
         if not isinstance(item, pd.DataFrame) and not Path(item).is_file():
@@ -552,6 +558,112 @@ def propose_schema(table: TablesLike, kind: str = "words") -> dict:
 _NORMALIZED_ID_COLUMNS = ("participant_id", "trial_id")
 
 
+#: DATA-66: the column vocabularies a loader can return frames in.
+NAMES_SOURCE = "source"
+NAMES_CANONICAL = "canonical"
+
+
+class ScanpathData(tuple):
+    """What [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data]
+    returns: the ``(words, fixations)`` frames — so
+    ``words, fixations = load_scanpath_data(…)`` unpacks it — plus
+    ``column_names``, the dataset's own name for every canonical column, per
+    table (``{"words": ColumnNames, "fixations": ColumnNames}``).
+
+    With ``names="source"`` (the default) the frames' columns are the dataset's
+    own names and each frame carries its map, so any API function takes it —
+    sliced, filtered or merged — and the names it writes are yours. With
+    ``names="canonical"`` they are the internal names, the same for every
+    dataset."""
+
+    def __new__(cls, words, fixations, column_names=None):
+        data = super().__new__(cls, (words, fixations))
+        data.column_names = dict(column_names or {})
+        return data
+
+    def __getnewargs__(self):
+        return (self[0], self[1], self.column_names)
+
+    @property
+    def words(self) -> pd.DataFrame:
+        return self[0]
+
+    @property
+    def fixations(self) -> pd.DataFrame:
+        return self[1]
+
+
+def _check_names_choice(names: str) -> None:
+    if names not in (NAMES_SOURCE, NAMES_CANONICAL):
+        raise ValueError(
+            f'names must be "{NAMES_SOURCE}" (the dataset\'s own column names) '
+            f'or "{NAMES_CANONICAL}" (the internal ones), got {names!r}.'
+        )
+
+
+def _named_in(
+    frame, label: str, *, optional: bool = False
+) -> tuple[pd.DataFrame, ColumnNames | None]:
+    """DATA-66: ``(canonical frame, its map)`` for a frame handed to the API.
+
+    A frame :func:`load_scanpath_data` returned under the dataset's own names
+    carries its map (`column_names.attach`); it is renamed back here, and the
+    map is returned for the call's options, figure text and output frames. A
+    canonical frame passes as it is, with no map. ``optional`` takes ``None``
+    as the empty table (VIZ-45)."""
+    found = _cn.frame_names(frame)
+    frame = _cn.to_canonical_frame(frame)
+    frame = (
+        _optional_frame(frame, label) if optional else _require_normalized(frame, label)
+    )
+    return frame, (found[1] if found else None)
+
+
+def _named_out(frame, table: str, names: ColumnNames | None):
+    """An output frame in the names its inputs carried (DATA-66): a table that
+    is the dataset's own under its whole map, else (``names`` already
+    restricted by the caller) only its ids. Canonical inputs, canonical out."""
+    if names is None or frame is None or not isinstance(frame, pd.DataFrame):
+        return frame
+    return _cn.attach(frame, table, names)
+
+
+def _call_names(
+    given: dict | None = None, **maps: ColumnNames | None
+) -> ColumnNames | None:
+    """One map across the frames of a call (fixations', then words', then raw
+    gaze's), or ``None`` when every frame was canonical. ``given`` is a
+    ``column_names=`` argument (``ScanpathData.column_names``), which names
+    canonical frames and wins over what the frames carry."""
+    if given:
+        return _cn.across_tables(
+            {
+                table: names
+                if isinstance(names, ColumnNames)
+                else ColumnNames.from_payload(names)
+                for table, names in given.items()
+            }
+        )
+    present = {table: names for table, names in maps.items() if names is not None}
+    return _cn.across_tables(present) if present else None
+
+
+def _table_names(
+    given: dict | None, table: str, carried: ColumnNames | None
+) -> ColumnNames | None:
+    """``table``'s own map for a call — from ``column_names=`` when given, else
+    what its frame carried. A word option is read in the words table's names
+    first: the merged map gives a shared column (``word_id``) the fixations'."""
+    if given:
+        names = given.get(table)
+        if names is None:
+            return None
+        return (
+            names if isinstance(names, ColumnNames) else ColumnNames.from_payload(names)
+        )
+    return carried
+
+
 def _require_normalized(frame, label: str) -> pd.DataFrame:
     """Guard the plotting entry points against raw / wrongly-typed input.
 
@@ -565,13 +677,18 @@ def _require_normalized(frame, label: str) -> pd.DataFrame:
             "Call words, fixations = load_scanpath_data(words=…, fixations=…) "
             "first — it reads paths/globs and normalizes column names."
         )
+    # DATA-66: a frame under the dataset's own names is processed canonically.
+    frame = _cn.to_canonical_frame(frame)
     missing = [col for col in _NORMALIZED_ID_COLUMNS if col not in frame.columns]
     if missing:
         raise ValueError(
             f"{label} frame is not normalized: missing the canonical column(s) "
             f"{', '.join(missing)}. Its columns are: {_column_preview(frame)}. "
             "Pass the frames returned by load_scanpath_data(...) (raw tables have "
-            "to go through it first)."
+            "to go through it first). A frame it returned under the dataset's own "
+            "names loses that map when merged or concatenated with another table "
+            "(pandas drops DataFrame.attrs there): pass the result through "
+            "load_scanpath_data(...) again, or load with names='canonical'."
         )
     return frame
 
@@ -585,8 +702,18 @@ def load_scanpath_data(
     trial_parts_manifest: dict | None = None,
     image_root: str | Path | None = None,
     image_pattern: str = "{text_id}.png",
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+    names: str = NAMES_SOURCE,
+) -> ScanpathData:
     """Load and normalize a words/IA table and/or a fixations table.
+
+    The columns keep the names your files give them (DATA-66):
+    ``CURRENT_FIX_DURATION``, not ``duration_ms``. A column Scanpath Studio
+    built, converted, computed or changed keeps its internal name, and
+    ``data.column_names`` (a [`ScanpathData`][scanpath_studio.api.ScanpathData])
+    records what every column was called. Every API function takes these
+    frames, and every column option (``color_by=``, hover fields …) takes
+    either name. ``names="canonical"`` returns the internal names instead —
+    the same for every dataset, for code that works across them.
 
     ``words`` / ``fixations`` may be DataFrames, paths to ``.csv`` / ``.tsv`` /
     ``.txt`` / ``.tab`` / ``.parquet`` / ``.feather`` / ``.xlsx`` / ``.xls`` files (or
@@ -622,8 +749,16 @@ def load_scanpath_data(
     table shares neither a trial id nor a ``text_id`` with any reading (or,
     multipart, with every screen a reading has fixations on).
     """
+    _check_names_choice(names)
     if words is None and fixations is None:
         raise ValueError("Provide at least one of words= or fixations=.")
+    # DATA-66: a frame this API already named is loaded under its internal
+    # names; its own map then renames the new one back to the user's.
+    prior = {
+        table: found[1]
+        for table, frame in (("words", words), ("fixations", fixations))
+        if (found := _cn.frame_names(frame)) is not None
+    }
 
     if words is not None:
         # BUG-53: a word spelled "None" or "NA" is a word, not a missing cell.
@@ -671,7 +806,9 @@ def load_scanpath_data(
     else:
         fixations_norm = _data.empty_fixations_frame()
 
-    words_norm, fixations_norm = _data.harmonize_frames(words_norm, fixations_norm)
+    words_norm, fixations_norm, _join, rewrites = _data.harmonize_frames_reporting(
+        words_norm, fixations_norm
+    )
     if image_root is not None:
         words_norm = _data.resolve_stimulus_image_paths(
             words_norm, image_root, image_pattern
@@ -679,7 +816,28 @@ def load_scanpath_data(
         fixations_norm = _data.resolve_stimulus_image_paths(
             fixations_norm, image_root, image_pattern
         )
-    return words_norm, fixations_norm
+    # DATA-66: what each column was called in these files — from the schemas
+    # and raw columns normalization read, with the columns the fixups rewrote
+    # marked converted.
+    maps = {
+        table: ColumnNames.from_payload(payload)
+        for table, payload in _cn.for_tables(
+            {"words": word_schema, "fixations": fix_schema},
+            {
+                "words": words_df if words is not None else None,
+                "fixations": fixations_df if fixations is not None else None,
+            },
+            rewrites=rewrites,
+        ).items()
+    }
+    maps = {
+        table: names_map.through(prior[table]) if table in prior else names_map
+        for table, names_map in maps.items()
+    }
+    if names == NAMES_SOURCE:
+        words_norm = _cn.attach(words_norm, "words", maps.get("words"))
+        fixations_norm = _cn.attach(fixations_norm, "fixations", maps.get("fixations"))
+    return ScanpathData(words_norm, fixations_norm, maps)
 
 
 def load_participant_metadata(
@@ -728,7 +886,7 @@ def load_participant_metadata(
             f"Columns: {_column_preview(frame)}. Pass id_column= explicitly."
         )
     if isinstance(participants, pd.DataFrame):
-        participants = _metadata.participant_ids(participants)
+        participants = _metadata.participant_ids(_cn.to_canonical_frame(participants))
     return _metadata.build_participant_metadata(
         frame,
         resolved,
@@ -796,7 +954,11 @@ def load_trial_metadata(
             f"participant_column={participant_column!r} is not in the metadata "
             f"table. Columns: {_column_preview(frame)}."
         )
-    keys = _metadata.trial_keys(trials) if trials is not None else None
+    keys = (
+        _metadata.trial_keys(_cn.to_canonical_frame(trials))
+        if trials is not None
+        else None
+    )
     return _metadata.build_trial_metadata(
         frame,
         resolved,
@@ -854,7 +1016,7 @@ def load_text_metadata(
             f"Columns: {_column_preview(frame)}. Pass id_column= explicitly."
         )
     if isinstance(texts, pd.DataFrame):
-        texts = _metadata.text_keys(texts)
+        texts = _metadata.text_keys(_cn.to_canonical_frame(texts))
     return _metadata.build_text_metadata(
         frame,
         resolved,
@@ -863,14 +1025,19 @@ def load_text_metadata(
     )
 
 
-def load_sample_data() -> tuple[pd.DataFrame, pd.DataFrame]:
+def load_sample_data(*, names: str = NAMES_SOURCE) -> ScanpathData:
     """Return the bundled OneStop demo, normalized and ready to plot: two
-    readers, twelve paragraphs each, every one of them with fixations."""
-    return load_scanpath_data(*_data.load_sample_data())
+    readers, twelve paragraphs each, every one of them with fixations. Under
+    the demo's own column names; ``names="canonical"`` for the internal ones
+    (see [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data])."""
+    return load_scanpath_data(*_data.load_sample_data(), names=names)
 
 
 def load_raw_gaze(
-    table: TablesLike, *, raw_gaze_schema: dict | None = None
+    table: TablesLike,
+    *,
+    raw_gaze_schema: dict | None = None,
+    names: str = NAMES_SOURCE,
 ) -> pd.DataFrame:
     """Load and normalize a raw (sample-level) gaze table for ``raw_gaze=``.
 
@@ -885,7 +1052,11 @@ def load_raw_gaze(
 
         raw_gaze = sps.load_raw_gaze("gaze_samples.csv")
         fig = sps.plot_scanpath(words, fixations, "p1", "t3", raw_gaze=raw_gaze)
+
+    Under the table's own column names, like ``load_scanpath_data``'s;
+    ``names="canonical"`` for the internal ones.
     """
+    _check_names_choice(names)
     frame = _as_dataframe(
         table,
         "raw gaze",
@@ -899,15 +1070,20 @@ def load_raw_gaze(
     problems = _data.validate_raw_gaze_schema(schema)
     if problems:
         raise _schema_error("raw_gaze", frame, schema, problems, explicit)
-    return _data.normalize_raw_gaze(frame, schema)
+    normalized = _data.normalize_raw_gaze(frame, schema)
+    if names == NAMES_CANONICAL:
+        return normalized
+    return _cn.attach(
+        normalized, "raw_gaze", _cn.from_schema("raw_gaze", schema, frame.columns)
+    )
 
 
-def load_sample_raw_gaze() -> pd.DataFrame:
+def load_sample_raw_gaze(*, names: str = NAMES_SOURCE) -> pd.DataFrame:
     """The bundled demo's raw gaze, normalized — what the app overlays on it.
 
     OneStop ships no sample-level gaze, so this is **synthesized** from one of
     the demo's real trials and covers that trial alone."""
-    return load_raw_gaze(_data.load_sample_raw_gaze())
+    return load_raw_gaze(_data.load_sample_raw_gaze(), names=names)
 
 
 def compute_word_metrics(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
@@ -915,24 +1091,39 @@ def compute_word_metrics(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Dat
 
     Pre-aggregated columns in ``words`` (EyeLink IA exports) are preserved; anything
     missing is computed from fixations + word bounding boxes. Takes the normalized
-    frames from [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data]."""
-    _require_normalized(words, "words")
-    _require_normalized(fixations, "fixations")
-    return _data.compute_word_metrics(words, fixations)
+    frames from [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data],
+    and answers in the names they carry."""
+    words, word_names = _named_in(words, "words")
+    fixations, _fix_names = _named_in(fixations, "fixations")
+    return _named_out(_data.compute_word_metrics(words, fixations), "words", word_names)
 
 
 def trial_summary(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
     """Exportable one-row-per-trial reading summary."""
     from .aggregation import trial_summary_table
 
-    return trial_summary_table(words, fixations)
+    words, word_names = _named_in(words, "words", optional=True)
+    fixations, fix_names = _named_in(fixations, "fixations", optional=True)
+    names = _call_names(fixations=fix_names, words=word_names)
+    return _named_out(
+        trial_summary_table(words, fixations),
+        "trial_summary",
+        names.identity() if names else None,
+    )
 
 
 def reader_summary(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
     """Exportable one-row-per-reader reading summary."""
     from .aggregation import reader_summary_table
 
-    return reader_summary_table(words, fixations)
+    words, word_names = _named_in(words, "words", optional=True)
+    fixations, fix_names = _named_in(fixations, "fixations", optional=True)
+    names = _call_names(fixations=fix_names, words=word_names)
+    return _named_out(
+        reader_summary_table(words, fixations),
+        "reader_summary",
+        names.identity() if names else None,
+    )
 
 
 def preprocess_data(
@@ -952,6 +1143,10 @@ def preprocess_data(
     from .measures import assign_fixations_to_words, enrich_fixations
     from .preprocessing import preprocess_fixations
 
+    given_words = words
+    words, _word_names = _named_in(words, "words", optional=True)
+    fixations, fix_names = _named_in(fixations, "fixations", optional=True)
+
     assigned = (
         enrich_fixations(assign_fixations_to_words(fixations, words), words)
         if not fixations.empty
@@ -968,7 +1163,12 @@ def preprocess_data(
             "discard_blink_adjacent": discard_blink_adjacent,
         },
     )
-    return words, processed, report
+    # The QA report is derived: it names its ids as the fixations do.
+    return (
+        given_words,
+        _named_out(processed, "fixations", fix_names),
+        _named_out(report, "cleaning_qa", fix_names.identity() if fix_names else None),
+    )
 
 
 def analysis_tables(
@@ -989,6 +1189,7 @@ def analysis_tables(
     [`compute_word_metrics`][scanpath_studio.api.compute_word_metrics] first
     to add the app's own.
     """
+    from .aggregation import reader_summary_table, trial_summary_table
     from .measures import assign_fixations_to_words, enrich_fixations
     from .preprocessing import (
         character_grid,
@@ -997,6 +1198,10 @@ def analysis_tables(
         sentence_measures,
     )
 
+    words, word_names = _named_in(words, "words", optional=True)
+    fixations, fix_names = _named_in(fixations, "fixations", optional=True)
+    if raw_gaze is not None:
+        raw_gaze, _gaze_names = _named_in(raw_gaze, "raw_gaze")
     analysis_fixations = (
         enrich_fixations(assign_fixations_to_words(fixations, words), words)
         if not fixations.empty and not words.empty
@@ -1012,14 +1217,28 @@ def analysis_tables(
         ),
         "word_measures": words,
         "sentence_measures": sentence_measures(words, analysis_fixations),
-        "trial_summary": trial_summary(words, analysis_fixations),
-        "reader_summary": reader_summary(words, analysis_fixations),
+        "trial_summary": trial_summary_table(words, analysis_fixations),
+        "reader_summary": reader_summary_table(words, analysis_fixations),
         "characters": character_grid(words),
         "cleaning_qa": cleaning_report(analysis_fixations),
     }
     if not _data.brought_reading_measures(words):
         del tables["word_measures"]
-    return tables
+    # DATA-66: in the names the frames carried — the two tables that are the
+    # dataset's own under their whole map, the derived ones by their ids only
+    # (the export bundle's rule, `export._ARTIFACT_TABLE`).
+    names = _call_names(fixations=fix_names, words=word_names)
+    if names is None:
+        return tables
+    own = {"fixations": fix_names, "word_measures": word_names}
+    return {
+        artifact: _named_out(
+            table,
+            artifact,
+            own[artifact] if artifact in own else names.identity(),
+        )
+        for artifact, table in tables.items()
+    }
 
 
 def alignment_sensitivity(
@@ -1040,7 +1259,15 @@ def alignment_sensitivity(
         )
     from .preprocessing import measure_sensitivity
 
-    return measure_sensitivity(words, fixations, methods)
+    words, word_names = _named_in(words, "words")
+    fixations, fix_names = _named_in(fixations, "fixations")
+    names = _call_names(fixations=fix_names, words=word_names)
+    tables = measure_sensitivity(words, fixations, methods)
+    if names is None:
+        return tables
+    return tuple(
+        _named_out(table, "alignment_sensitivity", names.identity()) for table in tables
+    )
 
 
 #: The columns each corpus-figure kind reads; ``"<value>"`` stands for
@@ -1174,9 +1401,14 @@ def list_trials(
     data. ``raw_gaze`` (a frame from
     [`load_raw_gaze`][scanpath_studio.api.load_raw_gaze]) adds the trials that
     only its samples cover — every trial, for a dataset recorded as raw gaze
-    alone (pass ``None`` for ``words`` and ``fixations`` then)."""
-    words = _optional_frame(words, "words")
-    fixations = _optional_frame(fixations, "fixations")
+    alone (pass ``None`` for ``words`` and ``fixations`` then). The id columns
+    take the names the frames carry (DATA-66)."""
+    words, word_names = _named_in(words, "words", optional=True)
+    fixations, fix_names = _named_in(fixations, "fixations", optional=True)
+    gaze_names = None
+    if raw_gaze is not None:
+        raw_gaze, gaze_names = _named_in(raw_gaze, "raw_gaze")
+    names = _call_names(fixations=fix_names, words=word_names, raw_gaze=gaze_names)
     cols = ["participant_id", "trial_id"]
     if words.empty or fixations.empty:
         present = fixations if words.empty else words
@@ -1184,7 +1416,6 @@ def list_trials(
     else:
         combos = words[cols].drop_duplicates().merge(fixations[cols].drop_duplicates())
     if raw_gaze is not None and not raw_gaze.empty:
-        _require_normalized(raw_gaze, "raw_gaze")
         # The app's rule (`utils.combo_source`): a trial is listed when it has
         # fixations — or, in a dataset without any, words — or when it has raw
         # gaze. So a trial with words and samples but no fixations is listed,
@@ -1199,7 +1430,8 @@ def list_trials(
             ]
         ]
         combos = pd.concat([combos, extra], ignore_index=True)
-    return combos.sort_values(cols).reset_index(drop=True)
+    combos = combos.sort_values(cols).reset_index(drop=True)
+    return _named_out(combos, "trials", names.identity() if names else None)
 
 
 def list_parts(
@@ -1217,13 +1449,17 @@ def list_parts(
     trial — so a samples-only trial keeps its screens in a dataset whose other
     trials have fixations.
     """
-    words = _optional_frame(words, "words")
-    fixations = _optional_frame(fixations, "fixations")
+    words, word_names = _named_in(words, "words", optional=True)
+    fixations, fix_names = _named_in(fixations, "fixations", optional=True)
+    gaze_names = None
+    if raw_gaze is not None:
+        raw_gaze, gaze_names = _named_in(raw_gaze, "raw_gaze")
+    names = _call_names(fixations=fix_names, words=word_names, raw_gaze=gaze_names)
     catalog = part_catalog(words, fixations)
     if raw_gaze is not None and SCREEN_ID in raw_gaze.columns:
         # Per trial, as `_select_part` and the app decide it: a trial neither
         # words nor fixations cover takes its screens from its samples.
-        samples = part_catalog(_require_normalized(raw_gaze, "raw_gaze"))
+        samples = part_catalog(raw_gaze)
         covered = _data.trial_keys(words) | _data.trial_keys(fixations)
         own = [
             (str(p), str(t)) not in covered
@@ -1248,7 +1484,9 @@ def list_parts(
         catalog = catalog[catalog["participant_id"].astype(str) == str(participant)]
     if trial is not None:
         catalog = catalog[catalog["trial_id"].astype(str) == str(trial)]
-    return catalog.reset_index(drop=True)
+    return _named_out(
+        catalog.reset_index(drop=True), "parts", names.identity() if names else None
+    )
 
 
 def _resolve_trial(
@@ -1268,7 +1506,7 @@ def _resolve_trial(
     the first match (the CLI's behavior, mirroring the app's default selection).
     ``raw_gaze`` makes the trials only its samples cover selectable (VIZ-45).
     """
-    combos = list_trials(words, fixations, raw_gaze=raw_gaze)
+    combos = _cn.to_canonical_frame(list_trials(words, fixations, raw_gaze=raw_gaze))
     if combos.empty:
         raise ValueError("No (participant, trial) combo exists in the data.")
     scoped = combos
@@ -1544,6 +1782,94 @@ _COLUMN_OPTIONS = {
 }
 
 
+#: DATA-66: the figure options whose value names one column, and those naming a
+#: list of them — each takes the dataset's own name as well as the internal one.
+_ONE_COLUMN_OPTIONS = (
+    "color_by",
+    "highlight_column",
+    "heatmap_metric",
+    "word_hover_measure",
+    "word_heatmap_col",
+    "x_field",
+    "y_field",
+)
+_COLUMN_LIST_OPTIONS = ("word_hover_fields", "fixation_hover_fields")
+#: …and of those, the ones naming a column of the words table.
+_WORD_OPTIONS = frozenset(
+    ("highlight_column", "word_hover_measure", "word_heatmap_col", "word_hover_fields")
+)
+
+
+def _canonical_options(
+    overrides: dict,
+    names: ColumnNames | None,
+    *,
+    words: ColumnNames | None = None,
+) -> dict:
+    """``overrides`` with every column it names in the internal vocabulary —
+    a word option in the words table's names (``words``) before the merged
+    map's.
+
+    ``heatmap_metric`` is checked here too: the heatmap weights by the fixation
+    duration or counts fixations, and any other value used to count silently —
+    which, once the dataset's own names are accepted, a misspelt name would."""
+    out = dict(overrides)
+
+    def canonical(option: str, value) -> str:
+        if words is not None and option in _WORD_OPTIONS:
+            found = words.to_canonical(value)
+            if found != str(value):
+                return found
+        return names.to_canonical(value) if names is not None else value
+
+    if names is not None or words is not None:
+        for option in _ONE_COLUMN_OPTIONS:
+            if isinstance(out.get(option), str):
+                out[option] = canonical(option, out[option])
+        for option in _COLUMN_LIST_OPTIONS:
+            if out.get(option) is not None and not isinstance(out[option], str):
+                out[option] = [canonical(option, value) for value in out[option]]
+    metric = out.get("heatmap_metric")
+    if metric not in (None, "duration_ms", "counts"):
+        duration = (
+            names.label("duration_ms")
+            if names is not None and names.source("duration_ms")
+            else "duration_ms"
+        )
+        raise ValueError(
+            f"heatmap_metric={metric!r} (--heatmap-metric on the CLI) must be "
+            f"the fixation duration ({duration!r}) or 'counts'."
+        )
+    return out
+
+
+def _column_labels(
+    names: ColumnNames | None,
+    word_frame,
+    fixation_frame,
+    *,
+    words: ColumnNames | None = None,
+) -> dict | None:
+    """`FigureSettings.column_labels` for frames that carried names — the
+    figure's text in the dataset's own names, as the app writes it, a word
+    column also under the words table's own name (`table_figure_labels`)."""
+    if names is None:
+        return None
+    labels = names.figure_labels(
+        [
+            column
+            for frame in (word_frame, fixation_frame)
+            if frame is not None
+            for column in frame
+        ]
+    )
+    if words is not None and word_frame is not None:
+        for column, label in words.figure_labels(word_frame.columns).items():
+            if labels.get(column) != label:
+                labels[f"words:{column}"] = label
+    return labels
+
+
 def _check_column_options(
     overrides: dict, *, words: pd.DataFrame, fixations: pd.DataFrame
 ) -> None:
@@ -1690,6 +2016,7 @@ def plot_scanpath(
     illustration_label: str = "auto",
     title: str = "",
     caption: str = "",
+    column_names: dict | None = None,
     **figure_overrides,
 ) -> go.Figure:
     """Build the canonical scanpath figure for one trial.
@@ -1730,6 +2057,12 @@ def plot_scanpath(
     defaults. A ``color_by`` / ``highlight_column`` naming a column the trial's table
     doesn't have raises a ``ValueError`` naming the closest ones, rather than drawing
     without it.
+
+    Frames under the dataset's own column names (what ``load_scanpath_data``
+    returns by default) are read through the map they carry, and an option naming
+    a column takes either name. ``column_names`` is that map for frames loaded with
+    ``names="canonical"`` (``data.column_names``): the options then take the
+    dataset's names too, and the figure's text uses them.
     """
     if illustration:
         figure_overrides = {
@@ -1750,10 +2083,16 @@ def plot_scanpath(
     _reject_unknown_options(
         figure_overrides, _STATIC_FIGURE_PARAMS | {"palette"}, "plot_scanpath"
     )
-    words = _optional_frame(words, "words")
-    fixations = _optional_frame(fixations, "fixations")
+    words, word_names = _named_in(words, "words", optional=True)
+    fixations, fix_names = _named_in(fixations, "fixations", optional=True)
+    gaze_names = None
     if raw_gaze is not None:
-        _require_normalized(raw_gaze, "raw_gaze")
+        raw_gaze, gaze_names = _named_in(raw_gaze, "raw_gaze")
+    names = _call_names(
+        column_names, fixations=fix_names, words=word_names, raw_gaze=gaze_names
+    )
+    word_side = _table_names(column_names, "words", word_names)
+    figure_overrides = _canonical_options(figure_overrides, names, words=word_side)
     trial_words, trial_fixations, pid, tid, selected_screen = _select_part(
         words, fixations, participant, trial, screen, raw_gaze=raw_gaze
     )
@@ -1823,6 +2162,9 @@ def plot_scanpath(
         font_family=font_family,
         x_field=x_field,
         y_field=y_field,
+        column_labels=_column_labels(
+            names, trial_words, trial_fixations, words=word_side
+        ),
     )
     fig = make_scanpath_figure(
         trial_words,
@@ -1852,6 +2194,7 @@ def animate_scanpath(
     illustration_label: str = "auto",
     title: str = "",
     caption: str = "",
+    column_names: dict | None = None,
     trial_b: tuple[str, str] | None = None,
     dataset_b: str | None = None,
     setup: SetupSnapshot | None = None,
@@ -1860,9 +2203,9 @@ def animate_scanpath(
 ) -> go.Figure:
     """Build the animated scanpath replay for one trial.
 
-    Same trial selection and canvas semantics as
-    [`plot_scanpath`][scanpath_studio.api.plot_scanpath], including ``screen`` selection
-    for multipart trials. The replay takes the reading time divided by
+    Same trial selection, canvas and column-name semantics as
+    [`plot_scanpath`][scanpath_studio.api.plot_scanpath] (``column_names`` included),
+    and ``screen`` selection for multipart trials. The replay takes the reading time divided by
     ``playback_speed``: save it as interactive HTML with
     [`save_figure`][scanpath_studio.api.save_figure], whose page keeps that clock
     itself, or rasterize it to GIF/MP4 with `animation_export.export_animation`, which
@@ -1957,8 +2300,14 @@ def animate_scanpath(
     # `plot_scanpath` and `animate_scanpath` don't render the same trial
     # differently (the app feeds both from one settings dict).
     animation_overrides = {**_animation_defaults(), **animation_overrides}
-    words = _optional_frame(words, "words")
-    fixations = _optional_frame(fixations, "fixations")
+    words, word_names = _named_in(words, "words", optional=True)
+    fixations, fix_names = _named_in(fixations, "fixations", optional=True)
+    names = _call_names(column_names, fixations=fix_names, words=word_names)
+    word_side = _table_names(column_names, "words", word_names)
+    animation_overrides = _canonical_options(
+        animation_overrides, names, words=word_side
+    )
+    named = _canonical_options(named, names, words=word_side)
     trial_words, trial_fixations, pid, tid, _selected_screen = _select_part(
         words, fixations, participant, trial, screen
     )
@@ -2077,6 +2426,9 @@ def animate_scanpath(
         font_family=font_family,
         playback_speed=playback_speed,
         autoplay=autoplay,
+        column_labels=_column_labels(
+            names, trial_words, trial_fixations, words=word_side
+        ),
     )
     fig = make_scanpath_animation(
         trial_words,
@@ -2300,8 +2652,19 @@ def render_parent_trial(
     if transition_mode not in {"instant", "recorded"}:
         raise ValueError("transition_mode must be 'instant' or 'recorded'.")
     raw_gaze = options.get("raw_gaze")
-    pid, tid = _resolve_trial(words, fixations, participant, trial, raw_gaze=raw_gaze)
-    catalog = list_parts(words, fixations, pid, tid, raw_gaze=raw_gaze)
+    pid, tid = _resolve_trial(
+        _cn.to_canonical_frame(words),
+        _cn.to_canonical_frame(fixations),
+        participant,
+        trial,
+        raw_gaze=_cn.to_canonical_frame(raw_gaze),
+    )
+    # Read here under the internal names; the renderers take the frames as
+    # given and name their figures as they were named (DATA-66).
+    catalog = _cn.to_canonical_frame(
+        list_parts(words, fixations, pid, tid, raw_gaze=raw_gaze)
+    )
+    canonical_fixations = _cn.to_canonical_frame(fixations)
     if catalog.empty:
         renderer = animate_scanpath if animate else plot_scanpath
         return {"screen-1": renderer(words, fixations, pid, tid, **options)}
@@ -2313,8 +2676,10 @@ def render_parent_trial(
         fig = renderer(words, fixations, pid, tid, screen=screen_id, **options)
         delay = 0.0
         if animate and transition_mode == "recorded" and position < len(screen_ids) - 1:
-            current = extract_part(fixations, pid, tid, screen_id)
-            following = extract_part(fixations, pid, tid, screen_ids[position + 1])
+            current = extract_part(canonical_fixations, pid, tid, screen_id)
+            following = extract_part(
+                canonical_fixations, pid, tid, screen_ids[position + 1]
+            )
             if not current.empty and not following.empty:
                 current_end = (
                     pd.to_numeric(current["timestamp_ms"], errors="coerce")
@@ -2415,6 +2780,7 @@ def compare_scanpaths(
     drift_correction: str | None = None,
     title: str = "",
     caption: str = "",
+    column_names: dict | None = None,
     **figure_overrides,
 ) -> go.Figure:
     """Build a two-scanpath comparison figure.
@@ -2484,7 +2850,10 @@ def compare_scanpaths(
     Remaining keywords are forwarded to `plots.make_comparison_figure`
     (e.g. ``show_words=False``, ``color_by="duration_ms"``); an unknown one
     raises ``TypeError`` naming the closest valid options;
-    ``figure_options("comparison")`` lists the accepted keywords.
+    ``figure_options("comparison")`` lists the accepted keywords. Column names
+    follow [`plot_scanpath`][scanpath_studio.api.plot_scanpath]'s rule: A's
+    names (or ``column_names``) name the options and the figure's text, and
+    either dataset's frames may come under their own names.
     """
     from .experimental_setup import IncomparableScreensError, setups_comparable
     from .utils import (
@@ -2507,11 +2876,26 @@ def compare_scanpaths(
     )
 
     cross_dataset = words_b is not None or fixations_b is not None
+    # DATA-66: A's names name the figure's text and its options; every frame,
+    # A's or B's, is processed under the internal names.
+    carried = {
+        table: found[1]
+        for table, frame in (("fixations", fixations), ("words", words))
+        if (found := _cn.frame_names(frame)) is not None
+    }
+    names = _call_names(column_names, **carried)
+    word_side = _table_names(column_names, "words", carried.get("words"))
+    figure_overrides = _canonical_options(figure_overrides, names, words=word_side)
+    words, fixations, words_b, fixations_b = (
+        _cn.to_canonical_frame(frame)
+        for frame in (words, fixations, words_b, fixations_b)
+    )
     words_b = words if words_b is None else words_b
     fixations_b = fixations if fixations_b is None else fixations_b
-    for frame, name in ((raw_gaze, "raw_gaze"), (raw_gaze_b, "raw_gaze_b")):
-        if frame is not None:
-            _require_normalized(frame, name)
+    if raw_gaze is not None:
+        raw_gaze = _require_normalized(raw_gaze, "raw_gaze")
+    if raw_gaze_b is not None:
+        raw_gaze_b = _require_normalized(raw_gaze_b, "raw_gaze_b")
     if raw_gaze_b is None and not cross_dataset:
         raw_gaze_b = raw_gaze
 
@@ -2676,6 +3060,9 @@ def compare_scanpaths(
         trial_labels=tuple(labels) if labels else None,
         style_a=style_a,
         style_b=style_b,
+        column_labels=_column_labels(
+            names, trial_words_a, trial_fix_a, words=word_side
+        ),
         # Only the split layouts read this; an overlay that got here has two
         # equal canvases anyway, so it is the same value either way.
         canvas_b=resolved_setup_b.canvas,

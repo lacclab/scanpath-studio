@@ -17,8 +17,8 @@ B = (PID, "l37_1129_2_1_1_Ele_r0")
 
 @pytest.fixture(scope="module")
 def demo():
-    words, fixations = sps.load_sample_data()
-    return words, fixations, sps.load_sample_raw_gaze()
+    words, fixations = sps.load_sample_data(names="canonical")
+    return words, fixations, sps.load_sample_raw_gaze(names="canonical")
 
 
 @pytest.fixture(scope="module")

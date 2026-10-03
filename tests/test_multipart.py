@@ -86,7 +86,9 @@ def test_scientific_enrichment_and_measures_never_cross_screen_boundary():
 
 def test_explicit_columns_auto_normalize_and_headless_api_selects_one_screen():
     words, fixations = make_multipart_synthetic_data()
-    normalized_words, normalized_fixations = api.load_scanpath_data(words, fixations)
+    normalized_words, normalized_fixations = api.load_scanpath_data(
+        words, fixations, names="canonical"
+    )
     assert SCREEN_ID in normalized_words
     assert SCREEN_ID in normalized_fixations
     assert api.list_trials(normalized_words, normalized_fixations).shape == (1, 2)

@@ -472,8 +472,12 @@ def load_potec(
     readers: Iterable | None = None,
     texts: Iterable[str] | None = None,
     download: bool = False,
+    names: str = "source",
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load PoTeC as normalized ``(words, fixations)`` frames, ready to plot.
+
+    Under PoTeC's own column names; ``names="canonical"`` for the internal
+    ones (see `api.load_scanpath_data`).
 
     ``root`` is a clone of the PoTeC repo (with the eye-tracking data
     downloaded) or any folder; with ``download=True`` the needed files are
@@ -513,6 +517,7 @@ def load_potec(
                 else None
             ),
         ),
+        names=names,
     )
 
 
@@ -1080,8 +1085,12 @@ def load_onestop(
     parts: Iterable[str] | None = None,
     variant: str = "public",
     download: bool = False,
+    names: str = "source",
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load OneStop as normalized ``(words, fixations)`` frames, ready to plot.
+
+    Under OneStop's own column names; ``names="canonical"`` for the internal
+    ones (see `api.load_scanpath_data`).
 
     ``root`` is a folder holding (or to download into, public variant only) the
     OneStop reports. Narrow the load with ``regime`` (``ordinary`` /
@@ -1113,7 +1122,7 @@ def load_onestop(
 
     from . import api
 
-    return api.load_scanpath_data(words=words_raw, fixations=fixations_raw)
+    return api.load_scanpath_data(words=words_raw, fixations=fixations_raw, names=names)
 
 
 # ---------------------------------------------------------------------------
@@ -2368,8 +2377,12 @@ def load_multipleye(
     stimuli: Iterable[str] | None = None,
     fixation_source: str = "scanpaths",
     include_question_screens: bool = True,
+    names: str = "source",
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load MultiplEYE as normalized ``(words, fixations)`` frames, ready to plot.
+
+    Under the loader's column names; ``names="canonical"`` for the internal
+    ones (see `api.load_scanpath_data`).
 
     ``root`` is a MultiplEYE session set (e.g.
     ``data/MultiplEYE_ZH_CH_Zurich_1_2025``). Narrow the load with ``sessions``
@@ -2414,6 +2427,7 @@ def load_multipleye(
             MULTIPLEYE_FIX_SCHEMA,
             word_id="word_idx" if "word_idx" in fixations_raw.columns else None,
         ),
+        names=names,
     )
 
 
@@ -2643,6 +2657,7 @@ def load_multipleye_uploads(
     participant_meta_df: pd.DataFrame | None = None,
     versions_df: pd.DataFrame | None = None,
     include_question_screens: bool = True,
+    names: str = "source",
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Normalized ``(words, fixations)`` from UPLOADED MultiplEYE files.
 
@@ -2678,4 +2693,5 @@ def load_multipleye_uploads(
             if not fix_raw.empty
             else None
         ),
+        names=names,
     )

@@ -252,8 +252,9 @@ def secondary_dataset_options(
 @st.cache_data(show_spinner=False)  # UX-168: B's dataset card covers this.
 def _load_public_frames(
     label: str, root: str, options: tuple
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Normalized frames for a public corpus, keyed on its location + options.
+) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
+    """Normalized frames for a public corpus, keyed on its location + options,
+    and its column-name map per table, as payloads (DATA-66).
 
     Goes through the `datasets.load_*` entry points (which normalize internally
     via `api.load_scanpath_data`), never `app.prepare_data` — that one takes a
@@ -262,26 +263,34 @@ def _load_public_frames(
     from scanpath_studio import datasets
 
     kwargs = dict(options)
+    # The app works in the internal names; DATA-66: the corpus' own names come
+    # back beside the frames (`ScanpathData.column_names`), for B's labels.
     if dataset := kwargs.get("dataset"):
         from scanpath_studio.eyegenbench import load_eyegenbench
 
-        frames = load_eyegenbench(root, dataset=dataset)
+        data = load_eyegenbench(root, dataset=dataset, names="canonical")
     elif onestop_regime_for_choice(label):
-        frames = datasets.load_onestop(
+        data = datasets.load_onestop(
             root,
             regime=kwargs["regime"],
             parts=list(kwargs["parts"]),
             variant=kwargs["variant"],
+            names="canonical",
         )
     elif _POTEC_LABEL_HINT in label:
-        frames = datasets.load_potec(root)
+        data = datasets.load_potec(root, names="canonical")
     else:
-        frames = datasets.load_multipleye(
-            root, fixation_source=kwargs["fixation_source"]
+        data = datasets.load_multipleye(
+            root, fixation_source=kwargs["fixation_source"], names="canonical"
         )
     # BUG-103: B's corpus is copied out of this cache on every rerun; the label
     # lets `load_secondary_dataset` key it without hashing it each time.
-    return stamp_source(frames)
+    words, fixations = stamp_source((data[0], data[1]))
+    payloads = {
+        table: names.to_payload()
+        for table, names in getattr(data, "column_names", {}).items()
+    }
+    return words, fixations, payloads
 
 
 @st.cache_data(show_spinner=False)  # UX-168: B's dataset card covers this.
@@ -299,7 +308,8 @@ def _load_builtin_frames(name: str) -> tuple[pd.DataFrame, pd.DataFrame]:
 
     progress.report()
     raw = load_sample_data() if name == DEMO_CHOICE else load_synthetic_data()
-    return api.load_scanpath_data(raw[0], raw[1])
+    words, fixations = api.load_scanpath_data(raw[0], raw[1], names="canonical")
+    return words, fixations
 
 
 @st.cache_data(show_spinner=False)
@@ -356,7 +366,7 @@ def _load_demo_raw_gaze() -> pd.DataFrame:
     """The bundled demo's normalized raw gaze, for a demo B (VIZ-48)."""
     from scanpath_studio import api
 
-    return api.load_sample_raw_gaze()
+    return api.load_sample_raw_gaze(names="canonical")
 
 
 def snapshot_for(
@@ -435,10 +445,14 @@ def load_secondary_dataset(name: str | None) -> SecondaryDataset | None:
             if not _public_ready(name)[0]:
                 return None
             root, options = _public_location(name)
-            words, fixations = _load_public_frames(
+            words, fixations, payloads = _load_public_frames(
                 name, root, tuple(sorted(options.items()))
             )
             adopt_source(words, fixations)
+            column_names = {
+                table: ColumnNames.from_payload(payload)
+                for table, payload in payloads.items()
+            }
         elif name in (DEMO_CHOICE, SYNTHETIC_CHOICE):
             words, fixations = _load_builtin_frames(name)
             column_names = {

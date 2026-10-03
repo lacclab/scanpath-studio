@@ -50,7 +50,7 @@ LONGEST = ("l37_1129", "l37_1129_2_2_2_Adv_r0")
 
 @functools.cache
 def _demo():
-    return api.load_sample_data()
+    return api.load_sample_data(names="canonical")
 
 
 @functools.cache

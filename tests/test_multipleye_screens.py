@@ -263,7 +263,7 @@ def _screens(frame: pd.DataFrame, reader: str) -> pd.DataFrame:
 
 def test_a_stimulus_is_one_trial_with_its_pages_as_screens(screens_root):
     words, fixations = datasets.load_multipleye(
-        screens_root, include_question_screens=False
+        screens_root, include_question_screens=False, names="canonical"
     )
 
     # trial_id == text_id == the stimulus; the pages live inside it as screens.
@@ -298,7 +298,7 @@ def test_a_stimulus_is_one_trial_with_its_pages_as_screens(screens_root):
 
 def test_screen_index_follows_the_readers_onsets_not_the_screen_names(screens_root):
     """The question order is shuffled per reader, so only the onsets can order it."""
-    _, fixations = datasets.load_multipleye(screens_root)
+    _, fixations = datasets.load_multipleye(screens_root, names="canonical")
 
     # Reader A fixated question_1112 BEFORE question_1111 …
     assert list(_screens(fixations, READER_A)["screen_id"]) == [
@@ -345,7 +345,7 @@ def test_question_aoi_matches_on_the_int_id_and_the_readers_version(screens_root
     )
     assert aoi["page"].astype(str).str.contains(f"question_{Q1:05d}").any()
 
-    words, _fixations = datasets.load_multipleye(screens_root)
+    words, _fixations = datasets.load_multipleye(screens_root, names="canonical")
     for reader in (READER_A, READER_B):
         assert f"question_{Q1}" in set(
             words[words["participant_id"] == reader]["screen_id"]
@@ -377,7 +377,7 @@ def test_question_aoi_matches_on_the_int_id_and_the_readers_version(screens_root
 
 
 def test_question_word_ids_are_screen_unique_and_in_reading_order(screens_root):
-    words, _ = datasets.load_multipleye(screens_root)
+    words, _ = datasets.load_multipleye(screens_root, names="canonical")
     screen = words[
         (words["participant_id"] == READER_A) & (words["screen_id"] == f"question_{Q1}")
     ].sort_values("word_id")
@@ -417,7 +417,7 @@ def test_question_word_ids_are_screen_unique_and_in_reading_order(screens_root):
 
 def test_a_reader_who_skipped_a_page_produces_no_orphan_screen(screens_root):
     """`harmonize_frames` rejects orphan screens, so the boxes must be scoped."""
-    words, fixations = datasets.load_multipleye(screens_root)
+    words, fixations = datasets.load_multipleye(screens_root, names="canonical")
 
     # Reader B never fixated page_2, so it is simply absent for them — and its
     # word boxes are absent too, rather than orphaning the screen.
@@ -448,7 +448,9 @@ def test_uploads_without_a_versions_file_yield_reading_screens_only(
     aoi_df = read_tables(aoi_files)
 
     with caplog.at_level(logging.WARNING, logger="scanpath_studio.datasets"):
-        words, fixations = datasets.load_multipleye_uploads(fix_df, aoi_df)
+        words, fixations = datasets.load_multipleye_uploads(
+            fix_df, aoi_df, names="canonical"
+        )
     assert set(fixations["screen_id"]) == {"page_1", "page_2"}
     assert set(words["screen_id"]) == {"page_1", "page_2"}
     assert "answer-layout version table" in caplog.text
@@ -456,19 +458,19 @@ def test_uploads_without_a_versions_file_yield_reading_screens_only(
     # Hand the recipe the versions table and the question screens come back.
     versions = pd.read_csv(write_versions(screens_root))
     words, fixations = datasets.load_multipleye_uploads(
-        fix_df, aoi_df, versions_df=versions
+        fix_df, aoi_df, versions_df=versions, names="canonical"
     )
     assert f"question_{Q1}" in set(fixations["screen_id"])
     assert f"question_{Q1}" in set(words["screen_id"])
     # Uploading the versions table alongside the AOI CSVs works the same way.
     combined = read_tables(aoi_files + [str(write_versions(screens_root))])
-    words, _ = datasets.load_multipleye_uploads(fix_df, combined)
+    words, _ = datasets.load_multipleye_uploads(fix_df, combined, names="canonical")
     assert f"question_{Q2}" in set(words["screen_id"])
 
 
 def test_include_question_screens_false_yields_reading_screens_only(screens_root):
     words, fixations = datasets.load_multipleye(
-        screens_root, include_question_screens=False
+        screens_root, include_question_screens=False, names="canonical"
     )
 
     assert set(words["screen_kind"]) == {"reading"}
@@ -491,7 +493,7 @@ def test_include_question_screens_false_yields_reading_screens_only(screens_root
 
 
 def test_the_headless_api_lists_and_plots_a_question_screen(screens_root):
-    words, fixations = datasets.load_multipleye(screens_root)
+    words, fixations = datasets.load_multipleye(screens_root, names="canonical")
 
     catalog = api.list_parts(words, fixations, READER_A, LIT)
     assert list(catalog["screen_id"]) == [

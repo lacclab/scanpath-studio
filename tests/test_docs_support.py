@@ -141,7 +141,7 @@ def test_an_embedded_replay_carries_the_replay_player():
     from scanpath_studio import api
     from scanpath_studio.plots import animation_player_post_script, replay_page
 
-    words, fixations = api.load_sample_data()
+    words, fixations = api.load_sample_data(names="canonical")
     pid, tid = api.list_trials(words, fixations).iloc[0]
     replay = api.animate_scanpath(words, fixations, pid, tid, fix_index_range=(1, 5))
     static = api.plot_scanpath(words, fixations, pid, tid, fix_index_range=(1, 5))

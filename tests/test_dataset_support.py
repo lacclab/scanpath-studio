@@ -183,7 +183,7 @@ def test_load_scanpath_data_accepts_path_list(tmp_path):
     p1, p2 = tmp_path / "f1.csv", tmp_path / "f2.csv"
     _write_fix_csv(p1, "p0", "t1")
     _write_fix_csv(p2, "p1", "t1")
-    words, fixations = sps.load_scanpath_data(fixations=[p1, p2])
+    words, fixations = sps.load_scanpath_data(fixations=[p1, p2], names="canonical")
     assert words.empty
     assert set(fixations["participant_id"]) == {"p0", "p1"}
     # the origin file survives normalization for traceability
@@ -197,13 +197,13 @@ def test_load_scanpath_data_accepts_path_list(tmp_path):
 
 def test_load_scanpath_data_requires_some_input():
     with pytest.raises(ValueError, match="at least one"):
-        sps.load_scanpath_data()
+        sps.load_scanpath_data(names="canonical")
 
 
 def test_fixations_only_load_list_and_plot(tmp_path):
     path = tmp_path / "fix.csv"
     _write_fix_csv(path, "p0", "t1")
-    words, fixations = sps.load_scanpath_data(fixations=path)
+    words, fixations = sps.load_scanpath_data(fixations=path, names="canonical")
     assert words.empty and not fixations.empty
 
     combos = sps.list_trials(words, fixations)
@@ -214,7 +214,7 @@ def test_fixations_only_load_list_and_plot(tmp_path):
 
 
 def test_words_only_load_list_and_plot(sample_words_df):
-    words, fixations = sps.load_scanpath_data(words=sample_words_df)
+    words, fixations = sps.load_scanpath_data(words=sample_words_df, names="canonical")
     assert fixations.empty and not words.empty
 
     combos = sps.list_trials(words, fixations)
@@ -227,7 +227,7 @@ def test_words_only_load_list_and_plot(sample_words_df):
 def test_words_only_heatmap_uses_preaggregated_measures(sample_words_df):
     sample_words_df = sample_words_df.copy()
     sample_words_df["IA_DWELL_TIME"] = [500, 250, 0, 100, 100]
-    words, fixations = sps.load_scanpath_data(words=sample_words_df)
+    words, fixations = sps.load_scanpath_data(words=sample_words_df, names="canonical")
     trial_words = words[words["participant_id"] == "p1"]
 
     def n_shapes(show_heatmap):
@@ -265,7 +265,7 @@ def test_words_only_heatmap_uses_preaggregated_measures(sample_words_df):
 def test_default_filters_fixations_only(tmp_path):
     path = tmp_path / "fix.csv"
     _write_fix_csv(path, "p0", "t1")
-    words, fixations = sps.load_scanpath_data(fixations=path)
+    words, fixations = sps.load_scanpath_data(fixations=path, names="canonical")
     filters = data_module.default_filters(words, fixations)
     assert filters["participants"] == ["p0"]
     assert filters["trials"] == ["t1"]
@@ -309,7 +309,7 @@ def aoi_fixations_df():
 
 def test_stimulus_words_broadcast_and_aoi_xy(stimulus_words_df, aoi_fixations_df):
     words, fixations = sps.load_scanpath_data(
-        words=stimulus_words_df, fixations=aoi_fixations_df
+        words=stimulus_words_df, fixations=aoi_fixations_df, names="canonical"
     )
     # words replicated across the readers that read each text
     assert set(words["participant_id"]) == {"7", "8"}
@@ -327,7 +327,9 @@ def test_stimulus_words_broadcast_and_aoi_xy(stimulus_words_df, aoi_fixations_df
 
 
 def test_stimulus_words_without_fixations_get_synthetic_participant(stimulus_words_df):
-    words, _fixations = sps.load_scanpath_data(words=stimulus_words_df)
+    words, _fixations = sps.load_scanpath_data(
+        words=stimulus_words_df, names="canonical"
+    )
     # No fixations to broadcast across → a single anonymous reader.
     assert (words["participant_id"] == data_module.SYNTHETIC_PARTICIPANT).all()
     assert data_module.STIMULUS_WORDS_FLAG not in words.columns
@@ -347,7 +349,7 @@ def test_a_repeated_reading_gets_the_stimulus_words_too(stimulus_words_df):
         }
     )
     words, fixations = sps.load_scanpath_data(
-        words=stimulus_words_df, fixations=fixations
+        words=stimulus_words_df, fixations=fixations, names="canonical"
     )
     assert set(fixations["trial_id"]) == {"t1", "t1_r2"}
     for trial in ("t1", "t1_r2"):
@@ -369,13 +371,17 @@ def test_a_trial_named_like_a_repeat_keeps_its_own_words(stimulus_words_df):
             "y": [75.0, 75.0],
         }
     )
-    words, _ = sps.load_scanpath_data(words=words_df, fixations=fixations)
+    words, _ = sps.load_scanpath_data(
+        words=words_df, fixations=fixations, names="canonical"
+    )
     own = words[words["trial_id"] == "t1_r2"]
     assert set(own["text"]) == {"Other"}
 
 
 def test_aoi_fixations_without_words_raise_on_plot(aoi_fixations_df):
-    words, fixations = sps.load_scanpath_data(fixations=aoi_fixations_df)
+    words, fixations = sps.load_scanpath_data(
+        fixations=aoi_fixations_df, names="canonical"
+    )
     assert fixations["x"].isna().all()
     with pytest.raises(ValueError, match="no usable coordinates"):
         sps.plot_scanpath(words, fixations, "7", "t1")
@@ -386,7 +392,7 @@ def test_fix_schema_requires_xy_or_word_id():
         {"participant_id": ["p"], "trial_id": ["t"], "duration_ms": [100]}
     )
     with pytest.raises(ValueError, match="Word/IA ID"):
-        sps.load_scanpath_data(fixations=no_position)
+        sps.load_scanpath_data(fixations=no_position, names="canonical")
 
 
 def test_participant_less_fixations_get_synthetic_participant():
@@ -400,7 +406,7 @@ def test_participant_less_fixations_get_synthetic_participant():
             "duration_ms": [100, 120, 90],
         }
     )
-    _words, fix = sps.load_scanpath_data(fixations=fixations)
+    _words, fix = sps.load_scanpath_data(fixations=fixations, names="canonical")
     assert (fix["participant_id"] == data_module.SYNTHETIC_PARTICIPANT).all()
 
 
@@ -428,7 +434,9 @@ def test_asymmetric_participant_reconciles_word_boxes():
             "duration_ms": [180, 200],
         }
     )
-    words_n, fix_n = sps.load_scanpath_data(words=words, fixations=fixations)
+    words_n, fix_n = sps.load_scanpath_data(
+        words=words, fixations=fixations, names="canonical"
+    )
     assert set(fix_n["participant_id"]) == {data_module.SYNTHETIC_PARTICIPANT}
     assert set(words_n["participant_id"]) == {data_module.SYNTHETIC_PARTICIPANT}
     # The boxes for the trial the picker offers ('(all)', 't1') are now reachable.
@@ -505,7 +513,9 @@ def potec_root(tmp_path):
 
 
 def test_load_potec(potec_root):
-    words, fixations = datasets_module.load_potec(potec_root, texts=["b0"])
+    words, fixations = datasets_module.load_potec(
+        potec_root, texts=["b0"], names="canonical"
+    )
 
     # stimulus words broadcast across both readers
     assert set(words["participant_id"]) == {"0", "1"}
@@ -536,7 +546,9 @@ def test_load_potec(potec_root):
 
 
 def test_load_potec_reader_subset(potec_root):
-    words, fixations = datasets_module.load_potec(potec_root, readers=[1], texts=["b0"])
+    words, fixations = datasets_module.load_potec(
+        potec_root, readers=[1], texts=["b0"], names="canonical"
+    )
     assert set(fixations["participant_id"]) == {"1"}
     assert set(words["participant_id"]) == {"1"}
 
@@ -573,12 +585,12 @@ def test_the_app_maps_potec_trials_as_reader_and_text(potec_root, monkeypatch):
 
 def test_load_potec_unknown_text(potec_root):
     with pytest.raises(ValueError, match="Unknown PoTeC text ids"):
-        datasets_module.load_potec(potec_root, texts=["z9"])
+        datasets_module.load_potec(potec_root, texts=["z9"], names="canonical")
 
 
 def test_load_potec_missing_data_message(tmp_path):
     with pytest.raises(FileNotFoundError, match="download=True"):
-        datasets_module.load_potec(tmp_path, texts=["b0"])
+        datasets_module.load_potec(tmp_path, texts=["b0"], names="canonical")
 
 
 def test_potec_reports_each_fixation_file(potec_root, monkeypatch):
@@ -926,7 +938,11 @@ def test_onestop_parts_are_screens_of_one_trial(onestop_offline, tmp_path):
     """DATA-63: a reading's parts are the *screens* of one trial, in presentation
     order — not one trial per part."""
     words, fixations = datasets_module.load_onestop(
-        tmp_path, regime="ordinary", parts=["Title", "Paragraph"], download=True
+        tmp_path,
+        regime="ordinary",
+        parts=["Title", "Paragraph"],
+        download=True,
+        names="canonical",
     )
     for frame in (words, fixations):
         assert frame["trial_id"].nunique() == 1
@@ -1024,7 +1040,11 @@ def test_onestop_present_per_part(onestop_offline, tmp_path):
 def test_load_onestop_normalized(onestop_offline, tmp_path):
     """The normalized headless loader returns plot-ready frames."""
     words, fixations = datasets_module.load_onestop(
-        tmp_path, regime="ordinary", parts=["Paragraph"], download=True
+        tmp_path,
+        regime="ordinary",
+        parts=["Paragraph"],
+        download=True,
+        names="canonical",
     )
     assert not words.empty
     assert {"participant_id", "trial_id", "word_id", "text"} <= set(words.columns)
@@ -1129,7 +1149,9 @@ def test_onestop_paragraph_three_of_two_articles_is_two_texts(tmp_path):
         _onestop_public_words(article_id=[1, 27], paragraph_id=[3, 3]),
         _onestop_public_fixations(article_id=[1, 27], paragraph_id=[3, 3]),
     )
-    words, fixations = datasets_module.load_onestop(tmp_path, regime="ordinary")
+    words, fixations = datasets_module.load_onestop(
+        tmp_path, regime="ordinary", names="canonical"
+    )
     assert words["text_id"].nunique() == 2
     assert fixations["text_id"].nunique() == 2
 
@@ -1142,7 +1164,9 @@ def test_onestop_repeated_reading_is_its_own_trial(tmp_path):
         _onestop_public_words(repeated_reading_trial=[0, 1], IA_ID=[1, 1]),
         _onestop_public_fixations(repeated_reading_trial=[0, 1]),
     )
-    words, _ = datasets_module.load_onestop(tmp_path, regime="ordinary")
+    words, _ = datasets_module.load_onestop(
+        tmp_path, regime="ordinary", names="canonical"
+    )
     assert words["text_id"].nunique() == 1
     assert set(words["trial_id"]) == {
         f"p1_{_FAKE_ONESTOP_PARAGRAPH}_r0",
@@ -1305,7 +1329,9 @@ def multipleye_root(tmp_path):
 
 
 def test_load_multipleye(multipleye_root):
-    words, fixations = datasets_module.load_multipleye(multipleye_root)
+    words, fixations = datasets_module.load_multipleye(
+        multipleye_root, names="canonical"
+    )
 
     # Reader key = full session; ET1/ET2 are distinct readers.
     assert set(fixations["participant_id"]) == {"001_ZH_CH_1_ET1", "014_ZH_CH_1_ET2"}
@@ -1350,7 +1376,9 @@ def test_load_multipleye(multipleye_root):
 def test_load_multipleye_pages_are_separate_non_overlapping_screens(multipleye_root):
     # page_1 and page_2 reuse the SAME coordinates but are different screens with
     # different text — proving the per-screen split avoids the overlap.
-    words, _ = datasets_module.load_multipleye(multipleye_root, stimuli=["Lit_Demo_1"])
+    words, _ = datasets_module.load_multipleye(
+        multipleye_root, stimuli=["Lit_Demo_1"], names="canonical"
+    )
     p1 = words[words["screen_id"] == "page_1"]
     p2 = words[words["screen_id"] == "page_2"]
     assert set(p1["text"]) == {"AA", "BB"}
@@ -1364,7 +1392,10 @@ def test_load_multipleye_fixations_source_fallback(multipleye_root):
     # no question-AOI file / version table here, so it is dropped rather than
     # guessed (3 rows in -> 2 reading-page fixations out).
     _words, fixations = datasets_module.load_multipleye(
-        multipleye_root, sessions=["001_ZH_CH_1_ET1"], fixation_source="fixations"
+        multipleye_root,
+        sessions=["001_ZH_CH_1_ET1"],
+        fixation_source="fixations",
+        names="canonical",
     )
     assert fixations["word_id"].isna().all()
     assert fixations["x"].notna().all()
@@ -1375,7 +1406,10 @@ def test_load_multipleye_fixations_source_fallback(multipleye_root):
 
 def test_multipleye_centered_offset(multipleye_root):
     _, fixations = datasets_module.load_multipleye(
-        multipleye_root, sessions=["001_ZH_CH_1_ET1"], stimuli=["Lit_Demo_1"]
+        multipleye_root,
+        sessions=["001_ZH_CH_1_ET1"],
+        stimuli=["Lit_Demo_1"],
+        names="canonical",
     )
     off_x, off_y = datasets_module._MULTIPLEYE_IMAGE_ORIGIN
     # The centering offset is (screen - image) / 2 = (305, 44.5) for the 1310x991
@@ -1407,7 +1441,7 @@ def test_multipleye_screen_kind_and_question_parsing():
 
 def test_load_multipleye_session_and_stimulus_filters(multipleye_root):
     words, fixations = datasets_module.load_multipleye(
-        multipleye_root, sessions=["014_ZH_CH_1_ET2"]
+        multipleye_root, sessions=["014_ZH_CH_1_ET2"], names="canonical"
     )
     assert set(fixations["participant_id"]) == {"014_ZH_CH_1_ET2"}
     assert set(words["text_id"]) == {"Arg_Other_2"}
@@ -1470,12 +1504,16 @@ def test_load_multipleye_missing_aoi_raises(multipleye_root):
         multipleye_root / "stimuli_Demo" / "aoi_stimuli_demo" / "lit_demo_1_aoi.csv"
     ).unlink()
     with pytest.raises(FileNotFoundError, match="AOI file not found"):
-        datasets_module.load_multipleye(multipleye_root, stimuli=["Lit_Demo_1"])
+        datasets_module.load_multipleye(
+            multipleye_root, stimuli=["Lit_Demo_1"], names="canonical"
+        )
 
 
 def test_load_multipleye_bad_fixation_source(multipleye_root):
     with pytest.raises(ValueError, match="fixation_source"):
-        datasets_module.load_multipleye(multipleye_root, fixation_source="saccades")
+        datasets_module.load_multipleye(
+            multipleye_root, fixation_source="saccades", names="canonical"
+        )
 
 
 # Optional end-to-end check against the read-only ZH-CH-Zurich sample, when present.
@@ -1487,7 +1525,7 @@ _MULTIPLEYE_SAMPLE = __import__("pathlib").Path("data/MultiplEYE_ZH_CH_Zurich_1_
 )
 def test_load_multipleye_real_sample():
     words, fixations = datasets_module.load_multipleye(
-        _MULTIPLEYE_SAMPLE, stimuli=["Lit_Alchemist_4"]
+        _MULTIPLEYE_SAMPLE, stimuli=["Lit_Alchemist_4"], names="canonical"
     )
     assert not words.empty and not fixations.empty
     # One trial per reading of the stimulus; its pages + question screens inside.
@@ -1537,7 +1575,7 @@ def test_multipleye_real_sample_stamps_font():
     # The stimulus FONT_SIZE (28) + CJK font are read from the config and stamped,
     # surviving normalization so the app can snap its font controls to them.
     words, fixations = datasets_module.load_multipleye(
-        _MULTIPLEYE_SAMPLE, stimuli=["Lit_Alchemist_4"]
+        _MULTIPLEYE_SAMPLE, stimuli=["Lit_Alchemist_4"], names="canonical"
     )
     assert float(words["stimulus_font_px"].iloc[0]) == 28.0
     fam = words["stimulus_font_family"].iloc[0]
@@ -1573,7 +1611,9 @@ def test_multipleye_stamps_font_when_config_present(multipleye_root):
     (cfg / "config_zh_ch_demo.py").write_text(
         'FONT_SIZE = 22\nFONT = "fonts/NotoSansMonoCJKsc-VF.ttf"\n', encoding="utf-8"
     )
-    words, _fixations = datasets_module.load_multipleye(multipleye_root)
+    words, _fixations = datasets_module.load_multipleye(
+        multipleye_root, names="canonical"
+    )
     assert (words["stimulus_font_px"] == 22.0).all()
     assert words["stimulus_font_family"].str.contains("CJK SC").all()
 
@@ -1872,7 +1912,9 @@ def test_multipleye_uploads_case_match_join():
         },
         columns=_AOI_COLS,
     )
-    words, fixations = datasets_module.load_multipleye_uploads(scan, aoi)
+    words, fixations = datasets_module.load_multipleye_uploads(
+        scan, aoi, names="canonical"
+    )
     assert not words.empty  # boxes joined despite the lowercase AOI filename
     assert set(words["text_id"]) == {"Lit_Demo_1"}  # CamelCase canonical, not lowercase
     assert set(words["trial_id"]) <= set(fixations["trial_id"])
@@ -1909,7 +1951,9 @@ def test_generic_wizard_tools_reproduce_multipleye_upload_recipe():
         },
         columns=_AOI_COLS,
     )
-    words_ref, fixations_ref = datasets_module.load_multipleye_uploads(scan, aoi)
+    words_ref, fixations_ref = datasets_module.load_multipleye_uploads(
+        scan, aoi, names="canonical"
+    )
 
     fix_raw = data_module.extract_columns_from_source_file(
         scan, datasets_module._MULTIPLEYE_TRIAL_RE.pattern, lowercase=True
@@ -1946,6 +1990,7 @@ def test_generic_wizard_tools_reproduce_multipleye_upload_recipe():
         fixations=fix_raw,
         word_schema=word_schema,
         fix_schema=fix_schema,
+        names="canonical",
     )
 
     assert len(words) == len(words_ref)
@@ -1966,7 +2011,9 @@ def test_multipleye_uploads_fixations_only():
             ]
         }
     )
-    words, fixations = datasets_module.load_multipleye_uploads(scan, None)
+    words, fixations = datasets_module.load_multipleye_uploads(
+        scan, None, names="canonical"
+    )
     assert words.empty and not fixations.empty
     assert fixations["x"].notna().all()
     assert set(fixations["trial_id"]) == {"Arg_Other_2"}
@@ -2037,7 +2084,9 @@ def test_multipleye_uploads_stimulus_without_aoi():
     aoi = _upload_frame(
         {"lit_demo_1_aoi": _aoi_pages(("page_1", 0, "AA", 80))}, columns=_AOI_COLS
     )
-    words, fixations = datasets_module.load_multipleye_uploads(scan, aoi)
+    words, fixations = datasets_module.load_multipleye_uploads(
+        scan, aoi, names="canonical"
+    )
     assert "Lit_Demo_1" in set(words["text_id"])  # has boxes
     assert "Arg_Other_2" not in set(words["text_id"])  # no AOI → no boxes, no raise
     # DATA-24: screens are part of the identity now, and multipart forbids a
@@ -2063,8 +2112,8 @@ def test_multipleye_uploads_match_directory_loader(multipleye_root):
     aoi = tag(
         glob.glob(str(multipleye_root / "stimuli_*" / "aoi_stimuli_*" / "*_aoi.csv"))
     )
-    wu, fu = datasets_module.load_multipleye_uploads(scan, aoi)
-    wd, fd = datasets_module.load_multipleye(multipleye_root)
+    wu, fu = datasets_module.load_multipleye_uploads(scan, aoi, names="canonical")
+    wd, fd = datasets_module.load_multipleye(multipleye_root, names="canonical")
     assert sorted(wu["trial_id"].unique()) == sorted(wd["trial_id"].unique())
     assert sorted(fu["trial_id"].unique()) == sorted(fd["trial_id"].unique())
     assert set(wu["text_id"]) == set(wd["text_id"])
@@ -2132,7 +2181,7 @@ def test_multipleye_uploads_pageless_file_does_not_crash():
         }
     )
     aoi = pd.concat([good_aoi, pageless], ignore_index=True, sort=False)
-    words, _ = datasets_module.load_multipleye_uploads(scan, aoi)
+    words, _ = datasets_module.load_multipleye_uploads(scan, aoi, names="canonical")
     assert (
         not words.empty
     )  # the real AOI still produced boxes; the page-less one didn't
@@ -2332,7 +2381,7 @@ def test_multipleye_uploads_with_questions_and_participant_meta():
         {"participant_id": [1], "session": ["ET1"], "age": [22], "gender": ["F"]}
     )
     _, fixations = datasets_module.load_multipleye_uploads(
-        scan, None, questions_df=questions, participant_meta_df=meta
+        scan, None, questions_df=questions, participant_meta_df=meta, names="canonical"
     )
     assert (
         json.loads(fixations["comprehension_questions"].iloc[0])[0]["target"]
@@ -2347,7 +2396,7 @@ def test_multipleye_uploads_with_questions_and_participant_meta():
 )
 def test_load_multipleye_real_sample_side_data():
     words, fixations = datasets_module.load_multipleye(
-        _MULTIPLEYE_SAMPLE, stimuli=["Lit_Alchemist_4"]
+        _MULTIPLEYE_SAMPLE, stimuli=["Lit_Alchemist_4"], names="canonical"
     )
     # Per-reader words with pre-aggregated reading measures (IA_* → canonical).
     assert "participant_id" in words.columns
@@ -2515,7 +2564,7 @@ def _secondary_stored_upload_app():
     from scanpath_studio.data import load_sample_data
     from scanpath_studio.experimental_setup import Provenance, SetupSnapshot
 
-    words, fixations = api.load_scanpath_data(*load_sample_data())
+    words, fixations = api.load_scanpath_data(*load_sample_data(), names="canonical")
     st.session_state["_datasets"] = {
         "My upload": {
             "words": words,
@@ -2618,7 +2667,10 @@ def test_a_screen_only_one_report_has_is_dropped_not_fatal(tmp_path, caplog):
     )
     with caplog.at_level("WARNING", logger="scanpath_studio.datasets"):
         words, fixations = datasets_module.load_onestop(
-            tmp_path, regime="ordinary", parts=["Paragraph", "Answers"]
+            tmp_path,
+            regime="ordinary",
+            parts=["Paragraph", "Answers"],
+            names="canonical",
         )
     assert set(fixations["participant_id"]) == {"p1"}
     assert set(words["participant_id"]) == {"p1"}

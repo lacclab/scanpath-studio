@@ -25,6 +25,7 @@ from pathlib import Path
 import pandas as pd
 
 from . import __version__
+from . import column_names as _cn
 from .code_snippet import (
     SOURCE_AUTHOR,
     SOURCE_DEMO,
@@ -863,8 +864,9 @@ def _render_parser() -> argparse.ArgumentParser:
     )
     viz.add_argument(
         "--heatmap-metric",
-        choices=["duration_ms", "counts"],
-        help="Heatmap weighting (default: duration_ms).",
+        metavar="COLUMN",
+        help="Heatmap weighting: the fixation duration column — under your "
+        "file's name or as duration_ms (the default) — or counts.",
     )
     viz.add_argument(
         "--heatmap-style",
@@ -1579,7 +1581,9 @@ def _compare_second_dataset(api, args, words, fixations):
         return words, fixations, False
     try:
         return (
-            *api.load_scanpath_data(args.compare_words, args.compare_fixations),
+            *api.load_scanpath_data(
+                args.compare_words, args.compare_fixations, names="canonical"
+            ),
             True,
         )
     except (ValueError, FileNotFoundError, OSError) as exc:
@@ -1587,6 +1591,14 @@ def _compare_second_dataset(api, args, words, fixations):
             "--compare-words/--compare-fixations: "
             + _load_error_message(exc, schema_flags=False)
         )
+
+
+def _listed(table: pd.DataFrame, column_names: dict) -> pd.DataFrame:
+    """A trial or screen listing with its ids under the dataset's own names
+    (DATA-66) — what ``--list-trials`` / ``--list-parts`` print."""
+    if not column_names:
+        return table
+    return _cn.as_written(table, _cn.across_tables(column_names).identity())
 
 
 def _compare_animation_frames(api, args, words, fixations, canvas) -> dict:
@@ -2095,6 +2107,7 @@ def _load_multipleye_render(
         sessions=[session] if session else None,
         fixation_source="scanpaths",
         include_question_screens=include_question_screens,
+        names="canonical",
     )
     if list_only:
         return words, fixations, session, None
@@ -2290,10 +2303,17 @@ def render(argv: list[str]) -> None:
 
     from . import api
 
+    # DATA-66: `render` works in the internal names, which the metadata joins,
+    # the trial checks and every option below are written against, and keeps
+    # each loader's map of the dataset's own names (`ScanpathData.column_names`)
+    # for what it prints, writes and draws.
+    column_names: dict = {}
     # Each fixed-screen source's monitor is `code_snippet.source_canvas`, the
     # table `api.figure_code` reads too, so both flavours of a recipe agree.
     if args.sample:
-        words, fixations = api.load_sample_data()
+        data = api.load_sample_data(names="canonical")
+        words, fixations = data
+        column_names = dict(data.column_names)
         canvas = canvas or source_canvas(SOURCE_DEMO)
     elif args.authoring:
         try:
@@ -2306,8 +2326,9 @@ def render(argv: list[str]) -> None:
         from .datasets import load_potec
 
         try:
-            words, fixations = load_potec(
+            data = load_potec(
                 args.potec,
+                names="canonical",
                 # Narrow the 900-file load when the trial is known — its
                 # text is the part after the reader (`0_b0` → `b0`); reader
                 # ids always need the full reader list for --list-trials so
@@ -2318,6 +2339,8 @@ def render(argv: list[str]) -> None:
             )
         except (ValueError, FileNotFoundError, OSError) as exc:
             raise SystemExit(str(exc))
+        words, fixations = data
+        column_names = dict(data.column_names)
         canvas = canvas or source_canvas(SOURCE_POTEC)
     elif args.eyegenbench:
         if not args.eyegenbench_dataset:
@@ -2325,9 +2348,11 @@ def render(argv: list[str]) -> None:
         from .eyegenbench import eyegenbench_monitor, load_eyegenbench
 
         try:
-            words, fixations = load_eyegenbench(
-                args.eyegenbench, dataset=args.eyegenbench_dataset
+            data = load_eyegenbench(
+                args.eyegenbench, dataset=args.eyegenbench_dataset, names="canonical"
             )
+            words, fixations = data
+            column_names = dict(data.column_names)
             # `eyegenbench_monitor` answers None for a corpus whose manifest
             # only carries the invented default screen, so `render` falls back
             # to the data's own extents there — the same call the app's picker
@@ -2342,7 +2367,7 @@ def render(argv: list[str]) -> None:
         from .datasets import load_onestop
 
         try:
-            words, fixations = load_onestop(
+            data = load_onestop(
                 args.onestop,
                 regime=args.onestop_regime,
                 parts=args.onestop_part,  # None → Paragraph default
@@ -2350,9 +2375,12 @@ def render(argv: list[str]) -> None:
                 # The lacclab variant is local (no download); the public one
                 # fetches the chosen regime + parts from OSF on first use.
                 download=args.onestop_variant == "public",
+                names="canonical",
             )
         except (ValueError, FileNotFoundError, OSError) as exc:
             raise SystemExit(str(exc))
+        words, fixations = data
+        column_names = dict(data.column_names)
         canvas = canvas or source_canvas(SOURCE_ONESTOP)
     elif args.source == "multipleye":
         try:
@@ -2389,7 +2417,7 @@ def render(argv: list[str]) -> None:
             words, fixations = empty_words_frame(), empty_fixations_frame()
         else:
             try:
-                words, fixations = api.load_scanpath_data(
+                data = api.load_scanpath_data(
                     args.words,
                     args.fixations,
                     word_schema=word_schema,
@@ -2397,9 +2425,12 @@ def render(argv: list[str]) -> None:
                     image_root=args.image_root,
                     image_pattern=args.image_pattern,
                     trial_parts_manifest=manifest,
+                    names="canonical",
                 )
             except (ValueError, OSError) as exc:
                 raise SystemExit(_load_error_message(exc)) from exc
+            words, fixations = data
+            column_names = dict(data.column_names)
 
     if args.image_root and not (args.words or args.fixations):
         from .data import resolve_stimulus_image_paths
@@ -2427,6 +2458,10 @@ def render(argv: list[str]) -> None:
             )
         except (ValueError, OSError) as exc:
             raise SystemExit("--raw-gaze: " + _load_error_message(exc)) from exc
+        # DATA-66: its own names kept beside it, the frame itself canonical.
+        if (found := _cn.frame_names(raw_gaze)) is not None:
+            column_names[found[0]] = found[1]
+        raw_gaze = _cn.to_canonical_frame(raw_gaze)
 
     # VIZ-45: what the metadata tables are joined against — the samples, when
     # they are the only table, or every join would report "0 matched".
@@ -2558,7 +2593,8 @@ def render(argv: list[str]) -> None:
                         how="left",
                     )
                     combos = _metadata.project_texts(attached_texts, combos)
-        print(combos.to_string(index=False))
+        # DATA-66: the ids under the dataset's own names.
+        print(_listed(combos, column_names).to_string(index=False))
         return
     if args.list_parts:
         parts = api.list_parts(
@@ -2567,7 +2603,7 @@ def render(argv: list[str]) -> None:
         if parts.empty:
             print("No multipart screens (the selected data is single-screen).")
         else:
-            print(parts.to_string(index=False))
+            print(_listed(parts, column_names).to_string(index=False))
         return
 
     try:
@@ -2853,6 +2889,9 @@ def render(argv: list[str]) -> None:
         font_family=args.font_family or FONT_FAMILY,
         title=args.title or "",
         caption=args.caption or "",
+        # DATA-66: the figure's text and the column flags in the dataset's own
+        # names — the frames themselves stay canonical.
+        column_names=column_names or None,
     )
     if args.print_code:
         _print_reproduction_code(
@@ -2998,7 +3037,9 @@ def render(argv: list[str]) -> None:
                         "--raw-gaze, which covers both readings of one dataset."
                     )
                 try:
-                    raw_gaze_b = api.load_raw_gaze(args.compare_raw_gaze)
+                    raw_gaze_b = api.load_raw_gaze(
+                        args.compare_raw_gaze, names="canonical"
+                    )
                 except (ValueError, FileNotFoundError, OSError) as exc:
                     raise SystemExit(
                         "--compare-raw-gaze: "
@@ -3259,12 +3300,27 @@ def analyze(argv: list[str]) -> None:
     if not qa.empty:
         tables["cleaning_qa"] = qa
     from .data import shareable_frame
+    from .export import strip_local_paths
 
     destination = Path(args.output_dir)
     destination.mkdir(parents=True, exist_ok=True)
+    # DATA-66: the tables come back under the dataset's own names (the loader's
+    # default); `columns.json` maps the two that are the dataset's own tables
+    # back to the internal names, as an export bundle's does.
+    written: dict[str, list] = {}
     for name, table in tables.items():
-        table = shareable_frame(table)
+        found = _cn.frame_names(table)
+        if found is not None and name in ("fixations", "word_measures"):
+            written[name] = _cn.written_columns(
+                shareable_frame(_cn.to_canonical_frame(table)), found[1]
+            )
+        # The paths a stimulus image was found at are this machine's, not data.
+        table = strip_local_paths(shareable_frame(table))
         table.to_csv(destination / f"{name}.csv", index=False)
+    if any(written.values()):
+        (destination / "columns.json").write_text(
+            json.dumps(_cn.columns_manifest(written), indent=2), encoding="utf-8"
+        )
     config = {
         "short_policy": policy,
         "short_threshold_ms": args.short_threshold_ms,

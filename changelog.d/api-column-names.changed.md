@@ -1,0 +1,1 @@
+The Python API's frames now keep your files' column names (`CURRENT_FIX_DURATION`, not `duration_ms`): every function and column option takes either name, `load_scanpath_data(..., names="canonical")` gives the internal names, `ScanpathData.column_names` holds the map, and `render --list-trials` and `analyze` print and write your names.

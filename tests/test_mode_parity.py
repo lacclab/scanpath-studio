@@ -501,8 +501,10 @@ class TestComparisonWiring:
             background_image_origin=(0.0, 0.0),
         )
         assert kwargs["fixation_symbol"] == "diamond"
-        # One stimulus image per panel — no split-layout gap left.
-        assert len(fig.layout.images) == 2
+        # A's panel draws A's page. B has no page of its own here, so its panel
+        # stays blank rather than repeating A's (each panel showing its own is
+        # tests/test_compare_screen_context.py).
+        assert [image.xref for image in fig.layout.images] == ["x"]
         symbols = {
             t.marker.symbol
             for t in fig.data

@@ -32,7 +32,11 @@ The import screen has three parts:
 1. **Name** — and an optional one-line description.
 2. **Tables** — upload fixations, AOIs and, optionally, raw gaze. The app
    guesses which column is which; check its guesses. The trial count under each
-   ID picker is a quick sanity check. Reading measures from an EyeLink
+   ID picker is a quick sanity check, and hovering the :material/visibility:
+   icon beside a mapped field shows its first few values and how they are read,
+   for example `0.12 → 120 ms` for a column in seconds. On a guess you have not
+   confirmed yet, the same values are on the :material/auto_awesome: confirm
+   button's tooltip. Reading measures from an EyeLink
    interest-area report (`IA_DWELL_TIME`, …) are picked up automatically, and
    are what Corpus Analysis shows. Optional tables, one row per reader, trial or
    text, add fields to filter and group by.
@@ -58,9 +62,20 @@ values from assumed ones.
 
 :material/database: **Data Management** lists every dataset with its counts; click a row to open it.
 **Edit dataset** opens under the list, below the open dataset's counts and
-tables, and changes its name, column mapping and recording setup, or adds a
-table it is missing. Changes apply when you click **Save changes**;
-**Cancel** discards them. The page also holds each dataset's tables and its
+tables, and changes its name, description, column mapping, recording setup
+and metadata tables, or adds a table it is missing (fixations, AOIs or raw
+gaze); its mapped fields show the same value preview. On an
+added dataset, changing an ID or coordinate column shows a few values as they
+are now and as they will be after saving, and **:material/search: Count trials and check
+joins** says whether readings would merge or the word boxes or a metadata table
+would stop matching. Its
+**:material/download: Save setup** writes the mapping in your files' own column names, so
+whoever has the same files can restore it on the add screen; anything a
+restore cannot redo by itself is listed beside the button. For the demo and
+the public corpora, a recording setup you save is your own for that dataset
+alone: the setup the corpus declares is kept, and **Reset to source setup**
+goes back to it. Nothing applies until you click **Save changes**;
+**Cancel** discards all of it. The page also holds each dataset's tables and its
 annotations, and at the foot, what is saved on this computer.
 
 Columns are named as they are in your files: in the tables, the plot

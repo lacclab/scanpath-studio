@@ -750,3 +750,99 @@ def dictionary_lines(
             internal = "" if written == column else f" (internally `{column}`)"
             lines.append(f"- `{written}`{internal}: {names[table].provenance(column)}")
     return lines
+
+
+def source_schema(
+    schema: Mapping | None, names: ColumnNames
+) -> tuple[dict | None, tuple[str, ...]]:
+    """``schema`` restated in the dataset's own files' column names.
+
+    ✏️ Edit dataset maps fields onto the stored frame's *canonical* columns
+    (``{"trial": "trial_id", "x": "x"}``), which say nothing to a script that
+    reads the original files. Read through ``names`` — the map from before
+    that edit — each becomes the column(s) it was read from, so the result can
+    be handed to ``api.load_scanpath_data`` over those files (Share → Code). A
+    column the app *made* (a generated stand-in, a computed value) maps to
+    nothing, which makes the loader make it again; a box stored as
+    ``x/y/width/height`` but read from edges is restated as those edges.
+
+    Returns ``(schema, unresolved)``: the fields that could not be traced back,
+    left as they were, for the caller to name.
+    """
+    from .data import trial_mapping_columns
+
+    if schema is None:
+        return None, ()
+    out: dict = {}
+    unresolved: list[str] = []
+    for key, value in schema.items():
+        if not value:
+            out[key] = value
+            continue
+        columns: list[str] = []
+        made = traced = False
+        for column in trial_mapping_columns(value):
+            entry = names.source(column)
+            if entry is None:
+                columns.append(str(column))
+            elif entry.kind in (GENERATED, COMPUTED) or not entry.sources:
+                made = True
+            elif entry.kind == CONVERTED and len(entry.sources) != 1:
+                traced = True  # right − left: only the edges say it
+            else:
+                columns.extend(entry.sources)
+        if traced:
+            out[key] = value
+            unresolved.append(str(key))
+        elif made:
+            out[key] = None
+        elif isinstance(value, str) and len(columns) == 1:
+            out[key] = columns[0]
+        else:
+            out[key] = columns
+    # A box read from edges is stored as x/y/width/height, its width and height
+    # computed as right − left: restate it as the edges it came from.
+    sizes = [names.source(schema.get(side) or "") for side in ("width", "height")]
+    if (
+        {"width", "height"} <= set(unresolved)
+        and all(e is not None and len(e.sources) == 2 for e in sizes)
+        and isinstance(out.get("x"), str)
+        and isinstance(out.get("y"), str)
+    ):
+        out.update(
+            left=out["x"],
+            top=out["y"],
+            right=sizes[0].sources[0],
+            bottom=sizes[1].sources[0],
+            x=None,
+            y=None,
+            width=None,
+            height=None,
+        )
+        unresolved = [k for k in unresolved if k not in ("width", "height")]
+    return out, tuple(unresolved)
+
+
+def stored_source_recipe(stored: Mapping) -> dict:
+    """A stored dataset's ``source_recipe`` — how a script loads its files.
+
+    Written when the dataset is added (`wizard._source_recipe`) and kept
+    current by ✏️ Edit dataset; read by Share → Code
+    (`code_snippet.upload_source`). A dataset stored before the recipe existed
+    gets one read off its stored mapping through its column-name map, which is
+    right unless one of its files used a canonical column name for a different
+    field.
+    """
+    recipe = stored.get("source_recipe")
+    if isinstance(recipe, Mapping):
+        return dict(recipe)
+    names = stored.get("column_names") or {}
+    schemas: dict = {}
+    unresolved: dict = {}
+    for table, schema in (stored.get("schemas") or {}).items():
+        schemas[table], missing = source_schema(
+            schema, ColumnNames.from_payload(names.get(table))
+        )
+        if missing:
+            unresolved[table] = list(missing)
+    return {"schemas": schemas, "unresolved": unresolved}

@@ -1,0 +1,1 @@
+Corpus Analysis explains the chosen measure in place — what it is, its unit, what each plotted value is, and a link to its definition — and says what the chosen error bars (SD, SEM, IQR, bootstrap CI) show.

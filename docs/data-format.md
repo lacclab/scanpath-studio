@@ -21,6 +21,12 @@ any guess.
 | **Trial metadata** *(optional)* | one row per trial | trial id, plus anything you know about that trial |
 | **Text metadata** *(optional)* | one row per text | text id, plus anything you know about that text |
 
+**Without timestamps.** A fixations table with no timestamp column still
+loads: its rows are taken to be in reading order. Reading time and reading
+speed are then an estimate — the fixations laid end to end by their durations,
+leaving out the time between them — and the summaries label them so
+(`reading_time_source`). The replay uses the same clock.
+
 **Units.** Durations and timestamps are read in milliseconds. A column whose
 header names another unit — `[s]`, `[μs]`, `[ns]`, as Tobii and Pupil Labs Neon
 write — is converted, and so are the vendor columns documented in seconds
@@ -150,7 +156,14 @@ Headless, it is `--text-metadata FILE` on `scanpath-studio render` and
   the matching word-box centers.
 - **Composite trial ids** — when no single column identifies a trial, map *Trial
   ID* to several columns (e.g. participant + paragraph + repeated-reading) and a
-  combined unique id is built on the fly.
+  combined unique id is built on the fly: the values joined with `_`. A `_`
+  inside a value is written `\_` (and a `\` as `\\`), so `block_A` + `B`
+  (`block\_A_B`) and `block` + `A_B` (`block_A\_B`) stay two trials. Values
+  without either character join exactly as before. Participant and Text ID
+  mappings compose the same way. A dataset saved on this computer before this
+  spelling keeps the ids it was saved with. A link, an annotations file or a
+  script that names a trial by the old spelling still finds it, unless two
+  trials shared that old id.
 
 ## Multipart logical trials
 
@@ -175,7 +188,8 @@ orphan screens instead of silently joining the wrong coordinate spaces.
 All geometry-dependent operations group by screen: fixation-to-word assignment,
 saccades, passes, regressions, and word measures never cross a screen boundary.
 The main view shows one screen with previous/next navigation; annotations can be
-stored on the parent trial or the current screen. Bulk output uses deterministic
+stored on the parent trial or the current screen. The trial filters' *Favorites
+only* and tag pickers read the parent trial's annotation only. Bulk output uses deterministic
 `screens/screen-001-<id>/` folders.
 
 If source reports have arbitrary page markers instead of mappable screen

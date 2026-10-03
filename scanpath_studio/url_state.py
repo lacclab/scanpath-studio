@@ -37,6 +37,7 @@ from .code_snippet import (
     FigureState,
     SnippetSource,
     reproduction_code,
+    upload_source,
 )
 from .constants import (
     _VIEW_DATA,
@@ -48,7 +49,10 @@ from .constants import (
     DEMO_CHOICE,
     FIXATION_SYMBOLS,
     ICONS,
+    LEGACY_MARKER_SIZE_SCALE,
     MANUAL_SAMPLE_CHOICE,
+    MARKER_DURATION_BOUNDS,
+    MARKER_SIZE_SCALES,
     MULTIPLEYE_BUNDLE_CHOICE,
     ONESTOP_CHOICE,
     ONESTOP_PART_LABELS,
@@ -63,11 +67,13 @@ from .constants import (
     SACCADE_COLOR_MODES,
     SACCADE_DASH_OPTIONS,
     SACCADE_WIDTH_BOUNDS,
+    SETUP_OVERRIDE_SESSION_KEYS,
     SYNTHETIC_CHOICE,
     UNIFORM_COLOR_FIELD,
     drift_correction_enabled,
     onestop_regime_for_choice,
     plural,
+    upload_identity,
 )
 from .controls import (
     _ALIGN_OPTIONS,
@@ -79,11 +85,13 @@ from .controls import (
     numeric_field_options,
     palette_state,
 )
+from .data import respell_reading
 from .experimental_setup import format_provenance_param, parse_provenance_param
 from .session_keys import (
     COMPARE_FIX_RANGE_PARAM,
     COMPARE_LAYOUT_PARAM,
     COMPARE_PARAM,
+    COMPARE_SCREEN_PARAM,
     COMPARE_SOURCE_PARAM,
     COMPARE_SOURCE_STATE_KEY,
     COMPARE_STIMULUS_PARAM,
@@ -175,6 +183,10 @@ def _parse_compare_layout(v) -> str:
 
 def _parse_compare_stimulus(v) -> str:
     return _parse_choice(v, _COMPARE_STIMULUS_OPTIONS, "compare stimulus source")
+
+
+def _parse_marker_size_scale(v) -> str:
+    return _parse_choice(v, tuple(MARKER_SIZE_SCALES), "marker size scale")
 
 
 #: The one colour spelling every `st.color_picker` holds and every figure
@@ -325,6 +337,8 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "show_saccade_arrows": "global_show_saccade_arrows",
     # VIZ-8: saccade-type colour key (default on, so always emitted).
     "saccade_type_legend": "global_saccade_type_legend",
+    # The fixed duration scale's size key (default on, so always emitted).
+    "duration_size_legend": "global_duration_size_legend",
     "snap_fixations": "global_fixation_snap_to_word",
     # PRE-3 / ENG-23: the drift-correction connector layer. Its algorithm rides
     # in `_SHARE_VALUE_PARAMS` below — both, or a shared corrected view reopens
@@ -363,6 +377,9 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     "y_field": "global_y_field",
     "saccade_style": "global_saccade_style",
     "saccade_render_mode": "global_saccade_render_mode",
+    # The duration scale: always emitted (it is seeded). A link carrying layer
+    # toggles but no scale opens on the relative one — see `_apply_url_preset`.
+    "marker_size_scale": "global_marker_size_scale",
     "illustration_label": "global_illustration_label",
     # PRE-3 / ENG-23: vertical drift correction ("Off" or a Carr et al. (2021)
     # algorithm). Since VIZ-23 it applies on all three render paths, so a link
@@ -508,6 +525,7 @@ _SHARE_FLOAT_PARAMS = {
 }
 _SHARE_INT_RANGE_PARAMS = {
     "marker_size_range": "global_marker_size_range",
+    "marker_duration_range": "global_marker_duration_range",
     # VIZ-40 (UX-135) closed VIZ-7's last surface gap: the window is now
     # linkable. Read like any other "lo,hi" range — `controls`' slider already
     # treats a value present before it first renders as explicit and clamps it
@@ -561,6 +579,7 @@ _URL_PRESETS = {
     # CMP-11 — same rule again: both are `st.segmented_control` options.
     "cmp_layout": ("single_compare_layout", _parse_compare_layout),
     "cmp_stimulus": ("single_compare_stimulus", _parse_compare_stimulus),
+    "marker_size_scale": ("global_marker_size_scale", _parse_marker_size_scale),
     # BUG-69 — and for every colour, which Plotly rejects outright.
     **{k: (_SHARE_VALUE_PARAMS[k], _parse_hex_color) for k in _SHARE_COLOR_PARAMS},
     # BUG-75 — figure text from a link is text, never markup.
@@ -623,6 +642,7 @@ _URL_BOUNDED = {
     "global_anim_grid_step_ms": (20, 500),
     "global_anim_max_frames": (30, 2000),
     "global_marker_size_range": (4, 40),
+    "global_marker_duration_range": MARKER_DURATION_BOUNDS,
     "global_fixation_opacity": (0.1, 1.0),
     "global_stimulus_image_opacity": (0.1, 1.0),
     # VIZ-4: image-alignment nudge — clamp a hand-crafted link to sane ranges.
@@ -662,7 +682,9 @@ _URL_BOUNDED = {
 #: EXP-19 — the settings a source's own declared monitor or typeface overwrites
 #: the first time that source is seeded (`app.seed_canvas_state`: the canvas
 #: pair, and `app._FONT_SNAP_KEYS`). A link that carries one names it under
-#: `LINK_SETUP_STATE_KEY`, so the snap keeps the sender's value.
+#: `LINK_SETUP_STATE_KEY`, so the snap keeps the sender's value. A recording
+#: setup the recipient saved for that dataset (`app._apply_setup_override`) is
+#: applied on the same first seeding, and keeps a linked value the same way.
 _SOURCE_SNAPPED_KEYS = frozenset(
     {
         "global_canvas_width",
@@ -670,6 +692,7 @@ _SOURCE_SNAPPED_KEYS = frozenset(
         "global_base_font_size",
         "global_font_family",
         "global_scale_text_to_boxes",
+        *SETUP_OVERRIDE_SESSION_KEYS,
     }
 )
 
@@ -957,6 +980,19 @@ def _apply_url_preset() -> str | None:
             snapped_from_link.add(state_key)
         st.session_state.setdefault(state_key, value)
 
+    # A link carrying layer toggles but no `marker_size_scale` opens on the
+    # relative scale. Share has emitted the scale since the fixed scale became
+    # the default, and the toggles always, so that is a link copied before it,
+    # drawn relative. `duration_size_legend` is left out of the check: it came
+    # in with the scale. A hand-written `?trial_id=` link carries no toggle and
+    # gets the new default.
+    if "marker_size_scale" not in qp and any(
+        k in qp for k in _SHARE_TOGGLE_PARAMS if k != "duration_size_legend"
+    ):
+        st.session_state.setdefault(
+            "global_marker_size_scale", LEGACY_MARKER_SIZE_SCALE
+        )
+
     # EXP-19: a source that declares its own monitor or typeface snaps the canvas
     # and font controls to it the first time it is seeded — on a recipient's
     # first run, that is, *after* this link has seeded them — so without a word
@@ -1011,6 +1047,12 @@ def _apply_url_preset() -> str | None:
             source_b = _source_choice_for_param(qp.get(COMPARE_SOURCE_PARAM))
             if source_b is not None:
                 st.session_state.setdefault(COMPARE_SOURCE_STATE_KEY, source_b)
+            # B's own screen, for B's navigator — which keeps it only when B's
+            # trial has that screen, as A's does with `screen=`.
+            if qp.get(COMPARE_SCREEN_PARAM) not in (None, ""):
+                st.session_state.setdefault(
+                    "single_compare_screen_id", str(qp[COMPARE_SCREEN_PARAM])
+                )
 
     # DATA-3: the public OneStop source options (variant / regime / parts) ride
     # the deep link too, seeded before the loader's widgets render. Validate each
@@ -1280,6 +1322,9 @@ def sanitize_session_value(key: str, value):
 #   schema 4 — UX-179: the figure only. Annotations, the column mapping, the
 #              metadata tables and the saved designs left the file (each has
 #              its own export now); the reader no longer applies them.
+#   schema 5 — the fixed duration scale (`sizing.marker_size_scale`,
+#              `marker_duration_range`, `duration_size_legend`). Older files
+#              were drawn on the relative scale and are migrated to it.
 #
 # **Bump `PLOT_CONFIG_SCHEMA` and register a migration in `_PLOT_CONFIG_MIGRATIONS`
 # whenever the config layout changes** (a renamed key, a moved section, a changed
@@ -1288,7 +1333,7 @@ def sanitize_session_value(key: str, value):
 # time. The field-by-field reader already tolerates *missing* sections, so a
 # migration is only needed when an old key must be *translated*, not merely when
 # new keys are added.
-PLOT_CONFIG_SCHEMA = 4
+PLOT_CONFIG_SCHEMA = 5
 
 
 def _detect_config_schema(config: dict) -> int:
@@ -1373,12 +1418,34 @@ def _migrate_config_3_to_4(config: dict) -> dict:
     return config
 
 
+def _migrate_config_4_to_5(config: dict) -> dict:
+    """Keep an older figure on the scale it was drawn with.
+
+    Before schema 5 every figure sized its markers relative to its own
+    shortest and longest fixation; the default is now a fixed duration scale.
+    Stamping ``marker_size_scale: "relative"`` makes an old file restore the
+    figure it saved rather than silently resizing it. Only a file with plot
+    settings is touched — an annotations-only backup gains no ``sizing``
+    section (BUG-73's rule, as in the 2→3 step).
+    """
+    migrated = dict(config)
+    if not _has_plot_section(config):
+        return migrated
+    if "sizing" in config and not isinstance(config.get("sizing"), dict):
+        return migrated
+    sizing = dict(config.get("sizing") or {})
+    sizing.setdefault("marker_size_scale", LEGACY_MARKER_SIZE_SCALE)
+    migrated["sizing"] = sizing
+    return migrated
+
+
 # version N -> callable that upgrades an N config to N+1. Keyed by the *source*
 # version so `_migrate_plot_config` can walk an old config forward step by step.
 _PLOT_CONFIG_MIGRATIONS = {
     1: _migrate_config_1_to_2,
     2: _migrate_config_2_to_3,
     3: _migrate_config_3_to_4,
+    4: _migrate_config_4_to_5,
 }
 
 
@@ -1435,6 +1502,11 @@ def _restore_selection(
     if tid in (None, "") or combos.empty:
         return False
     pid, tid = str(pid), str(tid)
+    # A link or config saved before composite ids escaped a `_` inside a part
+    # names the trial by its old spelling (`data.composite_respelling_map`).
+    pid, tid = respell_reading(
+        pid, tid, zip(combos["participant_id"], combos["trial_id"], strict=True)
+    )
     match = combos[
         (combos["participant_id"].astype(str) == pid)
         & (combos["trial_id"].astype(str) == tid)
@@ -1500,8 +1572,13 @@ def _apply_url_trial_selection(combos: pd.DataFrame) -> None:
 PENDING_TRIAL_KEY = "_pending_trial_selection"
 
 
-def request_trial(participant: str | None, trial_id: str | None) -> None:
+def request_trial(
+    participant: str | None, trial_id: str | None, *, screen_id: str | None = None
+) -> None:
     """Ask the app to open ``trial_id`` in the Scanpath view (ENG-36).
+
+    ``screen_id`` also opens that screen of a multipart trial — Data
+    Management → Annotations' **Open** on a screen annotation.
 
     Called from a *callback* — the reader/trial tables in Corpus Analysis have a
     "go to this trial" button — which runs before the script, so the trial pool
@@ -1515,6 +1592,7 @@ def request_trial(participant: str | None, trial_id: str | None) -> None:
     st.session_state[PENDING_TRIAL_KEY] = {
         "participant_id": str(participant) if participant else None,
         "trial_id": str(trial_id),
+        "screen_id": str(screen_id) if screen_id not in (None, "") else None,
     }
     _go_scanpath()
 
@@ -1966,6 +2044,27 @@ def _restore_plot_config(
             lo = max(_MARKER_BOUNDS[0], min(int(lo), _MARKER_BOUNDS[1]))
             hi = max(_MARKER_BOUNDS[0], min(int(hi), _MARKER_BOUNDS[1]))
             put("global_marker_size_range", (min(lo, hi), max(lo, hi)))
+    if "marker_size_scale" in sizing:
+        put_valid(
+            sizing["marker_size_scale"] in MARKER_SIZE_SCALES,
+            "global_marker_size_scale",
+            sizing["marker_size_scale"],
+            "marker size scale",
+        )
+    durations = sizing.get("marker_duration_range")
+    if isinstance(durations, (list, tuple)) and len(durations) == 2:
+        lo, hi = number(durations[0]), number(durations[1])
+        if lo is None or hi is None or not math.isfinite(lo + hi):
+            skipped.append("marker duration range")
+        else:
+            put(
+                "global_marker_duration_range",
+                _clamp_url_value(
+                    "global_marker_duration_range", (round(lo), round(hi))
+                ),
+            )
+    if "duration_size_legend" in sizing:
+        put("global_duration_size_legend", bool(sizing["duration_size_legend"]))
     if "order_font_size" in sizing:
         put_int(
             sizing["order_font_size"],
@@ -2328,13 +2427,17 @@ def _apply_uploaded_plot_config(combos: pd.DataFrame, fixations: pd.DataFrame) -
     Reads the file captured by 🔗 Share → File's ``plot_config_upload``
     uploader (persisted in session_state across reruns) and writes the saved
     settings into session_state *before* the widgets render — the same mechanism
-    as ``_apply_url_preset``. Deduped by ``(name, size)`` so manual tweaks made
-    after a restore aren't clobbered on every rerun. Call right after the trial
-    combos are built, before the canvas/visualization controls."""
+    as ``_apply_url_preset``. Deduped by upload identity (``upload_identity``:
+    the upload's ``file_id`` + a content hash) so manual tweaks made after a
+    restore aren't clobbered on every rerun, while a fresh upload — another
+    file, or the same one again — applies. Clearing the uploader forgets the
+    marker. Call right after the trial combos are built, before the
+    canvas/visualization controls."""
     uploaded = st.session_state.get("plot_config_upload")
     if uploaded is None:
+        st.session_state.pop("_plot_config_last_import", None)
         return
-    signature = (uploaded.name, uploaded.size)
+    signature = upload_identity(uploaded)
     if st.session_state.get("_plot_config_last_import") == signature:
         return
     # Stamp the signature up front so a malformed file isn't retried every rerun.
@@ -2500,6 +2603,8 @@ def _build_share_query(
                     f"The compared scanpath comes from **{source_b}**, which "
                     "can't be rebuilt from a link — it isn't included."
                 )
+        if COMPARE_PARAM in params and compare.get("screen_id") not in (None, ""):
+            params[COMPARE_SCREEN_PARAM] = str(compare["screen_id"])
 
     # Visualization toggles — emit an explicit 0/1 so a layer the user turned
     # *off* is shared as off (the URL coercion reads "0" as False).
@@ -2711,7 +2816,11 @@ def _link_defaults(data_choice: str) -> dict:
         # snaps the base font to *that* — a sender who chose the factory 16
         # there has to say so, or the recipient gets the corpus' size.
         defaults.pop("global_base_font_size")
-    width, height, authoritative = resolve_source_monitor(data_choice, None, None)
+    # What the source itself declares: the recipient has none of this
+    # session's own saved setup for it, so a canvas the sender saved travels.
+    width, height, authoritative = resolve_source_monitor(
+        data_choice, None, None, own_setup=False
+    )
     if authoritative:
         lo, hi = _CANVAS_BOUNDS
         defaults["global_canvas_width"] = min(max(int(width), lo), hi)
@@ -2908,9 +3017,10 @@ def _snippet_source(data_choice: str) -> SnippetSource:
             label=AUTHOR_CHOICE,
             options={"path": "scanpath.json"},
             note=(
-                "An authored scanpath lives in this session — export it from "
-                "the ✍️ authoring panel first, then point the snippet at that "
-                "JSON file."
+                "An authored scanpath lives in this session — save it with "
+                "**Download authoring file** on the ✍️ authoring screen first "
+                "(it downloads as `scanpath.json`, the name the snippet reads), "
+                "then run the snippet beside it."
             ),
         )
 
@@ -3009,11 +3119,24 @@ def _snippet_source(data_choice: str) -> SnippetSource:
             label=data_choice,
             note=UNKNOWN_SOURCE_NOTE,
         )
+    if isinstance(stored, dict):
+        from scanpath_studio.column_names import stored_source_recipe
+
+        return upload_source(
+            data_choice,
+            stored_source_recipe(stored),
+            words=_has_rows(stored.get("words")),
+            fixations=_has_rows(stored.get("fixations")),
+        )
     return SnippetSource(
         kind=SOURCE_UNKNOWN,
         label=data_choice,
         note=UNKNOWN_SOURCE_NOTE,
     )
+
+
+def _has_rows(frame) -> bool:
+    return frame is not None and not getattr(frame, "empty", True)
 
 
 def _samples_only(stored: dict) -> bool:

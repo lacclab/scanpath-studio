@@ -116,6 +116,10 @@ GLOBAL_STIMULUS_IMAGE_OFFSET_X = "global_stimulus_image_offset_x"
 GLOBAL_STIMULUS_IMAGE_OFFSET_Y = "global_stimulus_image_offset_y"
 GLOBAL_STIMULUS_IMAGE_SCALE = "global_stimulus_image_scale"
 GLOBAL_MARKER_SIZE_RANGE = "global_marker_size_range"
+# The fixed duration scale: curve (or "relative"), its ms bounds, and its key.
+GLOBAL_MARKER_SIZE_SCALE = "global_marker_size_scale"
+GLOBAL_MARKER_DURATION_RANGE = "global_marker_duration_range"
+GLOBAL_DURATION_SIZE_LEGEND = "global_duration_size_legend"
 GLOBAL_FIXATION_COLOR_RANGE = "global_fixation_color_range"
 GLOBAL_HEATMAP_COLOR_RANGE = "global_heatmap_color_range"
 GLOBAL_SHOW_STIMULUS_IMAGE = "global_show_stimulus_image"
@@ -353,6 +357,9 @@ SETUP_PROVENANCE_STATE_KEY = "_setup_provenance_arrived"
 # in the same dataset as A", which is every pre-CMP-8 comparison.
 COMPARE_PARAM = "compare"
 COMPARE_SOURCE_PARAM = "cmp_source"
+#: B's screen of a multipart trial — `screen=` is A's. Emitted only beside
+#: `compare=`, and seeded into B's own navigator (`single_compare_screen_id`).
+COMPARE_SCREEN_PARAM = "cmp_screen"
 #: CMP-11 — the compare layout and the overlay's stimulus source. Closed
 #: vocabularies, so a bad value raises and the reader's "Ignored bad URL param"
 #: warning fires rather than the widget wedging on an option it has never heard of.
@@ -388,6 +395,7 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         "show_saccades": GLOBAL_SHOW_SACCADES,
         "show_saccade_arrows": GLOBAL_SHOW_SACCADE_ARROWS,
         "saccade_type_legend": GLOBAL_SACCADE_TYPE_LEGEND,
+        "duration_size_legend": GLOBAL_DURATION_SIZE_LEGEND,
         "snap_fixations": GLOBAL_FIXATION_SNAP_TO_WORD,
         "align_connectors": GLOBAL_ALIGN_CONNECTORS,
         "anim_autoplay": GLOBAL_ANIM_AUTOPLAY,
@@ -423,6 +431,7 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
         "y_field": GLOBAL_Y_FIELD,
         "saccade_style": GLOBAL_SACCADE_STYLE,
         "saccade_render_mode": GLOBAL_SACCADE_RENDER_MODE,
+        "marker_size_scale": GLOBAL_MARKER_SIZE_SCALE,
         "align_algorithm": GLOBAL_ALIGN_ALGORITHM,
         "fixation_symbol": GLOBAL_FIXATION_SYMBOL,
         "fixation_color": GLOBAL_FIXATION_COLOR,
@@ -536,6 +545,7 @@ SHARE_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
 SHARE_INT_RANGE_PARAMS: Mapping[str, str] = MappingProxyType(
     {
         "marker_size_range": GLOBAL_MARKER_SIZE_RANGE,
+        "marker_duration_range": GLOBAL_MARKER_DURATION_RANGE,
         # UX-135 — VIZ-7's fixation-index window. Optional on the wire (see
         # `URL_OPTIONAL_PARAMS`): the slider *defaults* to the trial's own full
         # range, so an untouched one is not a setting and must not be stamped
@@ -602,6 +612,7 @@ URL_SELECTION_PARAMS = frozenset(
         PARAM_CORPUS,
         COMPARE_PARAM,
         COMPARE_SOURCE_PARAM,
+        COMPARE_SCREEN_PARAM,
     }
 )
 
@@ -671,6 +682,7 @@ URL_OPTIONAL_PARAMS = frozenset(
         SETUP_PROVENANCE_PARAM,
         COMPARE_PARAM,
         COMPARE_SOURCE_PARAM,
+        COMPARE_SCREEN_PARAM,
         PARAM_CORPUS,
         FIX_RANGE_PARAM,
         COMPARE_FIX_RANGE_PARAM,
@@ -711,6 +723,7 @@ URL_BOUNDED_STATE_KEYS = frozenset(
         GLOBAL_ANIM_GRID_STEP_MS,
         GLOBAL_ANIM_MAX_FRAMES,
         GLOBAL_MARKER_SIZE_RANGE,
+        GLOBAL_MARKER_DURATION_RANGE,
         GLOBAL_FIXATION_OPACITY,
         GLOBAL_STIMULUS_IMAGE_OPACITY,
         GLOBAL_STIMULUS_IMAGE_OFFSET_X,
@@ -776,7 +789,7 @@ URL_SEEDED_STATE_KEYS = frozenset(
 # The JSON schema version stamped by both writers and understood by the reader.
 # Bumping it in url_state without registering a migration (or without updating
 # this constant) is the failure the contract test catches.
-PLOT_CONFIG_SCHEMA_VERSION = 4
+PLOT_CONFIG_SCHEMA_VERSION = 5
 
 # `cmp{idx}_*` templates the config's `compare` list restores, per entry.
 COMPARE_STATE_KEY_TEMPLATES = frozenset(
@@ -859,6 +872,9 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_COLORBAR_TICKFONT_SIZE,
         # sizing
         GLOBAL_MARKER_SIZE_RANGE,
+        GLOBAL_MARKER_SIZE_SCALE,
+        GLOBAL_MARKER_DURATION_RANGE,
+        GLOBAL_DURATION_SIZE_LEGEND,
         GLOBAL_ORDER_FONT_SIZE,
         GLOBAL_ORDER_FONT_COLOR,
         GLOBAL_BASE_FONT_SIZE,
@@ -940,3 +956,23 @@ PLOT_CONFIG_OTHER_STATE_KEYS = frozenset(
 def compare_state_keys(index: int) -> frozenset:
     """The `cmp{index}_*` session keys one `compare` config entry restores."""
     return frozenset(t.format(idx=index) for t in COMPARE_STATE_KEY_TEMPLATES)
+
+
+def keep_legacy_marker_scale(values: Mapping) -> dict:
+    """``values`` with the relative marker scale stamped in when it predates it.
+
+    Old work keeps its old look. A design or a recovery-cache session saved
+    before the fixed duration scale existed holds plot settings but no
+    ``GLOBAL_MARKER_SIZE_SCALE``; left alone it would re-render on the new
+    default. Anything saved since carries the key (it is seeded with the rest),
+    so its absence beside other ``global_*`` keys marks the old kind. A mapping
+    with no plot settings at all is returned unchanged. Returns a copy.
+    """
+    from .constants import LEGACY_MARKER_SIZE_SCALE
+
+    out = dict(values)
+    if GLOBAL_MARKER_SIZE_SCALE not in out and any(
+        str(key).startswith("global_") for key in out
+    ):
+        out[GLOBAL_MARKER_SIZE_SCALE] = LEGACY_MARKER_SIZE_SCALE
+    return out

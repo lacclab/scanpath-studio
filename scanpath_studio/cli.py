@@ -905,6 +905,30 @@ def _render_parser() -> argparse.ArgumentParser:
         "Smaller ranges suit small thumbnails.",
     )
     viz.add_argument(
+        "--marker-size-scale",
+        choices=("sqrt", "linear", "log", "relative"),
+        help="How duration sets marker size (default: sqrt). sqrt / linear / log "
+        "map --marker-duration-range onto --marker-size-range the same way for "
+        "every figure, so one duration is one size across trials, comparisons "
+        "and replays; sqrt makes marker area grow with duration. relative "
+        "stretches each figure from its own shortest to longest fixation.",
+    )
+    viz.add_argument(
+        "--marker-duration-range",
+        nargs=2,
+        type=float,
+        metavar=("LO", "HI"),
+        help="Durations in ms given the smallest and largest marker on a fixed "
+        "scale (default: 50 600). Shorter and longer fixations clamp to them.",
+    )
+    viz.add_argument(
+        "--no-duration-size-legend",
+        dest="duration_size_legend",
+        action="store_false",
+        help="Hide the duration-size key (reference circles labelled in ms) "
+        "drawn on a fixed --marker-size-scale.",
+    )
+    viz.add_argument(
         "--canvas",
         metavar="WxH",
         help="Monitor size in px, e.g. 2560x1440 (default: estimated from data; "
@@ -1271,6 +1295,13 @@ def _render_parser() -> argparse.ArgumentParser:
         "name a second one.",
     )
     cmp_group.add_argument(
+        "--compare-screen",
+        metavar="SCREEN_ID",
+        help="Screen of the second scanpath's multipart trial (default: its first "
+        "screen), looked up in its own trial. --screen picks the first "
+        "scanpath's. Each scanpath is drawn from one screen.",
+    )
+    cmp_group.add_argument(
         "--compare-layout",
         choices=["overlay", "side-by-side", "stacked"],
         default="overlay",
@@ -1415,6 +1446,7 @@ def _render_parser() -> argparse.ArgumentParser:
 #: the option (`--fixation-opacity` → `fixation_opacity`), so they reach the
 #: builder unchanged whenever given.
 _DIRECT_OPTION_FLAGS = (
+    "marker_size_scale",
     "fixation_opacity",
     "order_font_size",
     "order_font_color",
@@ -1449,6 +1481,7 @@ _SWITCH_OPTION_FLAGS = {
     "show_colorbars": True,
     "scale_text_to_boxes": False,
     "fit_to_monitor": False,
+    "duration_size_legend": False,
 }
 
 #: The keys `--style-a` / `--style-b` take, each with its value parser.
@@ -1567,11 +1600,16 @@ def _compare_animation_frames(api, args, words, fixations, canvas) -> dict:
     data (CMP-21). This used to check only when ``--compare-canvas`` was given,
     and co-animated without looking otherwise.
     """
+    from .data import respell_reading, trial_keys
     from .utils import extract_trial
 
     participant_b, trial_b = _parse_compare_with(args.compare_with)
     words_b, fixations_b, cross_dataset = _compare_second_dataset(
         api, args, words, fixations
+    )
+    # An id spelled before composite ids escaped a `_` in a part still finds B.
+    participant_b, trial_b = respell_reading(
+        participant_b, trial_b, trial_keys(fixations_b)
     )
     trial_words_b = extract_trial(words_b, participant_b, trial_b)
     trial_fix_b = extract_trial(fixations_b, participant_b, trial_b)
@@ -1581,6 +1619,8 @@ def _compare_animation_frames(api, args, words, fixations, canvas) -> dict:
             f"trial={trial_b!r}. Use --list-trials to see the available pairs."
         )
     frames = {"words_b": trial_words_b, "fixations_b": trial_fix_b}
+    if args.compare_screen is not None:
+        frames["screen_b"] = args.compare_screen
     if cross_dataset:
         frames.update(
             dataset_b=args.compare_dataset_name,
@@ -1865,6 +1905,7 @@ def _print_reproduction_code(
         compare = cs.CompareTarget(
             participant=compare_participant,
             trial=compare_trial,
+            screen=args.compare_screen,
             layout=args.compare_layout,
             compare_stimulus=args.compare_stimulus,
             labels=_compare_labels(args),
@@ -2179,6 +2220,7 @@ def render(argv: list[str]) -> None:
             ("--compare-fixation-flag", args.compare_fixation_flags),
             ("--compare-saccade-classes", args.compare_saccade_classes),
             ("--compare-fix-index-range", args.compare_fix_index_range),
+            ("--compare-screen", args.compare_screen),
         )
         if given
     ]
@@ -2260,6 +2302,7 @@ def render(argv: list[str]) -> None:
             raise SystemExit(str(exc)) from exc
         canvas = canvas or source_canvas(SOURCE_AUTHOR)
     elif args.potec:
+        from .data import split_composite_id
         from .datasets import load_potec
 
         try:
@@ -2270,7 +2313,7 @@ def render(argv: list[str]) -> None:
                 # ids always need the full reader list for --list-trials so
                 # only narrow with an explicit -p.
                 readers=[args.participant] if args.participant else None,
-                texts=[str(args.trial).rsplit("_", 1)[-1]] if args.trial else None,
+                texts=[split_composite_id(args.trial)[-1]] if args.trial else None,
                 download=True,
             )
         except (ValueError, FileNotFoundError, OSError) as exc:
@@ -2746,6 +2789,8 @@ def render(argv: list[str]) -> None:
     for key, flipped in _SWITCH_OPTION_FLAGS.items():
         if getattr(args, key) == flipped:
             overrides[key] = flipped
+    if args.marker_duration_range:
+        overrides["marker_duration_range"] = tuple(args.marker_duration_range)
     if args.fixation_color_range:
         overrides["fixation_color_range"] = tuple(args.fixation_color_range)
     if args.heatmap_range:
@@ -2969,6 +3014,9 @@ def render(argv: list[str]) -> None:
                     fixations,
                     (participant, trial),
                     (compare_participant, compare_trial),
+                    # One screen per scanpath, each picked in its own trial.
+                    screen=args.screen,
+                    screen_b=args.compare_screen,
                     words_b=words_b,
                     fixations_b=fixations_b,
                     dataset_b=args.compare_dataset_name,
@@ -3210,12 +3258,12 @@ def analyze(argv: list[str]) -> None:
     # stands unless preprocessing actually ran.
     if not qa.empty:
         tables["cleaning_qa"] = qa
-    from .data import drop_internal_columns
+    from .data import shareable_frame
 
     destination = Path(args.output_dir)
     destination.mkdir(parents=True, exist_ok=True)
     for name, table in tables.items():
-        table = drop_internal_columns(table)
+        table = shareable_frame(table)
         table.to_csv(destination / f"{name}.csv", index=False)
     config = {
         "short_policy": policy,

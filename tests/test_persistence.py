@@ -1312,3 +1312,35 @@ def test_column_names_survive_a_cache_round_trip(tmp_path):
     restored = {}
     assert restore_state(restored, tmp_path)
     assert restored["_datasets"]["Corpus"]["column_names"] == names
+
+
+def test_a_built_in_datasets_own_setup_survives_a_cache_round_trip(tmp_path):
+    """The recording setup a user saved for the demo or a public corpus, and
+    which dataset the figure holds it for with what it replaced: all three,
+    or a relaunch would stash the override as the "before" it puts back."""
+    from scanpath_studio.constants import (
+        DATASET_SETUP_OVERRIDES_KEY,
+        SETUP_OVERRIDE_FOR_KEY,
+        SETUP_OVERRIDE_RESTORE_KEY,
+    )
+    from scanpath_studio.experimental_setup import SetupSnapshot
+
+    own = SetupSnapshot(monitor_width_mm=400.0).to_dict()
+    session = {
+        DATASET_SETUP_OVERRIDES_KEY: {"Bundled Demo": own, "junk": "not a setup"},
+        SETUP_OVERRIDE_FOR_KEY: "Bundled Demo",
+        SETUP_OVERRIDE_RESTORE_KEY: {
+            "global_monitor_width_mm": 597.0,
+            "global_font_family": None,
+            "not_a_setup_key": 1,
+        },
+    }
+    assert save_state(session, tmp_path)
+    restored = {}
+    assert restore_state(restored, tmp_path)
+    assert restored[DATASET_SETUP_OVERRIDES_KEY] == {"Bundled Demo": own}
+    assert restored[SETUP_OVERRIDE_FOR_KEY] == "Bundled Demo"
+    assert restored[SETUP_OVERRIDE_RESTORE_KEY] == {
+        "global_monitor_width_mm": 597.0,
+        "global_font_family": None,
+    }

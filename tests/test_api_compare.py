@@ -123,7 +123,8 @@ class TestSameDataset:
             show_legend=show_legend,
             canvas_size=(1920, 1080),
         )
-        assert len(fig.layout.annotations) == (2 if show_legend else 0)
+        titles = [a for a in fig.layout.annotations if a.name != "duration_size_key"]
+        assert len(titles) == (2 if show_legend else 0)
 
     def test_the_renamed_copy_never_reaches_a_label(self):
         """The rename is for slicing the figure; the legend names the real id."""

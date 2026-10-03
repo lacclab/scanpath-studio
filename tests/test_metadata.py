@@ -917,7 +917,13 @@ class TestTheExportOptOut:
                     include_fixations=True,
                     metadata_fields=fields,
                 ),
-                settings={"participant_metadata": self._frame()},
+                # The exported reader's row, beside one the bundle must not
+                # carry: metadata is scoped to the readers exported.
+                settings={
+                    "participant_metadata": self._frame().assign(
+                        participant_id=[str(keep.participant_id), "elsewhere"]
+                    )
+                },
             )
             with zipfile.ZipFile(io.BytesIO(data)) as zf:
                 members = zf.namelist()
@@ -930,6 +936,7 @@ class TestTheExportOptOut:
 
         _, full = _names(None)
         assert list(full.columns) == ["participant_id", "native_language", "age"]
+        assert len(full) == 1
 
         _, narrowed = _names(("age",))
         assert list(narrowed.columns) == ["participant_id", "age"]

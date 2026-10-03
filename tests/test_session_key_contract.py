@@ -298,6 +298,7 @@ def test_deep_link_seeds_frozen_state_keys():
     validated.update({param: "#123456" for param in _SHARE_COLOR_PARAMS})
     # EXP-18: the settings that joined the link are closed vocabularies too.
     validated["colorbar_orientation"] = "Horizontal"
+    validated["marker_size_scale"] = "linear"
     for category in ("short", "long", "oob", "blink"):
         validated[f"fixclass_{category}_mode"] = "Discard"
         validated[f"fixclass_{category}_symbol"] = "x"
@@ -492,6 +493,9 @@ def _restore_config_app():
         },
         "sizing": {
             "marker_size_range": [4, 10],
+            "marker_size_scale": "log",
+            "marker_duration_range": [80, 900],
+            "duration_size_legend": False,
             "order_font_size": 12,
             "order_font_color": "#000000",
             "base_font_size": 14,
@@ -670,6 +674,7 @@ def _compare_share_round_trip_app():
             "participant_id": "p2",
             "trial_id": "t2",
             "source": SYNTHETIC_CHOICE,
+            "screen_id": "page_2",
         },
     }
     query, caveats = _build_share_query(DEMO_CHOICE)
@@ -701,6 +706,9 @@ def test_compare_selection_round_trips_through_the_share_link():
         "trial_id": "t2",
     }
     assert at.session_state[sk.COMPARE_SOURCE_STATE_KEY] == "Synthetic test trial"
+    # B's own screen travels too, into B's own navigator.
+    assert emitted[sk.COMPARE_SCREEN_PARAM] == ["page_2"]
+    assert at.session_state["single_compare_screen_id"] == "page_2"
 
 
 def _compare_share_unshareable_app():

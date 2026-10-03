@@ -129,6 +129,7 @@ scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
 | Goal | Option |
 | --- | --- |
 | pick B | `--compare-with PARTICIPANT:TRIAL` |
+| pick each screen of a multipart trial | `--screen ID` (A), `--compare-screen ID` (B); each defaults to its trial's first screen |
 | arrange the panels | `--compare-layout {overlay,side-by-side,stacked}` (default `overlay`) |
 | whose stimulus an overlay draws | `--compare-stimulus {both,a,b}` (default `both`) |
 | name the two traces | `--label-a TEXT --label-b TEXT` (both or neither) |
@@ -161,8 +162,9 @@ scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
 `--animate --compare-with` replays **both** readings on one clock, the same dual
 co-animation the app renders with Animate and Compare both on.
 `--compare-with` cannot be combined with `--all-screens`: a comparison
-is a single figure of two readings, so render one screen at a time with
-`--screen`.
+is a single figure of two readings, each drawn from one screen. Pick A's with
+`--screen` and B's with `--compare-screen`; B's is looked up in B's own trial,
+so it can be a later page, or a page of the second dataset.
 
 **Overlay across two datasets requires matching canvases.** On two different
 canvases `--compare-layout overlay` fails rather than falling back, and so does
@@ -170,8 +172,9 @@ canvases `--compare-layout overlay` fails rather than falling back, and so does
 `--compare-layout side-by-side` or `stacked`, without `--animate`. Without
 `--compare-canvas` the second dataset's screen is read off its data, as A's is
 when neither `--canvas` nor a built-in source gives one. That extent rarely
-spans the whole screen, so state both screens when you know them. Nothing is
-rescaled.
+spans the whole screen, so state both screens when you know them. Within one
+dataset, two screens whose own canvases differ are refused the same way.
+Nothing is rescaled.
 
 A second dataset is loaded from **files only**. Any corpus reachable from Python
 can still be scanpath B via
@@ -186,6 +189,7 @@ B's frames directly.
 | animate | `--animate` and optionally `--playback-speed X`; every styling flag the replay can draw (`api.figure_options("animation")`) is honoured, and the rest are named in a warning |
 | set display geometry | `--canvas WIDTHxHEIGHT` |
 | color fixations | `--color-by FIELD` |
+| size fixations by duration | `--marker-size-scale sqrt\|linear\|log\|relative` (default `sqrt`), `--marker-duration-range LO HI` (ms, default `50 600`), `--marker-size-range MIN MAX` (px), `--no-duration-size-legend` |
 | draw only part of a trial | `--fix-index-range START:END` (1-based, both inclusive; honoured by `--animate` and `--compare-with` too) |
 | add the stimulus image | `--stimulus-image PATH` |
 | resolve per-trial images | `--image-root DIR --image-pattern '{text_id}.png'` |
